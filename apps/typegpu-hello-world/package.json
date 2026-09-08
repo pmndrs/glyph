@@ -1,0 +1,25 @@
+{
+  "name": "@pmndrs/glyph-typegpu-hello-world",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "check": "tsc --noEmit && oxfmt --check src scripts index.html package.json tsconfig.json vite.config.ts README.md && vite build",
+    "test": "node scripts/live-check.mts"
+  },
+  "dependencies": {
+    "@pmndrs/glyph": "workspace:*",
+    "typegpu": "0.12.5"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "@webgpu/types": "0.1.71",
+    "oxfmt": "0.35.0",
+    "typescript": "7.0.2",
+    "unplugin-typegpu": "0.12.2",
+    "vite": "8.1.5",
+    "vitexec": "0.1.17"
+  }
+}

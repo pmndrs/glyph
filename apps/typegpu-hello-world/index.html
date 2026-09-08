@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Glyph / TypeGPU hello world</title>
+  </head>
+  <body>
+    <main>
+      <header>
+        <a href="https://github.com/pmndrs/glyph">pmndrs / glyph</a>
+        <a href="https://github.com/pmndrs/glyph">Source ↗</a>
+      </header>
+      <section class="intro">
+        <p>
+          This example draws text directly with WebGPU, without a Three.js scene or camera. The shaders are TypeScript
+          functions compiled to run on the GPU. <a href="https://typegpu.com">Read more about TypeGPU ↗</a>
+        </p>
+      </section>
+      <section class="specimen" aria-label="Live text rendering">
+        <canvas aria-label="GPU-rendered text"></canvas>
+        <p id="status" role="status">Loading WebGPU…</p>
+      </section>
+      <form onsubmit="return false;">
+        <label class="message">Text<input id="message" value="Hello world" maxlength="240" /></label
+        ><label
+          >Size <output id="size-value">64 px</output
+          ><input id="size" type="range" min="16" max="112" value="64" /></label
+        ><label
+          >Raster<select id="raster">
+            <option value="msdf">MSDF</option>
+            <option value="bitmap">Bitmap</option>
+            <option value="slug">Slug</option>
+          </select></label
+        ><label>Color<input id="color" type="color" value="#a99aff" /></label>
+        <label class="tilt"
+          >Tilt <output id="tilt-value">0°</output><input id="tilt" type="range" min="-70" max="70" value="0" />
+        </label>
+      </form>
+      <footer>Tilt changes the GPU transform and color without reshaping. Bitmap uses a baked 32 px strike.</footer>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

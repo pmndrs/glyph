@@ -1,9 +1,7 @@
 import * as THREE from 'three/webgpu';
 
 import {
-  defineGlyphConfig,
   defineGlyphSchema,
-  resourceLease,
   type GlyphBindingSet,
   type GlyphBatchBindingInput,
   type GlyphBufferBindingInput,
@@ -12,7 +10,6 @@ import {
   type GlyphInstanceSpanBindingInput,
   type GlyphRootInstanceBindingInput,
   type GlyphSchema,
-  type RendererContext,
   type Codec,
 } from '../config/glyph.js';
 import type { CodecProgram } from '../config/codec.js';
@@ -20,19 +17,12 @@ import type { PortableResource } from '../config/resources.js';
 import { bitmap } from '../raster/bitmap.js';
 import { msdf } from '../raster/msdf.js';
 import { slug } from '../raster/slug.js';
-import { normalizeGlyphBufferCapacity } from '../text-properties.js';
-import { threeCodecDescriptor } from './codec.js';
 import type { ThreeAllocationMode, ThreeTransformMode } from './codec.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
+import { bitmapShader, decorationShader, msdfShader, slugShader } from '../tsl.js';
+import { createThreeConfig } from './internal/define-config.js';
 import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
-import { createThreeCodec, threeCodecResources } from './internal/renderer-resources.js';
-import {
-  ThreeRootHost,
-  normalizeThreeRootCompositing,
-  threeTextConstructionToken,
-  type ThreeRoot,
-  type ThreeRootOptions,
-} from './text.js';
+import type { ThreeRoot, ThreeRootOptions } from './text.js';
 
 export interface ThreeProgramBinding {
   readonly kind: 'three-program';
@@ -139,98 +129,9 @@ export const ThreeSchema: GlyphSchema<ThreeBindings, ThreePublicationBoundary> =
 
 export type ThreeGlyphConfig = GlyphConfigFor<typeof ThreeSchema, ThreeRoot, void, ThreeCodec, ThreeFontFormats>;
 
-/** Creates a pure Three config descriptor; every handle still owns independent mutable state. */
+/** Creates a Three config using the stable TSL shader implementation. */
 export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphConfig {
-  if (typeof options !== 'object' || options === null || Array.isArray(options)) {
-    throw new TypeError('ThreeConfig options must be an object');
-  }
-  const transformMode = options.transformMode ?? 'indexed';
-  const allocationMode = options.allocationMode ?? 'ordered';
-  const defaultFontFormat = options.defaultFontFormat ?? 'msdf';
-  const capacity =
-    options.capacity === undefined ? undefined : normalizeGlyphBufferCapacity(options.capacity, 'ThreeConfig capacity');
-  const compositing =
-    options.compositing === undefined
-      ? undefined
-      : normalizeThreeRootCompositing(options.compositing, 'ThreeConfig compositing');
-  const config = defineGlyphConfig({
-    schema: ThreeSchema,
-    fonts: { default: defaultFontFormat, formats: ThreeFontFormats },
-    encode: ({ ids }) =>
-      createThreeCodec(
-        ids,
-        transformMode,
-        (programs) =>
-          threeCodecDescriptor(
-            ids,
-            transformMode,
-            programs.map((program) => program.codec),
-            allocationMode,
-          ),
-        options.material,
-      ),
-    resolve: ({ format, resourceName, resources }) =>
-      resourceLease(
-        Object.freeze({
-          format,
-          resourceName,
-          resources,
-        }),
-        () => undefined,
-      ),
-    renderer: (context: RendererContext<ThreeBindings, void, ThreeCodec, ThreePublicationBoundary>) => {
-      if (context.defaultRenderer === undefined) {
-        throw new TypeError('ThreeConfig.renderer() must be constructed by a Three publication boundary');
-      }
-      return context.defaultRenderer;
-    },
-    commands: {
-      limits: {
-        maxParagraphs: 4_096,
-        maxClusters: 65_536,
-        maxLines: 65_536,
-        maxRegions: 65_536,
-        maxExclusions: 1,
-        maxInlineObjects: 1,
-        maxSlotsPerBand: 8,
-        maxOutputBytes: 64 * 1024 * 1024,
-      },
-      requestBytes: 64 * 1024,
-      resultBytes: 256 * 1024,
-      textUnits: 256,
-    },
-    root: {
-      create: (context) => {
-        if (context.fonts === undefined) throw new TypeError('Three GlyphConfig must declare font formats');
-        const rootOptions: ThreeRootOptions = {
-          ...(capacity === undefined ? {} : { capacity }),
-          ...(compositing === undefined ? {} : { compositing }),
-        };
-        const root = new ThreeRootHost(
-          threeTextConstructionToken,
-          context.name,
-          context.fonts,
-          context.services,
-          threeCodecResources(context.codec),
-          rootOptions,
-        );
-        const selected = context.create(root.publicRoot(), {
-          boundary: root.boundary(options.material),
-          defaultRenderer: root.renderer,
-          shape: {
-            prepare: () => root.prepareShape(),
-            accepted: () => root.acceptShape(),
-            rejected: (error) => root.rejectShape(error),
-          },
-          dispose: () => root.disposeHost(),
-        });
-        root.bindPublicRoot(selected);
-        return selected;
-      },
-    },
-  });
-  config satisfies ThreeGlyphConfig;
-  return config;
+  return createThreeConfig(options, { bitmapShader, decorationShader, msdfShader, slugShader });
 }
 
 /** Built-in indexed/ordered Three adapter. Spreading it preserves hooks without shared handle state. */

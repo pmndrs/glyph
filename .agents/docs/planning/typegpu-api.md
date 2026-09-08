@@ -45,7 +45,7 @@ generated:
 
 > **Historical proposal — superseded.** Glyph does not publish a second direct TypeGPU text engine. TypeGPU integration
 > uses the same public `GlyphConfig`, Codec, `CommandBufferView`, renderer decode, and root contract as Three; shader
-> realizations remain on explicit `/typegpu/*` leaves. Use the
+> realizations live on explicit `/shaders/*` leaves. The current high-level `/typegpu` API is `defineTypeGpuConfig`; see the [TypeGPU example](../../../apps/typegpu-hello-world/README.md). Use the
 > [renderer integration guide](../guides/renderer-integration.md).
 
 This is an engine-integration subpath, not part of the renderer-neutral core entry:

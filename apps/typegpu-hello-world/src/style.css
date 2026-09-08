@@ -1,0 +1,143 @@
+:root {
+  color: #eeedff;
+  background: #111326;
+  font-family: 'Helvetica Neue', sans-serif;
+  font-synthesis: none;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 1180px;
+  margin: auto;
+  padding: 34px 48px;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+header,
+footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  font-size: 13px;
+}
+header {
+  padding-bottom: 26px;
+  border-bottom: 1px solid #363b63;
+}
+header a {
+  font-weight: 700;
+}
+footer {
+  color: #a2a9d0;
+}
+.intro {
+  padding: 36px 0 28px;
+}
+.intro p {
+  max-width: 72ch;
+  margin: 0;
+  color: #bbc2eb;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.intro a {
+  color: #a99aff;
+  text-decoration: underline;
+  text-decoration-color: #6574d4;
+  text-underline-offset: 6px;
+  text-decoration-thickness: 1px;
+}
+.specimen {
+  position: relative;
+  border: 1px solid #363b63;
+  background: #1b2040;
+}
+canvas {
+  display: block;
+  width: 100%;
+  height: 260px;
+}
+#status {
+  position: absolute;
+  bottom: 12px;
+  left: 20px;
+  margin: 0;
+  color: #a2a9d0;
+  font: 11px monospace;
+}
+form {
+  display: grid;
+  grid-template-columns: 2fr 1fr 110px 58px;
+  gap: 26px;
+  padding: 30px 0 44px;
+}
+.tilt {
+  grid-column: 1 / -1;
+}
+label {
+  font-size: 12px;
+  color: #bbc2eb;
+}
+input,
+select {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  color: #eeedff;
+  background: #111326;
+  border: 1px solid #464f82;
+  border-radius: 0;
+  padding: 10px;
+  font: inherit;
+  font-size: 14px;
+}
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid #a99aff;
+  outline-offset: 3px;
+}
+input[type='range'] {
+  accent-color: #a99aff;
+  padding: 0;
+  margin-top: 25px;
+}
+input[type='color'] {
+  height: 39px;
+  padding: 4px;
+}
+output {
+  float: right;
+  color: #a99aff;
+}
+footer {
+  border-top: 1px solid #363b63;
+  padding-top: 20px;
+  font-size: 11px;
+}
+@media (max-width: 640px) {
+  main {
+    padding: 24px;
+  }
+  .intro {
+    padding-top: 34px;
+  }
+  form {
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .message {
+    grid-column: 1 / -1;
+  }
+  canvas {
+    height: 230px;
+  }
+}

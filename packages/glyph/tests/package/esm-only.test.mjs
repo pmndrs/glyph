@@ -46,10 +46,11 @@ test('the published contract is ESM-only', async () => {
     './tsl/msdf',
     './tsl/slug',
     './tsl/decoration',
-    './typegpu/bitmap',
+    './shaders/bitmap',
     './tsl/*',
-    './typegpu/*',
+    './shaders/*',
     './three/*',
+    './three/typegpu',
     './react/*',
     './raster/*',
     './config/*',
@@ -61,6 +62,7 @@ test('the published contract is ESM-only', async () => {
     './generated/*',
     './font-baker/*',
     './three/internal/*',
+    './three/typegpu/internal/*',
     './three/decorations',
     './three/frame-error',
     './three/glyph-measurement',
@@ -69,7 +71,7 @@ test('the published contract is ESM-only', async () => {
     './three/text',
     './raster/internal/*',
     './tsl/internal/*',
-    './typegpu/internal/*',
+    './shaders/internal/*',
     './tsl/slug-shaders/tsl-compat',
   ]) {
     assert.equal(manifest.exports[blocked], null, `${blocked} must remain package-private`);
@@ -192,4 +194,16 @@ test('generic raster baker construction lives only on the dedicated baker subpat
   const baker = await import('@pmndrs/glyph/baker');
   assert.equal(typeof baker.defineRasterBaker, 'function');
   assert.equal(typeof baker.rasterBake, 'function');
+});
+
+test('stable Three and TSL imports do not load the experimental TypeGPU bridge', async () => {
+  const stable = await readJavaScriptModuleClosure([
+    new URL('../../dist/three.js', import.meta.url),
+    new URL('../../dist/tsl.js', import.meta.url),
+  ]);
+  for (const specifier of stable.staticImports) {
+    assert.doesNotMatch(specifier, /^(?:typegpu|@typegpu\/)/);
+  }
+  const experimental = await readJavaScriptModuleClosure([new URL('../../dist/three/typegpu.js', import.meta.url)]);
+  assert.ok(experimental.staticImports.has('@typegpu/three'));
 });

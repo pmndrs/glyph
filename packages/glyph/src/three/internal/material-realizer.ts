@@ -8,10 +8,6 @@ import { msdfSchema } from '../../raster/msdf.js';
 import { msdf } from '../../raster/msdf.js';
 import { slugSchema } from '../../raster/slug.js';
 import { slug } from '../../raster/slug.js';
-import { bitmapShader } from '../../tsl/bitmap-shader.js';
-import { decorationShader } from '../../tsl/decoration-shader.js';
-import { msdfShader } from '../../tsl/msdf-shader.js';
-import { slugShader } from '../../tsl/slug-shader.js';
 import type { RetainedSlugPage, ThreeRendererResources } from './renderer-resources.js';
 import type { ThreeRootContext, ThreeTextMaterialContext } from '../material.js';
 import type { ThreeRasterProgramBuffer } from '../raster-program.js';
@@ -101,7 +97,7 @@ export class ThreeMaterialRealizer {
     const cached = this.#context.materials.get(key);
     if (cached !== undefined) return cached.material;
     const instance = physicalInstance(runInstance(), addressing);
-    const shader = decorationShader({
+    const shader = this.#coordinator.shaders.decorationShader({
       rect: TSL.storage(rect.attribute, 'vec4', rect.attribute.count).setPBO(true).element(instance),
       packed: TSL.storage(packed.attribute, 'uvec2', packed.attribute.count).setPBO(true).element(instance),
     });
@@ -158,7 +154,7 @@ export class ThreeMaterialRealizer {
     if (cached !== undefined) return cached.material;
     const texture = this.#textureArray(resource.binding, atlas, 'bitmap');
     const instance = physicalInstance(runInstance(), addressing);
-    const shader = bitmapShader(
+    const shader = this.#coordinator.shaders.bitmapShader(
       {
         origin: storageVec2(part.origin, instance),
         size: storageVec2(part.size, instance),
@@ -202,7 +198,7 @@ export class ThreeMaterialRealizer {
     const rect = field(part.rect);
     const uvRect = field(part.uvRect);
     const page = field(part.page);
-    const shader = msdfShader(
+    const shader = this.#coordinator.shaders.msdfShader(
       {
         origin: rect.xy,
         size: rect.zw,
@@ -273,7 +269,7 @@ export class ThreeMaterialRealizer {
     const viewport = TSL.uniform(new THREE.Vector2(1, 1)).onRenderUpdate(({ renderer }, self) =>
       renderer?.getDrawingBufferSize(self.value),
     );
-    const shader = slugShader(
+    const shader = this.#coordinator.shaders.slugShader(
       {
         origin: rect.xy,
         size: rect.zw,

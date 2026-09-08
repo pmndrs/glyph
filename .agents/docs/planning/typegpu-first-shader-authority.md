@@ -40,7 +40,7 @@ sources:
     resource: ../../../packages/glyph/src/raster/slug.ts
     title: Merged v0 Slug TSL implementation
   - id: slug-texture-v0
-    resource: ../../../packages/glyph/src/tsl/slug-shaders/slug-texture.ts
+    resource: ../../../packages/glyph/src/shaders/slug-shaders/slug-texture.ts
     title: Merged v0 Slug texture access
   - id: gpucat
     resource: https://github.com/isaac-mason/gpucat/tree/11cf91b5172cc5143f68ff6ebf01c5e815de4e94
@@ -404,7 +404,7 @@ WebGPU building blocks and confirms a WebGPU-only Three bridge; it does not yet 
 Implement Gate 0 before building a TypeGPU engine. Until then:
 
 - native TSL remains the flagship Three implementation;
-- `@pmndrs/glyph/typegpu` is the package-owned WebGPU shader/program subpath with an optional direct encoder;
+- `@pmndrs/glyph/shaders` is the package-owned WebGPU shader/program subpath with an optional direct encoder;
 - `@pmndrs/glyph/three/typegpu` is an isolated package-owned experiment;
 - gpucat remains an external public-API fitness test;
 - no TypeGPU, Three, or gpucat type enters core.

@@ -59,6 +59,7 @@ function isTextPeerDependency(id: string): boolean {
     // `typed-binary` and `tinyest` are resolution internals reached only through TypeGPU.
     id === 'typegpu' ||
     id.startsWith('typegpu/') ||
+    id.startsWith('@typegpu/') ||
     id === 'typed-binary' ||
     id === 'tinyest' ||
     id.startsWith('tinyest')

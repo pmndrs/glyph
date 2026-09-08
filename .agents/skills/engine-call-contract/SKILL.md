@@ -59,9 +59,9 @@ three facts.
 | ------------------------ | ---------------------------------------------------------------------------------------------------- | ------------ |
 | `.`                      | `glyph`, fonts, authoring, layout and measurement values, plus application-encountered config types  | everyone     |
 | `./config/*`             | exact renderer-neutral construction helpers for config, Codec, schema, resources, and raster formats | integrators  |
-| `./three`, `./react`     | one integration's application surface                                                                | applications |
+| `./three`, `./react`, `./typegpu`     | one integration's application surface                                                                | applications |
 | `./three/*`, `./react/*` | independently importable integration features and raster formats                                     | applications |
-| `./tsl/*`, `./typegpu/*` | independently importable technique shaders, with no engine or scene                                  | any host     |
+| `./tsl/*`, `./shaders/*` | independently importable technique shaders, with no engine or scene                                  | any host     |
 
 Config leaves are **additive to the root, not parallel to it**: an integrator imports application-encountered types
 from the root and construction helpers from their one owning leaf. Do not add a config barrel or re-export those

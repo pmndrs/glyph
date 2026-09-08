@@ -38,7 +38,7 @@ generated:
 # Raster technique contract and single-authority cleanup
 
 > **Historical proposal — superseded.** Public raster extensibility now uses `RasterFormat`, `RasterCodec`, and exact
-> `/config/*`, `/raster/*`, `/tsl/*`, or `/typegpu/*` leaves. The former Policy and renderer-program vocabulary below is
+> `/config/*`, `/raster/*`, `/tsl/*`, or `/shaders/*` leaves. The former Policy and renderer-program vocabulary below is
 > retained only as design history. Use the [portable raster-format implementation report](../guides/technique-implementation-report.md).
 
 A raster technique is the unit of extensibility this library promises: Bitmap, MSDF, and Slug are the first-party
@@ -155,7 +155,7 @@ move D-250 made for registers, applied to the seams.
 
 With the schema owned by the technique, the shader-language question becomes small: **a shader library owns only
 the realization of a declared interface.** `@pmndrs/glyph/tsl` implements `BitmapShaderInterface` with TSL nodes;
-a future `@pmndrs/glyph/typegpu` implements the same interface with TypeGPU; both import the technique's schema and
+a future `@pmndrs/glyph/shaders` implements the same interface with TypeGPU; both import the technique's schema and
 neither owns any data. The data path (binding tables, storage buffers, patch application) is core + the renderer
 integration; the shader receives typed views it did not define. This is the answer typegpu-first-shader-authority
 needs and the reason the shader library moved out of `three/`: shader realizations are per-language, schemas are

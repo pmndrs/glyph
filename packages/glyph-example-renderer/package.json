@@ -26,7 +26,7 @@
     "@pmndrs/glyph": "workspace:*",
     "@pmndrs/glyph-example-raster": "workspace:*",
     "@webgpu/types": "0.1.71",
-    "typegpu": "0.12.3"
+    "typegpu": "0.12.5"
   },
   "devDependencies": {
     "@types/node": "24.13.3",

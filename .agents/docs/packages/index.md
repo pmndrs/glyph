@@ -4,4 +4,6 @@
 - [`@pmndrs/glyph-benchmarks`](benchmarks.md) — Figma-backed benchmark and product-verification application.
 - [`@pmndrs/glyph-examples`](examples.md) — paired imperative Three.js and R3F examples over shared assets.
 
+- [`@pmndrs/glyph-typegpu-hello-world`](typegpu-hello-world.md) — editable text using the high-level TypeGPU integration.
+
 Each package concept carries a deterministic `source_digest`. Repository validation fails when package source changes without a corresponding concept review and digest refresh.

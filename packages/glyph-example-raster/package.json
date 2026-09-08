@@ -61,13 +61,13 @@
     "oxfmt": "0.35.0",
     "oxlint": "1.75.0",
     "three": "0.185.1",
-    "typegpu": "0.12.3",
+    "typegpu": "0.12.5",
     "unplugin-typegpu": "0.12.2",
     "vitest": "4.1.0"
   },
   "peerDependencies": {
     "three": ">=0.185.1 <0.186",
-    "typegpu": ">=0.12.3 <0.13"
+    "typegpu": ">=0.12.5 <0.13"
   },
   "peerDependenciesMeta": {
     "three": {

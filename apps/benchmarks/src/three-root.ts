@@ -1,10 +1,20 @@
 import { glyph } from '@pmndrs/glyph';
-import { defineThreeConfig, type GlyphBufferCapacity, type ThreeHandle, type ThreeRoot } from '@pmndrs/glyph/three';
+import {
+  defineThreeConfig as defineStableThreeConfig,
+  type GlyphBufferCapacity,
+  type ThreeHandle,
+  type ThreeRoot,
+} from '@pmndrs/glyph/three';
 
 interface BenchmarkThreeRootOptions {
   readonly capacity?: GlyphBufferCapacity;
   readonly compositing?: 'ordered' | 'independent';
 }
+
+const defineThreeConfig =
+  typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('shaders') === 'typegpu'
+    ? (await import('@pmndrs/glyph/three/typegpu')).defineThreeConfig
+    : defineStableThreeConfig;
 
 await glyph.init();
 const benchmarkHandles = new Map<string, ThreeHandle>();

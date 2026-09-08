@@ -2,9 +2,11 @@ import type { Constraints, Font, ParagraphLayout, TextStyle } from '@pmndrs/glyp
 import type { msdf as mtsdf } from '@pmndrs/glyph/raster/msdf';
 import type { slug } from '@pmndrs/glyph/raster/slug';
 import type { Text, ThreeRoot } from '@pmndrs/glyph/three';
+import * as t3 from '@typegpu/three';
 import type { Node } from 'three/webgpu';
 import * as THREE from 'three/webgpu';
-import { mul, saturate, sub, texture, vec4 } from 'three/tsl';
+import { texture } from 'three/tsl';
+import { d, std } from 'typegpu';
 
 import { rasterConformanceSpecimen, type SelectableFontFixture } from '../../../benchmark/font-fixtures';
 import { loadMtsdfFontAsset } from '../../../workloads/font-assets/mtsdf';
@@ -424,9 +426,15 @@ async function createComparisonResources(
 function heatmapNode(mtsdfTexture: THREE.Texture, slugTexture: THREE.Texture): Node<'vec4'> {
   const mtsdfCoverage: Node<'float'> = texture(mtsdfTexture).r;
   const slugCoverage: Node<'float'> = texture(slugTexture).r;
-  const mtsdfExtra: Node<'float'> = saturate(mul(sub(mtsdfCoverage, slugCoverage), HEATMAP_GAIN));
-  const slugExtra: Node<'float'> = saturate(mul(sub(slugCoverage, mtsdfCoverage), HEATMAP_GAIN));
-  return vec4(mtsdfExtra, slugExtra, slugExtra, 1);
+  const mtsdfCoverageAccess = t3.fromTSL(mtsdfCoverage, d.f32);
+  const slugCoverageAccess = t3.fromTSL(slugCoverage, d.f32);
+
+  return t3.toTSL(() => {
+    'use gpu';
+    const mtsdfExtra = std.saturate((mtsdfCoverageAccess.$ - slugCoverageAccess.$) * HEATMAP_GAIN);
+    const slugExtra = std.saturate((slugCoverageAccess.$ - mtsdfCoverageAccess.$) * HEATMAP_GAIN);
+    return d.vec4f(mtsdfExtra, slugExtra, slugExtra, 1);
+  }) as Node<'vec4'>;
 }
 
 async function compileComparison(resources: ComparisonResources): Promise<void> {

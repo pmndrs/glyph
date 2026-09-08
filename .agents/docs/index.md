@@ -10,6 +10,7 @@ okf_version: '0.2'
 - [Project brief](planning/project-brief.md) — product outcome, scope, non-goals, and success criteria.
 - [Canonical roadmap](roadmap/roadmap.md) — implementation sequence, issue-sized milestones, dependencies, and exit gates.
 - [Merged v0 runtime and bake API](planning/api-shapes.md) — superseded migration fixture; it describes the merged v0 surface that the Rust render-plan cutover deleted.
+- [TypeGPU hello world](../../apps/typegpu-hello-world/README.md) — high-level TypeGPU setup and caller-owned render passes.
 - [Three.js text API](planning/three-api.md) — authoritative Three-native loader, explicit `TextGroup` batching, reusable text across group disposal, retained non-throwing errors, ordering, and lifecycle contract.
 - [React font loading](guides/react.md) — direct FontFace, lifecycle-owning hooks, provider aliases, Suspense cache, retry, and cleanup.
 - [Glyph integration API](planning/core-api.md) — current root application vocabulary and renderer-neutral GlyphConfig contract.

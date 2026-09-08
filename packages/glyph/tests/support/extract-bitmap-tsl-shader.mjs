@@ -1,7 +1,7 @@
 import { attribute } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
-import { bitmapShader } from '../../dist/tsl/bitmap-shader.js';
+import { bitmapShader } from '../../dist/three/typegpu.js';
 
 /**
  * Compiles the canonical TSL Bitmap material to shader source without a GPU device.
@@ -10,7 +10,7 @@ import { bitmapShader } from '../../dist/tsl/bitmap-shader.js';
  * stand-in reaches the generated WGSL that a hardware WebGPU run would execute. The
  * instance nodes are plain per-vertex attributes and the coverage page is an unsigned
  * byte data array — the same resource kinds the command-buffer executor binds — so the
- * extracted source is the authoritative statement of what `/tsl` produces for Bitmap.
+ * extracted source is the authoritative statement of what `/three/typegpu` produces for Bitmap.
  *
  * `renderer.hasFeature` is stubbed because it is the only builder input that requires
  * an adapter; Bitmap reads its pages through data-texture texel loads, so no optional

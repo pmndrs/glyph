@@ -4,6 +4,7 @@ import type { Codec } from '../../config/glyph.js';
 import type { CodecIdFactory } from '../../config/codec.js';
 import type { PortableResourceGroupPayload, PortableTextureArrayPayload } from '../../config/resources.js';
 import type { TslSlugPageResources } from '../../tsl.js';
+import type { ThreeShaderSet } from './shader-set.js';
 import type { ThreeCodec } from '../handle.js';
 import type { ThreeTextMaterial } from '../material.js';
 import {
@@ -43,11 +44,13 @@ export function createThreeCodec(
   transformMode: 'direct' | 'indexed',
   descriptor: (programs: readonly CompiledThreeRasterProgram[]) => Codec['descriptor'],
   material: ThreeTextMaterial | undefined,
+  shaders: ThreeShaderSet,
 ): ThreeCodec {
   const programs = compiledThreeRasterPrograms(ids, transformMode);
   const resources = new ThreeRendererResources(
     new Map(programs.map((program) => [program.raster.id, program])),
     material,
+    shaders,
   );
   let disposed = false;
   const codec: ThreeCodec = Object.freeze({
@@ -80,7 +83,11 @@ export class ThreeRendererResources {
   readonly #slugPages = new Map<PortableResourceGroupPayload, RetainedThreeRenderResource<RetainedSlugPage>>();
   #disposed = false;
 
-  constructor(programs: ReadonlyMap<string, CompiledThreeRasterProgram>, material: ThreeTextMaterial | undefined) {
+  constructor(
+    programs: ReadonlyMap<string, CompiledThreeRasterProgram>,
+    material: ThreeTextMaterial | undefined,
+    readonly shaders: ThreeShaderSet,
+  ) {
     this.programs = programs;
     this.material = material;
   }

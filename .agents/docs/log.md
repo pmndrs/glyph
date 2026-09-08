@@ -7,6 +7,12 @@
   implementation, preserves the zero-allocation and trusted-internal-data laws, and must be deleted when the accepted work
   is complete.
 
+- **Made packed decoration shifts explicitly unsigned** — Decoration color decoding now uses TypeGPU's unsigned right-shift operator for its `u32` packed color operand, removing deprecated signed-shift syntax while preserving the emitted WGSL bit extraction.
+
+- **Normalized Bitmap texture dimensions across shader backends** — GLSL reports an array texture's size as signed `(width, height, layers)`, while WGSL reports only an unsigned `(width, height)`. The shared bounds helper now accepts a two-component float extent, so Three can discard GLSL's layer count and normalize WGSL's unsigned result before the TypeGPU bridge; each resource boundary converts the bounded coordinate to the integer type its texel load requires.
+
+- **Lowered Bitmap array loads through Three's backend boundary** — The Three adapter now delegates its physical texel load to the installed TSL `textureLoad(...).depth(...)` node. WebGL therefore receives `texelFetch` with an `ivec3(x, y, layer)` coordinate and explicit LOD, while WebGPU retains its native array-texture load. Canonical TypeGPU helpers still own bounded coordinate resolution and paint.
+
 ## 2026-09-03
 
 - **Retired stale renderer vocabulary** — Marked the Rust layout proposal and Fallow duplication audit as historical,
@@ -60,6 +66,10 @@
 - **Made GlyphConfig construction data-only** — `defineGlyphConfig()` now returns inert structural data, and
   `glyph.handle(name, config)` passes it directly into package-private construction. The public config leaf no longer
   leaks an invocation helper or callable factory property, while Vite-style spread/wrapped overrides keep working.
+
+- **Kept textures out of GLSL function parameters** — Bitmap's Three adapter now captures its array texture at the resource boundary and shares only the canonical bounded-texel coordinate helper with direct TypeGPU. Its emitted GLSL calls `texelFetch` without declaring TypeGPU's texture schema syntax as a function parameter, while WGSL retains the public resource-polymorphic coverage helper.
+
+- **Restored MTSDF paragraph orientation** — The canonical TypeGPU MTSDF vertex stage now converts the engine's downward paragraph Y into Three's upward Y, matching Bitmap, Slug, decoration, and the previous native TSL realization. A numeric regression pins the asymmetric origin and quad offset so a whole-paragraph mirror cannot pass unnoticed.
 
 ## 2026-09-02
 
@@ -200,6 +210,8 @@
 
 ## 2026-08-30
 
+- **TypeGPU is the shader authority** — Moved the remaining Slug shader modules under `/typegpu`, added canonical TypeGPU Bitmap, MTSDF, and decoration stages, and replaced native TSL formulas with `@typegpu/three` adapters. Resource operations are specialized through slots and schema-aware accessors, so direct TypeGPU hosts, procedural consumers, raw WebGPU-backed resources, and Three data textures share the same algorithms. Device-free WGSL/GLSL tests cover every first-party adapter, and direct TypeGPU resolution tests prove texture-free function sources.
+
 - **Implemented planner-assisted detached glyph slices** — A committed `RetainedText` can synchronously emit a complete
   checkpoint for selected drawable glyph records without advancing its source publication or acceptance state. Three's
   `Text.breakApart()` imports that checkpoint as one independently disposable `Glyphs` group with full local/world affine
@@ -211,6 +223,14 @@
 - **Raised layout fitting from F26.6 to F16.16 units** — Exact and justified columns now retain sub-unit Three.js font
   sizes without the accumulated line-advance drift that could push bitmap prose past its requested width. Integer-fit,
   shrink, remainder distribution, and paragraph integration fixtures pin the new one-unit contract.
+
+## 2026-08-29
+
+- **Framework-neutral raster shaders** — Moved Bitmap and MTSDF evaluation plus the analytic Slug fill algorithm into renderer-independent TypeGPU functions. The Slug core imports no renderer; neighboring TypeGPU modules own page texture reads and bounded band traversal, while the Three host supplies resources and node-valued glyph fields through `@typegpu/three`. Native TSL remains only for the writable varying and matrix-compatible dilation path. The benchmark comparison likewise computes its signed coverage heatmap through a plain-value TypeGPU function while retaining its native-TSL baseline.
+
+- **Build-time TypeGPU metadata** — Kept the repository-pinned TypeScript compiler as `@pmndrs/glyph`'s type and module emitter, then added a post-emit transform over staged JavaScript containing GPU directives. Published `/typegpu` modules and the TypeGPU-backed Slug host carry resolvable shader metadata without requiring consumer bundlers to transform package code; declarations and unrelated modules remain untouched.
+
+- **Portable Slug source gate** — Added a device-free package test that compiles the staged Slug graph through both Three.js node builders and verifies unique shared declarations, both bounded loops and terminators, the shared solver, and WebGL2 builtin compatibility. TypeGPU runtimes are optional peers, so renderer-neutral and baker consumers retain no static dependency on them.
 
 ## 2026-08-28
 

@@ -417,18 +417,42 @@ Start with the [renderer integration guide](.agents/docs/guides/renderer-integra
 the external TypeGPU implementation. Internal engine, wire, projection, and planner modules are deliberately not package
 exports.
 
+## Experimental Three shaders
+
+`@pmndrs/glyph/three` retains the native TSL implementation from `main`. To test the migrated TypeGPU shaders,
+import `ThreeConfig` or `defineThreeConfig` from `@pmndrs/glyph/three/typegpu` instead:
+
+```ts
+import { ThreeConfig } from '@pmndrs/glyph/three/typegpu';
+```
+
+Both entries share Text, TextGroup, materials, and lifecycle behavior. Shader selection belongs to each handle's
+config, so stable and experimental handles can coexist. The experimental entry also exports `bitmapShader`,
+`msdfShader`, `slugShader`, and `decorationShader` for material composition. `/tsl` retains the native TSL shaders;
+`/shaders` retains the shared TypeGPU functions. The experimental entry requires the optional `typegpu`,
+`@typegpu/three`, and `@typegpu/gl` peers. It remains separate while parity testing continues.
+
+## TypeGPU applications
+
+Use `@pmndrs/glyph/typegpu` for retained text rendering with a caller-owned TypeGPU root and render pass.
+`defineTypeGpuConfig({ root, format })` plugs into `glyph.handle()`. Create text with `handle.createText()`, publish updates
+with `glyph.shape()`, then record draws with `handle.draw(pass, { width, height })`. Bitmap, MSDF, and Slug share the same
+shader functions as the Three.js integration.
+
+Run `mise exec -- pnpm scripts run typegpu:dev` for the [editable hello-world app](apps/typegpu-hello-world/README.md).
+
 ## Technique shaders on their own
 
 The technique shaders ship without an engine or a scene attached, in two realizations of the same behaviour:
-`@pmndrs/glyph/tsl` as Three.js Shading Language node graphs, and `@pmndrs/glyph/typegpu` as TypeGPU functions for any
-TypeGPU host. The TypeGPU realization is pinned to the TSL one by compiling the TSL graph to WGSL and diffing against
+`@pmndrs/glyph/tsl` as Three.js Shading Language node graphs, and `@pmndrs/glyph/shaders` as TypeGPU functions for any
+TypeGPU host. The experimental Three adapters are checked by compiling their graphs to WGSL and comparing against
 the real generated source, rather than translating the node graph by inspection.
 
 ```ts
 import { bitmapShader } from '@pmndrs/glyph/tsl/bitmap';
 import { msdfShader } from '@pmndrs/glyph/tsl/msdf';
 import { slugShader } from '@pmndrs/glyph/tsl/slug';
-import { bitmapFragment, bitmapVertexSnapped } from '@pmndrs/glyph/typegpu/bitmap';
+import { bitmapFragment, bitmapVertexSnapped } from '@pmndrs/glyph/shaders/bitmap';
 ```
 
 ## Develop

@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 {
   "name": "benchmark:v1-bitmap",
   "summary": "Render the Rust command-buffer path for Three Bitmap/MTSDF/Slug and a custom material on WebGPU and WebGL2.",
-  "requirements": "Playwright Chromium, WebGPU, WebGL2, and baked Inter fixtures.",
+  "requirements": "Playwright Chromium, WebGPU, WebGL2, and baked Inter fixtures. Pass --typegpu to exercise /three/typegpu.",
   "writes": "No repository files."
 }
 */
@@ -36,6 +36,9 @@ interface ComposeProofResult {
   readonly canonicalGreenPixels: number;
 }
 
+const shaderQuery = process.argv.includes('--typegpu') ? '&shaders=typegpu' : '';
+process.stdout.write(`Three shaders: ${shaderQuery === '' ? 'stable TSL' : 'experimental TypeGPU'}\n`);
+
 const root = fileURLToPath(new URL('..', import.meta.url));
 const vite = fileURLToPath(new URL('../node_modules/.bin/vite', import.meta.url));
 const server = spawn(vite, ['--host', '127.0.0.1', '--port', '5177', '--strictPort'], {
@@ -66,7 +69,9 @@ try {
       if (message.type() === 'error') errors.push(message.text());
     });
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.goto(`http://127.0.0.1:5177/v1-bitmap.html?backend=${expected}`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`http://127.0.0.1:5177/v1-bitmap.html?backend=${expected}${shaderQuery}`, {
+      waitUntil: 'domcontentloaded',
+    });
     await page.waitForFunction(
       () =>
         (window as typeof window & { targetV1BitmapReady?: Promise<RasterProofResult> }).targetV1BitmapReady !==
@@ -101,7 +106,7 @@ try {
       if (message.type() === 'error') errors.push(message.text());
     });
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.goto(`http://127.0.0.1:5177/v1-mtsdf.html?backend=${expected}`, {
+    await page.goto(`http://127.0.0.1:5177/v1-mtsdf.html?backend=${expected}${shaderQuery}`, {
       waitUntil: 'domcontentloaded',
     });
     await page.waitForFunction(
@@ -137,7 +142,7 @@ try {
       if (message.type() === 'error') errors.push(message.text());
     });
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.goto(`http://127.0.0.1:5177/v1-slug.html?backend=${expected}`, {
+    await page.goto(`http://127.0.0.1:5177/v1-slug.html?backend=${expected}${shaderQuery}`, {
       waitUntil: 'domcontentloaded',
     });
     await page.waitForFunction(
@@ -172,7 +177,9 @@ try {
       if (message.type() === 'error') errors.push(message.text());
     });
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.goto(`http://127.0.0.1:5177/v1-compose.html?backend=${expected}`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`http://127.0.0.1:5177/v1-compose.html?backend=${expected}${shaderQuery}`, {
+      waitUntil: 'domcontentloaded',
+    });
     await page.waitForFunction(
       () =>
         (window as typeof window & { targetV1ComposeReady?: Promise<ComposeProofResult> }).targetV1ComposeReady !==

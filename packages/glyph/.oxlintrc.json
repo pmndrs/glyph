@@ -101,13 +101,33 @@
       }
     },
     {
-      "files": ["src/tsl/**", "src/tsl.ts"],
+      "files": ["src/tsl/**", "src/tsl.ts", "src/three/typegpu/internal/**"],
       "rules": {
         "eslint/no-restricted-imports": [
           "error",
           {
             "paths": ["three", "@react-three/fiber"],
             "patterns": ["three/src/*", "three/addons/*", "three/examples/*", "**/internal/**", "**/generated/**"]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/shaders/**", "src/shaders.ts"],
+      "rules": {
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "paths": ["three", "@react-three/fiber"],
+            "patterns": [
+              "three/src/*",
+              "three/addons/*",
+              "three/examples/*",
+              "**/internal/**",
+              "**/generated/**",
+              "three/tsl",
+              "three/webgpu"
+            ]
           }
         ]
       }
@@ -123,10 +143,11 @@
               "three/src/*",
               "three/addons/*",
               "three/examples/*",
-              "**/internal/**",
               "**/generated/**",
               "three/tsl",
-              "three/webgpu"
+              "three/webgpu",
+              "../internal/**",
+              "../../internal/**"
             ]
           }
         ]
