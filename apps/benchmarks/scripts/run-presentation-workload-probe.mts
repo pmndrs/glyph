@@ -10,6 +10,8 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 process.chdir(root);
 const technique = presentationFormat(process.env.PRESENTATION_TECHNIQUE);
 const backend = presentationBackend(process.env.PRESENTATION_BACKEND);
+const shaders = presentationShaders(process.env.PRESENTATION_SHADERS);
+const shaderQuery = shaders === 'typegpu' ? '&shaders=typegpu' : '';
 const screenshotDirectory = process.env.PRESENTATION_SCREENSHOT_DIR;
 if (screenshotDirectory !== undefined) await mkdir(screenshotDirectory, { recursive: true });
 const server = await createServer({ root, server: { host: '127.0.0.1', port: 0 } });
@@ -99,7 +101,7 @@ try {
   });
   page.on('pageerror', (error) => consoleProblems.push(`pageerror: ${error.message}`));
   await page.goto(
-    `http://127.0.0.1:${String(address.port)}/presentation?mode=benchmark&technique=${technique}&backend=${backend}&delivery=baked&dpr=2&font=inter&workload=text-ladder`,
+    `http://127.0.0.1:${String(address.port)}/presentation?mode=benchmark&technique=${technique}&backend=${backend}&delivery=baked&dpr=2&font=inter&workload=text-ladder${shaderQuery}`,
     { waitUntil: 'domcontentloaded' },
   );
   const workloadControl = page.getByLabel('Live workload', { exact: true });
@@ -237,7 +239,7 @@ try {
   }
   console.log(
     'presentation-workloads-ready',
-    JSON.stringify({ backend, workloads: workloads.length, rendererCount: 1, technique }),
+    JSON.stringify({ backend, workloads: workloads.length, rendererCount: 1, shaders, technique }),
   );
 } finally {
   await browser?.close();
@@ -324,6 +326,12 @@ function presentationBackend(value: string | undefined): PresentationBackend {
   if (value === undefined || value === 'webgpu') return 'webgpu';
   if (value === 'webgl2') return value;
   throw new RangeError(`PRESENTATION_BACKEND must be webgpu or webgl2; received ${value}`);
+}
+
+function presentationShaders(value: string | undefined): 'tsl' | 'typegpu' {
+  if (value === undefined || value === 'tsl') return 'tsl';
+  if (value === 'typegpu') return value;
+  throw new RangeError(`PRESENTATION_SHADERS must be tsl or typegpu; received ${value}`);
 }
 
 async function assertPresentationRemainsVisible(
