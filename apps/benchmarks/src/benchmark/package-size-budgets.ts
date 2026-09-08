@@ -16,19 +16,54 @@ export const packageSizeBudgets = {
     gzipBytes: 11_500,
     brotliBytes: 10_200,
   },
-  'tsl-subpath-js': {
-    rawBytes: 27_000,
-    minifiedBytes: 14_000,
-    gzipBytes: 4_200,
+  // `/shaders/tsl` measures 13,850 raw / 13,152 minified / 4,041 gzip / 3,585 Brotli.
+  'tsl-shader-library-js': {
+    rawBytes: 14_200,
+    minifiedBytes: 13_500,
+    gzipBytes: 4_150,
     brotliBytes: 3_700,
   },
-  // The TypeGPU technique shader library is a sibling of `/tsl` with no scene
-  // integration; `typegpu` itself is an optional peer and stays outside the graph.
-  'typegpu-subpath-js': {
-    rawBytes: 30_000,
-    minifiedBytes: 16_000,
-    gzipBytes: 5_000,
-    brotliBytes: 4_400,
+  // `/shaders/typegpu` is the complete Bitmap, MSDF, Slug, and decoration library, not the direct renderer.
+  // Its optional peer runtimes stay external; the package-owned graph measures
+  // 98,320 raw / 96,077 minified / 13,866 gzip / 11,739 Brotli.
+  'typegpu-shader-library-js': {
+    rawBytes: 101_000,
+    minifiedBytes: 99_000,
+    gzipBytes: 14_300,
+    brotliBytes: 12_100,
+  },
+  // Per-technique entries protect the tree-shakeable leaves independently of the aggregate barrel.
+  'typegpu-bitmap-shader-js': {
+    rawBytes: 18_500,
+    minifiedBytes: 18_400,
+    gzipBytes: 3_250,
+    brotliBytes: 2_850,
+  },
+  'typegpu-msdf-shader-js': {
+    rawBytes: 24_500,
+    minifiedBytes: 24_200,
+    gzipBytes: 4_200,
+    brotliBytes: 3_750,
+  },
+  'typegpu-slug-shader-js': {
+    rawBytes: 43_000,
+    minifiedBytes: 42_000,
+    gzipBytes: 6_500,
+    brotliBytes: 5_750,
+  },
+  'typegpu-decoration-shader-js': {
+    rawBytes: 6_400,
+    minifiedBytes: 6_400,
+    gzipBytes: 1_500,
+    brotliBytes: 1_350,
+  },
+  // `/typegpu` is the higher-level direct renderer over all three first-party formats. With optional peers external,
+  // it measures 221,915 raw / 219,089 minified / 41,480 gzip / 35,052 Brotli.
+  'typegpu-direct-renderer-js': {
+    rawBytes: 227_000,
+    minifiedBytes: 224_000,
+    gzipBytes: 42_500,
+    brotliBytes: 36_000,
   },
   'font-validator-js': {
     // The current tsdown graph is 734,377 raw / 584,675 minified / 138,073 gzip / 113,039 Brotli. Keep a small

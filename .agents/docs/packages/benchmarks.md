@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:77ea63712761f13628e2399859fd7d8694672fad00afc14ad505568e0a4768a6'
+source_digest: 'sha256:106ef6890259513d0d57091e55403cd3c852302e38cd862a99dac1ea565d8766'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -617,8 +617,8 @@ The [benchmark plan](../planning/benchmark-plan.md) owns target admission, corre
 
 [^slug-outline-research]: The planning concept keeps rejected outline evidence separate from the current benchmark capability contract.
 
-The workflow index also discovers `apps/typegpu-hello-world/scripts`, exposing `typegpu:dev` and `typegpu:live-check`. Shader-size entries now import the renderer-free `/shaders` entrypoint.
+The workflow index also discovers `apps/typegpu-hello-world/scripts`, exposing `typegpu:dev` and `typegpu:live-check`. Shader-size entries import the renderer-free `/shaders/tsl` and `/shaders/typegpu` entries.
 
 The `benchmark:v1-bitmap` workflow accepts `--typegpu` to run its WebGPU and WebGL2 proofs with `/three/typegpu`. Benchmark URLs may select that config with `shaders=typegpu`; the default remains native TSL through `/three`.
 
-`benchmark:unit` runs Vitest without rebuilding runtime packages and accepts test-file filters. The entry split passed Glyph checks and both dedicated Three browser proofs. The broader benchmark check still fails the unchanged `/shaders` library budget: the refreshed report measures 98,320 raw bytes against the existing 30,000-byte ceiling. The shader library and its size entry are unchanged by this split; the ceiling remains unchanged for a separate size review.
+`benchmark:unit` runs Vitest without rebuilding runtime packages and accepts test-file filters. Package-size evidence now classifies the aggregate TypeGPU shader library separately from the higher-level direct renderer and gates every Bitmap, MSDF, Slug, and decoration leaf. With optional peers external, the aggregate measures 98,320 raw / 96,077 minified / 13,866 gzip / 11,739 Brotli; the direct renderer measures 221,915 / 219,089 / 41,480 / 35,052. Leaf measurements are Bitmap 17,808 raw, MSDF 23,691, Slug 41,751, and decoration 6,072, so a tree-shaking regression fails at its own boundary rather than being hidden in one overloaded `/typegpu` number.

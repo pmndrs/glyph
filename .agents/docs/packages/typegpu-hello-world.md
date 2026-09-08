@@ -5,7 +5,7 @@ description: Demonstrates retained bitmap, MSDF, and Slug text rendering in call
 resource: ../../../apps/typegpu-hello-world
 workspace_package: '@pmndrs/glyph-typegpu-hello-world'
 documentation_type: reference
-source_digest: 'sha256:6aa030be55fcc6d8bb109bc0859b97772d3386925284f068cc4753a2ebb04ac5'
+source_digest: 'sha256:872a4c6e2c0b2a79cadf99f4215b9e5e75332781f6830ba708206b85b0333085'
 tags: [package, example, typegpu, webgpu, vite]
 sources:
   - id: manifest
@@ -29,6 +29,8 @@ generated:
 
 This Vite application uses `defineTypeGpuConfig`, `handle.createText()`, `glyph.shape()`, and `handle.draw()` from public
 Glyph exports. It owns its TypeGPU root, canvas context, command encoder, pass attachments, and queue submission.
+Reusable shader functions come from the explicit `@pmndrs/glyph/shaders/typegpu` sibling; native Three.js Shading
+Language functions remain isolated at `@pmndrs/glyph/shaders/tsl`.
 The UI edits content, font size, color, raster format, and tilt. The tilt uniform drives optional GPU position and color
 callbacks without reshaping. Those callbacks read an explicit bind group supplied through `handle.with(animationGroup).draw(...)`. Its compact purple/blue interface explains direct WebGPU rendering without a Three.js scene or camera,
 identifies shaders as TypeScript functions, and links to https://typegpu.com. A footer explains the tilt control and baked bitmap strike.

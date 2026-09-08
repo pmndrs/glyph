@@ -1,1 +1,1 @@
-export * from '@pmndrs/glyph/tsl';
+export * from '@pmndrs/glyph/shaders/tsl';

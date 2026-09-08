@@ -428,8 +428,8 @@ import { ThreeConfig } from '@pmndrs/glyph/three/typegpu';
 
 Both entries share Text, TextGroup, materials, and lifecycle behavior. Shader selection belongs to each handle's
 config, so stable and experimental handles can coexist. The experimental entry also exports `bitmapShader`,
-`msdfShader`, `slugShader`, and `decorationShader` for material composition. `/tsl` retains the native TSL shaders;
-`/shaders` retains the shared TypeGPU functions. The experimental entry requires the optional `typegpu`,
+`msdfShader`, `slugShader`, and `decorationShader` for material composition. `/shaders/tsl` retains the native TSL
+shaders; `/shaders/typegpu` retains the shared TypeGPU functions. The experimental entry requires the optional `typegpu`,
 `@typegpu/three`, and `@typegpu/gl` peers. It remains separate while parity testing continues.
 
 ## TypeGPU applications
@@ -443,16 +443,16 @@ Run `mise exec -- pnpm scripts run typegpu:dev` for the [editable hello-world ap
 
 ## Technique shaders on their own
 
-The technique shaders ship without an engine or a scene attached, in two realizations of the same behaviour:
-`@pmndrs/glyph/tsl` as Three.js Shading Language node graphs, and `@pmndrs/glyph/shaders` as TypeGPU functions for any
-TypeGPU host. The experimental Three adapters are checked by compiling their graphs to WGSL and comparing against
+The technique shaders ship without an engine or a scene attached, in two explicitly named sibling realizations:
+`@pmndrs/glyph/shaders/tsl` as Three.js Shading Language node graphs, and `@pmndrs/glyph/shaders/typegpu` as TypeGPU
+functions for any TypeGPU host. The experimental Three adapters are checked by compiling their graphs to WGSL and comparing against
 the real generated source, rather than translating the node graph by inspection.
 
 ```ts
-import { bitmapShader } from '@pmndrs/glyph/tsl/bitmap';
-import { msdfShader } from '@pmndrs/glyph/tsl/msdf';
-import { slugShader } from '@pmndrs/glyph/tsl/slug';
-import { bitmapFragment, bitmapVertexSnapped } from '@pmndrs/glyph/shaders/bitmap';
+import { bitmapShader } from '@pmndrs/glyph/shaders/tsl/bitmap';
+import { msdfShader } from '@pmndrs/glyph/shaders/tsl/msdf';
+import { slugShader } from '@pmndrs/glyph/shaders/tsl/slug';
+import { bitmapFragment, bitmapVertexSnapped } from '@pmndrs/glyph/shaders/typegpu/bitmap';
 ```
 
 ## Develop

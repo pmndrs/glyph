@@ -1,4 +1,4 @@
-/** High-level TypeGPU integration. Reusable shader functions live on @pmndrs/glyph/shaders. */
+/** High-level TypeGPU integration. Reusable shader functions live on @pmndrs/glyph/shaders/typegpu. */
 export { defineTypeGpuConfig } from './typegpu/config.js';
 export type {
   TypeGpuConfigOptions,

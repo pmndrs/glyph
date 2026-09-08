@@ -384,8 +384,8 @@ const glyphConfig = await measureJavaScript(
   },
 );
 const tslSubpath = await measureJavaScript(
-  'tsl-subpath-js',
-  'Technique shader library JS',
+  'tsl-shader-library-js',
+  'TSL technique shader library JS',
   new URL('../size-entries/text-tsl.ts', import.meta.url),
   false,
   true,
@@ -397,7 +397,7 @@ const tslSubpath = await measureJavaScript(
   },
 );
 const typegpuSubpath = await measureJavaScript(
-  'typegpu-subpath-js',
+  'typegpu-shader-library-js',
   'TypeGPU technique shader JS',
   new URL('../size-entries/text-typegpu.ts', import.meta.url),
   false,
@@ -406,6 +406,56 @@ const typegpuSubpath = await measureJavaScript(
   {
     // The TypeGPU shader library must not pull the renderer integrations or React;
     // the `typegpu` runtime itself is an optional peer and stays outside the graph.
+    expectedDynamic: [],
+    excludedInitial: [
+      '/packages/glyph/dist/react',
+      '/packages/glyph/dist/three',
+      '/packages/glyph/dist/tsl',
+      '/packages/glyph/dist/three/',
+      '/packages/glyph/dist/tsl/',
+    ],
+  },
+);
+const typegpuBitmapShader = await measureJavaScript(
+  'typegpu-bitmap-shader-js',
+  'TypeGPU Bitmap shader JS',
+  new URL('../size-entries/text-typegpu-bitmap.ts', import.meta.url),
+  false,
+  true,
+  true,
+);
+const typegpuMsdfShader = await measureJavaScript(
+  'typegpu-msdf-shader-js',
+  'TypeGPU MSDF shader JS',
+  new URL('../size-entries/text-typegpu-msdf.ts', import.meta.url),
+  false,
+  true,
+  true,
+);
+const typegpuSlugShader = await measureJavaScript(
+  'typegpu-slug-shader-js',
+  'TypeGPU Slug shader JS',
+  new URL('../size-entries/text-typegpu-slug.ts', import.meta.url),
+  false,
+  true,
+  true,
+);
+const typegpuDecorationShader = await measureJavaScript(
+  'typegpu-decoration-shader-js',
+  'TypeGPU decoration shader JS',
+  new URL('../size-entries/text-typegpu-decoration.ts', import.meta.url),
+  false,
+  true,
+  true,
+);
+const typegpuIntegration = await measureJavaScript(
+  'typegpu-direct-renderer-js',
+  'TypeGPU direct renderer JS',
+  new URL('../size-entries/text-typegpu-integration.ts', import.meta.url),
+  false,
+  true,
+  true,
+  {
     expectedDynamic: [],
     excludedInitial: [
       '/packages/glyph/dist/react',
@@ -477,6 +527,11 @@ const entries: SizeEntry[] = [
   glyphConfig,
   tslSubpath,
   typegpuSubpath,
+  typegpuBitmapShader,
+  typegpuMsdfShader,
+  typegpuSlugShader,
+  typegpuDecorationShader,
+  typegpuIntegration,
   coreJavaScript,
   textShaperWasm,
   threeRuntime,

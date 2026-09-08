@@ -1,1 +1,1 @@
-export * from '@pmndrs/glyph/shaders';
+export * from '@pmndrs/glyph/shaders/typegpu';

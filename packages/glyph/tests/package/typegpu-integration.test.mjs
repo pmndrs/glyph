@@ -232,7 +232,7 @@ test('TypeGPU roots consume real engine output, retain idle draws and isolate na
 
 test('TypeGPU application and shader entrypoints have separate dependency boundaries', async () => {
   const integration = await import('@pmndrs/glyph/typegpu');
-  const shaders = await import('@pmndrs/glyph/shaders');
+  const shaders = await import('@pmndrs/glyph/shaders/typegpu');
   assert.deepEqual(Object.keys(integration), ['defineTypeGpuConfig']);
   assert.equal(typeof shaders.bitmapFragment, 'function');
   for (const subpath of ['typegpu/bitmap', 'typegpu/internal/renderer', 'typegpu/text']) {

@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:7056b9ec1e5ad8d1ae4d5da4de63643984ebc28a5d6cdba68dd18ee08a7a4fa6'
+source_digest: 'sha256:ce0bba91e7dd390187149e4a05b5f546453ba7ece5e57d32c4a576e6a7e299d2'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -121,7 +121,7 @@ The package owns six runtime layers:
 | Shaping and layout       | Rust/Wasm                                                                       | Unicode analysis, bidi, font fallback, shaping, line composition, positioning, ellipsis, and semantic query state.                    |
 | Codec and command buffer | Rust/Wasm                                                                       | Interpret a validated Codec, pack canonical raster-format records, coalesce dirty ranges, and emit a compact command buffer.          |
 | Three.js integration     | `@pmndrs/glyph/three`                                                           | Compile Codec programs, resolve font/material resources, apply command-buffer deltas, upload dirty ranges, and maintain draw proxies. |
-| React integration        | `@pmndrs/glyph/three/typegpu`                                                   | Experimental Three config and shader adapters backed by `/shaders`; shares scene and lifecycle classes with `/three`.                 |
+| TypeGPU Three experiment | `@pmndrs/glyph/three/typegpu`                                                   | Experimental Three config and shader adapters backed by `/shaders/typegpu`; shares scene and lifecycle classes with `/three`.         |
 | `@pmndrs/glyph/react`    | Reconcile React values into the same imperative `Text` and `TextGroup` objects. |
 
 Runtime Rust and all shared Rust code remain `no_std + alloc` compatible with the package allocator contract. The optional
@@ -190,15 +190,15 @@ config helpers.
 | `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                           |
 | `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                              |
 | `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-format contracts.                                                          |
-| `@pmndrs/glyph/tsl`          | Stable native TSL raster-format shaders; no scene integration.                                                                         |
-| `@pmndrs/glyph/shaders`      | Canonical TypeGPU algorithms, schemas, slots, and accessors for every first-party raster format; no scene integration or engine.       |
+| `@pmndrs/glyph/shaders/tsl`     | Stable native TSL raster-format shaders; no scene integration.                                                                      |
+| `@pmndrs/glyph/shaders/typegpu` | Canonical TypeGPU algorithms, schemas, slots, and accessors for every first-party raster format; no scene integration or engine.    |
 | `@pmndrs/glyph/typegpu`      | `defineTypeGpuConfig`, retained text, and bitmap/MSDF/Slug draws into caller-owned passes.                                             |
 | `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers.                                                                                                       |
 
 The three renderer-neutral raster leaves retain portable Codec-registration side effects under tree shaking. Built-in
-Three configs select a private typed shader set carried by each handle's renderer resources, with no module-global switch. `/three` and `/tsl` preserve the native TSL implementation from `main`; `/three/typegpu` selects the migrated adapters over `/shaders`. Both handle variants can coexist; `/tsl/*` remains the direct public shader surface for application
+Three configs select a private typed shader set carried by each handle's renderer resources, with no module-global switch. `/three` and `/shaders/tsl` preserve the native TSL implementation from `main`; `/three/typegpu` selects the migrated adapters over `/shaders/typegpu`. Both handle variants can coexist; `/shaders/tsl/*` remains the direct public shader surface for application
 composition. The unshipped `/three/bitmap`, `/three/msdf`, and `/three/slug` forwarding aliases were removed: applications
-import portable formats from `/raster/*` and shader builders from `/tsl/*` without paying for wrapper modules.
+import portable formats from `/raster/*` and shader builders from `/shaders/tsl/*` without paying for wrapper modules.
 Every TypeScript subpath also publishes a custom `source` condition. Workspace Vite applications opt into that condition
 for direct TS/TSX hot reload, while ordinary Node and package consumers continue to resolve built declarations and ESM.
 Wasm and `package.json` exports remain distribution artifacts because they have no TypeScript source equivalent.
@@ -210,7 +210,7 @@ load those bytes.
 
 The TypeScript paragraph engine, paragraph batches/attachments, direct shaping exports, and the text-preparation Worker
 are removed. The `/typegpu` adapter uses the Codec command buffer and public GlyphConfig services. The separate
-`@pmndrs/glyph/shaders` library publishes the experimental raster-format realizations as typed functions for any WebGPU host; `typegpu` is an optional peer and the root entry
+`@pmndrs/glyph/shaders/typegpu` publishes the experimental raster-format realizations as typed functions for any WebGPU host; `typegpu` is an optional peer and the root entry
 has no static edge to it.
 
 The analytic Slug fill algorithm lives in `src/shaders/slug-shaders/core` as TypeGPU shader functions over plain values,
@@ -226,7 +226,7 @@ compiles the staged Slug graph through Three's WGSL and GLSL node builders and g
 both bounded band loops and terminators, and cross-backend builtin compatibility.
 
 `typegpu`, `@typegpu/three`, and `@typegpu/gl` are optional peers because their runtime identities must be shared with the
-consumer, like Three.js and React. Stable `/three` and `/tsl` consumers do not load these bridge runtimes, and
+consumer, like Three.js and React. Stable `/three` and `/shaders/tsl` consumers do not load these bridge runtimes, and
 package-size measurements externalize those peer graphs while retaining the package's emitted shader metadata.
 
 The package-owned `glyph` executable is available through `pnpm exec`; its `bake` command supports both project discovery
@@ -646,7 +646,7 @@ Renderer-facing types that applications can encounter publish from root `@pmndrs
 such as `defineGlyphConfig`, Codec authoring, schema binding, raster-format definition, and resource leases live on
 explicit `@pmndrs/glyph/config/*` leaves. D-306 and D-308 supersede D-249's former public `/core` engine-driving layer. Internal projection,
 identity mapping, planning, settlement, and Wasm transport are package machinery rather than an application or integrator
-API. The explicit `/tsl` and `/shaders` shader subpaths own raster-format shader realizations and no scene, runtime, or root.
+API. The explicit `/shaders/tsl` and `/shaders/typegpu` subpaths own raster-format shader realizations and no scene, runtime, or root.
 
 The raw borrowed Rust publication and its typed command tree never cross the integration boundary. The engine projects
 that trusted wire data through the integration's schema and resource resolver, then calls
@@ -672,8 +672,8 @@ package-private implementation data; the root exposes only renderer-facing seman
 The validator subpaths likewise had no consumer outside this package. Both sets of modules remain reachable by relative
 path from package-owned tests and scripts where wire-level verification is legitimate.
 
-Public implementation helpers use wildcard leaf exports under `/config`, `/three`, `/react`, `/raster`, `/tsl`, and
-`/shaders`; exact friendly aliases such as `/tsl/slug` remain stable. Nested TSL and TypeGPU shader modules are therefore
+Public implementation helpers use wildcard leaf exports under `/config`, `/three`, `/react`, `/raster`,
+`/shaders/tsl`, and `/shaders/typegpu`; exact friendly aliases such as `/shaders/tsl/slug` remain stable. Nested TSL and TypeGPU shader modules are therefore
 directly importable without a barrel. Explicit `null` export-map entries block the package's `internal`, generated ABI,
 font-baker validator, Three executor, raster decoder, and TSL compatibility paths even though package-owned relative
 imports can still reach those files. Packed-package tests import representative nested leaves and prove each blocked path
@@ -1115,7 +1115,7 @@ resources stay caller-owned. TypeGPU reports missing required groups at draw tim
 this supports matrix projections exactly and nonlinear deformations approximately. Optional depth state must match the
 caller-owned pass attachment; transparent text uses caller-controlled depth writes and ordering.
 Decoration lines, rich spans, and third-party raster programs are not part of this high-level API. Renderer buffers and textures are released with their owning roots/resources;
-the caller's TypeGPU root stays alive. Shader-only consumers use `/shaders`, including independently importable leaves.
+the caller's TypeGPU root stays alive. Shader-only consumers use `/shaders/typegpu`, including independently importable leaves.
 
 The [TypeGPU hello-world package](typegpu-hello-world.md) supplies the application and GPU verification workflow.
 MSDF retains Euclidean UV derivative lengths so its antialiasing footprint is invariant under screen rotation.
@@ -1136,6 +1136,6 @@ It also verifies uniform-driven perspective and color changes without reshaping,
 occlusion, offscreen clipping, and isolation between custom callbacks and the default configuration. Explicit bind-group
 checks cover vertex/fragment layouts, replacement, parent-view isolation, missing bindings, named roots, and disposal.
 
-The Three split is exercised through `pnpm scripts run benchmark:v1-bitmap`, with `-- --typegpu` selecting the experimental entry. The same Bitmap, MTSDF, Slug, decoration, retained-update, detached-glyph, and custom-material assertions run on WebGPU and WebGL2 for either config. Package tests also enforce peer isolation and packed experimental entry resolution.
+The Three split is exercised through `pnpm scripts run benchmark:v1-bitmap`, with `-- --typegpu` selecting the experimental entry. The same Bitmap, MTSDF, Slug, decoration, retained-update, detached-glyph, and custom-material assertions run on WebGPU and WebGL2 for either config. A focused package test also runs one Bitmap-plus-decoration material factory through `/three` and `/three/typegpu` and requires the same shader context. The packed-consumer test bundles the root and stable `/three` while rejecting any TypeGPU peer request, then proves the TypeGPU shader, direct-renderer, and Three bridge entries both request their optional peers and bundle when those peers are supplied externally.
 
 The split verification on 2026-09-07 passed both browser workflows. Bitmap produced 3,109 lit pixels with native TSL and 2,685 with the experimental shaders on each backend; custom Bitmap composition likewise produced 2,642 versus 2,185. MTSDF and Slug lit-pixel counts matched in these fixtures. These checks establish rendering and lifecycle behavior, not complete visual parity; the Bitmap difference remains a reason to keep the experimental entry separate.

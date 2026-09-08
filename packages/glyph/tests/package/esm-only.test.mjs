@@ -42,13 +42,15 @@ test('the published contract is ESM-only', async () => {
   });
   for (const subpath of [
     './baker',
-    './tsl/bitmap',
-    './tsl/msdf',
-    './tsl/slug',
-    './tsl/decoration',
-    './shaders/bitmap',
-    './tsl/*',
-    './shaders/*',
+    './shaders/tsl',
+    './shaders/tsl/bitmap',
+    './shaders/tsl/msdf',
+    './shaders/tsl/slug',
+    './shaders/tsl/decoration',
+    './shaders/typegpu',
+    './shaders/typegpu/bitmap',
+    './shaders/tsl/*',
+    './shaders/typegpu/*',
     './three/*',
     './three/typegpu',
     './react/*',
@@ -70,9 +72,9 @@ test('the published contract is ESM-only', async () => {
     './three/renderer-resources',
     './three/text',
     './raster/internal/*',
-    './tsl/internal/*',
-    './shaders/internal/*',
-    './tsl/slug-shaders/tsl-compat',
+    './shaders/tsl/internal/*',
+    './shaders/typegpu/internal/*',
+    './shaders/tsl/slug-shaders/tsl-compat',
   ]) {
     assert.equal(manifest.exports[blocked], null, `${blocked} must remain package-private`);
   }
@@ -102,6 +104,10 @@ test('the published contract is ESM-only', async () => {
     './bakers/bitmap/validate',
     './bakers/msdf/validate',
     './bakers/slug/validate',
+    './tsl',
+    './tsl/*',
+    './shaders',
+    './shaders/*',
   ]) {
     assert.ok(!(removed in manifest.exports), `${removed} is deliberately unpublished and must stay unpublished`);
   }

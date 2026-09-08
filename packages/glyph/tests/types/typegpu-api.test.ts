@@ -11,8 +11,13 @@ import {
   type TypeGpuBitmapInstance,
   type TypeGpuBitmapVertexInput,
   type TypeGpuBitmapVertexOutput,
-} from '@pmndrs/glyph/shaders/bitmap';
-import { msdfAtlasSizeAccessor, msdfFragment, msdfPixelRangeAccessor, msdfSampleSlot } from '@pmndrs/glyph/shaders';
+} from '@pmndrs/glyph/shaders/typegpu/bitmap';
+import {
+  msdfAtlasSizeAccessor,
+  msdfFragment,
+  msdfPixelRangeAccessor,
+  msdfSampleSlot,
+} from '@pmndrs/glyph/shaders/typegpu';
 
 // The technique-specific TypeGPU subpath is importable without any renderer, so a
 // WebGPU host pays only for the realization it selects.
