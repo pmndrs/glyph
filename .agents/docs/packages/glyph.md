@@ -653,16 +653,21 @@ arena growth.
 
 Retained publication tracks lifecycle, text, style, and geometry invalidation independently. The shared configured Text
 controller derives partial updates from each adapter's complete desired state; adapters and renderers do not implement
-wire diffing. A plain string replacement reuses its normalized font, transform, material, style, layout, and constraint
+wire diffing. Three owns deeply frozen normalized style, layout, and constraint snapshots, reusing their identity when a
+full-field reassignment is value-equal; mutating nested caller input followed by the required field reassignment therefore
+cannot rewrite history or suppress an update. A plain string replacement reuses its normalized font, transform,
+material, style, layout, and constraint
 ownership. Equal-length content emits only the minimal scalar-aligned text record; length changes additionally republish
 root-style coverage. A font-size or paint-only update emits only its style record while Rust remains authoritative for
 shaping and layout invalidation. These cases do not republish paragraph membership, scoped order, constraints, regions,
-exclusions, or inline-object records. Rust limits
+exclusions, or inline-object records; assigning an already-plain string to itself does not advance desired state or cross
+the Wasm boundary. Pending style-limit accounting follows the same style-dirty predicate as wire emission. Rust limits
 implicit paragraph inference to an empty planner, so a content batch may address several existing paragraphs without
 dummy lifecycle upserts. An omitted authored `maxLines` is encoded with Rust's existing zero sentinel for the root limit,
 so ordinary geometry no longer depends on string length. In the 684-label workload this reduces the request from 209,448
 to 23,400 bytes and the fresh
-same-machine remote-main A/B from 24.24–25.87 ms to 11.01–11.93 ms median while retaining one draw and 5,362 glyphs.
+same-machine remote-main A/B from 24.24–25.87 ms to final post-review medians of 11.39–11.89 ms while retaining one draw
+and 5,362 glyphs.
 
 Bitmap vertex pixel snapping is an explicit immutable Three/R3F option and defaults off. The unsnapped graph uses the
 ordinary model-view-projection position so shared-root or camera animation preserves subpixel movement; callers targeting

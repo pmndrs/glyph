@@ -787,6 +787,15 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     assertNoRawSpans(update, 'Text update');
     const updateKeys = Reflect.ownKeys(update);
     if (updateKeys.length === 0) return;
+    if (
+      updateKeys.length === 1 &&
+      updateKeys[0] === 'text' &&
+      typeof update.text === 'string' &&
+      this.#desired.spans.length === 0 &&
+      update.text === this.#desired.text
+    ) {
+      return;
+    }
     const next =
       updateKeys.length === 1 && updateKeys[0] === 'text' && typeof update.text === 'string'
         ? replaceDesiredString(this.#desired, update.text)
@@ -1573,12 +1582,47 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
     font: properties.font,
     text,
     spans,
-    style: Object.freeze(style),
-    layout: Object.freeze(layout),
-    constraints: Object.freeze(constraints),
+    style: reuseOrSnapshotTextProperty(previous?.style, style, 'Text style'),
+    layout: reuseOrSnapshotTextProperty(previous?.layout, layout, 'Text layout'),
+    constraints: reuseOrSnapshotTextProperty(previous?.constraints, constraints, 'Text constraints'),
     ...(rasterPixelRatio === undefined ? {} : { rasterPixelRatio }),
     ...(properties.material === undefined ? {} : { material: properties.material }),
   });
+}
+
+function reuseOrSnapshotTextProperty<Value extends object>(
+  previous: Value | undefined,
+  value: Value,
+  label: string,
+): Value {
+  if (previous !== undefined && equalTextProperty(previous, value)) return previous;
+  let snapshot: Value;
+  try {
+    snapshot = structuredClone(value);
+  } catch (cause) {
+    throw new TypeError(`${label} must contain cloneable data`, { cause });
+  }
+  return deepFreeze(snapshot);
+}
+
+function equalTextProperty(previous: unknown, next: unknown, seen = new WeakMap<object, object>()): boolean {
+  if (Object.is(previous, next)) return true;
+  if (typeof previous !== 'object' || previous === null || typeof next !== 'object' || next === null) return false;
+  if (seen.get(previous) === next) return true;
+  seen.set(previous, next);
+  const previousKeys = Reflect.ownKeys(previous);
+  const nextKeys = Reflect.ownKeys(next);
+  if (previousKeys.length !== nextKeys.length) return false;
+  return previousKeys.every(
+    (key) => Object.hasOwn(next, key) && equalTextProperty(Reflect.get(previous, key), Reflect.get(next, key), seen),
+  );
+}
+
+function deepFreeze<Value>(value: Value, seen = new WeakSet<object>()): Value {
+  if (typeof value !== 'object' || value === null || seen.has(value)) return value;
+  seen.add(value);
+  for (const key of Reflect.ownKeys(value)) deepFreeze(Reflect.get(value, key), seen);
+  return Object.freeze(value);
 }
 
 function replaceDesiredString<Format extends RasterFormatMetadata>(

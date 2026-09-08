@@ -1877,6 +1877,13 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   scene.updateMatrixWorld();
   assert.equal(instrumented.crossings, 0, 'an empty update and cached measurement must not cross into Rust');
 
+  instrumented.reset();
+  const unchangedText = left.text;
+  left.text = unchangedText;
+  assert.equal(left.measure(), initialLeftMeasurement, 'an unchanged plain string must preserve cached measurement');
+  scene.updateMatrixWorld();
+  assert.equal(instrumented.crossings, 0, 'an unchanged plain string must not cross into Rust');
+
   // Assigning `text` states the desired string. Publication derives the narrowest scalar-aligned
   // replacement from the last published string, coalescing intermediate desired states.
   left.text = 'A';
@@ -2014,6 +2021,35 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
       inlineObject: 0,
     },
     'font-size updates publish only style while Rust derives shaping and layout invalidation',
+  );
+
+  const mutableWidth = { mode: 'exact', size: 120 };
+  right.constraints = { ...right.constraints, width: mutableWidth };
+  const widerMeasurement = right.measure();
+  scene.updateMatrixWorld();
+  mutableWidth.size = 60;
+  instrumented.reset();
+  right.constraints = { ...right.constraints, width: mutableWidth };
+  const narrowerMeasurement = right.measure();
+  scene.updateMatrixWorld();
+  assert.notEqual(
+    narrowerMeasurement.width,
+    widerMeasurement.width,
+    'reassigning a full field after mutating nested caller input must publish the new owned snapshot',
+  );
+  assert.deepEqual(
+    instrumented.latestRequestCounts(),
+    {
+      paragraph: 0,
+      paragraphOrder: 0,
+      text: 0,
+      style: 0,
+      constraint: 1,
+      region: 2,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'a nested constraint change publishes geometry without unchanged semantic sections',
   );
 
   instrumented.reset();

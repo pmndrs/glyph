@@ -1784,7 +1784,7 @@ function retainedTextMetrics(desired: ResolvedTextOptions, ordinal: number): Ret
 }
 
 function pendingStyleMutationCount(state: RetainedTextLimitState): number {
-  if (!state.semanticDirty) return 0;
+  if (!state.styleDirty) return 0;
   return state.metrics.styleCount + Math.max(0, state.publishedStyleCount - state.metrics.styleCount);
 }
 

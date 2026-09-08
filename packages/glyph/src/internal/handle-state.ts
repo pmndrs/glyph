@@ -1247,11 +1247,6 @@ export class PlanTransport {
     this.#textCapacity = Math.max(this.#textCapacity, textCapacity);
   }
 
-  /** @internal Reserve one paragraph's retained text scratch without changing transport capacities. */
-  _reserveText(textCapacity: number): void {
-    this.reserve(this.#requestCapacity, this.#resultCapacity, textCapacity);
-  }
-
   /** @internal Stage one root request in its retained Wasm arena without invoking the engine. */
   stageUpdate(request: Uint8Array): number {
     this.#assertActive();
