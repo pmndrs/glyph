@@ -3,11 +3,7 @@ import { normalizeGlyphBufferCapacity } from '../../text-properties.js';
 import { threeCodecDescriptor } from '../codec.js';
 import type { ThreePublicationBoundary } from './publication-boundary.js';
 import { createThreeCodec, threeCodecResources } from './renderer-resources.js';
-import {
-  ThreeRootHost,
-  threeTextConstructionToken,
-  type ThreeRootOptions,
-} from '../text.js';
+import { ThreeRootHost, threeTextConstructionToken, type ThreeRootOptions } from '../text.js';
 
 import {
   ThreeSchema,

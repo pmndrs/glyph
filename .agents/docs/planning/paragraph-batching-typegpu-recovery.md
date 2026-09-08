@@ -114,23 +114,24 @@ every unrelated long-running suite must be repeated after each small fix.
 
 ### Required before or during the stack rebase
 
-- [ ] Confirm merged-main CI and release jobs are green; repair failures attributable to #46 directly on `main`.
-- [ ] Keep shader ownership split under `/shaders/tsl` and `/shaders/typegpu` without making one backend import the other.
-- [ ] Move the physical sources to `src/shaders/tsl/` and `src/shaders/typegpu/` so the package graph mirrors those
-  public namespaces; do not retain ambiguous `/tsl`, generic `/shaders`, or `/three-typegpu` aliases.
-- [ ] Keep `/three` on the TSL path and provide `/three/typegpu` as the explicit Three-plus-TypeGPU bridge.
-- [ ] Keep `/typegpu` as the direct integration leaf for custom TypeGPU engines.
-- [ ] Prove default/root and `/three` consumers build with TypeGPU peer packages absent.
-- [ ] Prove `/typegpu` and `/three/typegpu` consumers build when their optional peers are installed.
-- [ ] Keep `@typegpu/gl` as the optional fallback-rendering peer for the Three-plus-TypeGPU integration, while proving
-  default/root, `/three`, `/typegpu`, and `/shaders/typegpu` consumers do not require it unless `/three/typegpu` is
-  selected.
-- [ ] Measure every public leaf independently so `export *` or shared configuration does not retain both shader graphs.
-- [ ] Resolve the merged PR's restored root `compositing` option in favor of the accepted no-compositing contract.
-- [ ] Resolve its restored `textUnits: 256` default in favor of 64; retained text still grows from actual content.
+- [x] Confirm merged-main CI and release jobs are green; repair failures attributable to #46 directly on `main`.
+- [x] Keep shader ownership split under `/shaders/tsl` and `/shaders/typegpu` without making one backend import the other.
+- [x] Move the physical sources to `src/shaders/tsl/` and `src/shaders/typegpu/` so the package graph mirrors those
+      public namespaces; do not retain ambiguous `/tsl`, generic `/shaders`, or `/three-typegpu` aliases.
+- [x] Keep `/three` on the TSL path and provide `/three/typegpu` as the explicit Three-plus-TypeGPU bridge.
+- [x] Keep `/typegpu` as the direct integration leaf for custom TypeGPU engines.
+- [x] Prove default/root and `/three` consumers build with TypeGPU peer packages absent.
+- [x] Prove `/typegpu` and `/three/typegpu` consumers build when their optional peers are installed.
+- [x] Keep `@typegpu/gl` as the optional fallback-rendering peer for the Three-plus-TypeGPU integration, while proving
+      default/root, `/three`, `/typegpu`, and `/shaders/typegpu` consumers do not require it unless `/three/typegpu` is
+      selected.
+- [x] Price `/three`, `/three/typegpu`, and `/typegpu` as the application-facing bundle boundaries; use package-resolution,
+      graph-isolation, and tree-shaking tests for shader leaves instead of redundant per-technique size budgets.
+- [x] Resolve the merged PR's restored root `compositing` option in favor of the accepted no-compositing contract.
+- [x] Resolve its restored `textUnits: 256` default in favor of 64; retained text still grows from actual content.
 - [ ] Re-run the batching draw-count matrix through both `/three` and `/three/typegpu` after conflict resolution.
-- [ ] Decide and document the Bitmap native-TSL versus TypeGPU pixel delta. Do not claim pixel parity unless exact image
-  evidence proves it; pin an honest experimental threshold if the implementation intentionally remains non-identical.
+- [x] Decide and document the Bitmap native-TSL versus TypeGPU pixel delta. Do not claim pixel parity unless exact image
+      evidence proves it; pin an honest experimental threshold if the implementation intentionally remains non-identical.
 
 ### Explicitly not a blocker for this stack
 
@@ -149,19 +150,19 @@ owning layer and add the regression before broad verification.
 
 - [x] Accept content-only semantic mutations for multiple existing paragraphs without dummy lifecycle upserts.
 - [x] Accept semantic wire tables grouped in an order different from retained paragraph order while retaining atomic
-  rejection of unknown or noncontiguous paragraph groups.
+      rejection of unknown or noncontiguous paragraph groups.
 - [x] Preserve shaping-safe emergency wrapping for an overlong unbreakable word.
 - [x] Preserve authored tight explicit line height, including negative half-leading.
 - [x] Query or inspect one detached Text without rebinding unrelated detached siblings.
 - [x] Reject duplicate paragraph ranks at the typed boundary and preserve atomic rank swaps.
 - [x] Bound `measureParagraph` result-capacity retries while retaining asymmetric A/B capacity growth.
 - [x] Replace or encapsulate the live `queryMembers` scratch-array return so re-entry cannot observe mutated membership.
-- [ ] Make exact telemetry capture admit CPU and completed GPU samples under one documented window rule.
-- [ ] Prove negative-advance dense scripts cannot materialize one 12-byte sparse-word record per cluster or disable the
-  intended chunk fast path. Measure memory and fitting throughput before selecting the density guard.
+- [x] Make exact telemetry capture admit CPU and completed GPU samples under one documented window rule.
+- [x] Prove negative-advance dense scripts cannot materialize one 12-byte sparse-word record per cluster or disable the
+      intended chunk fast path. Measure memory and fitting throughput before selecting the density guard.
 - [ ] Pin the established per-workload draw-count envelopes in executable tests rather than prose alone.
 - [ ] Decide the internal baseline-shift contract separately: layout queries expose nonnegative top-to-baseline and
-  baseline-to-bottom distances, while unrestricted internal shifts can make either derived distance negative.
+      baseline-to-bottom distances, while unrestricted internal shifts can make either derived distance negative.
 
 ## Retained-update and resize performance work
 
@@ -178,24 +179,33 @@ candidate versus 0.60–0.71 ms on main, while whole-frame p95 could reach 17–
 reflows around 0.82–1.05 ms while whole frames could reach roughly 27 ms. This points to adapter/application scheduling,
 measurement reconciliation, and reactive UI work before deeper kernel changes.
 
+No historical revision in the measured retained-resize ladder was about twice as fast as the recovered core. The
+remembered twofold results were either an isolated chunk-summary microkernel whose production consumer was still pending,
+or a compound Paragraph Stress comparison under the older React/Koota harness. Production retains four-block SIMD for
+flags and cluster work plus the codec kernels; eight-block bidi was a lab-only variant and was about 1.9 times slower than
+four-block at 100,602 items. On a fixed-active 22,000-target resize, rebuilt explicit SIMD was about 13% faster than the
+same revision's rebuilt scalar artifact, and the current fixed-active SIMD median was about 26% faster than the older
+August SIMD result. Every final comparison must still rebuild and hash its artifact because `dist/text_shaper.wasm` is a
+last-build-wins output.
+
 ### Ordered optimization work
 
 - [x] In Three measurement/inspection, call the existing `needsReconcile(texts)` predicate and reconcile only when it is
-  true. Prove detached/reparent/rank/material cases still reconcile, while a cached width-query avoids Set allocation and
-  member removal scans.
+      true. Prove detached/reparent/rank/material cases still reconcile, while a cached width-query avoids Set allocation and
+      member removal scans.
 - [x] In Editorial layout, call `measure()` once per Text per reflow and reuse that result instead of six total calls.
 - [x] Decouple Paragraph Stress's automated per-frame width/font motion from React/Koota control-tree rerenders. Update
-  the scene imperatively and reflect controls at a lower cadence without changing the authored workload.
+      the scene imperatively and reflect controls at a lower cadence without changing the authored workload.
 - [ ] Re-measure active Paragraph Stress and Editorial with the exact capture API before changing Rust again.
 - [ ] Carry a sparse-word cursor across lines to remove repeated `partition_point` only if a profile shows material cost.
 - [ ] Investigate retained line/glyph dirty ranges so width changes do not globally compare and republish unchanged
-  positioned streams.
+      positioned streams.
 - [ ] Consider segmented positioned storage only after the simpler range proof. It must lower multi-megabyte A/B traffic
-  without regressing gather locality, cold start, or constant-time frames.
+      without regressing gather locality, cold start, or constant-time frames.
 - [ ] Benchmark SIMD for classified uniform LTR flow/positioning runs only after data is isolated into vector-friendly
-  blocks. Keep scalar fallback and require a same-source win over LLVM auto-vectorization.
+      blocks. Keep scalar fallback and require a same-source win over LLVM auto-vectorization.
 - [ ] Track initial shaping, warm updates, p95/max spikes, allocation count, Wasm high-water memory, request/publication
-  bytes, browser transfer size, and cold package initialization together; a median-only improvement is insufficient.
+      bytes, browser transfer size, and cold package initialization together; a median-only improvement is insufficient.
 
 Camera distance remains TypeScript-owned because it depends on host camera state. The adapter should publish paragraph
 ranks and let Rust own atomic permutation. Benchmark whether replacing the current 544-entry JavaScript sort with direct
@@ -215,35 +225,35 @@ notes on #163; do not add an Intl adapter or second Wasm target in this branch w
 
 Use repository-owned scripts and identical source/flags for A/B evidence. Record raw artifacts as well as summaries.
 
-- [ ] PR #46 merged-main CI and release workflows are green.
+- [x] PR #46 correction main CI and release workflows are green at `a82bfe5c`.
 - [ ] The full stack is visibly and correctly linked on GitHub after rebase, with #161 immediately above #160.
 - [ ] Focused regressions for every correctness fix pass.
 - [ ] Glyph Rust tests, Unicode conformance, rustfmt, Clippy `-D warnings`, TypeScript type tests, Oxfmt, and Oxlint pass.
 - [ ] Package export/optional-peer/tree-shaking fixtures pass for root, `/three`, `/three/typegpu`, and `/typegpu`.
 - [ ] The TypeGPU hello-world builds and its hardware live probe passes for Bitmap, MTSDF, and Slug.
 - [ ] The same hardware live-probe matrix passes through stable `/three` and experimental `/three/typegpu`, including
-  Bitmap, MTSDF, Slug, decorations, retained updates, custom materials, expected draw counts, and finite CPU/GPU timing.
+      Bitmap, MTSDF, Slug, decorations, retained updates, custom materials, expected draw counts, and finite CPU/GPU timing.
 - [ ] `pnpm docs:check` passes and every changed package concept has a current `source_digest`.
 - [ ] Browser presentation matrix passes all 60 backend/technique/workload cells.
 - [ ] All 24 live mutation probes reach a visible frame without renderer status errors.
 - [ ] Automated draw pins hold: Icon Grid 2, camera-ranked labels 1, Paragraph Stress 1, Rich Text 5, and other workloads
-  their established one-to-three envelopes.
+      their established one-to-three envelopes.
 - [ ] Fresh-scene A/B captures exactly 120 CPU and 120 finite completed-GPU samples per cell, rotates workload order, and
-  compares at least seven runs against a freshly built remote `main` worktree.
+      compares at least seven runs against a freshly built remote `main` worktree.
 - [ ] Paragraph Stress and Editorial active-resize median and tail CPU/GPU times are flat or better; idle/steady results
-  do not substitute for active mutation evidence.
+      do not substitute for active mutation evidence.
 - [ ] Node and browser SIMD labs remain flat or better, with scalar/reference parity.
 - [ ] Rebuild and hash the Wasm artifact for every A/B revision; compare explicit SIMD with a separately rebuilt scalar
-  artifact on the same final revision before attributing any historical performance delta to vectorization.
+      artifact on the same final revision before attributing any historical performance delta to vectorization.
 - [ ] Replay the documented revision ladder under one identical exact-window capture overlay. Freeze workload semantics,
-  use fresh renderers, rotate order for at least seven paired rounds, and split Paragraph Stress at the commit that moved
-  authored reflow into the timed scene frame so incompatible telemetry windows are never presented as engine regressions.
+      use fresh renderers, rotate order for at least seven paired rounds, and split Paragraph Stress at the commit that moved
+      authored reflow into the timed scene frame so incompatible telemetry windows are never presented as engine regressions.
 - [ ] Package size, Wasm raw/gzip/Brotli size, cold initialization, allocator count, and linear-memory high-water checks
-  show no unexplained regression.
+      show no unexplained regression.
 - [ ] Dead/duplicate-code tooling is rerun in the changed scope; cleanup does not add abstraction or hot-path work solely
-  to satisfy a metric.
+      to satisfy a metric.
 - [ ] A final read-only Opus adversarial review is run through the repository review tooling; every reported claim is
-  independently reproduced or rejected before changes are made.
+      independently reproduced or rejected before changes are made.
 - [ ] CI is green on the final pushed stack.
 - [ ] The maintainer completes the benchmark application pass and explicitly approves merge.
 
