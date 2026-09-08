@@ -2,6 +2,8 @@
 
 Run `mise exec -- pnpm scripts run typegpu:dev` from the workspace root, then open the printed URL in a WebGPU browser.
 The example includes its own Inter font artifact and license in `assets/`. Its production build includes the font license.
+Regenerate that artifact through the current package contract with `mise exec -- pnpm --filter
+@pmndrs/glyph-typegpu-hello-world bake:inter`; the app check verifies the committed bytes without rewriting them.
 
 The app creates a caller-owned TypeGPU root, loads fonts, and selects Glyph's TypeGPU integration:
 
