@@ -59,17 +59,8 @@ pub const DESCRIPTOR_FINGERPRINT_V0: u32 = 0x6473_6330;
 pub const SHAPING_FINGERPRINT_V0: u32 = 0x7368_7030;
 pub const SOURCE_FINGERPRINT_V0: u32 = 0x736f_7572;
 
-/// The single value a raster and its core font compare to decide they belong together.
-///
-/// The source fingerprint participates because rasters are built from outlines and the shaping
-/// payload deliberately carries none: two fonts with identical `head`/`maxp`/`cmap`/`hhea`/`hmtx`
-/// tables but different curves share a shaping identity, so without this a raster baked from one
-/// would be accepted against the other and render the wrong shapes.
-///
-/// Every dimension that must agree is folded in here, so a consumer performs one comparison
-/// instead of re-deriving the list at each call site and forgetting a dimension when the format
-/// grows. Keys are emitted in the sorted order RFC 8785 requires, matching `canonicalJson` in
-/// `src/internal/raster-identity.ts`.
+/// Returns the canonical fingerprint proving that a raster and core font belong together.
+/// Key order matches `canonicalJson` in `src/internal/raster-identity.ts`.
 pub fn compatibility_fingerprint(
     source_fingerprint: &str,
     shaping_fingerprint: &str,
@@ -264,14 +255,7 @@ pub(crate) fn zeroed_bytes(byte_length: usize) -> Result<std::vec::Vec<u8>, Rast
 mod fingerprint_tests {
     use super::*;
 
-    /// Reference vectors produced by mmh3, a MurmurHash3 implementation outside this
-    /// repository.
-    ///
-    /// This hash is implemented twice: here, and in TypeScript at
-    /// `packages/glyph/src/internal/fingerprint.ts`. Rust stamps external page filenames at
-    /// bake time and TypeScript recomputes them at load time, so a single divergent bit makes
-    /// every external page 404. Holding both ports against an outside implementation catches a
-    /// bug the two share, which comparing them only to each other cannot.
+    /// Independent mmh3 vectors shared by the Rust and TypeScript fingerprint implementations.
     const REFERENCE_VECTORS: &str = include_str!("../evidence/fingerprint-vectors-v0.json");
 
     #[test]

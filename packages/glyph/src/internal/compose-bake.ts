@@ -10,12 +10,7 @@ import { compatibilityFingerprint } from './raster-identity.js';
 export interface RasterComposition {
   readonly raster: RasterBakeArtifact;
   readonly packaging: RasterPackaging;
-  /**
-   * Filename for an external companion, and the `uri` recorded for it in the core's directory.
-   *
-   * The baker mints an id from identity it can see; only the caller knows what the core font is
-   * called on disk, and the directory entry has to name the file that will actually be written.
-   */
+  /** External companion filename and the core directory's matching `uri`. */
   readonly companionName?: string;
 }
 

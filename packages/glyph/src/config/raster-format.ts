@@ -213,13 +213,7 @@ function assertIdentifier(value: string, label: string): void {
   if (value.length === 0) throw new TypeError(`${label} must not be empty`);
 }
 
-/**
- * A kind is interpolated into the compatibility digest's canonical form and into resource
- * identities, so it is restricted to characters that need no escaping in either. Rust builds that
- * canonical string by interpolation rather than serialization; a kind carrying a quote or a
- * backslash would hash differently there than it does here. A glTF extension name is an uppercase
- * vendor prefix followed by underscore-separated parts.
- */
+/** Restricts digest/resource identifiers to the unescaped form shared with Rust. */
 function assertPattern(value: string, pattern: RegExp, label: string, shape: string): void {
   assertIdentifier(value, label);
   if (!pattern.test(value)) throw new TypeError(`${label} ${JSON.stringify(value)} must look like ${shape}`);

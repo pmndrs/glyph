@@ -34,8 +34,7 @@ impl From<BuildError> for FontOutlineError {
 
 /// Resolve and normalize one font-local glyph into Slug's quadratic geometry.
 ///
-/// `cubic_subdivisions` only reaches CFF sources, whose cubics are fitted with
-/// that many quadratics each; TrueType outlines are already quadratic and ignore it.
+/// CFF cubics use `cubic_subdivisions`; TrueType outlines ignore it.
 pub fn font_glyph_geometry(
     font: &FontRef<'_>,
     glyph_id: GlyphId,

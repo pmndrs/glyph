@@ -97,18 +97,7 @@ export function deriveRasterKey(input: {
   return fingerprint128(textEncoder.encode(canonical), fingerprintDomain.descriptor) as string as RasterKey;
 }
 
-/**
- * The single value a raster and its core font compare to decide they belong together.
- *
- * Every dimension that must agree is folded in here, so a consumer performs one comparison
- * instead of re-deriving the list at each call site and forgetting a dimension when the format
- * grows. The canonical form is published contract: a build pipeline can record the digest beside
- * the inputs it came from and recompute it later from its own manifest.
- *
- * ```text
- * {"glyphCount":2937,"glyphIdWidth":16,"kind":"bitmap","rasterKey":"d1dc…","shaping":"0c52…","source":"14fa…","version":0}
- * ```
- */
+/** Returns the published canonical fingerprint proving that a raster and core font agree. */
 export function compatibilityFingerprint(input: {
   readonly glyphCount: number;
   readonly glyphIdWidth: number;

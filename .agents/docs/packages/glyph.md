@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:fe1c755e053889933fdb1ab94e00d3f440063d8fe3fe8759b2bdcc9d1cc7cc2f'
+source_digest: 'sha256:4f0493d95906f9507ca9a7d35c33de708c7809237e18e1a3c5575c7b904a1723'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -452,6 +452,11 @@ and omit the sideband when scope and rank are unchanged. An ungrouped
 `Text.renderOrder` retains ordinary Three draw-mesh meaning. Paragraph rank is deliberately absent from glyph storage and
 draw keys: compatible spans and grouped paragraphs therefore coalesce by resource, material, and fixed paint layer, with
 under-decoration, glyph, and over-decoration layers preserving CSS paint order.
+Core preflights uniqueness only when a paragraph is created or its base lifecycle order changes, and validates the final
+nonremoved desired set rather than each update in isolation. Atomic base-order swaps therefore remain valid, duplicate
+final slots fail before serialization, and rank-only Billboard frames avoid the scan entirely; Rust retains the same
+authoritative validation at the ABI boundary. An accepted rank-only frame commits revisions without repeating cached
+paragraph measurement calls or bounding-box publication.
 Each traversed Text reports only its own current Scene. When that Scene and the renderer-owned draw object are unchanged,
 observation returns without allocating or scanning sibling Text instances. A full membership scan is reserved for an
 actual Scene transition or a detached draw object, including recovery after a host clears and reattaches the authored
@@ -572,11 +577,13 @@ only while it has changed text to publish; an idle synchronization does not ente
 publication therefore pays no semantic-sidecar cost, while renderers that need same-frame bounds pay the explicit
 per-publication cost instead of making a second Wasm query.
 
-An explicit query before first render carries the desired paragraph lifecycle and applies text, style, and geometry
-mutations only for the queried paragraph. Sequential queries extend one speculative batch candidate. The next ordinary
-publication adopts matching prepared work and publishes the batch once instead of shaping twice; a geometry-only mismatch
-reuses the semantic prefix and recomputes only flow and positioning. Unchanged measurements and inspections remain cached
-until the next semantic mutation.
+An explicit query before first render carries the complete desired paragraph lifecycle and applies text, style, and
+geometry mutations only for the queried paragraph. It serializes paragraph-order rows only for nonremoved paragraphs
+whose scoped rank is still pending publication; a semantic-only query therefore does not resend stable ranks, while
+sequential queries preserve every rank in the pending transaction. Sequential queries extend one speculative batch
+candidate. The next ordinary publication adopts matching prepared work and publishes the batch once instead of shaping
+twice; a geometry-only mismatch reuses the semantic prefix and recomputes only flow and positioning. Unchanged
+measurements and inspections remain cached until the next semantic mutation.
 
 The engine additionally exports `pmndrs_glyph_engine_measure_paragraph`, a paragraph-scoped synchronous query beside
 `pmndrs_glyph_engine_update`. It reuses the update request layout with the queried paragraph as an ABI argument, runs
@@ -655,12 +662,14 @@ arena growth.
 
 Retained publication tracks lifecycle, text, style, and geometry invalidation independently. The shared configured Text
 controller derives partial updates from each adapter's complete desired state; adapters and renderers do not implement
-wire diffing. Three owns deeply frozen normalized style, layout, and constraint snapshots, reusing their identity when a
-full-field reassignment is value-equal; mutating nested caller input followed by the required field reassignment therefore
-cannot rewrite history or suppress an update. A plain string replacement reuses its normalized font, transform,
-material, style, layout, and constraint
-ownership. When those already-owned field identities return through a content-only update, normalization skips their
-merge, validation, deep comparison, and clone; an actual full-field reassignment still takes the validating snapshot path.
+wire diffing. The shared controller retains the accepted caller identities beside cycle-safe, deeply frozen style,
+layout, and constraint snapshots. Reusing the same readonly outer record is an O(1) unchanged signal; supplying a new
+outer record compares it with the accepted snapshot and clones only a material change. A nested edit submitted through a
+new outer style, layout, or constraint record therefore cannot rewrite history or disappear through `/typegpu` or a
+custom `GlyphConfig`. Three's retained authoring model uses the same snapshot utility, and its package-owned records cross
+the controller seam without a second clone. A plain string replacement reuses its normalized font, transform, material,
+style, layout, and constraint ownership. When those accepted input identities return through a content-only update,
+normalization skips recursive comparison and cloning; a new outer property record still takes the validating path.
 Equal-length content emits only the minimal scalar-aligned text record; length changes additionally republish
 root-style coverage. A font-size or paint-only update emits only its style record while Rust remains authoritative for
 shaping and layout invalidation. These cases do not republish paragraph membership, scoped order, constraints, regions,

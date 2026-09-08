@@ -93,6 +93,44 @@ function recordingHost() {
         },
         () => {},
       ),
+    root: {
+      create(context) {
+        const selected = base.root.create(context);
+        selected.createCoreText = (selection, options) => {
+          const font = context.fonts.acquire(selection);
+          const transform = { position: root.createUniform() };
+          let state = { ...options, font, transform };
+          let controller;
+          let disposed = false;
+          try {
+            controller = context.services.createText(state);
+          } catch (error) {
+            transform.position.buffer.destroy();
+            font.dispose();
+            throw error;
+          }
+          return {
+            update(update) {
+              if (disposed) throw new Error('core test text is disposed');
+              const next = { ...state, ...update, font, transform };
+              controller.update(next);
+              state = next;
+            },
+            dispose() {
+              if (disposed) return;
+              disposed = true;
+              try {
+                controller.dispose();
+              } finally {
+                transform.position.buffer.destroy();
+                font.dispose();
+              }
+            },
+          };
+        };
+        return selected;
+      },
+    },
   };
   return { config, allocations, recorded, uploads, stats };
 }
@@ -225,6 +263,88 @@ test('TypeGPU roots consume real engine output, retain idle draws and isolate na
     assert.equal(host.allocations.size, 0, 'all renderer-owned buffers are released');
     assert.throws(() => handle.draw({}, { width: 640, height: 240 }), /disposed/);
   } finally {
+    handle.dispose();
+    font.dispose();
+  }
+});
+
+test('TypeGPU text snapshots nested desired state before comparing later updates', async () => {
+  const host = recordingHost();
+  const handle = glyph.handle('typegpu:nested-state-snapshot', host.config);
+  const font = glyph.fontFace(new Blob([fontBytes]), { format: msdf });
+  try {
+    await font.load();
+    const width = { mode: 'exact', size: 200 };
+    const text = handle.createText({
+      font,
+      text: 'A deliberately long line that must wrap after its exact width changes.',
+      constraints: { width },
+      layout: { wrap: 'word' },
+    });
+    glyph.shape();
+    const before = text.measure();
+    assert.equal(before.width, 200);
+
+    const originalStructuredClone = globalThis.structuredClone;
+    let structuredCloneCalls = 0;
+    globalThis.structuredClone = (...arguments_) => {
+      structuredCloneCalls += 1;
+      return originalStructuredClone(...arguments_);
+    };
+    try {
+      width.size = 40;
+      text.update({ constraints: { width } });
+    } finally {
+      globalThis.structuredClone = originalStructuredClone;
+    }
+    const after = text.measure();
+    assert.equal(after.width, 40);
+    assert.ok(after.lineCount > before.lineCount);
+    assert.equal(structuredCloneCalls, 1, 'one owning boundary snapshots an actual property change');
+
+    const OriginalWeakMap = globalThis.WeakMap;
+    globalThis.WeakMap = class extends OriginalWeakMap {
+      constructor() {
+        super();
+        throw new Error('unchanged properties must not allocate comparison state');
+      }
+    };
+    try {
+      text.update({ text: 'A different line reuses the retained property snapshots.' });
+    } finally {
+      globalThis.WeakMap = OriginalWeakMap;
+    }
+
+    text.dispose();
+  } finally {
+    handle.dispose();
+    font.dispose();
+  }
+});
+
+test('the shared planner rejects duplicate final orders while allowing atomic swaps', async () => {
+  const host = recordingHost();
+  const handle = glyph.handle('typegpu:order-preflight', host.config);
+  const font = glyph.fontFace(new Blob([fontBytes]), { format: msdf });
+  let first;
+  let second;
+  try {
+    await font.load();
+    first = handle.createCoreText(font, { text: 'first', order: 0 });
+    second = handle.createCoreText(font, { text: 'second', order: 1 });
+    glyph.shape();
+
+    first.update({ order: 1 });
+    second.update({ order: 0 });
+    assert.doesNotThrow(() => glyph.shape(), 'the final desired order permits an atomic swap');
+
+    second.update({ order: 1 });
+    assert.throws(() => glyph.shape(), /retained text order 1 is already in use/);
+    second.update({ order: 0 });
+    assert.doesNotThrow(() => glyph.shape(), 'a rejected duplicate leaves the desired frame repairable');
+  } finally {
+    first?.dispose();
+    second?.dispose();
     handle.dispose();
     font.dispose();
   }

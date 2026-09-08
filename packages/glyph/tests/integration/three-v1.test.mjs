@@ -348,6 +348,16 @@ test('Text renderOrder ranks grouped paragraphs while standalone Text keeps Thre
   };
 
   const authored = groupedSequence();
+  const minimum = labels[0].boundingBox.min;
+  const setMinimum = minimum.set;
+  let boundingBoxPublications = 0;
+  minimum.set = function setTrackedMinimum(x, y, z) {
+    boundingBoxPublications += 1;
+    return setMinimum.call(this, x, y, z);
+  };
+  t.after(() => {
+    minimum.set = setMinimum;
+  });
   labels[0].renderOrder = 2;
   labels[1].renderOrder = 1;
   labels[2].renderOrder = 0;
@@ -356,6 +366,7 @@ test('Text renderOrder ranks grouped paragraphs while standalone Text keeps Thre
   assert.deepEqual(groupedSequence(), [...authored].reverse());
   assert.equal(instrumentedGlyph.crossings, 1, 'one paragraph-order transaction crosses into Rust');
   assert.equal(instrumentedGlyph.measureCrossings, 0, 'order-only publication reuses measurements');
+  assert.equal(boundingBoxPublications, 0, 'order-only publication does not republish cached bounds');
   assert.deepEqual(
     instrumentedGlyph.latestParagraphMutations(),
     [],
@@ -2112,6 +2123,7 @@ function instrumentNextGlyphEngine() {
   let crossings = 0;
   let measureCrossings = 0;
   let latestRequest;
+  let latestMeasurementRequest;
   let latestUpdateFlags = 0;
   let latestUpdateGeneration = 0;
   let latestBatchCount = 0;
@@ -2167,6 +2179,8 @@ function instrumentNextGlyphEngine() {
     if (typeof measure === 'function') {
       exports[abi.functions.measureParagraph] = (...arguments_) => {
         measureCrossings += 1;
+        const [, pointer, length] = arguments_;
+        latestMeasurementRequest = new Uint8Array(exports.memory.buffer, pointer, length).slice();
         return measure(...arguments_);
       };
     }
@@ -2221,10 +2235,30 @@ function instrumentNextGlyphEngine() {
         inlineObject: view.getUint32(request.inlineObjectCount, true),
       };
     },
+    latestMeasurementRequestCounts() {
+      assert.ok(latestMeasurementRequest, 'a paragraph measurement request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      const view = new DataView(
+        latestMeasurementRequest.buffer,
+        latestMeasurementRequest.byteOffset,
+        latestMeasurementRequest.byteLength,
+      );
+      return {
+        paragraph: view.getUint32(request.paragraphMutationCount, true),
+        paragraphOrder: view.getUint32(request.paragraphOrderMutationCount, true),
+        text: view.getUint32(request.textMutationCount, true),
+        style: view.getUint32(request.styleMutationCount, true),
+        constraint: view.getUint32(request.constraintCount, true),
+        region: view.getUint32(request.regionCount, true),
+        exclusion: view.getUint32(request.exclusionCount, true),
+        inlineObject: view.getUint32(request.inlineObjectCount, true),
+      };
+    },
     reset() {
       crossings = 0;
       measureCrossings = 0;
       latestBatchRootIds = [];
+      latestMeasurementRequest = undefined;
     },
     latestParagraphMutations() {
       assert.ok(latestRequest, 'a text update request must have been captured');
@@ -2249,6 +2283,26 @@ function instrumentNextGlyphEngine() {
       const request = abi.layouts.engineUpdateRequest;
       const mutation = abi.layouts.engineParagraphOrderMutation;
       const view = new DataView(latestRequest.buffer, latestRequest.byteOffset, latestRequest.byteLength);
+      const offset = view.getUint32(request.paragraphOrderMutationsOffset, true);
+      const count = view.getUint32(request.paragraphOrderMutationCount, true);
+      return Array.from({ length: count }, (_recordValue, index) => {
+        const record = offset + index * mutation.size;
+        return {
+          paragraphId: view.getUint32(record + mutation.paragraphId, true),
+          orderScope: view.getUint32(record + mutation.orderScope, true),
+          orderRank: view.getFloat64(record + mutation.orderRank, true),
+        };
+      });
+    },
+    latestMeasurementParagraphOrderMutations() {
+      assert.ok(latestMeasurementRequest, 'a paragraph measurement request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      const mutation = abi.layouts.engineParagraphOrderMutation;
+      const view = new DataView(
+        latestMeasurementRequest.buffer,
+        latestMeasurementRequest.byteOffset,
+        latestMeasurementRequest.byteLength,
+      );
       const offset = view.getUint32(request.paragraphOrderMutationsOffset, true);
       const count = view.getUint32(request.paragraphOrderMutationCount, true);
       return Array.from({ length: count }, (_recordValue, index) => {
@@ -2379,6 +2433,51 @@ test('Text.measure answers attached first-frame state without traversing matrice
   second.dispose();
   font.dispose();
   fontDomain.dispose();
+});
+
+test('Text.measure retains lifecycle context but serializes only pending paragraph ranks', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const first = three.createText({ font, text: 'first query' });
+  const second = three.createText({ font, text: 'second query' });
+  group.add(first, second);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+
+  first.text = 'first unchanged-order query';
+  instrumentedGlyph.reset();
+  assert.ok(first.measure().glyphCount > 0);
+  const semanticQueryCounts = instrumentedGlyph.latestMeasurementRequestCounts();
+  assert.equal(semanticQueryCounts.paragraph, 2, 'a semantic query retains the complete paragraph lifecycle');
+  assert.equal(semanticQueryCounts.paragraphOrder, 0, 'a semantic query does not resend stable rank rows');
+
+  first.renderOrder = 2;
+  second.renderOrder = 1;
+  first.text = 'first ranked query';
+  second.text = 'second ranked query';
+  instrumentedGlyph.reset();
+  assert.ok(first.measure().glyphCount > 0);
+  assert.deepEqual(
+    instrumentedGlyph.latestMeasurementParagraphOrderMutations().map(({ orderRank }) => orderRank),
+    [2, 1],
+    'a scoped query serializes every rank still pending publication',
+  );
+  assert.ok(second.measure().glyphCount > 0);
+  assert.deepEqual(
+    instrumentedGlyph.latestMeasurementParagraphOrderMutations().map(({ orderRank }) => orderRank),
+    [2, 1],
+    'successive speculative queries retain the same pending rank transaction',
+  );
+  assert.equal(instrumentedGlyph.crossings, 0, 'queries do not publish a full frame');
+  assert.equal(instrumentedGlyph.measureCrossings, 2);
+
+  scene.updateMatrixWorld(true);
+  group.dispose();
+  first.dispose();
+  second.dispose();
+  font.dispose();
 });
 
 test('root-owned Text.measure creates only its implicit measurement batch before traversal', async (t) => {

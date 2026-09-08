@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
@@ -82,15 +84,10 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   }
 
   for (const specifier of [
-    '@pmndrs/glyph/shaders/tsl/packed-color',
-    '@pmndrs/glyph/shaders/typegpu/slug',
-    '@pmndrs/glyph/shaders/typegpu/bitmap-reference',
     '@pmndrs/glyph/three/material',
-    '@pmndrs/glyph/three/typegpu',
     '@pmndrs/glyph/react/bitmap',
     '@pmndrs/glyph/react/msdf',
     '@pmndrs/glyph/react/slug',
-    '@pmndrs/glyph/raster/bitmap',
     '@pmndrs/glyph/config/glyph',
     '@pmndrs/glyph/config/raster-format',
     '@pmndrs/glyph/config/schema',
@@ -99,13 +96,6 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     const imported = await import(resolved);
     assert.ok(Object.keys(imported).length > 0, `${specifier} must expose its public leaf`);
   }
-
-  const stableConsumer = join(temporaryDirectory, 'consumer', 'stable.mjs');
-  await writeFile(
-    stableConsumer,
-    "export { glyph } from '@pmndrs/glyph';\nexport { ThreeConfig } from '@pmndrs/glyph/three';\n",
-  );
-  assert.deepEqual(await buildPackedConsumer(stableConsumer, true), []);
 
   const typeGpuConsumer = join(temporaryDirectory, 'consumer', 'typegpu.mjs');
   await writeFile(
@@ -119,6 +109,12 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   );
   await assert.rejects(buildPackedConsumer(typeGpuConsumer, true), /requires optional TypeGPU peer/);
   assert.deepEqual(await buildPackedConsumer(typeGpuConsumer, false), ['@typegpu/three', 'typegpu']);
+
+  await verifyIsolatedPackedConsumers(
+    join(archiveDirectory, `pmndrs-glyph-${sourceManifest.version}.tgz`),
+    sourceManifest.devDependencies,
+    context,
+  );
 
   for (const subpath of ['./text-shaper.wasm', './bitmap-baker.wasm', './mtsdf-baker.wasm', './slug-baker.wasm']) {
     const specifier = `@pmndrs/glyph${subpath.slice(1)}`;
@@ -232,4 +228,197 @@ async function buildPackedConsumer(entry, forbidTypeGpuPeers) {
     },
   });
   return [...typeGpuPeers].sort();
+}
+
+async function verifyIsolatedPackedConsumers(archive, availableVersions, context) {
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-packed-consumers-'));
+  context.after(() => rm(temporaryDirectory, { recursive: true, force: true }));
+  const storeDirectory = execFileSync('pnpm', ['store', 'path'], {
+    cwd: packageDirectory,
+    encoding: 'utf8',
+  }).trim();
+  const cases = [
+    {
+      name: 'core',
+      dependencies: [],
+      absentPeers: ['three', 'typegpu', '@typegpu/gl', '@typegpu/three'],
+      entry: ["import * as core from '@pmndrs/glyph';", 'export { core };'],
+      missingPeerImports: [
+        { specifier: '@pmndrs/glyph/three', peer: 'three' },
+        { specifier: '@pmndrs/glyph/typegpu', peer: 'typegpu' },
+      ],
+    },
+    {
+      name: 'three',
+      dependencies: ['three', '@types/three'],
+      absentPeers: ['typegpu', '@typegpu/gl', '@typegpu/three'],
+      entry: publicSurfaceEntry([
+        '@pmndrs/glyph',
+        '@pmndrs/glyph/three',
+        '@pmndrs/glyph/shaders/tsl',
+        '@pmndrs/glyph/shaders/tsl/bitmap',
+        '@pmndrs/glyph/shaders/tsl/msdf',
+        '@pmndrs/glyph/shaders/tsl/slug',
+        '@pmndrs/glyph/shaders/tsl/decoration',
+        '@pmndrs/glyph/shaders/tsl/packed-color',
+      ]),
+      missingPeerImports: [{ specifier: '@pmndrs/glyph/three/typegpu', peer: 'typegpu' }],
+    },
+    {
+      name: 'typegpu',
+      dependencies: ['typegpu', '@webgpu/types'],
+      absentPeers: ['three', '@typegpu/gl', '@typegpu/three'],
+      entry: publicSurfaceEntry([
+        '@pmndrs/glyph',
+        '@pmndrs/glyph/typegpu',
+        '@pmndrs/glyph/shaders/typegpu',
+        '@pmndrs/glyph/shaders/typegpu/bitmap',
+        '@pmndrs/glyph/shaders/typegpu/bitmap-reference',
+        '@pmndrs/glyph/shaders/typegpu/msdf',
+        '@pmndrs/glyph/shaders/typegpu/slug',
+        '@pmndrs/glyph/shaders/typegpu/decoration',
+      ]),
+      missingPeerImports: [{ specifier: '@pmndrs/glyph/three/typegpu', peer: 'three' }],
+    },
+    {
+      name: 'three-typegpu',
+      dependencies: ['three', '@types/three', 'typegpu', '@typegpu/gl', '@typegpu/three', '@webgpu/types'],
+      absentPeers: [],
+      entry: publicSurfaceEntry([
+        '@pmndrs/glyph',
+        '@pmndrs/glyph/three/typegpu',
+        '@pmndrs/glyph/shaders/typegpu',
+        '@pmndrs/glyph/shaders/typegpu/bitmap',
+        '@pmndrs/glyph/shaders/typegpu/bitmap-reference',
+        '@pmndrs/glyph/shaders/typegpu/msdf',
+        '@pmndrs/glyph/shaders/typegpu/slug',
+        '@pmndrs/glyph/shaders/typegpu/decoration',
+      ]),
+      missingPeerImports: [],
+      runtimePeers: ['@typegpu/gl', '@typegpu/three'],
+    },
+  ];
+
+  for (const consumer of cases) {
+    const consumerDirectory = join(temporaryDirectory, consumer.name);
+    await mkdir(consumerDirectory);
+    await copyFile(archive, join(consumerDirectory, 'glyph.tgz'));
+    const dependencies = { '@pmndrs/glyph': 'file:./glyph.tgz' };
+    for (const name of consumer.dependencies) {
+      assert.equal(typeof availableVersions[name], 'string', `${name} needs a fixture version`);
+      dependencies[name] = availableVersions[name];
+    }
+    await writeFile(
+      join(consumerDirectory, 'package.json'),
+      `${JSON.stringify({ private: true, type: 'module', dependencies }, undefined, 2)}\n`,
+    );
+    await writeFile(join(consumerDirectory, 'entry.ts'), `${consumer.entry.join('\n')}\n`);
+    await writeFile(
+      join(consumerDirectory, 'tsconfig.json'),
+      `${JSON.stringify(typescriptConfig('./entry.ts', consumer.dependencies.includes('@webgpu/types'), true), undefined, 2)}\n`,
+    );
+    execFileSync(
+      'pnpm',
+      [
+        'install',
+        '--ignore-workspace',
+        '--prefer-offline',
+        '--config.auto-install-peers=false',
+        '--config.node-linker=hoisted',
+        '--store-dir',
+        storeDirectory,
+      ],
+      { cwd: consumerDirectory, encoding: 'utf8', env: { ...process.env, CI: 'true' } },
+    );
+
+    const entry = join(consumerDirectory, 'entry.ts');
+    const resolveFromConsumer = createRequire(entry);
+    for (const peer of consumer.absentPeers) {
+      assert.throws(
+        () => resolveFromConsumer.resolve(peer),
+        { code: 'MODULE_NOT_FOUND' },
+        `${consumer.name} must not install optional peer ${peer}`,
+      );
+    }
+    execFileSync(process.execPath, [join(packageDirectory, 'node_modules/typescript/bin/tsc'), '-p', 'tsconfig.json'], {
+      cwd: consumerDirectory,
+      stdio: 'pipe',
+    });
+    await buildInstalledConsumer(entry);
+
+    for (const peer of consumer.runtimePeers ?? []) {
+      await assertRuntimeImportRequiresPeer(consumerDirectory, '@pmndrs/glyph/three/typegpu', peer);
+    }
+
+    for (const rejected of consumer.missingPeerImports) {
+      assertRuntimeImportRejects(consumerDirectory, rejected.specifier, rejected.peer);
+    }
+  }
+}
+
+async function assertRuntimeImportRequiresPeer(consumerDirectory, specifier, peer) {
+  const peerDirectory = join(consumerDirectory, 'node_modules', ...peer.split('/'));
+  const hiddenDirectory = `${peerDirectory}.hidden`;
+  await rename(peerDirectory, hiddenDirectory);
+  try {
+    assertRuntimeImportRejects(consumerDirectory, specifier, peer);
+  } finally {
+    await rename(hiddenDirectory, peerDirectory);
+  }
+}
+
+function assertRuntimeImportRejects(consumerDirectory, specifier, peer) {
+  const result = spawnSync(
+    process.execPath,
+    ['--input-type=module', '--eval', `import(${JSON.stringify(specifier)})`],
+    {
+      cwd: consumerDirectory,
+      encoding: 'utf8',
+    },
+  );
+  assert.notEqual(result.status, 0, `${specifier} must reject a missing ${peer} peer`);
+  assert.match(`${result.stdout}\n${result.stderr}`, /ERR_MODULE_NOT_FOUND/);
+  assert.match(`${result.stdout}\n${result.stderr}`, new RegExp(escapeRegExp(peer)));
+}
+
+function typescriptConfig(entry, includeWebGpuTypes, skipLibCheck) {
+  return {
+    compilerOptions: {
+      lib: ['ES2025', 'DOM', 'DOM.Iterable'],
+      module: 'NodeNext',
+      moduleResolution: 'NodeNext',
+      noEmit: true,
+      skipLibCheck,
+      strict: true,
+      target: 'ES2022',
+      types: includeWebGpuTypes ? ['@webgpu/types'] : [],
+    },
+    files: [entry],
+  };
+}
+
+function publicSurfaceEntry(specifiers) {
+  return [
+    ...specifiers.map((specifier, index) => `import * as surface${String(index)} from '${specifier}';`),
+    `export const publicSurface = [${specifiers.map((_specifier, index) => `surface${String(index)}`).join(', ')}];`,
+  ];
+}
+
+async function buildInstalledConsumer(entry) {
+  await build({
+    configFile: false,
+    logLevel: 'silent',
+    mode: 'production',
+    root: dirname(entry),
+    build: {
+      lib: { entry, formats: ['es'], fileName: 'entry' },
+      minify: 'oxc',
+      target: 'es2022',
+      write: false,
+    },
+  });
+}
+
+function escapeRegExp(value) {
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

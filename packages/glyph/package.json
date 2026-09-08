@@ -225,6 +225,7 @@
       "import": "./dist/raster/*.js"
     },
     "./config/font-library": null,
+    "./config/text-property": null,
     "./config/*": {
       "types": {
         "source": "./src/config/*.ts",

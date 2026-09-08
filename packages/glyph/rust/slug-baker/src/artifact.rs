@@ -131,9 +131,7 @@ pub fn bake_slug(
 }
 
 pub fn descriptor_raster_key(descriptor: &SlugDescriptorV0) -> String {
-    // Canonical key order is alphabetical, so an explicit rate sorts ahead of
-    // the generator version. The default is absent from the descriptor entirely,
-    // which is what keeps every existing key byte-identical.
+    // Canonical key order is alphabetical; omitting the default rate preserves existing keys.
     let subdivisions = descriptor
         .cubic_subdivisions
         .map(|value| format!("\"cubicSubdivisions\":{value},"))
@@ -164,9 +162,7 @@ fn rasterize_font(
     let font = FontRef::from_index(source, face_index).map_err(|error| {
         SlugBakeError::new(SlugBakeErrorCode::InvalidFontFace, error).at("/fontFaceIndex")
     })?;
-    // Once, before the loop. Without an outline table every glyph resolves to
-    // "no geometry", which is recorded identically to a legitimately blank
-    // glyph — the artifact looks whole and renders nothing.
+    // Reject a missing outline table once; otherwise every glyph looks legitimately blank.
     if font.outline_glyphs().format().is_none() {
         return Err(SlugBakeError::new(
             SlugBakeErrorCode::InvalidFont,
@@ -343,10 +339,7 @@ mod tests {
         "../../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf"
     );
 
-    /// Both derived in JavaScript from the canonical raster-key JSON, so these
-    /// pin the Rust serializer to the TypeScript one across the ABI. Re-derived
-    /// as 128-bit fingerprints when portable identities replaced SHA-256; both
-    /// ports were run independently and produced these values.
+    /// JavaScript-derived keys pin Rust serialization to the TypeScript ABI.
     const DEFAULT_RASTER_KEY: &str = "2d776923eae1be079f8aacc606d01c01";
     const RATE_EIGHT_RASTER_KEY: &str = "0e8b45ef5345fee3a944c73facd3bd4d";
 

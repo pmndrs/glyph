@@ -215,9 +215,7 @@ mod tests {
     );
     const SHAPING_FINGERPRINT: &str = "0c522d6ea0db73ba74bcc389dc50263b";
 
-    /// Drop one table's directory record, leaving its bytes stranded. This is
-    /// the shape a CFF source reaches the raster bakers in: subsetting emits a
-    /// font whose outline table is simply gone.
+    /// Drops a table record, matching a subsetted CFF source whose outline table is absent.
     fn without_table(source: &[u8], tag: &[u8; 4]) -> Vec<u8> {
         let mut bytes = source.to_vec();
         let count = usize::from(u16::from_be_bytes([bytes[4], bytes[5]]));

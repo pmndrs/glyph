@@ -17,9 +17,7 @@
 }
 */
 
-// A manifest records what baking its font produces. The core artifact's byte length, fingerprint,
-// and SHA-256 move whenever the `PMNDRS_font` shape changes, so they are re-pinned from a real
-// bake rather than edited by hand.
+// Re-pin each manifest's artifact length, fingerprint, and SHA-256 from a real bake.
 
 import { createHash } from 'node:crypto';
 import { readFile, readdir, writeFile } from 'node:fs/promises';

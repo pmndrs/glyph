@@ -16,9 +16,7 @@ pub(crate) const CLUSTER_HARD_BREAK: u8 = 1 << 2;
 pub(crate) const CLUSTER_ALLOWED_BREAK: u8 = 1 << 3;
 /// The cluster starts with U+0020 — a justifiable, shrinkable word space.
 pub(crate) const CLUSTER_SPACE: u8 = 1 << 4;
-/// Chunk-summary-only marker: at least one advance in this chunk is negative.
-/// The cluster flag domain occupies the lower five bits, so this stays packed
-/// into the existing summary byte without widening a record or adding a lane.
+/// Chunk-summary marker for a negative advance, packed above the cluster flag domain.
 pub(crate) const CHUNK_NEGATIVE_ADVANCE: u8 = 1 << 5;
 
 use super::shaping_state::GLYPH_FLAG_UNSAFE_TO_BREAK as GLYPH_UNSAFE_TO_BREAK;
@@ -35,10 +33,7 @@ const NO_SOURCE_RUN: u32 = u32::MAX;
 /// Cluster count per chunk summary (D-245).
 pub(crate) const LAYOUT_CHUNK: usize = 64;
 
-/// One cumulative word-wrap opportunity. Sparse prose uses this cold sidecar
-/// to fit whole shaped words rather than retesting every cluster; dense break
-/// scripts stay on the cluster/chunk path so CJK does not pay a record per
-/// character.
+/// One cumulative word-wrap opportunity in the sparse-prose sidecar.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct WordBreakRecord {
     pub cluster_end: u32,
@@ -63,12 +58,8 @@ fn summarize_unit_chunks(
             flags_or |= *flag;
             flags_or |= CHUNK_NEGATIVE_ADVANCE * u8::from(*advance < 0);
         }
-        // This lane is tagged by the summary flags. Chunks containing spaces
-        // retain their shrinkable-space total. A negative, space-free chunk
-        // instead stores its largest advance prefix, which proves that every
-        // possible dense-script break boundary fits without materializing one
-        // word record per cluster. Ordinary chunks keep zero in the otherwise
-        // unused lane, so short-label storage and the common fit stay unchanged.
+        // Flags tag this auxiliary as a space sum or a negative space-free maximum prefix;
+        // ordinary chunks keep zero so the summary needs no additional lane.
         let auxiliary_sum =
             if flags_or & (CHUNK_NEGATIVE_ADVANCE | CLUSTER_SPACE) == CHUNK_NEGATIVE_ADVANCE {
                 let mut prefix = 0_i64;
@@ -137,9 +128,7 @@ pub(crate) struct ClusterArena {
     /// authoritative; the integer fit consumes this stream and must match.
     pub advance_units: Vec<i64>,
     /// Chunk-64 summaries over `advance_units`/`flags`, refreshed with them: total
-    /// advance, a flag-tagged auxiliary sum, and OR-folded flags per chunk. The
-    /// auxiliary is a shrinkable-space sum for chunks containing spaces, the
-    /// maximum advance prefix for negative space-free chunks, and zero otherwise.
+    /// advance, OR-folded flags, and a tagged space-sum or negative-prefix auxiliary per chunk.
     pub chunk_advance_sums: Vec<i64>,
     pub chunk_auxiliary_sums: Vec<i64>,
     pub chunk_flags_or: Vec<u8>,
@@ -562,10 +551,7 @@ impl ClusterArena {
             return Ok(());
         }
         self.word_breaks.clear();
-        // A sidecar cannot amortize its construction below one layout chunk:
-        // the scalar compositor already consumes the complete shaped segment
-        // without allocating, while short-label batches would otherwise build
-        // thousands of one- or two-record vectors every content update.
+        // Below one chunk, scalar composition is cheaper than allocating a sidecar.
         if self.flags.len() < LAYOUT_CHUNK {
             self.word_breaks_valid = true;
             return Ok(());
@@ -576,12 +562,8 @@ impl ClusterArena {
                 flags & (CLUSTER_ALLOWED_BREAK | CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK) != 0,
             );
         }
-        // At one opportunity per two clusters or denser, the record stream
-        // would rival the source lanes and performs no less work than the
-        // existing chunk/scalar path (the usual CJK and character-like case).
-        // Dense streams stay on the chunk/scalar compositor even with negative
-        // advances. Per-chunk summary markers preserve first-overflow semantics
-        // without turning a character-like script into a record-per-cluster index.
+        // Dense break streams stay on chunk/scalar composition; sparse records would rival the
+        // source lanes, while negative-prefix summaries preserve first-overflow semantics.
         if opportunity_count.saturating_mul(2) >= self.flags.len() {
             self.word_breaks_valid = true;
             return Ok(());

@@ -334,9 +334,8 @@ fn layout_next_line_integer_scalar(
                         )) <= units
                     })
                 } else if !has_spaces {
-                    // The tagged auxiliary is this chunk's maximum advance
-                    // prefix. Existing spaces precede the chunk, so their
-                    // shrink credit is constant across every local prefix.
+                    // The tagged auxiliary is this chunk's maximum advance prefix; preceding
+                    // spaces contribute constant shrink credit across every local prefix.
                     max_width_units.is_none_or(|units| {
                         advance
                             .saturating_add(clusters.chunk_auxiliary_sums[chunk])
@@ -347,9 +346,8 @@ fn layout_next_line_integer_scalar(
                             <= units
                     })
                 } else {
-                    // Combining spaces with any negative advance can make
-                    // hanging-space removal and shrink credit non-monotonic.
-                    // Resolve this rare mixed chunk through the exact scalar path.
+                    // Spaces plus a negative advance make hanging-space shrink non-monotonic,
+                    // so this rare mixed chunk uses the exact scalar path.
                     false
                 };
                 if fits {
@@ -359,6 +357,16 @@ fn layout_next_line_integer_scalar(
                     if flags_or & CLUSTER_SAFE_BEFORE != 0 {
                         pending_safe = Some((chunk, advance));
                     }
+                    trailing_space_units = if has_spaces {
+                        trailing_space_units_after_chunk(
+                            clusters,
+                            index,
+                            index + super::cluster_state::LAYOUT_CHUNK,
+                            trailing_space_units,
+                        )
+                    } else {
+                        0
+                    };
                     advance = next_advance;
                     space_units = next_space_units;
                     index += super::cluster_state::LAYOUT_CHUNK;
@@ -411,10 +419,8 @@ fn layout_next_line_integer_scalar(
         };
         let word_segment_end = wrap == WRAP_WORD
             && (flags & CLUSTER_ALLOWED_BREAK != 0 || required_break || index + 1 == count);
-        // Word wrapping evaluates only a completed shaped segment. Its terminating
-        // spaces hang and are removed from both visible advance and shrink budget,
-        // exactly like the indexed fitter. Character wrap retains its per-cluster
-        // overflow test.
+        // Word wrap fits completed shaped segments after hanging terminal spaces;
+        // character wrap retains its per-cluster overflow test.
         let hanging_units = if wrap == WRAP_WORD && word_segment_end {
             next_trailing_space_units
         } else if required_break {
@@ -460,17 +466,13 @@ fn layout_next_line_integer_scalar(
                 selected_end = end;
                 selected_advance = last_safe_advance;
             } else if let Some(end) = first_safe.filter(|end| *end > line_start) {
-                // No shaping-safe boundary fits (for example, the first glyph
-                // cluster itself is wider than the measure). Break at the first
-                // available boundary so unavoidable overflow stays minimal.
+                // If no shaping-safe boundary fits, break at the first one to minimize overflow.
                 selected_end = end;
                 selected_advance = first_safe_advance;
             } else {
                 advance = next_advance;
                 if (wrap == WRAP_WORD && word_segment_end) || required_break || index + 1 == count {
-                    // The first complete word has no earlier legal fallback. Keep
-                    // that word intact and let it overflow, instead of carrying an
-                    // already-overfull prefix through every later opportunity.
+                    // With no earlier legal fallback, keep the first complete word intact.
                     selected_end = index + 1;
                     selected_advance = advance;
                     break;
@@ -673,6 +675,29 @@ fn trailing_space_units(clusters: &ClusterArena, start: usize, mut end: usize) -
         end -= 1;
     }
     trailing
+}
+
+/// Returns the exact trailing-space run after a chunk; incoming space carries only through an all-space chunk.
+/// No-space chunks clear without reading per-cluster lanes, while other chunks read only their trailing suffix.
+fn trailing_space_units_after_chunk(
+    clusters: &ClusterArena,
+    start: usize,
+    mut end: usize,
+    incoming: i64,
+) -> i64 {
+    if clusters.flags[end - 1] & CLUSTER_SPACE == 0 {
+        return 0;
+    }
+    let mut trailing = 0_i64;
+    while end > start && clusters.flags[end - 1] & CLUSTER_SPACE != 0 {
+        trailing = trailing.saturating_add(clusters.advance_units[end - 1]);
+        end -= 1;
+    }
+    if end == start {
+        incoming.saturating_add(trailing)
+    } else {
+        trailing
+    }
 }
 
 /// Resolves the deferred break candidate inside a fully consumed chunk: the LAST
@@ -946,6 +971,112 @@ mod tests {
         );
     }
 
+    fn assert_skipped_chunk_trailing_space_parity(
+        advances: &[f64],
+        flags: &[u8],
+        line_start: usize,
+        expected_end: u32,
+    ) {
+        use super::super::layout_units::layout_units_from_scaled;
+
+        let clusters = make_clusters(advances, flags);
+        assert!(clusters.word_breaks.is_empty());
+        let width_units = layout_units_from_scaled(5.0);
+        let mut chunk_cursor = LineCursor::at_cluster(line_start);
+        let chunked = layout_next_line_integer(
+            &clusters,
+            &mut chunk_cursor,
+            Some(width_units),
+            WRAP_WORD,
+            0.0,
+        )
+        .unwrap()
+        .unwrap();
+
+        let mut scalar = make_clusters(advances, flags);
+        scalar.chunk_flags_or.clear();
+        let mut scalar_cursor = LineCursor::at_cluster(line_start);
+        let scalar = layout_next_line_integer(
+            &scalar,
+            &mut scalar_cursor,
+            Some(width_units),
+            WRAP_WORD,
+            0.0,
+        )
+        .unwrap()
+        .unwrap();
+
+        let mut f64_cursor = LineCursor::at_cluster(line_start);
+        let f64 = layout_next_line(
+            &clusters,
+            &mut f64_cursor,
+            scaled_from_layout_units(width_units),
+            WRAP_WORD,
+            0.0,
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(chunked, scalar);
+        assert_eq!(chunked, f64);
+        assert_eq!(chunked.cluster_end, expected_end);
+        assert!(chunked.hard_break);
+    }
+
+    #[test]
+    fn skipped_no_space_chunk_clears_a_negative_trailing_space() {
+        use super::super::cluster_state::LAYOUT_CHUNK;
+
+        let count = LAYOUT_CHUNK * 2 + 1;
+        let line_start = LAYOUT_CHUNK - 2;
+        let mut advances = vec![0.0; count];
+        let mut flags = vec![0; count];
+        advances[line_start] = 5.0;
+        flags[line_start] = CLUSTER_ALLOWED_BREAK;
+        advances[line_start + 1] = -2.0;
+        flags[line_start + 1] = CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        advances[LAYOUT_CHUNK] = -1.0;
+        advances[LAYOUT_CHUNK * 2 - 1] = 2.0;
+        flags[LAYOUT_CHUNK * 2 - 1] = CLUSTER_ALLOWED_BREAK;
+        flags[LAYOUT_CHUNK * 2] = CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK;
+
+        assert_skipped_chunk_trailing_space_parity(&advances, &flags, line_start, count as u32);
+    }
+
+    #[test]
+    fn skipped_trailing_space_chunk_replaces_an_earlier_negative_space_run() {
+        use super::super::cluster_state::LAYOUT_CHUNK;
+
+        let count = LAYOUT_CHUNK * 2 + 1;
+        let line_start = LAYOUT_CHUNK - 2;
+        let mut advances = vec![0.0; count];
+        let mut flags = vec![0; count];
+        advances[line_start] = 5.0;
+        flags[line_start] = CLUSTER_ALLOWED_BREAK;
+        advances[line_start + 1] = -2.0;
+        flags[line_start + 1] = CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        advances[LAYOUT_CHUNK * 2 - 1] = 1.0;
+        flags[LAYOUT_CHUNK * 2 - 1] = CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        flags[LAYOUT_CHUNK * 2] = CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK;
+
+        assert_skipped_chunk_trailing_space_parity(&advances, &flags, line_start, count as u32);
+    }
+
+    #[test]
+    fn an_all_space_chunk_carries_the_incoming_trailing_run() {
+        use super::super::cluster_state::LAYOUT_CHUNK;
+
+        let mut advances = vec![0.0; LAYOUT_CHUNK];
+        let flags = vec![CLUSTER_SPACE; LAYOUT_CHUNK];
+        advances[LAYOUT_CHUNK - 1] = 1.0;
+        let clusters = make_clusters(&advances, &flags);
+
+        assert_eq!(
+            trailing_space_units_after_chunk(&clusters, 0, LAYOUT_CHUNK, -2 * 65_536),
+            -65_536,
+        );
+    }
+
     #[test]
     fn dense_negative_chunks_match_scalar_and_f64_without_a_word_sidecar() {
         use super::super::{cluster_state::LAYOUT_CHUNK, layout_units::layout_units_from_scaled};
@@ -1172,10 +1303,7 @@ mod tests {
 
     #[test]
     fn word_fit_waits_for_the_shaped_word_before_breaking() {
-        // The second word has an early positive cluster followed by a negative
-        // shaped adjustment. Its completed advance fits exactly after the
-        // declared space compression; breaking at the early crossing leaves
-        // avoidable whitespace and disagrees with word-level composition.
+        // A later negative adjustment makes the whole second word fit after space compression.
         let mut flags = [CLUSTER_SAFE_BEFORE; 8];
         flags[4] |= CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
         let mut clusters =

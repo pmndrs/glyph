@@ -323,27 +323,13 @@ pub fn line_to_quadratic(start: Point, end: Point, units_per_em: f32) -> Quadrat
     }
 }
 
-/// Quadratics fitted per cubic unless a descriptor asks otherwise.
-///
-/// Four, not the legacy two. Only CFF sources reach this code, and no shipped
-/// artifact contains CFF-derived curves today because subsetting drops the
-/// `CFF ` table outright, so raising the rate rewrites nothing that exists.
-/// Two left a quarter of Dancing Script's cubics more than half a font unit off
-/// the true curve, worst case 8.32 units — 1.7px on a 200px glyph, and Slug is
-/// resolution independent, so that grows with the render size. Four brings the
-/// worst case to 1.15 units for twice the curves.
+/// Default CFF fit: four quadratics per cubic, measured at 1.15 font-unit worst deviation.
 pub const DEFAULT_CUBIC_SUBDIVISIONS: u8 = 4;
 /// Most quadratics one cubic may become, and so the scratch width a caller needs.
 pub const MAX_CUBIC_SUBDIVISIONS: usize = 16;
 
-/// Split `cubic` into `subdivisions` equal-parameter pieces, midpoint-fit a
-/// quadratic to each, and write them into `out`, returning how many were written.
-///
-/// Only CFF sources reach this: TrueType outlines are already quadratic. The
-/// rate is a straight accuracy-for-payload trade, since Slug ships these curves
-/// to the GPU. Measured over Dancing Script's 9,468 cubics, the worst deviation
-/// from the true curve falls 8.32 -> 1.15 -> 0.14 font units at 2, 4, and 8
-/// subdivisions, against a payload that grows in proportion.
+/// Fits one CFF cubic into equal-parameter quadratic pieces and writes them into `out`.
+/// `subdivisions` trades proportional payload and GPU work for fit accuracy.
 pub fn cubic_to_quadratics_into(
     cubic: Cubic,
     subdivisions: u8,
@@ -378,9 +364,8 @@ fn fit_quadratic(cubic: Cubic) -> Quadratic {
 }
 
 fn split_cubic_at(cubic: Cubic, t: f32) -> (Cubic, Cubic) {
-    // de Casteljau. The half split keeps the original midpoint arithmetic:
-    // `(a + b) * 0.5` and `a + (b - a) * 0.5` are not bit-identical in f32, so a
-    // rate of two still reproduces the legacy payload exactly.
+    // de Casteljau; preserve midpoint arithmetic at `t == 0.5` so a rate of two
+    // remains bit-identical to the legacy payload.
     let cut = |a: Point, b: Point| {
         if t == 0.5 {
             a.midpoint(b)
@@ -538,9 +523,7 @@ mod tests {
 
     #[test]
     fn raising_the_rate_moves_the_fit_closer_to_the_true_cubic() {
-        // Sample the cubic and take the nearest point on the fitted chain. The
-        // error must fall monotonically as the rate rises, which is the whole
-        // reason the knob exists.
+        // Nearest-point error across the fitted chain must fall as the rate rises.
         let error_at = |rate: u8| -> f32 {
             let mut converted = [ZERO_QUADRATIC; MAX_CUBIC_SUBDIVISIONS];
             let written = cubic_to_quadratics_into(SAMPLE_CUBIC, rate, &mut converted);

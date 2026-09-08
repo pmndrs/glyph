@@ -319,9 +319,7 @@ async function loadProjectPlans(rasters: readonly ResolvedRasterBaker[]): Promis
     (left, right) =>
       left.baker.extension.localeCompare(right.baker.extension) || left.rasterKey.localeCompare(right.rasterKey),
   );
-  // One raster per technique: more strikes or different settings belong to a single raster's
-  // options, not a second raster of the same extension. External packaging is something a caller
-  // asks for, never a fallback for a collision.
+  // Each technique declares one raster; options own variants, and external packaging is explicit.
   const declared = new Set<string>();
   return resolved.map((plan) => {
     if (declared.has(plan.baker.extension)) {
@@ -455,14 +453,7 @@ export interface FontFreshness {
   readonly reason: string;
 }
 
-/**
- * Decide whether an existing font already contains exactly what a bake would produce.
- *
- * Rasterizing is the expensive half of a bake and preparing the source is the cheap half, so the
- * check pays only the cheap half: the artifact records a fingerprint over its prepared source, and
- * every raster records the single value that has to agree for it to be usable. Matching both means
- * the bake would reproduce what is already on disk.
- */
+/** Checks source and raster fingerprints before paying the rasterization cost again. */
 export async function fontIsUpToDate(request: {
   readonly output: string;
   readonly input: string;
@@ -512,27 +503,21 @@ export async function fontIsUpToDate(request: {
     return { fresh: false, reason: 'a different core baker produced this font' };
   }
 
-  // Comparing raster keys alone would call an artifact fresh after the format changed, because a
-  // key describes the request and not what was written. Compare the digest each raster actually
-  // carries, which no artifact predating the field can satisfy.
+  // Raster keys describe requests; carried fingerprints also prove the written format.
   const metrics = font.metrics ?? {};
   const glyphCount = Number(metrics.glyphCount);
   const glyphIdWidth = Number(metrics.glyphIdWidth);
   const shaping = String((font.shaping ?? {}).fingerprint);
   const directory = Array.isArray(font.rasters) ? (font.rasters as Record<string, unknown>[]) : [];
   const extensions = (document.extensions ?? {}) as Record<string, Record<string, unknown> | undefined>;
-  // The requested rasters must be exactly what the font carries, not merely a subset: a bake
-  // publishes the whole file, so an extra raster means the requested bake would remove it and
-  // produce different bytes. Without this a font could never be shrunk.
+  // Exact raster-set equality lets a bake remove an existing raster instead of calling it fresh.
   const present = new Set(directory.map((entry) => String(entry.rasterKey)));
   const requested = new Set(request.rasters.map((raster) => raster.rasterKey));
   if (present.size !== requested.size || [...requested].some((key) => !present.has(key))) {
     return { fresh: false, reason: `the font carries ${present.size} raster(s) and ${requested.size} were requested` };
   }
 
-  // Packaging is not part of compatibility — an embedded and a split raster are equally usable —
-  // but it decides which files a bake writes, so a split request against an embedded font is not
-  // satisfied by it.
+  // Packaging does not affect compatibility, but it does change which files the bake writes.
   const embedded =
     directory.length > 0 &&
     directory.every((entry) => (entry.source as { type?: string } | undefined)?.type === 'embedded');

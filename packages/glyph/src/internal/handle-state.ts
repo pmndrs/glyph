@@ -1342,10 +1342,8 @@ export class PlanTransport {
         requiredResultCapacity <= maxOutputBytes &&
         requiredResultCapacity > availableResultCapacity
       ) {
-        // The header describes the inactive query slot while the last successful answer
-        // describes the active slot. Rust gates queries on the smaller A/B capacity, so
-        // their minimum is the exact grow/no-grow boundary. Every retry grows both slots
-        // beyond that boundary; otherwise the typed error wins.
+        // Rust gates queries on the smaller active/inactive capacity, so their minimum is the
+        // exact growth boundary; each retry grows both slots beyond it.
         canRepairResultCapacity = false;
         this.reserve(requestLength, requiredResultCapacity);
         continue;

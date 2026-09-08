@@ -907,9 +907,7 @@ fn extents_for_cluster(
     };
     let shift = f64::from(style.baseline_shift);
     Ok(LineExtents {
-        // Negative half-leading may put either glyph-metric side outside the
-        // authored line box. Preserve it: clamping a side independently makes
-        // sufficiently tight explicit line heights taller than requested.
+        // Preserve negative half-leading; clamping either side makes tight line boxes too tall.
         above: ascent + leading * 0.5 + shift,
         below: descent + leading * 0.5 - shift,
     })

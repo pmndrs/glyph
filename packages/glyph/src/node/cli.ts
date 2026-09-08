@@ -260,13 +260,7 @@ interface DirectBakeArguments {
   readonly yes: boolean;
 }
 
-/**
- * `My Font.ttf` -> `my-font.glb`.
- *
- * Companions sit beside the core and are named from it, so the derived stem has to be safe in a
- * URL without escaping: a viewer resolves `my-font.msdf.glb` relative to the page that loaded the
- * core.
- */
+/** Derives a URL-safe core name such as `My Font.ttf` -> `my-font.glb`. */
 function derivedOutputPath(input: string): string {
   const base = input.split(/[\\/]/).at(-1) ?? input;
   const stem = base.replace(/\.(?:ttf|otf|ttc|otc|woff2?)$/i, '');
@@ -577,11 +571,7 @@ interface DirectRasterPlans {
   readonly resolved: readonly ResolvedRasterBakePlan[];
 }
 
-/**
- * Each plan is resolved where its baker type is still concrete. `resolveRasterBakePlan` infers one
- * baker module per call, so mapping it across the mixed-format array would collapse to whichever
- * format happened to come first.
- */
+/** Resolves each plan while its concrete baker type still witnesses the associated options. */
 async function directRasterPlans(options: DirectBakeArguments): Promise<DirectRasterPlans> {
   const packaging = { artifact: options.split ? 'external' : 'embedded' } as const;
   const plans: DirectRasterBakePlan[] = [];

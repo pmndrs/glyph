@@ -45,6 +45,7 @@ import type {
 import { RenderPlanView, type RenderPlanTable } from './plan-view.js';
 import { readPlannerLayouts, readPlannerMeasurements } from './layout-query-view.js';
 import type { PortableResource } from '../config/resources.js';
+import { reuseOrCreateTextPropertySnapshot } from '../config/text-property.js';
 import type { ParagraphId, ResourceHandle } from './glyph-id.js';
 import { codecCapabilitySetSelectionId, selectCodecCapabilitySet } from './codec-capability-selection.js';
 
@@ -419,6 +420,7 @@ class RenderPlannerImpl {
   readonly #texts = new Set<RetainedTextState>();
   readonly #removed = new Set<RetainedTextState>();
   readonly #measured = new Map<RetainedTextState, ResolvedTextOptions>();
+  #baseOrderValidationPending = false;
   #liveTextCount = 0;
   #liveStyleCount = 0;
   #liveRegionCount = 0;
@@ -556,6 +558,7 @@ class RenderPlannerImpl {
     textStates.set(text, { planner: this, state });
     this.#addLiveState(state);
     this.#texts.add(state);
+    this.#baseOrderValidationPending = true;
     this.#structureRevision = checkedNextStructureRevision(this.#structureRevision);
     this.#nextTextOrdinal = nextOrdinal;
     this.#dirtyListener?.();
@@ -609,6 +612,7 @@ class RenderPlannerImpl {
     state.measurement = undefined;
     state.inspection = undefined;
     if (previousOrder !== nextOrder) {
+      this.#baseOrderValidationPending = true;
       this.#structureRevision = checkedNextStructureRevision(this.#structureRevision);
     }
     this.#dirtyListener?.();
@@ -630,7 +634,10 @@ class RenderPlannerImpl {
     if (!state.dirty) this.#pendingParagraphCount += 1;
     const lifecycleOrderChanged = state.metrics.order !== order;
     const scopedOrderChanged = state.orderScope !== orderScope || !Object.is(state.orderRank, orderRank);
-    if (lifecycleOrderChanged) state.metrics = { ...state.metrics, order };
+    if (lifecycleOrderChanged) {
+      state.metrics = { ...state.metrics, order };
+      this.#baseOrderValidationPending = true;
+    }
     state.orderScope = orderScope;
     state.orderRank = orderRank;
     state.dirty = true;
@@ -908,6 +915,7 @@ class RenderPlannerImpl {
   }
 
   #compileFrame(options: NormalizedPublishOptions, checkpointGeneration: number): Uint8Array {
+    this.#assertUniqueBaseOrders();
     const paragraphMutations = [
       ...[...this.#removed].map((state) => ({ opcode: 'remove' as const, paragraphId: state.paragraphId })),
       ...[...this.#texts]
@@ -925,9 +933,8 @@ class RenderPlannerImpl {
         orderScope: state.orderScope,
         orderRank: state.orderRank,
       }));
-    // Content mutations are keyed by paragraph id; presentation order is an
-    // independent Rust lifecycle input. Preserve retained insertion order here
-    // so adapters never pay a second paragraph sort on content updates.
+    // Content is keyed by paragraph id; order is separate Rust lifecycle input, so retaining
+    // insertion order here avoids a second adapter-side sort.
     const contentStates = [...this.#texts].filter((state) => !state.removed && state.semanticDirty);
     const textMutations = contentStates.flatMap((state) => {
       const mutation = minimalTextMutation(state.publishedText, state.desired.text);
@@ -1092,6 +1099,7 @@ class RenderPlannerImpl {
       state.geometryDirty = false;
       state.orderDirty = false;
     }
+    this.#baseOrderValidationPending = false;
   }
 
   #candidate(lease: BorrowedPlanLease): PlanCandidate {
@@ -1231,12 +1239,25 @@ class RenderPlannerImpl {
 
   #measurementParagraphOrderMutations(): PlannerParagraphOrderMutation[] {
     return [...this.#texts]
-      .filter((state) => !state.removed)
+      .filter((state) => !state.removed && state.orderDirty)
       .map((state) => ({
         paragraphId: state.paragraphId,
         orderScope: state.orderScope,
         orderRank: state.orderRank,
       }));
+  }
+
+  #assertUniqueBaseOrders(): void {
+    if (!this.#baseOrderValidationPending || this.#liveTextCount <= 1) return;
+    const desiredOrders = new Set<number>();
+    for (const state of this.#texts) {
+      if (state.removed) continue;
+      const order = state.metrics.order;
+      if (desiredOrders.has(order)) {
+        throw new RangeError(`retained text order ${String(order)} is already in use`);
+      }
+      desiredOrders.add(order);
+    }
   }
 
   #adoptMeasuredBindings(state: RetainedTextState): void {
@@ -1582,16 +1603,6 @@ function snapshotTextOptions(
   inlineMaterials: readonly HandleBindingLease<HandleMaterialBinding>[],
   inlineResources: readonly HandleBindingLease<HandleResourceBinding>[],
 ): RetainedTextOptions {
-  const {
-    font: _font,
-    text: _text,
-    material: _material,
-    transform: _transform,
-    flow: _flow,
-    inlineObjects: _inlineObjects,
-    ...rest
-  } = value;
-  const snapshot = snapshotAuthoredData(rest, 'text options');
   const text = Object.freeze({
     text: input.text,
     spans: Object.freeze(
@@ -1607,11 +1618,21 @@ function snapshotTextOptions(
     ),
   });
   return Object.freeze({
-    ...snapshot,
     font: font.binding,
     text,
     ...(material === undefined ? {} : { material: material.binding }),
     transform: transform.binding,
+    ...(value.order === undefined ? {} : { order: value.order }),
+    ...(value.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: value.rasterPixelRatio }),
+    ...(value.style === undefined
+      ? {}
+      : { style: reuseOrCreateTextPropertySnapshot(undefined, value.style, 'text style') }),
+    ...(value.layout === undefined
+      ? {}
+      : { layout: reuseOrCreateTextPropertySnapshot(undefined, value.layout, 'text layout') }),
+    ...(value.constraints === undefined
+      ? {}
+      : { constraints: reuseOrCreateTextPropertySnapshot(undefined, value.constraints, 'text constraints') }),
     ...(value.flow === undefined
       ? {}
       : {

@@ -1496,9 +1496,7 @@ fn equivalent_retained_line(
     typography: ThreadTypography,
     previous_typography: ThreadTypography,
 ) -> Result<Option<usize>, EngineError> {
-    // The retained fast path is intentionally narrower than positioning. A nontrivial
-    // bidi line needs its resolved visual cluster levels to decide whether hung spaces
-    // lead; those scratch levels are built only by the full positioning path.
+    // Nontrivial bidi needs full positioning's visual levels to decide whether hung spaces lead.
     if !visually_ltr {
         return Ok(None);
     }

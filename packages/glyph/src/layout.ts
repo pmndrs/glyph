@@ -19,11 +19,11 @@ export const glyphFlags: {
   readonly produced: number;
 } = textShaperAbi.engine.glyphFlags;
 
-/** Vertical metrics of a line or paragraph around its baseline: `ascent + descent === lineHeight` exactly, box top = `baseline - ascent`. Half-leading is already distributed into ascent/descent. */
+/** Signed vertical metrics around a baseline: `ascent + descent === lineHeight`; tight authored leading may make descent negative. */
 export interface BaselineMetrics {
   /** Distance from the top edge of the box down to the baseline. */
   readonly ascent: number;
-  /** Distance from the baseline down to the bottom edge of the box. */
+  /** Signed offset from the baseline to the bottom edge of the box. */
   readonly descent: number;
   /** Total block-axis extent of the box. */
   readonly lineHeight: number;

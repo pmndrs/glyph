@@ -46,6 +46,7 @@ import type {
   StagedRenderPlanner,
 } from './render-planner.js';
 import { observeRenderPlannerDirty, stageRenderPlanner } from './render-planner.js';
+import { reuseOrCreateTextPropertySnapshot } from '../config/text-property.js';
 
 const DEFAULT_LIMITS: GlyphCommandLimits = Object.freeze({
   maxParagraphs: 4_096,
@@ -766,6 +767,12 @@ interface BoundTextState {
   readonly leases: readonly { dispose(): void }[];
 }
 
+interface AcceptedTextPropertyInputs {
+  style: object | undefined;
+  layout: object | undefined;
+  constraints: object | undefined;
+}
+
 function normalizeParagraphOrderRank(rank: number): number {
   if (!Number.isFinite(rank)) throw new RangeError('paragraph order rank must be finite');
   return rank === 0 ? 0 : rank;
@@ -783,6 +790,11 @@ class ConfiguredTextController<
 
   #bound: BoundTextState;
   #state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>;
+  readonly #acceptedPropertyInputs: AcceptedTextPropertyInputs = {
+    style: undefined,
+    layout: undefined,
+    constraints: undefined,
+  };
   #disposed = false;
 
   constructor(
@@ -791,14 +803,16 @@ class ConfiguredTextController<
     state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>,
   ) {
     this.#services = services;
-    this.#state = state;
-    this.#bound = services.bind(state);
+    const snapshot = withOwnedTextPropertySnapshots(undefined, this.#acceptedPropertyInputs, state);
+    this.#state = snapshot;
+    this.#bound = services.bind(snapshot);
     try {
       this.#text = planner.createText(this.#bound.options);
     } catch (error) {
       this.#disposeLeases(this.#bound.leases);
       throw error;
     }
+    acceptTextPropertyInputs(this.#acceptedPropertyInputs, state);
   }
 
   get disposed(): boolean {
@@ -808,13 +822,15 @@ class ConfiguredTextController<
   update(state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>): void {
     this.#assertActive();
     this.#services.assertTextCall();
-    const reusableUpdate = reusablePlainTextUpdate(this.#state, state);
+    const snapshot = withOwnedTextPropertySnapshots(this.#state, this.#acceptedPropertyInputs, state);
+    const reusableUpdate = reusablePlainTextUpdate(this.#state, snapshot);
     if (reusableUpdate !== undefined) {
       this.#text.update(reusableUpdate);
-      this.#state = state;
+      this.#state = snapshot;
+      acceptTextPropertyInputs(this.#acceptedPropertyInputs, state);
       return;
     }
-    const next = this.#services.bind(state);
+    const next = this.#services.bind(snapshot);
     try {
       this.#text.update({
         ...next.options,
@@ -831,7 +847,8 @@ class ConfiguredTextController<
     }
     const previous = this.#bound;
     this.#bound = next;
-    this.#state = state;
+    this.#state = snapshot;
+    acceptTextPropertyInputs(this.#acceptedPropertyInputs, state);
     this.#disposeLeases(previous.leases);
   }
 
@@ -887,6 +904,53 @@ class ConfiguredTextController<
   }
 }
 
+function withOwnedTextPropertySnapshots<Format extends RasterFormatMetadata, MaterialInput, TransformInput>(
+  previous: GlyphTextState<Format, MaterialInput, TransformInput> | undefined,
+  previousInputs: AcceptedTextPropertyInputs,
+  state: GlyphTextState<Format, MaterialInput, TransformInput>,
+): GlyphTextState<Format, MaterialInput, TransformInput> {
+  const snapshot: { -readonly [Key in keyof typeof state]: (typeof state)[Key] } = { ...state };
+  if (state.style !== undefined) {
+    snapshot.style = retainTextPropertySnapshot(previous?.style, previousInputs.style, state.style, 'Glyph Text style');
+  }
+  if (state.layout !== undefined) {
+    snapshot.layout = retainTextPropertySnapshot(
+      previous?.layout,
+      previousInputs.layout,
+      state.layout,
+      'Glyph Text layout',
+    );
+  }
+  if (state.constraints !== undefined) {
+    snapshot.constraints = retainTextPropertySnapshot(
+      previous?.constraints,
+      previousInputs.constraints,
+      state.constraints,
+      'Glyph Text constraints',
+    );
+  }
+  return snapshot;
+}
+
+function retainTextPropertySnapshot<Value extends object>(
+  previous: Value | undefined,
+  previousInput: object | undefined,
+  input: Value,
+  label: string,
+): Value {
+  if (previous !== undefined && previousInput === input) return previous;
+  return reuseOrCreateTextPropertySnapshot(previous, input, label);
+}
+
+function acceptTextPropertyInputs<Format extends RasterFormatMetadata, MaterialInput, TransformInput>(
+  target: AcceptedTextPropertyInputs,
+  state: GlyphTextState<Format, MaterialInput, TransformInput>,
+): void {
+  target.style = state.style;
+  target.layout = state.layout;
+  target.constraints = state.constraints;
+}
+
 function reusablePlainTextUpdate<Format extends RasterFormatMetadata, MaterialInput, TransformInput>(
   previous: GlyphTextState<Format, MaterialInput, TransformInput>,
   next: GlyphTextState<Format, MaterialInput, TransformInput>,
@@ -904,19 +968,8 @@ function reusablePlainTextUpdate<Format extends RasterFormatMetadata, MaterialIn
   if (previous.text !== next.text) update.text = next.text;
   if (previous.order !== next.order) update.order = next.order;
   if (previous.rasterPixelRatio !== next.rasterPixelRatio) update.rasterPixelRatio = next.rasterPixelRatio;
-  if (!equalOptionalRecord(previous.style, next.style)) update.style = next.style;
-  if (!equalOptionalRecord(previous.layout, next.layout)) update.layout = next.layout;
-  if (!equalOptionalRecord(previous.constraints, next.constraints)) update.constraints = next.constraints;
+  if (previous.style !== next.style) update.style = next.style;
+  if (previous.layout !== next.layout) update.layout = next.layout;
+  if (previous.constraints !== next.constraints) update.constraints = next.constraints;
   return update;
-}
-
-function equalOptionalRecord(previous: object | undefined, next: object | undefined): boolean {
-  if (previous === next) return true;
-  if (previous === undefined || next === undefined) return false;
-  const previousKeys = Reflect.ownKeys(previous);
-  const nextKeys = Reflect.ownKeys(next);
-  if (previousKeys.length !== nextKeys.length) return false;
-  return previousKeys.every(
-    (key) => Object.hasOwn(next, key) && Object.is(Reflect.get(previous, key), Reflect.get(next, key)),
-  );
 }

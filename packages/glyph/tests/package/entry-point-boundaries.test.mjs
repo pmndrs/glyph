@@ -32,6 +32,11 @@ test('application types stay at root while integration construction lives on con
     null,
     'the internal FontLibrary must not become a second public font API',
   );
+  assert.equal(
+    manifest.exports['./config/text-property'],
+    null,
+    'configured-controller snapshot ownership must remain package-private',
+  );
   assert.ok(manifest.exports['./config/*'], 'renderer-neutral integration leaves must be public');
 
   for (const name of ['GlyphConfig', 'Codec', 'TechniqueSchema', 'RasterFormat']) {

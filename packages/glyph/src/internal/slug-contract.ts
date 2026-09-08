@@ -16,13 +16,7 @@ export const SLUG_CUBIC_SUBDIVISIONS = 4 as const;
 export const SLUG_MAX_CUBIC_SUBDIVISIONS = 16 as const;
 
 export interface SlugOptions {
-  /**
-   * Quadratics fitted per cubic when the source has CFF outlines. Defaults to 4.
-   *
-   * Straight accuracy for cost: Slug ships these curves to the GPU and the
-   * shader walks every curve in a pixel's band, so raising this grows both the
-   * payload and the per-pixel loop in proportion. TrueType sources ignore it.
-   */
+  /** Quadratics per CFF cubic; defaults to 4 and scales payload and shader work. */
   readonly cubicSubdivisions?: number;
 }
 
@@ -35,13 +29,7 @@ const descriptor = Object.freeze({
   generatorVersion: SLUG_GENERATOR_VERSION,
 }) satisfies SlugDescriptor;
 
-/**
- * Return the payload-changing Slug V0 descriptor.
- *
- * The default rate is omitted rather than written out, so the descriptor — and
- * the raster key derived from it — is unchanged for every caller who does not
- * ask for a different one.
- */
+/** Returns a Slug V0 descriptor, omitting the default rate to preserve existing raster keys. */
 export function slugDescriptor(options?: SlugOptions): SlugDescriptor {
   const cubicSubdivisions = normalizeSlugOptions(options)?.cubicSubdivisions;
   if (cubicSubdivisions === undefined || cubicSubdivisions === SLUG_CUBIC_SUBDIVISIONS) {

@@ -4,12 +4,7 @@ import test from 'node:test';
 
 import { fingerprint128, fingerprintDomain, isFingerprint } from '../../dist/internal/fingerprint.js';
 
-// This hash is implemented twice: in Rust at `rust/raster-artifact/src/lib.rs`, and here in
-// TypeScript. Rust stamps external page filenames at bake time and TypeScript recomputes them at
-// load time, so one divergent bit makes every external page 404. Both implementations verify
-// against the same corpus, which mmh3 produced outside this repository — checking the ports
-// against an outside implementation catches a bug they share, which comparing them to each other
-// cannot.
+// Independent mmh3 vectors hold the Rust and TypeScript fingerprint ports to the same oracle.
 const corpus = JSON.parse(
   await readFile(new URL('../../rust/raster-artifact/evidence/fingerprint-vectors-v0.json', import.meta.url), 'utf8'),
 );
@@ -60,9 +55,7 @@ test('fingerprint128 reads a subarray by its own bounds', () => {
 });
 
 test('the compatibility digest matches its published canonical form', async () => {
-  // Pinned against a value mmh3 produced outside this repository, and against the identical
-  // assertion in rust/raster-artifact. The canonical form is published contract: a build pipeline
-  // records the digest beside its inputs and recomputes it later from its own manifest.
+  // mmh3 and the Rust port independently pin the published canonical form.
   const { compatibilityFingerprint } = await import('../../dist/internal/raster-identity.js');
   assert.equal(
     compatibilityFingerprint({

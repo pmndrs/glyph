@@ -139,10 +139,7 @@ pub(crate) fn rasterize_strike(
     pages.push(AtlasPage::new(ATLAS_LIMIT, 1)?);
 
     let outlines = font.outline_glyphs();
-    // Once, before the loop. A font carrying no outline table at all draws an
-    // empty raster for every glyph, and `mark_absent` records that identically
-    // to a glyph the coverage set never selected — so the artifact looks whole
-    // and renders blank. Refuse it here instead, where the cause is still known.
+    // Reject a missing outline table once; otherwise every glyph looks legitimately blank.
     if outlines.format().is_none() {
         return Err(BitmapBakeError::new(
             BitmapBakeErrorCode::InvalidFont,

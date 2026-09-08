@@ -1,13 +1,12 @@
 //! Production and laboratory kernels for segmentation and line planning.
 //!
-//! Production probes four scalar bidi levels before scanning transitions one
-//! `v128` block at a time, and visits justification flags four `v128` blocks at
-//! a time. The short prefix avoids vector setup for mixed one-cluster runs while
-//! retaining the measured SIMD win on ordinary long runs. The four-block flag
-//! limit is a measured, deterministic unroll choice; wider candidates remain
-//! behind the `kernel-lab` feature until representative mobile browser evidence
-//! justifies their register pressure. Scalar tails preserve identical native and
-//! Wasm results at every slice length.
+//! Production probes four scalar bidi levels before its transition SIMD scan.
+//! Production scans bidi transitions one `v128` block at a time and visits
+//! justification flags four `v128` blocks at a time. The four-block limit is a
+//! measured, deterministic unroll choice; wider candidates remain behind the
+//! `kernel-lab` feature until representative mobile browser evidence justifies
+//! their register pressure. Scalar tails preserve identical native and Wasm
+//! results at every slice length.
 
 /// The first index after `start` whose level differs from `levels[start]`,
 /// or `levels.len()` when the run extends to the end.

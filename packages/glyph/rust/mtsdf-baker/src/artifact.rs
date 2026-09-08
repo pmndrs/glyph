@@ -355,9 +355,7 @@ fn select_font<'source>(
     let font = FontRef::from_index(source, face_index).map_err(|error| {
         MtsdfBakeError::new(MtsdfBakeErrorCode::InvalidFontFace, error).at("/fontFaceIndex")
     })?;
-    // Once, before the loop. Without an outline table every glyph produces an
-    // empty field, which is stored identically to a legitimately blank glyph —
-    // the artifact looks whole and renders nothing.
+    // Reject a missing outline table once; otherwise every glyph looks legitimately blank.
     if font.outline_glyphs().format().is_none() {
         return Err(MtsdfBakeError::new(
             MtsdfBakeErrorCode::InvalidFont,

@@ -32,6 +32,7 @@ import {
 } from '../text-properties.js';
 import { assertTextEffectsSupported, normalizedColumns, replacedContent } from '../engine-encoding.js';
 import type { GlyphCopy, GlyphRoot, GlyphRootServices, GlyphTextController } from '../config/glyph.js';
+import { reuseOrCreateTextPropertySnapshot } from '../config/text-property.js';
 import { ThreeCommandBufferRenderer } from './command-buffer-renderer.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import type { ThreeBindings, ThreeMaterialBinding } from './schema.js';
@@ -1374,10 +1375,11 @@ class ThreeRootPublication {
     this.#assertActive();
     this.#rendererUpdateRejected = false;
     this.#inspections.clear();
+    const publishMeasurements = this.#measurementPending;
     for (const [text, entry] of this.#entries) {
       entry.committedRevision = entry.stagedRevision;
       reconciler.markCommitted(text);
-      reconciler.publishMeasurement(text, entry.handle.measure());
+      if (publishMeasurements) reconciler.publishMeasurement(text, entry.handle.measure());
     }
     this.#measurementPending = false;
   }
@@ -1596,49 +1598,14 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
     font: properties.font,
     text,
     spans,
-    style: styleReused ? style : reuseOrSnapshotTextProperty(previous?.style, style, 'Text style'),
-    layout: layoutReused ? layout : reuseOrSnapshotTextProperty(previous?.layout, layout, 'Text layout'),
+    style: styleReused ? style : reuseOrCreateTextPropertySnapshot(previous?.style, style, 'Text style'),
+    layout: layoutReused ? layout : reuseOrCreateTextPropertySnapshot(previous?.layout, layout, 'Text layout'),
     constraints: constraintsReused
       ? constraints
-      : reuseOrSnapshotTextProperty(previous?.constraints, constraints, 'Text constraints'),
+      : reuseOrCreateTextPropertySnapshot(previous?.constraints, constraints, 'Text constraints'),
     ...(rasterPixelRatio === undefined ? {} : { rasterPixelRatio }),
     ...(properties.material === undefined ? {} : { material: properties.material }),
   });
-}
-
-function reuseOrSnapshotTextProperty<Value extends object>(
-  previous: Value | undefined,
-  value: Value,
-  label: string,
-): Value {
-  if (previous !== undefined && equalTextProperty(previous, value)) return previous;
-  let snapshot: Value;
-  try {
-    snapshot = structuredClone(value);
-  } catch (cause) {
-    throw new TypeError(`${label} must contain cloneable data`, { cause });
-  }
-  return deepFreeze(snapshot);
-}
-
-function equalTextProperty(previous: unknown, next: unknown, seen = new WeakMap<object, object>()): boolean {
-  if (Object.is(previous, next)) return true;
-  if (typeof previous !== 'object' || previous === null || typeof next !== 'object' || next === null) return false;
-  if (seen.get(previous) === next) return true;
-  seen.set(previous, next);
-  const previousKeys = Reflect.ownKeys(previous);
-  const nextKeys = Reflect.ownKeys(next);
-  if (previousKeys.length !== nextKeys.length) return false;
-  return previousKeys.every(
-    (key) => Object.hasOwn(next, key) && equalTextProperty(Reflect.get(previous, key), Reflect.get(next, key), seen),
-  );
-}
-
-function deepFreeze<Value>(value: Value, seen = new WeakSet<object>()): Value {
-  if (typeof value !== 'object' || value === null || seen.has(value)) return value;
-  seen.add(value);
-  for (const key of Reflect.ownKeys(value)) deepFreeze(Reflect.get(value, key), seen);
-  return Object.freeze(value);
 }
 
 function replaceDesiredString<Format extends RasterFormatMetadata>(
