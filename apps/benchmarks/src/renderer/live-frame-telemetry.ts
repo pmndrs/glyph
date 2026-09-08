@@ -49,9 +49,9 @@ export interface LiveFrameTelemetryCaptureOptions {
 export interface LiveFrameTelemetryCapture {
   /** The last frame already in flight before the capture began. */
   readonly startedAfterFrameId: number;
-  /** Exact finite CPU durations collected after `startedAfterFrameId`. */
+  /** Exact finite CPU durations collected after `startedAfterFrameId`; the CPU and GPU arrays are independent streams. */
   readonly cpuMs: Float64Array;
-  /** Exact finite GPU query completions whose source frames followed `startedAfterFrameId`. */
+  /** Exact finite GPU query completions whose source frames followed the same lower bound, not necessarily the CPU interval. */
   readonly gpuMs: Float64Array;
 }
 

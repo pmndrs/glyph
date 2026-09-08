@@ -153,16 +153,23 @@ owning layer and add the regression before broad verification.
       rejection of unknown or noncontiguous paragraph groups.
 - [x] Preserve shaping-safe emergency wrapping for an overlong unbreakable word.
 - [x] Preserve authored tight explicit line height, including negative half-leading.
+- [x] Preserve exact trailing-space state across chunk-skipped word fitting, including negative spacing and hard breaks,
+      without adding a lane, allocation, or SIMD-kernel branch.
 - [x] Query or inspect one detached Text without rebinding unrelated detached siblings.
-- [x] Reject duplicate paragraph ranks at the typed boundary and preserve atomic rank swaps.
+- [x] Reject duplicate final base paragraph orders at the typed boundary and preserve atomic order swaps.
+- [x] Retain accepted outer property identities beside shared immutable snapshots so unchanged adapter updates are O(1),
+      while a newly submitted style, layout, or constraint record observes nested caller changes.
+- [x] Omit unchanged scoped-order rows from paragraph queries while retaining the complete speculative lifecycle.
 - [x] Bound `measureParagraph` result-capacity retries while retaining asymmetric A/B capacity growth.
 - [x] Replace or encapsulate the live `queryMembers` scratch-array return so re-entry cannot observe mutated membership.
 - [x] Make exact telemetry capture admit CPU and completed GPU samples under one documented window rule.
+- [x] Keep the benchmark renderer error callback stable at its sole application owner instead of mirroring props through
+      an effect or teaching the host to retain callback state.
 - [x] Prove negative-advance dense scripts cannot materialize one 12-byte sparse-word record per cluster or disable the
       intended chunk fast path. Measure memory and fitting throughput before selecting the density guard.
-- [ ] Pin the established per-workload draw-count envelopes in executable tests rather than prose alone.
-- [ ] Decide the internal baseline-shift contract separately: layout queries expose nonnegative top-to-baseline and
-      baseline-to-bottom distances, while unrestricted internal shifts can make either derived distance negative.
+- [x] Pin the established per-workload draw-count envelopes in executable tests rather than prose alone.
+- [x] Keep `baselineShift` internal and unexposed. Public tight line height permits a signed descent while ascent remains
+      a nonnegative top-to-baseline distance; this stack does not invent public baseline-shift semantics.
 
 ## Retained-update and resize performance work
 

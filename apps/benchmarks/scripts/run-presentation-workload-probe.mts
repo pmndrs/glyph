@@ -4,6 +4,9 @@ import { fileURLToPath } from 'node:url';
 import type { Browser, Page } from 'playwright';
 import { createServer } from 'vite';
 
+import { assertPresentationDrawTopology } from '../src/benchmark/presentation-draw-topology.ts';
+import type { ComparisonWorkloadId } from '../src/workloads/comparison/contracts.ts';
+import { LOOPBACK_HOST, selectLoopbackPort } from './support/loopback-port.mts';
 import { launchProjectChromium } from './support/project-chromium.mts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -14,7 +17,7 @@ const shaders = presentationShaders(process.env.PRESENTATION_SHADERS);
 const shaderQuery = shaders === 'typegpu' ? '&shaders=typegpu' : '';
 const screenshotDirectory = process.env.PRESENTATION_SCREENSHOT_DIR;
 if (screenshotDirectory !== undefined) await mkdir(screenshotDirectory, { recursive: true });
-const server = await createServer({ root, server: { host: '127.0.0.1', port: 0 } });
+const server = await createServer({ root, server: { host: LOOPBACK_HOST, port: await selectLoopbackPort() } });
 await server.listen();
 const address = server.httpServer?.address();
 if (address === null || address === undefined || typeof address === 'string') {
@@ -181,6 +184,7 @@ try {
     // animates its own size and measure, so a sample taken later in the soak would report a different scene.
     await waitForSettledWorkload(page, workload, backend, false);
     const settled = await readBatching(page);
+    assertPresentationDrawTopology(workload.id, settled.drawCount);
     console.log(
       'presentation-workload-settled',
       workload.id,
@@ -336,7 +340,7 @@ function presentationShaders(value: string | undefined): 'tsl' | 'typegpu' {
 
 async function assertPresentationRemainsVisible(
   page: Page,
-  workload: string,
+  workload: ComparisonWorkloadId,
   expectedBackend: PresentationBackend,
 ): Promise<void> {
   const minimumRequiredInkPixels = workload === 'zoom-text' ? 32 : 300;
@@ -402,6 +406,7 @@ async function assertPresentationRemainsVisible(
     throw new Error(`${workload} rendered only ${String(visibleInkPixels)} visible foreground pixels`);
   }
   const batching = await readBatching(page);
+  assertPresentationDrawTopology(workload, batching.drawCount);
   console.log(
     'presentation-workload-visible',
     workload,

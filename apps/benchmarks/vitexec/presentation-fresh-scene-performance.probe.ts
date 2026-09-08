@@ -1,11 +1,26 @@
 /* @workflow { "name": "benchmark:presentation-fresh-scene-performance", "summary": "Measure selected Presentation workloads in independent scene-local telemetry windows.", "requirements": "GPU-enabled Chromium and authenticated benchmark fixtures.", "writes": "Standard output only.", "args": ["--gpu", "--path", "/?rounds=7", "--timeout", "300"] } */
 
+import type { ComparisonWorkloadId } from '../src/workloads/comparison/contracts';
+
 export {};
 
 const telemetryModulePath = '/src/renderer/live-frame-telemetry.ts';
 const telemetryModule: typeof import('../src/renderer/live-frame-telemetry') = await import(
   /* @vite-ignore */ telemetryModulePath
 );
+
+const allWorkloads = [
+  'off-axis-3d',
+  'dynamic-layout',
+  'paint-effects',
+  'icon-grid',
+  'billboard-labels',
+  'rich-text',
+  'paragraph-stress',
+  'editorial',
+] as const satisfies readonly ComparisonWorkloadId[];
+
+type FreshSceneWorkload = (typeof allWorkloads)[number];
 
 interface FreshSceneSample {
   readonly cpuMs: number;
@@ -15,21 +30,41 @@ interface FreshSceneSample {
   readonly gpuFrames: number;
   readonly gpuMs: number;
   readonly round: number;
-  readonly workload: string;
+  readonly workload: FreshSceneWorkload;
 }
 
-const workloads = [
-  'off-axis-3d',
-  'dynamic-layout',
-  'paint-effects',
-  'icon-grid',
-  'rich-text',
-  'paragraph-stress',
-  'editorial',
-] as const;
-const roundsParameter = Number(new URL(location.href).searchParams.get('rounds') ?? '7');
+interface FreshSceneTimingSummary {
+  readonly maxMs: number;
+  readonly p50Ms: number;
+  readonly p95Ms: number;
+}
+
+interface FreshSceneWindow {
+  readonly cpuMaxMs: number;
+  readonly cpuMs: readonly number[];
+  readonly cpuP50Ms: number;
+  readonly cpuP95Ms: number;
+  readonly gpuMaxMs: number;
+  readonly gpuMs: readonly number[];
+  readonly gpuP50Ms: number;
+  readonly gpuP95Ms: number;
+  readonly round: number;
+  readonly workload: FreshSceneWorkload;
+}
+
+const parameters = new URL(location.href).searchParams;
+const workloadParameter = parameters.get('workload');
+if (workloadParameter !== null && !isFreshSceneWorkload(workloadParameter)) {
+  throw new RangeError(`unknown fresh-scene workload: ${workloadParameter}`);
+}
+const workloads: readonly FreshSceneWorkload[] = workloadParameter === null ? allWorkloads : [workloadParameter];
+const roundsParameter = Number(parameters.get('rounds') ?? '7');
 if (!Number.isSafeInteger(roundsParameter) || roundsParameter <= 0 || roundsParameter > 20) {
   throw new RangeError('fresh-scene rounds must be an integer in [1, 20]');
+}
+
+function isFreshSceneWorkload(value: string): value is FreshSceneWorkload {
+  return allWorkloads.some((workload) => workload === value);
 }
 
 if (window.top !== window.self) await new Promise<never>(() => {});
@@ -65,17 +100,32 @@ for (let round = 0; round < roundsParameter; round += 1) {
         gpuSampleCount: 120,
         signal: AbortSignal.timeout(60_000),
       });
+      const cpu = nearestRankTimingSummary(capture.cpuMs);
+      const gpu = nearestRankTimingSummary(capture.gpuMs);
+      const evidence = {
+        round,
+        workload,
+        cpuMs: [...capture.cpuMs],
+        gpuMs: [...capture.gpuMs],
+        cpuP50Ms: cpu.p50Ms,
+        cpuP95Ms: cpu.p95Ms,
+        cpuMaxMs: cpu.maxMs,
+        gpuP50Ms: gpu.p50Ms,
+        gpuP95Ms: gpu.p95Ms,
+        gpuMaxMs: gpu.maxMs,
+      } satisfies FreshSceneWindow;
       const sample = {
         round,
         workload,
-        cpuMs: nearestRankMedian(capture.cpuMs),
-        gpuMs: nearestRankMedian(capture.gpuMs),
+        cpuMs: evidence.cpuP50Ms,
+        gpuMs: evidence.gpuP50Ms,
         frames: capture.cpuMs.length,
         gpuFrames: capture.gpuMs.length,
         draws: Number(viewport.dataset.drawCount),
         glyphs: Number(viewport.dataset.glyphCount),
       } satisfies FreshSceneSample;
       samples.push(sample);
+      console.log('fresh-scene-window', JSON.stringify(evidence));
       console.log('fresh-scene-cell', JSON.stringify(sample));
     } finally {
       iframe.remove();
@@ -111,12 +161,15 @@ function waitFrames(target: Window, count: number): Promise<void> {
   });
 }
 
-function nearestRankMedian(timings: Float64Array): number {
+function nearestRankTimingSummary(timings: Float64Array): FreshSceneTimingSummary {
   if (timings.length === 0) throw new RangeError('fresh-scene capture requires a nonempty timing window');
   const sorted = timings.slice().sort();
-  const median = sorted[Math.ceil(sorted.length * 0.5) - 1];
-  if (median === undefined || !Number.isFinite(median)) {
+  if (sorted.some((timing) => !Number.isFinite(timing))) {
     throw new RangeError('fresh-scene capture produced a non-finite timing');
   }
-  return median;
+  return {
+    maxMs: sorted[sorted.length - 1]!,
+    p50Ms: sorted[Math.ceil(sorted.length * 0.5) - 1]!,
+    p95Ms: sorted[Math.ceil(sorted.length * 0.95) - 1]!,
+  };
 }

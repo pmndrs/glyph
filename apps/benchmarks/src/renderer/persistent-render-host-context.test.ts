@@ -155,9 +155,8 @@ describe('PersistentRenderHostProvider lifecycle', () => {
   });
 
   test('ordinary rerender retains canvas settings and the existing host', async () => {
-    const initialError = vi.fn<(error: unknown) => void>();
-    const latestError = vi.fn<(error: unknown) => void>();
-    const firstValue = renderProvider(initialError);
+    const reportError = vi.fn<(error: unknown) => void>();
+    const firstValue = renderProvider(reportError);
     await firstValue.activateSurface({
       anchor: { clientHeight: 360, clientWidth: 640, prepend: prependCanvas } as unknown as HTMLElement,
       controller: { current: undefined },
@@ -172,7 +171,7 @@ describe('PersistentRenderHostProvider lifecycle', () => {
     });
     const settingsWrites = runtimeWorld.set.mock.calls.length;
 
-    const secondValue = renderProvider(latestError);
+    const secondValue = renderProvider(reportError);
     await secondValue.runExclusiveJob(() => undefined);
 
     expect(runtimeWorld.set).toHaveBeenCalledTimes(settingsWrites);
@@ -193,8 +192,7 @@ describe('PersistentRenderHostProvider lifecycle', () => {
     });
     expect(removeCanvas).toHaveBeenCalledTimes(1);
     expect(host.dispose).toHaveBeenCalledTimes(1);
-    expect(initialError).not.toHaveBeenCalled();
-    expect(latestError).toHaveBeenCalledWith(disposalFailure);
+    expect(reportError).toHaveBeenCalledWith(disposalFailure);
   });
 });
 

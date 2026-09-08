@@ -61,16 +61,11 @@ export function PersistentRenderHostProvider({
   const [canvas] = useState(() => document.createElement('canvas'));
   const canvasRef = useRef(canvas);
   const dprRef = useRef(dpr);
-  const onErrorRef = useRef(onError);
-  const [reportError] = useState(() => (error: unknown) => onErrorRef.current(error));
   const hostRef = useRef<PersistentRenderHost | undefined>(undefined);
   const hostPromiseRef = useRef<Promise<PersistentRenderHost> | undefined>(undefined);
   const activeAnchorRef = useRef<HTMLElement | undefined>(undefined);
   const interactionRef = useRef<CanvasInteractionBinding | undefined>(undefined);
   const surfaceGenerationRef = useRef(0);
-  useEffect(() => {
-    onErrorRef.current = onError;
-  }, [onError]);
   const ensureHost = async (width: number, height: number): Promise<PersistentRenderHost> => {
     let host = hostRef.current;
     if (host !== undefined) return host;
@@ -81,7 +76,7 @@ export function PersistentRenderHostProvider({
         dpr: dprRef.current,
         height,
         width,
-        onError: reportError,
+        onError,
       });
     }
     host = await hostPromiseRef.current;
@@ -122,9 +117,9 @@ export function PersistentRenderHostProvider({
       const host = hostRef.current;
       hostRef.current = undefined;
       hostPromiseRef.current = undefined;
-      if (host !== undefined) void host.dispose().catch(reportError);
+      if (host !== undefined) void host.dispose().catch(onError);
     },
-    [canvas, reportError, runtimeWorld],
+    [canvas, onError, runtimeWorld],
   );
 
   const activateSurface = async (

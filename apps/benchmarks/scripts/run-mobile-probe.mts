@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import type { Browser, Page } from 'playwright';
 import { createServer } from 'vite';
 
+import { LOOPBACK_HOST, selectLoopbackPort } from './support/loopback-port.mts';
 import { launchProjectChromium } from './support/project-chromium.mts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -10,8 +11,8 @@ process.chdir(root);
 const server = await createServer({
   root,
   server: {
-    host: '127.0.0.1',
-    port: 0,
+    host: LOOPBACK_HOST,
+    port: await selectLoopbackPort(),
   },
 });
 await server.listen();

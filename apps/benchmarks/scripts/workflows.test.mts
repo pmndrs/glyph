@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { createServer } from 'node:net';
 import { promisify } from 'node:util';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { forwardedWorkflowArguments, workflowCommandArguments } from './workflow-arguments.mts';
 import { hasVitexecFailure } from './workflow-output.mts';
+import { LOOPBACK_HOST, selectLoopbackPort } from './support/loopback-port.mts';
 
 const execute = promisify(execFile);
 const workflowScript = fileURLToPath(new URL('workflows.mts', import.meta.url));
@@ -51,4 +53,21 @@ test('forwards runner options in the position each runner parses', () => {
     '/tmp/profile',
     'probe.ts',
   ]);
+});
+
+test('selects and releases an available loopback port for private Vite servers', async () => {
+  const port = await selectLoopbackPort();
+  assert.ok(Number.isSafeInteger(port) && port > 0 && port <= 65_535);
+
+  const listener = createServer();
+  await new Promise<void>((resolve, reject) => {
+    listener.once('error', reject);
+    listener.listen({ exclusive: true, host: LOOPBACK_HOST, port }, resolve);
+  });
+  await new Promise<void>((resolve, reject) => {
+    listener.close((error) => {
+      if (error === undefined) resolve();
+      else reject(error);
+    });
+  });
 });

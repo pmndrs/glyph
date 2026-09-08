@@ -32,10 +32,8 @@ export const packageSizeBudgets = {
     gzipBytes: 139_000,
     brotliBytes: 113_500,
   },
-  // Portable fingerprinting inlines its own hash where SHA-256 called the free `crypto.subtle`
-  // browser API, so that code now ships in every bundle stamping or verifying an artifact.
-  // gzip 5,816 -> 6,022 (+206), crossing by 22. Linux and macOS measure this JavaScript
-  // identically, so unlike the Wasm ceilings it needs no cross-host margin.
+  // Portable fingerprinting moved this graph from 5,816 to 6,022 gzip bytes.
+  // Linux and macOS agree byte-for-byte, so this ceiling needs no host margin.
   'runtime-baker-host-js': {
     rawBytes: 18_000,
     minifiedBytes: 16_000,
@@ -90,15 +88,13 @@ export const packageSizeBudgets = {
     gzipBytes: 128_000,
     brotliBytes: 106_000,
   },
-  // `/three/typegpu` is the complete optional TypeGPU-backed Three integration. Its shader
-  // functions are priced here rather than as a second matrix of implementation-level leaves.
-  // With peers external it measures 618,195 raw / 604,898 minified / 138,827 gzip / 113,683 Brotli on the complete
-  // paragraph stack.
+  // `/three/typegpu` prices the complete optional integration, rather than implementation-level shader leaves.
+  // With peers external it measures 619,760 raw / 606,465 minified / 139,141 gzip / 113,976 Brotli.
   'three-typegpu-runtime-js': {
-    rawBytes: 620_000,
-    minifiedBytes: 606_000,
-    gzipBytes: 139_000,
-    brotliBytes: 114_000,
+    rawBytes: 622_000,
+    minifiedBytes: 609_000,
+    gzipBytes: 140_000,
+    brotliBytes: 115_000,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,
@@ -201,13 +197,8 @@ export const packageSizeBudgets = {
     gzipBytes: 5_700,
     brotliBytes: 5_100,
   },
-  // The configurable CFF cubic subdivision rate and the outline-table refusal both add
-  // code to this baker. Measured on the recorded macOS host, the artifact moved 461,488
-  // raw at the base commit to 464,164 after the subdivision rate (+2,676: the split-and-fit
-  // loop, its bounded quadratic buffer, and descriptor validation) and to 464,386 after the
-  // refusal (+222: one outline-format branch per baker). Linux emits 464,113 raw / 186,785
-  // gzip / 147,013 Brotli for the same sources, so these ceilings price the larger macOS
-  // measurement plus the documented cross-host margin.
+  // CFF subdivision and outline refusal moved macOS raw bytes from 461,488 to 464,386.
+  // Linux emits 464,113 raw / 186,785 gzip / 147,013 Brotli, so the ceiling includes host margin.
   'slug-baker-wasm': {
     rawBytes: 467_000,
     minifiedBytes: 467_000,

@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:3846c5ae7d1338eb16e51f35b5cb305f11aeb5d7e969dfd59cc1721cbb919e76'
+source_digest: 'sha256:b0d488f3c7f40e38ab9c717fe3ec4127610eb281c9f935c310c33f69b7b9f6c6'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -455,24 +455,28 @@ Benchmark mode exposes the same seven specialized workloads for Bitmap, MSDF, an
 Grouped workload changes reuse one `TextGroup` and replace its children in one retained Rust publication, avoiding a
 second set of session arenas while the outgoing command buffer is live. Stale stats no longer erase an update failure,
 and non-abort failures reach the browser console. Draw/glyph telemetry traverses the realized batch root once because
-Rust-planned meshes are siblings of authored entry nodes; the complete performance sweep rejects every zero-glyph or
-zero-draw cell. The complete 60-cell correctness sweep covers all ten workloads in Bitmap/MTSDF/Slug on WebGPU and
-forced WebGL2. Icon Grid retains two draws, Rich Text retains five draws instead of 36, Editorial retains three, Camera
-Billboard retains one, and the other workloads remain within their established 1–3 draw topology. Camera Billboard
-receives the host's active perspective camera on every animation frame, computes distance ranks in TypeScript, and
+Rust-planned meshes are siblings of authored entry nodes. The shared TSL/TypeGPU Presentation probe rejects every
+zero-glyph cell and enforces the workload's draw topology both at settled mount and after the visibility soak. The
+complete 60-cell correctness sweep covers all ten workloads in Bitmap/MTSDF/Slug on WebGPU and forced WebGL2. Icon Grid
+retains two draws, Rich Text retains five draws instead of 36, Editorial retains three, Camera Billboard retains one,
+and the other workloads remain within their established 1–3 draw topology. Private Vite probes ask the operating system
+for unused loopback ports, so browser workflows can run alongside the maintainer's ordinary development server. Camera
+Billboard receives the host's active perspective camera on every animation frame, computes distance ranks in TypeScript, and
 passes them as child `Text.renderOrder`; a focused regression proves the orbit and a depth-crossing rank reversal. No
 benchmark adapter sorts paragraphs or glyph records before the Rust publication.[^presentation-framerate-sweep]
 
 One aggregate CPU sweep could not serve as an A/B: exact remote main retained its 1,024-frame telemetry ring across
 workload replacement, while the candidate reset scene-local telemetry. The accepted comparison instead ran seven
-rotated repetitions per workload, each in a fresh visible same-origin scene with its own renderer and telemetry ring,
-then sampled 132–150 frames after a 30-frame warmup. Candidate/main Bitmap CPU and GPU medians in milliseconds were
-Off-axis / 3D `0.690/0.675` and `0.468/0.471`, Dynamic Layout `0.695/0.735` and `0.473/0.485`, Paint & Effects
-`0.945/0.955` and `0.523/0.528`, Icon Grid `0.505/0.505` and `0.605/0.607`, and Rich Text `0.285/0.520` and
-`0.504/0.544`. Off-axis's 0.015-ms median CPU increase was smaller than its overlapping run distributions and reversed
-to a 0.010-ms improvement in the seven-run mean. The evidence supports flat two-draw Icon Grid behavior and rejects the
-earlier single-pair 0.027-ms GPU increase; it does not claim a directional Icon Grid speedup. Rich Text improved 45.2%
-on CPU and 7.3% on GPU while reducing 36 draws to five. Camera Billboard,
+rotated repetitions per workload, each in a fresh visible same-origin scene with its own renderer and telemetry ring.
+After 30 warm animation frames, an explicit capture records exactly 120 finite CPU durations and 120 finite completed
+GPU query durations. These are two independent post-boundary streams because WebGPU timestamp queries resolve
+asynchronously; their medians must not be described as same-frame pairs. Candidate/current-main Bitmap CPU and GPU
+medians in milliseconds were Off-axis / 3D `0.705/0.695` and `0.505/0.499`, Dynamic Layout `0.750/0.755` and
+`0.515/0.509`, Paint & Effects `1.025/0.955` and `0.572/0.555`, Icon Grid `0.475/0.535` and `0.661/0.646`, and Rich
+Text `0.250/0.530` and `0.565/0.561`. Paint's CPU means were approximately equal despite the median difference, and
+the small GPU deltas are below the evidence needed for a directional claim. The evidence supports a faster two-draw
+Icon Grid CPU path and rejects a hidden twofold core regression. Rich Text reduced CPU by about 53% while reducing 36
+draws to five; its GPU result was effectively flat. Camera Billboard,
 which exists only on the stacked candidate, now exercises its orbit and retained rank publication rather than a dormant
 static scene. Its final Bitmap/MTSDF/Slug pass measured 2.030/2.120/2.065 ms median CPU submit and retained one draw for
 2,722 glyphs; the reusable distance-rank records allocate only when the label high-water grows. These are same-host

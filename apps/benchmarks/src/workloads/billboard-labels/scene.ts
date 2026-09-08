@@ -43,12 +43,7 @@ export function billboardLabelCount(amount: number): number {
   return BILLBOARD_MINIMUM_LABELS + Math.round(normalized * BILLBOARD_DENSITY_RANGE);
 }
 
-/**
- * A deterministic direction on the unit sphere, so a run is reproducible across techniques.
- *
- * Fibonacci spacing covers the shell evenly without clustering at the poles and needs no random
- * source to seed, which keeps two backends comparable frame for frame.
- */
+/** Returns a deterministic Fibonacci-distributed direction for cross-backend repeatability. */
 function billboardDirection(index: number, count: number, target: THREE.Vector3): THREE.Vector3 {
   const golden = Math.PI * (3 - Math.sqrt(5));
   const y = count === 1 ? 0 : 1 - (index / (count - 1)) * 2;
@@ -57,13 +52,7 @@ function billboardDirection(index: number, count: number, target: THREE.Vector3)
   return target.set(Math.cos(theta) * radius, y, Math.sin(theta) * radius);
 }
 
-/**
- * The world point the scene is built around.
- *
- * This app lays its world out in pixel units with the origin at the top-left and Y descending, and
- * the host aims its perspective camera at the viewport centre, so a scene that ignores that
- * convention renders in the corner rather than in view.
- */
+/** Returns the center in the app's top-left-origin, descending-Y world space. */
 function billboardCenter(viewportWidth: number, viewportHeight: number, target: THREE.Vector3): THREE.Vector3 {
   return target.set(viewportWidth / 2, -viewportHeight / 2, 0);
 }
@@ -123,13 +112,7 @@ const billboardOrder: BillboardOrderEntry[] = [];
 const farthestBillboardFirst = (left: BillboardOrderEntry, right: BillboardOrderEntry): number =>
   right.distance - left.distance;
 
-/**
- * Orbits the camera, faces every label at it, and reissues render order front to back.
- *
- * This is the case a draw-order guarantee has to survive: the labels never move, but which one is
- * nearest changes continuously, so their declared order is rewritten every frame without
- * re-shaping or re-planning any paragraph.
- */
+/** Orbits and faces labels, rewriting front-to-back order without reshaping them. */
 export function animateBillboardLabelEntries(
   entries: readonly ComparisonWorkloadEntry[],
   elapsedMs: number,

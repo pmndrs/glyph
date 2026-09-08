@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import type { Browser, Page } from 'playwright';
 import { createServer } from 'vite';
 
+import { LOOPBACK_HOST, selectLoopbackPort } from './support/loopback-port.mts';
 import { launchProjectChromium } from './support/project-chromium.mts';
 
 /** Samples the presented canvas per frame, not harness telemetry (its 250 ms interval would swamp this signal).
@@ -66,7 +67,7 @@ const TEXT_REVEAL_STEP = 3;
 /** Full authored reveal speed: faster than one grapheme per frame, which is where a lagging presentation shows. */
 const TYPEWRITER_REVEAL_PER_SECOND = 240;
 
-const server = await createServer({ root, server: { host: '127.0.0.1', port: 0 } });
+const server = await createServer({ root, server: { host: LOOPBACK_HOST, port: await selectLoopbackPort() } });
 await server.listen();
 const address = server.httpServer?.address();
 if (address === null || address === undefined || typeof address === 'string') {

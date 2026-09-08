@@ -1,6 +1,7 @@
 import {
   Suspense,
   use,
+  useCallback,
   useEffect,
   useEffectEvent,
   useRef,
@@ -619,9 +620,9 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
   const liveFormatComparison = location.mode === 'conformance' && location.workload === 'mtsdf-slug-compare';
   const actionEligible = available && backendAvailable && !isPending && !liveFormatComparison;
 
-  const reportRendererError = (caught: unknown): void => {
+  const reportRendererError = useCallback((caught: unknown): void => {
     setError(caught instanceof Error ? caught.message : String(caught));
-  };
+  }, []);
   const sceneIdentity = [
     location.backend,
     location.delivery,
