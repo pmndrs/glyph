@@ -16,6 +16,10 @@ pub(crate) const CLUSTER_HARD_BREAK: u8 = 1 << 2;
 pub(crate) const CLUSTER_ALLOWED_BREAK: u8 = 1 << 3;
 /// The cluster starts with U+0020 — a justifiable, shrinkable word space.
 pub(crate) const CLUSTER_SPACE: u8 = 1 << 4;
+/// Chunk-summary-only marker: at least one advance in this chunk is negative.
+/// The cluster flag domain occupies the lower five bits, so this stays packed
+/// into the existing summary byte without widening a record or adding a lane.
+pub(crate) const CHUNK_NEGATIVE_ADVANCE: u8 = 1 << 5;
 
 use super::shaping_state::GLYPH_FLAG_UNSAFE_TO_BREAK as GLYPH_UNSAFE_TO_BREAK;
 
@@ -46,25 +50,43 @@ fn summarize_unit_chunks(
     units: &[i64],
     flags: &[u8],
     chunk_advance_sums: &mut Vec<i64>,
-    chunk_space_sums: &mut Vec<i64>,
+    chunk_auxiliary_sums: &mut Vec<i64>,
     chunk_flags_or: &mut Vec<u8>,
-) -> bool {
-    let mut has_negative_advance = false;
+) {
     for (advances, flags) in units.chunks(LAYOUT_CHUNK).zip(flags.chunks(LAYOUT_CHUNK)) {
         let advance_sum = sum_advance_units(advances);
         let mut space_sum = 0_i64;
         let mut flags_or = 0_u8;
         for (advance, flag) in advances.iter().zip(flags) {
-            has_negative_advance |= *advance < 0;
             space_sum =
                 space_sum.saturating_add(*advance & -i64::from((*flag & CLUSTER_SPACE) >> 4));
             flags_or |= *flag;
+            flags_or |= CHUNK_NEGATIVE_ADVANCE * u8::from(*advance < 0);
         }
+        // This lane is tagged by the summary flags. Chunks containing spaces
+        // retain their shrinkable-space total. A negative, space-free chunk
+        // instead stores its largest advance prefix, which proves that every
+        // possible dense-script break boundary fits without materializing one
+        // word record per cluster. Ordinary chunks keep zero in the otherwise
+        // unused lane, so short-label storage and the common fit stay unchanged.
+        let auxiliary_sum =
+            if flags_or & (CHUNK_NEGATIVE_ADVANCE | CLUSTER_SPACE) == CHUNK_NEGATIVE_ADVANCE {
+                let mut prefix = 0_i64;
+                let mut maximum = 0_i64;
+                for &advance in advances {
+                    // A chunk contains at most 64 values bounded to +/-2^53, so
+                    // this exact prefix remains within +/-2^59.
+                    prefix += advance;
+                    maximum = maximum.max(prefix);
+                }
+                maximum
+            } else {
+                space_sum
+            };
         chunk_advance_sums.push(advance_sum);
-        chunk_space_sums.push(space_sum);
+        chunk_auxiliary_sums.push(auxiliary_sum);
         chunk_flags_or.push(flags_or);
     }
-    has_negative_advance
 }
 
 #[cfg(all(target_arch = "wasm32", feature = "simd128"))]
@@ -115,13 +137,14 @@ pub(crate) struct ClusterArena {
     /// authoritative; the integer fit consumes this stream and must match.
     pub advance_units: Vec<i64>,
     /// Chunk-64 summaries over `advance_units`/`flags`, refreshed with them: total
-    /// advance, shrinkable-space advance, and OR-folded flags per chunk.
+    /// advance, a flag-tagged auxiliary sum, and OR-folded flags per chunk. The
+    /// auxiliary is a shrinkable-space sum for chunks containing spaces, the
+    /// maximum advance prefix for negative space-free chunks, and zero otherwise.
     pub chunk_advance_sums: Vec<i64>,
-    pub chunk_space_sums: Vec<i64>,
+    pub chunk_auxiliary_sums: Vec<i64>,
     pub chunk_flags_or: Vec<u8>,
     pub word_breaks: Vec<WordBreakRecord>,
     pub(crate) word_breaks_valid: bool,
-    pub(crate) has_negative_advance: bool,
     /// Per-cluster `units_per_em` of the owning shaped font (0 while unshaped),
     /// resolved once at cluster build. Positioning derives its scale from the
     /// CURRENT style's font size and this column, so font-size-only style changes
@@ -507,23 +530,24 @@ impl ClusterArena {
                 .map(|advance| super::layout_units::layout_units_from_scaled(*advance)),
         );
         // Chunk-64 summaries (D-245): per 64-cluster chunk, the total advance, the
-        // advance carried by shrinkable spaces, and the OR of every cluster flag.
+        // tagged auxiliary described on `chunk_auxiliary_sums`, and the OR of every
+        // cluster flag plus summary-only markers.
         // The fit skips whole fitting chunks through these sums — exact, because
         // integer addition is associative — and resolves the last break position
         // inside a chunk only when a break is actually needed. The tail chunk is
         // summarized too; consumers gate on full-chunk availability themselves.
         let chunk_count = self.advance_units.len().div_ceil(LAYOUT_CHUNK);
         self.chunk_advance_sums.clear();
-        self.chunk_space_sums.clear();
+        self.chunk_auxiliary_sums.clear();
         self.chunk_flags_or.clear();
         reserve(&mut self.chunk_advance_sums, chunk_count)?;
-        reserve(&mut self.chunk_space_sums, chunk_count)?;
+        reserve(&mut self.chunk_auxiliary_sums, chunk_count)?;
         reserve(&mut self.chunk_flags_or, chunk_count)?;
-        self.has_negative_advance = summarize_unit_chunks(
+        summarize_unit_chunks(
             &self.advance_units,
             &self.flags,
             &mut self.chunk_advance_sums,
-            &mut self.chunk_space_sums,
+            &mut self.chunk_auxiliary_sums,
             &mut self.chunk_flags_or,
         );
         self.word_breaks.clear();
@@ -555,9 +579,10 @@ impl ClusterArena {
         // At one opportunity per two clusters or denser, the record stream
         // would rival the source lanes and performs no less work than the
         // existing chunk/scalar path (the usual CJK and character-like case).
-        // Negative advances need the complete-segment kernel below; materialize
-        // its index even for dense text so this heuristic cannot change layout.
-        if !self.has_negative_advance && opportunity_count.saturating_mul(2) >= self.flags.len() {
+        // Dense streams stay on the chunk/scalar compositor even with negative
+        // advances. Per-chunk summary markers preserve first-overflow semantics
+        // without turning a character-like script into a record-per-cluster index.
+        if opportunity_count.saturating_mul(2) >= self.flags.len() {
             self.word_breaks_valid = true;
             return Ok(());
         }
@@ -913,11 +938,10 @@ impl ClusterArena {
         self.advances.clear();
         self.advance_units.clear();
         self.chunk_advance_sums.clear();
-        self.chunk_space_sums.clear();
+        self.chunk_auxiliary_sums.clear();
         self.chunk_flags_or.clear();
         self.word_breaks.clear();
         self.word_breaks_valid = false;
-        self.has_negative_advance = false;
         self.units_per_em.clear();
         self.flags.clear();
         self.style_indexes.clear();
@@ -2050,7 +2074,7 @@ mod tests {
         assert_lane!(advances);
         assert_lane!(advance_units);
         assert_lane!(chunk_advance_sums);
-        assert_lane!(chunk_space_sums);
+        assert_lane!(chunk_auxiliary_sums);
         assert_lane!(chunk_flags_or);
         assert_lane!(word_breaks);
         assert_lane!(units_per_em);
@@ -2167,7 +2191,7 @@ mod tests {
         arena.flags[3] |= CLUSTER_SPACE;
         arena.refresh_layout_units().unwrap();
         assert_eq!(arena.chunk_advance_sums, [64 * 65_536, 65_536]);
-        assert_eq!(arena.chunk_space_sums, [65_536, 0]);
+        assert_eq!(arena.chunk_auxiliary_sums, [65_536, 0]);
         assert_eq!(
             arena.chunk_flags_or,
             [CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE, CLUSTER_ALLOWED_BREAK]
@@ -2177,10 +2201,39 @@ mod tests {
         arena.refresh_layout_units().unwrap();
         assert_eq!(arena.chunk_advance_sums[0], 64 * 65_536);
         assert_eq!(arena.chunk_advance_sums[1], 2_147_483_648);
-        assert_eq!(arena.chunk_space_sums, [65_536, 0]);
+        assert_eq!(arena.chunk_auxiliary_sums, [65_536, 0]);
         assert_eq!(
             arena.chunk_flags_or,
             [CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE, CLUSTER_ALLOWED_BREAK]
+        );
+    }
+
+    #[test]
+    fn negative_chunk_summary_packs_its_marker_and_tagged_auxiliary() {
+        let mut advances = vec![0.0; LAYOUT_CHUNK * 3];
+        let mut flags = vec![CLUSTER_ALLOWED_BREAK; advances.len()];
+        advances[0] = 3.0;
+        advances[1] = -2.0;
+        advances[2] = -2.0;
+        advances[LAYOUT_CHUNK] = -2.0;
+        flags[LAYOUT_CHUNK] |= CLUSTER_SPACE;
+        advances[LAYOUT_CHUNK * 2] = 1.0;
+        let mut arena = ClusterArena {
+            advances,
+            flags,
+            ..ClusterArena::default()
+        };
+        arena.refresh_layout_units().unwrap();
+
+        assert_eq!(arena.chunk_advance_sums, [-65_536, -131_072, 65_536]);
+        assert_eq!(arena.chunk_auxiliary_sums, [196_608, -131_072, 0]);
+        assert_eq!(
+            arena.chunk_flags_or,
+            [
+                CLUSTER_ALLOWED_BREAK | CHUNK_NEGATIVE_ADVANCE,
+                CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE | CHUNK_NEGATIVE_ADVANCE,
+                CLUSTER_ALLOWED_BREAK,
+            ],
         );
     }
 
@@ -2227,12 +2280,16 @@ mod tests {
         );
 
         let mut dense = ClusterArena {
-            advances: vec![1.0; 4],
-            flags: vec![CLUSTER_ALLOWED_BREAK; 4],
+            advances: vec![1.0; LAYOUT_CHUNK * 2],
+            flags: vec![CLUSTER_ALLOWED_BREAK; LAYOUT_CHUNK * 2],
             ..ClusterArena::default()
         };
+        dense.advances[3] = -1.0;
         dense.refresh_layout_units().unwrap();
         dense.ensure_word_breaks().unwrap();
         assert!(dense.word_breaks.is_empty());
+        assert_eq!(dense.word_breaks.capacity(), 0);
+        assert!(dense.word_breaks_valid);
+        assert!(dense.chunk_flags_or[0] & CHUNK_NEGATIVE_ADVANCE != 0);
     }
 }

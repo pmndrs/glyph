@@ -1121,10 +1121,14 @@ third of resize frames now cost a third of a millisecond.
 The completing reflow pass keeps shaped-word composition data beside the retained cluster lanes. Only a paragraph whose
 active geometry requests word wrapping lazily builds the sidecar. Sparse prose records one 12-byte
 `(cluster_end, advance_units, space_units)` entry per legal word break plus its terminal segment; a paragraph with at
-least one break per two clusters stays on the existing cluster/chunk path when advances are nonnegative, so ordinary
-dense CJK never pays a sidecar record per character. Paragraphs shorter than one 64-cluster layout chunk also stay on
-the allocation-free scalar path, so ordinary labels never construct the word index. A rare dense stream containing a negative advance keeps the sidecar
-so its presence remains a pure optimization and cannot change the selected break. Word fitting consumes complete shaped segments before testing the width, including the same word-space
+least one break per two clusters stays on the existing cluster/chunk path, so ordinary dense CJK never pays a sidecar
+record per character even when shaping produces a negative advance. Paragraphs shorter than one 64-cluster layout
+chunk also stay on the allocation-free scalar path, so ordinary labels never construct the word index. The existing
+chunk flag byte marks negative advances, and its existing auxiliary `i64` lane is interpreted by those flags as either
+the shrinkable-space sum or, for a negative space-free chunk, the largest advance prefix. This proves that every local
+break boundary fits before skipping that chunk. A chunk combining spaces with a negative advance takes the exact scalar
+path, preserving hanging-space and shrink semantics without another lane, Wasm ABI field, glyph-record byte, or warm
+allocation. Word fitting consumes complete shaped segments before testing the width, including the same word-space
 shrink budget used by justification. This fixes the case where an early positive glyph advance followed by a negative
 shaping adjustment incorrectly pushed a word to the next line even though the completed word fit. It does not reshape
 or split a previously shaped word.

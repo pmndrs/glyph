@@ -1,8 +1,8 @@
 use super::{
     EngineError,
     cluster_state::{
-        CLUSTER_ALLOWED_BREAK, CLUSTER_HARD_BREAK, CLUSTER_REQUIRED_BREAK, CLUSTER_SAFE_BEFORE,
-        CLUSTER_SPACE, ClusterArena,
+        CHUNK_NEGATIVE_ADVANCE, CLUSTER_ALLOWED_BREAK, CLUSTER_HARD_BREAK, CLUSTER_REQUIRED_BREAK,
+        CLUSTER_SAFE_BEFORE, CLUSTER_SPACE, ClusterArena,
     },
     frame::{WRAP_CHARACTER, WRAP_NONE, WRAP_WORD},
     layout_units::scaled_from_layout_units,
@@ -305,8 +305,8 @@ fn layout_next_line_integer_scalar(
     // candidate. Exactness holds because integer chunk sums equal the per-cluster
     // sums.
     let chunk_summaries = wrap == WRAP_WORD
-        && !clusters.has_negative_advance
-        && clusters.chunk_flags_or.len() == count.div_ceil(super::cluster_state::LAYOUT_CHUNK);
+        && clusters.chunk_flags_or.len() == count.div_ceil(super::cluster_state::LAYOUT_CHUNK)
+        && clusters.chunk_auxiliary_sums.len() == clusters.chunk_flags_or.len();
     let mut pending_allowed: Option<(usize, i64)> = None;
     let mut pending_safe: Option<(usize, i64)> = None;
 
@@ -320,13 +320,38 @@ fn layout_next_line_integer_scalar(
             let flags_or = clusters.chunk_flags_or[chunk];
             if flags_or & (CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK) == 0 {
                 let next_advance = advance.saturating_add(clusters.chunk_advance_sums[chunk]);
-                let next_space_units = space_units.saturating_add(clusters.chunk_space_sums[chunk]);
-                let fits = max_width_units.is_none_or(|units| {
-                    next_advance.saturating_sub(super::layout_units::apply_ratio(
-                        next_space_units,
-                        word_space_shrink,
-                    )) <= units
-                });
+                let has_spaces = flags_or & CLUSTER_SPACE != 0;
+                let next_space_units = if has_spaces {
+                    space_units.saturating_add(clusters.chunk_auxiliary_sums[chunk])
+                } else {
+                    space_units
+                };
+                let fits = if flags_or & CHUNK_NEGATIVE_ADVANCE == 0 {
+                    max_width_units.is_none_or(|units| {
+                        next_advance.saturating_sub(super::layout_units::apply_ratio(
+                            next_space_units,
+                            word_space_shrink,
+                        )) <= units
+                    })
+                } else if !has_spaces {
+                    // The tagged auxiliary is this chunk's maximum advance
+                    // prefix. Existing spaces precede the chunk, so their
+                    // shrink credit is constant across every local prefix.
+                    max_width_units.is_none_or(|units| {
+                        advance
+                            .saturating_add(clusters.chunk_auxiliary_sums[chunk])
+                            .saturating_sub(super::layout_units::apply_ratio(
+                                space_units,
+                                word_space_shrink,
+                            ))
+                            <= units
+                    })
+                } else {
+                    // Combining spaces with any negative advance can make
+                    // hanging-space removal and shrink credit non-monotonic.
+                    // Resolve this rare mixed chunk through the exact scalar path.
+                    false
+                };
                 if fits {
                     if flags_or & CLUSTER_ALLOWED_BREAK != 0 {
                         pending_allowed = Some((chunk, advance));
@@ -904,7 +929,7 @@ mod tests {
             clusters.word_breaks.is_empty(),
             "the first segment exceeds the i32 sidecar domain"
         );
-        assert!(clusters.has_negative_advance);
+        assert!(clusters.chunk_flags_or[0] & CHUNK_NEGATIVE_ADVANCE != 0);
 
         let line = layout_next_line_integer(
             &clusters,
@@ -919,6 +944,129 @@ mod tests {
             line.cluster_end, 11,
             "the later negative segment cannot pull an overflowing word back"
         );
+    }
+
+    #[test]
+    fn dense_negative_chunks_match_scalar_and_f64_without_a_word_sidecar() {
+        use super::super::{cluster_state::LAYOUT_CHUNK, layout_units::layout_units_from_scaled};
+
+        let count = LAYOUT_CHUNK * 5;
+        let mut advances = vec![1.0; count];
+        let mut flags = vec![CLUSTER_SAFE_BEFORE | CLUSTER_ALLOWED_BREAK; count];
+        flags[20] |= CLUSTER_SPACE;
+        advances[80] = -3.0;
+        advances[150] = 0.0;
+        flags[150] = CLUSTER_SAFE_BEFORE | CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK;
+        advances[200] = -0.25;
+        flags[200] |= CLUSTER_SPACE;
+
+        let dense = make_quantized_clusters(&advances, &flags);
+        assert!(dense.word_breaks.is_empty());
+        assert_eq!(dense.word_breaks.capacity(), 0);
+        assert!(dense.word_breaks_valid);
+        assert!(dense.chunk_flags_or[1] & CHUNK_NEGATIVE_ADVANCE != 0);
+        assert_eq!(dense.chunk_flags_or[1] & CLUSTER_SPACE, 0);
+        assert_eq!(dense.chunk_auxiliary_sums[1], 60 * 65_536);
+        assert_eq!(
+            dense.chunk_flags_or[3] & (CHUNK_NEGATIVE_ADVANCE | CLUSTER_SPACE),
+            CHUNK_NEGATIVE_ADVANCE | CLUSTER_SPACE,
+        );
+        assert_eq!(dense.chunk_auxiliary_sums[3], -16_384);
+
+        let mut scalar = make_quantized_clusters(&advances, &flags);
+        scalar.chunk_flags_or.clear();
+        for width in [1.0_f64, 7.0, 31.0, 63.0, 127.0, 511.0] {
+            let width_units = layout_units_from_scaled(width);
+            for shrink in [0.0_f64, 0.25, 0.61] {
+                let reference = fit_all(
+                    &dense,
+                    scaled_from_layout_units(width_units),
+                    WRAP_WORD,
+                    shrink,
+                );
+                assert_eq!(
+                    fit_all_integer(&dense, Some(width_units), WRAP_WORD, shrink),
+                    reference,
+                    "chunk width {width} shrink {shrink}",
+                );
+                assert_eq!(
+                    fit_all_integer(&scalar, Some(width_units), WRAP_WORD, shrink),
+                    reference,
+                    "scalar width {width} shrink {shrink}",
+                );
+            }
+        }
+
+        let word_pointer = dense.word_breaks.as_ptr();
+        let word_capacity = dense.word_breaks.capacity();
+        let chunk_pointer = dense.chunk_auxiliary_sums.as_ptr();
+        let chunk_capacity = dense.chunk_auxiliary_sums.capacity();
+        for width in 1..=256 {
+            let mut cursor = LineCursor::default();
+            let mut line_count = 0;
+            while let Some(line) = layout_next_line_integer(
+                &dense,
+                &mut cursor,
+                Some(i64::from(width) * 65_536),
+                WRAP_WORD,
+                0.37,
+            )
+            .unwrap()
+            {
+                assert!(line.cluster_end > line.cluster_start);
+                line_count += 1;
+            }
+            assert!(line_count > 0);
+        }
+        assert_eq!(dense.word_breaks.as_ptr(), word_pointer);
+        assert_eq!(dense.word_breaks.capacity(), word_capacity);
+        assert_eq!(dense.chunk_auxiliary_sums.as_ptr(), chunk_pointer);
+        assert_eq!(dense.chunk_auxiliary_sums.capacity(), chunk_capacity);
+    }
+
+    #[test]
+    fn sparse_negative_words_keep_index_scalar_and_f64_parity() {
+        use super::super::layout_units::layout_units_from_scaled;
+
+        let count = 257;
+        let mut advances = vec![1.0; count];
+        let mut flags = vec![CLUSTER_SAFE_BEFORE; count];
+        for end in (6..count).step_by(7) {
+            flags[end] |= CLUSTER_ALLOWED_BREAK;
+        }
+        flags[20] |= CLUSTER_SPACE;
+        advances[9] = -0.5;
+        advances[48] = -0.25;
+        flags[48] |= CLUSTER_SPACE;
+        advances[128] = 0.0;
+        flags[128] = CLUSTER_SAFE_BEFORE | CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK;
+
+        let indexed = make_quantized_clusters(&advances, &flags);
+        assert!(!indexed.word_breaks.is_empty());
+        let mut scalar = make_quantized_clusters(&advances, &flags);
+        scalar.word_breaks.clear();
+        scalar.chunk_flags_or.clear();
+        for width in [1.0_f64, 4.0, 8.0, 16.0, 32.0, 128.0] {
+            let width_units = layout_units_from_scaled(width);
+            for shrink in [0.0_f64, 0.25, 0.61] {
+                let reference = fit_all(
+                    &indexed,
+                    scaled_from_layout_units(width_units),
+                    WRAP_WORD,
+                    shrink,
+                );
+                assert_eq!(
+                    fit_all_integer(&indexed, Some(width_units), WRAP_WORD, shrink),
+                    reference,
+                    "indexed width {width} shrink {shrink}",
+                );
+                assert_eq!(
+                    fit_all_integer(&scalar, Some(width_units), WRAP_WORD, shrink),
+                    reference,
+                    "scalar width {width} shrink {shrink}",
+                );
+            }
+        }
     }
 
     #[test]
