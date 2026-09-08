@@ -204,6 +204,8 @@ export { fingerprint } from './identity.js';
 export { glyphFlags } from './layout.js';
 export type {
   BaselineMetrics,
+  BorrowedGlyph,
+  BorrowedGlyphLayout,
   FontSlotRecord,
   LayoutBox,
   ParagraphIntrinsicWidths,

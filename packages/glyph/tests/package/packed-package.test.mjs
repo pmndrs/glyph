@@ -83,20 +83,6 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     assert.ok(Object.keys(imported).length > 0, `${specifier} must expose at least one ESM export`);
   }
 
-  for (const specifier of [
-    '@pmndrs/glyph/three/material',
-    '@pmndrs/glyph/react/bitmap',
-    '@pmndrs/glyph/react/msdf',
-    '@pmndrs/glyph/react/slug',
-    '@pmndrs/glyph/config/glyph',
-    '@pmndrs/glyph/config/raster-format',
-    '@pmndrs/glyph/config/schema',
-  ]) {
-    const resolved = import.meta.resolve(specifier, consumerEntry);
-    const imported = await import(resolved);
-    assert.ok(Object.keys(imported).length > 0, `${specifier} must expose its public leaf`);
-  }
-
   const typeGpuConsumer = join(temporaryDirectory, 'consumer', 'typegpu.mjs');
   await writeFile(
     typeGpuConsumer,

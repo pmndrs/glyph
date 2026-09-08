@@ -596,13 +596,10 @@ async function createComparisonWorkloadRuntime(
         next.workload === 'icon-grid' && nextIconGridInstance !== undefined
           ? nextIconGridInstance.activate(next, { height, width })
           : undefined;
-      const rootChanged = false;
       const previous = entries;
       const previousRoot = batchRoot;
       const reuseBatchRoot =
-        !rootChanged &&
-        previousRoot instanceof TextGroup &&
-        comparisonWorkloadDefinition(next.workload).batching !== 'standalone';
+        previousRoot instanceof TextGroup && comparisonWorkloadDefinition(next.workload).batching !== 'standalone';
       let nextEntries: readonly WorkloadEntry[] = [];
       let nextRoot: THREE.Object3D;
       try {
@@ -623,7 +620,6 @@ async function createComparisonWorkloadRuntime(
         nextRoot = reuseBatchRoot ? previousRoot : createBatchRoot(glyphRoot, next.workload);
       } catch (error) {
         disposeEntries(nextEntries);
-        if (rootChanged) disposeBenchmarkThreeRoot(glyphRoot);
         throw error;
       }
       const scheduledAt = performance.now();
@@ -704,7 +700,6 @@ async function createComparisonWorkloadRuntime(
         }
         disposeEntries(nextEntries);
         if (!reuseBatchRoot) disposeBatchRoot(nextRoot);
-        if (rootChanged) disposeBenchmarkThreeRoot(glyphRoot);
         if (iconGridInstanceChanged) nextIconGridInstance?.dispose();
         throw error;
       }

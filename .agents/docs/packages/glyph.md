@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:4f0493d95906f9507ca9a7d35c33de708c7809237e18e1a3c5575c7b904a1723'
+source_digest: 'sha256:60ce1a05e827c3e808e3067955793d60b2d9b1906adf555450f9c1f260df0f87'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -273,6 +273,13 @@ boundary, and Font lease acquisition belong to the package-owned root host. They
 conditions and built declarations; package internals recover the host through private identity rather than exposing a
 second renderer/runtime object to applications.
 
+`Text` publishes ink through Three's object-level `boundingBox` contract and carries one package-private shared empty
+`BufferGeometry` marker so `Box3.setFromObject()` visits those bounds in ordinary and precise modes. The marker has no
+vertex payload, child, draw, per-Text allocation, serialization, or raycast behavior. Before the first rendered frame,
+Box3 requests one positioned measurement containing only the paragraph summary and lines; later traversal reuses the
+revision-aware measurement cache. Drei Center/Bounds can therefore consume transformed paragraph boxes without coupling
+authored objects to renderer-owned batch meshes or copying the per-glyph columns.
+
 The unbundled source graph follows the same boundary. `/three/raster-program` exposes the custom-raster
 registration DSL but keeps compiled snapshots and renderer lifecycle state under the denied `/three/internal/*` tree.
 Mixed implementation modules for Text, detached Glyphs/Decorations, frame translation, and measurement are exact-denied
@@ -330,8 +337,8 @@ is an engine defect and never enters this recovery path (D-285).
 `registerThreeRasterProgram` refuses a format registered after a runtime has read the registry (D-271), naming the
 raster format instead of applying to nothing. Snapshot tracking uses weak registry references, so an abandoned runtime cannot
 keep its identity registry alive or permanently poison later registration after collection. `/three` also re-exports
-`ParagraphLayoutSummary`, `GlyphLayoutInspection`, `ParagraphLayout`, `ParagraphMeasurement`, and `FontFeature`, so a
-`/three` importer can name what `Text.measure()`, `Text.glyphs()`, and `TextStyle.features` give it.
+`ParagraphLayoutSummary`, `GlyphLayoutInspection`, `BorrowedGlyphLayout`, `BorrowedGlyph`, `ParagraphLayout`,
+`ParagraphMeasurement`, and `FontFeature`, so a `/three` importer can name every Three text query result.
 
 One baked GLB may expose several raster formats without repeating its input identity. The ordinary declaration and loading
 surface is `glyph.fontFace(source, { family?, format? })`; root does not export `loadFont`, `createFontLibrary`, or
@@ -351,6 +358,18 @@ members plus the explicitly queried Text; querying an attached sibling cannot bi
 detached Text can still measure or inspect itself without entering the rendered batch. The former renderer-free
 `createParagraph()` path was removed because its private engine, handle, Codec, planner, font bindings, and caches
 duplicated the GlyphConfig pipeline (D-339).
+
+The Three root keeps only the current detached query publicly bound and parks at most one preceding detached controller
+outside active publication membership. Alternating two detached measurements or inspections therefore reuses each
+controller's revision-aware semantic cache without accumulating removal rows, while a third distinct query evicts the
+single parked controller. Scene publication also evicts that slot. This bound permits at most one dormant core
+inspection cache; `Text.glyphs()` still returns freshly copied, caller-owned columns on every call.
+
+`Text.withGlyphs(callback)` is the shared core, Three, and TypeGPU demand-read alternative for callers that need only a
+few glyphs. Its fixed descriptor serializes no per-glyph semantic table; each indexed access copies one retained Rust
+glyph into fixed Wasm scratch, then returns one frozen scalar object in O(selected) work. Full `glyphs()` remains the
+bulk caller-owned copy. The callback must finish synchronously:
+thenables, engine reentry, and retained-text mutation are rejected, and the indexed view expires on return or throw.
 
 The FontFace source cache coalesces canonical-equivalent locators before I/O and converges different locators onto one
 parsed main-font node after their complete GLB bytes have the same SHA-256 content identity. Every acquisition base is
@@ -407,7 +426,9 @@ receives a `kind: 'glyph' | 'decoration'` discriminated context and may keep or 
 material without mutating the glyph draw. `ThreeTextMaterialContextMap` supplies the exact built-in payloads and is the
 augmentation point for a custom Three program's literal format and output types; it does not add an untyped string
 fallback. Only glyph branches carry a raster `format`; `pmndrs.decoration` remains an internal Codec/command-buffer
-technique identifier. Decorated command-buffer gathers rebuild their output; the undecorated retained fast path is unchanged.
+technique identifier. Decorated command-buffer gathers rebuild their output, counting and appending each paint pass
+directly from the retained contiguous decoration slice without a transient filtered allocation; the undecorated retained
+fast path is unchanged.
 
 When runtime baking is required, one Worker request normalizes the Unicode ranges, prepares the selected source once,
 and feeds those exact prepared bytes to the shaping bake and every requested Bitmap, MSDF, or Slug bake. The Worker
@@ -568,8 +589,9 @@ Publication emits no semantic readback by default. A renderer that needs current
 sidecar on the same update; core copies it into the retained text cache before target acceptance, so plan publication and
 bounds cost one Wasm hop. Every semantic mutation invalidates that cache immediately. `Text.measure()` then answers from
 the cache or explicitly measures current desired state, while `Text.glyphs()` similarly requests the positioned
-inspection lane. Neither query traverses matrices, realizes renderer resources, flips publication slots, or burns a
-revision.
+inspection lane. `Text.withGlyphs()` prepares that same state without emitting the full inspection table and copies only
+explicitly indexed records. None of these queries traverses matrices, realizes renderer resources, flips publication
+slots, or burns a revision.
 
 A same-build isolation over one 21,805-glyph paragraph measured 0.002 ms for an unchanged publication, 0.174 ms for the
 aggregate measurement sidecar, and 0.582 ms for full glyph inspection. Three requests only aggregate measurement and

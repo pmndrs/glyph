@@ -2126,6 +2126,10 @@ function instrumentNextGlyphEngine() {
   let latestMeasurementRequest;
   let latestUpdateFlags = 0;
   let latestUpdateGeneration = 0;
+  let latestSemanticByteLength = 0;
+  let latestSemanticRecordCount = 0;
+  let latestSemanticParagraphCount = 0;
+  let borrowedGlyphReads = 0;
   let latestBatchCount = 0;
   let latestBatchRootIds = [];
   WebAssembly.instantiate = async (source, imports) => {
@@ -2133,17 +2137,29 @@ function instrumentNextGlyphEngine() {
     const exports = { ...instance.exports };
     const update = exports[abi.functions.textUpdate];
     assert.equal(typeof update, 'function', 'instrumented shaper must export text_update');
+    const captureResult = (resultPointer) => {
+      const result = abi.layouts.engineResult;
+      const semantic = abi.layouts.engineSemanticView;
+      const memory = new DataView(exports.memory.buffer);
+      latestUpdateFlags = memory.getUint32(resultPointer + result.flags, true);
+      latestUpdateGeneration = memory.getUint32(resultPointer + result.publicationGeneration, true);
+      latestSemanticRecordCount = memory.getUint32(resultPointer + result.semanticViewCount, true);
+      latestSemanticByteLength = latestSemanticRecordCount * semantic.size;
+      latestSemanticParagraphCount = 0;
+      const semanticOffset = memory.getUint32(resultPointer + result.semanticViewsOffset, true);
+      for (let index = 0; index < latestSemanticRecordCount; index += 1) {
+        const record = resultPointer + semanticOffset + index * semantic.size;
+        const kind = memory.getUint16(record + semantic.kind, true);
+        if (kind === abi.engine.semanticKinds.paragraphMeasurement) latestSemanticParagraphCount += 1;
+      }
+    };
     exports[abi.functions.textUpdate] = (...arguments_) => {
       crossings += 1;
       latestBatchCount = 1;
       const [, pointer, length] = arguments_;
       latestRequest = new Uint8Array(exports.memory.buffer, pointer, length).slice();
       const resultPointer = update(...arguments_);
-      if (resultPointer !== 0) {
-        const header = new DataView(exports.memory.buffer, resultPointer, abi.layouts.engineResult.size);
-        latestUpdateFlags = header.getUint32(abi.layouts.engineResult.flags, true);
-        latestUpdateGeneration = header.getUint32(abi.layouts.engineResult.publicationGeneration, true);
-      }
+      if (resultPointer !== 0) captureResult(resultPointer);
       return resultPointer;
     };
     const updateBatch = exports[abi.functions.textUpdateBatch];
@@ -2169,9 +2185,7 @@ function instrumentNextGlyphEngine() {
       for (let index = 0; index < count; index += 1) {
         const resultPointer = results.getUint32(index * entry.size + entry.resultPointer, true);
         if (resultPointer === 0) continue;
-        const header = new DataView(exports.memory.buffer, resultPointer, abi.layouts.engineResult.size);
-        latestUpdateFlags = header.getUint32(abi.layouts.engineResult.flags, true);
-        latestUpdateGeneration = header.getUint32(abi.layouts.engineResult.publicationGeneration, true);
+        captureResult(resultPointer);
       }
       return status;
     };
@@ -2181,9 +2195,16 @@ function instrumentNextGlyphEngine() {
         measureCrossings += 1;
         const [, pointer, length] = arguments_;
         latestMeasurementRequest = new Uint8Array(exports.memory.buffer, pointer, length).slice();
-        return measure(...arguments_);
+        const resultPointer = measure(...arguments_);
+        if (resultPointer !== 0) captureResult(resultPointer);
+        return resultPointer;
       };
     }
+    const borrowGlyph = exports[abi.functions.borrowParagraphGlyph];
+    exports[abi.functions.borrowParagraphGlyph] = (...arguments_) => {
+      borrowedGlyphReads += 1;
+      return borrowGlyph(...arguments_);
+    };
     return { exports };
   };
   let restored = false;
@@ -2205,6 +2226,18 @@ function instrumentNextGlyphEngine() {
     },
     get latestUpdateGeneration() {
       return latestUpdateGeneration;
+    },
+    get latestSemanticByteLength() {
+      return latestSemanticByteLength;
+    },
+    get latestSemanticRecordCount() {
+      return latestSemanticRecordCount;
+    },
+    get latestSemanticParagraphCount() {
+      return latestSemanticParagraphCount;
+    },
+    get borrowedGlyphReads() {
+      return borrowedGlyphReads;
     },
     get latestBatchCount() {
       return latestBatchCount;
@@ -2257,6 +2290,7 @@ function instrumentNextGlyphEngine() {
     reset() {
       crossings = 0;
       measureCrossings = 0;
+      borrowedGlyphReads = 0;
       latestBatchRootIds = [];
       latestMeasurementRequest = undefined;
     },
@@ -2480,6 +2514,174 @@ test('Text.measure retains lifecycle context but serializes only pending paragra
   font.dispose();
 });
 
+test('Text.withGlyphs demand-reads scalar records only inside one synchronous borrow', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const label = three.createText({ font, text: 'Borrowed glyph records wrap across two lines' });
+  label.constraints = { width: { mode: 'exact', size: 140 } };
+  const owned = label.glyphs();
+  instrumentedGlyph.reset();
+  let escaped;
+  const answer = Object.freeze({ answer: 42 });
+  const returned = label.withGlyphs((layout) => {
+    escaped = layout;
+    assert.equal(layout.glyphCount, owned.glyphCount);
+    for (const index of [0, owned.glyphCount - 1]) {
+      const glyphRecord = layout.glyphAt(index);
+      assert.equal(glyphRecord.stableId, owned.glyphStableIds[index]);
+      assert.equal(glyphRecord.fontHandle, owned.fontHandles[owned.glyphFontSlots[index]]);
+      assert.equal(glyphRecord.glyphId, owned.glyphIds[index]);
+      assert.equal(glyphRecord.cluster, owned.clusters[index]);
+      assert.equal(glyphRecord.bidiLevel, owned.glyphBidiLevels[index]);
+      assert.equal(glyphRecord.fontSize, owned.glyphFontSizes[index]);
+      assert.equal(glyphRecord.x, owned.x[index]);
+      assert.equal(glyphRecord.y, owned.y[index]);
+      assert.equal(glyphRecord.advance, owned.glyphAdvances[index]);
+      assert.equal(glyphRecord.inkX, owned.glyphInkX[index]);
+      assert.equal(glyphRecord.inkY, owned.glyphInkY[index]);
+      assert.equal(glyphRecord.inkWidth, owned.glyphInkWidths[index]);
+      assert.equal(glyphRecord.inkHeight, owned.glyphInkHeights[index]);
+      assert.equal(glyphRecord.flags, owned.glyphFlags[index]);
+      assert.equal(Object.isFrozen(glyphRecord), true);
+    }
+    assert.throws(() => label.set({ text: 'reentrant mutation' }), /cannot be reentered/);
+    assert.throws(() => label.measure(), /cannot be reentered/);
+    assert.throws(() => glyph.shape(), /cannot be reentered/);
+    return answer;
+  });
+
+  assert.equal(returned, answer, 'the callback result retains its identity');
+  assert.equal(instrumentedGlyph.latestSemanticRecordCount, 0, 'borrow setup serializes no semantic records');
+  assert.equal(instrumentedGlyph.borrowedGlyphReads, 2, 'only explicitly selected glyphs cross the Wasm ABI');
+  assert.equal(label.text, 'Borrowed glyph records wrap across two lines');
+  assert.throws(() => escaped.glyphCount, /expired/);
+  assert.throws(() => escaped.glyphAt(0), /expired/);
+
+  let thrownView;
+  assert.throws(
+    () =>
+      label.withGlyphs((layout) => {
+        thrownView = layout;
+        throw new Error('borrow callback failed');
+      }),
+    /borrow callback failed/,
+  );
+  assert.throws(() => thrownView.glyphCount, /expired/);
+  assert.throws(() => label.withGlyphs(async () => 42), /must answer synchronously/);
+  label.text = 'mutation succeeds after borrow release';
+  assert.equal(label.measure().glyphCount, 38);
+
+  label.dispose();
+  font.dispose();
+});
+
+test('empty Text bounding boxes cache their valid measurement', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const label = three.createText({ font, text: '' });
+  instrumentedGlyph.reset();
+
+  assert.equal(label.computeBoundingBox().isEmpty(), true);
+  assert.equal(label.computeBoundingBox().isEmpty(), true);
+  assert.equal(instrumentedGlyph.measureCrossings, 1, 'a valid empty box stays current');
+
+  label.dispose();
+  font.dispose();
+});
+
+test('Three Box3 measures transformed Text and TextGroup ink without adding scene objects', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const first = three.createText({ font, text: 'Box3 first' });
+  const second = three.createText({ font, text: 'Box3 second' });
+  group.position.set(4, 7, 0);
+  group.rotation.z = Math.PI / 8;
+  group.scale.set(1.25, 0.75, 1);
+  first.position.set(13, 17, 0);
+  second.position.set(-11, -19, 0);
+  group.add(first, second);
+  scene.add(group);
+
+  const expectedWorldBox = (text) => text.boundingBox.clone().applyMatrix4(text.matrixWorld);
+  const assertSameBox = (actual, expected, message) => {
+    assert.deepEqual(actual.min.toArray(), expected.min.toArray(), `${message} minimum`);
+    assert.deepEqual(actual.max.toArray(), expected.max.toArray(), `${message} maximum`);
+  };
+
+  try {
+    instrumentedGlyph.reset();
+    const preRenderBox = new THREE.Box3().setFromObject(first);
+    const preRenderMeasurement = first.measure();
+    assert.equal(preRenderBox.isEmpty(), false, 'Box3 positions ink before the first rendered frame');
+    assert.ok(preRenderMeasurement.inkBounds, 'the pre-render query caches authoritative ink bounds');
+    assert.equal(instrumentedGlyph.measureCrossings, 1, 'Box3 uses one positioned measurement query');
+    assert.equal(
+      instrumentedGlyph.latestSemanticRecordCount,
+      preRenderMeasurement.lineCount + 1,
+      'Box3 does not serialize per-glyph inspection records',
+    );
+    assertSameBox(preRenderBox, expectedWorldBox(first), 'pre-render Text');
+
+    scene.updateMatrixWorld(true);
+    assert.equal(first.geometry, second.geometry, 'Text objects share one measurement geometry');
+    assert.equal(first.geometry.getAttribute('position'), undefined, 'measurement geometry has no vertex payload');
+    assert.equal(first.isMesh, undefined, 'the Box3 hook must not classify Text as a Mesh');
+    assert.equal(first.isLine, undefined, 'the Box3 hook must not classify Text as a Line');
+    assert.equal(first.isPoints, undefined, 'the Box3 hook must not classify Text as Points');
+    assert.deepEqual(new THREE.Raycaster().intersectObject(first), [], 'the Box3 hook must not add raycast geometry');
+    const serialized = first.toJSON();
+    assert.equal(serialized.object.geometry, undefined, 'the Box3 hook must not serialize renderer geometry');
+    assert.equal(serialized.geometries, undefined, 'the Box3 hook must not register a geometry resource');
+    const groupChildren = [...group.children];
+    const draws = rootDraws(scene);
+    assert.ok(draws.length > 0, 'the fixture must realize its renderer-owned draws');
+    const expectedGroup = expectedWorldBox(first).union(expectedWorldBox(second));
+
+    for (const precise of [false, true]) {
+      assertSameBox(
+        new THREE.Box3().setFromObject(first, precise),
+        expectedWorldBox(first),
+        `Text precise=${String(precise)}`,
+      );
+      assertSameBox(
+        new THREE.Box3().setFromObject(group, precise),
+        expectedGroup,
+        `TextGroup precise=${String(precise)}`,
+      );
+    }
+
+    assert.deepEqual(group.children, groupChildren, 'measurement must not add authored scene children');
+    assert.deepEqual(rootDraws(scene), draws, 'measurement must not replace or add renderer-owned draws');
+
+    const beforeMutation = new THREE.Box3().setFromObject(first);
+    first.text = 'Box3 first becomes substantially longer';
+    scene.updateMatrixWorld(true);
+    const afterMutation = new THREE.Box3().setFromObject(first);
+    assertSameBox(afterMutation, expectedWorldBox(first), 'mutated Text');
+    assert.ok(
+      afterMutation.getSize(new THREE.Vector3()).lengthSq() > beforeMutation.getSize(new THREE.Vector3()).lengthSq(),
+      'a text mutation must refresh the scene-graph box',
+    );
+
+    group.remove(first);
+    first.dispose();
+    scene.updateMatrixWorld(true);
+    assertSameBox(
+      new THREE.Box3().setFromObject(second),
+      expectedWorldBox(second),
+      'remaining Text after sibling disposal',
+    );
+  } finally {
+    group.remove(first, second);
+    first.dispose();
+    second.dispose();
+    group.dispose();
+    font.dispose();
+  }
+});
+
 test('root-owned Text.measure creates only its implicit measurement batch before traversal', async (t) => {
   const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
@@ -2552,6 +2754,95 @@ test('layout queries do not retain unrelated detached Texts', async (t) => {
   detached.dispose();
   attached.dispose();
   group.dispose();
+  font.dispose();
+});
+
+test('alternating detached measurements retire one bounded speculative lifecycle', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const first = three.createText({ font, text: 'first detached query' });
+  const second = three.createText({ font, text: 'second detached query' });
+  const scene = new THREE.Scene();
+  scene.add(first, second);
+  scene.updateMatrixWorld(true);
+  scene.remove(first, second);
+  first.style = { ...first.style, fontSize: 17 };
+  second.style = { ...second.style, fontSize: 17 };
+  instrumentedGlyph.reset();
+
+  const firstMeasurement = first.measure();
+  assert.equal(firstMeasurement.glyphCount, 20);
+  assert.equal(second.bound, false, 'querying the first Text must not bind its detached sibling');
+  assert.equal(second.measure().glyphCount, 21);
+  assert.equal(first.bound, false, 'querying the second Text must not bind its detached sibling');
+  const initialRequestCounts = instrumentedGlyph.latestMeasurementRequestCounts();
+  assert.ok(initialRequestCounts.paragraph <= 2, 'the speculative lifecycle stays bounded to the two query targets');
+  assert.equal(instrumentedGlyph.measureCrossings, 2, 'each paragraph incurs one initial query');
+  assert.equal(first.measure(), firstMeasurement, 'returning to the first Text must reuse its controller measurement');
+  assert.equal(instrumentedGlyph.measureCrossings, 2, 'alternation must not recreate the first paragraph');
+
+  for (let iteration = 0; iteration < 8_193; iteration += 1) {
+    const target = iteration % 2 === 0 ? first : second;
+    const unrelated = target === first ? second : first;
+    assert.equal(target.measure().glyphCount, target === first ? 20 : 21);
+    assert.equal(target.bound, true, 'the explicitly queried Text remains bound to its query controller');
+    assert.equal(unrelated.bound, false, 'an alternating query must leave its detached sibling unbound');
+  }
+
+  assert.equal(instrumentedGlyph.crossings, 0, 'queries must not publish renderer work');
+  assert.equal(instrumentedGlyph.measureCrossings, 2, 'cached siblings must not be destroyed and remeasured');
+
+  for (let iteration = 0; iteration < 8_193; iteration += 1) {
+    const target = iteration % 2 === 0 ? first : second;
+    const unrelated = target === first ? second : first;
+    assert.equal(target.glyphs().glyphCount, target === first ? 20 : 21);
+    assert.equal(target.bound, true, 'the explicitly inspected Text remains bound to its query controller');
+    assert.equal(unrelated.bound, false, 'an alternating inspection must leave its detached sibling unbound');
+  }
+
+  assert.equal(instrumentedGlyph.measureCrossings, 4, 'each controller performs one positioning upgrade');
+  assert.deepEqual(
+    instrumentedGlyph.latestMeasurementRequestCounts(),
+    initialRequestCounts,
+    'alternation beyond the paragraph-mutation limit must not accumulate lifecycle rows',
+  );
+  assert.equal(three.textCount, 2, 'query alternation must preserve both root-owned Text lifetimes');
+
+  first.text = 'first detached query changed';
+  assert.equal(first.measure().glyphCount, 28, 'a semantic mutation invalidates the controller measurement');
+  assert.equal(instrumentedGlyph.measureCrossings, 5, 'the changed paragraph incurs exactly one new query');
+  assert.equal(second.bound, false);
+
+  first.style = { ...first.style, fontSize: 20 };
+  assert.equal(first.measure().glyphCount, 28, 'a style mutation invalidates the controller measurement');
+  assert.equal(instrumentedGlyph.measureCrossings, 6, 'the changed style incurs exactly one new query');
+  first.font = font;
+  assert.equal(first.measure().glyphCount, 28, 'a font mutation invalidates the controller measurement');
+  assert.equal(instrumentedGlyph.measureCrossings, 7, 'the changed font selection incurs exactly one new query');
+
+  scene.add(first, second);
+  scene.updateMatrixWorld(true);
+  assert.equal(instrumentedGlyph.crossings, 1, 'later attachment publishes both Texts in one frame');
+  assert.ok(instrumentedGlyph.latestRequestCounts().paragraph <= 3, 'publication retires at most one query paragraph');
+  const paragraphMutations = instrumentedGlyph.latestParagraphMutations();
+  const opcodes = textShaperAbi.engine.paragraphMutationOpcodes;
+  assert.equal(
+    paragraphMutations.filter(({ opcode }) => opcode === opcodes.remove).length,
+    1,
+    'attachment evicts exactly the one detached query-cache paragraph',
+  );
+  assert.equal(
+    paragraphMutations.filter(({ opcode }) => opcode === opcodes.upsert).length,
+    2,
+    'attachment publishes exactly the two authored paragraphs',
+  );
+  assert.equal(first.bound, true);
+  assert.equal(second.bound, true);
+  assert.equal(first.commitState().status, 'committed');
+  assert.equal(second.commitState().status, 'committed');
+
+  first.dispose();
+  second.dispose();
   font.dispose();
 });
 
@@ -2798,14 +3089,55 @@ test('one Three root grows aggregate glyph storage without reserving one aggrega
   assert.equal(group.error, undefined);
   assert.equal(group.textCount, labels.length);
   assert.equal(rootDraws(scene).length, 1);
+  assert.equal(instrumentedGlyph.latestSemanticParagraphCount, labels.length);
+  const initialSemanticByteLength = instrumentedGlyph.latestSemanticByteLength;
+  const measurements = labels.map((label) => label.measure());
+  assert.equal(labels[48].measure(), measurements[48], 'an unchanged attached Text reuses its measurement');
+  let measurementPublications = 0;
+  for (const label of labels) {
+    const minimum = label.boundingBox.min;
+    const set = minimum.set.bind(minimum);
+    minimum.set = (x, y, z) => {
+      measurementPublications += 1;
+      return set(x, y, z);
+    };
+  }
 
   for (let cycle = 0; cycle < 200; cycle += 1) {
+    measurementPublications = 0;
     for (let offset = 0; offset < 48; offset += 1) {
       const index = (cycle * 23 + offset) % labels.length;
       labels[index].text = `recycled-${String(cycle)}-${String(index)}`;
     }
     scene.updateMatrixWorld();
     assert.equal(group.error, undefined, `recycling cycle ${String(cycle)} must remain publishable`);
+    assert.equal(
+      instrumentedGlyph.latestSemanticParagraphCount,
+      48,
+      `recycling cycle ${String(cycle)} emits only dirty paragraph measurements`,
+    );
+    assert.equal(
+      instrumentedGlyph.latestSemanticRecordCount,
+      96,
+      `recycling cycle ${String(cycle)} emits one summary and line per dirty paragraph`,
+    );
+    assert.ok(
+      instrumentedGlyph.latestSemanticByteLength < initialSemanticByteLength,
+      `recycling cycle ${String(cycle)} keeps the semantic publication smaller than first publication`,
+    );
+    assert.equal(
+      measurementPublications,
+      48,
+      `recycling cycle ${String(cycle)} republishes bounds only for dirty Text objects`,
+    );
+    if (cycle !== 0) continue;
+    let publishedMeasurements = 0;
+    for (const [index, label] of labels.entries()) {
+      const measurement = label.measure();
+      if (measurement !== measurements[index]) publishedMeasurements += 1;
+      measurements[index] = measurement;
+    }
+    assert.equal(publishedMeasurements, 48, `recycling cycle ${String(cycle)} publishes only dirty measurements`);
   }
 
   group.dispose();

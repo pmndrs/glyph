@@ -121,6 +121,30 @@ export interface GlyphLayoutInspection extends GlyphLayout, ParagraphLayoutSumma
   readonly glyphStableIds: Uint32Array;
 }
 
+/** One caller-owned scalar glyph record read from a borrowed layout. */
+export interface BorrowedGlyph {
+  readonly stableId: number;
+  readonly fontHandle: number;
+  readonly glyphId: number;
+  readonly cluster: number;
+  readonly bidiLevel: number;
+  readonly fontSize: number;
+  readonly x: number;
+  readonly y: number;
+  readonly advance: number;
+  readonly inkX: number;
+  readonly inkY: number;
+  readonly inkWidth: number;
+  readonly inkHeight: number;
+  readonly flags: number;
+}
+
+/** Synchronous borrowed view over positioned glyphs; every access expires with its callback. */
+export interface BorrowedGlyphLayout {
+  readonly glyphCount: number;
+  glyphAt(index: number): BorrowedGlyph;
+}
+
 /** @internal Returns caller-owned columns while an integration keeps its canonical cached copy private. */
 export function copyGlyphLayoutInspection(layout: GlyphLayoutInspection): GlyphLayoutInspection {
   return Object.freeze({

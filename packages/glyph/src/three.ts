@@ -60,7 +60,7 @@ export type {
   ThreeGlyphMeasurement,
 } from './three/glyph-measurement.js';
 // `measure()`, `glyphs()`, caret helpers, and detached measurements return these.
-export type { LayoutBox, GlyphLayoutInspection, ParagraphLayoutSummary } from './layout.js';
+export type { BorrowedGlyphLayout, LayoutBox, GlyphLayoutInspection, ParagraphLayoutSummary } from './layout.js';
 export type { GlyphCaret, GlyphKey } from './glyph-placement.js';
 
 /** Creates a Three config using the stable TSL shader implementation. */

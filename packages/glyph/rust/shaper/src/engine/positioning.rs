@@ -37,6 +37,7 @@ const BIDI_RLI: u8 = 20;
 const BIDI_FSI: u8 = 21;
 const BIDI_PDI: u8 = 22;
 
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct SemanticGlyph {
     pub stable_id: u32,
@@ -59,6 +60,8 @@ pub(crate) struct SemanticGlyph {
     pub ink_inline_extent: f32,
     pub ink_block_extent: f32,
 }
+
+const _: () = assert!(core::mem::size_of::<SemanticGlyph>() == 52);
 
 /// The ink box the render record and the semantic record must agree on, derived once per glyph.
 #[derive(Clone, Copy)]
@@ -373,7 +376,13 @@ impl PositionedGlyphArena {
                 })
             })
             .transpose()?;
-        self.assign_content_revisions(previous, identity_index, next_content_revision)
+        // Retained flow proves that only geometry-authored semantic fields can differ.
+        self.assign_content_revisions(
+            previous,
+            identity_index,
+            next_content_revision,
+            retained_flow.is_some(),
+        )
     }
 
     fn append_retained_line(
@@ -1273,6 +1282,7 @@ impl PositionedGlyphArena {
         previous: &Self,
         index: &mut IdentityIndex,
         next_revision: &mut u32,
+        geometry_only: bool,
     ) -> Result<(), EngineError> {
         self.semantic_change_masks.resize(self.glyphs.len(), 0);
         if let Some(range) = self.recomposed_glyphs {
@@ -1329,8 +1339,12 @@ impl PositionedGlyphArena {
                 .all(|(next, old)| next.stable_id == old.stable_id)
         {
             *next_revision = (*next_revision).max(1);
-            for slot in 0..self.glyphs.len() {
-                self.assign_content_revision(slot, previous, Some(slot), next_revision)?;
+            if geometry_only {
+                self.assign_geometry_revisions(previous, next_revision)?;
+            } else {
+                for slot in 0..self.glyphs.len() {
+                    self.assign_content_revision(slot, previous, Some(slot), next_revision)?;
+                }
             }
             return Ok(());
         }
@@ -1355,6 +1369,50 @@ impl PositionedGlyphArena {
         Ok(())
     }
 
+    fn assign_geometry_revisions(
+        &mut self,
+        previous: &Self,
+        next_revision: &mut u32,
+    ) -> Result<(), EngineError> {
+        for slot in 0..self.glyphs.len() {
+            let mut mask = 0;
+            for field in 0..2 {
+                if self.semantic_f32[field][slot].to_bits()
+                    != previous.semantic_f32[field][slot].to_bits()
+                {
+                    mask |= 1 << field;
+                }
+            }
+            for field in 2..5 {
+                if self.semantic_u32[field][slot] != previous.semantic_u32[field][slot] {
+                    mask |= 1 << (SEMANTIC_F32_CHANGE_FIELD_COUNT + field);
+                }
+            }
+            let next_glyph = self.glyphs[slot];
+            let old_glyph = previous.glyphs[slot];
+            if next_glyph.clip_id != old_glyph.clip_id {
+                mask = ALL_SEMANTIC_CHANGES;
+            } else {
+                let next = self.semantic_glyphs[next_glyph.semantic_glyph_index as usize];
+                let old = previous.semantic_glyphs[old_glyph.semantic_glyph_index as usize];
+                if next.inline_origin.to_bits() != old.inline_origin.to_bits() {
+                    mask |= 1 << 6;
+                }
+                if next.block_origin.to_bits() != old.block_origin.to_bits() {
+                    mask |= 1 << 7;
+                }
+            }
+            self.assign_content_revision_with_mask(
+                slot,
+                previous,
+                Some(slot),
+                next_revision,
+                mask,
+            )?;
+        }
+        Ok(())
+    }
+
     fn assign_content_revision(
         &mut self,
         slot: usize,
@@ -1365,6 +1423,23 @@ impl PositionedGlyphArena {
         let change_mask = previous_slot.map_or(ALL_SEMANTIC_CHANGES, |previous_slot| {
             self.semantic_change_mask(slot, previous, previous_slot)
         });
+        self.assign_content_revision_with_mask(
+            slot,
+            previous,
+            previous_slot,
+            next_revision,
+            change_mask,
+        )
+    }
+
+    fn assign_content_revision_with_mask(
+        &mut self,
+        slot: usize,
+        previous: &Self,
+        previous_slot: Option<usize>,
+        next_revision: &mut u32,
+        change_mask: u16,
+    ) -> Result<(), EngineError> {
         let revision = if change_mask == 0 {
             previous.glyphs[previous_slot.expect("zero change requires a previous glyph")]
                 .content_revision
@@ -3415,7 +3490,7 @@ mod tests {
             reordered.semantic_u32[field].extend(active.semantic_u32[field].iter().rev().copied());
         }
         reordered
-            .assign_content_revisions(&active, &mut index, &mut next_revision)
+            .assign_content_revisions(&active, &mut index, &mut next_revision, false)
             .unwrap();
         assert_eq!(reordered.glyphs[0].content_revision, 2);
         assert_eq!(reordered.glyphs[1].content_revision, 1);
@@ -3478,8 +3553,13 @@ mod tests {
             next_end: 2,
         });
         let mut next_revision = 40;
-        next.assign_content_revisions(&previous, &mut IdentityIndex::default(), &mut next_revision)
-            .unwrap();
+        next.assign_content_revisions(
+            &previous,
+            &mut IdentityIndex::default(),
+            &mut next_revision,
+            false,
+        )
+        .unwrap();
         assert_eq!(
             next.glyphs
                 .iter()
@@ -3489,5 +3569,90 @@ mod tests {
         );
         assert_eq!(next.semantic_change_masks, [0, 1, 0]);
         assert_eq!(next_revision, 41);
+    }
+
+    #[test]
+    fn geometry_revision_scan_matches_full_semantic_comparison() {
+        let make_arena = |changed: bool, clip_id: u32| {
+            let glyph = LayoutGlyph {
+                stable_id: 1,
+                content_revision: 7,
+                semantic_glyph_index: 0,
+                binding_handle: 2,
+                font_handle: 3,
+                glyph_id: 4,
+                material_id: 5,
+                clip_id,
+                depth_key: PAINT_LAYER_GLYPH,
+                font_size: 16.0,
+                raster_pixel_ratio: 1.0,
+                inline_start: 8.0,
+                block_start: 9.0,
+                inline_extent: 10.0,
+                block_extent: 11.0,
+            };
+            let semantic = SemanticGlyph {
+                stable_id: 1,
+                font_handle: 3,
+                cluster: 12,
+                glyph_id: 4,
+                inline_origin: if changed { 13.0 } else { 8.0 },
+                block_origin: if changed { 14.0 } else { 9.0 },
+                ..SemanticGlyph::default()
+            };
+            let mut arena = PositionedGlyphArena {
+                glyphs: vec![glyph],
+                semantic_glyphs: vec![semantic],
+                ..PositionedGlyphArena::default()
+            };
+            for (field, values) in arena.semantic_f32.iter_mut().enumerate() {
+                values.push(if changed && field < 2 {
+                    20.0 + field as f32
+                } else {
+                    10.0 + field as f32
+                });
+            }
+            for (field, values) in arena.semantic_u32.iter_mut().enumerate() {
+                values.push(if changed && (2..5).contains(&field) {
+                    20 + field as u32
+                } else {
+                    10 + field as u32
+                });
+            }
+            arena
+        };
+        let assert_same_revisions =
+            |previous: &PositionedGlyphArena,
+             mut full: PositionedGlyphArena,
+             mut geometry: PositionedGlyphArena| {
+                let mut full_revision = 30;
+                full.assign_content_revisions(
+                    previous,
+                    &mut IdentityIndex::default(),
+                    &mut full_revision,
+                    false,
+                )
+                .unwrap();
+                let mut geometry_revision = 30;
+                geometry
+                    .assign_content_revisions(
+                        previous,
+                        &mut IdentityIndex::default(),
+                        &mut geometry_revision,
+                        true,
+                    )
+                    .unwrap();
+                assert_eq!(
+                    geometry.glyphs[0].content_revision,
+                    full.glyphs[0].content_revision
+                );
+                assert_eq!(geometry.semantic_change_masks, full.semantic_change_masks);
+                assert_eq!(geometry_revision, full_revision);
+            };
+
+        let previous = make_arena(false, 1);
+        assert_same_revisions(&previous, make_arena(true, 1), make_arena(true, 1));
+        assert_same_revisions(&previous, make_arena(false, 2), make_arena(false, 2));
+        assert_same_revisions(&previous, make_arena(false, 1), make_arena(false, 1));
     }
 }

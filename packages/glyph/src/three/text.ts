@@ -6,6 +6,7 @@ import { isFontFaceSelection, resolveFontFace, type FontFaceSelection, type Font
 import { createGlyphPlacements, type GlyphCaret, type GlyphPlacements } from '../glyph-placement.js';
 import {
   copyGlyphLayoutInspection,
+  type BorrowedGlyphLayout,
   type LayoutBox,
   type GlyphLayoutInspection,
   type ParagraphLayoutSummary,
@@ -52,6 +53,9 @@ export const threeTextConstructionToken: unique symbol = Symbol('pmndrs.glyph.th
 /** Package-private host identity carried by callable handle/root proxies. */
 const threeRootIdentity: unique symbol = Symbol('pmndrs.glyph.three.root');
 const threeRootHosts = new WeakMap<object, ThreeRootHost>();
+const detachedQueryOrder = 0xffff_ffff;
+// Box3 requires a geometry marker before consulting an Object3D boundingBox.
+const textBoundsGeometry = new THREE.BufferGeometry();
 
 /** One inline Three text run with optional font fallback and material override. */
 export type TextSpan<Format extends RasterFormatMetadata> = Omit<ParagraphSpan<Format>, 'font'> &
@@ -444,6 +448,7 @@ export class ThreeRootHost {
 
   /** @internal Remove one retained leaf from this publication root. */
   unregister(text: THREE.Object3D): void {
+    if (text instanceof Text) this.#binding?.removeText(text);
     this.#texts.delete(text);
     if (this.#texts.size !== 0 || this.#binding === undefined) return;
     const binding = this.#binding;
@@ -467,10 +472,22 @@ export class ThreeRootHost {
     return this.#rootBinding().measurement(text);
   }
 
+  /** @internal Measure one root member with authoritative positioned ink bounds. */
+  measurementWithInk(text: THREE.Object3D): ParagraphLayoutSummary {
+    this.#assertMember(text);
+    return this.#rootBinding().measurementWithInk(text);
+  }
+
   /** @internal Inspect one root member through the root-owned planner. */
   inspection(text: THREE.Object3D): GlyphLayoutInspection {
     this.#assertMember(text);
     return this.#rootBinding().inspection(text);
+  }
+
+  /** @internal Borrow one root member's positioned layout for a synchronous callback. */
+  withGlyphs<Result>(text: THREE.Object3D, read: (glyphs: BorrowedGlyphLayout) => Result): Result {
+    this.#assertMember(text);
+    return this.#rootBinding().withGlyphs(text, read);
   }
 
   /** @internal Return the publication-facing view after authenticating root membership. */
@@ -739,6 +756,9 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   get gpuBytes(): number {
     return this.#binding?.gpuBytes ?? 0;
   }
+  private get geometry(): THREE.BufferGeometry {
+    return textBoundsGeometry;
+  }
   get boundingBox(): THREE.Box3 {
     return this.computeBoundingBox();
   }
@@ -834,6 +854,12 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return inspection;
   }
 
+  /** Reads selected positioned glyphs without copying the complete layout. */
+  withGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result {
+    this.#assertActive();
+    return this.#root.withGlyphs(this, read);
+  }
+
   commitState(): TextCommitState {
     if (this.#disposed || this.parent === null) return { status: 'unbound' };
     const error = this.error;
@@ -845,7 +871,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   }
 
   computeBoundingBox(): THREE.Box3 {
-    if (!this.#boundingBoxCurrent) this.#setBoundingBox(this.glyphs());
+    if (!this.#boundingBoxCurrent) this.#setBoundingBox(this.#root.measurementWithInk(this));
     return this.#boundingBox;
   }
 
@@ -956,7 +982,6 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    this.#unbind();
     this.#root.unregister(this);
     for (const font of this.#ownedFonts) font.dispose();
   }
@@ -969,7 +994,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     const bounds = measurement.inkBounds;
     if (bounds === undefined) {
       this.#boundingBox.makeEmpty();
-      this.#boundingBoxCurrent = false;
+      this.#boundingBoxCurrent = true;
       return;
     }
     this.#boundingBox.min.set(bounds.x, -(bounds.y + bounds.height), 0);
@@ -1148,6 +1173,11 @@ interface BoundTextEntry {
   committedRevision: number;
 }
 
+interface DetachedQueryEntry {
+  readonly text: Text<RasterFormatMetadata>;
+  readonly entry: BoundTextEntry;
+}
+
 interface TextPresentation {
   readonly group: TextGroup | undefined;
   readonly material: ThreeTextMaterial | undefined;
@@ -1172,7 +1202,9 @@ class ThreeRootPublication {
   #rendererUpdateRejected = false;
   #capacityExceeded: { readonly required: number; readonly size: number } | undefined;
   #materialInvalidated = false;
-  #measurementPending = false;
+  readonly #pendingMeasurements = new Set<Text<RasterFormatMetadata>>();
+  #detachedQuery: Text<RasterFormatMetadata> | undefined;
+  #detachedQueryCache: DetachedQueryEntry | undefined;
   #disposed = false;
 
   constructor(capacity: GlyphBufferCapacity, root: ThreeRootHost) {
@@ -1200,7 +1232,15 @@ class ThreeRootPublication {
 
   reconcile(texts: readonly Text<RasterFormatMetadata>[]): void {
     this.#assertActive();
-    const desired = new Set(texts);
+    this.#evictDetachedQueryCache();
+    this.#detachedQuery = undefined;
+    this.#reconcileEntries(texts);
+  }
+
+  #reconcileEntries(
+    texts: readonly Text<RasterFormatMetadata>[],
+    desired: ReadonlySet<Text<RasterFormatMetadata>> = new Set(texts),
+  ): void {
     for (const text of [...this.#entries.keys()]) {
       if (!desired.has(text)) this.removeText(text);
     }
@@ -1235,6 +1275,10 @@ class ThreeRootPublication {
 
   needsReconcile(texts: readonly Text<RasterFormatMetadata>[]): boolean {
     this.#assertActive();
+    return this.#detachedQueryCache !== undefined || this.#needsActiveReconcile(texts);
+  }
+
+  #needsActiveReconcile(texts: readonly Text<RasterFormatMetadata>[]): boolean {
     if (this.#materialInvalidated || texts.length !== this.#entries.size) return true;
     for (let order = 0; order < texts.length; order += 1) {
       const text = texts[order]!;
@@ -1278,6 +1322,15 @@ class ThreeRootPublication {
   }
 
   removeText(text: Text<RasterFormatMetadata>): void {
+    if (this.#detachedQuery === text) this.#detachedQuery = undefined;
+    this.#pendingMeasurements.delete(text);
+    if (this.#detachedQueryCache?.text === text) {
+      this.#detachedQueryCache.entry.handle.dispose();
+      this.#detachedQueryCache = undefined;
+      this.#inspections.delete(text);
+      reconciler.unbindFrom(text, this);
+      return;
+    }
     const entry = this.#entries.get(text);
     if (entry === undefined) {
       reconciler.unbindFrom(text, this);
@@ -1290,12 +1343,21 @@ class ThreeRootPublication {
   }
 
   measurement(text: Text<RasterFormatMetadata>): ParagraphLayoutSummary {
+    return this.#measureText(text, false);
+  }
+
+  measurementWithInk(text: Text<RasterFormatMetadata>): ParagraphLayoutSummary {
+    return this.#measureText(text, true);
+  }
+
+  #measureText(text: Text<RasterFormatMetadata>, positionGlyphs: boolean): ParagraphLayoutSummary {
     this.#assertActive();
     const texts = this.#root.queryMembers(text);
-    if (this.needsReconcile(texts)) this.reconcile(texts);
+    if (this.#needsActiveReconcile(texts)) this.#reconcileQuery(texts, text);
     const entry = this.#entries.get(text);
     if (entry === undefined) throw new Error('Text is not retained by this batch');
-    const measurement = entry.handle.measure();
+    const measurement = positionGlyphs ? entry.handle.measureInk() : entry.handle.measure();
+    this.#detachedQuery = nearestScene(text) === undefined ? text : undefined;
     reconciler.publishMeasurement(text, measurement);
     return measurement;
   }
@@ -1303,12 +1365,69 @@ class ThreeRootPublication {
   inspection(text: Text<RasterFormatMetadata>): GlyphLayoutInspection {
     this.#assertActive();
     const texts = this.#root.queryMembers(text);
-    if (this.needsReconcile(texts)) this.reconcile(texts);
+    if (this.#needsActiveReconcile(texts)) this.#reconcileQuery(texts, text);
     const entry = this.#entries.get(text);
     if (entry === undefined) throw new Error('Text is not retained by this batch');
     const inspection = entry.handle.inspect();
+    this.#detachedQuery = nearestScene(text) === undefined ? text : undefined;
     reconciler.publishMeasurement(text, inspection);
     return inspection;
+  }
+
+  withGlyphs<Result>(text: Text<RasterFormatMetadata>, read: (glyphs: BorrowedGlyphLayout) => Result): Result {
+    this.#assertActive();
+    const texts = this.#root.queryMembers(text);
+    if (this.#needsActiveReconcile(texts)) this.#reconcileQuery(texts, text);
+    const entry = this.#entries.get(text);
+    if (entry === undefined) throw new Error('Text is not retained by this batch');
+    const result = entry.handle.withGlyphs(read);
+    this.#detachedQuery = nearestScene(text) === undefined ? text : undefined;
+    return result;
+  }
+
+  #reconcileQuery(texts: readonly Text<RasterFormatMetadata>[], text: Text<RasterFormatMetadata>): void {
+    const desired = new Set(texts);
+    if (nearestScene(text) !== undefined) {
+      this.#evictDetachedQueryCache();
+      this.#detachedQuery = undefined;
+      this.#reconcileEntries(texts, desired);
+      return;
+    }
+    const cached = this.#detachedQueryCache;
+    if (cached?.text === text && !this.#entries.has(text)) {
+      this.#detachedQueryCache = undefined;
+      this.#entries.set(text, cached.entry);
+    }
+    const previous = this.#detachedQuery;
+    let retired = previous !== undefined && previous !== text && !desired.has(previous) ? previous : undefined;
+    if (retired === undefined) {
+      for (const candidate of this.#entries.keys()) {
+        if (candidate === text || desired.has(candidate) || nearestScene(candidate) !== undefined) continue;
+        retired = candidate;
+        break;
+      }
+    }
+    const entry = retired === undefined ? undefined : this.#entries.get(retired);
+    if (retired !== undefined && entry !== undefined) {
+      this.#evictDetachedQueryCache();
+      entry.handle.updateParagraphOrder(detachedQueryOrder, entry.stagedOrderScope, entry.stagedOrderRank);
+      entry.stagedOrder = detachedQueryOrder;
+      this.#entries.delete(retired);
+      this.#inspections.delete(retired);
+      this.#pendingMeasurements.delete(retired);
+      reconciler.unbindFrom(retired, this);
+      this.#detachedQueryCache = { text: retired, entry };
+    }
+    this.#reconcileEntries(texts, desired);
+  }
+
+  #evictDetachedQueryCache(): void {
+    const cached = this.#detachedQueryCache;
+    if (cached === undefined) return;
+    this.#detachedQueryCache = undefined;
+    cached.entry.handle.dispose();
+    this.#inspections.delete(cached.text);
+    this.#pendingMeasurements.delete(cached.text);
   }
 
   glyphPlacements(text: Text<RasterFormatMetadata>): GlyphPlacements | undefined {
@@ -1368,20 +1487,22 @@ class ThreeRootPublication {
       return false;
     }
     this.#capacityExceeded = undefined;
-    return Object.freeze({ semanticViews: this.#measurementPending ? 'measurement' : 'none' });
+    return Object.freeze({ semanticViews: this.#pendingMeasurements.size === 0 ? 'none' : 'measurement' });
   }
 
   acceptShape(): void {
     this.#assertActive();
     this.#rendererUpdateRejected = false;
     this.#inspections.clear();
-    const publishMeasurements = this.#measurementPending;
     for (const [text, entry] of this.#entries) {
       entry.committedRevision = entry.stagedRevision;
       reconciler.markCommitted(text);
-      if (publishMeasurements) reconciler.publishMeasurement(text, entry.handle.measure());
     }
-    this.#measurementPending = false;
+    for (const text of this.#pendingMeasurements) {
+      const entry = this.#entries.get(text);
+      if (entry !== undefined) reconciler.publishMeasurement(text, entry.handle.measure());
+    }
+    this.#pendingMeasurements.clear();
   }
 
   rejectShape(): void {
@@ -1397,6 +1518,7 @@ class ThreeRootPublication {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    this.#detachedQuery = undefined;
     let failure: unknown;
     for (const [text, entry] of this.#entries) {
       try {
@@ -1406,7 +1528,17 @@ class ThreeRootPublication {
       }
       reconciler.unbindFrom(text, this);
     }
+    const cached = this.#detachedQueryCache;
+    this.#detachedQueryCache = undefined;
+    if (cached !== undefined) {
+      try {
+        cached.entry.handle.dispose();
+      } catch (error) {
+        failure ??= error;
+      }
+    }
     this.#entries.clear();
+    this.#pendingMeasurements.clear();
     if (failure !== undefined) throw failure;
   }
 
@@ -1451,7 +1583,7 @@ class ThreeRootPublication {
       previous.stagedOrderRank = orderRank;
       previous.stagedPresentation = presentation;
     }
-    this.#measurementPending = true;
+    this.#pendingMeasurements.add(text);
     this.#inspections.delete(text);
   }
 

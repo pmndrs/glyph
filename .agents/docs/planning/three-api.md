@@ -305,6 +305,9 @@ measurement without introducing a second renderer-free retained runtime.
 Sequential `measure()` calls in one group extend a full desired-lifecycle speculative transaction. Each query applies
 semantic mutations only for its paragraph; the first render traversal publishes the complete batch once and adopts the
 prepared work. Repeating an unchanged measurement returns the retained result object without another Wasm crossing.
+The root may park one preceding detached controller outside active publication membership, so alternating two detached
+queries preserves both semantic caches while only the explicitly queried Text remains bound. A third distinct detached
+query or an ordinary scene publication evicts that bounded slot.
 
 `glyphs()` is intentionally different: it positions current desired text and copies per-line and per-glyph arrays. It
 still does not publish or realize renderer resources. Ordinary rendering never materializes either semantic view merely

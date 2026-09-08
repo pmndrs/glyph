@@ -2,9 +2,15 @@
 
 ## 2026-09-08
 
+- **Added synchronous demand-read glyph inspection** — Core, Three, and TypeGPU Text controllers now expose
+  `withGlyphs(callback)` for indexed glyph reads without publishing or copying the complete semantic layout.
+  A fixed private Wasm descriptor plus fixed per-record scratch keeps setup independent of glyph count; callback lifetime,
+  thenable rejection, and a shared engine reentry gate prevent borrowed views from surviving or mutating their source.
+
 - **Made Rich Text mutation load refresh-rate independent** — Its rAF hook now publishes at most one latest-state update
-  per 60 Hz logical tick. Animation speed still scales the composed emphasis and tint phase, 120 Hz duplicate frames and
-  disabled animation add no work, and delayed frames never replay missed ticks.
+  per 60 Hz logical tick. The tick directly derives one continuously rate-scaled emphasis/tint state, so the 0%, 50%, and
+  100% controls do not republish duplicate content or replay skipped intermediate states. High-refresh duplicate frames,
+  disabled animation, and delayed-frame catch-up add no work.
 
 - **Corrected the post-TypeGPU integration boundary** — Published renderer-free shader realizations as the explicit
   `/shaders/tsl` and `/shaders/typegpu` siblings, retained `/three/typegpu` as the isolated Three experiment, and kept

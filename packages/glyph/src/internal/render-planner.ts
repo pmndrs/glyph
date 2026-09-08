@@ -1,7 +1,12 @@
 import { alignSpansToClusters } from '../formatted-text.js';
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { GlyphError } from '../glyph-error.js';
-import { copyGlyphLayoutInspection, type GlyphLayoutInspection, type ParagraphLayoutSummary } from '../layout.js';
+import {
+  copyGlyphLayoutInspection,
+  type BorrowedGlyphLayout,
+  type GlyphLayoutInspection,
+  type ParagraphLayoutSummary,
+} from '../layout.js';
 import {
   assertConstraints,
   assertParagraphLayout,
@@ -44,6 +49,7 @@ import type {
 } from './handle-state.js';
 import { RenderPlanView, type RenderPlanTable } from './plan-view.js';
 import { readPlannerLayouts, readPlannerMeasurements } from './layout-query-view.js';
+import { createBorrowedGlyphLayout } from './borrowed-layout-view.js';
 import type { PortableResource } from '../config/resources.js';
 import { reuseOrCreateTextPropertySnapshot } from '../config/text-property.js';
 import type { ParagraphId, ResourceHandle } from './glyph-id.js';
@@ -240,8 +246,12 @@ export interface RetainedText {
   updateOrder(order: number, orderScope: number, orderRank: number): void;
   /** Returns aggregate metrics; a cache miss may synchronously incur font and measure lookup work. */
   measure(): ParagraphLayoutSummary;
+  /** Returns aggregate metrics with authoritative positioned ink bounds. */
+  measureInk(): ParagraphLayoutSummary;
   /** Returns caller-owned columns; a cache miss may synchronously incur glyph lookup and positioning work. */
   glyphs(): GlyphLayoutInspection;
+  /** Demand-reads positioned glyphs through a synchronous expiring view. */
+  withGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result;
   /** Offers a complete checkpoint containing selected committed stable glyph ids to one renderer target. */
   copyGlyphs(stableIds: ArrayLike<number>, target: PlanTarget): PlanAcceptance;
   /** Offers a complete checkpoint containing this paragraph's committed decorations. */
@@ -652,7 +662,15 @@ class RenderPlannerImpl {
     this.#assertTextQueryable(state);
     const cached = state.measurement;
     if (cached !== undefined) return cached;
-    return this.#queryText(state, false);
+    return this.#queryMeasurement(state, false);
+  }
+
+  /** @internal */
+  _layoutTextInk(state: RetainedTextState): ParagraphLayoutSummary {
+    this.#assertTextQueryable(state);
+    const cached = state.measurement;
+    if (cached?.inkBounds !== undefined) return cached;
+    return this.#queryMeasurement(state, true);
   }
 
   /** @internal */
@@ -660,7 +678,35 @@ class RenderPlannerImpl {
     this.#assertTextQueryable(state);
     const cached = state.inspection;
     if (cached !== undefined) return copyGlyphLayoutInspection(cached);
-    return copyGlyphLayoutInspection(this.#queryText(state, true));
+    return copyGlyphLayoutInspection(this.#queryInspection(state));
+  }
+
+  /** @internal */
+  _withGlyphs<Result>(state: RetainedTextState, read: (glyphs: BorrowedGlyphLayout) => Result): Result {
+    this.#assertTextQueryable(state);
+    if (typeof read !== 'function') throw new TypeError('borrowed glyph inspection callback must be a function');
+    const publication = this.#transport.borrowParagraphLayout(
+      this.#queryTextRequest(state, textShaperAbi.engine.semanticViewMasks.borrowedLayout),
+      state.paragraphId,
+      this.#limits.maxOutputBytes,
+    );
+    let active = true;
+    const assertActive = (): void => {
+      if (!active || this.#transport.isExpired(publication.publication)) {
+        throw new Error('borrowed glyph layout has expired');
+      }
+    };
+    const glyphs = createBorrowedGlyphLayout(this.#transport, publication, assertActive);
+    this.#adoptMeasuredBindings(state);
+    const leaveBorrow = this.#handleState._enterBorrowedPlan();
+    try {
+      const result = read(glyphs);
+      if (isPromiseLike(result)) throw new TypeError('a borrowed glyph inspection callback must answer synchronously');
+      return result;
+    } finally {
+      active = false;
+      leaveBorrow();
+    }
   }
 
   /** @internal */
@@ -854,10 +900,37 @@ class RenderPlannerImpl {
     }
   }
 
-  #queryText(state: RetainedTextState, inspection: false): ParagraphLayoutSummary;
-  #queryText(state: RetainedTextState, inspection: true): GlyphLayoutInspection;
-  #queryText(state: RetainedTextState, inspection: boolean): ParagraphLayoutSummary | GlyphLayoutInspection {
+  #queryMeasurement(state: RetainedTextState, positionGlyphs: boolean): ParagraphLayoutSummary {
     this.#assertTextQueryable(state);
+    const masks = textShaperAbi.engine.semanticViewMasks;
+    const publication = this.#queryTextPublication(
+      state,
+      masks.measurement | (positionGlyphs ? masks.borrowedLayout : 0),
+    );
+    const measurement = readPlannerMeasurements(publication).get(state.paragraphId);
+    if (measurement === undefined) throw new Error('text engine returned no measurement for retained text');
+    this.#adoptMeasuredBindings(state);
+    state.measurement = measurement;
+    return measurement;
+  }
+
+  #queryInspection(state: RetainedTextState): GlyphLayoutInspection {
+    this.#assertTextQueryable(state);
+    const publication = this.#queryTextPublication(state, textShaperAbi.engine.semanticViewMasks.layoutInspection);
+    const layout = readPlannerLayouts(publication).get(state.paragraphId);
+    if (layout === undefined) throw new Error('text engine returned no layout inspection for retained text');
+    this.#adoptMeasuredBindings(state);
+    state.measurement = layout;
+    state.inspection = layout;
+    return layout;
+  }
+
+  #queryTextPublication(state: RetainedTextState, semanticViewMask: number): PlanPublication {
+    const request = this.#queryTextRequest(state, semanticViewMask);
+    return this.#transport.measureParagraph(request, state.paragraphId, this.#limits.maxOutputBytes);
+  }
+
+  #queryTextRequest(state: RetainedTextState, semanticViewMask: number): Uint8Array {
     const styles = compileStyles(this.#handleState, state);
     const styleMutations: PlannerStyleMutation[] = [...styles];
     for (let index = styles.length + 1; index <= state.publishedStyleCount; index += 1) {
@@ -869,16 +942,14 @@ class RenderPlannerImpl {
     }
     const geometry = compileGeometry(this.#handleState, state, 0, 0);
     const textChanged = !state.published || state.publishedText !== state.desired.text;
-    const request = compilePlannerFrameUpdate({
+    return compilePlannerFrameUpdate({
       rootId: this.#transport.handle,
       codecHandle: this.#codec.handle,
       ...(this.#capabilitySet === undefined ? {} : { capabilitySet: this.#capabilitySet }),
       expectedEngineRevision: this.#engineRevision,
       consumedRevision: this.#revision,
       acknowledgedPublicationGeneration: this.#acknowledgedGeneration,
-      semanticViewMask: inspection
-        ? textShaperAbi.engine.semanticViewMasks.layoutInspection
-        : textShaperAbi.engine.semanticViewMasks.measurement,
+      semanticViewMask,
       limits: this.#limits,
       paragraphMutations: this.#measurementParagraphMutations(),
       paragraphOrderMutations: this.#measurementParagraphOrderMutations(),
@@ -898,20 +969,6 @@ class RenderPlannerImpl {
       exclusions: geometry.exclusions,
       inlineObjects: compileInlineObjects(this.#handleState, state),
     });
-    const publication = this.#transport.measureParagraph(request, state.paragraphId, this.#limits.maxOutputBytes);
-    if (inspection) {
-      const layout = readPlannerLayouts(publication).get(state.paragraphId);
-      if (layout === undefined) throw new Error('text engine returned no layout inspection for retained text');
-      this.#adoptMeasuredBindings(state);
-      state.measurement = layout;
-      state.inspection = layout;
-      return layout;
-    }
-    const measurement = readPlannerMeasurements(publication).get(state.paragraphId);
-    if (measurement === undefined) throw new Error('text engine returned no measurement for retained text');
-    this.#adoptMeasuredBindings(state);
-    state.measurement = measurement;
-    return measurement;
   }
 
   #compileFrame(options: NormalizedPublishOptions, checkpointGeneration: number): Uint8Array {
@@ -1298,6 +1355,7 @@ class RenderPlannerImpl {
 
   #assertMutable(): void {
     this.#assertActive();
+    this.#handleState._assertEngineMutationAllowed();
   }
 
   #assertTextQueryable(state: RetainedTextState): void {
@@ -1343,8 +1401,16 @@ class RetainedTextImpl implements RetainedText {
     return this.#planner._layoutText(this.#state);
   }
 
+  measureInk(): ParagraphLayoutSummary {
+    return this.#planner._layoutTextInk(this.#state);
+  }
+
   glyphs(): GlyphLayoutInspection {
     return this.#planner._inspectText(this.#state);
+  }
+
+  withGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result {
+    return this.#planner._withGlyphs(this.#state, read);
   }
 
   copyGlyphs(stableIds: ArrayLike<number>, target: PlanTarget): PlanAcceptance {
@@ -2067,5 +2133,9 @@ function isNonArrayObject(value: unknown): value is Record<string, unknown> {
 }
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
-  return isNonArrayObject(value) && typeof value.then === 'function';
+  return (
+    value !== null &&
+    (typeof value === 'object' || typeof value === 'function') &&
+    typeof (value as PromiseLike<unknown>).then === 'function'
+  );
 }

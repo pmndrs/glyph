@@ -125,6 +125,16 @@ export interface PlanPublication {
   readonly drawCount: number;
 }
 
+/** @internal Fixed-size lease for demand reads from one retained positioned paragraph. */
+export interface BorrowedLayoutPublication {
+  readonly publication: PlanPublication;
+  readonly memoryBuffer: ArrayBuffer;
+  readonly rootId: PlannerHandle;
+  readonly paragraphId: ParagraphId;
+  readonly generation: number;
+  readonly glyphCount: number;
+}
+
 /** Paragraph/style a rejected frame names, from the result header — both are request-authored ids; zero means the status names none (engine-internal, capacity, or planner-level fault). */
 const NO_FAULT: GlyphEngineFault = Object.freeze({ paragraphId: 0, styleId: 0 });
 
@@ -1361,6 +1371,41 @@ export class PlanTransport {
     }
   }
 
+  /** @internal Prepares positioning and returns only a fixed-size demand-read descriptor. */
+  borrowParagraphLayout(
+    request: Uint8Array,
+    paragraphId: ParagraphId,
+    maxOutputBytes: number,
+  ): BorrowedLayoutPublication {
+    const publication = this.measureParagraph(request, paragraphId, maxOutputBytes);
+    if (publication.semanticViewCount !== 0) {
+      throw new TypeError('borrowed layout setup unexpectedly serialized semantic records');
+    }
+    const pointer = this.#exports.borrowParagraphLayout(this.#handle, paragraphId);
+    const memoryBuffer = this.#exports.memory.buffer;
+    const layout = textShaperAbi.layouts.borrowedLayoutDescriptor;
+    this.#assertBorrowedRange(pointer, layout.size, layout.alignment, memoryBuffer, 'borrowed layout descriptor');
+    const view = new DataView(memoryBuffer, pointer, layout.size);
+    const rootId = view.getUint32(layout.rootId, true) as PlannerHandle;
+    const describedParagraph = view.getUint32(layout.paragraphId, true) as ParagraphId;
+    if (rootId !== this.#handle || describedParagraph !== paragraphId) {
+      throw new TypeError('borrowed layout descriptor identifies a different paragraph');
+    }
+    return Object.freeze({
+      publication,
+      memoryBuffer,
+      rootId,
+      paragraphId: describedParagraph,
+      generation: uint32Handle(view.getUint32(layout.generation, true), 'borrowed layout generation'),
+      glyphCount: view.getUint32(layout.glyphCount, true),
+    });
+  }
+
+  /** @internal Returns one fixed scratch glyph record during an active layout borrow. */
+  borrowParagraphGlyph(layout: BorrowedLayoutPublication, index: number): number {
+    return this.#borrowParagraphRecord(layout, index);
+  }
+
   /** @internal Copies selected committed glyph records into a complete query checkpoint. */
   copyGlyphs(
     paragraphId: ParagraphId,
@@ -1447,6 +1492,37 @@ export class PlanTransport {
       );
     }
     return this.#decodeResult(header, resultPointer, memoryBuffer, initialMemoryBuffer);
+  }
+
+  #borrowParagraphRecord(layout: BorrowedLayoutPublication, index: number): number {
+    if (layout.rootId !== this.#handle || this.isExpired(layout.publication)) {
+      throw new Error('borrowed glyph layout has expired');
+    }
+    if (!Number.isSafeInteger(index) || index < 0 || index >= layout.glyphCount) {
+      throw new RangeError('borrowed layout glyph index is outside its range');
+    }
+    const pointer = this.#exports.borrowParagraphGlyph(this.#handle, layout.paragraphId, layout.generation, index);
+    const memoryBuffer = this.#exports.memory.buffer;
+    const record = textShaperAbi.layouts.borrowedGlyph;
+    this.#assertBorrowedRange(pointer, record.size, record.alignment, memoryBuffer, 'borrowed glyph record');
+    return pointer;
+  }
+
+  #assertBorrowedRange(
+    pointer: number,
+    byteLength: number,
+    alignment: number,
+    memoryBuffer: ArrayBuffer,
+    label: string,
+  ): void {
+    if (
+      pointer === 0 ||
+      pointer % alignment !== 0 ||
+      !Number.isSafeInteger(pointer + byteLength) ||
+      pointer + byteLength > memoryBuffer.byteLength
+    ) {
+      throw new RangeError(`${label} is outside Wasm memory`);
+    }
   }
 
   #decodeResult(

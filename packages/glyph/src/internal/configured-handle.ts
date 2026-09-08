@@ -47,6 +47,7 @@ import type {
 } from './render-planner.js';
 import { observeRenderPlannerDirty, stageRenderPlanner } from './render-planner.js';
 import { reuseOrCreateTextPropertySnapshot } from '../config/text-property.js';
+import type { BorrowedGlyphLayout } from '../layout.js';
 
 const DEFAULT_LIMITS: GlyphCommandLimits = Object.freeze({
   maxParagraphs: 4_096,
@@ -865,10 +866,22 @@ class ConfiguredTextController<
     return this.#text.measure();
   }
 
+  measureInk() {
+    this.#assertActive();
+    this.#services.assertTextCall();
+    return this.#text.measureInk();
+  }
+
   inspect() {
     this.#assertActive();
     this.#services.assertTextCall();
     return this.#text.glyphs();
+  }
+
+  withGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result {
+    this.#assertActive();
+    this.#services.assertTextCall();
+    return this.#text.withGlyphs(read);
   }
 
   belongsTo(services: object): boolean {

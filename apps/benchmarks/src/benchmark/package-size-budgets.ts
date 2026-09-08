@@ -71,12 +71,11 @@ export const packageSizeBudgets = {
   // +12,071 raw / +4,949 gzip / +8,451 Brotli of Rust shaping and planning code but left
   // the gate un-repinned; this branch changed no Rust behaviour (formatting only), and the
   // measured artifact is byte-identical to its base commit.
-  // Planner-assisted detached glyph copies add paragraph-scoped stable-ID selection and a
-  // one-shot publication checkpoint without changing the retained A/B publication state.
+  // The selective glyph borrow adds bounded demand-read ABI code without changing the retained A/B publication path.
   'text-shaper-wasm': {
-    rawBytes: 1_200_000,
-    minifiedBytes: 1_200_000,
-    gzipBytes: 468_000,
+    rawBytes: 1_208_000,
+    minifiedBytes: 1_208_000,
+    gzipBytes: 470_000,
     brotliBytes: 368_000,
   },
   // Three realization plus the root graph measures 501,283 raw / 489,958 minified / 123,383 gzip / 101,597 Brotli
@@ -88,13 +87,13 @@ export const packageSizeBudgets = {
     gzipBytes: 128_000,
     brotliBytes: 106_000,
   },
-  // `/three/typegpu` prices the complete optional integration, rather than implementation-level shader leaves.
-  // With peers external it measures 619,760 raw / 606,465 minified / 139,141 gzip / 113,976 Brotli.
+  // `/three/typegpu` prices the complete optional integration; selective glyph inspection measures
+  // 626,784 raw / 613,457 minified / 140,711 gzip / 115,199 Brotli with peers external.
   'three-typegpu-runtime-js': {
-    rawBytes: 622_000,
-    minifiedBytes: 609_000,
-    gzipBytes: 140_000,
-    brotliBytes: 115_000,
+    rawBytes: 630_000,
+    minifiedBytes: 617_000,
+    gzipBytes: 142_000,
+    brotliBytes: 117_000,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,

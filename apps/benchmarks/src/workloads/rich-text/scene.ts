@@ -138,16 +138,14 @@ export function richTextParagraphCount(amount: number): number {
 }
 
 /** Per-paragraph emphasis phase, so a stack reflows at staggered offsets instead of in lockstep. */
-export function richTextEmphasisScale(index: number, count: number, elapsedMs: number): number {
+export function richTextEmphasisScale(index: number, count: number, contentTick: number): number {
   assertParagraphIndex(index, count);
-  const step = richTextLogicalMutationTick(elapsedMs);
-  return 1 + 0.45 * (1 + Math.sin((step / RICH_TEXT_EMPHASIS_CYCLE_TICKS + index / count) * Math.PI * 2));
+  return 1 + 0.45 * (1 + Math.sin((contentTick / RICH_TEXT_EMPHASIS_CYCLE_TICKS + index / count) * Math.PI * 2));
 }
 
-export function richTextTintColor(index: number, count: number, elapsedMs: number): string {
+export function richTextTintColor(index: number, count: number, contentTick: number): string {
   assertParagraphIndex(index, count);
-  const step = richTextLogicalMutationTick(elapsedMs);
-  const hue = (((step / RICH_TEXT_TINT_CYCLE_TICKS + index / count) % 1) + 1) % 1;
+  const hue = (((contentTick / RICH_TEXT_TINT_CYCLE_TICKS + index / count) % 1) + 1) % 1;
   const channel = (offset: number): number => {
     const value = (offset + hue * 12) % 12;
     return 0.55 - 0.42 * Math.max(-1, Math.min(value - 3, 9 - value, 1));
@@ -176,6 +174,11 @@ export function nextRichTextPublicationTick(
   return tick === previousTick ? undefined : tick;
 }
 
+/** Scales one publication tick into the authored animation timeline without changing publication cadence. */
+export function richTextContentTick(publicationTick: number, animationSpeed: number): number {
+  return publicationTick * (0.25 + animationSpeed * 0.0175);
+}
+
 function richTextLogicalMutationTick(elapsedMs: number): number {
   const tick = (elapsedMs * RICH_TEXT_MUTATIONS_PER_SECOND) / 1_000;
   const boundaryTolerance = Number.EPSILON * Math.max(1, Math.abs(tick));
@@ -195,6 +198,7 @@ export const richTextWorkload = {
   create(context) {
     return createRichTextEntries({
       amount: context.configuration.amount,
+      animationSpeed: context.configuration.animationSpeed,
       companionFonts: richTextCompanionFonts(context.companionFonts),
       dpr: context.dpr,
       elapsedMs: context.animationElapsedMs,
@@ -250,6 +254,7 @@ function richTextParagraphPaint(
 export function createRichTextEntries(
   context: WorkloadTextFactoryContext & {
     readonly amount: number;
+    readonly animationSpeed: number;
     readonly companionFonts: RichTextCompanionFonts;
     readonly elapsedMs: number;
     readonly fontSize: number;
@@ -270,10 +275,11 @@ export function createRichTextEntries(
     context.paintShadowEnabled,
     context.paintStrokeWidth,
   );
+  const contentTick = richTextContentTick(richTextLogicalMutationTick(context.elapsedMs), context.animationSpeed);
   return Array.from({ length: count }, (_, index) => {
     const composition = richTextComposition(context.fontSize, {
-      emphasisFontSize: context.fontSize * richTextEmphasisScale(index, count, context.elapsedMs),
-      tintColor: richTextTintColor(index, count, context.elapsedMs),
+      emphasisFontSize: context.fontSize * richTextEmphasisScale(index, count, contentTick),
+      tintColor: richTextTintColor(index, count, contentTick),
     });
     const literal = richTextLiteral(context.companionFonts, composition);
     assertRichTextSpans(literal, composition);
@@ -324,15 +330,15 @@ export function animateRichTextEntries(
   const first = entries[0]!;
   const publicationTick = nextRichTextPublicationTick(configuration.animationEnabled, elapsedMs, first.lastPaintFrame);
   if (publicationTick === undefined) return;
-  const scaled = elapsedMs * (0.25 + configuration.animationSpeed * 0.0175);
+  const contentTick = richTextContentTick(publicationTick, configuration.animationSpeed);
   const started = performance.now();
   for (const [index, entry] of entries.entries()) {
     entry.lastPaintFrame = publicationTick;
     const literal = richTextLiteral(
       retainedCompanionFonts(entry),
       richTextComposition(configuration.fontSize, {
-        emphasisFontSize: configuration.fontSize * richTextEmphasisScale(index, entries.length, scaled),
-        tintColor: richTextTintColor(index, entries.length, scaled),
+        emphasisFontSize: configuration.fontSize * richTextEmphasisScale(index, entries.length, contentTick),
+        tintColor: richTextTintColor(index, entries.length, contentTick),
       }),
     );
     entry.sourceText = literal.text;

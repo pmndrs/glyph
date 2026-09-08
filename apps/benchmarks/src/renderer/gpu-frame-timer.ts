@@ -7,11 +7,19 @@ export interface GpuFrameMeasurement {
   readonly durationMs: number | undefined;
 }
 
+export interface GpuFrameTimerDiagnostics {
+  readonly activeFrameId: number | undefined;
+  readonly latestFrameId: number | undefined;
+  readonly oldestPendingFrameId: number | undefined;
+  readonly pendingCount: number;
+}
+
 export interface GpuFrameTimer {
   readonly supported: boolean;
   beginFrame(frameId: number): void;
   endFrame(): void;
   poll(): readonly GpuFrameMeasurement[];
+  diagnostics(): GpuFrameTimerDiagnostics;
   dispose(): Promise<void>;
 }
 
@@ -28,6 +36,30 @@ interface FrameTimerOptions {
 }
 
 const EMPTY_GPU_FRAME_MEASUREMENTS: readonly GpuFrameMeasurement[] = Object.freeze([]);
+const MAX_PENDING_WEBGL_QUERIES = 1_024;
+const GPU_FRAME_TIMER_DIAGNOSTICS_EVENT = 'pmndrs-gpu-frame-timer-diagnostics';
+
+interface GpuFrameTimerDiagnosticsRequest {
+  diagnostics: GpuFrameTimerDiagnostics | undefined;
+}
+
+export function requestGpuFrameTimerDiagnostics(target: EventTarget): GpuFrameTimerDiagnostics {
+  const detail: GpuFrameTimerDiagnosticsRequest = { diagnostics: undefined };
+  target.dispatchEvent(new CustomEvent<GpuFrameTimerDiagnosticsRequest>(GPU_FRAME_TIMER_DIAGNOSTICS_EVENT, { detail }));
+  if (detail.diagnostics === undefined) throw new DOMException('no GPU frame timer is bound', 'NotFoundError');
+  return detail.diagnostics;
+}
+
+export function bindGpuFrameTimerDiagnosticsRequests(target: EventTarget, timer: GpuFrameTimer): () => void {
+  const inspect: EventListener = (event) => {
+    if (!(event instanceof CustomEvent)) return;
+    const detail: unknown = event.detail;
+    if (typeof detail !== 'object' || detail === null || !Object.hasOwn(detail, 'diagnostics')) return;
+    (detail as GpuFrameTimerDiagnosticsRequest).diagnostics = timer.diagnostics();
+  };
+  target.addEventListener(GPU_FRAME_TIMER_DIAGNOSTICS_EVENT, inspect);
+  return () => target.removeEventListener(GPU_FRAME_TIMER_DIAGNOSTICS_EVENT, inspect);
+}
 
 export function createGpuFrameTimer(options: {
   readonly backend: RendererBackend;
@@ -52,21 +84,11 @@ export function createWebGpuFrameTimer(
 ): GpuFrameTimer {
   let activeFrameId: number | undefined;
   let resolution: Promise<void> | undefined;
+  let resolutionFrameId: number | undefined;
+  let resolutionRendererFrameId: number | undefined;
   let disposed = false;
   let completed: GpuFrameMeasurement[] = [];
-  const rendererFrameIds = new Map<number, number>();
-
-  const resolvedFrameId = (fallbackFrameId: number): number => {
-    const backend = resolver.backend as { getTimestampFrames?(type: THREE.TimestampQuery): number[] } | undefined;
-    const frames = backend?.getTimestampFrames?.(THREE.TimestampQuery.RENDER);
-    const rendererFrameId = frames?.at(-1);
-    if (rendererFrameId === undefined) return fallbackFrameId;
-    const frameId = rendererFrameIds.get(rendererFrameId) ?? fallbackFrameId;
-    for (const trackedRendererFrameId of rendererFrameIds.keys()) {
-      if (trackedRendererFrameId <= rendererFrameId) rendererFrameIds.delete(trackedRendererFrameId);
-    }
-    return frameId;
-  };
+  let latestFrameId: number | undefined;
 
   return {
     supported: options.supported,
@@ -81,15 +103,24 @@ export function createWebGpuFrameTimer(
       if (activeFrameId === undefined) throw new Error('no GPU frame measurement is active');
       const frameId = activeFrameId;
       activeFrameId = undefined;
+      latestFrameId = frameId;
       const rendererFrameId = resolver.info?.frame;
-      if (rendererFrameId !== undefined) rendererFrameIds.set(rendererFrameId, frameId);
       if (!options.supported || resolution !== undefined) return;
+
+      resolutionFrameId = frameId;
+      resolutionRendererFrameId = rendererFrameId;
 
       resolution = resolver
         .resolveTimestampsAsync(THREE.TimestampQuery.RENDER)
         .then((durationMs) => {
           if (disposed) return;
-          const frameIdForDuration = resolvedFrameId(frameId);
+          const backend = resolver.backend as { getTimestampFrames?(type: THREE.TimestampQuery): number[] } | undefined;
+          const resolvedRendererFrameId = backend?.getTimestampFrames?.(THREE.TimestampQuery.RENDER).at(-1);
+          const frameIdForDuration = resolutionFrameId ?? frameId;
+          if (resolvedRendererFrameId !== undefined && resolvedRendererFrameId !== resolutionRendererFrameId) {
+            completed.push({ frameId: frameIdForDuration, durationMs: undefined });
+            return;
+          }
           if (durationMs === undefined) {
             completed.push({ frameId: frameIdForDuration, durationMs: undefined });
             return;
@@ -109,6 +140,8 @@ export function createWebGpuFrameTimer(
         })
         .finally(() => {
           resolution = undefined;
+          resolutionFrameId = undefined;
+          resolutionRendererFrameId = undefined;
         });
     },
     poll() {
@@ -117,12 +150,21 @@ export function createWebGpuFrameTimer(
       completed = [];
       return measurements;
     },
+    diagnostics() {
+      return {
+        activeFrameId,
+        latestFrameId,
+        oldestPendingFrameId: resolutionFrameId,
+        pendingCount: resolution === undefined ? 0 : 1,
+      };
+    },
     async dispose() {
       disposed = true;
       activeFrameId = undefined;
       completed = [];
-      await resolution;
-      rendererFrameIds.clear();
+      resolution = undefined;
+      resolutionFrameId = undefined;
+      resolutionRendererFrameId = undefined;
     },
   };
 }
@@ -132,9 +174,14 @@ export function createWebGl2FrameTimer(context: WebGL2RenderingContext, options:
   if (extension === null) return unsupportedFrameTimer();
 
   let active: { readonly frameId: number; readonly query: WebGLQuery } | undefined;
+  // Fixed ring scratch bounds a stalled driver without adding steady-state allocations.
   let pending: Array<{ readonly frameId: number; readonly query: WebGLQuery }> = [];
+  let pendingScratch: Array<{ readonly frameId: number; readonly query: WebGLQuery }> = [];
+  const releasedPending = new Uint8Array(MAX_PENDING_WEBGL_QUERIES);
+  let nextEvictionIndex = 0;
   let failed: GpuFrameMeasurement[] = [];
   let disposed = false;
+  let latestFrameId: number | undefined;
 
   return {
     supported: true,
@@ -162,9 +209,18 @@ export function createWebGl2FrameTimer(context: WebGL2RenderingContext, options:
       const measurement = active;
       active = undefined;
       if (measurement === undefined) return;
+      latestFrameId = measurement.frameId;
       try {
         context.endQuery(extension.TIME_ELAPSED_EXT);
-        pending.push(measurement);
+        if (pending.length < MAX_PENDING_WEBGL_QUERIES) {
+          pending.push(measurement);
+        } else {
+          const expired = pending[nextEvictionIndex]!;
+          context.deleteQuery(expired.query);
+          failed.push({ frameId: expired.frameId, durationMs: undefined });
+          pending[nextEvictionIndex] = measurement;
+          nextEvictionIndex = (nextEvictionIndex + 1) % pending.length;
+        }
       } catch (error) {
         context.deleteQuery(measurement.query);
         options.onError(error);
@@ -178,11 +234,13 @@ export function createWebGl2FrameTimer(context: WebGL2RenderingContext, options:
       if (pending.length === 0) return rejected;
       if (context.getParameter(extension.GPU_DISJOINT_EXT) === true) {
         const discarded: GpuFrameMeasurement[] = [];
-        for (const { frameId, query } of pending) {
+        for (let offset = 0; offset < pending.length; offset += 1) {
+          const { frameId, query } = pending[(nextEvictionIndex + offset) % pending.length]!;
           discarded.push({ frameId, durationMs: undefined });
           context.deleteQuery(query);
         }
         pending = [];
+        nextEvictionIndex = 0;
         if (rejected.length === 0) return discarded;
         failed.push(...rejected, ...discarded);
         const measurements = failed;
@@ -191,17 +249,19 @@ export function createWebGl2FrameTimer(context: WebGL2RenderingContext, options:
       }
 
       let completed: GpuFrameMeasurement[] | undefined;
-      let waitingCount = 0;
-      for (let index = 0; index < pending.length; index += 1) {
+      let releasedCount = 0;
+      const head = pending.length === MAX_PENDING_WEBGL_QUERIES ? nextEvictionIndex : 0;
+      for (let offset = 0; offset < pending.length; offset += 1) {
+        const index = (head + offset) % pending.length;
         const measurement = pending[index]!;
         try {
           if (context.getQueryParameter(measurement.query, context.QUERY_RESULT_AVAILABLE) !== true) {
-            pending[waitingCount] = measurement;
-            waitingCount += 1;
-            continue;
+            break;
           }
           const nanoseconds: unknown = context.getQueryParameter(measurement.query, context.QUERY_RESULT);
           context.deleteQuery(measurement.query);
+          releasedPending[index] = 1;
+          releasedCount += 1;
           if (typeof nanoseconds !== 'number' || !Number.isFinite(nanoseconds) || nanoseconds < 0) {
             options.onError(new RangeError('WebGL GPU timer result must be finite and nonnegative'));
             (completed ??= []).push({ frameId: measurement.frameId, durationMs: undefined });
@@ -210,15 +270,37 @@ export function createWebGl2FrameTimer(context: WebGL2RenderingContext, options:
           (completed ??= []).push({ frameId: measurement.frameId, durationMs: nanoseconds / 1e6 });
         } catch (error) {
           context.deleteQuery(measurement.query);
+          releasedPending[index] = 1;
+          releasedCount += 1;
           options.onError(error);
           (completed ??= []).push({ frameId: measurement.frameId, durationMs: undefined });
         }
       }
-      pending.length = waitingCount;
+      if (releasedCount !== 0) {
+        pendingScratch.length = 0;
+        for (let offset = 0; offset < pending.length; offset += 1) {
+          const index = (head + offset) % pending.length;
+          if (releasedPending[index] === 0) {
+            pendingScratch.push(pending[index]!);
+          } else {
+            releasedPending[index] = 0;
+          }
+        }
+        const previousPending = pending;
+        pending = pendingScratch;
+        pendingScratch = previousPending;
+        pendingScratch.length = 0;
+        nextEvictionIndex = 0;
+      }
       if (completed === undefined) return rejected;
       if (rejected.length === 0) return completed;
       completed.unshift(...rejected);
       return completed;
+    },
+    diagnostics() {
+      const head = pending.length === MAX_PENDING_WEBGL_QUERIES ? nextEvictionIndex : 0;
+      const oldestPendingFrameId = pending[head]?.frameId;
+      return { activeFrameId: active?.frameId, latestFrameId, oldestPendingFrameId, pendingCount: pending.length };
     },
     async dispose() {
       if (disposed) return;
@@ -234,6 +316,8 @@ export function createWebGl2FrameTimer(context: WebGL2RenderingContext, options:
       }
       for (const { query } of pending) context.deleteQuery(query);
       pending = [];
+      pendingScratch = [];
+      nextEvictionIndex = 0;
       failed = [];
     },
   };
@@ -247,6 +331,12 @@ function unsupportedFrameTimer(): GpuFrameTimer {
     },
     endFrame() {},
     poll: () => EMPTY_GPU_FRAME_MEASUREMENTS,
+    diagnostics: () => ({
+      activeFrameId: undefined,
+      latestFrameId: undefined,
+      oldestPendingFrameId: undefined,
+      pendingCount: 0,
+    }),
     async dispose() {},
   };
 }

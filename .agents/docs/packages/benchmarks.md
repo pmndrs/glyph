@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:f17babae247c0d20ad0dba0c8baba670e8de37c9513a9f5f363a7ea377979056'
+source_digest: 'sha256:795ff54563cca287dfc4d2f8ecefb77ca3d55d2f33ffff09f58eba8942be04c8'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -466,8 +466,9 @@ passes them as child `Text.renderOrder`; a focused regression proves the orbit a
 benchmark adapter sorts paragraphs or glyph records before the Rust publication.[^presentation-framerate-sweep]
 
 Rich Text derives publication eligibility from an unscaled 60 Hz logical clock inside its rAF hook. High-refresh frames
-that remain in the same tick do no work, delayed frames publish only the latest state once, and `animationSpeed` continues
-to scale emphasis and tint progression without changing the publication budget.
+that remain in the same tick do no work, delayed frames publish only the latest state once, and each eligible tick derives
+one continuously rate-scaled emphasis/tint state. `animationSpeed` therefore changes content progression without changing
+the publication budget or causing duplicate authored updates at the 0%, 50%, or 100% controls.
 
 One aggregate CPU sweep could not serve as an A/B: exact remote main retained its 1,024-frame telemetry ring across
 workload replacement, while the candidate reset scene-local telemetry. The accepted comparison instead ran seven

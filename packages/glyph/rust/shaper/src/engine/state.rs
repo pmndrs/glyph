@@ -280,6 +280,13 @@ enum ParagraphInputKind {
 }
 
 impl ParagraphInputSpans {
+    fn is_empty(self) -> bool {
+        self.text.is_empty()
+            && self.styles.is_empty()
+            && self.constraints.is_empty()
+            && self.inline_objects.is_empty()
+    }
+
     fn span_mut(&mut self, kind: ParagraphInputKind) -> &mut RecordSpan {
         match kind {
             ParagraphInputKind::Text => &mut self.text,
@@ -645,6 +652,45 @@ impl TextEngine {
             .get(&handle)
             .map(|planner| planner.revision)
             .ok_or(EngineError::RootMissing)
+    }
+
+    pub(crate) fn borrowed_paragraph_layout(
+        &self,
+        root_id: u32,
+        paragraph_id: u32,
+    ) -> Result<usize, EngineError> {
+        let planner = self
+            .planners
+            .get(&root_id)
+            .ok_or(EngineError::RootMissing)?;
+        let paragraph = planner
+            .paragraph(paragraph_id)
+            .ok_or(EngineError::InvalidRequest)?;
+        let positioned = paragraph.state.positioned.active();
+        Ok(positioned.semantic_glyphs().len())
+    }
+
+    pub(crate) fn borrowed_paragraph_glyph(
+        &self,
+        root_id: u32,
+        paragraph_id: u32,
+        glyph_index: usize,
+    ) -> Result<super::positioning::SemanticGlyph, EngineError> {
+        let planner = self
+            .planners
+            .get(&root_id)
+            .ok_or(EngineError::RootMissing)?;
+        let paragraph = planner
+            .paragraph(paragraph_id)
+            .ok_or(EngineError::InvalidRequest)?;
+        paragraph
+            .state
+            .positioned
+            .active()
+            .semantic_glyphs()
+            .get(glyph_index)
+            .copied()
+            .ok_or(EngineError::InvalidRequest)
     }
 
     #[cfg(test)]
@@ -1058,8 +1104,10 @@ impl TextEngine {
             };
             // Measurement answers at line level from flow and clusters; only a
             // layout-inspection query needs the per-glyph positioning tail.
-            let position =
-                request.semantic_view_mask & super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION != 0;
+            let position = request.semantic_view_mask
+                & (super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION
+                    | super::frame::SEMANTIC_VIEW_BORROWED_LAYOUT)
+                != 0;
             if prefix_retained {
                 if !geometry_retained {
                     paragraph.positioned_changed = paragraph.state.prepare_geometry_and_layout(
@@ -1333,7 +1381,6 @@ impl TextEngine {
                         .map_err(|error| error.in_paragraph(paragraph_id))?
                 };
             }
-            planner.semantic_input_spans.clear();
             let positioned_changed = planner.lifecycle_changed
                 || planner
                     .paragraphs
@@ -1424,6 +1471,15 @@ impl TextEngine {
                 let query = (|| {
                     for order_index in 0..planner.active_order().len() {
                         let paragraph_id = planner.active_order()[order_index].id;
+                        let input_unchanged =
+                            planner.semantic_input_spans(paragraph_id)?.is_empty();
+                        let positioned_changed = planner
+                            .paragraph(paragraph_id)
+                            .ok_or(EngineError::InvalidRequest)?
+                            .positioned_changed;
+                        if input_unchanged && !positioned_changed {
+                            continue;
+                        }
                         let paragraph = planner
                             .paragraph_mut(paragraph_id)
                             .ok_or(EngineError::InvalidRequest)?;
@@ -1444,6 +1500,7 @@ impl TextEngine {
                 planner.semantic_records = records;
                 query?;
             }
+            planner.semantic_input_spans.clear();
             planner.pending_next_glyph_id = next_glyph_id;
             planner.pending_next_content_revision = next_content_revision;
             planner.pending_compositing_independent = request.compositing_independent;

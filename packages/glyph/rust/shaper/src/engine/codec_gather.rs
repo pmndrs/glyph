@@ -563,27 +563,31 @@ impl CodecGatherWorkspace {
         let Some(program) = codec.decoration_program(capability_set) else {
             return Ok(false);
         };
-        let decorations: alloc::vec::Vec<&super::positioning::DecorationRecord> = decorations
+        let decoration_count = decorations
             .iter()
             .filter(|record| pass.admits(record.flags))
-            .collect();
-        if decorations.is_empty() {
+            .count();
+        if decoration_count == 0 {
             return Ok(true);
         }
         let base = self.glyphs.len();
-        reserve(&mut self.glyphs, decorations.len())?;
-        reserve(&mut self.semantic_change_masks, decorations.len())?;
+        reserve(&mut self.glyphs, decoration_count)?;
+        reserve(&mut self.semantic_change_masks, decoration_count)?;
         for field in &mut self.f32_fields {
             field
-                .reserve(decorations.len())
+                .reserve(decoration_count)
                 .map_err(|_| GatherError::AllocationFailed)?;
         }
         for field in &mut self.u32_fields {
             field
-                .reserve(decorations.len())
+                .reserve(decoration_count)
                 .map_err(|_| GatherError::AllocationFailed)?;
         }
-        for (ordinal, &record) in decorations.iter().enumerate() {
+        for (ordinal, record) in decorations
+            .iter()
+            .filter(|record| pass.admits(record.flags))
+            .enumerate()
+        {
             let stable_id = DECORATION_STABLE_ID_BASE
                 | u32::try_from(base + ordinal).map_err(|_| GatherError::AllocationFailed)?;
             for (index, field) in self.f32_fields.iter_mut().enumerate() {
