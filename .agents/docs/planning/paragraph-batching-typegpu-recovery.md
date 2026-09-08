@@ -116,10 +116,15 @@ every unrelated long-running suite must be repeated after each small fix.
 
 - [ ] Confirm merged-main CI and release jobs are green; repair failures attributable to #46 directly on `main`.
 - [ ] Keep shader ownership split under `/shaders/tsl` and `/shaders/typegpu` without making one backend import the other.
+- [ ] Move the physical sources to `src/shaders/tsl/` and `src/shaders/typegpu/` so the package graph mirrors those
+  public namespaces; do not retain ambiguous `/tsl`, generic `/shaders`, or `/three-typegpu` aliases.
 - [ ] Keep `/three` on the TSL path and provide `/three/typegpu` as the explicit Three-plus-TypeGPU bridge.
 - [ ] Keep `/typegpu` as the direct integration leaf for custom TypeGPU engines.
 - [ ] Prove default/root and `/three` consumers build with TypeGPU peer packages absent.
 - [ ] Prove `/typegpu` and `/three/typegpu` consumers build when their optional peers are installed.
+- [ ] Keep `@typegpu/gl` as the optional fallback-rendering peer for the Three-plus-TypeGPU integration, while proving
+  default/root, `/three`, `/typegpu`, and `/shaders/typegpu` consumers do not require it unless `/three/typegpu` is
+  selected.
 - [ ] Measure every public leaf independently so `export *` or shared configuration does not retain both shader graphs.
 - [ ] Resolve the merged PR's restored root `compositing` option in favor of the accepted no-compositing contract.
 - [ ] Resolve its restored `textUnits: 256` default in favor of 64; retained text still grows from actual content.
@@ -149,8 +154,8 @@ owning layer and add the regression before broad verification.
 - [x] Preserve authored tight explicit line height, including negative half-leading.
 - [x] Query or inspect one detached Text without rebinding unrelated detached siblings.
 - [x] Reject duplicate paragraph ranks at the typed boundary and preserve atomic rank swaps.
-- [ ] Bound `measureParagraph` result-capacity retries while retaining asymmetric A/B capacity growth.
-- [ ] Replace or encapsulate the live `queryMembers` scratch-array return so re-entry cannot observe mutated membership.
+- [x] Bound `measureParagraph` result-capacity retries while retaining asymmetric A/B capacity growth.
+- [x] Replace or encapsulate the live `queryMembers` scratch-array return so re-entry cannot observe mutated membership.
 - [ ] Make exact telemetry capture admit CPU and completed GPU samples under one documented window rule.
 - [ ] Prove negative-advance dense scripts cannot materialize one 12-byte sparse-word record per cluster or disable the
   intended chunk fast path. Measure memory and fitting throughput before selecting the density guard.
@@ -175,11 +180,11 @@ measurement reconciliation, and reactive UI work before deeper kernel changes.
 
 ### Ordered optimization work
 
-- [ ] In Three measurement/inspection, call the existing `needsReconcile(texts)` predicate and reconcile only when it is
+- [x] In Three measurement/inspection, call the existing `needsReconcile(texts)` predicate and reconcile only when it is
   true. Prove detached/reparent/rank/material cases still reconcile, while a cached width-query avoids Set allocation and
   member removal scans.
-- [ ] In Editorial layout, call `measure()` once per Text per reflow and reuse that result instead of six total calls.
-- [ ] Decouple Paragraph Stress's automated per-frame width/font motion from React/Koota control-tree rerenders. Update
+- [x] In Editorial layout, call `measure()` once per Text per reflow and reuse that result instead of six total calls.
+- [x] Decouple Paragraph Stress's automated per-frame width/font motion from React/Koota control-tree rerenders. Update
   the scene imperatively and reflect controls at a lower cadence without changing the authored workload.
 - [ ] Re-measure active Paragraph Stress and Editorial with the exact capture API before changing Rust again.
 - [ ] Carry a sparse-word cursor across lines to remove repeated `partition_point` only if a profile shows material cost.
