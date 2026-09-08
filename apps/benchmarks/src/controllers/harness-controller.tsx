@@ -22,12 +22,9 @@ import type { BenchmarkSummary, RunnerEvent } from '../benchmark/contracts';
 import { environmentResource } from '../benchmark/environment';
 import { runRegisteredBenchmark } from '../benchmark/execution';
 import {
-  defaultRuntimeFontSizeForWorkload,
   resetRuntimeControlsForWorkload,
-  RuntimeLayoutControls,
   RuntimeTelemetry,
   RuntimeViewControls,
-  useRuntimeAnimationControls,
   useRuntimeWorld,
   type RuntimeLiveStats,
 } from '../benchmark/runtime-world';
@@ -38,10 +35,6 @@ import {
   type PresentationPreset,
   type PresentationWorkload,
 } from '../benchmark/presentation-sequence';
-import {
-  setParagraphStressMotionFrame,
-  type MutableParagraphStressMotionFrame,
-} from '../benchmark/paragraph-stress-motion';
 import {
   liveWorkloadFontFixtures,
   rasterConformanceSpecimen,
@@ -109,7 +102,6 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
   const [, navigate] = useLocation();
   const environment = use(environmentResource());
   const runtimeWorld = useRuntimeWorld();
-  const presentationAnimation = useRuntimeAnimationControls();
   const desktop = useSyncExternalStore(subscribeDesktop, desktopSnapshot, () => true);
   const phone = useSyncExternalStore(subscribePhone, phoneSnapshot, () => false);
   const [location, setLocationState] = useState(() => {
@@ -162,12 +154,6 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
       }
     | undefined
   >(undefined);
-  const paragraphStressMotionScratch = useRef<MutableParagraphStressMotionFrame>({
-    fontSize: 0,
-    layoutWidthPercent: 0,
-    scrollProgress: 0,
-  });
-
   const workload = workloadById(location.mode, location.workload);
   const fontFixture = location.fontFixture;
   const workloadFormat = workload.formats[location.technique];
@@ -206,40 +192,6 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
       if (!started) controller.abort();
     };
   }, [fontFixture, location.delivery, location.technique, presentationMode]);
-
-  const animateParagraphStressControls = useEffectEvent((elapsedMs: number) => {
-    const startFontSize = defaultRuntimeFontSizeForWorkload('paragraph-stress', location.layout);
-    const frame = paragraphStressMotionScratch.current;
-    setParagraphStressMotionFrame(frame, elapsedMs, presentationAnimation.animationSpeed, startFontSize);
-    const { fontSize, layoutWidthPercent } = frame;
-    const current = runtimeWorld.get(RuntimeLayoutControls);
-    if (current?.fontSize === fontSize && current.layoutWidthPercent === layoutWidthPercent) return;
-    runtimeWorld.set(RuntimeLayoutControls, { fontSize, layoutWidthPercent, workloadAmount: 100 });
-  });
-  useEffect(() => {
-    if (
-      location.mode !== 'benchmark' ||
-      location.workload !== 'paragraph-stress' ||
-      !presentationAnimation.animationEnabled
-    ) {
-      return;
-    }
-    let animationFrame = 0;
-    let active = true;
-    const startedAt = performance.now();
-    const animate = (): void => {
-      if (!active) return;
-      if (requestedLocationRef.current.workload === 'paragraph-stress') {
-        animateParagraphStressControls(Math.max(0, performance.now() - startedAt));
-      }
-      if (active) animationFrame = requestAnimationFrame(animate);
-    };
-    animationFrame = requestAnimationFrame(animate);
-    return () => {
-      active = false;
-      cancelAnimationFrame(animationFrame);
-    };
-  }, [location.mode, location.workload, presentationAnimation.animationEnabled, presentationAnimation.animationSpeed]);
 
   function setLocation(next: Partial<HarnessLocation>): void {
     if (presentationPlayback.current === undefined && next.workload !== undefined) setPresentationPreset(undefined);

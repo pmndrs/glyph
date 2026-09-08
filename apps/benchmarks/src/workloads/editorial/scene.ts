@@ -164,21 +164,18 @@ export function layoutEditorialEntries(
   viewportHeight: number,
 ): void {
   const inset = 24;
-  let block = inset;
   let columnWidth = 0;
-  for (const entry of entries) {
-    columnWidth = Math.max(columnWidth, committedTextMetrics(entry.text).width);
-  }
-  const left = Math.max(inset, (viewportWidth - columnWidth) / 2);
   let totalHeight = 0;
   for (const entry of entries) {
-    totalHeight += committedTextMetrics(entry.text).height;
-  }
-  block = Math.max(inset, (viewportHeight - totalHeight) / 2);
-  for (const entry of entries) {
     const layout = committedTextMetrics(entry.text);
-    entry.text.position.set(left, -block, 0);
-    block += layout.height;
+    columnWidth = Math.max(columnWidth, layout.width);
+    entry.text.position.set(0, -totalHeight, 0);
+    totalHeight += layout.height;
+  }
+  const left = Math.max(inset, (viewportWidth - columnWidth) / 2);
+  const top = Math.max(inset, (viewportHeight - totalHeight) / 2);
+  for (const entry of entries) {
+    entry.text.position.set(left, entry.text.position.y - top, 0);
   }
 }
 

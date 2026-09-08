@@ -18,7 +18,15 @@ interface FreshSceneSample {
   readonly workload: string;
 }
 
-const workloads = ['off-axis-3d', 'dynamic-layout', 'paint-effects', 'icon-grid', 'rich-text'] as const;
+const workloads = [
+  'off-axis-3d',
+  'dynamic-layout',
+  'paint-effects',
+  'icon-grid',
+  'rich-text',
+  'paragraph-stress',
+  'editorial',
+] as const;
 const roundsParameter = Number(new URL(location.href).searchParams.get('rounds') ?? '7');
 if (!Number.isSafeInteger(roundsParameter) || roundsParameter <= 0 || roundsParameter > 20) {
   throw new RangeError('fresh-scene rounds must be an integer in [1, 20]');

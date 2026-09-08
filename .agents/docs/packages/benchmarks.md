@@ -481,8 +481,14 @@ Paragraph Stress can opt into Chrome User Timing with `?textTimings=1`. Its reta
 property staging, Rust update plus demanded measurement, clean publication, renderer submission, and the package's
 internal Three phases. The production path performs no timing calls while the option is absent. The workload now asks
 for layout metrics before explicit scene publication, so the semantic mask shares the pending mutation and the later
-matrix traversal sees clean Rust state. Every workload now shares one root, because a paragraph batches its own spans
-and no workload states a compositing mode.
+matrix traversal sees clean Rust state. Automated width and font motion runs inside the workload's existing renderer
+frame hook and writes the retained Text directly; it no longer publishes Koota control state and rerenders the React
+control/chart tree on every rounded step. The frame hook reuses one motion record, skips identical steps, publishes one
+synchronous retained update when width or size changes, and reports the actual animated size and measure through the
+same live attributes. Editorial similarly measures each Text once per reflow and reuses its transform as temporary
+stacking state rather than reconciling the same two Texts six times. The isolated fresh-scene performance workflow now
+includes both active-resize workloads alongside the draw-batching cases. Every workload shares one root, because a
+paragraph batches its own spans and no workload states a compositing mode.
 
 Two direct Chromium 149/WebGPU/DPR-2 Paragraph Stress comparisons retained 11,510 glyphs and one draw in every case.
 Candidate/main retained-update medians were 0.665/0.795 and 0.750/0.785 ms; update-plus-measure medians were 0.510/0.580

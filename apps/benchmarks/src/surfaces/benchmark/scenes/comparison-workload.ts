@@ -367,6 +367,7 @@ async function createComparisonWorkloadRuntime(
   const dynamicWidthsScratch = new Float64Array(DYNAMIC_LAYOUT_TEXT.length);
   const workloadAnimationScratch: ComparisonWorkloadAnimationScratch = {
     dynamicWidths: dynamicWidthsScratch,
+    paragraphStress: { fontSize: 0, layoutWidthPercent: 0, scrollProgress: 0 },
     textLadderPosition: textLadderPositionScratch,
     zoomText: zoomAnimationState,
   };
@@ -929,8 +930,16 @@ async function createComparisonWorkloadRuntime(
         } else {
           measureVisibleEntries(entries, drawRoot, zoomScale, visibleEntryMetrics, visibleGeometryScratch);
         }
+        const authoredCssFontSize =
+          configuration.workload === 'paragraph-stress'
+            ? workloadAnimationScratch.paragraphStress.fontSize
+            : configuration.fontSize;
         const effectiveCssFontSize =
-          configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX * zoomScale : configuration.fontSize;
+          configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX * zoomScale : authoredCssFontSize;
+        const appliedLayoutWidthRatio =
+          configuration.workload === 'paragraph-stress'
+            ? workloadAnimationScratch.paragraphStress.layoutWidthPercent / 100
+            : configuration.layoutWidthRatio;
         const framebufferGpuBytes = rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4;
         const currentLoadedFonts = loadedFonts();
         measureLoadedFonts(currentLoadedFonts, loadedFontMetrics);
@@ -980,8 +989,8 @@ async function createComparisonWorkloadRuntime(
           appliedAmount: configuration.amount,
           appliedAnimationEnabled: configuration.animationEnabled,
           appliedAnimationSpeed: configuration.animationSpeed,
-          appliedFontSize: configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX : configuration.fontSize,
-          appliedLayoutWidthRatio: configuration.layoutWidthRatio,
+          appliedFontSize: configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX : authoredCssFontSize,
+          appliedLayoutWidthRatio,
           appliedPaintOpacity: configuration.paintOpacity,
           appliedPaintShadowEnabled: technique === 'mtsdf' && configuration.paintShadowEnabled,
           appliedPaintStrokeWidth: technique === 'mtsdf' ? configuration.paintStrokeWidth : 0,
@@ -1008,7 +1017,7 @@ async function createComparisonWorkloadRuntime(
         if (technique === 'bitmap') {
           const strikePpem = selectBitmapStrikePpem(
             currentStatsFont.bitmapStrikes,
-            configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX : configuration.fontSize,
+            configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX : authoredCssFontSize,
             rendererViewport.pixelRatio,
           );
           onStats({

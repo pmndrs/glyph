@@ -12,6 +12,11 @@
   `/three`, `/three/typegpu`, and direct `/typegpu`; shader barrels retain package-resolution, graph-isolation, and
   tree-shaking proofs without a redundant per-technique size matrix. No shader algorithm changed.
 
+- **Removed benchmark-shell work from active paragraph reflow** — Paragraph Stress now applies its rounded width and
+  font-size motion inside the retained scene frame hook rather than republishing reactive control state on every step;
+  unchanged frames stage nothing and live attributes report the actual animated values. Editorial measures each Text
+  once per reflow, and the isolated performance workflow now includes both active-resize workloads.
+
 - **Pinned the paragraph-batching and TypeGPU recovery** — A disposable implementation plan now records the exact PR
   #46 merged-main baseline, the #128-to-#161 stack order and authorship-preserving rebase procedure, already-checkpointed
   fixes, validated correctness findings, resize-performance attribution, TypeGPU export and optional-peer gates, final

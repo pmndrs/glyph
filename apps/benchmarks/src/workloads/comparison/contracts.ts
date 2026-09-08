@@ -67,6 +67,7 @@ export interface ComparisonWorkloadCreateContext extends ComparisonWorkloadLayou
 /** Reused host-owned scratch storage exposed to workload frame hooks without per-frame allocation. */
 export interface ComparisonWorkloadAnimationScratch {
   readonly dynamicWidths: Float64Array;
+  readonly paragraphStress: { fontSize: number; layoutWidthPercent: number; scrollProgress: number };
   readonly textLadderPosition: { x: number; y: number };
   readonly zoomText: { phraseIndex: number; phraseRevision: number; progress: number };
 }

@@ -44,17 +44,6 @@ export function setParagraphStressMotionFrame(
   frame.scrollProgress = paragraphStressScrollProgressForCycle(cycle);
 }
 
-/** Computes the render-loop-only scroll component without creating a complete motion frame. */
-export function paragraphStressScrollProgress(elapsedMs: number, animationSpeed: number): number {
-  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) {
-    throw new RangeError('paragraph stress elapsed time must be finite and nonnegative');
-  }
-  if (!Number.isFinite(animationSpeed) || animationSpeed < 0 || animationSpeed > 100) {
-    throw new RangeError('paragraph stress animation speed must be in [0, 100]');
-  }
-  return paragraphStressScrollProgressForCycle(paragraphStressCycle(elapsedMs, animationSpeed));
-}
-
 function validateParagraphStressMotion(elapsedMs: number, animationSpeed: number, startFontSize: number): void {
   if (!Number.isFinite(elapsedMs) || elapsedMs < 0) {
     throw new RangeError('paragraph stress elapsed time must be finite and nonnegative');
