@@ -40,14 +40,82 @@ export interface LiveFrameTelemetrySnapshot {
   readonly gpuHistoryCursor: LiveFrameHistoryCursor;
 }
 
+export interface LiveFrameTelemetryCaptureOptions {
+  readonly cpuSampleCount: number;
+  readonly gpuSampleCount: number;
+  readonly signal?: AbortSignal;
+}
+
+export interface LiveFrameTelemetryCapture {
+  /** The last frame already in flight before the capture began. */
+  readonly startedAfterFrameId: number;
+  /** Exact finite CPU durations collected after `startedAfterFrameId`. */
+  readonly cpuMs: Float64Array;
+  /** Exact finite GPU query completions whose source frames followed `startedAfterFrameId`. */
+  readonly gpuMs: Float64Array;
+}
+
+interface LiveFrameTelemetryCaptureRequest {
+  accepted: boolean;
+  readonly options: LiveFrameTelemetryCaptureOptions;
+  readonly resolve: (capture: LiveFrameTelemetryCapture) => void;
+  readonly reject: (reason: unknown) => void;
+}
+
+const LIVE_FRAME_TELEMETRY_CAPTURE_EVENT = 'pmndrs-live-frame-telemetry-capture';
+
 export interface LiveFrameTelemetry {
   readonly gpuTimingSupported: boolean;
   /** Starts a fresh scene-local sample window while preserving globally unique frame IDs. */
   reset(): void;
+  /** Allocates and records an exact finite window only for an explicit benchmark capture. */
+  capture(options: LiveFrameTelemetryCaptureOptions): Promise<LiveFrameTelemetryCapture>;
   beginFrame(timestampMs: number): number;
   endFrame(frameId: number, durationMs: number): LiveFrameTelemetrySnapshot | undefined;
   recordGpu(frameId: number, durationMs: number): boolean;
   discardGpu(frameId: number): boolean;
+}
+
+/** Requests an on-demand capture from the live telemetry instance bound to `target`. */
+export function requestLiveFrameTelemetryCapture(
+  target: EventTarget,
+  options: LiveFrameTelemetryCaptureOptions,
+): Promise<LiveFrameTelemetryCapture> {
+  return new Promise((resolve, reject) => {
+    const detail: LiveFrameTelemetryCaptureRequest = { accepted: false, options, resolve, reject };
+    target.dispatchEvent(
+      new CustomEvent<LiveFrameTelemetryCaptureRequest>(LIVE_FRAME_TELEMETRY_CAPTURE_EVENT, {
+        cancelable: true,
+        detail,
+      }),
+    );
+    if (!detail.accepted) reject(new DOMException('no live telemetry capture target is available', 'NotFoundError'));
+  });
+}
+
+/** Binds the explicit capture protocol without changing ordinary rolling telemetry publication. */
+export function bindLiveFrameTelemetryCaptureRequests(target: EventTarget, telemetry: LiveFrameTelemetry): () => void {
+  const requestCapture: EventListener = (event) => {
+    const detail = captureRequestDetail(event);
+    if (detail === undefined || detail.accepted) return;
+    detail.accepted = true;
+    event.preventDefault();
+    try {
+      void telemetry.capture(detail.options).then(detail.resolve, detail.reject);
+    } catch (error) {
+      detail.reject(error);
+    }
+  };
+  target.addEventListener(LIVE_FRAME_TELEMETRY_CAPTURE_EVENT, requestCapture);
+  return () => target.removeEventListener(LIVE_FRAME_TELEMETRY_CAPTURE_EVENT, requestCapture);
+}
+
+interface PendingLiveFrameTelemetryCapture extends LiveFrameTelemetryCapture {
+  cpuLength: number;
+  gpuLength: number;
+  readonly resolve: (capture: LiveFrameTelemetryCapture) => void;
+  readonly reject: (reason: unknown) => void;
+  readonly unlinkAbort: () => void;
 }
 
 export function createLiveFrameTelemetry(options?: {
@@ -87,10 +155,34 @@ export function createLiveFrameTelemetry(options?: {
   let reportedFrame = 0;
   let latestSnapshot: LiveFrameTelemetrySnapshot | undefined;
   let latestGpuMs: number | undefined;
+  let pendingCapture: PendingLiveFrameTelemetryCapture | undefined;
+
+  const settleCapture = (): void => {
+    const capture = pendingCapture;
+    if (capture === undefined || capture.cpuLength < capture.cpuMs.length || capture.gpuLength < capture.gpuMs.length) {
+      return;
+    }
+    pendingCapture = undefined;
+    capture.unlinkAbort();
+    capture.resolve({
+      startedAfterFrameId: capture.startedAfterFrameId,
+      cpuMs: capture.cpuMs,
+      gpuMs: capture.gpuMs,
+    });
+  };
+
+  const rejectCapture = (reason: unknown): void => {
+    const capture = pendingCapture;
+    if (capture === undefined) return;
+    pendingCapture = undefined;
+    capture.unlinkAbort();
+    capture.reject(reason);
+  };
 
   return {
     gpuTimingSupported,
     reset() {
+      rejectCapture(new DOMException('live telemetry capture was reset', 'AbortError'));
       frameTimestampHistory.fill(0);
       frameDurationHistory.fill(Number.NaN);
       frameIds.fill(0);
@@ -108,6 +200,36 @@ export function createLiveFrameTelemetry(options?: {
       reportedFrame = frameCount;
       latestSnapshot = undefined;
       latestGpuMs = undefined;
+    },
+    capture(captureOptions) {
+      const cpuSampleCount = nonnegativeSafeInteger(captureOptions.cpuSampleCount, 'CPU capture sample count');
+      const gpuSampleCount = nonnegativeSafeInteger(captureOptions.gpuSampleCount, 'GPU capture sample count');
+      if (cpuSampleCount === 0 && gpuSampleCount === 0) {
+        throw new RangeError('live telemetry capture must request at least one sample');
+      }
+      if (gpuSampleCount > 0 && !gpuTimingSupported) {
+        throw new DOMException('GPU timing is unavailable', 'NotSupportedError');
+      }
+      if (pendingCapture !== undefined) {
+        throw new DOMException('a live telemetry capture is already active', 'InvalidStateError');
+      }
+      captureOptions.signal?.throwIfAborted();
+      return new Promise<LiveFrameTelemetryCapture>((resolve, reject) => {
+        const abort = (): void => rejectCapture(captureOptions.signal?.reason ?? captureAbortedError());
+        const unlinkAbort = (): void => captureOptions.signal?.removeEventListener('abort', abort);
+        pendingCapture = {
+          startedAfterFrameId: frameCount,
+          cpuMs: new Float64Array(cpuSampleCount),
+          gpuMs: new Float64Array(gpuSampleCount),
+          cpuLength: 0,
+          gpuLength: 0,
+          resolve,
+          reject,
+          unlinkAbort,
+        };
+        captureOptions.signal?.addEventListener('abort', abort, { once: true });
+        settleCapture();
+      });
     },
     beginFrame(timestampMs) {
       if (!Number.isFinite(timestampMs)) throw new RangeError('frame timestamp must be finite');
@@ -162,6 +284,12 @@ export function createLiveFrameTelemetry(options?: {
       const historyIndex = frameHistoryIndex(frameIds, frameId);
       if (historyIndex === undefined) return undefined;
       submitHistory[historyIndex] = durationMs;
+      const capture = pendingCapture;
+      if (capture !== undefined && frameId > capture.startedAfterFrameId && capture.cpuLength < capture.cpuMs.length) {
+        capture.cpuMs[capture.cpuLength] = durationMs;
+        capture.cpuLength += 1;
+        settleCapture();
+      }
       if (reportFrames[historyIndex] !== 1) return undefined;
       const refreshRateHz =
         explicitRefreshRateHz ??
@@ -191,6 +319,17 @@ export function createLiveFrameTelemetry(options?: {
       assertGpuFrameId(frameId);
       if (!Number.isFinite(durationMs) || durationMs < 0) {
         throw new RangeError('GPU frame duration must be finite and nonnegative');
+      }
+      const capture = pendingCapture;
+      if (
+        capture !== undefined &&
+        frameId > capture.startedAfterFrameId &&
+        frameId <= frameCount &&
+        capture.gpuLength < capture.gpuMs.length
+      ) {
+        capture.gpuMs[capture.gpuLength] = durationMs;
+        capture.gpuLength += 1;
+        settleCapture();
       }
       const historyIndex = frameHistoryIndex(frameIds, frameId);
       if (historyIndex === undefined) return false;
@@ -359,6 +498,32 @@ function optionalPositive(value: number | undefined, label: string): number | un
   if (value === undefined) return undefined;
   if (!Number.isFinite(value) || value <= 0) throw new RangeError(`${label} must be positive`);
   return value;
+}
+
+function nonnegativeSafeInteger(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 0) throw new RangeError(`${label} must be a nonnegative safe integer`);
+  return value;
+}
+
+function captureAbortedError(): DOMException {
+  return new DOMException('live telemetry capture was aborted', 'AbortError');
+}
+
+function captureRequestDetail(event: Event): LiveFrameTelemetryCaptureRequest | undefined {
+  const detail: unknown = (event as CustomEvent<unknown>).detail;
+  if (detail === null || typeof detail !== 'object' || Array.isArray(detail)) return undefined;
+  if (
+    !('accepted' in detail) ||
+    typeof detail.accepted !== 'boolean' ||
+    !('options' in detail) ||
+    !('resolve' in detail) ||
+    typeof detail.resolve !== 'function' ||
+    !('reject' in detail) ||
+    typeof detail.reject !== 'function'
+  ) {
+    return undefined;
+  }
+  return detail as LiveFrameTelemetryCaptureRequest;
 }
 
 function assertGpuFrameId(frameId: number): void {

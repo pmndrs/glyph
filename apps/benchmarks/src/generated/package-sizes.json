@@ -32,11 +32,11 @@
       "label": "Core JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "480e15fdca9fe5ca3fa8af177b40fddab76056ca9fa86fcf130e307af1bde02a",
-      "rawBytes": 330866,
-      "minifiedBytes": 322809,
-      "gzipBytes": 81358,
-      "brotliBytes": 67664
+      "sha256": "b1c8c410dee2ad8753e106f5a96dcc49b8e1920d7631943bf356ff5529edac55",
+      "rawBytes": 330873,
+      "minifiedBytes": 322816,
+      "gzipBytes": 81361,
+      "brotliBytes": 67647
     },
     {
       "id": "text-shaper-wasm",

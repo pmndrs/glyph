@@ -14,6 +14,15 @@
 
 ## 2026-09-07
 
+- **Closed the adversarial retained-transaction review** — Rust now indexes semantic input sections by paragraph ID
+  before applying them in retained semantic order, so an atomic batch may carry valid text, style, constraint, and inline
+  tables in any paragraph-group order without changing glyph records or adding work to empty frames. Three query
+  reconciliation includes only render-active members plus the explicitly queried detached Text, preventing inspection of
+  one paragraph from binding unrelated detached siblings. Rank-only updates no longer replace unchanged metric objects,
+  and the full flow builder preserves negative half-leading for an authored tight line box. The fresh-scene performance
+  workflow now requests exact finite 120-sample CPU and completed-GPU windows without changing the continuously displayed
+  rolling telemetry.
+
 - **Corrected retained-performance attribution** — Content-only Three updates now recognize the already-owned normalized
   style, layout, and constraint identities before merge, validation, deep comparison, or cloning; actual full-field
   reassignments retain deep snapshot validation. The specialized runner now strips pnpm's option delimiter and places

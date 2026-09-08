@@ -486,6 +486,17 @@ test('Rust ranks interleaved TextGroup scopes only within their stable root slot
     [authored[2], authored[1], authored[0], authored[3]],
     'detach and reattach preserves the root membership slots used by scoped permutation',
   );
+  const restagedMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+  firstGroup.material = restagedMaterial;
+  secondGroup.material = restagedMaterial;
+  scene.updateMatrixWorld(true);
+  assert.equal(firstGroup.error, undefined, 'a shared restage accepts reattached planner insertion order');
+  assert.equal(secondGroup.error, undefined);
+  assert.deepEqual(
+    sequence(),
+    [authored[2], authored[1], authored[0], authored[3]],
+    'Rust consumes paragraph-keyed content independently of planner insertion order',
+  );
 
   for (const text of [firstA, secondA, firstB, secondB]) text.dispose();
   firstGroup.dispose();
@@ -2408,6 +2419,41 @@ test('root-owned Text.measure creates only its implicit measurement batch before
   label.dispose();
   font.dispose();
   fontDomain.dispose();
+});
+
+test('layout queries do not retain unrelated detached Texts', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const detached = three.createText({ font, text: 'detached sibling' });
+  const attached = three.createText({ font, text: 'attached query target' });
+  group.add(detached, attached);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+  assert.equal(detached.bound, true);
+  assert.equal(attached.bound, true);
+
+  group.remove(detached);
+  scene.updateMatrixWorld(true);
+  assert.equal(detached.bound, false);
+  assert.equal(attached.bound, true);
+
+  assert.ok(attached.measure().glyphCount > 0);
+  assert.equal(detached.bound, false, 'measuring a sibling cannot retain an unrelated detached Text');
+  assert.ok(attached.glyphs().glyphCount > 0);
+  assert.equal(detached.bound, false, 'inspecting a sibling cannot retain an unrelated detached Text');
+
+  assert.ok(detached.measure().glyphCount > 0, 'the explicitly queried detached Text remains measurable');
+  assert.equal(detached.bound, true);
+  scene.updateMatrixWorld(true);
+  assert.equal(detached.bound, false, 'the next draw removes only the explicitly queried detached Text');
+  assert.equal(attached.bound, true);
+
+  detached.dispose();
+  attached.dispose();
+  group.dispose();
+  font.dispose();
 });
 
 test('Bitmap strike changes fully initialize a replacement indexed batch', async (t) => {

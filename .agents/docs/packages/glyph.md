@@ -346,7 +346,9 @@ result identity; rejected calls are evicted for retry. The consuming handle supp
 undeclared face is passed to Text; imperative Three rejects an unloaded selected format before creating retained state.
 Explicit `Text.measure()` and `Text.glyphs()` calls synchronously query one Text through its selected handle. They may pay
 one additional Wasm crossing, but do not traverse a scene, publish commands, or realize renderer resources. Normal
-rendering still publishes every dirty root through one `glyph.shape()` crossing. The former renderer-free
+rendering still publishes every dirty root through one `glyph.shape()` crossing. A query reconciles render-active root
+members plus the explicitly queried Text; querying an attached sibling cannot bind an unrelated detached Text, while a
+detached Text can still measure or inspect itself without entering the rendered batch. The former renderer-free
 `createParagraph()` path was removed because its private engine, handle, Codec, planner, font bindings, and caches
 duplicated the GlyphConfig pipeline (D-339).
 
@@ -665,7 +667,10 @@ shaping and layout invalidation. These cases do not republish paragraph membersh
 exclusions, or inline-object records; assigning an already-plain string to itself does not advance desired state or cross
 the Wasm boundary. Pending style-limit accounting follows the same style-dirty predicate as wire emission. Rust limits
 implicit paragraph inference to an empty planner, so a content batch may address several existing paragraphs without
-dummy lifecycle upserts. An omitted authored `maxLines` is encoded with Rust's existing zero sentinel for the root limit,
+dummy lifecycle upserts. Rust indexes each populated semantic input table by paragraph ID before visiting retained
+semantic order, so valid atomic content batches do not depend on the adapter's Set insertion order. The reusable compact
+span index is empty on ordinary clean frames and retains its capacity after the first populated batch; glyph, cluster,
+and plan record layouts remain unchanged. An omitted authored `maxLines` is encoded with Rust's existing zero sentinel for the root limit,
 so ordinary geometry no longer depends on string length. In the 684-label workload this reduces the request from 209,448
 to 23,400 bytes and the fresh
 same-machine remote-main A/B from 24.24–25.87 ms to final post-review medians of 11.39–11.89 ms while retaining one draw
@@ -1135,8 +1140,8 @@ origin, and final-line state are unchanged copy their committed positioned SoA s
 only its unused end. Retained lines copy their indexed decoration slice with their glyph and semantic slices; a changed
 slot start invalidates reuse because it changes the published semantic line extent. Nontrivial bidi, center/end
 alignment, justification changes, boundary reshaping, and any changed line geometry take the full positioning path. At 22,000 glyphs and 101 widening updates, the final candidate measured
-1.858/4.849 ms median/p95 versus exact remote main's 2.991/5.256 ms. The dedicated measurement query measured
-0.327/0.455 ms versus 0.517/0.711 ms. Two browser Paragraph Stress A/B pairs retained 11,510 glyphs in one draw: the
+1.882/4.553 ms median/p95 versus exact remote main's 2.991/5.256 ms. The dedicated measurement query measured
+0.282/0.341 ms versus 0.517/0.711 ms. Two browser Paragraph Stress A/B pairs retained 11,510 glyphs in one draw: the
 candidate/main retained-update medians were 0.665/0.795 and 0.750/0.785 ms, while update-plus-measure medians were
 0.510/0.580 and 0.565/0.605 ms. These machine-local observations establish repeated direction and a lower common-case
 cost; width reflow remains above the sub-1-ms interactive target and is still the last post-shaping performance frontier.

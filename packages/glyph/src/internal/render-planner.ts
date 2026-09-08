@@ -630,7 +630,7 @@ class RenderPlannerImpl {
     if (!state.dirty) this.#pendingParagraphCount += 1;
     const lifecycleOrderChanged = state.metrics.order !== order;
     const scopedOrderChanged = state.orderScope !== orderScope || !Object.is(state.orderRank, orderRank);
-    state.metrics = { ...state.metrics, order };
+    if (lifecycleOrderChanged) state.metrics = { ...state.metrics, order };
     state.orderScope = orderScope;
     state.orderRank = orderRank;
     state.dirty = true;

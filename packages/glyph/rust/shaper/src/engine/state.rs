@@ -24,6 +24,7 @@ use super::{
     positioning::{PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT},
     render_plan::RenderPlanView,
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
+    semantic_wire::RecordSpan,
     shaping_state::{BoundaryShape, BoundaryShapeArena, ShapeArena, ShapingRun, ShapingRunArena},
     sort,
     staged::{Staged, StyleStage, TextStage},
@@ -220,6 +221,7 @@ struct PlannerState {
     ordered_paragraphs: Vec<ParagraphOrder>,
     pending_ordered_paragraphs: Vec<ParagraphOrder>,
     pending_semantic_order: Vec<ParagraphOrder>,
+    semantic_input_spans: Vec<ParagraphInputSpans>,
     order_sort_scratch: Vec<(u64, u32)>,
     rank_sort_scratch: Vec<(u64, u32)>,
     ranked_paragraphs: Vec<RankedParagraph>,
@@ -258,6 +260,60 @@ struct RankedParagraph {
     id: u32,
     rank: f64,
     slot: u32,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct ParagraphInputSpans {
+    id: u32,
+    text: RecordSpan,
+    styles: RecordSpan,
+    constraints: RecordSpan,
+    inline_objects: RecordSpan,
+}
+
+#[derive(Clone, Copy)]
+enum ParagraphInputKind {
+    Text,
+    Style,
+    Constraint,
+    InlineObject,
+}
+
+impl ParagraphInputSpans {
+    fn span_mut(&mut self, kind: ParagraphInputKind) -> &mut RecordSpan {
+        match kind {
+            ParagraphInputKind::Text => &mut self.text,
+            ParagraphInputKind::Style => &mut self.styles,
+            ParagraphInputKind::Constraint => &mut self.constraints,
+            ParagraphInputKind::InlineObject => &mut self.inline_objects,
+        }
+    }
+}
+
+fn index_paragraph_records(
+    paragraphs: &mut [ParagraphInputSpans],
+    record_count: usize,
+    paragraph_id: impl Fn(usize) -> Option<u32>,
+    kind: ParagraphInputKind,
+) -> Result<(), EngineError> {
+    let mut start = 0;
+    while start < record_count {
+        let id = paragraph_id(start).ok_or(EngineError::InvalidRequest)?;
+        let mut end = start + 1;
+        while end < record_count && paragraph_id(end) == Some(id) {
+            end += 1;
+        }
+        let paragraph_index = paragraphs
+            .binary_search_by_key(&id, |paragraph| paragraph.id)
+            .map_err(|_| EngineError::InvalidRequest)?;
+        let span = paragraphs[paragraph_index].span_mut(kind);
+        if !span.is_empty() {
+            return Err(EngineError::InvalidRequest);
+        }
+        *span = RecordSpan { start, end };
+        start = end;
+    }
+    Ok(())
 }
 
 #[derive(Default)]
@@ -1207,25 +1263,21 @@ impl TextEngine {
                     request.limits.max_paragraphs,
                 )?;
             }
-            let (mut text_cursor, mut style_cursor) = (0, 0);
-            let (mut constraint_cursor, mut inline_object_cursor) = (0, 0);
+            planner.prepare_semantic_input_spans(request)?;
             for order_index in 0..planner.active_semantic_order().len() {
                 let paragraph_id = planner.active_semantic_order()[order_index].id;
+                let spans = planner.semantic_input_spans(paragraph_id)?;
                 let text = request
                     .text_mutations
-                    .take_paragraph(paragraph_id, &mut text_cursor)
+                    .span(spans.text)
                     .map_err(|_| EngineError::InvalidRequest)?;
                 let styles = request
                     .style_mutations
-                    .take_paragraph(paragraph_id, &mut style_cursor)
+                    .span(spans.styles)
                     .map_err(|_| EngineError::InvalidRequest)?;
                 let geometry = request
                     .geometry
-                    .take_paragraph(
-                        paragraph_id,
-                        &mut constraint_cursor,
-                        &mut inline_object_cursor,
-                    )
+                    .spans(spans.constraints, spans.inline_objects)
                     .map_err(|_| EngineError::InvalidRequest)?;
                 let paragraph = planner
                     .paragraph_mut(paragraph_id)
@@ -1281,13 +1333,7 @@ impl TextEngine {
                         .map_err(|error| error.in_paragraph(paragraph_id))?
                 };
             }
-            if text_cursor != request.text_mutations.len()
-                || style_cursor != request.style_mutations.len()
-                || constraint_cursor != request.geometry.constraint_count()
-                || inline_object_cursor != request.geometry.inline_object_count()
-            {
-                return Err(EngineError::InvalidRequest);
-            }
+            planner.semantic_input_spans.clear();
             let positioned_changed = planner.lifecycle_changed
                 || planner
                     .paragraphs
@@ -1857,6 +1903,74 @@ impl PlannerState {
             .map(|index| &mut self.paragraphs[index])
     }
 
+    fn prepare_semantic_input_spans(
+        &mut self,
+        request: UpdateRequest<'_>,
+    ) -> Result<(), EngineError> {
+        self.semantic_input_spans.clear();
+        if request.text_mutations.len() == 0
+            && request.style_mutations.len() == 0
+            && request.geometry.constraint_count() == 0
+            && request.geometry.inline_object_count() == 0
+        {
+            return Ok(());
+        }
+
+        self.semantic_input_spans
+            .try_reserve(self.active_semantic_order().len())
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        for paragraph in &self.paragraphs {
+            if !paragraph.pending_remove {
+                self.semantic_input_spans.push(ParagraphInputSpans {
+                    id: paragraph.id,
+                    ..ParagraphInputSpans::default()
+                });
+            }
+        }
+        index_paragraph_records(
+            &mut self.semantic_input_spans,
+            request.text_mutations.len(),
+            |index| request.text_mutations.paragraph_id(index),
+            ParagraphInputKind::Text,
+        )?;
+        index_paragraph_records(
+            &mut self.semantic_input_spans,
+            request.style_mutations.len(),
+            |index| request.style_mutations.paragraph_id(index),
+            ParagraphInputKind::Style,
+        )?;
+        index_paragraph_records(
+            &mut self.semantic_input_spans,
+            request.geometry.constraint_count(),
+            |index| request.geometry.paragraph_id(index),
+            ParagraphInputKind::Constraint,
+        )?;
+        let constraint_count = request.geometry.constraint_count();
+        index_paragraph_records(
+            &mut self.semantic_input_spans,
+            request.geometry.inline_object_count(),
+            |index| {
+                constraint_count
+                    .checked_add(index)
+                    .and_then(|index| request.geometry.paragraph_id(index))
+            },
+            ParagraphInputKind::InlineObject,
+        )
+    }
+
+    fn semantic_input_spans(&self, paragraph_id: u32) -> Result<ParagraphInputSpans, EngineError> {
+        if self.semantic_input_spans.is_empty() {
+            return Ok(ParagraphInputSpans {
+                id: paragraph_id,
+                ..ParagraphInputSpans::default()
+            });
+        }
+        self.semantic_input_spans
+            .binary_search_by_key(&paragraph_id, |spans| spans.id)
+            .map(|index| self.semantic_input_spans[index])
+            .map_err(|_| EngineError::InvalidRequest)
+    }
+
     fn prepare_lifecycle(
         &mut self,
         mutations: super::semantic_wire::ParagraphMutationBatch<'_>,
@@ -2161,6 +2275,7 @@ impl PlannerState {
         self.speculative = None;
         self.plan.abort();
         self.semantic_records.clear();
+        self.semantic_input_spans.clear();
         for paragraph in &mut self.paragraphs {
             paragraph.state.abort_all();
             paragraph.positioned_changed = false;
@@ -4606,8 +4721,9 @@ mod tests {
             frame::{
                 PARAGRAPH_MUTATION_REMOVE, PARAGRAPH_MUTATION_UPSERT, STYLE_FIELD_DIRECTION,
                 STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK, STYLE_FIELD_LINE_HEIGHT,
-                STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FLAG_ROOT, STYLE_MUTATION_REMOVE,
-                STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE, TEXT_MUTATION_REPLACE_UTF16,
+                STYLE_FIELD_MATERIAL, STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FLAG_ROOT,
+                STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE,
+                TEXT_MUTATION_REPLACE_UTF16,
             },
             semantic_wire::{
                 parse_paragraph_mutations, parse_paragraph_order_mutations, parse_style_mutations,
@@ -5748,6 +5864,99 @@ mod tests {
     }
 
     #[test]
+    fn semantic_mutation_groups_are_keyed_independent_of_planner_insertion_order() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine.register_font_stack(7, &[42]).unwrap();
+        engine.create_root(4).unwrap();
+        engine.reserve_root_text(4, 8).unwrap();
+
+        let lifecycle = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 1),
+        ]);
+        let initial_text = paragraph_text_mutation_bytes(&[(1, 0, 0, &[0x61]), (2, 0, 0, &[0x62])]);
+        let mut initial = update(0, 0, 0);
+        initial.limits.max_paragraphs = 2;
+        initial.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        initial.text_mutations =
+            parse_text_mutations(&initial_text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+        let semantic_input_capacity = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .semantic_input_spans
+            .capacity();
+        assert!(semantic_input_capacity >= 2);
+
+        let reverse_insertion =
+            paragraph_text_mutation_bytes(&[(2, 0, 1, &[0x64]), (1, 0, 1, &[0x63])]);
+        let reverse_styles = paragraph_root_style_bytes(&[(2, 12), (1, 11)]);
+        let mut next = update(1, 1, 1);
+        next.limits.max_paragraphs = 2;
+        next.text_mutations =
+            parse_text_mutations(&reverse_insertion, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        next.style_mutations =
+            parse_style_mutations(&reverse_styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        let prepared = engine.prepare_update(next, 2).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let planner = engine.planners.get(&4).unwrap();
+        assert_eq!(
+            planner.semantic_input_spans.capacity(),
+            semantic_input_capacity,
+            "a populated retained update must reuse the paragraph-index capacity"
+        );
+        assert_eq!(
+            planner
+                .semantic_order
+                .iter()
+                .map(|paragraph| paragraph.id)
+                .collect::<Vec<_>>(),
+            [1, 2]
+        );
+        assert_eq!(
+            planner.paragraph(1).unwrap().state.text.committed().units,
+            [0x63]
+        );
+        assert_eq!(
+            planner.paragraph(2).unwrap().state.text.committed().units,
+            [0x64]
+        );
+        assert_eq!(
+            planner
+                .paragraph(1)
+                .unwrap()
+                .state
+                .styles
+                .committed()
+                .resolved
+                .segments()[0]
+                .style
+                .material_id,
+            11
+        );
+        assert_eq!(
+            planner
+                .paragraph(2)
+                .unwrap()
+                .state
+                .styles
+                .committed()
+                .resolved
+                .segments()[0]
+                .style
+                .material_id,
+            12
+        );
+    }
+
+    #[test]
     fn existing_paragraphs_accept_content_only_mutations_without_lifecycle_upserts() {
         let mut engine = TextEngine::default();
         engine
@@ -6286,6 +6495,40 @@ mod tests {
                     payload_offset += 2;
                 }
             }
+        }
+        bytes
+    }
+
+    fn paragraph_root_style_bytes(records: &[(u32, u32)]) -> Vec<u8> {
+        let record_offset = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let stride = abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize;
+        let mut bytes = vec![0; record_offset + records.len() * stride];
+        for (index, &(paragraph_id, material_id)) in records.iter().enumerate() {
+            let start = record_offset + index * stride;
+            let record = &mut bytes[start..start + stride];
+            record[abi::ENGINE_STYLE_MUTATION_OPCODE] = STYLE_MUTATION_UPSERT;
+            record[abi::ENGINE_STYLE_MUTATION_FLAGS] = STYLE_FLAG_ROOT;
+            write_u32(record, abi::ENGINE_STYLE_MUTATION_STYLE_ID, 1);
+            write_u32(
+                record,
+                abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID,
+                paragraph_id,
+            );
+            write_u32(
+                record,
+                abi::ENGINE_STYLE_MUTATION_FIELD_MASK,
+                STYLE_FIELD_FONT_STACK
+                    | STYLE_FIELD_MATERIAL
+                    | STYLE_FIELD_FONT_SIZE
+                    | STYLE_FIELD_LINE_HEIGHT
+                    | STYLE_FIELD_RASTER_PIXEL_RATIO,
+            );
+            write_u32(record, abi::ENGINE_STYLE_MUTATION_TEXT_END, 1);
+            write_u32(record, abi::ENGINE_STYLE_MUTATION_FONT_STACK_HANDLE, 7);
+            write_u32(record, abi::ENGINE_STYLE_MUTATION_MATERIAL_ID, material_id);
+            write_f32(record, abi::ENGINE_STYLE_MUTATION_FONT_SIZE, 16.0);
+            write_f32(record, abi::ENGINE_STYLE_MUTATION_LINE_HEIGHT, 1.2);
+            write_f32(record, abi::ENGINE_STYLE_MUTATION_RASTER_PIXEL_RATIO, 1.0);
         }
         bytes
     }

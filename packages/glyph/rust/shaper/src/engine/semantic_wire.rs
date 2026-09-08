@@ -62,6 +62,18 @@ pub(crate) struct TextMutation<'a> {
     pub insert_utf16_le: &'a [u8],
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct RecordSpan {
+    pub start: usize,
+    pub end: usize,
+}
+
+impl RecordSpan {
+    pub(crate) fn is_empty(self) -> bool {
+        self.start == self.end
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct StyleMutationBatch<'a> {
     request: &'a [u8],
@@ -248,6 +260,28 @@ impl GeometryBatch<'_> {
             regions: self.regions,
             exclusions: self.exclusions,
             inline_objects,
+        })
+    }
+
+    pub(crate) fn spans(
+        self,
+        constraints: RecordSpan,
+        inline_objects: RecordSpan,
+    ) -> Result<Self, u32> {
+        Ok(Self {
+            request: self.request,
+            constraints: records_span(
+                self.constraints,
+                abi::ENGINE_CONSTRAINT_RECORD_SIZE,
+                constraints,
+            )?,
+            regions: self.regions,
+            exclusions: self.exclusions,
+            inline_objects: records_span(
+                self.inline_objects,
+                abi::ENGINE_INLINE_OBJECT_RECORD_SIZE,
+                inline_objects,
+            )?,
         })
     }
 
@@ -528,7 +562,8 @@ impl<'a> TextMutationBatch<'a> {
     }
 
     pub(crate) fn paragraph_id(self, index: usize) -> Option<u32> {
-        self.get(index).map(|mutation| mutation.paragraph_id)
+        let record = record_at(self.records, ENGINE_TEXT_MUTATION_RECORD_SIZE, index)?;
+        read_u32(record, ENGINE_TEXT_MUTATION_PARAGRAPH_ID).ok()
     }
 
     pub(crate) fn take_paragraph(self, paragraph_id: u32, cursor: &mut usize) -> Result<Self, u32> {
@@ -541,6 +576,13 @@ impl<'a> TextMutationBatch<'a> {
                 paragraph_id,
                 cursor,
             )?,
+        })
+    }
+
+    pub(crate) fn span(self, span: RecordSpan) -> Result<Self, u32> {
+        Ok(Self {
+            request: self.request,
+            records: records_span(self.records, ENGINE_TEXT_MUTATION_RECORD_SIZE, span)?,
         })
     }
 
@@ -665,10 +707,8 @@ impl<'a> StyleMutationBatch<'a> {
     }
 
     pub(crate) fn paragraph_id(self, index: usize) -> Option<u32> {
-        match self.get(index)? {
-            StyleMutation::Remove { paragraph_id, .. }
-            | StyleMutation::Upsert(StyleValue { paragraph_id, .. }) => Some(paragraph_id),
-        }
+        let record = record_at(self.records, abi::ENGINE_STYLE_MUTATION_RECORD_SIZE, index)?;
+        read_u32(record, abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID).ok()
     }
 
     pub(crate) fn take_paragraph(self, paragraph_id: u32, cursor: &mut usize) -> Result<Self, u32> {
@@ -681,6 +721,13 @@ impl<'a> StyleMutationBatch<'a> {
                 paragraph_id,
                 cursor,
             )?,
+        })
+    }
+
+    pub(crate) fn span(self, span: RecordSpan) -> Result<Self, u32> {
+        Ok(Self {
+            request: self.request,
+            records: records_span(self.records, abi::ENGINE_STYLE_MUTATION_RECORD_SIZE, span)?,
         })
     }
 
@@ -990,6 +1037,19 @@ fn take_records<'a>(
     records
         .get(start * stride..*cursor * stride)
         .ok_or(STATUS_INVALID_REQUEST)
+}
+
+fn records_span(records: &[u8], stride: u32, span: RecordSpan) -> Result<&[u8], u32> {
+    let stride = usize::try_from(stride).map_err(|_| STATUS_INVALID_REQUEST)?;
+    if span.start > span.end {
+        return Err(STATUS_INVALID_REQUEST);
+    }
+    let start = span
+        .start
+        .checked_mul(stride)
+        .ok_or(STATUS_INVALID_REQUEST)?;
+    let end = span.end.checked_mul(stride).ok_or(STATUS_INVALID_REQUEST)?;
+    records.get(start..end).ok_or(STATUS_INVALID_REQUEST)
 }
 
 fn validate_constraints(constraints: &[u8], limits: UpdateLimits) -> Result<(), u32> {

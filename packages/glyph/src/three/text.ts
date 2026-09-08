@@ -488,12 +488,19 @@ export class ThreeRootHost {
     if (this.#bindScene(texts)) this.#commitTraversal(false);
   }
 
-  /** @internal Stable root membership snapshot used by measurement reconciliation. */
+  /** @internal Stable snapshot of every registered member used when a new Text enters this root. */
   members(): readonly Text<RasterFormatMetadata>[] {
     const members: Text<RasterFormatMetadata>[] = [];
     for (const text of this.#texts) {
       if (text instanceof Text && !text.disposed) members.push(text);
     }
+    return members;
+  }
+
+  /** @internal Render-active members plus the one Text whose detached layout is being queried. */
+  queryMembers(text: Text<RasterFormatMetadata>): readonly Text<RasterFormatMetadata>[] {
+    const members = this.#renderMembers();
+    if (nearestScene(text) === undefined) members.push(text);
     return members;
   }
 
@@ -630,7 +637,7 @@ export class ThreeRootHost {
     return scene !== undefined;
   }
 
-  #renderMembers(): readonly Text<RasterFormatMetadata>[] {
+  #renderMembers(): Text<RasterFormatMetadata>[] {
     const members = this.#renderMemberScratch;
     members.length = 0;
     for (const text of this.#texts) {
@@ -1283,7 +1290,7 @@ class ThreeRootPublication {
 
   measurement(text: Text<RasterFormatMetadata>): ParagraphLayoutSummary {
     this.#assertActive();
-    this.reconcile(this.#root.members());
+    this.reconcile(this.#root.queryMembers(text));
     const entry = this.#entries.get(text);
     if (entry === undefined) throw new Error('Text is not retained by this batch');
     const measurement = entry.handle.measure();
@@ -1293,7 +1300,7 @@ class ThreeRootPublication {
 
   inspection(text: Text<RasterFormatMetadata>): GlyphLayoutInspection {
     this.#assertActive();
-    this.reconcile(this.#root.members());
+    this.reconcile(this.#root.queryMembers(text));
     const entry = this.#entries.get(text);
     if (entry === undefined) throw new Error('Text is not retained by this batch');
     const inspection = entry.handle.inspect();

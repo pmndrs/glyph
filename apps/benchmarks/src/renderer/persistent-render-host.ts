@@ -1,7 +1,11 @@
 import * as THREE from 'three/webgpu';
 
 import { createGpuFrameTimer, type GpuFrameTimer } from './gpu-frame-timer';
-import { createLiveFrameTelemetry, type LiveFrameTelemetrySnapshot } from './live-frame-telemetry';
+import {
+  bindLiveFrameTelemetryCaptureRequests,
+  createLiveFrameTelemetry,
+  type LiveFrameTelemetrySnapshot,
+} from './live-frame-telemetry';
 import {
   createConfiguredRenderer,
   disposeConfiguredRenderer,
@@ -193,6 +197,7 @@ export async function createPersistentRenderHost(options: PersistentRenderHostOp
     };
 
     await renderer.setAnimationLoop(frame);
+    const unbindCaptureRequests = bindLiveFrameTelemetryCaptureRequests(options.canvas, telemetry);
 
     const host: PersistentRenderHost = {
       backend: options.backend,
@@ -355,6 +360,8 @@ export async function createPersistentRenderHost(options: PersistentRenderHostOp
       dispose() {
         if (disposal !== undefined) return disposal;
         disposed = true;
+        unbindCaptureRequests();
+        telemetry.reset();
         latestRequest?.controller.abort();
         for (const controller of jobControllers) controller.abort(disposedError());
         disposal = (async () => {

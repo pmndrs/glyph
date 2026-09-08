@@ -444,7 +444,8 @@ impl FlowLayoutArena {
                 *cursor = saved_cursor;
                 return Ok(None);
             }
-            let mut measured = LineExtents::default();
+            // Seed from the estimate so valid negative half-leading is not clamped against zero.
+            let mut measured = initial_extents;
             let mut composed = false;
             for slot in available.iter().copied() {
                 // The paragraph's first line composes against an indented width;
@@ -495,7 +496,6 @@ impl FlowLayoutArena {
                 *cursor = saved_cursor;
                 return Ok(None);
             }
-            measured.include(initial_extents);
             if attempt == 0 && measured.height() > height {
                 self.fragments.truncate(fragment_start);
                 *cursor = saved_cursor;
@@ -1221,6 +1221,27 @@ mod tests {
         assert!((tight.height() - 5.0).abs() < 1e-5);
         assert!((tight.above - 5.5).abs() < 1e-5);
         assert!((tight.below + 0.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn full_flow_publishes_tight_explicit_line_height() {
+        let clusters = uniform_clusters(1, 1.0);
+        let mut style = ResolvedStyle::test_typography(10.0, 0.0, 0.0);
+        style.has_line_height = true;
+        style.line_height = 0.5;
+        let layout = composed(
+            &plain_geometry(constraint()),
+            &clusters,
+            &[StyleSegment {
+                text_start: 0,
+                text_end: 1,
+                style,
+            }],
+        );
+
+        assert_eq!(layout.lines.len(), 1);
+        assert_eq!(layout.lines[0].baseline, 5.5);
+        assert_eq!(layout.lines[0].height, 5.0);
     }
 
     fn plain_geometry(constraint: FlowConstraint) -> FlowGeometryArena {

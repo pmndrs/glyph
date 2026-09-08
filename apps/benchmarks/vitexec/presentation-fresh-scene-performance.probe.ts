@@ -2,6 +2,11 @@
 
 export {};
 
+const telemetryModulePath = '/src/renderer/live-frame-telemetry.ts';
+const telemetryModule: typeof import('../src/renderer/live-frame-telemetry') = await import(
+  /* @vite-ignore */ telemetryModulePath
+);
+
 interface FreshSceneSample {
   readonly cpuMs: number;
   readonly draws: number;
@@ -45,20 +50,20 @@ for (let round = 0; round < roundsParameter; round += 1) {
       const child = iframe.contentWindow;
       if (child === null) throw new Error('fresh-scene iframe lost its window');
       await waitFrames(child, 30);
-      const startingFrames = Number(viewport.dataset.submitHistoryLength);
-      await waitFor(() =>
-        Number(viewport.dataset.submitHistoryLength) >= startingFrames + 120 &&
-        Number(viewport.dataset.gpuHistoryLength) >= 120
-          ? true
-          : undefined,
-      );
+      const canvas = viewport.parentElement?.querySelector('canvas');
+      if (canvas === null || canvas === undefined) throw new Error('fresh-scene viewport lost its renderer canvas');
+      const capture = await telemetryModule.requestLiveFrameTelemetryCapture(canvas, {
+        cpuSampleCount: 120,
+        gpuSampleCount: 120,
+        signal: AbortSignal.timeout(60_000),
+      });
       const sample = {
         round,
         workload,
-        cpuMs: Number(viewport.dataset.medianSubmitMs),
-        gpuMs: Number(viewport.dataset.medianGpuMs),
-        frames: Number(viewport.dataset.submitHistoryLength) - startingFrames,
-        gpuFrames: Number(viewport.dataset.gpuHistoryLength),
+        cpuMs: nearestRankMedian(capture.cpuMs),
+        gpuMs: nearestRankMedian(capture.gpuMs),
+        frames: capture.cpuMs.length,
+        gpuFrames: capture.gpuMs.length,
         draws: Number(viewport.dataset.drawCount),
         glyphs: Number(viewport.dataset.glyphCount),
       } satisfies FreshSceneSample;
@@ -96,4 +101,14 @@ function waitFrames(target: Window, count: number): Promise<void> {
     };
     target.requestAnimationFrame(next);
   });
+}
+
+function nearestRankMedian(timings: Float64Array): number {
+  if (timings.length === 0) throw new RangeError('fresh-scene capture requires a nonempty timing window');
+  const sorted = timings.slice().sort();
+  const median = sorted[Math.ceil(sorted.length * 0.5) - 1];
+  if (median === undefined || !Number.isFinite(median)) {
+    throw new RangeError('fresh-scene capture produced a non-finite timing');
+  }
+  return median;
 }
