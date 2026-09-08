@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { copyFile, mkdtemp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -318,11 +317,10 @@ async function verifyIsolatedPackedConsumers(archive, availableVersions, context
     );
 
     const entry = join(consumerDirectory, 'entry.ts');
-    const resolveFromConsumer = createRequire(entry);
     for (const peer of consumer.absentPeers) {
-      assert.throws(
-        () => resolveFromConsumer.resolve(peer),
-        { code: 'MODULE_NOT_FOUND' },
+      await assert.rejects(
+        stat(join(consumerDirectory, 'node_modules', ...peer.split('/'))),
+        { code: 'ENOENT' },
         `${consumer.name} must not install optional peer ${peer}`,
       );
     }
