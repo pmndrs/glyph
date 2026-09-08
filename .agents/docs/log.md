@@ -16,8 +16,8 @@
 
 - **Activated the camera-ranked label proof** — The presentation host now forwards its active workload camera into
   every frame hook, allowing Camera Billboard to orbit, face the camera, and rewrite child `Text.renderOrder` ranks as
-  depth crosses. A focused regression proves both camera motion and rank reversal; the change is benchmark-host
-  plumbing and does not alter Glyph records or renderer kernels.
+  depth crosses. Its reusable rank records remove per-label frame allocation. A focused regression proves both camera
+  motion and rank reversal; the change is benchmark-host plumbing and does not alter Glyph records or renderer kernels.
 
 - **Split retained invalidation by data ownership** — Plain string edits now reuse their configured and planner binding
   leases, publish only changed text plus root-style coverage when length changes, and omit unchanged lifecycle/order and

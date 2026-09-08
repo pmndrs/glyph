@@ -454,8 +454,10 @@ Against isolated runs of exact remote main on the same Chromium 149/Apple GPU ho
 direction: one candidate run improved CPU by 4.7–15.8%, while the final immediate pair was 0.025–0.080 ms slower; the
 largest final GPU difference was 0.054 ms. The evidence supports flat retained two-draw behavior, not a directional Icon
 Grid speedup. Rich Text improved by 80.3–94.4% CPU and up to 15.9% GPU while reducing 36 draws to five. Camera Billboard,
-which exists only on the stacked candidate, averaged 0.485 ms CPU across Bitmap/MTSDF/Slug and retained one draw. These
-are same-host observations, not portable budgets.
+which exists only on the stacked candidate, now exercises its orbit and retained rank publication rather than a dormant
+static scene. Its final Bitmap/MTSDF/Slug pass measured 2.030/2.120/2.065 ms median CPU submit and retained one draw for
+2,722 glyphs; the reusable distance-rank records allocate only when the label high-water grows. These are same-host
+observations, not portable budgets.
 
 Paragraph Stress can opt into Chrome User Timing with `?textTimings=1`. Its retained update is split into authored
 property staging, Rust update plus demanded measurement, clean publication, renderer submission, and the package's

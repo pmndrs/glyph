@@ -114,7 +114,14 @@ export function layoutBillboardLabelEntries(
 }
 
 const billboardLookTarget = new THREE.Vector3();
-const billboardOrder: { distance: number; entry: ComparisonWorkloadEntry }[] = [];
+interface BillboardOrderEntry {
+  distance: number;
+  entry: ComparisonWorkloadEntry;
+}
+
+const billboardOrder: BillboardOrderEntry[] = [];
+const farthestBillboardFirst = (left: BillboardOrderEntry, right: BillboardOrderEntry): number =>
+  right.distance - left.distance;
 
 /**
  * Orbits the camera, faces every label at it, and reissues render order front to back.
@@ -142,15 +149,20 @@ export function animateBillboardLabelEntries(
   camera.lookAt(billboardLookTarget);
   camera.updateMatrixWorld();
 
-  billboardOrder.length = 0;
-  for (const entry of entries) {
+  billboardOrder.length = entries.length;
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (entry === undefined) continue;
     // A billboard copies the camera's rotation rather than looking at it, so labels stay coplanar
     // with the screen instead of fanning at the edges of a wide field of view.
     entry.node.quaternion.copy(camera.quaternion);
-    billboardOrder.push({ distance: entry.node.position.distanceToSquared(camera.position), entry });
+    const order = billboardOrder[index] ?? { distance: 0, entry };
+    order.distance = entry.node.position.distanceToSquared(camera.position);
+    order.entry = entry;
+    billboardOrder[index] = order;
   }
   // Farthest first, so nearer labels paint over the ones behind them.
-  billboardOrder.sort((left, right) => right.distance - left.distance);
+  billboardOrder.sort(farthestBillboardFirst);
   for (let index = 0; index < billboardOrder.length; index += 1) {
     const sorted = billboardOrder[index];
     if (sorted !== undefined) sorted.entry.text.renderOrder = index;
