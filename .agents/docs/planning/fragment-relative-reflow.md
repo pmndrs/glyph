@@ -315,6 +315,9 @@ One stable run entity owns:
 Split a run only at a boundary that invalidates local glyph geometry or shaping-time order: a shaping/font-geometry
 change, paragraph-resolved bidi shaping run/direction change, or boundary replacement. Paint/material/raster/decorating
 group changes produce renderer or decoration spans over the same run and never churn placement topology. A
+script boundary that has already been shaped does not itself split a placement run when resolved direction, bidi level,
+selected font, and shaping/layout style remain compatible; exact per-cluster direction and shaped payload remain part of
+canonical comparison. A
 HarfRust-unsafe edge is forbidden as a slice boundary, not a reason by itself to split the run; a run may span it. Legal
 word and character breaks do not themselves create retained runs. In dense CJK, one large run therefore spans many legal
 break opportunities and is sliced only at safe cluster boundaries by composition. Do not encode topology conditions as

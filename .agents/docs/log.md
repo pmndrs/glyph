@@ -10,15 +10,19 @@
   and stable glyph identity remains a separate truthful lane. This is a pre-alpha coordinate reset, not a compatibility
   mode; justification and visual metadata never enter renderer rows.
 
-- **Measured and corrected the first complete cutover** — Coalescing nearby session placement rows through committed
-  bytes reduces ordered Bitmap active-resize writes from main's 170.4 KiB to 30.5 KiB at 22k Latin and 59.8 KiB at dense
-  CJK, with one patch per sample. CPU publication now consumes the retained local f32 row plus the same placement-f32
-  addition the renderers use, removing the duplicate glyph-extents lookup and f64 origin/ink reconstruction. A paired
-  61-sample run against PR #172 improves 22k Latin from `4.135 / 4.266 ms` to `3.838 / 4.092 ms` and 100k Latin from
-  `23.696 / 25.096 ms` to `21.830 / 24.251 ms`, while dense CJK remains 5.8% slower at `3.778 / 4.077 ms` versus
-  `3.572 / 3.745 ms`. Exact-main Latin was about `3.77 ms`, so the earlier 16–20% regression is removed; dense-CJK CPU
-  overhead remains open. Bitmap/MTSDF/Slug renderer checks and the packaged direct-TypeGPU live WebGPU probe pass;
-  roadmap 12.2 stays active until the residual CJK overhead and consolidated release gates close.
+- **Measured and corrected the first complete cutover** — The maintained benchmark now declares the distinct
+  placement-slot output for Bitmap, MTSDF, and Slug and records retained buffer live/capacity bytes; earlier measurements
+  without that occurrence lane remain attribution history rather than complete cutover costs. Compatible post-shaping
+  CJK script runs now share one geometry `LayoutRun` when direction, bidi level, selected font, and shaping/layout style agree.
+  On the exact placement-slot-inclusive target, 22k ordered Bitmap CJK active-resize improved from
+  `4.178 / 4.305 ms` to `3.590 / 3.940 ms`, and median writes fell from 143.1 KiB to 101.4 KiB as the shared x/y table
+  shrank from 58,592 to 15,968 bytes; the 87,912-byte occurrence rewrite remained the dominant cost while one-primitive
+  topology stayed unchanged. The matching Latin target measured `4.075 / 4.386 ms` with 39.8 KiB median writes and only
+  the shared x/y table patched.
+  Relative to PR #172's older absolute-placement timings, the target median is 1.5% faster for Latin and 0.5% slower for
+  CJK, but those are directional cross-contract comparisons rather than release gates. CPU publication consumes the same
+  local-plus-placement f32 operation as renderers. Bitmap/MTSDF/Slug program registration is green; roadmap 12.2 remains
+  active until the consolidated package/release and browser gates close.
 
 - **Re-pinned final LayoutRun coordinate arithmetic** — Deterministic inline and normal-range block controls prove that
   additive run-local placement cannot preserve the former ordered-f64-fold then single-f32-narrow bits universally; the

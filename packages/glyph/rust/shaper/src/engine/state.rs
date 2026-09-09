@@ -229,6 +229,7 @@ struct PlannerState {
     placement_slots: PlacementSlotArena<PlacementLogicalKey, PlacementCanonical>,
     desired_placements: Vec<DesiredPlacement<PlacementLogicalKey, PlacementCanonical>>,
     desired_placement_handles: Vec<PlacementHandle>,
+    dense_placement_ordinals: Vec<u32>,
     session_placement_rows: Vec<SessionPlacementRow>,
     placement_slot_count: u32,
     pending_placement_slot_count: u32,
@@ -289,10 +290,18 @@ enum RunLogicalAnchor {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct PlacementLogicalKey {
     run: super::run_slot::RunHandle,
-    segment_anchor: u32,
-    source_anchor: u32,
+    identity: PlacementLogicalIdentity,
     numeric_block_ordinal: u32,
     glyph_source: super::placement_state::GlyphSource,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum PlacementLogicalIdentity {
+    StableSource {
+        segment_anchor: u32,
+        source_anchor: u32,
+    },
+    DenseOrdinal(u32),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2698,9 +2707,11 @@ impl PlannerState {
     fn prepare_placement_slots(&mut self, publication_generation: u32) -> Result<(), EngineError> {
         let mut desired = core::mem::take(&mut self.desired_placements);
         let mut handles = core::mem::take(&mut self.desired_placement_handles);
+        let mut dense_ordinals = core::mem::take(&mut self.dense_placement_ordinals);
         let mut rows = core::mem::take(&mut self.session_placement_rows);
         desired.clear();
         handles.clear();
+        dense_ordinals.clear();
         rows.clear();
         let result = (|| {
             let required = self.active_order().iter().try_fold(
@@ -2728,6 +2739,13 @@ impl PlannerState {
                 .map_err(|_| EngineError::ResultTooLarge)?;
             rows.try_reserve(required)
                 .map_err(|_| EngineError::ResultTooLarge)?;
+            let run_slot_count =
+                usize::try_from(self.run_slots.required_slots().map_err(run_slot_error)?)
+                    .map_err(|_| EngineError::ResultTooLarge)?;
+            dense_ordinals
+                .try_reserve(run_slot_count)
+                .map_err(|_| EngineError::ResultTooLarge)?;
+            dense_ordinals.resize(run_slot_count, 0);
 
             for order in self.active_order() {
                 let paragraph = self
@@ -2739,11 +2757,30 @@ impl PlannerState {
                         .placement_segment(index)
                         .ok_or(EngineError::InvalidRequest)?;
                     let run = segment.run_handle.ok_or(EngineError::InvalidRequest)?;
+                    let identity = match segment.identity {
+                        super::placement_state::PlacementIdentity::StableSource {
+                            segment_anchor,
+                            source_anchor,
+                        } => PlacementLogicalIdentity::StableSource {
+                            segment_anchor,
+                            source_anchor,
+                        },
+                        super::placement_state::PlacementIdentity::Dense => {
+                            let ordinal = dense_ordinals
+                                .get_mut(
+                                    usize::try_from(run.slot().get())
+                                        .map_err(|_| EngineError::ResultTooLarge)?,
+                                )
+                                .ok_or(EngineError::InvalidRequest)?;
+                            let current = *ordinal;
+                            *ordinal = ordinal.checked_add(1).ok_or(EngineError::ResultTooLarge)?;
+                            PlacementLogicalIdentity::DenseOrdinal(current)
+                        }
+                    };
                     desired.push(DesiredPlacement::new(
                         PlacementLogicalKey {
                             run,
-                            segment_anchor: segment.segment_anchor,
-                            source_anchor: segment.source_anchor,
+                            identity,
                             numeric_block_ordinal: segment.numeric_block_ordinal,
                             glyph_source: segment.glyph_source,
                         },
@@ -2844,6 +2881,7 @@ impl PlannerState {
         })();
         self.desired_placements = desired;
         self.desired_placement_handles = handles;
+        self.dense_placement_ordinals = dense_ordinals;
         self.session_placement_rows = rows;
         result
     }

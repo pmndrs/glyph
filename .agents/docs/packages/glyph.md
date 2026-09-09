@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:1772d0a419e5e9c214e5e954e9cb079400e0286ef9e57f0cfa621ee413521392'
+source_digest: 'sha256:94ec2be1ce70913e38289b7197e70c0ad869012083261c59da71ae9d8a3ad9f9'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1217,16 +1217,19 @@ closed and 12.2's single-model cutover is active. Public contour, projected-obje
 milestones; the placement work does not imply those APIs.
 
 The M0/M1 harness first derived maximal shaping-compatible `LayoutRun` intervals from retained cluster ownership without
-changing production execution. The first production slice now retains those intervals in `ClusterArena`, makes them the
-sole flow-extents traversal, and uses them to hoist font geometry for boundary-free, zero-indent, trivial-order
-positioning, including justified lines. Bidi, boundary replacement, and indented fragments still use the same shared
-cluster-emission authority without run-level hoisting. Maintained benchmark cases isolate justified, mixed-bidi,
+changing production execution. Production now treats those as post-shaping geometry runs: adjacent shaping runs may
+share one `LayoutRun` after shaping when direction, resolved bidi level, selected font, and layout geometry agree, so a
+Han/kana/punctuation script transition does not manufacture a renderer placement entity. Direction, bidi, fallback-font,
+and shaping/layout-style changes still split the run. `ClusterArena` retains that topology, makes it the sole flow-extents traversal,
+and uses it to hoist font geometry for boundary-free, zero-indent, trivial-order positioning, including justified lines.
+Bidi, boundary replacement, and indented fragments still use the same shared cluster-emission authority without
+run-level hoisting. Maintained benchmark cases isolate justified, mixed-bidi,
 equivalent-width, and dense-CJK reflow and retain raw publication counters. The frozen pre-cutover Bitmap checkpoint
 measured 22k width updates at `1.144 / 3.605 ms` aggregate median/p95 and `1.493 / 3.743 ms` on the active 174,440-byte
 publication subset; measurement-only was `0.192 / 0.226 ms`. Those values remain attribution baselines, not performance
 claims for the production slice.
 
-The proof consumers establish maximal `(source_run, font_handle)` runs, one-run dense CJK, run-bounded line extents, exact
+The initial proof consumers establish maximal `(source_run, font_handle)` runs, one-run dense CJK, run-bounded line extents, exact
 visual occurrence ownership, and replacement-run ownership. They also reject plain local-plus-translation arithmetic as a
 legacy-bit-preserving transform: deterministic inline and block counterexamples change final f32 bits, and a 4,111-case
 representation lab finds mismatches in every tested compact candidate. The active-resize benchmark alternates
@@ -1293,15 +1296,18 @@ the same ABI through its adapter-local storage layout and existing scene group; 
 define a shared eight-buffer limit. The packaged TypeGPU application check and live WebGPU Bitmap/MTSDF/Slug probe pass,
 including its caller callback groups.
 
-The current candidate is materially cheaper to publish and has removed the earlier Latin CPU regression. Ordered Bitmap active-resize
-writes fell from 170.4 KiB on exact main to 30.5 KiB for 22k Latin and 59.8 KiB for 22k dense CJK, with one patch in each
-sample after session-range coalescing—about an 82% reduction for Latin. On this M4 host, the candidate measured
-`3.838 / 4.092 ms` median/p95 for 22k Latin in a paired 61-sample run, 7.2% faster at median than PR #172's
-`4.135 / 4.266 ms` and roughly even with the earlier exact-main `3.77 ms` median. At 100k Latin it measured
-`21.830 / 24.251 ms`, 7.9% faster at median than the paired PR #172 run while writing 132.0 KiB instead of 734.9 KiB.
-Dense CJK remains 5.8% slower than PR #172 at `3.778 / 4.077 ms` versus `3.572 / 3.745 ms`; the residual cost is in
-placement/state/gather/publication rather than line fitting. Milestone 12.2 remains active until that CJK overhead and the
-consolidated package/release gates close.
+The maintained benchmark now declares the distinct per-glyph placement-slot output for Bitmap, MTSDF, and Slug and
+records every retained buffer's live/capacity bytes; earlier measurements that omitted that occurrence lane remain useful
+attribution history, not complete cutover costs. In this placement-slot-inclusive target, merging compatible post-shaping
+CJK runs reduced 22k ordered Bitmap active-resize from `4.178 / 4.305 ms` median/p95 to `3.590 / 3.940 ms` and reduced
+median writes from 143.1 KiB to 101.4 KiB. The shared x/y table fell from 58,592 to 15,968 bytes per update while the
+87,912-byte occurrence rewrite remained the dominant cost, and the one-primitive topology did not change. The matching
+22k Latin target measured `4.075 / 4.386 ms` with 39.8 KiB median writes. Latin's
+only width-update patch is the shared x/y table because
+stable word-root occurrence slots survive reflow. Against the older PR #172 absolute-placement timing, the current target
+is 1.5% faster at the Latin median and 0.5% slower at the CJK median, but those comparisons cross publication contracts and are
+directional rather than release gates. Milestone 12.2 remains active until consolidated package/release and browser gates
+close.
 
 [^slug-shader-core]: The directory is the single renderer-independent expression of the analytic Slug fill algorithm.
 

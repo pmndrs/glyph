@@ -130,6 +130,7 @@ function bitmapProgram(abi, glyphScope) {
   const { loadF32, loadU32, binary, storeF32, storeU32 } = context;
   loadF32(15);
   loadU32(29, 0);
+  loadU32(30, 1);
   binary('multiplyF32', 15, 7, 2);
   binary('addF32', 16, 0, 15);
   binary('multiplyF32', 17, 8, 2);
@@ -144,7 +145,8 @@ function bitmapProgram(abi, glyphScope) {
     [5, [3, 4, 5, 6]],
   ]);
   storeU32(6, 0, 29);
-  return program(context, [...floatBuffers(abi, [2, 2, 2, 2, 4]), ...uintBuffers(abi, [1], 6)]);
+  storeU32(7, 0, 30);
+  return program(context, [...floatBuffers(abi, [2, 2, 2, 2, 4]), ...uintBuffers(abi, [1, 1], 6)]);
 }
 
 function mtsdfProgram(abi) {
@@ -212,6 +214,8 @@ function mtsdfProgram(abi) {
   loadU32(0, 2);
   operations.push({ opcode: abi.codec.opcodes.convertU32ToF32, target: 1, operand0: 0 });
   storeF32(6, 3, 1);
+  loadU32(0, 3);
+  storeU32(7, 0, 0);
   const context = {
     inputs: [
       ...semanticFields.map((inputField) => ({ scope: 'semantic', field: inputField })),
@@ -219,15 +223,17 @@ function mtsdfProgram(abi) {
       { scope: 'semantic', field: semanticU32.outlineRgba },
       { scope: 'semantic', field: semanticU32.shadowRgba },
       { scope: 'glyph', field: 0 },
+      { scope: 'semantic', field: semanticU32.placementSlot },
     ],
     operations,
     f32InputCount: 20,
-    u32InputCount: 3,
+    u32InputCount: 4,
   };
   return program(context, [
     ...floatBuffers(abi, [4, 4, 4, 4]),
     ...uintBuffers(abi, [2], 5),
     { id: 6, scalar: abi.codec.scalarTypes.f32, vectorWidth: 4 },
+    { id: 7, scalar: abi.codec.scalarTypes.u32, vectorWidth: 1 },
   ]);
 }
 
@@ -236,6 +242,7 @@ function slugProgram(abi) {
   const { loadF32, loadU32, binary, constantF32, constantU32, storeF32, storeU32 } = context;
   loadF32(16);
   for (let fieldIndex = 0; fieldIndex < 6; fieldIndex += 1) loadU32(21 + fieldIndex, fieldIndex);
+  loadU32(30, 6);
   binary('multiplyF32', 16, 8, 2);
   binary('addF32', 17, 0, 16);
   binary('multiplyF32', 18, 9, 2);
@@ -254,8 +261,9 @@ function slugProgram(abi) {
   stores(storeU32, [
     [6, [21, 22, 23, 24]],
     [7, [25, 26, 29, 29]],
+    [8, [30]],
   ]);
-  return program(context, [...floatBuffers(abi, [4, 4, 4, 4, 4]), ...uintBuffers(abi, [4, 4], 6)]);
+  return program(context, [...floatBuffers(abi, [4, 4, 4, 4, 4]), ...uintBuffers(abi, [4, 4, 1], 6)]);
 }
 
 function programContext(abi, bindingScope, bindingF32Count, bindingU32Count, inverseFontSize = false) {
@@ -272,6 +280,7 @@ function programContext(abi, bindingScope, bindingF32Count, bindingU32Count, inv
     ...(inverseFontSize ? [{ scope: 'semantic', field: semantic.inverseFontSize }] : []),
     ...Array.from({ length: bindingF32Count }, (_, fieldIndex) => ({ scope: bindingScope, field: fieldIndex })),
     ...Array.from({ length: bindingU32Count }, (_, fieldIndex) => ({ scope: bindingScope, field: fieldIndex })),
+    { scope: 'semantic', field: abi.engine.semanticU32Fields.placementSlot },
   ];
   const f32InputCount = 7 + (inverseFontSize ? 1 : 0) + bindingF32Count;
   return {
@@ -311,7 +320,7 @@ function programContext(abi, bindingScope, bindingF32Count, bindingU32Count, inv
       });
     },
     f32InputCount,
-    u32InputCount: bindingU32Count,
+    u32InputCount: bindingU32Count + 1,
   };
 }
 

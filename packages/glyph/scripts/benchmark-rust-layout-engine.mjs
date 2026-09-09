@@ -325,6 +325,21 @@ function execute(bytes, allowGrowth = false, operation = 'text_update', measureP
       glyphCount += primitive.getUint16(primitiveLayout.recordCount, true);
     }
   }
+  const bufferCount = result.getUint32(layout.bufferCount, true);
+  const buffersOffset = result.getUint32(layout.buffersOffset, true);
+  const bufferLayout = abi.layouts.engineBuffer;
+  const bufferRecords = {};
+  for (let index = 0; index < bufferCount; index += 1) {
+    const at = resultPointer + buffersOffset + index * bufferLayout.size;
+    const bufferRecord = new DataView(memory.buffer, at, bufferLayout.size);
+    const id = bufferRecord.getUint32(bufferLayout.id, true);
+    bufferRecords[id] = {
+      generation: bufferRecord.getUint32(bufferLayout.generation, true),
+      liveRecords: bufferRecord.getUint32(bufferLayout.liveRecords, true),
+      capacityRecords: bufferRecord.getUint32(bufferLayout.capacityRecords, true),
+      byteLength: bufferRecord.getUint32(bufferLayout.byteLength, true),
+    };
+  }
   return {
     durationMs,
     engineRevision: result.getUint32(layout.engineRevision, true),
@@ -335,6 +350,7 @@ function execute(bytes, allowGrowth = false, operation = 'text_update', measureP
     patchCount,
     writeBytes,
     patchBuffers,
+    bufferRecords,
   };
 }
 
@@ -410,6 +426,7 @@ function summarize(name, glyphs, samples, plans) {
         patchCount: plans[index]?.patchCount ?? 0,
         writeBytes: plans[index]?.writeBytes ?? 0,
         patchBuffers: plans[index]?.patchBuffers ?? {},
+        bufferRecords: plans[index]?.bufferRecords ?? {},
       })),
     });
   }

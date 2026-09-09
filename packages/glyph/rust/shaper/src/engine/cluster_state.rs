@@ -10,7 +10,7 @@ use super::{
     run_local::{NumericBlockSpan, RunLocalArena},
     run_slot::RunHandle,
     shaping_state::{ShapeArena, ShapingRun},
-    style_state::{StyleArena, StyleSegment},
+    style_state::{ResolvedStyle, StyleArena, StyleSegment},
 };
 
 use super::run_local::{ClusterFinish, RunLocalBuildError, RunLocalGlyphInput};
@@ -59,6 +59,7 @@ pub(crate) enum WordSidecarMode {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct PlacementCluster {
     pub segment_anchor: u32,
+    pub dense: bool,
     pub numeric_block_ordinal: u32,
     pub block_local_prefix: f64,
     pub block_anchor_inline: f64,
@@ -103,6 +104,8 @@ pub(crate) struct LayoutRun {
     pub cluster_end: u32,
     pub glyph_start: u32,
     pub glyph_count: u32,
+    /// First shaping run in this geometry run. Adjacent script runs may merge when direction,
+    /// bidi level, selected font, and layout geometry agree.
     pub source_run: u32,
     pub font_handle: u32,
     pub numeric_blocks: NumericBlockSpan,
@@ -377,7 +380,7 @@ impl ClusterArena {
         }
         self.build_index(text.len())?;
         self.aggregate_shape(runs, shape, metrics_for)?;
-        self.rebuild_layout_runs()?;
+        self.rebuild_layout_runs_for_shaping(runs)?;
         self.apply_break_flags(unicode)?;
         self.refresh_layout_units()?;
         Ok(())
@@ -587,7 +590,7 @@ impl ClusterArena {
                 self.flags[cluster] |= CLUSTER_SAFE_BEFORE;
             }
         }
-        self.rebuild_layout_runs()?;
+        self.rebuild_layout_runs_for_shaping(runs)?;
         if cluster_start > 0 {
             self.flags[cluster_start - 1] &= !CLUSTER_ALLOWED_BREAK;
         }
@@ -1223,6 +1226,7 @@ impl ClusterArena {
         if self.flags[cluster] & CLUSTER_HARD_BREAK != 0 && self.glyph_counts[cluster] == 0 {
             return Ok(PlacementCluster {
                 segment_anchor: self.stable_ids[cluster],
+                dense: false,
                 numeric_block_ordinal: u32::MAX,
                 block_local_prefix: 0.0,
                 block_anchor_inline: 0.0,
@@ -1301,6 +1305,7 @@ impl ClusterArena {
                     .get(segment_root)
                     .ok_or(EngineError::InvalidRequest)?
             },
+            dense: self.word_sidecar_mode == WordSidecarMode::Dense,
             numeric_block_ordinal,
             block_local_prefix: *self
                 .run_local
@@ -1379,7 +1384,34 @@ impl ClusterArena {
         Ok(())
     }
 
+    #[cfg(test)]
     pub(super) fn rebuild_layout_runs(&mut self) -> Result<(), EngineError> {
+        self.rebuild_layout_runs_with(|left, right| left == right)
+    }
+
+    fn rebuild_layout_runs_for_shaping(&mut self, runs: &[ShapingRun]) -> Result<(), EngineError> {
+        self.rebuild_layout_runs_with(|left, right| {
+            match (
+                usize::try_from(left).ok().and_then(|index| runs.get(index)),
+                usize::try_from(right)
+                    .ok()
+                    .and_then(|index| runs.get(index)),
+            ) {
+                (Some(left), Some(right)) => {
+                    left.direction == right.direction
+                        && left.bidi_level == right.bidi_level
+                        && run_layout_compatible(left.style, right.style)
+                }
+                (None, None) => left == NO_SOURCE_RUN && right == NO_SOURCE_RUN,
+                _ => false,
+            }
+        })
+    }
+
+    fn rebuild_layout_runs_with(
+        &mut self,
+        compatible_source_runs: impl Fn(u32, u32) -> bool,
+    ) -> Result<(), EngineError> {
         self.layout_runs.clear();
         let mut cluster_start = 0usize;
         while cluster_start < self.starts.len() {
@@ -1387,7 +1419,7 @@ impl ClusterArena {
             let font_handle = self.font_handles[cluster_start];
             let mut cluster_end = cluster_start + 1;
             while cluster_end < self.starts.len()
-                && self.source_runs[cluster_end] == source_run
+                && compatible_source_runs(source_run, self.source_runs[cluster_end])
                 && self.font_handles[cluster_end] == font_handle
             {
                 cluster_end += 1;
@@ -1843,7 +1875,6 @@ fn runs_canonically_equal(
             previous_clusters_range.clone(),
             previous,
         )?
-        || !shaping_identity_equal(current_run, current, previous_run, previous)?
     {
         return Ok(false);
     }
@@ -1871,6 +1902,14 @@ fn runs_canonically_equal(
                 != lane(&previous_clusters.shaped, previous_cluster)?
             || lane(&current_clusters.unsafe_before, current_cluster)?
                 != lane(&previous_clusters.unsafe_before, previous_cluster)?
+            || !cluster_direction_equal(
+                current_clusters,
+                current_cluster,
+                current,
+                previous_clusters,
+                previous_cluster,
+                previous,
+            )?
             || !geometric_style_equal(
                 current_style,
                 current.style_arena,
@@ -2018,13 +2057,21 @@ fn geometric_style_equal(
         && current_arena.resolved_features(current) == previous_arena.resolved_features(previous)
 }
 
-fn shaping_identity_equal(
-    current_run: LayoutRun,
+fn run_layout_compatible(left: ResolvedStyle, right: ResolvedStyle) -> bool {
+    left.same_layout_sources(right)
+}
+
+fn cluster_direction_equal(
+    current_clusters: &ClusterArena,
+    current_cluster: usize,
     current: RunCanonicalInput<'_>,
-    previous_run: LayoutRun,
+    previous_clusters: &ClusterArena,
+    previous_cluster: usize,
     previous: RunCanonicalInput<'_>,
 ) -> Result<bool, EngineError> {
-    match (current_run.source_run, previous_run.source_run) {
+    let current_source = lane(&current_clusters.source_runs, current_cluster)?;
+    let previous_source = lane(&previous_clusters.source_runs, previous_cluster)?;
+    match (current_source, previous_source) {
         (NO_SOURCE_RUN, NO_SOURCE_RUN) => Ok(true),
         (NO_SOURCE_RUN, _) | (_, NO_SOURCE_RUN) => Ok(false),
         (current_index, previous_index) => {
@@ -2036,8 +2083,7 @@ fn shaping_identity_equal(
                 .shaping_runs
                 .get(usize::try_from(previous_index).map_err(|_| EngineError::InvalidRequest)?)
                 .ok_or(EngineError::InvalidRequest)?;
-            Ok(current_run.script == previous_run.script
-                && current_run.direction == previous_run.direction
+            Ok(current_run.direction == previous_run.direction
                 && current_run.bidi_level == previous_run.bidi_level)
         }
     }
@@ -2519,6 +2565,43 @@ mod tests {
         assert_eq!(arena.layout_runs().len(), 1);
         assert_eq!(arena.layout_runs()[0].cluster_end, COUNT as u32);
         assert_shadow_topology(&arena);
+    }
+
+    #[test]
+    fn layout_runs_merge_script_boundaries_but_keep_direction_and_geometry() {
+        let mut arena = shadow_topology(&[0, 1, 2, 3, 4, 5], &[9, 9, 9, 9, 9, 10], &[1; 6]);
+        let mut runs = Vec::new();
+        for (index, (script, direction, bidi_level, font_size)) in [
+            (1, 0, 0, 16.0),
+            (2, 0, 0, 16.0),
+            (3, 1, 1, 16.0),
+            (4, 0, 2, 16.0),
+            (5, 0, 0, 20.0),
+            (6, 0, 0, 20.0),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            runs.push(ShapingRun {
+                text_start: index as u32,
+                text_end: index as u32 + 1,
+                script,
+                direction,
+                bidi_level,
+                style: ResolvedStyle::test_typography(font_size, 0.0, 0.0),
+            });
+        }
+
+        arena.rebuild_layout_runs_for_shaping(&runs).unwrap();
+
+        assert_eq!(
+            arena
+                .layout_runs()
+                .iter()
+                .map(|run| (run.cluster_start, run.cluster_end))
+                .collect::<Vec<_>>(),
+            [(0, 2), (2, 3), (3, 4), (4, 5), (5, 6)]
+        );
     }
 
     #[test]

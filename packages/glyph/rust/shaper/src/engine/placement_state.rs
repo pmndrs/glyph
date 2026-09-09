@@ -74,13 +74,22 @@ macro_rules! define_arena {
 }
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(dead_code)]
 pub(crate) enum SliceRole {
     Ordinary,
     HangingSpace,
     CharacterFallback,
     BoundaryReplacement,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum PlacementIdentity {
+    StableSource {
+        segment_anchor: u32,
+        source_anchor: u32,
+    },
+    Dense,
 }
 
 #[repr(u8)]
@@ -105,6 +114,7 @@ pub(crate) struct PlacementSegment {
     pub run_handle: Option<RunHandle>,
     pub placement_handle: Option<PlacementHandle>,
     pub canonical_revision: Option<RunCanonicalRevision>,
+    pub identity: PlacementIdentity,
     pub segment_anchor: u32,
     pub source_anchor: u32,
     pub numeric_block_ordinal: u32,
@@ -416,6 +426,10 @@ impl PlacementState {
             run_handle: None,
             placement_handle: None,
             canonical_revision: None,
+            identity: PlacementIdentity::StableSource {
+                segment_anchor,
+                source_anchor: segment_anchor,
+            },
             segment_anchor,
             source_anchor: segment_anchor,
             numeric_block_ordinal: u32::MAX,
@@ -1088,6 +1102,7 @@ fn same_segment_key(left: PlacementSegment, right: PlacementSegment) -> bool {
         && left.layout_run_owner == right.layout_run_owner
         && left.layout_run_index == right.layout_run_index
         && left.canonical_revision == right.canonical_revision
+        && left.identity == right.identity
         && left.segment_anchor == right.segment_anchor
         && left.numeric_block_ordinal == right.numeric_block_ordinal
         && left.glyph_source == right.glyph_source

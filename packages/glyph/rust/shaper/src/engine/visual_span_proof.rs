@@ -160,6 +160,12 @@ pub(crate) fn build_visual_instance_map(
                 run_handle: None,
                 placement_handle: None,
                 canonical_revision: None,
+                identity: super::placement_state::PlacementIdentity::StableSource {
+                    segment_anchor: cluster_stable_ids
+                        [usize::try_from(covered).map_err(|_| EngineError::InvalidRequest)?],
+                    source_anchor: cluster_stable_ids
+                        [usize::try_from(covered).map_err(|_| EngineError::InvalidRequest)?],
+                },
                 segment_anchor: cluster_stable_ids
                     [usize::try_from(covered).map_err(|_| EngineError::InvalidRequest)?],
                 source_anchor: cluster_stable_ids
