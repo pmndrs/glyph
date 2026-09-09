@@ -932,6 +932,7 @@ mod tests {
             glyph_count: u32::try_from(hard_break).unwrap(),
             source_run: 0,
             font_handle: 17,
+            numeric_blocks: Default::default(),
             canonical_revision: None,
             run_handle: None,
         }];

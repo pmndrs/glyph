@@ -6,10 +6,13 @@ pub(crate) use super::placement_state::SliceRole;
 
 use super::{
     EngineError,
-    cluster_state::{CLUSTER_HARD_BREAK, CLUSTER_SAFE_BEFORE, LayoutRun, LayoutRunSourceKind},
+    cluster_state::{CLUSTER_HARD_BREAK, CLUSTER_SAFE_BEFORE, LayoutRun},
     flow_composition::{FlowFragment, NO_BOUNDARY},
-    placement_state::{LayoutRunOwner, LayoutRunSlice, PlacementClass, VisualInstanceSpan},
+    placement_state::{LayoutRunOwner, LayoutRunSlice, VisualInstanceSpan},
 };
+
+#[cfg(test)]
+use super::cluster_state::LayoutRunSourceKind;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct VisualClusterOccurrence {
@@ -148,8 +151,6 @@ pub(crate) fn build_visual_instance_map(
             {
                 return Err(EngineError::InvalidRequest);
             }
-            let placement_slot =
-                u32::try_from(slices.len()).map_err(|_| EngineError::ResultTooLarge)?;
             slices.push(LayoutRunSlice {
                 fragment_index: u32::try_from(fragment_index)
                     .map_err(|_| EngineError::ResultTooLarge)?,
@@ -157,19 +158,17 @@ pub(crate) fn build_visual_instance_map(
                 layout_run_index: u32::try_from(run_index)
                     .map_err(|_| EngineError::ResultTooLarge)?,
                 run_handle: None,
+                canonical_revision: None,
                 run_identity_anchor: cluster_stable_ids[usize::try_from(run.cluster_start)
                     .map_err(|_| EngineError::InvalidRequest)?],
-                first_cluster_anchor: cluster_stable_ids
+                segment_anchor: cluster_stable_ids
                     [usize::try_from(covered).map_err(|_| EngineError::InvalidRequest)?],
+                numeric_block_ordinal: u32::MAX,
                 run_cluster_start: covered - run.cluster_start,
                 run_cluster_count: slice_end - covered,
                 glyph_source: super::placement_state::GlyphSource::LayoutRun,
                 source_glyph_start: glyph_start - run.glyph_start,
                 source_glyph_count: glyph_end - glyph_start,
-                placement_slot,
-                visual_reversed: false,
-                boundary_index: None,
-                class: PlacementClass::Ordinary,
             });
             covered = slice_end;
             if covered == run.cluster_end {
@@ -265,7 +264,7 @@ pub(crate) fn build_visual_instance_map(
         append_visual_cluster(
             &mut map,
             *occurrence,
-            slice.placement_slot,
+            occurrence.slice_index,
             glyph_start,
             glyph_count,
         )?;
@@ -276,12 +275,12 @@ pub(crate) fn build_visual_instance_map(
 fn append_visual_cluster(
     map: &mut VisualInstanceMap,
     occurrence: VisualClusterOccurrence,
-    placement_slot: u32,
+    segment_index: u32,
     glyph_start: u32,
     glyph_count: u32,
 ) -> Result<(), EngineError> {
     if let Some(span) = map.spans.last_mut()
-        && span.placement_slot == placement_slot
+        && span.segment_index == segment_index
         && span.visual_span_id == occurrence.visual_span_id
         && span.resolved_level == occurrence.resolved_level
         && span.role == occurrence.role
@@ -304,8 +303,7 @@ fn append_visual_cluster(
             glyph_start,
             glyph_count,
             glyph_source: super::placement_state::GlyphSource::LayoutRun,
-            slice_index: occurrence.slice_index,
-            placement_slot,
+            segment_index: occurrence.slice_index,
             visual_span_id: occurrence.visual_span_id,
             resolved_level: occurrence.resolved_level,
             role: occurrence.role,
@@ -317,7 +315,7 @@ fn append_visual_cluster(
     map.glyph_indices.extend(glyph_start..glyph_end);
     let glyph_count = usize::try_from(glyph_count).map_err(|_| EngineError::ResultTooLarge)?;
     map.occurrence_slots
-        .extend(core::iter::repeat_n(placement_slot, glyph_count));
+        .extend(core::iter::repeat_n(segment_index, glyph_count));
     Ok(())
 }
 
@@ -400,6 +398,7 @@ mod tests {
             glyph_count,
             source_run,
             font_handle: 17,
+            numeric_blocks: Default::default(),
             canonical_revision: None,
             run_handle: None,
         }
@@ -478,15 +477,14 @@ mod tests {
                     slice.run_cluster_count,
                     slice.source_glyph_start,
                     slice.source_glyph_count,
-                    slice.placement_slot,
                 ))
                 .collect::<Vec<_>>(),
             [
-                (0, 0, 0, 3, 0, 3, 0),
-                (1, 0, 3, 1, 3, 1, 1),
-                (1, 1, 0, 2, 0, 1, 2),
-                (2, 1, 2, 1, 1, 3, 3),
-                (2, 2, 0, 2, 0, 2, 4),
+                (0, 0, 0, 3, 0, 3),
+                (1, 0, 3, 1, 3, 1),
+                (1, 1, 0, 2, 0, 1),
+                (2, 1, 2, 1, 1, 3),
+                (2, 2, 0, 2, 0, 2),
             ]
         );
         assert_eq!(map.glyph_indices, (0..10).collect::<Vec<_>>());
@@ -588,7 +586,7 @@ mod tests {
                 .collect::<Vec<_>>(),
             [1, 2, 1]
         );
-        assert!(map.spans.iter().all(|span| span.placement_slot == 0));
+        assert!(map.spans.iter().all(|span| span.segment_index == 0));
     }
 
     #[test]

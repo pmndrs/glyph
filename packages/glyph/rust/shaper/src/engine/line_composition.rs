@@ -1094,7 +1094,10 @@ mod tests {
         let dense = make_quantized_clusters(&advances, &flags);
         assert!(dense.word_breaks.is_empty());
         assert_eq!(dense.word_breaks.capacity(), 0);
-        assert!(dense.word_breaks_valid);
+        assert_eq!(
+            dense.word_sidecar_mode,
+            crate::engine::cluster_state::WordSidecarMode::Dense
+        );
         assert!(dense.chunk_flags_or[1] & CHUNK_NEGATIVE_ADVANCE != 0);
         assert_eq!(dense.chunk_flags_or[1] & CLUSTER_SPACE, 0);
         assert_eq!(dense.chunk_auxiliary_sums[1], 60 * 65_536);

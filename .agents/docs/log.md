@@ -28,11 +28,14 @@
   existing renderer acknowledgement fence. Width-only reflow skips canonical comparison; paint,
   raster binding, placement, and batching remain outside run identity.
 
-- **Modeled transactional LayoutRun placement below existing batching** — Added test/kernel-lab-only SoA lanes for run
-  slices, visual spans, exact f64 placement, and wide-unit justification inputs. Text-edit convergence rematerializes
-  current placement metadata, while geometry-only retained lines remap compacted fragment indexes and copy contiguous
-  line ranges transactionally. The model adds no release storage or execution and deliberately keeps run, slice, and
-  placement class out of Codec batch keys; the next atomic cutover still owns stale-safe dense slots and renderer wiring.
+- **Staged compact LayoutRun placement below existing batching** — Normal core execution now retains fixed numeric
+  blocks, stable word-root placement segments, separate visual spans, one segment index per rendered glyph, and exactly
+  one f64 inline/block translation per segment beside the still-authoritative absolute output. The single existing
+  positioning traversal populates both; justification state is not duplicated into placement rows. Retained lines copy
+  and rebind compact metadata by canonical run revision and stable segment anchor, with a capacity-reused revision index
+  preventing per-segment run scans. Boundary source and ellipsis own distinct replacement runs and blocks. No segment,
+  role, or placement field enters Codec batch keys or draw topology, and no ABI, renderer, or performance claim exists
+  until the atomic f32x2 publication cutover removes absolute glyph writes.
 
 - **Started the production LayoutRun cutover** — `ClusterArena` now retains maximal shaping-compatible runs in normal
   execution. Flow extents consume those runs as their single production traversal, while boundary-free, zero-indent,
