@@ -53,9 +53,12 @@ export function rustLayoutBenchmarkInitialGeometry(name, base) {
 }
 
 export function assertRustLayoutBenchmarkResult(name, previous, next) {
-  if (name === 'active-column-resize' && (next.patchCount === 0 || next.writeBytes === 0)) {
+  if (
+    (name === 'active-column-resize' || name === 'adopt-measure-query') &&
+    (next.patchCount === 0 || next.writeBytes === 0)
+  ) {
     throw new Error(
-      `active-column-resize did not publish a changed layout at generation ${next.publicationGeneration}`,
+      `${name} did not publish a changed layout at generation ${next.publicationGeneration}`,
     );
   }
   if (name === 'equivalent-width' && (next.patchCount !== 0 || next.writeBytes !== 0)) {

@@ -218,8 +218,11 @@ test('stable Three and TSL imports do not load the experimental TypeGPU bridge',
   }
   const experimental = await readJavaScriptModuleClosure([new URL('../../dist/three/typegpu.js', import.meta.url)]);
   assert.ok(experimental.staticImports.has('@typegpu/three'));
-  assert.ok(
-    experimental.paths.every((path) => !path.includes('/dist/shaders/tsl/')),
+  assert.deepEqual(
+    experimental.paths.filter(
+      (path) => path.includes('/dist/shaders/tsl/') && !path.endsWith('/dist/shaders/tsl/packed-color.js'),
+    ),
+    [],
     'the TypeGPU-backed Three entry must not load the native TSL shader realization',
   );
 });

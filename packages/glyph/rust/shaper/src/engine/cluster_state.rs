@@ -1127,7 +1127,6 @@ impl ClusterArena {
         &self.layout_runs.runs
     }
 
-    #[cfg(test)]
     pub(crate) fn run_local(&self) -> &RunLocalArena {
         &self.run_local
     }
@@ -1137,6 +1136,75 @@ impl ClusterArena {
         run: LayoutRun,
         direction: u8,
         cluster: usize,
+    ) -> Result<PlacementCluster, EngineError> {
+        self.placement_cluster_at(run, direction, cluster, None)
+    }
+
+    pub(crate) fn placement_segment_monotone(
+        &self,
+        run: LayoutRun,
+        direction: u8,
+        cluster: usize,
+        word_break_cursor: &mut usize,
+    ) -> Result<(PlacementCluster, usize), EngineError> {
+        let placement =
+            self.placement_cluster_at(run, direction, cluster, Some(word_break_cursor))?;
+        if direction & 1 != 0 || self.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
+            return Ok((placement, cluster + 1));
+        }
+        let run_end = usize::try_from(run.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+        let word_end = match self.word_sidecar_mode {
+            WordSidecarMode::Dense => run_end,
+            WordSidecarMode::Sparse => self
+                .word_breaks
+                .get(*word_break_cursor)
+                .and_then(|record| usize::try_from(record.cluster_end).ok())
+                .ok_or(EngineError::InvalidRequest)?
+                .min(run_end),
+            WordSidecarMode::Short | WordSidecarMode::Overflow => {
+                let mut end = cluster + 1;
+                while end < run_end
+                    && self.flags[end - 1]
+                        & (CLUSTER_ALLOWED_BREAK | CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK)
+                        == 0
+                {
+                    end += 1;
+                }
+                end
+            }
+            WordSidecarMode::Unbuilt => return Err(EngineError::InvalidRequest),
+        };
+        let run_start =
+            usize::try_from(run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
+        let block_lane_start = usize::try_from(run.numeric_blocks.cluster_start)
+            .map_err(|_| EngineError::InvalidRequest)?;
+        let block_lane = block_lane_start
+            .checked_add(cluster - run_start)
+            .ok_or(EngineError::ResultTooLarge)?;
+        let block = *self
+            .run_local
+            .cluster_blocks()
+            .get(block_lane)
+            .ok_or(EngineError::InvalidRequest)?;
+        let mut block_end = cluster + 1;
+        while block_end < word_end
+            && self
+                .run_local
+                .cluster_blocks()
+                .get(block_lane_start + (block_end - run_start))
+                == Some(&block)
+        {
+            block_end += 1;
+        }
+        Ok((placement, block_end))
+    }
+
+    fn placement_cluster_at(
+        &self,
+        run: LayoutRun,
+        direction: u8,
+        cluster: usize,
+        word_break_cursor: Option<&mut usize>,
     ) -> Result<PlacementCluster, EngineError> {
         let run_start =
             usize::try_from(run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
@@ -1183,14 +1251,33 @@ impl ClusterArena {
         let segment_root = match self.word_sidecar_mode {
             WordSidecarMode::Dense => run_start,
             WordSidecarMode::Sparse => {
-                let record = self
-                    .word_breaks
-                    .partition_point(|record| record.cluster_end as usize <= cluster);
-                if record == 0 {
+                let record = match word_break_cursor {
+                    Some(cursor) => {
+                        if *cursor > self.word_breaks.len() {
+                            *cursor = self
+                                .word_breaks
+                                .partition_point(|record| record.cluster_end as usize <= cluster);
+                        } else {
+                            while self
+                                .word_breaks
+                                .get(*cursor)
+                                .is_some_and(|record| record.cluster_end as usize <= cluster)
+                            {
+                                *cursor += 1;
+                            }
+                        }
+                        *cursor
+                    }
+                    None => self
+                        .word_breaks
+                        .partition_point(|record| record.cluster_end as usize <= cluster),
+                };
+                let root = if record == 0 {
                     0
                 } else {
                     self.word_breaks[record - 1].cluster_end as usize
-                }
+                };
+                root.max(run_start)
             }
             WordSidecarMode::Short | WordSidecarMode::Overflow => {
                 let mut root = cluster;

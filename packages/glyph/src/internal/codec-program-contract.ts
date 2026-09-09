@@ -5,8 +5,7 @@ import { assertGlyphId } from './glyph-id.js';
 
 interface CompiledCodecMetadata {
   readonly schema: TechniqueSchemaMetadata;
-  readonly stableGlyphId: CodecBufferId | undefined;
-  readonly transformIndex: CodecBufferId | undefined;
+  readonly occurrence: CodecBufferId | undefined;
 }
 
 const metadata = new WeakMap<object, CompiledCodecMetadata>();
@@ -20,20 +19,10 @@ export function normalizeCodecProgramSystemBuffers(
   value: unknown,
 ): CodecProgramSystemBuffers {
   if (!isRecord(value)) throw new TypeError('codec system buffers need an object');
-  const stableGlyphId = snapshotSystemBuffer(value.stableGlyphId, 'stableGlyphId');
-  const transformIndex =
-    value.transformIndex === undefined ? undefined : snapshotSystemBuffer(value.transformIndex, 'transformIndex');
+  const occurrence = snapshotOccurrenceBuffer(value.occurrence);
   const ids = new Set(Object.values(technique).map((buffer) => buffer.id));
-  if (ids.has(stableGlyphId.id)) throw new TypeError('stableGlyphId system buffer collides with a technique buffer');
-  if (transformIndex !== undefined) {
-    if (transformIndex.id === stableGlyphId.id) {
-      throw new TypeError('transformIndex and stableGlyphId system buffers collide');
-    }
-    if (ids.has(transformIndex.id)) {
-      throw new TypeError('transformIndex system buffer collides with a technique buffer');
-    }
-  }
-  return Object.freeze({ stableGlyphId, ...(transformIndex === undefined ? {} : { transformIndex }) });
+  if (ids.has(occurrence.id)) throw new TypeError('occurrence system buffer collides with a technique buffer');
+  return Object.freeze({ occurrence });
 }
 
 export function assertTechniqueCodecBody<Schema extends TechniqueSchemaMetadata>(
@@ -47,17 +36,20 @@ export function assertTechniqueCodecBody<Schema extends TechniqueSchemaMetadata>
   }
   if (
     system !== undefined &&
-    (compiled.stableGlyphId !== system.stableGlyphId.id || compiled.transformIndex !== system.transformIndex?.id)
+    compiled.occurrence !== system.occurrence.id
   ) {
     throw new TypeError(`technique "${schema.technique}" codec body does not use the requested system buffers`);
   }
 }
 
-function snapshotSystemBuffer<const Name extends 'stableGlyphId' | 'transformIndex'>(
+function snapshotOccurrenceBuffer(
   value: unknown,
-  name: Name,
-): CodecBufferDeclaration<'u32', readonly [Name]> {
-  if (!isRecord(value)) throw new TypeError(`${name} system buffer needs one u32 "${name}" lane`);
+): CodecBufferDeclaration<'u32', readonly ['stableGlyphId', 'placementSlot', 'transformIndex', 'foregroundRgba']> {
+  if (!isRecord(value)) {
+    throw new TypeError(
+      'occurrence system buffer needs u32 stableGlyphId, placementSlot, transformIndex, and foregroundRgba lanes',
+    );
+  }
   const lanes = value.lanes;
   const id = value.id;
   if (
@@ -67,16 +59,20 @@ function snapshotSystemBuffer<const Name extends 'stableGlyphId' | 'transformInd
     id > 0xffff ||
     value.scalar !== 'u32' ||
     !Array.isArray(lanes) ||
-    lanes.length !== 1 ||
-    lanes[0] !== name
+    lanes.length !== 4 ||
+    lanes[0] !== 'stableGlyphId' ||
+    lanes[1] !== 'placementSlot' ||
+    lanes[2] !== 'transformIndex' ||
+    lanes[3] !== 'foregroundRgba'
   ) {
-    throw new TypeError(`${name} system buffer needs one u32 "${name}" lane`);
+    throw new TypeError(
+      'occurrence system buffer needs u32 stableGlyphId, placementSlot, transformIndex, and foregroundRgba lanes',
+    );
   }
-  const namedLanes: readonly [Name] = [name];
   return Object.freeze({
-    id: assertGlyphId(id, 'buffer', `${name} system buffer id`),
+    id: assertGlyphId(id, 'buffer', 'occurrence system buffer id'),
     scalar: 'u32',
-    lanes: namedLanes,
+    lanes: ['stableGlyphId', 'placementSlot', 'transformIndex', 'foregroundRgba'] as const,
   });
 }
 

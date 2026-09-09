@@ -40,6 +40,12 @@ export interface ComparisonWorkloadConfiguration {
 export type ComparisonWorkloadUpdateKind = 'rebuild' | 'retained';
 export type WorkloadCameraKind = 'orthographic' | 'perspective';
 
+export interface ComparisonWorkloadReflowPhases {
+  readonly layoutMs: number;
+  readonly publishMs: number;
+  readonly stageMs: number;
+}
+
 /** How the host parents a workload's Texts: 'group' shares one `TextGroup` batch; 'standalone' keeps each Text's own implicit batch of one. */
 export type ComparisonWorkloadBatching = 'group' | 'standalone';
 
@@ -90,7 +96,7 @@ export interface ComparisonWorkloadDefinition {
     scene: THREE.Scene,
     scratch: ComparisonWorkloadAnimationScratch,
     onError: (error: unknown) => void,
-    onReflow: (duration: number) => void,
+    onReflow: (duration: number, phases?: ComparisonWorkloadReflowPhases) => void,
     /** The host's camera, for a workload that billboards or orders by depth. */
     camera?: THREE.OrthographicCamera | THREE.PerspectiveCamera,
   ): void;

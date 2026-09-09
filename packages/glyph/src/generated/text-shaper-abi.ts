@@ -69,6 +69,7 @@ export const textShaperAbi = {
     },
     "bufferStrategies": {
       "orderedDirect": 1,
+      "sessionShared": 3,
       "stableIndirect": 2
     },
     "decorationFlags": {
@@ -118,7 +119,11 @@ export const textShaperAbi = {
       "textTop": 2
     },
     "internalBufferBindings": {
-      "order": 65535
+      "order": 65535,
+      "placement": 65534
+    },
+    "internalBufferIds": {
+      "placement": 2147483647
     },
     "lastLinePolicies": {
       "auto": 1,
@@ -199,6 +204,7 @@ export const textShaperAbi = {
       "flowThreadId": 3,
       "foregroundRgba": 0,
       "outlineRgba": 6,
+      "placementSlot": 8,
       "regionId": 2,
       "shadowRgba": 7,
       "stableGlyphId": 5,

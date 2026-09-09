@@ -58,6 +58,7 @@ struct BatchKey {
 struct InstanceState {
     stable_id: u32,
     content_revision: u32,
+    placement_slot: u32,
     input_index: u32,
     semantic_change_mask: u16,
 }
@@ -544,6 +545,7 @@ impl OrderedPlanCompiler {
             self.pending_instances[destination as usize] = InstanceState {
                 stable_id: glyph.stable_id,
                 content_revision: glyph.content_revision,
+                placement_slot: input.placement_slot(input_index)?,
                 input_index: input_index as u32,
                 semantic_change_mask: input
                     .semantic_change_masks
@@ -579,6 +581,7 @@ impl OrderedPlanCompiler {
             self.pending_instances[destination] = InstanceState {
                 stable_id: glyph.stable_id,
                 content_revision: glyph.content_revision,
+                placement_slot: input.placement_slot(input_index)?,
                 input_index: input_index as u32,
                 semantic_change_mask: input
                     .semantic_change_masks
@@ -1354,6 +1357,7 @@ fn collect_changed_ranges(
         let changed = previous.get(slot).is_none_or(|previous| {
             previous.stable_id != next.stable_id
                 || previous.content_revision != next.content_revision
+                || previous.placement_slot != next.placement_slot
         });
         match (start, changed) {
             (None, true) => start = Some(slot as u32),
@@ -1389,6 +1393,7 @@ fn instance_unchanged(
             let next = next[slot as usize];
             previous.stable_id == next.stable_id
                 && previous.content_revision == next.content_revision
+                && previous.placement_slot == next.placement_slot
         })
 }
 
@@ -1512,6 +1517,7 @@ mod tests {
                 CAPABILITY,
                 OrderedPlanInput {
                     glyphs: &[block_changed],
+                    placement_slots: &[0],
                     semantic_change_masks: &[1 << 1],
                     f32_fields: &[&[1.0]],
                     u32_fields: &[],
@@ -1536,6 +1542,7 @@ mod tests {
                 CAPABILITY,
                 OrderedPlanInput {
                     glyphs: &[glyph(1, 3)],
+                    placement_slots: &[0],
                     semantic_change_masks: &[1],
                     f32_fields: &[&[2.0]],
                     u32_fields: &[],
@@ -1550,6 +1557,66 @@ mod tests {
             .unwrap();
         assert_eq!(plan.patches.len(), 1);
         assert_eq!(plan.payload, 2.0_f32.to_le_bytes());
+    }
+
+    #[test]
+    fn placement_slot_changes_patch_only_the_occurrence_lane_without_changing_topology() {
+        let codec = placement_codec();
+        let mut compiler = OrderedPlanCompiler::default();
+        let glyphs = [glyph(1, 1)];
+        compiler
+            .prepare(
+                &codec,
+                CAPABILITY,
+                OrderedPlanInput {
+                    glyphs: &glyphs,
+                    placement_slots: &[3],
+                    semantic_change_masks: &[u16::MAX],
+                    f32_fields: &[&[1.0]],
+                    u32_fields: &[&[3]],
+                    order_independent: false,
+                },
+                true,
+                1,
+            )
+            .unwrap();
+        let first = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        let placement_buffer = first
+            .buffers
+            .iter()
+            .find(|buffer| buffer.codec_buffer_id == 2)
+            .unwrap()
+            .id;
+        let primitives = first.primitives.to_vec();
+        let draws = first.draws.to_vec();
+        compiler.commit().unwrap();
+
+        compiler
+            .prepare(
+                &codec,
+                CAPABILITY,
+                OrderedPlanInput {
+                    glyphs: &glyphs,
+                    placement_slots: &[9],
+                    semantic_change_masks: &[1 << 15],
+                    f32_fields: &[&[1.0]],
+                    u32_fields: &[&[9]],
+                    order_independent: false,
+                },
+                false,
+                2,
+            )
+            .unwrap();
+        let delta = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        assert_eq!(delta.primitives, primitives);
+        assert_eq!(delta.draws, draws);
+        assert_eq!(delta.patches.len(), 1);
+        assert_eq!(delta.patches[0].buffer_id, placement_buffer);
+        assert_eq!(delta.payload, 9_u32.to_le_bytes());
     }
 
     #[test]
@@ -1666,6 +1733,7 @@ mod tests {
                 CAPABILITY,
                 OrderedPlanInput {
                     glyphs: &glyphs,
+                    placement_slots: &[0; 4],
                     semantic_change_masks: &[],
                     f32_fields: &[&[1.0, 2.0, 3.0, 4.0]],
                     u32_fields: &[],
@@ -1707,6 +1775,7 @@ mod tests {
                 CAPABILITY,
                 OrderedPlanInput {
                     glyphs: &glyphs,
+                    placement_slots: &[0; 4],
                     semantic_change_masks: &[],
                     f32_fields: &[&[1.0, 2.0, 3.0, 4.0]],
                     u32_fields: &[],
@@ -1752,6 +1821,7 @@ mod tests {
                 CAPABILITY,
                 OrderedPlanInput {
                     glyphs: &glyphs,
+                    placement_slots: &[0; 4],
                     semantic_change_masks: &[],
                     f32_fields: &[&[1.0, 2.0, 3.0, 4.0]],
                     u32_fields: &[],
@@ -1962,12 +2032,14 @@ mod tests {
         x: &[f32],
         checkpoint: bool,
     ) {
+        let placement_slots = vec![0; glyphs.len()];
         compiler
             .prepare(
                 codec,
                 CAPABILITY,
                 OrderedPlanInput {
                     glyphs,
+                    placement_slots: &placement_slots,
                     semantic_change_masks: &[],
                     f32_fields: &[x],
                     u32_fields: &[],
@@ -2003,6 +2075,36 @@ mod tests {
 
     fn codec() -> ValidatedCodec {
         codec_with_material_storage(false)
+    }
+
+    fn placement_codec() -> ValidatedCodec {
+        let mut descriptor = descriptor_with_options(false, 1024, true);
+        let program = &mut descriptor.programs[0];
+        program.capability_set = CAPABILITY;
+        program.u32_input_count = 1;
+        program
+            .inputs
+            .push(crate::engine::codec::InputSource::semantic(8));
+        program.buffers.push(BufferSchema::packed(
+            BufferId(2),
+            ScalarType::U32,
+            1,
+            BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST,
+            1,
+        ));
+        program.operations.extend([
+            Operation::LoadU32 {
+                target: 1,
+                field: 0,
+            },
+            Operation::StoreU32 {
+                source: 1,
+                buffer: BufferId(2),
+                lane: 0,
+            },
+        ]);
+        descriptor.capability_sets[0].max_buffers_per_draw = 2;
+        ValidatedCodec::new(descriptor).unwrap()
     }
 
     const DECORATION_TECHNIQUE: TechniqueId = TechniqueId(99);

@@ -34,7 +34,7 @@ process.stdout.write(`Three shaders: ${shaderQuery === '' ? 'stable TSL' : 'expe
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const vite = fileURLToPath(new URL('../node_modules/.bin/vite', import.meta.url));
-const server = spawn(vite, ['--host', '127.0.0.1', '--port', '5177', '--strictPort'], {
+const server = spawn(vite, ['--force', '--host', '127.0.0.1', '--port', '5177', '--strictPort'], {
   cwd: root,
   stdio: ['ignore', 'pipe', 'pipe'],
 });

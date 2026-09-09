@@ -643,10 +643,7 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
 
 function systemCodecBuffers(system: RasterCodecSystem): CodecBuffer[] {
   return [
-    { id: system.stableGlyphId.id, scalar: 'u32', vectorWidth: 1 },
-    ...(system.transformIndex === undefined
-      ? []
-      : [{ id: system.transformIndex.id, scalar: 'u32' as const, vectorWidth: 1 }]),
+    { id: system.occurrence.id, scalar: 'u32', vectorWidth: 4 },
   ];
 }
 

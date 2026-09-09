@@ -342,9 +342,9 @@ test('Text renderOrder ranks grouped paragraphs while standalone Text keeps Thre
   const groupedSequence = () => {
     const draws = rootDraws(scene).filter((draw) => draw.renderOrder === 4);
     assert.equal(draws.length, 1, 'one group shares one compatible draw');
-    const attribute = draws[0].geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id));
+    const attribute = draws[0].geometry.getAttribute(glyphAttribute(threeSystemBuffers.occurrence.id));
     const start = draws[0].userData.pmndrsGlyphRunStart;
-    return Array.from(attribute.array.subarray(start, start + draws[0].geometry.instanceCount));
+    return Array.from({ length: draws[0].geometry.instanceCount }, (_, index) => attribute.getZ(start + index));
   };
 
   const authored = groupedSequence();
@@ -443,9 +443,9 @@ test('Rust ranks interleaved TextGroup scopes only within their stable root slot
   const sequence = () => {
     const draws = rootDraws(scene).filter((draw) => draw.renderOrder === 4);
     assert.equal(draws.length, 1, 'equal group presentation remains one compatible draw');
-    const attribute = draws[0].geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id));
+    const attribute = draws[0].geometry.getAttribute(glyphAttribute(threeSystemBuffers.occurrence.id));
     const start = draws[0].userData.pmndrsGlyphRunStart;
-    return Array.from(attribute.array.subarray(start, start + draws[0].geometry.instanceCount));
+    return Array.from({ length: draws[0].geometry.instanceCount }, (_, index) => attribute.getZ(start + index));
   };
   const authored = sequence();
   firstA.renderOrder = 1;
@@ -705,18 +705,18 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
       (child) => child.isMesh && child.userData.pmndrsGlyphPrimitiveKind === 'glyph',
     );
     assert.ok(sourceDraw);
-    const sourceStableIds = sourceDraw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.stableGlyphId.id));
-    const detachedStableIds = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.stableGlyphId.id));
+    const sourceStableIds = sourceDraw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.occurrence.id));
+    const detachedStableIds = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.occurrence.id));
     const sourceOrigins = sourceDraw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.origin.id));
     const detachedOrigins = draw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.origin.id));
     const sourceSizes = sourceDraw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.size.id));
     const detachedSizes = draw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.size.id));
     assert.ok(sourceStableIds && detachedStableIds && sourceOrigins && detachedOrigins && sourceSizes && detachedSizes);
-    const detachedTransformIndices = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id));
+    const detachedTransformIndices = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.occurrence.id));
     const detachedTransformTable = draw.geometry.getAttribute('_pmndrsGlyphTransforms');
     assert.ok(detachedTransformIndices && detachedTransformTable);
     const firstRecord = draw.userData.pmndrsGlyphRunStart;
-    const detachedTransformIndex = detachedTransformIndices.getX(firstRecord);
+    const detachedTransformIndex = detachedTransformIndices.getZ(firstRecord);
     const detachedRelativeTransform = detachedTransformTable.array.subarray(
       detachedTransformIndex * 16,
       detachedTransformIndex * 16 + 16,
@@ -960,7 +960,7 @@ test('Text.breakApart preserves TextGroup paint order across detached roots', as
     const sourceGlyphOrders = rootDraws(scene)
       .filter((child) => child.isMesh && child.userData.pmndrsGlyphPrimitiveKind === 'glyph')
       .filter((draw) => {
-        const stableIds = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.stableGlyphId.id));
+        const stableIds = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.occurrence.id));
         if (stableIds === undefined) return false;
         const start = draw.userData.pmndrsGlyphRunStart;
         for (let index = 0; index < draw.geometry.instanceCount; index += 1) {
@@ -1675,6 +1675,53 @@ test('Three retires materials bound to a replaced buffer generation', async (t) 
   fontDomain.dispose();
 });
 
+test('Three reflow patches shared placement rows without rebuilding draws or static glyph origins', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const materials = [];
+  const material = defineTextMaterial((context) => {
+    const created = context.createDefaultMaterial();
+    materials.push(created);
+    return created;
+  });
+  const scene = new THREE.Scene();
+  const label = three.createText({
+    font,
+    material,
+    text: 'alpha beta gamma delta epsilon zeta eta theta',
+    constraints: { width: { mode: 'exact', size: 300 } },
+  });
+  scene.add(label);
+  scene.updateMatrixWorld(true);
+  const draw = rootDraws(scene)[0];
+  assert.ok(draw);
+  const origins = draw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.origin.id));
+  const occurrences = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.occurrence.id));
+  const originalOrigins = origins.array.slice();
+  const originalSlots = Array.from({ length: occurrences.count }, (_, index) => occurrences.getY(index));
+  const originalY = [...label.glyphs().y];
+
+  label.set({ constraints: { width: { mode: 'exact', size: 90 } } });
+  scene.updateMatrixWorld(true);
+  const reflowed = rootDraws(scene);
+  assert.equal(reflowed.length, 1);
+  assert.equal(reflowed[0], draw, 'same-capacity placement patches retain the realized draw');
+  assert.equal(reflowed[0].material, materials[0], 'the material keeps the same placement-table identity');
+  assert.equal(materials.length, 1, 'reflow does not realize a second material');
+  assert.deepEqual(origins.array, originalOrigins, 'break changes do not rewrite run-local glyph origins');
+  assert.deepEqual(
+    Array.from({ length: occurrences.count }, (_, index) => occurrences.getY(index)),
+    originalSlots,
+    'stable word-root occurrence slots survive width changes',
+  );
+  assert.notDeepEqual([...label.glyphs().y], originalY, 'the public positioned layout still moves between lines');
+
+  label.dispose();
+  font.dispose();
+  fontDomain.dispose();
+});
+
 test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async (t) => {
   const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
@@ -1883,8 +1930,8 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   assert.equal(draws.length, 1, 'compatible paragraphs must batch in Rust before Three sees the plan');
   assert.equal(draws[0].geometry.instanceCount, 4);
   const start = draws[0].userData.pmndrsGlyphRunStart;
-  const indices = draws[0].geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id)).array;
-  assert.deepEqual(Array.from(indices.subarray(start, start + 4)), [1, 1, 2, 2]);
+  const indices = draws[0].geometry.getAttribute(glyphAttribute(threeSystemBuffers.occurrence.id));
+  assert.deepEqual(Array.from({ length: 4 }, (_, index) => indices.getZ(start + index)), [1, 1, 2, 2]);
   const transforms = draws[0].geometry.getAttribute('_pmndrsGlyphTransforms');
   assert.equal(transforms.array[1 * 16 + 12], 2);
   assert.equal(transforms.array[2 * 16 + 12], 5);
@@ -2912,8 +2959,11 @@ test('Bitmap strike changes fully initialize a replacement indexed batch', async
   const draw = rootDraws(scene)[0];
   assert.ok(draw);
   const start = draw.userData.pmndrsGlyphRunStart;
-  const transforms = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id)).array;
-  assert.deepEqual(Array.from(transforms.subarray(start, start + draw.geometry.instanceCount)), [1, 1]);
+  const transforms = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.occurrence.id));
+  assert.deepEqual(
+    Array.from({ length: draw.geometry.instanceCount }, (_, index) => transforms.getZ(start + index)),
+    [1, 1],
+  );
   const scaledOrigins = draw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.origin.id)).array;
   const scaledAdvance = scaledOrigins[(start + 1) * 2] - scaledOrigins[start * 2];
   assert.ok(

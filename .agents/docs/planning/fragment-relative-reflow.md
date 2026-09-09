@@ -186,6 +186,14 @@ internal glyph order, glyphless clusters retain ownership, and 4,096 homogeneous
 fragment slices and copy spans stay compact. A joined oracle test feeds the independent multi-fragment bidi and hanging
 plan into this mapper. Boundary replacement is rejected until replacement occurrences have one explicit owner.
 
+M1 and M2 are now complete, and the M3 candidate is integrated through the generated ABI, Three, custom Codec boundary,
+and direct-TypeGPU proof. The session row is exactly f32x2 x/y; a distinct per-physical-glyph placement slot selects it
+after the existing stable order indirection. Run, segment, role, and placement class remain outside all batch and draw
+keys. Renderer/browser correctness probes pass, and warmed active-resize publication now emits one compact placement
+patch instead of glyph-wide static geometry. M3 is not closed: on the reference M4 host, 22k ordered Bitmap updates remain
+about 12–14% slower than the applicable main/PR baseline despite roughly 82% lower Latin write bytes. Corrected
+measurement/adoption lanes localize that residual to adoption/state/gather/publication rather than line positioning.
+
 ## Compatibility with the merged engine
 
 This is a factoring of the post-shaping positioning/publication tail, not another text engine. Preserve these merged

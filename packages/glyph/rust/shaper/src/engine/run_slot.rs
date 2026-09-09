@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 use core::num::NonZeroU32;
 
 /// Dense planner-local storage index. It has no meaning outside its owning [`RunSlotArena`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct RunSlot(u32);
 
 impl RunSlot {
@@ -19,7 +19,7 @@ impl RunSlot {
 }
 
 /// Nonzero, nonwrapping incarnation of one physical run slot.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct RunGeneration(NonZeroU32);
 
 impl RunGeneration {
@@ -41,7 +41,7 @@ impl RunGeneration {
 }
 
 /// Opaque identity of one committed or prepared run in a planner-local namespace.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct RunHandle {
     slot: RunSlot,
     generation: RunGeneration,
@@ -258,21 +258,24 @@ where
         }
         u32::try_from(desired.len()).map_err(|_| RunSlotError::ArithmeticOverflow)?;
 
-        let retained = self.matches_committed_order(desired)?;
         self.begin_prepare(publication_generation)?;
-        let result = if retained {
-            #[cfg(test)]
-            {
-                self.retained_prepare_count += 1;
+        let result = self.prepare_retained(desired).and_then(|retained| {
+            if retained {
+                #[cfg(test)]
+                {
+                    self.retained_prepare_count += 1;
+                }
+                Ok(())
+            } else {
+                self.assignments.clear();
+                self.writes.clear();
+                #[cfg(test)]
+                {
+                    self.structural_prepare_count += 1;
+                }
+                self.prepare_structural(desired)
             }
-            self.prepare_retained(desired)
-        } else {
-            #[cfg(test)]
-            {
-                self.structural_prepare_count += 1;
-            }
-            self.prepare_structural(desired)
-        };
+        });
 
         if result.is_err() {
             self.abort();
@@ -280,14 +283,17 @@ where
         result
     }
 
-    fn matches_committed_order(
-        &self,
+    fn prepare_retained(
+        &mut self,
         desired: &[DesiredRun<Key, Canonical>],
     ) -> Result<bool, RunSlotError> {
         if desired.len() != self.committed_order.len() {
             return Ok(false);
         }
-        for (run, &slot) in desired.iter().zip(&self.committed_order) {
+        reserve(&mut self.assignments, desired.len())?;
+        reserve(&mut self.writes, desired.len())?;
+        for (index, run) in desired.iter().enumerate() {
+            let slot = self.committed_order[index];
             let occupant = self
                 .slot_state(slot)?
                 .occupant
@@ -296,18 +302,6 @@ where
             if occupant.logical_key != run.logical_key {
                 return Ok(false);
             }
-        }
-        Ok(true)
-    }
-
-    fn prepare_retained(
-        &mut self,
-        desired: &[DesiredRun<Key, Canonical>],
-    ) -> Result<(), RunSlotError> {
-        reserve(&mut self.assignments, desired.len())?;
-        reserve(&mut self.writes, desired.len())?;
-        for (index, run) in desired.iter().enumerate() {
-            let slot = self.committed_order[index];
             let state = self.slot_state(slot)?;
             let occupant = state
                 .occupant
@@ -338,10 +332,69 @@ where
             self.assignments.push(RunSlotAssignment { handle, change });
         }
         self.prepared = true;
-        Ok(())
+        Ok(true)
     }
 
     fn prepare_structural(
+        &mut self,
+        desired: &[DesiredRun<Key, Canonical>],
+    ) -> Result<(), RunSlotError> {
+        if desired
+            .windows(2)
+            .any(|pair| pair[0].logical_key == pair[1].logical_key)
+        {
+            return Err(RunSlotError::DuplicateLogicalKey);
+        }
+        if desired
+            .windows(2)
+            .all(|pair| pair[0].logical_key < pair[1].logical_key)
+        {
+            return self.prepare_sorted_structural(desired);
+        }
+        self.prepare_indexed_structural(desired)
+    }
+
+    fn prepare_sorted_structural(
+        &mut self,
+        desired: &[DesiredRun<Key, Canonical>],
+    ) -> Result<(), RunSlotError> {
+        reserve(&mut self.pending_index, desired.len())?;
+        reserve(&mut self.pending_order, desired.len())?;
+        reserve(&mut self.assignments, desired.len())?;
+        reserve(&mut self.writes, desired.len())?;
+        reserve(&mut self.retirements, self.slots.len())?;
+
+        let mut committed = 0usize;
+        for run in desired {
+            while let Some(&(key, slot)) = self.committed_index.get(committed) {
+                if key >= run.logical_key {
+                    break;
+                }
+                self.retire_slot(slot)?;
+                committed += 1;
+            }
+            let existing = self
+                .committed_index
+                .get(committed)
+                .copied()
+                .filter(|(key, _)| *key == run.logical_key)
+                .map(|(_, slot)| slot);
+            if existing.is_some() {
+                committed += 1;
+            }
+            let (handle, change) = self.assign_run(run, existing)?;
+            self.pending_index.push((run.logical_key, handle.slot));
+            self.pending_order.push(handle.slot);
+            self.assignments.push(RunSlotAssignment { handle, change });
+        }
+        while let Some(&(_, slot)) = self.committed_index.get(committed) {
+            self.retire_slot(slot)?;
+            committed += 1;
+        }
+        self.finish_structural_prepare()
+    }
+
+    fn prepare_indexed_structural(
         &mut self,
         desired: &[DesiredRun<Key, Canonical>],
     ) -> Result<(), RunSlotError> {
@@ -361,50 +414,9 @@ where
         {
             return Err(RunSlotError::DuplicateLogicalKey);
         }
-
         for run in desired {
-            let (handle, change) = match self.find_committed(&run.logical_key) {
-                Some(slot) => {
-                    let state = self.slot_state(slot)?;
-                    let occupant = state
-                        .occupant
-                        .as_ref()
-                        .ok_or(RunSlotError::ArithmeticOverflow)?;
-                    if occupant.canonical == run.canonical {
-                        (
-                            RunHandle {
-                                slot,
-                                generation: state.generation,
-                            },
-                            RunSlotChange::Retained,
-                        )
-                    } else {
-                        let handle = RunHandle {
-                            slot,
-                            generation: state.generation.next()?,
-                        };
-                        self.writes.push(PendingWrite {
-                            handle,
-                            occupant: Occupant {
-                                logical_key: run.logical_key,
-                                canonical: run.canonical,
-                            },
-                        });
-                        (handle, RunSlotChange::Updated)
-                    }
-                }
-                None => {
-                    let handle = self.allocate_slot()?;
-                    self.writes.push(PendingWrite {
-                        handle,
-                        occupant: Occupant {
-                            logical_key: run.logical_key,
-                            canonical: run.canonical,
-                        },
-                    });
-                    (handle, RunSlotChange::Allocated)
-                }
-            };
+            let existing = self.find_committed(&run.logical_key);
+            let (handle, change) = self.assign_run(run, existing)?;
 
             let pending = self
                 .pending_index
@@ -434,6 +446,66 @@ where
                 });
             }
         }
+        self.finish_structural_prepare()
+    }
+
+    fn assign_run(
+        &mut self,
+        run: &DesiredRun<Key, Canonical>,
+        existing: Option<RunSlot>,
+    ) -> Result<(RunHandle, RunSlotChange), RunSlotError> {
+        let Some(slot) = existing else {
+            let handle = self.allocate_slot()?;
+            self.writes.push(PendingWrite {
+                handle,
+                occupant: Occupant {
+                    logical_key: run.logical_key,
+                    canonical: run.canonical,
+                },
+            });
+            return Ok((handle, RunSlotChange::Allocated));
+        };
+        let state = self.slot_state(slot)?;
+        let occupant = state
+            .occupant
+            .as_ref()
+            .ok_or(RunSlotError::ArithmeticOverflow)?;
+        if occupant.canonical == run.canonical {
+            return Ok((
+                RunHandle {
+                    slot,
+                    generation: state.generation,
+                },
+                RunSlotChange::Retained,
+            ));
+        }
+        let handle = RunHandle {
+            slot,
+            generation: state.generation.next()?,
+        };
+        self.writes.push(PendingWrite {
+            handle,
+            occupant: Occupant {
+                logical_key: run.logical_key,
+                canonical: run.canonical,
+            },
+        });
+        Ok((handle, RunSlotChange::Updated))
+    }
+
+    fn retire_slot(&mut self, slot: RunSlot) -> Result<(), RunSlotError> {
+        let state = self.slot_state(slot)?;
+        if state.occupant.is_none() {
+            return Err(RunSlotError::ArithmeticOverflow);
+        }
+        self.retirements.push(RunHandle {
+            slot,
+            generation: state.generation,
+        });
+        Ok(())
+    }
+
+    fn finish_structural_prepare(&mut self) -> Result<(), RunSlotError> {
         reserve(&mut self.quarantine, self.retirements.len())?;
 
         let required_slots = usize::try_from(self.pending_slot_count)

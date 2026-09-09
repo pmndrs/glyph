@@ -125,6 +125,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
     flowThreadId: 3,
     foregroundRgba: 0,
     outlineRgba: 6,
+    placementSlot: 8,
     regionId: 2,
     shadowRgba: 7,
     stableGlyphId: 5,

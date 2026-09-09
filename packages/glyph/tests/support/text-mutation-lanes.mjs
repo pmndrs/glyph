@@ -9,11 +9,21 @@ import { ThreeConfig } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 // The identity lane is named by the codec contract that packs it, not by a literal here.
-import { STABLE_GLYPH_BUFFER_ID, TRANSFORM_BUFFER_ID } from '../../dist/three/codec.js';
+import { OCCURRENCE_BUFFER_ID } from '../../dist/three/codec.js';
+import { bitmapSchema } from '../../dist/raster/bitmap.js';
+import { msdfSchema } from '../../dist/raster/msdf.js';
+import { slugSchema } from '../../dist/raster/slug.js';
 
-export const IDENTITY_LANE = `_pmndrsGlyph_${STABLE_GLYPH_BUFFER_ID}`;
-const TRANSFORM_INDEX_LANE = `_pmndrsGlyph_${TRANSFORM_BUFFER_ID}`;
+const OCCURRENCE_LANE = `_pmndrsGlyph_${OCCURRENCE_BUFFER_ID}`;
+export const IDENTITY_LANE = `${OCCURRENCE_LANE}:stableGlyphId`;
+export const PLACEMENT_SLOT_LANE = `${OCCURRENCE_LANE}:placementSlot`;
+const TRANSFORM_INDEX_LANE = `${OCCURRENCE_LANE}:transformIndex`;
 const TRANSFORM_TABLE = '_pmndrsGlyphTransforms';
+const LOCAL_ORIGIN_LANES = new Set(
+  [bitmapSchema.buffers.origin.id, msdfSchema.buffers.rect.id, slugSchema.buffers.rect.id].map(
+    (id) => `_pmndrsGlyph_${id}`,
+  ),
+);
 
 export const fixtures = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
 
@@ -114,7 +124,15 @@ export function lanes(mounted) {
       if (!(attribute instanceof THREE.InstancedBufferAttribute)) continue;
       if (name === TRANSFORM_TABLE) continue;
       const width = attribute.itemSize ?? 1;
-      attributes[name] = [...attribute.array].slice(start * width, (start + instances) * width);
+      const values = [...attribute.array].slice(start * width, (start + instances) * width);
+      if (name === OCCURRENCE_LANE) {
+        assert.equal(width, 4, 'occurrence record width');
+        attributes[IDENTITY_LANE] = values.filter((_, index) => index % 4 === 0);
+        attributes[PLACEMENT_SLOT_LANE] = values.filter((_, index) => index % 4 === 1);
+        attributes[TRANSFORM_INDEX_LANE] = values.filter((_, index) => index % 4 === 2);
+      } else {
+        attributes[name] = values;
+      }
     }
     const transformAttribute = geometry.getAttribute(TRANSFORM_TABLE);
     draws.push({
@@ -198,6 +216,28 @@ export function assertMatchesFreshBuild(font, mounted, paragraphs, context) {
           assertTransformBindings(want, expected, `${context}: draw ${index} fresh`);
           continue;
         }
+        if (name === PLACEMENT_SLOT_LANE) {
+          assert.equal(
+            draw.attributes[name].length,
+            expected.attributes[name].length,
+            `${context}: draw ${index} placement-slot count`,
+          );
+          assert.ok(
+            draw.attributes[name].every(Number.isSafeInteger),
+            `${context}: draw ${index} placement slots are dense integer addresses`,
+          );
+          continue;
+        }
+        if (LOCAL_ORIGIN_LANES.has(name)) {
+          // The first two lanes are deliberately run-local; public x/y above are the absolute
+          // oracle. Width/height remain static technique data and must still match cold output.
+          assert.deepEqual(
+            withoutLocalOrigin(draw.attributes[name], draw.instances),
+            withoutLocalOrigin(expected.attributes[name], expected.instances),
+            `${context}: draw ${index} packed ${name} non-position lanes`,
+          );
+          continue;
+        }
         // The packed lane. This is what the GPU samples, and the only lane that caught the defect.
         assert.deepEqual(draw.attributes[name], expected.attributes[name], `${context}: draw ${index} packed ${name}`);
       }
@@ -205,6 +245,20 @@ export function assertMatchesFreshBuild(font, mounted, paragraphs, context) {
   } finally {
     unmount(fresh);
   }
+}
+
+function withoutLocalOrigin(values, instances) {
+  const width = instances === 0 ? 0 : values.length / instances;
+  assert.ok(Number.isSafeInteger(width) && width >= 2, 'local-origin record width');
+  const result = [];
+  for (let record = 0; record < instances; record += 1) {
+    result.push(...values.slice(record * width + 2, (record + 1) * width));
+  }
+  return result;
+}
+
+export function isColdComparablePackedLane(name) {
+  return name !== PLACEMENT_SLOT_LANE && !LOCAL_ORIGIN_LANES.has(name);
 }
 
 /** Resolve renderer-local transform ids through each scene's own matrix table. */

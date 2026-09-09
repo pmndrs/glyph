@@ -29,7 +29,6 @@ interface DrawOwner {
   glyphStorage?(storageKey: string):
     | Readonly<{
         transforms: THREE.StorageInstancedBufferAttribute;
-        pivots: THREE.StorageInstancedBufferAttribute;
       }>
     | undefined;
 }
@@ -125,7 +124,7 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
         const originDeclaration =
           decoration || resolvedResource === undefined ? undefined : glyphOriginBuffer(resolvedResource);
         const origins = originDeclaration === undefined ? undefined : byCodecId.get(originDeclaration.id);
-        const stableIds = decoration ? undefined : byCodecId.get(threeSystemBuffers.stableGlyphId.id);
+        const stableIds = decoration ? undefined : byCodecId.get(threeSystemBuffers.occurrence.id);
         if (originDeclaration !== undefined && origins !== undefined && stableIds !== undefined) {
           nextOriginSegments.push({
             origins,
@@ -148,6 +147,7 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
           transform,
           context.transformGeneration,
           drawGeometry.key,
+          decoration ? 'placement:none' : `placement:${context.placementTable?.storageKey ?? 'missing'}`,
         );
         const reusable = previous.get(key)?.shift();
         if (reusable !== undefined) {
@@ -173,7 +173,6 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
         const glyphStorage = stableIds === undefined ? undefined : owner.glyphStorage?.(glyphStorageKey(stableIds));
         if (glyphStorage !== undefined) {
           geometry.setAttribute('_pmndrsGlyphInstanceTransforms', glyphStorage.transforms);
-          geometry.setAttribute('_pmndrsGlyphInstancePivots', glyphStorage.pivots);
         }
         if (transform.kind === 'indexed') geometry.setAttribute('_pmndrsGlyphTransforms', context.transformAttribute);
         const mesh = new THREE.Mesh(geometry, material);
@@ -226,7 +225,7 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
 function prepareOwnerGlyphStorage(buffers: ReadonlyMap<ThreeBufferBinding, RetainedBuffer>, owner: DrawOwner): void {
   if (owner.prepareGlyphStorage === undefined) return;
   for (const buffer of buffers.values()) {
-    if (buffer.codecBufferId === threeSystemBuffers.stableGlyphId.id) {
+    if (buffer.codecBufferId === threeSystemBuffers.occurrence.id) {
       owner.prepareGlyphStorage(glyphStorageKey(buffer), buffer.capacityRecords);
     }
   }
@@ -237,9 +236,9 @@ function transformRealization(
   transformId: number,
 ): TransformRealization {
   if (transformId !== 0) return { kind: 'direct', transformId };
-  const indices = buffers.get(threeSystemBuffers.transformIndex.id);
-  if (indices === undefined || !(indices.array instanceof Uint32Array)) {
-    throw new Error('indexed Three draw is missing its u32 transform-index buffer');
+  const indices = buffers.get(threeSystemBuffers.occurrence.id);
+  if (indices === undefined || indices.vectorWidth !== 4 || !(indices.array instanceof Uint32Array)) {
+    throw new Error('indexed Three draw is missing its u32 occurrence buffer');
   }
   return { kind: 'indexed', indices };
 }
@@ -266,6 +265,7 @@ function drawRealizationKey(
   transform: TransformRealization,
   transformGeneration: number,
   geometry: string,
+  placementKey: string,
 ): string {
   // The Rust plan compiler publishes Codec buffers in declaration order and the stable order buffer last.
   // Preserve that package-owned order instead of sorting the complete binding set for every realized span.
@@ -274,5 +274,5 @@ function drawRealizationKey(
     transform.kind === 'direct'
       ? `direct:${transform.transformId}`
       : transformProgramKey(transform, transformGeneration);
-  return `${programKey}:${resourceKey}:${materialKey}:${clipId}:${depthKey}:${transformKey}:${geometry}:${bufferKey}`;
+  return `${programKey}:${resourceKey}:${materialKey}:${clipId}:${depthKey}:${transformKey}:${geometry}:${placementKey}:${bufferKey}`;
 }

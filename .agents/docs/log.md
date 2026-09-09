@@ -2,6 +2,22 @@
 
 ## 2026-09-09
 
+- **Cut the retained LayoutRun placement contract through core and renderers** — The generated ABI now carries a distinct
+  per-physical-glyph placement slot and one program-independent session table whose row is exactly f32x2 x/y. Planner-
+  scoped run and placement slots are staged, generation-checked, and acknowledgement-quarantined; fixed numeric blocks,
+  sparse word-root segments, dense-CJK segments, visual order, bidi, hanging spaces, and replacement runs remain core
+  authorities. Three and direct TypeGPU resolve placement without adding a run/slice batch key, primitive, span, or draw,
+  and stable glyph identity remains a separate truthful lane. This is a pre-alpha coordinate reset, not a compatibility
+  mode; justification and visual metadata never enter renderer rows.
+
+- **Measured the first complete cutover honestly** — Coalescing nearby session placement rows through committed bytes
+  reduced ordered Bitmap active-resize writes from main's 170.4 KiB to 30.5 KiB at 22k Latin and 59.8 KiB at dense CJK,
+  with one patch per sample. The candidate still measured about 12–14% slower at 22k (`4.206 / 4.496 ms` Latin and
+  `4.092 / 4.277 ms` CJK median/p95), while 100k Latin was about 0.7% faster than PR #172 and wrote 140.7 KiB instead of
+  783.6 KiB. Corrected measurement/adoption probes show measurement itself is flat and the remaining cost is state,
+  gather, and publication. Bitmap/MTSDF/Slug renderer checks and the packaged direct-TypeGPU live WebGPU probe pass;
+  roadmap 12.2 stays active until the residual overhead and consolidated release gates close.
+
 - **Re-pinned final LayoutRun coordinate arithmetic** — Deterministic inline and normal-range block controls prove that
   additive run-local placement cannot preserve the former ordered-f64-fold then single-f32-narrow bits universally; the
   4,111-case representation lab also rejects plain f32, high/low translation, and break-anchor forms as exact legacy-bit

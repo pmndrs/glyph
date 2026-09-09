@@ -147,7 +147,6 @@ function measureWarm(name) {
   const samples = [];
   const plans = [];
   for (let index = 0; index < options.warmup + options.repetitions; index += 1) {
-    const revision = index + 2;
     const common = {
       expectedEngineRevision: state.engineRevision,
       consumedRevision: state.revision,
@@ -182,7 +181,7 @@ function measureWarm(name) {
     } else if (name === 'measure-query' || name === 'adopt-measure-query') {
       bytes = updateBytes({
         ...common,
-        geometry: { ...baseGeometry, width: 420 + index * 7, revision },
+        geometry: rustLayoutBenchmarkGeometry('active-column-resize', index, baseGeometry),
       });
       const queryBytes = bytes.slice();
       new DataView(queryBytes.buffer).setUint32(
@@ -296,11 +295,23 @@ function execute(bytes, allowGrowth = false, operation = 'text_update', measureP
   const patchesOffset = result.getUint32(layout.patchesOffset, true);
   const patchLayout = abi.layouts.enginePatch;
   let writeBytes = 0;
+  const patchBuffers = {};
   for (let index = 0; index < patchCount; index += 1) {
     const at = resultPointer + patchesOffset + index * patchLayout.size;
     const patch = new DataView(memory.buffer, at, patchLayout.size);
+    const bufferId = patch.getUint32(patchLayout.bufferId, true);
+    const attribution = (patchBuffers[bufferId] ??= { patches: 0, writeBytes: 0, writeGaps: {} });
+    attribution.patches += 1;
     if (patch.getUint8(patchLayout.opcode) === abi.engine.patchOpcodes.write) {
-      writeBytes += patch.getUint32(patchLayout.byteLength, true);
+      const byteLength = patch.getUint32(patchLayout.byteLength, true);
+      const destinationOffset = patch.getUint32(patchLayout.destinationOffset, true);
+      if (attribution.writeEnd !== undefined && destinationOffset >= attribution.writeEnd) {
+        const gap = destinationOffset - attribution.writeEnd;
+        attribution.writeGaps[gap] = (attribution.writeGaps[gap] ?? 0) + 1;
+      }
+      attribution.writeEnd = destinationOffset + byteLength;
+      writeBytes += byteLength;
+      attribution.writeBytes += byteLength;
     }
   }
   const primitiveCount = result.getUint32(layout.primitiveCount, true);
@@ -323,6 +334,7 @@ function execute(bytes, allowGrowth = false, operation = 'text_update', measureP
     glyphCount,
     patchCount,
     writeBytes,
+    patchBuffers,
   };
 }
 
@@ -397,6 +409,7 @@ function summarize(name, glyphs, samples, plans) {
         glyphCount: plans[index]?.glyphCount ?? 0,
         patchCount: plans[index]?.patchCount ?? 0,
         writeBytes: plans[index]?.writeBytes ?? 0,
+        patchBuffers: plans[index]?.patchBuffers ?? {},
       })),
     });
   }

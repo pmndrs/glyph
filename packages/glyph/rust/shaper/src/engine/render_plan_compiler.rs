@@ -19,11 +19,12 @@ use super::{
         RESOURCE_ACTION_RETAIN, RESOURCE_ACTION_UPDATE, RETIRE_RESOURCE, RenderPlanView,
         ResourceRecord, RetirementRecord,
     },
+    session_placement::{SessionPlacementCompiler, SessionPlacementError, SessionPlacementInput},
     stable_plan::StablePlanCompiler,
 };
 
-const ORDERED_BUFFER_ID_LIMIT: u32 = 0x7fff_ffff;
-const STABLE_BUFFER_ID_FLOOR: u32 = ORDERED_BUFFER_ID_LIMIT;
+const ORDERED_BUFFER_ID_LIMIT: u32 = 0x7fff_fffe;
+const STABLE_BUFFER_ID_FLOOR: u32 = 0x7fff_ffff;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RenderPlanCompilerError {
@@ -52,6 +53,18 @@ impl From<PlanInputError> for RenderPlanCompilerError {
 impl From<PlanError> for RenderPlanCompilerError {
     fn from(error: PlanError) -> Self {
         Self::Plan(error)
+    }
+}
+
+impl From<SessionPlacementError> for RenderPlanCompilerError {
+    fn from(error: SessionPlacementError) -> Self {
+        match error {
+            SessionPlacementError::AllocationFailed => Self::AllocationFailed,
+            SessionPlacementError::AlreadyPrepared => Self::AlreadyPrepared,
+            SessionPlacementError::InvalidInput => Self::InvalidPlan,
+            SessionPlacementError::ArithmeticOverflow => Self::ArithmeticOverflow,
+            SessionPlacementError::GenerationExhausted => Self::InvalidIdentity,
+        }
     }
 }
 
@@ -118,6 +131,7 @@ enum PreparedStrategy {
 pub struct RenderPlanCompiler {
     ordered: OrderedPlanCompiler,
     stable: StablePlanCompiler,
+    session: SessionPlacementCompiler,
     resources: Vec<ResourceRecord>,
     buffers: Vec<BufferRecord>,
     patches: Vec<PatchRecord>,
@@ -133,6 +147,7 @@ impl Default for RenderPlanCompiler {
         Self {
             ordered: OrderedPlanCompiler::with_buffer_id_limit(ORDERED_BUFFER_ID_LIMIT),
             stable: StablePlanCompiler::with_buffer_id_floor(STABLE_BUFFER_ID_FLOOR),
+            session: SessionPlacementCompiler::default(),
             resources: Vec::new(),
             buffers: Vec::new(),
             patches: Vec::new(),
@@ -151,7 +166,22 @@ impl RenderPlanCompiler {
             return Err(RenderPlanCompilerError::AlreadyPrepared);
         }
         self.clear_merged_plan();
+        self.session.prepare_reuse()?;
         self.prepared_strategy = PreparedStrategy::Empty;
+        Ok(())
+    }
+
+    pub(crate) fn prepare_session(
+        &mut self,
+        input: SessionPlacementInput<'_>,
+        publication_generation: u32,
+        checkpoint: bool,
+    ) -> Result<(), RenderPlanCompilerError> {
+        if self.prepared_strategy == PreparedStrategy::None {
+            return Err(RenderPlanCompilerError::NotPrepared);
+        }
+        self.session
+            .prepare(input, publication_generation, checkpoint)?;
         Ok(())
     }
 
@@ -247,7 +277,7 @@ impl RenderPlanCompiler {
         capability_set: CapabilitySetId,
         codec_fingerprint: u64,
     ) -> Result<RenderPlanView<'_>, RenderPlanCompilerError> {
-        match self.prepared_strategy {
+        let mut view = match self.prepared_strategy {
             PreparedStrategy::None => Err(RenderPlanCompilerError::NotPrepared),
             PreparedStrategy::Empty => Ok(RenderPlanView {
                 codec_handle,
@@ -276,7 +306,13 @@ impl RenderPlanCompiler {
                 payload: &self.payload,
                 ..RenderPlanView::default()
             }),
-        }
+        }?;
+        let session = self.session.view();
+        view.session_buffers = session.buffers;
+        view.session_patches = session.patches;
+        view.session_retirements = session.retirements;
+        view.session_payload = session.payload;
+        Ok(view)
     }
 
     pub fn commit(&mut self) -> Result<(), RenderPlanCompilerError> {
@@ -290,6 +326,7 @@ impl RenderPlanCompiler {
                 self.stable.commit()?;
             }
         }
+        self.session.commit();
         self.prepared_strategy = PreparedStrategy::None;
         Ok(())
     }
@@ -304,11 +341,14 @@ impl RenderPlanCompiler {
             }
             PreparedStrategy::None | PreparedStrategy::Empty => {}
         }
+        self.session.abort();
         self.prepared_strategy = PreparedStrategy::None;
     }
 
     pub fn buffer_bytes(&self, id: u32) -> Option<&[u8]> {
-        if id <= ORDERED_BUFFER_ID_LIMIT {
+        if let Some(bytes) = self.session.buffer_bytes(id) {
+            Some(bytes)
+        } else if id <= ORDERED_BUFFER_ID_LIMIT {
             self.ordered.buffer_bytes(id)
         } else {
             self.stable.buffer_bytes(id)
@@ -808,6 +848,7 @@ mod tests {
                 CAPABILITY,
                 PlanInput {
                     glyphs: &glyphs,
+                    placement_slots: &[0; 4],
                     semantic_change_masks: &[],
                     f32_fields: &[&[1.0, 2.0, 3.0, 4.0]],
                     u32_fields: &[],
@@ -935,12 +976,14 @@ mod tests {
         publication_generation: u32,
         acknowledged_publication_generation: u32,
     ) {
+        let placement_slots = vec![0; glyphs.len()];
         compiler
             .prepare(
                 codec,
                 CAPABILITY,
                 PlanInput {
                     glyphs,
+                    placement_slots: &placement_slots,
                     semantic_change_masks: &[],
                     f32_fields: &[x],
                     u32_fields: &[],

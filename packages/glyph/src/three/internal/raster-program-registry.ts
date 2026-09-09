@@ -108,7 +108,7 @@ function compileProgram<Format extends RasterFormatMetadata, Schema extends Tech
   identities: CodecIdFactory,
   transformMode: 'indexed' | 'direct',
 ): CompiledThreeRasterProgram {
-  const system = transformMode === 'indexed' ? threeSystemBuffers : { stableGlyphId: threeSystemBuffers.stableGlyphId };
+  const system = threeSystemBuffers;
   const codec = createRasterCodecProgram(portable, {
     namespace: 'three',
     system,

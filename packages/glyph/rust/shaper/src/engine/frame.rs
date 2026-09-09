@@ -99,6 +99,7 @@ pub(crate) const SEMANTIC_U32_TRANSFORM_INDEX: u8 = 4;
 pub(crate) const SEMANTIC_U32_STABLE_GLYPH_ID: u8 = 5;
 pub(crate) const SEMANTIC_U32_OUTLINE_RGBA: u8 = 6;
 pub(crate) const SEMANTIC_U32_SHADOW_RGBA: u8 = 7;
+pub(crate) const SEMANTIC_U32_PLACEMENT_SLOT: u8 = 8;
 pub(crate) const PARAGRAPH_MUTATION_UPSERT: u8 = 1;
 pub(crate) const PARAGRAPH_MUTATION_REMOVE: u8 = 2;
 
