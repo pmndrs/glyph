@@ -23,7 +23,6 @@
 - [External gpucat integration fitness plan](gpucat-integration.md) — public-surface mapping, external-package boundary, ordering/lifecycle plan, and remaining shader-reuse proof for gpucat.
 - [Canonical roadmap](../roadmap/roadmap.md) — authoritative implementation order and exit gates.
 - [Glyph alpha fast-follow implementation brief](api-alpha-fast-follow.md) — disposable post-merge prompt for the deferred Rust audit and remaining production-review findings; delete it when the accepted work is complete.
-- [Paragraph batching and TypeGPU integration recovery](paragraph-batching-typegpu-recovery.md) — disposable execution plan for preserving the PR #160/#161 stack over merged PR #46, closing validated correctness and resize-performance work, and proving the final browser gates; delete it after the stack lands.
 - [uikit integration](uikit-integration.md) — third-party retained-layout integration boundary.
 
 ## Data and extension contracts
@@ -48,7 +47,8 @@
 
 - [Shaping compilation and execution research](shaping-compilation-research.md) — closed-corpus baking, semantic bytecode, per-font CPU/Wasm specialization, and WebGPU execution research.
 - [Language-aware font units and physical bitmap strikes](language-and-strike-bundles.md) — coverage-first language delivery, CJK units, DPR selection, and independent strike residency.
-- [Responsive editorial flow and mixed-raster composition](editorial-flow-layout.md) — post-v1 exclusion regions, responsive columns, and a bitmap/MTSDF/Slug benchmark.
+- [Responsive editorial flow and mixed-raster composition](editorial-flow-layout.md) — research motivation, Pretext comparison, and benchmark concept for post-v1 editorial flow; implementation is owned by the fragment-relative reflow plan.
+- [Fragment-relative reflow and LayoutRun placement](fragment-relative-reflow.md) — active Milestone 12 implementation and proof plan for stable run placement, polygon exclusions, projected objects, and same-source drop caps.
 - [Paragraph-scoped preparation and synchronous layout queries](paragraph-query-preparation.md) — one-paragraph
   prepare/query, retained candidate adoption, and why it needs no third full buffer.
 

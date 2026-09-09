@@ -1,7 +1,7 @@
 ---
 type: Design Research
 title: Responsive editorial flow and mixed-raster composition
-description: Defines the post-v1 layout model and benchmark for responsive multi-column text around exclusions rendered with Bitmap, MTSDF, and Slug.
+description: Records the product motivation, prior-art comparison, and benchmark concept for post-v1 editorial flow; the fragment-relative reflow plan owns implementation.
 tags: [layout, benchmark, typography, exclusions, bitmap, mtsdf, slug]
 sources:
   - id: 'pretext'
@@ -16,19 +16,26 @@ sources:
   - id: 'roadmap'
     resource: '../roadmap/roadmap.md'
     title: 'Canonical implementation roadmap'
+  - id: 'fragment-relative-reflow'
+    resource: 'fragment-relative-reflow.md'
+    title: 'Fragment-relative reflow and LayoutRun placement'
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-15T15:53:27Z'
+  at: '2026-09-09T02:02:17Z'
 ---
 
 # Responsive editorial flow and mixed-raster composition
 
-Status: accepted post-v1 direction; API and performance conclusions remain evidence-gated
+Status: accepted post-v1 research direction; implementation model and gates are superseded by the
+[fragment-relative reflow plan](fragment-relative-reflow.md)
 
 ## Recommendation
 
-Add responsive flow regions and a mixed-raster editorial benchmark after the target v1 release gate. Do not expand target v1's box-constrained paragraph contract to fit this work prematurely.
+Use responsive flow regions and a mixed-raster editorial benchmark to prove the post-v1 feature. The canonical roadmap
+now authorizes that work over the landed retained Rust core and paragraph-reflow optimization; the implementation sequence,
+data model, numeric contract, and release gates live only in the
+[fragment-relative reflow plan](fragment-relative-reflow.md).
 
 The benchmark should be a typographic composition that needs all three first-party techniques:
 
@@ -62,9 +69,14 @@ The showcase should exercise all four lanes and label them separately. Repeated 
 
 ## Current boundary
 
-Target v1 lays out horizontal text in a rectangular content box, and flows it through side-by-side ordered columns inside that box. It can reshape changed line boundaries efficiently, but it does not represent column balancing, holes, floats, arbitrary contours, or more than one usable interval on a baseline. An oversized letter can be rendered beside a box today, but body text cannot correctly flow around its contour.
+The public authoring surface lays out horizontal text in a rectangular content box and flows it through side-by-side
+ordered columns. Internally, the Rust engine already retains bounded rectangle or polygon regions and exclusions, subtracts
+them into multiple slots, and composes line fragments through sequential regions. Those records are package-owned frame
+geometry, not yet a public arbitrary-contour or scene-object API.
 
-The shaping engine is not the missing piece. The missing piece is a flow planner between paragraph measurement and final positioning.
+The missing production boundary is retained fragment-relative placement: public contour authoring, object projection,
+same-source drop caps, and geometry-local publication must reuse shaped text without rematerializing absolute geometry for
+every glyph.
 
 ### What already exists
 
@@ -76,45 +88,21 @@ The shaping engine is not the missing piece. The missing piece is a flow planner
 
 ### What is missing
 
-- a region vocabulary beyond one rectangle and one available width per line;
-- exclusion subtraction, column progression, and multiple usable slots on one baseline;
+- public region and exclusion authoring beyond the content-box column shorthand;
+- retained run placement that can update a subset of lines, fragments, and publication rows;
 - explicit logical and visual ordering across fragments separated by an obstacle;
 - incremental invalidation keyed by changing region geometry and edited source ranges;
+- known-object 2D/3D projection and same-source drop-cap contour ownership;
 - a mixed-raster composition policy that selects techniques by typographic role without splitting layout authority;
 - correctness oracles for collision, reading order, safe breaks, and responsive region transitions;
 - comparable timing evidence against Pretext for both stable-text reflow and edited-text preparation.
 
-## Proposed flow model
+## Implementation ownership
 
-Represent a composition as an ordered sequence of flow regions. For each line band, a region resolves zero or more horizontal slots after subtracting its exclusions:
-
-```ts
-type FlowSlot = Readonly<{
-  inlineStart: number;
-  inlineEnd: number;
-}>;
-
-type LineBand = Readonly<{
-  blockStart: number;
-  blockEnd: number;
-  slots: readonly FlowSlot[];
-}>;
-```
-
-These are illustrative internal values, not an accepted public API.
-
-The planner should:
-
-1. project drop caps, images, callouts, or known 3D geometry into line-band exclusion intervals;
-2. subtract those intervals from each column or region to produce ordered slots;
-3. place shaped clusters into slots without crossing grapheme, bidi, or unsafe shaping boundaries;
-4. use the existing batched boundary reshaping path when a new slot changes a line boundary;
-5. emit explicit fragments so reading order and visual order remain inspectable when one baseline has space on both sides of an obstacle;
-6. retain shaped text while viewport, column, or obstacle changes invalidate only the flow plan and affected boundaries.
-
-The first implementation should use conservative line-box collision against explicit two-dimensional exclusions. Tight glyph-ink collision, arbitrary rendered-scene occlusion, balanced columns, hyphenation, and vertical writing require separate evidence and should not hide inside the initial contract.
-
-For known scene objects, the application can project bounds or a simplified silhouette from its CPU-visible transform and geometry. A general solution that discovers occlusion from already-rendered pixels may require GPU readback and is not part of the first flow-region milestone.
+The [fragment-relative reflow plan](fragment-relative-reflow.md) is the sole owner of the `LayoutRun` model, transactional
+placement, two-dimensional polygon authoring, projected known-geometry objects, same-source drop caps, query behavior,
+renderer publication, milestone sequence, and acceptance gates. This research concept does not define a parallel API or
+algorithm. Existing retained geometry and slot composition remain the starting authority recorded by D-190–D-192.
 
 ## Editorial benchmark
 
@@ -152,21 +140,13 @@ Compare both a static first layout and deterministic dynamic updates. Keep appro
 
 ## Milestone gates
 
-Milestone 12 begins only after the target v1 renderer-set gate. Before accepting a public flow API it must prove:
-
-- rectangular layout remains the zero-overhead common path;
-- the same prepared paragraph can produce box and exclusion-region layouts;
-- multi-column and multi-slot reading order is explicit for LTR, RTL, and mixed-direction text;
-- moving an exclusion reuses broad shaping and batches only necessary boundary reshapes;
-- bitmap, MTSDF, and Slug consume one authoritative positioned layout without duplicated advances or kerning;
-- benchmark mode reports consumer costs, while conformance mode visibly explains every tested boundary and collision;
-- allocation, latency, payload, and bundle isolation stay within measured budgets;
-- the Pretext comparison is reproducible and states where contracts differ.
+Milestone 12 gates are maintained in the [fragment-relative reflow plan](fragment-relative-reflow.md). The benchmark and
+comparison here supply product evidence to those gates; they do not weaken exact layout, renderer parity, allocation,
+latency, payload, or bundle-isolation requirements.
 
 ## Deferred follow-ups
 
-- contour-tight drop-cap wrapping based on glyph ink rather than conservative geometry;
 - balanced columns, widows/orphans policy, automatic hyphenation, and shape-inside authoring tools;
 - arbitrary GPU scene occlusion derived from depth or masks;
 - vertical editorial flow;
-- making a flow-region representation public before integration experience proves it.
+- freezing a general-purpose shape-inside API before integration evidence proves it.

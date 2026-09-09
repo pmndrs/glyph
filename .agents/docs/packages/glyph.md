@@ -508,10 +508,13 @@ future deltas. Portable payload bytes are already shared by immutable `Font` val
 root-local. Pooling those immutable device objects above roots is a Three implementation follow-up, not a core scene,
 device, render-pass, or implicit-standalone-batch API.
 
-A paragraph's content box may declare `columns: { count, gap }`, flowing text through side-by-side ordered columns inside
-the exact content-box width. Columns fill in order without balancing, so the final column may run short, and an exact
-`width` is required because the column advance is derived from it. Ordered columns are the only multi-interval flow the
-engine represents; balancing, exclusions, and contour flow remain post-v1.
+A paragraph's public content box may declare `columns: { count, gap }`, flowing text through side-by-side ordered columns
+inside the exact content-box width. Columns fill in order without balancing, so the final column may run short, and an
+exact `width` is required because the column advance is derived from it. Internally, Rust already retains bounded rectangle
+or polygon regions and exclusions, subtracts them into multiple slots, and composes fragments through sequential regions.
+Those package-owned frame records are not yet a public arbitrary-contour or scene-object API. Public contour authoring,
+incremental obstacle-local placement, projected known-geometry objects, and same-source drop caps belong to
+[Milestone 12's fragment-relative reflow plan](../planning/fragment-relative-reflow.md); balanced columns remain deferred.
 
 ## Renderer Codec
 
@@ -1071,18 +1074,21 @@ input leaves a fresh valid transaction usable. This supplements the Rust parser 
 than restoring any deleted `shapeBatch`, `reshapeRanges`, or TypeScript paragraph state machine. The package gate now
 contains 165 Node integration tests plus three deterministic fuzz-smoke tests.
 
-The integer layout-units migration (D-254) moved cluster advances, line fitting, justification, and positioning onto
-F26.6 integers with one rounding contract (`layout_units.rs`: round-half-up as `floor(value * 64 + 1/2)`), landed as
-stacked slices with an interleaved same-run A/B for each — sides alternated in identical order within one process
-session, because this host drifts several percent between sessions. Step deltas, medians at the 22,000-glyph corpus:
+D-254 introduced scale-late F26.6 fixed-point layout decisions, and PR #134 later raised the decision lane to 16
+fractional bits stored in `i64`. The current rounding contract is `floor(value * 65,536 + 1/2)` with caller-derived values
+bounded to ±2^53 integer units. Cluster values, chunk summaries, fitting, and justification use the `i64` lane; the
+authoritative shaped advances and intra-line positioning cursor remain `f64`, and semantic, query, Codec, and renderer
+geometry narrows to the public `f32` contract. The original migration landed as stacked slices with an interleaved
+same-run A/B for each — sides alternated in identical order within one process session because this host drifts several
+percent between sessions. Historical step deltas, medians at the 22,000-glyph corpus:
 
-| Slice                                  | Lane deltas (median, rounds consistent)                                                                                                                          |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Registry flattening (slice 1)          | lane-neutral; shaper −9,433 raw bytes                                                                                                                            |
-| F26.6 fit + chunk-64 kernels (slice 2) | ~2% measure lane, scales with line length; byte-exact break parity                                                                                               |
-| Retained adjacency stream (slice 3)    | column-resize 2.996 → 2.781 ms (−7.2%), measure-query 1.930 → 1.824 ms (−5.5%), both 3/3; suffix +1.3% / splice +2.1% (re-shape scatter, accepted); cold neutral |
-| Metric-only scale refresh (slice 3)    | font-size 6.715 → 5.898 ms (−12.2%, 3/3) — 9.2% below the pre-stream baseline; other lanes neutral                                                               |
-| Integer justification (slice 4)        | lane-neutral 2/2 (the direct lanes do not justify); totals now exact                                                                                             |
+| Slice                                             | Lane deltas (median, rounds consistent)                                                                                                                          |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Registry flattening (slice 1)                     | lane-neutral; shaper −9,433 raw bytes                                                                                                                            |
+| F26.6 fit + chunk-64 kernels (historical slice 2) | ~2% measure lane, scales with line length; byte-exact break parity                                                                                               |
+| Retained adjacency stream (slice 3)               | column-resize 2.996 → 2.781 ms (−7.2%), measure-query 1.930 → 1.824 ms (−5.5%), both 3/3; suffix +1.3% / splice +2.1% (re-shape scatter, accepted); cold neutral |
+| Metric-only scale refresh (slice 3)               | font-size 6.715 → 5.898 ms (−12.2%, 3/3) — 9.2% below the pre-stream baseline; other lanes neutral                                                               |
+| Integer justification (slice 4)                   | lane-neutral 2/2 (the direct lanes do not justify); totals now exact                                                                                             |
 
 The stream replaces the glyph permutation with six adjacency-order payload columns scattered at build, so positioning
 walks sequential memory and geometry-only updates reuse the stream untouched; a metrics-only restyle re-derives just the
@@ -1099,10 +1105,14 @@ quantized-boundary re-pins recorded with their commits — one RTL ellipsis exte
 paragraph bidi and CJK contracts (30 and 25 numeric leaves, maxima 0.070 px and 0.101 px, the latter a long Korean
 line's accumulated per-site sub-unit quantization), and the advanced-shaping and rich-text composed hashes, whose
 roughly twenty-five structural pins each — glyph and draw counts, line counts, both first-line break positions — held
-exactly while origins settled on 1/64 boundaries. Integer justification required no re-pin: both contract corpora and
+exactly while the historical F26.6 origins settled on 1/64 boundaries. Integer justification required no re-pin: both contract corpora and
 the sixteen-scenario conformance suite reproduce byte-identically because their justified cases divide evenly. Native
 and Wasm agree bit-for-bit on the contract corpora by construction of the shared rounding contract, and the linux CI
 host reproduces both composed scenario hashes recorded on this darwin host.
+
+PR #134 re-derived the affected deterministic fixtures when the decision lane moved to 1/65,536 units. That refinement
+did not make glyph positioning integer: the `f64` pen remains a deliberate seam, and a future integer-pen change requires
+its own explicit corpus re-derivation.
 
 The review fold that closed the migration replaced the fit's Q16 shrink budget with an exactly-applied f64 ratio —
 one IEEE multiply and one round-half-up per comparison, shared verbatim by justification's growth and compression
@@ -1181,35 +1191,30 @@ candidate/main retained-update medians were 0.665/0.795 and 0.750/0.785 ms, whil
 0.510/0.580 and 0.565/0.605 ms. These machine-local observations establish repeated direction and a lower common-case
 cost; width reflow remains above the sub-1-ms interactive target and is still the last post-shaping performance frontier.
 
+The [fragment-relative reflow plan](../planning/fragment-relative-reflow.md) owns that next frontier. It must preserve the
+word sidecar and chunk summaries as fit indexes, retain current shaping and bidi authority, and prove that width or obstacle
+changes patch stable run placement instead of republishing unchanged glyph-local geometry. This paragraph records the
+baseline only; it does not claim that `LayoutRun`, public contour authoring, projected objects, or drop caps are implemented.
+
 Large `measure()` and `glyphs()` queries also reserve against the smaller of the active slot's cached capacity and the
 required capacity reported by the failing inactive A/B result slot. Each retry must strictly grow the actual failing slot
 or return the typed engine error. This fixes alternating large inspection queries without an arbitrary retry count and
 without changing normal publication or cached-query work.
 
-Two follow-ups from the closing audit are tracked in [the integer layout-units plan](../planning/integer-layout-units.md)
-as slice 6 so they cannot silently lapse: the integer pen (layout decisions resolve in F26.6 while the
-intra-line cursor still accumulates the f64 advance lane — one deliberate seam, deterministic but dual-lane,
-whose closure deletes the f64 advances column and re-pins the visual corpus), and the explicit-state-machine
-consolidation of the engine's prepared/pending flag lattice, which produced one live regression and one
-review finding during the migration and belongs to the first maintainability-review pass together with a
-direct dual-derivation assertion for the glyph-count lanes.
+The [historical integer layout-units record](../planning/integer-layout-units.md) retains the one deliberately open numeric
+seam: decisions resolve in the 16-fraction-bit `i64` lane while the intra-line cursor accumulates and resynchronizes against
+the `f64` advance lane. Closing that seam would delete the `f64` advances column but move per-glyph origins, so it remains
+a separately accepted re-pin rather than part of the fragment-relative run cutover. The prepared/pending state-machine
+follow-up is complete under D-258: every stage is a `Staged<T>`, and staging new flow invalidates stale positioning by
+construction.
 
-## Merge gates still open
+## Fragment-relative reflow frontier
 
-Before the foundation stack is publishable:
-
-- finish the stale-code and stale-documentation audit;
-- regenerate affected ABI, optimized Wasm, package-size records, and package digests from source;
-- run package checks, strict Rust checks, benchmark conformance, packed consumers, WebGPU and forced-WebGL2 live rendering,
-  and the full repository gate;
-- run the unchanged 25k-glyph comparison with enough samples and report cold, font-size, width, and text-update tables;
-- profile and reduce any path that misses the target without weakening correctness;
-- run a read-only Claude adversarial review if the CLI is available, then address supported findings;
-- commit and push the coherent stack with a clean worktree.
-
-The query/candidate-adoption API and the two publishing-feature stacks remain follow-on work after this foundation merge.
-They must reuse retained Rust paragraph state and the same render-plan architecture rather than reintroducing a second
-layout path.
+PR #161 is merged. Its retained word fitting, line reuse, partial update sections, paragraph ordering, synchronous queries,
+publication lifecycle, and renderer batching are the baseline rather than open merge gates. Milestone 12 may replace the
+glyph-wide absolute-positioning materialization only through the single-model cutover in the
+[fragment-relative reflow plan](../planning/fragment-relative-reflow.md). Until its shadow and renderer feasibility gates
+pass, the current positioned arena remains authoritative and no public contour or drop-cap behavior is implied.
 
 [^slug-shader-core]: The directory is the single renderer-independent expression of the analytic Slug fill algorithm.
 
