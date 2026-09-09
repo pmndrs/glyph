@@ -841,54 +841,6 @@ fn include_range_extents(
         )?);
         return Ok(());
     }
-    let mut cached_style = None;
-    let mut cached_extents = LineExtents::default();
-    for index in start..end {
-        if clusters.flags[index] & CLUSTER_HARD_BREAK == 0 {
-            let style_index = *clusters
-                .style_indexes
-                .get(index)
-                .ok_or(EngineError::InvalidRequest)?;
-            if cached_style != Some(style_index) {
-                cached_extents = extents_for_cluster(
-                    clusters,
-                    styles,
-                    index,
-                    metrics_for,
-                    first_font_for_stack,
-                )?;
-                cached_style = Some(style_index);
-            }
-            target.include(cached_extents);
-        }
-    }
-    Ok(())
-}
-
-#[cfg(any(test, feature = "kernel-lab"))]
-fn include_range_extents_by_layout_runs(
-    target: &mut LineExtents,
-    clusters: &ClusterArena,
-    styles: &[StyleSegment],
-    line: ComposedLine,
-    metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
-    first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
-) -> Result<(), EngineError> {
-    let start = usize::try_from(line.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
-    let end = usize::try_from(line.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
-    if start == end {
-        let fallback = start
-            .saturating_sub(1)
-            .min(clusters.starts.len().saturating_sub(1));
-        target.include(extents_for_cluster(
-            clusters,
-            styles,
-            fallback,
-            metrics_for,
-            first_font_for_stack,
-        )?);
-        return Ok(());
-    }
     let runs = clusters.layout_runs();
     let first = runs.partition_point(|run| run.cluster_end <= line.cluster_start);
     let mut covered = start;
@@ -1134,13 +1086,13 @@ mod tests {
         extents
     }
 
-    fn shadow_range_extents(
+    fn retained_range_extents(
         clusters: &ClusterArena,
         styles: &[StyleSegment],
         line: ComposedLine,
     ) -> LineExtents {
         let mut extents = LineExtents::default();
-        include_range_extents_by_layout_runs(
+        include_range_extents(
             &mut extents,
             clusters,
             styles,
@@ -1181,9 +1133,9 @@ mod tests {
         }];
         let clusters = retained_clusters("abcd", &styles, &runs, &[(0, 9, 0, 4)]);
         let calls = Cell::new(0usize);
-        let mut shadow = LineExtents::default();
-        include_range_extents_by_layout_runs(
-            &mut shadow,
+        let mut actual = LineExtents::default();
+        include_range_extents(
+            &mut actual,
             &clusters,
             &styles,
             composed_range(0, 4),
@@ -1198,7 +1150,7 @@ mod tests {
         assert_eq!(clusters.layout_runs().len(), 1);
         assert_eq!(clusters.style_indexes, [0, 0, 1, 1]);
         assert_eq!(
-            shadow,
+            actual,
             scalar_range_extents(&clusters, &styles, composed_range(0, 4))
         );
         assert_eq!(calls.get(), 1);
@@ -1238,7 +1190,7 @@ mod tests {
 
         assert_eq!(clusters.layout_runs().len(), 4);
         assert_eq!(
-            shadow_range_extents(&clusters, &styles, line),
+            retained_range_extents(&clusters, &styles, line),
             scalar_range_extents(&clusters, &styles, line)
         );
     }
@@ -1273,7 +1225,7 @@ mod tests {
 
         for line in [composed_range(0, 5), composed_range(3, 3)] {
             assert_eq!(
-                shadow_range_extents(&clusters, &styles, line),
+                retained_range_extents(&clusters, &styles, line),
                 scalar_range_extents(&clusters, &styles, line)
             );
         }
@@ -1300,9 +1252,9 @@ mod tests {
         }];
         let clusters = retained_clusters(&text, &styles, &runs, &[(0, 9, 0, COUNT as u32)]);
         let calls = Cell::new(0usize);
-        let mut shadow = LineExtents::default();
-        include_range_extents_by_layout_runs(
-            &mut shadow,
+        let mut actual = LineExtents::default();
+        include_range_extents(
+            &mut actual,
             &clusters,
             &styles,
             composed_range(127, 4_000),
@@ -1316,7 +1268,7 @@ mod tests {
 
         assert_eq!(clusters.layout_runs().len(), 1);
         assert_eq!(
-            shadow,
+            actual,
             scalar_range_extents(&clusters, &styles, composed_range(127, 4_000))
         );
         assert_eq!(calls.get(), 1);
@@ -1481,6 +1433,14 @@ mod tests {
     /// consumer of the integer fit sees an F16.16 stream coherent with the f64
     /// advances under the rounding contract.
     fn quantized(mut clusters: ClusterArena) -> ClusterArena {
+        let count = clusters.starts.len();
+        if clusters.source_runs.len() == count && clusters.font_handles.len() == count {
+            if clusters.glyph_starts.is_empty() {
+                clusters.glyph_starts.resize(count, 0);
+                clusters.glyph_counts.resize(count, 0);
+            }
+            clusters.rebuild_layout_runs().unwrap();
+        }
         clusters.refresh_layout_units().unwrap();
         clusters
     }

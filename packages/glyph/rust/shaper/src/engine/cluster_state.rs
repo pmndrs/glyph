@@ -41,7 +41,6 @@ pub(crate) struct WordBreakRecord {
     pub space_units: i32,
 }
 
-#[cfg(any(test, feature = "kernel-lab"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct LayoutRun {
     pub cluster_start: u32,
@@ -52,13 +51,11 @@ pub(crate) struct LayoutRun {
     pub font_handle: u32,
 }
 
-#[cfg(any(test, feature = "kernel-lab"))]
 #[derive(Default)]
 pub(super) struct LayoutRunArena {
     runs: Vec<LayoutRun>,
 }
 
-#[cfg(any(test, feature = "kernel-lab"))]
 impl LayoutRunArena {
     fn reserve(&mut self, capacity: usize) -> Result<(), EngineError> {
         reserve(&mut self.runs, capacity)
@@ -66,6 +63,14 @@ impl LayoutRunArena {
 
     fn clear(&mut self) {
         self.runs.clear();
+    }
+
+    fn push(&mut self, run: LayoutRun) -> Result<(), EngineError> {
+        self.runs
+            .try_reserve(1)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        self.runs.push(run);
+        Ok(())
     }
 }
 
@@ -189,7 +194,6 @@ pub(crate) struct ClusterArena {
     pub index_at: Vec<u32>,
     pub(super) shaped: Vec<u8>,
     pub(super) unsafe_before: Vec<u8>,
-    #[cfg(any(test, feature = "kernel-lab"))]
     pub(super) layout_runs: LayoutRunArena,
 }
 
@@ -227,8 +231,6 @@ impl ClusterArena {
         reserve(&mut self.index_at, capacity.saturating_add(1))?;
         reserve(&mut self.shaped, capacity)?;
         reserve(&mut self.unsafe_before, capacity)?;
-        #[cfg(any(test, feature = "kernel-lab"))]
-        self.layout_runs.reserve(capacity)?;
         Ok(())
     }
 
@@ -302,7 +304,6 @@ impl ClusterArena {
         }
         self.build_index(text.len())?;
         self.aggregate_shape(runs, shape, metrics_for)?;
-        #[cfg(any(test, feature = "kernel-lab"))]
         self.rebuild_layout_runs()?;
         self.apply_break_flags(unicode)?;
         self.refresh_layout_units()?;
@@ -513,7 +514,6 @@ impl ClusterArena {
                 self.flags[cluster] |= CLUSTER_SAFE_BEFORE;
             }
         }
-        #[cfg(any(test, feature = "kernel-lab"))]
         self.rebuild_layout_runs()?;
         if cluster_start > 0 {
             self.flags[cluster_start - 1] &= !CLUSTER_ALLOWED_BREAK;
@@ -767,7 +767,7 @@ impl ClusterArena {
         copy_lane!(index_at);
         copy_lane!(shaped);
         copy_lane!(unsafe_before);
-        #[cfg(any(test, feature = "kernel-lab"))]
+        self.layout_runs.reserve(source.layout_runs.runs.len())?;
         self.layout_runs
             .runs
             .extend_from_slice(&source.layout_runs.runs);
@@ -984,18 +984,14 @@ impl ClusterArena {
         self.index_at.clear();
         self.shaped.clear();
         self.unsafe_before.clear();
-        #[cfg(any(test, feature = "kernel-lab"))]
         self.layout_runs.clear();
     }
 
-    #[cfg(any(test, feature = "kernel-lab"))]
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn layout_runs(&self) -> &[LayoutRun] {
         &self.layout_runs.runs
     }
 
-    #[cfg(any(test, feature = "kernel-lab"))]
-    fn rebuild_layout_runs(&mut self) -> Result<(), EngineError> {
+    pub(super) fn rebuild_layout_runs(&mut self) -> Result<(), EngineError> {
         self.layout_runs.clear();
         let mut cluster_start = 0usize;
         while cluster_start < self.starts.len() {
@@ -1013,8 +1009,7 @@ impl ClusterArena {
             let glyph_end = self.glyph_starts[final_cluster]
                 .checked_add(self.glyph_counts[final_cluster])
                 .ok_or(EngineError::ResultTooLarge)?;
-            self.layout_runs.reserve(1)?;
-            self.layout_runs.runs.push(LayoutRun {
+            self.layout_runs.push(LayoutRun {
                 cluster_start: u32::try_from(cluster_start)
                     .map_err(|_| EngineError::ResultTooLarge)?,
                 cluster_end: u32::try_from(cluster_end).map_err(|_| EngineError::ResultTooLarge)?,
@@ -1024,7 +1019,7 @@ impl ClusterArena {
                     .ok_or(EngineError::InvalidRequest)?,
                 source_run,
                 font_handle,
-            });
+            })?;
             cluster_start = cluster_end;
         }
         Ok(())
@@ -1453,7 +1448,7 @@ mod tests {
     }
 
     #[test]
-    fn shadow_layout_runs_are_gapless_maximal_and_glyph_contiguous() {
+    fn layout_runs_are_gapless_maximal_and_glyph_contiguous() {
         let source_runs = [0, 0, 0, 0, 1, 1, 1, 1];
         let font_handles = [10, 10, 20, 20, 20, 20, 10, 10];
         let arena = shadow_topology(&source_runs, &font_handles, &[1, 2, 0, 1, 3, 0, 2, 1]);
@@ -1499,7 +1494,7 @@ mod tests {
     }
 
     #[test]
-    fn shadow_layout_run_property_matches_the_scalar_adjacency_oracle() {
+    fn layout_run_property_matches_the_scalar_adjacency_oracle() {
         let mut state = 0x6d2b_79f5_u32;
         for length in 0..192usize {
             let mut source_runs = Vec::with_capacity(length);
