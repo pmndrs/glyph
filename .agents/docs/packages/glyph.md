@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:b7555b3e5849bb5eae4d1885a49b7fb3abd344f37135090892c5be3d7b2b02b5'
+source_digest: 'sha256:7f95a1008091590623c6380533bb4f853323ab4cc1be25fbc6b5dacc86ec74f4'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1222,6 +1222,17 @@ cases now isolate justified, mixed-bidi, equivalent-width, and dense-CJK reflow 
 first frozen Bitmap checkpoint measured 22k width updates at `1.144 / 3.605 ms` aggregate median/p95 and
 `1.493 / 3.743 ms` on the active 174,440-byte publication subset; measurement-only was `0.192 / 0.226 ms`. Those values
 are an attribution checkpoint, not final performance evidence.
+
+The first shadow consumers now prove maximal `(source_run, font_handle)` runs, one-run dense CJK, run-bounded line
+extents, and ordinary base-LTR slice parity without entering production execution. They also reject plain local-plus-
+translation arithmetic as a universal numeric replacement: deterministic inline and block counterexamples change final
+f32 bits, and a 4,111-case representation lab finds mismatches in every tested compact candidate. The active-resize
+benchmark alternates 420/434-unit widths and fails on any zero-patch sample. This narrows the next work; it does not yet
+authorize an ABI or renderer cutover.
+
+The optimized proof Wasm is 1,205,308 bytes, 43 bytes above the 1,205,265-byte frozen baseline. An active-resize
+A/B/B/A check was flat within run spread: baseline medians/p95s were `3.588/3.699` and `3.618/3.790 ms`; proof values
+were `3.620/3.765` and `3.615/3.747 ms`. This is a no-regression checkpoint, not evidence of the future topology win.
 
 [^slug-shader-core]: The directory is the single renderer-independent expression of the analytic Slug fill algorithm.
 

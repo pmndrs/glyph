@@ -865,6 +865,64 @@ fn include_range_extents(
     Ok(())
 }
 
+#[cfg(any(test, feature = "kernel-lab"))]
+fn include_range_extents_by_layout_runs(
+    target: &mut LineExtents,
+    clusters: &ClusterArena,
+    styles: &[StyleSegment],
+    line: ComposedLine,
+    metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
+    first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
+) -> Result<(), EngineError> {
+    let start = usize::try_from(line.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
+    let end = usize::try_from(line.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+    if start == end {
+        let fallback = start
+            .saturating_sub(1)
+            .min(clusters.starts.len().saturating_sub(1));
+        target.include(extents_for_cluster(
+            clusters,
+            styles,
+            fallback,
+            metrics_for,
+            first_font_for_stack,
+        )?);
+        return Ok(());
+    }
+    let runs = clusters.layout_runs();
+    let first = runs.partition_point(|run| run.cluster_end <= line.cluster_start);
+    let mut covered = start;
+    for run in &runs[first..] {
+        let run_start =
+            usize::try_from(run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
+        if run_start >= end {
+            break;
+        }
+        let run_end = usize::try_from(run.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+        let overlap_start = run_start.max(start);
+        let overlap_end = run_end.min(end);
+        if overlap_start != covered || overlap_start >= overlap_end {
+            return Err(EngineError::InvalidRequest);
+        }
+        if let Some(index) = (overlap_start..overlap_end)
+            .find(|index| clusters.flags[*index] & CLUSTER_HARD_BREAK == 0)
+        {
+            target.include(extents_for_cluster(
+                clusters,
+                styles,
+                index,
+                metrics_for,
+                first_font_for_stack,
+            )?);
+        }
+        covered = overlap_end;
+    }
+    if covered != end {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok(())
+}
+
 fn extents_for_cluster(
     clusters: &ClusterArena,
     styles: &[StyleSegment],
@@ -958,7 +1016,7 @@ fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), EngineError>
 mod tests {
     use super::*;
     use crate::engine::{
-        cluster_state::CLUSTER_SAFE_BEFORE,
+        cluster_state::{CLUSTER_SAFE_BEFORE, ClusterBuildInput},
         flow_geometry::{RetainedExclusion, RetainedRegion},
         frame::{
             ALIGN_START, AXIS_EXACT, BLOCK_ALIGN_START, EXCLUSION_WRAP_BOTH, LAST_LINE_AUTO,
@@ -966,9 +1024,303 @@ mod tests {
             WRAP_CHARACTER, WRAP_NONE,
         },
         semantic_wire::{FlowConstraint, FlowExclusion, FlowRegion},
+        shaping_state::{ShapeArena, ShapedRun, ShapingRun},
         style_state::ResolvedStyle,
     };
+    use crate::unicode::UnicodeAnalysis;
     use alloc::vec;
+    use core::cell::Cell;
+
+    fn fixture_metrics(_: u32) -> Option<FontMetrics> {
+        Some(FontMetrics {
+            units_per_em: 1_000,
+            ascender: 800,
+            descender: -200,
+            line_gap: 100,
+            underline_position: -100,
+            underline_thickness: 50,
+            strikeout_position: 300,
+            strikeout_size: 50,
+        })
+    }
+
+    fn retained_clusters(
+        text: &str,
+        styles: &[StyleSegment],
+        runs: &[ShapingRun],
+        shaped: &[(u32, u32, u32, u32)],
+    ) -> ClusterArena {
+        let text: Vec<u16> = text.encode_utf16().collect();
+        let mut unicode = UnicodeAnalysis::default();
+        unicode.analyze(&text).unwrap();
+        let mut shape = ShapeArena::default();
+        for &(source_run, font_handle, text_start, text_end) in shaped {
+            let glyph_start = u32::try_from(shape.glyph_ids.len()).unwrap();
+            for cluster in text_start..text_end {
+                shape.glyph_ids.push(u16::try_from(cluster + 1).unwrap());
+                shape.clusters.push(cluster);
+                shape.x_advances.push(500);
+                shape.y_advances.push(0);
+                shape.x_offsets.push(0);
+                shape.y_offsets.push(0);
+                shape.glyph_flags.push(0);
+            }
+            shape.runs.push(ShapedRun {
+                source_run,
+                binding_handle: source_run + 1,
+                font_handle,
+                text_start,
+                text_end,
+                glyph_start,
+                glyph_count: text_end - text_start,
+            });
+        }
+        let text_unit_ids = (1..=u32::try_from(text.len()).unwrap()).collect::<Vec<_>>();
+        let mut clusters = ClusterArena::default();
+        clusters
+            .build(
+                ClusterBuildInput {
+                    text: &text,
+                    text_unit_ids: &text_unit_ids,
+                    unicode: &unicode,
+                    styles,
+                    runs,
+                    shape: &shape,
+                },
+                fixture_metrics,
+            )
+            .unwrap();
+        clusters
+    }
+
+    fn composed_range(start: u32, end: u32) -> ComposedLine {
+        ComposedLine {
+            cluster_start: start,
+            cluster_end: end,
+            text_start: start,
+            text_end: end,
+            advance: 0.0,
+            hung_advance: 0.0,
+            hard_break: false,
+        }
+    }
+
+    fn scalar_range_extents(
+        clusters: &ClusterArena,
+        styles: &[StyleSegment],
+        line: ComposedLine,
+    ) -> LineExtents {
+        let start = usize::try_from(line.cluster_start).unwrap();
+        let end = usize::try_from(line.cluster_end).unwrap();
+        let mut extents = LineExtents::default();
+        if start == end {
+            let fallback = start
+                .saturating_sub(1)
+                .min(clusters.starts.len().saturating_sub(1));
+            extents.include(
+                extents_for_cluster(clusters, styles, fallback, fixture_metrics, |_| Some(1))
+                    .unwrap(),
+            );
+            return extents;
+        }
+        for index in start..end {
+            if clusters.flags[index] & CLUSTER_HARD_BREAK == 0 {
+                extents.include(
+                    extents_for_cluster(clusters, styles, index, fixture_metrics, |_| Some(1))
+                        .unwrap(),
+                );
+            }
+        }
+        extents
+    }
+
+    fn shadow_range_extents(
+        clusters: &ClusterArena,
+        styles: &[StyleSegment],
+        line: ComposedLine,
+    ) -> LineExtents {
+        let mut extents = LineExtents::default();
+        include_range_extents_by_layout_runs(
+            &mut extents,
+            clusters,
+            styles,
+            line,
+            fixture_metrics,
+            |_| Some(1),
+        )
+        .unwrap();
+        extents
+    }
+
+    #[test]
+    fn layout_run_extents_ignore_paint_only_style_boundaries() {
+        let base = ResolvedStyle::test_typography(10.0, 0.0, 0.0);
+        let mut painted = base;
+        painted.material_id = 17;
+        painted.raster_pixel_ratio = 2.0;
+        painted.decoration_flags = 1;
+        let styles = [
+            StyleSegment {
+                text_start: 0,
+                text_end: 2,
+                style: base,
+            },
+            StyleSegment {
+                text_start: 2,
+                text_end: 4,
+                style: painted,
+            },
+        ];
+        let runs = [ShapingRun {
+            text_start: 0,
+            text_end: 4,
+            script: u32::from_be_bytes(*b"Latn"),
+            direction: 4,
+            bidi_level: 0,
+            style: base,
+        }];
+        let clusters = retained_clusters("abcd", &styles, &runs, &[(0, 9, 0, 4)]);
+        let calls = Cell::new(0usize);
+        let mut shadow = LineExtents::default();
+        include_range_extents_by_layout_runs(
+            &mut shadow,
+            &clusters,
+            &styles,
+            composed_range(0, 4),
+            |handle| {
+                calls.set(calls.get() + 1);
+                fixture_metrics(handle)
+            },
+            |_| Some(1),
+        )
+        .unwrap();
+
+        assert_eq!(clusters.layout_runs().len(), 1);
+        assert_eq!(clusters.style_indexes, [0, 0, 1, 1]);
+        assert_eq!(
+            shadow,
+            scalar_range_extents(&clusters, &styles, composed_range(0, 4))
+        );
+        assert_eq!(calls.get(), 1);
+    }
+
+    #[test]
+    fn layout_run_extents_cover_partial_geometry_runs() {
+        let base = ResolvedStyle::test_typography(10.0, 0.0, 0.0);
+        let mut larger = base;
+        larger.font_size = 20.0;
+        let mut tight = larger;
+        tight.has_line_height = true;
+        tight.line_height = 0.7;
+        let mut shifted = tight;
+        shifted.baseline_shift = 3.0;
+        let values = [base, larger, tight, shifted];
+        let styles: [StyleSegment; 4] = core::array::from_fn(|index| StyleSegment {
+            text_start: (index * 2) as u32,
+            text_end: (index * 2 + 2) as u32,
+            style: values[index],
+        });
+        let runs: [ShapingRun; 4] = core::array::from_fn(|index| ShapingRun {
+            text_start: (index * 2) as u32,
+            text_end: (index * 2 + 2) as u32,
+            script: u32::from_be_bytes(*b"Latn"),
+            direction: 4,
+            bidi_level: 0,
+            style: values[index],
+        });
+        let clusters = retained_clusters(
+            "abcdefgh",
+            &styles,
+            &runs,
+            &[(0, 9, 0, 2), (1, 9, 2, 4), (2, 9, 4, 6), (3, 9, 6, 8)],
+        );
+        let line = composed_range(1, 7);
+
+        assert_eq!(clusters.layout_runs().len(), 4);
+        assert_eq!(
+            shadow_range_extents(&clusters, &styles, line),
+            scalar_range_extents(&clusters, &styles, line)
+        );
+    }
+
+    #[test]
+    fn layout_run_extents_preserve_hard_break_and_empty_line_behavior() {
+        let style = ResolvedStyle::test_typography(10.0, 0.0, 0.0);
+        let styles = [StyleSegment {
+            text_start: 0,
+            text_end: 5,
+            style,
+        }];
+        let runs = [
+            ShapingRun {
+                text_start: 0,
+                text_end: 2,
+                script: u32::from_be_bytes(*b"Latn"),
+                direction: 4,
+                bidi_level: 0,
+                style,
+            },
+            ShapingRun {
+                text_start: 3,
+                text_end: 5,
+                script: u32::from_be_bytes(*b"Latn"),
+                direction: 4,
+                bidi_level: 0,
+                style,
+            },
+        ];
+        let clusters = retained_clusters("ab\ncd", &styles, &runs, &[(0, 9, 0, 2), (1, 9, 3, 5)]);
+
+        for line in [composed_range(0, 5), composed_range(3, 3)] {
+            assert_eq!(
+                shadow_range_extents(&clusters, &styles, line),
+                scalar_range_extents(&clusters, &styles, line)
+            );
+        }
+        assert_eq!(clusters.layout_runs().len(), 3);
+    }
+
+    #[test]
+    fn dense_cjk_extents_visit_one_layout_run() {
+        const COUNT: usize = 4_096;
+        let text = "界".repeat(COUNT);
+        let style = ResolvedStyle::test_typography(10.0, 0.0, 0.0);
+        let styles = [StyleSegment {
+            text_start: 0,
+            text_end: COUNT as u32,
+            style,
+        }];
+        let runs = [ShapingRun {
+            text_start: 0,
+            text_end: COUNT as u32,
+            script: u32::from_be_bytes(*b"Hani"),
+            direction: 4,
+            bidi_level: 0,
+            style,
+        }];
+        let clusters = retained_clusters(&text, &styles, &runs, &[(0, 9, 0, COUNT as u32)]);
+        let calls = Cell::new(0usize);
+        let mut shadow = LineExtents::default();
+        include_range_extents_by_layout_runs(
+            &mut shadow,
+            &clusters,
+            &styles,
+            composed_range(127, 4_000),
+            |handle| {
+                calls.set(calls.get() + 1);
+                fixture_metrics(handle)
+            },
+            |_| Some(1),
+        )
+        .unwrap();
+
+        assert_eq!(clusters.layout_runs().len(), 1);
+        assert_eq!(
+            shadow,
+            scalar_range_extents(&clusters, &styles, composed_range(127, 4_000))
+        );
+        assert_eq!(calls.get(), 1);
+    }
 
     #[test]
     fn one_update_flows_fragments_around_a_hole_and_retries_for_tall_text() {

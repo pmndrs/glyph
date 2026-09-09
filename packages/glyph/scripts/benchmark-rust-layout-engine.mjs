@@ -169,7 +169,12 @@ function measureWarm(name) {
         style: { ...baseStyle, fontSize: 12 + index * 0.5 },
         geometry: baseGeometry,
       });
-    } else if (name === 'column-resize' || name === 'justify' || name === 'bidi-resize') {
+    } else if (
+      name === 'column-resize' ||
+      name === 'active-column-resize' ||
+      name === 'justify' ||
+      name === 'bidi-resize'
+    ) {
       bytes = updateBytes({
         ...common,
         geometry: rustLayoutBenchmarkGeometry(name, index, baseGeometry),
@@ -425,6 +430,7 @@ function printReport(caseReports) {
     );
   }
   console.log('column-resize is the existing layout-width case: one fully active column is reflowed end to end.');
+  console.log('active-column-resize alternates two known break-changing widths and requires a nonempty plan update.');
   console.log('justify reflows the same active column with justified non-final lines.');
   console.log('bidi-resize reflows mixed Latin and Arabic text using the pinned Amiri artifact.');
   console.log('equivalent-width alternates adjacent f32 widths and requires zero render-plan patches or writes.');

@@ -99,6 +99,194 @@ impl GlyphInkBox {
     }
 }
 
+#[cfg(any(test, feature = "kernel-lab"))]
+#[derive(Clone, Copy)]
+struct ShadowGlyphGeometry {
+    inline_origin: f64,
+    block_origin: f64,
+    inline_advance: f64,
+    ink: GlyphInkBox,
+}
+
+#[cfg(any(test, feature = "kernel-lab"))]
+#[allow(clippy::too_many_arguments)]
+fn shadow_glyph_geometry(
+    cursor: f64,
+    baseline: f64,
+    baseline_shift: f32,
+    scale: f64,
+    x_advance: i32,
+    x_offset: i32,
+    y_offset: i32,
+    outline: Option<&FontGlyphExtents>,
+) -> ShadowGlyphGeometry {
+    let inline_advance = f64::from(x_advance).abs() * scale;
+    let inline_offset = f64::from(x_offset) * scale;
+    let block_offset = f64::from(y_offset) * scale;
+    let inline_origin = cursor + inline_offset;
+    let block_origin = baseline - block_offset - f64::from(baseline_shift);
+    let ink = match outline {
+        Some(extents) => GlyphInkBox::from_extents(extents, inline_origin, block_origin, scale),
+        None => GlyphInkBox::empty_at(inline_origin, block_origin),
+    };
+    ShadowGlyphGeometry {
+        inline_origin,
+        block_origin,
+        inline_advance,
+        ink,
+    }
+}
+
+#[cfg(any(test, feature = "kernel-lab"))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct ShadowRunGlyph {
+    stable_id: u32,
+    inline_origin: f32,
+    block_origin: f32,
+    inline_advance: f32,
+    ink_inline_start: f32,
+    ink_block_start: f32,
+    ink_inline_extent: f32,
+    ink_block_extent: f32,
+}
+
+#[cfg(any(test, feature = "kernel-lab"))]
+#[cfg_attr(not(test), allow(dead_code))]
+fn shadow_base_ltr_unindented_fragment_positions(
+    line: FlowLine,
+    fragment: FlowFragment,
+    clusters: &ClusterArena,
+    styles: &[StyleSegment],
+    extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+) -> Result<Vec<ShadowRunGlyph>, EngineError> {
+    if line.align == ALIGN_JUSTIFY
+        || fragment.boundary_index != super::flow_composition::NO_BOUNDARY
+    {
+        return Err(EngineError::InvalidRequest);
+    }
+    let cluster_start =
+        usize::try_from(fragment.line.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
+    let cluster_end =
+        usize::try_from(fragment.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+    if cluster_start > cluster_end || cluster_end > clusters.starts.len() {
+        return Err(EngineError::InvalidRequest);
+    }
+    let (_, pen_origin) = fragment_pen(
+        line,
+        fragment,
+        true,
+        clusters,
+        cluster_start,
+        cluster_end,
+        0.0,
+        JustifyControls::default(),
+        0,
+        false,
+    );
+    let baseline = line.block_start + line.baseline;
+    let mut fragment_cursor = pen_origin;
+    let mut next_cluster = cluster_start;
+    let mut positioned = Vec::new();
+
+    for run in clusters.layout_runs() {
+        let run_start =
+            usize::try_from(run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
+        let run_end = usize::try_from(run.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+        let intersection_start = run_start.max(cluster_start);
+        let intersection_end = run_end.min(cluster_end);
+        if intersection_start >= intersection_end {
+            continue;
+        }
+        if intersection_start != next_cluster {
+            return Err(EngineError::InvalidRequest);
+        }
+
+        let mut local_cursor = 0.0;
+        for cluster in run_start..intersection_start {
+            if clusters.flags[cluster] & CLUSTER_HARD_BREAK == 0 {
+                local_cursor += clusters.advances[cluster];
+            }
+        }
+        let inline_translation = fragment_cursor - local_cursor;
+        for cluster in intersection_start..intersection_end {
+            if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
+                continue;
+            }
+            let style_index = usize::try_from(clusters.style_indexes[cluster])
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let style = styles
+                .get(style_index)
+                .ok_or(EngineError::InvalidRequest)?
+                .style;
+            let font_handle = clusters.font_handles[cluster];
+            let units_per_em = clusters.units_per_em[cluster];
+            if font_handle == 0 || units_per_em == 0.0 {
+                return Err(EngineError::InvalidRequest);
+            }
+            let scale = f64::from(style.font_size) / units_per_em;
+            let local_cluster_origin = local_cursor;
+            let fragment_cluster_origin = fragment_cursor;
+            let glyph_start = usize::try_from(clusters.glyph_starts[cluster])
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let glyph_end = glyph_start
+                .checked_add(
+                    usize::try_from(clusters.glyph_counts[cluster])
+                        .map_err(|_| EngineError::InvalidRequest)?,
+                )
+                .ok_or(EngineError::InvalidRequest)?;
+            for glyph in glyph_start..glyph_end {
+                let glyph_id = u32::from(
+                    *clusters
+                        .glyph_ids
+                        .get(glyph)
+                        .ok_or(EngineError::InvalidRequest)?,
+                );
+                let outline = extents_for(font_handle, glyph_id);
+                let geometry = shadow_glyph_geometry(
+                    local_cursor,
+                    0.0,
+                    style.baseline_shift,
+                    scale,
+                    *clusters
+                        .glyph_x_advances
+                        .get(glyph)
+                        .ok_or(EngineError::InvalidRequest)?,
+                    *clusters
+                        .glyph_x_offsets
+                        .get(glyph)
+                        .ok_or(EngineError::InvalidRequest)?,
+                    *clusters
+                        .glyph_y_offsets
+                        .get(glyph)
+                        .ok_or(EngineError::InvalidRequest)?,
+                    outline.as_ref(),
+                );
+                positioned.push(ShadowRunGlyph {
+                    stable_id: *clusters
+                        .glyph_stable_ids
+                        .get(glyph)
+                        .ok_or(EngineError::InvalidRequest)?,
+                    inline_origin: finite_f32(geometry.inline_origin + inline_translation)?,
+                    block_origin: finite_f32(geometry.block_origin + baseline)?,
+                    inline_advance: nonnegative_f32(geometry.inline_advance)?,
+                    ink_inline_start: finite_f32(geometry.ink.inline_start + inline_translation)?,
+                    ink_block_start: finite_f32(geometry.ink.block_start + baseline)?,
+                    ink_inline_extent: nonnegative_f32(geometry.ink.inline_extent)?,
+                    ink_block_extent: nonnegative_f32(geometry.ink.block_extent)?,
+                });
+                local_cursor += geometry.inline_advance;
+            }
+            local_cursor = local_cluster_origin + clusters.advances[cluster];
+            fragment_cursor = fragment_cluster_origin + clusters.advances[cluster];
+        }
+        next_cluster = intersection_end;
+    }
+    if next_cluster != cluster_end {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok(positioned)
+}
+
 /// One solid decoration line for a contiguous decorated visual run: underline,
 /// overline, or line-through geometry in positioned space, colored by the style's
 /// decoration paint. Non-solid line styles carry their style bits for later paint work
@@ -2202,8 +2390,12 @@ fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::shaping_state::ShapeArena;
+    use super::super::{
+        cluster_state::ClusterBuildInput,
+        shaping_state::{ShapeArena, ShapedRun},
+    };
     use super::*;
+    use crate::unicode::UnicodeAnalysis;
 
     fn assert_layout_plan_producer_invariants(arena: &PositionedGlyphArena) {
         let glyph_count = arena.glyphs.len();
@@ -2271,6 +2463,372 @@ mod tests {
             assert!((decoration.inline_start + decoration.inline_extent).is_finite());
             assert!((decoration.block_start + decoration.block_extent).is_finite());
         }
+    }
+
+    fn layout_run_positioning_fixture()
+    -> (Vec<u16>, ClusterArena, Vec<ShapingRun>, Vec<StyleSegment>) {
+        let text = "abcdefg漢字語文\n".encode_utf16().collect::<Vec<_>>();
+        let mut unicode = UnicodeAnalysis::default();
+        unicode.analyze(&text).unwrap();
+        let mut style = ResolvedStyle::test_typography(10.0, -6.0, 0.0);
+        style.baseline_shift = 0.25;
+        let styles = vec![StyleSegment {
+            text_start: 0,
+            text_end: u32::try_from(text.len()).unwrap(),
+            style,
+        }];
+        let runs = vec![
+            ShapingRun {
+                text_start: 0,
+                text_end: 3,
+                script: u32::from_be_bytes(*b"Latn"),
+                direction: 0,
+                bidi_level: 0,
+                style,
+            },
+            ShapingRun {
+                text_start: 3,
+                text_end: 7,
+                script: u32::from_be_bytes(*b"Latn"),
+                direction: 0,
+                bidi_level: 0,
+                style,
+            },
+            ShapingRun {
+                text_start: 7,
+                text_end: 11,
+                script: u32::from_be_bytes(*b"Hani"),
+                direction: 0,
+                bidi_level: 0,
+                style,
+            },
+        ];
+        let shape = ShapeArena {
+            runs: vec![
+                ShapedRun {
+                    source_run: 0,
+                    binding_handle: 101,
+                    font_handle: 11,
+                    text_start: 0,
+                    text_end: 3,
+                    glyph_start: 0,
+                    glyph_count: 3,
+                },
+                ShapedRun {
+                    source_run: 1,
+                    binding_handle: 101,
+                    font_handle: 11,
+                    text_start: 3,
+                    text_end: 5,
+                    glyph_start: 3,
+                    glyph_count: 2,
+                },
+                ShapedRun {
+                    source_run: 1,
+                    binding_handle: 202,
+                    font_handle: 22,
+                    text_start: 5,
+                    text_end: 7,
+                    glyph_start: 5,
+                    glyph_count: 2,
+                },
+                ShapedRun {
+                    source_run: 2,
+                    binding_handle: 202,
+                    font_handle: 22,
+                    text_start: 7,
+                    text_end: 11,
+                    glyph_start: 7,
+                    glyph_count: 4,
+                },
+            ],
+            glyph_ids: vec![10, 11, 12, 20, 21, 30, 31, 40, 41, 42, 43],
+            clusters: vec![0, 1, 1, 3, 4, 5, 6, 7, 8, 9, 10],
+            x_advances: vec![-300, 200, -100, 500, -500, 500, 500, 700, -700, 700, 700],
+            y_advances: vec![0; 11],
+            x_offsets: vec![-17, 33, -9, 11, -13, 5, -7, 0, 19, -23, 7],
+            y_offsets: vec![5, -7, 3, 9, -11, 1, -3, 0, 4, -6, 2],
+            glyph_flags: vec![0; 11],
+        };
+        let metrics = |_| {
+            Some(FontMetrics {
+                units_per_em: 1_000,
+                ascender: 800,
+                descender: -200,
+                line_gap: 0,
+                underline_position: -100,
+                underline_thickness: 50,
+                strikeout_position: 300,
+                strikeout_size: 50,
+            })
+        };
+        let mut clusters = ClusterArena::default();
+        clusters
+            .build(
+                ClusterBuildInput {
+                    text: &text,
+                    text_unit_ids: &(1..=u32::try_from(text.len()).unwrap()).collect::<Vec<_>>(),
+                    unicode: &unicode,
+                    styles: &styles,
+                    runs: &runs,
+                    shape: &shape,
+                },
+                metrics,
+            )
+            .unwrap();
+        clusters.glyph_stable_ids = (1..=u32::try_from(shape.glyph_ids.len()).unwrap()).collect();
+        (text, clusters, runs, styles)
+    }
+
+    fn fixture_position_results(
+        cluster_start: usize,
+        cluster_end: usize,
+        mutate: impl FnOnce(&mut ClusterArena, &mut [StyleSegment], &mut FlowLine),
+    ) -> (Vec<ShadowRunGlyph>, PositionedGlyphArena) {
+        let (text, mut clusters, runs, mut styles) = layout_run_positioning_fixture();
+        let advance = clusters.advances[cluster_start..cluster_end]
+            .iter()
+            .copied()
+            .sum();
+        let mut line = FlowLine {
+            flow_thread_id: 1,
+            region_id: 2,
+            transform_index: 3,
+            clip_id: 4,
+            fragment_start: 0,
+            fragment_count: 1,
+            align: ALIGN_START,
+            block_start: 512.125,
+            baseline: 9.5,
+            height: 12.0,
+        };
+        mutate(&mut clusters, &mut styles, &mut line);
+        let fragment = FlowFragment {
+            line: ComposedLine {
+                cluster_start: u32::try_from(cluster_start).unwrap(),
+                cluster_end: u32::try_from(cluster_end).unwrap(),
+                text_start: clusters.starts[cluster_start],
+                text_end: clusters.ends[cluster_end - 1],
+                advance,
+                hung_advance: 0.0,
+                hard_break: clusters.flags[cluster_end - 1] & CLUSTER_HARD_BREAK != 0,
+            },
+            slot_start: 1_000_000.125,
+            slot_end: 1_000_512.125,
+            flexible_end: false,
+            boundary_index: NO_BOUNDARY,
+        };
+        let extents = |_: u32, glyph_id: u32| {
+            Some(FontGlyphExtents {
+                x_min: -10,
+                y_min: -200,
+                x_max: i32::try_from(400 + glyph_id).unwrap(),
+                y_max: 700,
+            })
+        };
+        let expected = shadow_base_ltr_unindented_fragment_positions(
+            line, fragment, &clusters, &styles, extents,
+        )
+        .unwrap();
+        let mut production = PositionedGlyphArena::default();
+        production
+            .position_fragment::<false>(
+                line,
+                fragment,
+                true,
+                &text,
+                &clusters,
+                &runs,
+                &BoundaryShapeArena::default(),
+                &styles,
+                &BidiAnalysis::default(),
+                true,
+                0.0,
+                JustifyControls::default(),
+                |_| None,
+                extents,
+            )
+            .unwrap();
+
+        (expected, production)
+    }
+
+    fn assert_shadow_run_positions_match_production(cluster_start: usize, cluster_end: usize) {
+        let (expected, production) =
+            fixture_position_results(cluster_start, cluster_end, |_, _, _| {});
+
+        assert_eq!(production.semantic_glyphs.len(), expected.len());
+        assert_eq!(production.glyphs.len(), expected.len());
+        for ((semantic, layout), expected) in production
+            .semantic_glyphs
+            .iter()
+            .zip(&production.glyphs)
+            .zip(expected)
+        {
+            assert_eq!(semantic.stable_id, expected.stable_id);
+            assert_eq!(
+                semantic.inline_origin.to_bits(),
+                expected.inline_origin.to_bits()
+            );
+            assert_eq!(
+                semantic.block_origin.to_bits(),
+                expected.block_origin.to_bits()
+            );
+            assert_eq!(
+                semantic.inline_advance.to_bits(),
+                expected.inline_advance.to_bits()
+            );
+            assert_eq!(
+                semantic.ink_inline_start.to_bits(),
+                expected.ink_inline_start.to_bits()
+            );
+            assert_eq!(
+                semantic.ink_block_start.to_bits(),
+                expected.ink_block_start.to_bits()
+            );
+            assert_eq!(
+                semantic.ink_inline_extent.to_bits(),
+                expected.ink_inline_extent.to_bits()
+            );
+            assert_eq!(
+                semantic.ink_block_extent.to_bits(),
+                expected.ink_block_extent.to_bits()
+            );
+            assert_eq!(
+                layout.inline_start.to_bits(),
+                expected.ink_inline_start.to_bits()
+            );
+            assert_eq!(
+                layout.block_start.to_bits(),
+                expected.ink_block_start.to_bits()
+            );
+            assert_eq!(
+                layout.inline_extent.to_bits(),
+                expected.ink_inline_extent.to_bits()
+            );
+            assert_eq!(
+                layout.block_extent.to_bits(),
+                expected.ink_block_extent.to_bits()
+            );
+        }
+    }
+
+    #[test]
+    fn base_ltr_unindented_layout_run_slices_match_absolute_positioning() {
+        let (_, clusters, _, _) = layout_run_positioning_fixture();
+        assert_eq!(
+            clusters
+                .layout_runs()
+                .iter()
+                .map(|run| (
+                    run.cluster_start,
+                    run.cluster_end,
+                    run.source_run,
+                    run.font_handle
+                ))
+                .collect::<Vec<_>>(),
+            [
+                (0, 3, 0, 11),
+                (3, 5, 1, 11),
+                (5, 7, 1, 22),
+                (7, 11, 2, 22),
+                (11, 12, u32::MAX, 0)
+            ]
+        );
+        assert_eq!(clusters.glyph_counts, [1, 2, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0]);
+        assert!(clusters.advances[..3].iter().all(|advance| *advance < 0.0));
+
+        assert_shadow_run_positions_match_production(0, 12);
+        assert_shadow_run_positions_match_production(8, 10);
+    }
+
+    #[test]
+    fn large_late_slice_rejects_plain_f64_local_plus_translation() {
+        let (shadow, production) = fixture_position_results(8, 10, |clusters, _, _| {
+            clusters.advances[7] = 2_f64.powi(53);
+        });
+        let absolute = production.semantic_glyphs[0].inline_origin;
+        let reassociated = shadow[0].inline_origin;
+
+        assert_eq!(absolute.to_bits(), 0x4974_2405);
+        assert_eq!(reassociated.to_bits(), 0x4974_2400);
+        assert_ne!(absolute.to_bits(), reassociated.to_bits());
+    }
+
+    #[test]
+    fn normal_range_block_origin_rejects_reassociated_translation() {
+        let (shadow, production) = fixture_position_results(8, 10, |clusters, styles, line| {
+            styles[0].style.font_size = f32::from_bits(0x4177_65c4);
+            styles[0].style.baseline_shift = f32::from_bits(0x4202_277e);
+            line.block_start = 0.0;
+            line.baseline = f64::from_bits(0x4004_9490_c000_0000);
+            let glyph = usize::try_from(clusters.glyph_starts[8]).unwrap();
+            clusters.glyph_y_offsets[glyph] = -1_938;
+        });
+        let absolute = production.semantic_glyphs[0].block_origin;
+        let reassociated = shadow[0].block_origin;
+
+        assert_eq!(absolute.to_bits(), 0xb2e5_6040);
+        assert_eq!(reassociated.to_bits(), 0xb2e5_6042);
+        assert_ne!(absolute.to_bits(), reassociated.to_bits());
+    }
+
+    #[test]
+    fn shadow_positioning_rejects_justify_and_boundary() {
+        let (_, clusters, _, styles) = layout_run_positioning_fixture();
+        let line = FlowLine {
+            flow_thread_id: 1,
+            region_id: 1,
+            transform_index: 0,
+            clip_id: 0,
+            fragment_start: 0,
+            fragment_count: 1,
+            align: ALIGN_JUSTIFY,
+            block_start: 0.0,
+            baseline: 8.0,
+            height: 10.0,
+        };
+        let fragment = FlowFragment {
+            line: ComposedLine {
+                cluster_start: 0,
+                cluster_end: 1,
+                text_start: 0,
+                text_end: 1,
+                advance: clusters.advances[0],
+                hung_advance: 0.0,
+                hard_break: false,
+            },
+            slot_start: 0.0,
+            slot_end: 20.0,
+            flexible_end: false,
+            boundary_index: NO_BOUNDARY,
+        };
+        assert!(matches!(
+            shadow_base_ltr_unindented_fragment_positions(
+                line,
+                fragment,
+                &clusters,
+                &styles,
+                |_, _| None,
+            ),
+            Err(EngineError::InvalidRequest)
+        ));
+        assert!(matches!(
+            shadow_base_ltr_unindented_fragment_positions(
+                FlowLine {
+                    align: ALIGN_START,
+                    ..line
+                },
+                FlowFragment {
+                    boundary_index: 0,
+                    ..fragment
+                },
+                &clusters,
+                &styles,
+                |_, _| None,
+            ),
+            Err(EngineError::InvalidRequest)
+        ));
     }
 
     /// A line that ends in a space keeps that space but does not charge it to `advance`.
