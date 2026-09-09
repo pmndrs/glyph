@@ -2,13 +2,7 @@ import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 
 import type { LiveTextScene } from '../shared/live-text-scene';
 
-/**
- * Stable Benchmark Ipsum workload corpus for native-strike rendering checks.
- *
- * Keep each concern on its own line so a visual failure can be localized without
- * changing the corpus. Missing fixture coverage is reported rather than hidden by
- * substituting different text.
- */
+/** Stable corpus for native-strike checks: one concern per line so a visual failure localizes; don't substitute text to hide missing fixture coverage. */
 export const BENCHMARK_IPSUM_CONFORMANCE_LINES = [
   'Lorem ipsum dolor sit amet.',
   'Hamburgefontsiv 0123456789.',
@@ -19,13 +13,7 @@ export const BENCHMARK_IPSUM_CONFORMANCE_LINES = [
 
 export const BENCHMARK_IPSUM_CONFORMANCE_TEXT = BENCHMARK_IPSUM_CONFORMANCE_LINES.join('\n');
 
-/**
- * Paragraph-scale Latin workload for the continuously rendered benchmark surface.
- *
- * This is intentionally meaningful enough to inspect while retaining repeated
- * kerning pairs, ligature candidates, numerals, punctuation, and mathematics.
- * Complex-script universality remains in its separately pinned fixture corpus.
- */
+/** Paragraph-scale Latin workload for the continuously rendered surface; retains kerning pairs, ligatures, numerals, punctuation, and math. Complex-script coverage lives in its own pinned fixture corpus. */
 export const BENCHMARK_IPSUM_PARAGRAPHS = [
   'Typography is a moving system. AVATAR To Wa Yo repeat familiar kerning pairs while a responsive panel changes the space around them. The quick visual check is useful, but the benchmark records the cost of shaping, layout, upload, and every rendered frame.',
   'A practical interface mixes prose with 0123456789, prices such as 24.50, ranges from 8–512 px, and punctuation—“quotes”, (parentheses), brackets, commas, and semicolons. Repeated office, affine, difficult, and shuffle words retain ff, fi, fl, ffi, and ffl candidates without claiming that every font substitutes them.',

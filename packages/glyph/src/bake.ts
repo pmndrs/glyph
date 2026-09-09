@@ -1,5 +1,5 @@
 import type { JsonValue } from './raster.js';
-import type { RasterKey, Sha256Hex } from './identity.js';
+import type { RasterKey, Fingerprint } from './identity.js';
 
 export type { BakeWarning, SerializedBakeError } from './font-baker/index.js';
 
@@ -23,21 +23,21 @@ export type BakeProgressListener = (progress: BakeProgress) => void;
 
 export interface RasterPackaging {
   readonly artifact: 'embedded' | 'external';
-  readonly pages: 'embedded' | 'external';
 }
 
 export interface BakeArtifact {
-  readonly role: 'font' | 'raster' | 'raster-page';
+  readonly role: 'font' | 'raster';
   readonly id: string;
   readonly bytes: Uint8Array;
-  readonly sha256: Sha256Hex;
+  readonly fingerprint: Fingerprint;
 }
 
 export interface RasterBakeFontContext {
   readonly source: Uint8Array;
+  readonly sourceFingerprint: Fingerprint;
   readonly fontFaceIndex: number;
   readonly glyphCount: number;
-  readonly shapingHash: Sha256Hex;
+  readonly shapingFingerprint: Fingerprint;
 }
 
 export interface RasterBakeRequest<Descriptor extends JsonValue> {
@@ -61,7 +61,6 @@ export interface RasterPagePayloadReport {
   readonly height: number;
   readonly format: string;
   readonly gpuBytes: number;
-  readonly source: 'embedded' | 'external';
   readonly encodedBytes: number;
 }
 

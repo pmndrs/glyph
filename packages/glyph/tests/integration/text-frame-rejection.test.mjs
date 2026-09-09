@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 
-import '../support/browser-globals.mjs';
 import * as THREE from 'three/webgpu';
 import { span, txt } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';

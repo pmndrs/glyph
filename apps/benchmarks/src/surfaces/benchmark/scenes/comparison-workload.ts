@@ -344,11 +344,7 @@ async function createComparisonWorkloadRuntime(
   const canvasSurface = createCanvasSurface(renderer, width, height, configuration.showGrid);
   const rendererInitMs = persistentContext.rendererInitMs;
   let font: LoadedFormatFont | undefined;
-  /**
-   * Companion fixtures stay resident once loaded, keyed by fixture rather than held in one slot: the routes that need a
-   * companion do not all need the same one, and a Text that a previous workload published still holds a font lease, so
-   * releasing a companion at a workload switch would invalidate a font the outgoing scene has not finished with.
-   */
+  /** Companion fixtures stay resident once loaded, keyed by fixture: a previous workload's Text may still hold a lease, so switching workloads must not invalidate a font it hasn't finished with. */
   const companionFonts = new Map<BenchmarkFontFixture, LoadedFormatFont>();
   let selectedFontController: RetainedFontFixtureController<LoadedFormatFont> | undefined;
   let entries: readonly WorkloadEntry[] = [];
@@ -371,14 +367,13 @@ async function createComparisonWorkloadRuntime(
   const dynamicWidthsScratch = new Float64Array(DYNAMIC_LAYOUT_TEXT.length);
   const workloadAnimationScratch: ComparisonWorkloadAnimationScratch = {
     dynamicWidths: dynamicWidthsScratch,
+    paragraphStress: { fontSize: 0, layoutWidthPercent: 0, scrollProgress: 0 },
     textLadderPosition: textLadderPositionScratch,
     zoomText: zoomAnimationState,
   };
   const scene = new THREE.Scene();
-  let rootCompositing = workloadCompositing(configuration.workload);
-  let glyphRoot = createBenchmarkThreeRoot(`comparison-${technique}-${rootCompositing}`, {
+  const glyphRoot = createBenchmarkThreeRoot(`comparison-${technique}`, {
     capacity: { size: 4_096, policy: 'grow' },
-    compositing: rootCompositing,
   });
   let camera = createWorkloadCamera(configuration.workload, width, height);
   const textUpdateTelemetry = createTextUpdateTelemetry();
@@ -465,10 +460,7 @@ async function createComparisonWorkloadRuntime(
     const activeSelectedFont = selectedFontController;
     const activeFont = (): LoadedFormatFont => activeSelectedFont.current.asset;
     const loadedFontsScratch: LoadedFormatFont[] = [];
-    /**
-     * The selected fixture and a companion fixture can resolve to the same registered font, so residency is deduplicated
-     * by the loaded handle rather than by the asset wrapper — counting one font twice would double its reported bytes.
-     */
+    /** Selected and companion fixtures can resolve to the same registered font, so residency dedupes by loaded handle, not asset wrapper — else reported bytes double-count. */
     const loadedFonts = (): readonly LoadedFormatFont[] => {
       loadedFontsScratch.length = 0;
       loadedFontsScratch.push(activeFont());
@@ -491,9 +483,8 @@ async function createComparisonWorkloadRuntime(
       }
       return cachedBitmapAtlasPages;
     };
-    // Icon Grid renders its cells from the companion fixture, so that fixture owns the reported density there. Every
-    // other workload — including a composed one that only reaches its companion through a span — keeps the selected
-    // font as its density source, so a retained companion never becomes the visible configuration after navigation.
+    // Icon Grid reports density from its companion fixture; every other workload (even composed, reaching a
+    // companion only via a span) reports from the selected font.
     const statsFont = (): LoadedFormatFont =>
       configuration.workload === 'icon-grid' ? (residentCompanionFont('icon-grid') ?? activeFont()) : activeFont();
     let fontFixtureSwitching = false;
@@ -605,27 +596,15 @@ async function createComparisonWorkloadRuntime(
         next.workload === 'icon-grid' && nextIconGridInstance !== undefined
           ? nextIconGridInstance.activate(next, { height, width })
           : undefined;
-      const nextCompositing = workloadCompositing(next.workload);
-      const previousGlyphRoot = glyphRoot;
-      const nextGlyphRoot =
-        nextCompositing === rootCompositing
-          ? previousGlyphRoot
-          : createBenchmarkThreeRoot(`comparison-${technique}-${nextCompositing}`, {
-              capacity: { size: 4_096, policy: 'grow' },
-              compositing: nextCompositing,
-            });
-      const rootChanged = nextGlyphRoot !== previousGlyphRoot;
       const previous = entries;
       const previousRoot = batchRoot;
       const reuseBatchRoot =
-        !rootChanged &&
-        previousRoot instanceof TextGroup &&
-        comparisonWorkloadDefinition(next.workload).batching !== 'standalone';
+        previousRoot instanceof TextGroup && comparisonWorkloadDefinition(next.workload).batching !== 'standalone';
       let nextEntries: readonly WorkloadEntry[] = [];
       let nextRoot: THREE.Object3D;
       try {
         nextEntries = createEntries(
-          nextGlyphRoot,
+          glyphRoot,
           activeFont().loaded,
           technique,
           next,
@@ -638,10 +617,9 @@ async function createComparisonWorkloadRuntime(
           initialIconWindow?.scrollX ?? (workloadChanged ? 0 : (iconGridInstance?.view().scrollX ?? 0)),
           initialIconWindow?.scrollY ?? (workloadChanged ? 0 : (iconGridInstance?.view().scrollY ?? 0)),
         );
-        nextRoot = reuseBatchRoot ? previousRoot : createBatchRoot(nextGlyphRoot, next.workload);
+        nextRoot = reuseBatchRoot ? previousRoot : createBatchRoot(glyphRoot, next.workload);
       } catch (error) {
         disposeEntries(nextEntries);
-        if (rootChanged) disposeBenchmarkThreeRoot(nextGlyphRoot);
         throw error;
       }
       const scheduledAt = performance.now();
@@ -657,11 +635,6 @@ async function createComparisonWorkloadRuntime(
           batchRoot = nextRoot;
           disposeEntries(previous);
           if (!reuseBatchRoot) disposeBatchRoot(previousRoot);
-          if (rootChanged) {
-            disposeBenchmarkThreeRoot(previousGlyphRoot);
-            glyphRoot = nextGlyphRoot;
-            rootCompositing = nextCompositing;
-          }
           if (iconGridInstanceChanged) {
             iconGridInstance?.dispose();
             iconGridInstance = next.workload === 'icon-grid' ? nextIconGridInstance : undefined;
@@ -691,11 +664,6 @@ async function createComparisonWorkloadRuntime(
         scene.add(nextRoot);
         disposeEntries(previous);
         if (!reuseBatchRoot) disposeBatchRoot(previousRoot);
-        if (rootChanged) {
-          disposeBenchmarkThreeRoot(previousGlyphRoot);
-          glyphRoot = nextGlyphRoot;
-          rootCompositing = nextCompositing;
-        }
         if (iconGridInstanceChanged) {
           iconGridInstance?.dispose();
           iconGridInstance = next.workload === 'icon-grid' ? nextIconGridInstance : undefined;
@@ -716,7 +684,7 @@ async function createComparisonWorkloadRuntime(
         if (reuseBatchRoot) {
           for (const { node } of nextEntries) nextRoot.remove(node);
           disposeBatchRoot(nextRoot);
-          const restoredRoot = createBatchRoot(previousGlyphRoot, configuration.workload);
+          const restoredRoot = createBatchRoot(glyphRoot, configuration.workload);
           try {
             for (const { node } of previous) restoredRoot.add(node);
             publishWorkloadTexts(restoredRoot, previous);
@@ -732,7 +700,6 @@ async function createComparisonWorkloadRuntime(
         }
         disposeEntries(nextEntries);
         if (!reuseBatchRoot) disposeBatchRoot(nextRoot);
-        if (rootChanged) disposeBenchmarkThreeRoot(nextGlyphRoot);
         if (iconGridInstanceChanged) nextIconGridInstance?.dispose();
         throw error;
       }
@@ -780,6 +747,7 @@ async function createComparisonWorkloadRuntime(
       const fontSizeChanged = next.fontSize !== configuration.fontSize;
       if (comparisonWorkloadUpdateKind(configuration, next, contentWidthChanged) === 'rebuild') {
         await commit(next);
+        persistentContext.resetTelemetry();
         return;
       }
       if (contentWidthChanged || fontSizeChanged) {
@@ -868,9 +836,8 @@ async function createComparisonWorkloadRuntime(
       ) {
         iconGridInstance?.suspend();
       }
-      // Queued, never merged. Collapsing a superseded configuration into its successor made a dragged control report
-      // the cost of the two updates that survived rather than of the twenty it requested, which is a measurement of
-      // the queue and not of the workload. Callers debounce their own input; whatever arrives here is applied.
+      // Queued, never merged: collapsing configurations would measure the queue's cost instead of the workload's.
+      // Callers debounce their own input.
       return new Promise<void>((resolve, reject) => {
         pendingUpdates.push({ configuration: next, viewportChanged, waiters: [{ resolve, reject }] });
         startUpdateDrain();
@@ -911,6 +878,7 @@ async function createComparisonWorkloadRuntime(
             workloadAnimationScratch,
             onError,
             recordReflow,
+            camera,
           );
         }
         if (renderScene && !fontFixtureCommitting) {
@@ -929,6 +897,7 @@ async function createComparisonWorkloadRuntime(
               workloadAnimationScratch,
               onError,
               recordReflow,
+              camera,
             );
           }
           const started = performance.now();
@@ -956,8 +925,16 @@ async function createComparisonWorkloadRuntime(
         } else {
           measureVisibleEntries(entries, drawRoot, zoomScale, visibleEntryMetrics, visibleGeometryScratch);
         }
+        const authoredCssFontSize =
+          configuration.workload === 'paragraph-stress'
+            ? workloadAnimationScratch.paragraphStress.fontSize
+            : configuration.fontSize;
         const effectiveCssFontSize =
-          configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX * zoomScale : configuration.fontSize;
+          configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX * zoomScale : authoredCssFontSize;
+        const appliedLayoutWidthRatio =
+          configuration.workload === 'paragraph-stress'
+            ? workloadAnimationScratch.paragraphStress.layoutWidthPercent / 100
+            : configuration.layoutWidthRatio;
         const framebufferGpuBytes = rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4;
         const currentLoadedFonts = loadedFonts();
         measureLoadedFonts(currentLoadedFonts, loadedFontMetrics);
@@ -1007,8 +984,8 @@ async function createComparisonWorkloadRuntime(
           appliedAmount: configuration.amount,
           appliedAnimationEnabled: configuration.animationEnabled,
           appliedAnimationSpeed: configuration.animationSpeed,
-          appliedFontSize: configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX : configuration.fontSize,
-          appliedLayoutWidthRatio: configuration.layoutWidthRatio,
+          appliedFontSize: configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX : authoredCssFontSize,
+          appliedLayoutWidthRatio,
           appliedPaintOpacity: configuration.paintOpacity,
           appliedPaintShadowEnabled: technique === 'mtsdf' && configuration.paintShadowEnabled,
           appliedPaintStrokeWidth: technique === 'mtsdf' ? configuration.paintStrokeWidth : 0,
@@ -1035,7 +1012,7 @@ async function createComparisonWorkloadRuntime(
         if (technique === 'bitmap') {
           const strikePpem = selectBitmapStrikePpem(
             currentStatsFont.bitmapStrikes,
-            configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX : configuration.fontSize,
+            configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX : authoredCssFontSize,
             rendererViewport.pixelRatio,
           );
           onStats({
@@ -1181,18 +1158,10 @@ async function createComparisonWorkloadRuntime(
   }
 }
 
-/**
- * Multi-instance workloads mount under one shared `TextGroup`, so their Texts prepare and pack into a single paragraph
- * batch that owns one set of GPU resources. A single-paragraph workload gets a plain Group and keeps its own implicit
- * batch of one, which is what it already was.
- */
+/** Multi-instance workloads share one `TextGroup` batch (one set of GPU resources); a single-paragraph workload gets a plain Group, its own implicit batch of one. */
 function createBatchRoot(root: ThreeRoot, workload: ComparisonWorkloadId): THREE.Object3D {
   if (comparisonWorkloadDefinition(workload).batching === 'standalone') return new THREE.Group();
   return root.createTextGroup();
-}
-
-function workloadCompositing(workload: ComparisonWorkloadId): 'ordered' | 'independent' {
-  return workload === 'icon-grid' ? 'independent' : 'ordered';
 }
 
 function disposeBatchRoot(root: THREE.Object3D): void {
@@ -1254,6 +1223,7 @@ function animateEntries(
   scratch: ComparisonWorkloadAnimationScratch,
   onError: (error: unknown) => void,
   onReflow: (duration: number) => void,
+  camera?: THREE.OrthographicCamera | THREE.PerspectiveCamera,
 ): void {
   comparisonWorkloadDefinition(configuration.workload).animate(
     entries,
@@ -1265,6 +1235,7 @@ function animateEntries(
     scratch,
     onError,
     onReflow,
+    camera,
   );
 }
 
@@ -1291,13 +1262,7 @@ export function comparisonWorkloadRequiresIconWindowSuspension(
   return registryRequiresIconWindowSuspension(previous, next);
 }
 
-/**
- * Swaps the font fixture behind every retained Text and commits the whole set in one publication.
- *
- * The replacement `Font` is already resolved, so there is no readiness window to roll back: either the single
- * `updateMatrixWorld` commits every Text onto the new fixture or it throws with none of them published, and the caller
- * releases the candidate owner.
- */
+/** Swaps the font fixture behind every retained Text, committing the whole set in one publication: the single `updateMatrixWorld` either commits all Texts or throws with none published. */
 export function applyRetainedTextFontFixture(
   root: THREE.Object3D,
   entries: readonly WorkloadEntry[],
@@ -1312,9 +1277,7 @@ export function applyRetainedTextWidths(texts: readonly WorkloadText[], widths: 
   applyRetainedTextLayout(texts, widths, undefined);
 }
 
-/**
- * `set` replaces a property group wholesale, so each update carries forward the unaffected style or constraints.
- */
+/** `set` replaces a property group wholesale, so each update carries forward the unaffected style or constraints. */
 function applyRetainedTextLayout(
   texts: readonly WorkloadText[],
   widths: ArrayLike<number> | undefined,

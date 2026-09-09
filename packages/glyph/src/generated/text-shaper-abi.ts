@@ -206,6 +206,7 @@ export const textShaperAbi = {
     },
     "semanticViewMasks": {
       "all": 3,
+      "borrowedLayout": 4,
       "layoutInspection": 2,
       "measurement": 1
     },
@@ -259,6 +260,8 @@ export const textShaperAbi = {
   },
   "functions": {
     "allocate": "pmndrs_glyph_shaper_alloc",
+    "borrowParagraphGlyph": "pmndrs_glyph_engine_borrow_paragraph_glyph",
+    "borrowParagraphLayout": "pmndrs_glyph_engine_borrow_paragraph_layout",
     "codecCount": "pmndrs_glyph_engine_codec_count",
     "copyDecorations": "pmndrs_glyph_engine_copy_decorations",
     "copyGlyphs": "pmndrs_glyph_engine_copy_glyphs",
@@ -291,6 +294,32 @@ export const textShaperAbi = {
     "updateBatchPointer": "pmndrs_glyph_engine_update_batch_ptr"
   },
   "layouts": {
+    "borrowedGlyph": {
+      "alignment": 4,
+      "bidiLevel": 16,
+      "blockOrigin": 28,
+      "cluster": 8,
+      "flags": 14,
+      "fontHandle": 4,
+      "fontSize": 20,
+      "glyphId": 12,
+      "inkBlockExtent": 48,
+      "inkBlockStart": 40,
+      "inkInlineExtent": 44,
+      "inkInlineStart": 36,
+      "inlineAdvance": 32,
+      "inlineOrigin": 24,
+      "size": 52,
+      "stableId": 0
+    },
+    "borrowedLayoutDescriptor": {
+      "alignment": 4,
+      "generation": 0,
+      "glyphCount": 12,
+      "paragraphId": 8,
+      "rootId": 4,
+      "size": 16
+    },
     "codecBuffer": {
       "alignment": 4,
       "capacityClass": 12,
@@ -510,6 +539,13 @@ export const textShaperAbi = {
       "paragraphId": 4,
       "reserved0": 2,
       "size": 12
+    },
+    "engineParagraphOrderMutation": {
+      "alignment": 8,
+      "orderRank": 8,
+      "orderScope": 4,
+      "paragraphId": 0,
+      "size": 16
     },
     "enginePatch": {
       "alignment": 4,
@@ -746,11 +782,13 @@ export const textShaperAbi = {
       "maxSlotsPerBand": 60,
       "paragraphMutationCount": 132,
       "paragraphMutationsOffset": 128,
+      "paragraphOrderMutationCount": 140,
+      "paragraphOrderMutationsOffset": 136,
       "regionCount": 96,
       "regionsOffset": 92,
       "rootId": 8,
       "semanticViewMask": 36,
-      "size": 136,
+      "size": 144,
       "styleMutationCount": 80,
       "styleMutationsOffset": 76,
       "textMutationCount": 72,

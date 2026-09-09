@@ -3,8 +3,9 @@ pub(crate) const FRAME_FLAG_COMPOSITING_INDEPENDENT: u32 = 1;
 pub(crate) const FRAME_FLAGS: u32 = FRAME_FLAG_COMPOSITING_INDEPENDENT;
 pub(crate) const SEMANTIC_VIEW_MEASUREMENT: u32 = 1 << 0;
 pub(crate) const SEMANTIC_VIEW_LAYOUT_INSPECTION: u32 = 1 << 1;
+pub(crate) const SEMANTIC_VIEW_BORROWED_LAYOUT: u32 = 1 << 2;
 pub(crate) const SEMANTIC_VIEW_MASK: u32 =
-    SEMANTIC_VIEW_MEASUREMENT | SEMANTIC_VIEW_LAYOUT_INSPECTION;
+    SEMANTIC_VIEW_MEASUREMENT | SEMANTIC_VIEW_LAYOUT_INSPECTION | SEMANTIC_VIEW_BORROWED_LAYOUT;
 
 pub(crate) const TEXT_MUTATION_REPLACE_UTF16: u8 = 1;
 pub(crate) const TEXT_ENCODING_UTF16_LE: u8 = 1;
@@ -113,6 +114,7 @@ pub(crate) struct UpdateRequest<'a> {
     pub compositing_independent: bool,
     pub limits: UpdateLimits,
     pub paragraph_mutations: super::semantic_wire::ParagraphMutationBatch<'a>,
+    pub paragraph_order_mutations: super::semantic_wire::ParagraphOrderMutationBatch<'a>,
     pub text_mutations: super::semantic_wire::TextMutationBatch<'a>,
     pub style_mutations: super::semantic_wire::StyleMutationBatch<'a>,
     pub geometry: super::semantic_wire::GeometryBatch<'a>,

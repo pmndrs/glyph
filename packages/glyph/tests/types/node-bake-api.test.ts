@@ -8,7 +8,7 @@ const explicit = bakeFont({
   rasters: [
     {
       baker: bitmapBaker,
-      packaging: { artifact: 'embedded', pages: 'embedded' },
+      packaging: { artifact: 'embedded' },
       options: { strikes: [16, 32] },
     },
   ],
@@ -22,7 +22,7 @@ const project = bakeProject({
 
 declare const report: NodeFontBakeReport;
 const elapsed: number = report.execution.timingsMs.total;
-const outputHash: string | undefined = report.execution.outputs[0]?.sha256;
+const outputHash: string | undefined = report.execution.outputs[0]?.fingerprint;
 void explicit;
 void project;
 void elapsed;
@@ -35,7 +35,7 @@ void bakeFont({
   rasters: [
     {
       baker: bitmapBaker,
-      packaging: { artifact: 'embedded', pages: 'embedded' },
+      packaging: { artifact: 'embedded' },
       // @ts-expect-error Bitmap bake options retain their package-owned static tuple contract.
       options: { strikes: [] },
     },
@@ -50,7 +50,7 @@ void bakeFont({
     {
       baker: bitmapBaker,
       // @ts-expect-error The Node host accepts only explicit supported packaging modes.
-      packaging: { artifact: 'inline', pages: 'embedded' },
+      packaging: { artifact: 'inline' },
       options: { strikes: [16] },
     },
   ],

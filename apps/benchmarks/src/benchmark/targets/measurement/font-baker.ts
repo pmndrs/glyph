@@ -31,7 +31,7 @@ const bakerTarget: BenchmarkTarget = {
     });
     const artifact = result.artifacts[0];
     if (artifact === undefined) throw new Error('Font baker returned no artifact');
-    return { bytes: artifact.bytes.byteLength, hash: artifact.sha256 };
+    return { bytes: artifact.bytes.byteLength, hash: artifact.fingerprint };
   },
   dispose: async () => undefined,
 };

@@ -1,4 +1,5 @@
 import type { RegisteredFont } from '../font.js';
+import type { Fingerprint } from '../identity.js';
 import type { JsonValue, RasterReference, RasterResourceResolver } from '../raster.js';
 
 export interface RegisteredBufferView {
@@ -13,7 +14,7 @@ export interface RegisteredRasterSourceData {
   bufferViews?: readonly RegisteredBufferView[];
   /** Complete authenticated external or runtime-generated raster artifact. Embedded rasters use the main artifact. */
   artifactBytes?: Uint8Array<ArrayBuffer>;
-  artifactHash?: string;
+  artifactFingerprint?: string;
   /** Content identities actually resolved while decoding this raster. */
   readonly resourceIdentities: Set<string>;
   readonly externalCandidates: RegisteredRasterExternalCandidate[];
@@ -21,7 +22,7 @@ export interface RegisteredRasterSourceData {
 }
 
 export interface RegisteredRasterResourceData {
-  readonly artifactHash: string;
+  readonly artifactFingerprint: string;
   readonly byteLength: number;
   readonly bytes: Uint8Array<ArrayBuffer>;
 }
@@ -42,9 +43,9 @@ export interface RegisteredFontData {
   /** Complete immutable GLB backing. Every embedded payload is a view into this allocation. */
   readonly artifactBytes: Uint8Array<ArrayBuffer>;
   /** Content identity of the complete main GLB, independent of its locator or shaping payload. */
-  readonly artifactHash: string;
+  readonly artifactFingerprint: string;
   readonly fontFaceIndex: number;
-  readonly sourceHash: string;
+  readonly sourceFingerprint: Fingerprint;
   sourceBytes?: Uint8Array;
   readonly sourceCandidates: RegisteredFontSourceCandidate[];
   readonly shapingSfnt: Uint8Array;
@@ -57,8 +58,8 @@ export interface RegisteredFontData {
 }
 
 export interface RegisteredFontSourceCandidate {
-  /** Hash of the exact source bytes available at this candidate. */
-  readonly sourceHash: string;
+  /** Fingerprint stamped for the exact source bytes available at this candidate. */
+  readonly sourceFingerprint: Fingerprint;
   readonly sourceUrl: string;
   readonly fetch?: typeof fetch;
 }

@@ -699,3 +699,88 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
     font.dispose();
   }
 });
+
+test('style-clean text edits do not consume the pending style mutation limit', async () => {
+  const font = await fixtureFont();
+  const glyphEngine = await fixtureEngine();
+  const handleState = createGlyphHandleState(glyphEngine, { integration: 'test.render-planner-style-limits' });
+  const codec = handleState.installCodec(threeCodecDescriptor);
+  const fontBinding = handleState.bindFontStack(createFontStack(font));
+  let acceptedPublications = 0;
+  const planner = handleState.createRootPlanner({
+    codec,
+    capabilitySetIndex: 0,
+    target: () => ({
+      delivery: 'borrowed',
+      accept: () => {
+        acceptedPublications += 1;
+        return { accepted: true };
+      },
+      dispose() {},
+    }),
+    limits: {
+      maxParagraphs: 3,
+      maxClusters: 5,
+      maxLines: 5,
+      maxRegions: 3,
+      maxExclusions: 1,
+      maxInlineObjects: 1,
+      maxSlotsPerBand: 1,
+      maxOutputBytes: 1_048_576,
+    },
+    requestCapacity: 65_536,
+    resultCapacity: 1_048_576,
+    textCapacity: 64,
+  });
+  const registration = registerGlyphShapeParticipant(glyphEngine, {
+    stage: () => stageRenderPlanner(planner),
+    accepted() {},
+    rejected(error) {
+      throw error;
+    },
+  });
+  const stopObservingDirty = observeRenderPlannerDirty(planner, () => registration.invalidate());
+  const first = planner.createText({
+    font: fontBinding,
+    text: {
+      text: 'abc',
+      spans: [
+        { start: 0, end: 1, style: { color: '#ff0000' } },
+        { start: 1, end: 2, style: { color: '#00ff00' } },
+      ],
+    },
+  });
+  const second = planner.createText({ font: fontBinding, text: 'd' });
+  const third = planner.createText({ font: fontBinding, text: 'e' });
+
+  try {
+    shapeGlyphEngine(glyphEngine);
+    assert.equal(acceptedPublications, 1);
+
+    first.update({ text: 'abc' });
+    second.update({
+      text: {
+        text: 'd',
+        spans: [{ start: 0, end: 1, style: { color: '#0000ff' } }],
+      },
+    });
+    assert.doesNotThrow(
+      () => third.update({ text: 'f' }),
+      'a text-only edit emits no style record beside the five pending style mutations',
+    );
+    shapeGlyphEngine(glyphEngine);
+    assert.equal(acceptedPublications, 2);
+  } finally {
+    stopObservingDirty();
+    registration.dispose();
+    first.dispose();
+    second.dispose();
+    third.dispose();
+    planner.dispose();
+    fontBinding.dispose();
+    codec.dispose();
+    handleState.dispose();
+    glyphEngine.dispose();
+    font.dispose();
+  }
+});

@@ -207,10 +207,7 @@ const primitiveLayout = textShaperAbi.layouts.enginePrimitive;
 const drawLayout = textShaperAbi.layouts.engineDraw;
 const retirementLayout = textShaperAbi.layouts.engineRetirement;
 
-/**
- * Retains only opaque JS identities. All command scalars and ranges stay in the trusted Rust
- * publication and are read lazily through the borrowed tables below.
- */
+/** Retains only opaque JS identities — command scalars and ranges stay in the trusted Rust publication, read lazily through the borrowed tables below. */
 export class TypedCommandTreeMapper {
   readonly #sources = new WeakMap<BorrowedTypedCommandTree, TypedSourceState>();
   readonly #resources = new Map<string, TypedResource>();

@@ -1,12 +1,4 @@
-/* @workflow
-{
-  "name": "glyph:mtsdf-generator-profile",
-  "summary": "Measure compile, initialization, cold-corpus, and warm-corpus MTSDF generator cost.",
-  "requirements": "A built Glyph package.",
-  "writes": "Standard output only.",
-  "args": []
-}
-*/
+/* @workflow { "name": "glyph:mtsdf-generator-profile", "summary": "Measure compile, initialization, cold-corpus, and warm-corpus MTSDF generator cost.", "requirements": "A built Glyph package.", "writes": "Standard output only.", "args": [] } */
 
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';

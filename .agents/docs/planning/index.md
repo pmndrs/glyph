@@ -23,6 +23,7 @@
 - [External gpucat integration fitness plan](gpucat-integration.md) — public-surface mapping, external-package boundary, ordering/lifecycle plan, and remaining shader-reuse proof for gpucat.
 - [Canonical roadmap](../roadmap/roadmap.md) — authoritative implementation order and exit gates.
 - [Glyph alpha fast-follow implementation brief](api-alpha-fast-follow.md) — disposable post-merge prompt for the deferred Rust audit and remaining production-review findings; delete it when the accepted work is complete.
+- [Paragraph batching and TypeGPU integration recovery](paragraph-batching-typegpu-recovery.md) — disposable execution plan for preserving the PR #160/#161 stack over merged PR #46, closing validated correctness and resize-performance work, and proving the final browser gates; delete it after the stack lands.
 - [uikit integration](uikit-integration.md) — third-party retained-layout integration boundary.
 
 ## Data and extension contracts

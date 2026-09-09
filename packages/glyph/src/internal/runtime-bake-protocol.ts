@@ -1,20 +1,14 @@
 import type { FontBakeDescriptor, SerializedBakeError } from '../font-baker/index.js';
-import type { RasterKey } from '../identity.js';
+import type { Fingerprint, RasterKey } from '../identity.js';
 import type { JsonValue } from '../raster.js';
+import { isFingerprint } from './fingerprint.js';
 
 export type RuntimeBakeUnicodeRange = {
   readonly start: number;
   readonly end: number;
 };
 
-/**
- * The raster kinds the runtime bake Worker embeds bakers for. This set is the
- * single routing authority: the host puts only these kinds into a Worker font
- * bake, and every other technique bakes host-side through the baker its own
- * declaration names (`technique.runtimeBaker`). The Worker's kind switch is
- * the realization of this set; its rejection of anything else guards protocol
- * violations, not routing.
- */
+/** Raster kinds the runtime bake Worker embeds bakers for — the single routing authority. Every other technique bakes host-side via its own `technique.runtimeBaker`. */
 export const workerRasterKinds: readonly string[] = Object.freeze(['bitmap', 'msdf', 'slug']);
 
 export type RuntimeBakeRaster = {
@@ -48,7 +42,7 @@ export interface RuntimeBakeArtifact {
   readonly role: 'font';
   readonly id: string;
   readonly bytes: ArrayBuffer;
-  readonly sha256: string;
+  readonly fingerprint: Fingerprint;
 }
 
 export interface RuntimeBakeFailure {
@@ -133,7 +127,7 @@ function isRasters(value: unknown): value is readonly RuntimeBakeRaster[] {
         Number.isSafeInteger(raster.version) &&
         (raster.version as number) >= 0 &&
         typeof raster.rasterKey === 'string' &&
-        /^[0-9a-f]{64}$/.test(raster.rasterKey) &&
+        isFingerprint(raster.rasterKey) &&
         isJsonValue(raster.descriptor),
     )
   );
@@ -157,7 +151,7 @@ function isRuntimeBakeArtifact(value: unknown): value is RuntimeBakeArtifact {
     value.role === 'font' &&
     typeof value.id === 'string' &&
     value.bytes instanceof ArrayBuffer &&
-    typeof value.sha256 === 'string'
+    isFingerprint(value.fingerprint)
   );
 }
 

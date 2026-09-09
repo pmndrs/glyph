@@ -31,6 +31,12 @@ export type PlannerParagraphMutation =
   | { readonly opcode: 'upsert'; readonly paragraphId: ParagraphId; readonly order: number }
   | { readonly opcode: 'remove'; readonly paragraphId: ParagraphId };
 
+export interface PlannerParagraphOrderMutation {
+  readonly paragraphId: ParagraphId;
+  readonly orderScope: number;
+  readonly orderRank: number;
+}
+
 export interface PlannerTextMutation {
   readonly paragraphId: ParagraphId;
   readonly start: number;
@@ -114,12 +120,7 @@ export interface PlannerConstraint {
   readonly spaceBefore?: number;
   /** Block-axis space added after the paragraph's final line. */
   readonly spaceAfter?: number;
-  /**
-   * Justification bounds on each word space as multiples of its natural
-   * advance. Leave unset for the unclamped distribution; when set, minimum is
-   * in (0, 1] and maximum is at least 1. Deficit beyond the maximum spills
-   * into letter-space expansion, capped per inter-cluster gap.
-   */
+  /** Justification bounds on each word space as multiples of its natural advance: min in (0, 1], max ≥ 1. Deficit beyond max spills into capped letter-space expansion. */
   readonly justify?: {
     readonly minWordSpaceRatio?: number;
     readonly maxWordSpaceRatio?: number;
@@ -200,6 +201,7 @@ export interface PlannerFrameUpdate {
   readonly compositingIndependent?: boolean;
   readonly limits: PlannerFrameLimits;
   readonly paragraphMutations?: readonly PlannerParagraphMutation[];
+  readonly paragraphOrderMutations?: readonly PlannerParagraphOrderMutation[];
   readonly textMutations?: readonly PlannerTextMutation[];
   readonly styleMutations?: readonly PlannerStyleMutation[];
   readonly constraints?: readonly PlannerConstraint[];
@@ -213,6 +215,7 @@ export function compilePlannerFrameUpdate(frame: PlannerFrameUpdate): Uint8Array
   const abi = textShaperAbi;
   const request = abi.layouts.engineUpdateRequest;
   const paragraphMutations = frame.paragraphMutations ?? [];
+  const paragraphOrderMutations = frame.paragraphOrderMutations ?? [];
   const textMutations = frame.textMutations ?? [];
   const styleMutations = frame.styleMutations ?? [];
   const constraints = frame.constraints ?? [];
@@ -231,6 +234,12 @@ export function compilePlannerFrameUpdate(frame: PlannerFrameUpdate): Uint8Array
     abi.layouts.engineParagraphMutation.size,
     abi.layouts.engineParagraphMutation.alignment,
     'paragraph mutations',
+  );
+  const paragraphOrderOffset = allocate(
+    paragraphOrderMutations.length,
+    abi.layouts.engineParagraphOrderMutation.size,
+    abi.layouts.engineParagraphOrderMutation.alignment,
+    'paragraph order mutations',
   );
   const textOffset = allocate(textMutations.length, abi.layouts.engineTextMutation.size, 4, 'text mutations');
   const styleOffset = allocate(styleMutations.length, abi.layouts.engineStyleMutation.size, 4, 'style mutations');
@@ -272,6 +281,7 @@ export function compilePlannerFrameUpdate(frame: PlannerFrameUpdate): Uint8Array
   writeHeader(view, frame, bytes.length, {
     textOffset,
     paragraphOffset,
+    paragraphOrderOffset,
     styleOffset,
     constraintOffset,
     regionOffset,
@@ -279,6 +289,7 @@ export function compilePlannerFrameUpdate(frame: PlannerFrameUpdate): Uint8Array
     inlineObjectOffset,
   });
   writeParagraphMutations(view, paragraphOffset, paragraphMutations);
+  writeParagraphOrderMutations(view, paragraphOrderOffset, paragraphOrderMutations);
   writeTextMutations(view, textOffset, textMutations, textPayloads);
   writeStyleMutations(view, bytes, styleOffset, styleMutations, languageBytes, languageOffsets, featureOffsets);
   writeConstraints(view, constraintOffset, constraints);
@@ -290,6 +301,7 @@ export function compilePlannerFrameUpdate(frame: PlannerFrameUpdate): Uint8Array
 
 interface HeaderOffsets {
   readonly paragraphOffset: number;
+  readonly paragraphOrderOffset: number;
   readonly textOffset: number;
   readonly styleOffset: number;
   readonly constraintOffset: number;
@@ -329,6 +341,8 @@ function writeHeader(view: DataView, frame: PlannerFrameUpdate, byteLength: numb
     ['maxOutputBytes', limits.maxOutputBytes],
     ['paragraphMutationsOffset', offsets.paragraphOffset],
     ['paragraphMutationCount', frame.paragraphMutations?.length ?? 0],
+    ['paragraphOrderMutationsOffset', offsets.paragraphOrderOffset],
+    ['paragraphOrderMutationCount', frame.paragraphOrderMutations?.length ?? 0],
     ['textMutationsOffset', offsets.textOffset],
     ['textMutationCount', frame.textMutations?.length ?? 0],
     ['styleMutationsOffset', offsets.styleOffset],
@@ -362,6 +376,21 @@ function writeParagraphMutations(
     if (mutation.opcode === 'upsert') {
       view.setUint32(offset + layout.order, u32(mutation.order, 'paragraph order'), true);
     }
+  }
+}
+
+function writeParagraphOrderMutations(
+  view: DataView,
+  tableOffset: number,
+  mutations: readonly PlannerParagraphOrderMutation[],
+): void {
+  const layout = textShaperAbi.layouts.engineParagraphOrderMutation;
+  for (const [index, mutation] of mutations.entries()) {
+    const offset = tableOffset + index * layout.size;
+    view.setUint32(offset + layout.paragraphId, u32(mutation.paragraphId, 'paragraph ID'), true);
+    view.setUint32(offset + layout.orderScope, u32(mutation.orderScope, 'paragraph order scope'), true);
+    if (!Number.isFinite(mutation.orderRank)) throw new RangeError('paragraph order rank must be finite');
+    view.setFloat64(offset + layout.orderRank, mutation.orderRank, true);
   }
 }
 

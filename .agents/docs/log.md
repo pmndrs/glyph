@@ -2,6 +2,16 @@
 
 ## 2026-09-08
 
+- **Added synchronous demand-read glyph inspection** — Core, Three, and TypeGPU Text controllers now expose
+  `withGlyphs(callback)` for indexed glyph reads without publishing or copying the complete semantic layout.
+  A fixed private Wasm descriptor plus fixed per-record scratch keeps setup independent of glyph count; callback lifetime,
+  thenable rejection, and a shared engine reentry gate prevent borrowed views from surviving or mutating their source.
+
+- **Made Rich Text mutation load refresh-rate independent** — Its rAF hook now publishes at most one latest-state update
+  per 60 Hz logical tick. The tick directly derives one continuously rate-scaled emphasis/tint state, so the 0%, 50%, and
+  100% controls do not republish duplicate content or replay skipped intermediate states. High-refresh duplicate frames,
+  disabled animation, and delayed-frame catch-up add no work.
+
 - **Corrected the post-TypeGPU integration boundary** — Published renderer-free shader realizations as the explicit
   `/shaders/tsl` and `/shaders/typegpu` siblings, retained `/three/typegpu` as the isolated Three experiment, and kept
   `/typegpu` as the narrower direct renderer. Packed-consumer builds now prove the root and stable Three entry never
@@ -11,6 +21,102 @@
   Shared Three types and config construction no longer pull native TSL into `/three/typegpu`. Package-size gates price
   `/three`, `/three/typegpu`, and direct `/typegpu`; shader barrels retain package-resolution, graph-isolation, and
   tree-shaking proofs without a redundant per-technique size matrix. No shader algorithm changed.
+
+- **Removed benchmark-shell work from active paragraph reflow** — Paragraph Stress now applies its rounded width and
+  font-size motion inside the retained scene frame hook rather than republishing reactive control state on every step;
+  unchanged frames stage nothing and live attributes report the actual animated values. Editorial measures each Text
+  once per reflow, and the isolated performance workflow now includes both active-resize workloads.
+
+- **Pinned the paragraph-batching and TypeGPU recovery** — A disposable implementation plan now records the exact PR
+  #46 merged-main baseline, the #128-to-#161 stack order and authorship-preserving rebase procedure, already-checkpointed
+  fixes, validated correctness findings, resize-performance attribution, TypeGPU export and optional-peer gates, final
+  adversarial review, maintainer benchmark approval, and the conditions for deleting the plan after landing.
+
+## 2026-09-07
+
+- **Closed the adversarial retained-transaction review** — Rust now indexes semantic input sections by paragraph ID
+  before applying them in retained semantic order, so an atomic batch may carry valid text, style, constraint, and inline
+  tables in any paragraph-group order without changing glyph records or adding work to empty frames. Three query
+  reconciliation includes only render-active members plus the explicitly queried detached Text, preventing inspection of
+  one paragraph from binding unrelated detached siblings. Rank-only updates no longer replace unchanged metric objects,
+  and the full flow builder preserves negative half-leading for an authored tight line box. The fresh-scene performance
+  workflow now requests exact finite 120-sample CPU and completed-GPU windows without changing the continuously displayed
+  rolling telemetry.
+
+- **Corrected retained-performance attribution** — Content-only Three updates now recognize the already-owned normalized
+  style, layout, and constraint identities before merge, validation, deep comparison, or cloning; actual full-field
+  reassignments retain deep snapshot validation. The specialized runner now strips pnpm's option delimiter and places
+  forwarded Vitexec options before the injected module, with a focused argv-order contract. An aggregate main comparison
+  was rejected because main retained its telemetry ring across workload replacement; fresh-page profiles instead show
+  Off-axis / 3D, Dynamic Layout, and Paint & Effects flat or faster on the candidate.
+
+- **Activated the camera-ranked label proof** — The presentation host now forwards its active workload camera into
+  every frame hook, allowing Camera Billboard to orbit, face the camera, and rewrite child `Text.renderOrder` ranks as
+  depth crosses. Its reusable rank records remove per-label frame allocation. A focused regression proves both camera
+  motion and rank reversal; the change is benchmark-host plumbing and does not alter Glyph records or renderer kernels.
+
+- **Split retained invalidation by data ownership** — Plain string edits now reuse their configured and planner binding
+  leases, publish only changed text plus root-style coverage when length changes, and omit unchanged lifecycle/order and
+  geometry tables. Rust now limits implicit paragraph inference to an empty planner, so a content batch can update
+  several existing paragraphs without dummy lifecycle upserts. The 684-label request shrank from 209,448 to 23,400
+  bytes; three fresh exact-main medians of 24.24–25.87 ms compare with final post-review medians of 11.39–11.89 ms on
+  the candidate, with one draw and 5,362 glyphs throughout. Configured
+  roots now prewarm one 64-unit spare paragraph rather than 256, saving roughly 462 KiB/root in the isolated cold probe,
+  while active paragraph arenas continue growing from actual content without a root-wide publication scan. The scoped
+  maintainability review additionally corrected style-limit accounting to use style dirtiness, made Three's nested
+  authored properties owned snapshots, removed one dead reserve method, and made unchanged plain strings true no-ops.
+
+- **Completed the scoped maintainability pass** — Strict TypeScript, Oxlint, Oxfmt, Rustfmt, and Clippy checks cover the
+  touched Glyph and benchmark boundaries. Camera-rank updates no longer allocate temporary paragraph-order objects,
+  the telemetry ring owns one shared index calculation, and scalar word fitting explicitly disables monotonic chunk
+  skips for the rare negative-advance/sidecar-overflow case. The review deliberately keeps paragraph scratch records
+  separate from the 64-byte glyph record, keeps renderer reconciliation loops allocation-free, and rejects broader
+  abstraction or scope-ID recycling without a measured failure mode.
+
+- **Closed the final Opus review findings** — The second read-only review found an unstated group leaking child paragraph
+  ranks into Three material keys, retained lines dropping decoration records, scalar word fallback disagreeing with the
+  sparse index on negative advances, an end-aligned semantic-extent reuse hole, and an extreme tight-line-height clamp.
+  Focused regressions now keep default groups in one draw, copy per-line decoration slices, make both word fitters select
+  the same completed shaped segment, invalidate moved slot starts, and preserve an authored 0.5-em line box. The timed
+  demo observer also records attribute old values so batched DOM mutations cannot hide a language-case transition.
+
+- **Opened optional language-resource follow-up** — [#163](https://github.com/pmndrs/glyph/issues/163) specifies
+  explicit language selection, dynamically imported dictionary/hyphenation data, a versioned bounds-checked Wasm
+  linear-memory ABI, deterministic baseline fallback, and package-size/hot-path gates. Baseline word wrapping remains
+  Unicode UAX #14 constrained by grapheme and shaping safety; it does not pretend to provide locale tailoring.
+
+- **Repaired the complete timed Presentation proof** — Exact remote main and the candidate both exposed a state race:
+  timed playback initialized Advanced Shaping as automatic, then the location transition overwrote it with manual mode,
+  repeating only the first CJK case. Playback-aware initialization now preserves auto mode, and the probe records DOM
+  mutations across the whole scene rather than polling short cases sequentially. WebGPU and forced WebGL2 both render
+  every advanced case and complete the ten-scene retained-canvas sequence.
+
+- **Completed retained word flow and width-only positioning reuse** — Sparse prose now retains one 12-byte cumulative
+  record per word opportunity while dense CJK stays on the existing cluster/chunk path. Whole shaped words, including
+  negative positioning adjustments and shrinkable spaces, are evaluated before a break. Unchanged start-aligned lines
+  reuse their committed positioned SoA slices; the 22,000-glyph 500-update A/B moved from 0.314/4.417 to
+  0.171/3.058 ms median/p95 against exact remote main without changing output.
+
+- **Closed benchmark and query evidence gaps** — Scene-local telemetry resets retained globally unique frame IDs and
+  fixed wrapped-ring extrema/copy indexing. All 60 backend/technique/workload cells preserve their expected topology,
+  all 24 mutation live probes reach a visible frame, and Paragraph Stress remains one draw with flat-or-better measured
+  CPU/GPU work. Large alternating glyph-inspection queries now grow the capacity reported by the actual failing A/B slot.
+
+- **Made justification consume completed shaped words** — Editorial non-final lines now reach the exact column edge
+  under the same word-space shrink contract used during fitting, while final lines remain ragged. The regression covers
+  a shaped word whose early positive advance is canceled by a later negative adjustment instead of moving that fitting
+  word to the next line.
+
+- **Recovered paragraph batching without rank-packed glyph keys** — Compatible spans and grouped paragraphs again
+  coalesce by resource, material, and fixed paint layer. `Text.renderOrder` ranks paragraphs only inside a `TextGroup`,
+  while group and standalone Text render order remain Three draw-mesh state. Rank-only changes publish one lifecycle
+  permutation without semantic or measurement payloads. The complete Bitmap/MSDF/Slug WebGPU/WebGL2 matrix restored
+  Icon Grid from 476 to 2 draws and Rich Text from 36 to 5 without changing the other workloads' 1–3 draw envelopes.
+
+- **Made explicit line height authoritative across font fallback** — Line extents now use the stack primary's metrics,
+  accept negative half-leading for tight authored values, and reuse resolved extents across repeated cluster styles. A
+  compiled primary-versus-fallback regression and public Inter-to-Amiri measurement both hold `lineHeight: 0.92` at 0.92
+  em; the live 11,510-glyph Paragraph Stress update-and-measure path measured 1.94 ms p95.
 
 ## 2026-09-04
 
@@ -157,6 +263,15 @@
 
 ## 2026-09-01
 
+- **A raster and its core font agree through one fingerprint** — Every raster extension carries a single
+  domain-separated MurmurHash3 x86 128 digest over the compatibility tuple it must share with its core, replacing eight
+  hand-written multi-field identity checks and retiring the `shapingFingerprint`, `glyphCount`, `glyphIdWidth`, and
+  `descriptorFingerprint` fields that existed only to be compared. The canonical form is published contract, so a
+  consumer may keep its own fingerprint-to-metadata manifest, and a third-party technique stamps it through the exported
+  helper. Page payloads are never external, a font declares one raster per technique, splitting is an explicit request
+  rather than a duplicate-extension fallback, and no filename carries a content hash. Baking defaults to MSDF, derives a
+  url-safe output name, and skips work whose artifact is already current.
+
 - **Kept policy identifiers out of the Three material API** — D-305 makes `ThreeTextMaterialContext` a closed
   `kind: 'glyph' | 'decoration'` union. Glyph branches carry the concrete built-in raster technique; decoration has no
   technique, while the reserved `pmndrs.decoration` name remains internal to the policy and command-buffer ABI.
@@ -220,6 +335,12 @@
   cache leases without invalidating independently bound Fonts. The planned direct CLI zero-flag default changes from
   shaping-only to embedded Bitmap 8/16, MSDF, and Slug.
 
+## 2026-08-31
+
+- **Added direct-bake glyph lookups** — `glyph bake --glyph-map <path>` emits a deterministic JSON name-to-code-point
+  lookup from the same font face and Unicode selection as the GLB. The lookup and font publish together with rollback,
+  `--check` verifies both outputs byte-for-byte, and ambiguous selected aliases fail before either output is written.
+
 ## 2026-08-30
 
 - **TypeGPU is the shader authority** — Moved the remaining Slug shader modules under `/typegpu`, added canonical TypeGPU Bitmap, MTSDF, and decoration stages, and replaced native TSL formulas with `@typegpu/three` adapters. Resource operations are specialized through slots and schema-aware accessors, so direct TypeGPU hosts, procedural consumers, raw WebGPU-backed resources, and Three data textures share the same algorithms. Device-free WGSL/GLSL tests cover every first-party adapter, and direct TypeGPU resolution tests prove texture-free function sources.
@@ -243,6 +364,12 @@
 - **Build-time TypeGPU metadata** — Kept the repository-pinned TypeScript compiler as `@pmndrs/glyph`'s type and module emitter, then added a post-emit transform over staged JavaScript containing GPU directives. Published `/typegpu` modules and the TypeGPU-backed Slug host carry resolvable shader metadata without requiring consumer bundlers to transform package code; declarations and unrelated modules remain untouched.
 
 - **Portable Slug source gate** — Added a device-free package test that compiles the staged Slug graph through both Three.js node builders and verifies unique shared declarations, both bounded loops and terminators, the shared solver, and WebGL2 builtin compatibility. TypeGPU runtimes are optional peers, so renderer-neutral and baker consumers retain no static dependency on them.
+
+- **Baked identities no longer depend on Web Crypto** — Bake and runtime-bake producers stamp related font, raster, and
+  page artifacts with domain-separated MurmurHash3 x86 128 fingerprints. Normal loading compares those fingerprints and
+  declared lengths without hashing payload bytes. Build-time composition still recomputes fingerprints before
+  publication. The contract detects accidentally mixed or stale bake outputs and leaves damaged containers to decode or
+  upload validation; it does not claim cryptographic integrity.
 
 ## 2026-08-28
 

@@ -13,7 +13,6 @@ import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { msdf } from '@pmndrs/glyph/raster/msdf';
 import { slug } from '@pmndrs/glyph/raster/slug';
 import { defineThreeConfig, ThreeConfig } from '@pmndrs/glyph/three';
-import '../support/browser-globals.mjs';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 const bytes = await readFile(fontUrl);
@@ -78,8 +77,42 @@ function defineFontAwareConfig() {
     root: {
       create: (context) => {
         assert.ok(context.fonts, 'a config with font formats receives its runtime-owned font store');
+        const createText = (selection, options) => {
+          const font = context.fonts.acquire(selection);
+          const transform = {};
+          let state = { ...options, font, transform };
+          let controller;
+          let disposed = false;
+          try {
+            controller = context.services.createText(state);
+          } catch (error) {
+            font.dispose();
+            throw error;
+          }
+          return {
+            update(update) {
+              if (disposed) throw new Error('portable test text is disposed');
+              const next = { ...state, ...update, font, transform };
+              controller.update(next);
+              state = next;
+            },
+            measure() {
+              if (disposed) throw new Error('portable test text is disposed');
+              return controller.measure();
+            },
+            dispose() {
+              if (disposed) return;
+              disposed = true;
+              try {
+                controller.dispose();
+              } finally {
+                font.dispose();
+              }
+            },
+          };
+        };
         return context.create(
-          { acquireFont: (selection) => context.fonts.acquire(selection) },
+          { acquireFont: (selection) => context.fonts.acquire(selection), createText },
           { boundary: undefined },
         );
       },
@@ -212,6 +245,35 @@ test('Glyph owns FontFace loading for a non-Three configured handle', async () =
     const font = handle.acquireFont(face);
     assert.equal(font.raster, portableBitmap);
     font.dispose();
+  } finally {
+    face.dispose();
+    handle.dispose();
+  }
+});
+
+test('a configured adapter snapshots nested text records at the shared controller seam', async () => {
+  const handle = glyph.handle('font-face:portable-nested-state', defineFontAwareConfig());
+  const face = glyph.fontFace(new Blob([bytes], { type: 'model/gltf-binary' }), {
+    family: 'FontFacePortableNestedState',
+    format: portableBitmap({ strikes: [16] }),
+  });
+  try {
+    await face.load();
+    const width = { mode: 'exact', size: 200 };
+    const text = handle.createText(face, {
+      text: 'A deliberately long line that must wrap after its exact width changes.',
+      constraints: { width },
+      layout: { wrap: 'word' },
+    });
+    const before = text.measure();
+    assert.equal(before.width, 200);
+
+    width.size = 40;
+    text.update({ constraints: { width } });
+    const after = text.measure();
+    assert.equal(after.width, 40);
+    assert.ok(after.lineCount > before.lineCount);
+    text.dispose();
   } finally {
     face.dispose();
     handle.dispose();

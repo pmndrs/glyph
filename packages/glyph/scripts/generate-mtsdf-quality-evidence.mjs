@@ -1,21 +1,5 @@
-/* @workflow
-{
-  "name": "glyph:mtsdf-quality:generate",
-  "summary": "Regenerate reconstructed-coverage quality evidence for the production MTSDF kernel.",
-  "requirements": "Stable Rust and the authenticated font fixtures.",
-  "writes": "Checked-in MTSDF reconstruction quality evidence.",
-  "args": []
-}
-*/
-/* @workflow
-{
-  "name": "glyph:mtsdf-quality:check",
-  "summary": "Verify reconstructed MTSDF coverage against checked-in ground-truth quality evidence.",
-  "requirements": "Stable Rust and the authenticated font fixtures.",
-  "writes": "Nothing.",
-  "args": ["--check"]
-}
-*/
+/* @workflow { "name": "glyph:mtsdf-quality:generate", "summary": "Regenerate reconstructed-coverage quality evidence for the production MTSDF kernel.", "requirements": "Stable Rust and the authenticated font fixtures.", "writes": "Checked-in MTSDF reconstruction quality evidence.", "args": [] } */
+/* @workflow { "name": "glyph:mtsdf-quality:check", "summary": "Verify reconstructed MTSDF coverage against checked-in ground-truth quality evidence.", "requirements": "Stable Rust and the authenticated font fixtures.", "writes": "Nothing.", "args": ["--check"] } */
 
 // The native msdfgen oracle answers "does the kernel agree with msdfgen". It cannot answer "is the
 // glyph the shader reconstructs actually the glyph": a faithfully reproduced artifact is still an
@@ -39,12 +23,7 @@ const EM_SIZE = 64;
 const PIXEL_RANGE = 8;
 const ZOOM = 8;
 
-/**
- * Glyphs chosen for the failure modes that distinguish a correct multi-channel field from a
- * flattened one: right-angle stems, diagonal junctions, tight counters, and the pinch points of a
- * doubled bowl. `o` carries no corner at all and is the control — error correction never engages,
- * so its numbers must not move when correction changes.
- */
+/** Covers right-angle, diagonal, and pinch-point failure modes; `o` is the no-correction control. */
 const CORPUS = [
   { font: 'inter-v4.1/Inter-Regular.ttf', characters: 'IHnoMA48&' },
   { font: 'source-serif-4.005/SourceSerif4-Regular.ttf', characters: 'AMweg8' },

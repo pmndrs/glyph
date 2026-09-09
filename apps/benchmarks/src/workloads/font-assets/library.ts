@@ -9,13 +9,7 @@ import {
 
 import { benchmarkFontArtifactByteLimit } from './limits';
 
-/**
- * Application-lifetime cache for benchmark fonts.
- *
- * Raster-format scenes are intentionally short-lived; transport and decoded font backings are not.
- * The custom fetch presents checked-in gzip fixtures as their decoded GLB response, which lets the
- * library use the artifact URL as its stable cache identity without retaining a second byte cache.
- */
+/** Application-lifetime font cache; the custom fetch presents checked-in gzip fixtures as their decoded GLB response, so the artifact URL alone serves as stable cache identity. */
 export const benchmarkFontLibrary = createFontLibrary({
   fetch: fetchBenchmarkFont,
   maxArtifactBytes: benchmarkFontArtifactByteLimit,

@@ -9,7 +9,7 @@ use pmndrs_glyph_slug_core::{
     quantize_f16,
 };
 use pmndrs_glyph_slug_fontations::{FontOutlineError, font_glyph_geometry, glyph_count};
-use skrifa::{FontRef, GlyphId};
+use skrifa::{FontRef, GlyphId, MetadataProvider};
 
 use crate::{
     error::{SlugBakeError, SlugBakeErrorCode, overflow},
@@ -46,9 +46,10 @@ pub fn bake_slug(
     source: &[u8],
     request: SlugBakeRequestV0,
 ) -> Result<SlugBakeResultV0, SlugBakeError> {
-    request.descriptor.validate()?;
-    validate_hash("shapingHash", &request.shaping_hash)?;
-    validate_hash("rasterKey", &request.raster_key)?;
+    let settings = request.descriptor.validate()?;
+    validate_fingerprint("sourceFingerprint", &request.source_fingerprint)?;
+    validate_fingerprint("shapingFingerprint", &request.shaping_fingerprint)?;
+    validate_fingerprint("rasterKey", &request.raster_key)?;
     if request.raster_key != descriptor_raster_key(&request.descriptor) {
         return Err(SlugBakeError::new(
             SlugBakeErrorCode::InvalidIdentity,
@@ -56,37 +57,45 @@ pub fn bake_slug(
         )
         .at("/rasterKey"));
     }
+    if pmndrs_glyph_raster_artifact::fingerprint128(
+        source,
+        pmndrs_glyph_raster_artifact::SOURCE_FINGERPRINT_V0,
+    ) != request.source_fingerprint
+    {
+        return Err(SlugBakeError::new(
+            SlugBakeErrorCode::InvalidIdentity,
+            "source fingerprint does not match the supplied font",
+        )
+        .at("/sourceFingerprint"));
+    }
 
-    let packed = rasterize_font(source, request.font_face_index, request.glyph_count)?;
+    let packed = rasterize_font(
+        source,
+        request.font_face_index,
+        request.glyph_count,
+        settings.cubic_subdivisions,
+    )?;
     let metadata_bytes = packed.record_bytes.len();
     let built = build_slug_glb(
         &request.raster_key,
-        &request.shaping_hash,
+        &request.source_fingerprint,
+        &request.shaping_fingerprint,
         request.glyph_count,
-        request.packaging.pages,
         &packed,
     )?;
-    let raster_id = format!("slug-{}-{}.glb", request.shaping_hash, request.raster_key);
+    let raster_fingerprint = artifact_fingerprint(&built.bytes);
+    let raster_id = format!(
+        "slug-{}-{}.glb",
+        request.shaping_fingerprint, request.raster_key
+    );
     let mut artifacts = Vec::new();
-    artifacts
-        .try_reserve_exact(1 + built.resources.len())
-        .map_err(|_| overflow())?;
+    artifacts.try_reserve_exact(1).map_err(|_| overflow())?;
     artifacts.push(SlugBakeArtifactV0 {
         role: "raster".into(),
         id: raster_id,
-        sha256: pmndrs_glyph_raster_artifact::sha256_hex(&built.bytes),
+        fingerprint: raster_fingerprint,
         bytes: built.bytes,
     });
-    for resource in built.resources {
-        if !resource.embedded {
-            artifacts.push(SlugBakeArtifactV0 {
-                role: "raster-page".into(),
-                id: resource.id,
-                bytes: resource.bytes,
-                sha256: resource.sha256,
-            });
-        }
-    }
     let serialized_bytes = artifacts.iter().try_fold(0_usize, |total, artifact| {
         total.checked_add(artifact.bytes.len()).ok_or_else(overflow)
     })?;
@@ -102,12 +111,7 @@ pub fn bake_slug(
             height: page.height,
             format: "rgba16float".into(),
             gpu_bytes: page.gpu_bytes,
-            source: if page.embedded {
-                "embedded"
-            } else {
-                "external"
-            }
-            .into(),
+            source: "embedded".into(),
             encoded_bytes: page.encoded_bytes,
         });
     }
@@ -127,21 +131,44 @@ pub fn bake_slug(
 }
 
 pub fn descriptor_raster_key(descriptor: &SlugDescriptorV0) -> String {
+    // Canonical key order is alphabetical; omitting the default rate preserves existing keys.
+    let subdivisions = descriptor
+        .cubic_subdivisions
+        .map(|value| format!("\"cubicSubdivisions\":{value},"))
+        .unwrap_or_default();
     let canonical = format!(
-        "{{\"descriptor\":{{\"generatorVersion\":\"{}\"}},\"extension\":\"{}\",\"kind\":\"{}\",\"version\":{}}}",
+        "{{\"descriptor\":{{{subdivisions}\"generatorVersion\":\"{}\"}},\"extension\":\"{}\",\"kind\":\"{}\",\"version\":{}}}",
         descriptor.generator_version, SLUG_EXTENSION, SLUG_KIND, SLUG_FORMAT_VERSION,
     );
-    pmndrs_glyph_raster_artifact::sha256_hex(canonical.as_bytes())
+    pmndrs_glyph_raster_artifact::fingerprint128(
+        canonical.as_bytes(),
+        pmndrs_glyph_raster_artifact::DESCRIPTOR_FINGERPRINT_V0,
+    )
+}
+
+fn artifact_fingerprint(bytes: &[u8]) -> String {
+    pmndrs_glyph_raster_artifact::fingerprint128(
+        bytes,
+        pmndrs_glyph_raster_artifact::ARTIFACT_FINGERPRINT_V0,
+    )
 }
 
 fn rasterize_font(
     source: &[u8],
     face_index: u32,
     expected_glyph_count: u16,
+    cubic_subdivisions: u8,
 ) -> Result<PackedSlug, SlugBakeError> {
     let font = FontRef::from_index(source, face_index).map_err(|error| {
         SlugBakeError::new(SlugBakeErrorCode::InvalidFontFace, error).at("/fontFaceIndex")
     })?;
+    // Reject a missing outline table once; otherwise every glyph looks legitimately blank.
+    if font.outline_glyphs().format().is_none() {
+        return Err(SlugBakeError::new(
+            SlugBakeErrorCode::InvalidFont,
+            "font has no glyf, CFF, or CFF2 outline table to convert",
+        ));
+    }
     let actual_glyph_count = glyph_count(&font)
         .map_err(|error| SlugBakeError::new(SlugBakeErrorCode::InvalidFont, error))?;
     if actual_glyph_count != expected_glyph_count {
@@ -163,6 +190,7 @@ fn rasterize_font(
             &font,
             GlyphId::new(u32::from(raw_glyph_id)),
             DEFAULT_BAND_COUNT,
+            cubic_subdivisions,
         )
         .map_err(|error| outline_error(raw_glyph_id, error))?;
         geometries.push(match geometry {
@@ -267,8 +295,8 @@ fn quantize_plane_bounds(bounds: Bounds, glyph_id: u16) -> Result<[i16; 4], Slug
     Ok(output)
 }
 
-fn validate_hash(field: &str, value: &str) -> Result<(), SlugBakeError> {
-    if value.len() == 64
+fn validate_fingerprint(field: &str, value: &str) -> Result<(), SlugBakeError> {
+    if value.len() == 32
         && value
             .bytes()
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
@@ -277,7 +305,7 @@ fn validate_hash(field: &str, value: &str) -> Result<(), SlugBakeError> {
     }
     Err(SlugBakeError::new(
         SlugBakeErrorCode::InvalidIdentity,
-        format!("{field} must be a lowercase SHA-256 hex digest"),
+        format!("{field} must be a lowercase 128-bit fingerprint"),
     )
     .at(format!("/{field}")))
 }
@@ -311,26 +339,65 @@ mod tests {
         "../../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf"
     );
 
+    /// JavaScript-derived keys pin Rust serialization to the TypeScript ABI.
+    const DEFAULT_RASTER_KEY: &str = "2d776923eae1be079f8aacc606d01c01";
+    const RATE_EIGHT_RASTER_KEY: &str = "0e8b45ef5345fee3a944c73facd3bd4d";
+
+    #[test]
+    fn a_configured_rate_derives_the_same_key_typescript_derives() {
+        let configured = SlugDescriptorV0 {
+            generator_version: SLUG_GENERATOR_VERSION.into(),
+            cubic_subdivisions: Some(8),
+        };
+        assert_eq!(descriptor_raster_key(&configured), RATE_EIGHT_RASTER_KEY);
+        assert_ne!(descriptor_raster_key(&configured), DEFAULT_RASTER_KEY);
+    }
+
+    #[test]
+    fn a_rate_outside_the_supported_range_is_refused_by_name() {
+        for rate in [0_u8, 17] {
+            let error = SlugDescriptorV0 {
+                generator_version: SLUG_GENERATOR_VERSION.into(),
+                cubic_subdivisions: Some(rate),
+            }
+            .validate()
+            .expect_err("an unsupported rate must not validate");
+            assert_eq!(error.path.as_deref(), Some("/descriptor/cubicSubdivisions"));
+        }
+    }
+
     #[test]
     fn bakes_dense_inter_records_deterministically() {
         let descriptor = SlugDescriptorV0 {
             generator_version: SLUG_GENERATOR_VERSION.into(),
+            cubic_subdivisions: None,
         };
+        assert_eq!(
+            descriptor_raster_key(&descriptor),
+            DEFAULT_RASTER_KEY,
+            "the default descriptor's key must not move"
+        );
         let raster_key = descriptor_raster_key(&descriptor);
         let request = || SlugBakeRequestV0 {
+            source_fingerprint: pmndrs_glyph_raster_artifact::fingerprint128(
+                INTER,
+                pmndrs_glyph_raster_artifact::SOURCE_FINGERPRINT_V0,
+            ),
             font_face_index: 0,
             glyph_count: 2937,
-            shaping_hash: "11".repeat(32),
+            shaping_fingerprint: "11".repeat(16),
             raster_key: raster_key.clone(),
             packaging: crate::model::SlugPackagingV0 {
                 artifact: crate::model::ArtifactPackaging::External,
-                pages: crate::model::PagePackaging::Embedded,
             },
             descriptor: descriptor.clone(),
         };
         let first = bake_slug(INTER, request()).unwrap();
         let second = bake_slug(INTER, request()).unwrap();
-        assert_eq!(first.artifacts[0].sha256, second.artifacts[0].sha256);
+        assert_eq!(
+            first.artifacts[0].fingerprint,
+            second.artifacts[0].fingerprint
+        );
         assert_eq!(first.report.metadata_bytes, 2937 * 40);
     }
 

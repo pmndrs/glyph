@@ -42,9 +42,12 @@ import type {
   RetainedFormattedText,
   RetainedText,
   RetainedTextOptions,
+  RetainedTextUpdate,
   StagedRenderPlanner,
 } from './render-planner.js';
 import { observeRenderPlannerDirty, stageRenderPlanner } from './render-planner.js';
+import { reuseOrCreateTextPropertySnapshot } from '../config/text-property.js';
+import type { BorrowedGlyphLayout } from '../layout.js';
 
 const DEFAULT_LIMITS: GlyphCommandLimits = Object.freeze({
   maxParagraphs: 4_096,
@@ -392,6 +395,8 @@ class ConfiguredRootServices<
     Bindings['transformInput'],
     { readonly canonical: HandleTransformBinding; references: number }
   >();
+  readonly #paragraphOrderScopes = new WeakMap<object, number>();
+  #nextParagraphOrderScope = 1;
   #planner: RenderPlanner | undefined;
   #target: GlyphPlanTarget<Bindings, RendererResult> | undefined;
   #shapeRegistration: GlyphShapeRegistration | undefined;
@@ -439,7 +444,7 @@ class ConfiguredRootServices<
         limits: commands?.limits ?? DEFAULT_LIMITS,
         requestCapacity: commands?.requestBytes ?? 64 * 1024,
         resultCapacity: commands?.resultBytes ?? 256 * 1024,
-        textCapacity: commands?.textUnits ?? 256,
+        textCapacity: commands?.textUnits ?? 64,
       });
       registration = registerGlyphShapeParticipant(this.#engine, {
         stage: () => this.#stageShape(),
@@ -579,6 +584,23 @@ class ConfiguredRootServices<
       for (const lease of leases.reverse()) lease.dispose();
       throw error;
     }
+  }
+
+  bindParagraphOrderScope(scopeObject: object | undefined): number {
+    if (scopeObject === undefined) return 0;
+    if (typeof scopeObject !== 'object' || scopeObject === null) {
+      throw new TypeError('paragraph order scope must be an object');
+    }
+    let scope = this.#paragraphOrderScopes.get(scopeObject);
+    if (scope === undefined) {
+      if (this.#nextParagraphOrderScope > 0xffff_ffff) {
+        throw new RangeError('paragraph order scopes are exhausted');
+      }
+      scope = this.#nextParagraphOrderScope;
+      this.#nextParagraphOrderScope += 1;
+      this.#paragraphOrderScopes.set(scopeObject, scope);
+    }
+    return scope;
   }
 
   assertTextCall(): void {
@@ -746,6 +768,17 @@ interface BoundTextState {
   readonly leases: readonly { dispose(): void }[];
 }
 
+interface AcceptedTextPropertyInputs {
+  style: object | undefined;
+  layout: object | undefined;
+  constraints: object | undefined;
+}
+
+function normalizeParagraphOrderRank(rank: number): number {
+  if (!Number.isFinite(rank)) throw new RangeError('paragraph order rank must be finite');
+  return rank === 0 ? 0 : rank;
+}
+
 class ConfiguredTextController<
   Format extends RasterFormatMetadata,
   Bindings extends GlyphBindingSet,
@@ -755,7 +788,14 @@ class ConfiguredTextController<
 > implements GlyphTextController<Format, Bindings['materialInput'], Bindings['transformInput']> {
   readonly #services: ConfiguredRootServices<Bindings, RendererResult, Boundary, CodecValue>;
   readonly #text: RetainedText;
+
   #bound: BoundTextState;
+  #state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>;
+  readonly #acceptedPropertyInputs: AcceptedTextPropertyInputs = {
+    style: undefined,
+    layout: undefined,
+    constraints: undefined,
+  };
   #disposed = false;
 
   constructor(
@@ -764,13 +804,16 @@ class ConfiguredTextController<
     state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>,
   ) {
     this.#services = services;
-    this.#bound = services.bind(state);
+    const snapshot = withOwnedTextPropertySnapshots(undefined, this.#acceptedPropertyInputs, state);
+    this.#state = snapshot;
+    this.#bound = services.bind(snapshot);
     try {
       this.#text = planner.createText(this.#bound.options);
     } catch (error) {
       this.#disposeLeases(this.#bound.leases);
       throw error;
     }
+    acceptTextPropertyInputs(this.#acceptedPropertyInputs, state);
   }
 
   get disposed(): boolean {
@@ -780,16 +823,41 @@ class ConfiguredTextController<
   update(state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>): void {
     this.#assertActive();
     this.#services.assertTextCall();
-    const next = this.#services.bind(state);
+    const snapshot = withOwnedTextPropertySnapshots(this.#state, this.#acceptedPropertyInputs, state);
+    const reusableUpdate = reusablePlainTextUpdate(this.#state, snapshot);
+    if (reusableUpdate !== undefined) {
+      this.#text.update(reusableUpdate);
+      this.#state = snapshot;
+      acceptTextPropertyInputs(this.#acceptedPropertyInputs, state);
+      return;
+    }
+    const next = this.#services.bind(snapshot);
     try {
-      this.#text.update(next.options);
+      this.#text.update({
+        ...next.options,
+        material: next.options.material,
+        order: next.options.order,
+        rasterPixelRatio: next.options.rasterPixelRatio,
+        style: next.options.style,
+        layout: next.options.layout,
+        constraints: next.options.constraints,
+      });
     } catch (error) {
       this.#disposeLeases(next.leases);
       throw error;
     }
     const previous = this.#bound;
     this.#bound = next;
+    this.#state = snapshot;
+    acceptTextPropertyInputs(this.#acceptedPropertyInputs, state);
     this.#disposeLeases(previous.leases);
+  }
+
+  updateParagraphOrder(order: number, scope: object | undefined, rank: number): void {
+    this.#assertActive();
+    this.#services.assertTextCall();
+    const orderRank = normalizeParagraphOrderRank(rank);
+    this.#text.updateOrder(order, this.#services.bindParagraphOrderScope(scope), orderRank);
   }
 
   measure() {
@@ -798,10 +866,22 @@ class ConfiguredTextController<
     return this.#text.measure();
   }
 
+  measureInk() {
+    this.#assertActive();
+    this.#services.assertTextCall();
+    return this.#text.measureInk();
+  }
+
   inspect() {
     this.#assertActive();
     this.#services.assertTextCall();
     return this.#text.glyphs();
+  }
+
+  withGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result {
+    this.#assertActive();
+    this.#services.assertTextCall();
+    return this.#text.withGlyphs(read);
   }
 
   belongsTo(services: object): boolean {
@@ -835,4 +915,74 @@ class ConfiguredTextController<
   #assertActive(): void {
     if (this.#disposed) throw new Error('Glyph Text controller has been disposed');
   }
+}
+
+function withOwnedTextPropertySnapshots<Format extends RasterFormatMetadata, MaterialInput, TransformInput>(
+  previous: GlyphTextState<Format, MaterialInput, TransformInput> | undefined,
+  previousInputs: AcceptedTextPropertyInputs,
+  state: GlyphTextState<Format, MaterialInput, TransformInput>,
+): GlyphTextState<Format, MaterialInput, TransformInput> {
+  const snapshot: { -readonly [Key in keyof typeof state]: (typeof state)[Key] } = { ...state };
+  if (state.style !== undefined) {
+    snapshot.style = retainTextPropertySnapshot(previous?.style, previousInputs.style, state.style, 'Glyph Text style');
+  }
+  if (state.layout !== undefined) {
+    snapshot.layout = retainTextPropertySnapshot(
+      previous?.layout,
+      previousInputs.layout,
+      state.layout,
+      'Glyph Text layout',
+    );
+  }
+  if (state.constraints !== undefined) {
+    snapshot.constraints = retainTextPropertySnapshot(
+      previous?.constraints,
+      previousInputs.constraints,
+      state.constraints,
+      'Glyph Text constraints',
+    );
+  }
+  return snapshot;
+}
+
+function retainTextPropertySnapshot<Value extends object>(
+  previous: Value | undefined,
+  previousInput: object | undefined,
+  input: Value,
+  label: string,
+): Value {
+  if (previous !== undefined && previousInput === input) return previous;
+  return reuseOrCreateTextPropertySnapshot(previous, input, label);
+}
+
+function acceptTextPropertyInputs<Format extends RasterFormatMetadata, MaterialInput, TransformInput>(
+  target: AcceptedTextPropertyInputs,
+  state: GlyphTextState<Format, MaterialInput, TransformInput>,
+): void {
+  target.style = state.style;
+  target.layout = state.layout;
+  target.constraints = state.constraints;
+}
+
+function reusablePlainTextUpdate<Format extends RasterFormatMetadata, MaterialInput, TransformInput>(
+  previous: GlyphTextState<Format, MaterialInput, TransformInput>,
+  next: GlyphTextState<Format, MaterialInput, TransformInput>,
+): RetainedTextUpdate | undefined {
+  if (
+    typeof previous.text !== 'string' ||
+    typeof next.text !== 'string' ||
+    previous.font !== next.font ||
+    previous.transform !== next.transform ||
+    previous.material !== next.material
+  ) {
+    return undefined;
+  }
+  const update: { -readonly [Key in keyof RetainedTextUpdate]: RetainedTextUpdate[Key] } = {};
+  if (previous.text !== next.text) update.text = next.text;
+  if (previous.order !== next.order) update.order = next.order;
+  if (previous.rasterPixelRatio !== next.rasterPixelRatio) update.rasterPixelRatio = next.rasterPixelRatio;
+  if (previous.style !== next.style) update.style = next.style;
+  if (previous.layout !== next.layout) update.layout = next.layout;
+  if (previous.constraints !== next.constraints) update.constraints = next.constraints;
+  return update;
 }

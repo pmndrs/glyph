@@ -2,11 +2,11 @@ use std::{env, fs, path::PathBuf, process::ExitCode};
 
 use pmndrs_glyph_mtsdf_baker::{
     ArtifactPackaging, MSDF_GENERATOR_VERSION, MtsdfBakeRequestV0, MtsdfDescriptorV0,
-    MtsdfPackagingV0, PagePackaging, RasterCoverageV0, RasterUnicodeRangeV0, bake_mtsdf_profiled,
+    MtsdfPackagingV0, RasterCoverageV0, RasterUnicodeRangeV0, bake_mtsdf_profiled,
     descriptor_raster_key,
 };
 use pmndrs_glyph_mtsdf_fontations::glyph_count;
-use pmndrs_glyph_raster_artifact::sha256_hex;
+use pmndrs_glyph_raster_artifact::{SHAPING_FINGERPRINT_V0, fingerprint128};
 use serde_json::json;
 use skrifa::FontRef;
 
@@ -32,17 +32,20 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         pixel_range: None,
     };
     let raster_key = descriptor_raster_key(&descriptor);
-    let shaping_hash = sha256_hex(&source);
+    let shaping_fingerprint = fingerprint128(&source, SHAPING_FINGERPRINT_V0);
     let profiled = bake_mtsdf_profiled(
         &source,
         MtsdfBakeRequestV0 {
+            source_fingerprint: fingerprint128(
+                &source,
+                pmndrs_glyph_raster_artifact::SOURCE_FINGERPRINT_V0,
+            ),
             font_face_index: 0,
             glyph_count,
-            shaping_hash,
+            shaping_fingerprint,
             raster_key,
             packaging: MtsdfPackagingV0 {
                 artifact: ArtifactPackaging::Embedded,
-                pages: PagePackaging::Embedded,
             },
             descriptor,
         },

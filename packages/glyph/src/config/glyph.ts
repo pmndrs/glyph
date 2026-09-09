@@ -1,6 +1,6 @@
 import type { Font } from '../font.js';
 import type { FontFaceRasterOf, FontFaceSelection } from '../font-face.js';
-import type { GlyphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
+import type { BorrowedGlyphLayout, GlyphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
 import type { FontSelection } from '../loaded-font.js';
 import type { RasterFormatMetadata } from './raster-format.js';
 import type { Constraints, ParagraphLayout, TextStyle } from '../text-properties.js';
@@ -345,10 +345,7 @@ export interface DisplayListChanges<Bindings extends GlyphBindingSet> {
   readonly retirements: BorrowedCommandSequence<Retirement<Bindings['resource'], Bindings['buffer']>>;
 }
 
-/**
- * One phase-structured retained display-list update. Every reference is already a typed
- * binding; numeric engine IDs and the trusted wire representation remain private.
- */
+/** One phase-structured retained display-list update; references are typed bindings — numeric engine IDs and the wire representation stay private. */
 export interface CommandBufferView<Bindings extends GlyphBindingSet> {
   readonly delivery: 'borrowed-command-buffer';
   readonly engineRevision: number;
@@ -450,15 +447,20 @@ export interface GlyphTextState<Format extends RasterFormatMetadata, MaterialInp
 export interface GlyphTextController<Format extends RasterFormatMetadata, MaterialInput, TransformInput> {
   readonly disposed: boolean;
   update(state: GlyphTextState<Format, MaterialInput, TransformInput>): void;
+  /** Changes only this paragraph's root slot and scoped rank; shaping, layout, and measurement remain reusable. */
+  updateParagraphOrder(order: number, scope: object | undefined, rank: number): void;
   measure(): ParagraphLayoutSummary;
+  /** Returns aggregate metrics after positioning glyphs so ink bounds are authoritative. */
+  measureInk(): ParagraphLayoutSummary;
   inspect(): GlyphLayoutInspection;
+  /** Reads indexed glyph data without copying full columns; the view expires when `read` returns. */
+  withGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result;
   dispose(): void;
 }
 
-/** Optional semantic products and compositing contract for the next `shape()` publication. */
+/** Optional semantic products for the next `shape()` publication. */
 export interface GlyphShapeOptions {
   readonly semanticViews?: 'none' | 'measurement' | 'layout-inspection' | 'all';
-  readonly compositing?: 'ordered' | 'independent';
 }
 
 /** Core-owned shaping/publication services scoped to exactly one anonymous or named root. */

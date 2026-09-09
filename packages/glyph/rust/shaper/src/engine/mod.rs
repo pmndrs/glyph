@@ -19,6 +19,7 @@ mod identity_index;
 #[cfg(feature = "kernel-lab")]
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) mod kernel_lab;
+pub(crate) mod layout_borrow;
 pub(crate) mod layout_query;
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) mod layout_units;
@@ -55,4 +56,5 @@ mod stable_pool;
 mod staged;
 mod style_state;
 
+pub(crate) use positioning::SemanticGlyph;
 pub use state::{EngineError, FrameFault, TextEngine};

@@ -88,6 +88,38 @@ impl InkBounds {
     }
 }
 
+#[inline(never)]
+#[allow(clippy::too_many_arguments)]
+fn semantic_line_record(
+    paragraph_id: u32,
+    index: usize,
+    text_start: u32,
+    text_end: u32,
+    item_start: u32,
+    item_count: u32,
+    line: FlowLine,
+    advance: f64,
+    ink: InkBounds,
+) -> Result<SemanticRecord, EngineError> {
+    let mut record = SemanticRecord {
+        id: u32::try_from(index.saturating_add(1)).map_err(|_| EngineError::ResultTooLarge)?,
+        kind: SEMANTIC_LINE,
+        flags: 0,
+        parent_id: paragraph_id,
+        text_start,
+        text_end,
+        item_start,
+        item_count,
+        block_start: finite_f32(line.block_start + line.baseline)?,
+        inline_extent: finite_nonnegative_f32(advance)?,
+        block_extent: finite_nonnegative_f32(line.height)?,
+        ascent: finite_nonnegative_f32(line.baseline)?,
+        ..SemanticRecord::default()
+    };
+    ink.write(&mut record)?;
+    Ok(record)
+}
+
 /// The ink box of one line's glyph span. An out-of-range or absent span yields an unjoined box,
 /// which is the same answer a query that skipped positioning gives.
 fn line_ink_bounds(
@@ -295,46 +327,42 @@ pub(crate) fn append_measurement(
         content_height = content_height.max(line.block_start + line.height);
         consumed_clusters = consumed_clusters
             .max(usize::try_from(last.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?);
-        target.push(SemanticRecord {
-            id: u32::try_from(index.saturating_add(1)).map_err(|_| EngineError::ResultTooLarge)?,
-            kind: SEMANTIC_LINE,
-            parent_id: paragraph_id,
-            text_start: first.line.text_start,
-            text_end: last.line.text_end,
-            item_start: if include_glyphs {
-                u32::try_from(glyph_record_start)
-                    .map_err(|_| EngineError::ResultTooLarge)?
-                    .checked_add(semantic_line_glyph_starts[index])
-                    .ok_or(EngineError::ResultTooLarge)?
-            } else {
-                0
-            },
-            item_count: if include_glyphs {
-                semantic_line_glyph_counts[index]
-            } else {
-                0
-            },
-            block_start: finite_f32(line.block_start + line.baseline)?,
-            inline_extent: finite_nonnegative_f32(advance)?,
-            block_extent: finite_nonnegative_f32(line.height)?,
-            // `line.baseline` is the distance from the line box top to the baseline, half-leading
-            // included, so it IS the line's ascent and `height - ascent` is its descent exactly.
-            ascent: finite_nonnegative_f32(line.baseline)?,
-            ..SemanticRecord::default()
-        });
-        // The paragraph's ascent is the distance from its box top to the FIRST baseline, which is
-        // the first emitted line's absolute baseline, not that line's own ascent.
-        if line_count_emitted == 0 {
-            first_ascent = line.block_start + line.baseline;
-        }
-        line_count_emitted += 1;
+        let item_start = if include_glyphs {
+            u32::try_from(glyph_record_start)
+                .map_err(|_| EngineError::ResultTooLarge)?
+                .checked_add(semantic_line_glyph_starts[index])
+                .ok_or(EngineError::ResultTooLarge)?
+        } else {
+            0
+        };
+        let item_count = if include_glyphs {
+            semantic_line_glyph_counts[index]
+        } else {
+            0
+        };
         let line_ink = line_ink_bounds(
             positioned_glyphs,
             semantic_line_glyph_starts,
             semantic_line_glyph_counts,
             index,
         );
-        line_ink.write(target.last_mut().ok_or(EngineError::InvalidRequest)?)?;
+        target.push(semantic_line_record(
+            paragraph_id,
+            index,
+            first.line.text_start,
+            last.line.text_end,
+            item_start,
+            item_count,
+            line,
+            advance,
+            line_ink,
+        )?);
+        // The paragraph's ascent is the distance from its box top to the FIRST baseline, which is
+        // the first emitted line's absolute baseline, not that line's own ascent.
+        if line_count_emitted == 0 {
+            first_ascent = line.block_start + line.baseline;
+        }
+        line_count_emitted += 1;
         paragraph_ink.join(line_ink);
     }
 

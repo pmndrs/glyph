@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:3f8f9db111935a6d20e6213c84e3f1c820ef50c7f8c211ee13185fd72c55e36e'
+source_digest: 'sha256:1a2ad6229047dae54d47277be9cd49c71054b4040c000943c0361e67af1cfa23'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -238,6 +238,12 @@ CLI nor the programmatic `@pmndrs/glyph/bake` path invokes a platform font tool.
 publishes only to temporary storage and compares the complete GLB byte-for-byte with the requested output. It calls the
 same `bakeFont` host as programmatic consumers rather than maintaining an example-only composition path.
 
+Direct baking may add `--glyph-map <path>` to publish a deterministic JSON object mapping authored glyph names to code
+points from the same `--unicodes` selection and collection face as the font artifact. The font and lookup publish as one
+rollback-safe output set, while `--check` verifies both byte-for-byte. Unnamed mappings are omitted. A name with multiple
+selected code points is rejected as ambiguous so the caller must narrow the Unicode set rather than accepting an
+order-dependent alias.
+
 The `glyph glyphs` command uses the same package-owned baker Wasm and Skrifa to enumerate Unicode mappings, exact glyph
 IDs, and names retained in a font's `post` or CFF data. Exact repeatable `--name` filters can emit structured JSON or a
 compressed `--unicode-set` accepted by `glyph bake --unicodes`. Fonts without authored names still expose exact IDs rather
@@ -266,6 +272,13 @@ counts, and mutable material presentation. The renderer draw object, discovered 
 boundary, and Font lease acquisition belong to the package-owned root host. They are unavailable through both source
 conditions and built declarations; package internals recover the host through private identity rather than exposing a
 second renderer/runtime object to applications.
+
+`Text` publishes ink through Three's object-level `boundingBox` contract and carries one package-private shared empty
+`BufferGeometry` marker so `Box3.setFromObject()` visits those bounds in ordinary and precise modes. The marker has no
+vertex payload, child, draw, per-Text allocation, serialization, or raycast behavior. Before the first rendered frame,
+Box3 requests one positioned measurement containing only the paragraph summary and lines; later traversal reuses the
+revision-aware measurement cache. Drei Center/Bounds can therefore consume transformed paragraph boxes without coupling
+authored objects to renderer-owned batch meshes or copying the per-glyph columns.
 
 The unbundled source graph follows the same boundary. `/three/raster-program` exposes the custom-raster
 registration DSL but keeps compiled snapshots and renderer lifecycle state under the denied `/three/internal/*` tree.
@@ -324,8 +337,8 @@ is an engine defect and never enters this recovery path (D-285).
 `registerThreeRasterProgram` refuses a format registered after a runtime has read the registry (D-271), naming the
 raster format instead of applying to nothing. Snapshot tracking uses weak registry references, so an abandoned runtime cannot
 keep its identity registry alive or permanently poison later registration after collection. `/three` also re-exports
-`ParagraphLayoutSummary`, `GlyphLayoutInspection`, `ParagraphLayout`, `ParagraphMeasurement`, and `FontFeature`, so a
-`/three` importer can name what `Text.measure()`, `Text.glyphs()`, and `TextStyle.features` give it.
+`ParagraphLayoutSummary`, `GlyphLayoutInspection`, `BorrowedGlyphLayout`, `BorrowedGlyph`, `ParagraphLayout`,
+`ParagraphMeasurement`, and `FontFeature`, so a `/three` importer can name every Three text query result.
 
 One baked GLB may expose several raster formats without repeating its input identity. The ordinary declaration and loading
 surface is `glyph.fontFace(source, { family?, format? })`; root does not export `loadFont`, `createFontLibrary`, or
@@ -340,9 +353,23 @@ result identity; rejected calls are evicted for retry. The consuming handle supp
 undeclared face is passed to Text; imperative Three rejects an unloaded selected format before creating retained state.
 Explicit `Text.measure()` and `Text.glyphs()` calls synchronously query one Text through its selected handle. They may pay
 one additional Wasm crossing, but do not traverse a scene, publish commands, or realize renderer resources. Normal
-rendering still publishes every dirty root through one `glyph.shape()` crossing. The former renderer-free
+rendering still publishes every dirty root through one `glyph.shape()` crossing. A query reconciles render-active root
+members plus the explicitly queried Text; querying an attached sibling cannot bind an unrelated detached Text, while a
+detached Text can still measure or inspect itself without entering the rendered batch. The former renderer-free
 `createParagraph()` path was removed because its private engine, handle, Codec, planner, font bindings, and caches
 duplicated the GlyphConfig pipeline (D-339).
+
+The Three root keeps only the current detached query publicly bound and parks at most one preceding detached controller
+outside active publication membership. Alternating two detached measurements or inspections therefore reuses each
+controller's revision-aware semantic cache without accumulating removal rows, while a third distinct query evicts the
+single parked controller. Scene publication also evicts that slot. This bound permits at most one dormant core
+inspection cache; `Text.glyphs()` still returns freshly copied, caller-owned columns on every call.
+
+`Text.withGlyphs(callback)` is the shared core, Three, and TypeGPU demand-read alternative for callers that need only a
+few glyphs. Its fixed descriptor serializes no per-glyph semantic table; each indexed access copies one retained Rust
+glyph into fixed Wasm scratch, then returns one frozen scalar object in O(selected) work. Full `glyphs()` remains the
+bulk caller-owned copy. The callback must finish synchronously:
+thenables, engine reentry, and retained-text mutation are rejected, and the indexed view expires on return or throw.
 
 The FontFace source cache coalesces canonical-equivalent locators before I/O and converges different locators onto one
 parsed main-font node after their complete GLB bytes have the same SHA-256 content identity. Every acquisition base is
@@ -399,7 +426,9 @@ receives a `kind: 'glyph' | 'decoration'` discriminated context and may keep or 
 material without mutating the glyph draw. `ThreeTextMaterialContextMap` supplies the exact built-in payloads and is the
 augmentation point for a custom Three program's literal format and output types; it does not add an untyped string
 fallback. Only glyph branches carry a raster `format`; `pmndrs.decoration` remains an internal Codec/command-buffer
-technique identifier. Decorated command-buffer gathers rebuild their output; the undecorated retained fast path is unchanged.
+technique identifier. Decorated command-buffer gathers rebuild their output, counting and appending each paint pass
+directly from the retained contiguous decoration slice without a transient filtered allocation; the undecorated retained
+fast path is unchanged.
 
 When runtime baking is required, one Worker request normalizes the Unicode ranges, prepares the selected source once,
 and feeds those exact prepared bytes to the shaping bake and every requested Bitmap, MSDF, or Slug bake. The Worker
@@ -420,7 +449,7 @@ command-buffer stream and one renderer publication boundary. It may bind to at m
 members by object identity; a root name is stable semantic/customization metadata, not a `Scene.uuid`. A second Scene
 therefore uses another named root. Returned roots are terminal and cannot create deeper roots. `TextGroup` remains freely
 nestable for scene hierarchy, transform/visibility inheritance, material selection, pixel snapping, and render order, but
-does not create another planner or publication stream. Capacity and compositing are immutable `ThreeConfig` policy shared
+does not create another planner or publication stream. Capacity is immutable `ThreeConfig` policy shared
 by the anonymous and named roots of one handle; selecting different policy means creating another handle from
 `defineThreeConfig(...)`, not mutating a live root. Per-root, group, Text, and span material selection remains retained
 scene state because it describes authored presentation rather than renderer policy. A traversal sends only changed
@@ -436,6 +465,19 @@ Three's ordinary scene traversal owns world-matrix composition. The root observe
 publishes semantic changes once at its renderer-owned draw node, and patches root-relative transforms through a separate
 engine-free side path. Camera motion does not republish text. Text, nested `TextGroup`, and other ancestor motion,
 visibility, reparenting, and manual matrix changes patch only affected renderer-local slots and do not enter Wasm.
+Within a `TextGroup`, each child `Text.renderOrder` ranks that paragraph's instances in the shared batch while the nearest
+`TextGroup.renderOrder` remains the Three draw-mesh order. Changing only a child rank publishes one transactional
+16-byte `(paragraph_id, scope, rank)` sideband record and lets Rust apply the paragraph permutation without resending
+text, styles, geometry, measurement, or per-glyph records. Ordinary content updates retain the 12-byte lifecycle record
+and omit the sideband when scope and rank are unchanged. An ungrouped
+`Text.renderOrder` retains ordinary Three draw-mesh meaning. Paragraph rank is deliberately absent from glyph storage and
+draw keys: compatible spans and grouped paragraphs therefore coalesce by resource, material, and fixed paint layer, with
+under-decoration, glyph, and over-decoration layers preserving CSS paint order.
+Core preflights uniqueness only when a paragraph is created or its base lifecycle order changes, and validates the final
+nonremoved desired set rather than each update in isolation. Atomic base-order swaps therefore remain valid, duplicate
+final slots fail before serialization, and rank-only Billboard frames avoid the scan entirely; Rust retains the same
+authoritative validation at the ABI boundary. An accepted rank-only frame commits revisions without repeating cached
+paragraph measurement calls or bounding-box publication.
 Each traversed Text reports only its own current Scene. When that Scene and the renderer-owned draw object are unchanged,
 observation returns without allocating or scanning sibling Text instances. A full membership scan is reserved for an
 actual Scene transition or a detached draw object, including recovery after a host clears and reattaches the authored
@@ -455,6 +497,10 @@ result. Font size, letter spacing, word spacing, line height, and baseline chang
 positioning without treating glyph identities as newly shaped content. A public optimized-Wasm regression doubles a
 paragraph's font size and proves its retained inline advance doubles; the live Paragraph Stress scene additionally keeps
 correct spacing through intermediate animated sizes for Bitmap, MSDF, and Slug.
+Line boxes resolve vertical metrics from the font stack's primary face rather than the fallback face selected for an
+individual cluster. Natural line height retains nonnegative font leading; an explicit `lineHeight` is authoritative and
+may produce negative half-leading, so values below one em remain effective and mixed-script fallback cannot introduce
+line-to-line leading jitter.
 
 The Three executor does not infer paragraph layout from GPU records and does not maintain a parallel candidate/current
 target state machine. It applies the Rust command buffer transactionally and retains only renderer resources required by
@@ -506,9 +552,8 @@ stable transform-table ID to each rendered glyph so compatible paragraphs may co
 draws by transform for integrations that prefer ordinary object matrices. Codec programs may use ordered-direct or
 stable-indirect physical storage. Stable draws carry one reserved u32 order buffer; Three validates its draw/primitive
 addressing once, then uses the same logical-to-physical mapping for raster-format records, transform indices, explicit origin
-queries, and third-party program material contexts. Root `compositing` determines whether Rust must preserve authored
-ordering or may reorder independent work. Ordered-direct remains the first-party default until stable planning meets the
-same tail-latency target.
+queries, and third-party program material contexts. A paragraph always batches its own spans, so no root policy states
+draw order. Ordered-direct remains the first-party default until stable planning meets the same tail-latency target.
 
 `materialId` is explicit through the frame ABI and command buffer. Three maps it to a `defineTextMaterial()` factory. Material
 identity may split draws without forcing a second copy of the canonical glyph buffers.
@@ -544,8 +589,9 @@ Publication emits no semantic readback by default. A renderer that needs current
 sidecar on the same update; core copies it into the retained text cache before target acceptance, so plan publication and
 bounds cost one Wasm hop. Every semantic mutation invalidates that cache immediately. `Text.measure()` then answers from
 the cache or explicitly measures current desired state, while `Text.glyphs()` similarly requests the positioned
-inspection lane. Neither query traverses matrices, realizes renderer resources, flips publication slots, or burns a
-revision.
+inspection lane. `Text.withGlyphs()` prepares that same state without emitting the full inspection table and copies only
+explicitly indexed records. None of these queries traverses matrices, realizes renderer resources, flips publication
+slots, or burns a revision.
 
 A same-build isolation over one 21,805-glyph paragraph measured 0.002 ms for an unchanged publication, 0.174 ms for the
 aggregate measurement sidecar, and 0.582 ms for full glyph inspection. Three requests only aggregate measurement and
@@ -553,11 +599,13 @@ only while it has changed text to publish; an idle synchronization does not ente
 publication therefore pays no semantic-sidecar cost, while renderers that need same-frame bounds pay the explicit
 per-publication cost instead of making a second Wasm query.
 
-An explicit query before first render carries the desired paragraph lifecycle and applies text, style, and geometry
-mutations only for the queried paragraph. Sequential queries extend one speculative batch candidate. The next ordinary
-publication adopts matching prepared work and publishes the batch once instead of shaping twice; a geometry-only mismatch
-reuses the semantic prefix and recomputes only flow and positioning. Unchanged measurements and inspections remain cached
-until the next semantic mutation.
+An explicit query before first render carries the complete desired paragraph lifecycle and applies text, style, and
+geometry mutations only for the queried paragraph. It serializes paragraph-order rows only for nonremoved paragraphs
+whose scoped rank is still pending publication; a semantic-only query therefore does not resend stable ranks, while
+sequential queries preserve every rank in the pending transaction. Sequential queries extend one speculative batch
+candidate. The next ordinary publication adopts matching prepared work and publishes the batch once instead of shaping
+twice; a geometry-only mismatch reuses the semantic prefix and recomputes only flow and positioning. Unchanged
+measurements and inspections remain cached until the next semantic mutation.
 
 The engine additionally exports `pmndrs_glyph_engine_measure_paragraph`, a paragraph-scoped synchronous query beside
 `pmndrs_glyph_engine_update`. It reuses the update request layout with the queried paragraph as an ABI argument, runs
@@ -626,6 +674,38 @@ per-paragraph line bound multiplied retained scratch by paragraph count: a 684-p
 memory from roughly 2.07 GB to the 4.29 GB address ceiling in 17 updates. The corrected bound completes 200 update cycles
 and settles near 105 MB for that deliberately larger 8,000-glyph fixture. This regression also guards against forwarding
 aggregate glyph capacity as one paragraph's text reservation.
+
+The configured-root text prewarm is 64 UTF-16 units and applies to one reusable spare paragraph, not every retained Text.
+Active paragraph lanes grow from their actual content and retain their high-water capacity; publication therefore does
+not rescan every Text or attempt to resize an already-consumed spare. A 100-root cold probe measured 224.00 KiB per root
+at 64 units versus 686.08 KiB at the former 256-unit default, excluding the equal command buffers. The smaller default
+keeps more than four times the observed 9–14-unit label headroom while preserving unbounded correctness through ordinary
+arena growth.
+
+Retained publication tracks lifecycle, text, style, and geometry invalidation independently. The shared configured Text
+controller derives partial updates from each adapter's complete desired state; adapters and renderers do not implement
+wire diffing. The shared controller retains the accepted caller identities beside cycle-safe, deeply frozen style,
+layout, and constraint snapshots. Reusing the same readonly outer record is an O(1) unchanged signal; supplying a new
+outer record compares it with the accepted snapshot and clones only a material change. A nested edit submitted through a
+new outer style, layout, or constraint record therefore cannot rewrite history or disappear through `/typegpu` or a
+custom `GlyphConfig`. Three's retained authoring model uses the same snapshot utility, and its package-owned records cross
+the controller seam without a second clone. A plain string replacement reuses its normalized font, transform, material,
+style, layout, and constraint ownership. When those accepted input identities return through a content-only update,
+normalization skips recursive comparison and cloning; a new outer property record still takes the validating path.
+Equal-length content emits only the minimal scalar-aligned text record; length changes additionally republish
+root-style coverage. A font-size or paint-only update emits only its style record while Rust remains authoritative for
+shaping and layout invalidation. These cases do not republish paragraph membership, scoped order, constraints, regions,
+exclusions, or inline-object records; assigning an already-plain string to itself does not advance desired state or cross
+the Wasm boundary. Pending style-limit accounting follows the same style-dirty predicate as wire emission. Rust limits
+implicit paragraph inference to an empty planner, so a content batch may address several existing paragraphs without
+dummy lifecycle upserts. Rust indexes each populated semantic input table by paragraph ID before visiting retained
+semantic order, so valid atomic content batches do not depend on the adapter's Set insertion order. The reusable compact
+span index is empty on ordinary clean frames and retains its capacity after the first populated batch; glyph, cluster,
+and plan record layouts remain unchanged. An omitted authored `maxLines` is encoded with Rust's existing zero sentinel for the root limit,
+so ordinary geometry no longer depends on string length. In the 684-label workload this reduces the request from 209,448
+to 23,400 bytes and the fresh
+same-machine remote-main A/B from 24.24–25.87 ms to final post-review medians of 11.39–11.89 ms while retaining one draw
+and 5,362 glyphs.
 
 Bitmap vertex pixel snapping is an explicit immutable Three/R3F option and defaults off. The unsnapped graph uses the
 ordinary model-view-projection position so shared-root or camera animation preserves subpixel movement; callers targeting
@@ -1068,6 +1148,43 @@ integration sequence drives adopt → relayout → adopt across the equivalence 
 (−89%), the published classes are unchanged, and every other lane is neutral over two interleaved rounds. The
 lane median and p95 are order statistics over the published classes and move little; what changed is that a
 third of resize frames now cost a third of a millisecond.
+
+The completing reflow pass keeps shaped-word composition data beside the retained cluster lanes. Only a paragraph whose
+active geometry requests word wrapping lazily builds the sidecar. Sparse prose records one 12-byte
+`(cluster_end, advance_units, space_units)` entry per legal word break plus its terminal segment; a paragraph with at
+least one break per two clusters stays on the existing cluster/chunk path, so ordinary dense CJK never pays a sidecar
+record per character even when shaping produces a negative advance. Paragraphs shorter than one 64-cluster layout
+chunk also stay on the allocation-free scalar path, so ordinary labels never construct the word index. The existing
+chunk flag byte marks negative advances, and its existing auxiliary `i64` lane is interpreted by those flags as either
+the shrinkable-space sum or, for a negative space-free chunk, the largest advance prefix. This proves that every local
+break boundary fits before skipping that chunk. A chunk combining spaces with a negative advance takes the exact scalar
+path, preserving hanging-space and shrink semantics without another lane, Wasm ABI field, glyph-record byte, or warm
+allocation. Word fitting consumes complete shaped segments before testing the width, including the same word-space
+shrink budget used by justification. This fixes the case where an early positive glyph advance followed by a negative
+shaping adjustment incorrectly pushed a word to the next line even though the completed word fit. It does not reshape
+or split a previously shaped word.
+
+The legal stream begins with Unicode 17 UAX #14 opportunities, discards any optional opportunity that falls inside a
+UAX #29 extended grapheme, and intersects the result with HarfRust unsafe-to-break shaping boundaries. The default has
+no dictionary segmentation, language-specific hyphenation, or locale tailoring. Optional language-resource imports,
+including a versioned linear-memory ABI that can move language tables out of the default Wasm payload, are tracked in
+[#163](https://github.com/pmndrs/glyph/issues/163); no renderer adapter may become a second layout implementation.
+
+After composition, start-aligned lines whose semantic range, fragment order, indent, baseline, transform, clip, slot
+origin, and final-line state are unchanged copy their committed positioned SoA slices even when a wider slot changes
+only its unused end. Retained lines copy their indexed decoration slice with their glyph and semantic slices; a changed
+slot start invalidates reuse because it changes the published semantic line extent. Nontrivial bidi, center/end
+alignment, justification changes, boundary reshaping, and any changed line geometry take the full positioning path. At 22,000 glyphs and 101 widening updates, the final candidate measured
+1.882/4.553 ms median/p95 versus exact remote main's 2.991/5.256 ms. The dedicated measurement query measured
+0.282/0.341 ms versus 0.517/0.711 ms. Two browser Paragraph Stress A/B pairs retained 11,510 glyphs in one draw: the
+candidate/main retained-update medians were 0.665/0.795 and 0.750/0.785 ms, while update-plus-measure medians were
+0.510/0.580 and 0.565/0.605 ms. These machine-local observations establish repeated direction and a lower common-case
+cost; width reflow remains above the sub-1-ms interactive target and is still the last post-shaping performance frontier.
+
+Large `measure()` and `glyphs()` queries also reserve against the smaller of the active slot's cached capacity and the
+required capacity reported by the failing inactive A/B result slot. Each retry must strictly grow the actual failing slot
+or return the typed engine error. This fixes alternating large inspection queries without an arbitrary retry count and
+without changing normal publication or cached-query work.
 
 Two follow-ups from the closing audit are tracked in [the integer layout-units plan](../planning/integer-layout-units.md)
 as slice 6 so they cannot silently lapse: the integer pen (layout decisions resolve in F26.6 while the

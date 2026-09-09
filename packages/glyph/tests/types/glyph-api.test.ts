@@ -123,6 +123,8 @@ const recordingConfig = defineGlyphConfig({
     create: (context) => {
       context.codec.codecLabel satisfies 'recording';
       context.services.createText satisfies (typeof context.services)['createText'];
+      // @ts-expect-error Paragraph order is staged per controller and resolved atomically by Rust.
+      void context.services.reorderTexts;
       let result: Readonly<{ readonly kind: 'recording-result' }> | undefined;
       const extension = {
         kind: 'recording-root' as const,

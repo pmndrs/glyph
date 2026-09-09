@@ -42,7 +42,7 @@ The provisional `PMNDRS_font` GLB family separates one shaping core from typed r
 
 ## Consequences
 
-- Every companion authenticates shaping hash, glyph count/width, raster key, version, buffer ranges, and external hashes before publication.
+- Every companion matches the shaping fingerprint, glyph count/width, raster key, version, buffer ranges, and external fingerprints before publication.
 - Bitmap renders fill and opacity only; unsupported effects reject instead of degrading silently.
 - Logical pages are not equivalent to texture layers, binding slots, draws, or residency policy.
 - Latin remains the first release rendering corpus; broad CJK paging and icon coverage land after the first release gate.

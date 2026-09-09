@@ -1,43 +1,4 @@
-/**
- * Minimal reproductions of three defects found while extending incremental-mutation coverage.
- *
- * Each one is the smallest input that exhibits a defect the differential/packed-lane oracle or the
- * script corpora uncovered, reduced to the public `Text`/`TextGroup` surface and one baked fixture.
- * They are pinned here rather than inside the coverage files so that a red run names the defect
- * instead of naming a corpus, and so that fixing one turns exactly one test green. All three are
- * now fixed, and each pins its fix: reverting the fix turns exactly the case below red again.
- *
- * None of these is the defect fixed by `fix(glyph): rebuild only a slot whose retained identity
- * moved`. That fix holds: the Latin gate and every non-bidi script case pass with it and fail
- * without it.
- *
- *   1. A GLYPH DISAPPEARS FROM THE GPU BUFFER. FIXED.
- *      Deleting a leading left-to-right island, together with its separating space, from a
- *      right-to-left paragraph inside a `TextGroup` left a LATER, UNEDITED paragraph with one
- *      fewer instanced record than it has committed glyphs. The engine still reported every glyph;
- *      the GPU was handed one fewer. Nothing engine-side could see this, which is exactly why the
- *      packed lanes are worth asserting. The retained gather recorded only a selection bit per
- *      source glyph, never the identity that bit belonged to, so a deleted space let an unchanged
- *      glyph read a neighbour's row and skip its own record.
- *
- *   2. A LEGAL TEXT CHANGE MANUFACTURED A PARAGRAPH THE ENGINE REFUSES TO PUBLISH. FIXED.
- *      The engine requires every extended grapheme cluster to resolve to exactly one style. `Text`
- *      did not hold that on its `spans` input: adding a combining scalar at a legal, cluster-
- *      aligned span boundary moved that boundary into the middle of the cluster the change just
- *      created, and the paragraph stopped publishing with an opaque numeric engine status. `Text`
- *      now resolves every span boundary onto the cluster grid before a frame is built (D-265); the
- *      surface around this one case is covered by `text-mutation-span-alignment.test.mjs`. The
- *      original reproduction went through `replaceText`, which has since been removed along with
- *      the rest of the offset-taking edit surface; the case is restated on the `set` that remains.
- *
- *   3. A SPACE FOLLOWED BY A COMBINING MARK WAS REJECTED OUTRIGHT. FIXED.
- *      UAX #14 LB9 does NOT attach a combining mark to a preceding SPACE, so it yields a break
- *      opportunity between them; UAX #29 GB9 attaches it unconditionally, so the two are one
- *      grapheme cluster. The break opportunity therefore falls strictly inside a cluster, and the
- *      engine rejected the whole frame instead of ignoring an opportunity it cannot take. The same
- *      text after any base the two standards agree on -- a letter, a hyphen, a tab, U+00A0 -- is
- *      accepted, which isolates the disagreement as the cause.
- */
+/** Minimal regression pins for three fixed defects the packed-lane oracle and script corpora found; each test is the smallest repro, and reverting its fix turns exactly that test red. */
 import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 
@@ -63,13 +24,7 @@ const authored = (text, style, spans = []) => ({
   properties: { constraints, layout, spans, style: [style, paint], text },
 });
 
-/**
- * Committed glyphs against records actually handed to the GPU, per paragraph and in total.
- *
- * Totals alone would catch the loss but not attribute it. A group batches its paragraphs into one
- * draw, so the GPU side cannot name which paragraph lost a record -- the per-paragraph committed
- * counts are the attribution, and they must sum to the records the group actually hands over.
- */
+/** Committed glyphs vs. GPU-handed records, per paragraph and in total. Per-paragraph counts attribute a loss that a batched single-draw total cannot pin to one paragraph. */
 function drawn(mounted) {
   const scene = lanes(mounted);
   const glyphs = scene.paragraphs.map((entry) => entry.glyphCount);

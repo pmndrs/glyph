@@ -24,11 +24,7 @@ export interface FontBindingFieldTable {
   readonly names?: readonly string[];
 }
 
-/**
- * Order a binding table by the schema's declared field names. The same name
- * list drives the codec program's input table, so a missing, extra, or
- * misspelled reader is a compile error instead of a silently shifted column.
- */
+/** Orders a binding table by the schema's declared field names — the same list drives the codec program's input table, so a missing/extra/misspelled reader is a compile error, not a shifted column. */
 export function schemaFieldTable<const Names extends readonly string[]>(
   names: Names,
   rows: number,

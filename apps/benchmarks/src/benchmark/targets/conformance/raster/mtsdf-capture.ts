@@ -207,7 +207,9 @@ async function createFlatMtsdfConformanceResources(options: {
       layout: { wrap: 'word' },
       // Match the baked 64 px/em base level in device pixels. Deep minification
       // is exercised separately with the same authored field and derivative AA.
-      style: { fontSize: 64 / dpr, lineHeight: 1.2, color: '#ffffff' },
+      // Sampling conformance uses the font's natural line metrics. Explicit tight line-height
+      // behavior is authenticated by the paragraph contracts rather than changing this pixel oracle.
+      style: { fontSize: 64 / dpr, color: '#ffffff' },
       rasterPixelRatio: dpr,
     });
     signal?.throwIfAborted();

@@ -3,12 +3,7 @@ import { normalizeGlyphBufferCapacity } from '../../text-properties.js';
 import { threeCodecDescriptor } from '../codec.js';
 import type { ThreePublicationBoundary } from './publication-boundary.js';
 import { createThreeCodec, threeCodecResources } from './renderer-resources.js';
-import {
-  ThreeRootHost,
-  normalizeThreeRootCompositing,
-  threeTextConstructionToken,
-  type ThreeRootOptions,
-} from '../text.js';
+import { ThreeRootHost, threeTextConstructionToken, type ThreeRootOptions } from '../text.js';
 
 import {
   ThreeSchema,
@@ -30,10 +25,6 @@ export function createThreeConfig(options: ThreeConfigOptions, shaders: ThreeSha
   const defaultFontFormat = options.defaultFontFormat ?? 'msdf';
   const capacity =
     options.capacity === undefined ? undefined : normalizeGlyphBufferCapacity(options.capacity, 'ThreeConfig capacity');
-  const compositing =
-    options.compositing === undefined
-      ? undefined
-      : normalizeThreeRootCompositing(options.compositing, 'ThreeConfig compositing');
   const config = defineGlyphConfig({
     schema: ThreeSchema,
     fonts: { default: defaultFontFormat, formats: ThreeFontFormats },
@@ -79,14 +70,13 @@ export function createThreeConfig(options: ThreeConfigOptions, shaders: ThreeSha
       },
       requestBytes: 64 * 1024,
       resultBytes: 256 * 1024,
-      textUnits: 256,
+      textUnits: 64,
     },
     root: {
       create: (context) => {
         if (context.fonts === undefined) throw new TypeError('Three GlyphConfig must declare font formats');
         const rootOptions: ThreeRootOptions = {
           ...(capacity === undefined ? {} : { capacity }),
-          ...(compositing === undefined ? {} : { compositing }),
         };
         const root = new ThreeRootHost(
           threeTextConstructionToken,

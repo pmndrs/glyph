@@ -35,7 +35,8 @@ async function outcome(bytes) {
     const font = await new FontRegistry().registerAsset(Buffer.from(bytes));
     return {
       ok: true,
-      shapingHash: font.shapingHash,
+      sourceFingerprint: font.sourceFingerprint,
+      shapingFingerprint: font.shapingFingerprint,
       glyphCount: font.glyphCount,
       rasters: font.rasterReferences.length,
     };

@@ -472,6 +472,12 @@ function assertOwnedFrameRangesDoNotOverlap(bytes, abi) {
   };
   for (const [label, offsetField, countField, layout] of [
     ['paragraph mutations', 'paragraphMutationsOffset', 'paragraphMutationCount', abi.layouts.engineParagraphMutation],
+    [
+      'paragraph order mutations',
+      'paragraphOrderMutationsOffset',
+      'paragraphOrderMutationCount',
+      abi.layouts.engineParagraphOrderMutation,
+    ],
     ['text mutations', 'textMutationsOffset', 'textMutationCount', abi.layouts.engineTextMutation],
     ['style mutations', 'styleMutationsOffset', 'styleMutationCount', abi.layouts.engineStyleMutation],
     ['constraints', 'constraintsOffset', 'constraintCount', abi.layouts.engineConstraint],

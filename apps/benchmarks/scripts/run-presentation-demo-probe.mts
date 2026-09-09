@@ -2,12 +2,13 @@ import { fileURLToPath } from 'node:url';
 import type { Browser } from 'playwright';
 import { createServer } from 'vite';
 
+import { LOOPBACK_HOST, selectLoopbackPort } from './support/loopback-port.mts';
 import { launchProjectChromium } from './support/project-chromium.mts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 process.chdir(root);
 const backend = presentationBackend(process.env.PRESENTATION_BACKEND);
-const server = await createServer({ root, server: { host: '127.0.0.1', port: 0 } });
+const server = await createServer({ root, server: { host: LOOPBACK_HOST, port: await selectLoopbackPort() } });
 await server.listen();
 const address = server.httpServer?.address();
 if (address === null || address === undefined || typeof address === 'string') {
@@ -49,11 +50,23 @@ try {
   await page.waitForFunction(() => document.querySelector('canvas[data-configured-renderer-active="true"]') !== null);
   await page.evaluate(() => {
     const scope = globalThis as typeof globalThis & {
+      presentationDemoAdvancedCases: string[];
       presentationDemoCanvas: Element | null;
       presentationDemoErrors: string[];
     };
+    scope.presentationDemoAdvancedCases = [];
     scope.presentationDemoCanvas = document.querySelector('canvas[data-configured-renderer-active="true"]');
     scope.presentationDemoErrors = [];
+    const recordAdvancedCase = (caseId: string | null): void => {
+      if (caseId !== null && !scope.presentationDemoAdvancedCases.includes(caseId)) {
+        scope.presentationDemoAdvancedCases.push(caseId);
+      }
+    };
+    const collectAdvancedCase = (): void => {
+      for (const surface of document.querySelectorAll('[data-testid="benchmark-surface"][data-advanced-case]')) {
+        recordAdvancedCase(surface.getAttribute('data-advanced-case'));
+      }
+    };
     const collectErrors = (): void => {
       for (const element of document.querySelectorAll<HTMLElement>('[data-testid$="-live-error"]')) {
         const message = element.textContent?.trim();
@@ -62,7 +75,21 @@ try {
         }
       }
     };
-    new MutationObserver(collectErrors).observe(document.body, { childList: true, subtree: true });
+    new MutationObserver((records) => {
+      for (const record of records) {
+        if (record.type === 'attributes' && record.attributeName === 'data-advanced-case') {
+          recordAdvancedCase(record.oldValue);
+        }
+      }
+      collectAdvancedCase();
+      collectErrors();
+    }).observe(document.body, {
+      attributeFilter: ['data-advanced-case'],
+      attributeOldValue: true,
+      attributes: true,
+      childList: true,
+      subtree: true,
+    });
   });
 
   const animationTrigger = page.getByRole('button', { name: 'Animation: ON' });
@@ -144,14 +171,23 @@ try {
   };
   await waitForWorkload('paint-effects');
   await waitForWorkload('advanced-shaping');
-  for (const caseId of ['cjk-line-breaks', 'mixed-bidi', 'arabic-joining', 'indic-reordering', 'latin-features']) {
-    await page.waitForFunction(
-      (expected) =>
-        document.querySelector('[data-testid="benchmark-surface"]')?.getAttribute('data-advanced-case') === expected,
-      caseId,
+  await waitForWorkload('zoom-text');
+  const expectedAdvancedCases = [
+    'cjk-line-breaks',
+    'mixed-bidi',
+    'arabic-joining',
+    'indic-reordering',
+    'latin-features',
+  ];
+  const observedAdvancedCases = await page.evaluate(() => {
+    const scope = globalThis as typeof globalThis & { presentationDemoAdvancedCases: string[] };
+    return scope.presentationDemoAdvancedCases;
+  });
+  if (JSON.stringify(observedAdvancedCases) !== JSON.stringify(expectedAdvancedCases)) {
+    throw new Error(
+      `Timed demo advanced-shaping sequence mismatch: expected ${expectedAdvancedCases.join(', ')}, observed ${observedAdvancedCases.join(', ')}`,
     );
   }
-  await waitForWorkload('zoom-text');
   await page.waitForFunction(() => {
     const viewport = document.querySelector<HTMLElement>(
       '[data-testid="comparison-live-viewport"][data-workload="zoom-text"]',

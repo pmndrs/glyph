@@ -20,6 +20,7 @@ import { decodeRasterCoverage } from '../../internal/raster-coverage-artifact.js
 import type { RasterDecodeArtifact } from '../../raster.js';
 import { defineRasterResourceId } from '../../config/raster-format.js';
 import type { BitmapData, BitmapPageData, BitmapStrikeData } from '../bitmap.js';
+import { compatibilityFingerprint } from '../../internal/raster-identity.js';
 
 const RECORD_STRIDE = DENSE_GLYPH_RECORD_STRIDE;
 const MAX_RUNTIME_TEXTURE_BYTES = 256 * 1024 * 1024;
@@ -36,9 +37,16 @@ export async function decodeBitmapData(font: RasterDecodeFont, raster: RasterDec
   if (
     extension.version !== BITMAP_FORMAT_VERSION ||
     extension.rasterKey !== raster.rasterKey ||
-    extension.shapingHash !== font.shapingHash ||
-    extension.glyphCount !== font.glyphCount ||
-    extension.glyphIdWidth !== 16
+    extension.fingerprint !==
+      compatibilityFingerprint({
+        glyphCount: font.glyphCount,
+        glyphIdWidth: 16,
+        kind: 'bitmap',
+        rasterKey: raster.rasterKey,
+        shaping: font.shapingFingerprint,
+        source: font.sourceFingerprint,
+        version: BITMAP_FORMAT_VERSION,
+      })
   ) {
     throw new TypeError('bitmap extension identity does not match its registered font and raster');
   }
@@ -99,7 +107,7 @@ export async function decodeBitmapData(font: RasterDecodeFont, raster: RasterDec
           ...decoded,
           format: 'r8unorm',
           resource: defineRasterResourceId(
-            `pmndrs.bitmap/${font.shapingHash}/${raster.rasterKey}/${strikeIndex}/${pageIndex}`,
+            `pmndrs.bitmap/${font.shapingFingerprint}/${raster.rasterKey}/${strikeIndex}/${pageIndex}`,
           ),
         };
       },

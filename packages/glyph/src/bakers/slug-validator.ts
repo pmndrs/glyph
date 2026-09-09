@@ -19,7 +19,7 @@ import binaryResourceSchema from './schemas/binaryResource.PMNDRS_font.schema.js
 import slugSchema from './schemas/glTF.PMNDRS_font_slug.schema.json' with { type: 'json' };
 import sourceSchema from './schemas/resourceSource.PMNDRS_font.schema.json' with { type: 'json' };
 import textureResourceSchema from './schemas/textureResource.PMNDRS_font.schema.json' with { type: 'json' };
-import type { RasterKey, Sha256Hex } from '../identity.js';
+import type { RasterKey, Fingerprint } from '../identity.js';
 import {
   RasterArtifactValidationError,
   asArray,
@@ -30,7 +30,7 @@ import {
   claimOtherRasterExtensionViews,
   claimRasterView,
   fail,
-  isSha256,
+  isFingerprint,
   requireNonArrayObject,
   resolveRasterPageSource,
   sliceRasterView,
@@ -48,9 +48,11 @@ import {
   SLUG_GENERATOR_VERSION,
   SLUG_GLYPH_RECORD_STRIDE,
   SLUG_PLANE_UNITS_PER_EM,
+  SLUG_MAX_CUBIC_SUBDIVISIONS,
   slugDescriptorRasterKey,
   type SlugDescriptor,
 } from '../internal/slug-contract.js';
+import { compatibilityFingerprint } from '../internal/raster-identity.js';
 
 const CURVE_BYTES_PER_TEXEL = 8;
 const HEADER_BYTES_PER_TEXEL = 4;
@@ -79,11 +81,11 @@ export interface SlugArtifactValidationLimits {
 
 export interface SlugArtifactValidationContext {
   readonly rasterKey: RasterKey | string;
-  readonly shapingHash: Sha256Hex | string;
+  readonly sourceFingerprint: Fingerprint | string;
+  readonly shapingFingerprint: Fingerprint | string;
   readonly glyphCount: number;
   readonly glyphIdWidth: 16;
   readonly descriptor: SlugDescriptor;
-  readonly externalPages?: ReadonlyMap<string, Uint8Array>;
   readonly limits?: Partial<SlugArtifactValidationLimits>;
 }
 
@@ -110,7 +112,7 @@ export interface ValidatedSlugPage {
 export interface ValidatedSlugArtifact {
   readonly document: Readonly<Record<string, unknown>>;
   readonly rasterKey: RasterKey;
-  readonly shapingHash: Sha256Hex;
+  readonly shapingFingerprint: Fingerprint;
   readonly glyphCount: number;
   readonly records: Uint8Array;
   readonly pages: readonly ValidatedSlugPage[];
@@ -194,9 +196,16 @@ async function validateSlugSemantics(
   if (
     extension.version !== SLUG_FORMAT_VERSION ||
     extension.rasterKey !== context.rasterKey ||
-    extension.shapingHash !== context.shapingHash ||
-    extension.glyphCount !== context.glyphCount ||
-    extension.glyphIdWidth !== context.glyphIdWidth
+    extension.fingerprint !==
+      compatibilityFingerprint({
+        glyphCount: context.glyphCount,
+        glyphIdWidth: context.glyphIdWidth,
+        kind: 'slug',
+        rasterKey: context.rasterKey,
+        shaping: context.shapingFingerprint as string,
+        source: context.sourceFingerprint as string,
+        version: SLUG_FORMAT_VERSION,
+      })
   ) {
     fail(
       'RECIPROCAL_IDENTITY',
@@ -236,7 +245,7 @@ async function validateSlugSemantics(
   for (let pageIndex = 0; pageIndex < pageValues.length; pageIndex += 1) {
     const pagePath = `${extensionPath}/pages/${pageIndex}`;
     const page = requireNonArrayObject(pageValues[pageIndex], pagePath);
-    const validated = await validatePage(page, pagePath, parsed, views, claimedViews, context.externalPages, limits);
+    const validated = await validatePage(page, pagePath, parsed, views, claimedViews, limits);
     gpuBytes = checkedSum(gpuBytes, pageGpuBytes(validated, pagePath), pagePath);
     if (gpuBytes > limits.maxGpuBytes) {
       fail('GPU_BUDGET', 'Slug pages exceed the configured GPU byte budget', pagePath);
@@ -256,7 +265,7 @@ async function validateSlugSemantics(
   return {
     document,
     rasterKey: context.rasterKey as RasterKey,
-    shapingHash: context.shapingHash as Sha256Hex,
+    shapingFingerprint: context.shapingFingerprint as Fingerprint,
     glyphCount: context.glyphCount,
     records,
     pages,
@@ -266,18 +275,33 @@ async function validateSlugSemantics(
 
 async function validateContext(context: SlugArtifactValidationContext): Promise<void> {
   const descriptor = requireNonArrayObject(context.descriptor, '/descriptor');
+  const cubicSubdivisions = Object.hasOwn(descriptor, 'cubicSubdivisions') ? descriptor.cubicSubdivisions : undefined;
   if (
-    Object.keys(descriptor).length !== 1 ||
+    Object.keys(descriptor).length !== (cubicSubdivisions === undefined ? 1 : 2) ||
     !Object.hasOwn(descriptor, 'generatorVersion') ||
-    descriptor.generatorVersion !== SLUG_GENERATOR_VERSION
+    descriptor.generatorVersion !== SLUG_GENERATOR_VERSION ||
+    (cubicSubdivisions !== undefined &&
+      (typeof cubicSubdivisions !== 'number' ||
+        !Number.isSafeInteger(cubicSubdivisions) ||
+        cubicSubdivisions < 1 ||
+        cubicSubdivisions > SLUG_MAX_CUBIC_SUBDIVISIONS))
   ) {
-    fail('SLUG_DESCRIPTOR', 'descriptor does not match the fixed Slug generator', '/descriptor');
+    fail('SLUG_DESCRIPTOR', 'descriptor does not match the Slug generator', '/descriptor');
   }
-  if (context.rasterKey !== (await slugDescriptorRasterKey())) {
-    fail('RASTER_KEY', 'expected raster key does not match the fixed descriptor', '/rasterKey');
+  // Re-derive from the descriptor that arrived, so a configured rate validates
+  // against its own key rather than the default one.
+  const expectedRasterKey = slugDescriptorRasterKey(
+    cubicSubdivisions === undefined ? undefined : { cubicSubdivisions: cubicSubdivisions as number },
+  );
+  if (context.rasterKey !== expectedRasterKey) {
+    fail('RASTER_KEY', 'expected raster key does not match the descriptor', '/rasterKey');
   }
-  if (!isSha256(context.shapingHash)) {
-    fail('SHAPING_HASH', 'expected shaping hash must be lowercase SHA-256', '/shapingHash');
+  if (!isFingerprint(context.shapingFingerprint)) {
+    fail(
+      'SHAPING_FINGERPRINT',
+      'expected shaping fingerprint must be lowercase 128-bit hexadecimal',
+      '/shapingFingerprint',
+    );
   }
   if (!Number.isInteger(context.glyphCount) || context.glyphCount < 1 || context.glyphCount > 65_535) {
     fail('GLYPH_COUNT', 'expected glyph count must be in 1..=65535', '/glyphCount');
@@ -290,7 +314,6 @@ async function validatePage(
   parsed: ParsedGlb,
   views: readonly RasterBufferView[],
   claimedViews: Set<number>,
-  externalPages: ReadonlyMap<string, Uint8Array> | undefined,
   limits: SlugArtifactValidationLimits,
 ): Promise<ValidatedSlugPage> {
   const curve = requireNonArrayObject(page.curve, `${pagePath}/curve`);
@@ -320,7 +343,6 @@ async function validatePage(
     parsed,
     views,
     claimedViews,
-    externalPages,
     'Slug curve',
   );
   validateNativeKtx2(curveResource.bytes, curveWidth, curveHeight, CURVE_FORMAT, variantPath);
@@ -335,7 +357,6 @@ async function validatePage(
     parsed,
     views,
     claimedViews,
-    externalPages,
     'Slug headers',
   );
   validateIntegerGrid(
@@ -361,7 +382,6 @@ async function validatePage(
     parsed,
     views,
     claimedViews,
-    externalPages,
     'Slug references',
   );
   validateIntegerGrid(
@@ -393,12 +413,11 @@ async function resolveBinaryResource(
   parsed: ParsedGlb,
   views: readonly RasterBufferView[],
   claimedViews: Set<number>,
-  externalPages: ReadonlyMap<string, Uint8Array> | undefined,
   label: string,
 ): Promise<ResolvedRasterPageSource> {
   const resource = requireNonArrayObject(value, path);
   const source = requireNonArrayObject(resource.source, `${path}/source`);
-  return resolveRasterPageSource(source, path, parsed, views, claimedViews, externalPages, label);
+  return resolveRasterPageSource(source, path, parsed, views, claimedViews, label);
 }
 
 function validateIntegerGrid(

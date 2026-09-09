@@ -1,8 +1,6 @@
-use alloc::{format, string::String, vec::Vec};
+use alloc::vec::Vec;
 
-use pmndrs_glyph_raster_artifact::{
-    KtxFormat, PagePackaging, append_buffer_view, encode_glb, encode_ktx2,
-};
+use pmndrs_glyph_raster_artifact::{KtxFormat, append_buffer_view, encode_glb, encode_ktx2};
 use pmndrs_glyph_slug_core::PackedSlug;
 use serde_json::{Value, json};
 
@@ -13,15 +11,11 @@ use crate::{
 
 pub(crate) struct BuiltRasterGlb {
     pub bytes: Vec<u8>,
-    pub resources: Vec<BuiltResource>,
     pub page_reports: Vec<BuiltPageReport>,
 }
 
 pub(crate) struct BuiltResource {
-    pub id: String,
     pub bytes: Vec<u8>,
-    pub sha256: String,
-    pub embedded: bool,
 }
 
 pub(crate) struct BuiltPageReport {
@@ -29,16 +23,26 @@ pub(crate) struct BuiltPageReport {
     pub height: u16,
     pub gpu_bytes: usize,
     pub encoded_bytes: usize,
-    pub embedded: bool,
 }
 
 pub(crate) fn build_slug_glb(
     raster_key: &str,
-    shaping_hash: &str,
+    source_fingerprint: &str,
+    shaping_fingerprint: &str,
     glyph_count: u16,
-    page_packaging: PagePackaging,
     packed: &PackedSlug,
 ) -> Result<BuiltRasterGlb, SlugBakeError> {
+    // One value the core and this raster compare to decide they belong together; every
+    // dimension that must agree is folded in, so a consumer never re-derives the list.
+    let compatibility = pmndrs_glyph_raster_artifact::compatibility_fingerprint(
+        source_fingerprint,
+        shaping_fingerprint,
+        raster_key,
+        crate::model::SLUG_KIND,
+        u32::from(crate::model::SLUG_FORMAT_VERSION),
+        glyph_count,
+        16,
+    );
     let mut binary = Vec::<u8>::new();
     let mut buffer_views = Vec::<Value>::new();
     let record_view = append_buffer_view(&mut binary, &mut buffer_views, &packed.record_bytes)?;
@@ -56,7 +60,7 @@ pub(crate) fn build_slug_glb(
         .try_reserve_exact(packed.pages.len())
         .map_err(|_| overflow())?;
 
-    for (page_index, page) in packed.pages.iter().enumerate() {
+    for page in &packed.pages {
         let metadata = page.metadata;
         let curve = encode_ktx2(
             KtxFormat::Rgba16Sfloat,
@@ -64,30 +68,18 @@ pub(crate) fn build_slug_glb(
             metadata.curve_height,
             &page.curve_bytes,
         )?;
-        let stem = format!("slug-{shaping_hash}-{raster_key}-p{page_index}");
-        let curve_source = append_resource(
-            &mut binary,
-            &mut buffer_views,
-            &mut resources,
-            format!("{stem}-curves.ktx2"),
-            curve,
-            page_packaging,
-        )?;
+        let curve_source = append_resource(&mut binary, &mut buffer_views, &mut resources, curve)?;
         let header_source = append_resource(
             &mut binary,
             &mut buffer_views,
             &mut resources,
-            format!("{stem}-headers.r32ui.bin"),
             page.header_bytes.clone(),
-            page_packaging,
         )?;
         let reference_source = append_resource(
             &mut binary,
             &mut buffer_views,
             &mut resources,
-            format!("{stem}-references.r16ui.bin"),
             page.reference_bytes.clone(),
-            page_packaging,
         )?;
         pages.push(json!({
             "curve": {
@@ -131,7 +123,6 @@ pub(crate) fn build_slug_glb(
             height: metadata.curve_height,
             gpu_bytes,
             encoded_bytes,
-            embedded: page_packaging == PagePackaging::Embedded,
         });
     }
 
@@ -144,9 +135,7 @@ pub(crate) fn build_slug_glb(
             SLUG_EXTENSION: {
                 "version": 0,
                 "rasterKey": raster_key,
-                "shapingHash": shaping_hash,
-                "glyphCount": glyph_count,
-                "glyphIdWidth": 16,
+                "fingerprint": compatibility,
                 "planeUnitsPerEm": SLUG_PLANE_UNITS_PER_EM,
                 "recordBufferView": record_view,
                 "recordStride": 40,
@@ -158,7 +147,6 @@ pub(crate) fn build_slug_glb(
     });
     Ok(BuiltRasterGlb {
         bytes: encode_glb(&root, binary)?,
-        resources,
         page_reports,
     })
 }
@@ -167,28 +155,10 @@ fn append_resource(
     binary: &mut Vec<u8>,
     buffer_views: &mut Vec<Value>,
     resources: &mut Vec<BuiltResource>,
-    id: String,
     bytes: Vec<u8>,
-    packaging: PagePackaging,
 ) -> Result<Value, SlugBakeError> {
-    let sha256 = pmndrs_glyph_raster_artifact::sha256_hex(&bytes);
-    let source = match packaging {
-        PagePackaging::Embedded => {
-            let view = append_buffer_view(binary, buffer_views, &bytes)?;
-            json!({ "type": "bufferView", "bufferView": view })
-        }
-        PagePackaging::External => json!({
-            "type": "external",
-            "uri": id,
-            "byteLength": bytes.len(),
-            "artifactHash": sha256,
-        }),
-    };
-    resources.push(BuiltResource {
-        id,
-        bytes,
-        sha256,
-        embedded: packaging == PagePackaging::Embedded,
-    });
+    let view = append_buffer_view(binary, buffer_views, &bytes)?;
+    let source = json!({ "type": "bufferView", "bufferView": view });
+    resources.push(BuiltResource { bytes });
     Ok(source)
 }

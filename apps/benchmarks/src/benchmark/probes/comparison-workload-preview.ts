@@ -7,10 +7,7 @@ import {
 } from '../../surfaces/benchmark/scenes/comparison-workload';
 import { createPersistentRenderHost } from '../../renderer/persistent-render-host';
 
-/**
- * Measurement-only adapter for probes that need an isolated canvas. The retained
- * workload scene remains renderer-agnostic; this adapter owns the host lifecycle.
- */
+/** Measurement-only adapter for probes needing an isolated canvas; owns the render-host lifecycle while the retained scene stays renderer-agnostic. */
 export interface ComparisonWorkloadPreview {
   dispose(): Promise<void>;
   panBy(deltaX: number, deltaY: number): { readonly deltaX: number; readonly deltaY: number } | void;

@@ -22,7 +22,7 @@ use crate::{
         TEXT_MUTATION_REPLACE_UTF16, UpdateLimits, WRAP_CHARACTER, WRAP_NONE, WRAP_WORD,
         WRITING_HORIZONTAL_TB, WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
     },
-    wire::{array, read_f32, read_u16, read_u32},
+    wire::{array, read_f32, read_f64, read_u16, read_u32},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,10 +30,22 @@ pub(crate) struct ParagraphMutationBatch<'a> {
     records: &'a [u8],
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum ParagraphMutation {
     Upsert { paragraph_id: u32, order: u32 },
     Remove { paragraph_id: u32 },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ParagraphOrderMutationBatch<'a> {
+    records: &'a [u8],
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ParagraphOrderMutation {
+    pub paragraph_id: u32,
+    pub scope: u32,
+    pub rank: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -48,6 +60,18 @@ pub(crate) struct TextMutation<'a> {
     pub text_start: u32,
     pub delete_count: u32,
     pub insert_utf16_le: &'a [u8],
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct RecordSpan {
+    pub start: usize,
+    pub end: usize,
+}
+
+impl RecordSpan {
+    pub(crate) fn is_empty(self) -> bool {
+        self.start == self.end
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -236,6 +260,28 @@ impl GeometryBatch<'_> {
             regions: self.regions,
             exclusions: self.exclusions,
             inline_objects,
+        })
+    }
+
+    pub(crate) fn spans(
+        self,
+        constraints: RecordSpan,
+        inline_objects: RecordSpan,
+    ) -> Result<Self, u32> {
+        Ok(Self {
+            request: self.request,
+            constraints: records_span(
+                self.constraints,
+                abi::ENGINE_CONSTRAINT_RECORD_SIZE,
+                constraints,
+            )?,
+            regions: self.regions,
+            exclusions: self.exclusions,
+            inline_objects: records_span(
+                self.inline_objects,
+                abi::ENGINE_INLINE_OBJECT_RECORD_SIZE,
+                inline_objects,
+            )?,
         })
     }
 
@@ -454,6 +500,30 @@ impl<'a> ParagraphMutationBatch<'a> {
     }
 }
 
+impl<'a> ParagraphOrderMutationBatch<'a> {
+    pub(crate) const fn empty() -> Self {
+        Self { records: &[] }
+    }
+
+    pub(crate) fn len(self) -> usize {
+        self.records.len() / abi::ENGINE_PARAGRAPH_ORDER_MUTATION_RECORD_SIZE as usize
+    }
+
+    pub(crate) fn get(self, index: usize) -> Option<ParagraphOrderMutation> {
+        let record = record_at(
+            self.records,
+            abi::ENGINE_PARAGRAPH_ORDER_MUTATION_RECORD_SIZE,
+            index,
+        )?;
+        Some(ParagraphOrderMutation {
+            paragraph_id: read_u32(record, abi::ENGINE_PARAGRAPH_ORDER_MUTATION_PARAGRAPH_ID)
+                .ok()?,
+            scope: read_u32(record, abi::ENGINE_PARAGRAPH_ORDER_MUTATION_ORDER_SCOPE).ok()?,
+            rank: read_f64(record, abi::ENGINE_PARAGRAPH_ORDER_MUTATION_ORDER_RANK).ok()?,
+        })
+    }
+}
+
 impl<'a> TextMutationBatch<'a> {
     pub(crate) const fn empty() -> Self {
         Self {
@@ -492,7 +562,8 @@ impl<'a> TextMutationBatch<'a> {
     }
 
     pub(crate) fn paragraph_id(self, index: usize) -> Option<u32> {
-        self.get(index).map(|mutation| mutation.paragraph_id)
+        let record = record_at(self.records, ENGINE_TEXT_MUTATION_RECORD_SIZE, index)?;
+        read_u32(record, ENGINE_TEXT_MUTATION_PARAGRAPH_ID).ok()
     }
 
     pub(crate) fn take_paragraph(self, paragraph_id: u32, cursor: &mut usize) -> Result<Self, u32> {
@@ -505,6 +576,13 @@ impl<'a> TextMutationBatch<'a> {
                 paragraph_id,
                 cursor,
             )?,
+        })
+    }
+
+    pub(crate) fn span(self, span: RecordSpan) -> Result<Self, u32> {
+        Ok(Self {
+            request: self.request,
+            records: records_span(self.records, ENGINE_TEXT_MUTATION_RECORD_SIZE, span)?,
         })
     }
 
@@ -629,10 +707,8 @@ impl<'a> StyleMutationBatch<'a> {
     }
 
     pub(crate) fn paragraph_id(self, index: usize) -> Option<u32> {
-        match self.get(index)? {
-            StyleMutation::Remove { paragraph_id, .. }
-            | StyleMutation::Upsert(StyleValue { paragraph_id, .. }) => Some(paragraph_id),
-        }
+        let record = record_at(self.records, abi::ENGINE_STYLE_MUTATION_RECORD_SIZE, index)?;
+        read_u32(record, abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID).ok()
     }
 
     pub(crate) fn take_paragraph(self, paragraph_id: u32, cursor: &mut usize) -> Result<Self, u32> {
@@ -645,6 +721,13 @@ impl<'a> StyleMutationBatch<'a> {
                 paragraph_id,
                 cursor,
             )?,
+        })
+    }
+
+    pub(crate) fn span(self, span: RecordSpan) -> Result<Self, u32> {
+        Ok(Self {
+            request: self.request,
+            records: records_span(self.records, abi::ENGINE_STYLE_MUTATION_RECORD_SIZE, span)?,
         })
     }
 
@@ -754,6 +837,31 @@ pub(crate) fn parse_paragraph_mutations(
         abi::ENGINE_PARAGRAPH_MUTATION_RECORD_ALIGNMENT,
     )?;
     Ok(ParagraphMutationBatch { records })
+}
+
+pub(crate) fn parse_paragraph_order_mutations(
+    request: &[u8],
+    offset: u32,
+    count: u32,
+) -> Result<ParagraphOrderMutationBatch<'_>, u32> {
+    if count == 0 {
+        return if offset == 0 {
+            Ok(ParagraphOrderMutationBatch::empty())
+        } else {
+            Err(STATUS_INVALID_REQUEST)
+        };
+    }
+    if offset < ENGINE_UPDATE_REQUEST_HEADER_SIZE {
+        return Err(STATUS_INVALID_REQUEST);
+    }
+    let records = array(
+        request,
+        offset,
+        count,
+        abi::ENGINE_PARAGRAPH_ORDER_MUTATION_RECORD_SIZE,
+        abi::ENGINE_PARAGRAPH_ORDER_MUTATION_RECORD_ALIGNMENT,
+    )?;
+    Ok(ParagraphOrderMutationBatch { records })
 }
 
 pub(crate) fn parse_text_mutations(
@@ -929,6 +1037,19 @@ fn take_records<'a>(
     records
         .get(start * stride..*cursor * stride)
         .ok_or(STATUS_INVALID_REQUEST)
+}
+
+fn records_span(records: &[u8], stride: u32, span: RecordSpan) -> Result<&[u8], u32> {
+    let stride = usize::try_from(stride).map_err(|_| STATUS_INVALID_REQUEST)?;
+    if span.start > span.end {
+        return Err(STATUS_INVALID_REQUEST);
+    }
+    let start = span
+        .start
+        .checked_mul(stride)
+        .ok_or(STATUS_INVALID_REQUEST)?;
+    let end = span.end.checked_mul(stride).ok_or(STATUS_INVALID_REQUEST)?;
+    records.get(start..end).ok_or(STATUS_INVALID_REQUEST)
 }
 
 fn validate_constraints(constraints: &[u8], limits: UpdateLimits) -> Result<(), u32> {

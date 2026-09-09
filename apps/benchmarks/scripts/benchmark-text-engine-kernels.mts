@@ -1,9 +1,4 @@
-/* @workflow {
-  "name": "glyph:kernel-lab-browser",
-  "summary": "Runs the scalar, auto-vectorized, and explicit SIMD retained-engine kernel packet in project Chromium.",
-  "requirements": "Built @pmndrs/glyph and package-local kernel-lab artifacts. Accepts --json.",
-  "writes": "stdout only, or the JSON report path passed to --json"
-} */
+/* @workflow { "name": "glyph:kernel-lab-browser", "summary": "Runs the scalar, auto-vectorized, and explicit SIMD retained-engine kernel packet in project Chromium.", "requirements": "Built @pmndrs/glyph and package-local kernel-lab artifacts. Accepts --json.", "writes": "stdout only, or the JSON report path passed to --json" } */
 import { readFile, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import type { Browser } from 'playwright';
@@ -80,6 +75,7 @@ try {
             advances: new Int32Array(decode(input.advances).buffer),
             flags: decode(input.flags),
             levels: decode(input.levels),
+            mixedLevels: decode(input.mixedLevels),
             codec: decode(input.codec),
           };
           return module.benchmarkKernelArtifact(decode(wasmBase64), artifactName, typedInput, {
@@ -147,6 +143,7 @@ function encodeInput(input: (typeof workloads)[number]) {
     advances: encode(input.advances),
     flags: encode(input.flags),
     levels: encode(input.levels),
+    mixedLevels: encode(input.mixedLevels),
     codec: encode(input.codec),
   };
 }

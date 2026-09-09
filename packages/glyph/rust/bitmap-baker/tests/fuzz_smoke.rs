@@ -1,6 +1,6 @@
 use pmndrs_glyph_bitmap_baker::{
-    ArtifactPackaging, BitmapBakeRequestV0, BitmapDescriptorV0, BitmapPackagingV0, PagePackaging,
-    bake_bitmap, descriptor_raster_key,
+    ArtifactPackaging, BitmapBakeRequestV0, BitmapDescriptorV0, BitmapPackagingV0, bake_bitmap,
+    descriptor_raster_key,
 };
 
 const SEED: u32 = 0x504d_4e44;
@@ -22,13 +22,16 @@ fn arbitrary_font_bytes_fail_safely_and_deterministically() {
             *byte = random.next() as u8;
         }
         let request = BitmapBakeRequestV0 {
+            source_fingerprint: pmndrs_glyph_raster_artifact::fingerprint128(
+                &source,
+                pmndrs_glyph_raster_artifact::SOURCE_FINGERPRINT_V0,
+            ),
             font_face_index: random.next(),
             glyph_count: 1,
-            shaping_hash: "0".repeat(64),
+            shaping_fingerprint: "0".repeat(32),
             raster_key: raster_key.clone(),
             packaging: BitmapPackagingV0 {
                 artifact: ArtifactPackaging::External,
-                pages: PagePackaging::Embedded,
             },
             descriptor: descriptor.clone(),
         };

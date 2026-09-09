@@ -22,10 +22,7 @@ import {
   type AdvancedShapingFrame,
   type AdvancedShapingState,
 } from '../workloads/advanced-shaping/scene';
-/*
- * The dock intentionally consumes the same typed control state as the main panel.
- * shadcn/Base UI owns interaction semantics; this component only maps state to a compact presentation.
- */
+/* Shares the main panel's typed control state; shadcn/Base UI owns interaction semantics, this component only maps state to a compact presentation. */
 import type { GraphicsBackend, RasterFormatName } from '../benchmark/url-state';
 import { logarithmicRangePosition, logarithmicRangeValue } from './range-values';
 import { Button } from '@/components/ui/button';

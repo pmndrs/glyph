@@ -18,6 +18,7 @@ import slugBaker from '../../dist/bakers/slug.js';
 import { resolveRasterBakePlan } from '../../dist/internal/raster-bake-plan.js';
 import { cloneImmutableFont, immutableFontResources, immutableFontVariantIdentity } from '../../dist/loaded-font.js';
 import { FontLoader } from '../../dist/loader.js';
+import { fingerprint128, fingerprintDomain } from '../../dist/internal/fingerprint.js';
 
 const fixtureDirectory = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/', import.meta.url);
 const fixturePromise = Promise.all([
@@ -71,7 +72,7 @@ test('the runtime host transfers source and accepts one authoritative font artif
                 role: 'font',
                 id: 'fixture-font',
                 bytes: artifact.buffer.slice(artifact.byteOffset, artifact.byteOffset + artifact.byteLength),
-                sha256: '0'.repeat(64),
+                fingerprint: '0'.repeat(32),
               },
               ...(malformedArtifacts
                 ? [
@@ -79,7 +80,7 @@ test('the runtime host transfers source and accepts one authoritative font artif
                       role: 'font',
                       id: 'duplicate-font',
                       bytes: new ArrayBuffer(0),
-                      sha256: '0'.repeat(64),
+                      fingerprint: '0'.repeat(32),
                     },
                   ]
                 : []),
@@ -249,6 +250,67 @@ test('the Worker entry runs the portable baker and transfers the exact canonical
   assert.deepEqual(transfer, [value.artifacts[0].bytes]);
 });
 
+test('a runtime-bake cache hit returns before loading baker Wasm', async (t) => {
+  const { source, artifact } = await fixturePromise;
+  const originals = {
+    addEventListener: globalThis.addEventListener,
+    caches: globalThis.caches,
+    fetch: globalThis.fetch,
+    location: globalThis.location,
+    postMessage: globalThis.postMessage,
+  };
+  let receive;
+  const result = Promise.withResolvers();
+  globalThis.addEventListener = (type, listener) => {
+    if (type === 'message') receive = listener;
+  };
+  globalThis.location = { origin: 'https://assets.test' };
+  globalThis.caches = {
+    async open() {
+      return {
+        async match() {
+          return new Response(artifact, {
+            headers: {
+              'x-pmndrs-artifact-id': 'cached-font.glb',
+              'x-pmndrs-byte-length': String(artifact.byteLength),
+              'x-pmndrs-expires-at': String(Date.now() + 60_000),
+              'x-pmndrs-fingerprint': fingerprint128(artifact, fingerprintDomain.artifact),
+            },
+          });
+        },
+      };
+    },
+  };
+  globalThis.fetch = async () => {
+    throw new Error('cache hit loaded baker Wasm');
+  };
+  globalThis.postMessage = (value, transfer) => {
+    if (value.type === 'bake-font-result-v0') result.resolve({ value, transfer });
+  };
+  t.after(() => {
+    restoreGlobal('addEventListener', originals.addEventListener);
+    restoreGlobal('caches', originals.caches);
+    restoreGlobal('fetch', originals.fetch);
+    restoreGlobal('location', originals.location);
+    restoreGlobal('postMessage', originals.postMessage);
+  });
+
+  await import(`../../dist/runtime-bake-worker.js?test=cache-hit-${Date.now()}`);
+  receive({
+    data: {
+      type: 'bake-font-v0',
+      id: 8,
+      source: source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength),
+      font: { formatVersion: 0, fontFaceIndex: 0 },
+      cache: { expiresAt: Date.now() + 60_000 },
+    },
+  });
+  const { value, transfer } = await result.promise;
+  assert.equal(value.ok, true);
+  assert.deepEqual(Buffer.from(value.artifacts[0].bytes), Buffer.from(artifact));
+  assert.deepEqual(transfer, [value.artifacts[0].bytes]);
+});
+
 test('the Worker prepares once and matches the Node canonical GLB for every built-in raster', async (t) => {
   const { source } = await fixturePromise;
   const outputRoot = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-runtime-subset-parity-'));
@@ -378,7 +440,7 @@ test('external techniques bake through their own declared baker, never the Worke
     rasters: [
       {
         baker: bitmapBaker,
-        packaging: { artifact: 'embedded', pages: 'embedded' },
+        packaging: { artifact: 'embedded' },
         options: { strikes: [32] },
       },
     ],
@@ -435,6 +497,59 @@ test('external techniques bake through their own declared baker, never the Worke
     'the Worker plan carries only kinds the Worker declares',
   );
 });
+
+test('runtime technique artifacts are rejected when bytes contradict their stamp', async () => {
+  const { source, artifact } = await fixturePromise;
+  const { defineRasterFormat } = await import('@pmndrs/glyph/config/raster-format');
+  const external = defineRasterFormat({
+    id: 'test.invalid-runtime-fingerprint',
+    kind: 'testInvalidFingerprint',
+    extension: 'TEST_invalid_runtime_fingerprint',
+    version: 0,
+    textEffects: [],
+    runtimeBaker: () =>
+      Promise.resolve({
+        kind: 'testInvalidFingerprint',
+        bake(request) {
+          return Promise.resolve({
+            rasterKey: request.rasterKey,
+            kind: 'testInvalidFingerprint',
+            extension: 'TEST_invalid_runtime_fingerprint',
+            version: 0,
+            artifacts: [
+              {
+                role: 'raster',
+                id: 'invalid.glb',
+                bytes: Uint8Array.of(1, 2, 3, 4),
+                fingerprint: '0'.repeat(32),
+              },
+            ],
+            report: { metadataBytes: 0, serializedBytes: 4, gpuBytes: 0, pages: [] },
+          });
+        },
+      }),
+    descriptor() {
+      return {};
+    },
+    async decode() {
+      return {};
+    },
+    dispose() {},
+  });
+  await assert.rejects(
+    loadFont(
+      {
+        source: `data:font/ttf;base64,${Buffer.from(source).toString('base64')}`,
+        runtimeBake: () => Promise.resolve(new Uint8Array(artifact)),
+      },
+      [external],
+    ),
+    (error) =>
+      error?.reason === 'INVALID_RASTER_ASSET' &&
+      error.message === 'runtime raster bytes do not match their stamped fingerprint',
+  );
+});
+
 test('the Worker retries a failed Wasm fetch and retains the recovered core', async (t) => {
   const { source } = await fixturePromise;
   const originals = {
@@ -497,5 +612,5 @@ function restoreGlobal(key, value) {
 }
 
 function embeddedPackaging() {
-  return { artifact: 'embedded', pages: 'embedded' };
+  return { artifact: 'embedded' };
 }

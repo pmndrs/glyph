@@ -12,20 +12,24 @@
     "fontFile": "Inter-Regular.ttf",
     "fontBytes": 411640,
     "fontSha256": "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82",
+    "fontFingerprint": "14fa0a34f3783dd4f131d5b546e453b7",
     "license": "OFL-1.1",
     "licenseFile": "LICENSE.txt",
     "licenseSha256": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a"
   },
-  "face": { "fontIndex": 0, "variations": {} },
+  "face": {
+    "fontIndex": 0,
+    "variations": {}
+  },
   "glyphIds": "source",
   "bake": {
     "bakerVersion": "0.0.0",
     "formatVersion": 0,
-    "descriptorHash": "f1c0e6c2ead13ceab41f2e39aa883e139fcecfb59c08bee7818242615170331d",
     "expectedCore": {
-      "artifactBytes": 172240,
-      "artifactSha256": "4c87184ce8df2037d87427a63af7c1fa68c7bf7c00042b177c69d442792d1db8",
-      "shapingHash": "6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
+      "artifactBytes": 172108,
+      "artifactFingerprint": "b11a5f7f7f0818018ed68809fdb94374",
+      "artifactSha256": "b1a2496cd19ac7bb262887e08bf0c83497f210be989f6fab327336a6612a1637",
+      "shapingFingerprint": "0c522d6ea0db73ba74bcc389dc50263b",
       "shapingSfntBytes": 147192,
       "extentsBytes": 23496,
       "extentsAvailabilityBytes": 368,
@@ -39,15 +43,51 @@
       "strikeoutPosition": 671,
       "strikeoutSize": 140,
       "tables": [
-        { "tag": "GDEF", "rawBytes": 1036, "paddedBytes": 1036 },
-        { "tag": "GPOS", "rawBytes": 83724, "paddedBytes": 83724 },
-        { "tag": "GSUB", "rawBytes": 24406, "paddedBytes": 24408 },
-        { "tag": "OS/2", "rawBytes": 96, "paddedBytes": 96 },
-        { "tag": "cmap", "rawBytes": 25900, "paddedBytes": 25900 },
-        { "tag": "head", "rawBytes": 54, "paddedBytes": 56 },
-        { "tag": "hhea", "rawBytes": 36, "paddedBytes": 36 },
-        { "tag": "hmtx", "rawBytes": 11748, "paddedBytes": 11748 },
-        { "tag": "maxp", "rawBytes": 32, "paddedBytes": 32 }
+        {
+          "tag": "GDEF",
+          "rawBytes": 1036,
+          "paddedBytes": 1036
+        },
+        {
+          "tag": "GPOS",
+          "rawBytes": 83724,
+          "paddedBytes": 83724
+        },
+        {
+          "tag": "GSUB",
+          "rawBytes": 24406,
+          "paddedBytes": 24408
+        },
+        {
+          "tag": "OS/2",
+          "rawBytes": 96,
+          "paddedBytes": 96
+        },
+        {
+          "tag": "cmap",
+          "rawBytes": 25900,
+          "paddedBytes": 25900
+        },
+        {
+          "tag": "head",
+          "rawBytes": 54,
+          "paddedBytes": 56
+        },
+        {
+          "tag": "hhea",
+          "rawBytes": 36,
+          "paddedBytes": 36
+        },
+        {
+          "tag": "hmtx",
+          "rawBytes": 11748,
+          "paddedBytes": 11748
+        },
+        {
+          "tag": "maxp",
+          "rawBytes": 32,
+          "paddedBytes": 32
+        }
       ]
     }
   },

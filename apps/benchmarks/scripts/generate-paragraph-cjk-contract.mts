@@ -80,8 +80,8 @@ try {
     font: {
       fixture: 'noto-sans-cjk-jp-regular-v0',
       sourceSha256: createHash('sha256').update(source).digest('hex'),
-      artifactSha256: artifact.sha256,
-      shapingHash: font.shapingHash,
+      artifactFingerprint: artifact.fingerprint,
+      shapingFingerprint: font.shapingFingerprint,
       sourceOracle: '../shaping/noto-sans-cjk/harfrust.json',
       independentOracle: '../shaping/noto-sans-cjk/harfbuzz.json',
     },
@@ -112,20 +112,5 @@ function firstDifference(left: string, right: string): number {
   return length;
 }
 
-/* @workflow
-{
-  "name": "fixture:paragraph-cjk:generate",
-  "summary": "Regenerate the public Rust paragraph CJK contract fixture.",
-  "requirements": "Built runtime packages, the core baker, and authenticated checked-in fonts.",
-  "writes": "Checked-in paragraph CJK contract."
-}
-*/
-/* @workflow
-{
-  "name": "fixture:paragraph-cjk:check",
-  "summary": "Verify the public Rust paragraph CJK contract fixture by deterministic regeneration.",
-  "requirements": "Built runtime packages, the core baker, and authenticated checked-in fonts.",
-  "writes": "Nothing.",
-  "args": ["--check"]
-}
-*/
+/* @workflow { "name": "fixture:paragraph-cjk:generate", "summary": "Regenerate the public Rust paragraph CJK contract fixture.", "requirements": "Built runtime packages, the core baker, and authenticated checked-in fonts.", "writes": "Checked-in paragraph CJK contract." } */
+/* @workflow { "name": "fixture:paragraph-cjk:check", "summary": "Verify the public Rust paragraph CJK contract fixture by deterministic regeneration.", "requirements": "Built runtime packages, the core baker, and authenticated checked-in fonts.", "writes": "Nothing.", "args": ["--check"] } */

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 
-import { createFontBaker } from '@pmndrs/glyph/bake';
+import { createFontBaker, validateFontArtifact } from '@pmndrs/glyph/bake';
 import { fontBakerWasmUrl } from '@pmndrs/glyph/bake';
 
 import { bitmapBakerFromCore, createBitmapBaker } from '../dist/bakers/bitmap.js';
@@ -16,11 +16,10 @@ const renderingFixtureUrl = new URL(
   '../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb',
   import.meta.url,
 );
-const shapingHash = '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09';
 const glyphCount = 2937;
 const options = { strikes: [16] };
 const descriptor = bitmapDescriptor(options);
-const rasterKey = await bitmapRasterKey(options);
+const rasterKey = bitmapRasterKey(options);
 const [source, wasm, fontWasm] = await Promise.all([
   readFile(sourceUrl),
   readFile(wasmUrl),
@@ -29,35 +28,47 @@ const [source, wasm, fontWasm] = await Promise.all([
 const baker = bitmapBakerFromCore(await createBitmapBaker(wasm));
 const fontBaker = await createFontBaker(fontWasm);
 const core = fontBaker.bake({ source, descriptor: { formatVersion: 0, fontFaceIndex: 0 } });
-const font = { source, fontFaceIndex: 0, glyphCount, shapingHash };
+const coreValidation = await validateFontArtifact(core.artifacts[0].bytes);
+const font = {
+  source,
+  sourceFingerprint: coreValidation.sourceFingerprint,
+  fontFaceIndex: 0,
+  glyphCount,
+  shapingFingerprint: coreValidation.shapingFingerprint,
+};
 const [embedded, external] = await Promise.all([
   baker.bake({
     font,
     rasterKey,
-    packaging: { artifact: 'embedded', pages: 'embedded' },
+    packaging: { artifact: 'embedded' },
     descriptor,
   }),
   baker.bake({
     font,
     rasterKey,
-    packaging: { artifact: 'external', pages: 'external' },
+    packaging: { artifact: 'external' },
     descriptor,
   }),
 ]);
 const [combinedEmbedded, combinedExternal, empty] = await Promise.all([
-  composeFontBake(core, [{ raster: embedded, packaging: { artifact: 'embedded', pages: 'embedded' } }]),
-  composeFontBake(core, [{ raster: external, packaging: { artifact: 'external', pages: 'external' } }]),
+  composeFontBake(core, [{ raster: embedded, packaging: { artifact: 'embedded' } }]),
+  // The Node bake names a companion from its core font, so the golden must pin that same name.
+  composeFontBake(core, [
+    { raster: external, packaging: { artifact: 'external' }, companionName: 'Inter-Regular.bitmap.glb' },
+  ]),
   composeFontBake(core, []),
 ]);
-const context = { rasterKey, shapingHash, glyphCount, glyphIdWidth: 16, descriptor };
+const context = {
+  rasterKey,
+  sourceFingerprint: coreValidation.sourceFingerprint,
+  shapingFingerprint: coreValidation.shapingFingerprint,
+  glyphCount,
+  glyphIdWidth: 16,
+  descriptor,
+};
 const embeddedValidation = await validateBitmapArtifact(embedded.artifacts[0].bytes, context);
-const externalPages = new Map(
-  external.artifacts.filter(({ role }) => role === 'raster-page').map(({ id, bytes }) => [id, bytes]),
-);
-const externalValidation = await validateBitmapArtifact(external.artifacts[0].bytes, {
-  ...context,
-  externalPages,
-});
+// A companion carries its pages inside it, so it validates against the same context.
+const externalValidation = await validateBitmapArtifact(external.artifacts[0].bytes, context);
 const records = embeddedValidation.strikes[0].records;
 if (!records.every((value, index) => value === externalValidation.strikes[0].records[index])) {
   throw new Error('embedded and external packaging changed authoritative record bytes');
@@ -74,9 +85,11 @@ const fixture = {
     fixture: 'apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf',
     bytes: source.byteLength,
     sha256: hash(source),
+    fingerprint: coreValidation.sourceFingerprint,
     faceIndex: 0,
     glyphCount,
-    shapingHash,
+    sourceFingerprint: coreValidation.sourceFingerprint,
+    shapingFingerprint: coreValidation.shapingFingerprint,
   },
   descriptor,
   rasterKey,
@@ -118,11 +131,12 @@ await Promise.all([
 
 function summarizeResult(result, validation) {
   return {
-    artifacts: result.artifacts.map(({ role, id, bytes, sha256 }) => ({
+    artifacts: result.artifacts.map(({ role, id, bytes, fingerprint }) => ({
       role,
       id,
       bytes: bytes.byteLength,
-      sha256,
+      fingerprint,
+      sha256: hash(bytes),
     })),
     report: result.report,
     pages: validation.strikes.flatMap((strike) =>
@@ -141,11 +155,12 @@ function summarizeResult(result, validation) {
 
 function summarizeComposition(result) {
   return {
-    artifacts: result.artifacts.map(({ role, id, bytes, sha256 }) => ({
+    artifacts: result.artifacts.map(({ role, id, bytes, fingerprint }) => ({
       role,
       id,
       bytes: bytes.byteLength,
-      sha256,
+      fingerprint,
+      sha256: hash(bytes),
     })),
     report: result.report,
   };

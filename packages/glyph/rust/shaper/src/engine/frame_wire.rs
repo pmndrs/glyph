@@ -19,7 +19,8 @@ use crate::{
         ENGINE_UPDATE_MAX_EXCLUSIONS, ENGINE_UPDATE_MAX_INLINE_OBJECTS, ENGINE_UPDATE_MAX_LINES,
         ENGINE_UPDATE_MAX_OUTPUT_BYTES, ENGINE_UPDATE_MAX_PARAGRAPHS, ENGINE_UPDATE_MAX_REGIONS,
         ENGINE_UPDATE_MAX_SLOTS_PER_BAND, ENGINE_UPDATE_PARAGRAPH_MUTATION_COUNT,
-        ENGINE_UPDATE_PARAGRAPH_MUTATIONS_OFFSET, ENGINE_UPDATE_REGION_COUNT,
+        ENGINE_UPDATE_PARAGRAPH_MUTATIONS_OFFSET, ENGINE_UPDATE_PARAGRAPH_ORDER_MUTATION_COUNT,
+        ENGINE_UPDATE_PARAGRAPH_ORDER_MUTATIONS_OFFSET, ENGINE_UPDATE_REGION_COUNT,
         ENGINE_UPDATE_REGIONS_OFFSET, ENGINE_UPDATE_REQUEST_HEADER_SIZE, ENGINE_UPDATE_ROOT_ID,
         ENGINE_UPDATE_SEMANTIC_VIEW_MASK, ENGINE_UPDATE_STYLE_MUTATION_COUNT,
         ENGINE_UPDATE_STYLE_MUTATIONS_OFFSET, ENGINE_UPDATE_TEXT_MUTATION_COUNT,
@@ -27,7 +28,10 @@ use crate::{
     },
     engine::{
         frame::{UpdateLimits, UpdateRequest},
-        semantic_wire::{parse_geometry, parse_paragraph_mutations, parse_text_mutations},
+        semantic_wire::{
+            parse_geometry, parse_paragraph_mutations, parse_paragraph_order_mutations,
+            parse_text_mutations,
+        },
     },
     wire::read_u32,
 };
@@ -77,13 +81,25 @@ pub(crate) fn parse_update_request(bytes: &[u8], root_id: u32) -> Result<UpdateR
         return Err(STATUS_INVALID_REQUEST);
     }
     let paragraph_mutation_count = read_u32(bytes, ENGINE_UPDATE_PARAGRAPH_MUTATION_COUNT)?;
-    if paragraph_mutation_count > limits.max_paragraphs {
+    // One frame may remove every previous paragraph and upsert every survivor. The final live set
+    // remains bounded by max_paragraphs after lifecycle validation.
+    if paragraph_mutation_count > limits.max_paragraphs.saturating_mul(2) {
         return Err(STATUS_INVALID_REQUEST);
     }
     let paragraph_mutations = parse_paragraph_mutations(
         bytes,
         read_u32(bytes, ENGINE_UPDATE_PARAGRAPH_MUTATIONS_OFFSET)?,
         paragraph_mutation_count,
+    )?;
+    let paragraph_order_mutation_count =
+        read_u32(bytes, ENGINE_UPDATE_PARAGRAPH_ORDER_MUTATION_COUNT)?;
+    if paragraph_order_mutation_count > limits.max_paragraphs {
+        return Err(STATUS_INVALID_REQUEST);
+    }
+    let paragraph_order_mutations = parse_paragraph_order_mutations(
+        bytes,
+        read_u32(bytes, ENGINE_UPDATE_PARAGRAPH_ORDER_MUTATIONS_OFFSET)?,
+        paragraph_order_mutation_count,
     )?;
     let text_mutation_count = read_u32(bytes, ENGINE_UPDATE_TEXT_MUTATION_COUNT)?;
     if text_mutation_count > limits.max_clusters {
@@ -120,6 +136,7 @@ pub(crate) fn parse_update_request(bytes: &[u8], root_id: u32) -> Result<UpdateR
         limits,
     )?;
     if paragraph_mutation_count == 0
+        && paragraph_order_mutation_count == 0
         && text_mutation_count == 0
         && style_mutation_count == 0
         && constraint_count == 0
@@ -144,6 +161,7 @@ pub(crate) fn parse_update_request(bytes: &[u8], root_id: u32) -> Result<UpdateR
         compositing_independent: flags & super::frame::FRAME_FLAG_COMPOSITING_INDEPENDENT != 0,
         limits,
         paragraph_mutations,
+        paragraph_order_mutations,
         text_mutations,
         style_mutations,
         geometry,

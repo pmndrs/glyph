@@ -8,10 +8,7 @@ import { LIVE_TEXT_LINE_HEIGHT } from '../../workloads/shared/text-style';
 /** White, so every rendered channel carries the atlas coverage the exact CPU reference composites. */
 const CONFORMANCE_TEXT_COLOR = '#ffffff';
 
-/**
- * One committed target-v1 Bitmap paragraph, measured. The exact conformance oracle compares GPU bytes against a CPU
- * compositor that reads the same layout, so the layout has to be readable without re-running it.
- */
+/** One committed target-v1 Bitmap paragraph, measured; the layout is exposed so a CPU compositor can compare GPU bytes against it without re-running it. */
 export interface BitmapConformanceLine {
   readonly object: Text<typeof bitmap>;
   readonly layout: GlyphLayout;
@@ -24,11 +21,7 @@ export interface BitmapConformanceLine {
   readonly strikePpem: number;
 }
 
-/**
- * Builds one target-v1 paragraph under `parent` and commits it. `Text` reconciles during `updateMatrixWorld` and only
- * while it is parented, so attaching before committing — rather than awaiting a readiness promise — is what makes the
- * layout and its draws observable, and lets a preparation failure surface as a thrown error instead of an empty frame.
- */
+/** Builds one target-v1 paragraph under `parent` and commits it; `Text` reconciles during `updateMatrixWorld` only while parented, so attaching before committing surfaces preparation failures as thrown errors instead of an empty frame. */
 export function createBitmapConformanceLine(
   scene: THREE.Scene,
   root: ThreeRoot,

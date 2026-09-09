@@ -1,21 +1,36 @@
+import type { ParagraphLayoutSummary } from '@pmndrs/glyph';
 import type * as THREE from 'three/webgpu';
 
 import { benchmarkIpsumText } from '../../benchmark/font-fixtures';
-import { paragraphStressScrollProgress } from '../../benchmark/paragraph-stress-motion';
-import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
+import { setParagraphStressMotionFrame } from '../../benchmark/paragraph-stress-motion';
+import type {
+  ComparisonWorkloadAnimationScratch,
+  ComparisonWorkloadConfiguration,
+  ComparisonWorkloadDefinition,
+} from '../comparison/contracts';
 import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
   committedTextMetrics,
   exactWidth,
   paintColor,
+  publishWorkloadTexts,
   type ComparisonWorkloadEntry,
   type WorkloadTextFactoryContext,
 } from '../shared/scene-entry';
 
 export const paragraphStressWorkload = {
-  animate(entries, configuration, elapsedMs, _viewportWidth, viewportHeight, scene) {
-    if (!configuration.animationEnabled) return;
-    animateParagraphStressScene(scene, entries, configuration, elapsedMs, viewportHeight);
+  animate(entries, configuration, elapsedMs, viewportWidth, viewportHeight, scene, scratch, onError, onReflow) {
+    animateParagraphStressScene(
+      scene,
+      entries,
+      configuration,
+      elapsedMs,
+      viewportWidth,
+      viewportHeight,
+      scratch.paragraphStress,
+      onError,
+      onReflow,
+    );
   },
   applyRetainedConfiguration() {},
   // One Text holding a large repeated-ipsum body is already a batch of one, so a shared group would prove nothing
@@ -60,14 +75,22 @@ export function createParagraphStressEntries(
     constraints: { width: exactWidth(benchmarkContentWidth(context.viewportWidth, context.layoutWidthRatio)) },
     layout: { wrap: 'word' },
   });
-  return [{ node: text, role: 'primary', sourceText, text }];
+  return [
+    {
+      node: text,
+      role: 'primary',
+      sourceText,
+      text,
+      lastWidth: benchmarkContentWidth(context.viewportWidth, context.layoutWidthRatio),
+    },
+  ];
 }
 
 export function layoutParagraphStressEntries(
   entries: readonly ComparisonWorkloadEntry[],
   viewportWidth: number,
   viewportHeight: number,
-): void {
+): ParagraphLayoutSummary | undefined {
   const entry = entries[0];
   if (entry === undefined) return;
   const layout = committedTextMetrics(entry.text);
@@ -76,19 +99,54 @@ export function layoutParagraphStressEntries(
     -Math.max(12, (viewportHeight - layout.height) / 2),
     0,
   );
+  return layout;
 }
 
 export function animateParagraphStressScene(
   scene: THREE.Scene,
   entries: readonly ComparisonWorkloadEntry[],
-  configuration: Pick<ComparisonWorkloadConfiguration, 'animationSpeed'>,
+  configuration: Pick<
+    ComparisonWorkloadConfiguration,
+    'animationEnabled' | 'animationSpeed' | 'fontSize' | 'layoutWidthRatio'
+  >,
   elapsedMs: number,
+  viewportWidth: number,
   viewportHeight: number,
+  frame: ComparisonWorkloadAnimationScratch['paragraphStress'],
+  onError: (error: unknown) => void,
+  onReflow: (duration: number) => void,
 ): void {
   const entry = entries[0];
   if (entry === undefined) return;
-  const layout = committedTextMetrics(entry.text);
-  const scrollProgress = paragraphStressScrollProgress(elapsedMs, configuration.animationSpeed);
-  const maximumScrollY = Math.max(0, layout.height - viewportHeight + 24);
-  scene.position.y = maximumScrollY * scrollProgress;
+  if (configuration.animationEnabled) {
+    setParagraphStressMotionFrame(frame, elapsedMs, configuration.animationSpeed, configuration.fontSize);
+  } else {
+    frame.fontSize = configuration.fontSize;
+    frame.layoutWidthPercent = configuration.layoutWidthRatio * 100;
+  }
+  const width = benchmarkContentWidth(viewportWidth, frame.layoutWidthPercent / 100);
+  const fontSizeChanged = entry.text.style.fontSize !== frame.fontSize;
+  const widthChanged = entry.lastWidth === undefined || Math.abs(width - entry.lastWidth) >= 1;
+  let layout: ParagraphLayoutSummary | undefined;
+  if (fontSizeChanged || widthChanged) {
+    const started = performance.now();
+    try {
+      entry.lastWidth = width;
+      entry.text.set({
+        ...(fontSizeChanged ? { style: { ...entry.text.style, fontSize: frame.fontSize } } : {}),
+        ...(widthChanged ? { constraints: { ...entry.text.constraints, width: exactWidth(width) } } : {}),
+      });
+      publishWorkloadTexts(scene, entries);
+      layout = layoutParagraphStressEntries(entries, viewportWidth, viewportHeight);
+      onReflow(performance.now() - started);
+    } catch (error) {
+      onError(error);
+      return;
+    }
+  }
+  if (configuration.animationEnabled) {
+    layout ??= committedTextMetrics(entry.text);
+    const maximumScrollY = Math.max(0, layout.height - viewportHeight + 24);
+    scene.position.y = maximumScrollY * frame.scrollProgress;
+  }
 }

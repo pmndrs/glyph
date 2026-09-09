@@ -1,5 +1,6 @@
 import { advancedShapingDefinition } from './advanced-shaping/definition';
 import { benchmarkIpsumDefinition } from './benchmark-ipsum/definition';
+import { billboardLabelsDefinition } from './billboard-labels/definition';
 import type { ComparisonWorkloadId } from './comparison/contracts';
 import { dynamicLayoutDefinition } from './dynamic-layout/definition';
 import { editorialDefinition } from './editorial/definition';
@@ -27,14 +28,12 @@ import type { BenchmarkWorkloadDefinition } from './shared/definition';
 /** Every runnable live example, including the two retained single-paragraph scenes. */
 export type BenchmarkWorkloadId = 'benchmark-ipsum' | 'advanced-shaping' | ComparisonWorkloadId;
 
-/**
- * The one complete route catalog. Each value is declared beside the authored
- * workload scene; this file only preserves application order and lookup.
- */
+/** The one complete route catalog; each value is declared beside its authored workload scene, this file only preserves application order and lookup. */
 export const BENCHMARK_WORKLOADS = {
   'benchmark-ipsum': benchmarkIpsumDefinition,
   'advanced-shaping': advancedShapingDefinition,
   'text-ladder': textLadderDefinition,
+  'billboard-labels': billboardLabelsDefinition,
   'zoom-text': zoomTextDefinition,
   'icon-grid': iconGridDefinition,
   'off-axis-3d': offAxis3dDefinition,

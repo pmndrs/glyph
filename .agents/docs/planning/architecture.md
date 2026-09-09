@@ -391,7 +391,7 @@ transparent misses. Preparation intermediates and partial raster results are nev
 - A missing baked asset is recoverable and warns once in development.
 - An invalid baked asset yields a structured diagnostic before any allowed fallback.
 - Unsupported source fonts, output/resource limits, Worker failures, and unsupported required sections are distinct errors.
-- External raster-page fetch, length, hash, decode, capability, and budget failures identify the raster and logical page and never publish a partial draw generation.
+- Companion fetch, decode, capability, and budget failures identify the raster and logical page and never publish a partial draw generation.
 - HarfRust shaping never silently falls back to approximate shaping.
 - Production fallback remains functional but does not emit the development pre-bake warning.
 

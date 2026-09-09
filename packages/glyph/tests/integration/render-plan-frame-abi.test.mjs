@@ -45,7 +45,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   const requestLayout = abi.layouts.engineUpdateRequest;
   const resultLayout = abi.layouts.engineResult;
   assert.equal(resultLayout.size, 144);
-  assert.equal(requestLayout.size, 136);
+  assert.equal(requestLayout.size, 144);
   assert.equal(resultLayout.alignment, 16);
   assert.equal(abi.layouts.engineBuffer.size, 36);
   assert.equal(abi.layouts.enginePatch.size, 36);
@@ -65,6 +65,8 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
     [24, 116, 84, 8, 60, 48, 60],
   );
   assert.equal(abi.layouts.engineInlineObject.alignment, 4);
+  assert.equal(abi.layouts.engineParagraphMutation.size, 12);
+  assert.equal(abi.layouts.engineParagraphOrderMutation.size, 16);
   assert.equal(abi.layouts.engineInlineObject.baselineAlignment, 52);
   assert.equal(abi.engine.textMutationOpcodes.replaceUtf16, 1);
   assert.equal(abi.engine.textEncodings.utf16Le, 1);

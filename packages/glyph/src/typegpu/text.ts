@@ -5,6 +5,7 @@ import type {
   GlyphHandleFonts,
   GlyphRootServices,
   GlyphTextController,
+  BorrowedGlyphLayout,
   ParagraphLayoutSummary,
   GlyphLayoutInspection,
   RasterFormatRequest,
@@ -47,6 +48,8 @@ export interface TypeGpuText<Selection extends TypeGpuFontSelection = TypeGpuFon
   update(update: TypeGpuTextUpdate<Selection>): void;
   measure(): ParagraphLayoutSummary;
   glyphs(): GlyphLayoutInspection;
+  /** Reads indexed glyph data without copying full columns; the view expires when `read` returns. */
+  withGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result;
   dispose(): void;
 }
 
@@ -109,6 +112,10 @@ export function createText<Selection extends TypeGpuFontSelection>(
     glyphs() {
       assertActive();
       return controller.inspect();
+    },
+    withGlyphs(read) {
+      assertActive();
+      return controller.withGlyphs(read);
     },
     dispose() {
       if (disposed) return;

@@ -8,6 +8,7 @@ export interface PresentationProbeCase {
 
 export interface PresentationProbeMatrixOptions {
   readonly cases: readonly PresentationProbeCase[];
+  readonly environment?: Readonly<NodeJS.ProcessEnv>;
   readonly label: string;
   readonly script: URL;
 }
@@ -16,6 +17,7 @@ export async function runPresentationProbeMatrix(options: PresentationProbeMatri
   for (const probeCase of options.cases) {
     const environment = {
       ...process.env,
+      ...options.environment,
       PRESENTATION_BACKEND: probeCase.backend,
       ...(probeCase.technique === undefined ? {} : { PRESENTATION_TECHNIQUE: probeCase.technique }),
     };

@@ -1,5 +1,7 @@
 import { fontBakerAbi, type FontBakerAbi } from './generated/font-baker-abi.js';
 import { GlyphError } from '../glyph-error.js';
+import type { Fingerprint } from '../identity.js';
+import { isFingerprint } from '../internal/fingerprint.js';
 
 export { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from './contract.js';
 export { fontBakerAbi } from './generated/font-baker-abi.js';
@@ -36,7 +38,7 @@ export interface PreparedFontReport {
   readonly preparedBytes: number;
   readonly fontFaceIndex: 0;
   readonly glyphCount: number;
-  readonly sha256: string;
+  readonly fingerprint: Fingerprint;
 }
 
 export interface PreparedFont {
@@ -67,7 +69,7 @@ export interface BakeArtifact {
   readonly role: 'font';
   readonly id: string;
   readonly bytes: Uint8Array;
-  readonly sha256: string;
+  readonly fingerprint: Fingerprint;
 }
 
 export interface BakeWarning {
@@ -146,7 +148,7 @@ export type { FontBakerAbi };
 interface FontArtifactMetadata {
   readonly role: 'font';
   readonly id: string;
-  readonly sha256: string;
+  readonly fingerprint: Fingerprint;
 }
 
 interface FontResultMetadata {
@@ -356,8 +358,7 @@ function isFontArtifactMetadata(value: unknown): value is FontArtifactMetadata {
     value.role === 'font' &&
     typeof value.id === 'string' &&
     value.id.length > 0 &&
-    typeof value.sha256 === 'string' &&
-    /^[0-9a-f]{64}$/.test(value.sha256)
+    isFingerprint(value.fingerprint)
   );
 }
 
@@ -439,8 +440,7 @@ function isPreparedFontReport(value: unknown): value is PreparedFontReport {
     value.preparedBytes > 0 &&
     value.fontFaceIndex === 0 &&
     isNonnegativeSafeInteger(value.glyphCount) &&
-    typeof value.sha256 === 'string' &&
-    /^[0-9a-f]{64}$/.test(value.sha256)
+    isFingerprint(value.fingerprint)
   );
 }
 

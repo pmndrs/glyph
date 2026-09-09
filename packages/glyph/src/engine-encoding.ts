@@ -10,12 +10,7 @@ import type {
 } from './internal/frame-wire.js';
 import type { HandleIdFactory, ParagraphId, StyleId } from './internal/glyph-id.js';
 
-/**
- * The single implementation of the Text-to-engine encodings shared by every host.
- * Every GlyphConfig integration compiles constraints, regions, styles, limits, and
- * incremental text edits through these functions so hosts cannot drift in what they
- * ask the engine to flow.
- */
+/** Single implementation of the Text-to-engine encodings shared by every host — every GlyphConfig integration compiles through these functions so hosts cannot drift. */
 
 export function normalizedColumns(
   layout: ParagraphLayout | undefined,
@@ -53,14 +48,13 @@ export function compileEngineGeometry(
   layout: ParagraphLayout | undefined,
   constraints: Constraints | undefined,
   regionStart: number,
-  textLength: number,
 ): { readonly constraint: PlannerConstraint; readonly regions: readonly PlannerRegion[] } {
   const width = axis(constraints?.width);
   const height = axis(constraints?.height);
   const columns = normalizedColumns(layout, constraints);
   const inlineEnd = width.mode === 'unconstrained' ? 0x01_00_00_00 : width.size;
   const blockEnd = height.mode === 'unconstrained' ? 0x01_00_00_00 : height.size;
-  const maxLines = layout?.maxLines ?? Math.max(1, textLength);
+  const maxLines = layout?.maxLines ?? 0;
   const columnWidth = (inlineEnd - columns.gap * (columns.count - 1)) / columns.count;
   if (columns.count > 1 && columnWidth <= 0) {
     throw new RangeError('layout columns and gap leave no positive column measure');
@@ -225,17 +219,7 @@ function engineDecoration(decoration: NonNullable<TextStyle['decoration']>, styl
   };
 }
 
-/**
- * The spans that state a style over text, in authored order.
- *
- * An empty span covers no cluster and so states nothing, but the engine's style resolution walks
- * the text offset by offset and cannot advance across a zero-width scope, so one reaching it fails
- * the whole frame (`style_state.rs`, `resolve`). Cluster resolution produces an empty span whenever
- * an edit hands a span's last cluster to the span before it, and keeps it in `Text.spans` so the
- * loss is visible and later indices do not shift; dropping it here is what keeps that record from
- * costing the paragraph. Style ids stay contiguous from the emitted order because the removal pass
- * that trims a shrunken style list counts on it.
- */
+/** Drops only empty spans (start === end) — the engine's style resolution can't advance across a zero-width scope and fails the frame otherwise (`style_state.rs::resolve`); style ids must stay contiguous with the emitted order. */
 export function styledSpans<Span extends ParagraphSpan<RasterFormatMetadata>>(
   spans: readonly Span[] | undefined,
 ): readonly Span[] {
@@ -287,12 +271,7 @@ function linearColorBytes(color: readonly number[]): readonly [number, number, n
   return [srgbByte(color[0]!), srgbByte(color[1]!), srgbByte(color[2]!), Math.round(color[3]! * 255)];
 }
 
-/**
- * Replacement text carries its own formatting: a literal brings its spans and a
- * plain string brings none. Retaining the previous spans would reinterpret them
- * against unrelated text, so an update that replaces text without stating spans
- * clears the ones it replaced.
- */
+/** Replacing text without stating spans clears the previous spans — retaining them would reinterpret old formatting against unrelated text. */
 export function replacedContent<Update extends { readonly text?: unknown; readonly spans?: unknown }>(
   update: Update,
 ): Update {

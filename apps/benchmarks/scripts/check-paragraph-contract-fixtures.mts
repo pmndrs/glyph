@@ -43,9 +43,9 @@ async function authenticateShaping(
   url: URL,
   label: string,
 ): Promise<void> {
-  const expected = string(metadata.shapingHash, `${label} shapingHash`);
+  const expected = string(metadata.shapingFingerprint, `${label} shapingFingerprint`);
   const font = await validateFontArtifact(await readFile(url));
-  assertEqual(font.shapingHash, expected, `${label} shaping hash`);
+  assertEqual(font.shapingFingerprint, expected, `${label} shaping fingerprint`);
 }
 
 async function authenticateOracles(
@@ -84,12 +84,4 @@ function assertEqual(actual: unknown, expected: unknown, label: string): void {
   if (!Object.is(actual, expected)) throw new Error(`${label}: ${String(actual)} !== ${String(expected)}`);
 }
 
-/* @workflow
-{
-  "name": "fixture:paragraph-contracts:check",
-  "summary": "Authenticate retained paragraph contracts, their source fonts, shaping payloads, and independent oracles.",
-  "requirements": "Built runtime packages plus checked-in paragraph fonts, contracts, and shaping oracles.",
-  "writes": "Nothing. Behavioral equivalence is checked by the public paragraph-contracts browser target.",
-  "args": []
-}
-*/
+/* @workflow { "name": "fixture:paragraph-contracts:check", "summary": "Authenticate retained paragraph contracts, their source fonts, shaping payloads, and independent oracles.", "requirements": "Built runtime packages plus checked-in paragraph fonts, contracts, and shaping oracles.", "writes": "Nothing. Behavioral equivalence is checked by the public paragraph-contracts browser target.", "args": [] } */

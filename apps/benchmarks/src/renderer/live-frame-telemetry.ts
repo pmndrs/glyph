@@ -40,12 +40,82 @@ export interface LiveFrameTelemetrySnapshot {
   readonly gpuHistoryCursor: LiveFrameHistoryCursor;
 }
 
+export interface LiveFrameTelemetryCaptureOptions {
+  readonly cpuSampleCount: number;
+  readonly gpuSampleCount: number;
+  readonly signal?: AbortSignal;
+}
+
+export interface LiveFrameTelemetryCapture {
+  /** The last frame already in flight before the capture began. */
+  readonly startedAfterFrameId: number;
+  /** Exact finite CPU durations collected after `startedAfterFrameId`; the CPU and GPU arrays are independent streams. */
+  readonly cpuMs: Float64Array;
+  /** Exact finite GPU query completions whose source frames followed the same lower bound, not necessarily the CPU interval. */
+  readonly gpuMs: Float64Array;
+}
+
+interface LiveFrameTelemetryCaptureRequest {
+  accepted: boolean;
+  readonly options: LiveFrameTelemetryCaptureOptions;
+  readonly resolve: (capture: LiveFrameTelemetryCapture) => void;
+  readonly reject: (reason: unknown) => void;
+}
+
+const LIVE_FRAME_TELEMETRY_CAPTURE_EVENT = 'pmndrs-live-frame-telemetry-capture';
+
 export interface LiveFrameTelemetry {
   readonly gpuTimingSupported: boolean;
+  /** Starts a fresh scene-local sample window while preserving globally unique frame IDs. */
+  reset(): void;
+  /** Allocates and records an exact finite window only for an explicit benchmark capture. */
+  capture(options: LiveFrameTelemetryCaptureOptions): Promise<LiveFrameTelemetryCapture>;
   beginFrame(timestampMs: number): number;
   endFrame(frameId: number, durationMs: number): LiveFrameTelemetrySnapshot | undefined;
   recordGpu(frameId: number, durationMs: number): boolean;
   discardGpu(frameId: number): boolean;
+}
+
+/** Requests an on-demand capture from the live telemetry instance bound to `target`. */
+export function requestLiveFrameTelemetryCapture(
+  target: EventTarget,
+  options: LiveFrameTelemetryCaptureOptions,
+): Promise<LiveFrameTelemetryCapture> {
+  return new Promise((resolve, reject) => {
+    const detail: LiveFrameTelemetryCaptureRequest = { accepted: false, options, resolve, reject };
+    target.dispatchEvent(
+      new CustomEvent<LiveFrameTelemetryCaptureRequest>(LIVE_FRAME_TELEMETRY_CAPTURE_EVENT, {
+        cancelable: true,
+        detail,
+      }),
+    );
+    if (!detail.accepted) reject(new DOMException('no live telemetry capture target is available', 'NotFoundError'));
+  });
+}
+
+/** Binds the explicit capture protocol without changing ordinary rolling telemetry publication. */
+export function bindLiveFrameTelemetryCaptureRequests(target: EventTarget, telemetry: LiveFrameTelemetry): () => void {
+  const requestCapture: EventListener = (event) => {
+    const detail = captureRequestDetail(event);
+    if (detail === undefined || detail.accepted) return;
+    detail.accepted = true;
+    event.preventDefault();
+    try {
+      void telemetry.capture(detail.options).then(detail.resolve, detail.reject);
+    } catch (error) {
+      detail.reject(error);
+    }
+  };
+  target.addEventListener(LIVE_FRAME_TELEMETRY_CAPTURE_EVENT, requestCapture);
+  return () => target.removeEventListener(LIVE_FRAME_TELEMETRY_CAPTURE_EVENT, requestCapture);
+}
+
+interface PendingLiveFrameTelemetryCapture extends LiveFrameTelemetryCapture {
+  cpuLength: number;
+  gpuLength: number;
+  readonly resolve: (capture: LiveFrameTelemetryCapture) => void;
+  readonly reject: (reason: unknown) => void;
+  readonly unlinkAbort: () => void;
 }
 
 export function createLiveFrameTelemetry(options?: {
@@ -65,29 +135,105 @@ export function createLiveFrameTelemetry(options?: {
     throw new RangeError('live telemetry report interval must be positive');
   }
 
-  const frameTimestampHistory = new Float64Array(capacity);
+  let frameTimestampHistory = new Float64Array(capacity);
   const frameDurationHistory = new Float32Array(capacity).fill(Number.NaN);
   const frameDurationScratch = new Float32Array(capacity);
   const frameIds = new Array<number>(capacity).fill(0);
   const pendingGpuFrames = new Uint8Array(capacity);
-  const submitHistory = new Float32Array(capacity).fill(Number.NaN);
+  let submitHistory = new Float32Array(capacity).fill(Number.NaN);
   const reportFrames = new Uint8Array(capacity);
   const reportFramesPerSecond = new Float32Array(capacity);
   const submitQuantileScratch = new Float32Array(capacity);
-  const fpsHistory = new Float32Array(capacity).fill(Number.NaN);
-  const gpuHistory = new Float32Array(capacity).fill(Number.NaN);
+  let fpsHistory = new Float32Array(capacity).fill(Number.NaN);
+  let gpuHistory = new Float32Array(capacity).fill(Number.NaN);
   const gpuQuantileScratch = new Float32Array(capacity);
-  const historyCursor: LiveFrameHistoryCursor = { length: 0, nextIndex: 0 };
+  let historyCursor: LiveFrameHistoryCursor = { length: 0, nextIndex: 0 };
   let frameCount = 0;
+  let historyStartFrameId = 1;
   let lastFrameTimestamp: number | undefined;
   let smoothedFrameDurationMs: number | undefined;
   let reportedAt: number | undefined;
   let reportedFrame = 0;
   let latestSnapshot: LiveFrameTelemetrySnapshot | undefined;
   let latestGpuMs: number | undefined;
+  let pendingCapture: PendingLiveFrameTelemetryCapture | undefined;
+
+  const settleCapture = (): void => {
+    const capture = pendingCapture;
+    if (capture === undefined || capture.cpuLength < capture.cpuMs.length || capture.gpuLength < capture.gpuMs.length) {
+      return;
+    }
+    pendingCapture = undefined;
+    capture.unlinkAbort();
+    capture.resolve({
+      startedAfterFrameId: capture.startedAfterFrameId,
+      cpuMs: capture.cpuMs,
+      gpuMs: capture.gpuMs,
+    });
+  };
+
+  const rejectCapture = (reason: unknown): void => {
+    const capture = pendingCapture;
+    if (capture === undefined) return;
+    pendingCapture = undefined;
+    capture.unlinkAbort();
+    capture.reject(reason);
+  };
 
   return {
     gpuTimingSupported,
+    reset() {
+      rejectCapture(new DOMException('live telemetry capture was reset', 'AbortError'));
+      // Keep the previous published history immutable so the charts can bridge a scene change instead of flashing
+      // empty. These four small rings are allocated only when benchmark identity changes, never on an ordinary frame.
+      frameTimestampHistory = new Float64Array(capacity);
+      frameDurationHistory.fill(Number.NaN);
+      frameIds.fill(0);
+      pendingGpuFrames.fill(0);
+      submitHistory = new Float32Array(capacity).fill(Number.NaN);
+      reportFrames.fill(0);
+      reportFramesPerSecond.fill(0);
+      fpsHistory = new Float32Array(capacity).fill(Number.NaN);
+      gpuHistory = new Float32Array(capacity).fill(Number.NaN);
+      historyCursor = { length: 0, nextIndex: 0 };
+      historyStartFrameId = frameCount + 1;
+      lastFrameTimestamp = undefined;
+      smoothedFrameDurationMs = undefined;
+      reportedAt = undefined;
+      reportedFrame = frameCount;
+      latestSnapshot = undefined;
+      latestGpuMs = undefined;
+    },
+    capture(captureOptions) {
+      const cpuSampleCount = nonnegativeSafeInteger(captureOptions.cpuSampleCount, 'CPU capture sample count');
+      const gpuSampleCount = nonnegativeSafeInteger(captureOptions.gpuSampleCount, 'GPU capture sample count');
+      if (cpuSampleCount === 0 && gpuSampleCount === 0) {
+        throw new RangeError('live telemetry capture must request at least one sample');
+      }
+      if (gpuSampleCount > 0 && !gpuTimingSupported) {
+        throw new DOMException('GPU timing is unavailable', 'NotSupportedError');
+      }
+      if (pendingCapture !== undefined) {
+        throw new DOMException('a live telemetry capture is already active', 'InvalidStateError');
+      }
+      captureOptions.signal?.throwIfAborted();
+      return new Promise<LiveFrameTelemetryCapture>((resolve, reject) => {
+        const abort = (): void => rejectCapture(captureOptions.signal?.reason ?? captureAbortedError());
+        const unlinkAbort = (): void => captureOptions.signal?.removeEventListener('abort', abort);
+        pendingCapture = {
+          startedAfterFrameId: frameCount,
+          cpuMs: new Float64Array(cpuSampleCount),
+          gpuMs: new Float64Array(gpuSampleCount),
+          cpuLength: 0,
+          gpuLength: 0,
+          resolve,
+          reject,
+          unlinkAbort,
+        };
+        captureOptions.signal?.addEventListener('abort', abort, { once: true });
+        settleCapture();
+      });
+    },
     beginFrame(timestampMs) {
       if (!Number.isFinite(timestampMs)) throw new RangeError('frame timestamp must be finite');
       frameCount += 1;
@@ -138,9 +284,15 @@ export function createLiveFrameTelemetry(options?: {
         throw new RangeError('CPU frame duration must be finite and nonnegative');
       }
       assertGpuFrameId(frameId);
-      const historyIndex = frameHistoryIndex(frameIds, frameId);
+      const historyIndex = frameHistoryIndex(frameIds, frameId, historyStartFrameId);
       if (historyIndex === undefined) return undefined;
       submitHistory[historyIndex] = durationMs;
+      const capture = pendingCapture;
+      if (capture !== undefined && frameId > capture.startedAfterFrameId && capture.cpuLength < capture.cpuMs.length) {
+        capture.cpuMs[capture.cpuLength] = durationMs;
+        capture.cpuLength += 1;
+        settleCapture();
+      }
       if (reportFrames[historyIndex] !== 1) return undefined;
       const refreshRateHz =
         explicitRefreshRateHz ??
@@ -171,7 +323,18 @@ export function createLiveFrameTelemetry(options?: {
       if (!Number.isFinite(durationMs) || durationMs < 0) {
         throw new RangeError('GPU frame duration must be finite and nonnegative');
       }
-      const historyIndex = frameHistoryIndex(frameIds, frameId);
+      const capture = pendingCapture;
+      if (
+        capture !== undefined &&
+        frameId > capture.startedAfterFrameId &&
+        frameId <= frameCount &&
+        capture.gpuLength < capture.gpuMs.length
+      ) {
+        capture.gpuMs[capture.gpuLength] = durationMs;
+        capture.gpuLength += 1;
+        settleCapture();
+      }
+      const historyIndex = frameHistoryIndex(frameIds, frameId, historyStartFrameId);
       if (historyIndex === undefined) return false;
       for (let pendingIndex = 0; pendingIndex < capacity; pendingIndex += 1) {
         if (pendingGpuFrames[pendingIndex] !== 1) continue;
@@ -185,7 +348,7 @@ export function createLiveFrameTelemetry(options?: {
     },
     discardGpu(frameId) {
       assertGpuFrameId(frameId);
-      const historyIndex = frameHistoryIndex(frameIds, frameId);
+      const historyIndex = frameHistoryIndex(frameIds, frameId, historyStartFrameId);
       if (historyIndex === undefined) return false;
       pendingGpuFrames[historyIndex] = 0;
       return true;
@@ -273,7 +436,7 @@ function snapshot(options: {
 
 function historyMinimum(history: Float32Array, length: number, nextIndex: number): number {
   let minimum = Number.POSITIVE_INFINITY;
-  const start = length === history.length ? nextIndex : 0;
+  const start = historyStart(length, nextIndex, history.length);
   for (let index = 0; index < length; index += 1) {
     const value = history[(start + index) % history.length] ?? Number.NaN;
     if (Number.isFinite(value)) minimum = Math.min(minimum, value);
@@ -283,7 +446,7 @@ function historyMinimum(history: Float32Array, length: number, nextIndex: number
 
 function historyMaximum(history: Float32Array, length: number, nextIndex: number): number {
   let maximum = Number.NEGATIVE_INFINITY;
-  const start = length === history.length ? nextIndex : 0;
+  const start = historyStart(length, nextIndex, history.length);
   for (let index = 0; index < length; index += 1) {
     const value = history[(start + index) % history.length] ?? Number.NaN;
     if (Number.isFinite(value)) maximum = Math.max(maximum, value);
@@ -293,7 +456,7 @@ function historyMaximum(history: Float32Array, length: number, nextIndex: number
 
 function copyFiniteHistory(source: Float32Array, target: Float32Array, length: number, nextIndex: number): number {
   let copied = 0;
-  const start = length === source.length ? nextIndex : 0;
+  const start = historyStart(length, nextIndex, source.length);
   for (let index = 0; index < length; index += 1) {
     const value = source[(start + index) % source.length] ?? Number.NaN;
     if (!Number.isFinite(value)) continue;
@@ -301,6 +464,10 @@ function copyFiniteHistory(source: Float32Array, target: Float32Array, length: n
     copied += 1;
   }
   return copied;
+}
+
+function historyStart(length: number, nextIndex: number, capacity: number): number {
+  return (nextIndex - length + capacity) % capacity;
 }
 
 /** Selects the nearest-rank quantile in place without sorting or allocating a prefix view. */
@@ -336,13 +503,44 @@ function optionalPositive(value: number | undefined, label: string): number | un
   return value;
 }
 
+function nonnegativeSafeInteger(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 0) throw new RangeError(`${label} must be a nonnegative safe integer`);
+  return value;
+}
+
+function captureAbortedError(): DOMException {
+  return new DOMException('live telemetry capture was aborted', 'AbortError');
+}
+
+function captureRequestDetail(event: Event): LiveFrameTelemetryCaptureRequest | undefined {
+  const detail: unknown = (event as CustomEvent<unknown>).detail;
+  if (detail === null || typeof detail !== 'object' || Array.isArray(detail)) return undefined;
+  if (
+    !('accepted' in detail) ||
+    typeof detail.accepted !== 'boolean' ||
+    !('options' in detail) ||
+    !('resolve' in detail) ||
+    typeof detail.resolve !== 'function' ||
+    !('reject' in detail) ||
+    typeof detail.reject !== 'function'
+  ) {
+    return undefined;
+  }
+  return detail as LiveFrameTelemetryCaptureRequest;
+}
+
 function assertGpuFrameId(frameId: number): void {
   if (!Number.isSafeInteger(frameId) || frameId <= 0) {
     throw new RangeError('GPU frame id must be a positive safe integer');
   }
 }
 
-function frameHistoryIndex(frameIds: readonly number[], frameId: number): number | undefined {
-  const index = (frameId - 1) % frameIds.length;
+function frameHistoryIndex(
+  frameIds: readonly number[],
+  frameId: number,
+  historyStartFrameId: number,
+): number | undefined {
+  if (frameId < historyStartFrameId) return undefined;
+  const index = (frameId - historyStartFrameId) % frameIds.length;
   return frameIds[index] === frameId ? index : undefined;
 }

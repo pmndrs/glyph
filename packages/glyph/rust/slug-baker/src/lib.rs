@@ -31,7 +31,7 @@ pub use artifact::{bake_slug, descriptor_raster_key};
 pub use error::{SlugBakeError, SlugBakeErrorCode};
 #[cfg(feature = "artifact-baker")]
 pub use model::{
-    ArtifactPackaging, PagePackaging, SLUG_EXTENSION, SLUG_FORMAT_VERSION, SLUG_GENERATOR_VERSION,
-    SLUG_KIND, SLUG_PLANE_UNITS_PER_EM, SlugBakeArtifactV0, SlugBakeRequestV0, SlugBakeResultV0,
+    ArtifactPackaging, SLUG_EXTENSION, SLUG_FORMAT_VERSION, SLUG_GENERATOR_VERSION, SLUG_KIND,
+    SLUG_PLANE_UNITS_PER_EM, SlugBakeArtifactV0, SlugBakeRequestV0, SlugBakeResultV0,
     SlugDescriptorV0, SlugPackagingV0, SlugPageReportV0, SlugPayloadReportV0,
 };

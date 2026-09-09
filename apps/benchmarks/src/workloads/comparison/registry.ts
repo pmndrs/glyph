@@ -1,3 +1,4 @@
+import { billboardLabelsWorkload } from '../billboard-labels/scene';
 import { dynamicLayoutWorkload } from '../dynamic-layout/scene';
 import { editorialWorkload } from '../editorial/scene';
 import { iconGridWorkload } from '../icon-grid/scene';
@@ -9,13 +10,10 @@ import { textLadderWorkload } from '../text-ladder/scene';
 import { zoomTextWorkload } from '../zoom-text/scene';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition, ComparisonWorkloadId } from './contracts';
 
-/**
- * The one complete map from a comparison workload ID to its canonical example.
- * Keep host ownership outside this registry: a workload may define scene content
- * without being allowed to allocate a renderer, canvas, RAF loop, or telemetry.
- */
+/** The one complete map from workload ID to its canonical example; a workload defines scene content only, never a renderer, canvas, RAF loop, or telemetry. */
 export const COMPARISON_WORKLOADS = {
   'text-ladder': textLadderWorkload,
+  'billboard-labels': billboardLabelsWorkload,
   'zoom-text': zoomTextWorkload,
   'icon-grid': iconGridWorkload,
   'off-axis-3d': offAxis3dWorkload,

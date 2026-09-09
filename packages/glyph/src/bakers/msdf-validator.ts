@@ -18,7 +18,7 @@ import {
 import msdfSchema from './schemas/glTF.PMNDRS_font_distance_field.schema.json' with { type: 'json' };
 import sourceSchema from './schemas/resourceSource.PMNDRS_font.schema.json' with { type: 'json' };
 import resourceSchema from './schemas/textureResource.PMNDRS_font.schema.json' with { type: 'json' };
-import type { RasterKey, Sha256Hex } from '../identity.js';
+import type { RasterKey, Fingerprint } from '../identity.js';
 import {
   RasterArtifactValidationError,
   asArray,
@@ -28,7 +28,7 @@ import {
   claimOtherRasterExtensionViews,
   claimRasterView,
   fail,
-  isSha256,
+  isFingerprint,
   requireNonArrayObject,
   resolveRasterPageSource,
   sliceRasterView,
@@ -41,7 +41,7 @@ import {
   withSchemaId,
   type RasterArtifactValidationIssue,
 } from '../internal/raster-artifact-validation.js';
-import { canonicalJson } from '../internal/raster-identity.js';
+import { canonicalJson, compatibilityFingerprint } from '../internal/raster-identity.js';
 import { normalizeRasterCoverage } from '../raster-coverage.js';
 import {
   MSDF_EXTENSION,
@@ -77,11 +77,11 @@ export interface MsdfArtifactValidationLimits {
 
 export interface MsdfArtifactValidationContext {
   readonly rasterKey: RasterKey | string;
-  readonly shapingHash: Sha256Hex | string;
+  readonly sourceFingerprint: Fingerprint | string;
+  readonly shapingFingerprint: Fingerprint | string;
   readonly glyphCount: number;
   readonly glyphIdWidth: 16;
   readonly descriptor: MsdfDescriptor;
-  readonly externalPages?: ReadonlyMap<string, Uint8Array>;
   readonly limits?: Partial<MsdfArtifactValidationLimits>;
 }
 
@@ -96,7 +96,7 @@ export interface ValidatedMsdfPage {
 export interface ValidatedMsdfArtifact {
   readonly document: Readonly<Record<string, unknown>>;
   readonly rasterKey: RasterKey;
-  readonly shapingHash: Sha256Hex;
+  readonly shapingFingerprint: Fingerprint;
   readonly glyphCount: number;
   readonly records: Uint8Array;
   readonly pages: readonly ValidatedMsdfPage[];
@@ -157,12 +157,16 @@ async function validateMsdfSemantics(
   if (canonicalJson(context.descriptor) !== canonicalJson(canonicalDescriptor)) {
     fail('MTSDF_DESCRIPTOR', 'descriptor is not in canonical MTSDF form', '/descriptor');
   }
-  const expectedKey = await msdfDescriptorRasterKey(context.descriptor);
+  const expectedKey = msdfDescriptorRasterKey(context.descriptor);
   if (context.rasterKey !== expectedKey) {
     fail('RASTER_KEY', 'expected raster key does not match the MTSDF descriptor', '/rasterKey');
   }
-  if (!isSha256(context.shapingHash)) {
-    fail('SHAPING_HASH', 'expected shaping hash must be lowercase SHA-256', '/shapingHash');
+  if (!isFingerprint(context.shapingFingerprint)) {
+    fail(
+      'SHAPING_FINGERPRINT',
+      'expected shaping fingerprint must be lowercase 128-bit hexadecimal',
+      '/shapingFingerprint',
+    );
   }
   if (!Number.isInteger(context.glyphCount) || context.glyphCount < 1 || context.glyphCount > 65_535) {
     fail('GLYPH_COUNT', 'expected glyph count must be in 1..=65535', '/glyphCount');
@@ -204,9 +208,16 @@ async function validateMsdfSemantics(
   if (
     extension.version !== MSDF_FORMAT_VERSION ||
     extension.rasterKey !== context.rasterKey ||
-    extension.shapingHash !== context.shapingHash ||
-    extension.glyphCount !== context.glyphCount ||
-    extension.glyphIdWidth !== context.glyphIdWidth
+    extension.fingerprint !==
+      compatibilityFingerprint({
+        glyphCount: context.glyphCount,
+        glyphIdWidth: context.glyphIdWidth,
+        kind: 'msdf',
+        rasterKey: context.rasterKey,
+        shaping: context.shapingFingerprint as string,
+        source: context.sourceFingerprint as string,
+        version: MSDF_FORMAT_VERSION,
+      })
   ) {
     fail(
       'RECIPROCAL_IDENTITY',
@@ -280,15 +291,7 @@ async function validateMsdfSemantics(
       fail('VARIANT_CONTRACT', 'MSDF V0 requires one lossless native RGBA8 KTX2 variant', variantPath);
     }
     const source = requireNonArrayObject(variant.source, `${variantPath}/source`);
-    const resource = await resolveRasterPageSource(
-      source,
-      variantPath,
-      parsed,
-      views,
-      claimedViews,
-      context.externalPages,
-      'MSDF',
-    );
+    const resource = await resolveRasterPageSource(source, variantPath, parsed, views, claimedViews, 'MSDF');
     validateNativeKtx2(resource.bytes, width, height, RGBA8_FORMAT, variantPath);
     pages.push({
       width,
@@ -325,7 +328,7 @@ async function validateMsdfSemantics(
   return {
     document,
     rasterKey: context.rasterKey as RasterKey,
-    shapingHash: context.shapingHash as Sha256Hex,
+    shapingFingerprint: context.shapingFingerprint as Fingerprint,
     glyphCount: context.glyphCount,
     ...(coverage === undefined ? {} : { coverage }),
     records,

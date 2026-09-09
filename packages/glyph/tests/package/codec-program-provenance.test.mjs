@@ -7,11 +7,7 @@ import { id } from '../../dist/config/codec.js';
 const OPTIONS = { scope: 'glyph', bindingF32: ['bearingX'] };
 const BUFFER = { id: id.buffer('test.codec-provenance/position'), scalar: 'f32', lanes: ['x', 'y'] };
 
-/**
- * A value loaded from one program's input table means nothing inside another
- * program: the input index it carries would silently read a different field.
- * Only scope-free constants may cross builders.
- */
+/** A value from one program's input table means nothing in another — its input index could silently read a different field. Only scope-free constants may cross builders. */
 test('storing another scope’s value throws instead of misreading inputs', () => {
   const first = codecProgram(OPTIONS);
   const second = codecProgram(OPTIONS);

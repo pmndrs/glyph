@@ -106,10 +106,7 @@ export type HandleEngineFontBinder = <Format extends RasterFormatMetadata>(
   font: Font<Format>,
 ) => HandleEngineFontBinding<Format>;
 
-/**
- * One borrowed A/B render-plan publication. Its bytes point into Wasm memory and expire when
- * this transport answers any later call. Configured renderers consume publications synchronously.
- */
+/** One borrowed A/B render-plan publication; `bytes` point into Wasm memory and expire on the transport's next call. Renderers must consume it synchronously. */
 export interface PlanPublication {
   readonly bytes: Uint8Array;
   readonly memoryBuffer: ArrayBuffer;
@@ -128,13 +125,17 @@ export interface PlanPublication {
   readonly drawCount: number;
 }
 
-/**
- * The paragraph and style a rejected frame names, read out of the result header.
- *
- * Both are the identifiers the request used, so a handle maps them to what it authored.
- * Zero means the status names none: an engine-internal invariant, a capacity watermark, or a
- * planner-level conflict attributes nothing.
- */
+/** @internal Fixed-size lease for demand reads from one retained positioned paragraph. */
+export interface BorrowedLayoutPublication {
+  readonly publication: PlanPublication;
+  readonly memoryBuffer: ArrayBuffer;
+  readonly rootId: PlannerHandle;
+  readonly paragraphId: ParagraphId;
+  readonly generation: number;
+  readonly glyphCount: number;
+}
+
+/** Paragraph/style a rejected frame names, from the result header — both are request-authored ids; zero means the status names none (engine-internal, capacity, or planner-level fault). */
 const NO_FAULT: GlyphEngineFault = Object.freeze({ paragraphId: 0, styleId: 0 });
 
 interface EngineRegistrationOwners {
@@ -1256,11 +1257,6 @@ export class PlanTransport {
     this.#textCapacity = Math.max(this.#textCapacity, textCapacity);
   }
 
-  /** @internal Reserve one paragraph's retained text scratch without changing transport capacities. */
-  _reserveText(textCapacity: number): void {
-    this.reserve(this.#requestCapacity, this.#resultCapacity, textCapacity);
-  }
-
   /** @internal Stage one root request in its retained Wasm arena without invoking the engine. */
   stageUpdate(request: Uint8Array): number {
     this.#assertActive();
@@ -1320,26 +1316,21 @@ export class PlanTransport {
     this.#stagedUpdate = undefined;
   }
 
-  /**
-   * Answers one paragraph-scoped synchronous measurement without publishing. The
-   * result rides the inactive output slot under a handle-state lease: its bytes stay readable
-   * only until the next call into the same Wasm module. Engine revisions, the
-   * publication generation, and the renderer fence are untouched, so the following
-   * ordinary frame proceeds from pre-measure state.
-   */
-  measureParagraph(request: Uint8Array, paragraphId: ParagraphId): PlanPublication {
+  /** Answers one paragraph-scoped synchronous measurement without publishing. Result bytes ride the inactive output slot and stay readable only until the next call into this Wasm module; engine revisions, publication generation, and renderer fence are untouched. */
+  measureParagraph(request: Uint8Array, paragraphId: ParagraphId, maxOutputBytes: number): PlanPublication {
     this.#assertActive();
     if (!(request instanceof Uint8Array) || request.byteLength === 0) {
       throw new TypeError('paragraph measure request must be a nonempty Uint8Array');
     }
     assertGlyphId(paragraphId, 'paragraph', 'paragraph id');
+    maxOutputBytes = uint32(maxOutputBytes, 'paragraph measure max output bytes');
     this.#invalidate();
     const requestLength = uint32(request.byteLength, 'paragraph measure byte length');
     const initialMemoryBuffer = this.#exports.memory.buffer;
     if (requestLength > this.#requestCapacity || requestLength > this.#exports.requestCapacity(this.#handle)) {
       this.reserve(requestLength, this.#resultCapacity);
     }
-    let retriedResultGrowth = false;
+    let canRepairResultCapacity = true;
     for (;;) {
       const requestPointer = this.#exports.requestPointer(this.#handle);
       if (requestPointer === 0) throw engineStatusError('resolve text request arena', textShaperAbi.status.rootMissing);
@@ -1354,12 +1345,16 @@ export class PlanTransport {
       const header = new DataView(memoryBuffer, resultPointer, layout.size);
       const status = header.getUint32(layout.status, true);
       const requiredResultCapacity = header.getUint32(layout.requiredResultCapacity, true);
+      const availableResultCapacity = Math.min(this.#resultCapacity, header.getUint32(layout.resultCapacity, true));
       if (
         status === textShaperAbi.status.resultTooLarge &&
-        !retriedResultGrowth &&
-        requiredResultCapacity > this.#resultCapacity
+        canRepairResultCapacity &&
+        requiredResultCapacity <= maxOutputBytes &&
+        requiredResultCapacity > availableResultCapacity
       ) {
-        retriedResultGrowth = true;
+        // Rust gates queries on the smaller active/inactive capacity, so their minimum is the
+        // exact growth boundary; each retry grows both slots beyond it.
+        canRepairResultCapacity = false;
         this.reserve(requestLength, requiredResultCapacity);
         continue;
       }
@@ -1374,6 +1369,41 @@ export class PlanTransport {
       }
       return this.#decodeResult(header, resultPointer, memoryBuffer, initialMemoryBuffer);
     }
+  }
+
+  /** @internal Prepares positioning and returns only a fixed-size demand-read descriptor. */
+  borrowParagraphLayout(
+    request: Uint8Array,
+    paragraphId: ParagraphId,
+    maxOutputBytes: number,
+  ): BorrowedLayoutPublication {
+    const publication = this.measureParagraph(request, paragraphId, maxOutputBytes);
+    if (publication.semanticViewCount !== 0) {
+      throw new TypeError('borrowed layout setup unexpectedly serialized semantic records');
+    }
+    const pointer = this.#exports.borrowParagraphLayout(this.#handle, paragraphId);
+    const memoryBuffer = this.#exports.memory.buffer;
+    const layout = textShaperAbi.layouts.borrowedLayoutDescriptor;
+    this.#assertBorrowedRange(pointer, layout.size, layout.alignment, memoryBuffer, 'borrowed layout descriptor');
+    const view = new DataView(memoryBuffer, pointer, layout.size);
+    const rootId = view.getUint32(layout.rootId, true) as PlannerHandle;
+    const describedParagraph = view.getUint32(layout.paragraphId, true) as ParagraphId;
+    if (rootId !== this.#handle || describedParagraph !== paragraphId) {
+      throw new TypeError('borrowed layout descriptor identifies a different paragraph');
+    }
+    return Object.freeze({
+      publication,
+      memoryBuffer,
+      rootId,
+      paragraphId: describedParagraph,
+      generation: uint32Handle(view.getUint32(layout.generation, true), 'borrowed layout generation'),
+      glyphCount: view.getUint32(layout.glyphCount, true),
+    });
+  }
+
+  /** @internal Returns one fixed scratch glyph record during an active layout borrow. */
+  borrowParagraphGlyph(layout: BorrowedLayoutPublication, index: number): number {
+    return this.#borrowParagraphRecord(layout, index);
   }
 
   /** @internal Copies selected committed glyph records into a complete query checkpoint. */
@@ -1462,6 +1492,37 @@ export class PlanTransport {
       );
     }
     return this.#decodeResult(header, resultPointer, memoryBuffer, initialMemoryBuffer);
+  }
+
+  #borrowParagraphRecord(layout: BorrowedLayoutPublication, index: number): number {
+    if (layout.rootId !== this.#handle || this.isExpired(layout.publication)) {
+      throw new Error('borrowed glyph layout has expired');
+    }
+    if (!Number.isSafeInteger(index) || index < 0 || index >= layout.glyphCount) {
+      throw new RangeError('borrowed layout glyph index is outside its range');
+    }
+    const pointer = this.#exports.borrowParagraphGlyph(this.#handle, layout.paragraphId, layout.generation, index);
+    const memoryBuffer = this.#exports.memory.buffer;
+    const record = textShaperAbi.layouts.borrowedGlyph;
+    this.#assertBorrowedRange(pointer, record.size, record.alignment, memoryBuffer, 'borrowed glyph record');
+    return pointer;
+  }
+
+  #assertBorrowedRange(
+    pointer: number,
+    byteLength: number,
+    alignment: number,
+    memoryBuffer: ArrayBuffer,
+    label: string,
+  ): void {
+    if (
+      pointer === 0 ||
+      pointer % alignment !== 0 ||
+      !Number.isSafeInteger(pointer + byteLength) ||
+      pointer + byteLength > memoryBuffer.byteLength
+    ) {
+      throw new RangeError(`${label} is outside Wasm memory`);
+    }
   }
 
   #decodeResult(

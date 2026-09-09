@@ -1,4 +1,4 @@
-use alloc::{format, string::String, vec::Vec};
+use alloc::vec::Vec;
 
 use pmndrs_glyph_raster_artifact::{
     KtxFormat, RasterCoverageV0, append_buffer_view, encode_glb, encode_ktx2,
@@ -10,7 +10,7 @@ use crate::profile::{BakePhase, BakeProfiler, PhaseTimer};
 use crate::{
     artifact::RasterizedMtsdf,
     error::MtsdfBakeError,
-    model::{MSDF_EXTENSION, MSDF_GENERATOR_LABEL, MtsdfBakeSettingsV0, PagePackaging},
+    model::{MSDF_EXTENSION, MSDF_GENERATOR_LABEL, MtsdfBakeSettingsV0},
 };
 
 pub(crate) struct BuiltRasterGlb {
@@ -19,24 +19,32 @@ pub(crate) struct BuiltRasterGlb {
 }
 
 pub(crate) struct BuiltPage {
-    pub id: String,
     pub bytes: Vec<u8>,
-    pub sha256: String,
     pub width: u16,
     pub height: u16,
-    pub embedded: bool,
 }
 
 pub(crate) fn build_mtsdf_glb(
     raster_key: &str,
-    shaping_hash: &str,
+    source_fingerprint: &str,
+    shaping_fingerprint: &str,
     glyph_count: u16,
-    page_packaging: PagePackaging,
     settings: MtsdfBakeSettingsV0,
     coverage_descriptor: Option<&RasterCoverageV0>,
     rasterized: &RasterizedMtsdf,
     #[cfg(feature = "profiling")] profiler: &mut BakeProfiler,
 ) -> Result<BuiltRasterGlb, MtsdfBakeError> {
+    // One value the core and this raster compare to decide they belong together; every
+    // dimension that must agree is folded in, so a consumer never re-derives the list.
+    let compatibility = pmndrs_glyph_raster_artifact::compatibility_fingerprint(
+        source_fingerprint,
+        shaping_fingerprint,
+        raster_key,
+        crate::model::MSDF_KIND,
+        u32::from(crate::model::MSDF_FORMAT_VERSION),
+        glyph_count,
+        16,
+    );
     #[cfg(feature = "profiling")]
     let container_timer = PhaseTimer::start();
     #[cfg(feature = "profiling")]
@@ -57,27 +65,15 @@ pub(crate) fn build_mtsdf_glb(
     page_artifacts
         .try_reserve_exact(rasterized.pages.len())
         .map_err(|_| crate::error::overflow())?;
-    for (page_index, page) in rasterized.pages.iter().enumerate() {
+    for page in &rasterized.pages {
         #[cfg(feature = "profiling")]
         let ktx2 = profiler.measure(BakePhase::TextureEncoding, || {
             encode_ktx2(KtxFormat::Rgba8Unorm, page.width, page.height, &page.texels)
         })?;
         #[cfg(not(feature = "profiling"))]
         let ktx2 = encode_ktx2(KtxFormat::Rgba8Unorm, page.width, page.height, &page.texels)?;
-        let sha256 = pmndrs_glyph_raster_artifact::sha256_hex(&ktx2);
-        let id = format!("msdf-{shaping_hash}-{raster_key}-p{page_index}.ktx2");
-        let source = match page_packaging {
-            PagePackaging::Embedded => {
-                let view = append_buffer_view(&mut binary, &mut buffer_views, &ktx2)?;
-                json!({ "type": "bufferView", "bufferView": view })
-            }
-            PagePackaging::External => json!({
-                "type": "external",
-                "uri": id,
-                "byteLength": ktx2.len(),
-                "artifactHash": sha256,
-            }),
-        };
+        let view = append_buffer_view(&mut binary, &mut buffer_views, &ktx2)?;
+        let source = json!({ "type": "bufferView", "bufferView": view });
         pages.push(json!({
             "width": page.width,
             "height": page.height,
@@ -91,12 +87,9 @@ pub(crate) fn build_mtsdf_glb(
             }],
         }));
         page_artifacts.push(BuiltPage {
-            id,
             bytes: ktx2,
-            sha256,
             width: page.width,
             height: page.height,
-            embedded: page_packaging == PagePackaging::Embedded,
         });
     }
 
@@ -104,9 +97,7 @@ pub(crate) fn build_mtsdf_glb(
     let mut extension = json!({
         "version": 0,
         "rasterKey": raster_key,
-        "shapingHash": shaping_hash,
-        "glyphCount": glyph_count,
-        "glyphIdWidth": 16,
+        "fingerprint": compatibility,
         "encoding": "mtsdf",
         "emSize": settings.em_size,
         "pixelRange": settings.pixel_range,

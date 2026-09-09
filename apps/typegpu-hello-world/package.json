@@ -4,9 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "bake:inter": "pnpm exec glyph bake --input ../benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf --output ./assets/inter-latin.font.glb --unicodes U+0020-007E --bitmap 32 --msdf --slug",
+    "bake:check": "pnpm bake:inter --check",
     "dev": "vite",
     "build": "vite build",
-    "check": "tsc --noEmit && oxfmt --check src scripts index.html package.json tsconfig.json vite.config.ts README.md && vite build",
+    "check": "tsc --noEmit && oxfmt --check src scripts index.html package.json tsconfig.json vite.config.ts README.md && pnpm bake:check && vite build",
     "test": "node scripts/live-check.mts"
   },
   "dependencies": {

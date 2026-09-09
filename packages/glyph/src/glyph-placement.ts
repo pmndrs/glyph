@@ -1,35 +1,9 @@
 import type { LayoutBox, GlyphLayoutInspection } from './layout.js';
 
-/**
- * The one coordinate space every position and box in a `GlyphPlacements` snapshot is expressed in:
- * paragraph-local units, origin at the paragraph box's top-left corner, positive X right and
- * positive Y down. It is the space the engine positioned the glyphs in and the space
- * `GlyphLayout` reports.
- *
- * It is a stated field rather than a convention because renderer records may encode their origin
- * differently. The internal committed-display view normalizes every value into paragraph space;
- * a position that could not be read is named by `GlyphPlacements.incomplete` rather than silently
- * substituted.
- */
+/** Coordinate space for every position/box in a `GlyphPlacements` snapshot: paragraph-local units, origin top-left, +X right, +Y down — the space the engine positions glyphs in. */
 export type GlyphSpace = 'paragraph';
 
-/**
- * Identity of one glyph within a paragraph, owned by this package.
- *
- * **It survives a reflow that moves glyphs. It does not survive a reflow that reshapes them.**
- *
- * The key is the font, the shaped glyph id, the source cluster, and the occurrence index that
- * separates otherwise identical glyphs. So a change to the content box, the font size, the anchor,
- * the device pixel ratio, or the paragraph's transform keeps every key: the same glyphs moved. A
- * change to the text, the font, the language, the direction, or the feature set does not: those
- * replace or reorder the glyph stream, and a key that happened to match across one would interpolate
- * a glyph along a path it never travelled.
- *
- * The engine's `glyphStableIds` deliberately does not appear here. A stable id identifies a record
- * within one committed layout, which is what the GPU write path needs and what a reflow discards.
- * The one real consumer of the previous API discovered this and built this key itself; owning it
- * here is the point.
- */
+/** Identity of one glyph within a paragraph. Survives a reflow that moves glyphs (content box, size, anchor, DPR, transform); does not survive one that reshapes them (text, font, language, direction, features). */
 export type GlyphKey = string & { readonly __glyphKey: unique symbol };
 
 /** One glyph's placement. `x`/`y` are the pair a manipulation writes; everything else describes it. */
@@ -60,12 +34,7 @@ export interface GlyphPlacement {
   readonly bounds: LayoutBox;
 }
 
-/**
- * A run of glyphs addressed as one unit, because that is what a reader sees move.
- *
- * A caller staggering a reveal by word should not have to derive word membership from clusters,
- * which is what the previous surface forced.
- */
+/** A run of glyphs addressed as one unit — a word or line, whichever a reader perceives moving together. */
 export interface GlyphRun {
   readonly kind: 'word' | 'line';
   readonly index: number;
@@ -92,14 +61,7 @@ export interface GlyphLine extends GlyphRun {
   readonly lineHeight: number;
 }
 
-/**
- * A caret position, resolved to a cluster rather than to a UTF-16 index.
- *
- * Cluster-first is the whole point: one JavaScript character is not one caret stop. A ligature is
- * one glyph over several characters, a combining mark is several characters at one position, and
- * under bidi the character after an offset can be drawn to its left. A caret that indexes characters
- * cannot express any of those.
- */
+/** Caret position resolved to a cluster, not a UTF-16 index — a ligature spans multiple characters, a combining mark shares one position, and bidi can draw the next character to the left. */
 export interface GlyphCaret {
   /** UTF-16 offset of the cluster boundary the caret sits at. */
   readonly offset: number;
@@ -111,42 +73,17 @@ export interface GlyphCaret {
   readonly rect: LayoutBox;
 }
 
-/**
- * Internal read-only view of one paragraph's committed renderer records, addressable as glyphs,
- * words, and lines in one stated coordinate space. Public mutation happens only on the detached
- * `Glyphs` object returned by the Three adapter.
- *
- * Every array here is internally consistent by construction. There are no parallel columns for a
- * caller to keep aligned.
- */
+/** Read-only view of one paragraph's committed records, addressable as glyphs/words/lines in one coordinate space; every array is internally consistent by construction. Mutation happens only via the detached `Glyphs` object. */
 export interface GlyphPlacements {
   /** Every position and box below is in this space. No value in this snapshot is from another. */
   readonly space: GlyphSpace;
-  /**
-   * The committed layout these placements describe.
-   *
-   * Applying a snapshot taken before a reflow would move whichever records inherited its
-   * identities, so the layout rides along and the write compares it rather than trusting the caller
-   * to have noticed.
-   */
+  /** The committed layout these placements describe — rides along so a write against a stale (already-reflowed) snapshot is caught by comparison, not trusted to the caller. */
   readonly layout: GlyphLayoutInspection;
   readonly glyphs: readonly GlyphPlacement[];
   /** Runs of non-whitespace glyphs, split at every line boundary. See `wordsOf` for the exact rule. */
   readonly words: readonly GlyphRun[];
   readonly lines: readonly GlyphLine[];
-  /**
-   * Glyphs with no retained render record, so `x`/`y` hold the shaped origin and a write to them
-   * cannot land.
-   *
-   * The ordinary case is a glyph the font gives no outline for — a space is in here for almost every
-   * paragraph — because the render plan carries no record for something it never draws. Those
-   * glyphs still exist in the measure, still hold their place in the advance, and still belong to a
-   * word and a line; they simply cannot be moved independently of the glyphs around them.
-   *
-   * It is reported rather than hidden because the previous surface substituted a shaped-space value
-   * into its displayed array and said nothing, so a caller could not tell a moved glyph from an
-   * unmovable one.
-   */
+  /** Glyphs with no retained render record — typically ones the font gives no outline for, like spaces — so `x`/`y` hold the shaped origin and a write to them cannot land. */
   readonly incomplete: readonly number[];
   /** Nearest cluster boundary to a point, in this snapshot's space. */
   caretAt(x: number, y: number): GlyphCaret;
@@ -156,13 +93,7 @@ export interface GlyphPlacements {
 
 const EMPTY_BOX: LayoutBox = Object.freeze({ x: 0, y: 0, width: 0, height: 0 });
 
-/**
- * Whitespace that separates one animated word from the next.
- *
- * This is a presentation rule, not the engine's cluster grid, so it is stated here in full rather
- * than deferred to a segmenter whose Unicode version follows the host. A script that writes without
- * spaces yields one word per line; a caller wanting per-character motion there uses `glyphs`.
- */
+/** Presentation word-boundary rule (not the engine's cluster grid) — stated in full rather than deferred to a host segmenter. Scripts without spaces yield one word per line; use `glyphs` for per-character motion there. */
 function isWordSeparator(code: number): boolean {
   return (
     code === 0x20 ||
@@ -200,13 +131,7 @@ function unionBox(left: LayoutBox | undefined, right: LayoutBox): LayoutBox {
   );
 }
 
-/**
- * Builds the placement snapshot for one committed layout.
- *
- * `displayedX`/`displayedY` carry the drawn origins read from the retained records, and `incomplete`
- * names the glyphs whose record was missing. The caller supplies both together so the snapshot can
- * state its own completeness instead of leaving a hole the reader cannot see.
- */
+/** Builds the placement snapshot for one committed layout. `displayedX`/`displayedY` are drawn origins from retained records; `incomplete` names glyphs whose record was missing. */
 export function createGlyphPlacements(
   layout: GlyphLayoutInspection,
   text: string,
@@ -388,14 +313,7 @@ function clusterEndsOf(layout: GlyphLayoutInspection, textLength: number): Reado
   return ends;
 }
 
-/**
- * Groups glyphs into words: maximal runs of glyphs whose source cluster is not whitespace, never
- * crossing a line boundary.
- *
- * Grouping runs over the glyph order rather than the text order so the result stays contiguous under
- * bidi, where one word's glyphs are adjacent on screen even when its characters are not adjacent in
- * visual reading order across the paragraph.
- */
+/** Groups glyphs into words (maximal non-whitespace runs, never crossing a line) by glyph order, not text order — keeps a word's glyphs screen-contiguous under bidi. */
 function wordsOf(
   layout: GlyphLayoutInspection,
   text: string,
@@ -452,13 +370,7 @@ function caretRect(line: GlyphLine, x: number): LayoutBox {
   return box(x, line.baseline - line.ascent, 0, line.lineHeight);
 }
 
-/**
- * Resolves a point to the nearest cluster boundary.
- *
- * The comparison is against each glyph's leading and trailing edges rather than its centre alone, so
- * a right-to-left glyph resolves to the boundary that is logically before it even though that edge
- * is drawn on its right. That is the property a character-indexed hit test cannot have.
- */
+/** Resolves a point to the nearest cluster boundary using each glyph's leading/trailing edges, not its centre — an RTL glyph resolves to its logically-preceding boundary even though that edge draws on its right. */
 function caretAt(
   lines: readonly GlyphLine[],
   clusterEnds: ReadonlyMap<number, number>,
@@ -500,14 +412,7 @@ function caretAt(
   return Object.freeze({ offset: best.offset, line: line.index, leading: best.leading, rect: caretRect(line, best.x) });
 }
 
-/**
- * Rectangles covering the clusters whose offsets fall in `[start, end)`, one per line touched.
- *
- * A rectangle spans the union of the matching glyphs' advance boxes on that line and the full height
- * of the line box, matching what `Range.getClientRects()` returns for text: a selection highlight is
- * a layout-box artefact, not an ink one. A bidi line whose selected characters are drawn in two
- * separate places yields two rectangles for that line rather than one covering the gap.
- */
+/** Rectangles covering clusters in `[start, end)`, one per touched line — union of glyph advance boxes at full line height, matching `Range.getClientRects()`. A bidi line split by the selection yields two rectangles, not one spanning the gap. */
 function selectionRects(
   lines: readonly GlyphLine[],
   clusterEnds: ReadonlyMap<number, number>,

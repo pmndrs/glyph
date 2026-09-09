@@ -621,7 +621,8 @@ async function createFlatSlugConformanceResources({
       layout: { wrap: 'word', align: 'start' },
       style: {
         fontSize: sceneOptions?.fontSize ?? 64 / dpr,
-        lineHeight: 1.2,
+        // Sampling conformance uses natural line metrics; the paragraph contracts own
+        // explicit tight line-height behavior independently of this pixel oracle.
         language: specimen.language,
         direction: specimen.direction,
         color: '#ffffff',
@@ -702,11 +703,7 @@ async function loadConformanceSlugFont(
   return { font: loaded.loaded, data: loaded.data };
 }
 
-/**
- * The public loader publishes no fetch hook, so the only way to observe which URLs one external artifact touches
- * is to own `globalThis.fetch` for the duration of that load. The swap is scoped to this call and restored
- * unconditionally; the embedded fixture of a parity run has already finished loading before it is installed.
- */
+/** No public fetch hook exists, so this owns `globalThis.fetch` for the call's duration to observe artifact URLs; restored unconditionally in `finally`. */
 async function loadExternalSlugFont(
   artifactUrl: string,
   fetcher: typeof fetch,

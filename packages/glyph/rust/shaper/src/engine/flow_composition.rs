@@ -444,7 +444,8 @@ impl FlowLayoutArena {
                 *cursor = saved_cursor;
                 return Ok(None);
             }
-            let mut measured = LineExtents::default();
+            // Seed from the estimate so valid negative half-leading is not clamped against zero.
+            let mut measured = initial_extents;
             let mut composed = false;
             for slot in available.iter().copied() {
                 // The paragraph's first line composes against an indented width;
@@ -495,7 +496,6 @@ impl FlowLayoutArena {
                 *cursor = saved_cursor;
                 return Ok(None);
             }
-            measured.include(initial_extents);
             if attempt == 0 && measured.height() > height {
                 self.fragments.truncate(fragment_start);
                 *cursor = saved_cursor;
@@ -841,15 +841,25 @@ fn include_range_extents(
         )?);
         return Ok(());
     }
+    let mut cached_style = None;
+    let mut cached_extents = LineExtents::default();
     for index in start..end {
         if clusters.flags[index] & CLUSTER_HARD_BREAK == 0 {
-            target.include(extents_for_cluster(
-                clusters,
-                styles,
-                index,
-                metrics_for,
-                first_font_for_stack,
-            )?);
+            let style_index = *clusters
+                .style_indexes
+                .get(index)
+                .ok_or(EngineError::InvalidRequest)?;
+            if cached_style != Some(style_index) {
+                cached_extents = extents_for_cluster(
+                    clusters,
+                    styles,
+                    index,
+                    metrics_for,
+                    first_font_for_stack,
+                )?;
+                cached_style = Some(style_index);
+            }
+            target.include(cached_extents);
         }
     }
     Ok(())
@@ -873,12 +883,10 @@ fn extents_for_cluster(
         .get(style_index)
         .ok_or(EngineError::InvalidRequest)?
         .style;
-    let selected = clusters.font_handles.get(index).copied().unwrap_or(0);
-    let font_handle = if selected == 0 {
-        first_font_for_stack(style.font_stack_handle).ok_or(EngineError::FontStackMissing)?
-    } else {
-        selected
-    };
+    // Line boxes belong to the authored stack, not whichever fallback face happened to draw one
+    // cluster. Using the primary face removes mixed-script leading jitter.
+    let font_handle =
+        first_font_for_stack(style.font_stack_handle).ok_or(EngineError::FontStackMissing)?;
     let metrics =
         metrics_for(font_handle).ok_or(EngineError::FontMetricsMissing(FrameFault::default()))?;
     if metrics.units_per_em == 0 {
@@ -890,16 +898,18 @@ fn extents_for_cluster(
     let natural = (f64::from(metrics.ascender) - f64::from(metrics.descender)
         + f64::from(metrics.line_gap))
         * scale;
-    let requested = if style.has_line_height {
-        f64::from(style.font_size * style.line_height)
+    let leading = if style.has_line_height {
+        // Explicit line height is authoritative, including tight values whose half-leading is
+        // negative. Ink may exceed that box just as it can in CSS.
+        f64::from(style.font_size * style.line_height) - ascent - descent
     } else {
-        natural
+        (natural - ascent - descent).max(0.0)
     };
-    let leading = (requested - ascent - descent).max(0.0);
     let shift = f64::from(style.baseline_shift);
     Ok(LineExtents {
-        above: (ascent + leading * 0.5 + shift).max(0.0),
-        below: (descent + leading * 0.5 - shift).max(0.0),
+        // Preserve negative half-leading; clamping either side makes tight line boxes too tall.
+        above: ascent + leading * 0.5 + shift,
+        below: descent + leading * 0.5 - shift,
     })
 }
 
@@ -1129,6 +1139,107 @@ mod tests {
             text_end,
             style: ResolvedStyle::test_typography(10.0, 0.0, 0.0),
         }
+    }
+
+    #[test]
+    fn line_height_uses_the_stack_primary_and_can_be_tighter_than_natural_metrics() {
+        let clusters = quantized(ClusterArena {
+            starts: vec![0],
+            ends: vec![1],
+            advances: vec![1.0],
+            flags: vec![CLUSTER_SAFE_BEFORE],
+            style_indexes: vec![0],
+            source_runs: vec![0],
+            // The fallback face that drew this cluster has deliberately taller metrics.
+            font_handles: vec![2],
+            index_at: vec![0, 1],
+            ..ClusterArena::default()
+        });
+        let mut style = ResolvedStyle::test_typography(10.0, 0.0, 0.0);
+        style.font_stack_handle = 7;
+        style.has_line_height = true;
+        style.line_height = 0.92;
+        let styles = [StyleSegment {
+            text_start: 0,
+            text_end: 1,
+            style,
+        }];
+        let extents = extents_for_cluster(
+            &clusters,
+            &styles,
+            0,
+            |handle| match handle {
+                1 => Some(FontMetrics {
+                    units_per_em: 1_000,
+                    ascender: 800,
+                    descender: -200,
+                    line_gap: 360,
+                    underline_position: -100,
+                    underline_thickness: 50,
+                    strikeout_position: 300,
+                    strikeout_size: 50,
+                }),
+                2 => panic!("selected fallback metrics must not determine the line box"),
+                _ => None,
+            },
+            |stack| (stack == 7).then_some(1),
+        )
+        .unwrap();
+        assert!((extents.height() - 9.2).abs() < 1e-5);
+        assert!((extents.above - 7.6).abs() < 1e-5);
+        assert!((extents.below - 1.6).abs() < 1e-5);
+
+        let mut tight_style = style;
+        tight_style.line_height = 0.5;
+        let tight = extents_for_cluster(
+            &clusters,
+            &[StyleSegment {
+                text_start: 0,
+                text_end: 1,
+                style: tight_style,
+            }],
+            0,
+            |handle| match handle {
+                1 => Some(FontMetrics {
+                    units_per_em: 1_000,
+                    ascender: 800,
+                    descender: -200,
+                    line_gap: 360,
+                    underline_position: -100,
+                    underline_thickness: 50,
+                    strikeout_position: 300,
+                    strikeout_size: 50,
+                }),
+                2 => panic!("selected fallback metrics must not determine the line box"),
+                _ => None,
+            },
+            |stack| (stack == 7).then_some(1),
+        )
+        .unwrap();
+        assert!((tight.height() - 5.0).abs() < 1e-5);
+        assert!((tight.above - 5.5).abs() < 1e-5);
+        assert!((tight.below + 0.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn full_flow_publishes_tight_explicit_line_height() {
+        let clusters = uniform_clusters(1, 1.0);
+        let mut style = ResolvedStyle::test_typography(10.0, 0.0, 0.0);
+        style.has_line_height = true;
+        style.line_height = 0.5;
+        let layout = composed(
+            &plain_geometry(constraint()),
+            &clusters,
+            &[StyleSegment {
+                text_start: 0,
+                text_end: 1,
+                style,
+            }],
+        );
+
+        assert_eq!(layout.lines.len(), 1);
+        assert_eq!(layout.lines[0].baseline, 5.5);
+        assert_eq!(layout.lines[0].height, 5.0);
     }
 
     fn plain_geometry(constraint: FlowConstraint) -> FlowGeometryArena {

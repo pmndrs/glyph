@@ -225,6 +225,7 @@
       "import": "./dist/raster/*.js"
     },
     "./config/font-library": null,
+    "./config/text-property": null,
     "./config/*": {
       "types": {
         "source": "./src/config/*.ts",
@@ -327,8 +328,8 @@
   },
   "devDependencies": {
     "@cto.af/linebreak": "4.0.3",
-    "@react-three/fiber": "10.0.0-alpha.3",
-    "@react-three/test-renderer": "10.0.0-alpha.3",
+    "@react-three/fiber": "10.0.0-alpha.4",
+    "@react-three/test-renderer": "10.0.0-alpha.4",
     "@typegpu/gl": "0.12.4",
     "@typegpu/three": "^0.12.1",
     "@types/node": "24.13.3",
@@ -350,7 +351,7 @@
     "vite": "8.1.5"
   },
   "peerDependencies": {
-    "@react-three/fiber": ">=10.0.0-alpha.3 <11",
+    "@react-three/fiber": ">=10.0.0-alpha.4 <11",
     "@typegpu/gl": ">=0.12.4 <0.13",
     "@typegpu/three": ">=0.12.0 <0.13",
     "react": ">=19.2 <19.3",

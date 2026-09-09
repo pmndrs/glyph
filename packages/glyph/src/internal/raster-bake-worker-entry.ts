@@ -39,12 +39,13 @@ async function handleMessage<Kind extends string, Options, Descriptor extends Js
     const result = await baker.bake({
       font: {
         source: new Uint8Array(request.source),
+        sourceFingerprint: request.sourceFingerprint,
         fontFaceIndex: request.fontFaceIndex,
         glyphCount: request.glyphCount,
-        shapingHash: request.shapingHash,
+        shapingFingerprint: request.shapingFingerprint,
       },
       rasterKey: request.rasterKey,
-      packaging: { artifact: 'embedded', pages: 'embedded' },
+      packaging: { artifact: 'embedded' },
       descriptor,
       onProgress(progress) {
         scope.postMessage(
@@ -61,7 +62,7 @@ async function handleMessage<Kind extends string, Options, Descriptor extends Js
         role: artifact.role,
         id: artifact.id,
         bytes: transferableArrayBuffer(artifact.bytes),
-        sha256: artifact.sha256,
+        fingerprint: artifact.fingerprint,
       };
     });
     const response: RasterBakeWorkerSuccess = {

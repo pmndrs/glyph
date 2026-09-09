@@ -47,7 +47,9 @@ async function waitForFormat(
       selected !== undefined && 'commitState' in selected && typeof selected.commitState === 'function'
         ? selected.commitState()
         : undefined;
-    if (selected?.visible === true && commit?.status === 'committed' && counts.draws === 7 && counts.records === 47) {
+    // The Slug world span and TextGroup labels share one draw; the selected Latin/icon paragraph
+    // contributes two resource-partitioned draws, for six total.
+    if (selected?.visible === true && commit?.status === 'committed' && counts.draws === 6 && counts.records === 47) {
       return { draws: 2, records: 11 };
     }
     await nextFrame();

@@ -7,6 +7,7 @@ import {
   txt,
   type Font,
   type FontFaceTransfer,
+  type BorrowedGlyph,
   type SerializedFontFace,
 } from '../../src/index.js';
 import { bitmap } from '../../src/raster/bitmap.js';
@@ -30,6 +31,7 @@ import type * as ThreeApi from '../../src/three.js';
 
 declare const bitmapFont: Font<typeof bitmap>;
 declare const mtsdfFont: Font<typeof msdf>;
+declare const threeGeometry: import('three/webgpu').BufferGeometry;
 
 const emphasis = span(bitmapFont, { color: '#ff00ff' });
 const green = span({ color: '#00ff00' });
@@ -144,14 +146,18 @@ const label = three.createText({
   style: [styles.base, false, null, styles.accent],
   layout: [layouts.centered, layouts.wrapped],
 });
+// @ts-expect-error Box3 compatibility does not expose mutable renderer geometry.
+label.geometry satisfies import('three/webgpu').BufferGeometry;
+// @ts-expect-error Box3 compatibility does not expose mutable renderer geometry.
+label.geometry = threeGeometry;
 const labels = three.createTextGroup({ pixelSnapping: true });
 // @ts-expect-error TextGroup material mutation has one property surface, not a duplicate setter method.
 labels.setMaterial(undefined);
-const independentThree = glyph.handle(
-  'three:independent-type-fixture',
-  defineThreeConfig({ compositing: 'independent', capacity: { size: 4_096, policy: 'chunk' } }),
+const capacityThree = glyph.handle(
+  'three:capacity-type-fixture',
+  defineThreeConfig({ capacity: { size: 4_096, policy: 'chunk' } }),
 );
-independentThree.createText({ font: bitmapFont, text: 'Config-owned root policy' });
+capacityThree.createText({ font: bitmapFont, text: 'Config-owned root policy' });
 // @ts-expect-error Capacity is immutable config policy, not mutable root state.
 three.setCapacity({ size: 4_096, policy: 'chunk' });
 // @ts-expect-error Compositing is immutable config policy, not mutable root state.
@@ -165,6 +171,12 @@ label.text = txt`${green`Updated`}`;
 label.constraints = [constraints.card, constraints.naturalHeight];
 const measurement = label.measure();
 void measurement.contentWidth;
+const borrowedGlyphId: number = label.withGlyphs((layout) => {
+  layout satisfies ThreeApi.BorrowedGlyphLayout;
+  layout.glyphAt(0) satisfies BorrowedGlyph;
+  return layout.glyphAt(0).glyphId;
+});
+void borrowedGlyphId;
 
 labels.add(three.createText({ font: mtsdfFont, text: 'Mixed technique' }));
 

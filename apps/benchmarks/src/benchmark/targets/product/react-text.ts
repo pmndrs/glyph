@@ -28,10 +28,7 @@ const TEXT_ACCENT = 'AVATAR';
 const TEXT_SUFFIX = ' café — ffi, kerning, marks, and wrapping.';
 const NARROW_WIDTH = 360;
 const BITMAP_COLOR_ATTRIBUTE = codecAttributeName(bitmapSchema.buffers.color.id);
-/**
- * Target v1 merges a Text update into the state it already holds, so omitting constraints would keep the previous
- * width instead of restoring natural measurement. The unconstrained axis has to be stated.
- */
+/** Target v1 merges updates into existing state, so omitting constraints would keep the previous width; the unconstrained axis must be stated explicitly. */
 const NATURAL_CONSTRAINTS: Constraints = { width: { mode: 'unconstrained' } };
 const fontInput = bitmapFontUrl;
 const fontOptions = { strikes: [16] } as const;
@@ -43,10 +40,7 @@ function createBitmapFontFace() {
 type BitmapFontFace = ReturnType<typeof createBitmapFontFace>;
 type BitmapFontSelection = BitmapFontFace['bitmap'];
 
-/**
- * Target v1 reports batch failures through `onError` rather than a rejected readiness promise, so the run records the
- * first failure and fails on it instead of hashing whatever partial frame survived.
- */
+/** Target v1 reports failures via `onError`, not a rejected promise, so this records the first failure instead of hashing a partial frame. */
 interface ReactTextFailures {
   error: unknown;
 }

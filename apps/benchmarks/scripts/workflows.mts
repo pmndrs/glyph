@@ -3,6 +3,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { dirname, extname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { forwardedWorkflowArguments, workflowCommandArguments } from './workflow-arguments.mts';
 import { hasVitexecFailure } from './workflow-output.mts';
 
 interface Workflow {
@@ -30,6 +31,7 @@ const workflowPattern = /\/\* @workflow\s+(\{[\s\S]*?\})\s+\*\//g;
 
 const workflows = await indexWorkflows();
 const [operation = 'list', workflowName, ...forwardedArguments] = process.argv.slice(2);
+const workflowArguments = forwardedWorkflowArguments(forwardedArguments);
 
 if (operation === 'list' || operation === '--help' || operation === 'help') {
   printWorkflows(workflowName);
@@ -38,7 +40,7 @@ if (operation === 'list' || operation === '--help' || operation === 'help') {
   printWorkflow(requireWorkflow(workflowName));
 } else if (operation === 'run') {
   if (workflowName === undefined) fail('scripts run requires a workflow name');
-  await runWorkflow(requireWorkflow(workflowName), forwardedArguments);
+  await runWorkflow(requireWorkflow(workflowName), workflowArguments);
 } else {
   fail(`Unknown scripts operation: ${operation}`);
 }
@@ -143,10 +145,7 @@ async function runWorkflow(workflow: IndexedWorkflow, extraArguments: readonly s
           `apps/benchmarks/node_modules/.bin/${process.platform === 'win32' ? 'vitexec.CMD' : 'vitexec'}`,
         );
   const file = runner === 'node' ? workflow.file : relative(workflow.cwd, workflow.file);
-  const commandArguments =
-    runner === 'node'
-      ? [file, ...(workflow.args ?? []), ...extraArguments]
-      : [...(workflow.args ?? []), file, ...extraArguments];
+  const commandArguments = workflowCommandArguments(runner, file, workflow.args ?? [], extraArguments);
   await new Promise<void>((resolveRun, reject) => {
     const captureVitexec = runner === 'vitexec';
     const child = spawn(executable, commandArguments, {

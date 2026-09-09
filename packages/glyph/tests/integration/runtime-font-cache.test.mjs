@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import test from 'node:test';
 
 import { createCache } from '../../dist/internal/runtime-font-cache.js';
@@ -7,12 +6,12 @@ import { createCache } from '../../dist/internal/runtime-font-cache.js';
 test('runtime GLB cache keys include source, normalized ranges, and exact raster plans', async () => {
   const storage = new MemoryCacheStorage();
   const cache = createCache(storage, 'https://assets.test', () => 1_000);
-  const source = new Uint8Array([1, 2, 3]);
+  const source = '1'.repeat(32);
   const request = runtimeRequest();
   const key = await cache.key(source, request);
 
   assert.equal(await cache.key(source, runtimeRequest()), key);
-  assert.notEqual(await cache.key(new Uint8Array([1, 2, 4]), request), key);
+  assert.notEqual(await cache.key('2'.repeat(32), request), key);
   assert.notEqual(await cache.key(source, { ...request, unicodeRanges: [{ start: 0x20, end: 0x7f }] }), key);
   assert.notEqual(await cache.key(source, { ...request, rasters: [] }), key);
 });
@@ -24,7 +23,7 @@ test('runtime GLB cache returns exact bytes and honors the source response expir
   const artifact = {
     id: 'font-fixture',
     bytes: new Uint8Array([4, 5, 6]),
-    sha256: sha256(new Uint8Array([4, 5, 6])),
+    fingerprint: '3'.repeat(32),
   };
   await cache.put('fixture', artifact, 2_000);
   assert.deepEqual(await cache.match('fixture'), artifact);
@@ -41,7 +40,7 @@ test('runtime GLB cache failure remains a transparent miss', async () => {
   const cache = createCache(new ThrowingCacheStorage(), 'https://assets.test', () => 1_000);
   assert.equal(await cache.match('fixture'), undefined);
   await assert.doesNotReject(
-    cache.put('fixture', { id: 'font-fixture', bytes: new Uint8Array([1]), sha256: 'b'.repeat(64) }, 2_000),
+    cache.put('fixture', { id: 'font-fixture', bytes: new Uint8Array([1]), fingerprint: 'b'.repeat(32) }, 2_000),
   );
 });
 
@@ -57,15 +56,11 @@ function runtimeRequest() {
         kind: 'bitmap',
         extension: 'PMNDRS_font_bitmap',
         version: 0,
-        rasterKey: 'c'.repeat(64),
+        rasterKey: 'c'.repeat(32),
         descriptor: { generatorVersion: '0.0.0', strikes: [16] },
       },
     ],
   };
-}
-
-function sha256(bytes) {
-  return createHash('sha256').update(bytes).digest('hex');
 }
 
 class MemoryCacheStorage {

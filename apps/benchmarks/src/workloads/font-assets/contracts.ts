@@ -65,10 +65,7 @@ interface CommonBenchmarkFontAsset {
   readonly metrics: FontDeliveryMetrics;
 }
 
-/**
- * One fixture loaded once through the shared Glyph font graph. `loaded` is the canonical Font lease; `data` is a CPU-oracle view
- * reconstructed from the same compiled binding and portable payloads consumed by renderer integrations.
- */
+/** One fixture loaded once through the shared font graph: `loaded` is the canonical Font lease, `data` is a CPU-oracle view reconstructed from the same compiled binding and portable payloads. */
 export type BenchmarkFontAsset =
   | (CommonBenchmarkFontAsset & {
       readonly technique: 'bitmap';

@@ -4,15 +4,20 @@ import { fileURLToPath } from 'node:url';
 import type { Browser, Page } from 'playwright';
 import { createServer } from 'vite';
 
+import { assertPresentationDrawTopology } from '../src/benchmark/presentation-draw-topology.ts';
+import type { ComparisonWorkloadId } from '../src/workloads/comparison/contracts.ts';
+import { LOOPBACK_HOST, selectLoopbackPort } from './support/loopback-port.mts';
 import { launchProjectChromium } from './support/project-chromium.mts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 process.chdir(root);
 const technique = presentationFormat(process.env.PRESENTATION_TECHNIQUE);
 const backend = presentationBackend(process.env.PRESENTATION_BACKEND);
+const shaders = presentationShaders(process.env.PRESENTATION_SHADERS);
+const shaderQuery = shaders === 'typegpu' ? '&shaders=typegpu' : '';
 const screenshotDirectory = process.env.PRESENTATION_SCREENSHOT_DIR;
 if (screenshotDirectory !== undefined) await mkdir(screenshotDirectory, { recursive: true });
-const server = await createServer({ root, server: { host: '127.0.0.1', port: 0 } });
+const server = await createServer({ root, server: { host: LOOPBACK_HOST, port: await selectLoopbackPort() } });
 await server.listen();
 const address = server.httpServer?.address();
 if (address === null || address === undefined || typeof address === 'string') {
@@ -32,6 +37,14 @@ const workloads = [
     camera: 'orthographic',
   },
   { id: 'icon-grid', label: 'Icon grid', fontSize: 64, layoutWidthRatio: 0.82, amount: 50, camera: 'orthographic' },
+  {
+    id: 'billboard-labels',
+    label: 'Billboard labels',
+    fontSize: 18,
+    layoutWidthRatio: 0.82,
+    amount: 50,
+    camera: 'perspective',
+  },
   {
     id: 'off-axis-3d',
     label: 'Off-axis / 3D',
@@ -91,7 +104,7 @@ try {
   });
   page.on('pageerror', (error) => consoleProblems.push(`pageerror: ${error.message}`));
   await page.goto(
-    `http://127.0.0.1:${String(address.port)}/presentation?mode=benchmark&technique=${technique}&backend=${backend}&delivery=baked&dpr=2&font=inter&workload=text-ladder`,
+    `http://127.0.0.1:${String(address.port)}/presentation?mode=benchmark&technique=${technique}&backend=${backend}&delivery=baked&dpr=2&font=inter&workload=text-ladder${shaderQuery}`,
     { waitUntil: 'domcontentloaded' },
   );
   const workloadControl = page.getByLabel('Live workload', { exact: true });
@@ -171,6 +184,7 @@ try {
     // animates its own size and measure, so a sample taken later in the soak would report a different scene.
     await waitForSettledWorkload(page, workload, backend, false);
     const settled = await readBatching(page);
+    assertPresentationDrawTopology(workload.id, settled.drawCount);
     console.log(
       'presentation-workload-settled',
       workload.id,
@@ -229,19 +243,15 @@ try {
   }
   console.log(
     'presentation-workloads-ready',
-    JSON.stringify({ backend, workloads: workloads.length, rendererCount: 1, technique }),
+    JSON.stringify({ backend, workloads: workloads.length, rendererCount: 1, shaders, technique }),
   );
 } finally {
   await browser?.close();
   await server.close();
 }
 
-/**
- * Waits until the named workload owns the viewport at its authored configuration and is publishing frames.
- *
- * `requireZoomBuildUp` is the one condition that is not a mount invariant: Zoom text only reaches its reported scale
- * part-way through its own cycle, so the settled-mount sample must not wait for it.
- */
+/** Waits until the named workload owns the viewport at its authored configuration and is publishing frames.
+ * `requireZoomBuildUp` is excluded from settle-on-mount: Zoom text reaches its reported scale mid-cycle. */
 async function waitForSettledWorkload(
   page: Page,
   workload: (typeof workloads)[number],
@@ -277,10 +287,7 @@ async function waitForSettledWorkload(
   );
 }
 
-/**
- * Draw and glyph counts are the batching evidence for one cell: the renderer issues one draw per packed glyph run, so
- * a change in batch topology shows up here and nowhere else in the probe output.
- */
+/** Draw/glyph counts are the batching evidence for one cell — the renderer issues one draw per packed glyph run. */
 async function readBatching(page: Page): Promise<{ readonly drawCount: number; readonly glyphCount: number }> {
   return page.evaluate(() => {
     const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
@@ -325,9 +332,15 @@ function presentationBackend(value: string | undefined): PresentationBackend {
   throw new RangeError(`PRESENTATION_BACKEND must be webgpu or webgl2; received ${value}`);
 }
 
+function presentationShaders(value: string | undefined): 'tsl' | 'typegpu' {
+  if (value === undefined || value === 'tsl') return 'tsl';
+  if (value === 'typegpu') return value;
+  throw new RangeError(`PRESENTATION_SHADERS must be tsl or typegpu; received ${value}`);
+}
+
 async function assertPresentationRemainsVisible(
   page: Page,
-  workload: string,
+  workload: ComparisonWorkloadId,
   expectedBackend: PresentationBackend,
 ): Promise<void> {
   const minimumRequiredInkPixels = workload === 'zoom-text' ? 32 : 300;
@@ -393,6 +406,7 @@ async function assertPresentationRemainsVisible(
     throw new Error(`${workload} rendered only ${String(visibleInkPixels)} visible foreground pixels`);
   }
   const batching = await readBatching(page);
+  assertPresentationDrawTopology(workload, batching.drawCount);
   console.log(
     'presentation-workload-visible',
     workload,

@@ -53,7 +53,7 @@ msdfFragment
   .with(msdfAtlasSizeAccessor, d.vec2f(1024, 1024))
   .with(msdfPixelRangeAccessor, d.f32(4));
 
-import { glyph } from '@pmndrs/glyph';
+import { glyph, type BorrowedGlyph } from '@pmndrs/glyph';
 import { defineTypeGpuConfig, type TypeGpuHandle } from '@pmndrs/glyph/typegpu';
 import type { TgpuRoot, TgpuRenderPass } from 'typegpu';
 declare const root: TgpuRoot;
@@ -64,6 +64,12 @@ const text = handle.createText({ font, text: 'Hello', style: { fontSize: 32 }, p
 text.update({ constraints: { width: { mode: 'at-most', size: 640 } } });
 text.measure();
 text.glyphs();
+const borrowedCluster: number = text.withGlyphs((layout) => {
+  layout satisfies import('@pmndrs/glyph/typegpu').BorrowedGlyphLayout;
+  layout.glyphAt(0) satisfies BorrowedGlyph;
+  return layout.glyphAt(0).cluster;
+});
+void borrowedCluster;
 handle.draw(pass, { width: 640, height: 320 });
 handle('overlay').draw(pass, { width: 640, height: 320 });
 // @ts-expect-error Decoration lines are not part of the TypeGPU integration yet.

@@ -24,31 +24,20 @@ import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../th
 
 type BitmapFormat = typeof bitmap;
 
-/**
- * One measure and one body size for every case.
- *
- * 700 CSS px is not arbitrary: it is the measure at which dropping the emphasis span's size back to the body size
- * changes the paragraph from three lines to two. A case that only moved advances would leave line breaking as an open
- * question, so the pinned measure is the one that closes it.
- */
+/** 700 CSS px: the measure where dropping the emphasis span's size to body size changes the paragraph from three lines to two. */
 const CONTENT_WIDTH = 700;
 const BODY_FONT_SIZE = 16;
 const UTF8_ENCODER = new TextEncoder();
 const BITMAP_COLOR_ATTRIBUTE = codecAttributeName(bitmapSchema.buffers.color.id);
 const DECORATION_RECT_ATTRIBUTE = codecAttributeName(hashId.buffer('glyph-three/decoration/rect'));
 const DECORATION_PACKED_ATTRIBUTE = codecAttributeName(hashId.buffer('glyph-three/decoration/packed'));
-// Decoration gather convention (D-248): buffer 2 packs [color, flags | style << 8] per instance. The bit values are
-// the shaper ABI's `engine.decorationFlags` / `engine.decorationStyles`, pinned here because a silent renumbering
-// must fail this lane rather than shift what the probe counts.
+// Buffer 2 packs [color, flags | style << 8] per instance; bit values are the shaper ABI's engine.decorationFlags / engine.decorationStyles.
 const DECORATION_UNDERLINE_FLAG = 0b0001;
 const DECORATION_LINE_THROUGH_FLAG = 0b0100;
 const DECORATION_SOLID_STYLE = 1;
 const bitmapRaster: RasterFormatInput<BitmapFormat> = bitmap({ strikes: [16] });
 
-/**
- * Each control removes exactly one span property from the composed paragraph, so the difference it makes is
- * attributable to that property alone. `composed` is the paragraph the live workload renders.
- */
+/** Each case id removes exactly one span property from the composed paragraph so its effect is attributable; `composed` is what the live workload renders. */
 type RichTextCaseId =
   | 'composed'
   | 'no-small-caps'
@@ -121,9 +110,8 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
         if (body === undefined || foreign === undefined || emphasis === undefined) {
           throw new Error('rich text conformance did not load its three fixtures');
         }
-        // Decoration-metrics probe: every baked font this workload touches must expose the
-        // underline and strikeout values the artifact bakes from `post` and `OS/2`, so a
-        // regression in the bake or decode path fails this lane before any renderer work.
+        // Every baked font must expose the underline/strikeout metrics baked from post/OS2, so a
+        // bake or decode regression fails here before any renderer work.
         for (const loadedFont of [body, foreign, emphasis]) {
           const { underlinePosition, underlineThickness, strikeoutPosition, strikeoutSize } = loadedFont.metrics;
           const values = [underlinePosition, underlineThickness, strikeoutPosition, strikeoutSize];
@@ -202,13 +190,8 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
       const accentPaintGlyphs = countColor(composed, accentColor);
       const tintPaintGlyphs = countColor(composed, tintColor);
       const paragraphPaintGlyphs = countColor(composed, paragraphColor);
-      /*
-       * The nested style-only span states no paint of its own, so the README's cascade requires every one of its glyphs
-       * to keep the paint of the span that encloses it. Counting accent glyphs with and without the nesting isolates
-       * that: the two counts are equal when the inner range inherits, and differ by exactly the nested glyph count when
-       * it resets to the paragraph paint instead. A count is used rather than per-glyph attribution because draws are
-       * grouped by raster resource, so drawn instance order is not paragraph order and cannot address a cluster.
-       */
+      /* Counts accent glyphs with/without nesting: equal when the nested span inherits paint, differ by its glyph
+       * count when it resets to paragraph paint (a count, not per-glyph, since draws group by raster resource). */
       const nestedGlyphCount = glyphsInRange(composed, nested).length;
       const nestedPaintDelta = countColor(noNesting, accentColor) - accentPaintGlyphs;
 
@@ -223,9 +206,8 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
 
       const hashes = CASE_IDS.map((caseId) => {
         const value = required(evidence, caseId);
-        // Glyph selection and topology remain exact. Positions are public f32 values, so the semantic digest quantizes
-        // below a visible hundredth of a pixel; paint is explicitly a multiset because resource batching may reorder
-        // draws without changing the paragraph's resolved colors.
+        // Positions are public f32, so the digest quantizes to a visible hundredth of a pixel; paint is a sorted
+        // multiset since batching may reorder draws.
         return [
           caseId,
           value.glyphIds.join(','),
@@ -343,14 +325,7 @@ function measureCase(
   }
 }
 
-/**
- * Reads the paint the packer actually resolved, not the paint the author stated.
- *
- * Bitmap publishes one instance colour per drawn glyph into the batch storage its draws share, and each draw records
- * where its run begins, so walking the draws recovers the resolved colour of every rendered glyph. Draws are grouped by
- * raster resource rather than by paragraph position, so the result is the paragraph's multiset of resolved colours and
- * not a per-cluster mapping — which is why the paint evidence is expressed as counts and differences between cases.
- */
+/** Reads the paint the packer resolved (not what spans state) by walking draws; grouped by raster resource, so results are per-color counts, not per-glyph. */
 function readEvidence(scene: THREE.Scene, root: ThreeRoot, layout: GlyphLayout): CaseEvidence {
   const colors: string[] = [];
   let drawCount = 0;

@@ -4,6 +4,8 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+import { fingerprint } from '@pmndrs/glyph';
+
 import { ADVANCED_SHAPING_CASES } from '../src/workloads/advanced-shaping/scene.ts';
 
 const harfBuzzVersion = '13.0.0';
@@ -50,6 +52,7 @@ try {
       fontFile: outputFontName,
       fontBytes: generatedBytes.byteLength,
       fontSha256: sha256(generatedBytes),
+      fontFingerprint: fingerprint.source(generatedBytes),
       license: 'OFL-1.1',
       licenseFile: 'LICENSE.txt',
       licenseSha256: sha256(licenseBytes),
@@ -106,20 +109,5 @@ async function run(command: string, arguments_: readonly string[]): Promise<void
     });
   });
 }
-/* @workflow
-{
-  "name": "fixture:japanese-showcase:generate",
-  "summary": "Regenerate the authenticated Japanese showcase subset.",
-  "requirements": "Provisioned HarfBuzz tools and the source CJK font.",
-  "writes": "Checked-in Japanese showcase fixture."
-}
-*/
-/* @workflow
-{
-  "name": "fixture:japanese-showcase:check",
-  "summary": "Verify the authenticated Japanese showcase subset.",
-  "requirements": "Provisioned HarfBuzz tools and the source CJK font.",
-  "writes": "Nothing.",
-  "args": ["--check"]
-}
-*/
+/* @workflow { "name": "fixture:japanese-showcase:generate", "summary": "Regenerate the authenticated Japanese showcase subset.", "requirements": "Provisioned HarfBuzz tools and the source CJK font.", "writes": "Checked-in Japanese showcase fixture." } */
+/* @workflow { "name": "fixture:japanese-showcase:check", "summary": "Verify the authenticated Japanese showcase subset.", "requirements": "Provisioned HarfBuzz tools and the source CJK font.", "writes": "Nothing.", "args": ["--check"] } */

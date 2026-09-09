@@ -19,7 +19,7 @@ import bitmapSchema from './schemas/glTF.PMNDRS_font_bitmap.schema.json' with { 
 import sourceSchema from './schemas/resourceSource.PMNDRS_font.schema.json' with { type: 'json' };
 import pagesSchema from './schemas/texturePages.PMNDRS_font.schema.json' with { type: 'json' };
 import resourceSchema from './schemas/textureResource.PMNDRS_font.schema.json' with { type: 'json' };
-import type { RasterKey, Sha256Hex } from '../identity.js';
+import type { RasterKey, Fingerprint } from '../identity.js';
 import {
   RasterArtifactValidationError,
   asArray,
@@ -31,7 +31,7 @@ import {
   claimOtherRasterExtensionViews,
   claimRasterView,
   fail,
-  isSha256,
+  isFingerprint,
   requireNonArrayObject,
   resolveRasterPageSource,
   sliceRasterView,
@@ -44,7 +44,7 @@ import {
   withSchemaId,
   type RasterArtifactValidationIssue,
 } from '../internal/raster-artifact-validation.js';
-import { canonicalJson } from '../internal/raster-identity.js';
+import { canonicalJson, compatibilityFingerprint } from '../internal/raster-identity.js';
 import {
   BITMAP_EXTENSION,
   BITMAP_FORMAT_VERSION,
@@ -102,11 +102,11 @@ export interface BitmapArtifactValidationLimits {
 
 export interface BitmapArtifactValidationContext {
   readonly rasterKey: RasterKey | string;
-  readonly shapingHash: Sha256Hex | string;
+  readonly sourceFingerprint: Fingerprint | string;
+  readonly shapingFingerprint: Fingerprint | string;
   readonly glyphCount: number;
   readonly glyphIdWidth: 16;
   readonly descriptor: BitmapDescriptor;
-  readonly externalPages?: ReadonlyMap<string, Uint8Array>;
   readonly limits?: Partial<BitmapArtifactValidationLimits>;
 }
 
@@ -128,7 +128,7 @@ export interface ValidatedBitmapStrike {
 export interface ValidatedBitmapArtifact {
   readonly document: Readonly<Record<string, unknown>>;
   readonly rasterKey: RasterKey;
-  readonly shapingHash: Sha256Hex;
+  readonly shapingFingerprint: Fingerprint;
   readonly glyphCount: number;
   readonly strikes: readonly ValidatedBitmapStrike[];
   readonly khronos: KhronosValidationReport;
@@ -175,12 +175,16 @@ async function validateBitmapSemantics(
   if (canonicalJson(context.descriptor) !== canonicalJson(expectedDescriptor)) {
     fail('BITMAP_DESCRIPTOR', 'descriptor is not in canonical bitmap form', '/descriptor');
   }
-  const expectedKey = await bitmapDescriptorRasterKey(expectedDescriptor);
+  const expectedKey = bitmapDescriptorRasterKey(expectedDescriptor);
   if (context.rasterKey !== expectedKey) {
     fail('RASTER_KEY', 'expected raster key does not match the canonical descriptor', '/rasterKey');
   }
-  if (!isSha256(context.shapingHash)) {
-    fail('SHAPING_HASH', 'expected shaping hash must be lowercase SHA-256', '/shapingHash');
+  if (!isFingerprint(context.shapingFingerprint)) {
+    fail(
+      'SHAPING_FINGERPRINT',
+      'expected shaping fingerprint must be lowercase 128-bit hexadecimal',
+      '/shapingFingerprint',
+    );
   }
   if (!Number.isInteger(context.glyphCount) || context.glyphCount < 1 || context.glyphCount > 65_535) {
     fail('GLYPH_COUNT', 'expected glyph count must be in 1..=65535', '/glyphCount');
@@ -222,9 +226,16 @@ async function validateBitmapSemantics(
   if (
     extension.version !== BITMAP_FORMAT_VERSION ||
     extension.rasterKey !== context.rasterKey ||
-    extension.shapingHash !== context.shapingHash ||
-    extension.glyphCount !== context.glyphCount ||
-    extension.glyphIdWidth !== context.glyphIdWidth
+    extension.fingerprint !==
+      compatibilityFingerprint({
+        glyphCount: context.glyphCount,
+        glyphIdWidth: context.glyphIdWidth,
+        kind: 'bitmap',
+        rasterKey: context.rasterKey,
+        shaping: context.shapingFingerprint as string,
+        source: context.sourceFingerprint as string,
+        version: BITMAP_FORMAT_VERSION,
+      })
   ) {
     fail(
       'RECIPROCAL_IDENTITY',
@@ -325,15 +336,7 @@ async function validateBitmapSemantics(
           );
         }
         const source = requireNonArrayObject(variant.source, `${variantPath}/source`);
-        const resource = await resolveRasterPageSource(
-          source,
-          variantPath,
-          parsed,
-          views,
-          claimedViews,
-          context.externalPages,
-          'bitmap',
-        );
+        const resource = await resolveRasterPageSource(source, variantPath, parsed, views, claimedViews, 'bitmap');
         validateNativeKtx2(resource.bytes, width, height, format, variantPath);
         if (gpuFormat === 'r8unorm') {
           baselinePage = {
@@ -369,7 +372,7 @@ async function validateBitmapSemantics(
   return {
     document,
     rasterKey: context.rasterKey as RasterKey,
-    shapingHash: context.shapingHash as Sha256Hex,
+    shapingFingerprint: context.shapingFingerprint as Fingerprint,
     glyphCount: context.glyphCount,
     ...(coverage === undefined ? {} : { coverage }),
     strikes,

@@ -18,7 +18,6 @@ use core_maths::CoreFloat;
 
 use crate::{
     error::{BakeError, BakeErrorCode},
-    hex_sha256,
     report::{FontMetricsV0, ShapingPayloadReportV0, TablePayloadReport, compressed_lengths},
 };
 
@@ -65,7 +64,7 @@ pub(crate) struct ShapingPayload {
     pub sfnt: Vec<u8>,
     pub extents: Vec<u8>,
     pub extents_availability: Vec<u8>,
-    pub shaping_hash: String,
+    pub shaping_fingerprint: String,
     pub metrics: FontMetricsV0,
     pub report: ShapingPayloadReportV0,
 }
@@ -161,7 +160,7 @@ pub(crate) fn build_shaping_payload(
 
     let (sfnt, tables) = rebuild_sfnt(&font)?;
     let (extents, extents_availability) = collect_extents(&font, glyph_count)?;
-    let shaping_hash = shaping_hash(&sfnt, &extents, &extents_availability)?;
+    let shaping_fingerprint = shaping_fingerprint(&sfnt, &extents, &extents_availability)?;
     let compressed = compressed_lengths(&sfnt)?;
     let total_raw_bytes = sfnt
         .len()
@@ -173,7 +172,7 @@ pub(crate) fn build_shaping_payload(
         sfnt,
         extents,
         extents_availability,
-        shaping_hash,
+        shaping_fingerprint,
         metrics,
         report: ShapingPayloadReportV0 {
             format: "opentype-sfnt-harfrust-v0".to_owned(),
@@ -326,7 +325,11 @@ fn encode_bounds(bounds: [f32; 4]) -> Result<[i16; 4], BakeError> {
     ])
 }
 
-fn shaping_hash(sfnt: &[u8], extents: &[u8], availability: &[u8]) -> Result<String, BakeError> {
+fn shaping_fingerprint(
+    sfnt: &[u8],
+    extents: &[u8],
+    availability: &[u8],
+) -> Result<String, BakeError> {
     let mut bytes = b"PMNDRS_font\0v0\0".to_vec();
     for value in [sfnt, extents, availability] {
         bytes.extend_from_slice(
@@ -336,7 +339,10 @@ fn shaping_hash(sfnt: &[u8], extents: &[u8], availability: &[u8]) -> Result<Stri
         );
         bytes.extend_from_slice(value);
     }
-    Ok(hex_sha256(&bytes))
+    Ok(pmndrs_glyph_raster_artifact::fingerprint128(
+        &bytes,
+        pmndrs_glyph_raster_artifact::SHAPING_FINGERPRINT_V0,
+    ))
 }
 
 fn checksum(bytes: &[u8]) -> u32 {

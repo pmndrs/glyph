@@ -8,6 +8,7 @@ import {
   createFontBakerFromInstance,
   fontBakerAbi,
 } from '../../../dist/font-baker/index.js';
+import { fingerprint128 } from '../../../dist/internal/fingerprint.js';
 
 const [wasm, rustReleaseWasm] = await Promise.all([
   readFile(new URL('../../../dist/font-baker.wasm', import.meta.url)),
@@ -51,6 +52,12 @@ test('the TypeScript wrapper returns structured Rust errors', async () => {
       }),
     (error) => error instanceof FontBakeError && error.reason === 'INVALID_FONT',
   );
+});
+
+test('JavaScript uses the MurmurHash3 x86 128 wire format', () => {
+  const encoder = new TextEncoder();
+  assert.equal(fingerprint128(new Uint8Array(), 0), '00000000000000000000000000000000');
+  assert.equal(fingerprint128(encoder.encode('foo'), 0), '251b7c576525b6606525b6606525b660');
 });
 
 test('prepares and inspects one reusable subset through the packaged Wasm API', async () => {
@@ -129,7 +136,7 @@ test('the direct-memory shim releases an allocation whose memory copy fails', ()
 
 test('the response decoder rejects metadata that does not prove the public result', () => {
   const response = fontBakerResponse({
-    artifacts: [{ role: 'font', id: 'fixture', sha256: '0'.repeat(64) }],
+    artifacts: [{ role: 'font', id: 'fixture', fingerprint: '0'.repeat(32) }],
     report: {},
     warnings: [],
   });

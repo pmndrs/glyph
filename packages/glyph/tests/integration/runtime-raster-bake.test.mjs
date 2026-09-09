@@ -9,10 +9,11 @@ import { msdf, msdfDescriptor, msdfRasterKey } from '@pmndrs/glyph/raster/msdf';
 import { normalizeBitmapOptions } from '../../dist/internal/bitmap-contract.js';
 import { normalizeMsdfOptions } from '../../dist/internal/msdf-contract.js';
 import { startRasterBakeWorker } from '../../dist/internal/raster-bake-worker-entry.js';
+import { interShapingFingerprint, interSourceFingerprint } from '../support/inter-identity.mjs';
 
-const shapingHash = '1'.repeat(64);
-const rasterKey = '2'.repeat(64);
-const interShapingHash = '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09';
+const sourceFingerprint = '0'.repeat(32);
+const shapingFingerprint = '1'.repeat(32);
+const rasterKey = '2'.repeat(32);
 const interUrl = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 
 test('Bitmap and MSDF runtime bakers execute through lazy module Workers', async (t) => {
@@ -54,7 +55,7 @@ test('Bitmap and MSDF runtime bakers execute through lazy module Workers', async
                 role: 'raster',
                 id: 'fixture.font.glb',
                 bytes,
-                sha256: '3'.repeat(64),
+                fingerprint: '3'.repeat(32),
               },
             ],
             report: {
@@ -87,12 +88,13 @@ test('Bitmap and MSDF runtime bakers execute through lazy module Workers', async
     globalThis.Worker = originalWorker;
   });
 
-  const font = { glyphCount: 7, shapingHash };
+  const font = { glyphCount: 7, shapingFingerprint };
   const source = Uint8Array.from([9, 8, 7]);
   const bitmapModule = bitmap;
   const runtimeBitmapBaker = await bitmapModule.runtimeBaker();
   const bitmapResult = await runtimeBitmapBaker.default.bake({
     source,
+    sourceFingerprint,
     font,
     fontFaceIndex: 0,
     rasterKey,
@@ -101,12 +103,14 @@ test('Bitmap and MSDF runtime bakers execute through lazy module Workers', async
   const runtimeMsdfBaker = await msdf.runtimeBaker();
   const msdfResult = await runtimeMsdfBaker.default.bake({
     source,
+    sourceFingerprint,
     font,
     fontFaceIndex: 0,
     rasterKey,
   });
   const configuredMsdfResult = await runtimeMsdfBaker.default.bake({
     source,
+    sourceFingerprint,
     font,
     fontFaceIndex: 0,
     rasterKey,
@@ -168,7 +172,7 @@ test('bounded runtime cancellation replaces the active Worker and recovers the s
             kind: 'bitmap',
             extension: 'PMNDRS_font_bitmap',
             version: 0,
-            artifacts: [{ role: 'raster', id: 'bounded.glb', bytes, sha256: '3'.repeat(64) }],
+            artifacts: [{ role: 'raster', id: 'bounded.glb', bytes, fingerprint: '3'.repeat(32) }],
             report: {
               metadataBytes: 20,
               serializedBytes: 4,
@@ -200,12 +204,20 @@ test('bounded runtime cancellation replaces the active Worker and recovers the s
   });
 
   const source = Uint8Array.of(9, 8, 7);
-  const font = { glyphCount: 7, shapingHash };
+  const font = { glyphCount: 7, shapingFingerprint };
   const options = { strikes: [16], coverage: { glyphIds: [1, 3] } };
   const baker = (await bitmap.runtimeBaker()).default;
   const controller = new AbortController();
-  const cancelled = baker.bake({ source, font, fontFaceIndex: 0, rasterKey, options, signal: controller.signal });
-  const recovered = baker.bake({ source, font, fontFaceIndex: 0, rasterKey, options });
+  const cancelled = baker.bake({
+    source,
+    sourceFingerprint,
+    font,
+    fontFaceIndex: 0,
+    rasterKey,
+    options,
+    signal: controller.signal,
+  });
+  const recovered = baker.bake({ source, sourceFingerprint, font, fontFaceIndex: 0, rasterKey, options });
   controller.abort(new Error('cancel bounded raster'));
 
   await assert.rejects(cancelled, /cancel bounded raster/);
@@ -248,7 +260,7 @@ test('the raster Worker entry frees its baker result before transferring exact a
           kind: 'fixture',
           extension: 'PMNDRS_fixture',
           version: 0,
-          artifacts: [{ role: 'raster', id: 'fixture.glb', bytes: bakerBytes, sha256: '3'.repeat(64) }],
+          artifacts: [{ role: 'raster', id: 'fixture.glb', bytes: bakerBytes, fingerprint: '3'.repeat(32) }],
           report: {
             metadataBytes: 1,
             serializedBytes: 4,
@@ -274,9 +286,10 @@ test('the raster Worker entry frees its baker result before transferring exact a
       type: 'bake-raster-v0',
       id: 1,
       source: Uint8Array.from([1]).buffer,
+      sourceFingerprint,
       fontFaceIndex: 0,
       glyphCount: 1,
-      shapingHash,
+      shapingFingerprint,
       rasterKey,
       options: undefined,
     },
@@ -289,27 +302,33 @@ test('the raster Worker entry frees its baker result before transferring exact a
 
 test('Node and serial Worker entry produce identical bounded Bitmap and MSDF artifacts', async (t) => {
   const source = new Uint8Array(await readFile(interUrl));
-  const font = { source, fontFaceIndex: 0, glyphCount: 2937, shapingHash: interShapingHash };
+  const font = {
+    source,
+    sourceFingerprint: interSourceFingerprint,
+    fontFaceIndex: 0,
+    glyphCount: 2937,
+    shapingFingerprint: interShapingFingerprint,
+  };
   for (const fixture of [
     {
       baker: bitmapBaker,
       normalize: normalizeBitmapOptions,
       options: { strikes: [16], coverage: { glyphIds: [43, 44] } },
       descriptor: bitmapDescriptor({ strikes: [16], coverage: { glyphIds: [43, 44] } }),
-      rasterKey: await bitmapRasterKey({ strikes: [16], coverage: { glyphIds: [43, 44] } }),
+      rasterKey: bitmapRasterKey({ strikes: [16], coverage: { glyphIds: [43, 44] } }),
     },
     {
       baker: msdfBaker,
       normalize: normalizeMsdfOptions,
       options: { coverage: { glyphIds: [43, 44] } },
       descriptor: msdfDescriptor({ coverage: { glyphIds: [43, 44] } }),
-      rasterKey: await msdfRasterKey({ coverage: { glyphIds: [43, 44] } }),
+      rasterKey: msdfRasterKey({ coverage: { glyphIds: [43, 44] } }),
     },
   ]) {
     const direct = await fixture.baker.bake({
       font,
       rasterKey: fixture.rasterKey,
-      packaging: { artifact: 'embedded', pages: 'embedded' },
+      packaging: { artifact: 'embedded' },
       descriptor: fixture.descriptor,
     });
     const worker = await bakeThroughWorker(t, fixture, source);
@@ -317,11 +336,11 @@ test('Node and serial Worker entry produce identical bounded Bitmap and MSDF art
     assert.equal(worker.rasterKey, direct.rasterKey);
     assert.deepEqual(worker.report, direct.report);
     assert.deepEqual(
-      worker.artifacts.map(({ role, id, bytes, sha256 }) => ({
+      worker.artifacts.map(({ role, id, bytes, fingerprint }) => ({
         role,
         id,
         bytes: new Uint8Array(bytes),
-        sha256,
+        fingerprint,
       })),
       direct.artifacts,
     );
@@ -349,9 +368,10 @@ async function bakeThroughWorker(t, fixture, source) {
       type: 'bake-raster-v0',
       id: 1,
       source: source.slice().buffer,
+      sourceFingerprint: interSourceFingerprint,
       fontFaceIndex: 0,
       glyphCount: 2937,
-      shapingHash: interShapingHash,
+      shapingFingerprint: interShapingFingerprint,
       rasterKey: fixture.rasterKey,
       options: fixture.options,
     },

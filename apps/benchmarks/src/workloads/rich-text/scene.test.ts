@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { richTextComposition, richTextParagraphCount, richTextSpanNames } from './scene';
+import {
+  nextRichTextPublicationTick,
+  richTextComposition,
+  richTextContentTick,
+  richTextEmphasisScale,
+  richTextParagraphCount,
+  richTextSpanNames,
+  richTextTintColor,
+} from './scene';
 
 const BODY = 16;
 
@@ -34,3 +42,53 @@ describe('rich text composition', () => {
     expect(() => richTextParagraphCount(101)).toThrow(RangeError);
   });
 });
+
+describe('rich text mutation cadence', () => {
+  it.each([0, 50, 100])('publishes 60 distinct authored states at %i%% speed from 60 Hz and 120 Hz rAF', (speed) => {
+    const expectedTicks = Array.from({ length: 60 }, (_, tick) => tick);
+    for (const refreshRate of [60, 120] as const) {
+      const ticks = collectMutationTicks(refreshRate);
+      const states = ticks.map((tick) => richTextAuthoredState(tick, speed));
+      expect(ticks).toEqual(expectedTicks);
+      expect(new Set(states)).toHaveLength(60);
+    }
+  });
+
+  it('publishes no ticks while animation is disabled', () => {
+    expect(nextRichTextPublicationTick(false, 0, undefined)).toBeUndefined();
+    expect(nextRichTextPublicationTick(false, 1_000, 12)).toBeUndefined();
+  });
+
+  it('skips duplicate ticks and jumps to the latest tick once after a delayed rAF', () => {
+    expect(nextRichTextPublicationTick(true, 0, undefined)).toBe(0);
+    expect(nextRichTextPublicationTick(true, 8, 0)).toBeUndefined();
+    expect(nextRichTextPublicationTick(true, 100, 0)).toBe(6);
+    expect(nextRichTextPublicationTick(true, 110, 6)).toBeUndefined();
+    for (const speed of [0, 50, 100]) {
+      expect(richTextAuthoredState(6, speed)).not.toBe(richTextAuthoredState(0, speed));
+    }
+  });
+
+  it('retains four-second emphasis and twelve-second tint cycles on the 60 Hz content timeline', () => {
+    expect(richTextEmphasisScale(0, 1, 60 * 4)).toBeCloseTo(richTextEmphasisScale(0, 1, 0), 12);
+    expect(richTextTintColor(0, 1, 60 * 12)).toBe(richTextTintColor(0, 1, 0));
+  });
+});
+
+function richTextAuthoredState(publicationTick: number, animationSpeed: number): string {
+  const contentTick = richTextContentTick(publicationTick, animationSpeed);
+  return `${String(richTextEmphasisScale(0, 1, contentTick))}:${richTextTintColor(0, 1, contentTick)}`;
+}
+
+function collectMutationTicks(refreshRate: 60 | 120): readonly number[] {
+  const ticks: number[] = [];
+  let previousTick: number | undefined;
+  for (let frame = 0; frame < refreshRate; frame += 1) {
+    const elapsedMs = (frame * 1_000) / refreshRate;
+    const tick = nextRichTextPublicationTick(true, elapsedMs, previousTick);
+    if (tick === undefined) continue;
+    ticks.push(tick);
+    previousTick = tick;
+  }
+  return ticks;
+}

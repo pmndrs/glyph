@@ -11,12 +11,7 @@ export const paragraphBenchmarkSource = [
   'Scientific copy adds x2+y2~z2, 0<=a<=1, and pi. Arrows point both ways. These symbols expose missing coverage, uneven baselines, bad advances, and atlas placement errors that plain alphabet samples can hide.',
 ].join('\n');
 
-/**
- * Simplified and Japanese copy carrying the punctuation that drives UAX #14 LB16/LB17 -- fullwidth
- * comma, ideographic full stop, and bracket pairs. Latin prose reaches those rules rarely; CJK reaches
- * them on most characters, which is the only reason the quadratic scan in `class_after_spaces` stayed
- * invisible for so long. Every scalar here is covered by the pinned CJK contract strike.
- */
+/** CJK punctuation driving UAX #14 LB16/LB17 (fullwidth comma, ideographic stop, brackets); every scalar here is covered by the pinned CJK contract strike. */
 export const paragraphBenchmarkSourceCjk = [
   '简体中文段落没有空格，需要在合法边界换行，并保持（标点）与、完整。',
   '日本語の段落も空白を使わず、句読点や括弧（例）で行を折り返します。',

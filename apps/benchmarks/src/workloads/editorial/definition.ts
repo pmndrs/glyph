@@ -17,7 +17,7 @@ export const editorialDefinition = {
     layoutWidth: layoutWidthControl,
   },
   defaults: workloadDefaults(20, 24),
-  description: 'Justified editorial columns exercising indent, paragraph spacing, and word-space bounds.',
+  description: 'CSS-like justified columns exercising indent, paragraph spacing, and shrink-aware word fitting.',
   fontPolicy: { kind: 'selectable', defaultFixture: 'inter' },
   id: 'editorial',
   interaction: { pan: true, zoom: false },

@@ -1,8 +1,8 @@
 use super::{
     EngineError,
     cluster_state::{
-        CLUSTER_ALLOWED_BREAK, CLUSTER_HARD_BREAK, CLUSTER_REQUIRED_BREAK, CLUSTER_SAFE_BEFORE,
-        CLUSTER_SPACE, ClusterArena,
+        CHUNK_NEGATIVE_ADVANCE, CLUSTER_ALLOWED_BREAK, CLUSTER_HARD_BREAK, CLUSTER_REQUIRED_BREAK,
+        CLUSTER_SAFE_BEFORE, CLUSTER_SPACE, ClusterArena,
     },
     frame::{WRAP_CHARACTER, WRAP_NONE, WRAP_WORD},
     layout_units::scaled_from_layout_units,
@@ -238,6 +238,19 @@ pub(crate) fn layout_next_line_integer(
     wrap: u8,
     word_space_shrink: f64,
 ) -> Result<Option<ComposedLine>, EngineError> {
+    if wrap == WRAP_WORD && !clusters.word_breaks.is_empty() {
+        return layout_next_word_line_indexed(clusters, cursor, max_width_units, word_space_shrink);
+    }
+    layout_next_line_integer_scalar(clusters, cursor, max_width_units, wrap, word_space_shrink)
+}
+
+fn layout_next_line_integer_scalar(
+    clusters: &ClusterArena,
+    cursor: &mut LineCursor,
+    max_width_units: Option<i64>,
+    wrap: u8,
+    word_space_shrink: f64,
+) -> Result<Option<ComposedLine>, EngineError> {
     if max_width_units.is_some_and(|units| units < 0)
         || !(0.0..1.0).contains(&word_space_shrink)
         || !matches!(wrap, WRAP_NONE | WRAP_WORD | WRAP_CHARACTER)
@@ -280,6 +293,8 @@ pub(crate) fn layout_next_line_integer(
     let mut trailing_space_units = 0_i64;
     let mut last_safe = None;
     let mut last_safe_advance = 0_i64;
+    let mut first_safe = None;
+    let mut first_safe_advance = 0_i64;
     let mut selected_end = count;
     let mut selected_advance = 0_i64;
     // Chunk-64 fast path (D-245, word wrap only): a chunk whose summary fits in
@@ -290,7 +305,8 @@ pub(crate) fn layout_next_line_integer(
     // candidate. Exactness holds because integer chunk sums equal the per-cluster
     // sums.
     let chunk_summaries = wrap == WRAP_WORD
-        && clusters.chunk_flags_or.len() == count.div_ceil(super::cluster_state::LAYOUT_CHUNK);
+        && clusters.chunk_flags_or.len() == count.div_ceil(super::cluster_state::LAYOUT_CHUNK)
+        && clusters.chunk_auxiliary_sums.len() == clusters.chunk_flags_or.len();
     let mut pending_allowed: Option<(usize, i64)> = None;
     let mut pending_safe: Option<(usize, i64)> = None;
 
@@ -304,13 +320,36 @@ pub(crate) fn layout_next_line_integer(
             let flags_or = clusters.chunk_flags_or[chunk];
             if flags_or & (CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK) == 0 {
                 let next_advance = advance.saturating_add(clusters.chunk_advance_sums[chunk]);
-                let next_space_units = space_units.saturating_add(clusters.chunk_space_sums[chunk]);
-                let fits = max_width_units.is_none_or(|units| {
-                    next_advance.saturating_sub(super::layout_units::apply_ratio(
-                        next_space_units,
-                        word_space_shrink,
-                    )) <= units
-                });
+                let has_spaces = flags_or & CLUSTER_SPACE != 0;
+                let next_space_units = if has_spaces {
+                    space_units.saturating_add(clusters.chunk_auxiliary_sums[chunk])
+                } else {
+                    space_units
+                };
+                let fits = if flags_or & CHUNK_NEGATIVE_ADVANCE == 0 {
+                    max_width_units.is_none_or(|units| {
+                        next_advance.saturating_sub(super::layout_units::apply_ratio(
+                            next_space_units,
+                            word_space_shrink,
+                        )) <= units
+                    })
+                } else if !has_spaces {
+                    // The tagged auxiliary is this chunk's maximum advance prefix; preceding
+                    // spaces contribute constant shrink credit across every local prefix.
+                    max_width_units.is_none_or(|units| {
+                        advance
+                            .saturating_add(clusters.chunk_auxiliary_sums[chunk])
+                            .saturating_sub(super::layout_units::apply_ratio(
+                                space_units,
+                                word_space_shrink,
+                            ))
+                            <= units
+                    })
+                } else {
+                    // Spaces plus a negative advance make hanging-space shrink non-monotonic,
+                    // so this rare mixed chunk uses the exact scalar path.
+                    false
+                };
                 if fits {
                     if flags_or & CLUSTER_ALLOWED_BREAK != 0 {
                         pending_allowed = Some((chunk, advance));
@@ -318,6 +357,16 @@ pub(crate) fn layout_next_line_integer(
                     if flags_or & CLUSTER_SAFE_BEFORE != 0 {
                         pending_safe = Some((chunk, advance));
                     }
+                    trailing_space_units = if has_spaces {
+                        trailing_space_units_after_chunk(
+                            clusters,
+                            index,
+                            index + super::cluster_state::LAYOUT_CHUNK,
+                            trailing_space_units,
+                        )
+                    } else {
+                        0
+                    };
                     advance = next_advance;
                     space_units = next_space_units;
                     index += super::cluster_state::LAYOUT_CHUNK;
@@ -327,9 +376,22 @@ pub(crate) fn layout_next_line_integer(
         }
         let flags = clusters.flags[index];
         if index > line_start && flags & CLUSTER_SAFE_BEFORE != 0 {
-            last_safe = Some(index);
-            last_safe_advance = advance;
-            pending_safe = None;
+            if first_safe.is_none() {
+                first_safe = Some(index);
+                first_safe_advance = advance;
+            }
+            let fits = wrap != WRAP_WORD
+                || max_width_units.is_none_or(|units| {
+                    advance.saturating_sub(super::layout_units::apply_ratio(
+                        space_units,
+                        word_space_shrink,
+                    )) <= units
+                });
+            if fits {
+                last_safe = Some(index);
+                last_safe_advance = advance;
+                pending_safe = None;
+            }
         }
         let required_break = flags & CLUSTER_REQUIRED_BREAK != 0;
         let cluster_advance = clusters.advance_units[index];
@@ -346,19 +408,41 @@ pub(crate) fn layout_next_line_integer(
         // space becomes interior, charged by the next non-space cluster's own test.
         // Testing it would refuse words the line has room for, and did.
         let cluster_is_space = flags & CLUSTER_SPACE != 0;
-        // A required break ends the line here, so the spaces already accumulated behind it
-        // hang exactly as they would at a soft wrap and must not be charged. Any other
-        // cluster continues the line, making those spaces interior and chargeable.
-        let hanging_units = if required_break {
+        let next_trailing_space_units = if cluster_is_space {
+            trailing_space_units.saturating_add(cluster_advance)
+        } else if required_break {
+            // A hard-break control does not make the spaces immediately before it
+            // interior. They still terminate this line and hang from its measure.
             trailing_space_units
         } else {
             0
         };
-        if wrap != WRAP_NONE
-            && !cluster_is_space
+        let word_segment_end = wrap == WRAP_WORD
+            && (flags & CLUSTER_ALLOWED_BREAK != 0 || required_break || index + 1 == count);
+        // Word wrap fits completed shaped segments after hanging terminal spaces;
+        // character wrap retains its per-cluster overflow test.
+        let hanging_units = if wrap == WRAP_WORD && word_segment_end {
+            next_trailing_space_units
+        } else if required_break {
+            trailing_space_units
+        } else {
+            0
+        };
+        let visible_space_units = if wrap == WRAP_WORD {
+            next_space_units.saturating_sub(hanging_units)
+        } else {
+            next_space_units
+        };
+        let tests_overflow = match wrap {
+            WRAP_WORD => word_segment_end,
+            WRAP_CHARACTER => !cluster_is_space,
+            WRAP_NONE => false,
+            _ => unreachable!(),
+        };
+        if tests_overflow
             && max_width_units.is_some_and(|units| {
                 next_advance.saturating_sub(hanging_units).saturating_sub(
-                    super::layout_units::apply_ratio(next_space_units, word_space_shrink),
+                    super::layout_units::apply_ratio(visible_space_units, word_space_shrink),
                 ) > units
             })
             && index > line_start
@@ -381,9 +465,14 @@ pub(crate) fn layout_next_line_integer(
             } else if let Some(end) = last_safe.filter(|end| *end > line_start) {
                 selected_end = end;
                 selected_advance = last_safe_advance;
+            } else if let Some(end) = first_safe.filter(|end| *end > line_start) {
+                // If no shaping-safe boundary fits, break at the first one to minimize overflow.
+                selected_end = end;
+                selected_advance = first_safe_advance;
             } else {
                 advance = next_advance;
-                if required_break || index + 1 == count {
+                if (wrap == WRAP_WORD && word_segment_end) || required_break || index + 1 == count {
+                    // With no earlier legal fallback, keep the first complete word intact.
                     selected_end = index + 1;
                     selected_advance = advance;
                     break;
@@ -395,11 +484,7 @@ pub(crate) fn layout_next_line_integer(
         }
         advance = next_advance;
         space_units = next_space_units;
-        trailing_space_units = if cluster_is_space {
-            trailing_space_units.saturating_add(cluster_advance)
-        } else {
-            0
-        };
+        trailing_space_units = next_trailing_space_units;
         if required_break {
             selected_end = index + 1;
             selected_advance = advance;
@@ -467,6 +552,154 @@ pub(crate) fn layout_next_line_integer(
     }))
 }
 
+fn layout_next_word_line_indexed(
+    clusters: &ClusterArena,
+    cursor: &mut LineCursor,
+    max_width_units: Option<i64>,
+    word_space_shrink: f64,
+) -> Result<Option<ComposedLine>, EngineError> {
+    if max_width_units.is_some_and(|units| units < 0) || !(0.0..1.0).contains(&word_space_shrink) {
+        return Err(EngineError::InvalidRequest);
+    }
+    let count = clusters.starts.len();
+    if cursor.cluster > count || clusters.advance_units.len() != count {
+        return Err(EngineError::InvalidRequest);
+    }
+    if cursor.trailing_empty || cursor.cluster == count {
+        return layout_next_line_integer_scalar(
+            clusters,
+            cursor,
+            max_width_units,
+            WRAP_WORD,
+            word_space_shrink,
+        );
+    }
+    let line_start = cursor.cluster;
+    let first_break = clusters
+        .word_breaks
+        .partition_point(|record| record.cluster_end as usize <= line_start);
+    if first_break == 0 {
+        if line_start != 0 {
+            return layout_next_line_integer_scalar(
+                clusters,
+                cursor,
+                max_width_units,
+                WRAP_WORD,
+                word_space_shrink,
+            );
+        }
+    } else {
+        let previous = clusters.word_breaks[first_break - 1];
+        if previous.cluster_end as usize != line_start {
+            return layout_next_line_integer_scalar(
+                clusters,
+                cursor,
+                max_width_units,
+                WRAP_WORD,
+                word_space_shrink,
+            );
+        }
+    }
+    let mut selected = None;
+    let mut line_advance = 0_i64;
+    let mut line_spaces = 0_i64;
+    for index in first_break..clusters.word_breaks.len() {
+        let record = clusters.word_breaks[index];
+        let end = usize::try_from(record.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+        let next_advance = line_advance.saturating_add(i64::from(record.advance_units));
+        let next_spaces = line_spaces.saturating_add(i64::from(record.space_units));
+        let trailing = trailing_space_units(clusters, line_start, end);
+        let visible_advance = next_advance.saturating_sub(trailing);
+        let visible_spaces = next_spaces.saturating_sub(trailing);
+        let effective = visible_advance.saturating_sub(super::layout_units::apply_ratio(
+            visible_spaces,
+            word_space_shrink,
+        ));
+        if max_width_units.is_some_and(|width| effective > width) {
+            if index == first_break {
+                return layout_next_line_integer_scalar(
+                    clusters,
+                    cursor,
+                    max_width_units,
+                    WRAP_WORD,
+                    word_space_shrink,
+                );
+            }
+            break;
+        }
+        line_advance = next_advance;
+        line_spaces = next_spaces;
+        selected = Some((record, line_advance));
+        if clusters.flags[end - 1] & (CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK) != 0
+            || end == count
+        {
+            break;
+        }
+    }
+    let (record, full_advance) = selected.ok_or(EngineError::InvalidRequest)?;
+    let selected_end =
+        usize::try_from(record.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+    if selected_end <= line_start || selected_end > count {
+        return Err(EngineError::InvalidRequest);
+    }
+    let last = selected_end - 1;
+    let hard_break = clusters.flags[last] & CLUSTER_HARD_BREAK != 0;
+    let hung_units = trailing_space_units(clusters, line_start, selected_end);
+    let selected_advance = full_advance.saturating_sub(hung_units);
+    let text_start = clusters.starts[line_start];
+    let text_end = if hard_break {
+        clusters.starts[last]
+    } else {
+        clusters.ends[last]
+    };
+    cursor.cluster = selected_end;
+    cursor.trailing_empty = selected_end == count && hard_break;
+    Ok(Some(ComposedLine {
+        cluster_start: u32::try_from(line_start).map_err(|_| EngineError::ResultTooLarge)?,
+        cluster_end: record.cluster_end,
+        text_start,
+        text_end,
+        advance: scaled_from_layout_units(selected_advance),
+        hung_advance: scaled_from_layout_units(hung_units),
+        hard_break,
+    }))
+}
+
+fn trailing_space_units(clusters: &ClusterArena, start: usize, mut end: usize) -> i64 {
+    if end > start && clusters.flags[end - 1] & CLUSTER_HARD_BREAK != 0 {
+        end -= 1;
+    }
+    let mut trailing = 0_i64;
+    while end > start && clusters.flags[end - 1] & CLUSTER_SPACE != 0 {
+        trailing = trailing.saturating_add(clusters.advance_units[end - 1]);
+        end -= 1;
+    }
+    trailing
+}
+
+/// Returns the exact trailing-space run after a chunk; incoming space carries only through an all-space chunk.
+/// No-space chunks clear without reading per-cluster lanes, while other chunks read only their trailing suffix.
+fn trailing_space_units_after_chunk(
+    clusters: &ClusterArena,
+    start: usize,
+    mut end: usize,
+    incoming: i64,
+) -> i64 {
+    if clusters.flags[end - 1] & CLUSTER_SPACE == 0 {
+        return 0;
+    }
+    let mut trailing = 0_i64;
+    while end > start && clusters.flags[end - 1] & CLUSTER_SPACE != 0 {
+        trailing = trailing.saturating_add(clusters.advance_units[end - 1]);
+        end -= 1;
+    }
+    if end == start {
+        incoming.saturating_add(trailing)
+    } else {
+        trailing
+    }
+}
+
 /// Resolves the deferred break candidate inside a fully consumed chunk: the LAST
 /// cluster carrying `flag`, with the exact prefix advance the scalar loop would have
 /// recorded there. Allowed breaks break after their cluster; safe breaks break
@@ -502,6 +735,7 @@ fn resolve_last_flagged(
 
 #[cfg(test)]
 mod tests {
+    use super::super::cluster_state::WordBreakRecord;
     use super::*;
     use alloc::vec;
 
@@ -531,6 +765,7 @@ mod tests {
             *advance = scaled_from_layout_units(clusters.advance_units[index]);
         }
         clusters.refresh_layout_units().unwrap();
+        clusters.ensure_word_breaks().unwrap();
         clusters
     }
 
@@ -577,7 +812,7 @@ mod tests {
             let letters = 2 + (word * 7) % 5;
             for letter in 0..letters {
                 advances.push(7.31 + f64::from((word * 13 + letter * 3) % 17) * 0.373);
-                flags.push(0);
+                flags.push(CLUSTER_SAFE_BEFORE);
             }
             advances.push(3.17);
             flags.push(CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE);
@@ -621,7 +856,7 @@ mod tests {
         while advances.len() < 24 * LAYOUT_CHUNK {
             for letter in 0..2 + (word % 6) {
                 advances.push(4.0 + f64::from((word * 11 + letter * 7) % 13) * 0.417);
-                flags.push(0);
+                flags.push(CLUSTER_SAFE_BEFORE);
             }
             advances.push(2.75);
             flags.push(CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE);
@@ -671,6 +906,297 @@ mod tests {
                 scaled_from_layout_units(i64::MAX),
                 "wrap {wrap} must saturate instead of wrapping the accumulated line advance",
             );
+        }
+    }
+
+    #[test]
+    fn an_oversized_sparse_word_index_falls_back_to_the_exact_scalar_fit() {
+        use super::super::layout_units::layout_units_from_scaled;
+
+        let mut flags = [0_u8; 8];
+        flags[2] = CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        flags[7] = CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        let clusters =
+            make_quantized_clusters(&[32_768.0, 1.0, 1.0, 2.0, 3.0, 4.0, 5.0, 1.0], &flags);
+        assert!(
+            clusters.word_breaks.is_empty(),
+            "a word advance outside the compact i32 sidecar domain selects the scalar kernel",
+        );
+        for width in [1.0_f64, 32_767.0, 32_768.0, 32_769.0, 32_770.0, 32_786.0] {
+            let width_units = layout_units_from_scaled(width);
+            assert_eq!(
+                fit_all_integer(&clusters, Some(width_units), WRAP_WORD, 0.0),
+                fit_all(
+                    &clusters,
+                    scaled_from_layout_units(width_units),
+                    WRAP_WORD,
+                    0.0,
+                ),
+                "width {width}",
+            );
+        }
+    }
+
+    #[test]
+    fn an_oversized_negative_stream_cannot_take_the_monotonic_chunk_path() {
+        use super::super::{cluster_state::LAYOUT_CHUNK, layout_units::layout_units_from_scaled};
+
+        let mut advances = vec![0.0; LAYOUT_CHUNK];
+        let mut flags = vec![0; LAYOUT_CHUNK];
+        advances[10] = 32_768.0;
+        flags[10] = CLUSTER_ALLOWED_BREAK;
+        advances[20] = -32_768.0;
+        flags[20] = CLUSTER_ALLOWED_BREAK;
+        flags[LAYOUT_CHUNK - 1] = CLUSTER_ALLOWED_BREAK;
+        let mut clusters = make_clusters(&advances, &flags);
+        clusters.ensure_word_breaks().unwrap();
+        assert!(
+            clusters.word_breaks.is_empty(),
+            "the first segment exceeds the i32 sidecar domain"
+        );
+        assert!(clusters.chunk_flags_or[0] & CHUNK_NEGATIVE_ADVANCE != 0);
+
+        let line = layout_next_line_integer(
+            &clusters,
+            &mut LineCursor::default(),
+            Some(layout_units_from_scaled(1.0)),
+            WRAP_WORD,
+            0.0,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            line.cluster_end, 11,
+            "the later negative segment cannot pull an overflowing word back"
+        );
+    }
+
+    fn assert_skipped_chunk_trailing_space_parity(
+        advances: &[f64],
+        flags: &[u8],
+        line_start: usize,
+        expected_end: u32,
+    ) {
+        use super::super::layout_units::layout_units_from_scaled;
+
+        let clusters = make_clusters(advances, flags);
+        assert!(clusters.word_breaks.is_empty());
+        let width_units = layout_units_from_scaled(5.0);
+        let mut chunk_cursor = LineCursor::at_cluster(line_start);
+        let chunked = layout_next_line_integer(
+            &clusters,
+            &mut chunk_cursor,
+            Some(width_units),
+            WRAP_WORD,
+            0.0,
+        )
+        .unwrap()
+        .unwrap();
+
+        let mut scalar = make_clusters(advances, flags);
+        scalar.chunk_flags_or.clear();
+        let mut scalar_cursor = LineCursor::at_cluster(line_start);
+        let scalar = layout_next_line_integer(
+            &scalar,
+            &mut scalar_cursor,
+            Some(width_units),
+            WRAP_WORD,
+            0.0,
+        )
+        .unwrap()
+        .unwrap();
+
+        let mut f64_cursor = LineCursor::at_cluster(line_start);
+        let f64 = layout_next_line(
+            &clusters,
+            &mut f64_cursor,
+            scaled_from_layout_units(width_units),
+            WRAP_WORD,
+            0.0,
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(chunked, scalar);
+        assert_eq!(chunked, f64);
+        assert_eq!(chunked.cluster_end, expected_end);
+        assert!(chunked.hard_break);
+    }
+
+    #[test]
+    fn skipped_no_space_chunk_clears_a_negative_trailing_space() {
+        use super::super::cluster_state::LAYOUT_CHUNK;
+
+        let count = LAYOUT_CHUNK * 2 + 1;
+        let line_start = LAYOUT_CHUNK - 2;
+        let mut advances = vec![0.0; count];
+        let mut flags = vec![0; count];
+        advances[line_start] = 5.0;
+        flags[line_start] = CLUSTER_ALLOWED_BREAK;
+        advances[line_start + 1] = -2.0;
+        flags[line_start + 1] = CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        advances[LAYOUT_CHUNK] = -1.0;
+        advances[LAYOUT_CHUNK * 2 - 1] = 2.0;
+        flags[LAYOUT_CHUNK * 2 - 1] = CLUSTER_ALLOWED_BREAK;
+        flags[LAYOUT_CHUNK * 2] = CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK;
+
+        assert_skipped_chunk_trailing_space_parity(&advances, &flags, line_start, count as u32);
+    }
+
+    #[test]
+    fn skipped_trailing_space_chunk_replaces_an_earlier_negative_space_run() {
+        use super::super::cluster_state::LAYOUT_CHUNK;
+
+        let count = LAYOUT_CHUNK * 2 + 1;
+        let line_start = LAYOUT_CHUNK - 2;
+        let mut advances = vec![0.0; count];
+        let mut flags = vec![0; count];
+        advances[line_start] = 5.0;
+        flags[line_start] = CLUSTER_ALLOWED_BREAK;
+        advances[line_start + 1] = -2.0;
+        flags[line_start + 1] = CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        advances[LAYOUT_CHUNK * 2 - 1] = 1.0;
+        flags[LAYOUT_CHUNK * 2 - 1] = CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        flags[LAYOUT_CHUNK * 2] = CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK;
+
+        assert_skipped_chunk_trailing_space_parity(&advances, &flags, line_start, count as u32);
+    }
+
+    #[test]
+    fn an_all_space_chunk_carries_the_incoming_trailing_run() {
+        use super::super::cluster_state::LAYOUT_CHUNK;
+
+        let mut advances = vec![0.0; LAYOUT_CHUNK];
+        let flags = vec![CLUSTER_SPACE; LAYOUT_CHUNK];
+        advances[LAYOUT_CHUNK - 1] = 1.0;
+        let clusters = make_clusters(&advances, &flags);
+
+        assert_eq!(
+            trailing_space_units_after_chunk(&clusters, 0, LAYOUT_CHUNK, -2 * 65_536),
+            -65_536,
+        );
+    }
+
+    #[test]
+    fn dense_negative_chunks_match_scalar_and_f64_without_a_word_sidecar() {
+        use super::super::{cluster_state::LAYOUT_CHUNK, layout_units::layout_units_from_scaled};
+
+        let count = LAYOUT_CHUNK * 5;
+        let mut advances = vec![1.0; count];
+        let mut flags = vec![CLUSTER_SAFE_BEFORE | CLUSTER_ALLOWED_BREAK; count];
+        flags[20] |= CLUSTER_SPACE;
+        advances[80] = -3.0;
+        advances[150] = 0.0;
+        flags[150] = CLUSTER_SAFE_BEFORE | CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK;
+        advances[200] = -0.25;
+        flags[200] |= CLUSTER_SPACE;
+
+        let dense = make_quantized_clusters(&advances, &flags);
+        assert!(dense.word_breaks.is_empty());
+        assert_eq!(dense.word_breaks.capacity(), 0);
+        assert!(dense.word_breaks_valid);
+        assert!(dense.chunk_flags_or[1] & CHUNK_NEGATIVE_ADVANCE != 0);
+        assert_eq!(dense.chunk_flags_or[1] & CLUSTER_SPACE, 0);
+        assert_eq!(dense.chunk_auxiliary_sums[1], 60 * 65_536);
+        assert_eq!(
+            dense.chunk_flags_or[3] & (CHUNK_NEGATIVE_ADVANCE | CLUSTER_SPACE),
+            CHUNK_NEGATIVE_ADVANCE | CLUSTER_SPACE,
+        );
+        assert_eq!(dense.chunk_auxiliary_sums[3], -16_384);
+
+        let mut scalar = make_quantized_clusters(&advances, &flags);
+        scalar.chunk_flags_or.clear();
+        for width in [1.0_f64, 7.0, 31.0, 63.0, 127.0, 511.0] {
+            let width_units = layout_units_from_scaled(width);
+            for shrink in [0.0_f64, 0.25, 0.61] {
+                let reference = fit_all(
+                    &dense,
+                    scaled_from_layout_units(width_units),
+                    WRAP_WORD,
+                    shrink,
+                );
+                assert_eq!(
+                    fit_all_integer(&dense, Some(width_units), WRAP_WORD, shrink),
+                    reference,
+                    "chunk width {width} shrink {shrink}",
+                );
+                assert_eq!(
+                    fit_all_integer(&scalar, Some(width_units), WRAP_WORD, shrink),
+                    reference,
+                    "scalar width {width} shrink {shrink}",
+                );
+            }
+        }
+
+        let word_pointer = dense.word_breaks.as_ptr();
+        let word_capacity = dense.word_breaks.capacity();
+        let chunk_pointer = dense.chunk_auxiliary_sums.as_ptr();
+        let chunk_capacity = dense.chunk_auxiliary_sums.capacity();
+        for width in 1..=256 {
+            let mut cursor = LineCursor::default();
+            let mut line_count = 0;
+            while let Some(line) = layout_next_line_integer(
+                &dense,
+                &mut cursor,
+                Some(i64::from(width) * 65_536),
+                WRAP_WORD,
+                0.37,
+            )
+            .unwrap()
+            {
+                assert!(line.cluster_end > line.cluster_start);
+                line_count += 1;
+            }
+            assert!(line_count > 0);
+        }
+        assert_eq!(dense.word_breaks.as_ptr(), word_pointer);
+        assert_eq!(dense.word_breaks.capacity(), word_capacity);
+        assert_eq!(dense.chunk_auxiliary_sums.as_ptr(), chunk_pointer);
+        assert_eq!(dense.chunk_auxiliary_sums.capacity(), chunk_capacity);
+    }
+
+    #[test]
+    fn sparse_negative_words_keep_index_scalar_and_f64_parity() {
+        use super::super::layout_units::layout_units_from_scaled;
+
+        let count = 257;
+        let mut advances = vec![1.0; count];
+        let mut flags = vec![CLUSTER_SAFE_BEFORE; count];
+        for end in (6..count).step_by(7) {
+            flags[end] |= CLUSTER_ALLOWED_BREAK;
+        }
+        flags[20] |= CLUSTER_SPACE;
+        advances[9] = -0.5;
+        advances[48] = -0.25;
+        flags[48] |= CLUSTER_SPACE;
+        advances[128] = 0.0;
+        flags[128] = CLUSTER_SAFE_BEFORE | CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK;
+
+        let indexed = make_quantized_clusters(&advances, &flags);
+        assert!(!indexed.word_breaks.is_empty());
+        let mut scalar = make_quantized_clusters(&advances, &flags);
+        scalar.word_breaks.clear();
+        scalar.chunk_flags_or.clear();
+        for width in [1.0_f64, 4.0, 8.0, 16.0, 32.0, 128.0] {
+            let width_units = layout_units_from_scaled(width);
+            for shrink in [0.0_f64, 0.25, 0.61] {
+                let reference = fit_all(
+                    &indexed,
+                    scaled_from_layout_units(width_units),
+                    WRAP_WORD,
+                    shrink,
+                );
+                assert_eq!(
+                    fit_all_integer(&indexed, Some(width_units), WRAP_WORD, shrink),
+                    reference,
+                    "indexed width {width} shrink {shrink}",
+                );
+                assert_eq!(
+                    fit_all_integer(&scalar, Some(width_units), WRAP_WORD, shrink),
+                    reference,
+                    "scalar width {width} shrink {shrink}",
+                );
+            }
         }
     }
 
@@ -773,6 +1299,104 @@ mod tests {
             .unwrap();
         assert_eq!(line.cluster_end, 10);
         assert_eq!(line.advance, 10.0);
+    }
+
+    #[test]
+    fn word_fit_waits_for_the_shaped_word_before_breaking() {
+        // A later negative adjustment makes the whole second word fit after space compression.
+        let mut flags = [CLUSTER_SAFE_BEFORE; 8];
+        flags[4] |= CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        let mut clusters =
+            make_quantized_clusters(&[1.0, 1.0, 1.0, 1.0, 1.0, 6.0, -4.0, 1.0], &flags);
+        clusters.word_breaks = vec![
+            WordBreakRecord {
+                cluster_end: 5,
+                advance_units: 5 * 65_536,
+                space_units: 65_536,
+            },
+            WordBreakRecord {
+                cluster_end: 8,
+                advance_units: 3 * 65_536,
+                space_units: 0,
+            },
+        ];
+        assert!(!clusters.word_breaks.is_empty());
+        let mut cursor = LineCursor::default();
+        let line = layout_next_line_integer(
+            &clusters,
+            &mut cursor,
+            Some(super::super::layout_units::layout_units_from_scaled(7.5)),
+            WRAP_WORD,
+            0.5,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(line.cluster_end, 8);
+        assert_eq!(line.advance, 8.0);
+        let mut scalar_clusters = clusters;
+        scalar_clusters.word_breaks.clear();
+        let mut scalar_cursor = LineCursor::default();
+        let scalar = layout_next_line_integer(
+            &scalar_clusters,
+            &mut scalar_cursor,
+            Some(super::super::layout_units::layout_units_from_scaled(7.5)),
+            WRAP_WORD,
+            0.5,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            scalar, line,
+            "the sparse index is only an optimization and cannot select a different break",
+        );
+    }
+
+    #[test]
+    fn overlong_word_uses_the_last_safe_boundary_inside_the_measure() {
+        let mut flags = vec![CLUSTER_SAFE_BEFORE; 81];
+        flags[80] |= CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        let clusters = make_quantized_clusters(&vec![1.0; 81], &flags);
+        assert!(!clusters.word_breaks.is_empty());
+        let expected = ComposedLine {
+            cluster_start: 0,
+            cluster_end: 10,
+            text_start: 0,
+            text_end: 10,
+            advance: 10.0,
+            hung_advance: 0.0,
+            hard_break: false,
+        };
+
+        let mut indexed = LineCursor::default();
+        assert_eq!(
+            layout_next_line_integer(&clusters, &mut indexed, Some(10 * 65_536), WRAP_WORD, 0.0)
+                .unwrap()
+                .unwrap(),
+            expected,
+        );
+
+        let mut scalar_clusters = clusters;
+        scalar_clusters.word_breaks.clear();
+        let mut integer_scalar = LineCursor::default();
+        assert_eq!(
+            layout_next_line_integer(
+                &scalar_clusters,
+                &mut integer_scalar,
+                Some(10 * 65_536),
+                WRAP_WORD,
+                0.0,
+            )
+            .unwrap()
+            .unwrap(),
+            expected,
+        );
+        let mut reference = LineCursor::default();
+        assert_eq!(
+            layout_next_line(&scalar_clusters, &mut reference, 10.0, WRAP_WORD, 0.0)
+                .unwrap()
+                .unwrap(),
+            expected,
+        );
     }
 
     #[test]

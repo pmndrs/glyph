@@ -17,12 +17,12 @@ export const packageSizeBudgets = {
     brotliBytes: 10_200,
   },
   // `/typegpu` is the higher-level direct renderer over all three first-party formats. With optional peers external,
-  // it measures 221,958 raw / 219,098 minified / 41,382 gzip / 35,132 Brotli.
+  // it measures 225,879 raw / 222,963 minified / 42,571 gzip / 36,048 Brotli on the complete paragraph stack.
   'typegpu-direct-renderer-js': {
     rawBytes: 227_000,
     minifiedBytes: 224_000,
-    gzipBytes: 42_500,
-    brotliBytes: 36_000,
+    gzipBytes: 43_000,
+    brotliBytes: 36_500,
   },
   'font-validator-js': {
     // The current tsdown graph is 734,377 raw / 584,675 minified / 138,073 gzip / 113,039 Brotli. Keep a small
@@ -32,10 +32,12 @@ export const packageSizeBudgets = {
     gzipBytes: 139_000,
     brotliBytes: 113_500,
   },
+  // Portable fingerprinting moved this graph from 5,816 to 6,022 gzip bytes.
+  // Linux and macOS agree byte-for-byte, so this ceiling needs no host margin.
   'runtime-baker-host-js': {
     rawBytes: 18_000,
     minifiedBytes: 16_000,
-    gzipBytes: 6_000,
+    gzipBytes: 6_200,
     brotliBytes: 5_500,
   },
   'runtime-baker-worker-js': {
@@ -69,12 +71,11 @@ export const packageSizeBudgets = {
   // +12,071 raw / +4,949 gzip / +8,451 Brotli of Rust shaping and planning code but left
   // the gate un-repinned; this branch changed no Rust behaviour (formatting only), and the
   // measured artifact is byte-identical to its base commit.
-  // Planner-assisted detached glyph copies add paragraph-scoped stable-ID selection and a
-  // one-shot publication checkpoint without changing the retained A/B publication state.
+  // The selective glyph borrow adds bounded demand-read ABI code without changing the retained A/B publication path.
   'text-shaper-wasm': {
-    rawBytes: 1_200_000,
-    minifiedBytes: 1_200_000,
-    gzipBytes: 468_000,
+    rawBytes: 1_208_000,
+    minifiedBytes: 1_208_000,
+    gzipBytes: 470_000,
     brotliBytes: 368_000,
   },
   // Three realization plus the root graph measures 501,283 raw / 489,958 minified / 123,383 gzip / 101,597 Brotli
@@ -86,14 +87,13 @@ export const packageSizeBudgets = {
     gzipBytes: 128_000,
     brotliBytes: 106_000,
   },
-  // `/three/typegpu` is the complete optional TypeGPU-backed Three integration. Its shader
-  // functions are priced here rather than as a second matrix of implementation-level leaves.
-  // With peers external it measures 609,736 raw / 596,546 minified / 136,568 gzip / 112,065 Brotli.
+  // `/three/typegpu` prices the complete optional integration; selective glyph inspection measures
+  // 626,784 raw / 613,457 minified / 140,711 gzip / 115,199 Brotli with peers external.
   'three-typegpu-runtime-js': {
-    rawBytes: 616_000,
-    minifiedBytes: 603_000,
-    gzipBytes: 139_000,
-    brotliBytes: 114_000,
+    rawBytes: 630_000,
+    minifiedBytes: 617_000,
+    gzipBytes: 142_000,
+    brotliBytes: 117_000,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,
@@ -164,9 +164,10 @@ export const packageSizeBudgets = {
     gzipBytes: 236_000,
     brotliBytes: 181_000,
   },
+  // Carries the same inlined fingerprint hash: minified 15,726 -> 16,047 (+321), crossing by 47.
   'bitmap-baker-js': {
     rawBytes: 23_500,
-    minifiedBytes: 16_000,
+    minifiedBytes: 16_300,
     gzipBytes: 4_900,
     brotliBytes: 4_400,
   },
@@ -188,17 +189,20 @@ export const packageSizeBudgets = {
     gzipBytes: 220_000,
     brotliBytes: 173_000,
   },
+  // Carries the same inlined fingerprint hash: minified 19,218 -> 19,539 (+321), crossing by 39.
   'mtsdf-baker-js': {
     rawBytes: 27_500,
-    minifiedBytes: 19_500,
+    minifiedBytes: 19_800,
     gzipBytes: 5_700,
     brotliBytes: 5_100,
   },
+  // CFF subdivision and outline refusal moved macOS raw bytes from 461,488 to 464,386.
+  // Linux emits 464,113 raw / 186,785 gzip / 147,013 Brotli, so the ceiling includes host margin.
   'slug-baker-wasm': {
-    rawBytes: 464_000,
-    minifiedBytes: 464_000,
-    gzipBytes: 187_000,
-    brotliBytes: 147_000,
+    rawBytes: 467_000,
+    minifiedBytes: 467_000,
+    gzipBytes: 188_000,
+    brotliBytes: 148_000,
   },
   'slug-baker-js': {
     rawBytes: 20_000,

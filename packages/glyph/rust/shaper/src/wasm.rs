@@ -13,6 +13,7 @@ use crate::{
         font_binding_wire::parse_font_binding,
         frame::RootRevision,
         frame_wire::parse_update_request,
+        layout_borrow::BorrowedLayoutDescriptor,
         render_plan_compiler::RenderPlanCompilerError,
         render_plan_wire::{publication_layout, query_layout},
         transport::{FrameTransport, UpdateBatchResult, UpdateBatchTransport},
@@ -1032,6 +1033,60 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_measure_paragraph(
     })
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_engine_borrow_paragraph_layout(
+    root_id: u32,
+    paragraph_id: u32,
+) -> u32 {
+    with_state(|state| {
+        let glyph_count = match state
+            .engine
+            .borrowed_paragraph_layout(root_id, paragraph_id)
+        {
+            Ok(count) => count,
+            Err(_) => return 0,
+        };
+        let Ok(glyph_count) = u32::try_from(glyph_count) else {
+            return 0;
+        };
+        state.borrow_generation = state.borrow_generation.wrapping_add(1).max(1);
+        state.borrowed_layout = BorrowedLayoutDescriptor {
+            generation: state.borrow_generation,
+            root_id,
+            paragraph_id,
+            glyph_count,
+        };
+        u32::try_from(core::ptr::addr_of!(state.borrowed_layout) as usize).unwrap_or(0)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_engine_borrow_paragraph_glyph(
+    root_id: u32,
+    paragraph_id: u32,
+    generation: u32,
+    glyph_index: u32,
+) -> u32 {
+    with_state(|state| {
+        if !state
+            .borrowed_layout
+            .matches(root_id, paragraph_id, generation)
+            || glyph_index >= state.borrowed_layout.glyph_count
+        {
+            return 0;
+        }
+        state.borrowed_glyph =
+            match state
+                .engine
+                .borrowed_paragraph_glyph(root_id, paragraph_id, glyph_index as usize)
+            {
+                Ok(glyph) => glyph,
+                Err(_) => return 0,
+            };
+        u32::try_from(core::ptr::addr_of!(state.borrowed_glyph) as usize).unwrap_or(0)
+    })
+}
+
 #[derive(Default)]
 struct WasmState {
     registry: ShaperRegistry,
@@ -1039,6 +1094,9 @@ struct WasmState {
     frames: BTreeMap<u32, FrameTransport>,
     update_batch: UpdateBatchTransport,
     allocations: Vec<Allocation>,
+    borrow_generation: u32,
+    borrowed_layout: BorrowedLayoutDescriptor,
+    borrowed_glyph: crate::engine::SemanticGlyph,
 }
 
 struct Allocation {

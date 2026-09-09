@@ -130,14 +130,14 @@ try {
         amiri: {
           fixture: 'amiri-regular-v0',
           sourceSha256: 'ab391c4147d054c48976e98322ad0eefe1427aa0e0502a12a4c75d80a70cfcd7',
-          shapingHash: amiri.shapingHash,
+          shapingFingerprint: amiri.shapingFingerprint,
           sourceOracle: '../shaping/amiri-regular/harfrust.json',
           independentOracle: '../shaping/amiri-regular/harfbuzz.json',
         },
         inter: {
           fixture: 'inter-regular-v0',
           sourceSha256: '40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82',
-          shapingHash: inter.shapingHash,
+          shapingFingerprint: inter.shapingFingerprint,
         },
       },
       bidi,
@@ -193,20 +193,5 @@ function firstDifference(left: string, right: string): number {
   return length;
 }
 
-/* @workflow
-{
-  "name": "fixture:paragraph-bidi:generate",
-  "summary": "Regenerate the public Rust paragraph bidi contract fixture.",
-  "requirements": "Built runtime packages and authenticated checked-in fonts.",
-  "writes": "Checked-in paragraph bidi contract."
-}
-*/
-/* @workflow
-{
-  "name": "fixture:paragraph-bidi:check",
-  "summary": "Verify the public Rust paragraph bidi contract fixture by deterministic regeneration.",
-  "requirements": "Built runtime packages and authenticated checked-in fonts.",
-  "writes": "Nothing.",
-  "args": ["--check"]
-}
-*/
+/* @workflow { "name": "fixture:paragraph-bidi:generate", "summary": "Regenerate the public Rust paragraph bidi contract fixture.", "requirements": "Built runtime packages and authenticated checked-in fonts.", "writes": "Checked-in paragraph bidi contract." } */
+/* @workflow { "name": "fixture:paragraph-bidi:check", "summary": "Verify the public Rust paragraph bidi contract fixture by deterministic regeneration.", "requirements": "Built runtime packages and authenticated checked-in fonts.", "writes": "Nothing.", "args": ["--check"] } */

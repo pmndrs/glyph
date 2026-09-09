@@ -33,6 +33,10 @@ const amiriFontUrl = new URL(
   '../../../../apps/benchmarks/fixtures/rendering/amiri-bitmap-16.font.glb',
   import.meta.url,
 );
+const sourceSerifFontUrl = new URL(
+  '../../../../apps/benchmarks/fixtures/rendering/source-serif-4-bitmap-16.font.glb',
+  import.meta.url,
+);
 const iconSlugFontUrl = new URL(
   '../../../../apps/benchmarks/fixtures/rendering/font-awesome-free-6.7.2-slug.font.glb.gz',
   import.meta.url,
@@ -323,6 +327,192 @@ test('one Three root binds one Scene and exposes its semantic name to material f
     root.dispose();
     font.dispose();
   }
+});
+
+test('Text renderOrder ranks grouped paragraphs while standalone Text keeps Three draw order', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup({ renderOrder: 4 });
+  const labels = ['A', 'B', 'C'].map((text) => three.createText({ font, text }));
+  group.add(...labels);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+
+  const groupedSequence = () => {
+    const draws = rootDraws(scene).filter((draw) => draw.renderOrder === 4);
+    assert.equal(draws.length, 1, 'one group shares one compatible draw');
+    const attribute = draws[0].geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id));
+    const start = draws[0].userData.pmndrsGlyphRunStart;
+    return Array.from(attribute.array.subarray(start, start + draws[0].geometry.instanceCount));
+  };
+
+  const authored = groupedSequence();
+  const minimum = labels[0].boundingBox.min;
+  const setMinimum = minimum.set;
+  let boundingBoxPublications = 0;
+  minimum.set = function setTrackedMinimum(x, y, z) {
+    boundingBoxPublications += 1;
+    return setMinimum.call(this, x, y, z);
+  };
+  t.after(() => {
+    minimum.set = setMinimum;
+  });
+  labels[0].renderOrder = 2;
+  labels[1].renderOrder = 1;
+  labels[2].renderOrder = 0;
+  instrumentedGlyph.reset();
+  scene.updateMatrixWorld(true);
+  assert.deepEqual(groupedSequence(), [...authored].reverse());
+  assert.equal(instrumentedGlyph.crossings, 1, 'one paragraph-order transaction crosses into Rust');
+  assert.equal(instrumentedGlyph.measureCrossings, 0, 'order-only publication reuses measurements');
+  assert.equal(boundingBoxPublications, 0, 'order-only publication does not republish cached bounds');
+  assert.deepEqual(
+    instrumentedGlyph.latestParagraphMutations(),
+    [],
+    'scoped rank updates do not republish unchanged base lifecycle order',
+  );
+  const orderMutations = instrumentedGlyph.latestParagraphOrderMutations();
+  assert.equal(new Set(orderMutations.map(({ orderScope }) => orderScope)).size, 1);
+  assert.ok(orderMutations[0].orderScope > 0);
+  assert.deepEqual(
+    orderMutations.map(({ orderRank }) => orderRank),
+    [2, 1],
+    'the adapter publishes only changed data-only ranks in stable order and leaves the permutation to Rust',
+  );
+  instrumentedGlyph.reset();
+  scene.updateMatrixWorld(true);
+  assert.equal(instrumentedGlyph.crossings, 0, 'an unchanged ranked group does no sorting or Wasm work');
+
+  const loose = three.createText({ font, text: 'D' });
+  loose.renderOrder = 9;
+  scene.add(loose);
+  scene.updateMatrixWorld(true);
+  assert.deepEqual(
+    rootDraws(scene)
+      .map((draw) => draw.renderOrder)
+      .sort((left, right) => left - right),
+    [4, 10],
+    'standalone Text renderOrder remains the mesh-level base (plus deterministic draw offset)',
+  );
+
+  loose.dispose();
+  group.dispose();
+  for (const label of labels) label.dispose();
+  font.dispose();
+});
+
+test('an unstated TextGroup keeps child paragraph ranks out of Three material keys', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const labels = ['A', 'B', 'C'].map((text, rank) => {
+    const label = three.createText({ font, text });
+    label.renderOrder = 2 - rank;
+    return label;
+  });
+  group.add(...labels);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+
+  const draws = rootDraws(scene);
+  assert.equal(draws.length, 1, 'default group presentation remains one compatible draw');
+  assert.equal(draws[0].renderOrder, 0, 'the group retains Three default draw order');
+
+  for (const label of labels) label.dispose();
+  group.dispose();
+  font.dispose();
+});
+
+test('Rust ranks interleaved TextGroup scopes only within their stable root slots', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const firstGroup = three.createTextGroup({ renderOrder: 4 });
+  const secondGroup = three.createTextGroup({ renderOrder: 4 });
+  const firstA = three.createText({ font, text: 'A' });
+  const secondA = three.createText({ font, text: 'B' });
+  const firstB = three.createText({ font, text: 'C' });
+  const secondB = three.createText({ font, text: 'D' });
+  firstGroup.add(firstA, firstB);
+  secondGroup.add(secondA, secondB);
+  scene.add(firstGroup, secondGroup);
+  scene.updateMatrixWorld(true);
+
+  const sequence = () => {
+    const draws = rootDraws(scene).filter((draw) => draw.renderOrder === 4);
+    assert.equal(draws.length, 1, 'equal group presentation remains one compatible draw');
+    const attribute = draws[0].geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id));
+    const start = draws[0].userData.pmndrsGlyphRunStart;
+    return Array.from(attribute.array.subarray(start, start + draws[0].geometry.instanceCount));
+  };
+  const authored = sequence();
+  firstA.renderOrder = 1;
+  firstA.text = 'AA';
+  firstB.renderOrder = 0;
+  scene.updateMatrixWorld(true);
+  assert.deepEqual(
+    sequence(),
+    [authored[2], authored[1], authored[0], authored[0], authored[3]],
+    'rank and semantic mutations share one atomic frame while scoped ranks only permute their own slots',
+  );
+  instrumentedGlyph.reset();
+  firstA.text = 'E';
+  firstB.text = 'F';
+  scene.updateMatrixWorld(true);
+  assert.equal(firstGroup.error, undefined);
+  assert.deepEqual(
+    instrumentedGlyph.latestParagraphOrderMutations(),
+    [],
+    'content-only edits do not republish unchanged paragraph ranks',
+  );
+  assert.deepEqual(
+    instrumentedGlyph.latestRequestCounts(),
+    {
+      paragraph: 0,
+      paragraphOrder: 0,
+      text: 2,
+      style: 1,
+      constraint: 0,
+      region: 0,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'variable-length content edits publish text and root-style coverage without unchanged lifecycle or geometry',
+  );
+  assert.deepEqual(
+    sequence(),
+    [authored[2], authored[1], authored[0], authored[3]],
+    'later semantic records stay in authored order after the ranked render order commits',
+  );
+
+  firstGroup.remove(firstA);
+  scene.updateMatrixWorld(true);
+  firstGroup.add(firstA);
+  scene.updateMatrixWorld(true);
+  assert.equal(firstGroup.error, undefined);
+  assert.deepEqual(
+    sequence(),
+    [authored[2], authored[1], authored[0], authored[3]],
+    'detach and reattach preserves the root membership slots used by scoped permutation',
+  );
+  const restagedMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+  firstGroup.material = restagedMaterial;
+  secondGroup.material = restagedMaterial;
+  scene.updateMatrixWorld(true);
+  assert.equal(firstGroup.error, undefined, 'a shared restage accepts reattached planner insertion order');
+  assert.equal(secondGroup.error, undefined);
+  assert.deepEqual(
+    sequence(),
+    [authored[2], authored[1], authored[0], authored[3]],
+    'Rust consumes paragraph-keyed content independently of planner insertion order',
+  );
+
+  for (const text of [firstA, secondA, firstB, secondB]) text.dispose();
+  firstGroup.dispose();
+  secondGroup.dispose();
+  font.dispose();
 });
 
 test('a root releases its renderer publication when its final Text is disposed', async (t) => {
@@ -1573,6 +1763,72 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async (t)
   fontDomain.dispose();
 });
 
+test('explicit line height follows the font-stack primary across fallback scripts', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const fontDomain = createThreeFontDomain();
+  const [primary, fallback] = await Promise.all([
+    fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] })),
+    fontDomain.loadFont({ baked: dataUrl(await readFile(amiriFontUrl)) }, bitmap({ strikes: [16] })),
+  ]);
+  const scene = new THREE.Scene();
+  const label = three.createText({
+    font: createFontStack(primary, fallback),
+    style: { fontSize: 10, lineHeight: 0.92 },
+    text: 'Latin',
+  });
+  scene.add(label);
+  scene.updateMatrixWorld(true);
+
+  const latin = label.measure().lines[0];
+  label.text = 'مرحبا';
+  scene.updateMatrixWorld(true);
+  const arabic = label.measure().lines[0];
+
+  assert.ok(latin !== undefined && arabic !== undefined);
+  assert.ok(Math.abs(latin.lineHeight - 9.2) < 1e-4, 'lineHeight below 1 is authoritative');
+  assert.ok(
+    Math.abs(arabic.lineHeight - latin.lineHeight) < 1e-4,
+    'fallback glyph metrics cannot change the authored line box',
+  );
+
+  label.dispose();
+  primary.dispose();
+  fallback.dispose();
+  fontDomain.dispose();
+});
+
+test('one Text coalesces interleaved font spans without crossing decoration paint layers', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const [latin, serif] = await Promise.all([
+    loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] })),
+    loadFont({ baked: dataUrl(await readFile(sourceSerifFontUrl)) }, bitmap({ strikes: [16] })),
+  ]);
+  const latinSpan = textSpan(latin);
+  const serifSpan = textSpan(serif);
+  const label = three.createText({
+    font: latin,
+    text: txt`${latinSpan`A`}${serifSpan`B`}${latinSpan`C`}`,
+    style: { decoration: { underline: true, lineThrough: true } },
+  });
+  const scene = new THREE.Scene();
+  scene.add(label);
+  scene.updateMatrixWorld(true);
+
+  const draws = rootDraws(scene);
+  const depthKeys = draws.map((draw) => draw.userData.pmndrsGlyphDepthKey);
+  assert.equal(
+    depthKeys.filter((depth) => depth === 1).length,
+    2,
+    'the repeated Latin resource and intervening serif resource become one draw each',
+  );
+  assert.ok(depthKeys.indexOf(0) < depthKeys.indexOf(1), 'under decorations precede glyph draws');
+  assert.ok(depthKeys.lastIndexOf(2) > depthKeys.lastIndexOf(1), 'over decorations follow glyph draws');
+
+  label.dispose();
+  latin.dispose();
+  serif.dispose();
+});
+
 test('one Three root realizes two public Text objects as one indexed Rust draw', async (t) => {
   const three = await createThreeTestHandle(t);
   const instrumented = instrumentedGlyph;
@@ -1643,6 +1899,13 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   scene.updateMatrixWorld();
   assert.equal(instrumented.crossings, 0, 'an empty update and cached measurement must not cross into Rust');
 
+  instrumented.reset();
+  const unchangedText = left.text;
+  left.text = unchangedText;
+  assert.equal(left.measure(), initialLeftMeasurement, 'an unchanged plain string must preserve cached measurement');
+  scene.updateMatrixWorld();
+  assert.equal(instrumented.crossings, 0, 'an unchanged plain string must not cross into Rust');
+
   // Assigning `text` states the desired string. Publication derives the narrowest scalar-aligned
   // replacement from the last published string, coalescing intermediate desired states.
   left.text = 'A';
@@ -1661,6 +1924,20 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
     instrumented.latestTextMutations(),
     [{ start: 1, deleteCount: 1, insert: 'Y' }],
     'declarative assignment must serialize its smallest scalar-aligned replacement',
+  );
+  assert.deepEqual(
+    instrumented.latestRequestCounts(),
+    {
+      paragraph: 0,
+      paragraphOrder: 0,
+      text: 1,
+      style: 0,
+      constraint: 0,
+      region: 0,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'equal-length plain content publishes no unchanged retained state',
   );
 
   left.text = 'AZ';
@@ -1731,12 +2008,71 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   );
   nestedParent.visible = true;
   scene.updateMatrixWorld();
+  instrumented.reset();
   right.style = { ...right.style, color: '#00ff00' };
   scene.updateMatrixWorld();
+  assert.deepEqual(
+    instrumented.latestRequestCounts(),
+    {
+      paragraph: 0,
+      paragraphOrder: 0,
+      text: 0,
+      style: 1,
+      constraint: 0,
+      region: 0,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'paint-only style updates publish no unchanged lifecycle, text, or geometry',
+  );
 
+  instrumented.reset();
   right.style = { ...right.style, fontSize: 20 };
   scene.updateMatrixWorld();
   assert.equal(right.glyphs().glyphFontSizes[0], 20);
+  assert.deepEqual(
+    instrumented.latestRequestCounts(),
+    {
+      paragraph: 0,
+      paragraphOrder: 0,
+      text: 0,
+      style: 1,
+      constraint: 0,
+      region: 0,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'font-size updates publish only style while Rust derives shaping and layout invalidation',
+  );
+
+  const mutableWidth = { mode: 'exact', size: 120 };
+  right.constraints = { ...right.constraints, width: mutableWidth };
+  const widerMeasurement = right.measure();
+  scene.updateMatrixWorld();
+  mutableWidth.size = 60;
+  instrumented.reset();
+  right.constraints = { ...right.constraints, width: mutableWidth };
+  const narrowerMeasurement = right.measure();
+  scene.updateMatrixWorld();
+  assert.notEqual(
+    narrowerMeasurement.width,
+    widerMeasurement.width,
+    'reassigning a full field after mutating nested caller input must publish the new owned snapshot',
+  );
+  assert.deepEqual(
+    instrumented.latestRequestCounts(),
+    {
+      paragraph: 0,
+      paragraphOrder: 0,
+      text: 0,
+      style: 0,
+      constraint: 1,
+      region: 2,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'a nested constraint change publishes geometry without unchanged semantic sections',
+  );
 
   instrumented.reset();
   left.text = 'ABC';
@@ -1787,8 +2123,13 @@ function instrumentNextGlyphEngine() {
   let crossings = 0;
   let measureCrossings = 0;
   let latestRequest;
+  let latestMeasurementRequest;
   let latestUpdateFlags = 0;
   let latestUpdateGeneration = 0;
+  let latestSemanticByteLength = 0;
+  let latestSemanticRecordCount = 0;
+  let latestSemanticParagraphCount = 0;
+  let borrowedGlyphReads = 0;
   let latestBatchCount = 0;
   let latestBatchRootIds = [];
   WebAssembly.instantiate = async (source, imports) => {
@@ -1796,17 +2137,29 @@ function instrumentNextGlyphEngine() {
     const exports = { ...instance.exports };
     const update = exports[abi.functions.textUpdate];
     assert.equal(typeof update, 'function', 'instrumented shaper must export text_update');
+    const captureResult = (resultPointer) => {
+      const result = abi.layouts.engineResult;
+      const semantic = abi.layouts.engineSemanticView;
+      const memory = new DataView(exports.memory.buffer);
+      latestUpdateFlags = memory.getUint32(resultPointer + result.flags, true);
+      latestUpdateGeneration = memory.getUint32(resultPointer + result.publicationGeneration, true);
+      latestSemanticRecordCount = memory.getUint32(resultPointer + result.semanticViewCount, true);
+      latestSemanticByteLength = latestSemanticRecordCount * semantic.size;
+      latestSemanticParagraphCount = 0;
+      const semanticOffset = memory.getUint32(resultPointer + result.semanticViewsOffset, true);
+      for (let index = 0; index < latestSemanticRecordCount; index += 1) {
+        const record = resultPointer + semanticOffset + index * semantic.size;
+        const kind = memory.getUint16(record + semantic.kind, true);
+        if (kind === abi.engine.semanticKinds.paragraphMeasurement) latestSemanticParagraphCount += 1;
+      }
+    };
     exports[abi.functions.textUpdate] = (...arguments_) => {
       crossings += 1;
       latestBatchCount = 1;
       const [, pointer, length] = arguments_;
       latestRequest = new Uint8Array(exports.memory.buffer, pointer, length).slice();
       const resultPointer = update(...arguments_);
-      if (resultPointer !== 0) {
-        const header = new DataView(exports.memory.buffer, resultPointer, abi.layouts.engineResult.size);
-        latestUpdateFlags = header.getUint32(abi.layouts.engineResult.flags, true);
-        latestUpdateGeneration = header.getUint32(abi.layouts.engineResult.publicationGeneration, true);
-      }
+      if (resultPointer !== 0) captureResult(resultPointer);
       return resultPointer;
     };
     const updateBatch = exports[abi.functions.textUpdateBatch];
@@ -1832,9 +2185,7 @@ function instrumentNextGlyphEngine() {
       for (let index = 0; index < count; index += 1) {
         const resultPointer = results.getUint32(index * entry.size + entry.resultPointer, true);
         if (resultPointer === 0) continue;
-        const header = new DataView(exports.memory.buffer, resultPointer, abi.layouts.engineResult.size);
-        latestUpdateFlags = header.getUint32(abi.layouts.engineResult.flags, true);
-        latestUpdateGeneration = header.getUint32(abi.layouts.engineResult.publicationGeneration, true);
+        captureResult(resultPointer);
       }
       return status;
     };
@@ -1842,9 +2193,18 @@ function instrumentNextGlyphEngine() {
     if (typeof measure === 'function') {
       exports[abi.functions.measureParagraph] = (...arguments_) => {
         measureCrossings += 1;
-        return measure(...arguments_);
+        const [, pointer, length] = arguments_;
+        latestMeasurementRequest = new Uint8Array(exports.memory.buffer, pointer, length).slice();
+        const resultPointer = measure(...arguments_);
+        if (resultPointer !== 0) captureResult(resultPointer);
+        return resultPointer;
       };
     }
+    const borrowGlyph = exports[abi.functions.borrowParagraphGlyph];
+    exports[abi.functions.borrowParagraphGlyph] = (...arguments_) => {
+      borrowedGlyphReads += 1;
+      return borrowGlyph(...arguments_);
+    };
     return { exports };
   };
   let restored = false;
@@ -1867,6 +2227,18 @@ function instrumentNextGlyphEngine() {
     get latestUpdateGeneration() {
       return latestUpdateGeneration;
     },
+    get latestSemanticByteLength() {
+      return latestSemanticByteLength;
+    },
+    get latestSemanticRecordCount() {
+      return latestSemanticRecordCount;
+    },
+    get latestSemanticParagraphCount() {
+      return latestSemanticParagraphCount;
+    },
+    get borrowedGlyphReads() {
+      return borrowedGlyphReads;
+    },
     get latestBatchCount() {
       return latestBatchCount;
     },
@@ -1881,10 +2253,46 @@ function instrumentNextGlyphEngine() {
         true,
       );
     },
+    latestRequestCounts() {
+      assert.ok(latestRequest, 'a text update request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      const view = new DataView(latestRequest.buffer, latestRequest.byteOffset, latestRequest.byteLength);
+      return {
+        paragraph: view.getUint32(request.paragraphMutationCount, true),
+        paragraphOrder: view.getUint32(request.paragraphOrderMutationCount, true),
+        text: view.getUint32(request.textMutationCount, true),
+        style: view.getUint32(request.styleMutationCount, true),
+        constraint: view.getUint32(request.constraintCount, true),
+        region: view.getUint32(request.regionCount, true),
+        exclusion: view.getUint32(request.exclusionCount, true),
+        inlineObject: view.getUint32(request.inlineObjectCount, true),
+      };
+    },
+    latestMeasurementRequestCounts() {
+      assert.ok(latestMeasurementRequest, 'a paragraph measurement request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      const view = new DataView(
+        latestMeasurementRequest.buffer,
+        latestMeasurementRequest.byteOffset,
+        latestMeasurementRequest.byteLength,
+      );
+      return {
+        paragraph: view.getUint32(request.paragraphMutationCount, true),
+        paragraphOrder: view.getUint32(request.paragraphOrderMutationCount, true),
+        text: view.getUint32(request.textMutationCount, true),
+        style: view.getUint32(request.styleMutationCount, true),
+        constraint: view.getUint32(request.constraintCount, true),
+        region: view.getUint32(request.regionCount, true),
+        exclusion: view.getUint32(request.exclusionCount, true),
+        inlineObject: view.getUint32(request.inlineObjectCount, true),
+      };
+    },
     reset() {
       crossings = 0;
       measureCrossings = 0;
+      borrowedGlyphReads = 0;
       latestBatchRootIds = [];
+      latestMeasurementRequest = undefined;
     },
     latestParagraphMutations() {
       assert.ok(latestRequest, 'a text update request must have been captured');
@@ -1901,6 +2309,42 @@ function instrumentNextGlyphEngine() {
           reserved0: view.getUint16(record + mutation.reserved0, true),
           paragraphId: view.getUint32(record + mutation.paragraphId, true),
           order: view.getUint32(record + mutation.order, true),
+        };
+      });
+    },
+    latestParagraphOrderMutations() {
+      assert.ok(latestRequest, 'a text update request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      const mutation = abi.layouts.engineParagraphOrderMutation;
+      const view = new DataView(latestRequest.buffer, latestRequest.byteOffset, latestRequest.byteLength);
+      const offset = view.getUint32(request.paragraphOrderMutationsOffset, true);
+      const count = view.getUint32(request.paragraphOrderMutationCount, true);
+      return Array.from({ length: count }, (_recordValue, index) => {
+        const record = offset + index * mutation.size;
+        return {
+          paragraphId: view.getUint32(record + mutation.paragraphId, true),
+          orderScope: view.getUint32(record + mutation.orderScope, true),
+          orderRank: view.getFloat64(record + mutation.orderRank, true),
+        };
+      });
+    },
+    latestMeasurementParagraphOrderMutations() {
+      assert.ok(latestMeasurementRequest, 'a paragraph measurement request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      const mutation = abi.layouts.engineParagraphOrderMutation;
+      const view = new DataView(
+        latestMeasurementRequest.buffer,
+        latestMeasurementRequest.byteOffset,
+        latestMeasurementRequest.byteLength,
+      );
+      const offset = view.getUint32(request.paragraphOrderMutationsOffset, true);
+      const count = view.getUint32(request.paragraphOrderMutationCount, true);
+      return Array.from({ length: count }, (_recordValue, index) => {
+        const record = offset + index * mutation.size;
+        return {
+          paragraphId: view.getUint32(record + mutation.paragraphId, true),
+          orderScope: view.getUint32(record + mutation.orderScope, true),
+          orderRank: view.getFloat64(record + mutation.orderRank, true),
         };
       });
     },
@@ -2025,6 +2469,219 @@ test('Text.measure answers attached first-frame state without traversing matrice
   fontDomain.dispose();
 });
 
+test('Text.measure retains lifecycle context but serializes only pending paragraph ranks', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const first = three.createText({ font, text: 'first query' });
+  const second = three.createText({ font, text: 'second query' });
+  group.add(first, second);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+
+  first.text = 'first unchanged-order query';
+  instrumentedGlyph.reset();
+  assert.ok(first.measure().glyphCount > 0);
+  const semanticQueryCounts = instrumentedGlyph.latestMeasurementRequestCounts();
+  assert.equal(semanticQueryCounts.paragraph, 2, 'a semantic query retains the complete paragraph lifecycle');
+  assert.equal(semanticQueryCounts.paragraphOrder, 0, 'a semantic query does not resend stable rank rows');
+
+  first.renderOrder = 2;
+  second.renderOrder = 1;
+  first.text = 'first ranked query';
+  second.text = 'second ranked query';
+  instrumentedGlyph.reset();
+  assert.ok(first.measure().glyphCount > 0);
+  assert.deepEqual(
+    instrumentedGlyph.latestMeasurementParagraphOrderMutations().map(({ orderRank }) => orderRank),
+    [2, 1],
+    'a scoped query serializes every rank still pending publication',
+  );
+  assert.ok(second.measure().glyphCount > 0);
+  assert.deepEqual(
+    instrumentedGlyph.latestMeasurementParagraphOrderMutations().map(({ orderRank }) => orderRank),
+    [2, 1],
+    'successive speculative queries retain the same pending rank transaction',
+  );
+  assert.equal(instrumentedGlyph.crossings, 0, 'queries do not publish a full frame');
+  assert.equal(instrumentedGlyph.measureCrossings, 2);
+
+  scene.updateMatrixWorld(true);
+  group.dispose();
+  first.dispose();
+  second.dispose();
+  font.dispose();
+});
+
+test('Text.withGlyphs demand-reads scalar records only inside one synchronous borrow', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const label = three.createText({ font, text: 'Borrowed glyph records wrap across two lines' });
+  label.constraints = { width: { mode: 'exact', size: 140 } };
+  const owned = label.glyphs();
+  instrumentedGlyph.reset();
+  let escaped;
+  const answer = Object.freeze({ answer: 42 });
+  const returned = label.withGlyphs((layout) => {
+    escaped = layout;
+    assert.equal(layout.glyphCount, owned.glyphCount);
+    for (const index of [0, owned.glyphCount - 1]) {
+      const glyphRecord = layout.glyphAt(index);
+      assert.equal(glyphRecord.stableId, owned.glyphStableIds[index]);
+      assert.equal(glyphRecord.fontHandle, owned.fontHandles[owned.glyphFontSlots[index]]);
+      assert.equal(glyphRecord.glyphId, owned.glyphIds[index]);
+      assert.equal(glyphRecord.cluster, owned.clusters[index]);
+      assert.equal(glyphRecord.bidiLevel, owned.glyphBidiLevels[index]);
+      assert.equal(glyphRecord.fontSize, owned.glyphFontSizes[index]);
+      assert.equal(glyphRecord.x, owned.x[index]);
+      assert.equal(glyphRecord.y, owned.y[index]);
+      assert.equal(glyphRecord.advance, owned.glyphAdvances[index]);
+      assert.equal(glyphRecord.inkX, owned.glyphInkX[index]);
+      assert.equal(glyphRecord.inkY, owned.glyphInkY[index]);
+      assert.equal(glyphRecord.inkWidth, owned.glyphInkWidths[index]);
+      assert.equal(glyphRecord.inkHeight, owned.glyphInkHeights[index]);
+      assert.equal(glyphRecord.flags, owned.glyphFlags[index]);
+      assert.equal(Object.isFrozen(glyphRecord), true);
+    }
+    assert.throws(() => label.set({ text: 'reentrant mutation' }), /cannot be reentered/);
+    assert.throws(() => label.measure(), /cannot be reentered/);
+    assert.throws(() => glyph.shape(), /cannot be reentered/);
+    return answer;
+  });
+
+  assert.equal(returned, answer, 'the callback result retains its identity');
+  assert.equal(instrumentedGlyph.latestSemanticRecordCount, 0, 'borrow setup serializes no semantic records');
+  assert.equal(instrumentedGlyph.borrowedGlyphReads, 2, 'only explicitly selected glyphs cross the Wasm ABI');
+  assert.equal(label.text, 'Borrowed glyph records wrap across two lines');
+  assert.throws(() => escaped.glyphCount, /expired/);
+  assert.throws(() => escaped.glyphAt(0), /expired/);
+
+  let thrownView;
+  assert.throws(
+    () =>
+      label.withGlyphs((layout) => {
+        thrownView = layout;
+        throw new Error('borrow callback failed');
+      }),
+    /borrow callback failed/,
+  );
+  assert.throws(() => thrownView.glyphCount, /expired/);
+  assert.throws(() => label.withGlyphs(async () => 42), /must answer synchronously/);
+  label.text = 'mutation succeeds after borrow release';
+  assert.equal(label.measure().glyphCount, 38);
+
+  label.dispose();
+  font.dispose();
+});
+
+test('empty Text bounding boxes cache their valid measurement', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const label = three.createText({ font, text: '' });
+  instrumentedGlyph.reset();
+
+  assert.equal(label.computeBoundingBox().isEmpty(), true);
+  assert.equal(label.computeBoundingBox().isEmpty(), true);
+  assert.equal(instrumentedGlyph.measureCrossings, 1, 'a valid empty box stays current');
+
+  label.dispose();
+  font.dispose();
+});
+
+test('Three Box3 measures transformed Text and TextGroup ink without adding scene objects', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const first = three.createText({ font, text: 'Box3 first' });
+  const second = three.createText({ font, text: 'Box3 second' });
+  group.position.set(4, 7, 0);
+  group.rotation.z = Math.PI / 8;
+  group.scale.set(1.25, 0.75, 1);
+  first.position.set(13, 17, 0);
+  second.position.set(-11, -19, 0);
+  group.add(first, second);
+  scene.add(group);
+
+  const expectedWorldBox = (text) => text.boundingBox.clone().applyMatrix4(text.matrixWorld);
+  const assertSameBox = (actual, expected, message) => {
+    assert.deepEqual(actual.min.toArray(), expected.min.toArray(), `${message} minimum`);
+    assert.deepEqual(actual.max.toArray(), expected.max.toArray(), `${message} maximum`);
+  };
+
+  try {
+    instrumentedGlyph.reset();
+    const preRenderBox = new THREE.Box3().setFromObject(first);
+    const preRenderMeasurement = first.measure();
+    assert.equal(preRenderBox.isEmpty(), false, 'Box3 positions ink before the first rendered frame');
+    assert.ok(preRenderMeasurement.inkBounds, 'the pre-render query caches authoritative ink bounds');
+    assert.equal(instrumentedGlyph.measureCrossings, 1, 'Box3 uses one positioned measurement query');
+    assert.equal(
+      instrumentedGlyph.latestSemanticRecordCount,
+      preRenderMeasurement.lineCount + 1,
+      'Box3 does not serialize per-glyph inspection records',
+    );
+    assertSameBox(preRenderBox, expectedWorldBox(first), 'pre-render Text');
+
+    scene.updateMatrixWorld(true);
+    assert.equal(first.geometry, second.geometry, 'Text objects share one measurement geometry');
+    assert.equal(first.geometry.getAttribute('position'), undefined, 'measurement geometry has no vertex payload');
+    assert.equal(first.isMesh, undefined, 'the Box3 hook must not classify Text as a Mesh');
+    assert.equal(first.isLine, undefined, 'the Box3 hook must not classify Text as a Line');
+    assert.equal(first.isPoints, undefined, 'the Box3 hook must not classify Text as Points');
+    assert.deepEqual(new THREE.Raycaster().intersectObject(first), [], 'the Box3 hook must not add raycast geometry');
+    const serialized = first.toJSON();
+    assert.equal(serialized.object.geometry, undefined, 'the Box3 hook must not serialize renderer geometry');
+    assert.equal(serialized.geometries, undefined, 'the Box3 hook must not register a geometry resource');
+    const groupChildren = [...group.children];
+    const draws = rootDraws(scene);
+    assert.ok(draws.length > 0, 'the fixture must realize its renderer-owned draws');
+    const expectedGroup = expectedWorldBox(first).union(expectedWorldBox(second));
+
+    for (const precise of [false, true]) {
+      assertSameBox(
+        new THREE.Box3().setFromObject(first, precise),
+        expectedWorldBox(first),
+        `Text precise=${String(precise)}`,
+      );
+      assertSameBox(
+        new THREE.Box3().setFromObject(group, precise),
+        expectedGroup,
+        `TextGroup precise=${String(precise)}`,
+      );
+    }
+
+    assert.deepEqual(group.children, groupChildren, 'measurement must not add authored scene children');
+    assert.deepEqual(rootDraws(scene), draws, 'measurement must not replace or add renderer-owned draws');
+
+    const beforeMutation = new THREE.Box3().setFromObject(first);
+    first.text = 'Box3 first becomes substantially longer';
+    scene.updateMatrixWorld(true);
+    const afterMutation = new THREE.Box3().setFromObject(first);
+    assertSameBox(afterMutation, expectedWorldBox(first), 'mutated Text');
+    assert.ok(
+      afterMutation.getSize(new THREE.Vector3()).lengthSq() > beforeMutation.getSize(new THREE.Vector3()).lengthSq(),
+      'a text mutation must refresh the scene-graph box',
+    );
+
+    group.remove(first);
+    first.dispose();
+    scene.updateMatrixWorld(true);
+    assertSameBox(
+      new THREE.Box3().setFromObject(second),
+      expectedWorldBox(second),
+      'remaining Text after sibling disposal',
+    );
+  } finally {
+    group.remove(first, second);
+    first.dispose();
+    second.dispose();
+    group.dispose();
+    font.dispose();
+  }
+});
+
 test('root-owned Text.measure creates only its implicit measurement batch before traversal', async (t) => {
   const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
@@ -2063,6 +2720,163 @@ test('root-owned Text.measure creates only its implicit measurement batch before
   label.dispose();
   font.dispose();
   fontDomain.dispose();
+});
+
+test('layout queries do not retain unrelated detached Texts', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const detached = three.createText({ font, text: 'detached sibling' });
+  const attached = three.createText({ font, text: 'attached query target' });
+  group.add(detached, attached);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+  assert.equal(detached.bound, true);
+  assert.equal(attached.bound, true);
+
+  group.remove(detached);
+  scene.updateMatrixWorld(true);
+  assert.equal(detached.bound, false);
+  assert.equal(attached.bound, true);
+
+  assert.ok(attached.measure().glyphCount > 0);
+  assert.equal(detached.bound, false, 'measuring a sibling cannot retain an unrelated detached Text');
+  assert.ok(attached.glyphs().glyphCount > 0);
+  assert.equal(detached.bound, false, 'inspecting a sibling cannot retain an unrelated detached Text');
+
+  assert.ok(detached.measure().glyphCount > 0, 'the explicitly queried detached Text remains measurable');
+  assert.equal(detached.bound, true);
+  scene.updateMatrixWorld(true);
+  assert.equal(detached.bound, false, 'the next draw removes only the explicitly queried detached Text');
+  assert.equal(attached.bound, true);
+
+  detached.dispose();
+  attached.dispose();
+  group.dispose();
+  font.dispose();
+});
+
+test('alternating detached measurements retire one bounded speculative lifecycle', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const first = three.createText({ font, text: 'first detached query' });
+  const second = three.createText({ font, text: 'second detached query' });
+  const scene = new THREE.Scene();
+  scene.add(first, second);
+  scene.updateMatrixWorld(true);
+  scene.remove(first, second);
+  first.style = { ...first.style, fontSize: 17 };
+  second.style = { ...second.style, fontSize: 17 };
+  instrumentedGlyph.reset();
+
+  const firstMeasurement = first.measure();
+  assert.equal(firstMeasurement.glyphCount, 20);
+  assert.equal(second.bound, false, 'querying the first Text must not bind its detached sibling');
+  assert.equal(second.measure().glyphCount, 21);
+  assert.equal(first.bound, false, 'querying the second Text must not bind its detached sibling');
+  const initialRequestCounts = instrumentedGlyph.latestMeasurementRequestCounts();
+  assert.ok(initialRequestCounts.paragraph <= 2, 'the speculative lifecycle stays bounded to the two query targets');
+  assert.equal(instrumentedGlyph.measureCrossings, 2, 'each paragraph incurs one initial query');
+  assert.equal(first.measure(), firstMeasurement, 'returning to the first Text must reuse its controller measurement');
+  assert.equal(instrumentedGlyph.measureCrossings, 2, 'alternation must not recreate the first paragraph');
+
+  for (let iteration = 0; iteration < 8_193; iteration += 1) {
+    const target = iteration % 2 === 0 ? first : second;
+    const unrelated = target === first ? second : first;
+    assert.equal(target.measure().glyphCount, target === first ? 20 : 21);
+    assert.equal(target.bound, true, 'the explicitly queried Text remains bound to its query controller');
+    assert.equal(unrelated.bound, false, 'an alternating query must leave its detached sibling unbound');
+  }
+
+  assert.equal(instrumentedGlyph.crossings, 0, 'queries must not publish renderer work');
+  assert.equal(instrumentedGlyph.measureCrossings, 2, 'cached siblings must not be destroyed and remeasured');
+
+  for (let iteration = 0; iteration < 8_193; iteration += 1) {
+    const target = iteration % 2 === 0 ? first : second;
+    const unrelated = target === first ? second : first;
+    assert.equal(target.glyphs().glyphCount, target === first ? 20 : 21);
+    assert.equal(target.bound, true, 'the explicitly inspected Text remains bound to its query controller');
+    assert.equal(unrelated.bound, false, 'an alternating inspection must leave its detached sibling unbound');
+  }
+
+  assert.equal(instrumentedGlyph.measureCrossings, 4, 'each controller performs one positioning upgrade');
+  assert.deepEqual(
+    instrumentedGlyph.latestMeasurementRequestCounts(),
+    initialRequestCounts,
+    'alternation beyond the paragraph-mutation limit must not accumulate lifecycle rows',
+  );
+  assert.equal(three.textCount, 2, 'query alternation must preserve both root-owned Text lifetimes');
+
+  first.text = 'first detached query changed';
+  assert.equal(first.measure().glyphCount, 28, 'a semantic mutation invalidates the controller measurement');
+  assert.equal(instrumentedGlyph.measureCrossings, 5, 'the changed paragraph incurs exactly one new query');
+  assert.equal(second.bound, false);
+
+  first.style = { ...first.style, fontSize: 20 };
+  assert.equal(first.measure().glyphCount, 28, 'a style mutation invalidates the controller measurement');
+  assert.equal(instrumentedGlyph.measureCrossings, 6, 'the changed style incurs exactly one new query');
+  first.font = font;
+  assert.equal(first.measure().glyphCount, 28, 'a font mutation invalidates the controller measurement');
+  assert.equal(instrumentedGlyph.measureCrossings, 7, 'the changed font selection incurs exactly one new query');
+
+  scene.add(first, second);
+  scene.updateMatrixWorld(true);
+  assert.equal(instrumentedGlyph.crossings, 1, 'later attachment publishes both Texts in one frame');
+  assert.ok(instrumentedGlyph.latestRequestCounts().paragraph <= 3, 'publication retires at most one query paragraph');
+  const paragraphMutations = instrumentedGlyph.latestParagraphMutations();
+  const opcodes = textShaperAbi.engine.paragraphMutationOpcodes;
+  assert.equal(
+    paragraphMutations.filter(({ opcode }) => opcode === opcodes.remove).length,
+    1,
+    'attachment evicts exactly the one detached query-cache paragraph',
+  );
+  assert.equal(
+    paragraphMutations.filter(({ opcode }) => opcode === opcodes.upsert).length,
+    2,
+    'attachment publishes exactly the two authored paragraphs',
+  );
+  assert.equal(first.bound, true);
+  assert.equal(second.bound, true);
+  assert.equal(first.commitState().status, 'committed');
+  assert.equal(second.commitState().status, 'committed');
+
+  first.dispose();
+  second.dispose();
+  font.dispose();
+});
+
+test('synchronous Three scene events cannot replace a live member traversal with query members', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const firstScene = new THREE.Scene();
+  const secondScene = new THREE.Scene();
+  const attached = three.createText({ font, text: 'attached live member' });
+  const detached = three.createText({ font, text: 'detached query member' });
+  firstScene.add(attached, detached);
+  firstScene.updateMatrixWorld(true);
+  firstScene.remove(detached);
+  secondScene.add(attached);
+  attached.text = 'moved attached live member';
+  let nestedQueries = 0;
+  const queryDuringRootAttachment = (event) => {
+    if (!event.child?.name.startsWith('@pmndrs/glyph:')) return;
+    nestedQueries += 1;
+    detached.measure();
+  };
+  secondScene.addEventListener('childadded', queryDuringRootAttachment);
+
+  try {
+    glyph.shape();
+    assert.equal(nestedQueries, 1, 'renderer root attachment must exercise the synchronous query reentry');
+    assert.equal(attached.bound, true);
+    assert.equal(detached.bound, false, 'the outer live traversal must remove the query-only detached member');
+  } finally {
+    secondScene.removeEventListener('childadded', queryDuringRootAttachment);
+    attached.dispose();
+    detached.dispose();
+    font.dispose();
+  }
 });
 
 test('Bitmap strike changes fully initialize a replacement indexed batch', async (t) => {
@@ -2144,6 +2958,37 @@ test('multi-page Bitmap strikes remain one ordered texture-array draw', async (t
     draws[0].geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.page.id)),
     'the Bitmap plan must publish a page-layer stream',
   );
+
+  group.dispose();
+  label.dispose();
+  font.dispose();
+  fontDomain.dispose();
+});
+
+test('large inspection queries grow the inactive A/B result slot to the reported requirement', async (t) => {
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 8_192, policy: 'grow' } }));
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont(
+    { baked: dataUrl(await readFile(densityFontUrl)) },
+    bitmap({ strikes: [16, 32] }),
+  );
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const label = three.createText({
+    font,
+    text: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789 !?.,;:'.repeat(100),
+    style: { fontSize: 16 },
+    constraints: { width: { mode: 'exact', size: 600 } },
+    layout: { wrap: 'word' },
+  });
+  group.add(label);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+
+  assert.equal(group.error, undefined);
+  const inspection = label.glyphs();
+  assert.ok(inspection.glyphCount > 6_000);
+  assert.equal(inspection.glyphIds.length, inspection.glyphCount);
 
   group.dispose();
   label.dispose();
@@ -2244,14 +3089,55 @@ test('one Three root grows aggregate glyph storage without reserving one aggrega
   assert.equal(group.error, undefined);
   assert.equal(group.textCount, labels.length);
   assert.equal(rootDraws(scene).length, 1);
+  assert.equal(instrumentedGlyph.latestSemanticParagraphCount, labels.length);
+  const initialSemanticByteLength = instrumentedGlyph.latestSemanticByteLength;
+  const measurements = labels.map((label) => label.measure());
+  assert.equal(labels[48].measure(), measurements[48], 'an unchanged attached Text reuses its measurement');
+  let measurementPublications = 0;
+  for (const label of labels) {
+    const minimum = label.boundingBox.min;
+    const set = minimum.set.bind(minimum);
+    minimum.set = (x, y, z) => {
+      measurementPublications += 1;
+      return set(x, y, z);
+    };
+  }
 
   for (let cycle = 0; cycle < 200; cycle += 1) {
+    measurementPublications = 0;
     for (let offset = 0; offset < 48; offset += 1) {
       const index = (cycle * 23 + offset) % labels.length;
       labels[index].text = `recycled-${String(cycle)}-${String(index)}`;
     }
     scene.updateMatrixWorld();
     assert.equal(group.error, undefined, `recycling cycle ${String(cycle)} must remain publishable`);
+    assert.equal(
+      instrumentedGlyph.latestSemanticParagraphCount,
+      48,
+      `recycling cycle ${String(cycle)} emits only dirty paragraph measurements`,
+    );
+    assert.equal(
+      instrumentedGlyph.latestSemanticRecordCount,
+      96,
+      `recycling cycle ${String(cycle)} emits one summary and line per dirty paragraph`,
+    );
+    assert.ok(
+      instrumentedGlyph.latestSemanticByteLength < initialSemanticByteLength,
+      `recycling cycle ${String(cycle)} keeps the semantic publication smaller than first publication`,
+    );
+    assert.equal(
+      measurementPublications,
+      48,
+      `recycling cycle ${String(cycle)} republishes bounds only for dirty Text objects`,
+    );
+    if (cycle !== 0) continue;
+    let publishedMeasurements = 0;
+    for (const [index, label] of labels.entries()) {
+      const measurement = label.measure();
+      if (measurement !== measurements[index]) publishedMeasurements += 1;
+      measurements[index] = measurement;
+    }
+    assert.equal(publishedMeasurements, 48, `recycling cycle ${String(cycle)} publishes only dirty measurements`);
   }
 
   group.dispose();
@@ -2260,12 +3146,7 @@ test('one Three root grows aggregate glyph storage without reserving one aggrega
   fontDomain.dispose();
 });
 
-/**
- * Roadmap 11.17 layer 4: layout under a geometry-only change routes to the
- * paragraph-scoped synchronous engine query — no full planner updates, no
- * publication flips, no revision burn — and the following ordinary frame adopts the
- * speculative work without a checkpoint rebuild.
- */
+/** A geometry-only constraint change routes to the paragraph-scoped synchronous engine query — no full planner update, no publication flip — and the next ordinary frame adopts the speculative work without a checkpoint rebuild. */
 test('repeated layout under changing constraints stays on the paragraph query path', async (t) => {
   const abi = textShaperAbi;
   const three = await createThreeTestHandle(t);
@@ -2319,11 +3200,8 @@ test('repeated layout under changing constraints stays on the paragraph query pa
 });
 
 test('a standard ligature that absorbs a grapheme publishes and keeps typing', async (t) => {
-  // A ligature reports one glyph at the first grapheme of the pair, so the trailing
-  // grapheme's cluster owns no glyph. It still belongs to the shaped run and positioning
-  // still derives a scale for it, so the cluster arena must record the owning font's
-  // units-per-em for it as well. Amiri applies `liga` to Latin f-pairs; Inter as baked
-  // does not, which is why every existing Latin fixture missed this.
+  // A ligature's absorbed grapheme owns no glyph, but the cluster arena still records the
+  // owning font's units-per-em for it. Amiri applies `liga` to Latin f-pairs; Inter as baked does not.
   const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
   const font = await fontDomain.loadFont({ baked: dataUrl(await readFile(amiriFontUrl)) }, bitmap({ strikes: [16] }));

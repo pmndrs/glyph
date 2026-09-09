@@ -71,12 +71,7 @@ export async function createConfiguredRenderer(options: RendererOptions): Promis
   }
 }
 
-/**
- * Disposes a configured renderer only after WebKit has acknowledged WebGL
- * context loss. Three.js disposal is synchronous even though context release
- * is not; admitting a replacement renderer before this event can exhaust the
- * browser's context budget during rapid surface changes.
- */
+/** Disposes only after WebKit acknowledges WebGL context loss; Three.js disposal is synchronous but context release is not, and skipping this wait can exhaust the browser's context budget. */
 export async function disposeConfiguredRenderer(renderer: THREE.WebGPURenderer): Promise<void> {
   const contextLoss = monitorWebGlContextLoss(renderer);
   try {

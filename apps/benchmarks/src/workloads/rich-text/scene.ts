@@ -11,40 +11,13 @@ import {
   type WorkloadTextFactoryContext,
 } from '../shared/scene-entry';
 
-/**
- * Composed-span content shaped like a film title sequence: one body face carrying per-range variation.
- *
- * Every clause exists to make one span obligation observable in a committed `ParagraphLayout`, and each obligation
- * fails in a different way, so a single colour comparison could not tell them apart:
- *
- * - `properNoun` states a face *and* an OpenType feature, so the shaper must select different glyph ids over that
- *   range while leaving every other glyph id untouched — the strongest available proof that a span reaches shaping;
- * - `tracked` states only letter spacing, the exact inverse: glyph ids must stay identical while origins move;
- * - `emphasis` states only a size, so it must inherit the surrounding face while re-measuring — its advances, and the
- *   line it breaks on, must move relative to the same paragraph composed at one size;
- * - `face` selects a second face for a range the body face *can* shape, which is an authoring choice rather than a
- *   fallback, and must move that range to another font slot;
- * - `foreign` selects a third face for a range the body face cannot shape at all, which is fallback, and must resolve
- *   without `.notdef`;
- * - `accent` states color and size together while `nested` sits inside it stating only a size, so the inner range must
- *   inherit the enclosing face and color while overriding the enclosing size;
- * - `tint` states only color, so it must leave the shaped result identical.
- *
- * Small caps need a face that carries an `smcp` table. Of the repository fixtures only Source Serif 4 does, so the
- * proper-noun span names it explicitly rather than depending on whichever face the harness has selected.
- */
+/** Composed-span content: each span isolates one shaping/paint obligation (glyph selection, tracking, resize, font-slot, fallback, paint inheritance) a single check couldn't otherwise distinguish. */
 export const RICH_TEXT_PARAGRAPH_COLOR = LIVE_TEXT_COLOR_CSS;
 export const RICH_TEXT_ACCENT_COLOR = '#ff8800';
 export const RICH_TEXT_TINT_COLOR = '#00c8ff';
 export const RICH_TEXT_SMALL_CAPS_FEATURE = 'smcp';
 
-/**
- * Companion faces the composed content selects by span, in the order the route's font policy declares them.
- *
- * `emphasis` is the deliberate authoring choice — the repository carries no italic fixture, so a serif standing beside
- * a sans body face is the available stand-in for the italic emphasis a title sequence would use. `foreign` is the
- * fallback: no Latin fixture can shape Devanagari at all.
- */
+/** Companion faces the composed content selects by span, in font-policy order: `emphasis` stands in for italic (no italic fixture exists), `foreign` is the actual fallback (no Latin face shapes Devanagari). */
 export interface RichTextCompanionFonts {
   readonly emphasis: Font<RasterFormatMetadata>;
   readonly foreign: Font<RasterFormatMetadata>;
@@ -55,22 +28,14 @@ export interface RichTextComposition {
   readonly bodyFontSize: number;
   readonly emphasisFontSize: number;
   readonly letterSpacing: number;
-  /**
-   * Whether the accent span encloses a nested style-only span. Composing the same words without that wrapper is the
-   * control that isolates what the nesting itself costs, so it is a composition input rather than a size of `0`.
-   */
+  /** Whether the accent span encloses a nested style-only span; a composition input (not a size of `0`) so composing without it isolates what nesting itself costs. */
   readonly nested: boolean;
   readonly nestedFontSize: number;
   readonly smallCaps: boolean;
   readonly tintColor: string;
 }
 
-/**
- * Which authored span occupies each index of the composed literal, with its exact UTF-16 range.
- *
- * `txt` derives these ranges from the template, so pinning them here turns an edit to the prose into a loud failure
- * instead of a silent re-attribution of every piece of per-glyph evidence that reads back through them.
- */
+/** Which authored span occupies each index of the composed literal, with its exact UTF-16 range; pinning these turns a prose edit into a loud failure instead of silent re-attribution. */
 export const RICH_TEXT_SPANS = [
   { end: 25, name: 'properNoun', start: 19 },
   { end: 66, name: 'tracked', start: 61 },
@@ -160,12 +125,9 @@ export function assertRichTextSpans(
 const RICH_TEXT_PARAGRAPH_GAP = 18;
 const RICH_TEXT_MINIMUM_PARAGRAPHS = 1;
 const RICH_TEXT_MAXIMUM_PARAGRAPHS = 6;
-/**
- * A span size change is shaping input, so the animation advances on its own cadence instead of every frame. The live
- * cost this workload reports is the cost of composed reflow, and sampling it at a fixed rate keeps that cost comparable
- * across technique and backend lanes rather than proportional to whichever lane presents frames fastest.
- */
-const RICH_TEXT_RESHAPE_INTERVAL_MS = 125;
+const RICH_TEXT_MUTATIONS_PER_SECOND = 60;
+const RICH_TEXT_EMPHASIS_CYCLE_TICKS = RICH_TEXT_MUTATIONS_PER_SECOND * 4;
+const RICH_TEXT_TINT_CYCLE_TICKS = RICH_TEXT_MUTATIONS_PER_SECOND * 12;
 
 export function richTextParagraphCount(amount: number): number {
   if (!Number.isFinite(amount) || amount < 0 || amount > 100) {
@@ -176,16 +138,14 @@ export function richTextParagraphCount(amount: number): number {
 }
 
 /** Per-paragraph emphasis phase, so a stack reflows at staggered offsets instead of in lockstep. */
-export function richTextEmphasisScale(index: number, count: number, elapsedMs: number): number {
+export function richTextEmphasisScale(index: number, count: number, contentTick: number): number {
   assertParagraphIndex(index, count);
-  const step = Math.floor(elapsedMs / RICH_TEXT_RESHAPE_INTERVAL_MS);
-  return 1 + 0.45 * (1 + Math.sin((step / 32 + index / count) * Math.PI * 2));
+  return 1 + 0.45 * (1 + Math.sin((contentTick / RICH_TEXT_EMPHASIS_CYCLE_TICKS + index / count) * Math.PI * 2));
 }
 
-export function richTextTintColor(index: number, count: number, elapsedMs: number): string {
+export function richTextTintColor(index: number, count: number, contentTick: number): string {
   assertParagraphIndex(index, count);
-  const step = Math.floor(elapsedMs / RICH_TEXT_RESHAPE_INTERVAL_MS);
-  const hue = (((step / 96 + index / count) % 1) + 1) % 1;
+  const hue = (((contentTick / RICH_TEXT_TINT_CYCLE_TICKS + index / count) % 1) + 1) % 1;
   const channel = (offset: number): number => {
     const value = (offset + hue * 12) % 12;
     return 0.55 - 0.42 * Math.max(-1, Math.min(value - 3, 9 - value, 1));
@@ -203,6 +163,28 @@ function assertParagraphIndex(index: number, count: number): void {
   }
 }
 
+/** Returns the latest eligible 60 Hz tick, or `undefined` when this rAF must not publish. */
+export function nextRichTextPublicationTick(
+  animationEnabled: boolean,
+  elapsedMs: number,
+  previousTick: number | undefined,
+): number | undefined {
+  if (!animationEnabled) return undefined;
+  const tick = richTextLogicalMutationTick(elapsedMs);
+  return tick === previousTick ? undefined : tick;
+}
+
+/** Scales one publication tick into the authored animation timeline without changing publication cadence. */
+export function richTextContentTick(publicationTick: number, animationSpeed: number): number {
+  return publicationTick * (0.25 + animationSpeed * 0.0175);
+}
+
+function richTextLogicalMutationTick(elapsedMs: number): number {
+  const tick = (elapsedMs * RICH_TEXT_MUTATIONS_PER_SECOND) / 1_000;
+  const boundaryTolerance = Number.EPSILON * Math.max(1, Math.abs(tick));
+  return Math.floor(tick + boundaryTolerance);
+}
+
 export const richTextWorkload = {
   animate(entries, configuration, elapsedMs) {
     animateRichTextEntries(entries, configuration, elapsedMs);
@@ -216,6 +198,7 @@ export const richTextWorkload = {
   create(context) {
     return createRichTextEntries({
       amount: context.configuration.amount,
+      animationSpeed: context.configuration.animationSpeed,
       companionFonts: richTextCompanionFonts(context.companionFonts),
       dpr: context.dpr,
       elapsedMs: context.animationElapsedMs,
@@ -248,10 +231,7 @@ export function richTextCompanionFonts(companions: readonly WorkloadFont[]): Ric
   return { emphasis, foreign };
 }
 
-/**
- * Bitmap rejects outline and shadow and Slug V0 omits them, so the composed style only reaches for them on MTSDF —
- * the same technique gate the paint-effects lane already encodes.
- */
+/** Bitmap rejects outline/shadow and Slug V0 omits them, so composed style only reaches for them on MTSDF — the same gate the paint-effects lane uses. */
 function richTextParagraphPaint(
   technique: RasterFormatName,
   fontSize: number,
@@ -274,6 +254,7 @@ function richTextParagraphPaint(
 export function createRichTextEntries(
   context: WorkloadTextFactoryContext & {
     readonly amount: number;
+    readonly animationSpeed: number;
     readonly companionFonts: RichTextCompanionFonts;
     readonly elapsedMs: number;
     readonly fontSize: number;
@@ -294,10 +275,11 @@ export function createRichTextEntries(
     context.paintShadowEnabled,
     context.paintStrokeWidth,
   );
+  const contentTick = richTextContentTick(richTextLogicalMutationTick(context.elapsedMs), context.animationSpeed);
   return Array.from({ length: count }, (_, index) => {
     const composition = richTextComposition(context.fontSize, {
-      emphasisFontSize: context.fontSize * richTextEmphasisScale(index, count, context.elapsedMs),
-      tintColor: richTextTintColor(index, count, context.elapsedMs),
+      emphasisFontSize: context.fontSize * richTextEmphasisScale(index, count, contentTick),
+      tintColor: richTextTintColor(index, count, contentTick),
     });
     const literal = richTextLiteral(context.companionFonts, composition);
     assertRichTextSpans(literal, composition);
@@ -338,28 +320,25 @@ export function layoutRichTextEntries(
   }
 }
 
-/**
- * Republishes every paragraph's composed literal. A span size change is shaping input, so this deliberately reaches the
- * reshape path rather than the paint-only path: that reshape is the cost this workload exists to measure.
- */
+/** Republishes every paragraph's composed literal; a span size change is shaping input, so this deliberately takes the reshape path — that reshape cost is what this workload measures. */
 export function animateRichTextEntries(
   entries: readonly ComparisonWorkloadEntry[],
   configuration: Pick<ComparisonWorkloadConfiguration, 'animationEnabled' | 'animationSpeed' | 'fontSize'>,
   elapsedMs: number,
 ): void {
-  if (!configuration.animationEnabled || entries.length === 0) return;
-  const scaled = elapsedMs * (0.25 + configuration.animationSpeed * 0.0175);
-  const reshapeFrame = Math.floor(scaled / RICH_TEXT_RESHAPE_INTERVAL_MS);
+  if (entries.length === 0) return;
   const first = entries[0]!;
-  if (first.lastPaintFrame === reshapeFrame) return;
+  const publicationTick = nextRichTextPublicationTick(configuration.animationEnabled, elapsedMs, first.lastPaintFrame);
+  if (publicationTick === undefined) return;
+  const contentTick = richTextContentTick(publicationTick, configuration.animationSpeed);
   const started = performance.now();
   for (const [index, entry] of entries.entries()) {
-    entry.lastPaintFrame = reshapeFrame;
+    entry.lastPaintFrame = publicationTick;
     const literal = richTextLiteral(
       retainedCompanionFonts(entry),
       richTextComposition(configuration.fontSize, {
-        emphasisFontSize: configuration.fontSize * richTextEmphasisScale(index, entries.length, scaled),
-        tintColor: richTextTintColor(index, entries.length, scaled),
+        emphasisFontSize: configuration.fontSize * richTextEmphasisScale(index, entries.length, contentTick),
+        tintColor: richTextTintColor(index, entries.length, contentTick),
       }),
     );
     entry.sourceText = literal.text;
@@ -399,10 +378,7 @@ export function applyRichTextRetainedConfiguration(
   }
 }
 
-/**
- * Reads the immutable companion leases retained beside the entry. `Text` intentionally does not expose the command
- * compiler's generated span records as mutable public state.
- */
+/** Reads the immutable companion leases retained beside the entry; `Text` intentionally doesn't expose the compiler's generated span records as mutable public state. */
 function retainedCompanionFonts(entry: ComparisonWorkloadEntry): RichTextCompanionFonts {
   const fonts = entry.richTextCompanionFonts;
   if (fonts === undefined) throw new Error('rich text paragraph lost its retained companion fonts');

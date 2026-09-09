@@ -1,10 +1,11 @@
 import type {
   BakeArtifact,
+  Fingerprint,
   RasterBakeArtifact,
   RasterBakeRequest,
   RasterResourceSource,
-  Sha256Hex,
 } from '@pmndrs/glyph';
+import { compatibilityFingerprint, fingerprint } from '@pmndrs/glyph';
 
 import {
   GLYPH_EXAMPLE_EXTENSION,
@@ -22,9 +23,8 @@ const GLTF_WITNESS = new Uint8Array(12);
 export interface GlyphExampleExtension {
   readonly version: 0;
   readonly rasterKey: string;
-  readonly shapingHash: string;
-  readonly glyphCount: number;
-  readonly glyphIdWidth: 16;
+  /** The one value this raster and its core font compare to decide they belong together. */
+  readonly fingerprint: Fingerprint;
   readonly descriptor: GlyphExampleDescriptor;
   readonly headerBufferView: number;
   readonly records: RasterResourceSource;
@@ -35,21 +35,26 @@ export async function bakeGlyphExampleArtifact(
   request: RasterBakeRequest<GlyphExampleDescriptor>,
 ): Promise<RasterBakeArtifact<typeof GLYPH_EXAMPLE_KIND>> {
   request.signal?.throwIfAborted();
+  if (fingerprint.source(request.font.source) !== request.font.sourceFingerprint) {
+    throw new TypeError('glyph-example source bytes do not match their stamped fingerprint');
+  }
   const records = glyphColorRecords(request.font.glyphCount, request.descriptor.paletteSeed);
-  const external = request.packaging.pages === 'external';
-  const recordHash = await sha256(records);
   request.signal?.throwIfAborted();
-  const recordId = `${request.rasterKey}.glyph-example.rgba`;
-  const binary = external ? concatenate(GLTF_WITNESS, HEADER) : concatenate(GLTF_WITNESS, HEADER, records);
-  const recordSource: RasterResourceSource = external
-    ? { type: 'external', uri: recordId, byteLength: records.byteLength, artifactHash: recordHash }
-    : { type: 'bufferView', bufferView: 2 };
+  // A page always travels inside the artifact that declares it.
+  const binary = concatenate(GLTF_WITNESS, HEADER, records);
+  const recordSource: RasterResourceSource = { type: 'bufferView', bufferView: 2 };
   const extension: GlyphExampleExtension = {
     version: GLYPH_EXAMPLE_FORMAT_VERSION,
     rasterKey: request.rasterKey,
-    shapingHash: request.font.shapingHash,
-    glyphCount: request.font.glyphCount,
-    glyphIdWidth: 16,
+    fingerprint: compatibilityFingerprint({
+      glyphCount: request.font.glyphCount,
+      glyphIdWidth: 16,
+      kind: GLYPH_EXAMPLE_KIND,
+      rasterKey: request.rasterKey,
+      shaping: request.font.shapingFingerprint,
+      source: request.font.sourceFingerprint,
+      version: GLYPH_EXAMPLE_FORMAT_VERSION,
+    }),
     descriptor: request.descriptor,
     headerBufferView: 1,
     records: recordSource,
@@ -61,15 +66,11 @@ export async function bakeGlyphExampleArtifact(
     bufferViews: [
       { buffer: 0, byteOffset: 0, byteLength: GLTF_WITNESS.byteLength, target: 34962 },
       { buffer: 0, byteOffset: GLTF_WITNESS.byteLength, byteLength: HEADER.byteLength },
-      ...(external
-        ? []
-        : [
-            {
-              buffer: 0,
-              byteOffset: GLTF_WITNESS.byteLength + HEADER.byteLength,
-              byteLength: records.byteLength,
-            },
-          ]),
+      {
+        buffer: 0,
+        byteOffset: GLTF_WITNESS.byteLength + HEADER.byteLength,
+        byteLength: records.byteLength,
+      },
     ],
     accessors: [
       {
@@ -89,16 +90,16 @@ export async function bakeGlyphExampleArtifact(
     extensionsUsed: [GLYPH_EXAMPLE_EXTENSION],
   };
   const bytes = encodeGlb(document, binary);
+  const artifactFingerprint = fingerprint.artifact(bytes);
   const metadataBytes = HEADER.byteLength + new TextEncoder().encode(JSON.stringify(extension)).byteLength;
   const artifacts: BakeArtifact[] = [
     {
       role: 'raster',
       id: `${request.rasterKey}.glyph-example.glb`,
       bytes,
-      sha256: await sha256(bytes),
+      fingerprint: artifactFingerprint,
     },
   ];
-  if (external) artifacts.push({ role: 'raster-page', id: recordId, bytes: records, sha256: recordHash });
   request.signal?.throwIfAborted();
   return {
     rasterKey: request.rasterKey,
@@ -116,7 +117,6 @@ export async function bakeGlyphExampleArtifact(
           height: 1,
           format: 'rgba8unorm',
           gpuBytes: records.byteLength,
-          source: external ? 'external' : 'embedded',
           encodedBytes: records.byteLength,
         },
       ],
@@ -169,12 +169,6 @@ function encodeGlb(document: unknown, binary: Uint8Array): Uint8Array {
   view.setUint32(binHeader + 4, BIN_CHUNK, true);
   bytes.set(binary, binHeader + 8);
   return bytes;
-}
-
-async function sha256(bytes: Uint8Array): Promise<Sha256Hex> {
-  const owned = Uint8Array.from(bytes);
-  const digest = await crypto.subtle.digest('SHA-256', owned);
-  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('') as Sha256Hex;
 }
 
 function concatenate(...parts: readonly Uint8Array[]): Uint8Array {

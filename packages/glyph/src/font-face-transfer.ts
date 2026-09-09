@@ -1,13 +1,13 @@
 /** One content-addressed external resource carried with a serialized raster. */
 export interface SerializedFontFaceResource {
-  readonly artifactHash: string;
+  readonly artifactFingerprint: string;
   readonly byteLength: number;
   readonly data: ArrayBuffer;
 }
 
 /** Content identity of one external resource used by a serialized raster. */
 export interface SerializedFontFaceResourceIdentity {
-  readonly artifactHash: string;
+  readonly artifactFingerprint: string;
   readonly byteLength: number;
 }
 
@@ -19,7 +19,7 @@ export interface SerializedFontFaceRaster {
   readonly version: number;
   /** Complete sidecar GLB. Omitted only when this raster is embedded in the main font GLB. */
   readonly data?: ArrayBuffer;
-  readonly artifactHash?: string;
+  readonly artifactFingerprint?: string;
   /** Exact external resource dependencies resolved while loading this raster. */
   readonly resources: readonly SerializedFontFaceResourceIdentity[];
 }
@@ -30,7 +30,7 @@ export interface SerializedFontFace {
   readonly version: 1;
   /** Complete main font GLB. This buffer is transferable. */
   readonly data: ArrayBuffer;
-  readonly artifactHash: string;
+  readonly artifactFingerprint: string;
   readonly rasters: readonly SerializedFontFaceRaster[];
   /** External resources deduplicated across every carried raster by content identity. */
   readonly resources: readonly SerializedFontFaceResource[];

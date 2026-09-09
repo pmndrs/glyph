@@ -1,4 +1,4 @@
-import type { RasterDecodeArtifact, RasterDecodeFont } from '@pmndrs/glyph';
+import type { RasterDecodeArtifact, RasterDecodeFont, RasterKey } from '@pmndrs/glyph';
 import {
   bitmap,
   bitmapDescriptor,
@@ -14,7 +14,8 @@ void inline;
 void fromTuple;
 
 const configured: BitmapOptions<typeof tuple> = { strikes: tuple };
-void bitmapRasterKey(configured);
+const configuredRasterKey: RasterKey = bitmapRasterKey(configured);
+void configuredRasterKey;
 declare const font: RasterDecodeFont;
 declare const raster: RasterDecodeArtifact<'bitmap'>;
 const bitmapData: Promise<BitmapData> = bitmap.decode(font, raster);

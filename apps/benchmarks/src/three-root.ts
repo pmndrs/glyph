@@ -8,7 +8,6 @@ import {
 
 interface BenchmarkThreeRootOptions {
   readonly capacity?: GlyphBufferCapacity;
-  readonly compositing?: 'ordered' | 'independent';
 }
 
 const defineThreeConfig =
@@ -21,11 +20,10 @@ const benchmarkHandles = new Map<string, ThreeHandle>();
 
 function benchmarkHandle(options: BenchmarkThreeRootOptions): ThreeHandle {
   const capacity = options.capacity ?? { size: 4_096, policy: 'chunk' };
-  const compositing = options.compositing ?? 'ordered';
-  const key = `${String(capacity.size)}:${capacity.policy}:${compositing}`;
+  const key = `${String(capacity.size)}:${capacity.policy}`;
   const existing = benchmarkHandles.get(key);
   if (existing !== undefined) return existing;
-  const handle = glyph.handle(`benchmarks:${key}`, defineThreeConfig({ capacity, compositing }));
+  const handle = glyph.handle(`benchmarks:${key}`, defineThreeConfig({ capacity }));
   benchmarkHandles.set(key, handle);
   return handle;
 }

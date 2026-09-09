@@ -55,7 +55,7 @@ const three = glyph.handle('main', ThreeConfig);
 Import only the RasterFormat modules an application names explicitly. `ThreeConfig` already supports its built-in
 Bitmap, MSDF, and Slug formats and realizes their Three materials.
 
-`ThreeConfig` is the built-in config value. `defineThreeConfig({ transformMode, allocationMode, capacity, compositing })`
+`ThreeConfig` is the built-in config value. `defineThreeConfig({ transformMode, allocationMode, capacity })`
 creates an immutable variant. Several named Three handles may coexist over the same loaded FontFace data while owning
 independent roots and renderer state.
 
@@ -137,12 +137,24 @@ scene.add(group);
 
 All descendant `Text` objects under the group participate in its retained hierarchy and nearest root publication.
 Compatible Bitmap, MSDF, and Slug records may share backing storage while the command buffer emits the draw boundaries
-required by raster, font resource, material, clipping, and compositing policy.
+required by raster, font resource, material, and clipping policy.
 
-`compositing: 'ordered'` preserves authored draw order. `independent` allows Rust to reorder compatible work when the
-application asserts that blending order is irrelevant.
+A `Text` always batches its own spans. Inside a `TextGroup`, each child `Text.renderOrder` is the stable paragraph rank;
+the adapter sends changed ranks and group-owned scope identities through a separate order sideband, while the ordinary
+12-byte paragraph mutation retains only lifecycle identity and authored root order. Rust atomically permutes
+only that scope's paragraphs into its existing root slots. Rust validates the complete final permutation in one
+transaction; the adapter neither pre-sorts nor incrementally rejects rank swaps. Authored semantic traversal remains
+separate from ranked draw traversal. The nearest
+`TextGroup.renderOrder` remains the ordinary Three draw-mesh order of the shared publication object, and an ungrouped
+`Text.renderOrder` remains the ordinary Three draw-mesh order of that Text's publication object. Applications such as
+camera-facing label systems may calculate child ranks from camera distance in TypeScript, but the portable engine owns
+applying those ranks to paragraph order, decoration paint layers, and coalesced glyph batches.
 
-Capacity and compositing belong to `defineThreeConfig()`, not mutable TextGroup or handle methods. The policy controls
+Draw order inside one paragraph follows the engine's fixed under-decoration, glyph-ink, and over-decoration paint layers.
+Paragraph rank is not stored per glyph and is not a draw-key field, so multiple fonts, colors, and decorations can still
+coalesce wherever their actual resource, material, and paint-layer keys agree.
+
+Capacity belongs to `defineThreeConfig()`, not mutable TextGroup or handle methods. The policy controls
 every anonymous or named root created by that handle:
 
 ```ts
@@ -150,7 +162,6 @@ const dense = glyph.handle(
   'dense',
   defineThreeConfig({
     capacity: { size: 16_384, policy: 'chunk' },
-    compositing: 'independent',
   }),
 );
 ```
@@ -168,7 +179,7 @@ an engine failure: traversal leaves the last complete draw live, `commitState()`
 reports the desired paragraph. Shortening the text or increasing capacity is checked again on the next traversal, so
 recovery does not depend on a latch or unrelated input churn (D-282).
 
-`ThreeConfig` defaults every root to 4,096-glyph chunks and ordered compositing. To use another immutable policy, create
+`ThreeConfig` defaults every root to 4,096-glyph chunks. To use another immutable policy, create
 another handle from another config.
 
 ## Update retained values
@@ -294,6 +305,9 @@ measurement without introducing a second renderer-free retained runtime.
 Sequential `measure()` calls in one group extend a full desired-lifecycle speculative transaction. Each query applies
 semantic mutations only for its paragraph; the first render traversal publishes the complete batch once and adopts the
 prepared work. Repeating an unchanged measurement returns the retained result object without another Wasm crossing.
+The root may park one preceding detached controller outside active publication membership, so alternating two detached
+queries preserves both semantic caches while only the explicitly queried Text remains bound. A third distinct detached
+query or an ordinary scene publication evicts that bounded slot.
 
 `glyphs()` is intentionally different: it positions current desired text and copies per-line and per-glyph arrays. It
 still does not publish or realize renderer resources. Ordinary rendering never materializes either semantic view merely

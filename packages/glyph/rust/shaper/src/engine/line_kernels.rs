@@ -1,5 +1,6 @@
 //! Production and laboratory kernels for segmentation and line planning.
 //!
+//! Production probes four scalar bidi levels before its transition SIMD scan.
 //! Production scans bidi transitions one `v128` block at a time and visits
 //! justification flags four `v128` blocks at a time. The four-block limit is a
 //! measured, deterministic unroll choice; wider candidates remain behind the
@@ -15,6 +16,13 @@ pub(crate) fn next_transition(levels: &[u8], start: usize) -> usize {
     let mut index = start + 1;
     #[cfg(all(target_arch = "wasm32", feature = "simd128"))]
     {
+        let prefix_end = (index + 4).min(levels.len());
+        while index < prefix_end && levels[index] == level {
+            index += 1;
+        }
+        if index < prefix_end {
+            return index;
+        }
         index = next_transition_simd::<1>(levels, index, level);
     }
     while index < levels.len() && levels[index] == level {
@@ -25,11 +33,20 @@ pub(crate) fn next_transition(levels: &[u8], start: usize) -> usize {
 
 #[cfg(feature = "kernel-lab")]
 fn next_transition_grouped<const GROUPS: usize>(levels: &[u8], start: usize) -> usize {
+    // The lab varies only SIMD grouping after the production scalar prefix, so
+    // it measures deployable kernels rather than an artificial vector-only loop.
     let level = levels[start];
     #[allow(unused_mut)]
     let mut index = start + 1;
     #[cfg(all(target_arch = "wasm32", feature = "simd128"))]
     {
+        let prefix_end = (index + 4).min(levels.len());
+        while index < prefix_end && levels[index] == level {
+            index += 1;
+        }
+        if index < prefix_end {
+            return index;
+        }
         index = next_transition_simd::<GROUPS>(levels, index, level);
     }
     while index < levels.len() && levels[index] == level {

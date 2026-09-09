@@ -74,7 +74,7 @@ An outer `Text` is a retained paragraph and a Three `Object3D`. A nested `Text` 
 
 `TextGroup` is an optional batching and ordering boundary. It collects descendant `Text` objects through the ordinary scene graph, so regular Three groups may appear between them. A standalone `Text` has the same text semantics and lazily owns an implicit batch of one.
 
-`defineThreeConfig({ compositing: 'ordered' })` preserves authored draw order and is the default. Use `independent` only when overlapping text does not depend on blending order as it lets the planner reorder compatible work into fewer draws.
+A `Text` always batches its own spans, so one paragraph mixing faces or sizes collapses into as few draws as its resources allow. Draw order inside a paragraph is shaping's, not the caller's: it is deterministic but not a promise. Order between paragraphs is stated by grouping them.
 
 `GlyphProvider` is optional. Use it only to select a named/custom root for a subtree or to declare scoped string FontFace
 aliases. Its handle and FontFace table are immutable for the lifetime of that provider:
@@ -252,6 +252,15 @@ pnpm exec glyph bake --input Inter-Regular.ttf --output Inter.font.glb --bitmap 
 ```
 
 Add `--unicodes U+0020-007E` to bake a subset, or `--check` to rebuild temporarily and require byte-identical output.
+For an icon font, `--glyph-map <path>` writes a directly importable JSON lookup from each authored glyph name in that
+same Unicode selection to its code point:
+
+```sh
+pnpm exec glyph bake --input fa-solid-900.ttf --output icons.font.glb --unicodes U+F000-F8FF --glyph-map icons.json --msdf
+```
+
+Names with multiple code points inside the selected set are rejected as ambiguous; narrow `--unicodes` rather than
+letting the generator silently choose an alias.
 
 Or let the CLI discover every `glyph.fontFace()` declaration in a project and write each artifact beside its source asset:
 

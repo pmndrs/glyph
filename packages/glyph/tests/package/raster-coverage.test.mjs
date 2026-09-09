@@ -39,7 +39,7 @@ test('normalizes the complete Bitmap Worker option boundary without dropping cov
   assert.throws(() => normalizeBitmapOptions({ strikes: [16], unknown: true }), /unknown property/);
 });
 
-test('authenticates identical bounded coverage in Bitmap and MSDF descriptors', async () => {
+test('fingerprints identical bounded coverage in Bitmap and MSDF descriptors', async () => {
   const coverage = {
     unicodeRanges: [{ start: 65, end: 90 }],
     text: 'AB',
@@ -50,12 +50,9 @@ test('authenticates identical bounded coverage in Bitmap and MSDF descriptors', 
     generatorVersion: '0.0.0',
     strikes: [16, 32],
   });
-  assert.equal(
-    await bitmapRasterKey({ strikes: [16, 32], coverage }),
-    'c2ca57973a0666f858d350def46deb26b41b9219e3073df6636a3eaa0810e853',
-  );
+  assert.equal(bitmapRasterKey({ strikes: [16, 32], coverage }), '1337754c97c73e84d8d6d5429d514fb5');
   assert.deepEqual(msdfDescriptor({ coverage }), { coverage, generatorVersion: '0.0.0' });
-  assert.equal(await msdfRasterKey({ coverage }), '4118e8f8787ea4de99492c4869059cca10b0ae69494b780699a421d5fe22fe4d');
+  assert.equal(msdfRasterKey({ coverage }), '71f88f27050d4b01aa9c1d1d60c5de77');
 });
 
 test('rejects ambiguous, unbounded, and non-scalar coverage input', () => {

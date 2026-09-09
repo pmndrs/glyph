@@ -28,12 +28,4 @@ for (const dpr of [1, 2] as const) {
 }
 
 console.log('source-outline-fidelity-probe-ready');
-/* @workflow
-{
-  "name": "benchmark:source-outline",
-  "summary": "Verify cross-technique source-outline fidelity on hardware WebGPU.",
-  "requirements": "GPU-enabled Chromium and Vitexec.",
-  "writes": "Ignored browser caches only.",
-  "args": ["--gpu", "--path", "/?runner=probe"]
-}
-*/
+/* @workflow { "name": "benchmark:source-outline", "summary": "Verify cross-technique source-outline fidelity on hardware WebGPU.", "requirements": "GPU-enabled Chromium and Vitexec.", "writes": "Ignored browser caches only.", "args": ["--gpu", "--path", "/?runner=probe"] } */

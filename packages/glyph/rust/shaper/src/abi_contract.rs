@@ -30,7 +30,7 @@ use crate::engine::frame::{
     SEMANTIC_F32_SHADOW_OFFSET_X_EM, SEMANTIC_F32_SHADOW_OFFSET_Y_EM, SEMANTIC_U32_CLUSTER_ID,
     SEMANTIC_U32_FLOW_THREAD_ID, SEMANTIC_U32_FOREGROUND_RGBA, SEMANTIC_U32_OUTLINE_RGBA,
     SEMANTIC_U32_REGION_ID, SEMANTIC_U32_SHADOW_RGBA, SEMANTIC_U32_STABLE_GLYPH_ID,
-    SEMANTIC_U32_TRANSFORM_INDEX, SEMANTIC_VIEW_LAYOUT_INSPECTION, SEMANTIC_VIEW_MASK,
+    SEMANTIC_U32_TRANSFORM_INDEX, SEMANTIC_VIEW_BORROWED_LAYOUT, SEMANTIC_VIEW_LAYOUT_INSPECTION,
     SEMANTIC_VIEW_MEASUREMENT, SHAPE_POLYGON, SHAPE_RECTANGLE, STYLE_FIELD_BASELINE_SHIFT,
     STYLE_FIELD_DECORATION, STYLE_FIELD_DIRECTION, STYLE_FIELD_FEATURES, STYLE_FIELD_FONT_SIZE,
     STYLE_FIELD_FONT_STACK, STYLE_FIELD_FOREGROUND, STYLE_FIELD_LANGUAGE,
@@ -53,6 +53,7 @@ use crate::engine::semantic_view::{
     SEMANTIC_LINE, SEMANTIC_PARAGRAPH_MEASUREMENT, SEMANTIC_RUN, SEMANTIC_SELECTION,
     SemanticRecord,
 };
+use crate::engine::{SemanticGlyph, layout_borrow::BorrowedLayoutDescriptor};
 
 pub const ABI_VERSION: u32 = 0;
 pub const SHAPER_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -226,6 +227,8 @@ struct EngineUpdateRequestHeader {
     max_paragraphs: u32,
     paragraph_mutations_offset: u32,
     paragraph_mutation_count: u32,
+    paragraph_order_mutations_offset: u32,
+    paragraph_order_mutation_count: u32,
 }
 
 #[repr(C)]
@@ -243,6 +246,13 @@ struct EngineParagraphMutationRecord {
     reserved0: u16,
     paragraph_id: u32,
     order: u32,
+}
+
+#[repr(C)]
+struct EngineParagraphOrderMutationRecord {
+    paragraph_id: u32,
+    order_scope: u32,
+    order_rank: f64,
 }
 
 #[repr(C)]
@@ -516,6 +526,11 @@ layout!(
     EngineParagraphMutationRecord
 );
 layout!(
+    ENGINE_PARAGRAPH_ORDER_MUTATION_RECORD_SIZE,
+    ENGINE_PARAGRAPH_ORDER_MUTATION_RECORD_ALIGNMENT,
+    EngineParagraphOrderMutationRecord
+);
+layout!(
     ENGINE_TEXT_MUTATION_RECORD_SIZE,
     ENGINE_TEXT_MUTATION_RECORD_ALIGNMENT,
     EngineTextMutationRecord
@@ -559,6 +574,16 @@ layout!(
     SEMANTIC_RECORD_SIZE,
     SEMANTIC_RECORD_ALIGNMENT,
     SemanticRecord
+);
+layout!(
+    BORROWED_LAYOUT_DESCRIPTOR_SIZE,
+    BORROWED_LAYOUT_DESCRIPTOR_ALIGNMENT,
+    BorrowedLayoutDescriptor
+);
+layout!(
+    BORROWED_GLYPH_RECORD_SIZE,
+    BORROWED_GLYPH_RECORD_ALIGNMENT,
+    SemanticGlyph
 );
 layout!(
     RESOURCE_RECORD_SIZE,
@@ -1072,6 +1097,16 @@ field_offset!(
     paragraph_mutation_count
 );
 field_offset!(
+    ENGINE_UPDATE_PARAGRAPH_ORDER_MUTATIONS_OFFSET,
+    EngineUpdateRequestHeader,
+    paragraph_order_mutations_offset
+);
+field_offset!(
+    ENGINE_UPDATE_PARAGRAPH_ORDER_MUTATION_COUNT,
+    EngineUpdateRequestHeader,
+    paragraph_order_mutation_count
+);
+field_offset!(
     ENGINE_PARAGRAPH_MUTATION_OPCODE,
     EngineParagraphMutationRecord,
     opcode
@@ -1095,6 +1130,21 @@ field_offset!(
     ENGINE_PARAGRAPH_MUTATION_ORDER,
     EngineParagraphMutationRecord,
     order
+);
+field_offset!(
+    ENGINE_PARAGRAPH_ORDER_MUTATION_PARAGRAPH_ID,
+    EngineParagraphOrderMutationRecord,
+    paragraph_id
+);
+field_offset!(
+    ENGINE_PARAGRAPH_ORDER_MUTATION_ORDER_SCOPE,
+    EngineParagraphOrderMutationRecord,
+    order_scope
+);
+field_offset!(
+    ENGINE_PARAGRAPH_ORDER_MUTATION_ORDER_RANK,
+    EngineParagraphOrderMutationRecord,
+    order_rank
 );
 field_offset!(
     ENGINE_TEXT_MUTATION_OPCODE,
@@ -1762,6 +1812,52 @@ field_offset!(
     SemanticRecord,
     max_content_width
 );
+field_offset!(
+    BORROWED_LAYOUT_GENERATION,
+    BorrowedLayoutDescriptor,
+    generation
+);
+field_offset!(BORROWED_LAYOUT_ROOT_ID, BorrowedLayoutDescriptor, root_id);
+field_offset!(
+    BORROWED_LAYOUT_PARAGRAPH_ID,
+    BorrowedLayoutDescriptor,
+    paragraph_id
+);
+field_offset!(
+    BORROWED_LAYOUT_GLYPH_COUNT,
+    BorrowedLayoutDescriptor,
+    glyph_count
+);
+field_offset!(BORROWED_GLYPH_STABLE_ID, SemanticGlyph, stable_id);
+field_offset!(BORROWED_GLYPH_FONT_HANDLE, SemanticGlyph, font_handle);
+field_offset!(BORROWED_GLYPH_CLUSTER, SemanticGlyph, cluster);
+field_offset!(BORROWED_GLYPH_GLYPH_ID, SemanticGlyph, glyph_id);
+field_offset!(BORROWED_GLYPH_FLAGS, SemanticGlyph, flags);
+field_offset!(BORROWED_GLYPH_BIDI_LEVEL, SemanticGlyph, bidi_level);
+field_offset!(BORROWED_GLYPH_FONT_SIZE, SemanticGlyph, font_size);
+field_offset!(BORROWED_GLYPH_INLINE_ORIGIN, SemanticGlyph, inline_origin);
+field_offset!(BORROWED_GLYPH_BLOCK_ORIGIN, SemanticGlyph, block_origin);
+field_offset!(BORROWED_GLYPH_INLINE_ADVANCE, SemanticGlyph, inline_advance);
+field_offset!(
+    BORROWED_GLYPH_INK_INLINE_START,
+    SemanticGlyph,
+    ink_inline_start
+);
+field_offset!(
+    BORROWED_GLYPH_INK_BLOCK_START,
+    SemanticGlyph,
+    ink_block_start
+);
+field_offset!(
+    BORROWED_GLYPH_INK_INLINE_EXTENT,
+    SemanticGlyph,
+    ink_inline_extent
+);
+field_offset!(
+    BORROWED_GLYPH_INK_BLOCK_EXTENT,
+    SemanticGlyph,
+    ink_block_extent
+);
 field_offset!(RESOURCE_ID, ResourceRecord, id);
 field_offset!(RESOURCE_GENERATION, ResourceRecord, generation);
 field_offset!(RESOURCE_TECHNIQUE_ID, ResourceRecord, technique_id);
@@ -1910,6 +2006,8 @@ pub fn json() -> String {
             "textUpdate": "pmndrs_glyph_engine_update",
             "textUpdateBatch": "pmndrs_glyph_engine_update_batch",
             "measureParagraph": "pmndrs_glyph_engine_measure_paragraph",
+            "borrowParagraphLayout": "pmndrs_glyph_engine_borrow_paragraph_layout",
+            "borrowParagraphGlyph": "pmndrs_glyph_engine_borrow_paragraph_glyph",
             "copyGlyphs": "pmndrs_glyph_engine_copy_glyphs",
             "copyDecorations": "pmndrs_glyph_engine_copy_decorations"
         },
@@ -2080,7 +2178,9 @@ pub fn json() -> String {
                 "codecParametersLength": ENGINE_UPDATE_CODEC_PARAMETERS_LENGTH,
                 "maxParagraphs": ENGINE_UPDATE_MAX_PARAGRAPHS,
                 "paragraphMutationsOffset": ENGINE_UPDATE_PARAGRAPH_MUTATIONS_OFFSET,
-                "paragraphMutationCount": ENGINE_UPDATE_PARAGRAPH_MUTATION_COUNT
+                "paragraphMutationCount": ENGINE_UPDATE_PARAGRAPH_MUTATION_COUNT,
+                "paragraphOrderMutationsOffset": ENGINE_UPDATE_PARAGRAPH_ORDER_MUTATIONS_OFFSET,
+                "paragraphOrderMutationCount": ENGINE_UPDATE_PARAGRAPH_ORDER_MUTATION_COUNT
             },
             "engineUpdateBatchEntry": {
                 "size": ENGINE_UPDATE_BATCH_ENTRY_SIZE,
@@ -2098,6 +2198,13 @@ pub fn json() -> String {
                 "reserved0": ENGINE_PARAGRAPH_MUTATION_RESERVED0,
                 "paragraphId": ENGINE_PARAGRAPH_MUTATION_PARAGRAPH_ID,
                 "order": ENGINE_PARAGRAPH_MUTATION_ORDER
+            },
+            "engineParagraphOrderMutation": {
+                "size": ENGINE_PARAGRAPH_ORDER_MUTATION_RECORD_SIZE,
+                "alignment": ENGINE_PARAGRAPH_ORDER_MUTATION_RECORD_ALIGNMENT,
+                "paragraphId": ENGINE_PARAGRAPH_ORDER_MUTATION_PARAGRAPH_ID,
+                "orderScope": ENGINE_PARAGRAPH_ORDER_MUTATION_ORDER_SCOPE,
+                "orderRank": ENGINE_PARAGRAPH_ORDER_MUTATION_ORDER_RANK
             },
             "engineTextMutation": {
                 "size": ENGINE_TEXT_MUTATION_RECORD_SIZE,
@@ -2312,6 +2419,32 @@ pub fn json() -> String {
                 "ascent": SEMANTIC_ASCENT,
                 "minContentWidth": SEMANTIC_MIN_CONTENT_WIDTH,
                 "maxContentWidth": SEMANTIC_MAX_CONTENT_WIDTH
+            },
+            "borrowedLayoutDescriptor": {
+                "size": BORROWED_LAYOUT_DESCRIPTOR_SIZE,
+                "alignment": BORROWED_LAYOUT_DESCRIPTOR_ALIGNMENT,
+                "generation": BORROWED_LAYOUT_GENERATION,
+                "rootId": BORROWED_LAYOUT_ROOT_ID,
+                "paragraphId": BORROWED_LAYOUT_PARAGRAPH_ID,
+                "glyphCount": BORROWED_LAYOUT_GLYPH_COUNT
+            },
+            "borrowedGlyph": {
+                "size": BORROWED_GLYPH_RECORD_SIZE,
+                "alignment": BORROWED_GLYPH_RECORD_ALIGNMENT,
+                "stableId": BORROWED_GLYPH_STABLE_ID,
+                "fontHandle": BORROWED_GLYPH_FONT_HANDLE,
+                "cluster": BORROWED_GLYPH_CLUSTER,
+                "glyphId": BORROWED_GLYPH_GLYPH_ID,
+                "flags": BORROWED_GLYPH_FLAGS,
+                "bidiLevel": BORROWED_GLYPH_BIDI_LEVEL,
+                "fontSize": BORROWED_GLYPH_FONT_SIZE,
+                "inlineOrigin": BORROWED_GLYPH_INLINE_ORIGIN,
+                "blockOrigin": BORROWED_GLYPH_BLOCK_ORIGIN,
+                "inlineAdvance": BORROWED_GLYPH_INLINE_ADVANCE,
+                "inkInlineStart": BORROWED_GLYPH_INK_INLINE_START,
+                "inkBlockStart": BORROWED_GLYPH_INK_BLOCK_START,
+                "inkInlineExtent": BORROWED_GLYPH_INK_INLINE_EXTENT,
+                "inkBlockExtent": BORROWED_GLYPH_INK_BLOCK_EXTENT
             },
             "engineResource": {
                 "size": RESOURCE_RECORD_SIZE,
@@ -2632,9 +2765,10 @@ pub fn json() -> String {
                 "checkpoint": RESULT_FLAG_CHECKPOINT
             },
             "semanticViewMasks": {
-                "all": SEMANTIC_VIEW_MASK,
+                "all": SEMANTIC_VIEW_MEASUREMENT | SEMANTIC_VIEW_LAYOUT_INSPECTION,
                 "measurement": SEMANTIC_VIEW_MEASUREMENT,
-                "layoutInspection": SEMANTIC_VIEW_LAYOUT_INSPECTION
+                "layoutInspection": SEMANTIC_VIEW_LAYOUT_INSPECTION,
+                "borrowedLayout": SEMANTIC_VIEW_BORROWED_LAYOUT
             },
             "measurementFlags": {
                 "overflowed": crate::engine::layout_query::MEASUREMENT_FLAG_OVERFLOWED,

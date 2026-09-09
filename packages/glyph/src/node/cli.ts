@@ -1,17 +1,21 @@
 #!/usr/bin/env node
 
 import type { MsdfOptions } from '../internal/msdf-contract.js';
+import type { SlugOptions } from '../internal/slug-contract.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type { RasterBakePlan } from '../bake.js';
 import type { UnicodeRange } from '../font-baker/index.js';
 import { normalizeUnicodeRanges } from '../internal/font-selection.js';
+import { assertDistinctInputOutputs, publishFilesWithRollback } from '../internal/node-file-publication.js';
+import { resolveRasterBakePlan, type ResolvedRasterBakePlan } from '../internal/raster-bake-plan.js';
 import {
   bakeFont,
   bakeProject,
+  fontIsUpToDate,
   inspectFont,
   NodeBakeError,
   type NodeFontBakeReport,
@@ -60,7 +64,8 @@ export async function runCli(
   }
   try {
     if (parsed.direct !== undefined) {
-      const report = await bakeDirect(parsed.direct);
+      const report = await bakeDirect(parsed.direct, io);
+      if (report === undefined) return 0;
       if (parsed.json) io.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
       else {
         io.stdout.write(`${parsed.direct.input} -> ${parsed.direct.output}\n`);
@@ -241,13 +246,32 @@ interface ParsedBakeArguments {
 interface DirectBakeArguments {
   readonly input: string;
   readonly output: string;
+  readonly glyphMap?: string;
   readonly fontFaceIndex: number;
   readonly bitmapStrikes?: readonly [number, ...number[]];
   readonly msdf: boolean;
   readonly msdfOptions?: MsdfOptions;
   readonly slug: boolean;
+  readonly slugOptions?: SlugOptions;
   readonly unicodeRanges?: readonly UnicodeRange[];
   readonly check: boolean;
+  readonly split: boolean;
+  readonly force: boolean;
+  readonly yes: boolean;
+}
+
+/** Derives a URL-safe core name such as `My Font.ttf` -> `my-font.glb`. */
+function derivedOutputPath(input: string): string {
+  const base = input.split(/[\\/]/).at(-1) ?? input;
+  const stem = base.replace(/\.(?:ttf|otf|ttc|otc|woff2?)$/i, '');
+  const safe = stem
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (safe === '') throw new TypeError(`could not derive an output name from ${input}; pass --output`);
+  return `${join(dirname(input), safe)}.glb`;
 }
 
 function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
@@ -257,12 +281,17 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
   const assetRoots: string[] = [];
   let input: string | undefined;
   let output: string | undefined;
+  let glyphMap: string | undefined;
   let fontFaceIndex = 0;
   let fontFaceIndexSet = false;
+  let split = false;
+  let force = false;
+  let yes = false;
   let bitmapStrikes: readonly [number, ...number[]] | undefined;
   let msdf = false;
   let msdfOptions: MsdfOptions | undefined;
   let slug = false;
+  let slugOptions: SlugOptions | undefined;
   let unicodeRanges: readonly UnicodeRange[] | undefined;
   let check = false;
   let json = false;
@@ -285,6 +314,8 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
       input = uniqueValue(input, valueAfter(argv, ++index, argument), argument);
     } else if (argument === '--output') {
       output = uniqueValue(output, valueAfter(argv, ++index, argument), argument);
+    } else if (argument === '--glyph-map') {
+      glyphMap = uniqueValue(glyphMap, valueAfter(argv, ++index, argument), argument);
     } else if (argument === '--font-face-index') {
       if (fontFaceIndexSet) throw new TypeError('--font-face-index may be provided only once');
       fontFaceIndexSet = true;
@@ -303,12 +334,24 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
         msdfOptions = parseMsdfOptions(argv[++index]!);
       }
     } else if (argument === '--slug') {
+      if (slug) throw new TypeError('--slug may be provided only once');
       slug = true;
+      // Optional settings follow the flag exactly as --msdf's do.
+      const nextSlugArgument = argv[index + 1];
+      if (nextSlugArgument !== undefined && !nextSlugArgument.startsWith('-')) {
+        slugOptions = parseSlugOptions(argv[++index]!);
+      }
     } else if (argument === '--unicodes') {
       if (unicodeRanges !== undefined) throw new TypeError('--unicodes may be provided only once');
       unicodeRanges = parseUnicodeSet(valueAfter(argv, ++index, argument));
     } else if (argument === '--check') {
       check = true;
+    } else if (argument === '--split') {
+      split = true;
+    } else if (argument === '--force') {
+      force = true;
+    } else if (argument === '--yes') {
+      yes = true;
     } else {
       throw new TypeError(`Unknown argument: ${argument}`);
     }
@@ -316,18 +359,22 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
   const directSelected =
     input !== undefined ||
     output !== undefined ||
+    glyphMap !== undefined ||
     bitmapStrikes !== undefined ||
     msdf ||
     slug ||
     unicodeRanges !== undefined ||
     check ||
+    split ||
+    force ||
+    yes ||
     fontFaceIndexSet;
   const projectSelected =
     projectRoot !== undefined || outputRoot !== undefined || entries.length !== 0 || assetRoots.length !== 0;
   if (directSelected && projectSelected)
     throw new TypeError('direct font options cannot be mixed with project discovery');
-  if (directSelected && (input === undefined || output === undefined)) {
-    throw new TypeError('direct font baking requires both --input and --output');
+  if (directSelected && input === undefined) {
+    throw new TypeError('direct font baking requires --input');
   }
   return {
     project: {
@@ -340,14 +387,19 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
       ? {
           direct: {
             input: input!,
-            output: output!,
+            output: output ?? derivedOutputPath(input!),
+            ...(glyphMap === undefined ? {} : { glyphMap }),
             fontFaceIndex,
             ...(bitmapStrikes === undefined ? {} : { bitmapStrikes }),
             msdf,
             ...(msdfOptions === undefined ? {} : { msdfOptions }),
             slug,
+            ...(slugOptions === undefined ? {} : { slugOptions }),
             ...(unicodeRanges === undefined ? {} : { unicodeRanges }),
             check,
+            split,
+            force,
+            yes,
           },
         }
       : {}),
@@ -389,16 +441,44 @@ function parseUnicodeSet(value: string): readonly UnicodeRange[] {
   return normalizeUnicodeRanges(ranges);
 }
 
-async function bakeDirect(options: DirectBakeArguments): Promise<NodeFontBakeReport> {
+async function bakeDirect(
+  options: DirectBakeArguments,
+  io: { readonly stdout: { write(text: string): unknown } },
+): Promise<NodeFontBakeReport | undefined> {
+  const { plans, resolved } = await directRasterPlans(options);
+  if (!options.check && !options.force) {
+    const freshness = await fontIsUpToDate({
+      output: options.output,
+      input: options.input,
+      fontFaceIndex: options.fontFaceIndex,
+      ...(options.unicodeRanges === undefined ? {} : { unicodeRanges: options.unicodeRanges }),
+      rasters: resolved.map((plan) => ({
+        rasterKey: plan.rasterKey,
+        kind: plan.baker.kind,
+        version: plan.baker.version,
+      })),
+      split: options.split,
+    });
+    if (freshness.fresh) {
+      io.stdout.write(`${options.output} is up to date — ${freshness.reason}\n`);
+      return undefined;
+    }
+  }
   const temporaryDirectory = await mkdtemp(join(tmpdir(), 'text-bake-'));
   try {
-    const output = options.check ? join(temporaryDirectory, 'checked.font.glb') : options.output;
+    const staged = options.check || options.glyphMap !== undefined;
+    const output = staged ? join(temporaryDirectory, 'checked.font.glb') : options.output;
+    let glyphMapBytes: Uint8Array | undefined;
+    if (options.glyphMap !== undefined) {
+      await assertDistinctInputOutputs(options.input, [options.output, options.glyphMap]);
+      glyphMapBytes = await createGlyphMap(options);
+    }
     const report = await bakeFont({
       input: options.input,
       output,
       font: { fontFaceIndex: options.fontFaceIndex },
       ...(options.unicodeRanges === undefined ? {} : { unicodeRanges: options.unicodeRanges }),
-      rasters: await directRasterPlans(options),
+      rasters: plans,
     });
     if (options.check) {
       const [expected, actual] = await Promise.all([readFile(options.output), readFile(output)]);
@@ -409,11 +489,76 @@ async function bakeDirect(options: DirectBakeArguments): Promise<NodeFontBakeRep
           options.output,
         );
       }
+      if (options.glyphMap !== undefined && glyphMapBytes !== undefined) {
+        const expectedGlyphMap = await readFile(options.glyphMap);
+        if (!expectedGlyphMap.equals(glyphMapBytes)) {
+          throw new NodeBakeError(
+            'STALE_GLYPH_MAP',
+            'generated glyph map is not byte-identical to the requested output',
+            options.glyphMap,
+          );
+        }
+      }
+    } else if (options.glyphMap !== undefined && glyphMapBytes !== undefined) {
+      const fontBytes = await readFile(output);
+      const started = performance.now();
+      await publishFilesWithRollback([
+        { bytes: fontBytes, file: options.output },
+        { bytes: glyphMapBytes, file: options.glyphMap },
+      ]);
+      return reportWithPublishedOutput(report, output, options.output, performance.now() - started);
     }
-    return report;
+    return staged ? reportWithPublishedOutput(report, output, options.output, 0) : report;
   } finally {
     await rm(temporaryDirectory, { force: true, recursive: true });
   }
+}
+
+async function createGlyphMap(options: DirectBakeArguments): Promise<Uint8Array> {
+  const inspection = await inspectFont({ input: options.input, fontFaceIndex: options.fontFaceIndex });
+  const names = new Map<string, number>();
+  for (const { codePoint, name } of inspection.glyphs) {
+    if (name === undefined || name.length === 0 || !selectedCodePoint(codePoint, options.unicodeRanges)) continue;
+    const previous = names.get(name);
+    if (previous !== undefined && previous !== codePoint) {
+      throw new NodeBakeError(
+        'AMBIGUOUS_GLYPH_NAME',
+        `${name} maps to both ${formatCodePoint(previous)} and ${formatCodePoint(codePoint)} in the selected Unicode set`,
+        options.input,
+      );
+    }
+    names.set(name, codePoint);
+  }
+  return new TextEncoder().encode(
+    `${JSON.stringify(Object.fromEntries([...names].sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))), null, 2)}\n`,
+  );
+}
+
+function selectedCodePoint(codePoint: number, ranges: readonly UnicodeRange[] | undefined): boolean {
+  return ranges === undefined || ranges.some(({ start, end }) => codePoint >= start && codePoint <= end);
+}
+
+function reportWithPublishedOutput(
+  report: NodeFontBakeReport,
+  stagedOutput: string,
+  publishedOutput: string,
+  publishDuration: number,
+): NodeFontBakeReport {
+  return {
+    ...report,
+    execution: {
+      ...report.execution,
+      timingsMs: {
+        ...report.execution.timingsMs,
+        write: report.execution.timingsMs.write + publishDuration,
+        total: report.execution.timingsMs.total + publishDuration,
+      },
+      outputs: report.execution.outputs.map((output) => ({
+        ...output,
+        file: output.file === stagedOutput ? publishedOutput : output.file,
+      })),
+    },
+  };
 }
 
 type DirectRasterBakePlan =
@@ -421,31 +566,46 @@ type DirectRasterBakePlan =
   | RasterBakePlan<typeof import('../bakers/msdf.js').msdfBaker>
   | RasterBakePlan<typeof import('../bakers/slug.js').slugBaker>;
 
-async function directRasterPlans(options: DirectBakeArguments): Promise<DirectRasterBakePlan[]> {
-  const packaging = { artifact: 'embedded', pages: 'embedded' } as const;
-  const rasters: DirectRasterBakePlan[] = [];
+interface DirectRasterPlans {
+  readonly plans: DirectRasterBakePlan[];
+  readonly resolved: readonly ResolvedRasterBakePlan[];
+}
+
+/** Resolves each plan while its concrete baker type still witnesses the associated options. */
+async function directRasterPlans(options: DirectBakeArguments): Promise<DirectRasterPlans> {
+  const packaging = { artifact: options.split ? 'external' : 'embedded' } as const;
+  const plans: DirectRasterBakePlan[] = [];
+  const resolutions: Promise<ResolvedRasterBakePlan>[] = [];
+  // Naming no format is not a request for a font that cannot render; it is not having chosen.
+  if (options.bitmapStrikes === undefined && !options.msdf && !options.slug) {
+    const { msdfBaker } = await import('../bakers/msdf.js');
+    const plan = { baker: msdfBaker, packaging, options: undefined };
+    plans.push(plan);
+    resolutions.push(resolveRasterBakePlan(plan));
+    return { plans, resolved: await Promise.all(resolutions) };
+  }
   if (options.bitmapStrikes !== undefined) {
     const { bitmapBaker } = await import('../bakers/bitmap.js');
-    rasters.push({ baker: bitmapBaker, packaging, options: { strikes: options.bitmapStrikes } });
+    const plan = { baker: bitmapBaker, packaging, options: { strikes: options.bitmapStrikes } };
+    plans.push(plan);
+    resolutions.push(resolveRasterBakePlan(plan));
   }
   if (options.msdf) {
     const { msdfBaker } = await import('../bakers/msdf.js');
-    rasters.push({ baker: msdfBaker, packaging, options: options.msdfOptions });
+    const plan = { baker: msdfBaker, packaging, options: options.msdfOptions };
+    plans.push(plan);
+    resolutions.push(resolveRasterBakePlan(plan));
   }
   if (options.slug) {
     const { slugBaker } = await import('../bakers/slug.js');
-    rasters.push({ baker: slugBaker, packaging, options: undefined });
+    const plan = { baker: slugBaker, packaging, options: options.slugOptions };
+    plans.push(plan);
+    resolutions.push(resolveRasterBakePlan(plan));
   }
-  return rasters;
+  return { plans, resolved: await Promise.all(resolutions) };
 }
 
-/**
- * `em-size=32,pixel-range=6` — the technique's own settings, in the technique's
- * own terms.
- *
- * Atlas cost scales with the square of the em size, so a face set at small sizes
- * pays several times over for the default of 64 and has no way to say so.
- */
+/** Parses `em-size=32,pixel-range=6` — technique-specific settings. Atlas cost scales with the square of em size, so small-size faces can override the size-64 default. */
 function parseMsdfOptions(value: string): MsdfOptions {
   const options: { emSize?: number; pixelRange?: number } = {};
   for (const entry of value.split(',')) {
@@ -460,6 +620,30 @@ function parseMsdfOptions(value: string): MsdfOptions {
     else throw new TypeError(`Unknown --msdf setting: ${key}`);
   }
   return options;
+}
+
+function parseSlugOptions(value: string): SlugOptions {
+  const options: { cubicSubdivisions?: number } = {};
+  for (const entry of value.split(',')) {
+    const separator = entry.indexOf('=');
+    if (separator < 1) {
+      throw new TypeError(`--slug settings must be key=value pairs: ${entry}`);
+    }
+    const key = entry.slice(0, separator).trim();
+    const raw = entry.slice(separator + 1).trim();
+    if (key === 'cubic-subdivisions') {
+      options.cubicSubdivisions = boundedInteger(raw, 'cubic-subdivisions', '--slug', 1, 16);
+    } else throw new TypeError(`Unknown --slug setting: ${key}`);
+  }
+  return options;
+}
+
+function boundedInteger(value: string, label: string, flag: string, low: number, high: number): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < low || parsed > high) {
+    throw new TypeError(`${flag} ${label} must be an integer from ${low} to ${high}: ${value}`);
+  }
+  return parsed;
 }
 
 function positiveInteger(value: string, label: string): number {
@@ -537,7 +721,7 @@ Examples:
 function bakeUsage(): string {
   return `Usage:
   glyph bake [discovery options]
-  glyph bake --input <font> --output <font.glb> [options]
+  glyph bake --input <font> [--output <font.glb>] [options]
 
 Bake one known font directly, or discover glyph.fontFace() declarations in a project.
 Direct options and discovery options cannot be mixed. With no bake options, discovery
@@ -545,7 +729,9 @@ scans the current project and writes beside each source asset.
 
 Direct font options:
   --input <path>         Source TTF, OTF, TTC, or OTC font
-  --output <path>        Output GLB containing shaping data and selected rasters
+  --output <path>        Output GLB (default: the input name, beside it, url-safe)
+                        Example: "My Font.ttf" bakes to my-font.glb
+  --glyph-map <path>     Write name-to-code-point JSON for the selected Unicode set
   --font-face-index <n>  Collection face to bake (default: 0)
   --unicodes <set>       Unicode set used to prepare a smaller source font
                         Example: U+0020-007E,U+00A0-00FF,U+4E00-9FFF
@@ -556,8 +742,16 @@ Raster options:
   --msdf [settings]      Embed the MSDF raster, optionally configured
                         Settings: em-size (default 64), pixel-range (default 8)
                         Example: --msdf em-size=32,pixel-range=6
-  --slug                 Embed the default Slug raster
-                        With none selected, emit a shaping-only GLB
+  --slug [settings]      Embed the Slug raster, optionally configured
+                        Settings: cubic-subdivisions (default 4, CFF sources only)
+                        Example: --slug cubic-subdivisions=8
+                        With none selected, MSDF is baked
+
+Packaging options:
+  --split                Write each raster beside the core as <name>.<technique>.glb
+                        Default packs every raster into the one output file
+  --force                Always bake, skipping the up-to-date check
+  --yes                  Do not prompt before replacing an existing font
 
 Discovery options:
   --project-root <path>  Project root (default: current directory)
@@ -573,6 +767,7 @@ Output options:
 Examples:
   glyph bake --input Inter-Regular.ttf --output inter.font.glb --bitmap 16,32 --msdf --slug
   glyph bake --input Inter-Regular.ttf --output inter-latin.font.glb --unicodes U+0020-007E --msdf
+  glyph bake --input fa-solid-900.ttf --output icons.font.glb --unicodes U+F000-F8FF --glyph-map icons.json --msdf
   glyph bake --input Inter-Regular.ttf --output inter-small.font.glb --msdf em-size=32
   glyph bake --project-root . --output-root public/generated
   glyph bake --input Inter-Regular.ttf --output inter.font.glb --msdf --check

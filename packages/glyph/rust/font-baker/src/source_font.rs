@@ -9,7 +9,7 @@ use skera::{DEFAULT_DROP_TABLES, DEFAULT_LAYOUT_FEATURES, Plan, SubsetFlags};
 use skrifa::{GlyphNameSource, MetadataProvider};
 use std::{string::String, string::ToString, vec::Vec};
 
-use crate::{BakeError, BakeErrorCode, hex_sha256};
+use crate::{BakeError, BakeErrorCode};
 
 const MAX_UNICODE_RANGES: usize = 4_096;
 const MAX_UNICODE: u32 = 0x10_ffff;
@@ -45,7 +45,7 @@ pub struct PreparedFontReportV0 {
     pub prepared_bytes: usize,
     pub font_face_index: u32,
     pub glyph_count: u32,
-    pub sha256: String,
+    pub fingerprint: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -123,7 +123,10 @@ pub fn prepare_font(
         prepared_bytes: bytes.len(),
         font_face_index: 0,
         glyph_count,
-        sha256: hex_sha256(&bytes),
+        fingerprint: pmndrs_glyph_raster_artifact::fingerprint128(
+            &bytes,
+            pmndrs_glyph_raster_artifact::SOURCE_FINGERPRINT_V0,
+        ),
     };
     Ok(PreparedFontV0 { bytes, report })
 }

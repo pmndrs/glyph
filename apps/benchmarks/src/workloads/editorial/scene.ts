@@ -11,17 +11,22 @@ import {
   type WorkloadTextFactoryContext,
 } from '../shared/scene-entry';
 
-/** One editorial column: every paragraph justifies with bounded elasticity. */
+/** One editorial column: every paragraph fully expands like CSS and bounds only compression. */
 export const EDITORIAL_TEXT = [
-  'The pull of a justified column is older than the press that made it common. A page holds its measure, both edges true, while every line negotiates its own interior: word spaces widen and narrow inside declared bounds, and the letters lend a fraction of a unit when the words alone cannot settle the difference.',
-  'Typography is the craft of endowing human language with a durable visual form. The paragraph opens with a small indent, carries its own space before and after, and asks the composer for restraint: expansion capped near a third of a space, compression never past three quarters, and the last line left to fall where it may.',
-  'A tight measure is the honest test. When the column narrows, the breaker may borrow back the declared shrink to seat one more word; when it widens, capped word growth spills into hair-fine letter spacing rather than rivers. The reader should notice none of this — only that the page sits quietly.',
+  'The pull of a justified column is older than the press that made it common. A page holds its measure, both edges true, while every line negotiates its own interior: word spaces narrow only inside declared bounds and widen to settle the remaining difference.',
+  'Typography is the craft of endowing human language with a durable visual form. The paragraph opens with a small indent, carries its own space before and after, and asks the composer for restraint: compression never past three quarters, full expansion to the far edge, and the last line left to fall where it may.',
+  'A tight measure is the honest test. When the column narrows, the breaker may borrow back the declared shrink to seat one more word; when it widens, word spaces absorb the remainder so the edge remains true. The reader should notice none of this — only that the page sits quietly.',
 ] as const;
 
 const EDITORIAL_JUSTIFY = {
   minWordSpaceRatio: 0.75,
-  maxWordSpaceRatio: 1.35,
-  letterSpaceExpansion: 0.4,
+} as const;
+
+/** A bounded expansion specimen: word spaces cap first, then letter gaps absorb the remainder. */
+const EDITORIAL_BOUNDED_JUSTIFY = {
+  ...EDITORIAL_JUSTIFY,
+  maxWordSpaceRatio: 1.25,
+  letterSpaceExpansion: 4,
 } as const;
 
 export const editorialWorkload = {
@@ -91,7 +96,7 @@ export function createEditorialEntries(
       wrap: 'word',
       align: 'justify',
       spaceAfter: context.fontSize * 0.8,
-      justify: EDITORIAL_JUSTIFY,
+      justify: EDITORIAL_BOUNDED_JUSTIFY,
     },
   });
   const body = context.root.createText({
@@ -159,21 +164,18 @@ export function layoutEditorialEntries(
   viewportHeight: number,
 ): void {
   const inset = 24;
-  let block = inset;
   let columnWidth = 0;
-  for (const entry of entries) {
-    columnWidth = Math.max(columnWidth, committedTextMetrics(entry.text).width);
-  }
-  const left = Math.max(inset, (viewportWidth - columnWidth) / 2);
   let totalHeight = 0;
   for (const entry of entries) {
-    totalHeight += committedTextMetrics(entry.text).height;
-  }
-  block = Math.max(inset, (viewportHeight - totalHeight) / 2);
-  for (const entry of entries) {
     const layout = committedTextMetrics(entry.text);
-    entry.text.position.set(left, -block, 0);
-    block += layout.height;
+    columnWidth = Math.max(columnWidth, layout.width);
+    entry.text.position.set(0, -totalHeight, 0);
+    totalHeight += layout.height;
+  }
+  const left = Math.max(inset, (viewportWidth - columnWidth) / 2);
+  const top = Math.max(inset, (viewportHeight - totalHeight) / 2);
+  for (const entry of entries) {
+    entry.text.position.set(left, entry.text.position.y - top, 0);
   }
 }
 

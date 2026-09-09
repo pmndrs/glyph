@@ -1,7 +1,4 @@
-/**
- * CPU reference math adapted from three-flatland Slug at 2935a89f
- * (MIT). It is independent of TSL and GPU texture behavior.
- */
+/** CPU reference math adapted from three-flatland Slug at 2935a89f (MIT); independent of TSL and GPU texture behavior. */
 
 export interface DecodedSlugHeader {
   readonly curveCount: number;

@@ -15,7 +15,7 @@
     "@pmndrs/glyph": "workspace:*",
     "@pmndrs/glyph-example-raster": "workspace:*",
     "@pmndrs/glyph-example-renderer": "workspace:*",
-    "@react-three/fiber": "10.0.0-alpha.3",
+    "@react-three/fiber": "10.0.0-alpha.4",
     "@typegpu/gl": "0.12.4",
     "@typegpu/three": "^0.12.1",
     "class-variance-authority": "0.7.1",
