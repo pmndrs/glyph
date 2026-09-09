@@ -15,8 +15,15 @@ import { slugDescriptor } from '@pmndrs/glyph/raster/slug';
 import { paragraphTextForGlyphs } from './support/paragraph-benchmark-fixture.mts';
 import { copyIntoAllocation, engineFrameUpdateBytes } from '../tests/support/engine-abi.mjs';
 import { techniqueProof } from './support/render-technique-proof.mjs';
+import {
+  assertRustLayoutBenchmarkResult,
+  parseRustLayoutBenchmarkArguments,
+  rustLayoutBenchmarkCases,
+  rustLayoutBenchmarkGeometry,
+  rustLayoutBenchmarkInitialGeometry,
+} from './support/rust-layout-benchmark-cases.mjs';
 
-const options = parseArguments(process.argv.slice(2));
+const options = parseRustLayoutBenchmarkArguments(process.argv.slice(2));
 const rootId = 1;
 const codecHandle = 1;
 const fontHandle = 1;
@@ -54,11 +61,6 @@ const limits = {
 };
 const baseGeometry = { width: 600, height: regionHeight, maxLines: utf16.length + 1, revision: 1 };
 const baseStyle = { textEnd: utf16.length, fontSize: 24, lineHeight: 1.2, rasterPixelRatio: 1 };
-const initial = updateBytes({
-  textMutation: { start: 0, deleteCount: 0, insert: utf16 },
-  style: baseStyle,
-  geometry: baseGeometry,
-});
 let plannerMemory;
 
 console.log(
@@ -67,19 +69,7 @@ console.log(
 
 const reports = [];
 const rawSampleRows = [];
-const cases = [
-  'cold',
-  'no-op',
-  'publish-measurement',
-  'publish-inspection',
-  'font-size',
-  'column-resize',
-  'measure-query',
-  'adopt-measure-query',
-  'suffix-edit',
-  'localized-edit',
-  'localized-splice',
-];
+const cases = rustLayoutBenchmarkCases(options.corpus);
 for (const name of options.case === undefined ? cases : [options.case]) {
   reports.push(name === 'cold' ? measureCold() : measureWarm(name));
 }
@@ -94,6 +84,7 @@ if (options.jsonPath !== undefined) {
         wasmSha256: createHash('sha256').update(wasm).digest('hex'),
         technique: options.technique,
         allocation: options.allocation,
+        corpus: options.corpus,
         glyphTarget: options.glyphs,
         warmup: options.warmup,
         repetitions: options.repetitions,
@@ -108,12 +99,26 @@ if (options.jsonPath !== undefined) {
 if (options.samplesPath !== undefined) {
   await writeFile(
     options.samplesPath,
-    `${JSON.stringify({ schemaVersion: 0, warmup: options.warmup, cases: rawSampleRows }, undefined, 2)}\n`,
+    `${JSON.stringify(
+      {
+        schemaVersion: 0,
+        technique: options.technique,
+        allocation: options.allocation,
+        corpus: options.corpus,
+        glyphTarget: options.glyphs,
+        warmup: options.warmup,
+        repetitions: options.repetitions,
+        cases: rawSampleRows,
+      },
+      undefined,
+      2,
+    )}\n`,
   );
   console.log(`wrote ${options.samplesPath}`);
 }
 
 function measureCold() {
+  const initial = initialBytes('cold');
   const samples = [];
   const plans = [];
   let glyphs = 0;
@@ -131,6 +136,7 @@ function measureCold() {
 }
 
 function measureWarm(name) {
+  const initial = initialBytes(name);
   createRoot(initial.byteLength);
   let state = execute(initial, true);
   const liveGlyphCount = state.glyphCount;
@@ -163,10 +169,10 @@ function measureWarm(name) {
         style: { ...baseStyle, fontSize: 12 + index * 0.5 },
         geometry: baseGeometry,
       });
-    } else if (name === 'column-resize') {
+    } else if (name === 'column-resize' || name === 'justify' || name === 'bidi-resize') {
       bytes = updateBytes({
         ...common,
-        geometry: { ...baseGeometry, width: 420 + index * 7, revision },
+        geometry: rustLayoutBenchmarkGeometry(name, index, baseGeometry),
       });
     } else if (name === 'measure-query' || name === 'adopt-measure-query') {
       bytes = updateBytes({
@@ -217,10 +223,17 @@ function measureWarm(name) {
         style: { ...baseStyle, textEnd },
         geometry: baseGeometry,
       });
+    } else if (name === 'equivalent-width') {
+      bytes = updateBytes({
+        ...common,
+        geometry: rustLayoutBenchmarkGeometry(name, index, baseGeometry),
+      });
     } else {
       bytes = updateBytes({ ...common, geometry: baseGeometry });
     }
+    const previous = state;
     state = execute(bytes, index < options.warmup, `${name}[${index}]`, name === 'measure-query' ? 1 : undefined);
+    assertRustLayoutBenchmarkResult(name, previous, state);
     if (index >= options.warmup) {
       samples.push(state.durationMs);
       plans.push(state);
@@ -228,6 +241,14 @@ function measureWarm(name) {
   }
   requireStatus(fn.disposeRoot(rootId), `dispose ${name} planner`);
   return summarize(name, liveGlyphCount, samples, plans);
+}
+
+function initialBytes(name) {
+  return updateBytes({
+    textMutation: { start: 0, deleteCount: 0, insert: utf16 },
+    style: baseStyle,
+    geometry: rustLayoutBenchmarkInitialGeometry(name, baseGeometry),
+  });
 }
 
 function createRoot(requestCapacity) {
@@ -366,6 +387,9 @@ function summarize(name, glyphs, samples, plans) {
       samples: samples.map((durationMs, index) => ({
         index,
         durationMs,
+        publicationGeneration: plans[index]?.publicationGeneration ?? 0,
+        primitiveCount: plans[index]?.primitiveCount ?? 0,
+        glyphCount: plans[index]?.glyphCount ?? 0,
         patchCount: plans[index]?.patchCount ?? 0,
         writeBytes: plans[index]?.writeBytes ?? 0,
       })),
@@ -401,6 +425,9 @@ function printReport(caseReports) {
     );
   }
   console.log('column-resize is the existing layout-width case: one fully active column is reflowed end to end.');
+  console.log('justify reflows the same active column with justified non-final lines.');
+  console.log('bidi-resize reflows mixed Latin and Arabic text using the pinned Amiri artifact.');
+  console.log('equivalent-width alternates adjacent f32 widths and requires zero render-plan patches or writes.');
   console.log(
     'measure-query answers the same alternating widths through the paragraph-scoped synchronous measure: no gather, plan, or publication.',
   );
@@ -430,86 +457,27 @@ function requireStatus(status, operation) {
   if (status !== abi.status.ok) throw new Error(`${operation} failed with status ${status}`);
 }
 
-function parseArguments(arguments_) {
-  const read = (name, fallback) => {
-    const index = arguments_.indexOf(name);
-    return index === -1 ? fallback : Number.parseInt(arguments_[index + 1], 10);
-  };
-  return {
-    technique: normalizeTechnique(readString('--technique', 'bitmap')),
-    allocation: readAllocation('--allocation'),
-    wasm: readString('--wasm'),
-    corpus: normalizeCorpus(readString('--corpus', 'latin')),
-    case: readCase('--case'),
-    glyphs: read('--glyphs', 22_000),
-    height: read('--height', 100_000),
-    repetitions: read('--reps', 31),
-    warmup: read('--warmup', 8),
-    jsonPath: readString('--json'),
-    samplesPath: readString('--samples'),
-  };
-
-  function readString(name, fallback) {
-    const index = arguments_.indexOf(name);
-    return index === -1 ? fallback : arguments_[index + 1];
-  }
-
-  function readCase(name) {
-    const value = readString(name);
-    if (
-      value !== undefined &&
-      ![
-        'cold',
-        'no-op',
-        'publish-measurement',
-        'publish-inspection',
-        'font-size',
-        'column-resize',
-        'measure-query',
-        'adopt-measure-query',
-        'suffix-edit',
-        'localized-edit',
-        'localized-splice',
-      ].includes(value)
-    ) {
-      throw new RangeError(`unknown benchmark case: ${value}`);
-    }
-    return value;
-  }
-
-  function readAllocation(name) {
-    const value = readString(name, 'ordered');
-    if (value !== 'ordered' && value !== 'stable') throw new RangeError(`unknown allocation strategy: ${value}`);
-    return value;
-  }
-}
-
-function normalizeTechnique(value) {
-  const name = value === 'msdf' ? 'mtsdf' : value;
-  if (!['bitmap', 'mtsdf', 'slug'].includes(name)) {
-    throw new RangeError('--technique must be bitmap, mtsdf, msdf, or slug');
-  }
-  return name;
-}
-
-function normalizeCorpus(name) {
-  if (name !== 'latin' && name !== 'cjk') {
-    throw new Error(`--corpus must be latin or cjk, received ${name}`);
-  }
-  return name;
-}
-
 async function loadArtifact(techniqueName, corpus) {
   // CJK ships only the pinned contract strike, which is the one proven to cover the CJK
   // benchmark source. The Latin fixtures carry no CJK coverage, so the pairing is not free.
   const fixtures =
     corpus === 'cjk'
-      ? { bitmap: ['noto-sans-cjk-showcase-bitmap-16.font.glb', false] }
-      : {
-          bitmap: ['inter-bitmap-16.font.glb', false],
-          mtsdf: ['inter-mtsdf.font.glb.gz', true],
-          slug: ['inter-slug.font.glb.gz', true],
-        };
+      ? {
+          bitmap: ['noto-sans-cjk-showcase-bitmap-16.font.glb', false],
+          mtsdf: ['noto-sans-cjk-showcase-mtsdf.font.glb.gz', true],
+          slug: ['noto-sans-cjk-showcase-slug.font.glb.gz', true],
+        }
+      : corpus === 'bidi'
+        ? {
+            bitmap: ['amiri-bitmap-16.font.glb', false],
+            mtsdf: ['amiri-mtsdf.font.glb.gz', true],
+            slug: ['amiri-slug.font.glb.gz', true],
+          }
+        : {
+            bitmap: ['inter-bitmap-16.font.glb', false],
+            mtsdf: ['inter-mtsdf.font.glb.gz', true],
+            slug: ['inter-slug.font.glb.gz', true],
+          };
   const entry = fixtures[techniqueName];
   if (entry === undefined) {
     throw new Error(`corpus ${corpus} has no pinned ${techniqueName} artifact`);
