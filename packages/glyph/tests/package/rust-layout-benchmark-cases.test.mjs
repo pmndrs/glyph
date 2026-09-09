@@ -11,6 +11,7 @@ import {
 
 test('the maintained benchmark case registry keeps specialized corpus requirements explicit', () => {
   assert.equal(rustLayoutBenchmarkCases('latin').includes('justify'), true);
+  assert.equal(rustLayoutBenchmarkCases('latin').includes('active-column-resize'), true);
   assert.equal(rustLayoutBenchmarkCases('latin').includes('equivalent-width'), true);
   assert.equal(rustLayoutBenchmarkCases('latin').includes('bidi-resize'), false);
   assert.equal(rustLayoutBenchmarkCases('bidi').includes('bidi-resize'), true);
@@ -37,11 +38,25 @@ test('reflow cases produce deterministic geometry shapes', () => {
     width: 441,
     revision: 5,
   });
+  assert.deepEqual(rustLayoutBenchmarkInitialGeometry('active-column-resize', base), {
+    ...base,
+    width: 434,
+  });
+  assert.deepEqual(rustLayoutBenchmarkGeometry('active-column-resize', 2, base), {
+    ...base,
+    width: 420,
+    revision: 4,
+  });
+  assert.deepEqual(rustLayoutBenchmarkGeometry('active-column-resize', 3, base), {
+    ...base,
+    width: 434,
+    revision: 5,
+  });
 
   const first = rustLayoutBenchmarkGeometry('equivalent-width', 0, base);
   const second = rustLayoutBenchmarkGeometry('equivalent-width', 1, base);
   assert.equal(first.width, 600);
-  assert.equal(second.width, 600.0000610351562);
+  assert.equal(second.width, 600.00006103515625);
   assert.notEqual(
     new Uint32Array(new Float32Array([first.width]).buffer)[0],
     new Uint32Array(new Float32Array([second.width]).buffer)[0],
@@ -72,5 +87,25 @@ test('equivalent-width rejects render-plan writes while retaining publication ge
       patchCount: 1,
       writeBytes: 8,
     }),
+  );
+});
+
+test('active-column-resize requires every measured update to publish', () => {
+  const settled = { publicationGeneration: 7, patchCount: 1, writeBytes: 8 };
+  assert.doesNotThrow(() =>
+    assertRustLayoutBenchmarkResult('active-column-resize', settled, {
+      publicationGeneration: 8,
+      patchCount: 1,
+      writeBytes: 8,
+    }),
+  );
+  assert.throws(
+    () =>
+      assertRustLayoutBenchmarkResult('active-column-resize', settled, {
+        publicationGeneration: 8,
+        patchCount: 0,
+        writeBytes: 0,
+      }),
+    /active-column-resize did not publish a changed layout at generation 8/u,
   );
 });
