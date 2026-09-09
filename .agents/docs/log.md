@@ -10,13 +10,15 @@
   and stable glyph identity remains a separate truthful lane. This is a pre-alpha coordinate reset, not a compatibility
   mode; justification and visual metadata never enter renderer rows.
 
-- **Measured the first complete cutover honestly** — Coalescing nearby session placement rows through committed bytes
-  reduced ordered Bitmap active-resize writes from main's 170.4 KiB to 30.5 KiB at 22k Latin and 59.8 KiB at dense CJK,
-  with one patch per sample. The candidate still measured about 12–14% slower at 22k (`4.206 / 4.496 ms` Latin and
-  `4.092 / 4.277 ms` CJK median/p95), while 100k Latin was about 0.7% faster than PR #172 and wrote 140.7 KiB instead of
-  783.6 KiB. Corrected measurement/adoption probes show measurement itself is flat and the remaining cost is state,
-  gather, and publication. Bitmap/MTSDF/Slug renderer checks and the packaged direct-TypeGPU live WebGPU probe pass;
-  roadmap 12.2 stays active until the residual overhead and consolidated release gates close.
+- **Measured and corrected the first complete cutover** — Coalescing nearby session placement rows through committed
+  bytes reduces ordered Bitmap active-resize writes from main's 170.4 KiB to 30.5 KiB at 22k Latin and 59.8 KiB at dense
+  CJK, with one patch per sample. CPU publication now consumes the retained local f32 row plus the same placement-f32
+  addition the renderers use, removing the duplicate glyph-extents lookup and f64 origin/ink reconstruction. A paired
+  61-sample run against PR #172 improves 22k Latin from `4.135 / 4.266 ms` to `3.838 / 4.092 ms` and 100k Latin from
+  `23.696 / 25.096 ms` to `21.830 / 24.251 ms`, while dense CJK remains 5.8% slower at `3.778 / 4.077 ms` versus
+  `3.572 / 3.745 ms`. Exact-main Latin was about `3.77 ms`, so the earlier 16–20% regression is removed; dense-CJK CPU
+  overhead remains open. Bitmap/MTSDF/Slug renderer checks and the packaged direct-TypeGPU live WebGPU probe pass;
+  roadmap 12.2 stays active until the residual CJK overhead and consolidated release gates close.
 
 - **Re-pinned final LayoutRun coordinate arithmetic** — Deterministic inline and normal-range block controls prove that
   additive run-local placement cannot preserve the former ordered-f64-fold then single-f32-narrow bits universally; the
@@ -24,7 +26,8 @@
   encodings. Because the package is pre-alpha, the plan now selects one replacement contract instead of a compatibility
   fallback: retain 16-fraction-bit i64 fit/justification decisions and f64 shaping/layout internals, narrow stable local
   and dynamic placement components separately, and apply one declared f32 order in CPU queries/publication and every
-  renderer. The old absolute materializer remains test comparison evidence only and is deleted at the atomic cutover.
+  renderer. CPU glyph origins and ink bounds now consume the retained local row and placement row through that exact
+  operation. The old absolute materializer remains test comparison evidence only; no production compatibility path exists.
   Static anchors may be fixed break-independent numeric blocks inside one LayoutRun, never visual slices. Numeric
   boundaries are independent of shaping-safe line breaks; admission uses the full running two-dimensional origin/ink
   envelope, and placement uses stability-aware source-slice/block/visual-segment intersections. Sparse prose retains safe
