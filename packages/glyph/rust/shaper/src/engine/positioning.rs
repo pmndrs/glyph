@@ -5,8 +5,8 @@ use alloc::vec::Vec;
 use crate::{FontGlyphExtents, FontMetrics, bidi::BidiAnalysis};
 
 use super::placement_state::{
-    GlyphSource, LayoutRunOwner, PlacementState, RetainedLinePlacement, SegmentTranslation,
-    SliceRole,
+    GlyphSource, LayoutRunOwner, PlacementIdentity, PlacementState, RetainedLinePlacement,
+    SegmentTranslation, SliceRole,
 };
 
 use super::{
@@ -1698,6 +1698,7 @@ impl PositionedGlyphArena {
                     cluster + 1,
                     clusters,
                     placement_cluster,
+                    false,
                     state.cursor,
                     state.baseline,
                 )?;
@@ -1755,6 +1756,7 @@ impl PositionedGlyphArena {
                         cluster + 1,
                         clusters,
                         placement_cluster,
+                        false,
                         state.cursor,
                         state.baseline,
                     )?;
@@ -1852,6 +1854,7 @@ impl PositionedGlyphArena {
                         cluster + 1,
                         clusters,
                         placement_cluster,
+                        true,
                         state.cursor,
                         state.baseline,
                     )?;
@@ -1893,12 +1896,12 @@ impl PositionedGlyphArena {
                     segment_end,
                     clusters,
                     placement_cluster,
+                    true,
                     state.cursor,
                     state.baseline,
                 )?;
                 while cluster < segment_end {
                     if clusters.flags[cluster] & CLUSTER_HARD_BREAK == 0 {
-                        debug_assert_eq!(clusters.source_runs[cluster], layout_run.source_run);
                         debug_assert_eq!(clusters.font_handles[cluster], geometry.font_handle);
                         debug_assert_eq!(
                             clusters.units_per_em[cluster].to_bits(),
@@ -1961,6 +1964,7 @@ impl PositionedGlyphArena {
         overlap_end: usize,
         clusters: &ClusterArena,
         placement_cluster: PlacementCluster,
+        allow_dense_identity: bool,
         cursor: f64,
         baseline: f64,
     ) -> Result<PlacementOccurrence, EngineError> {
@@ -1993,6 +1997,14 @@ impl PositionedGlyphArena {
                 run_handle: layout_run.run_handle,
                 placement_handle: None,
                 canonical_revision: layout_run.canonical_revision,
+                identity: if allow_dense_identity && placement_cluster.dense {
+                    PlacementIdentity::Dense
+                } else {
+                    PlacementIdentity::StableSource {
+                        segment_anchor: placement_cluster.segment_anchor,
+                        source_anchor: clusters.stable_ids[overlap_start],
+                    }
+                },
                 segment_anchor: placement_cluster.segment_anchor,
                 source_anchor: clusters.stable_ids[overlap_start],
                 numeric_block_ordinal: placement_cluster.numeric_block_ordinal,
@@ -2450,6 +2462,10 @@ impl PositionedGlyphArena {
                 run_handle: run.run_handle,
                 placement_handle: None,
                 canonical_revision: run.canonical_revision,
+                identity: PlacementIdentity::StableSource {
+                    segment_anchor: clusters.stable_ids[owner_cluster],
+                    source_anchor: clusters.stable_ids[owner_cluster],
+                },
                 segment_anchor: clusters.stable_ids[owner_cluster],
                 source_anchor: clusters.stable_ids[owner_cluster],
                 numeric_block_ordinal: block_index
@@ -4584,13 +4600,7 @@ mod tests {
                     run.font_handle
                 ))
                 .collect::<Vec<_>>(),
-            [
-                (0, 3, 0, 11),
-                (3, 5, 1, 11),
-                (5, 7, 1, 22),
-                (7, 11, 2, 22),
-                (11, 12, u32::MAX, 0)
-            ]
+            [(0, 5, 0, 11), (5, 11, 1, 22), (11, 12, u32::MAX, 0)]
         );
         assert_eq!(clusters.glyph_counts, [1, 2, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0]);
         assert!(clusters.advances[..3].iter().all(|advance| *advance < 0.0));
@@ -4599,10 +4609,10 @@ mod tests {
         assert_run_positions_match_renderer_placement(8, 10);
 
         let (_, positioned) = fixture_position_results(0, 12, |_, _, _| {});
-        assert_eq!(positioned.placement.segments().len(), 8);
-        assert_eq!(positioned.placement.segment_count(), 8);
-        assert_eq!(positioned.placement.visual_spans().len(), 7);
-        let hard_break = positioned.placement.segments().get(7).unwrap();
+        assert_eq!(positioned.placement.segments().len(), 7);
+        assert_eq!(positioned.placement.segment_count(), 7);
+        assert_eq!(positioned.placement.visual_spans().len(), 6);
+        let hard_break = positioned.placement.segments().get(6).unwrap();
         assert_eq!(
             (hard_break.run_cluster_count, hard_break.source_glyph_count),
             (1, 0)
@@ -4631,7 +4641,7 @@ mod tests {
                 .get(1)
                 .unwrap()
                 .glyph_start,
-            3
+            5
         );
     }
 
@@ -5219,6 +5229,7 @@ mod tests {
                         cluster + 1,
                         &clusters,
                         placement_cluster,
+                        false,
                         cursor,
                         line.baseline,
                     )
