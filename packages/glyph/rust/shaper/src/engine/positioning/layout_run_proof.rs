@@ -925,6 +925,7 @@ mod tests {
             .map(|cluster| u32::try_from(cluster).unwrap())
             .collect::<Vec<_>>();
         let layout_runs = [LayoutRun {
+            source_kind: crate::engine::cluster_state::LayoutRunSourceKind::Paragraph,
             cluster_start: 0,
             cluster_end: u32::try_from(cluster_count).unwrap(),
             glyph_start: 0,

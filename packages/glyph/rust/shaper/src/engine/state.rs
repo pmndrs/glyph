@@ -8,7 +8,10 @@ use crate::{
 };
 
 use super::{
-    cluster_state::{ClusterArena, ClusterBuildInput, RunCanonicalInput, RunCanonicalRevision},
+    cluster_state::{
+        BoundaryRunRole, ClusterArena, ClusterBuildInput, LayoutRunSourceKind, RunCanonicalInput,
+        RunCanonicalRevision,
+    },
     codec::{ALLOCATION_ORDERED_DIRECT, CapabilitySetId, ValidatedCodec},
     codec_gather::{
         CodecGatherWorkspace, DEFAULT_GATHER_RECORD_CAPACITY, GatherError, LayoutPlanInput,
@@ -263,7 +266,16 @@ impl ParagraphIncarnation {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct RunLogicalKey {
     paragraph: ParagraphIncarnation,
-    first_text_unit_id: NonZeroU32,
+    anchor: RunLogicalAnchor,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum RunLogicalAnchor {
+    Text(NonZeroU32),
+    Boundary {
+        flow_thread_id: u32,
+        role: BoundaryRunRole,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -366,6 +378,7 @@ struct ParagraphState {
     glyph_identity_index: IdentityIndex,
     layout_run_identity_index: IdentityIndex,
     next_run_canonical_revision: u32,
+    pending_source_run_canonical_revision: u32,
     pending_next_run_canonical_revision: u32,
     geometry: Staged<FlowGeometryArena>,
     flow_layout: Staged<FlowLayoutArena>,
@@ -2381,6 +2394,11 @@ impl PlannerState {
                         .ok_or(EngineError::InvalidRequest)?;
                     total
                         .checked_add(paragraph.state.clusters.active().layout_runs().len())
+                        .and_then(|total| {
+                            total.checked_add(
+                                paragraph.state.positioned.active().replacement_runs().len(),
+                            )
+                        })
                         .ok_or(EngineError::ResultTooLarge)
                 })?;
             desired
@@ -2392,6 +2410,9 @@ impl PlannerState {
                     .ok_or(EngineError::InvalidRequest)?;
                 let clusters = paragraph.state.clusters.active();
                 for run in clusters.layout_runs() {
+                    if run.source_kind != LayoutRunSourceKind::Paragraph {
+                        return Err(EngineError::InvalidRequest);
+                    }
                     let cluster = usize::try_from(run.cluster_start)
                         .map_err(|_| EngineError::InvalidRequest)?;
                     let first_text_unit_id = clusters
@@ -2404,7 +2425,27 @@ impl PlannerState {
                     desired.push(DesiredRun::new(
                         RunLogicalKey {
                             paragraph: paragraph.incarnation,
-                            first_text_unit_id,
+                            anchor: RunLogicalAnchor::Text(first_text_unit_id),
+                        },
+                        canonical,
+                    ));
+                }
+                for run in paragraph.state.positioned.active().replacement_runs() {
+                    let LayoutRunSourceKind::Boundary {
+                        flow_thread_id,
+                        role,
+                    } = run.source_kind
+                    else {
+                        return Err(EngineError::InvalidRequest);
+                    };
+                    let canonical = run.canonical_revision.ok_or(EngineError::InvalidRequest)?;
+                    desired.push(DesiredRun::new(
+                        RunLogicalKey {
+                            paragraph: paragraph.incarnation,
+                            anchor: RunLogicalAnchor::Boundary {
+                                flow_thread_id,
+                                role,
+                            },
                         },
                         canonical,
                     ));
@@ -2450,11 +2491,84 @@ impl PlannerState {
                             .bind_layout_run_handle(run_index, canonical, assignment.handle())?;
                     } else {
                         let run = paragraph.state.clusters.committed().layout_runs()[run_index];
-                        if assignment.change() != RunSlotChange::Retained
+                        if run.source_kind != LayoutRunSourceKind::Paragraph
+                            || assignment.change() != RunSlotChange::Retained
                             || run.run_handle != Some(assignment.handle())
                         {
                             return Err(EngineError::InvalidRequest);
                         }
+                    }
+                }
+                let replacement_count = self
+                    .paragraph(paragraph_id)
+                    .ok_or(EngineError::InvalidRequest)?
+                    .state
+                    .positioned
+                    .active()
+                    .replacement_runs()
+                    .len();
+                for run_index in 0..replacement_count {
+                    let assignment = *self
+                        .run_slots
+                        .assignments()
+                        .map_err(run_slot_error)?
+                        .get(assignment_index)
+                        .ok_or(EngineError::InvalidRequest)?;
+                    assignment_index += 1;
+                    let paragraph = self
+                        .paragraph_mut(paragraph_id)
+                        .ok_or(EngineError::InvalidRequest)?;
+                    if paragraph.state.positioned.is_prepared() {
+                        let run = paragraph
+                            .state
+                            .positioned
+                            .pending()
+                            .replacement_runs()
+                            .get(run_index)
+                            .ok_or(EngineError::InvalidRequest)?;
+                        if !matches!(run.source_kind, LayoutRunSourceKind::Boundary { .. }) {
+                            return Err(EngineError::InvalidRequest);
+                        }
+                        let canonical =
+                            run.canonical_revision.ok_or(EngineError::InvalidRequest)?;
+                        paragraph
+                            .state
+                            .positioned
+                            .pending_mut()
+                            .bind_replacement_run_handle(
+                                run_index,
+                                canonical,
+                                assignment.handle(),
+                            )?;
+                    } else {
+                        let run = paragraph
+                            .state
+                            .positioned
+                            .committed()
+                            .replacement_runs()
+                            .get(run_index)
+                            .copied()
+                            .ok_or(EngineError::InvalidRequest)?;
+                        if !matches!(run.source_kind, LayoutRunSourceKind::Boundary { .. })
+                            || assignment.change() != RunSlotChange::Retained
+                            || run.run_handle != Some(assignment.handle())
+                        {
+                            return Err(EngineError::InvalidRequest);
+                        }
+                    }
+                }
+                #[cfg(any(test, feature = "kernel-lab"))]
+                {
+                    let paragraph = self
+                        .paragraph_mut(paragraph_id)
+                        .ok_or(EngineError::InvalidRequest)?;
+                    if paragraph.state.positioned.is_prepared() {
+                        let layout_runs = paragraph.state.clusters.active().layout_runs();
+                        paragraph
+                            .state
+                            .positioned
+                            .pending_mut()
+                            .bind_placement_run_handles(layout_runs)?;
                     }
                 }
             }
@@ -2610,6 +2724,7 @@ impl ParagraphState {
         }
         self.clusters.abort();
         self.next_run_canonical_revision = 0;
+        self.pending_source_run_canonical_revision = 0;
         self.pending_next_run_canonical_revision = 0;
         {
             let (committed, pending) = self.geometry.pair_mut();
@@ -3697,6 +3812,7 @@ impl ParagraphState {
         };
         match result {
             Ok(()) => {
+                self.pending_source_run_canonical_revision = next_revision;
                 self.pending_next_run_canonical_revision = next_revision;
                 self.clusters.mark_prepared();
                 Ok(())
@@ -3711,14 +3827,16 @@ impl ParagraphState {
     fn abort_clusters(&mut self) {
         self.clusters.pending_mut().clear();
         self.clusters.abort();
+        self.pending_source_run_canonical_revision = self.next_run_canonical_revision;
         self.pending_next_run_canonical_revision = self.next_run_canonical_revision;
     }
 
     fn commit_clusters(&mut self) {
         if self.clusters.is_prepared() {
-            self.next_run_canonical_revision = self.pending_next_run_canonical_revision;
             self.clusters.commit();
         }
+        // The shared cursor also includes replacement runs prepared after the cluster stage.
+        self.next_run_canonical_revision = self.pending_next_run_canonical_revision;
         self.abort_clusters();
     }
 
@@ -4057,6 +4175,8 @@ impl ParagraphState {
         let bidi = self.bidi.active();
         let previous = self.positioned.active();
         let mut next_content_revision = 1;
+        let mut next_run_canonical_revision = 1;
+        let boundary_shape = BoundaryShapeArena::default();
         let geometry = &self.intrinsic_geometry_scratch;
         self.intrinsic_positioned_scratch.build(
             previous,
@@ -4065,11 +4185,14 @@ impl ParagraphState {
             text,
             clusters,
             runs,
-            &BoundaryShapeArena::default(),
+            runs,
+            &boundary_shape,
+            &boundary_shape,
             styles,
             bidi,
             &mut self.intrinsic_identity_scratch,
             &mut next_content_revision,
+            &mut next_run_canonical_revision,
             |thread| thread_typography(geometry, thread),
             |thread| thread_typography(geometry, thread),
             |handle| shaper.font_metrics(handle),
@@ -4101,6 +4224,7 @@ impl ParagraphState {
         let text = self.text.active().units.as_slice();
         let clusters = self.clusters.active();
         let runs = self.shaping_runs.active().runs();
+        let previous_runs = self.shaping_runs.committed().runs();
         let styles = self.styles.active().resolved.segments();
         let bidi = self.bidi.active();
         let flow = self.flow_layout.active();
@@ -4129,11 +4253,14 @@ impl ParagraphState {
             text,
             clusters,
             runs,
+            previous_runs,
             boundary_shape,
+            &self.boundary_shape,
             styles,
             bidi,
             &mut self.glyph_identity_index,
             next_content_revision,
+            &mut self.pending_next_run_canonical_revision,
             |thread| thread_typography(geometry, thread),
             |thread| thread_typography(self.geometry.committed(), thread),
             |handle| shaper.font_metrics(handle),
@@ -4146,6 +4273,7 @@ impl ParagraphState {
     fn abort_positioned(&mut self) {
         self.positioned.pending_mut().clear();
         self.positioned.abort();
+        self.pending_next_run_canonical_revision = self.pending_source_run_canonical_revision;
     }
 
     fn commit_positioned(&mut self) {
@@ -4931,8 +5059,41 @@ mod tests {
 
         assert!(!paragraph.clusters.is_prepared());
         assert_eq!(paragraph.next_run_canonical_revision, 17);
+        assert_eq!(paragraph.pending_source_run_canonical_revision, 17);
         assert_eq!(paragraph.pending_next_run_canonical_revision, 17);
         assert_eq!(next_glyph_id, 23);
+    }
+
+    #[test]
+    fn positioned_abort_preserves_source_revision_checkpoint() {
+        let mut paragraph = ParagraphState {
+            next_run_canonical_revision: 17,
+            pending_source_run_canonical_revision: 23,
+            pending_next_run_canonical_revision: 29,
+            ..ParagraphState::default()
+        };
+
+        paragraph.abort_positioned();
+
+        assert_eq!(paragraph.next_run_canonical_revision, 17);
+        assert_eq!(paragraph.pending_source_run_canonical_revision, 23);
+        assert_eq!(paragraph.pending_next_run_canonical_revision, 23);
+    }
+
+    #[test]
+    fn positioned_revision_commits_without_a_pending_cluster_stage() {
+        let mut paragraph = ParagraphState {
+            next_run_canonical_revision: 17,
+            pending_source_run_canonical_revision: 17,
+            pending_next_run_canonical_revision: 18,
+            ..ParagraphState::default()
+        };
+
+        paragraph.commit_clusters();
+
+        assert_eq!(paragraph.next_run_canonical_revision, 18);
+        assert_eq!(paragraph.pending_source_run_canonical_revision, 18);
+        assert_eq!(paragraph.pending_next_run_canonical_revision, 18);
     }
 
     #[test]

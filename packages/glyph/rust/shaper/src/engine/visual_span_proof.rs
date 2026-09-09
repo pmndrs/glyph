@@ -6,9 +6,9 @@ pub(crate) use super::placement_state::SliceRole;
 
 use super::{
     EngineError,
-    cluster_state::{CLUSTER_HARD_BREAK, CLUSTER_SAFE_BEFORE, LayoutRun},
+    cluster_state::{CLUSTER_HARD_BREAK, CLUSTER_SAFE_BEFORE, LayoutRun, LayoutRunSourceKind},
     flow_composition::{FlowFragment, NO_BOUNDARY},
-    placement_state::{LayoutRunSlice, PlacementClass, VisualInstanceSpan},
+    placement_state::{LayoutRunOwner, LayoutRunSlice, PlacementClass, VisualInstanceSpan},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -153,16 +153,22 @@ pub(crate) fn build_visual_instance_map(
             slices.push(LayoutRunSlice {
                 fragment_index: u32::try_from(fragment_index)
                     .map_err(|_| EngineError::ResultTooLarge)?,
+                layout_run_owner: LayoutRunOwner::Paragraph,
                 layout_run_index: u32::try_from(run_index)
                     .map_err(|_| EngineError::ResultTooLarge)?,
+                run_handle: None,
                 run_identity_anchor: cluster_stable_ids[usize::try_from(run.cluster_start)
                     .map_err(|_| EngineError::InvalidRequest)?],
+                first_cluster_anchor: cluster_stable_ids
+                    [usize::try_from(covered).map_err(|_| EngineError::InvalidRequest)?],
                 run_cluster_start: covered - run.cluster_start,
                 run_cluster_count: slice_end - covered,
-                run_glyph_start: glyph_start - run.glyph_start,
-                run_glyph_count: glyph_end - glyph_start,
+                glyph_source: super::placement_state::GlyphSource::LayoutRun,
+                source_glyph_start: glyph_start - run.glyph_start,
+                source_glyph_count: glyph_end - glyph_start,
                 placement_slot,
-                role: SliceRole::Ordinary,
+                visual_reversed: false,
+                boundary_index: None,
                 class: PlacementClass::Ordinary,
             });
             covered = slice_end;
@@ -204,7 +210,8 @@ pub(crate) fn build_visual_instance_map(
     let visual_instance_count = slices.iter().try_fold(0usize, |total, slice| {
         total
             .checked_add(
-                usize::try_from(slice.run_glyph_count).map_err(|_| EngineError::ResultTooLarge)?,
+                usize::try_from(slice.source_glyph_count)
+                    .map_err(|_| EngineError::ResultTooLarge)?,
             )
             .ok_or(EngineError::ResultTooLarge)
     })?;
@@ -296,6 +303,7 @@ fn append_visual_cluster(
             instance_start,
             glyph_start,
             glyph_count,
+            glyph_source: super::placement_state::GlyphSource::LayoutRun,
             slice_index: occurrence.slice_index,
             placement_slot,
             visual_span_id: occurrence.visual_span_id,
@@ -385,6 +393,7 @@ mod tests {
         source_run: u32,
     ) -> LayoutRun {
         LayoutRun {
+            source_kind: LayoutRunSourceKind::Paragraph,
             cluster_start,
             cluster_end,
             glyph_start,
@@ -467,8 +476,8 @@ mod tests {
                     slice.layout_run_index,
                     slice.run_cluster_start,
                     slice.run_cluster_count,
-                    slice.run_glyph_start,
-                    slice.run_glyph_count,
+                    slice.source_glyph_start,
+                    slice.source_glyph_count,
                     slice.placement_slot,
                 ))
                 .collect::<Vec<_>>(),
@@ -506,8 +515,8 @@ mod tests {
 
         assert_eq!(map.slices[1].run_cluster_start, 1);
         assert_eq!(map.slices[1].run_cluster_count, 1);
-        assert_eq!(map.slices[1].run_glyph_start, 1);
-        assert_eq!(map.slices[1].run_glyph_count, 0);
+        assert_eq!(map.slices[1].source_glyph_start, 1);
+        assert_eq!(map.slices[1].source_glyph_count, 0);
         assert_eq!(map.spans.len(), 2);
         assert_eq!(map.glyph_indices, [1, 2, 0]);
         assert_eq!(map.occurrence_slots, [2, 2, 0]);
@@ -651,7 +660,7 @@ mod tests {
             ),
             (0, 1)
         );
-        assert_eq!(map.slices[1].run_glyph_count, 0);
+        assert_eq!(map.slices[1].source_glyph_count, 0);
         assert_eq!(map.counts().visual_cluster_count, 4);
         assert_eq!(map.glyph_indices, [0, 1, 2, 3]);
         assert!(matches!(
