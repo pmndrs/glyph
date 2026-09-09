@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:d904535a5cb1dda4b61271c2370f67f5b1e3be76b25b141db91e81fec82c1fa4'
+source_digest: 'sha256:6af7e8162738e08902419b8da5e391649eb6db521c641848bdf250965372cce6'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1238,6 +1238,14 @@ safe-boundary mapper. It preserves multi-glyph cluster order and glyphless owner
 it has an explicit occurrence model, and keeps 4,096 homogeneous CJK clusters in one retained run. A 166-glyph real
 corpus reconstructs all 332 already-published f32 coordinates exactly from line and observable-slice anchors, but the
 f64 reassociation counterexamples remain authoritative for the future CPU cutover.
+
+The next checkpoint models run slices, visual spans, placements, and ordinary/justified work queues as SoA lanes shared
+by positioning and the visual oracle. It remains test/kernel-lab only, so normal builds allocate and execute none of it.
+Composite writes roll back as one logical record, geometry-only retained lines remap compacted fragment indexes, and
+text-edit convergence rematerializes placement metadata from current runs rather than copying stale indexes or prefixes.
+Justified placements retain exact wide-unit quotient/remainder, eligible counts, and slice-start ordinals without making
+placement class, run identity, or slice identity a renderer batch key. The first cluster's stable ID is only a
+reconciliation anchor; dense stale-safe slots and generations remain owned by the atomic publication cutover.
 
 Installed Three compilers accept branch-free 3x10, 2x16, and u32 occurrence-map specializations through storage WGSL and
 WebGL2 PBO GLSL as one instanced-mesh representation. The TypeGPU lab proves the lookup expression only. A separate

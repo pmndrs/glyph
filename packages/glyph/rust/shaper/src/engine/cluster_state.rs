@@ -195,6 +195,8 @@ pub(crate) struct ClusterArena {
     pub(super) shaped: Vec<u8>,
     pub(super) unsafe_before: Vec<u8>,
     pub(super) layout_runs: LayoutRunArena,
+    #[cfg(any(test, feature = "kernel-lab"))]
+    pub(super) layout_run_prefixes: Vec<f64>,
 }
 
 pub(crate) struct ClusterBuildInput<'a> {
@@ -231,6 +233,8 @@ impl ClusterArena {
         reserve(&mut self.index_at, capacity.saturating_add(1))?;
         reserve(&mut self.shaped, capacity)?;
         reserve(&mut self.unsafe_before, capacity)?;
+        #[cfg(any(test, feature = "kernel-lab"))]
+        reserve(&mut self.layout_run_prefixes, capacity)?;
         Ok(())
     }
 
@@ -767,6 +771,8 @@ impl ClusterArena {
         copy_lane!(index_at);
         copy_lane!(shaped);
         copy_lane!(unsafe_before);
+        #[cfg(any(test, feature = "kernel-lab"))]
+        copy_lane!(layout_run_prefixes);
         self.layout_runs.reserve(source.layout_runs.runs.len())?;
         self.layout_runs
             .runs
@@ -842,6 +848,8 @@ impl ClusterArena {
             self.advances[cluster] = advance;
         }
         self.refresh_layout_units()?;
+        #[cfg(any(test, feature = "kernel-lab"))]
+        self.rebuild_layout_run_prefixes()?;
         Ok(Some(()))
     }
 
@@ -985,10 +993,17 @@ impl ClusterArena {
         self.shaped.clear();
         self.unsafe_before.clear();
         self.layout_runs.clear();
+        #[cfg(any(test, feature = "kernel-lab"))]
+        self.layout_run_prefixes.clear();
     }
 
     pub(crate) fn layout_runs(&self) -> &[LayoutRun] {
         &self.layout_runs.runs
+    }
+
+    #[cfg(any(test, feature = "kernel-lab"))]
+    pub(crate) fn layout_run_prefix(&self, cluster: usize) -> Option<f64> {
+        self.layout_run_prefixes.get(cluster).copied()
     }
 
     pub(super) fn rebuild_layout_runs(&mut self) -> Result<(), EngineError> {
@@ -1021,6 +1036,26 @@ impl ClusterArena {
                 font_handle,
             })?;
             cluster_start = cluster_end;
+        }
+        #[cfg(any(test, feature = "kernel-lab"))]
+        self.rebuild_layout_run_prefixes()?;
+        Ok(())
+    }
+
+    #[cfg(any(test, feature = "kernel-lab"))]
+    fn rebuild_layout_run_prefixes(&mut self) -> Result<(), EngineError> {
+        self.layout_run_prefixes.clear();
+        reserve(&mut self.layout_run_prefixes, self.starts.len())?;
+        for run_index in 0..self.layout_runs.runs.len() {
+            let run = self.layout_runs.runs[run_index];
+            let start =
+                usize::try_from(run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
+            let end = usize::try_from(run.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+            let mut prefix = 0.0;
+            for cluster in start..end {
+                self.layout_run_prefixes.push(prefix);
+                prefix += self.advances[cluster];
+            }
         }
         Ok(())
     }
@@ -1400,6 +1435,7 @@ mod tests {
         for index in 0..source_runs.len() {
             arena.starts.push(u32::try_from(index).unwrap());
             arena.ends.push(u32::try_from(index + 1).unwrap());
+            arena.advances.push(0.0);
             arena.source_runs.push(source_runs[index]);
             arena.font_handles.push(font_handles[index]);
             arena.glyph_starts.push(glyph_start);
@@ -1527,6 +1563,11 @@ mod tests {
 
         assert_eq!(arena.layout_runs().len(), 1);
         assert_eq!(arena.layout_runs()[0].cluster_end, COUNT as u32);
+        let expected = arena.advances[..COUNT - 1]
+            .iter()
+            .fold(0.0, |prefix, advance| prefix + *advance);
+        assert_eq!(arena.layout_run_prefixes.len(), COUNT);
+        assert_eq!(arena.layout_run_prefix(COUNT - 1), Some(expected));
         assert_shadow_topology(&arena);
     }
 
@@ -2188,6 +2229,7 @@ mod tests {
         assert_lane!(index_at);
         assert_lane!(shaped);
         assert_lane!(unsafe_before);
+        assert_lane!(layout_run_prefixes);
         assert_eq!(retained_next_id, cold_next_id);
     }
 
