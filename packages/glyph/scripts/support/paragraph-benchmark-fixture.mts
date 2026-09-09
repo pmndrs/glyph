@@ -17,10 +17,16 @@ export const paragraphBenchmarkSourceCjk = [
   '日本語の段落も空白を使わず、句読点や括弧（例）で行を折り返します。',
 ].join('\n');
 
-export type BenchmarkCorpus = 'latin' | 'cjk';
+export const paragraphBenchmarkSourceBidi = [
+  'Typography stays readable when English text meets العربية في السطر نفسه and returns to Latin.',
+  'Numbers such as 0123456789 and punctuation (24.50) retain their visual order داخل فقرة مختلطة الاتجاه.',
+].join('\n');
+
+export type BenchmarkCorpus = 'latin' | 'bidi' | 'cjk';
 
 const corpusFixtures = {
   latin: { source: paragraphBenchmarkSource, font: 'inter-bitmap-16.font.glb' },
+  bidi: { source: paragraphBenchmarkSourceBidi, font: 'amiri-bitmap-16.font.glb' },
   cjk: { source: paragraphBenchmarkSourceCjk, font: 'noto-sans-cjk-showcase-bitmap-16.font.glb' },
 } as const satisfies Record<BenchmarkCorpus, { readonly source: string; readonly font: string }>;
 let nextFixtureHandle = 1;

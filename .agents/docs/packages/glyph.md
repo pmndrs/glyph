@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:1a2ad6229047dae54d47277be9cd49c71054b4040c000943c0361e67af1cfa23'
+source_digest: 'sha256:b7555b3e5849bb5eae4d1885a49b7fb3abd344f37135090892c5be3d7b2b02b5'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1215,6 +1215,13 @@ publication lifecycle, and renderer batching are the baseline rather than open m
 glyph-wide absolute-positioning materialization only through the single-model cutover in the
 [fragment-relative reflow plan](../planning/fragment-relative-reflow.md). Until its shadow and renderer feasibility gates
 pass, the current positioned arena remains authoritative and no public contour or drop-cap behavior is implied.
+
+The M0/M1 harness is intentionally non-shipping: test and kernel-lab builds derive maximal shaping-compatible
+`LayoutRun` intervals from retained cluster ownership while the production path remains unchanged. Maintained benchmark
+cases now isolate justified, mixed-bidi, equivalent-width, and dense-CJK reflow and retain raw publication counters. The
+first frozen Bitmap checkpoint measured 22k width updates at `1.144 / 3.605 ms` aggregate median/p95 and
+`1.493 / 3.743 ms` on the active 174,440-byte publication subset; measurement-only was `0.192 / 0.226 ms`. Those values
+are an attribution checkpoint, not final performance evidence.
 
 [^slug-shader-core]: The directory is the single renderer-independent expression of the analytic Slug fill algorithm.
 
