@@ -152,11 +152,30 @@ The separate 4,111-case representation lab likewise records 221 plain-f32, 129 h
 break-anchor final-bit mismatches. These results reject those forms as universal semantic/query encodings; they do not
 select a GPU encoding without real-corpus shader, pixel, byte, and fetch-cost evidence. The active resize case alternates
 420 and 434 caller units and rejects every zero-patch sample; Latin, dense-CJK, and bidi smoke runs all published on every
-measured update. M1 remains open for bidi, justification, boundary replacement, visual-span mapping, and renderer proof.
+measured update. M1 remains open for boundary replacement, the real direct TypeGPU pipeline, browser pixels and fetch
+cost, and selection of a numeric ABI.
+
 The optimized proof artifact is 1,205,308 bytes, 43 bytes above the frozen baseline despite no production-path source
 change. A same-driver A/B/B/A active-resize check measured baseline medians/p95s of `3.588/3.699` and `3.618/3.790 ms`
 versus proof `3.620/3.765` and `3.615/3.747 ms`; that is flat within run spread, not a speed claim. Instruction/code-size
 admission remains part of the completed M1 gate rather than being inferred from cfg isolation.
+
+The next M1 proof closes more representation questions without selecting the production ABI. Post-narrow
+line-relative and observable-slice-relative reconstruction was bit-exact for 332 published x/y coordinates across 166
+real Latin, CJK, bidi, justified, combining-mark, and mixed-size glyphs. Its 14 lines and 18 observable slices include a
+two-glyph cluster and a font-size boundary; cancellation and finite-f32 rejection controls remain visible.
+That is only a normal-range f32 lower bound; it does not override the f64 inline and block reassociation
+counterexamples. Installed Three 0.185.1 compiles branch-free nested occurrence-map lookup for whole-resource 3x10,
+2x16, and u32 map specializations through both storage WGSL and WebGL2 PBO GLSL as one instanced-mesh representation. The direct
+TypeGPU proof establishes only that a separate two-binding placement group can fit beside the saturated eight-buffer
+Slug Codec. Actual TypeGPU renderer storage ownership, bind-group lifetime, callback pressure, pixels, and draw behavior
+remain mandatory M1 evidence, as do browser pixel/fetch evidence and boundary replacement.
+
+The visual mapping proof intersects source-monotone fragments with retained runs, validates safe cluster boundaries,
+and consumes each selected non-hard-break cluster exactly once in explicit L1/L2 order. Multi-glyph clusters retain
+internal glyph order, glyphless clusters retain ownership, and 4,096 homogeneous CJK clusters remain one run while
+fragment slices and copy spans stay compact. A joined oracle test feeds the independent multi-fragment bidi and hanging
+plan into this mapper. Boundary replacement is rejected until replacement occurrences have one explicit owner.
 
 ## Compatibility with the merged engine
 

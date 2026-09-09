@@ -125,7 +125,7 @@ function emptySummary() {
   };
 }
 
-function float32UlpDistance(left, right) {
+export function float32UlpDistance(left, right) {
   return Math.abs(orderedFloat32Bits(left) - orderedFloat32Bits(right));
 }
 
