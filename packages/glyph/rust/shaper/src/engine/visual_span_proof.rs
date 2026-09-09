@@ -391,6 +391,8 @@ mod tests {
             glyph_count,
             source_run,
             font_handle: 17,
+            canonical_revision: None,
+            run_handle: None,
         }
     }
 

@@ -47,6 +47,8 @@ mod positioning;
 pub mod render_plan;
 pub mod render_plan_compiler;
 pub(crate) mod render_plan_wire;
+#[cfg_attr(not(test), allow(dead_code))]
+mod run_slot;
 pub(crate) mod semantic_view;
 mod semantic_wire;
 pub(crate) mod shaping_state;

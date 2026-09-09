@@ -2,6 +2,13 @@
 
 ## 2026-09-09
 
+- **Gave retained LayoutRuns planner-scoped transactional identity** — Each paragraph incarnation
+  now owns exact non-hash canonical run revisions derived from complete retained text, shaping,
+  cluster, and glyph topology. A root-scoped dense slot arena reconciles those revisions, binds
+  `{slot, generation}` only into staged cluster state, and quarantines retired slots through the
+  existing renderer acknowledgement fence. Width-only reflow skips canonical comparison; paint,
+  raster binding, placement, and batching remain outside run identity.
+
 - **Modeled transactional LayoutRun placement below existing batching** — Added test/kernel-lab-only SoA lanes for run
   slices, visual spans, exact f64 placement, and wide-unit justification inputs. Text-edit convergence rematerializes
   current placement metadata, while geometry-only retained lines remap compacted fragment indexes and copy contiguous
