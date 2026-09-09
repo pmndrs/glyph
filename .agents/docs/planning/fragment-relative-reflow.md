@@ -68,7 +68,7 @@ sources:
     title: Milestone 12 responsive flow-region and mixed-raster goals
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-09-09T02:40:00Z'
+  at: '2026-09-09T09:25:07Z'
 ---
 
 # Fragment-relative retained reflow
@@ -76,9 +76,15 @@ generated:
 ## Decision
 
 Replace width-update glyph materialization with a core-owned retained run model. Shaping produces immutable glyph-local
-data inside stable **layout runs**. Reflow moves, reorders, splits, or decorates run entities at
-legal boundaries and publishes compact placement/order/decorations. It does not recompute and republish every glyph's
-absolute position.
+data inside stable **layout runs**. Reflow moves, reorders, splits, or decorates run entities at legal boundaries and
+publishes compact placement/order/decorations instead of recomputing and republishing every glyph's absolute position.
+
+This pre-alpha cutover deliberately re-pins the final coordinate contract. Fit and justification decisions remain in the
+16-fraction-bit `i64` lanes, and shaping, advances, local geometry, pen construction, and slice placement remain `f64`
+inside the CPU. At the publication/realization edge, however, run-local and placement components narrow separately to
+`f32`, and CPU semantic/query output and every renderer apply the same ordered `f32` placement operations defined below.
+The previous ordered absolute-pen `f64` fold followed by one `f32` narrow is comparison evidence, not a compatibility
+contract. There is no permanent absolute-position bypass, fallback materializer, or selectable second production mode.
 
 The feature remains fragment-relative in user-facing prose, but `LayoutRun` is the sole retained placement-run entity.
 `FlowFragment` and public `SEMANTIC_FRAGMENT` describe output pieces of a logical line inside flow slots; they are not a
@@ -142,25 +148,26 @@ production SIMD. Its `text-shaper.wasm` is 1,205,265 bytes with SHA-256
 `1.493 / 3.743 ms`. The paired measurement-only lane measured `0.192 / 0.226 ms`. These are an attribution checkpoint,
 not the required three-round baseline or a merge claim.
 
-The first M1 proof keeps `LayoutRun` and both consumers behind test/kernel-lab compilation. Maximal adjacent
+The first M1 proof kept `LayoutRun` and both consumers behind test/kernel-lab compilation. Maximal adjacent
 `(source_run, font_handle)` topology preserves gapless cluster ownership and contiguous glyph spans; 4,096 homogeneous
 CJK clusters remain one run even across legal breaks, paint bindings, and negative advances. The extent walker is
 `O(log R + overlapping R)` and samples font metrics once per intersecting non-hard-break run. Ordinary base-LTR,
 zero-indent slices match current output across the normal mixed/fallback/ligature corpus, while deterministic inline and
 block counterexamples prove that algebraically reassociated run-local-plus-translation `f64` is not universally bit-exact.
 The separate 4,111-case representation lab likewise records 221 plain-f32, 129 high/low-translation, and 915
-break-anchor final-bit mismatches. These results reject those forms as universal semantic/query encodings; they do not
-select a GPU encoding without real-corpus shader, pixel, byte, and fetch-cost evidence. The active resize case alternates
+break-anchor final-bit mismatches. These results prove that an additive run representation cannot preserve the former
+absolute-fold bits universally; they do not make additive placement invalid once its different final numeric contract is
+declared and measured. The active resize case alternates
 420 and 434 caller units and rejects every zero-patch sample; Latin, dense-CJK, and bidi smoke runs all published on every
-measured update. M1 remains open for boundary replacement, the real direct TypeGPU pipeline, browser pixels and fetch
-cost, and selection of a numeric ABI.
+measured update. M1 remains open for boundary replacement, browser pixels and fetch cost, and admission of the re-pinned
+numeric ABI.
 
 The optimized proof artifact is 1,205,308 bytes, 43 bytes above the frozen baseline despite no production-path source
 change. A same-driver A/B/B/A active-resize check measured baseline medians/p95s of `3.588/3.699` and `3.618/3.790 ms`
 versus proof `3.620/3.765` and `3.615/3.747 ms`; that is flat within run spread, not a speed claim. Instruction/code-size
 admission remains part of the completed M1 gate rather than being inferred from cfg isolation.
 
-The next M1 proof closes more representation questions without selecting the production ABI. Post-narrow
+The later M1 proof recorded a lower bound without selecting the production ABI. Post-narrow
 line-relative and observable-slice-relative reconstruction was bit-exact for 332 published x/y coordinates across 166
 real Latin, CJK, bidi, justified, combining-mark, and mixed-size glyphs. Its 14 lines and 18 observable slices include a
 two-glyph cluster and a font-size boundary; cancellation and finite-f32 rejection controls remain visible.
@@ -199,18 +206,20 @@ authorities unchanged unless an independent failing oracle requires a correction
 The cutover splits current positioning into topology-time glyph-local preparation and geometry-time `LayoutRunSlice`
 placement. A `LayoutRun` is deliberately larger than a word or break: it is sliced at shaping-safe cluster boundaries
 when line composition places it. This replaces width-triggered absolute per-glyph positioning, absolute-origin change
-comparison, and the corresponding glyph-wide publication without turning dense CJK into one run per cluster. Existing
-exact cold layout, semantic records, render-plan output, and pixel results remain the independent oracle until the
-replacement passes, then the old production path is deleted.
+comparison, and the corresponding glyph-wide publication without turning dense CJK into one run per cluster. The old
+path remains a test/lab comparison oracle until the replacement passes the declared numeric and pixel gates, then is
+deleted rather than retained as a hidden compatibility path.
 
-The numeric history is a compatibility constraint, not an invitation to move origins into integer space. The merged
+The numeric history constrains the domains that remain upstream of final placement; it is not an invitation to move
+origins into integer space. The merged
 engine retains cluster advances in f64, mirrors them as wide fixed-point values with 16 fractional bits stored in i64 for
 authoritative fit and exact justification decisions, advances an f64 glyph pen, resynchronizes that pen from the f64
 cluster advance after each cluster, and narrows each final published origin once to f32. An F26.6 fit lane landed earlier
 and was superseded by PR #134 because six fractional bits visibly displaced small Three world-space text; the f64
-positioning pen remained throughout. This plan preserves the merged split authority: i64 wide fixed point decides
-fit/distribution; f64 owns pen, cluster resynchronization, and local-plus-placement composition; f32 is the single
-publication narrow. Integer glyph or run origins are not part of the cutover.
+positioning pen remained throughout. This plan preserves `i64` wide-fixed-point fit/distribution and `f64` shaping,
+advance, pen, cluster-resynchronization, local-geometry, and slice-placement computation. It deliberately changes only the
+last composition: local and placement values narrow independently, and their specified `f32` operations define public and
+renderer coordinates. Integer glyph or run origins are not part of the cutover.
 
 ## Existing flow-geometry authority
 
@@ -273,10 +282,11 @@ Keep the existing shaped glyph/cluster authority and add only data that remains 
 - glyph ID, cluster/source range, style/font/raster identity;
 - run-local f64 advances, glyph offsets, and cluster-prefix resynchronization points, with the existing wide fixed-point
   mirror with 16 fractional bits stored in i64 retained only for fit and exact justification decisions;
-- run-local glyph origins and ink derived with the existing f64 pen and narrowed only at the final publication edge;
+- anchor-local glyph origins and ink derived in f64, then narrowed into retained f32 local components at the declared
+  final-placement boundary;
 - local ink bounds and raster extent;
 - advance and shaping offsets;
-- a stable `LayoutRun` slot and run-local cluster/glyph ordinal; and
+- a stable `LayoutRun` slot, fixed break-independent numeric-block ordinal, and run-local cluster/glyph ordinal; and
 - static gap identity only where inter-character expansion is permitted.
 
 The static glyph-to-run mapping is published when shaping topology changes, not on width changes. Fragment/line
@@ -287,7 +297,8 @@ membership is dynamic slice data and cannot be baked into a static glyph record.
 One stable run entity owns:
 
 - cluster range and contiguous glyph range;
-- local advance and range-queryable local-ink chunk summaries;
+- local advance, fixed break-independent numeric anchor blocks with two-dimensional anchors, and range-queryable
+  local-ink chunk summaries;
 - paragraph-resolved/base bidi run identity, shaping direction, and shaping-time internal glyph order;
 - geometry/shaping identity such as selected font face, size/variation/features, and spacing inputs;
 - source kind (`paragraph-source` or a distinct shaped `boundary-replacement` while that topology exists); and
@@ -301,17 +312,25 @@ word and character breaks do not themselves create retained runs. In dense CJK, 
 break opportunities and is sliced only at safe cluster boundaries by composition. Do not encode topology conditions as
 booleans tested for each glyph during placement.
 
+A boundary replacement owns a distinct shaped `LayoutRun`, its glyph-local records, and its numeric blocks for exactly
+the committed topology lifetime in which it exists. It does not borrow a zero-glyph slice or placement identity from the
+paragraph-source run whose text it replaces. Creation, replacement, removal, abort, and renderer-acknowledged retirement
+follow the same staged ownership rules as paragraph-source runs.
+
 ### `LayoutRunSliceArena`
 
-One dynamic occurrence identifies a contiguous cluster/glyph subrange of a `LayoutRun` placed into one
-`FlowFragment`. It stores run ID/generation, run-local cluster and glyph start/count, local prefix at the slice start,
-line-resolved L1 level/visual-span identity, placement slot, an occurrence role (`ordinary`, `hanging-space`,
-`character-fallback`, or `boundary-replacement`), and a closed `PlacementClass` discriminator with exactly `Ordinary`
-and `Justified` cases. Final-line and hard-break state stay on the owning `FlowLine`/`FlowFragment`. Classification
-appends the slice to one homogeneous queue; neither hot kernel switches on class or role. L2 visual order lives in the
-visual span, never in the stable run.
-A width change rebuilds compact slices and visual spans; it does not rewrite the run's glyph-local records. Large CJK
-runs may yield several line slices, but never one retained run per break or glyph.
+One dynamic source slice identifies a contiguous cluster/glyph subrange of a `LayoutRun` placed into one
+`FlowFragment`. CPU SoA lanes retain run ID/generation, run-local cluster and glyph start/count, local prefix,
+occurrence role, and the closed `Ordinary`/`Justified` placement class. Final-line, hard-break, role, line-resolved L1,
+and L2 identity remain CPU composition metadata; none enters the renderer placement row.
+
+The placement unit is the nonempty intersection of one source slice, one fixed numeric block, and one stability-aware
+visual segment after L1/L2. Sparse prose retains safe word-root segments from the existing word sidecar even when adjacent
+segments currently have equal translations, so glyph-to-placement-slot ownership survives movement across lines,
+exclusions, and justification. Split inside a word only for an actual displacement or boundary change. Dense CJK retains
+large `LayoutRun` topology and uses fixed numeric blocks plus current visual segments, never one run or row per glyph.
+Classification appends occurrences to homogeneous queues, so neither hot kernel switches on class or role. This split is
+placement metadata only: it does not create a retained run, static glyph rewrite, batch key, or draw.
 
 Each slice caches the ink union for its local glyph range. Derive it from immutable run chunk summaries plus bounded
 edge scans, so a partial CJK run does not force a whole-run bound or a broad per-glyph measurement walk.
@@ -319,9 +338,11 @@ edge scans, so a partial CJK run does not force a whole-run bound or a broad per
 The renderer mapping keeps stable glyph identity separate and adds a distinct per-physical-glyph occurrence map.
 Stable-indirect draws keep their existing logical-to-physical order lookup, then read the placement slot at that physical
 row. Ordered-direct draws use their existing physical instance directly. Both then read the one session placement table
-shared across resource/material batches. This maps every glyph ordinal to exactly one live slice without another visual
-order stream or draw key. Reject any candidate that requires one draw per run/slice or a branch/search over line breaks
-in the ordinary vertex path.
+shared across resource/material batches. This maps every glyph occurrence to exactly one live placement occurrence
+without another visual-order stream or draw key. Source slice/block intersection count and L2 copy-span count are
+reported separately: an RTL or mixed-level source intersection can require multiple copy spans even when it uses one
+translation. Reject any candidate that requires one draw per run/slice or a branch/search over line breaks in the
+ordinary vertex path.
 
 Keep paint/material/raster grouping outside `LayoutRunArena`. Existing codec/resource batch spans reference run-local
 glyph subranges and are intersected with visual slice spans during plan publication. A paint-only update rebuilds those
@@ -330,36 +351,72 @@ geometry are unchanged. Decoration spans remain separate line-owned entities.
 
 ### `SlicePlacementArena`
 
-Retain committed/pending A/B placement tables. The correctness-first GPU/publication candidate is one dense 8-byte
-translation row. Keep active count separate from reserved capacity and keep justification payload out of the ordinary
-row.
+Retain committed/pending A/B placement tables. Every renderer/session placement row has exactly one dense 8-byte
+translation representation. Keep active count separate from reserved capacity; justification has no renderer sidecar,
+mode, or wider row.
 
-The initial proof should test this shape:
+The universal row is:
 
 ```text
 translation_x: f32
 translation_y: f32
 ```
 
-Rust computes each slice translation and every query-visible absolute result from f64 local prefixes and an f64 pen,
-including cluster resynchronization, then performs the existing single f32 publication narrow. The wide fixed-point fit
-and justification lanes do not become origin storage. Plain `f32(local) + f32(translation)` introduces a second rounding
-and cannot generally reproduce `f32(f64_local + f64_translation)` bit-for-bit. M1 must therefore report CPU semantic and
-query parity separately from renderer math, and compare plain f32, high/low translation, anchor, or another compact
-encoding against both the old absolute-f32 stream and pixel output over tiny world text and the admitted large-coordinate
-range. Do not change the CPU authority or introduce integer origins to make a shader representation convenient. If no
-compact encoding meets the deliberately chosen renderer parity, keep the absolute-f32 production contract and do not
-perform the retained cutover until that contract is explicitly re-pinned. Justification quotient/remainder remains exact
-wide fixed-point decision data on the CPU; application to the f64 pen and the final origin narrow retain current ordering.
-Because WGSL and GLSL ES do not expose an i64 lane, M1 must separately compare a proven bounded i32/u32 narrow, hi/lo
-u32 lanes, or another explicit justification wire form against the old absolute-f32 stream and justified pixels. No
-shader-i64 support is presumed, and failure to prove a compact form blocks the cutover. Each placed slice's visual
-starting ordinal lives in a separate table scoped to one `FlowFragment`.
+Do not derive static local coordinates from a visual slice: width changes move CJK and other dense content across slice
+boundaries and would turn the proposed optimization back into broad static-glyph rewrites. The exact anchor scheme remains
+evidence-gated. An admissible bounded-local design may partition one `LayoutRun` into fixed, break-independent numeric
+anchor blocks owned by that run. Numeric boundaries are allowed at stable cluster or glyph adjacencies, including a
+`CLUSTER_SAFE_BEFORE`-false edge: they neither reshape nor authorize a line break. Composition slices still require a
+shaping-safe cluster boundary.
 
-This row is a comparison candidate, not a foregone ABI. M1 must compare it with a break-anchor representation: stable
-run-local prefixes, one compact slice-to-line slot, and one line row containing the line origin and slice-start prefix.
-The latter writes less dynamic data but costs another indexed read in the vertex path. Choose from measured end-to-end
-CPU, GPU, bytes, exact glyph-to-slice mapping, and WebGL2 feasibility; do not optimize only the Rust loop.
+Build each block from a running two-dimensional geometry envelope, not total advance or endpoint prefixes. The scan uses
+the run's direction-canonical glyph order and includes every glyph cursor, negative-advance excursion, cluster-prefix
+resynchronization, x/y shaping offset, baseline shift, semantic origin, and ink start derived from glyph extents. It also
+includes any ink corner formed locally before translation. A freely chosen f64 `(anchor_inline, anchor_block)` must bound
+every translated local coordinate admitted to the block. The selected contract must explicitly handle a single glyph
+whose required envelope exceeds its bound; it may revise the bound or representation, but it may not silently use an
+absolute fallback or second materializer.
+
+Dynamic source slices intersect numeric blocks and stability-aware L1/L2 visual segments to publish the placement
+occurrences defined above. Sparse prose reuses retained safe word roots; only real intra-word displacement or boundary
+changes subdivide them. Dense CJK uses fixed numeric blocks and current visual segments without manufacturing word,
+run, or per-glyph placement entities. A numeric block is not a second run identity, line entity, batch key, or draw key.
+A warmed width update with unchanged text, font/local geometry, and boundary-replacement topology may rewrite dynamic
+occurrence and placement rows but must write zero bytes to static glyph-local/numeric-block buffers.
+
+The final coordinate contract is re-pinned to the additive representation. For an ordinary coordinate, the normative
+operation sequence is:
+
+```text
+local_f32       = round_ties_even_f32(anchor_local_f64)
+translation_f32 = round_ties_even_f32(occurrence_translation_f64)
+final_f32       = round_ties_even_f32(local_f32 + translation_f32)
+```
+
+CPU semantic publication, measurement, hit testing, glyph inspection, and every renderer must use that sequence; no
+consumer may preserve the former absolute-fold result or substitute algebraic reassociation.
+`occurrence_translation_f64` includes the selected fixed numeric anchor and any cumulative justification displacement
+computed by the CPU for that source-slice/block/visual-segment intersection. The CPU retains exact `i64`
+quotient/remainder and ordinal state. Sparse prose preserves safe word-root placement slots and subdivides a word only
+where cumulative displacement or a boundary actually changes; dense CJK follows fixed numeric-block and current-visual
+segment boundaries. The CPU then narrows each segment's ordinary x/y row. Every renderer uses the same ordinary operation
+sequence above; it never receives justification arithmetic or metadata.
+
+The wide fixed-point fit and justification lanes do not become origin storage, and `f64` remains authoritative before
+these declared final narrows. If admission bounds one local scalar to `abs(local) <= 8,192`, binary32 round-to-nearest-even
+bounds that local conversion alone to `1 / 4,096` absolute error; it does not bound translation narrowing or the final
+addition. Freeze and test three separate limits: local-narrow error against its f64 input, translation-narrow error at the
+admitted world-coordinate range, and final-add absolute/ULP error after the declared operation sequence. The existing
+inline/block reassociation controls and the 4,111-case representation lab measure the deliberate delta from the former
+absolute-fold contract rather than demand old-bit parity. Before enabling the cutover, reject new non-finite results and
+pass tiny-world, cancellation, large-coordinate, justification, and browser pixel gates without post-hoc bound widening.
+The old absolute result is only an independent comparison oracle for those gates; a failure blocks or revises the new
+single contract and never activates a compatibility materializer.
+
+The 8-byte row is the universal renderer/session representation, subject to those admission gates rather than another
+compact encoding search. Break-anchor and high/low experiments remain negative evidence about old-bit preservation, not
+alternate production modes. Visual starting ordinals, class, role, bidi level, block ownership, and exact justification
+inputs live only in CPU SoA lanes used to produce rows and visual spans.
 
 Stable placement slots are reusable only after publication acknowledgement retires their previous generation. Capacity
 grows geometrically and reuses its high-water allocation after warmup.
@@ -437,25 +494,23 @@ the same visual paint result as the independent oracle.
 ### Justification
 
 Word-space justification moves following slice roots; it does not rewrite glyph-local origins. Letter/cluster expansion
-uses the `Justified` placement class. Store static gap identity with glyph-local data, then publish the visual starting
-ordinal and exact wide-fixed-point quotient/remainder per placed slice within one `FlowFragment`; final displacement is
-converted to f64 and applied to the pen before its one f32 origin narrow:
+uses the CPU-only `Justified` placement class. Store static gap identity with glyph-local data, then retain the visual
+starting ordinal and exact wide-fixed-point quotient/remainder in CPU SoA lanes scoped to one `FlowFragment`:
 
 ```text
 ordinal * quotient + min(ordinal, remainder)
 ```
 
-`PlacementClass` selects homogeneous core queues, not a per-slice raster program or batch key. After constructing the
-same batches as the baseline, assign each whole batch a closed `RenderPlacementClass`: `OrdinaryBatch` when it contains no
-justified slice, otherwise `JustificationCapableBatch`. Every slice in a justification-capable batch uses that one vertex
-path; ordinary, final-line, hard-break, and no-gap slices carry zero quotient/remainder, so the expression is branch-free
-without splitting a draw. Because inter-character expansion moves glyphs inside a run, the justified query kernel must
-publish a post-expansion ink summary or walk that specialized slice; translating a pre-justification summary is not
-sufficient.
+`PlacementClass` selects homogeneous CPU queues, not a raster program, batch key, or renderer mode. The justified system
+evaluates the expression above and writes ordinary f32x2 x/y rows through the stability-aware segmentation rule: retain
+safe word-root slots even when adjacent translations match, and split within a word only at an actual displacement or
+boundary change. The existing occurrence map selects those rows without changing draws or raster programs. Because
+inter-character expansion moves glyphs inside a run, the justified query kernel must publish a post-expansion ink summary
+or walk that specialized slice; translating a pre-justification summary is not sufficient.
 Quotient/remainder and ordinal zero reset independently for every fragment. The final-line decision is made once for the
 logical `FlowLine`, so a nonterminal slot is never mistaken for a paragraph-final line. Final-line, inter-character, and
-script-specific justification policies must select core queues before traversal; renderer program selection occurs once
-per completed baseline-equivalent batch.
+script-specific justification policies select CPU queues before traversal; renderer program selection remains solely a
+raster/material concern.
 
 ### Hanging spaces and line measurement
 
@@ -574,9 +629,10 @@ successful commit. Abort/retry leaves the committed graph and every generation r
 tombstones an entity in pending state; binding IDs, placement slots, and vertex ranges are reusable only after no pending
 or committed reference remains and renderer publication acknowledgement retires the old generation.
 
-This does not claim that WebGPU reads Wasm linear memory directly. GPU upload is unavoidable. The invariant is no extra
-full intermediate copy: a pure width update writes and uploads compact placement/order/decoration patches and writes
-zero bytes to the static glyph-local buffer.
+This does not claim that a GPU reads Wasm linear memory directly. GPU upload is unavoidable. After the single-system
+numeric cutover, the invariant is no extra full intermediate copy: a width update with unchanged text, font/local
+geometry, and boundary-replacement topology writes and uploads compact placement/order/decoration patches and writes zero
+bytes to the static glyph-local/numeric-block buffers.
 
 The retained identity foundation is concrete: each paragraph receives a nonwrapping incarnation, each `LayoutRun`
 receives an exact non-hash canonical revision after complete retained-content comparison, and a planner-scoped dense
@@ -590,13 +646,14 @@ drawing degenerate slack wastes vertex work and complicates ordering. Reserve ca
 ### Codec and ABI cutover
 
 Replace the glyph-wide absolute placement contract atomically. The shipping engine has one retained placement model:
-`LayoutRun` plus compact run/line placement. The old materializer may exist only behind test/lab compilation as the parity
-oracle and is deleted from production when the cutover lands; it is never a selectable production mode. Retire the
-test/lab oracle only at M6 after full matrix closure.
+`LayoutRun` plus compact run/line placement under the re-pinned final-coordinate operations above. The old materializer
+may exist only behind test/lab compilation as a numeric/pixel comparison oracle and is deleted from production when the
+cutover lands; it is never a selectable production mode or an exact-bit compatibility fallback. Retire the test/lab
+oracle only at M6 after full matrix closure.
 
-1. Declare the new placement inputs per raster program, matching existing per-program allocation strategy. Require
-   agreement only within one batch/draw; glyph and line/decorating programs may consume different compact tables without
-   a per-glyph branch, but all positions derive from the same run authority.
+1. Declare one renderer/session placement input for every raster program: an occurrence slot selects exactly one f32x2
+   x/y row. Existing adapters may retain their allocation strategy, but the row layout is universal and carries no
+   justification, class, role, bidi, or block metadata.
 2. Add paragraph/session-scoped placement buffers whose capacity is independent of batch glyph capacity and whose IDs,
    patch records, range jobs, execution, acknowledgement, and retirement are explicit in the generated contract. A run
    shared across resource/material batches must address the same placement row.
@@ -607,16 +664,16 @@ test/lab oracle only at M6 after full matrix closure.
    measured starting point, not a shared limit the core must encode around.
 4. Version and regenerate the Rust JSON contract, TypeScript declarations, validators, fixtures, and ABI fingerprints in
    the same commit.
-5. Update custom codec/program registration to the new placement contract in the same release. The package remains
-   unreleased and carries no demonstrated compatibility obligation that justifies shipping two positioning systems.
-   Keep the stable-ID contract truthful and migrate custom programs to the additional occurrence/placement inputs in the
-   same cut; do not overload identity with a placement slot merely to preserve a prototype adapter's buffer count.
+5. Update custom codec/program registration to the new placement contract in the same release. The package is pre-alpha,
+   and the deliberately re-pinned final-coordinate contract does not justify shipping two positioning systems. Keep the
+   stable-ID contract truthful and migrate custom programs to the additional occurrence/placement inputs in the same cut;
+   do not overload identity with a placement slot to preserve an adapter's current physical buffer shape.
 
-The proof may revise the 8-byte f32 candidate or choose another GPU encoding, but it must not proceed to ABI
-implementation without recording per-technique bytes per active and reserved slice, alignment, translation and
-justification numeric wire forms, rounding order, and slot lifetime. CPU semantic/query output retains the exact
-one-narrow contract. Renderer acceptance records both absolute-f32 deltas and pixel evidence for ordinary and justified
-slices separately; it must not claim bit parity from plain local-f32 addition or presume GPU i64 arithmetic.
+The universal 8-byte row must not proceed to ABI implementation without recording per-technique bytes per active and
+reserved slice, alignment, rounding order, and slot lifetime. Exact justification arithmetic remains CPU SoA state that
+produces ordinary rows. CPU semantic/query output and renderer realization share the re-pinned operation order.
+Acceptance records signed and absolute deltas from the old absolute-f32 oracle plus pixel evidence for ordinary and
+justified slices separately; old-bit parity is not required, but the predeclared error and pixel bounds are.
 
 ### GPU data access
 
@@ -625,11 +682,10 @@ per-physical-glyph occurrence map stores the current placement slot; it is dynam
 static run identity. The generic material/resource realizer resolves final position before invoking the raster coverage
 graph, so custom material augmentation continues to observe the same final-position semantics.
 
-Keep ordinary-only and justification-capable vertex paths separate at whole-batch granularity. The ordinary-only shader
-performs one indexed placement fetch and adds one translation; it does not test bidi, wrapping, decorations, raster type,
-or justification. A justification-capable batch uses one shader for all its slices and additionally applies the ordinal
-quotient/remainder expression; zero payload makes ordinary/final slices a branch-free no-op. Program choice must not enter
-the per-slice batch key or split a baseline batch. Bitmap, MTSDF, and Slug coverage remain unchanged.
+Every vertex path performs the same indexed fetch of one f32x2 x/y placement row and the same ordered addition. Shaders
+do not test or receive wrapping, bidi, decoration, justification, class, role, or numeric-block state. Justified and
+ordinary content therefore share the existing raster program and batch; Bitmap, MTSDF, and Slug coverage remain
+unchanged.
 
 Before freezing the ABI, prove the indexed lookup on both WebGPU and Three's WebGL2 backend. The proof must identify the
 actual TSL/GLSL resource form, integer/bitcast behavior, alignment, update range, and device limits in the installed Three
@@ -649,9 +705,9 @@ input, but `/typegpu` is still a proof-of-concept and that layout is not a share
 interleave, widen, or move those prototype inputs to storage to carry the distinct occurrence map and shared placement
 table without extra draws. Three and direct TypeGPU currently realize each display-list span as a draw, so slices cannot
 become spans. At 22k capacity, Three WebGL2 pads storage to 22,016 records and uploads the complete dirty PBO texture:
-176,128 bytes for an f32x2 row and 352,256 bytes for f32x4. M1 therefore prices the changed 4-byte occurrence rows plus
-session placement, including padded transfer. These are feasibility inputs; the numeric placement row remains
-evidence-gated.
+176,128 bytes for the required f32x2 row; f32x4's 352,256 bytes is rejected overhead, not a candidate. M1 therefore
+prices the changed 4-byte occurrence rows plus session placement, including padded transfer. The row shape is fixed while
+its numeric and pixel admission remain evidence-gated.
 
 ## Milestones and commit boundaries
 
@@ -676,9 +732,10 @@ Exit: attribution supports run placement/publication as the dominant removable w
 
 - Build `LayoutRunArena` and placements in test/lab configurations beside the current positioned arena; production keeps
   executing exactly one path.
-- Flatten the shadow result through a test/lab adapter and compare it bit-for-bit with current semantic glyphs,
-  measurements, decorations, and visual order, except that known multi-slot bidi defects—later-fragment level indexing
-  and paragraph-base-direction slot consumption—must match the independent oracle rather than the defective baseline.
+- Flatten the shadow result through a test/lab adapter and compare topology, measurements, decorations, and visual order
+  with current output, except that known multi-slot bidi defects—later-fragment level indexing and
+  paragraph-base-direction slot consumption—must match the independent oracle rather than the defective baseline. Record
+  final-coordinate differences under the separately declared numeric gate instead of requiring old bits.
 - Add an independent UAX #9 oracle and a two-plus-fragment LTR/RTL/mixed fixture that fails the existing later-fragment
   level indexing. Prove full-line L1, fragment-local L2, base-direction slot consumption, physical paint order, hanging
   space ownership, logical final-line policy, and per-fragment justification ordinal reset.
@@ -688,17 +745,27 @@ Exit: attribution supports run placement/publication as the dominant removable w
   freezing record layouts.
 - Measure run count, changed placement rows, working-set bytes, and projected publication bytes across Latin,
   mixed-direction, CJK, and justification corpora.
-- Compare run-translation rows with break-anchor plus run-to-line rows. Three already proves indexed storage on WebGPU
-  and WebGL2; measure the incremental lookup and limits. Separately prove base `/typegpu` storage binding, instance index,
-  bind-group ownership, and a production resource layout within baseline WebGPU limits. Record CPU publication bytes and
-  GPU fetch cost for every candidate.
+- Prove a break-independent anchor policy. Compare whole-run anchors with fixed numeric anchor blocks owned inside one
+  `LayoutRun`; numeric blocks may split at stable glyph/cluster adjacencies independent of shaping-safe line boundaries,
+  and visual slices may not define static local coordinates. Admit blocks from the full running two-dimensional
+  origin/ink envelope, including negative advances and cluster resynchronization. Record CPU publication bytes and GPU
+  fetch cost for each admitted anchor policy.
 - Prove the dense-CJK mapping from a large `LayoutRun` through safe-boundary slices to exact visual instance spans for
   multi-glyph, zero-glyph, combining, ligature, and RTL clusters. Record run/slice/span counts and reject one-run-per-break,
   one-run-per-glyph, per-glyph break search, or one-draw-per-slice designs.
-- Compare CPU one-narrow semantic/query output separately from GPU local-plus-placement candidates. Plain f32 addition
-  gets no bit-exact presumption; authenticate high/low or anchor alternatives against old absolute-f32 and pixel output.
-  Separately prove the chosen bounded or hi/lo justification quotient/remainder wire over the full justification corpus;
-  GPU shaders do not consume the CPU i64 representation directly.
+- Prove stability-aware source-slice/numeric-block/visual-segment intersections under L1/L2. Sparse prose must retain safe
+  word-root placement slots across line, exclusion, and justification movement even when adjacent translations match;
+  split inside a word only at a real displacement or boundary change. Dense CJK must use fixed numeric blocks and current
+  visual segments without one run or placement row per glyph. Report placement rows separately from copy spans and
+  preserve the existing draw count.
+- Authenticate the declared local-narrow, placement-narrow, and ordered-f32-add sequence independently in Rust and every
+  renderer. Predeclare and measure local-narrow, translation-narrow, and final-add bounds separately; record signed,
+  absolute, and ULP deltas from the old absolute-f32 oracle without treating old-bit parity as acceptance. Separately
+  prove CPU quotient/remainder evaluation and the stability-aware segment rule over the full justification corpus; every
+  segment selects an ordinary f32x2 row.
+- Prove explicit replacement `LayoutRun`/numeric-block ownership through boundary appearance, replacement, disappearance,
+  abort, retry, publication acknowledgement, and retirement; a zero-glyph attachment to a paragraph-source run is not an
+  admitted replacement owner.
 - If a candidate uses integer reinterpretation, compile a focused TSL storage-read fixture under Three's installed WebGL2
   backend; its pinned `bitcast_uint_int` helper has an observed return-type mismatch, so source presence is not proof.
 - Measure WebGL2 active dirty bytes and padded/full backing-texture transfer bytes independently.
@@ -706,12 +773,13 @@ Exit: attribution supports run placement/publication as the dominant removable w
   16 bytes/glyph for MTSDF/Slug. Account separately for Wasm retained, CPU staging, GPU static, GPU dynamic, and
   per-update publication bytes.
 - Add a render-plan fixture containing a three-line justified Bitmap paragraph and a ragged Bitmap paragraph that share
-  font, material, and resource. Its candidate draw count must equal baseline while final/hard-break/no-gap slices receive
-  zero justification payload inside the single justification-capable batch.
+  font, material, and resource. Its candidate draw count must equal baseline while every ordinary and justified
+  occurrence selects the same f32x2 row shape and no renderer justification payload exists.
 
-Exit: exact CPU semantic/query parity, independently correct bidi, accepted renderer numeric/pixel parity, a precise CJK
-mapping, per-technique byte gates, and a proven buffer lifetime, with no dense CJK, GPU, or renderer regression above 3%.
-Otherwise reject or redesign before touching the ABI.
+Exit: CPU semantic/query and renderer results agree exactly under the re-pinned operation order; signed/absolute/ULP
+deltas from the old oracle stay inside a predeclared bound; pixel evidence is accepted; bidi is independently correct;
+and CJK mapping, per-technique bytes, buffer lifetime, and regression gates pass. Otherwise revise the one new contract
+before touching the ABI; do not activate an absolute compatibility path.
 
 ### M2 — core implementation, test/lab oracle only
 
@@ -719,20 +787,23 @@ Otherwise reject or redesign before touching the ABI.
 - Implement every existing word/character/no-wrap, dense CJK, bidi L1/L2, hanging-space, justification, decoration,
   ellipsis, measurement, hit-test, borrowed/full glyph-query, detached-slice, and custom-program behavior before cutover.
 - Compute measurement and borrowed per-glyph query results from run-local data in test/lab builds.
-- Keep the prior first-party glyph-wide materializer only as a test oracle; do not ship two first-party width paths.
+- Keep the prior first-party glyph-wide materializer only as a test oracle for topology and measured numeric/pixel delta;
+  do not ship two first-party width paths.
 - Preserve shaping, local edits, font-size invalidation, ellipsis boundary shaping, commit/abort, and identity semantics.
   Prove a paint/material/raster/decorating-only update changes render/decor spans without changing `LayoutRun` or
   placement identity/revisions.
 
-Exit: the entire existing-behavior correctness matrix has exact oracle parity and allocation-free steady state after
-warmup; production behavior and timing remain unchanged.
+Exit: the existing-behavior matrix has exact non-coordinate parity, final coordinates satisfy the newly declared
+cross-consumer contract and error/pixel gates, and steady state is allocation-free after warmup; production behavior and
+timing remain unchanged until the atomic cutover.
 
 ### M3 — atomic core, ABI, query, and renderer cutover
 
 - Add the new per-program run/line inputs and paragraph/session-scoped placement buffers.
 - Define numeric wire representation, change-mask semantics, buffer IDs, capacities, range jobs, patches,
   acknowledgement, and retirement in the generated contract.
-- Publish static glyph-local/run-slot records only on topology changes.
+- Publish static glyph-local/numeric-block/run-slot records only on topology or local-geometry changes, never visual-slice
+  boundary changes.
 - Publish placement, visual-order, and decoration patches on width changes.
 - Teach the generic realization boundary to bind local glyph data and the run/line tables.
 - Migrate Bitmap, MTSDF, Slug, decoration, and custom program registration across `/three` and `/three/typegpu`.
@@ -748,7 +819,9 @@ warmup; production behavior and timing remain unchanged.
   contract with old renderers or vice versa; use preparatory dormant commits if needed, then one atomic enabling commit.
 
 Exit: every first-party integration and custom-program boundary consumes the same core publication with existing draw
-counts; the complete existing-behavior correctness matrix passes; pure warmed width changes write zero static-glyph
+counts; CPU queries and renderers agree on the re-pinned coordinate bits; the complete non-coordinate behavior matrix and
+declared numeric/pixel gates pass; warmed width changes with unchanged text, font/local geometry, and
+boundary-replacement topology—including dense-CJK slice-boundary changes—write zero static glyph-local/numeric-block
 bytes; commit/abort stays atomic; `benchmark:external-raster`, the `/three` and `/three/typegpu` live probes, and the
 `/typegpu` hello-world pass from the packaged exports.
 
@@ -848,8 +921,9 @@ The shadow oracle and final implementation cover:
 - justified LTR/RTL/mixed content in every produced slot with exact logical and visual reading order.
 
 For each case compare exact line breaks, run/slice/glyph source ranges, visual-order permutation, wide-fixed-point fit and
-distribution decisions, CPU semantic/query f32 positions, renderer position deltas, ink and logical bounds,
-content/geometry revisions, decoration records, render-plan primitives/draws/patches, and pixel output.
+distribution decisions, exact agreement between CPU semantic/query and renderer coordinates under the re-pinned
+operations, signed/absolute/ULP deltas from the old numeric oracle, ink and logical bounds, content/geometry revisions,
+decoration records, render-plan primitives/draws/patches, and pixel output.
 Randomized state transitions use fixed seeds and compare against the retained baseline oracle; regenerated goldens are
 not an acceptance mechanism.
 
@@ -869,15 +943,17 @@ Merge targets:
 - on every machine, the candidate is also at least 30% faster at p95 than an identically built, interleaved frozen-main
   baseline. A non-reference machine may establish the relative result but cannot waive the absolute reference-machine
   gate; no target is waived without a fresh attributed report;
-- zero broad shaping calls and zero static-glyph publication bytes for a warmed pure width change;
+- zero broad shaping calls and zero static glyph-local/numeric-block publication bytes for a warmed width change with
+  unchanged text, font/local geometry, and boundary-replacement topology;
 - ordinary changed-width placement publication at most 25% of each exact per-technique baseline: 8 bytes/glyph for
   Bitmap and 16 bytes/glyph for MTSDF/Slug before fixed metadata;
 - in the homogeneous 22k CJK character-wrap fixture, retained `LayoutRun` count equals topology-run count rather than
   legal-break/cluster/glyph count; slice count is bounded by produced `FlowFragment` count plus explicit hanging or
   boundary-replacement slices; slice ranges cover every renderable glyph exactly once with no overlap or gap;
-- dense-CJK width updates publish zero static-glyph bytes and no per-cluster placement row; dynamic slice/order bytes,
-  total retained high-water bytes, and actual GPU transfer may be larger than the Latin 25% target but must not exceed
-  the corresponding absolute-origin baseline or regress median/p95 beyond the 3% gate;
+- dense-CJK width updates with unchanged text, font/local geometry, and boundary-replacement topology publish zero static
+  glyph-local/numeric-block bytes and no per-cluster placement row; dynamic occurrence/placement/order bytes, total
+  retained high-water bytes, and actual GPU transfer may be larger than the Latin 25% target but must not exceed the
+  corresponding absolute-origin baseline or regress median/p95 beyond the 3% gate;
 - measurement query satisfies both bars: no worse than 3% versus its freshly reproduced same-machine baseline and no
   higher than `0.35 ms` median / `0.45 ms` p95 on the designated reference machine;
 - no workload median or p95 regression above 3%; dense CJK and mixed bidi may use a 3% noise band but no directional
@@ -889,8 +965,8 @@ Merge targets:
 
 Record active/reserved run and slice counts, placement/order/decor bytes, static glyph bytes, Wasm retained bytes, CPU
 staging, GPU static and dynamic capacity, per-update publication, and patch count separately. Initial budgets: no
-static-glyph growth above 4 bytes/glyph for the run slot; core placement at most 16 bytes/active slice, with the plain GPU
-candidate at 8 bytes; and no pool or total high-water increase above 3% without an identified, measured tradeoff accepted
+static-glyph growth above 4 bytes/glyph for the run slot; core placement at most 16 bytes/active slice, with the required
+GPU row at 8 bytes; and no pool or total high-water increase above 3% without an identified, measured tradeoff accepted
 before merge.
 
 ### GPU and adapters

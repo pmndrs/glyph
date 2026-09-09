@@ -1,6 +1,10 @@
 use alloc::vec::Vec;
 
-use super::EngineError;
+use super::{
+    EngineError,
+    cluster_state::{LayoutRun, LayoutRunSourceKind},
+    run_slot::RunHandle,
+};
 
 macro_rules! define_arena {
     (
@@ -84,17 +88,36 @@ pub(crate) enum SliceRole {
     BoundaryReplacement,
 }
 
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum GlyphSource {
+    LayoutRun,
+    Boundary,
+}
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum LayoutRunOwner {
+    Paragraph,
+    Replacement,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct LayoutRunSlice {
     pub fragment_index: u32,
+    pub layout_run_owner: LayoutRunOwner,
     pub layout_run_index: u32,
+    pub run_handle: Option<RunHandle>,
     pub run_identity_anchor: u32,
+    pub first_cluster_anchor: u32,
     pub run_cluster_start: u32,
     pub run_cluster_count: u32,
-    pub run_glyph_start: u32,
-    pub run_glyph_count: u32,
+    pub glyph_source: GlyphSource,
+    pub source_glyph_start: u32,
+    pub source_glyph_count: u32,
     pub placement_slot: u32,
-    pub role: SliceRole,
+    pub visual_reversed: bool,
+    pub boundary_index: Option<u32>,
     pub class: PlacementClass,
 }
 
@@ -103,6 +126,7 @@ pub(crate) struct VisualInstanceSpan {
     pub instance_start: u32,
     pub glyph_start: u32,
     pub glyph_count: u32,
+    pub glyph_source: GlyphSource,
     pub slice_index: u32,
     pub placement_slot: u32,
     pub visual_span_id: u32,
@@ -130,14 +154,19 @@ define_arena!(
     LayoutRunSliceArena,
     LayoutRunSlice,
     fragment_indices => fragment_index: u32,
+    layout_run_owners => layout_run_owner: LayoutRunOwner,
     layout_run_indices => layout_run_index: u32,
+    run_handles => run_handle: Option<RunHandle>,
     run_identity_anchors => run_identity_anchor: u32,
+    first_cluster_anchors => first_cluster_anchor: u32,
     run_cluster_starts => run_cluster_start: u32,
     run_cluster_counts => run_cluster_count: u32,
-    run_glyph_starts => run_glyph_start: u32,
-    run_glyph_counts => run_glyph_count: u32,
+    glyph_sources => glyph_source: GlyphSource,
+    source_glyph_starts => source_glyph_start: u32,
+    source_glyph_counts => source_glyph_count: u32,
     placement_slots => placement_slot: u32,
-    roles => role: SliceRole,
+    visual_reversed => visual_reversed: bool,
+    boundary_indices => boundary_index: Option<u32>,
     classes => class: PlacementClass,
 );
 
@@ -147,6 +176,7 @@ define_arena!(
     instance_starts => instance_start: u32,
     glyph_starts => glyph_start: u32,
     glyph_counts => glyph_count: u32,
+    glyph_sources => glyph_source: GlyphSource,
     slice_indices => slice_index: u32,
     placement_slots => placement_slot: u32,
     visual_span_ids => visual_span_id: u32,
@@ -220,17 +250,22 @@ impl PlacementState {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn push_admitted_slice(
+    pub(crate) fn push_admitted_slice(
         &mut self,
         fragment_index: u32,
+        layout_run_owner: LayoutRunOwner,
         layout_run_index: u32,
         run_identity_anchor: u32,
+        first_cluster_anchor: u32,
         run_cluster_start: u32,
         run_cluster_count: u32,
-        run_glyph_start: u32,
-        run_glyph_count: u32,
+        glyph_source: GlyphSource,
+        source_glyph_start: u32,
+        source_glyph_count: u32,
         placement: SlicePlacement,
         class: PlacementClass,
+        visual_reversed: bool,
+        boundary_index: Option<u32>,
     ) -> Result<(u32, u32), EngineError> {
         let slice_index =
             u32::try_from(self.slices.len()).map_err(|_| EngineError::ResultTooLarge)?;
@@ -246,14 +281,19 @@ impl PlacementState {
         )?;
         self.slices.push(LayoutRunSlice {
             fragment_index,
+            layout_run_owner,
             layout_run_index,
+            run_handle: None,
             run_identity_anchor,
+            first_cluster_anchor,
             run_cluster_start,
             run_cluster_count,
-            run_glyph_start,
-            run_glyph_count,
+            glyph_source,
+            source_glyph_start,
+            source_glyph_count,
             placement_slot,
-            role: SliceRole::Ordinary,
+            visual_reversed,
+            boundary_index,
             class,
         });
         self.placements.push(placement);
@@ -272,10 +312,11 @@ impl PlacementState {
         fragment_index: u32,
         layout_run_index: u32,
         run_identity_anchor: u32,
+        first_cluster_anchor: u32,
         run_cluster_start: u32,
         run_cluster_count: u32,
-        run_glyph_start: u32,
-        run_glyph_count: u32,
+        source_glyph_start: u32,
+        source_glyph_count: u32,
         absolute_glyph_start: u32,
         placement: SlicePlacement,
         class: PlacementClass,
@@ -284,17 +325,22 @@ impl PlacementState {
         let result = (|| {
             let (slice, placement) = self.push_admitted_slice(
                 fragment_index,
+                LayoutRunOwner::Paragraph,
                 layout_run_index,
                 run_identity_anchor,
+                first_cluster_anchor,
                 run_cluster_start,
                 run_cluster_count,
-                run_glyph_start,
-                run_glyph_count,
+                GlyphSource::LayoutRun,
+                source_glyph_start,
+                source_glyph_count,
                 placement,
                 class,
+                false,
+                None,
             )?;
-            if run_glyph_count != 0 {
-                self.push_visual_span(slice, placement, absolute_glyph_start, run_glyph_count)?;
+            if source_glyph_count != 0 {
+                self.push_visual_span(slice, placement, absolute_glyph_start, source_glyph_count)?;
             }
             Ok(())
         })();
@@ -312,16 +358,64 @@ impl PlacementState {
         glyph_count: u32,
     ) -> Result<(), EngineError> {
         let instance_start = self.next_instance_start()?;
+        self.push_emitted_span(
+            slice_index,
+            placement_slot,
+            instance_start,
+            GlyphSource::LayoutRun,
+            glyph_start,
+            glyph_count,
+            0,
+            SliceRole::Ordinary,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn push_emitted_span(
+        &mut self,
+        slice_index: u32,
+        placement_slot: u32,
+        instance_start: u32,
+        glyph_source: GlyphSource,
+        glyph_start: u32,
+        glyph_count: u32,
+        resolved_level: u8,
+        role: SliceRole,
+    ) -> Result<(), EngineError> {
+        if glyph_count == 0 {
+            return Ok(());
+        }
+        if let Some(last) = self
+            .visual_spans
+            .get(self.visual_spans.len().saturating_sub(1))
+            && last.slice_index == slice_index
+            && last.placement_slot == placement_slot
+            && last.glyph_source == glyph_source
+            && last.resolved_level == resolved_level
+            && last.role == role
+            && last.instance_start.checked_add(last.glyph_count) == Some(instance_start)
+            && last.glyph_start.checked_add(last.glyph_count) == Some(glyph_start)
+        {
+            let count = last
+                .glyph_count
+                .checked_add(glyph_count)
+                .ok_or(EngineError::ResultTooLarge)?;
+            let final_index = self.visual_spans.len() - 1;
+            self.visual_spans.glyph_counts[final_index] = count;
+            return Ok(());
+        }
         self.visual_spans.reserve(1)?;
         self.visual_spans.push(VisualInstanceSpan {
             instance_start,
             glyph_start,
             glyph_count,
+            glyph_source,
             slice_index,
             placement_slot,
-            visual_span_id: slice_index,
-            resolved_level: 0,
-            role: SliceRole::Ordinary,
+            visual_span_id: u32::try_from(self.visual_spans.len())
+                .map_err(|_| EngineError::ResultTooLarge)?,
+            resolved_level,
+            role,
         });
         Ok(())
     }
@@ -448,6 +542,7 @@ impl PlacementState {
             let placement = previous.placements.row(slice.placement_slot as usize);
             let next_slice = (next_slice_start + relative) as u32;
             slice.fragment_index = new_fragment_start + (slice.fragment_index - old_fragment_start);
+            slice.run_handle = None;
             slice.placement_slot = self.placements.len() as u32;
             self.slices.push(slice);
             self.placements.push(placement);
@@ -485,6 +580,76 @@ impl PlacementState {
 
     pub(crate) fn queues(&self) -> (&[u32], &[u32]) {
         (&self.ordinary_slices, &self.justified_slices)
+    }
+
+    pub(crate) fn validate_occurrences(
+        &self,
+        instance_count: usize,
+        layout_runs: &[LayoutRun],
+        replacement_runs: &[LayoutRun],
+    ) -> Result<(), EngineError> {
+        if !self.is_valid() {
+            return Err(EngineError::InvalidRequest);
+        }
+        let mut instance_cursor = 0_u32;
+        for index in 0..self.visual_spans.len() {
+            let span = self.visual_spans.row(index);
+            let slice = self
+                .slices
+                .get(usize::try_from(span.slice_index).map_err(|_| EngineError::InvalidRequest)?)
+                .ok_or(EngineError::InvalidRequest)?;
+            let run = owning_run(slice, layout_runs, replacement_runs)?;
+            let source_start = run
+                .glyph_start
+                .checked_add(slice.source_glyph_start)
+                .ok_or(EngineError::ResultTooLarge)?;
+            let source_end = source_start
+                .checked_add(slice.source_glyph_count)
+                .ok_or(EngineError::ResultTooLarge)?;
+            let span_end = span
+                .glyph_start
+                .checked_add(span.glyph_count)
+                .ok_or(EngineError::ResultTooLarge)?;
+            if span.instance_start != instance_cursor
+                || span.placement_slot != slice.placement_slot
+                || span.glyph_source != slice.glyph_source
+                || span.glyph_start < source_start
+                || span_end > source_end
+            {
+                return Err(EngineError::InvalidRequest);
+            }
+            instance_cursor = instance_cursor
+                .checked_add(span.glyph_count)
+                .ok_or(EngineError::ResultTooLarge)?;
+        }
+        if usize::try_from(instance_cursor).map_err(|_| EngineError::ResultTooLarge)?
+            != instance_count
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn bind_run_handles(
+        &mut self,
+        layout_runs: &[LayoutRun],
+        replacement_runs: &[LayoutRun],
+    ) -> Result<(), EngineError> {
+        for index in 0..self.slices.len() {
+            let slice = self.slices.row(index);
+            if owning_run(slice, layout_runs, replacement_runs)?
+                .run_handle
+                .is_none()
+            {
+                return Err(EngineError::InvalidRequest);
+            }
+        }
+        for index in 0..self.slices.len() {
+            let slice = self.slices.row(index);
+            self.slices.run_handles[index] =
+                owning_run(slice, layout_runs, replacement_runs)?.run_handle;
+        }
+        Ok(())
     }
 
     fn checkpoint(&self) -> PlacementCheckpoint {
@@ -555,6 +720,34 @@ impl PlacementState {
     }
 }
 
+fn owning_run<'a>(
+    slice: LayoutRunSlice,
+    layout_runs: &'a [LayoutRun],
+    replacement_runs: &'a [LayoutRun],
+) -> Result<&'a LayoutRun, EngineError> {
+    let index = usize::try_from(slice.layout_run_index).map_err(|_| EngineError::InvalidRequest)?;
+    let run = match slice.layout_run_owner {
+        LayoutRunOwner::Paragraph => layout_runs.get(index),
+        LayoutRunOwner::Replacement => replacement_runs.get(index),
+    }
+    .ok_or(EngineError::InvalidRequest)?;
+    let valid_owner = matches!(
+        (slice.layout_run_owner, run.source_kind, slice.glyph_source),
+        (
+            LayoutRunOwner::Paragraph,
+            LayoutRunSourceKind::Paragraph,
+            GlyphSource::LayoutRun
+        ) | (
+            LayoutRunOwner::Replacement,
+            LayoutRunSourceKind::Boundary { .. },
+            GlyphSource::Boundary
+        )
+    );
+    valid_owner
+        .then_some(run)
+        .ok_or(EngineError::InvalidRequest)
+}
+
 fn checked_grow(length: usize, additional: usize) -> Result<usize, EngineError> {
     let end = length
         .checked_add(additional)
@@ -618,6 +811,8 @@ fn line_span(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::cluster_state::BoundaryRunRole;
+    use crate::engine::run_slot::{DesiredRun, RunSlotArena};
 
     #[test]
     fn one_slice_can_own_multiple_visual_spans_and_one_class_queue() {
@@ -626,10 +821,13 @@ mod tests {
         let (slice, placement) = state
             .push_admitted_slice(
                 3,
+                LayoutRunOwner::Paragraph,
                 5,
                 101,
+                107,
                 7,
                 4,
+                GlyphSource::LayoutRun,
                 11,
                 6,
                 SlicePlacement {
@@ -647,6 +845,8 @@ mod tests {
                     extra_gap_units: 1,
                 },
                 PlacementClass::Justified,
+                false,
+                None,
             )
             .unwrap();
         state.push_visual_span(slice, placement, 11, 2).unwrap();
@@ -654,6 +854,8 @@ mod tests {
         state.finish_line(line).unwrap();
 
         assert_eq!(state.slices().len(), 1);
+        assert_eq!(state.slices().get(0).unwrap().run_identity_anchor, 101);
+        assert_eq!(state.slices().get(0).unwrap().first_cluster_anchor, 107);
         assert_eq!(state.visual_spans().len(), 2);
         assert_eq!(state.queues(), (&[][..], &[0][..]));
         assert_eq!(state.line_slice_counts, [1]);
@@ -669,6 +871,7 @@ mod tests {
                 4,
                 2,
                 71,
+                73,
                 0,
                 2,
                 0,
@@ -704,5 +907,194 @@ mod tests {
             Err(EngineError::InvalidRequest)
         ));
         assert_eq!(state.checkpoint(), checkpoint);
+    }
+
+    #[test]
+    fn slice_binding_uses_the_owning_layout_run_handle() {
+        let mut state = PlacementState::default();
+        state.clear();
+        let placement = SlicePlacement {
+            local_prefix: 0.0,
+            translation_inline: 0.0,
+            translation_block: 0.0,
+            space_ordinal_start: 0,
+            gap_ordinal_start: 0,
+            spaces: 0,
+            gaps: 0,
+            gap_cluster_count: 0,
+            per_space_units: 0,
+            extra_space_units: 0,
+            per_gap_units: 0,
+            extra_gap_units: 0,
+        };
+        state
+            .push_admitted_slice(
+                0,
+                LayoutRunOwner::Paragraph,
+                0,
+                11,
+                13,
+                0,
+                1,
+                GlyphSource::LayoutRun,
+                0,
+                1,
+                placement,
+                PlacementClass::Ordinary,
+                false,
+                None,
+            )
+            .unwrap();
+
+        let mut slots = RunSlotArena::default();
+        slots.prepare(&[DesiredRun::new(1_u32, 2_u32)], 1).unwrap();
+        let handle = slots.assignments().unwrap()[0].handle();
+        let runs = [LayoutRun {
+            source_kind: LayoutRunSourceKind::Paragraph,
+            cluster_start: 0,
+            cluster_end: 1,
+            glyph_start: 0,
+            glyph_count: 1,
+            source_run: 0,
+            font_handle: 1,
+            canonical_revision: None,
+            run_handle: Some(handle),
+        }];
+        state.bind_run_handles(&runs, &[]).unwrap();
+
+        assert_eq!(state.slices().get(0).unwrap().run_handle, Some(handle));
+
+        state.slices.run_handles[0] = None;
+        state
+            .push_admitted_slice(
+                0,
+                LayoutRunOwner::Paragraph,
+                1,
+                17,
+                17,
+                0,
+                1,
+                GlyphSource::LayoutRun,
+                0,
+                1,
+                placement,
+                PlacementClass::Ordinary,
+                false,
+                None,
+            )
+            .unwrap();
+        assert!(matches!(
+            state.bind_run_handles(&runs, &[]),
+            Err(EngineError::InvalidRequest)
+        ));
+        assert_eq!(state.slices.run_handles, [None, None]);
+    }
+
+    #[test]
+    fn replacement_slices_bind_distinct_handles_and_validate_partial_outline_spans() {
+        let placement = SlicePlacement {
+            local_prefix: 0.0,
+            translation_inline: 0.0,
+            translation_block: 0.0,
+            space_ordinal_start: 0,
+            gap_ordinal_start: 0,
+            spaces: 0,
+            gaps: 0,
+            gap_cluster_count: 0,
+            per_space_units: 0,
+            extra_space_units: 0,
+            per_gap_units: 0,
+            extra_gap_units: 0,
+        };
+        let mut slots = RunSlotArena::default();
+        slots
+            .prepare(
+                &[DesiredRun::new(1_u32, 1_u32), DesiredRun::new(2_u32, 1_u32)],
+                1,
+            )
+            .unwrap();
+        let source_handle = slots.assignments().unwrap()[0].handle();
+        let ellipsis_handle = slots.assignments().unwrap()[1].handle();
+        let replacement_runs = [
+            LayoutRun {
+                source_kind: LayoutRunSourceKind::Boundary {
+                    flow_thread_id: 7,
+                    role: BoundaryRunRole::BoundarySource,
+                },
+                cluster_start: 0,
+                cluster_end: 1,
+                glyph_start: 4,
+                glyph_count: 2,
+                source_run: 0,
+                font_handle: 1,
+                canonical_revision: None,
+                run_handle: Some(source_handle),
+            },
+            LayoutRun {
+                source_kind: LayoutRunSourceKind::Boundary {
+                    flow_thread_id: 7,
+                    role: BoundaryRunRole::Ellipsis,
+                },
+                cluster_start: 0,
+                cluster_end: 1,
+                glyph_start: 8,
+                glyph_count: 1,
+                source_run: 0,
+                font_handle: 1,
+                canonical_revision: None,
+                run_handle: Some(ellipsis_handle),
+            },
+        ];
+        let mut state = PlacementState::default();
+        for (run_index, glyph_count, glyph_start) in [(0, 2, 4), (1, 1, 8)] {
+            let (slice, slot) = state
+                .push_admitted_slice(
+                    0,
+                    LayoutRunOwner::Replacement,
+                    run_index,
+                    7,
+                    11,
+                    0,
+                    0,
+                    GlyphSource::Boundary,
+                    0,
+                    glyph_count,
+                    placement,
+                    PlacementClass::Ordinary,
+                    false,
+                    Some(0),
+                )
+                .unwrap();
+            state
+                .push_emitted_span(
+                    slice,
+                    slot,
+                    run_index,
+                    GlyphSource::Boundary,
+                    glyph_start,
+                    1,
+                    0,
+                    SliceRole::BoundaryReplacement,
+                )
+                .unwrap();
+        }
+        state.bind_run_handles(&[], &replacement_runs).unwrap();
+        state
+            .validate_occurrences(2, &[], &replacement_runs)
+            .unwrap();
+        assert_eq!(
+            state.slices().get(0).unwrap().run_handle,
+            Some(source_handle)
+        );
+        assert_eq!(
+            state.slices().get(1).unwrap().run_handle,
+            Some(ellipsis_handle)
+        );
+
+        state.visual_spans.glyph_starts[1] = 7;
+        assert!(matches!(
+            state.validate_occurrences(2, &[], &replacement_runs),
+            Err(EngineError::InvalidRequest)
+        ));
     }
 }

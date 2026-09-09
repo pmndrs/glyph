@@ -52,7 +52,7 @@ impl RunCanonicalRevision {
         self.0.get()
     }
 
-    fn allocate(next: &mut u32) -> Result<Self, EngineError> {
+    pub(crate) fn allocate(next: &mut u32) -> Result<Self, EngineError> {
         let value = (*next).max(1);
         let revision = NonZeroU32::new(value).ok_or(EngineError::RevisionExhausted)?;
         *next = value.checked_add(1).ok_or(EngineError::RevisionExhausted)?;
@@ -60,8 +60,24 @@ impl RunCanonicalRevision {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum BoundaryRunRole {
+    BoundarySource,
+    Ellipsis,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum LayoutRunSourceKind {
+    Paragraph,
+    Boundary {
+        flow_thread_id: u32,
+        role: BoundaryRunRole,
+    },
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct LayoutRun {
+    pub source_kind: LayoutRunSourceKind,
     pub cluster_start: u32,
     pub cluster_end: u32,
     pub glyph_start: u32,
@@ -1139,6 +1155,7 @@ impl ClusterArena {
                 .checked_add(self.glyph_counts[final_cluster])
                 .ok_or(EngineError::ResultTooLarge)?;
             self.layout_runs.push(LayoutRun {
+                source_kind: LayoutRunSourceKind::Paragraph,
                 cluster_start: u32::try_from(cluster_start)
                     .map_err(|_| EngineError::ResultTooLarge)?,
                 cluster_end: u32::try_from(cluster_end).map_err(|_| EngineError::ResultTooLarge)?,
@@ -2013,6 +2030,7 @@ mod tests {
             arena.layout_runs(),
             [
                 LayoutRun {
+                    source_kind: LayoutRunSourceKind::Paragraph,
                     cluster_start: 0,
                     cluster_end: 2,
                     glyph_start: 0,
@@ -2023,6 +2041,7 @@ mod tests {
                     run_handle: None,
                 },
                 LayoutRun {
+                    source_kind: LayoutRunSourceKind::Paragraph,
                     cluster_start: 2,
                     cluster_end: 4,
                     glyph_start: 3,
@@ -2033,6 +2052,7 @@ mod tests {
                     run_handle: None,
                 },
                 LayoutRun {
+                    source_kind: LayoutRunSourceKind::Paragraph,
                     cluster_start: 4,
                     cluster_end: 6,
                     glyph_start: 4,
@@ -2043,6 +2063,7 @@ mod tests {
                     run_handle: None,
                 },
                 LayoutRun {
+                    source_kind: LayoutRunSourceKind::Paragraph,
                     cluster_start: 6,
                     cluster_end: 8,
                     glyph_start: 7,
