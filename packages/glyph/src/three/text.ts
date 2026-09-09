@@ -506,6 +506,12 @@ export class ThreeRootHost {
     if (this.#bindScene(texts)) this.#commitTraversal(false);
   }
 
+  /** @internal Publish a directly observed TextGroup presentation change. */
+  observeGroupPresentation(): void {
+    if (this.#disposed || this.#binding === undefined) return;
+    this.#commitTraversal(true);
+  }
+
   /** @internal Stable snapshot of every registered member used when a new Text enters this root. */
   members(): readonly Text<RasterFormatMetadata>[] {
     const members: Text<RasterFormatMetadata>[] = [];
@@ -1130,6 +1136,12 @@ export class TextGroup extends THREE.Object3D {
 
   override copy(_source: THREE.Object3D, _recursive?: boolean): never {
     throw new Error('TextGroup cannot be copied');
+  }
+
+  override updateMatrixWorld(force?: boolean): void {
+    super.updateMatrixWorld(force);
+    if (this.#disposed || !observeTextGroupRenderOrder(this)) return;
+    this.#root.observeGroupPresentation();
   }
 
   dispose(): void {
@@ -1913,12 +1925,20 @@ function resolveTextPresentation(text: Text<RasterFormatMetadata>): TextPresenta
 function statedTextGroupRenderOrder(group: TextGroup): number | undefined {
   const state = textGroupRenderOrders.get(group);
   if (state === undefined) throw new Error('TextGroup render-order state is unavailable');
-  if (state.observed !== group.renderOrder) {
-    if (!Number.isFinite(group.renderOrder)) throw new RangeError('TextGroup renderOrder must be finite');
-    state.observed = group.renderOrder;
-    state.stated = group.renderOrder;
-  }
+  observeTextGroupRenderOrder(group, state);
   return state.stated;
+}
+
+function observeTextGroupRenderOrder(
+  group: TextGroup,
+  state: TextGroupRenderOrderState | undefined = textGroupRenderOrders.get(group),
+): boolean {
+  if (state === undefined) throw new Error('TextGroup render-order state is unavailable');
+  if (state.observed === group.renderOrder) return false;
+  if (!Number.isFinite(group.renderOrder)) throw new RangeError('TextGroup renderOrder must be finite');
+  state.observed = group.renderOrder;
+  state.stated = group.renderOrder;
+  return true;
 }
 
 function sameTextPresentation(left: TextPresentation, right: TextPresentation): boolean {

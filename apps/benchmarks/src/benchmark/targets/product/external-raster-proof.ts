@@ -139,8 +139,6 @@ async function createResources(
       style: { fontSize: 48, color: '#ffffff' },
     });
     const scene = new THREE.Scene();
-    const coverGroup = new THREE.Group();
-    coverGroup.renderOrder = 100;
     orderingGeometry = new THREE.PlaneGeometry(WIDTH, HEIGHT);
     orderingMaterial = new THREE.MeshBasicNodeMaterial({
       color: 0x7f1734,
@@ -150,17 +148,13 @@ async function createResources(
     });
     const cover = new THREE.Mesh(orderingGeometry, orderingMaterial);
     cover.position.set(WIDTH / 2, -HEIGHT / 2, 0);
-    coverGroup.add(cover);
-    // The caller-owned parent stays a plain `THREE.Group`: Three derives a render list's `groupOrder` from `isGroup`,
-    // so this is the boundary that must order the whole text above the cover. The `TextGroup` inside it owns only the
-    // text-local render-order base, which is a separate contract this target also checks.
+    cover.renderOrder = 100;
+    // The current config-based API owns one scene-level publication root. TextGroup.renderOrder is therefore the
+    // ordinary draw-mesh order against sibling scene content, independent of the authored transform hierarchy.
     textGroup = root.createTextGroup({ renderOrder: 200 });
     textGroup.add(text);
-    const callerGroup = new THREE.Group();
-    callerGroup.renderOrder = 200;
-    callerGroup.add(textGroup);
     text.position.set(32, -36, 0);
-    scene.add(coverGroup, callerGroup);
+    scene.add(cover, textGroup);
     // `Text` reconciles while parented, so attaching and forcing one world update is what commits the first revision.
     textGroup.updateMatrixWorld(true);
     if (textGroup.error !== undefined) throw textGroup.error;
