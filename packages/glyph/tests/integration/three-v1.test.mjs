@@ -1277,7 +1277,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.ok(displayedGlyphs?.[0].localAdvanceBounds.getSize(new THREE.Vector3()).x > 0);
 
   group.renderOrder = 20;
-  scene.updateMatrixWorld();
+  group.updateMatrixWorld(true);
   assert.equal(firstDraws[0].renderOrder, 20, 'group render order must update existing draw proxies');
 
   label.renderOrder = 7;

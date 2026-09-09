@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:94ec2be1ce70913e38289b7197e70c0ad869012083261c59da71ae9d8a3ad9f9'
+source_digest: 'sha256:c92d275b13e084e6dd0d917da1d3eca865e0eccd365b6b3f641af627cc6b9681'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -465,6 +465,9 @@ Three's ordinary scene traversal owns world-matrix composition. The root observe
 publishes semantic changes once at its renderer-owned draw node, and patches root-relative transforms through a separate
 engine-free side path. Camera motion does not republish text. Text, nested `TextGroup`, and other ancestor motion,
 visibility, reparenting, and manual matrix changes patch only affected renderer-local slots and do not enter Wasm.
+Calling `TextGroup.updateMatrixWorld()` directly also observes a changed finite group `renderOrder` and publishes that
+presentation change; an unchanged direct traversal remains a no-op. The root-level publication object is a Scene child,
+so this order is compared with sibling Scene draw-mesh order rather than inheriting an authored parent `Group.groupOrder`.
 Within a `TextGroup`, each child `Text.renderOrder` ranks that paragraph's instances in the shared batch while the nearest
 `TextGroup.renderOrder` remains the Three draw-mesh order. Changing only a child rank publishes one transactional
 16-byte `(paragraph_id, scope, rank)` sideband record and lets Rust apply the paragraph permutation without resending

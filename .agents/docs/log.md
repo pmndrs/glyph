@@ -2,6 +2,12 @@
 
 ## 2026-09-09
 
+- **Corrected the external Three raster gate** — Direct `TextGroup.updateMatrixWorld()` now observes and publishes a
+  changed finite group render order without requiring a full Scene traversal; unchanged traversal remains inert. The
+  external raster browser proof now exercises the current root-level publication contract—`TextGroup.renderOrder`
+  against sibling Scene draw order—instead of the superseded per-group publication model. WebGPU and WebGL2 each pass
+  two retained deterministic frames with the same pixel hash, retained Mesh, and retained geometry.
+
 - **Cut the retained LayoutRun placement contract through core and renderers** — The generated ABI now carries a distinct
   per-physical-glyph placement slot and one program-independent session table whose row is exactly f32x2 x/y. Planner-
   scoped run and placement slots are staged, generation-checked, and acknowledgement-quarantined; fixed numeric blocks,
