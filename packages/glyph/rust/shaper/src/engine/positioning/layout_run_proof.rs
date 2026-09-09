@@ -931,6 +931,8 @@ mod tests {
             glyph_count: u32::try_from(hard_break).unwrap(),
             source_run: 0,
             font_handle: 17,
+            canonical_revision: None,
+            run_handle: None,
         }];
         let map = build_visual_instance_map(
             &layout_runs,

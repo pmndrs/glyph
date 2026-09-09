@@ -1,4 +1,5 @@
 use alloc::{collections::BTreeMap, vec::Vec};
+use core::num::NonZeroU32;
 
 use crate::{
     STATUS_RESULT_TOO_LARGE, ShapeRangeRef, ShapeRunRef, ShaperRegistry,
@@ -7,7 +8,7 @@ use crate::{
 };
 
 use super::{
-    cluster_state::{ClusterArena, ClusterBuildInput},
+    cluster_state::{ClusterArena, ClusterBuildInput, RunCanonicalInput, RunCanonicalRevision},
     codec::{ALLOCATION_ORDERED_DIRECT, CapabilitySetId, ValidatedCodec},
     codec_gather::{
         CodecGatherWorkspace, DEFAULT_GATHER_RECORD_CAPACITY, GatherError, LayoutPlanInput,
@@ -24,6 +25,7 @@ use super::{
     positioning::{PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT},
     render_plan::RenderPlanView,
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
+    run_slot::{DesiredRun, RunSlotArena, RunSlotChange, RunSlotError},
     semantic_wire::RecordSpan,
     shaping_state::{BoundaryShape, BoundaryShapeArena, ShapeArena, ShapingRun, ShapingRunArena},
     sort,
@@ -215,6 +217,10 @@ struct PlannerState {
     pending_next_glyph_id: u32,
     next_content_revision: u32,
     pending_next_content_revision: u32,
+    next_paragraph_incarnation: u32,
+    pending_next_paragraph_incarnation: u32,
+    run_slots: RunSlotArena<RunLogicalKey, RunCanonicalRevision>,
+    desired_runs: Vec<DesiredRun<RunLogicalKey, RunCanonicalRevision>>,
     spare_paragraph: Option<ParagraphState>,
     paragraphs: Vec<RetainedParagraph>,
     semantic_order: Vec<ParagraphOrder>,
@@ -233,12 +239,31 @@ struct PlannerState {
 
 struct RetainedParagraph {
     id: u32,
+    incarnation: ParagraphIncarnation,
     placement: ParagraphPlacement,
     pending_placement: Option<ParagraphPlacement>,
     pending_remove: bool,
     created: bool,
     positioned_changed: bool,
     state: ParagraphState,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct ParagraphIncarnation(NonZeroU32);
+
+impl ParagraphIncarnation {
+    fn allocate(next: &mut u32) -> Result<Self, EngineError> {
+        let value = (*next).max(1);
+        let incarnation = NonZeroU32::new(value).ok_or(EngineError::RevisionExhausted)?;
+        *next = value.checked_add(1).ok_or(EngineError::RevisionExhausted)?;
+        Ok(Self(incarnation))
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct RunLogicalKey {
+    paragraph: ParagraphIncarnation,
+    first_text_unit_id: NonZeroU32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -339,6 +364,9 @@ struct ParagraphState {
     incremental_shape_source_run: Option<u32>,
     clusters: Staged<ClusterArena>,
     glyph_identity_index: IdentityIndex,
+    layout_run_identity_index: IdentityIndex,
+    next_run_canonical_revision: u32,
+    pending_next_run_canonical_revision: u32,
     geometry: Staged<FlowGeometryArena>,
     flow_layout: Staged<FlowLayoutArena>,
     intrinsic_geometry_scratch: FlowGeometryArena,
@@ -1236,6 +1264,14 @@ impl TextEngine {
         {
             return Err(EngineError::RevisionConflict);
         }
+        // A completed renderer fence is external monotonic state. Validate and accept it
+        // before taking an adoptable speculative transaction; later preparation aborts do
+        // not roll the fence back.
+        planner
+            .run_slots
+            .acknowledge(request.acknowledged_publication_generation)
+            .map_err(run_slot_error)?;
+        planner.acknowledged_publication_generation = request.acknowledged_publication_generation;
         // Candidate adoption: a retained speculative transaction whose committed
         // revision and lifecycle input match this frame hands its pending state and
         // reserved identities to the commit; per-paragraph adoption is
@@ -1281,9 +1317,6 @@ impl TextEngine {
         };
         let checkpoint =
             planner.revision.root == 0 || request.consumed_revision != planner.revision.root;
-        // A completed renderer fence is external monotonic state. It remains accepted even if
-        // plan preparation or publication later aborts.
-        planner.acknowledged_publication_generation = request.acknowledged_publication_generation;
         let (mut next_glyph_id, mut next_content_revision) = match adopted {
             Some(transaction) => (
                 transaction.next_glyph_id.max(1),
@@ -1381,6 +1414,7 @@ impl TextEngine {
                         .map_err(|error| error.in_paragraph(paragraph_id))?
                 };
             }
+            planner.prepare_run_slots(publication_generation)?;
             let positioned_changed = planner.lifecycle_changed
                 || planner
                     .paragraphs
@@ -1619,6 +1653,8 @@ impl TextEngine {
             return Err(EngineError::RevisionConflict);
         }
         planner.plan.commit().map_err(plan_error)?;
+        planner.run_slots.commit();
+        planner.desired_runs.clear();
         planner.commit_paragraphs();
         planner.next_glyph_id = planner.pending_next_glyph_id;
         planner.next_content_revision = planner.pending_next_content_revision;
@@ -2088,6 +2124,7 @@ impl PlannerState {
                 return Ok(());
             }
             self.lifecycle_prepared = true;
+            self.pending_next_paragraph_incarnation = self.next_paragraph_incarnation.max(1);
             let final_count = self
                 .paragraphs
                 .len()
@@ -2264,6 +2301,8 @@ impl PlannerState {
                 Ok(())
             }
             Err(index) => {
+                let incarnation =
+                    ParagraphIncarnation::allocate(&mut self.pending_next_paragraph_incarnation)?;
                 let state = if let Some(spare) = self.spare_paragraph.take() {
                     let mut spare = spare;
                     spare.reset_for_reuse();
@@ -2277,6 +2316,7 @@ impl PlannerState {
                     index,
                     RetainedParagraph {
                         id,
+                        incarnation,
                         placement: ParagraphPlacement {
                             order,
                             scope: 0,
@@ -2328,9 +2368,110 @@ impl PlannerState {
         }
     }
 
+    fn prepare_run_slots(&mut self, publication_generation: u32) -> Result<(), EngineError> {
+        let mut desired = core::mem::take(&mut self.desired_runs);
+        desired.clear();
+        let result = (|| {
+            let required = self
+                .active_order()
+                .iter()
+                .try_fold(0usize, |total, order| {
+                    let paragraph = self
+                        .paragraph(order.id)
+                        .ok_or(EngineError::InvalidRequest)?;
+                    total
+                        .checked_add(paragraph.state.clusters.active().layout_runs().len())
+                        .ok_or(EngineError::ResultTooLarge)
+                })?;
+            desired
+                .try_reserve(required)
+                .map_err(|_| EngineError::ResultTooLarge)?;
+            for order in self.active_order() {
+                let paragraph = self
+                    .paragraph(order.id)
+                    .ok_or(EngineError::InvalidRequest)?;
+                let clusters = paragraph.state.clusters.active();
+                for run in clusters.layout_runs() {
+                    let cluster = usize::try_from(run.cluster_start)
+                        .map_err(|_| EngineError::InvalidRequest)?;
+                    let first_text_unit_id = clusters
+                        .stable_ids
+                        .get(cluster)
+                        .copied()
+                        .and_then(NonZeroU32::new)
+                        .ok_or(EngineError::InvalidRequest)?;
+                    let canonical = run.canonical_revision.ok_or(EngineError::InvalidRequest)?;
+                    desired.push(DesiredRun::new(
+                        RunLogicalKey {
+                            paragraph: paragraph.incarnation,
+                            first_text_unit_id,
+                        },
+                        canonical,
+                    ));
+                }
+            }
+            self.run_slots
+                .prepare(&desired, publication_generation)
+                .map_err(run_slot_error)?;
+            let assignment_count = self.run_slots.assignments().map_err(run_slot_error)?.len();
+            if assignment_count != desired.len() {
+                return Err(EngineError::InvalidRequest);
+            }
+            let mut assignment_index = 0usize;
+            for order_index in 0..self.active_order().len() {
+                let paragraph_id = self.active_order()[order_index].id;
+                let run_count = self
+                    .paragraph(paragraph_id)
+                    .ok_or(EngineError::InvalidRequest)?
+                    .state
+                    .clusters
+                    .active()
+                    .layout_runs()
+                    .len();
+                for run_index in 0..run_count {
+                    let assignment = *self
+                        .run_slots
+                        .assignments()
+                        .map_err(run_slot_error)?
+                        .get(assignment_index)
+                        .ok_or(EngineError::InvalidRequest)?;
+                    assignment_index += 1;
+                    let paragraph = self
+                        .paragraph_mut(paragraph_id)
+                        .ok_or(EngineError::InvalidRequest)?;
+                    if paragraph.state.clusters.is_prepared() {
+                        let canonical = paragraph.state.clusters.pending().layout_runs()[run_index]
+                            .canonical_revision
+                            .ok_or(EngineError::InvalidRequest)?;
+                        paragraph
+                            .state
+                            .clusters
+                            .pending_mut()
+                            .bind_layout_run_handle(run_index, canonical, assignment.handle())?;
+                    } else {
+                        let run = paragraph.state.clusters.committed().layout_runs()[run_index];
+                        if assignment.change() != RunSlotChange::Retained
+                            || run.run_handle != Some(assignment.handle())
+                        {
+                            return Err(EngineError::InvalidRequest);
+                        }
+                    }
+                }
+            }
+            if assignment_index != assignment_count {
+                return Err(EngineError::InvalidRequest);
+            }
+            Ok(())
+        })();
+        self.desired_runs = desired;
+        result
+    }
+
     fn abort_pending(&mut self) {
         self.speculative = None;
         self.plan.abort();
+        self.run_slots.abort();
+        self.desired_runs.clear();
         self.semantic_records.clear();
         self.semantic_input_spans.clear();
         for paragraph in &mut self.paragraphs {
@@ -2366,6 +2507,7 @@ impl PlannerState {
         self.ranked_paragraphs.clear();
         self.lifecycle_prepared = false;
         self.lifecycle_changed = false;
+        self.pending_next_paragraph_incarnation = 0;
     }
 
     fn commit_paragraphs(&mut self) {
@@ -2397,6 +2539,8 @@ impl PlannerState {
             &mut self.pending_ordered_paragraphs,
         );
         core::mem::swap(&mut self.semantic_order, &mut self.pending_semantic_order);
+        self.next_paragraph_incarnation = self.pending_next_paragraph_incarnation;
+        self.pending_next_paragraph_incarnation = 0;
         self.pending_ordered_paragraphs.clear();
         self.pending_semantic_order.clear();
         self.rank_sort_scratch.clear();
@@ -2465,6 +2609,8 @@ impl ParagraphState {
             pending.clear();
         }
         self.clusters.abort();
+        self.next_run_canonical_revision = 0;
+        self.pending_next_run_canonical_revision = 0;
         {
             let (committed, pending) = self.geometry.pair_mut();
             committed.clear();
@@ -2757,6 +2903,9 @@ impl ParagraphState {
             committed.reserve(capacity)?;
             pending.reserve(capacity)?;
         }
+        self.layout_run_identity_index
+            .prepare(capacity)
+            .map_err(|_| EngineError::ResultTooLarge)?;
         {
             let (committed, pending) = self.flow_layout.pair_mut();
             committed.reserve(capacity, capacity)?;
@@ -3450,8 +3599,7 @@ impl ParagraphState {
         let runs = self.shaping_runs.active().runs();
         if runs.is_empty() {
             self.clusters.pending_mut().clear();
-            self.clusters.mark_prepared();
-            return Ok(());
+            return self.finish_cluster_preparation();
         }
         // A metrics-only restyle retains the shape, so the cluster arena needs
         // only its advance lanes re-derived from the retained adjacency stream
@@ -3469,8 +3617,7 @@ impl ParagraphState {
                 .refresh_scales_from_stream(committed_clusters, styles)?
                 .is_some()
         } {
-            self.clusters.mark_prepared();
-            return Ok(());
+            return self.finish_cluster_preparation();
         }
         let shape = self.shape.active();
         let build_input = || ClusterBuildInput {
@@ -3503,8 +3650,7 @@ impl ParagraphState {
                 self.abort_clusters();
                 return Err(error);
             }
-            self.clusters.mark_prepared();
-            return Ok(());
+            return self.finish_cluster_preparation();
         }
         self.clusters
             .pending_mut()
@@ -3518,17 +3664,59 @@ impl ParagraphState {
             self.abort_clusters();
             return Err(error);
         }
-        self.clusters.mark_prepared();
-        Ok(())
+        self.finish_cluster_preparation()
+    }
+
+    /// Completes every cluster-producing path through one exact retained-run comparison.
+    /// Width-only updates never reach this method because they prepare no cluster stage.
+    fn finish_cluster_preparation(&mut self) -> Result<(), EngineError> {
+        let current = RunCanonicalInput {
+            text: &self.text.active().units,
+            text_unit_ids: &self.text.active().unit_ids,
+            style_arena: &self.styles.active().arena,
+            styles: self.styles.active().resolved.segments(),
+            shaping_runs: self.shaping_runs.active().runs(),
+        };
+        let committed = RunCanonicalInput {
+            text: &self.text.committed().units,
+            text_unit_ids: &self.text.committed().unit_ids,
+            style_arena: &self.styles.committed().arena,
+            styles: self.styles.committed().resolved.segments(),
+            shaping_runs: self.shaping_runs.committed().runs(),
+        };
+        let mut next_revision = self.next_run_canonical_revision;
+        let result = {
+            let (pending, previous) = self.clusters.derive_mut();
+            pending.finalize_layout_run_revisions(
+                previous,
+                current,
+                committed,
+                &mut self.layout_run_identity_index,
+                &mut next_revision,
+            )
+        };
+        match result {
+            Ok(()) => {
+                self.pending_next_run_canonical_revision = next_revision;
+                self.clusters.mark_prepared();
+                Ok(())
+            }
+            Err(error) => {
+                self.abort_clusters();
+                Err(error)
+            }
+        }
     }
 
     fn abort_clusters(&mut self) {
         self.clusters.pending_mut().clear();
         self.clusters.abort();
+        self.pending_next_run_canonical_revision = self.next_run_canonical_revision;
     }
 
     fn commit_clusters(&mut self) {
         if self.clusters.is_prepared() {
+            self.next_run_canonical_revision = self.pending_next_run_canonical_revision;
             self.clusters.commit();
         }
         self.abort_clusters();
@@ -4680,6 +4868,23 @@ fn plan_error(error: RenderPlanCompilerError) -> EngineError {
     }
 }
 
+fn run_slot_error(error: RunSlotError) -> EngineError {
+    match error {
+        RunSlotError::GenerationExhausted | RunSlotError::SlotExhausted => {
+            EngineError::RevisionExhausted
+        }
+        RunSlotError::AllocationFailed | RunSlotError::ArithmeticOverflow => {
+            EngineError::ResultTooLarge
+        }
+        RunSlotError::InvalidPublicationGeneration | RunSlotError::AcknowledgementRegressed => {
+            EngineError::RevisionConflict
+        }
+        RunSlotError::AlreadyPrepared
+        | RunSlotError::NotPrepared
+        | RunSlotError::DuplicateLogicalKey => EngineError::InvalidRequest,
+    }
+}
+
 /// The typography for one flow thread; absent threads carry defaults so
 /// retained lines from removed constraints position unchanged.
 fn thread_typography(
@@ -4710,6 +4915,25 @@ mod tests {
     use crate::engine::style_state::ResolvedStyle;
 
     use super::*;
+
+    #[test]
+    fn width_only_cluster_prepare_skips_canonical_comparison() {
+        let mut paragraph = ParagraphState {
+            next_run_canonical_revision: 17,
+            pending_next_run_canonical_revision: 17,
+            ..ParagraphState::default()
+        };
+        let mut next_glyph_id = 23;
+
+        paragraph
+            .prepare_clusters(&ShaperRegistry::default(), &mut next_glyph_id)
+            .unwrap();
+
+        assert!(!paragraph.clusters.is_prepared());
+        assert_eq!(paragraph.next_run_canonical_revision, 17);
+        assert_eq!(paragraph.pending_next_run_canonical_revision, 17);
+        assert_eq!(next_glyph_id, 23);
+    }
 
     #[test]
     fn retained_edit_range_and_run_topology_track_insertions_without_crossing_run_boundaries() {
@@ -5047,13 +5271,36 @@ mod tests {
             .register_codec(9, validated_codec(TechniqueId(1)))
             .unwrap();
         engine.create_root(4).unwrap();
-        let prepared = engine.prepare_update(update(0, 0, 0), 1).unwrap();
+        let lifecycle = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 7, 0)]);
+        let mut request = update(0, 0, 0);
+        request.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine.prepare_update(request, 1).unwrap();
+        let aborted_incarnation = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .paragraph(7)
+            .unwrap()
+            .incarnation;
         assert!(engine.prepared_gather_cache.is_some());
         engine.abort_update(prepared).unwrap();
         assert!(engine.gather_cache.is_none());
         assert!(engine.prepared_gather_cache.is_none());
         assert_eq!(engine.root_revision(4).unwrap(), RootRevision::default());
-        let retry = engine.prepare_update(update(0, 0, 0), 1).unwrap();
+        assert!(engine.planners.get(&4).unwrap().paragraph(7).is_none());
+        let retry = engine.prepare_update(request, 1).unwrap();
+        assert_eq!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .paragraph(7)
+                .unwrap()
+                .incarnation,
+            aborted_incarnation,
+            "an aborted creation must not consume the committed incarnation counter"
+        );
         engine.commit_update(retry).unwrap();
     }
 
@@ -5763,6 +6010,9 @@ mod tests {
             planner.paragraph(2).unwrap().state.text.committed().units,
             [0x63, 0x64]
         );
+        let original_first_incarnation = planner.paragraph(1).unwrap().incarnation;
+        let original_second_incarnation = planner.paragraph(2).unwrap().incarnation;
+        assert_ne!(original_first_incarnation, original_second_incarnation);
 
         let reorder_bytes = paragraph_mutation_bytes(&[
             (PARAGRAPH_MUTATION_UPSERT, 1, 1),
@@ -5792,6 +6042,14 @@ mod tests {
             planner.paragraph(2).unwrap().state.text.committed().units,
             [0x63, 0x64]
         );
+        assert_eq!(
+            planner.paragraph(1).unwrap().incarnation,
+            original_first_incarnation
+        );
+        assert_eq!(
+            planner.paragraph(2).unwrap().incarnation,
+            original_second_incarnation
+        );
 
         let remove_bytes = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_REMOVE, 1, 0)]);
         let mut remove = update(2, 2, 2);
@@ -5820,8 +6078,8 @@ mod tests {
             .committed()
             .units
             .capacity();
-        let replacement_lifecycle = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 3, 1)]);
-        let replacement_text = paragraph_text_mutation_bytes(&[(3, 0, 0, &[0x7a])]);
+        let replacement_lifecycle = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 1, 1)]);
+        let replacement_text = paragraph_text_mutation_bytes(&[(1, 0, 0, &[0x7a])]);
         let mut replacement = update(3, 3, 3);
         replacement.limits.max_paragraphs = 2;
         replacement.paragraph_mutations =
@@ -5831,7 +6089,10 @@ mod tests {
             parse_text_mutations(&replacement_text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         let prepared = engine.prepare_update(replacement, 4).unwrap();
         engine.commit_update(prepared).unwrap();
-        let recycled = &engine.planners.get(&4).unwrap().paragraph(3).unwrap().state;
+        let planner = engine.planners.get(&4).unwrap();
+        let replacement = planner.paragraph(1).unwrap();
+        assert_ne!(replacement.incarnation, original_first_incarnation);
+        let recycled = &replacement.state;
         assert_eq!(
             recycled.text.committed().units,
             [0x7a],
