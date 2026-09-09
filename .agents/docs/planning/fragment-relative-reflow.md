@@ -1,0 +1,875 @@
+---
+type: Implementation Plan
+title: Fragment-relative retained reflow
+description: Replaces glyph-wide width-update materialization with stable run-local data, then extends the same retained layout authority to polygon exclusions, projected 3D obstacles, and drop caps.
+documentation_type: explanation
+tags: [glyph, layout, reflow, performance, wasm, three, typegpu]
+status: draft
+sources:
+  - id: design-baseline
+    resource: https://github.com/pmndrs/glyph/commit/2094243668bcf5462cff0ac3b1f7faf52cba3b6c
+    title: Post-merge main used to prepare the frontier design
+  - id: width-performance
+    resource: https://github.com/pmndrs/glyph/issues/154
+    title: Paragraph width-update performance issue
+  - id: numeric-history
+    resource: https://github.com/pmndrs/glyph/pull/134
+    title: Wide fixed-point fit restoration while retaining f64 positioning
+  - id: rust-state
+    resource: ../../../packages/glyph/rust/shaper/src/engine/state.rs
+    title: Retained Rust paragraph state and geometry-only preparation
+  - id: cluster-state
+    resource: ../../../packages/glyph/rust/shaper/src/engine/cluster_state.rs
+    title: Cluster arena, sparse word-break records, and chunk summaries
+  - id: flow
+    resource: ../../../packages/glyph/rust/shaper/src/engine/flow_composition.rs
+    title: Region flow and line composition
+  - id: flow-geometry
+    resource: ../../../packages/glyph/rust/shaper/src/engine/flow_geometry.rs
+    title: Existing retained rectangle and polygon region/exclusion kernel
+  - id: positioning
+    resource: ../../../packages/glyph/rust/shaper/src/engine/positioning.rs
+    title: Absolute glyph positioning and geometry revision assignment
+  - id: gather
+    resource: ../../../packages/glyph/rust/shaper/src/engine/codec_gather.rs
+    title: Codec semantic gather and record publication
+  - id: codec
+    resource: ../../../packages/glyph/rust/shaper/src/engine/codec.rs
+    title: Validated codec and program contract
+  - id: abi
+    resource: ../../../packages/glyph/rust/shaper/src/abi_contract.rs
+    title: Generated Rust and TypeScript ABI authority
+  - id: query
+    resource: ../../../packages/glyph/src/internal/render-planner.ts
+    title: Synchronous measurement and borrowed glyph inspection
+  - id: three-geometry
+    resource: ../../../packages/glyph/src/three/internal/geometry.ts
+    title: Three unit-quad and instance-count realization
+  - id: three-renderer
+    resource: ../../../packages/glyph/src/three/command-buffer-renderer.ts
+    title: Three command-buffer realization
+  - id: typegpu-renderer
+    resource: ../../../packages/glyph/src/typegpu/internal/renderer.ts
+    title: Renderer-neutral TypeGPU command-buffer realization
+  - id: package-evidence
+    resource: ../packages/glyph.md
+    title: Glyph package boundaries and measured release evidence
+  - id: prepared-query
+    resource: paragraph-query-preparation.md
+    title: Paragraph-scoped preparation and synchronous query contract
+  - id: dirty-ranges
+    resource: dirty-range-upload-research.md
+    title: Adaptive dirty-range upload research
+  - id: editorial-flow
+    resource: editorial-flow-layout.md
+    title: Editorial regions, exclusions, reading order, and product proof
+  - id: roadmap
+    resource: ../roadmap/roadmap.md
+    title: Milestone 12 responsive flow-region and mixed-raster goals
+generated:
+  by: openai-codex/gpt-5.6
+  at: '2026-09-09T02:40:00Z'
+---
+
+# Fragment-relative retained reflow
+
+## Decision
+
+Replace width-update glyph materialization with a core-owned retained run model. Shaping produces immutable glyph-local
+data inside stable **layout runs**. Reflow moves, reorders, splits, or decorates run entities at
+legal boundaries and publishes compact placement/order/decorations. It does not recompute and republish every glyph's
+absolute position.
+
+The feature remains fragment-relative in user-facing prose, but `LayoutRun` is the sole retained placement-run entity.
+`FlowFragment` and public `SEMANTIC_FRAGMENT` describe output pieces of a logical line inside flow slots; they are not a
+second run arena or positioning system. A word is not always one stable unit: shaping, font geometry, bidi shaping
+direction, or a boundary replacement may split it. Paint, material, raster technique, and decoration do not. A layout
+run is the largest glyph interval whose local geometry and shaping-time internal order remain valid when a line break or
+paint assignment moves.
+
+This is one renderer-neutral pipeline:
+
+```text
+unit quad
+  -> immutable glyph-local ink and raster size
+  -> stable run-local glyph placement
+  -> mutable line/fragment placement and visual order
+  -> paragraph/region transform
+```
+
+Three, `/three/typegpu`, and `/typegpu` consume the same core layout authority. No adapter may implement line layout,
+run placement, bidi ordering, or its own semantic placement cache; retained GPU mirrors are realization resources only.
+Their validated wire encodings may differ until every renderer proves the indexed representation.
+
+Topology reduction comes before SIMD. Existing evidence does not establish SIMD as the dominant remaining lever; the
+current path is dominated by glyph-wide positioning/materialization, semantic gather, change detection, and publication.
+Only a measured dense placement or comparison phase may gain a vector kernel.
+
+## What the baseline proves
+
+The planning baseline is freshly fetched post-merge `origin/main` commit
+`2094243668bcf5462cff0ac3b1f7faf52cba3b6c`, not a remembered revision or recovery worktree. M0 must fetch again and
+record the then-current remote commit and artifact hashes immediately before implementation.
+
+- Built-in Bitmap, MTSDF, Slug, and decoration paths already use a static `[0, 1]` unit quad. Shaders expand it from
+  instance origin and size; normal width changes do not rebuild CPU vertex quads or convex hulls.
+- Geometry-only preparation retains shaped glyphs and clusters, then reruns flow and positioning. Broad shaping is
+  already skipped. Boundary shaping is an ellipsis/replacement concern, not the ordinary width path.
+- `ClusterArena` already owns lazy sparse word-break records and chunk summaries. Sparse prose can fit lines at word
+  granularity; dense character wrapping remains a different workload.
+- Equivalent width classes already reuse positioned state and publish nothing. For changed classes, however,
+  `position_fragment`, geometry-revision assignment, codec gather, and diff still walk or materialize absolute glyph
+  records.
+- The final four 22k width-reflow candidate runs measured `1.251–1.317 ms` median / `3.642–3.723 ms` p95, versus
+  `1.654–1.663 / 4.062–4.328` in their exact interleaved baseline runs. Measurement-query evidence was
+  `0.282 / 0.341`, versus `0.517 / 0.711`. Browser Paragraph Stress
+  update medians were approximately `0.665–0.750 ms`, versus main `0.785–0.795`; update plus measurement was
+  approximately `0.510–0.565`, versus main `0.580–0.605`.
+- Prior attribution found roughly one-third equivalent-width no-publication cases, a common full-publication class near
+  `170 KiB`, and a small doubled-compute p95 class. The latest short circuits address the first class, not glyph-wide
+  changed-width publication.
+- Previous explicit SIMD attempts did not improve width/measurement lanes before topology changes. Line selection also
+  contains serial prefix and break dependencies. Existing SIMD/chunk summaries should remain untouched unless a new
+  proof beats them.
+
+The first milestone must reproduce these numbers and attribute the current total. If attribution contradicts this
+model, stop and revise this plan before changing the ABI.
+
+## Compatibility with the merged engine
+
+This is a factoring of the post-shaping positioning/publication tail, not another text engine. Preserve these merged
+authorities unchanged unless an independent failing oracle requires a correction:
+
+- font loading, fallback, shaping runs, Unicode analysis, HarfRust unsafe boundaries, and stable glyph/cluster IDs;
+- `ClusterArena`'s f64 advances, wide fixed-point fit lane with 16 fractional bits stored in i64, sparse word-break
+  sidecar, chunk summaries, negative-advance rules, and word/character/no-wrap selection;
+- primary-face line metrics, tight explicit line height, hanging spaces, ellipsis boundary shaping, and sequential flow
+  regions;
+- scoped paragraph ordering, semantic/render-order separation, fixed paint layers, batching, and draw coalescing;
+- independent lifecycle/text/style/geometry invalidation, speculative query adoption, A/B commit/abort, borrowed
+  publication, renderer acknowledgement, and bounded detached-query ownership;
+- Codec resource/program semantics, plan diff/range packing, retained GPU buffers, dirty uploads, unit quads, custom
+  material augmentation, and package export/optional-peer boundaries; and
+- authoritative measurement, Box3 bounds, caret/selection, and callback-bounded glyph inspection semantics.
+
+The cutover splits current positioning into topology-time glyph-local preparation and geometry-time `LayoutRunSlice`
+placement. A `LayoutRun` is deliberately larger than a word or break: it is sliced at shaping-safe cluster boundaries
+when line composition places it. This replaces width-triggered absolute per-glyph positioning, absolute-origin change
+comparison, and the corresponding glyph-wide publication without turning dense CJK into one run per cluster. Existing
+exact cold layout, semantic records, render-plan output, and pixel results remain the independent oracle until the
+replacement passes, then the old production path is deleted.
+
+The numeric history is a compatibility constraint, not an invitation to move origins into integer space. The merged
+engine retains cluster advances in f64, mirrors them as wide fixed-point values with 16 fractional bits stored in i64 for
+authoritative fit and exact justification decisions, advances an f64 glyph pen, resynchronizes that pen from the f64
+cluster advance after each cluster, and narrows each final published origin once to f32. An F26.6 fit lane landed earlier
+and was superseded by PR #134 because six fractional bits visibly displaced small Three world-space text; the f64
+positioning pen remained throughout. This plan preserves the merged split authority: i64 wide fixed point decides
+fit/distribution; f64 owns pen, cluster resynchronization, and local-plus-placement composition; f32 is the single
+publication narrow. Integer glyph or run origins are not part of the cutover.
+
+## Existing flow-geometry authority
+
+Polygonal editorial flow is not a new layout engine. The Rust core already retains rectangle and polygon regions,
+rectangle and polygon exclusions, exclusion margins and wrap sides, multiple disjoint inline slots on one band, and
+sequential regions. Production composition already emits multiple same-baseline `FlowFragment` records around a hole.
+The private retained planner can encode this geometry in one request, but the supported public `GlyphTextState` surface
+currently exposes only ordered rectangular columns.
+
+The frontier therefore preserves `FlowGeometryArena` as the sole slot-subtraction authority and adds the missing
+ownership around it:
+
+- stable package-minted region, exclusion-source, and flow-binding IDs plus generations, independent of array position;
+- per-entity geometry revisions and one shared bounded vertex pool;
+- zero exclusion allocation/capacity for flows with none; on the first exclusion, retained `Vec` arenas reserve capacity
+  for 16 bindings/entities, then grow geometrically and retain their high-water allocation; this is an allocation policy,
+  not an API count limit or a new inline-container dependency;
+- a separate lazy, geometrically growing slot-output/scratch capacity; exclusion entity capacity and the number of
+  disjoint slots one band can produce are never represented by the same limit;
+- public/config-owned rectangle and bounded-simple-polygon authoring;
+- fragment-relative invalidation and forward convergence after one obstacle changes;
+- a Three-owned projector from known 3D geometry to canonical 2D layout-space exclusions; and
+- a same-source drop-cap entity that produces both an anchored display run and an exclusion.
+
+Geometry descriptors should use dense component lanes for identity, generation, revision, kind, bounds, vertex range,
+margin, and wrap policy. Polygon vertices should remain interleaved inline/block pairs unless a focused kernel proves
+SoA faster; each band intersection consumes both coordinates together. The rectangular/no-exclusion path remains a
+separate homogeneous loop and must not acquire a polygon branch in its hot traversal. A polygon is one implicitly
+closed simple ring with at least three distinct finite vertices, no consecutive duplicates, no self-intersection, no
+holes, and nonzero signed area; normalize winding at admission. Concave region rings retain the existing exact
+even-odd section intersection. Concave exclusions retain the existing conservative single inline hull over each line
+band rather than pretending to preserve holes in the occluder.
+
+Separate authored scene identity from flow-local layout data. A scene-level `ExclusionSource` owns the stable object ID,
+generation, and world-silhouette revision. A `FlowExclusionBinding` owns one source/flow relationship, its own generation,
+and its projected layout-local polygon, bounds, margin, wrap policy, and projection revision. Each flow retains a compact
+dense binding range. A linear cache-local scan is the default through the initial 16-binding reservation and beyond; admit a
+block-sorted candidate/band index only after attributed measurements establish that scan's material cost and crossover.
+Source-to-binding adjacency is the only reverse edge. The hot line loop never searches a global scene registry or follows
+renderer object pointers. Exclusions do not point at runs: geometry produces slots first, then composition assigns run
+slices.
+
+Geometry, bindings, the vertex pool, candidate index, and resulting flow layout use the existing `Staged<T>`
+commit/pending discipline. Prepare every source update, binding insertion/removal, vertex-range replacement, and index
+change in pending state; publish it with the matching layout transaction or abort it together. A removed binding becomes
+a tombstone until neither committed nor pending state references its generation. Binding IDs and vertex ranges may be
+reused only after transaction retirement and renderer acknowledgement. Growth is fallible and happens before mutation;
+an entity, vertex, or produced-slot global ceiling returns `ResultTooLarge` and leaves committed state untouched. Never
+silently drop an exclusion or a slot to fit a capacity.
+
+## Core data model
+
+Use small, phase-owned component arenas with dense structure-of-arrays storage. Stable IDs describe identity; compact
+active arrays and queues describe work. No optional feature union belongs in the innermost glyph or cluster loop.
+
+### Retained shaped glyph components
+
+Keep the existing shaped glyph/cluster authority and add only data that remains valid across width changes:
+
+- glyph ID, cluster/source range, style/font/raster identity;
+- run-local f64 advances, glyph offsets, and cluster-prefix resynchronization points, with the existing wide fixed-point
+  mirror with 16 fractional bits stored in i64 retained only for fit and exact justification decisions;
+- run-local glyph origins and ink derived with the existing f64 pen and narrowed only at the final publication edge;
+- local ink bounds and raster extent;
+- advance and shaping offsets;
+- a stable `LayoutRun` slot and run-local cluster/glyph ordinal; and
+- static gap identity only where inter-character expansion is permitted.
+
+The static glyph-to-run mapping is published when shaping topology changes, not on width changes. Fragment/line
+membership is dynamic slice data and cannot be baked into a static glyph record.
+
+### `LayoutRunArena`
+
+One stable run entity owns:
+
+- cluster range and contiguous glyph range;
+- local advance and range-queryable local-ink chunk summaries;
+- paragraph-resolved/base bidi run identity, shaping direction, and shaping-time internal glyph order;
+- geometry/shaping identity such as selected font face, size/variation/features, and spacing inputs;
+- source kind (`paragraph-source` or a distinct shaped `boundary-replacement` while that topology exists); and
+- the stable run slot and generation.
+
+Split a run only at a boundary that invalidates local glyph geometry or shaping-time order: a shaping/font-geometry
+change, paragraph-resolved bidi shaping run/direction change, or boundary replacement. Paint/material/raster/decorating
+group changes produce renderer or decoration spans over the same run and never churn placement topology. A
+HarfRust-unsafe edge is forbidden as a slice boundary, not a reason by itself to split the run; a run may span it. Legal
+word and character breaks do not themselves create retained runs. In dense CJK, one large run therefore spans many legal
+break opportunities and is sliced only at safe cluster boundaries by composition. Do not encode topology conditions as
+booleans tested for each glyph during placement.
+
+### `LayoutRunSliceArena`
+
+One dynamic occurrence identifies a contiguous cluster/glyph subrange of a `LayoutRun` placed into one
+`FlowFragment`. It stores run ID/generation, run-local cluster and glyph start/count, local prefix at the slice start,
+line-resolved L1 level/visual-span identity, placement slot, an occurrence role (`ordinary`, `hanging-space`,
+`character-fallback`, or `boundary-replacement`), and a closed `PlacementClass` discriminator with exactly `Ordinary`
+and `Justified` cases. Final-line and hard-break state stay on the owning `FlowLine`/`FlowFragment`. Classification
+appends the slice to one homogeneous queue; neither hot kernel switches on class or role. L2 visual order lives in the
+visual span, never in the stable run.
+A width change rebuilds compact slices and visual spans; it does not rewrite the run's glyph-local records. Large CJK
+runs may yield several line slices, but never one retained run per break or glyph.
+
+Each slice caches the ink union for its local glyph range. Derive it from immutable run chunk summaries plus bounded
+edge scans, so a partial CJK run does not force a whole-run bound or a broad per-glyph measurement walk.
+
+The renderer mapping is an M1 decision with two admissible shapes: a coalesced instance/order span carrying one slice
+placement slot as span metadata, or a compact run-indexed occurrence table addressed through the existing indirect
+instance/order stream. Either shape must map every glyph ordinal to exactly one live slice after a break moves, preserve
+material batching and visual order, and avoid per-glyph absolute-origin publication. Reject any candidate that requires
+one draw per run/slice or a branch/search over line breaks in the ordinary vertex path.
+
+Keep paint/material/raster grouping outside `LayoutRunArena`. Existing codec/resource batch spans reference run-local
+glyph subranges and are intersected with visual slice spans during plan publication. A paint-only update rebuilds those
+render spans and program resources, but preserves run IDs, run-local geometry, slices, and placements whenever text and
+geometry are unchanged. Decoration spans remain separate line-owned entities.
+
+### `SlicePlacementArena`
+
+Retain committed/pending A/B placement tables. The correctness-first GPU/publication candidate is one dense 8-byte
+translation row. Keep active count separate from reserved capacity and keep justification payload out of the ordinary
+row.
+
+The initial proof should test this shape:
+
+```text
+translation_x: f32
+translation_y: f32
+```
+
+Rust computes each slice translation and every query-visible absolute result from f64 local prefixes and an f64 pen,
+including cluster resynchronization, then performs the existing single f32 publication narrow. The wide fixed-point fit
+and justification lanes do not become origin storage. Plain `f32(local) + f32(translation)` introduces a second rounding
+and cannot generally reproduce `f32(f64_local + f64_translation)` bit-for-bit. M1 must therefore report CPU semantic and
+query parity separately from renderer math, and compare plain f32, high/low translation, anchor, or another compact
+encoding against both the old absolute-f32 stream and pixel output over tiny world text and the admitted large-coordinate
+range. Do not change the CPU authority or introduce integer origins to make a shader representation convenient. If no
+compact encoding meets the deliberately chosen renderer parity, keep the absolute-f32 production contract and do not
+perform the retained cutover until that contract is explicitly re-pinned. Justification quotient/remainder remains exact
+wide fixed-point decision data on the CPU; application to the f64 pen and the final origin narrow retain current ordering.
+Because WGSL and GLSL ES do not expose an i64 lane, M1 must separately compare a proven bounded i32/u32 narrow, hi/lo
+u32 lanes, or another explicit justification wire form against the old absolute-f32 stream and justified pixels. No
+shader-i64 support is presumed, and failure to prove a compact form blocks the cutover. Each placed slice's visual
+starting ordinal lives in a separate table scoped to one `FlowFragment`.
+
+This row is a comparison candidate, not a foregone ABI. M1 must compare it with a break-anchor representation: stable
+run-local prefixes, one compact slice-to-line slot, and one line row containing the line origin and slice-start prefix.
+The latter writes less dynamic data but costs another indexed read in the vertex path. Choose from measured end-to-end
+CPU, GPU, bytes, exact glyph-to-slice mapping, and WebGL2 feasibility; do not optimize only the Rust loop.
+
+Stable placement slots are reusable only after publication acknowledgement retires their previous generation. Capacity
+grows geometrically and reuses its high-water allocation after warmup.
+
+### Visual line and decoration components
+
+Maintain compact visual-run spans per line: a line references a range of run IDs in visual order. Preserve a
+copy-span representation where unchanged runs can be copied without deciding order per glyph. The current stable
+indirect ordering path remains the correctness fallback for non-contiguous or reordered spans.
+
+Decorations are separate entities, one per continuous decorating group per visual line. Each holds a line-relative rect,
+paint program, depth layer, and run-span provenance. They remain unit-quad instances and do not cause glyph
+geometry regeneration.
+
+## Phase-specialized systems
+
+Classify work once per invalid paragraph and append entity IDs to explicit dense queues:
+
+- `compose_word_queue`
+- `compose_character_queue`
+- `shape_boundary_replacements`
+- `reorder_bidi_lines`
+- `place_ordinary_slices`
+- `place_justified_slices`
+- `rebuild_decoration_spans`
+- `publish_slice_placements`
+- `publish_visual_order`
+
+Each queue has one narrow loop over homogeneous records. The ordinary placement loop reads run advance and writes
+line translation; it has no branch for wrap mode, bidi, justification, decorations, ellipsis, or raster technique.
+Character fallback, justification, and boundary replacement are separate systems rather than conditions inside that
+loop.
+
+Line composition may remain serial where a prefix sum determines the next legal break. It should operate on word/break
+records, not glyphs. Placement of the selected runs and dirty comparison of placement rows are independent dense
+passes and are the only initial SIMD candidates.
+
+## Required typography behavior
+
+### Word and character wrapping
+
+For word wrapping, keep legal UAX #14 opportunities intersected with the existing UAX #29 and HarfRust-safe cluster
+boundaries as a sparse break sidecar over large topology-defined runs. Moving a line break updates run slices, line
+membership, translation, and visual order. Glyph-local records remain unchanged.
+
+An oversized unbreakable span enters `compose_character_queue`. That system slices the same large run at existing safe
+cluster boundaries and patches only the affected slice/break mapping; it does not manufacture retained per-cluster runs.
+Dense CJK uses a dense safe-boundary bitmap or cluster-index range already owned by `ClusterArena`, not a sparse word
+record per cluster. The M1 proof must show, for every selected break, the exact mapping
+`(LayoutRunId, local cluster range, local glyph range) -> LayoutRunSlice -> visual instance span`, including clusters
+with multiple glyphs, zero glyphs, ligatures, combining marks, and RTL glyph order.
+
+### Bidirectional text
+
+Split stable runs on paragraph-resolved shaping bidi-run/direction boundaries, never on line-resolved L1 changes. A
+same-baseline group of disjoint slots is one logical `FlowLine` with one ordered list of `FlowFragment` occurrences.
+Geometry stores slots in ascending physical inline order. Source content is consumed through those slots in
+paragraph-base order: ascending for LTR and descending for RTL. The fragments retain that logical consumption order even
+if paint spans are later stored in physical order.
+
+After composition, prepare resolved levels once over the full logical line source range and index every fragment against
+that same line start. Apply UAX #9 L1 to that full line, then apply L2 independently to each fragment's contiguous source
+range; a hole is a layout fragmentation boundary and cannot reorder glyphs across itself. This explicitly fixes the
+current second-fragment defect where a level array based at the first fragment is indexed using the later fragment's
+start. Validate the correction against an independent UAX #9 implementation, not the old positioned output. Stable runs
+retain topology and direction, not a line-independent resolved level. Internal glyph order stays local to its run.
+
+Trailing whitespace whose level resets at the logical line boundary is a distinct hanging-space slice occurrence and is
+attached to the fragment containing the logical line end. Mixed-direction lines may therefore update occurrence levels,
+translations, and order spans when width changes even when glyph-local geometry is unchanged. Within each fragment,
+visual spans paint in UAX #9 order; fragments paint in ascending physical inline order, with the existing stable
+semantic/render-order tie-breaks. Draw order is not optional: combining marks, overlaps, and custom materials must retain
+the same visual paint result as the independent oracle.
+
+### Justification
+
+Word-space justification moves following slice roots; it does not rewrite glyph-local origins. Letter/cluster expansion
+uses the `Justified` placement class. Store static gap identity with glyph-local data, then publish the visual starting
+ordinal and exact wide-fixed-point quotient/remainder per placed slice within one `FlowFragment`; final displacement is
+converted to f64 and applied to the pen before its one f32 origin narrow:
+
+```text
+ordinal * quotient + min(ordinal, remainder)
+```
+
+`PlacementClass` selects homogeneous core queues, not a per-slice raster program or batch key. After constructing the
+same batches as the baseline, assign each whole batch a closed `RenderPlacementClass`: `OrdinaryBatch` when it contains no
+justified slice, otherwise `JustificationCapableBatch`. Every slice in a justification-capable batch uses that one vertex
+path; ordinary, final-line, hard-break, and no-gap slices carry zero quotient/remainder, so the expression is branch-free
+without splitting a draw. Because inter-character expansion moves glyphs inside a run, the justified query kernel must
+publish a post-expansion ink summary or walk that specialized slice; translating a pre-justification summary is not
+sufficient.
+Quotient/remainder and ordinal zero reset independently for every fragment. The final-line decision is made once for the
+logical `FlowLine`, so a nonterminal slot is never mistaken for a paragraph-final line. Final-line, inter-character, and
+script-specific justification policies must select core queues before traversal; renderer program selection occurs once
+per completed baseline-equivalent batch.
+
+### Hanging spaces and line measurement
+
+Hanging spaces remain in semantic/source ranges but are excluded from visible line advance and justification input as
+required by the current contract. A separate slice occurrence prevents end-of-line behavior from mutating its retained
+layout run.
+
+Line measurements and paragraph bounds derive from fragment summaries and placements. They must not materialize every
+glyph. Ink bounds use the union of translated run-local ink summaries, plus decoration bounds where the public
+measurement contract includes them.
+
+### Decorations
+
+Rebuild only continuous decoration spans whose line membership or endpoints changed. Preserve under/content/over depth
+ordering and style discontinuities. A future skip-ink policy must consume retained local ink intervals in core; adapters
+must not scan glyphs to derive it.
+
+### Editorial regions, exclusions, and local convergence
+
+Retain `FlowGeometryArena`, `InlineSlotArena`, and `FlowLayoutArena::rebuild_until_state_converges` as the only region,
+slot-subtraction, and convergence authorities; strengthen them instead of adding parallel systems. Compare committed
+and pending geometry by stable entity ID, generation, and revision. Build the ordered block intervals affected by the
+union of every changed binding's old and new bounds, including margin. Preserve the prefix before the earliest interval.
+Recompose forward, but do not test convergence before the dirty horizon—the end of the last affected interval or later
+geometry event—has been crossed. This prevents an unchanged band between two changed portions of a concave polygon from
+certifying a stale suffix. At or after that horizon, stop only when this convergence certificate matches the retained
+suffix:
+
+- next stable source cluster and flow-thread identity;
+- region ID, block cursor, baseline, line height, and paragraph spacing state;
+- ordered inline-slot sequence, slot geometry revisions, and `FlowFragment` origins;
+- break, hanging-space, boundary-replacement, line-limit, and ellipsis state; and
+- `LayoutRunSlice` occurrence order and placement at the suffix boundary.
+
+If the certificate never matches, reflow to the end. Cold rebuild remains the exact oracle. This is a flow-geometry
+system layered before layout-run placement, not a geometry condition inside shaping or the ordinary placement loop.
+Unchanged obstacle projection must write no geometry records and trigger no Wasm crossing.
+
+Justification is scoped independently to every produced `FlowFragment`. Its quotient/remainder and ordinal base reset
+for each disjoint slot, while final-line policy follows the logical `FlowLine` rather than accidentally treating every
+slot as a paragraph ending. Slot consumption follows the paragraph base direction defined above; bidi resolution and
+paint order remain properties of the fragment/visual-span pass, not geometry traversal.
+
+### Projected 3D obstacles
+
+The core consumes only canonical 2D layout-space polygons. Three owns projection because cameras, object transforms,
+clipping, and the text plane are renderer concerns. The helper accepts caller-known conservative object bounds or an
+explicit simplified CPU silhouette plus the text object's planar local-to-world transform and flow bounds. It rejects a
+noninvertible transform, a camera on the text plane, and a degenerate/edge-on text-plane projection rather than emitting
+nonfinite geometry.
+
+For a bounds volume, transform its faces to world space, clip them first to the camera-side half-space of the oriented
+text plane and then to the camera frustum including the near plane, and project the surviving vertices/edge
+intersections to NDC. Thus an object wholly behind the text plane or camera contributes no exclusion; an object crossing
+the text plane contributes only its camera-side portion. For each surviving NDC point, construct the perspective camera
+ray or orthographic parallel ray, intersect that ray with the text plane, and transform the finite intersection into
+text/flow-local coordinates. Take a conservative convex hull for bounds input; an explicit silhouette may retain a
+validated simple concave ring. Clip to the authored flow region, inflate by declared projection error and layout margin,
+simplify without moving the boundary inward, then quantize. Update one stable `FlowExclusionBinding` only when the
+quantized polygon or projection inputs change.
+
+There is no depth-buffer, coverage-mask, GPU readback, or claim of hidden-surface exactness. The declared policy is
+camera-to-text-plane occlusion, not arbitrary scene visibility. Near/frustum/text-plane crossings must remain finite and
+conservative. Moving the object, text, or camera is renderer-only work when the quantized layout-space polygon is
+unchanged. Projection, clipping, serialization, Rust slot resolution, reflow, publication, and submit are reported as
+separate phases.
+
+### Drop caps
+
+A drop cap remains part of the same source paragraph. Begin with one complete extended grapheme, then extend its source
+range to a HarfRust shaping-safe cluster boundary (`CLUSTER_SAFE_BEFORE`) without splitting a ligature or dependent
+cluster. If no bounded safe edge exists, conservatively disable the cap or shape the authenticated larger prefix; never
+split the EGC or guess a glyph boundary. Shape that selected prefix once through its authored font/style/raster program,
+anchor its display run to the first region, exclude the exact selected source range from body flow, and emit a
+conservative exclusion before composing the remaining clusters.
+
+The cap and body retain one source-coordinate domain. The cap entity records selected UTF-16 range, cluster range,
+display-run ID, body-resume cluster, and source-to-display mapping. Caret, selection, hit testing, `withGlyphs`, and full
+glyph inspection merge the two realized ranges without duplication or omission. Local edits recompute the safe boundary
+transactionally. The initial model specifies cap height in lines, baseline/cap alignment, margin, side, and optional
+caller-authored polygon. Raster program is per display run, so a Slug cap beside Bitmap or MTSDF body text shares core
+layout and source mapping without adapter-owned realization logic.
+
+The first production slice uses transformed glyph/design bounds or an explicit polygon. Outline-tight automatic flow is
+separately evidence-gated because the retained shaping artifact does not own contour points. Arbitrary rendered-pixel
+occlusion remains out of scope.
+
+The Editorial acceptance scene combines a stylized same-source drop cap with justified columns and a moving 3D object.
+The object repeatedly approaches, intersects, passes through, and exits the text plane so its projected polygon changes
+topology and creates zero, one, or multiple inline slots. The scene must visibly prove continuous reflow, source
+continuity, mixed-raster alignment, and recovery to the original layout after the obstacle leaves.
+
+### Hit testing and glyph inspection
+
+Resolve hit tests as line -> physical fragment -> visual slice -> local cluster/glyph. A run-local prefix/index may be
+built lazily for a queried line, but ordinary rendering and measurement must not allocate it.
+
+`withGlyphs(callback)` remains the zero-whole-copy inspection API. It composes an individual absolute result into the
+existing fixed Wasm scratch from slice placement plus local glyph data. `glyphs()` and `breakApart()` may explicitly
+materialize caller-owned arrays because the caller requested a full copy; they are not resize hot paths. Query results
+must remain synchronous, lifetime-bounded, and invalid after the callback.
+
+Migrate `snapshotGlyphOrigins` and the Three `glyphPlacements` path in the atomic cutover. Bounds, raycast, caret, and
+selection must resolve through the core line -> fragment -> visual slice -> local glyph query authority, not a renderer
+snapshot/cache of absolute origins. A renderer may cache GPU resources, but it may not become the semantic placement
+source. Compare these public methods before/after render, after width change, and after commit/abort.
+
+## Publication, shaders, and renderer ownership
+
+### Zero-copy and double buffering
+
+Keep the current synchronous borrowed A/B publication contract. `FlowGeometryArena`, flow-local binding/index storage,
+`FlowLayoutArena`, run slices, and placement/order/decoration tables all participate in one pending transaction. Rust
+writes inactive pending state, exposes a lifetime-bounded borrowed publication, and promotes the entire graph only on
+successful commit. Abort/retry leaves the committed graph and every generation reachable from it unchanged. Removal
+tombstones an entity in pending state; binding IDs, placement slots, and vertex ranges are reusable only after no pending
+or committed reference remains and renderer publication acknowledgement retires the old generation.
+
+This does not claim that WebGPU reads Wasm linear memory directly. GPU upload is unavoidable. The invariant is no extra
+full intermediate copy: a pure width update writes and uploads compact placement/order/decoration patches and writes
+zero bytes to the static glyph-local buffer.
+
+Do not zero-scale unused capacity. The built-ins already use static unit quads with an authoritative instance count;
+drawing degenerate slack wastes vertex work and complicates ordering. Reserve capacity and set the live count.
+
+### Codec and ABI cutover
+
+Replace the glyph-wide absolute placement contract atomically. The shipping engine has one retained placement model:
+`LayoutRun` plus compact run/line placement. The old materializer may exist only behind test/lab compilation as the parity
+oracle and is deleted from production when the cutover lands; it is never a selectable production mode. Retire the
+test/lab oracle only at M6 after full matrix closure.
+
+1. Declare the new placement inputs per raster program, matching existing per-program allocation strategy. Require
+   agreement only within one batch/draw; glyph and line/decorating programs may consume different compact tables without
+   a per-glyph branch, but all positions derive from the same run authority.
+2. Add paragraph/session-scoped placement buffers whose capacity is independent of batch glyph capacity and whose IDs,
+   patch records, range jobs, execution, acknowledgement, and retirement are explicit in the generated contract. A run
+   shared across resource/material batches must address the same placement row.
+3. Mark the static run slot as topology-only or widen the exhausted semantic change mask. The current named bits occupy
+   0–14 while bit 15 is outside `ALL_SEMANTIC_CHANGES`; define and include a generated `RUN_SLOT_CHANGE` bit (widening the
+   mask if needed) or move the slot to a separately versioned topology record. No new field may silently receive a zero
+   dependency mask. Pack or otherwise account for the slot before raising resource limits: base TypeGPU Slug already
+   consumes its declared eight buffers.
+4. Version and regenerate the Rust JSON contract, TypeScript declarations, validators, fixtures, and ABI fingerprints in
+   the same commit.
+5. Update custom codec/program registration to the new placement contract in the same release. The package remains
+   unreleased and carries no demonstrated compatibility obligation that justifies shipping two positioning systems.
+
+The proof may revise the 8-byte f32 candidate or choose another GPU encoding, but it must not proceed to ABI
+implementation without recording per-technique bytes per active and reserved slice, alignment, translation and
+justification numeric wire forms, rounding order, and slot lifetime. CPU semantic/query output retains the exact
+one-narrow contract. Renderer acceptance records both absolute-f32 deltas and pixel evidence for ordinary and justified
+slices separately; it must not claim bit parity from plain local-f32 addition or presume GPU i64 arithmetic.
+
+### GPU data access
+
+Static per-glyph instance data contains local origin/ink/size, run slot, and local ordinal. A stable-addressed occurrence
+or span record associates that glyph range with the current slice placement. The generic material/resource realizer
+resolves final position before invoking the raster coverage graph, so custom material augmentation continues to observe
+the same final-position semantics.
+
+Keep ordinary-only and justification-capable vertex paths separate at whole-batch granularity. The ordinary-only shader
+performs one indexed placement fetch and adds one translation; it does not test bidi, wrapping, decorations, raster type,
+or justification. A justification-capable batch uses one shader for all its slices and additionally applies the ordinal
+quotient/remainder expression; zero payload makes ordinary/final slices a branch-free no-op. Program choice must not enter
+the per-slice batch key or split a baseline batch. Bitmap, MTSDF, and Slug coverage remain unchanged.
+
+Before freezing the ABI, prove the indexed lookup on both WebGPU and Three's WebGL2 backend. The proof must identify the
+actual TSL/GLSL resource form, integer/bitcast behavior, alignment, update range, and device limits in the installed Three
+version. For WebGL2 data textures/PBOs, measure bytes uploaded from dirty active rows and bytes actually transferred when
+the backend expands that update to padded width, full row, or full allocated texture; report active and reserved texture
+capacity separately. If WebGL2 requires per-glyph CPU absolute expansion, a linear per-glyph break search, or an extra
+draw per run/slice, reject that representation and test a compact occurrence/order-span alternative; adapters may not
+silently diverge.
+
+Three TSL and Three TypeGPU-backed shaders already have indexed-storage precedent; measure the incremental fetch and
+WebGL2 PBO/texture limits. Base `/typegpu` must separately prove storage usage, bind-group ownership, instance-index
+access, and buffer-limit headroom before it migrates. It has no decoration renderer today and this plan does not imply
+one. No adapter owns a second layout model, and the new placement table must preserve existing scene draw counts.
+
+## Milestones and commit boundaries
+
+Work in coherent, reviewable feature gates. Each commit must preserve its named invariant and pass focused deterministic
+checks, but the full evidence gauntlet runs at the end of each stack rather than after every commit. Push checkpoints to
+the remote under a draft PR so work is recoverable and reviewable; do not mark the PR ready until the stack-level
+correctness, package, browser, performance, and documentation gates all pass.
+
+### M0 — freeze and attribute the exact baseline
+
+- Fetch remote `main` again and rebuild its exact `origin/main` result with the pinned toolchain; record commit, tree,
+  Wasm, and benchmark-driver hashes.
+- Add benchmark/lab-only phase accounting for line fit, run/glyph positioning, boundary shaping, decorations,
+  semantic query, codec gather, plan diff, and publication; record records and bytes, not wall time inside production.
+- Add maintained `justify`, `bidi-resize`, and `equivalent-width` cases plus Bitmap/MTSDF/Slug CJK fixtures before using
+  those lanes as gates.
+- Reproduce the 22k width/measurement evidence in three interleaved baseline rounds.
+
+Exit: attribution supports run placement/publication as the dominant removable work. If not, stop and update this plan.
+
+### M1 — test/lab run proof and renderer feasibility, no ABI change
+
+- Build `LayoutRunArena` and placements in test/lab configurations beside the current positioned arena; production keeps
+  executing exactly one path.
+- Flatten the shadow result through a test/lab adapter and compare it bit-for-bit with current semantic glyphs,
+  measurements, decorations, and visual order, except that known multi-slot bidi defects—later-fragment level indexing
+  and paragraph-base-direction slot consumption—must match the independent oracle rather than the defective baseline.
+- Add an independent UAX #9 oracle and a two-plus-fragment LTR/RTL/mixed fixture that fails the existing later-fragment
+  level indexing. Prove full-line L1, fragment-local L2, base-direction slot consumption, physical paint order, hanging
+  space ownership, logical final-line policy, and per-fragment justification ordinal reset.
+- Scope justification ordinals to each `FlowFragment` and prove justified ink bounds in the shadow oracle; these are
+  data-model requirements, not later cleanup.
+- Specify paragraph/session buffer ownership, capacity, batch sharing, acknowledgement, and slot retirement before
+  freezing record layouts.
+- Measure run count, changed placement rows, working-set bytes, and projected publication bytes across Latin,
+  mixed-direction, CJK, and justification corpora.
+- Compare run-translation rows with break-anchor plus run-to-line rows. Three already proves indexed storage on WebGPU
+  and WebGL2; measure the incremental lookup and limits. Separately prove base `/typegpu` storage binding, instance index,
+  bind-group ownership, and eight-buffer pressure. Record CPU publication bytes and GPU fetch cost for every candidate.
+- Prove the dense-CJK mapping from a large `LayoutRun` through safe-boundary slices to exact visual instance spans for
+  multi-glyph, zero-glyph, combining, ligature, and RTL clusters. Record run/slice/span counts and reject one-run-per-break,
+  one-run-per-glyph, per-glyph break search, or one-draw-per-slice designs.
+- Compare CPU one-narrow semantic/query output separately from GPU local-plus-placement candidates. Plain f32 addition
+  gets no bit-exact presumption; authenticate high/low or anchor alternatives against old absolute-f32 and pixel output.
+  Separately prove the chosen bounded or hi/lo justification quotient/remainder wire over the full justification corpus;
+  GPU shaders do not consume the CPU i64 representation directly.
+- If a candidate uses integer reinterpretation, compile a focused TSL storage-read fixture under Three's installed WebGL2
+  backend; its pinned `bitcast_uint_int` helper has an observed return-type mismatch, so source presence is not proof.
+- Measure WebGL2 active dirty bytes and padded/full backing-texture transfer bytes independently.
+- Rebaseline publication per technique: current geometry-only width writes are 8 bytes/glyph for Bitmap and
+  16 bytes/glyph for MTSDF/Slug. Account separately for Wasm retained, CPU staging, GPU static, GPU dynamic, and
+  per-update publication bytes.
+- Add a render-plan fixture containing a three-line justified Bitmap paragraph and a ragged Bitmap paragraph that share
+  font, material, and resource. Its candidate draw count must equal baseline while final/hard-break/no-gap slices receive
+  zero justification payload inside the single justification-capable batch.
+
+Exit: exact CPU semantic/query parity, independently correct bidi, accepted renderer numeric/pixel parity, a precise CJK
+mapping, per-technique byte gates, and a proven buffer lifetime, with no dense CJK, GPU, or renderer regression above 3%.
+Otherwise reject or redesign before touching the ABI.
+
+### M2 — core implementation, test/lab oracle only
+
+- Implement the run arenas and specialized queues without executing both paths in shipping builds.
+- Implement every existing word/character/no-wrap, dense CJK, bidi L1/L2, hanging-space, justification, decoration,
+  ellipsis, measurement, hit-test, borrowed/full glyph-query, detached-slice, and custom-program behavior before cutover.
+- Compute measurement and borrowed per-glyph query results from run-local data in test/lab builds.
+- Keep the prior first-party glyph-wide materializer only as a test oracle; do not ship two first-party width paths.
+- Preserve shaping, local edits, font-size invalidation, ellipsis boundary shaping, commit/abort, and identity semantics.
+  Prove a paint/material/raster/decorating-only update changes render/decor spans without changing `LayoutRun` or
+  placement identity/revisions.
+
+Exit: the entire existing-behavior correctness matrix has exact oracle parity and allocation-free steady state after
+warmup; production behavior and timing remain unchanged.
+
+### M3 — atomic core, ABI, query, and renderer cutover
+
+- Add the new per-program run/line inputs and paragraph/session-scoped placement buffers.
+- Define numeric wire representation, change-mask semantics, buffer IDs, capacities, range jobs, patches,
+  acknowledgement, and retirement in the generated contract.
+- Publish static glyph-local/run-slot records only on topology changes.
+- Publish placement, visual-order, and decoration patches on width changes.
+- Teach the generic realization boundary to bind local glyph data and the run/line tables.
+- Migrate Bitmap, MTSDF, Slug, decoration, and custom program registration across `/three` and `/three/typegpu`.
+- Migrate base `/typegpu` Bitmap/MTSDF/Slug in the same tip, using either the shared indexed encoding or an adapter-specific
+  wire encoding already validated in M1 against its eight-buffer ceiling; both derive from the same core authority and it
+  still has no decoration path. If neither encoding passes, M3 and the production cutover do not land.
+- Migrate `snapshotGlyphOrigins`, Three `glyphPlacements`, bounds/raycast/caret/selection queries, generated validators,
+  `material-realizer.ts`, and `registerThreeRasterProgram` in the same tip.
+- Preserve custom material override semantics and package optional-dependency/tree-shaking boundaries.
+- Regenerate every ABI surface, switch the entire core authority, and remove the old materializer from production in the
+  same coherent commit. Compile it only into oracle tests. No intermediate pushed/reviewable tip may pair the new core
+  contract with old renderers or vice versa; use preparatory dormant commits if needed, then one atomic enabling commit.
+
+Exit: every first-party integration and custom-program boundary consumes the same core publication with existing draw
+counts; the complete existing-behavior correctness matrix passes; pure warmed width changes write zero static-glyph
+bytes; commit/abort stays atomic; `benchmark:external-raster`, the `/three` and `/three/typegpu` live probes, and the
+`/typegpu` hello-world pass from the packaged exports.
+
+### M4 — retained flow geometry and public 2D authoring
+
+- Give regions and exclusions stable identities/revisions and preserve the existing packed vertex authority.
+- Remove the legacy Three `maxExclusions: 1` feature cap. Keep zero exclusion allocation for empty flows; on first use,
+  reserve 16 entries in retained exclusion/binding `Vec` arenas, then grow geometrically. Grow lazy slot output/scratch
+  independently. Retain explicit global entity, vertex, and slot ceilings only to reject hostile/unbounded transactions.
+- Strengthen existing `FlowLayoutArena::rebuild_until_state_converges` with the first-affected band, future dirty horizon,
+  and exact suffix certificate against cold rebuild.
+- Expose experimental rectangle/polygon region and exclusion inputs through the shared config/controller boundary;
+  validate finite bounds, global vertex/entity caps, distinct vertices, nonzero area, wrap side, margins, one simple ring,
+  and no holes/self-intersection before Wasm. Preserve horizontal-edge, critical-block, and between-critical midpoint
+  sampling regressions for exact concave regions and conservative concave exclusions.
+- Prove simultaneous drop-cap and object exclusions, sequential regions, multiple slots, and LTR/RTL/mixed reading
+  order without adding branches to ordinary rectangular flow.
+
+Exit: public 2D polygon flow uses the existing Rust authority; moving one obstacle touches only affected bands and run
+placements; unchanged rectangular columns remain flat; exact cold-oracle parity holds.
+
+### M5 — projected 3D obstacles and same-source drop caps
+
+- Add the renderer-neutral canonical 2D exclusion model and a Three-specific projection helper for known bounds or a
+  simplified CPU-visible silhouette. Do not introduce Three/camera types into core.
+- Add camera-side text-plane and frustum clipping, perspective/orthographic ray-plane mapping, conservative hull/inflate,
+  flow clipping, and quantized no-op detection without GPU readback.
+- Add the same-source EGC-plus-shaping-safe drop-cap entity, exact source/cluster mapping, body resume, anchor placement,
+  cap-height/alignment, query merging, and mixed-raster realization.
+- Upgrade the Editorial workload to stylized justified columns with a Slug drop cap and a moving 3D object that crosses
+  the text plane, creates changing slots, exits, and restores the original layout.
+- Attribute projection, slot resolution, reflow, placement, publication, and renderer submit independently.
+
+Exit: perspective and orthographic projection cases are finite/conservative; the workload shows no overlap,
+duplication, missing clusters, broad reshaping, or adapter-owned layout; both Three renderer paths agree.
+
+### M6 — full-matrix closure and oracle retirement
+
+- Run the full existing and new flow/drop-cap/projection matrix across core and adapters; no typography or query behavior
+  is deferred until this milestone.
+- Delete the test oracle only after the full parity matrix and renderer migration are accepted; no legacy production
+  domain remains.
+
+Exit: the correctness matrix below passes without adapter-specific exceptions.
+
+### M7 — profile, then consider SIMD
+
+Start with branch-free scalar placement and comparison. Wasm SIMD128 carries two i64 or f64 positions per register;
+process four or eight runs only by unrolling across two or four independent v128 accumulators. Add that kernel only if
+profiling shows the candidate placement/dirty phase is at least 15% of end-to-end width-update time. Admit SIMD only
+when it:
+
+- is at least 1.20x faster than the scalar kernel in three interleaved rounds;
+- improves full width-update median by at least 5%;
+- does not worsen end-to-end p95;
+- is bit-exact with scalar wide-fixed-point fit/distribution output and the f64/f32 positioning contract; and
+- remains inside package-size gates.
+
+Otherwise keep scalar. Do not change the proven word-fit SIMD/chunk kernels merely to share naming or abstraction.
+
+### M8 — release validation and stack handoff
+
+- Run focused, package, repository, docs, package-boundary, and browser gates.
+- Update durable package/decision docs and delete this disposable plan when the work lands.
+- Before implementation, fetch remote `main`, record the exact post-merge commit/tree, and branch from that updated
+  `origin/main`. This work is a fresh frontier, not another layer of the merged recovery stack; confirm its GitHub base
+  is `main` before pushing.
+- Push and hold unmerged for the maintainer's remote benchmark pass.
+
+## Correctness gates
+
+The shadow oracle and final implementation cover:
+
+- LTR/RTL/mixed bidi, isolate and override controls, combining marks, overlapping glyphs, and ligatures, including at
+  least two disjoint slots where the second fragment is checked against an independent UAX #9 oracle;
+- Latin, Arabic, CJK, emoji sequences, and character fallback at HarfRust-safe cluster boundaries, with homogeneous
+  dense CJK retained as large topology runs and mapped exactly through line slices;
+- word, character, and no-wrap policies; every alignment and writing/flow mode already supported;
+- paint/material/raster/decorating-only changes that preserve run/slice/placement identity while updating render spans;
+- word/inter-character justification, deterministic wide-fixed-point remainder distribution, and non-justified final lines;
+- leading/trailing/hanging spaces, hard breaks, empty lines, ellipsis, and boundary replacement;
+- custom `registerThreeRasterProgram` programs using the same run-placement contract as built-ins;
+- continuous and discontinuous under/content/over decorations;
+- measure-before-render, measure-after-render, width no-op, hit testing, `withGlyphs`, full glyph copies, and detached
+  slices;
+- commit, abort, retry, removal, independent exclusion/slot capacity growth, publication acknowledgement, vertex/range
+  retirement, generation reuse, stale-handle rejection, and `ResultTooLarge` rollback;
+- rectangle and valid simple convex/concave polygon regions; invalid/self-intersecting/zero-area rings; horizontal edges;
+  diamond and conservatively hulled concave exclusions; margins and every wrap side; simultaneous cap/object exclusions;
+  sequential regions; and multiple slots per band;
+- moving 2D and projected 3D obstacles across perspective/orthographic cameras, near/frustum/text-plane crossings,
+  objects behind the camera and behind the text plane, a camera on/parallel to the plane, rotated/scaled/degenerate text
+  transforms, topology changes, and unchanged quantized projections;
+- same-source drop caps spanning one through five lines, complete EGC plus shaping-safe selection, combining marks,
+  ligatures, fallback, local edits, LTR/RTL, mixed-raster cap/body, no duplicated or missing cluster, and stable source,
+  caret, selection, hit-test, and inspection mapping; and
+- justified LTR/RTL/mixed content in every produced slot with exact logical and visual reading order.
+
+For each case compare exact line breaks, run/slice/glyph source ranges, visual-order permutation, wide-fixed-point fit and
+distribution decisions, CPU semantic/query f32 positions, renderer position deltas, ink and logical bounds,
+content/geometry revisions, decoration records, render-plan primitives/draws/patches, and pixel output.
+Randomized state transitions use fixed seeds and compare against the retained baseline oracle; regenerated goldens are
+not an acceptance mechanism.
+
+## Performance and memory gates
+
+### Rust and publication
+
+Run the pinned `glyph:rust-layout-benchmark` at 22k glyphs with `column-resize`, 40 warmups, 101 repetitions, and raw
+samples for Bitmap, MTSDF, and Slug. Interleave baseline/candidate order over at least three rounds on the same machine.
+Also run measurement query, cold layout, font-size changes, localized edits/splices, equivalent-width no-ops, mixed bidi,
+dense CJK character wrap, justification, polygon exclusions, a moving obstacle, and the stylized drop-cap Editorial
+scene. Attribute projection, slot resolution, composition, positioning, publication, and renderer submit separately.
+
+Merge targets:
+
+- on the designated reference machine, complete ordinary Latin width update is at most `1.0 ms` median and `2.0 ms` p95;
+- on every machine, the candidate is also at least 30% faster at p95 than an identically built, interleaved frozen-main
+  baseline. A non-reference machine may establish the relative result but cannot waive the absolute reference-machine
+  gate; no target is waived without a fresh attributed report;
+- zero broad shaping calls and zero static-glyph publication bytes for a warmed pure width change;
+- ordinary changed-width placement publication at most 25% of each exact per-technique baseline: 8 bytes/glyph for
+  Bitmap and 16 bytes/glyph for MTSDF/Slug before fixed metadata;
+- in the homogeneous 22k CJK character-wrap fixture, retained `LayoutRun` count equals topology-run count rather than
+  legal-break/cluster/glyph count; slice count is bounded by produced `FlowFragment` count plus explicit hanging or
+  boundary-replacement slices; slice ranges cover every renderable glyph exactly once with no overlap or gap;
+- dense-CJK width updates publish zero static-glyph bytes and no per-cluster placement row; dynamic slice/order bytes,
+  total retained high-water bytes, and actual GPU transfer may be larger than the Latin 25% target but must not exceed
+  the corresponding absolute-origin baseline or regress median/p95 beyond the 3% gate;
+- measurement query satisfies both bars: no worse than 3% versus its freshly reproduced same-machine baseline and no
+  higher than `0.35 ms` median / `0.45 ms` p95 on the designated reference machine;
+- no workload median or p95 regression above 3%; dense CJK and mixed bidi may use a 3% noise band but no directional
+  regression across all three rounds;
+- zero steady-state allocation after high-water warmup;
+- geometry edits reshape zero unaffected source runs and converge to the retained suffix when the exact certificate
+  permits it; and
+- unchanged ordinary rectangles/columns remain within the 3% noise band and write no polygon sideband.
+
+Record active/reserved run and slice counts, placement/order/decor bytes, static glyph bytes, Wasm retained bytes, CPU
+staging, GPU static and dynamic capacity, per-update publication, and patch count separately. Initial budgets: no
+static-glyph growth above 4 bytes/glyph for the run slot; core placement at most 16 bytes/active slice, with the plain GPU
+candidate at 8 bytes; and no pool or total high-water increase above 3% without an identified, measured tradeoff accepted
+before merge.
+
+### GPU and adapters
+
+The extra indexed placement read is not free. Run identical scenes for every raster technique through Three TSL,
+`/three/typegpu`, and `/typegpu`, including WebGPU and Three's WebGL fallback where supported. The candidate must:
+
+- keep GPU median and p95 within 3% of baseline and never regress either by more than `0.10 ms`;
+- for the ordinary 22k Latin width update on WebGL2, transfer at most 25% of the baseline's actual padded/full-texture
+  bytes after including backend row alignment; for dense CJK, transfer no more than the corresponding baseline;
+- preserve existing draw counts and resource sharing, including mixed justified/ragged content sharing one resource;
+- produce exact render-plan/order fixtures and accepted ordinary/justified pixel tolerances; and
+- pass `benchmark:external-raster` with the new placement contract and preserve custom material augmentation; and
+- prove default `/three` does not load TypeGPU while the TypeGPU subpaths remain functional and tree-shakeable.
+
+### Browser and soak
+
+Use `probe:live-update-latency` for maintained live-style/active-resize coverage plus
+`benchmark:paragraph-stress-timing`, `benchmark:presentation-fresh-scene-performance`, `benchmark:presentation`, and
+`benchmark:icon-grid-soak`. Run one browser instance at a time. Required results:
+
+- Active Resize complete CPU update below `4 ms` p95, with core Rust-plus-plan work below `2 ms` p95;
+- flat-or-better median and p95 against an identically built post-merge `main` for every workload;
+- no disappeared graphs, maximum-depth errors, stale timer-query reads, or unrecovered frame stalls;
+- zero unexplained frames above `50 ms` and zero above `100 ms` in a multi-minute Editorial/Icon Grid soak;
+- the Editorial scene's moving 3D object crosses the text plane and exits while justified body text reflows around its
+  projected polygon and stylized drop cap, then returns exactly to the initial layout; and
+- bounded pending GPU timer queries and flat Wasm/JS/GPU memory after high-water warmup.
+
+Live gates remain outside coverage accounting. Deterministic unit/integration tests own correctness; browser probes own
+packaging, adapter, GPU, and real-timing evidence.
+
+## Rejection conditions
+
+Do not land the design if any of these remain true:
+
+- changed-width publication still rewrites absolute origin for most glyphs;
+- Three and TypeGPU need separate run/layout implementations;
+- ordinary shaders branch per glyph on wrap, bidi, raster technique, or justification;
+- bidi/order correctness requires one draw per run or slice, or otherwise increases the existing draw count;
+- `withGlyphs` copies a full paragraph to answer a bounded callback;
+- width changes allocate after warmup or reuse a placement slot before acknowledgement;
+- the extra GPU indirection misses its adapter gate; or
+- SIMD wins an isolated loop but worsens end-to-end median, p95, code size, or local reasoning.
+
+The intended win is less topology-dependent work and less publication, not a more complicated way to move every glyph.
