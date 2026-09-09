@@ -287,6 +287,10 @@ fn shadow_base_ltr_unindented_fragment_positions(
     Ok(positioned)
 }
 
+#[cfg(any(test, feature = "kernel-lab"))]
+#[cfg_attr(not(test), allow(dead_code))]
+mod layout_run_proof;
+
 /// One solid decoration line for a contiguous decorated visual run: underline,
 /// overline, or line-through geometry in positioned space, colored by the style's
 /// decoration paint. Non-solid line styles carry their style bits for later paint work
@@ -1021,15 +1025,8 @@ impl PositionedGlyphArena {
                 cursor += x_advance;
             }
             cursor = cluster_origin + clusters.advances[cluster];
-            // Adjustments are span-bounded and count-limited in visual encounter
-            // order: exactly the `spaces` counted word spaces and `gaps` gaps
-            // inside the trimmed span receive units — trailing logical spaces
-            // (outside `gap_end`) and any visual cluster beyond the counted set
-            // never absorb uncounted adjustments, in either direction, so the
-            // applied cursor sum equals the measured distribution total. Each
-            // unit count converts through the dyadic 1/64 exactly, and the
-            // leading encounters carry the euclidean remainder one unit at a
-            // time.
+            // Only trimmed visual-order sites receive adjustments; leading sites take the Euclidean remainder.
+            // Layout units convert to exact dyadic 1/65,536 values in f64.
             if clusters.flags[cluster] & CLUSTER_SPACE != 0
                 && cluster < justify.gap_end
                 && space_ordinal < i64::from(justify.spaces)
