@@ -2,40 +2,14 @@
 
 use alloc::vec::Vec;
 
+pub(crate) use super::placement_state::SliceRole;
+
 use super::{
     EngineError,
     cluster_state::{CLUSTER_HARD_BREAK, CLUSTER_SAFE_BEFORE, LayoutRun},
     flow_composition::{FlowFragment, NO_BOUNDARY},
+    placement_state::{LayoutRunSlice, PlacementClass, VisualInstanceSpan},
 };
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct LayoutRunSlice {
-    pub fragment_index: u32,
-    pub layout_run_index: u32,
-    pub cluster_start: u32,
-    pub cluster_end: u32,
-    pub glyph_start: u32,
-    pub glyph_count: u32,
-    pub placement_slot: u32,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct VisualInstanceSpan {
-    pub instance_start: u32,
-    pub glyph_start: u32,
-    pub glyph_count: u32,
-    pub placement_slot: u32,
-    pub visual_span_id: u32,
-    pub resolved_level: u8,
-    pub role: SliceRole,
-}
-
-#[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum SliceRole {
-    Ordinary,
-    HangingSpace,
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct VisualClusterOccurrence {
@@ -87,11 +61,13 @@ pub(crate) fn build_visual_instance_map(
     cluster_glyph_starts: &[u32],
     cluster_glyph_counts: &[u32],
     cluster_flags: &[u8],
+    cluster_stable_ids: &[u32],
     fragments: &[FlowFragment],
     visual_clusters: &[VisualClusterOccurrence],
 ) -> Result<VisualInstanceMap, EngineError> {
     if cluster_glyph_starts.len() != cluster_glyph_counts.len()
         || cluster_glyph_starts.len() != cluster_flags.len()
+        || cluster_glyph_starts.len() != cluster_stable_ids.len()
     {
         return Err(EngineError::InvalidRequest);
     }
@@ -179,11 +155,15 @@ pub(crate) fn build_visual_instance_map(
                     .map_err(|_| EngineError::ResultTooLarge)?,
                 layout_run_index: u32::try_from(run_index)
                     .map_err(|_| EngineError::ResultTooLarge)?,
-                cluster_start: covered,
-                cluster_end: slice_end,
-                glyph_start,
-                glyph_count: glyph_end - glyph_start,
+                run_identity_anchor: cluster_stable_ids[usize::try_from(run.cluster_start)
+                    .map_err(|_| EngineError::InvalidRequest)?],
+                run_cluster_start: covered - run.cluster_start,
+                run_cluster_count: slice_end - covered,
+                run_glyph_start: glyph_start - run.glyph_start,
+                run_glyph_count: glyph_end - glyph_start,
                 placement_slot,
+                role: SliceRole::Ordinary,
+                class: PlacementClass::Ordinary,
             });
             covered = slice_end;
             if covered == run.cluster_end {
@@ -193,9 +173,21 @@ pub(crate) fn build_visual_instance_map(
     }
     let mut paint_cluster_count = 0usize;
     for slice in &slices {
-        let start =
-            usize::try_from(slice.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
-        let end = usize::try_from(slice.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+        let run = layout_runs
+            .get(usize::try_from(slice.layout_run_index).map_err(|_| EngineError::InvalidRequest)?)
+            .ok_or(EngineError::InvalidRequest)?;
+        let start = usize::try_from(
+            run.cluster_start
+                .checked_add(slice.run_cluster_start)
+                .ok_or(EngineError::ResultTooLarge)?,
+        )
+        .map_err(|_| EngineError::InvalidRequest)?;
+        let end = start
+            .checked_add(
+                usize::try_from(slice.run_cluster_count)
+                    .map_err(|_| EngineError::InvalidRequest)?,
+            )
+            .ok_or(EngineError::ResultTooLarge)?;
         for &flags in &cluster_flags[start..end] {
             paint_cluster_count = paint_cluster_count
                 .checked_add(usize::from(flags & CLUSTER_HARD_BREAK == 0))
@@ -212,7 +204,7 @@ pub(crate) fn build_visual_instance_map(
     let visual_instance_count = slices.iter().try_fold(0usize, |total, slice| {
         total
             .checked_add(
-                usize::try_from(slice.glyph_count).map_err(|_| EngineError::ResultTooLarge)?,
+                usize::try_from(slice.run_glyph_count).map_err(|_| EngineError::ResultTooLarge)?,
             )
             .ok_or(EngineError::ResultTooLarge)
     })?;
@@ -235,8 +227,18 @@ pub(crate) fn build_visual_instance_map(
             .slices
             .get(slice_index)
             .ok_or(EngineError::InvalidRequest)?;
-        if occurrence.cluster_index < slice.cluster_start
-            || occurrence.cluster_index >= slice.cluster_end
+        let run = layout_runs
+            .get(usize::try_from(slice.layout_run_index).map_err(|_| EngineError::InvalidRequest)?)
+            .ok_or(EngineError::InvalidRequest)?;
+        let slice_cluster_start = run
+            .cluster_start
+            .checked_add(slice.run_cluster_start)
+            .ok_or(EngineError::ResultTooLarge)?;
+        let slice_cluster_end = slice_cluster_start
+            .checked_add(slice.run_cluster_count)
+            .ok_or(EngineError::ResultTooLarge)?;
+        if occurrence.cluster_index < slice_cluster_start
+            || occurrence.cluster_index >= slice_cluster_end
         {
             return Err(EngineError::InvalidRequest);
         }
@@ -294,6 +296,7 @@ fn append_visual_cluster(
             instance_start,
             glyph_start,
             glyph_count,
+            slice_index: occurrence.slice_index,
             placement_slot,
             visual_span_id: occurrence.visual_span_id,
             resolved_level: occurrence.resolved_level,
@@ -421,6 +424,10 @@ mod tests {
         [CLUSTER_SAFE_BEFORE; COUNT]
     }
 
+    fn stable_ids<const COUNT: usize>() -> [u32; COUNT] {
+        core::array::from_fn(|index| u32::try_from(index + 1).unwrap())
+    }
+
     #[test]
     fn maps_multiglyph_combining_and_glyphless_ligature_continuations_exactly() {
         let runs = [run(0, 4, 0, 4, 0), run(4, 7, 4, 4, 1), run(7, 9, 8, 2, 2)];
@@ -444,63 +451,37 @@ mod tests {
             &glyph_starts,
             &glyph_counts,
             &safe_flags::<9>(),
+            &stable_ids::<9>(),
             &fragments,
             &visual_clusters,
         )
         .unwrap();
 
         assert_eq!(
-            map.slices,
+            map.slices
+                .iter()
+                .map(|slice| (
+                    slice.fragment_index,
+                    slice.layout_run_index,
+                    slice.run_cluster_start,
+                    slice.run_cluster_count,
+                    slice.run_glyph_start,
+                    slice.run_glyph_count,
+                    slice.placement_slot,
+                ))
+                .collect::<Vec<_>>(),
             [
-                LayoutRunSlice {
-                    fragment_index: 0,
-                    layout_run_index: 0,
-                    cluster_start: 0,
-                    cluster_end: 3,
-                    glyph_start: 0,
-                    glyph_count: 3,
-                    placement_slot: 0,
-                },
-                LayoutRunSlice {
-                    fragment_index: 1,
-                    layout_run_index: 0,
-                    cluster_start: 3,
-                    cluster_end: 4,
-                    glyph_start: 3,
-                    glyph_count: 1,
-                    placement_slot: 1,
-                },
-                LayoutRunSlice {
-                    fragment_index: 1,
-                    layout_run_index: 1,
-                    cluster_start: 4,
-                    cluster_end: 6,
-                    glyph_start: 4,
-                    glyph_count: 1,
-                    placement_slot: 2,
-                },
-                LayoutRunSlice {
-                    fragment_index: 2,
-                    layout_run_index: 1,
-                    cluster_start: 6,
-                    cluster_end: 7,
-                    glyph_start: 5,
-                    glyph_count: 3,
-                    placement_slot: 3,
-                },
-                LayoutRunSlice {
-                    fragment_index: 2,
-                    layout_run_index: 2,
-                    cluster_start: 7,
-                    cluster_end: 9,
-                    glyph_start: 8,
-                    glyph_count: 2,
-                    placement_slot: 4,
-                },
+                (0, 0, 0, 3, 0, 3, 0),
+                (1, 0, 3, 1, 3, 1, 1),
+                (1, 1, 0, 2, 0, 1, 2),
+                (2, 1, 2, 1, 1, 3, 3),
+                (2, 2, 0, 2, 0, 2, 4),
             ]
         );
         assert_eq!(map.glyph_indices, (0..10).collect::<Vec<_>>());
         assert_eq!(map.occurrence_slots, [0, 0, 0, 1, 2, 3, 3, 3, 4, 4]);
+        assert_eq!(map.slices[0].run_identity_anchor, 1);
+        assert_eq!(map.slices[1].run_identity_anchor, 1);
     }
 
     #[test]
@@ -515,15 +496,16 @@ mod tests {
             &glyph_starts,
             &glyph_counts,
             &safe_flags::<3>(),
+            &stable_ids::<3>(),
             &fragments,
             &[ordinary(2, 2), ordinary(1, 1), ordinary(0, 0)],
         )
         .unwrap();
 
-        assert_eq!(map.slices[1].cluster_start, 1);
-        assert_eq!(map.slices[1].cluster_end, 2);
-        assert_eq!(map.slices[1].glyph_start, 1);
-        assert_eq!(map.slices[1].glyph_count, 0);
+        assert_eq!(map.slices[1].run_cluster_start, 1);
+        assert_eq!(map.slices[1].run_cluster_count, 1);
+        assert_eq!(map.slices[1].run_glyph_start, 1);
+        assert_eq!(map.slices[1].run_glyph_count, 0);
         assert_eq!(map.spans.len(), 2);
         assert_eq!(map.glyph_indices, [1, 2, 0]);
         assert_eq!(map.occurrence_slots, [2, 2, 0]);
@@ -552,6 +534,7 @@ mod tests {
             &glyph_starts,
             &glyph_counts,
             &safe_flags::<9>(),
+            &stable_ids::<9>(),
             &fragments,
             &visual_clusters,
         )
@@ -576,6 +559,7 @@ mod tests {
             &glyph_starts,
             &glyph_counts,
             &safe_flags::<3>(),
+            &stable_ids::<3>(),
             &[fragment(0, 3)],
             &[
                 visual(0, 2, 0, 1, SliceRole::Ordinary),
@@ -615,6 +599,7 @@ mod tests {
             &glyph_starts,
             &glyph_counts,
             &safe_flags::<6>(),
+            &stable_ids::<6>(),
             &[fragment(0, 6)],
             &visual_clusters,
         )
@@ -646,6 +631,7 @@ mod tests {
             &glyph_starts,
             &glyph_counts,
             &cluster_flags,
+            &stable_ids::<5>(),
             &[fragment(0, 5)],
             &[
                 ordinary(0, 0),
@@ -657,10 +643,13 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            (map.slices[1].cluster_start, map.slices[1].cluster_end),
-            (2, 3)
+            (
+                map.slices[1].run_cluster_start,
+                map.slices[1].run_cluster_count
+            ),
+            (0, 1)
         );
-        assert_eq!(map.slices[1].glyph_count, 0);
+        assert_eq!(map.slices[1].run_glyph_count, 0);
         assert_eq!(map.counts().visual_cluster_count, 4);
         assert_eq!(map.glyph_indices, [0, 1, 2, 3]);
         assert!(matches!(
@@ -669,6 +658,7 @@ mod tests {
                 &glyph_starts,
                 &glyph_counts,
                 &cluster_flags,
+                &stable_ids::<5>(),
                 &[fragment(0, 5)],
                 &[
                     ordinary(0, 0),
@@ -701,6 +691,7 @@ mod tests {
                 &glyph_starts,
                 &glyph_counts,
                 &unsafe_flags,
+                &stable_ids::<4>(),
                 &[fragment(0, 2), fragment(2, 4)],
                 &visual_clusters,
             ),
@@ -715,6 +706,7 @@ mod tests {
                 &glyph_starts,
                 &glyph_counts,
                 &safe_flags::<4>(),
+                &stable_ids::<4>(),
                 &[boundary],
                 &[
                     ordinary(0, 0),
@@ -759,6 +751,7 @@ mod tests {
             &glyph_starts,
             &glyph_counts,
             &cluster_flags,
+            &(1..=u32::try_from(CLUSTERS).unwrap()).collect::<Vec<_>>(),
             &fragments,
             &visual_clusters,
         )
@@ -788,6 +781,7 @@ mod tests {
                 &glyph_starts,
                 &glyph_counts,
                 &safe_flags::<4>(),
+                &stable_ids::<4>(),
                 &[fragment(0, 3), fragment(2, 4)],
                 &[
                     ordinary(0, 0),
@@ -804,6 +798,7 @@ mod tests {
                 &glyph_starts,
                 &glyph_counts,
                 &safe_flags::<4>(),
+                &stable_ids::<4>(),
                 &[fragment(0, 2), fragment(2, 4)],
                 &[
                     ordinary(0, 0),
@@ -820,6 +815,7 @@ mod tests {
                 &glyph_starts,
                 &glyph_counts,
                 &safe_flags::<4>(),
+                &stable_ids::<4>(),
                 &[fragment(0, 2), fragment(2, 4)],
                 &[ordinary(0, 0), ordinary(0, 1), ordinary(1, 2)],
             ),
@@ -831,6 +827,7 @@ mod tests {
                 &[0, 1, 3, 4],
                 &glyph_counts,
                 &safe_flags::<4>(),
+                &stable_ids::<4>(),
                 &[fragment(0, 4)],
                 &[
                     ordinary(0, 0),
