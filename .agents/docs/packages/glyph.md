@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:9fecf8e6ed54940855ff305cc8d2bafc5dc8f543990dde055b1d3830153f1eee'
+source_digest: 'sha256:1772d0a419e5e9c214e5e954e9cb079400e0286ef9e57f0cfa621ee413521392'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1235,9 +1235,10 @@ representation lab finds mismatches in every tested compact candidate. The activ
 Those counterexamples now close the old-bit question rather than indefinitely blocking additive placement. This
 pre-alpha package has no required numeric backward compatibility, so the cutover selects one new coordinate contract:
 derive fixed run-owned anchor-local geometry and slice placement in f64, narrow each component separately to f32, and
-apply the declared f32 addition order identically in CPU publication/queries and every renderer. The previous ordered
-absolute-pen fold remains only a signed/absolute/ULP and pixel comparison oracle; no permanent absolute bypass or second
-production materializer is allowed. Admission requires a predeclared finite error bound, no new non-finite output, and
+apply the declared f32 addition order identically in CPU publication/queries and every renderer. CPU publication now
+reads the retained local rows and performs that same f32 addition for glyph origins and ink bounds. The previous ordered
+absolute-pen fold remains only test comparison evidence; no permanent absolute bypass or second production materializer
+exists. Admission requires a predeclared finite error bound, no new non-finite output, and
 accepted tiny-world, cancellation, large-coordinate, justification, and browser-pixel evidence.
 
 Static local coordinates cannot be anchored to visual slices because width changes move dense-CJK slice boundaries. The
@@ -1292,14 +1293,15 @@ the same ABI through its adapter-local storage layout and existing scene group; 
 define a shared eight-buffer limit. The packaged TypeGPU application check and live WebGPU Bitmap/MTSDF/Slug probe pass,
 including its caller callback groups.
 
-The current candidate is materially cheaper to publish but is not yet a 22k CPU speedup. Ordered Bitmap active-resize
+The current candidate is materially cheaper to publish and has removed the earlier Latin CPU regression. Ordered Bitmap active-resize
 writes fell from 170.4 KiB on exact main to 30.5 KiB for 22k Latin and 59.8 KiB for 22k dense CJK, with one patch in each
 sample after session-range coalescing—about an 82% reduction for Latin. On this M4 host, the candidate measured
-`4.206 / 4.496 ms` median/p95 for 22k Latin and `4.092 / 4.277 ms` for CJK, roughly 12–14% slower than the applicable
-main/PR baseline. At 100k Latin it measured `19.596 / 20.158 ms`, about 0.7% faster than PR #172 while writing 140.7 KiB
-instead of 783.6 KiB. Measurement-only CJK remains flat (`0.409 ms` candidate versus `0.406 ms` PR #172); the residual
-22k cost is in adoption/state/gather/publication, not line positioning. Milestone 12.2 remains active until that overhead
-and the consolidated package/release gates close.
+`3.838 / 4.092 ms` median/p95 for 22k Latin in a paired 61-sample run, 7.2% faster at median than PR #172's
+`4.135 / 4.266 ms` and roughly even with the earlier exact-main `3.77 ms` median. At 100k Latin it measured
+`21.830 / 24.251 ms`, 7.9% faster at median than the paired PR #172 run while writing 132.0 KiB instead of 734.9 KiB.
+Dense CJK remains 5.8% slower than PR #172 at `3.778 / 4.077 ms` versus `3.572 / 3.745 ms`; the residual cost is in
+placement/state/gather/publication rather than line fitting. Milestone 12.2 remains active until that CJK overhead and the
+consolidated package/release gates close.
 
 [^slug-shader-core]: The directory is the single renderer-independent expression of the analytic Slug fill algorithm.
 

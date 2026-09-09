@@ -1931,7 +1931,10 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   assert.equal(draws[0].geometry.instanceCount, 4);
   const start = draws[0].userData.pmndrsGlyphRunStart;
   const indices = draws[0].geometry.getAttribute(glyphAttribute(threeSystemBuffers.occurrence.id));
-  assert.deepEqual(Array.from({ length: 4 }, (_, index) => indices.getZ(start + index)), [1, 1, 2, 2]);
+  assert.deepEqual(
+    Array.from({ length: 4 }, (_, index) => indices.getZ(start + index)),
+    [1, 1, 2, 2],
+  );
   const transforms = draws[0].geometry.getAttribute('_pmndrsGlyphTransforms');
   assert.equal(transforms.array[1 * 16 + 12], 2);
   assert.equal(transforms.array[2 * 16 + 12], 5);
@@ -3069,10 +3072,8 @@ test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async (t) 
   assert.equal(inspection.clusters.at(-1), 3, 'the ellipsis is anchored at the truncation boundary');
   assert.deepEqual([...inspection.glyphIds], [61, 2613, 2598, 6597]);
   assert.deepEqual([...inspection.clusters], [2, 1, 0, 3]);
-  // Re-pinned under the F16.16 layout-unit contract: the RTL alignment origin is
-  // derived from the higher-resolution quantized line advance. Relative glyph
-  // advances remain unchanged; only the uniform line origin moved by 0.01337 units.
-  assert.deepEqual([...inspection.x], [0.23200830817222595, 10.808008193969727, 18.376008987426758, 23.91200828552246]);
+  // CPU inspection and the renderer share the retained local-f32 plus placement-f32 operation.
+  assert.deepEqual([...inspection.x], [0.2320079803466797, 10.808008193969727, 18.376007080078125, 23.91200828552246]);
 
   label.dispose();
   font.dispose();
