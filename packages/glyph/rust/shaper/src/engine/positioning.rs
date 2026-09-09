@@ -353,6 +353,78 @@ struct DecoratedRun {
     end: f64,
 }
 
+struct FragmentPositionState {
+    cursor: f64,
+    baseline: f64,
+    decorated_run: Option<DecoratedRun>,
+    space_ordinal: i64,
+    gap_ordinal: i64,
+}
+
+struct PositionedCluster {
+    style: ResolvedStyle,
+    font_handle: u32,
+    cluster_origin: f64,
+}
+
+struct GlyphStreams<'a> {
+    ids: &'a [u16],
+    clusters: &'a [u32],
+    x_advances: &'a [i32],
+    x_offsets: &'a [i32],
+    y_offsets: &'a [i32],
+    shape_flags: &'a [u16],
+    stable_ids: &'a [u32],
+}
+
+#[derive(Clone, Copy)]
+struct RunGeometry {
+    font_handle: u32,
+    units_per_em: f64,
+    font_size: f32,
+    baseline_shift: f32,
+    scale: f64,
+}
+
+impl RunGeometry {
+    fn for_cluster(
+        clusters: &ClusterArena,
+        styles: &[StyleSegment],
+        cluster: usize,
+    ) -> Result<Self, EngineError> {
+        let style_index = usize::try_from(clusters.style_indexes[cluster])
+            .map_err(|_| EngineError::InvalidRequest)?;
+        let style = styles
+            .get(style_index)
+            .ok_or(EngineError::InvalidRequest)?
+            .style;
+        Self::for_values(
+            clusters.font_handles[cluster],
+            clusters.units_per_em[cluster],
+            style.font_size,
+            style.baseline_shift,
+        )
+    }
+
+    fn for_values(
+        font_handle: u32,
+        units_per_em: f64,
+        font_size: f32,
+        baseline_shift: f32,
+    ) -> Result<Self, EngineError> {
+        if font_handle == 0 || units_per_em == 0.0 {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(Self {
+            font_handle,
+            units_per_em,
+            font_size,
+            baseline_shift,
+            scale: f64::from(font_size) / units_per_em,
+        })
+    }
+}
+
 #[derive(Clone, Copy)]
 struct RecomposedGlyphRange {
     previous_start: usize,
@@ -886,11 +958,7 @@ impl PositionedGlyphArena {
             paragraph_level,
             hung_leads,
         );
-        let mut cursor = pen_origin;
         let baseline = line.block_start + line.baseline;
-        let mut decorated_run: Option<DecoratedRun> = None;
-        let mut space_ordinal = 0_i64;
-        let mut gap_ordinal = 0_i64;
         // The adjacency-order glyph stream is one equal-length column family;
         // a single admission per fragment lets every cluster's range walk the
         // columns sequentially with direct indexing — no shape-order gather.
@@ -904,182 +972,104 @@ impl PositionedGlyphArena {
         {
             return Err(EngineError::InvalidRequest);
         }
-        let stream_ids = &clusters.glyph_ids[..stream_len];
-        let stream_clusters = &clusters.glyph_clusters[..stream_len];
-        let stream_x_advances = &clusters.glyph_x_advances[..stream_len];
-        let stream_x_offsets = &clusters.glyph_x_offsets[..stream_len];
-        let stream_y_offsets = &clusters.glyph_y_offsets[..stream_len];
-        let stream_shape_flags = &clusters.glyph_shape_flags[..stream_len];
-        let stream_stable_ids = &clusters.glyph_stable_ids[..stream_len];
-        let visual_count = if visually_ltr {
-            retained_cluster_end.saturating_sub(cluster_start)
-        } else {
-            self.visual_clusters.len().saturating_sub(visual_start)
+        let streams = GlyphStreams {
+            ids: &clusters.glyph_ids[..stream_len],
+            clusters: &clusters.glyph_clusters[..stream_len],
+            x_advances: &clusters.glyph_x_advances[..stream_len],
+            x_offsets: &clusters.glyph_x_offsets[..stream_len],
+            y_offsets: &clusters.glyph_y_offsets[..stream_len],
+            shape_flags: &clusters.glyph_shape_flags[..stream_len],
+            stable_ids: &clusters.glyph_stable_ids[..stream_len],
         };
-        for ordinal in 0..visual_count {
-            let cluster = if visually_ltr {
-                cluster_start + ordinal
+        let mut state = FragmentPositionState {
+            cursor: pen_origin,
+            baseline,
+            decorated_run: None,
+            space_ordinal: 0,
+            gap_ordinal: 0,
+        };
+        let layout_run_order =
+            visually_ltr && paragraph_level & 1 == 0 && indent == 0.0 && boundary.is_none();
+        if layout_run_order {
+            if justify.is_zero() {
+                self.position_layout_run_fragment::<TEXT_EFFECTS, false>(
+                    line,
+                    fragment,
+                    cluster_start,
+                    retained_cluster_end,
+                    clusters,
+                    runs,
+                    styles,
+                    &streams,
+                    justify,
+                    &mut state,
+                    metrics_for,
+                    extents_for,
+                )?;
             } else {
-                usize::try_from(self.visual_clusters[visual_start + ordinal])
-                    .map_err(|_| EngineError::InvalidRequest)?
+                self.position_layout_run_fragment::<TEXT_EFFECTS, true>(
+                    line,
+                    fragment,
+                    cluster_start,
+                    retained_cluster_end,
+                    clusters,
+                    runs,
+                    styles,
+                    &streams,
+                    justify,
+                    &mut state,
+                    metrics_for,
+                    extents_for,
+                )?;
+            }
+        } else {
+            let visual_count = if visually_ltr {
+                retained_cluster_end.saturating_sub(cluster_start)
+            } else {
+                self.visual_clusters.len().saturating_sub(visual_start)
             };
-            if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
-                continue;
-            }
-            let bidi_level = cluster_level(
-                cluster,
-                fragment.line.text_start,
-                clusters,
-                runs,
-                &self.line_levels,
-            )?;
-            let style_index = usize::try_from(clusters.style_indexes[cluster])
-                .map_err(|_| EngineError::InvalidRequest)?;
-            let style = styles
-                .get(style_index)
-                .ok_or(EngineError::InvalidRequest)?
-                .style;
-            let font_handle = clusters.font_handles[cluster];
-            let binding_handle = clusters.binding_handles[cluster];
-            // The owning font's units-per-em rides the cluster arena (it can only
-            // change on re-shape), so the hot loop derives its scale from the
-            // CURRENT style without a per-cluster registry resolution.
-            let units_per_em = clusters.units_per_em[cluster];
-            if font_handle == 0 || units_per_em == 0.0 {
-                return Err(EngineError::InvalidRequest);
-            }
-            let scale = f64::from(style.font_size) / units_per_em;
-            let cluster_origin = cursor;
-            let glyph_start = usize::try_from(clusters.glyph_starts[cluster])
-                .map_err(|_| EngineError::InvalidRequest)?;
-            let glyph_count = usize::try_from(clusters.glyph_counts[cluster])
-                .map_err(|_| EngineError::InvalidRequest)?;
-            let adjacency_end = glyph_start
-                .checked_add(glyph_count)
-                .ok_or(EngineError::InvalidRequest)?;
-            // The cluster's adjacency range is admitted once; the walk below
-            // reads the stream columns sequentially without further checks.
-            if adjacency_end > stream_len {
-                return Err(EngineError::InvalidRequest);
-            }
-            for adjacency in glyph_start..adjacency_end {
-                let stable_id = stream_stable_ids[adjacency];
-                let glyph_id = u32::from(stream_ids[adjacency]);
-                let x_advance = f64::from(stream_x_advances[adjacency]).abs() * scale;
-                let x_offset = f64::from(stream_x_offsets[adjacency]) * scale;
-                let y_offset = f64::from(stream_y_offsets[adjacency]) * scale;
-                let flags = stream_shape_flags[adjacency];
-                let origin_inline = cursor + x_offset;
-                let origin_block = baseline - y_offset - f64::from(style.baseline_shift);
-                let outline = extents_for(font_handle, glyph_id);
-                let ink = match outline.as_ref() {
-                    Some(extents) => {
-                        GlyphInkBox::from_extents(extents, origin_inline, origin_block, scale)
-                    }
-                    None => GlyphInkBox::empty_at(origin_inline, origin_block),
+            for ordinal in 0..visual_count {
+                let cluster = if visually_ltr {
+                    cluster_start + ordinal
+                } else {
+                    usize::try_from(self.visual_clusters[visual_start + ordinal])
+                        .map_err(|_| EngineError::InvalidRequest)?
                 };
-                self.semantic_glyphs.push(SemanticGlyph {
-                    stable_id,
-                    font_handle,
-                    cluster: stream_clusters[adjacency],
-                    glyph_id: u16::try_from(glyph_id).map_err(|_| EngineError::ResultTooLarge)?,
-                    flags,
-                    bidi_level,
-                    font_size: style.font_size,
-                    inline_origin: finite_f32(origin_inline)?,
-                    block_origin: finite_f32(origin_block)?,
-                    inline_advance: nonnegative_f32(x_advance)?,
-                    ink_inline_start: finite_f32(ink.inline_start)?,
-                    ink_block_start: finite_f32(ink.block_start)?,
-                    ink_inline_extent: nonnegative_f32(ink.inline_extent)?,
-                    ink_block_extent: nonnegative_f32(ink.block_extent)?,
-                });
-                if outline.is_some() {
-                    let semantic_glyph_index = u32::try_from(self.semantic_glyphs.len() - 1)
-                        .map_err(|_| EngineError::ResultTooLarge)?;
-                    self.push_glyph::<TEXT_EFFECTS>(
-                        LayoutGlyph {
-                            stable_id,
-                            content_revision: 0,
-                            semantic_glyph_index,
-                            binding_handle,
-                            font_handle,
-                            glyph_id,
-                            material_id: style.material_id,
-                            clip_id: line.clip_id,
-                            depth_key: PAINT_LAYER_GLYPH,
-                            font_size: style.font_size,
-                            raster_pixel_ratio: style.raster_pixel_ratio,
-                            inline_start: finite_f32(ink.inline_start)?,
-                            block_start: finite_f32(ink.block_start)?,
-                            inline_extent: nonnegative_f32(ink.inline_extent)?,
-                            block_extent: nonnegative_f32(ink.block_extent)?,
-                        },
-                        style,
-                        clusters.stable_ids[cluster],
-                        line.region_id,
-                        line.flow_thread_id,
-                        line.transform_index,
-                    );
+                if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
+                    continue;
                 }
-                cursor += x_advance;
-            }
-            cursor = cluster_origin + clusters.advances[cluster];
-            // Only trimmed visual-order sites receive adjustments; leading sites take the Euclidean remainder.
-            // Layout units convert to exact dyadic 1/65,536 values in f64.
-            if clusters.flags[cluster] & CLUSTER_SPACE != 0
-                && cluster < justify.gap_end
-                && space_ordinal < i64::from(justify.spaces)
-                && (justify.per_space_units != 0 || justify.extra_space_units != 0)
-            {
-                let units =
-                    justify.per_space_units + i64::from(space_ordinal < justify.extra_space_units);
-                cursor += super::layout_units::scaled_from_layout_units(units);
-                space_ordinal += 1;
-            }
-            if cluster < justify.gap_end
-                && gap_ordinal < i64::from(justify.gaps)
-                && (justify.per_gap_units != 0 || justify.extra_gap_units != 0)
-            {
-                let units =
-                    justify.per_gap_units + i64::from(gap_ordinal < justify.extra_gap_units);
-                cursor += super::layout_units::scaled_from_layout_units(units);
-                gap_ordinal += 1;
-            }
-            if style.decoration_flags == 0 {
-                if decorated_run.is_some() {
-                    self.flush_decorated_run(&mut decorated_run, line, metrics_for)?;
-                }
-            } else {
-                match decorated_run {
-                    // One continuous line per CSS decorating box: nested spans that inherit
-                    // the same declared decoration extend the run across style changes.
-                    Some(ref mut run)
-                        if run.font_handle == font_handle
-                            && same_decoration_group(&run.style, &style) =>
-                    {
-                        run.end = cursor
-                    }
-                    _ => {
-                        self.flush_decorated_run(&mut decorated_run, line, metrics_for)?;
-                        decorated_run = Some(DecoratedRun {
-                            style,
-                            font_handle,
-                            start: cluster_origin,
-                            end: cursor,
-                        });
-                    }
-                }
+                let geometry = RunGeometry::for_cluster(clusters, styles, cluster)?;
+                let positioned = self.position_cluster::<TEXT_EFFECTS>(
+                    line,
+                    fragment,
+                    cluster,
+                    clusters,
+                    runs,
+                    styles,
+                    &streams,
+                    geometry,
+                    &mut state,
+                    extents_for,
+                )?;
+                self.finish_positioned_cluster::<true>(
+                    line,
+                    cluster,
+                    clusters,
+                    positioned,
+                    justify,
+                    &mut state,
+                    metrics_for,
+                )?;
             }
         }
-        if decorated_run.is_some() {
-            self.flush_decorated_run(&mut decorated_run, line, metrics_for)?;
+        if state.decorated_run.is_some() {
+            self.flush_decorated_run(&mut state.decorated_run, line, metrics_for)?;
         }
         if let Some(boundary) = boundary {
             let _ = self.position_boundary::<TEXT_EFFECTS>(
                 line,
                 boundary,
-                cursor,
+                state.cursor,
                 baseline,
                 text,
                 clusters,
@@ -1093,6 +1083,272 @@ impl PositionedGlyphArena {
         Ok(indent
             + fragment.line.advance
             + super::layout_units::scaled_from_layout_units(justify.total_units()))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn position_layout_run_fragment<const TEXT_EFFECTS: bool, const ADJUST: bool>(
+        &mut self,
+        line: FlowLine,
+        fragment: FlowFragment,
+        cluster_start: usize,
+        cluster_end: usize,
+        clusters: &ClusterArena,
+        runs: &[ShapingRun],
+        styles: &[StyleSegment],
+        streams: &GlyphStreams<'_>,
+        justify: JustifyDistribution,
+        state: &mut FragmentPositionState,
+        metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
+        extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+    ) -> Result<(), EngineError> {
+        let layout_runs = clusters.layout_runs();
+        let first =
+            layout_runs.partition_point(|run| run.cluster_end <= fragment.line.cluster_start);
+        let mut covered = cluster_start;
+        for layout_run in &layout_runs[first..] {
+            let run_start = usize::try_from(layout_run.cluster_start)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            if run_start >= cluster_end {
+                break;
+            }
+            let run_end =
+                usize::try_from(layout_run.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+            let overlap_start = run_start.max(cluster_start);
+            let overlap_end = run_end.min(cluster_end);
+            if overlap_start != covered || overlap_start >= overlap_end {
+                return Err(EngineError::InvalidRequest);
+            }
+            let Some(geometry_cluster) = (overlap_start..overlap_end)
+                .find(|cluster| clusters.flags[*cluster] & CLUSTER_HARD_BREAK == 0)
+            else {
+                covered = overlap_end;
+                continue;
+            };
+            let geometry = RunGeometry::for_cluster(clusters, styles, geometry_cluster)?;
+            debug_assert_eq!(layout_run.font_handle, geometry.font_handle);
+            for cluster in overlap_start..overlap_end {
+                if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
+                    continue;
+                }
+                debug_assert_eq!(clusters.source_runs[cluster], layout_run.source_run);
+                debug_assert_eq!(clusters.font_handles[cluster], geometry.font_handle);
+                debug_assert_eq!(
+                    clusters.units_per_em[cluster].to_bits(),
+                    geometry.units_per_em.to_bits()
+                );
+                let style_index = usize::try_from(clusters.style_indexes[cluster])
+                    .map_err(|_| EngineError::InvalidRequest)?;
+                let style = styles
+                    .get(style_index)
+                    .ok_or(EngineError::InvalidRequest)?
+                    .style;
+                debug_assert_eq!(style.font_size.to_bits(), geometry.font_size.to_bits());
+                debug_assert_eq!(
+                    style.baseline_shift.to_bits(),
+                    geometry.baseline_shift.to_bits()
+                );
+                let positioned = self.position_cluster::<TEXT_EFFECTS>(
+                    line,
+                    fragment,
+                    cluster,
+                    clusters,
+                    runs,
+                    styles,
+                    streams,
+                    geometry,
+                    state,
+                    extents_for,
+                )?;
+                self.finish_positioned_cluster::<ADJUST>(
+                    line,
+                    cluster,
+                    clusters,
+                    positioned,
+                    justify,
+                    state,
+                    metrics_for,
+                )?;
+            }
+            covered = overlap_end;
+        }
+        if covered != cluster_end {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn position_cluster<const TEXT_EFFECTS: bool>(
+        &mut self,
+        line: FlowLine,
+        fragment: FlowFragment,
+        cluster: usize,
+        clusters: &ClusterArena,
+        runs: &[ShapingRun],
+        styles: &[StyleSegment],
+        streams: &GlyphStreams<'_>,
+        geometry: RunGeometry,
+        state: &mut FragmentPositionState,
+        extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+    ) -> Result<PositionedCluster, EngineError> {
+        let bidi_level = cluster_level(
+            cluster,
+            fragment.line.text_start,
+            clusters,
+            runs,
+            &self.line_levels,
+        )?;
+        let style_index = usize::try_from(clusters.style_indexes[cluster])
+            .map_err(|_| EngineError::InvalidRequest)?;
+        let style = styles
+            .get(style_index)
+            .ok_or(EngineError::InvalidRequest)?
+            .style;
+        let binding_handle = clusters.binding_handles[cluster];
+        let font_handle = geometry.font_handle;
+        let scale = geometry.scale;
+        let cluster_origin = state.cursor;
+        let glyph_start = usize::try_from(clusters.glyph_starts[cluster])
+            .map_err(|_| EngineError::InvalidRequest)?;
+        let glyph_count = usize::try_from(clusters.glyph_counts[cluster])
+            .map_err(|_| EngineError::InvalidRequest)?;
+        let adjacency_end = glyph_start
+            .checked_add(glyph_count)
+            .ok_or(EngineError::InvalidRequest)?;
+        if adjacency_end > streams.ids.len() {
+            return Err(EngineError::InvalidRequest);
+        }
+        for adjacency in glyph_start..adjacency_end {
+            let stable_id = streams.stable_ids[adjacency];
+            let glyph_id = u32::from(streams.ids[adjacency]);
+            let x_advance = f64::from(streams.x_advances[adjacency]).abs() * scale;
+            let x_offset = f64::from(streams.x_offsets[adjacency]) * scale;
+            let y_offset = f64::from(streams.y_offsets[adjacency]) * scale;
+            let flags = streams.shape_flags[adjacency];
+            let origin_inline = state.cursor + x_offset;
+            let origin_block = state.baseline - y_offset - f64::from(geometry.baseline_shift);
+            let outline = extents_for(font_handle, glyph_id);
+            let ink = match outline.as_ref() {
+                Some(extents) => {
+                    GlyphInkBox::from_extents(extents, origin_inline, origin_block, scale)
+                }
+                None => GlyphInkBox::empty_at(origin_inline, origin_block),
+            };
+            self.semantic_glyphs.push(SemanticGlyph {
+                stable_id,
+                font_handle,
+                cluster: streams.clusters[adjacency],
+                glyph_id: u16::try_from(glyph_id).map_err(|_| EngineError::ResultTooLarge)?,
+                flags,
+                bidi_level,
+                font_size: geometry.font_size,
+                inline_origin: finite_f32(origin_inline)?,
+                block_origin: finite_f32(origin_block)?,
+                inline_advance: nonnegative_f32(x_advance)?,
+                ink_inline_start: finite_f32(ink.inline_start)?,
+                ink_block_start: finite_f32(ink.block_start)?,
+                ink_inline_extent: nonnegative_f32(ink.inline_extent)?,
+                ink_block_extent: nonnegative_f32(ink.block_extent)?,
+            });
+            if outline.is_some() {
+                let semantic_glyph_index = u32::try_from(self.semantic_glyphs.len() - 1)
+                    .map_err(|_| EngineError::ResultTooLarge)?;
+                self.push_glyph::<TEXT_EFFECTS>(
+                    LayoutGlyph {
+                        stable_id,
+                        content_revision: 0,
+                        semantic_glyph_index,
+                        binding_handle,
+                        font_handle,
+                        glyph_id,
+                        material_id: style.material_id,
+                        clip_id: line.clip_id,
+                        depth_key: PAINT_LAYER_GLYPH,
+                        font_size: geometry.font_size,
+                        raster_pixel_ratio: style.raster_pixel_ratio,
+                        inline_start: finite_f32(ink.inline_start)?,
+                        block_start: finite_f32(ink.block_start)?,
+                        inline_extent: nonnegative_f32(ink.inline_extent)?,
+                        block_extent: nonnegative_f32(ink.block_extent)?,
+                    },
+                    style,
+                    clusters.stable_ids[cluster],
+                    line.region_id,
+                    line.flow_thread_id,
+                    line.transform_index,
+                );
+            }
+            state.cursor += x_advance;
+        }
+        state.cursor = cluster_origin + clusters.advances[cluster];
+        Ok(PositionedCluster {
+            style,
+            font_handle,
+            cluster_origin,
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn finish_positioned_cluster<const ADJUST: bool>(
+        &mut self,
+        line: FlowLine,
+        cluster: usize,
+        clusters: &ClusterArena,
+        positioned: PositionedCluster,
+        justify: JustifyDistribution,
+        state: &mut FragmentPositionState,
+        metrics_for: impl Fn(u32) -> Option<FontMetrics>,
+    ) -> Result<(), EngineError> {
+        if ADJUST {
+            if clusters.flags[cluster] & CLUSTER_SPACE != 0
+                && cluster < justify.gap_end
+                && state.space_ordinal < i64::from(justify.spaces)
+                && (justify.per_space_units != 0 || justify.extra_space_units != 0)
+            {
+                let units = justify.per_space_units
+                    + i64::from(state.space_ordinal < justify.extra_space_units);
+                state.cursor += super::layout_units::scaled_from_layout_units(units);
+                state.space_ordinal += 1;
+            }
+            if cluster < justify.gap_end
+                && state.gap_ordinal < i64::from(justify.gaps)
+                && (justify.per_gap_units != 0 || justify.extra_gap_units != 0)
+            {
+                let units =
+                    justify.per_gap_units + i64::from(state.gap_ordinal < justify.extra_gap_units);
+                state.cursor += super::layout_units::scaled_from_layout_units(units);
+                state.gap_ordinal += 1;
+            }
+        }
+        let PositionedCluster {
+            style,
+            font_handle,
+            cluster_origin,
+        } = positioned;
+        if style.decoration_flags == 0 {
+            if state.decorated_run.is_some() {
+                self.flush_decorated_run(&mut state.decorated_run, line, metrics_for)?;
+            }
+        } else {
+            match state.decorated_run {
+                Some(ref mut run)
+                    if run.font_handle == font_handle
+                        && same_decoration_group(&run.style, &style) =>
+                {
+                    run.end = state.cursor
+                }
+                _ => {
+                    self.flush_decorated_run(&mut state.decorated_run, line, metrics_for)?;
+                    state.decorated_run = Some(DecoratedRun {
+                        style,
+                        font_handle,
+                        start: cluster_origin,
+                        end: state.cursor,
+                    });
+                }
+            }
+        }
+        Ok(())
     }
 
     fn flush_decorated_run(
@@ -3301,22 +3557,32 @@ mod tests {
                 style: nested,
             },
         ];
-        let runs = [ShapingRun {
-            text_start: 0,
-            text_end: 2,
-            script: u32::from_be_bytes(*b"Latn"),
-            direction: 0,
-            bidi_level: 0,
-            style: declaring,
-        }];
-        let clusters = ClusterArena {
+        let runs = [
+            ShapingRun {
+                text_start: 0,
+                text_end: 1,
+                script: u32::from_be_bytes(*b"Latn"),
+                direction: 0,
+                bidi_level: 0,
+                style: declaring,
+            },
+            ShapingRun {
+                text_start: 1,
+                text_end: 2,
+                script: u32::from_be_bytes(*b"Latn"),
+                direction: 0,
+                bidi_level: 0,
+                style: nested,
+            },
+        ];
+        let mut clusters = ClusterArena {
             starts: vec![0, 1, 2],
             ends: vec![1, 2, 3],
             advances: vec![6.0, 4.2, 0.0],
             units_per_em: vec![1_000.0; 3],
             flags: vec![CLUSTER_SAFE_BEFORE, CLUSTER_SAFE_BEFORE, CLUSTER_HARD_BREAK],
             style_indexes: vec![0, 1, 0],
-            source_runs: vec![0, 0, u32::MAX],
+            source_runs: vec![0, 1, u32::MAX],
             binding_handles: vec![11, 11, 0],
             font_handles: vec![1, 1, 0],
             stable_ids: vec![10, 20, 30],
@@ -3332,6 +3598,7 @@ mod tests {
             index_at: vec![0, 1, 2, 3],
             ..ClusterArena::default()
         };
+        clusters.rebuild_layout_runs().unwrap();
         let bidi = BidiAnalysis {
             levels: vec![0, 0, BIDI_B],
             classes: vec![0, 0, BIDI_B],
@@ -3449,7 +3716,7 @@ mod tests {
             bidi_level: 0,
             style,
         }];
-        let clusters = ClusterArena {
+        let mut clusters = ClusterArena {
             starts: vec![0, 1, 2],
             ends: vec![1, 2, 3],
             advances: vec![6.0, 6.0, 0.0],
@@ -3472,6 +3739,7 @@ mod tests {
             index_at: vec![0, 1, 2, 3],
             ..ClusterArena::default()
         };
+        clusters.rebuild_layout_runs().unwrap();
         let bidi = BidiAnalysis {
             levels: vec![0, 0, BIDI_B],
             classes: vec![0, 0, BIDI_B],
@@ -3654,7 +3922,7 @@ mod tests {
             bidi_level: 0,
             style,
         }];
-        let clusters = ClusterArena {
+        let mut clusters = ClusterArena {
             starts: vec![0, 1, 2, 3],
             ends: vec![1, 2, 3, 4],
             advances: vec![6.0, 6.0, 6.0, 6.0],
@@ -3682,6 +3950,7 @@ mod tests {
             index_at: vec![0, 1, 2, 3, 4],
             ..ClusterArena::default()
         };
+        clusters.rebuild_layout_runs().unwrap();
         let bidi = BidiAnalysis {
             levels: vec![0, 0, 0, 0],
             classes: vec![0, 0, 0, 0],
@@ -3860,7 +4129,7 @@ mod tests {
             bidi_level: 0,
             style,
         }];
-        let clusters = ClusterArena {
+        let mut clusters = ClusterArena {
             starts: vec![0, 1, 2],
             ends: vec![1, 2, 3],
             advances: vec![6.0, 6.0, 0.0],
@@ -3883,6 +4152,7 @@ mod tests {
             index_at: vec![0, 1, 2, 3],
             ..ClusterArena::default()
         };
+        clusters.rebuild_layout_runs().unwrap();
         let bidi = BidiAnalysis {
             levels: vec![0, 0, BIDI_B],
             classes: vec![0, 0, BIDI_B],
