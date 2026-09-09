@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:795ff54563cca287dfc4d2f8ecefb77ca3d55d2f33ffff09f58eba8942be04c8'
+source_digest: 'sha256:5f4f516c5b40023772ae695d1588164ee3c629358cc8b32ca2d456ac99f1ec2b'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -669,6 +669,11 @@ The [benchmark plan](../planning/benchmark-plan.md) owns target admission, corre
 [^slug-outline-research]: The planning concept keeps rejected outline evidence separate from the current benchmark capability contract.
 
 The workflow index also discovers `apps/typegpu-hello-world/scripts`, exposing `typegpu:dev` and `typegpu:live-check`.
+
+The retained paragraph timing probes expose publication generation, patch count, write bytes, and per-buffer patch ranges
+beside wall time. The maintained 420↔434 active-resize, measurement, and adoption cases require a real break-changing
+publication, so equivalent-width no-ops cannot be misreported as reflow speed. Comparison scenes additionally assert that
+the LayoutRun placement candidate preserves the baseline primitive and draw topology.
 
 The `benchmark:v1-bitmap` workflow accepts `--typegpu` to run its WebGPU and WebGL2 proofs with `/three/typegpu`. Benchmark URLs may select that config with `shaders=typegpu`; the default remains native TSL through `/three`.
 

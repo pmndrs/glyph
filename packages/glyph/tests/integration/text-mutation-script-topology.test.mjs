@@ -11,6 +11,7 @@ import {
   createFontCache,
   edit,
   IDENTITY_LANE,
+  isColdComparablePackedLane,
   lanes,
   mount,
   seededRandom,
@@ -412,7 +413,7 @@ function graphemeUnits(source) {
   return [...GRAPHEMES.segment(source)].map((entry) => entry.segment);
 }
 
-/** Negative control: proves `assertMatchesFreshBuild` can see a difference. Without this, every assertion above could pass against a corrupt buffer. Corrupting one float in one packed lane must fail, per lane. */
+/** Negative control: proves the cold-comparable packed lanes still detect corruption. Local x/y and placement slots intentionally retain history and are covered by the public-position and renderer gates. */
 test('the differential oracle fails when a single packed float is corrupted', { timeout }, async () => {
   const shaping = CASES.find((entry) => entry.id === 'indic-reordering');
   const font = await fonts.load('devanagari');
@@ -424,12 +425,12 @@ test('the differential oracle fails when a single packed float is corrupted', { 
 
     const drawn = lanes(mounted).draws;
     assert.ok(drawn.length > 0, 'the control needs at least one draw to corrupt');
-    const packed = Object.keys(drawn[0].attributes).sort();
+    const packed = Object.keys(drawn[0].attributes).filter(isColdComparablePackedLane).sort();
     assert.ok(packed.length > 0, 'the control needs at least one packed instanced lane to corrupt');
 
     for (const name of packed) {
-      const attribute = attributeNamed(mounted, name);
-      const slot = drawn[0].start * (attribute.itemSize ?? 1);
+      const { attribute, component } = attributeNamed(mounted, name);
+      const slot = drawn[0].start * (attribute.itemSize ?? 1) + component;
       const original = attribute.array[slot];
       // A value no legal packing of this paragraph can produce, so a pass cannot be a coincidence.
       attribute.array[slot] = original === 0 ? 12_345 : 0;
@@ -453,11 +454,13 @@ test('the differential oracle fails when a single packed float is corrupted', { 
 });
 
 function attributeNamed(mounted, name) {
+  const component = name.endsWith(':stableGlyphId') ? 0 : name.endsWith(':transformIndex') ? 2 : undefined;
+  const attributeName = component === undefined ? name : name.slice(0, name.lastIndexOf(':'));
   let found;
   mounted.scene.traverse((object) => {
     if (found !== undefined || object.userData.pmndrsGlyphRunStart === undefined) return;
-    found = object.geometry?.attributes?.[name];
+    found = object.geometry?.attributes?.[attributeName];
   });
-  assert.notEqual(found, undefined, `no draw exposed a ${name} attribute`);
-  return found;
+  assert.notEqual(found, undefined, `no draw exposed a ${attributeName} attribute`);
+  return { attribute: found, component: component ?? 0 };
 }

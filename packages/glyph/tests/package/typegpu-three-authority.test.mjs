@@ -5,6 +5,8 @@ import { glyph } from '@pmndrs/glyph';
 import * as stableThree from '@pmndrs/glyph/three';
 import * as experimentalThree from '@pmndrs/glyph/three/typegpu';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
+import { slug } from '@pmndrs/glyph/raster/slug';
 import { createThreeTestHandle } from '../support/three-handle.mjs';
 
 import * as d from 'typegpu/data';
@@ -146,7 +148,9 @@ test('stable and experimental handles retain independent shader selection in one
     if (object.isMesh) draws.push(object);
   });
   assert.equal(draws.length, 2);
-  const programs = draws.map((mesh) => compileNodeMaterialBackends(mesh, { scene }).webgpu.vertex);
+  const shaders = draws.map((mesh) => compileNodeMaterialBackends(mesh, { scene }));
+  for (const backend of shaders) assertPlacementAddressing(backend);
+  const programs = shaders.map((backend) => backend.webgpu.vertex);
   assert.equal(programs.filter((source) => /fn bitmapQuadPosition\(/.test(source)).length, 1);
   experimental.dispose();
   stableText.text = 'Still stable';
@@ -159,6 +163,59 @@ test('stable and experimental handles retain independent shader selection in one
   assert.equal(remaining.length, 1);
   assert.doesNotMatch(compileNodeMaterialBackends(remaining[0], { scene }).webgpu.vertex, /fn bitmapQuadPosition\(/);
 });
+
+test('mounted Bitmap, MTSDF, and Slug draws all resolve physical placement before raster projection', async (t) => {
+  const three = await createThreeTestHandle(t, stableThree.ThreeConfig);
+  const bytes = await readFile(
+    new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url),
+  );
+  const fonts = [
+    glyph.fontFace(new Blob([bytes]), { format: bitmap({ strikes: [32] }) }),
+    glyph.fontFace(new Blob([bytes]), { format: msdf }),
+    glyph.fontFace(new Blob([bytes]), { format: slug }),
+  ];
+  await Promise.all(fonts.map((font) => font.load()));
+  t.after(() => fonts.forEach((font) => font.dispose()));
+  const scene = new THREE.Scene();
+  for (const [index, font] of fonts.entries()) {
+    const text = three.createText({ font, text: 'Placed', style: { fontSize: 32 } });
+    text.position.y = index * 40;
+    scene.add(text);
+  }
+  scene.updateMatrixWorld();
+  const draws = [];
+  scene.traverse((object) => {
+    if (object.isMesh) draws.push(object);
+  });
+  assert.equal(draws.length, 3);
+  const sources = draws.map((mesh) => compileNodeMaterialBackends(mesh, { scene }));
+  for (const source of sources) assertPlacementAddressing(source);
+});
+
+function assertPlacementAddressing(shaders) {
+  assert.match(
+    shaders.webgpu.vertex,
+    /NodeBuffer_\d+\.value\[\s*nodeVar\d+\s*\](?:\.xy)?\s*\+\s*NodeBuffer_\d+\.value\[\s*NodeBuffer_\d+\.value\[\s*nodeVar\d+\s*\]\.y\s*\]/,
+    'WGSL must add a physical glyph local origin to placement[placementSlot[physicalGlyph]]',
+  );
+
+  const glsl = shaders.webgl2.vertex;
+  const occurrenceLoads = [...glsl.matchAll(/(nodeVar\d+)\s*=\s*uvec4\(texelFetch\([^;]+\)\)\.xyzw;/g)];
+  const nested = occurrenceLoads
+    .map(([, occurrence]) => {
+      const load = glsl.match(
+        new RegExp(`(nodeVar\\d+)\\s*=\\s*vec4\\(texelFetch\\([^;]*\\b${occurrence}\\.y\\b[^;]*\\)\\)\\.xy;`),
+      );
+      return load === null ? undefined : load[1];
+    })
+    .find((value) => value !== undefined);
+  assert.notEqual(nested, undefined, 'GLSL must use a fetched u32 slot to fetch one vec2 placement');
+  assert.match(
+    glsl,
+    new RegExp(`\\(\\s*nodeVar\\d+(?:\\.xy)?\\s*\\+\\s*${nested}\\s*\\)`),
+    'GLSL must add the fetched placement to the local origin before projection',
+  );
+}
 
 test('stable and experimental Three configs share the custom material override contract', async (t) => {
   const font = glyph.fontFace(

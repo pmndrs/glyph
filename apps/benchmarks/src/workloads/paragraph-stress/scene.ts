@@ -7,6 +7,7 @@ import type {
   ComparisonWorkloadAnimationScratch,
   ComparisonWorkloadConfiguration,
   ComparisonWorkloadDefinition,
+  ComparisonWorkloadReflowPhases,
 } from '../comparison/contracts';
 import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
@@ -17,6 +18,9 @@ import {
   type ComparisonWorkloadEntry,
   type WorkloadTextFactoryContext,
 } from '../shared/scene-entry';
+
+const widthOnlyMotion =
+  typeof location !== 'undefined' && new URLSearchParams(location.search).get('paragraphStressWidthOnly') === '1';
 
 export const paragraphStressWorkload = {
   animate(entries, configuration, elapsedMs, viewportWidth, viewportHeight, scene, scratch, onError, onReflow) {
@@ -114,12 +118,13 @@ export function animateParagraphStressScene(
   viewportHeight: number,
   frame: ComparisonWorkloadAnimationScratch['paragraphStress'],
   onError: (error: unknown) => void,
-  onReflow: (duration: number) => void,
+  onReflow: (duration: number, phases?: ComparisonWorkloadReflowPhases) => void,
 ): void {
   const entry = entries[0];
   if (entry === undefined) return;
   if (configuration.animationEnabled) {
     setParagraphStressMotionFrame(frame, elapsedMs, configuration.animationSpeed, configuration.fontSize);
+    if (widthOnlyMotion) frame.fontSize = configuration.fontSize;
   } else {
     frame.fontSize = configuration.fontSize;
     frame.layoutWidthPercent = configuration.layoutWidthRatio * 100;
@@ -132,13 +137,19 @@ export function animateParagraphStressScene(
     const started = performance.now();
     try {
       entry.lastWidth = width;
+      const stageStarted = performance.now();
       entry.text.set({
         ...(fontSizeChanged ? { style: { ...entry.text.style, fontSize: frame.fontSize } } : {}),
         ...(widthChanged ? { constraints: { ...entry.text.constraints, width: exactWidth(width) } } : {}),
       });
+      const stageMs = performance.now() - stageStarted;
+      const publishStarted = performance.now();
       publishWorkloadTexts(scene, entries);
+      const publishMs = performance.now() - publishStarted;
+      const layoutStarted = performance.now();
       layout = layoutParagraphStressEntries(entries, viewportWidth, viewportHeight);
-      onReflow(performance.now() - started);
+      const layoutMs = performance.now() - layoutStarted;
+      onReflow(performance.now() - started, { stageMs, publishMs, layoutMs });
     } catch (error) {
       onError(error);
       return;

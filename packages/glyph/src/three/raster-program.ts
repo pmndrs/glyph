@@ -159,13 +159,13 @@ export function registerThreeRasterProgram<
 /** Three-owned semantic values used by renderer-specific shader adapters. */
 export interface ThreeCodecAbi {
   readonly scalarTypes: Readonly<{ readonly f32: 'f32'; readonly u32: 'u32'; readonly u16: 'u16' }>;
-  readonly transformBufferId: typeof threeSystemBuffers.transformIndex.id;
+  readonly transformBufferId: typeof threeSystemBuffers.occurrence.id;
 }
 
 /** Three-owned Codec metadata; raw shaper opcodes and layouts remain package-private. */
 export const threeCodecAbi: ThreeCodecAbi = Object.freeze({
   scalarTypes: Object.freeze({ f32: 'f32', u32: 'u32', u16: 'u16' }),
-  transformBufferId: threeSystemBuffers.transformIndex.id,
+  transformBufferId: threeSystemBuffers.occurrence.id,
 });
 
 function sameGeometry(left: TechniqueGeometryDeclaration, right: unknown): right is TechniqueGeometryDeclaration {

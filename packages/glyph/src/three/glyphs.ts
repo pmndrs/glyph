@@ -78,7 +78,6 @@ export interface DetachedGlyph {
 
 interface DetachedGlyphStorage {
   readonly transforms: THREE.StorageInstancedBufferAttribute;
-  readonly pivots: THREE.StorageInstancedBufferAttribute;
 }
 
 interface DetachedGlyphRecordAddress {
@@ -151,17 +150,15 @@ export class Glyphs extends THREE.Object3D {
         prepareGlyphStorage(storageKey, capacityRecords) {
           const existing = owner.#storages.get(storageKey);
           if (existing !== undefined) {
-            if (existing.pivots.count !== capacityRecords) {
+            if (existing.transforms.count / 4 !== capacityRecords) {
               throw new Error('detached glyph plan changed physical record capacity during realization');
             }
             return;
           }
           const capacity = Math.max(1, capacityRecords);
           const transforms = new THREE.StorageInstancedBufferAttribute(new Float32Array(capacity * 16), 4);
-          const pivots = new THREE.StorageInstancedBufferAttribute(new Float32Array(capacity * 2), 2);
           transforms.setUsage(THREE.DynamicDrawUsage);
-          pivots.setUsage(THREE.StaticDrawUsage);
-          owner.#storages.set(storageKey, { transforms, pivots });
+          owner.#storages.set(storageKey, { transforms });
         },
         glyphStorage(storageKey) {
           return owner.#storages.get(storageKey);
@@ -190,7 +187,7 @@ export class Glyphs extends THREE.Object3D {
           if (storage === undefined) {
             throw new Error(`detached glyph ${placement.index} references unknown physical record storage`);
           }
-          if (address.index < 0 || address.index >= storage.pivots.count) {
+          if (address.index < 0 || address.index >= storage.transforms.count / 4) {
             throw new RangeError(
               `detached glyph ${placement.index} exceeds the copied plan's physical record capacity`,
             );
@@ -207,7 +204,6 @@ export class Glyphs extends THREE.Object3D {
       if (copy === undefined) target?.dispose();
       for (const storage of this.#storages.values()) {
         storage.transforms.dispose();
-        storage.pivots.dispose();
       }
       this.#storages.clear();
       throw error;
@@ -232,13 +228,30 @@ export class Glyphs extends THREE.Object3D {
     this.#assertActive();
     const { storage, index: record } = this.#record(index);
     target.fromArray(storage.transforms.array as Float32Array, record * 16);
+    target.elements[3] = 0;
+    target.elements[7] = 0;
+    target.elements[11] = 0;
+    target.elements[15] = 1;
   }
 
   setMatrixAt(index: number, matrix: THREE.Matrix4): void {
     this.#assertActive();
     const { storage, index: record } = this.#record(index);
     const offset = record * 16;
-    storage.transforms.array.set(matrix.elements, offset);
+    if (
+      matrix.elements[3] !== 0 ||
+      matrix.elements[7] !== 0 ||
+      matrix.elements[11] !== 0 ||
+      matrix.elements[15] !== 1
+    ) {
+      throw new TypeError('glyph instance matrices must be affine');
+    }
+    const transforms = storage.transforms.array as Float32Array;
+    const pivotX = transforms[offset + 3]!;
+    const pivotY = transforms[offset + 7]!;
+    transforms.set(matrix.elements, offset);
+    transforms[offset + 3] = pivotX;
+    transforms[offset + 7] = pivotY;
     markStorageAttributeUpdated(storage.transforms, offset, 16);
   }
 
@@ -275,7 +288,6 @@ export class Glyphs extends THREE.Object3D {
     for (const storage of this.#storages.values()) {
       try {
         storage.transforms.dispose();
-        storage.pivots.dispose();
       } catch (error) {
         failure ??= error;
       }
@@ -291,15 +303,15 @@ export class Glyphs extends THREE.Object3D {
       const storage = this.#storages.get(address.storageKey);
       if (storage === undefined) throw new Error(`detached glyph ${index} lost its physical record storage`);
       const transforms = storage.transforms.array as Float32Array;
-      const pivots = storage.pivots.array as Float32Array;
       const record = address.index;
       const x = placement.x;
       const y = -placement.y;
-      pivots.set([x, y], record * 2);
-      new THREE.Matrix4().makeTranslation(x, y, 0).toArray(transforms, record * 16);
+      const offset = record * 16;
+      new THREE.Matrix4().makeTranslation(x, y, 0).toArray(transforms, offset);
+      transforms[offset + 3] = x;
+      transforms[offset + 7] = y;
     }
     for (const storage of this.#storages.values()) {
-      storage.pivots.needsUpdate = true;
       storage.transforms.needsUpdate = true;
     }
   }

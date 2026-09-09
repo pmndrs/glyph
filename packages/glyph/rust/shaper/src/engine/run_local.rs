@@ -70,6 +70,7 @@ pub(crate) enum ClusterFinish {
 pub(crate) struct RunLocalArena {
     blocks: Vec<NumericBlock>,
     rows: Vec<RunLocalGlyph>,
+    source_rows: Vec<u32>,
     cluster_blocks: Vec<u32>,
     cluster_prefixes: Vec<f64>,
     pending_block_rows: Vec<PendingGlyph>,
@@ -81,6 +82,7 @@ impl RunLocalArena {
     pub(crate) fn clear(&mut self) {
         self.blocks.clear();
         self.rows.clear();
+        self.source_rows.clear();
         self.cluster_blocks.clear();
         self.cluster_prefixes.clear();
         self.pending_block_rows.clear();
@@ -96,6 +98,11 @@ impl RunLocalArena {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn rows(&self) -> &[RunLocalGlyph] {
         &self.rows
+    }
+
+    pub(crate) fn row_for_source_glyph(&self, source_glyph: u32) -> Option<RunLocalGlyph> {
+        let row = *self.source_rows.get(usize::try_from(source_glyph).ok()?)?;
+        self.rows.get(usize::try_from(row).ok()?).copied()
     }
 
     #[cfg_attr(not(test), allow(dead_code))]
@@ -341,6 +348,19 @@ impl RunLocalWriter<'_> {
                     .checked_add(1)
                     .ok_or(RunLocalBuildError::AllocationFailed)?,
             );
+            let source_glyph = usize::try_from(row.source_glyph)
+                .map_err(|_| RunLocalBuildError::AllocationFailed)?;
+            if self.arena.source_rows.len() <= source_glyph {
+                let additional = source_glyph + 1 - self.arena.source_rows.len();
+                reserve(&mut self.arena.source_rows, additional)?;
+                self.arena.source_rows.resize(source_glyph + 1, u32::MAX);
+            }
+            if self.arena.source_rows[source_glyph] != u32::MAX {
+                return Err(RunLocalBuildError::InvalidSource);
+            }
+            let row_index = u32::try_from(self.arena.rows.len())
+                .map_err(|_| RunLocalBuildError::AllocationFailed)?;
+            self.arena.source_rows[source_glyph] = row_index;
             self.arena
                 .rows
                 .push(row.finish(block_index, anchor_inline, anchor_block)?);

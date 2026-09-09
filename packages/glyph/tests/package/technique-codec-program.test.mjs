@@ -7,8 +7,8 @@ import { defineCodecBuffers, defineTechniqueSchema } from '../../dist/config/sch
 
 const ORIGIN_BUFFER_ID = id.buffer('test.codec-contract/origin');
 const PAGE_BUFFER_ID = id.buffer('test.codec-contract/page');
-const SYSTEM_BUFFER_ID = id.buffer('test.codec-contract/system/stable-glyph-id');
-const OTHER_SYSTEM_BUFFER_ID = id.buffer('test.codec-contract/system/other-stable-glyph-id');
+const SYSTEM_BUFFER_ID = id.buffer('test.codec-contract/system/occurrence');
+const OTHER_SYSTEM_BUFFER_ID = id.buffer('test.codec-contract/system/other-occurrence');
 
 const schema = defineTechniqueSchema({
   technique: 'test.codec-contract',
@@ -21,7 +21,11 @@ const schema = defineTechniqueSchema({
 });
 
 const system = defineCodecBuffers({
-  stableGlyphId: { id: SYSTEM_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
+  occurrence: {
+    id: SYSTEM_BUFFER_ID,
+    scalar: 'u32',
+    lanes: ['stableGlyphId', 'placementSlot', 'transformIndex', 'foregroundRgba'],
+  },
 });
 
 function program() {
@@ -69,15 +73,27 @@ test('host system lanes are exact and disjoint from technique buffers', () => {
   assert.throws(
     () =>
       techniqueProgram(schema, {
-        system: { stableGlyphId: { id: ORIGIN_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] } },
+        system: {
+          occurrence: {
+            id: ORIGIN_BUFFER_ID,
+            scalar: 'u32',
+            lanes: ['stableGlyphId', 'placementSlot', 'transformIndex', 'foregroundRgba'],
+          },
+        },
       }),
     /collides with a technique buffer/,
   );
   assert.throws(
     () =>
       techniqueProgram(schema, {
-        system: { stableGlyphId: { id: OTHER_SYSTEM_BUFFER_ID, scalar: 'f32', lanes: ['stableGlyphId'] } },
+        system: {
+          occurrence: {
+            id: OTHER_SYSTEM_BUFFER_ID,
+            scalar: 'f32',
+            lanes: ['stableGlyphId', 'placementSlot', 'transformIndex', 'foregroundRgba'],
+          },
+        },
       }),
-    /needs one u32/,
+    /needs u32 stableGlyphId, placementSlot, transformIndex, and foregroundRgba lanes/,
   );
 });
