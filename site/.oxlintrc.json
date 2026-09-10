@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxlint/configuration_schema.json",
+  "plugins": ["react", "jsx-a11y"],
+  "categories": { "correctness": "error", "perf": "warn", "suspicious": "warn" },
+  "env": { "browser": true, "es2025": true },
+  "settings": { "react": { "version": "19.2.8" } },
+  "rules": {
+    "eslint/no-await-in-loop": "off",
+    "eslint/no-underscore-dangle": "off",
+    "react/no-array-index-key": "off",
+    "react/react-in-jsx-scope": "off",
+    "react/react-compiler": "error",
+    "react/rules-of-hooks": "error"
+  },
+  "ignorePatterns": ["dist/**", "docs/assets/**"]
+}

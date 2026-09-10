@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 300" width="1160" height="300" role="img" aria-labelledby="t d">
+  <title id="t">The glyph pipeline</title>
+  <desc id="d">Text and styles enter JavaScript, where only grapheme cluster breaks are found so spans snap to clusters. Everything else — Unicode analysis, shaping, layout, and encoding through the codec — runs in Rust, comes back as one published byte buffer, and a renderer decodes it into draw objects.</desc>
+  <defs>
+    <style>
+      .bg { fill: #07080b; }
+      .lane { fill: #0e1118; stroke: #1c2130; stroke-width: 1; }
+      .box { fill: #141927; stroke: #2a3247; stroke-width: 1.25; rx: 8; }
+      .box.js { stroke: #70d6ff; }
+      .box.rs { stroke: #ffd166; }
+      .box.out { stroke: #a855f7; }
+      .box.gpu { stroke: #34d399; }
+      .label { font: 600 16px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #e7ecf6; }
+      .sub { font: 400 13px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #97a1b4; }
+      .lanename { font: 600 11px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #97a1b4; letter-spacing: 0.12em; }
+      .mono { font: 500 12px/1 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; fill: #ffd166; }
+      .edge { fill: none; stroke: #4a5570; stroke-width: 1.5; marker-end: url(#arrow); }
+      .edge.hot { stroke: #a855f7; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5570"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="1160" height="300" rx="14"/>
+
+  <!-- lanes -->
+  <rect class="lane" x="24" y="44" width="252" height="212" rx="10"/>
+  <text class="lanename" x="40" y="66">JAVASCRIPT</text>
+  <rect class="lane" x="292" y="44" width="580" height="212" rx="10"/>
+  <text class="lanename" x="308" y="66">RUST · WASM</text>
+  <rect class="lane" x="888" y="44" width="252" height="212" rx="10"/>
+  <text class="lanename" x="904" y="66">YOUR RENDERER</text>
+
+  <!-- javascript: what you wrote, and the one Unicode step that stays here: grapheme cluster breaks -->
+  <rect class="box js" x="44" y="90" width="212" height="56"/>
+  <text class="label" x="60" y="114">Text · TextStyle</text>
+  <text class="sub" x="60" y="134">what you wrote, validated</text>
+  <rect class="box js" x="44" y="170" width="212" height="56"/>
+  <text class="label" x="60" y="194">Cluster breaks</text>
+  <text class="sub" x="60" y="214">UAX 29 · spans snap to them</text>
+
+  <!-- rust: analysis, shaping, layout, encoding -->
+  <rect class="box rs" x="312" y="90" width="150" height="56"/>
+  <text class="label" x="328" y="114">Analysis</text>
+  <text class="sub" x="328" y="134">UAX 9 · 14 · 24 · 29</text>
+  <rect class="box rs" x="474" y="90" width="118" height="56"/>
+  <text class="label" x="490" y="114">Shaper</text>
+  <text class="sub" x="490" y="134">HarfRust</text>
+  <rect class="box rs" x="604" y="90" width="118" height="56"/>
+  <text class="label" x="620" y="114">Layout</text>
+  <text class="sub" x="620" y="134">lines, columns</text>
+  <rect class="box rs" x="734" y="90" width="118" height="56"/>
+  <text class="label" x="750" y="114">Encode</text>
+  <text class="sub" x="750" y="134">runs the codec</text>
+  <rect class="box out" x="312" y="170" width="540" height="56"/>
+  <text class="label" x="328" y="194">Publication</text>
+  <text class="sub" x="328" y="214">one borrowed byte buffer: header, tables, patches</text>
+  <text class="mono" x="696" y="163">glyph.shape()</text>
+
+  <!-- renderer -->
+  <rect class="box out" x="908" y="90" width="212" height="56"/>
+  <text class="label" x="924" y="114">Decode</text>
+  <text class="sub" x="924" y="134">tables → GPU buffers</text>
+  <rect class="box gpu" x="908" y="170" width="212" height="56"/>
+  <text class="label" x="924" y="194">Draw objects</text>
+  <text class="sub" x="924" y="214">instanced, one per batch</text>
+
+  <!-- edges -->
+  <path class="edge" d="M 150 146 L 150 170"/>
+  <path class="edge" d="M 256 198 C 284 198, 284 118, 312 118"/>
+  <path class="edge" d="M 462 118 L 474 118"/>
+  <path class="edge" d="M 592 118 L 604 118"/>
+  <path class="edge" d="M 722 118 L 734 118"/>
+  <path class="edge hot" d="M 793 146 L 793 170"/>
+  <path class="edge hot" d="M 852 198 C 880 198, 880 118, 908 118"/>
+  <path class="edge" d="M 1014 146 L 1014 170"/>
+</svg>

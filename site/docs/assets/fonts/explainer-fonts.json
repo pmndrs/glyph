@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 0,
+  "note": "Generated fonts retain their source font and license beside the baked artifact.",
+  "fonts": [
+    {
+      "id": "lovers-quarrel-slug",
+      "source": "lovers-quarrel-regular.ttf",
+      "license": "lovers-quarrel-OFL.txt",
+      "output": "lovers-quarrel-slug.font.glb"
+    },
+    {
+      "id": "geist-msdf",
+      "source": "geist-regular.ttf",
+      "license": "geist-OFL.txt",
+      "output": "geist-msdf.font.glb"
+    },
+    {
+      "id": "geist-slug-alphanumeric",
+      "source": "geist-regular.ttf",
+      "license": "geist-OFL.txt",
+      "output": "geist-slug-alphanumeric.font.glb"
+    },
+    {
+      "id": "vt323-bitmap",
+      "source": "vt323-regular.ttf",
+      "license": "vt323-OFL.txt",
+      "output": "vt323-bitmap.font.glb"
+    },
+    {
+      "id": "font-awesome-icons-msdf",
+      "source": "font-awesome-solid-900.ttf",
+      "license": "font-awesome-LICENSE.txt",
+      "output": "font-awesome-icons-msdf.font.glb"
+    },
+    {
+      "id": "mplus1p-japanese",
+      "source": "mplus1p-regular.ttf",
+      "license": "mplus1p-OFL.txt",
+      "output": "mplus1p-japanese.font.glb"
+    }
+  ]
+}

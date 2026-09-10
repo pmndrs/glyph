@@ -1,0 +1,46 @@
+---
+title: Core API
+description: Ordered font stacks, batch-owned paragraph handles, identity-preserving capacity changes, and renderer-ready glyph batches.
+nav: 0
+sourcecode: site/docs/core-api/introduction.mdx
+---
+
+<Intro>
+  The renderer-neutral core: what loads a font, what owns a paragraph, and what the engine hands a renderer once layout
+  has committed.
+</Intro>
+
+<Keypoints title="What you'll learn">
+  <KeypointsItem>How a font request resolves, and why a raster's options are part of its identity</KeypointsItem>
+  <KeypointsItem>How an ordered font stack picks a face per cluster</KeypointsItem>
+  <KeypointsItem>What a paragraph handle owns, and what survives a capacity change</KeypointsItem>
+  <KeypointsItem>When layout is readable, and what a measurement costs</KeypointsItem>
+</Keypoints>
+
+## Runtime and font loading
+
+{/* What a font request is, what `useFont` and the loader return, and the
+lifecycle of a registered font. Worth covering here: raster options form part
+of the raster key, so a request whose options differ from the baked artifact
+finds no match and falls back to runtime generation. */}
+
+## Loaded fonts and fallback
+
+{/* Ordered font stacks: `{ fonts: [...] }`, resolution per cluster, and what
+happens when no face in the stack covers a code point. */}
+
+## Paragraph input
+
+{/* Content boxes, styles, paint, and spans. `wrap`, `align`, `columns`,
+`justify` bounds and `lastLine` live here. */}
+
+## Layout query values
+
+{/* `measureLayout()` and `ParagraphLayoutSummary`: `contentWidth`,
+`contentHeight`, `firstBaseline`, `lastBaseline`, `glyphCount`,
+`missingGlyphCount`, `overflowed` — and what each is measured against. */}
+
+## Synchronization boundary
+
+{/* When committed layout is readable, what forces a synchronous query, and the
+cost of asking. */}

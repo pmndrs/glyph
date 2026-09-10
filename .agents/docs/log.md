@@ -341,6 +341,13 @@
   lookup from the same font face and Unicode selection as the GLB. The lookup and font publish together with rollback,
   `--check` verifies both outputs byte-for-byte, and ambiguous selected aliases fail before either output is written.
 
+- **Added reusable inline documentation explainers** — The static `pmndrs/docs` site now accepts page-local custom
+  elements backed by one bounded pool of offscreen R3F roots. Visible proxies receive complete bitmap frames, preserve the
+  last frame through resize, and stop advancing when they leave the viewport. A synchronous ordered input stream keeps
+  clicks and keys ahead of later motion without rerendering React roots. The getting-started page exercises the three font
+  techniques, fallback, icons, editing with caret and drag selection, and planner-assisted `breakApart()` physics; a
+  direct-canvas physics page remains available as a proxy-independent diagnostic.
+
 ## 2026-08-30
 
 - **TypeGPU is the shader authority** — Moved the remaining Slug shader modules under `/typegpu`, added canonical TypeGPU Bitmap, MTSDF, and decoration stages, and replaced native TSL formulas with `@typegpu/three` adapters. Resource operations are specialized through slots and schema-aware accessors, so direct TypeGPU hosts, procedural consumers, raw WebGPU-backed resources, and Three data textures share the same algorithms. Device-free WGSL/GLSL tests cover every first-party adapter, and direct TypeGPU resolution tests prove texture-free function sources.

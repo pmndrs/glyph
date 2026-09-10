@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 240" width="960" height="240" role="img" aria-labelledby="t d">
+  <title id="t">What a paragraph is made of</title>
+  <desc id="d">Style is inherited down the tree, layout is the paragraph's flow policy, constraints are the box its parent gives it; the three meet in one paragraph, which can be measured and drawn.</desc>
+  <defs>
+    <style>
+      .bg { fill: #07080b; }
+      .lane { fill: #0e1118; stroke: #1c2130; stroke-width: 1; }
+      .box { fill: #141927; stroke: #2a3247; stroke-width: 1.25; rx: 8; }
+      .box.js { stroke: #70d6ff; } .box.rs { stroke: #ffd166; } .box.out { stroke: #a855f7; } .box.gpu { stroke: #34d399; } .box.dim { stroke: #2a3247; }
+      .label { font: 600 16px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #e7ecf6; }
+      .sub { font: 400 13px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #97a1b4; }
+      .lanename { font: 600 11px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #97a1b4; letter-spacing: 0.12em; }
+      .mono { font: 500 12.5px/1 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; fill: #ffd166; }
+      .mono.cyan { fill: #70d6ff; } .mono.green { fill: #34d399; }
+      .edge { fill: none; stroke: #4a5570; stroke-width: 1.5; marker-end: url(#arrow); }
+      .edge.hot { stroke: #a855f7; marker-end: url(#arrowv); } .edge.fast { stroke: #34d399; marker-end: url(#arrowg); } .edge.dash { stroke-dasharray: 5 4; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5570"/></marker>
+    <marker id="arrowv" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a855f7"/></marker>
+    <marker id="arrowg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#34d399"/></marker>
+  </defs>
+  <rect class="bg" width="960" height="240" rx="14"/>
+  <rect class="box js" x="40" y="36" width="230" height="48"/><text class="label" x="56" y="58">style</text><text class="sub" x="56" y="76">inherited: paragraph → span</text>
+  <rect class="box js" x="40" y="96" width="230" height="48"/><text class="label" x="56" y="118">layout</text><text class="sub" x="56" y="136">the paragraph's flow policy</text>
+  <rect class="box js" x="40" y="156" width="230" height="48"/><text class="label" x="56" y="178">constraints</text><text class="sub" x="56" y="196">the box its parent gives it</text>
+  <rect class="box rs" x="380" y="96" width="200" height="48"/><text class="label" x="396" y="118">Paragraph</text><text class="sub" x="396" y="136">shaped, laid out, in Rust</text>
+  <rect class="box out" x="690" y="56" width="230" height="48"/><text class="label" x="706" y="78">measure()</text><text class="sub" x="706" y="96">width, contentWidth, lines, ink</text>
+  <rect class="box gpu" x="690" y="136" width="230" height="48"/><text class="label" x="706" y="158">draw</text><text class="sub" x="706" y="176">planned glyph and decoration batches</text>
+  <path class="edge" d="M 270 60 C 330 60, 330 120, 380 120"/><path class="edge" d="M 270 120 L 380 120"/><path class="edge" d="M 270 180 C 330 180, 330 120, 380 120"/>
+  <path class="edge" d="M 580 120 C 640 120, 640 80, 690 80"/><path class="edge hot" d="M 580 120 C 640 120, 640 160, 690 160"/>
+</svg>
