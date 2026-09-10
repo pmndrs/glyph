@@ -329,7 +329,8 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
     },
   });
   const stopObservingDirty = observeRenderPlannerDirty(planner, () => registration.invalidate());
-  const region = (transform, inlineStart, inlineEnd) => ({
+  const region = (key, transform, inlineStart, inlineEnd) => ({
+    key,
     transform,
     shape: 'rectangle',
     writingMode: 'horizontal-tb',
@@ -343,7 +344,8 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
     clipInlineEnd: inlineEnd,
     clipBlockEnd: 80,
   });
-  const exclusion = (inlineStart, inlineEnd) => ({
+  const exclusion = (key, inlineStart, inlineEnd) => ({
+    key,
     shape: 'rectangle',
     wrapSide: 'both',
     inlineStart,
@@ -406,8 +408,8 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
     },
     flow: {
       regions: [
-        { region: region(transforms[0], 0, 80), exclusions: [exclusion(20, 30)] },
-        { region: region(transforms[1], 80, 160), exclusions: [exclusion(100, 110)] },
+        { region: region('left', transforms[0], 0, 80), exclusions: [exclusion('left-hole', 20, 30)] },
+        { region: region('right', transforms[1], 80, 160), exclusions: [exclusion('right-hole', 100, 110)] },
       ],
     },
     inlineObjects: [
@@ -663,6 +665,94 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
 
     shapeGlyphEngine(glyphEngine);
     assert.equal(acceptedPublications, 1, 'the same producer state passes the Wasm publication path');
+    text.update({
+      flow: {
+        regions: [
+          { region: region('left', transforms[0], 0, 80), exclusions: [exclusion('left-hole', 24, 34)] },
+          { region: region('right', transforms[1], 80, 160), exclusions: [exclusion('right-hole', 100, 110)] },
+        ],
+      },
+    });
+    assert.equal(text.measure().lineCount > 0, true);
+    const movedBytes = capture.bytes();
+    const movedRegions = readRecords(
+      movedBytes,
+      request.regionsOffset,
+      request.regionCount,
+      textShaperAbi.layouts.engineRegion,
+    );
+    const movedExclusions = readRecords(
+      movedBytes,
+      request.exclusionsOffset,
+      request.exclusionCount,
+      textShaperAbi.layouts.engineExclusion,
+    );
+    assert.deepEqual(
+      movedRegions.map((value) => value.getUint32(textShaperAbi.layouts.engineRegion.id, true)),
+      regionIds,
+      'region identity is independent of a child exclusion update',
+    );
+    assert.deepEqual(
+      movedRegions.map((value) => value.getUint32(textShaperAbi.layouts.engineRegion.geometryRevision, true)),
+      [1, 1],
+      'unchanged region geometry retains its per-entity revision',
+    );
+    assert.deepEqual(
+      movedExclusions.map((value) => value.getUint32(textShaperAbi.layouts.engineExclusion.id, true)),
+      exclusionIds,
+      'exclusion identity is keyed independently of geometry',
+    );
+    assert.deepEqual(
+      movedExclusions.map((value) => value.getUint32(textShaperAbi.layouts.engineExclusion.geometryRevision, true)),
+      [2, 1],
+      'only the moved exclusion advances its geometry revision',
+    );
+    shapeGlyphEngine(glyphEngine);
+    assert.equal(acceptedPublications, 2);
+    text.update({
+      flow: {
+        regions: [
+          { region: region('right', transforms[1], 80, 160), exclusions: [exclusion('right-hole', 100, 110)] },
+          { region: region('left', transforms[0], 0, 80), exclusions: [exclusion('left-hole', 24, 34)] },
+        ],
+      },
+    });
+    assert.equal(text.measure().lineCount > 0, true);
+    const reorderedBytes = capture.bytes();
+    const reorderedRegions = readRecords(
+      reorderedBytes,
+      request.regionsOffset,
+      request.regionCount,
+      textShaperAbi.layouts.engineRegion,
+    );
+    const reorderedExclusions = readRecords(
+      reorderedBytes,
+      request.exclusionsOffset,
+      request.exclusionCount,
+      textShaperAbi.layouts.engineExclusion,
+    );
+    assert.deepEqual(
+      reorderedRegions.map((value) => value.getUint32(textShaperAbi.layouts.engineRegion.id, true)),
+      [regionIds[1], regionIds[0]],
+      'region order remains flow order without becoming entity identity',
+    );
+    assert.deepEqual(
+      reorderedRegions.map((value) => value.getUint32(textShaperAbi.layouts.engineRegion.geometryRevision, true)),
+      [1, 1],
+      'reordering retains unchanged region revisions',
+    );
+    assert.deepEqual(
+      reorderedExclusions.map((value) => value.getUint32(textShaperAbi.layouts.engineExclusion.id, true)),
+      [exclusionIds[1], exclusionIds[0]],
+      'exclusion identity remains stable across region reordering',
+    );
+    assert.deepEqual(
+      reorderedExclusions.map((value) => value.getUint32(textShaperAbi.layouts.engineExclusion.geometryRevision, true)),
+      [1, 2],
+      'reordering retains each exclusion revision by key',
+    );
+    shapeGlyphEngine(glyphEngine);
+    assert.equal(acceptedPublications, 3);
     text.update({ text: sourceText });
     assert.equal(
       text.measure().lineCount > 0,

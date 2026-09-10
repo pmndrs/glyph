@@ -10,6 +10,8 @@ use super::{
     sort,
 };
 
+const INITIAL_EXCLUSION_CAPACITY: usize = 16;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct InlineSlot {
     pub start: f64,
@@ -51,7 +53,12 @@ impl FlowGeometryArena {
         self.clear();
         reserve(&mut self.constraints, geometry.constraint_count())?;
         reserve(&mut self.regions, geometry.region_count())?;
-        reserve(&mut self.exclusions, geometry.exclusion_count())?;
+        let exclusion_capacity = if geometry.exclusion_count() == 0 {
+            0
+        } else {
+            geometry.exclusion_count().max(INITIAL_EXCLUSION_CAPACITY)
+        };
+        reserve(&mut self.exclusions, exclusion_capacity)?;
         for index in 0..geometry.constraint_count() {
             let mut constraint = geometry
                 .constraint(index)

@@ -236,8 +236,10 @@ renderer coordinates. Integer glyph or run origins are not part of the cutover.
 Polygonal editorial flow is not a new layout engine. The Rust core already retains rectangle and polygon regions,
 rectangle and polygon exclusions, exclusion margins and wrap sides, multiple disjoint inline slots on one band, and
 sequential regions. Production composition already emits multiple same-baseline `FlowFragment` records around a hole.
-The private retained planner can encode this geometry in one request, but the supported public `GlyphTextState` surface
-currently exposes only ordered rectangular columns.
+The private retained planner and the shared public `GlyphTextState` surface can now encode this geometry in one request.
+Public `TextFlow` descriptions use ordered stable-keyed rectangle or simple-polygon regions and exclusions in
+paragraph-local inline/block coordinates; the configured integration binds them to the paragraph transform before the
+retained planner boundary.
 
 The frontier therefore preserves `FlowGeometryArena` as the sole slot-subtraction authority and adds the missing
 ownership around it:
@@ -853,6 +855,13 @@ bytes; commit/abort stays atomic; `benchmark:external-raster`, the `/three` and 
 
 Exit: public 2D polygon flow uses the existing Rust authority; moving one obstacle touches only affected bands and run
 placements; unchanged rectangular columns remain flat; exact cold-oracle parity holds.
+
+Current checkpoint: public 2D authoring, stable keyed IDs, per-entity revision retention, pre-Wasm simple-ring/f32
+validation, React/Three threading, removal of the one-exclusion cap, and the first-use 16-entry retained exclusion reserve
+are implemented. A public integration fixture composes one polygon region around two simultaneous exclusions into three
+same-line slots, while low-level transaction evidence proves that moving one exclusion advances only its revision and
+that array reordering preserves entity IDs/revisions. Dirty-band invalidation, forward suffix convergence, and the full
+LTR/RTL/mixed cold-oracle matrix remain open, so M4 is not complete at this checkpoint.
 
 ### M5 — projected 3D obstacles and same-source drop caps
 

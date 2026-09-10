@@ -41,6 +41,7 @@ import type {
   RenderPlanner,
   RetainedFormattedText,
   RetainedText,
+  RetainedTextFlowInput,
   RetainedTextOptions,
   RetainedTextUpdate,
   StagedRenderPlanner,
@@ -48,6 +49,7 @@ import type {
 import { observeRenderPlannerDirty, stageRenderPlanner } from './render-planner.js';
 import { reuseOrCreateTextPropertySnapshot } from '../config/text-property.js';
 import type { BorrowedGlyphLayout } from '../layout.js';
+import { normalizeTextFlow, type TextFlow, type TextFlowBounds, type TextFlowShape } from '../text-properties.js';
 
 const DEFAULT_LIMITS: GlyphCommandLimits = Object.freeze({
   maxParagraphs: 4_096,
@@ -566,6 +568,7 @@ class ConfiguredRootServices<
       const transform = this.#bindTransform(state.transform, leases);
       const material = state.material === undefined ? undefined : this.#bindMaterial(state.material, leases);
       const text = typeof state.text === 'string' ? state.text : this.#bindFormattedText(state.text, leases);
+      const flow = state.flow === undefined ? undefined : bindTextFlow(state.flow, transform);
       return {
         options: Object.freeze({
           font,
@@ -577,6 +580,7 @@ class ConfiguredRootServices<
           ...(state.style === undefined ? {} : { style: state.style }),
           ...(state.layout === undefined ? {} : { layout: state.layout }),
           ...(state.constraints === undefined ? {} : { constraints: state.constraints }),
+          ...(flow === undefined ? {} : { flow }),
         }),
         leases,
       };
@@ -772,6 +776,7 @@ interface AcceptedTextPropertyInputs {
   style: object | undefined;
   layout: object | undefined;
   constraints: object | undefined;
+  flow: object | undefined;
 }
 
 function normalizeParagraphOrderRank(rank: number): number {
@@ -795,6 +800,7 @@ class ConfiguredTextController<
     style: undefined,
     layout: undefined,
     constraints: undefined,
+    flow: undefined,
   };
   #disposed = false;
 
@@ -841,6 +847,7 @@ class ConfiguredTextController<
         style: next.options.style,
         layout: next.options.layout,
         constraints: next.options.constraints,
+        flow: next.options.flow,
       });
     } catch (error) {
       this.#disposeLeases(next.leases);
@@ -942,6 +949,12 @@ function withOwnedTextPropertySnapshots<Format extends RasterFormatMetadata, Mat
       'Glyph Text constraints',
     );
   }
+  if (state.flow !== undefined) {
+    snapshot.flow =
+      previous?.flow !== undefined && previousInputs.flow === state.flow
+        ? previous.flow
+        : normalizeTextFlow(state.flow, 'Glyph Text flow');
+  }
   return snapshot;
 }
 
@@ -962,6 +975,7 @@ function acceptTextPropertyInputs<Format extends RasterFormatMetadata, MaterialI
   target.style = state.style;
   target.layout = state.layout;
   target.constraints = state.constraints;
+  target.flow = state.flow;
 }
 
 function reusablePlainTextUpdate<Format extends RasterFormatMetadata, MaterialInput, TransformInput>(
@@ -973,7 +987,8 @@ function reusablePlainTextUpdate<Format extends RasterFormatMetadata, MaterialIn
     typeof next.text !== 'string' ||
     previous.font !== next.font ||
     previous.transform !== next.transform ||
-    previous.material !== next.material
+    previous.material !== next.material ||
+    previous.flow !== next.flow
   ) {
     return undefined;
   }
@@ -985,4 +1000,81 @@ function reusablePlainTextUpdate<Format extends RasterFormatMetadata, MaterialIn
   if (previous.layout !== next.layout) update.layout = next.layout;
   if (previous.constraints !== next.constraints) update.constraints = next.constraints;
   return update;
+}
+
+function bindTextFlow(flow: TextFlow, transform: HandleTransformBinding): RetainedTextFlowInput {
+  return Object.freeze({
+    regions: Object.freeze(
+      flow.regions.map((region) => {
+        const bounds = textFlowShapeBounds(region.shape);
+        const clip = region.clip ?? bounds;
+        return Object.freeze({
+          region: Object.freeze({
+            key: region.key,
+            transform,
+            shape: region.shape.kind,
+            ...(region.shape.kind === 'polygon'
+              ? {
+                  vertices: Object.freeze(
+                    region.shape.vertices.map(([inline, block]) => Object.freeze({ inline, block })),
+                  ),
+                }
+              : {}),
+            writingMode: 'horizontal-tb' as const,
+            textOrientation: 'mixed' as const,
+            inlineStart: bounds[0],
+            blockStart: bounds[1],
+            inlineEnd: bounds[2],
+            blockEnd: bounds[3],
+            clipInlineStart: clip[0],
+            clipBlockStart: clip[1],
+            clipInlineEnd: clip[2],
+            clipBlockEnd: clip[3],
+          }),
+          ...(region.exclusions === undefined
+            ? {}
+            : {
+                exclusions: Object.freeze(
+                  region.exclusions.map((exclusion) => {
+                    const exclusionBounds = textFlowShapeBounds(exclusion.shape);
+                    return Object.freeze({
+                      key: exclusion.key,
+                      shape: exclusion.shape.kind,
+                      ...(exclusion.shape.kind === 'polygon'
+                        ? {
+                            vertices: Object.freeze(
+                              exclusion.shape.vertices.map(([inline, block]) => Object.freeze({ inline, block })),
+                            ),
+                          }
+                        : {}),
+                      wrapSide: exclusion.wrapSide ?? ('both' as const),
+                      inlineStart: exclusionBounds[0],
+                      blockStart: exclusionBounds[1],
+                      inlineEnd: exclusionBounds[2],
+                      blockEnd: exclusionBounds[3],
+                      marginInline: exclusion.marginInline ?? 0,
+                      marginBlock: exclusion.marginBlock ?? 0,
+                    });
+                  }),
+                ),
+              }),
+        });
+      }),
+    ),
+  });
+}
+
+function textFlowShapeBounds(shape: TextFlowShape): TextFlowBounds {
+  if (shape.kind === 'rectangle') return shape.bounds;
+  let inlineStart = Number.POSITIVE_INFINITY;
+  let blockStart = Number.POSITIVE_INFINITY;
+  let inlineEnd = Number.NEGATIVE_INFINITY;
+  let blockEnd = Number.NEGATIVE_INFINITY;
+  for (const [inline, block] of shape.vertices) {
+    inlineStart = Math.min(inlineStart, inline);
+    blockStart = Math.min(blockStart, block);
+    inlineEnd = Math.max(inlineEnd, inline);
+    blockEnd = Math.max(blockEnd, block);
+  }
+  return [inlineStart, blockStart, inlineEnd, blockEnd];
 }

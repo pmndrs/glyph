@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:6d042f874276bae166208b704f3afd3b9fd796f02b504f1c1a206a31863e9f09'
+source_digest: 'sha256:20385486c1683ff6af15f1f57fb990b9660c7c07e18c1552f4829cccd96b9bc7'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -515,8 +515,17 @@ A paragraph's public content box may declare `columns: { count, gap }`, flowing 
 inside the exact content-box width. Columns fill in order without balancing, so the final column may run short, and an
 exact `width` is required because the column advance is derived from it. Internally, Rust already retains bounded rectangle
 or polygon regions and exclusions, subtracts them into multiple slots, and composes fragments through sequential regions.
-Those package-owned frame records are not yet a public arbitrary-contour or scene-object API. Public contour authoring,
-incremental obstacle-local placement, projected known-geometry objects, and same-source drop caps belong to
+The shared public `TextFlow` surface now admits ordered keyed rectangle or simple-polygon regions, keyed rectangle or
+simple-polygon exclusions, margins, and every existing wrap side in paragraph-local inline/block coordinates. Admission
+normalizes coordinates to their exact finite f32 wire values, rejects duplicate keys, degenerate or self-intersecting
+rings, and freezes normalized state before it reaches the retained planner. Stable keys mint entity IDs independently of
+array order, and unchanged entities retain their own geometry revisions when one sibling moves or the flow order changes.
+The Three integration binds this renderer-neutral description to the paragraph transform; React forwards the same model.
+The retained Rust geometry authority remains unchanged, zero-exclusion paragraphs allocate no exclusion arena, and the
+first nonempty exclusion set reserves 16 retained entries before ordinary geometric growth. Three's former one-exclusion
+feature cap is removed without coupling entity capacity to the separate slot-output limit.
+
+Obstacle-local dirty-band convergence, projected known-geometry objects, and same-source drop caps remain in
 [Milestone 12's fragment-relative reflow plan](../planning/fragment-relative-reflow.md); balanced columns remain deferred.
 
 ## Renderer Codec

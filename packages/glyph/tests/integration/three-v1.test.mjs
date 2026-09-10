@@ -601,6 +601,94 @@ test('text property registries validate and freeze reusable rules', () => {
   assert.throws(() => Constraints.create({ broken: { width: { mode: 'exact', size: Number.NaN } } }), /size/);
 });
 
+test('public 2D flow accepts keyed polygons and composes around multiple exclusions', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+  const text = three.createText({
+    font,
+    text: 'iiiiiiiiiiiiiiiiiiii',
+    layout: { wrap: 'character' },
+    constraints: {
+      width: { mode: 'exact', size: 120 },
+      height: { mode: 'exact', size: 80 },
+    },
+    flow: {
+      regions: [
+        {
+          key: 'body',
+          shape: {
+            kind: 'polygon',
+            vertices: [
+              [0, 0],
+              [120, 0],
+              [120, 80],
+              [0, 80],
+            ],
+          },
+          exclusions: [
+            { key: 'first', shape: { kind: 'rectangle', bounds: [24 + 2 ** -30, 0, 34, 80] } },
+            { key: 'second', shape: { kind: 'rectangle', bounds: [64, 0, 74, 80] } },
+          ],
+        },
+      ],
+    },
+  });
+  t.after(() => text.dispose());
+
+  const layout = text.glyphs();
+  assert.deepEqual(instrumentedGlyph.latestMeasurementRequestCounts(), {
+    paragraph: 1,
+    paragraphOrder: 0,
+    text: 1,
+    style: 1,
+    constraint: 1,
+    region: 1,
+    exclusion: 2,
+    inlineObject: 0,
+  });
+  assert.equal(layout.lineCount, 1, 'the three disjoint slots remain one logical line');
+  const inlineJumps = [...layout.x]
+    .slice(1)
+    .map((x, index) => x - layout.x[index])
+    .filter((advance) => advance > 8);
+  assert.equal(inlineJumps.length, 2, 'the exclusions introduce two cross-slot x jumps');
+  assert.ok(Object.isFrozen(text.flow));
+  assert.ok(Object.isFrozen(text.flow.regions[0].shape.vertices));
+  assert.equal(
+    text.flow.regions[0].exclusions[0].shape.bounds[0],
+    24,
+    'public flow coordinates normalize to their exact f32 wire value before revision comparison',
+  );
+
+  assert.throws(() => {
+    text.flow = {
+      regions: [
+        { key: 'duplicate', shape: { kind: 'rectangle', bounds: [0, 0, 20, 20] } },
+        { key: 'duplicate', shape: { kind: 'rectangle', bounds: [20, 0, 40, 20] } },
+      ],
+    };
+  }, /region key "duplicate" is duplicated/);
+  assert.throws(() => {
+    text.flow = {
+      regions: [
+        {
+          key: 'crossed',
+          shape: {
+            kind: 'polygon',
+            vertices: [
+              [0, 0],
+              [20, 20],
+              [0, 20],
+              [20, 0],
+            ],
+          },
+        },
+      ],
+    };
+  }, /nonzero finite area|must not self-intersect/);
+});
+
 test('detached matrix helpers round-trip aliased and independent targets with a hoisted inverse', () => {
   const rootWorld = new THREE.Matrix4().compose(
     new THREE.Vector3(4, -3, 2),

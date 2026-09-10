@@ -22,6 +22,7 @@ import type {
   Constraints,
   ParagraphLayout,
   PropertyList,
+  TextFlow,
   TextStyle,
 } from '../text-properties.js';
 import {
@@ -30,6 +31,7 @@ import {
   assertTextStyle,
   assertTextStyleFeatureRanges,
   normalizeGlyphBufferCapacity,
+  normalizeTextFlow,
 } from '../text-properties.js';
 import { assertTextEffectsSupported, normalizedColumns, replacedContent } from '../engine-encoding.js';
 import type { GlyphCopy, GlyphRoot, GlyphRootServices, GlyphTextController } from '../config/glyph.js';
@@ -76,8 +78,8 @@ export type StandaloneTextProperties<Format extends RasterFormatMetadata> = Text
   Readonly<{ pixelSnapping?: boolean }>;
 
 /** Partial desired-state replacement accepted by {@link Text.set}. */
-export type TextUpdate<Format extends RasterFormatMetadata> = Partial<TextBaseProperties<Format>> &
-  Readonly<{ text?: TextInput<Format>; material?: ThreeTextMaterial }>;
+export type TextUpdate<Format extends RasterFormatMetadata> = Partial<Omit<TextBaseProperties<Format>, 'flow'>> &
+  Readonly<{ text?: TextInput<Format>; material?: ThreeTextMaterial; flow?: TextFlow | undefined }>;
 
 /** Publication controls owned by every anonymous or named Three root. */
 export interface ThreeRootOptions {
@@ -106,6 +108,7 @@ interface DesiredTextState<Format extends RasterFormatMetadata> {
   readonly style: TextStyle;
   readonly layout: ParagraphLayout;
   readonly constraints: Constraints;
+  readonly flow?: TextFlow;
   readonly rasterPixelRatio?: number;
   readonly material?: ThreeTextMaterial;
 }
@@ -799,6 +802,12 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   }
   set constraints(value: PropertyList<Constraints>) {
     this.set({ constraints: value });
+  }
+  get flow(): TextFlow | undefined {
+    return this.#desired.flow;
+  }
+  set flow(value: TextFlow | undefined) {
+    this.set({ flow: value });
   }
   get rasterPixelRatio(): number {
     return this.#desired.rasterPixelRatio ?? 1;
@@ -1659,6 +1668,7 @@ function coreTextState(
     style: desired.style,
     layout: desired.layout,
     constraints: desired.constraints,
+    ...(desired.flow === undefined ? {} : { flow: desired.flow }),
   };
 }
 
@@ -1694,6 +1704,7 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
   const styleReused = previous !== undefined && properties.style === previous.style;
   const layoutReused = previous !== undefined && properties.layout === previous.layout;
   const constraintsReused = previous !== undefined && properties.constraints === previous.constraints;
+  const flowReused = previous !== undefined && properties.flow === previous.flow;
   const style = styleReused ? previous.style : mergePropertyList(properties.style, 'Text style');
   const layout = layoutReused ? previous.layout : mergePropertyList(properties.layout, 'Text layout');
   const constraints = constraintsReused
@@ -1702,6 +1713,11 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
   if (!styleReused) assertTextStyle(style, 'Text style');
   if (!layoutReused) assertParagraphLayout(layout, 'Text layout');
   if (!constraintsReused) assertConstraints(constraints, 'Text constraints');
+  const flow = flowReused
+    ? previous.flow
+    : properties.flow === undefined
+      ? undefined
+      : normalizeTextFlow(properties.flow, 'Text flow');
   if (!layoutReused || !constraintsReused) normalizedColumns(layout, constraints);
   const formatted = typeof properties.text === 'string' ? undefined : properties.text;
   if (formatted !== undefined && !isFormattedText(formatted)) throw new TypeError('Text content is invalid');
@@ -1747,6 +1763,7 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
     constraints: constraintsReused
       ? constraints
       : reuseOrCreateTextPropertySnapshot(previous?.constraints, constraints, 'Text constraints'),
+    ...(flow === undefined ? {} : { flow }),
     ...(rasterPixelRatio === undefined ? {} : { rasterPixelRatio }),
     ...(properties.material === undefined ? {} : { material: properties.material }),
   });

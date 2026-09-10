@@ -2,6 +2,15 @@
 
 ## 2026-09-10
 
+- **Exposed stable-keyed public 2D flow without adding a second layout engine** — The shared `TextFlow` model now carries
+  ordered rectangle or simple-polygon regions and multiple keyed exclusions through generic configuration, Three, and
+  React into the existing retained Rust geometry authority. Admission freezes exact finite-f32 coordinates, normalizes
+  polygon winding, and rejects duplicate keys, degenerate rings, and self-intersection before Wasm. Region/exclusion IDs
+  no longer depend on array position; moving one exclusion advances only its entity revision, and reordering retains all
+  unchanged identities/revisions. Three's one-exclusion feature cap is removed, empty flows retain zero exclusion
+  allocation, and first use reserves 16 entries before geometric growth. Focused public evidence composes two holes into
+  three same-line slots. Dirty-horizon convergence and the broader bidi/projection/drop-cap matrix remain open.
+
 - **Retained static glyph geometry across changed-width positioning** — Geometry-only reflow now authenticates and
   reuses committed glyph-local, raster, and effect rows for visually trivial, boundary-free, undecorated text. The single
   positioning traversal recomputes compact segment translations and absolute CPU query coordinates, refreshes dynamic
