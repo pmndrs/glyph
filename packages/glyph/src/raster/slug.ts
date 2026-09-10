@@ -89,8 +89,10 @@ import { defineTechniqueSchema, type TechniqueSchema } from '../config/schema.js
 const SLUG_RECT_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/rect');
 const SLUG_PLANE_RECT_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/plane-rect');
 const SLUG_BAND_TRANSFORM_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/band-transform');
+const SLUG_COLOR_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/color');
 const SLUG_INVERSE_FONT_SIZE_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/inverse-font-size');
 const SLUG_TABLE_STARTS_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/table-starts');
+const SLUG_BAND_COUNTS_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/band-counts');
 
 /** The authoritative physical shape of the Slug format. */
 export const slugSchema: TechniqueSchema<
@@ -110,15 +112,25 @@ export const slugSchema: TechniqueSchema<
       readonly scalar: 'f32';
       readonly lanes: readonly ['scaleX', 'scaleY', 'offsetX', 'offsetY'];
     };
+    readonly color: {
+      readonly id: typeof SLUG_COLOR_BUFFER_ID;
+      readonly scalar: 'f32';
+      readonly lanes: readonly ['red', 'green', 'blue', 'alpha'];
+    };
     readonly inverseFontSize: {
       readonly id: typeof SLUG_INVERSE_FONT_SIZE_BUFFER_ID;
       readonly scalar: 'f32';
-      readonly lanes: readonly ['inverseFontSize', 'horizontalBands', 'verticalBands', 'unused3'];
+      readonly lanes: readonly ['inverseFontSize', 'unused1', 'unused2', 'unused3'];
     };
     readonly tableStarts: {
       readonly id: typeof SLUG_TABLE_STARTS_BUFFER_ID;
       readonly scalar: 'u32';
       readonly lanes: readonly ['curveBase', 'horizontalHeaderBase', 'verticalHeaderBase', 'referenceBase'];
+    };
+    readonly bandCounts: {
+      readonly id: typeof SLUG_BAND_COUNTS_BUFFER_ID;
+      readonly scalar: 'u32';
+      readonly lanes: readonly ['horizontalBands', 'verticalBands', 'unused2', 'unused3'];
     };
   },
   {
@@ -176,15 +188,21 @@ export const slugSchema: TechniqueSchema<
       scalar: 'f32',
       lanes: ['scaleX', 'scaleY', 'offsetX', 'offsetY'],
     },
+    color: { id: SLUG_COLOR_BUFFER_ID, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
     inverseFontSize: {
       id: SLUG_INVERSE_FONT_SIZE_BUFFER_ID,
       scalar: 'f32',
-      lanes: ['inverseFontSize', 'horizontalBands', 'verticalBands', 'unused3'],
+      lanes: ['inverseFontSize', 'unused1', 'unused2', 'unused3'],
     },
     tableStarts: {
       id: SLUG_TABLE_STARTS_BUFFER_ID,
       scalar: 'u32',
       lanes: ['curveBase', 'horizontalHeaderBase', 'verticalHeaderBase', 'referenceBase'],
+    },
+    bandCounts: {
+      id: SLUG_BAND_COUNTS_BUFFER_ID,
+      scalar: 'u32',
+      lanes: ['horizontalBands', 'verticalBands', 'unused2', 'unused3'],
     },
   },
   resources: {
@@ -206,7 +224,7 @@ export const slugCodec: RasterCodec<typeof slug, typeof slugSchema> = registerGl
   schema: slugSchema,
   codecBody(system) {
     const p = techniqueProgram(slugSchema, { inverseFontSize: true, system });
-    const { inlineOrigin, blockOrigin, fontSize, inverseFontSize } = p.semantics;
+    const { inlineOrigin, blockOrigin, fontSize, color, inverseFontSize } = p.semantics;
     if (inverseFontSize === undefined) throw new TypeError('the Slug program declares inverseFontSize');
     const {
       bearingX,
@@ -225,6 +243,7 @@ export const slugCodec: RasterCodec<typeof slug, typeof slugSchema> = registerGl
       verticalBands,
     } = p.binding;
     const zeroF32 = f32.const(0);
+    const zeroU32 = u32.const(0);
     return p.compile({
       rect: [
         f32.add(inlineOrigin, f32.mul(bearingX, fontSize)),
@@ -234,13 +253,10 @@ export const slugCodec: RasterCodec<typeof slug, typeof slugSchema> = registerGl
       ],
       planeRect: [bearingX, bearingY, width, height],
       bandTransform: [bandScaleX, bandScaleY, bandOffsetX, bandOffsetY],
-      inverseFontSize: [
-        inverseFontSize,
-        u32.toF32(horizontalBands),
-        u32.toF32(verticalBands),
-        zeroF32,
-      ],
+      color: [color.red, color.green, color.blue, color.alpha],
+      inverseFontSize: [inverseFontSize, zeroF32, zeroF32, zeroF32],
       tableStarts: [curveBase, horizontalHeaderBase, verticalHeaderBase, referenceBase],
+      bandCounts: [horizontalBands, verticalBands, zeroU32, zeroU32],
     });
   },
   compileFont(compiler) {

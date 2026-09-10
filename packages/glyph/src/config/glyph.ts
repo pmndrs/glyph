@@ -52,13 +52,10 @@ export interface GlyphBindingSet {
   readonly transformInput: unknown;
 }
 
-export type GlyphBufferDeclaration =
-  | Readonly<{ kind: 'codec'; value: CodecBuffer }>
-  | Readonly<{ kind: 'order' }>
-  | Readonly<{ kind: 'placement' }>;
+export type GlyphBufferDeclaration = Readonly<{ kind: 'codec'; value: CodecBuffer }> | Readonly<{ kind: 'order' }>;
 
 export interface GlyphBufferBindingInput<Program extends object> {
-  readonly program: Program | undefined;
+  readonly program: Program;
   readonly declaration: GlyphBufferDeclaration;
 }
 
@@ -259,7 +256,7 @@ export type ResourceUpdate<Resource extends object> =
 export type BufferUpdate<Buffer extends object, Program extends object> = Readonly<{
   kind: 'ensure';
   buffer: Buffer;
-  program: Program | undefined;
+  program: Program;
   scalarType: 'f32' | 'u32' | 'u16';
   vectorWidth: number;
   capacityRecords: number;

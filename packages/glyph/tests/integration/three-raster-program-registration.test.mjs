@@ -17,7 +17,8 @@ import {
 import { FontRegistry } from '../../dist/loader.js';
 
 const RECT_BUFFER_ID = id.buffer('test.three-plan-program/rect');
-const OCCURRENCE_BUFFER_ID = id.buffer('test.three-plan-program/system/occurrence');
+const STABLE_GLYPH_BUFFER_ID = id.buffer('test.three-plan-program/system/stable-glyph-id');
+const TRANSFORM_BUFFER_ID = id.buffer('test.three-plan-program/system/transform-index');
 await glyph.init();
 
 const portablePrograms = new Map();
@@ -274,11 +275,8 @@ test('engine construction rejects a portable body compiled for different system 
     codecBody() {
       const authoring = techniqueProgram(schema, {
         system: {
-          occurrence: {
-            id: OCCURRENCE_BUFFER_ID,
-            scalar: 'u32',
-            lanes: ['stableGlyphId', 'placementSlot', 'transformIndex', 'foregroundRgba'],
-          },
+          stableGlyphId: { id: STABLE_GLYPH_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
+          transformIndex: { id: TRANSFORM_BUFFER_ID, scalar: 'u32', lanes: ['transformIndex'] },
         },
       });
       return authoring.compile({});

@@ -264,44 +264,6 @@ async function verifyHooks() {
     cutoff.buffer.destroy();
   }
 }
-async function verifyIncrementalReflow() {
-  for (const [name, font] of Object.entries(app.fonts)) {
-    const reflow = glyph.handle(`typegpu:reflow:${name}`, defineTypeGpuConfig({ root, format }));
-    const text = 'alpha beta gamma delta epsilon zeta eta theta';
-    const retained = reflow.createText({
-      font,
-      text,
-      position: [24, 24],
-      style: { fontSize: 32 },
-      constraints: { width: { mode: 'exact', size: 280 } },
-    });
-    try {
-      glyph.shape();
-      const before = await pixels(reflow);
-      retained.update({ constraints: { width: { mode: 'exact', size: 120 } } });
-      glyph.shape();
-      const incremental = await pixels(reflow);
-      if (!incremental.some((value, index) => value !== before[index]))
-        throw new Error(`${name} width reflow did not move pixels`);
-
-      const cold = reflow('cold');
-      cold.createText({
-        font,
-        text,
-        position: [24, 24],
-        style: { fontSize: 32 },
-        constraints: { width: { mode: 'exact', size: 120 } },
-      });
-      glyph.shape();
-      const rebuilt = await pixels(cold);
-      if (rebuilt.some((value, index) => value !== incremental[index]))
-        throw new Error(`${name} incremental reflow differs from a cold final-state root`);
-    } finally {
-      retained.dispose();
-      reflow.dispose();
-    }
-  }
-}
 // The app already owns the singleton; its update() invokes the public glyph.shape().
 const message = document.querySelector<HTMLInputElement>('#message')!;
 const raster = document.querySelector<HTMLSelectElement>('#raster')!;
@@ -327,7 +289,6 @@ try {
     if (visible(await pixels()) !== 0) throw new Error(`${format} empty text did not clear draws`);
   }
   await verifyHooks();
-  await verifyIncrementalReflow();
   if (errors.length) throw new Error(errors.join('\n'));
 } finally {
   readback.destroy();

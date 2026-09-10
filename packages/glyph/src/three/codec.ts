@@ -26,26 +26,31 @@ import { bitmapCodec } from '../raster/bitmap.js';
 import { msdfCodec } from '../raster/msdf.js';
 import { slugCodec } from '../raster/slug.js';
 
-const THREE_OCCURRENCE_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/occurrence');
+const THREE_STABLE_GLYPH_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/stable-glyph');
+const THREE_TRANSFORM_INDEX_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/transform-index');
 const DECORATION_RECT_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/decoration/rect');
 const DECORATION_PACKED_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/decoration/packed');
 
 /** Buffers the Three Codec itself owns, shared by every program in it. */
 export const threeSystemBuffers: {
-  readonly occurrence: {
-    readonly id: typeof THREE_OCCURRENCE_BUFFER_ID;
+  readonly stableGlyphId: {
+    readonly id: typeof THREE_STABLE_GLYPH_BUFFER_ID;
     readonly scalar: 'u32';
-    readonly lanes: readonly ['stableGlyphId', 'placementSlot', 'transformIndex', 'foregroundRgba'];
+    readonly lanes: readonly ['stableGlyphId'];
+  };
+  readonly transformIndex: {
+    readonly id: typeof THREE_TRANSFORM_INDEX_BUFFER_ID;
+    readonly scalar: 'u32';
+    readonly lanes: readonly ['transformIndex'];
   };
 } = defineCodecBuffers({
-  occurrence: {
-    id: THREE_OCCURRENCE_BUFFER_ID,
-    scalar: 'u32',
-    lanes: ['stableGlyphId', 'placementSlot', 'transformIndex', 'foregroundRgba'],
-  },
+  stableGlyphId: { id: THREE_STABLE_GLYPH_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
+  transformIndex: { id: THREE_TRANSFORM_INDEX_BUFFER_ID, scalar: 'u32', lanes: ['transformIndex'] },
 });
 
-export const OCCURRENCE_BUFFER_ID: CodecBufferId = threeSystemBuffers.occurrence.id;
+export const TRANSFORM_BUFFER_ID: CodecBufferId = threeSystemBuffers.transformIndex.id;
+
+export const STABLE_GLYPH_BUFFER_ID: CodecBufferId = threeSystemBuffers.stableGlyphId.id;
 
 /** Decoration is a reserved technique of the Three Codec, not a raster technique: rows are resource-free and fill the gather lanes directly. */
 export const decorationSchema: TechniqueSchema<
@@ -194,23 +199,30 @@ function decorationProgram(
 }
 
 function codecSystemBuffers(transformMode: ThreeTransformMode) {
-  void transformMode;
-  return threeSystemBuffers;
+  return transformMode === 'indexed' ? threeSystemBuffers : { stableGlyphId: threeSystemBuffers.stableGlyphId };
 }
 
 /** Every Three program publishes its schema's buffers, then the Codec's own system buffers. */
 function programBuffers(schema: TechniqueSchemaMetadata, transformMode: ThreeTransformMode): CodecBuffer[] {
-  void transformMode;
   return [
     ...schemaCodecBuffers(schema),
-    occurrenceBuffer(),
+    stableGlyphIdBuffer(),
+    ...(transformMode === 'indexed' ? [transformIndexBuffer()] : []),
   ];
 }
 
-function occurrenceBuffer(): CodecBuffer {
+function transformIndexBuffer(): CodecBuffer {
   return {
-    id: OCCURRENCE_BUFFER_ID,
+    id: TRANSFORM_BUFFER_ID,
     scalar: 'u32',
-    vectorWidth: 4,
+    vectorWidth: 1,
+  };
+}
+
+function stableGlyphIdBuffer(): CodecBuffer {
+  return {
+    id: STABLE_GLYPH_BUFFER_ID,
+    scalar: 'u32',
+    vectorWidth: 1,
   };
 }

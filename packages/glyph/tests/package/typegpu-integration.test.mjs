@@ -9,7 +9,7 @@ import { msdf, msdfSchema } from '@pmndrs/glyph/raster/msdf';
 const fontBytes = await readFile(
   new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url),
 );
-globalThis.GPUBufferUsage ??= { VERTEX: 32, STORAGE: 128, COPY_DST: 8 };
+globalThis.GPUBufferUsage ??= { VERTEX: 32, COPY_DST: 8 };
 await glyph.init();
 
 // A recording host at the public config seam. The real engine authors all commands and bytes.
@@ -18,10 +18,9 @@ function recordingHost() {
   const recorded = [];
   const uploads = [];
   const stats = { allocations: 0, preparations: 0, reject: false };
-  function buffer(size, usage = 0) {
+  function buffer(size) {
     const value = {
       bytes: new Uint8Array(size),
-      usage,
       destroyed: false,
       destroy() {
         this.destroyed = true;
@@ -43,9 +42,9 @@ function recordingHost() {
       };
     },
     device: {
-      createBuffer({ size, usage }) {
+      createBuffer({ size }) {
         stats.allocations++;
-        return buffer(size, usage);
+        return buffer(size);
       },
       queue: {
         writeBuffer(target, offset, bytes) {
@@ -73,25 +72,15 @@ function recordingHost() {
     resolve: () =>
       resourceLease(
         {
-          prepare(buffers, placementTable, viewport, position, start, count) {
+          prepare(buffers, viewport, position, start, count) {
             stats.preparations++;
-            const occurrences = [...buffers.values()].find(
-              (buffer) => (buffer.usage & GPUBufferUsage.STORAGE) !== 0,
-            );
-            if (occurrences === undefined) throw new Error('missing TypeGPU occurrence storage');
             return {
               draw() {
-                const occurrenceRows = new DataView(occurrences.bytes.buffer, occurrences.bytes.byteOffset);
-                const rows = new DataView(placementTable.bytes.buffer, placementTable.bytes.byteOffset);
                 recorded.push({
                   // Compare raster inputs, not lifecycle-specific stable glyph identities.
                   buffers: Object.values(msdfSchema.buffers).map((declaration) => {
                     const stride = declaration.lanes.length * 4;
                     return buffers.get(declaration.id).bytes.slice(start * stride, (start + count) * stride);
-                  }),
-                  placements: Array.from({ length: count }, (_, index) => {
-                    const slot = occurrenceRows.getUint32((start + index) * 16 + 4, true);
-                    return [rows.getFloat32(slot * 8, true), rows.getFloat32(slot * 8 + 4, true)];
                   }),
                   position: [...position.value],
                   viewport: [...viewport.value],
@@ -174,7 +163,7 @@ test('localized TypeGPU edits retain GPU buffers and discard leaves accepted byt
     assert.equal(host.stats.preparations, preparationCount, 'unchanged draw bindings stay prepared');
     assert.ok(host.uploads.length > 0);
     assert.ok(
-      host.uploads.every((upload) => upload.length <= upload.capacity / 8),
+      host.uploads.every((upload) => upload.length < upload.capacity / 8),
       JSON.stringify(host.uploads),
     );
     t.diagnostic(

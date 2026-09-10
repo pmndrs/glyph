@@ -32,10 +32,10 @@ const portableCapabilities = Object.freeze({
   wholeBufferThresholdBasisPoints: 7_500,
 });
 const portableSystemBuffers = defineCodecBuffers({
-  occurrence: {
-    id: id.buffer('test.font-face-portable-config/occurrence'),
+  stableGlyphId: {
+    id: id.buffer('test.font-face-portable-config/stable-glyph'),
     scalar: 'u32',
-    lanes: ['stableGlyphId', 'placementSlot', 'transformIndex', 'foregroundRgba'],
+    lanes: ['stableGlyphId'],
   },
 });
 await glyph.init();

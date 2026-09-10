@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:4f637e1f225360b07f36876fda5169d44a992c746ed489e1bf6ddc3ce23a5962'
+source_digest: 'sha256:a0b905000d0748c187a30bf3b039dda0304ffc3bcdafeff47a6099ce49dcdb47'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1238,14 +1238,12 @@ legacy-bit-preserving transform: deterministic inline and block counterexamples 
 representation lab finds mismatches in every tested compact candidate. The active-resize benchmark alternates
 420/434-unit widths and fails on any zero-patch sample.
 
-Those counterexamples now close the old-bit question rather than indefinitely blocking additive placement. This
-pre-alpha package has no required numeric backward compatibility, so the cutover selects one new coordinate contract:
-derive fixed run-owned anchor-local geometry and slice placement in f64, narrow each component separately to f32, and
-apply the declared f32 addition order identically in CPU publication/queries and every renderer. CPU publication now
-reads the retained local rows and performs that same f32 addition for glyph origins and ink bounds. The previous ordered
-absolute-pen fold remains only test comparison evidence; no permanent absolute bypass or second production materializer
-exists. Admission requires a predeclared finite error bound, no new non-finite output, and
-accepted tiny-world, cancellation, large-coordinate, justification, and browser-pixel evidence.
+Those counterexamples close the old-bit question for the rejected indexed placement-table experiment. The package is
+pre-alpha and may deliberately repin its final coordinate arithmetic, but no new numeric contract is currently enabled.
+Production CPU publication and every renderer again consume the established absolute f32 origins produced by the
+ordered f64 positioning fold and one final narrow. A later direct-offset cutover must define one shared operation order,
+predeclare its finite error bound, and pass tiny-world, cancellation, large-coordinate, justification, and browser-pixel
+evidence before replacing that authority.
 
 Static local coordinates cannot be anchored to visual slices because width changes move dense-CJK slice boundaries. The
 exact anchor policy remains evidence-gated; an admissible bounded-local form may use fixed, break-independent numeric
@@ -1270,47 +1268,32 @@ it has an explicit occurrence model, and keeps 4,096 homogeneous CJK clusters in
 corpus reconstructs all 332 already-published f32 coordinates exactly from line and observable-slice anchors, but the
 f64 reassociation counterexamples remain authoritative for the future CPU cutover.
 
-The active cutover retains break-independent numeric blocks and compact placement segments in normal execution. Each
-segment owns one f64 `{inline, block}` translation in core; justification quotient/remainder, ordinals, class, role, and
-bidi state are not placement-row fields. The existing positioning traversal is the only arithmetic/emission walk. Sparse
-prose preserves stable word-root segments, while dense CJK keeps large `LayoutRun`s and segments only where displacement
-or numeric-block ownership changes. Visual spans retain L1/L2 and hanging/boundary ownership separately. Retained lines
-copy and rebind compact metadata transactionally instead of replaying glyph positioning.
+Break-independent numeric blocks, compact placement segments, and visual-span ownership remain test/kernel-lab proof
+state. They exercise the existing positioning traversal and keep justification, L1/L2, hanging, and boundary metadata in
+core, but release builds do not construct, reconcile, or publish that dormant state while it has no shipping consumer.
 
-Production run and placement identity are planner-scoped and transactional. A paragraph incarnation prevents a removed/recycled
-paragraph from aliasing its predecessor. Each retained run carries a nonzero canonical revision minted only after an
-exact comparison of its complete text-unit, shaping, cluster, glyph, and local-metric contents; no hash establishes
-equality. Paint, raster binding, placement, absolute offsets, and temporary source-run ordinals are excluded. A dense
-root-owned slot arena binds `{slot, generation}` only into staged cluster state, quarantines retirement through the
-renderer acknowledgement fence, and keeps retained-order reconciliation allocation-free after warmup. Width-only flow
-updates reuse the committed identity without re-running the deep comparison. A separate dense placement-slot arena applies
-the same commit/abort/acknowledgement discipline without conflating a run with one of its visual occurrences.
+The proof also retains planner-scoped run identity and canonical comparison machinery under test/kernel-lab compilation.
+It remains useful for validating split/merge, replacement-run, and acknowledgement behavior, but release width updates do
+not pay for run-slot reconciliation until an accepted publication representation needs it.
 
-The generated ABI now publishes a distinct per-physical-glyph placement slot and one program-independent session table.
-The renderer row is universally exactly f32x2 x/y; stable glyph identity remains an independent semantic lane. Ordered
-and stable planning write the occurrence at the existing physical record, and stable draws apply their existing logical-
-to-physical order lookup first. Neither run, segment, placement class, nor placement table enters `BatchKey`, primitive,
-span, or draw compatibility. Session writes are coalesced through retained committed bytes, so many nearby changed rows
-produce one bounded patch without duplicating the table per raster or material batch.
+The placement-slot/session-table ABI and renderer implementation were withdrawn before release. They preserved draw
+topology and reduced some writes, but added an occurrence lookup, slot lifetime, reconciliation, and CPU bookkeeping while
+still failing the end-to-end performance gate. The generated ABI, Codec contract, Three, and direct TypeGPU therefore use
+the established absolute origins again. TypeGPU remains a proof-of-concept and does not define a shared buffer limit.
 
-Three consumes the shared table through its retained storage/PBO path and applies the placement before Bitmap, MTSDF,
-Slug, and custom raster transforms. CPU stable-ID origin/geometry/copy addressing remains intact. Direct TypeGPU consumes
-the same ABI through its adapter-local storage layout and existing scene group; it remains a proof-of-concept and does not
-define a shared eight-buffer limit. The packaged TypeGPU application check and live WebGPU Bitmap/MTSDF/Slug probe pass,
-including its caller callback groups.
+The replacement direction keeps the existing batches, physical instances, order indirection, primitive spans, and draws.
+Core will expose a direct x/y occurrence offset through an engine-owned semantic placement seam; Codec authors describe
+glyph meaning and raster inputs, not slots, tables, bind groups, or backend memory layout. Each adapter may realize that
+engine-owned offset as the most suitable internal attribute or storage representation without changing the public Codec
+plan or creating a run/slice batch key.
 
-The maintained benchmark now declares the distinct per-glyph placement-slot output for Bitmap, MTSDF, and Slug and
-records every retained buffer's live/capacity bytes; earlier measurements that omitted that occurrence lane remain useful
-attribution history, not complete cutover costs. In this placement-slot-inclusive target, merging compatible post-shaping
-CJK runs reduced 22k ordered Bitmap active-resize from `4.178 / 4.305 ms` median/p95 to `3.590 / 3.940 ms` and reduced
-median writes from 143.1 KiB to 101.4 KiB. The shared x/y table fell from 58,592 to 15,968 bytes per update while the
-87,912-byte occurrence rewrite remained the dominant cost, and the one-primitive topology did not change. The matching
-22k Latin target measured `4.075 / 4.386 ms` with 39.8 KiB median writes. Latin's
-only width-update patch is the shared x/y table because
-stable word-root occurrence slots survive reflow. Against the older PR #172 absolute-placement timing, the current target
-is 1.5% faster at the Latin median and 0.5% slower at the CJK median, but those comparisons cross publication contracts and are
-directional rather than release gates. Milestone 12.2 remains active until consolidated package/release and browser gates
-close.
+The withdrawn placement-slot target remains useful negative evidence: it reduced some publication bytes but stayed slower
+than the applicable baseline, so fewer bytes alone did not justify its additional state. After removing its release-path
+bookkeeping while retaining proof coverage, the exact 22k ordered Bitmap active-resize harness measures `3.953 / 3.975 ms`
+for Latin and `3.141 / 3.167 ms` for dense CJK on the reference M4 host. The same-run main medians are `3.801 ms` and
+`2.985 ms`; the cleanup therefore recovers most of the experimental regression but remains `4.0%` and `5.2%` slower.
+Both paths still publish the baseline 170.4/171.7 KiB of absolute origins. These numbers are a cleanup checkpoint, not a
+speed claim; the direct x/y occurrence path must beat this baseline without changing draws.
 
 The benchmark also owns a `position-query` case that runs the same break-changing flow and positioning tail through the
 borrowed-layout mask while excluding gather, plan compilation, publication, and inspection copies. On the pinned M4 host,
@@ -1321,13 +1304,9 @@ changing RTL/fallback lookup. The matching complete 22k active-resize path impro
 and from `3.650` to `3.607 ms` for dense CJK. Embedding each retained local raster origin in the existing 64-byte
 `LayoutGlyph` row then removed two parallel per-glyph vectors and their retained-copy/gather traffic. On the exact rebuilt
 source, complete Latin measured `3.864 / 3.994 ms` median/p95 and dense CJK measured `3.195 / 3.218 ms`, with low
-`2.21% / 1.23%` relative standard deviation. This confirms that duplicate origin storage materially amplified the dense
-CJK regression, but compressed placement construction and reconciliation remain unfinished CPU work. A placement-arena reuse fast
-path separately restores unchanged no-op updates from `0.004–0.005 ms` to `0.001 ms`; it does not improve changed-width
-frames. The updated 22k target still trails frozen main by `2.5%` for Latin and `7.4%` for dense CJK (`3.769 ms` and the
-clean `2.974 ms` CJK pass) while writing 39.8 KiB and 101.4 KiB instead of 170.4 KiB and 171.7 KiB. These are actionable
-attribution results, not an accepted performance gate: CPU bookkeeping still outweighs the reduced upload bytes, especially
-for dense CJK.
+`2.21% / 1.23%` relative standard deviation. This confirmed that duplicate origin storage materially amplified the dense
+CJK regression, but the subsequently withdrawn placement-table design still did not beat the same-contract baseline.
+Those measurements remain attribution history rather than the current package state.
 
 [^slug-shader-core]: The directory is the single renderer-independent expression of the analytic Slug fill algorithm.
 

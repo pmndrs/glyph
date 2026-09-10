@@ -26,7 +26,6 @@ pub struct PlanGlyph {
 #[derive(Clone, Copy)]
 pub struct PlanInput<'a> {
     pub glyphs: &'a [PlanGlyph],
-    pub placement_slots: &'a [u32],
     pub semantic_change_masks: &'a [u16],
     pub f32_fields: &'a [&'a [f32]],
     pub u32_fields: &'a [&'a [u32]],
@@ -37,15 +36,6 @@ pub struct PlanInput<'a> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlanInputError {
     InvalidShape,
-}
-
-impl PlanInput<'_> {
-    pub(crate) fn placement_slot(self, index: usize) -> Result<u32, PlanInputError> {
-        self.placement_slots
-            .get(index)
-            .copied()
-            .ok_or(PlanInputError::InvalidShape)
-    }
 }
 
 pub fn span_bounds(glyphs: &[PlanGlyph]) -> Result<(f32, f32, f32, f32), PlanInputError> {

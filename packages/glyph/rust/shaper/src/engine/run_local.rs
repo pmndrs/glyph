@@ -103,11 +103,13 @@ impl RunLocalArena {
         &self.rows
     }
 
+    #[cfg(test)]
     pub(crate) fn row_for_source_glyph(&self, source_glyph: u32) -> Option<&RunLocalGlyph> {
         let row = *self.source_rows.get(usize::try_from(source_glyph).ok()?)?;
         self.rows.get(usize::try_from(row).ok()?)
     }
 
+    #[cfg(test)]
     pub(crate) fn row_for_source_order_glyph(&self, source_glyph: u32) -> Option<&RunLocalGlyph> {
         let index = usize::try_from(source_glyph).ok()?;
         let row = self.rows.get(index)?;

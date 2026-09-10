@@ -1130,6 +1130,7 @@ impl ClusterArena {
         &self.layout_runs.runs
     }
 
+    #[cfg(test)]
     pub(crate) fn run_local(&self) -> &RunLocalArena {
         &self.run_local
     }
