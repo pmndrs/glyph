@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:7f2825d23064a38006269ef23ed2cbceeb80854418543e4fb6964637ec36afd6'
+source_digest: 'sha256:c9a34a6284740855b552eaadc145541e58c2cdb50ff9ca7d05e82ed5e7400048'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1336,6 +1336,13 @@ faster at the Latin median and 23.2% faster at the CJK median, with 22.4% and 23
 active-resize sample still emits one unchanged f32x2 direct-offset patch—174,440 bytes for Latin and 175,824 bytes for
 CJK—so these results establish a CPU positioning win, not the final compact-publication result. The full direct occurrence
 upload remains the next transfer frontier; it is not a missing Three range-update optimization.
+
+The maintained `adopt-position-query` case prepares borrowed-layout positioning before timing the remaining transaction.
+For the same final Latin fixture, measurement is `0.220 / 0.227 ms`, measurement plus positioning is
+`1.222 / 1.248 ms`, and adoption plus retained gather, plan compilation, and publication is `1.655 / 1.688 ms`. The
+dense-CJK publication tail is `0.973 / 0.998 ms`. These phases explain the complete median rather than forming a second
+layout path: direct offset publication is about 58% of the Latin total, per-glyph positioning about 35%, and line fitting
+about 8% after rounding.
 
 The current renderer contract is exercised as product code rather than a synthetic placement graph. Direct TypeGPU
 renders Bitmap/MSDF/Slug through project Chromium WebGPU with nonzero-alpha counts `2148/2010/1992`. Native Three TSL and

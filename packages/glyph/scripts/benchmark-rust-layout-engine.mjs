@@ -178,7 +178,12 @@ function measureWarm(name) {
         ...common,
         geometry: rustLayoutBenchmarkGeometry(name, index, baseGeometry),
       });
-    } else if (name === 'measure-query' || name === 'position-query' || name === 'adopt-measure-query') {
+    } else if (
+      name === 'measure-query' ||
+      name === 'position-query' ||
+      name === 'adopt-measure-query' ||
+      name === 'adopt-position-query'
+    ) {
       bytes = updateBytes({
         ...common,
         geometry: rustLayoutBenchmarkGeometry('active-column-resize', index, baseGeometry),
@@ -186,13 +191,13 @@ function measureWarm(name) {
       const queryBytes = bytes.slice();
       new DataView(queryBytes.buffer).setUint32(
         abi.layouts.engineUpdateRequest.semanticViewMask,
-        name === 'position-query'
+        name === 'position-query' || name === 'adopt-position-query'
           ? abi.engine.semanticViewMasks.borrowedLayout
           : abi.engine.semanticViewMasks.measurement,
         true,
       );
-      if (name === 'adopt-measure-query') {
-        execute(queryBytes, index < options.warmup, `adopt-measure-query.prepare[${index}]`, 1);
+      if (name === 'adopt-measure-query' || name === 'adopt-position-query') {
+        execute(queryBytes, index < options.warmup, `${name}.prepare[${index}]`, 1);
       } else {
         bytes = queryBytes;
       }
@@ -476,7 +481,7 @@ function printReport(caseReports) {
     'position-query adds only the positioning tail to the same synchronous query through borrowed-layout mode: no gather, plan, publication, or inspection copy.',
   );
   console.log(
-    'adopt-measure-query times only adoption, gather, plan compilation, and publication after the same measure query prepared flow and positioning.',
+    'adopt-measure-query includes the positioning tail plus adoption, gather, plan compilation, and publication after measurement prepared flow only; adopt-position-query isolates adoption, gather, plan compilation, and publication after borrowed-layout prepared positioning.',
   );
   console.log(
     'publish-measurement and publish-inspection isolate semantic-sidecar overhead against the otherwise identical no-op publication.',
