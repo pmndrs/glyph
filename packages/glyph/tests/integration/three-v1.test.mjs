@@ -3063,7 +3063,6 @@ test('Text.withGlyphs demand-reads scalar records only inside one synchronous bo
   const owned = label.glyphs();
   instrumentedGlyph.reset();
   let escaped;
-  const answer = Object.freeze({ answer: 42 });
   const returned = label.withGlyphs((layout) => {
     escaped = layout;
     assert.equal(layout.glyphCount, owned.glyphCount);
@@ -3088,10 +3087,9 @@ test('Text.withGlyphs demand-reads scalar records only inside one synchronous bo
     assert.throws(() => label.set({ text: 'reentrant mutation' }), /cannot be reentered/);
     assert.throws(() => label.measure(), /cannot be reentered/);
     assert.throws(() => glyph.shape(), /cannot be reentered/);
-    return answer;
   });
 
-  assert.equal(returned, answer, 'the callback result retains its identity');
+  assert.equal(returned, undefined, 'a read-only borrow has no presentation result');
   assert.equal(instrumentedGlyph.latestSemanticRecordCount, 0, 'borrow setup serializes no semantic records');
   assert.equal(instrumentedGlyph.borrowedGlyphReads, 2, 'only explicitly selected glyphs cross the Wasm ABI');
   assert.equal(label.text, 'Borrowed glyph records wrap across two lines');
@@ -3111,6 +3109,197 @@ test('Text.withGlyphs demand-reads scalar records only inside one synchronous bo
   assert.throws(() => label.withGlyphs(async () => 42), /must answer synchronously/);
   label.text = 'mutation succeeds after borrow release';
   assert.equal(label.measure().glyphCount, 38);
+
+  label.dispose();
+  font.dispose();
+});
+
+test('Text.withGlyphs installs live local matrices without reshaping later frames', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const label = three.createText({ font, text: 'Live glyphs' });
+  scene.add(label);
+  glyph.shape();
+  scene.updateMatrixWorld(true);
+
+  const baselineBytes = three.gpuBytes;
+  const targetX = [];
+  label.withGlyphs((layout) => {
+    const matrices = [];
+    for (let index = 0; index < layout.glyphCount; index += 1) {
+      const glyphRecord = layout.glyphAt(index);
+      targetX.push(glyphRecord.x + 10);
+      matrices.push(new THREE.Matrix4().makeTranslation(glyphRecord.x + 10, -glyphRecord.y, index * 0.01));
+    }
+    return matrices;
+  });
+  glyph.shape();
+  scene.updateMatrixWorld(true);
+
+  assert.ok(three.gpuBytes > baselineBytes, 'matrix storage is allocated only after deformation is activated');
+  const transformed = label.measureGlyphs();
+  assert.ok(transformed);
+  for (const [index, measurement] of transformed.entries()) {
+    assert.equal(measurement.drawnOrigin.x, targetX[index]);
+    assert.equal(measurement.drawnOrigin.z, Math.fround(index * 0.01));
+  }
+  const attributes = new Set(
+    rootDraws(scene)
+      .map((draw) => draw.geometry.getAttribute('_pmndrsGlyphInstanceTransforms'))
+      .filter(Boolean),
+  );
+  assert.ok(
+    attributes.size > 0,
+    `live glyph draws capture renderer-owned matrix storage: ${JSON.stringify(
+      rootDraws(scene).map((draw) => Object.keys(draw.geometry.attributes)),
+    )}`,
+  );
+  const liveDraw = rootDraws(scene)[0];
+  assert.ok(liveDraw);
+  for (const backend of ['webgpu', 'webgl2']) {
+    const vertex = compileNodeMaterial(liveDraw, { backend }).vertex;
+    assert.ok(vertex.length > 0, `${backend} compiles the live matrix lookup`);
+  }
+
+  const crossings = instrumentedGlyph.crossings;
+  label.withGlyphs((layout) => {
+    const matrices = [];
+    for (let index = 0; index < layout.glyphCount; index += 1) {
+      const glyphRecord = layout.glyphAt(index);
+      matrices.push(new THREE.Matrix4().makeTranslation(glyphRecord.x + 20, -glyphRecord.y, 0));
+    }
+    return { space: 'local', matrices };
+  });
+  assert.equal(instrumentedGlyph.crossings, crossings, 'an active deformation does not publish another shape frame');
+  assert.ok(
+    [...attributes].every((attribute) => attribute.updateRanges.length > 0),
+    'later matrix writes mark bounded storage ranges',
+  );
+  assert.equal(label.measureGlyphs()?.[0]?.drawnOrigin.x, targetX[0] + 10);
+
+  const unchangedVersions = new Map();
+  for (const attribute of attributes) {
+    attribute.clearUpdateRanges();
+    unchangedVersions.set(attribute, attribute.version);
+  }
+  label.withGlyphs((layout) => ({
+    space: 'local',
+    matrices: Array.from({ length: layout.glyphCount }, (_, index) => {
+      const glyphRecord = layout.glyphAt(index);
+      return new THREE.Matrix4().makeTranslation(glyphRecord.x + 20, -glyphRecord.y, 0);
+    }),
+  }));
+  for (const attribute of attributes) {
+    assert.equal(attribute.version, unchangedVersions.get(attribute), 'unchanged matrices do not dirty storage');
+    assert.equal(attribute.updateRanges.length, 0, 'unchanged matrices schedule no upload range');
+  }
+  label.withGlyphs((layout) => ({
+    space: 'local',
+    matrices: Array.from({ length: layout.glyphCount }, (_, index) => {
+      const glyphRecord = layout.glyphAt(index);
+      return new THREE.Matrix4().makeTranslation(glyphRecord.x + (index === 0 ? 21 : 20), -glyphRecord.y, 0);
+    }),
+  }));
+  assert.equal(
+    [...attributes].reduce(
+      (total, attribute) => total + attribute.updateRanges.reduce((sum, range) => sum + range.count, 0),
+      0,
+    ),
+    16,
+    'one changed glyph uploads one matrix row even though the callback returns the complete index domain',
+  );
+
+  assert.throws(
+    () => label.withGlyphs(() => []),
+    /returned 0 matrices/u,
+    'a deformation result must cover the current glyph index domain exactly',
+  );
+  assert.throws(
+    () =>
+      label.withGlyphs((layout) => {
+        const matrix = new THREE.Matrix4();
+        matrix.elements[3] = 0.25;
+        return Array.from({ length: layout.glyphCount }, () => matrix);
+      }),
+    /must be affine/u,
+    'projective matrices cannot silently lose their homogeneous coordinate',
+  );
+  let paragraphTarget;
+  label.withGlyphs((layout) => {
+    const matrices = [];
+    for (let index = 0; index < layout.glyphCount; index += 1) {
+      const glyphRecord = layout.glyphAt(index);
+      paragraphTarget ??= { x: glyphRecord.x + 2, y: glyphRecord.y + 3 };
+      matrices.push(new THREE.Matrix4().makeTranslation(glyphRecord.x + 2, glyphRecord.y + 3, 0));
+    }
+    return { space: 'paragraph', matrices };
+  });
+  const paragraphMeasurement = label.measureGlyphs()?.[0];
+  assert.equal(paragraphMeasurement?.drawnOrigin.x, paragraphTarget.x);
+  assert.equal(paragraphMeasurement?.drawnOrigin.y, -paragraphTarget.y);
+
+  label.position.set(5, 7, 0);
+  scene.updateMatrixWorld(true);
+  label.withGlyphs((layout) => ({
+    space: 'world',
+    matrices: Array.from({ length: layout.glyphCount }, (_, index) =>
+      new THREE.Matrix4().makeTranslation(100 + index, 50, 2),
+    ),
+  }));
+  const firstWorld = label.measureGlyphs()?.[0]?.originalMatrix.clone().premultiply(label.matrixWorld);
+  assert.deepEqual(firstWorld?.elements.slice(12, 15), [100, 50, 2]);
+  for (const attribute of attributes) attribute.clearUpdateRanges();
+  scene.updateMatrixWorld(true);
+  assert.ok(
+    [...attributes].every((attribute) => attribute.updateRanges.length === 0),
+    'an unchanged world transform schedules no matrix upload',
+  );
+  label.position.x += 10;
+  scene.updateMatrixWorld(true);
+  const movedWorld = label.measureGlyphs()?.[0]?.originalMatrix.clone().premultiply(label.matrixWorld);
+  assert.deepEqual(movedWorld?.elements.slice(12, 15), [100, 50, 2]);
+
+  label.clearGlyphTransforms();
+  assert.equal(label.measureGlyphs()?.[0]?.drawnOrigin.x, label.glyphs().x[0]);
+  label.dispose();
+  font.dispose();
+});
+
+test('live glyph transforms follow positional indexes across accepted topology', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const label = three.createText({ font, text: 'AB' });
+  scene.add(label);
+  glyph.shape();
+
+  label.withGlyphs((layout) =>
+    Array.from({ length: layout.glyphCount }, (_, index) =>
+      new THREE.Matrix4().makeTranslation(20 + index * 20, 5, index),
+    ),
+  );
+  glyph.shape();
+  assert.deepEqual(
+    label.measureGlyphs()?.map(({ drawnOrigin }) => drawnOrigin.x),
+    [20, 40],
+  );
+
+  label.text = 'CD';
+  glyph.shape();
+  assert.deepEqual(
+    label.measureGlyphs()?.map(({ drawnOrigin }) => drawnOrigin.x),
+    [20, 40],
+    'the same accepted count reapplies matrices by the new visual index',
+  );
+
+  label.text = 'CDE';
+  glyph.shape();
+  assert.deepEqual(
+    label.measureGlyphs()?.map(({ drawnOrigin }) => drawnOrigin.x),
+    Array.from(label.glyphs().x),
+    'a changed index domain retires the stale exact-length override',
+  );
 
   label.dispose();
   font.dispose();

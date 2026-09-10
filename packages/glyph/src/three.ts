@@ -50,6 +50,9 @@ export type {
   TextGroupOptions,
   TextProperties,
   TextUpdate,
+  ThreeGlyphTransformResult,
+  ThreeGlyphTransforms,
+  ThreeGlyphTransformSpace,
 } from './three/text.js';
 export { Glyphs, localToWorldMatrix, worldToLocalMatrix } from './three/glyphs.js';
 export type { DetachedGlyph } from './three/glyphs.js';
