@@ -33,8 +33,11 @@ pub(crate) struct NumericBlock {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct RunLocalGlyph {
+    #[cfg(any(test, feature = "kernel-lab"))]
     pub source_glyph: u32,
+    #[cfg(any(test, feature = "kernel-lab"))]
     pub block_index: u32,
+    #[cfg(any(test, feature = "kernel-lab"))]
     pub pen_inline: f64,
     pub inline_origin: f32,
     pub block_origin: f32,
@@ -100,9 +103,9 @@ impl RunLocalArena {
         &self.rows
     }
 
-    pub(crate) fn row_for_source_glyph(&self, source_glyph: u32) -> Option<RunLocalGlyph> {
+    pub(crate) fn row_for_source_glyph(&self, source_glyph: u32) -> Option<&RunLocalGlyph> {
         let row = *self.source_rows.get(usize::try_from(source_glyph).ok()?)?;
-        self.rows.get(usize::try_from(row).ok()?).copied()
+        self.rows.get(usize::try_from(row).ok()?)
     }
 
     #[cfg_attr(not(test), allow(dead_code))]
@@ -414,6 +417,7 @@ struct RawGlyph {
 #[derive(Clone, Copy)]
 struct PendingGlyph {
     source_glyph: u32,
+    #[cfg(any(test, feature = "kernel-lab"))]
     pen_inline: f64,
     inline_origin: f64,
     block_origin: f64,
@@ -445,6 +449,7 @@ impl RawGlyph {
         }
         Ok(PendingGlyph {
             source_glyph: self.source_glyph,
+            #[cfg(any(test, feature = "kernel-lab"))]
             pen_inline,
             inline_origin,
             block_origin: self.block_origin,
@@ -465,9 +470,14 @@ impl PendingGlyph {
         anchor_inline: f64,
         anchor_block: f64,
     ) -> Result<RunLocalGlyph, RunLocalBuildError> {
+        #[cfg(not(any(test, feature = "kernel-lab")))]
+        let _ = block_index;
         Ok(RunLocalGlyph {
+            #[cfg(any(test, feature = "kernel-lab"))]
             source_glyph: self.source_glyph,
+            #[cfg(any(test, feature = "kernel-lab"))]
             block_index,
+            #[cfg(any(test, feature = "kernel-lab"))]
             pen_inline: self.pen_inline,
             inline_origin: local_f32(self.inline_origin - anchor_inline)?,
             block_origin: local_f32(self.block_origin - anchor_block)?,

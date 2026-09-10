@@ -2,6 +2,15 @@
 
 ## 2026-09-09
 
+- **Isolated the remaining LayoutRun CPU regression** — Added a maintained `position-query` benchmark that includes the
+  break-changing flow and positioning tail but excludes gather, plan compilation, publication, and inspection copies. At
+  623 rendered Bitmap glyphs the frozen main baseline measured `0.061 ms`; the initial cutover measured `0.109 ms`, and
+  compacting the shipping run-local row recovered only `0.004 ms`. The complete active-resize path remains `0.160 ms`
+  versus main's `0.102–0.105 ms`, proving the current regression is placement-sidecar construction rather than renderer
+  upload volume. A separate unchanged-publication fast path restored no-op updates to `0.001 ms`, while current 22k
+  Latin/CJK runs remained slower than main despite reducing writes from 170.4/171.7 KiB to 39.8/101.4 KiB. Milestone
+  12.2 therefore remains active; these numbers guide the next structural optimization and are not release acceptance.
+
 - **Corrected the external Three raster gate** — Direct `TextGroup.updateMatrixWorld()` now observes and publishes a
   changed finite group render order without requiring a full Scene traversal; unchanged traversal remains inert. The
   external raster browser proof now exercises the current root-level publication contract—`TextGroup.renderOrder`
