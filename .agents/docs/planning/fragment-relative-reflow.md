@@ -135,6 +135,13 @@ record the then-current remote commit and artifact hashes immediately before imp
 The first milestone must reproduce these numbers and attribute the current total. If attribution contradicts this
 model, stop and revise this plan before changing the ABI.
 
+The first frozen M0 run built the unchanged product source at `2094243668bcf5462cff0ac3b1f7faf52cba3b6c` with explicit
+production SIMD. Its `text-shaper.wasm` is 1,205,265 bytes with SHA-256
+`27c5dc5c8555506211c01f99040ef1210a34992e5a70a75ad758cd6ba816fd55`. On this machine, 22k Bitmap column resize measured
+`1.144 / 3.605 ms` aggregate median/p95; the 54 of 101 samples that actually published the 174,440-byte plan measured
+`1.493 / 3.743 ms`. The paired measurement-only lane measured `0.192 / 0.226 ms`. These are an attribution checkpoint,
+not the required three-round baseline or a merge claim.
+
 ## Compatibility with the merged engine
 
 This is a factoring of the post-shaping positioning/publication tail, not another text engine. Preserve these merged
@@ -590,6 +597,14 @@ Three TSL and Three TypeGPU-backed shaders already have indexed-storage preceden
 WebGL2 PBO/texture limits. Base `/typegpu` must separately prove storage usage, bind-group ownership, instance-index
 access, and buffer-limit headroom before it migrates. It has no decoration renderer today and this plan does not imply
 one. No adapter owns a second layout model, and the new placement table must preserve existing scene draw counts.
+
+The source audit fixes the first representation experiment: direct `/typegpu` Slug already occupies all eight declared
+Codec buffer slots, so placement belongs to paragraph/session storage rather than another technique buffer. Three and
+direct TypeGPU currently realize each display-list span as a draw, so slices cannot become spans; one branch-free logical
+instance-to-slice lookup must preserve coalescing. At 22k capacity, Three WebGL2 pads storage to 22,016 records and uploads
+the complete dirty PBO texture: 176,128 bytes for an f32x2 row and 352,256 bytes for f32x4. M1 therefore compares packed
+u32 occurrence maps plus session placement, including the whole padded transfer, rather than pricing the 8-byte placement
+row alone. These are feasibility inputs; no wire representation is accepted yet.
 
 ## Milestones and commit boundaries
 
