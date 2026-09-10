@@ -189,9 +189,12 @@ plan into this mapper. Boundary replacement is rejected until replacement occurr
 M1 established the topology, numeric counterexamples, and renderer feasibility evidence. The indexed M2/M3
 placement-slot/session-table candidate was then implemented and rejected: it preserved draws and reduced some writes but
 remained slower than the same-contract baseline and exposed backend allocation details too high in the Codec contract.
-Production has returned to absolute origins while the core segment/numeric proof remains test/kernel-lab only. The next
-candidate is a direct engine-owned x/y occurrence offset aligned with existing physical glyph records; it must preserve
-batch/draw topology and hide backend memory layout from Codec authors.
+The replacement now retains run-local geometry and compact placement segments in production, while an engine-owned direct
+x/y occurrence offset travels in the existing physical glyph records. Codec authors do not declare that system field or
+its backend memory layout, and batches, physical instances, order indirection, primitives, spans, and draws remain
+unchanged. The current retained width path reuses static glyph/raster/effect rows and recomputes dynamic placement plus
+absolute CPU query coordinates; it still publishes one f32x2 offset per rendered glyph, so compact segment publication
+remains the next byte-reduction step.
 
 ## Compatibility with the merged engine
 
@@ -781,10 +784,11 @@ deltas from the old oracle stay inside a predeclared bound; pixel evidence is ac
 and CJK mapping, per-technique bytes, buffer lifetime, and regression gates pass. Otherwise revise the one new contract
 before touching the ABI; do not activate an absolute compatibility path.
 
-### M2 — core proof beside the absolute-position oracle
+### M2 — retained core state beside the absolute-query oracle
 
-- Retain break-independent numeric blocks and compact placement-segment/visual-span SoA state under test/kernel-lab
-  compilation while the existing absolute glyph output remains the only production publication and renderer input.
+- Retain break-independent numeric blocks and compact placement-segment/visual-span state in production. CPU semantic and
+  query output keeps its absolute coordinate surface, while renderer placement consumes the engine-owned direct f32x2
+  occurrence offset derived from the same local-plus-placement authority.
 - Populate that state from the single existing positioning traversal. Do not add a parallel placement walk or duplicate
   justification arithmetic; segment translation is exactly f64 inline/block and all role, bidi, block, and justification
   metadata remains outside the renderer row.
@@ -794,30 +798,30 @@ before touching the ABI; do not activate an absolute compatibility path.
   if compact validation fails, use the same normal positioning traversal, not a second rematerializer.
 - Keep every rendered glyph mapped to exactly one segment while outline-less semantic glyphs, glyphless clusters, hard
   breaks, and boundary replacement retain explicit source ownership without fabricating instances.
-- Keep the prior first-party glyph-wide materializer only as a test oracle for topology and measured numeric/pixel delta;
-  do not ship two first-party width paths.
+- Keep comparison arithmetic only as a test oracle for topology and measured numeric/pixel delta; do not ship two
+  first-party width paths.
 - Preserve shaping, local edits, font-size invalidation, ellipsis boundary shaping, commit/abort, and identity semantics.
   Prove a paint/material/raster/decorating-only update changes render/decor spans without changing `LayoutRun` or
   placement identity/revisions.
 
-Exit: compact core state is total over the existing behavior matrix, exact current absolute output remains unchanged,
-retained resolution is bounded and steady state is allocation-free after warmup. The checkpoint makes no performance
-claim until M3 removes absolute publication and a warmed width change writes zero static glyph bytes.
+Exit: compact core state is total over the existing behavior matrix, CPU query output and renderer output agree under the
+re-pinned operation order, and retained resolution is bounded and allocation-stable after warmup. A warmed width change
+must reuse static glyph/raster/effect state before the final compact-publication checkpoint claims zero static writes.
 
-### M3 — atomic core, ABI, query, and renderer cutover
+### M3 — atomic direct-offset ABI, query, and renderer cutover
 
-- Add the new per-program run/line inputs and paragraph/session-scoped placement buffers.
-- Define numeric wire representation, change-mask semantics, buffer IDs, capacities, range jobs, patches,
-  acknowledgement, and retirement in the generated contract.
+- Add the hidden engine-owned direct f32x2 occurrence input after portable raster Codec authoring; adapters own its
+  physical attribute/storage packing and no run/line/placement-table field enters the public Codec plan.
+- Define numeric wire representation, change-mask semantics, capacities, range jobs, patches, acknowledgement, and
+  retirement in the generated contract without changing batch or draw identity.
 - Publish static glyph-local/numeric-block/run-slot records only on topology or local-geometry changes, never visual-slice
   boundary changes.
 - Publish placement, visual-order, and decoration patches on width changes.
-- Teach the generic realization boundary to bind local glyph data and the run/line tables.
+- Teach the generic realization boundary to combine local glyph data with the direct x/y occurrence offset.
 - Migrate Bitmap, MTSDF, Slug, decoration, and custom program registration across `/three` and `/three/typegpu`.
-- Migrate base `/typegpu` Bitmap/MTSDF/Slug in the same tip, using either the shared indexed encoding or an adapter-specific
-  resource encoding validated in M1 against the production callback and baseline-device contract; both derive from the
-  same core authority and it still has no decoration path. If neither encoding passes, M3 and the production cutover do
-  not land.
+- Migrate base `/typegpu` Bitmap/MTSDF/Slug in the same tip using adapter-owned storage or instance packing validated
+  against the production callback and baseline-device contract. TypeGPU remains a proof-of-concept and does not dictate
+  the shared Codec memory layout; it still has no decoration path.
 - Migrate `snapshotGlyphOrigins`, Three `glyphPlacements`, bounds/raycast/caret/selection queries, generated validators,
   `material-realizer.ts`, and `registerThreeRasterProgram` in the same tip.
 - Preserve custom material override semantics and package optional-dependency/tree-shaking boundaries.

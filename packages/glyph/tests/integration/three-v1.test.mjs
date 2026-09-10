@@ -3068,8 +3068,8 @@ test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async (t) 
   assert.equal(inspection.clusters.at(-1), 3, 'the ellipsis is anchored at the truncation boundary');
   assert.deepEqual([...inspection.glyphIds], [61, 2613, 2598, 6597]);
   assert.deepEqual([...inspection.clusters], [2, 1, 0, 3]);
-  // CPU inspection and the renderer share the absolute f64-to-f32 publication authority.
-  assert.deepEqual([...inspection.x], [0.23200830817222595, 10.808008193969727, 18.376008987426758, 23.91200828552246]);
+  // CPU inspection and the renderer share the declared local-plus-offset f32 placement authority.
+  assert.deepEqual([...inspection.x], [0.2320079803466797, 10.808008193969727, 18.376007080078125, 23.91200828552246]);
 
   label.dispose();
   font.dispose();

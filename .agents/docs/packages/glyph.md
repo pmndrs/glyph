@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:7988d1b075d82f6dc451184f67f9573693ed34636dbcf5d862d65269832fffc7'
+source_digest: 'sha256:6d042f874276bae166208b704f3afd3b9fd796f02b504f1c1a206a31863e9f09'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1270,22 +1270,30 @@ it has an explicit occurrence model, and keeps 4,096 homogeneous CJK clusters in
 corpus reconstructs all 332 already-published f32 coordinates exactly from line and observable-slice anchors, but the
 f64 reassociation counterexamples remain authoritative for the future CPU cutover.
 
-Break-independent numeric blocks, compact placement segments, and visual-span ownership remain test/kernel-lab proof
-state. They exercise the existing positioning traversal and keep justification, L1/L2, hanging, and boundary metadata in
-core, but release builds do not yet construct or reconcile that compact state. The shipping direct-offset buffer is still
-expanded from absolute positioned glyph rows, so width changes retain the prior 8-byte-per-glyph publication and the
-compact CPU/publication cut remains open.
+Break-independent numeric blocks and compact placement segments are now production-owned and populated by the single
+positioning traversal. Justification, L1/L2, hanging, boundary ownership, and exact f64 translation remain in core; only
+the resolved x/y offset reaches a renderer. CPU semantic/query rows still publish absolute coordinates from the same
+local-plus-offset operation. Visual-span proof rows and planner-scoped run handles remain test/kernel-lab evidence because
+the direct-offset renderer contract does not consume indexed run identity.
 
-Retained gather has one guarded position-only path: it resolves the changed Codec buffer dependencies first and updates
-semantic position inputs plus CPU ink bounds in place only when every required input is semantic and storage topology is
-unchanged. Font selection, raster resources, and full `PlanGlyph` reconstruction are skipped in that case; all other
-changes use the general gather authority. Paired 22k ordered Bitmap adoption-only samples improved by about 1–3%, while
-the unchanged 170.4 KiB f32x2 write confirms that this is a bounded CPU improvement rather than the final compact
-publication result.
+Retained geometry-only positioning has a matching guarded path for visually trivial, boundary-free, undecorated text. It
+reuses committed glyph-local, raster, and effect rows, walks the existing positioning authority only to rebuild compact
+placement and absolute CPU query coordinates, and refreshes clip, region, thread, and transform metadata. Stable/glyph/font
+identity and exact outline presence authenticate the retained rows; any mismatch aborts the candidate. Retained gather
+then resolves changed Codec dependencies and updates semantic position inputs plus CPU ink bounds without repeating font
+selection, raster resource lookup, or full `PlanGlyph` construction. Other changes use the general authorities.
 
-The proof also retains planner-scoped run identity and canonical comparison machinery under test/kernel-lab compilation.
-It remains useful for validating split/merge, replacement-run, and acknowledgement behavior, but release width updates do
-not pay for run-slot reconciliation until an accepted publication representation needs it.
+Two 31-sample ordered Bitmap repeats on the pinned M4 host pool to `3.237 / 3.377 ms` median/p95 for 21,805 Latin glyphs
+and `2.493 / 2.583 ms` for 21,978 dense-CJK glyphs. The exact main comparison measured `3.769 / 3.852 ms` for Latin and
+a `3.091 ms` pooled CJK median; one noisy main CJK pass prevents a useful pooled p95 comparison. The retained candidate is
+therefore 14.1% faster at the Latin median and 19.4% faster at the CJK median. Its isolated 21,805-glyph positioning query
+measures `1.447 / 1.498 ms`. Every active-resize sample still emits one unchanged f32x2 direct-offset patch—174,440 bytes
+for Latin and 175,824 bytes for CJK—so these results establish a CPU positioning win, not the final compact-publication
+result.
+
+Planner-scoped run identity and canonical comparison remain test/kernel-lab execution. They validate split/merge,
+replacement-run, and acknowledgement behavior, but release width updates do not pay for run-slot reconciliation because
+the accepted direct-offset publication does not expose indexed run handles.
 
 The placement-slot/session-table ABI and renderer implementation were withdrawn before release. They preserved draw
 topology and reduced some writes, but added an occurrence lookup, slot lifetime, reconciliation, and CPU bookkeeping while
@@ -1303,12 +1311,10 @@ engine-owned offset as the most suitable internal attribute or storage represent
 plan or creating a run/slice batch key.
 
 The withdrawn placement-slot target remains useful negative evidence: it reduced some publication bytes but stayed slower
-than the applicable baseline, so fewer bytes alone did not justify its additional state. After removing its release-path
-bookkeeping while retaining proof coverage, the exact 22k ordered Bitmap active-resize harness measures `3.953 / 3.975 ms`
-for Latin and `3.141 / 3.167 ms` for dense CJK on the reference M4 host. The same-run main medians are `3.801 ms` and
-`2.985 ms`; the cleanup therefore recovers most of the experimental regression but remains `4.0%` and `5.2%` slower.
-Both paths still publish the baseline 170.4/171.7 KiB of absolute origins. These numbers are a cleanup checkpoint, not a
-speed claim; the direct x/y occurrence path must beat this baseline without changing draws.
+than the applicable baseline, so fewer bytes alone did not justify its additional state. Its earlier cleanup checkpoint
+still ran 4–5% slower than main while publishing the baseline 170.4/171.7 KiB. The retained-static direct-offset path above
+now beats that baseline without changing draws; the remaining byte frontier is to serialize compact offsets without
+turning run, word, block, segment, or slice identity into a renderer-visible key.
 
 The benchmark also owns a `position-query` case that runs the same break-changing flow and positioning tail through the
 borrowed-layout mask while excluding gather, plan compilation, publication, and inspection copies. On the pinned M4 host,

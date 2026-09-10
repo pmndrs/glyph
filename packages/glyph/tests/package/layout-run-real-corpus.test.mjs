@@ -144,7 +144,7 @@ const EXPECTED_SUMMARIES = {
       minimumX: 0,
       maximumX: 239.16000366210938,
       minimumY: 34.79999923706055,
-      maximumY: 84.80000305175781,
+      maximumY: 84.79999542236328,
     },
     candidates: exactCandidates(34),
   },

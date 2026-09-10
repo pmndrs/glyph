@@ -24,12 +24,12 @@ import {
   type PortableTextureArrayPayload,
   type PortableTexturePayload,
 } from './resources.js';
-import { type CompiledCodecProgramBody, type CodecProgramSystemBuffers } from './codec-program.js';
 import {
-  assertTechniqueCodecBody,
   attachHostCodecProgramSystemBuffers,
-  normalizeCodecProgramSystemBuffers,
-} from '../internal/codec-program-contract.js';
+  type CompiledCodecProgramBody,
+  type CodecProgramSystemBuffers,
+} from './codec-program.js';
+import { assertTechniqueCodecBody, normalizeCodecProgramSystemBuffers } from '../internal/codec-program-contract.js';
 import {
   schemaCodecBuffers,
   type TechniqueBindingDeclaration,

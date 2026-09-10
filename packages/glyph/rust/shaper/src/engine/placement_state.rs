@@ -329,6 +329,11 @@ impl PlacementState {
         Ok(())
     }
 
+    pub(crate) fn glyph_translation(&self, glyph_index: usize) -> Option<SegmentTranslation> {
+        let segment = *self.glyph_segment_indices.get(glyph_index)?;
+        self.translations.get(usize::try_from(segment).ok()?)
+    }
+
     pub(crate) fn finish_line(&mut self, start: (usize, usize)) -> Result<(), EngineError> {
         let segments = span_record(start.0, self.segments.len())?;
         #[cfg(any(test, feature = "kernel-lab"))]
