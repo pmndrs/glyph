@@ -734,12 +734,13 @@ and WebGL2 transfer behavior. Base `/typegpu` must separately prove its chosen s
 instance-index access, and buffer-limit headroom before it migrates. It has no decoration renderer today and this plan
 does not imply one. No adapter owns a second layout model, and the added offset must preserve existing scene draw counts.
 
-The source audit records that Slug has seven technique records. Three packs `placementSlot` into the proven-unused
-`bandCounts.z` lane and reads the shared placement table as its eighth storage input, avoiding a texture, a ninth storage
-binding, or a draw split. Direct `/typegpu` currently uses seven vertex layouts plus scene-owned slot/table storage; it is
-still a proof-of-concept and that layout is not a shared-engine limit. An adapter may interleave, widen, or move prototype
-inputs without exposing those choices to Codec authors. Three and direct TypeGPU currently realize each display-list span
-as a draw, so slices cannot become spans. M1 prices the chosen slot/table transfer, including Three WebGL2 PBO padding.
+The source audit records that Slug has seven technique records. Both Three and direct `/typegpu` pack `placementSlot` into
+the proven-unused `bandCounts.z` lane, retain stable glyph identity as the eighth Codec record, and read the shared x/y
+placement table from scene-owned storage. TypeGPU binds the seven raster records as vertex inputs; its stable-ID record
+remains a CPU/publication identity rather than a vertex input. Placement therefore adds no texture, ninth Codec buffer,
+vertex layout, bind group, or draw split. Adapter-local packing remains below the shared Codec-authoring contract. Three
+and direct TypeGPU currently realize each display-list span as a draw, so slices cannot become spans. M1 prices the chosen
+slot/table transfer, including Three WebGL2 PBO padding.
 
 ## Milestones and commit boundaries
 

@@ -4,7 +4,7 @@ import { defineCodecBuffers } from '../../config/schema.js';
 import { createRasterCodecProgram } from '../../config/raster.js';
 import { bitmapCodec } from '../../raster/bitmap.js';
 import { msdfCodec } from '../../raster/msdf.js';
-import { slugCodec } from '../../raster/slug.js';
+import { slugCodec, slugSchema } from '../../raster/slug.js';
 
 const system = defineCodecBuffers({
   stableGlyphId: { id: id.buffer('glyph-typegpu/stable-glyph'), scalar: 'u32', lanes: ['stableGlyphId'] },
@@ -17,7 +17,7 @@ const capabilitySet: CodecCapabilitySet = {
   updateAlignment: 4,
   coalesceGapBytes: 128,
   rangeCallPenaltyBytes: 256,
-  maxBuffersPerDraw: 9,
+  maxBuffersPerDraw: 8,
   maxResourcesPerDraw: 4,
   maxIndirectDraws: 0,
   fragmentationBudget: 8,
@@ -37,7 +37,10 @@ export function codecDescriptor(ids: CodecIdFactory): CodecDescriptor {
     programs: [
       createRasterCodecProgram(bitmapCodec, options),
       createRasterCodecProgram(msdfCodec, options),
-      createRasterCodecProgram(slugCodec, options),
+      createRasterCodecProgram(slugCodec, {
+        ...options,
+        placementSlotTarget: { buffer: slugSchema.buffers.bandCounts.id, lane: 2 },
+      }),
     ],
   };
 }

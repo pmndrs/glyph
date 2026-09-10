@@ -23,19 +23,25 @@ export function rustLayoutBenchmarkCases(corpus) {
 }
 
 export function rustLayoutBenchmarkGeometry(name, index, base) {
-  if (name === 'active-column-resize' || name === 'position-query' || name === 'adopt-position-query') {
+  if (
+    name === 'active-column-resize' ||
+    name === 'position-query' ||
+    name === 'adopt-position-query' ||
+    name === 'justify' ||
+    name === 'bidi-resize'
+  ) {
     return {
       ...base,
       width: index % 2 === 0 ? 420 : 434,
       revision: index + 2,
+      ...(name === 'justify' ? { align: 'justify' } : {}),
     };
   }
-  if (name === 'column-resize' || name === 'justify' || name === 'bidi-resize') {
+  if (name === 'column-resize') {
     return {
       ...base,
       width: 420 + index * 7,
       revision: index + 2,
-      ...(name === 'justify' ? { align: 'justify' } : {}),
     };
   }
   if (name === 'equivalent-width') {
@@ -49,14 +55,20 @@ export function rustLayoutBenchmarkGeometry(name, index, base) {
 }
 
 export function rustLayoutBenchmarkInitialGeometry(name, base) {
-  if (name === 'justify') return { ...base, align: 'justify' };
-  if (name === 'active-column-resize' || name === 'adopt-position-query') return { ...base, width: 434 };
+  if (name === 'justify') return { ...base, width: 434, align: 'justify' };
+  if (name === 'active-column-resize' || name === 'adopt-position-query' || name === 'bidi-resize') {
+    return { ...base, width: 434 };
+  }
   return base;
 }
 
 export function assertRustLayoutBenchmarkResult(name, previous, next) {
   if (
-    (name === 'active-column-resize' || name === 'adopt-measure-query' || name === 'adopt-position-query') &&
+    (name === 'active-column-resize' ||
+      name === 'adopt-measure-query' ||
+      name === 'adopt-position-query' ||
+      name === 'justify' ||
+      name === 'bidi-resize') &&
     (next.patchCount === 0 || next.writeBytes === 0)
   ) {
     throw new Error(`${name} did not publish a changed layout at generation ${next.publicationGeneration}`);

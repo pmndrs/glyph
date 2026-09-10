@@ -17,15 +17,25 @@ import { defineRasterResourceId } from '../../dist/config/raster-format.js';
 import { techniqueProof } from '../../scripts/support/render-technique-proof.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 import { immutableTestFont } from '../support/immutable-font.mjs';
+import { copyIntoAllocation } from '../support/engine-abi.mjs';
 
 const fixtureRoot = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
+const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 
-test('production first-party bindings preserve every proven field-major raster lane', async () => {
+test('production first-party bindings and benchmark codecs preserve every proven raster lane', async () => {
   const abi = textShaperAbi;
-  for (const name of ['bitmap', 'mtsdf', 'slug']) {
+  const wasm = await readFile(wasmUrl);
+  const instance = await WebAssembly.instantiate(await WebAssembly.compile(wasm), {});
+  const memory = instance.exports[abi.memory];
+  const fn = Object.fromEntries(
+    Object.entries(abi.functions).map(([name, exported]) => [name, instance.exports[exported]]),
+  );
+  assert.equal(fn.initialize(), abi.status.ok);
+  for (const [index, name] of ['bitmap', 'mtsdf', 'slug'].entries()) {
     const { core, raster, loaded } = await fixture(name);
     const actual = fontBindingBytes(loaded);
-    const expected = techniqueProof(abi, name, raster).bindingBytes;
+    const proof = techniqueProof(abi, name, raster);
+    const expected = proof.bindingBytes;
     const strikeRows = core.glyphCount * (name === 'bitmap' ? raster.strikes.length : 1);
     for (const [table, rows] of [
       ['glyphF32', core.glyphCount],
@@ -40,6 +50,12 @@ test('production first-party bindings preserve every proven field-major raster l
         tableBytes(expected, abi, table, rows),
         `${name} ${table}`,
       );
+    }
+    const pointer = copyIntoAllocation(memory, fn.allocate, proof.codecBytes);
+    assert.equal(fn.registerCodec(index + 1, pointer, proof.codecBytes.byteLength), abi.status.ok, name);
+    fn.deallocate(pointer, proof.codecBytes.byteLength);
+    if (name === 'slug') {
+      assert.equal(proof.outputBytesPerGlyph, 112, 'Slug packs placementSlot into bandCounts.z');
     }
   }
 });

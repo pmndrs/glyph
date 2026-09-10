@@ -421,9 +421,20 @@ where
         reserve(&mut self.pending_order, desired.len())?;
         reserve(&mut self.assignments, desired.len())?;
         reserve(&mut self.writes, desired.len())?;
-        for run in desired {
-            self.pending_index
-                .push((run.logical_key, RunSlot(u32::MAX)));
+        let placeholder = RunSlotAssignment {
+            handle: RunHandle {
+                slot: RunSlot(u32::MAX),
+                generation: RunGeneration::INITIAL,
+            },
+            change: RunSlotChange::Retained,
+        };
+        for (index, run) in desired.iter().enumerate() {
+            self.pending_index.push((
+                run.logical_key,
+                RunSlot(u32::try_from(index).map_err(|_| RunSlotError::ArithmeticOverflow)?),
+            ));
+            self.pending_order.push(RunSlot(u32::MAX));
+            self.assignments.push(placeholder);
         }
         self.pending_index.sort_unstable_by_key(|entry| entry.0);
         if self
@@ -433,37 +444,36 @@ where
         {
             return Err(RunSlotError::DuplicateLogicalKey);
         }
-        for run in desired {
-            let existing = self.find_committed(&run.logical_key);
-            let (handle, change) = self.assign_run(run, existing)?;
-
-            let pending = self
-                .pending_index
-                .binary_search_by(|entry| entry.0.cmp(&run.logical_key))
-                .map_err(|_| RunSlotError::ArithmeticOverflow)?;
-            self.pending_index[pending].1 = handle.slot;
-            self.pending_order.push(handle.slot);
-            self.assignments.push(RunSlotAssignment { handle, change });
-        }
-
         reserve(&mut self.retirements, self.slots.len())?;
-        for (slot_index, state) in self.slots.iter().enumerate() {
-            let Some(occupant) = &state.occupant else {
-                continue;
-            };
-            if self
-                .pending_index
-                .binary_search_by(|entry| entry.0.cmp(&occupant.logical_key))
-                .is_err()
-            {
-                let slot = RunSlot(
-                    u32::try_from(slot_index).map_err(|_| RunSlotError::ArithmeticOverflow)?,
-                );
-                self.retirements.push(RunHandle {
-                    slot,
-                    generation: state.generation,
-                });
+        let mut committed = 0usize;
+        for pending in 0..self.pending_index.len() {
+            let (key, original) = self.pending_index[pending];
+            while let Some(&(committed_key, slot)) = self.committed_index.get(committed) {
+                if committed_key >= key {
+                    break;
+                }
+                self.retire_slot(slot)?;
+                committed += 1;
             }
+            let existing = self
+                .committed_index
+                .get(committed)
+                .copied()
+                .filter(|(committed_key, _)| *committed_key == key)
+                .map(|(_, slot)| slot);
+            if existing.is_some() {
+                committed += 1;
+            }
+            let original =
+                usize::try_from(original.0).map_err(|_| RunSlotError::ArithmeticOverflow)?;
+            let (handle, change) = self.assign_run(&desired[original], existing)?;
+            self.pending_index[pending].1 = handle.slot;
+            self.pending_order[original] = handle.slot;
+            self.assignments[original] = RunSlotAssignment { handle, change };
+        }
+        while let Some(&(_, slot)) = self.committed_index.get(committed) {
+            self.retire_slot(slot)?;
+            committed += 1;
         }
         self.finish_structural_prepare()
     }
@@ -664,13 +674,6 @@ where
         ]
     }
 
-    fn find_committed(&self, key: &Key) -> Option<RunSlot> {
-        self.committed_index
-            .binary_search_by(|entry| entry.0.cmp(key))
-            .ok()
-            .map(|index| self.committed_index[index].1)
-    }
-
     fn slot_state(&self, slot: RunSlot) -> Result<&RunSlotState<Key, Canonical>, RunSlotError> {
         self.slots
             .get(slot.0 as usize)
@@ -789,12 +792,15 @@ mod tests {
             arena.assignments().unwrap()[1].change(),
             RunSlotChange::Updated
         );
+        let retained = handles(&arena);
         arena.commit();
 
         arena
             .prepare(&[run(20, 3, 2.0), run(10, 1, 1.0)], 3)
             .unwrap();
         assert_eq!(arena.prepare_counts(), (1, 2));
+        assert_eq!(handles(&arena), [retained[1], retained[0]]);
+        assert!(arena.retirements().unwrap().is_empty());
         arena.commit();
         arena.commit();
     }

@@ -1143,6 +1143,16 @@ impl ClusterArena {
         self.placement_cluster_at(run, direction, cluster, None)
     }
 
+    pub(crate) fn placement_cluster_cached(
+        &self,
+        run: LayoutRun,
+        direction: u8,
+        cluster: usize,
+        word_break_cursor: &mut usize,
+    ) -> Result<PlacementCluster, EngineError> {
+        self.placement_cluster_at(run, direction, cluster, Some(word_break_cursor))
+    }
+
     pub(crate) fn placement_segment_monotone(
         &self,
         run: LayoutRun,
@@ -1262,6 +1272,11 @@ impl ClusterArena {
                                 .word_breaks
                                 .partition_point(|record| record.cluster_end as usize <= cluster);
                         } else {
+                            while *cursor > 0
+                                && self.word_breaks[*cursor - 1].cluster_end as usize > cluster
+                            {
+                                *cursor -= 1;
+                            }
                             while self
                                 .word_breaks
                                 .get(*cursor)
