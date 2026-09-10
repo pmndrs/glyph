@@ -9,13 +9,24 @@
   a cold rebuild; the attached Three test changes a combining-mark cap through the public text surface and remains
   cold-equivalent.
 
-- **Refreshed direct-offset CPU and browser evidence** — two current 31-sample ordered Bitmap repeats measure
-  `3.013 / 3.183 ms` median/p95 for 21,805 Latin glyphs and `2.394 / 2.526 ms` for 21,978 dense-CJK glyphs. Against exact
-  main's `3.769 / 3.852 ms` Latin and clean `2.974 / 3.127 ms` CJK repeat, those are 20.1%/17.4% and 19.5%/19.2%
-  median/p95 improvements. Each update still writes one 174,440/175,824-byte x/y patch and preserves draw topology.
-  Direct TypeGPU now passes Bitmap/MSDF/Slug on project Chromium WebGPU; native Three TSL and the experimental
-  Three/TypeGPU shader set pass all three rasters, retained draw/storage, detached-copy, decoration, and composition on
-  WebGPU and forced WebGL2. The 40-warmup/101-sample release matrix, transfer attribution, and editorial soak remain open.
+- **Closed direct occurrence-origin and ellipsis conformance** — Gather now reads each rendered glyph's final semantic
+  inline/block origin through its `semantic_glyph_index`; it no longer treats a shared compact CPU segment translation as
+  the renderer input or builds a detached-copy placement vector. An ellipsis-only fragment with an empty retained source
+  interval is a valid no-op before its boundary replacement emits. The deliberately re-pinned additive f32 contract
+  changes only expected coordinate bits and hashes in the authenticated bidi/CJK fixtures; their measurement, glyph,
+  cluster, line, and advance contracts remain unchanged. The complete public paragraph-contract matrix and Bitmap,
+  MTSDF, and Slug WebGL2 product targets pass with one draw and no reference mismatch. The 68-frame advanced-shaping
+  timeline retains its exact 709-glyph, 625-rendered-glyph, 63-draw structure under the same coordinate repin. Placement
+  invalidation now compares those final semantic-origin bits rather than the compact segment translation; all 333
+  mutation/topology cases pass, including clipped CJK edits. Fresh 31-sample ordered Bitmap repeats measure
+  `2.883 / 2.928 ms` median/p95 for 21,805
+  Latin glyphs and `2.246 / 2.283 ms` for 21,978 dense-CJK glyphs. Against exact main's `3.767 / 3.850 ms` and
+  `2.974 / 3.127 ms`, those are 23.5%/23.9% and 24.5%/27.0% median/p95 improvements. Each update still writes one
+  174,440/175,824-byte f32x2 patch and preserves draw topology.
+  The optimized shaper is 1,325,689 raw / 511,751 gzip / 393,474 Brotli bytes. The reviewed consumer graphs are 44,703
+  raw / 11,682 gzip for config, 230,346 / 43,525 for direct TypeGPU, 540,499 / 133,033 for Three, and 648,878 /
+  146,273 for Three plus TypeGPU; their ceilings were re-priced with bounded headroom. The 40-warmup/101-sample release
+  matrix, transfer attribution, and editorial soak remain open.
 
 - **Extended localized exclusion convergence through drop-cap paragraphs** — the retained exact-width flow path now
   rederives same-source cap geometry, reapplies its cut, and realigns baseline caps while recomposing a moved exclusion's

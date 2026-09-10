@@ -6,6 +6,7 @@ import { defineCodecBuffers } from '@pmndrs/glyph/config/schema';
 import { glyphExampleCodec } from '@pmndrs/glyph-example-raster';
 
 const EXAMPLE_STABLE_GLYPH_BUFFER_ID: CodecBufferId = id.buffer('glyph-example-renderer/stable-glyph');
+const EXAMPLE_PLACEMENT_OFFSET_BUFFER_ID: CodecBufferId = id.buffer('glyph-example-renderer/placement-offset');
 
 /** The Codec's own system lane: glyph identity that survives reflow within a paragraph. */
 export const exampleSystemBuffers: {
@@ -14,8 +15,18 @@ export const exampleSystemBuffers: {
     readonly scalar: 'u32';
     readonly lanes: readonly ['stableGlyphId'];
   };
+  readonly placementOffset: {
+    readonly id: typeof EXAMPLE_PLACEMENT_OFFSET_BUFFER_ID;
+    readonly scalar: 'f32';
+    readonly lanes: readonly ['inlineOffset', 'blockOffset'];
+  };
 } = defineCodecBuffers({
   stableGlyphId: { id: EXAMPLE_STABLE_GLYPH_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
+  placementOffset: {
+    id: EXAMPLE_PLACEMENT_OFFSET_BUFFER_ID,
+    scalar: 'f32',
+    lanes: ['inlineOffset', 'blockOffset'],
+  },
 });
 
 /** Stable namespace used to derive this renderer's numeric program identity. */

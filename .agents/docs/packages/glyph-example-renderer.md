@@ -5,7 +5,7 @@ description: Proves the root GlyphConfig integration surface through a real Type
 resource: ../../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:12efe627142021421bfb346ce458993de0b3024e729142cb38cffd7d1c757140'
+source_digest: 'sha256:4e64a77f97bf862a5f4d0ae69ffe0ec6621b6b3b0e07b00c2a309788d2339256'
 tags: [package, glyph-config, codec, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -54,7 +54,9 @@ resource realization, borrowed `CommandBufferView`, and concrete TypeGPU/WebGPU 
 The package is a standing consumer proof. Production source imports only `@pmndrs/glyph`, the example raster package, and
 the raster's explicit `/typegpu` shader subpath—never `internal/`, `generated/`, a removed `/core` subpath, `/three`, or
 Three itself. Its Codec supplies its own system lane, capability set, allocation mode, transform mode, and program
-namespace while reusing the raster format's portable Codec body. The package root exposes a custom `source` condition for
+namespace while reusing the raster format's portable Codec body. The portable body receives no system-buffer object;
+package-private host assembly adds stable identity and direct occurrence-origin storage after body authentication. The
+package root exposes a custom `source` condition for
 opted-in workspace tools; default consumers resolve built ESM and declarations.
 
 The ordinary proof begins with `await glyph.init()` and `glyph.handle(name, defineExampleConfig(device))`. Its seven-field
@@ -80,19 +82,21 @@ root instances, and instance spans. Candidate resources, retained buffers, patch
 local maps; `commit()` swaps them atomically, while `discard()` leaves the previous accepted device state untouched. Only
 accepted renderer-owned state survives after the borrowed view expires.
 
-The example Codec consumes stable glyph identity and placement occurrence as distinct system semantics. This keeps the
-external-renderer contract truthful when the core publishes run-local glyph geometry plus the shared f32x2 placement table;
-the example does not turn placement identity into a batch or draw key.
+The example Codec consumes stable glyph identity and direct f32x2 occurrence origin as distinct system semantics. The
+renderer resolves the aligned origin buffer beside each physical glyph record and adds it once to the raster-local origin;
+there is no placement slot, shared table, batch key, or draw key.
 
 `RecordingExampleRendererDevice` is the deterministic CPU oracle. It reads already-bound raster format, program, variant,
 named buffers, geometry, resources, ordered batches/root instances, and instance spans before one commit changes accepted
 state. It validates only renderer and user/config requirements; it does not revalidate trusted Rust hierarchy semantics.
 Rejected candidates discard staging and leave accepted state untouched.
 
-`TypeGpuExampleRendererDevice` is the concrete renderer device. It realizes GLB-like position, UV, and index accessors; creates
-TypeGPU/WebGPU vertex, index, and instance buffers; builds the selected pipeline; encodes an indexed instanced pass; and
-submits to an offscreen `rgba8unorm` target. Empty idle deltas produce no submission, while accepted removal clears the
-target. The hardware recovery proof disposes the lost-device handle and creates a new handle with a new configured device,
+`TypeGpuExampleRendererDevice` is the concrete renderer device. It realizes GLB-like position, UV, and index accessors;
+creates TypeGPU/WebGPU vertex, index, raster-instance, and host occurrence-origin buffers; builds the selected pipeline;
+encodes an indexed instanced pass; and submits to an offscreen `rgba8unorm` target. A retained width change preserves draw
+count and existing raster-local bytes, changes the occurrence origins, and must match a cold root at the same width.
+Empty idle deltas produce no submission, while accepted removal clears the target. The hardware recovery proof disposes
+the lost-device handle and creates a new handle with a new configured device,
 then reuses the same loaded FontFace selection and reconstructs the retained text. Device replacement is therefore not a hidden
 mutation on an ordinary handle.
 
@@ -100,7 +104,8 @@ The acceptance fixture bakes Inter, declares and loads a typed `glyph.fontFace()
 handle, acquires an independent immutable Font lease inside its Text, and publishes initial and updated retained state
 through `glyph.shape()`. It asserts non-empty draws, required named buffers and
 geometry, changed visible pixels, idle submission suppression, failure atomicity, exact retirement, and disposal. The
-hardware lab additionally proves recovery on a second handle. Glyph's package-private tests retain borrowed expiry,
+fixture also proves retained-width/cold equivalence and that a rejected update leaves the prior accepted resources and
+submissions intact. The hardware lab additionally proves recovery on a second handle. Glyph's package-private tests retain borrowed expiry,
 publication ownership, and worker-transfer coverage without exposing those mechanisms to integrators.
 
 See [Example renderer](../planning/example-renderer.md) for why the package exists and how it divides

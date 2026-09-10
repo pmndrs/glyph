@@ -190,7 +190,8 @@ M1 established the topology, numeric counterexamples, and renderer feasibility e
 placement-slot/session-table candidate was then implemented and rejected: it preserved draws and reduced some writes but
 remained slower than the same-contract baseline and exposed backend allocation details too high in the Codec contract.
 The replacement now retains run-local geometry and compact placement segments in production, while an engine-owned direct
-x/y occurrence offset travels in the existing physical glyph records. Codec authors do not declare that system field or
+x/y occurrence origin for each rendered glyph travels in the existing physical glyph records. Gather obtains it directly
+from the glyph's semantic row rather than treating one compact CPU segment translation as a renderer value. Codec authors do not declare that system field or
 its backend memory layout, and batches, physical instances, order indirection, primitives, spans, and draws remain
 unchanged. The current retained width path reuses static glyph/raster/effect rows and recomputes dynamic placement plus
 absolute CPU query coordinates; it still publishes one f32x2 offset per rendered glyph, so compact segment publication
@@ -660,7 +661,7 @@ may exist only behind test/lab compilation as a numeric/pixel comparison oracle 
 cutover lands; it is never a selectable production mode or an exact-bit compatibility fallback. Retire the test/lab
 oracle only at M6 after full matrix closure.
 
-1. Add one engine-owned semantic x/y occurrence offset for every rendered glyph. Codec authors produce glyph-local
+1. Add one engine-owned semantic x/y occurrence origin for every rendered glyph. Codec authors produce glyph-local
    technique outputs and never receive or declare the host system buffers; package-private assembly appends the x/y
    store after authenticating the body. Authors never declare a slot, table, bind group, or backend memory layout. The
    offset carries no justification, class, role, bidi, or block metadata.
@@ -675,11 +676,11 @@ oracle only at M6 after full matrix closure.
    pre-alpha, and the deliberately re-pinned final-coordinate contract does not justify shipping two positioning systems.
    Keep the stable-ID contract truthful and hide adapter allocation details behind the engine boundary.
 
-The universal 8-byte offset is now implemented in the generated semantic contract and the Three/direct-TypeGPU adapter
-paths. The engine publishes exactly two f32 values per rendered occurrence; Three owns its retained PBO/storage form and
-direct TypeGPU owns an adapter-local instance layout. Exact justification arithmetic remains CPU SoA state that produces
-ordinary x/y rows. CPU semantic/query output retains absolute origins, while raster realization consumes the same f32
-operands in the commuted addition proven bit-identical by the deterministic arithmetic corpus. Per-technique browser
+The universal 8-byte origin is now implemented in the generated semantic contract and the Three/direct-TypeGPU adapter
+paths. The engine publishes exactly two f32 values per rendered occurrence, resolved directly from its semantic glyph;
+Three owns its retained PBO/storage form and direct TypeGPU owns an adapter-local instance layout. Exact justification
+arithmetic remains CPU SoA state that produces ordinary x/y rows. CPU semantic/query output retains absolute origins,
+while raster realization consumes the same f32 operands in the commuted addition proven bit-identical by the deterministic arithmetic corpus. Per-technique browser
 realization now passes direct TypeGPU on project Chromium WebGPU and both Three shader sets on WebGPU plus forced WebGL2,
 without changing draw/storage identity. Active/capacity transfer bytes, the complete editorial pixel matrix, and release
 size remain acceptance gates; implementation does not by itself close the milestone's CPU/publication-performance gate.
@@ -687,7 +688,7 @@ size remain acceptance gates; implementation does not by itself close the milest
 ### GPU data access
 
 Static per-glyph instance data contains local origin/ink/size, stable identity, and local ordinal. One aligned
-per-physical-glyph x/y lane stores the current occurrence offset; it is dynamic placement data, not a batch key or static
+per-physical-glyph x/y lane stores the current final semantic occurrence origin; it is dynamic placement data, not a batch key or static
 run identity. The generic material/resource realizer resolves final position before invoking the raster coverage graph,
 so custom material augmentation continues to observe the same final-position semantics.
 

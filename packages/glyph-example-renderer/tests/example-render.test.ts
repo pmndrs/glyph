@@ -81,11 +81,7 @@ test('the public handle publishes the shared bound hierarchy into a renderer-own
       height: 1000,
     });
 
-    device.failNextPreparation = true;
-    expect(() => glyph.shape()).toThrow('injected renderer preparation failure');
-    expect(device.discarded).toBe(1);
-    expect(device.primary.resources.size).toBe(0);
-
+    glyph.shape();
     text.update({ text: 'Glyph!' });
     glyph.shape();
     const accepted = handle.drawList;
@@ -112,6 +108,7 @@ test('the public handle publishes the shared bound hierarchy into a renderer-own
       });
       expect(realized.geometry.instanceCount).toBe(realized.primitive.recordCount);
       expect(realized.buffers.get('origin')).toBeInstanceOf(Uint8Array);
+      expect(realized.placementOffset).toBeInstanceOf(Uint8Array);
       expect(realized.resources.get('glyphGeometry')).toBeDefined();
     }
 
@@ -122,12 +119,50 @@ test('the public handle publishes the shared bound hierarchy into a renderer-own
     expect(device.primary.submissions).toHaveLength(acceptedSubmissions);
     expect(device.primary.realizedDraws).toEqual(acceptedDraws);
 
-    text.update({ text: 'updated', color: '#ff8040' });
+    text.update({ text: 'Portable TypeGPU reflow', fontSize: 64, width: 360, height: 192 });
     glyph.shape();
-    const updated = handle.drawList;
-    expect(updated.changed).toBe(true);
-    expect(updated.draws.length).toBeGreaterThan(0);
-    expect(text.text).toBe('updated');
+    const narrowDrawCount = handle.drawList.draws.length;
+    const narrowVisibleRecordEnd = device.primary.realizedDraws.reduce(
+      (end, realized) => Math.max(end, realized.primitive.recordIndex + realized.primitive.recordCount),
+      0,
+    );
+    const narrowOrigin = device.primary.buffersByName.get('origin')?.slice();
+    const narrowPlacement = device.primary.realizedDraws.at(0)?.placementOffset.slice();
+    if (narrowOrigin === undefined || narrowPlacement === undefined)
+      throw new Error('expected retained reflow buffers');
+
+    text.update({ width: 720 });
+    glyph.shape();
+    const reflowed = handle.drawList;
+    const wideOrigin = device.primary.buffersByName.get('origin');
+    const widePlacement = device.primary.realizedDraws.at(0)?.placementOffset;
+    expect(reflowed.changed).toBe(true);
+    expect(reflowed.draws).toHaveLength(narrowDrawCount);
+    expect(device.primary.realizedDraws).toHaveLength(narrowDrawCount);
+    const wideVisibleRecordEnd = device.primary.realizedDraws.reduce(
+      (end, realized) => Math.max(end, realized.primitive.recordIndex + realized.primitive.recordCount),
+      0,
+    );
+    const narrowVisibleOriginBytes = narrowVisibleRecordEnd * 2 * Float32Array.BYTES_PER_ELEMENT;
+    const wideVisibleOriginBytes = wideVisibleRecordEnd * 2 * Float32Array.BYTES_PER_ELEMENT;
+    expect(wideVisibleRecordEnd).toBeGreaterThan(narrowVisibleRecordEnd);
+    expect(wideOrigin?.slice(0, narrowVisibleOriginBytes)).toEqual(narrowOrigin.slice(0, narrowVisibleOriginBytes));
+    expect(wideOrigin?.slice(narrowVisibleOriginBytes, wideVisibleOriginBytes).some((byte) => byte !== 0)).toBe(true);
+    expect(widePlacement).not.toEqual(narrowPlacement);
+    expect(widePlacement?.some((byte) => byte !== 0)).toBe(true);
+
+    const retainedResourceCount = device.primary.resources.size;
+    const retainedSubmissionCount = device.primary.submissions.length;
+    expect(retainedResourceCount).toBeGreaterThan(0);
+    device.failNextPreparation = true;
+    text.update({ text: 'Rejected update' });
+    expect(() => glyph.shape()).toThrow('injected renderer preparation failure');
+    expect(device.discarded).toBe(1);
+    expect(device.primary.resources.size).toBe(retainedResourceCount);
+    expect(device.primary.submissions).toHaveLength(retainedSubmissionCount);
+
+    text.update({ text: 'Recovered update' });
+    glyph.shape();
 
     text.dispose();
     glyph.shape();

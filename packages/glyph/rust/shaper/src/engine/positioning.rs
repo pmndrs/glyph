@@ -19,6 +19,7 @@ use super::{
     flow_composition::{FlowDropCap, FlowFragment, FlowLayoutArena, FlowLine},
     frame::{ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START},
     identity_index::{IdentityIndex, IdentityIndexError},
+    line_composition::ComposedLine,
     run_local::{
         ClusterFinish, RunLocalArena, RunLocalBuildError, RunLocalGlyph, RunLocalGlyphInput,
         RunLocalWriter,
@@ -741,7 +742,11 @@ impl PositionedGlyphArena {
         reserve(&mut self.semantic_line_glyph_counts, flow.lines.len())?;
         reserve(&mut self.semantic_line_inline_extents, flow.lines.len())?;
         let visually_ltr = is_trivially_ltr(bidi, runs);
-        let retain_static_geometry = retained_flow.is_some()
+        let retains_same_cluster_sequence = match retained_flow {
+            Some(previous_flow) => same_contiguous_positioned_cluster_range(flow, previous_flow)?,
+            None => false,
+        };
+        let retain_static_geometry = retains_same_cluster_sequence
             && visually_ltr
             && boundary_shape.records.is_empty()
             && previous_boundary_shape.records.is_empty()
@@ -1347,10 +1352,6 @@ impl PositionedGlyphArena {
 
     pub(crate) fn glyphs(&self) -> &[LayoutGlyph] {
         &self.glyphs
-    }
-
-    pub(crate) fn placement(&self) -> &PlacementState {
-        &self.placement
     }
 
     pub(crate) fn replacement_runs(&self) -> &[LayoutRun] {
@@ -1993,6 +1994,12 @@ impl PositionedGlyphArena {
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
         mut retained: Option<&mut RetainedInstanceCursor>,
     ) -> Result<(), EngineError> {
+        if cluster_start > cluster_end {
+            return Err(EngineError::InvalidRequest);
+        }
+        if cluster_start == cluster_end {
+            return Ok(());
+        }
         let layout_runs = clusters.layout_runs();
         let first =
             layout_runs.partition_point(|run| run.cluster_end <= fragment.line.cluster_start);
@@ -3236,7 +3243,7 @@ impl PositionedGlyphArena {
                 if next_glyph.block_start.to_bits() != old_glyph.block_start.to_bits() {
                     mask |= 1 << 7;
                 }
-                if placement_changed(&self.placement, slot, &previous.placement, slot) {
+                if occurrence_origin_changed(self, slot, previous, slot) {
                     mask |= SEMANTIC_PLACEMENT_CHANGE;
                 }
             }
@@ -3326,7 +3333,7 @@ impl PositionedGlyphArena {
         if next.block_start.to_bits() != old.block_start.to_bits() {
             mask |= 1 << 7;
         }
-        if placement_changed(&self.placement, slot, &previous.placement, previous_slot) {
+        if occurrence_origin_changed(self, slot, previous, previous_slot) {
             mask |= SEMANTIC_PLACEMENT_CHANGE;
         }
         for field in 0..SEMANTIC_U32_BASE_FIELD_COUNT {
@@ -3351,20 +3358,23 @@ impl PositionedGlyphArena {
     }
 }
 
-fn placement_changed(
-    next: &PlacementState,
+fn occurrence_origin_changed(
+    next: &PositionedGlyphArena,
     next_glyph: usize,
-    previous: &PlacementState,
+    previous: &PositionedGlyphArena,
     previous_glyph: usize,
 ) -> bool {
-    match (
-        next.glyph_translation(next_glyph),
-        previous.glyph_translation(previous_glyph),
-    ) {
-        (Some(next), Some(previous)) => {
-            next.translation_inline.to_bits() != previous.translation_inline.to_bits()
-                || next.translation_block.to_bits() != previous.translation_block.to_bits()
-        }
+    let origin = |arena: &PositionedGlyphArena, glyph_index: usize| {
+        let glyph = arena.glyphs.get(glyph_index)?;
+        let semantic_index = usize::try_from(glyph.semantic_glyph_index).ok()?;
+        let semantic = arena.semantic_glyphs.get(semantic_index)?;
+        Some((
+            semantic.inline_origin.to_bits(),
+            semantic.block_origin.to_bits(),
+        ))
+    };
+    match (origin(next, next_glyph), origin(previous, previous_glyph)) {
+        (Some(next), Some(previous)) => next != previous,
         (None, None) => false,
         _ => true,
     }
@@ -3642,6 +3652,92 @@ fn line_fragments(flow: &FlowLayoutArena, line: FlowLine) -> Result<&[FlowFragme
     flow.fragments
         .get(start..end)
         .ok_or(EngineError::InvalidRequest)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PositionedClusterRange {
+    Empty,
+    Contiguous { start: u32, end: u32 },
+    Discontiguous,
+}
+
+fn same_contiguous_positioned_cluster_range(
+    current: &FlowLayoutArena,
+    previous: &FlowLayoutArena,
+) -> Result<bool, EngineError> {
+    let current = contiguous_positioned_cluster_range(current)?;
+    let previous = contiguous_positioned_cluster_range(previous)?;
+    Ok(matches!(
+        (current, previous),
+        (PositionedClusterRange::Empty, PositionedClusterRange::Empty)
+    ) || matches!(
+        (current, previous),
+        (
+            PositionedClusterRange::Contiguous {
+                start: current_start,
+                end: current_end,
+            },
+            PositionedClusterRange::Contiguous {
+                start: previous_start,
+                end: previous_end,
+            },
+        ) if current_start == previous_start && current_end == previous_end
+    ))
+}
+
+fn contiguous_positioned_cluster_range(
+    flow: &FlowLayoutArena,
+) -> Result<PositionedClusterRange, EngineError> {
+    let mut range = PositionedClusterRange::Empty;
+    let mut drop_cap_cursor = 0usize;
+    for (line_index, line) in flow.lines.iter().copied().enumerate() {
+        let first_thread_line =
+            line_index == 0 || flow.lines[line_index - 1].flow_thread_id != line.flow_thread_id;
+        if first_thread_line
+            && let Some(drop_cap) = flow
+                .drop_caps
+                .get(drop_cap_cursor)
+                .filter(|cap| cap.line.flow_thread_id == line.flow_thread_id)
+        {
+            append_positioned_cluster_range(&mut range, drop_cap.fragment.line)?;
+            drop_cap_cursor += 1;
+        }
+        for fragment in line_fragments(flow, line)? {
+            append_positioned_cluster_range(&mut range, fragment.line)?;
+        }
+    }
+    if drop_cap_cursor != flow.drop_caps.len() {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok(range)
+}
+
+fn append_positioned_cluster_range(
+    range: &mut PositionedClusterRange,
+    line: ComposedLine,
+) -> Result<(), EngineError> {
+    if line.cluster_start > line.cluster_end {
+        return Err(EngineError::InvalidRequest);
+    }
+    if line.cluster_start == line.cluster_end {
+        return Ok(());
+    }
+    *range = match *range {
+        PositionedClusterRange::Empty => PositionedClusterRange::Contiguous {
+            start: line.cluster_start,
+            end: line.cluster_end,
+        },
+        PositionedClusterRange::Contiguous { start, end } if end == line.cluster_start => {
+            PositionedClusterRange::Contiguous {
+                start,
+                end: line.cluster_end,
+            }
+        }
+        PositionedClusterRange::Contiguous { .. } | PositionedClusterRange::Discontiguous => {
+            PositionedClusterRange::Discontiguous
+        }
+    };
+    Ok(())
 }
 
 // Each argument is one independently compared positioning input. Packing them
@@ -4371,6 +4467,57 @@ mod tests {
             },
             stable_ids: vec![11; count],
         }
+    }
+
+    fn flow_with_fragment_ranges(ranges: &[(u32, u32)]) -> FlowLayoutArena {
+        let fragments = ranges
+            .iter()
+            .copied()
+            .map(|(cluster_start, cluster_end)| FlowFragment {
+                line: ComposedLine {
+                    cluster_start,
+                    cluster_end,
+                    text_start: cluster_start,
+                    text_end: cluster_end,
+                    advance: 0.0,
+                    hung_advance: 0.0,
+                    hard_break: false,
+                },
+                slot_start: 0.0,
+                slot_end: 100.0,
+                flexible_end: false,
+                boundary_index: NO_BOUNDARY,
+            })
+            .collect();
+        FlowLayoutArena {
+            lines: vec![FlowLine {
+                flow_thread_id: 1,
+                region_id: 1,
+                transform_index: 0,
+                clip_id: 0,
+                fragment_start: 0,
+                fragment_count: u16::try_from(ranges.len()).unwrap(),
+                align: ALIGN_START,
+                block_start: 0.0,
+                baseline: 10.0,
+                height: 12.0,
+            }],
+            fragments,
+            ..FlowLayoutArena::default()
+        }
+    }
+
+    #[test]
+    fn static_geometry_retention_requires_the_same_contiguous_cluster_sequence() {
+        let previous = flow_with_fragment_ranges(&[(0, 3), (3, 8)]);
+        let reflowed = flow_with_fragment_ranges(&[(0, 2), (2, 5), (5, 8)]);
+        assert!(same_contiguous_positioned_cluster_range(&reflowed, &previous).unwrap());
+
+        let clipped = flow_with_fragment_ranges(&[(0, 5)]);
+        assert!(!same_contiguous_positioned_cluster_range(&clipped, &previous).unwrap());
+
+        let discontiguous = flow_with_fragment_ranges(&[(0, 3), (4, 8)]);
+        assert!(!same_contiguous_positioned_cluster_range(&discontiguous, &previous).unwrap());
     }
 
     #[test]
@@ -6366,6 +6513,58 @@ mod tests {
         // Every glyph, inserted included, receives a content revision.
         assert_eq!(next_revision, 6);
 
+        let ellipsis_only_flow = FlowLayoutArena {
+            lines: vec![FlowLine {
+                fragment_start: 0,
+                fragment_count: 1,
+                ..lines[0]
+            }],
+            fragments: vec![FlowFragment {
+                line: ComposedLine {
+                    cluster_start: 2,
+                    cluster_end: 2,
+                    text_start: 2,
+                    text_end: 2,
+                    advance: 3.0,
+                    hung_advance: 0.0,
+                    hard_break: false,
+                },
+                slot_start: 0.0,
+                slot_end: 20.0,
+                flexible_end: false,
+                boundary_index: 0,
+            }],
+            ..FlowLayoutArena::default()
+        };
+        let mut ellipsis_only = PositionedGlyphArena::default();
+        let mut ellipsis_index = IdentityIndex::default();
+        let mut ellipsis_revision = 1;
+        let mut ellipsis_run_revision = 1;
+        ellipsis_only
+            .build(
+                &PositionedGlyphArena::default(),
+                &ellipsis_only_flow,
+                None,
+                &text,
+                &clusters,
+                &runs,
+                &runs,
+                &boundary,
+                &BoundaryShapeArena::default(),
+                &styles,
+                &bidi,
+                &mut ellipsis_index,
+                &mut ellipsis_revision,
+                &mut ellipsis_run_revision,
+                |_| ThreadTypography::default(),
+                |_| ThreadTypography::default(),
+                metrics,
+                extents,
+            )
+            .unwrap();
+        assert_eq!(ellipsis_only.glyphs.len(), 1);
+        assert_eq!(ellipsis_only.glyphs[0].stable_id, 777);
+
         let retained = FlowLayoutArena {
             lines: flow.lines.clone(),
             fragments: flow.fragments.clone(),
@@ -6855,5 +7054,59 @@ mod tests {
         assert_same_revisions(&previous, make_arena(true, 1), make_arena(true, 1));
         assert_same_revisions(&previous, make_arena(false, 2), make_arena(false, 2));
         assert_same_revisions(&previous, make_arena(false, 1), make_arena(false, 1));
+    }
+
+    #[test]
+    fn direct_occurrence_origin_owns_the_placement_change_bit() {
+        let glyph = LayoutGlyph {
+            stable_id: 1,
+            content_revision: 7,
+            semantic_glyph_index: 0,
+            binding_handle: 2,
+            font_handle: 3,
+            glyph_id: 4,
+            material_id: 5,
+            clip_id: 0,
+            depth_key: PAINT_LAYER_GLYPH,
+            font_size: 16.0,
+            raster_pixel_ratio: 1.0,
+            inline_start: 0.0,
+            block_start: 0.0,
+            inline_extent: 10.0,
+            block_extent: 11.0,
+        };
+        let arena = |inline_origin| {
+            let mut arena = PositionedGlyphArena {
+                glyphs: vec![glyph],
+                semantic_glyphs: vec![SemanticGlyph {
+                    stable_id: 1,
+                    font_handle: 3,
+                    glyph_id: 4,
+                    inline_origin,
+                    block_origin: 9.0,
+                    ..SemanticGlyph::default()
+                }],
+                ..PositionedGlyphArena::default()
+            };
+            for values in &mut arena.semantic_f32 {
+                values.push(0.0);
+            }
+            for values in &mut arena.semantic_u32 {
+                values.push(0);
+            }
+            arena
+        };
+        let previous = arena(8.0);
+        let mut next = arena(12.0);
+        let mut next_revision = 30;
+        next.assign_content_revisions(
+            &previous,
+            &mut IdentityIndex::default(),
+            &mut next_revision,
+            false,
+        )
+        .unwrap();
+        assert_eq!(next.semantic_change_masks, [SEMANTIC_PLACEMENT_CHANGE]);
+        assert_eq!(next.glyphs[0].content_revision, 30);
     }
 }

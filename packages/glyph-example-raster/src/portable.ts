@@ -64,8 +64,8 @@ export const glyphExampleCodecDefinition: RasterCodec<typeof glyphExample, typeo
   raster: glyphExample,
   schema: glyphExampleSchema,
   programVariant: GLYPH_EXAMPLE_PROGRAM_VARIANT,
-  codecBody(system, _capabilities) {
-    const p = techniqueProgram(glyphExampleSchema, { system });
+  codecBody() {
+    const p = techniqueProgram(glyphExampleSchema);
     const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
     const { inset, red, green, blue, alpha } = p.binding;
     // The authored inset trims both edges, so width and height lose twice its pixel value.

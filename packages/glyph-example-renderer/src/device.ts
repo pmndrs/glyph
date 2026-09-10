@@ -19,7 +19,7 @@ import {
 
 import type { ExampleBindings, ExampleBufferBinding, ExampleResolvedResource } from './config.js';
 import type { ExampleDraw, ExampleDrawList, ExamplePrimitiveRecord } from './draw-list.js';
-import { EXAMPLE_RENDERER_PROGRAM_NAMESPACE } from './codec.js';
+import { EXAMPLE_RENDERER_PROGRAM_NAMESPACE, exampleSystemBuffers } from './codec.js';
 
 /** One named instance-buffer input required by an example renderer shader. */
 export interface ExampleRendererShaderBuffer {
@@ -142,6 +142,8 @@ export interface ExampleRealizedDraw extends ExampleDrawBindings {
   readonly draw: ExampleDraw;
   readonly primitive: ExamplePrimitiveRecord;
   readonly geometry: ExampleGeometry;
+  /** Host-owned placement offsets applied by the renderer around the portable glyph shader. */
+  readonly placementOffset: Uint8Array;
 }
 
 /** Deterministic CPU oracle and reference implementation of the bound renderer contract. */
@@ -347,8 +349,25 @@ function realizeDraw(
   for (const name of Object.keys(shader.variant.resources)) {
     if (!namedResources.has(name)) throw new Error(`example renderer is missing its required "${name}" resource`);
   }
+  const placementBinding = draw.buffers.find(
+    (candidate) =>
+      candidate.input.declaration.kind === 'codec' &&
+      candidate.input.declaration.value.id === exampleSystemBuffers.placementOffset.id,
+  );
+  const placement = placementBinding === undefined ? undefined : buffers.get(placementBinding);
+  if (placement === undefined) throw new Error('example renderer is missing its host placement-offset buffer');
+  if (placement.scalarType !== 'f32' || placement.vectorWidth !== 2) {
+    throw new TypeError('example renderer placement offsets must contain f32x2 records');
+  }
   const geometry = geometryFor(shader.variant.geometry, namedResources, draw.primitive.recordCount);
-  return Object.freeze({ draw, primitive: draw.primitive, geometry, buffers: namedBuffers, resources: namedResources });
+  return Object.freeze({
+    draw,
+    primitive: draw.primitive,
+    geometry,
+    buffers: namedBuffers,
+    resources: namedResources,
+    placementOffset: placement.bytes,
+  });
 }
 
 function cloneBuffers(
