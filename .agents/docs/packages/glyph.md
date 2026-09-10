@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:58aed5a05209df25d3ba7e0a870dc509a3c2c84ad3779fed37ce88c40f3f0614'
+source_digest: 'sha256:987946b3294aeb87a98cffa49b750420c820b98c072bfa5ec58dafce1bc199a0'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1276,14 +1276,22 @@ core, but release builds do not yet construct or reconcile that compact state. T
 expanded from absolute positioned glyph rows, so width changes retain the prior 8-byte-per-glyph publication and the
 compact CPU/publication cut remains open.
 
+Retained gather has one guarded position-only path: it resolves the changed Codec buffer dependencies first and updates
+semantic position inputs plus CPU ink bounds in place only when every required input is semantic and storage topology is
+unchanged. Font selection, raster resources, and full `PlanGlyph` reconstruction are skipped in that case; all other
+changes use the general gather authority. Paired 22k ordered Bitmap adoption-only samples improved by about 1–3%, while
+the unchanged 170.4 KiB f32x2 write confirms that this is a bounded CPU improvement rather than the final compact
+publication result.
+
 The proof also retains planner-scoped run identity and canonical comparison machinery under test/kernel-lab compilation.
 It remains useful for validating split/merge, replacement-run, and acknowledgement behavior, but release width updates do
 not pay for run-slot reconciliation until an accepted publication representation needs it.
 
 The placement-slot/session-table ABI and renderer implementation were withdrawn before release. They preserved draw
 topology and reduced some writes, but added an occurrence lookup, slot lifetime, reconciliation, and CPU bookkeeping while
-still failing the end-to-end performance gate. The generated ABI, Codec contract, Three, and direct TypeGPU therefore use
-the established absolute origins again. TypeGPU remains a proof-of-concept and does not define a shared buffer limit.
+still failing the end-to-end performance gate. The generated ABI, Codec contract, Three, and direct TypeGPU instead use
+the direct engine-owned f32x2 occurrence offset described above. TypeGPU remains a proof-of-concept and does not define a
+shared buffer limit.
 
 The replacement direction keeps the existing batches, physical instances, order indirection, primitive spans, and draws.
 Core will expose a direct x/y occurrence offset through an engine-owned semantic placement seam; Codec authors describe
