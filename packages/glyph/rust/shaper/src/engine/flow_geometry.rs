@@ -18,6 +18,13 @@ pub(crate) struct InlineSlot {
     pub end: f64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct InlineCut {
+    pub start: f64,
+    pub end: f64,
+    pub wrap_side: u8,
+}
+
 #[derive(Default)]
 pub(crate) struct InlineSlotArena {
     slots: Vec<InlineSlot>,
@@ -257,6 +264,25 @@ impl InlineSlotArena {
         block_end: f64,
         max_slots: usize,
     ) -> Result<&'a [InlineSlot], EngineError> {
+        self.resolve_band_with_cut(
+            geometry,
+            region_index,
+            block_start,
+            block_end,
+            max_slots,
+            None,
+        )
+    }
+
+    pub(crate) fn resolve_band_with_cut<'a>(
+        &'a mut self,
+        geometry: &FlowGeometryArena,
+        region_index: usize,
+        block_start: f64,
+        block_end: f64,
+        max_slots: usize,
+        extra_cut: Option<InlineCut>,
+    ) -> Result<&'a [InlineSlot], EngineError> {
         if !block_start.is_finite() || !block_end.is_finite() || block_start >= block_end {
             return Err(EngineError::InvalidRequest);
         }
@@ -329,6 +355,20 @@ impl InlineSlotArena {
                     cut.start,
                     cut.end,
                     record.wrap_side,
+                    max_slots,
+                )?;
+            }
+            core::mem::swap(&mut self.slots, &mut self.scratch);
+        }
+        if let Some(cut) = extra_cut {
+            self.scratch.clear();
+            for slot in self.slots.iter().copied() {
+                subtract_slot(
+                    &mut self.scratch,
+                    slot,
+                    cut.start,
+                    cut.end,
+                    cut.wrap_side,
                     max_slots,
                 )?;
             }

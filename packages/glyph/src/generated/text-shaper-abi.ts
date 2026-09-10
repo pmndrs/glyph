@@ -87,6 +87,14 @@ export const textShaperAbi = {
       "wavy": 5
     },
     "defaultRootTextCapacity": 1024,
+    "dropCapAlignments": {
+      "baseline": 2,
+      "textTop": 1
+    },
+    "dropCapSides": {
+      "inlineEnd": 2,
+      "inlineStart": 1
+    },
     "exclusionWrapSides": {
       "both": 1,
       "inlineEnd": 3,
@@ -427,6 +435,11 @@ export const textShaperAbi = {
       "align": 47,
       "alignment": 4,
       "blockAlign": 49,
+      "dropCapAlignment": 82,
+      "dropCapLines": 81,
+      "dropCapMarginBlock": 88,
+      "dropCapMarginInline": 84,
+      "dropCapSide": 83,
       "firstLineIndent": 56,
       "flags": 50,
       "flowThreadId": 0,
@@ -445,7 +458,7 @@ export const textShaperAbi = {
       "resumeBlockOffset": 24,
       "resumeCluster": 36,
       "resumeRegion": 42,
-      "size": 84,
+      "size": 92,
       "spaceAfter": 64,
       "spaceBefore": 60,
       "viewportBlockEnd": 20,

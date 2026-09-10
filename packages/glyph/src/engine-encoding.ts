@@ -85,6 +85,7 @@ export function compileEngineGeometry(
       ...(layout?.spaceAfter === undefined ? {} : { spaceAfter: layout.spaceAfter }),
       ...(layout?.justify === undefined ? {} : { justify: layout.justify }),
       ...(layout?.lastLine === undefined ? {} : { lastLine: layout.lastLine }),
+      ...(layout?.dropCap === undefined ? {} : { dropCap: layout.dropCap }),
     },
     regions: Array.from({ length: columns.count }, (_, column) => {
       const inlineStart = column * (columnWidth + columns.gap);

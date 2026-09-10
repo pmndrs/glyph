@@ -75,6 +75,20 @@ export interface TextFlow {
   readonly regions: readonly TextFlowRegion[];
 }
 
+/** Layout controls for a shaping-safe drop cap drawn from the paragraph's source prefix. */
+export interface DropCapLayout {
+  /** Minimum body-line span reserved beside the cap. */
+  readonly lines: number;
+  /** Vertical alignment of the cap. Defaults to `text-top`. */
+  readonly align?: 'text-top' | 'baseline';
+  /** Logical side of the paragraph. Defaults to `inline-start`. */
+  readonly side?: 'inline-start' | 'inline-end';
+  /** Inline clearance between cap ink and body text. */
+  readonly marginInline?: number;
+  /** Block clearance around cap ink. */
+  readonly marginBlock?: number;
+}
+
 /** Stable paragraph flow properties, independent of the box being measured. */
 export interface ParagraphLayout {
   readonly maxLines?: number;
@@ -98,6 +112,8 @@ export interface ParagraphLayout {
   readonly lastLine?: 'auto' | 'justify';
   /** Flows text through ordered columns inside an exact `width`, filling in order without balancing (final column may run short); `gap` is inline space between columns. */
   readonly columns?: { readonly count: number; readonly gap?: number };
+  /** Places the first shaping-safe source prefix as a same-paragraph drop cap. */
+  readonly dropCap?: DropCapLayout;
 }
 
 export type LinearRgbaInput = readonly [number, number, number, number];
@@ -278,6 +294,16 @@ export function assertParagraphLayout(value: ParagraphLayout, label = 'paragraph
       throw new RangeError(`${label} columns count must be an integer between 1 and 16`);
     }
     optionalNonnegativeFinite(value.columns.gap, `${label} columns gap`);
+  }
+  if (value.dropCap !== undefined) {
+    assertRecord(value.dropCap, `${label} dropCap`);
+    if (!Number.isSafeInteger(value.dropCap.lines) || value.dropCap.lines < 1 || value.dropCap.lines > 16) {
+      throw new RangeError(`${label} dropCap lines must be an integer between 1 and 16`);
+    }
+    optionalEnum(value.dropCap.align, ['text-top', 'baseline'], `${label} dropCap align`);
+    optionalEnum(value.dropCap.side, ['inline-start', 'inline-end'], `${label} dropCap side`);
+    optionalNonnegativeFinite(value.dropCap.marginInline, `${label} dropCap marginInline`);
+    optionalNonnegativeFinite(value.dropCap.marginBlock, `${label} dropCap marginBlock`);
   }
 }
 

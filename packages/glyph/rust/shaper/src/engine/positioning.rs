@@ -16,7 +16,7 @@ use super::{
         LayoutRunSourceKind, PlacementCluster, RunCanonicalRevision,
     },
     codec_gather::{LayoutGlyph, PAINT_LAYER_GLYPH},
-    flow_composition::{FlowFragment, FlowLayoutArena, FlowLine},
+    flow_composition::{FlowDropCap, FlowFragment, FlowLayoutArena, FlowLine},
     frame::{ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START},
     identity_index::{IdentityIndex, IdentityIndexError},
     run_local::{
@@ -757,6 +757,7 @@ impl PositionedGlyphArena {
             self.retained_static_geometry = retained_instances.is_some();
         }
         let mut retained_line_cursor = 0usize;
+        let mut drop_cap_cursor = 0usize;
         for (line_index, line) in flow.lines.iter().copied().enumerate() {
             let placement_line_start = CAPTURE_RUN_PLACEMENT.then(|| self.placement.begin_line());
             if retained_instances.is_none()
@@ -799,6 +800,7 @@ impl PositionedGlyphArena {
                 }
             }
             if retained_instances.is_none()
+                && flow.drop_caps.is_empty()
                 && let Some(previous_flow) = retained_flow
                 && let Some(previous_line_index) = equivalent_retained_line(
                     flow,
@@ -881,6 +883,54 @@ impl PositionedGlyphArena {
             }
             let first = fragments.first().ok_or(EngineError::InvalidRequest)?;
             let last = fragments.last().ok_or(EngineError::InvalidRequest)?;
+            let first_thread_line =
+                line_index == 0 || flow.lines[line_index - 1].flow_thread_id != line.flow_thread_id;
+            let drop_cap = first_thread_line
+                .then(|| flow.drop_caps.get(drop_cap_cursor).copied())
+                .flatten()
+                .filter(|cap| cap.line.flow_thread_id == line.flow_thread_id);
+            if drop_cap.is_some() {
+                drop_cap_cursor += 1;
+            }
+            let mut inline_start = fragments
+                .iter()
+                .map(|fragment| fragment.slot_start)
+                .fold(f64::INFINITY, f64::min);
+            let mut inline_end = f64::NEG_INFINITY;
+            if let Some(cap) = drop_cap {
+                self.placement_fragment_index = line.fragment_start;
+                let cap_advance = if self.text_effects {
+                    self.position_drop_cap::<true>(
+                        cap,
+                        text,
+                        clusters,
+                        runs,
+                        boundary_shape,
+                        styles,
+                        bidi,
+                        visually_ltr,
+                        metrics_for,
+                        extents_for,
+                        retained_instances.as_mut(),
+                    )?
+                } else {
+                    self.position_drop_cap::<false>(
+                        cap,
+                        text,
+                        clusters,
+                        runs,
+                        boundary_shape,
+                        styles,
+                        bidi,
+                        visually_ltr,
+                        metrics_for,
+                        extents_for,
+                        retained_instances.as_mut(),
+                    )?
+                };
+                inline_start = inline_start.min(cap.fragment.slot_start);
+                inline_end = inline_end.max(cap.fragment.slot_start + cap_advance);
+            }
             if !visually_ltr {
                 prepare_line_levels(
                     &mut self.line_levels,
@@ -893,12 +943,7 @@ impl PositionedGlyphArena {
                 .lines
                 .get(line_index + 1)
                 .is_none_or(|next| next.flow_thread_id != line.flow_thread_id);
-            let inline_start = fragments
-                .iter()
-                .map(|fragment| fragment.slot_start)
-                .fold(f64::INFINITY, f64::min);
             let typography = typography_for(line.flow_thread_id);
-            let mut inline_end = f64::NEG_INFINITY;
             self.placement_fragment_index = line.fragment_start;
             for fragment in fragments.iter().copied() {
                 let indent = if fragment.line.cluster_start == 0 {
@@ -1026,6 +1071,9 @@ impl PositionedGlyphArena {
             cursor.semantic_next != cursor.semantic_end
                 || cursor.rendered_next != cursor.rendered_end
         }) {
+            return Err(EngineError::InvalidRequest);
+        }
+        if drop_cap_cursor != flow.drop_caps.len() {
             return Err(EngineError::InvalidRequest);
         }
         self.recomposed_glyphs = flow
@@ -1565,6 +1613,48 @@ impl PositionedGlyphArena {
 
     pub(crate) fn semantic_u32(&self) -> [&[u32]; SEMANTIC_U32_FIELD_COUNT] {
         core::array::from_fn(|index| self.semantic_u32[index].as_slice())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn position_drop_cap<const TEXT_EFFECTS: bool>(
+        &mut self,
+        cap: FlowDropCap,
+        text: &[u16],
+        clusters: &ClusterArena,
+        runs: &[ShapingRun],
+        boundary_shape: &BoundaryShapeArena,
+        styles: &[StyleSegment],
+        bidi: &BidiAnalysis,
+        visually_ltr: bool,
+        metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
+        extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+        retained: Option<&mut RetainedInstanceCursor>,
+    ) -> Result<f64, EngineError> {
+        if !visually_ltr {
+            prepare_line_levels(
+                &mut self.line_levels,
+                bidi,
+                cap.fragment.line.text_start,
+                cap.fragment.line.text_end,
+            )?;
+        }
+        self.position_fragment::<TEXT_EFFECTS>(
+            cap.line,
+            cap.fragment,
+            false,
+            text,
+            clusters,
+            runs,
+            boundary_shape,
+            styles,
+            bidi,
+            visually_ltr,
+            0.0,
+            JustifyControls::default(),
+            metrics_for,
+            extents_for,
+            retained,
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -3839,6 +3929,8 @@ pub(crate) fn flow_positioning_equivalent(
     committed_typography: impl Fn(u32) -> ThreadTypography + Copy,
 ) -> Result<bool, EngineError> {
     if pending.lines.len() != committed.lines.len()
+        || !pending.drop_caps.is_empty()
+        || !committed.drop_caps.is_empty()
         || !pending.ellipsis_threads().is_empty()
         || !committed.ellipsis_threads().is_empty()
     {
@@ -5238,6 +5330,7 @@ mod tests {
                 slot_end,
                 ..fragment
             }],
+            drop_caps: alloc::vec::Vec::new(),
             ellipsis_threads: alloc::vec::Vec::new(),
             recomposed_lines: None,
         };

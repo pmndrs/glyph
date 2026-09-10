@@ -14,13 +14,14 @@ use crate::{
         ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START, AXIS_AT_MOST, AXIS_EXACT,
         AXIS_UNCONSTRAINED, BASELINE_ALPHABETIC, BASELINE_MIDDLE, BASELINE_TEXT_BOTTOM,
         BASELINE_TEXT_TOP, BLOCK_ALIGN_CENTER, BLOCK_ALIGN_END, BLOCK_ALIGN_START,
-        EXCLUSION_WRAP_BOTH, EXCLUSION_WRAP_INLINE_END, EXCLUSION_WRAP_INLINE_START,
-        EXCLUSION_WRAP_LARGEST, LAST_LINE_AUTO, LAST_LINE_JUSTIFY, ORIENTATION_MIXED,
-        ORIENTATION_SIDEWAYS, ORIENTATION_UPRIGHT, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS,
-        OVERFLOW_VISIBLE, PARAGRAPH_MUTATION_REMOVE, PARAGRAPH_MUTATION_UPSERT, SHAPE_POLYGON,
-        SHAPE_RECTANGLE, STYLE_FLAG_ROOT, STYLE_MUTATION_REMOVE, TEXT_ENCODING_UTF16_LE,
-        TEXT_MUTATION_REPLACE_UTF16, UpdateLimits, WRAP_CHARACTER, WRAP_NONE, WRAP_WORD,
-        WRITING_HORIZONTAL_TB, WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
+        DROP_CAP_ALIGN_BASELINE, DROP_CAP_ALIGN_TEXT_TOP, DROP_CAP_SIDE_INLINE_END,
+        DROP_CAP_SIDE_INLINE_START, EXCLUSION_WRAP_BOTH, EXCLUSION_WRAP_INLINE_END,
+        EXCLUSION_WRAP_INLINE_START, EXCLUSION_WRAP_LARGEST, LAST_LINE_AUTO, LAST_LINE_JUSTIFY,
+        ORIENTATION_MIXED, ORIENTATION_SIDEWAYS, ORIENTATION_UPRIGHT, OVERFLOW_CLIP,
+        OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE, PARAGRAPH_MUTATION_REMOVE, PARAGRAPH_MUTATION_UPSERT,
+        SHAPE_POLYGON, SHAPE_RECTANGLE, STYLE_FLAG_ROOT, STYLE_MUTATION_REMOVE,
+        TEXT_ENCODING_UTF16_LE, TEXT_MUTATION_REPLACE_UTF16, UpdateLimits, WRAP_CHARACTER,
+        WRAP_NONE, WRAP_WORD, WRITING_HORIZONTAL_TB, WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
     },
     wire::{array, read_f32, read_f64, read_u16, read_u32},
 };
@@ -156,6 +157,11 @@ pub(crate) struct FlowConstraint {
     pub justify_max_word_space_ratio: f32,
     pub justify_letter_space_expansion: f32,
     pub last_line: u8,
+    pub drop_cap_lines: u8,
+    pub drop_cap_alignment: u8,
+    pub drop_cap_side: u8,
+    pub drop_cap_margin_inline: f32,
+    pub drop_cap_margin_block: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -341,6 +347,13 @@ impl GeometryBatch<'_> {
             )
             .ok()?,
             last_line: record[abi::ENGINE_CONSTRAINT_LAST_LINE],
+            drop_cap_lines: record[abi::ENGINE_CONSTRAINT_DROP_CAP_LINES],
+            drop_cap_alignment: record[abi::ENGINE_CONSTRAINT_DROP_CAP_ALIGNMENT],
+            drop_cap_side: record[abi::ENGINE_CONSTRAINT_DROP_CAP_SIDE],
+            drop_cap_margin_inline: read_f32(record, abi::ENGINE_CONSTRAINT_DROP_CAP_MARGIN_INLINE)
+                .ok()?,
+            drop_cap_margin_block: read_f32(record, abi::ENGINE_CONSTRAINT_DROP_CAP_MARGIN_BLOCK)
+                .ok()?,
         })
     }
 
@@ -1101,6 +1114,11 @@ fn validate_constraints(constraints: &[u8], limits: UpdateLimits) -> Result<(), 
             record,
             abi::ENGINE_CONSTRAINT_JUSTIFY_LETTER_SPACE_EXPANSION,
         )?;
+        let drop_cap_lines = byte(record, abi::ENGINE_CONSTRAINT_DROP_CAP_LINES)?;
+        let drop_cap_alignment = byte(record, abi::ENGINE_CONSTRAINT_DROP_CAP_ALIGNMENT)?;
+        let drop_cap_side = byte(record, abi::ENGINE_CONSTRAINT_DROP_CAP_SIDE)?;
+        let drop_cap_margin_inline = finite(record, abi::ENGINE_CONSTRAINT_DROP_CAP_MARGIN_INLINE)?;
+        let drop_cap_margin_block = finite(record, abi::ENGINE_CONSTRAINT_DROP_CAP_MARGIN_BLOCK)?;
         if first_line_indent < 0.0
             || space_before < 0.0
             || space_after < 0.0
@@ -1110,6 +1128,17 @@ fn validate_constraints(constraints: &[u8], limits: UpdateLimits) -> Result<(), 
             || !matches!(
                 byte(record, abi::ENGINE_CONSTRAINT_LAST_LINE)?,
                 LAST_LINE_AUTO | LAST_LINE_JUSTIFY
+            )
+            || drop_cap_margin_inline < 0.0
+            || drop_cap_margin_block < 0.0
+            || !matches!(
+                (drop_cap_lines, drop_cap_alignment, drop_cap_side),
+                (0, 0, 0)
+                    | (
+                        1..=16,
+                        DROP_CAP_ALIGN_TEXT_TOP | DROP_CAP_ALIGN_BASELINE,
+                        DROP_CAP_SIDE_INLINE_START | DROP_CAP_SIDE_INLINE_END
+                    )
             )
         {
             return Err(STATUS_INVALID_REQUEST);
@@ -1785,6 +1814,21 @@ mod tests {
             0.5,
         );
         typography[CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_LAST_LINE] = LAST_LINE_JUSTIFY;
+        typography[CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_DROP_CAP_LINES] = 3;
+        typography[CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_DROP_CAP_ALIGNMENT] =
+            DROP_CAP_ALIGN_BASELINE;
+        typography[CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_DROP_CAP_SIDE] =
+            DROP_CAP_SIDE_INLINE_END;
+        write_f32(
+            &mut typography,
+            CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_DROP_CAP_MARGIN_INLINE,
+            6.0,
+        );
+        write_f32(
+            &mut typography,
+            CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_DROP_CAP_MARGIN_BLOCK,
+            2.0,
+        );
         let constraint = parse_valid_geometry(&typography)
             .unwrap()
             .constraint(0)
@@ -1792,6 +1836,11 @@ mod tests {
         assert_eq!(constraint.first_line_indent, 12.0);
         assert_eq!(constraint.justify_min_word_space_ratio, 0.75);
         assert_eq!(constraint.last_line, LAST_LINE_JUSTIFY);
+        assert_eq!(constraint.drop_cap_lines, 3);
+        assert_eq!(constraint.drop_cap_alignment, DROP_CAP_ALIGN_BASELINE);
+        assert_eq!(constraint.drop_cap_side, DROP_CAP_SIDE_INLINE_END);
+        assert_eq!(constraint.drop_cap_margin_inline, 6.0);
+        assert_eq!(constraint.drop_cap_margin_block, 2.0);
 
         for (offset, value) in [
             (abi::ENGINE_CONSTRAINT_FIRST_LINE_INDENT, -1.0),
@@ -1801,6 +1850,8 @@ mod tests {
             (abi::ENGINE_CONSTRAINT_JUSTIFY_MIN_WORD_SPACE_RATIO, -0.25),
             (abi::ENGINE_CONSTRAINT_JUSTIFY_MAX_WORD_SPACE_RATIO, 0.5),
             (abi::ENGINE_CONSTRAINT_JUSTIFY_LETTER_SPACE_EXPANSION, -0.1),
+            (abi::ENGINE_CONSTRAINT_DROP_CAP_MARGIN_INLINE, -1.0),
+            (abi::ENGINE_CONSTRAINT_DROP_CAP_MARGIN_BLOCK, f32::NAN),
         ] {
             let mut invalid = valid_geometry_bytes();
             write_f32(&mut invalid, CONSTRAINT_OFFSET + offset, value);
@@ -1813,6 +1864,19 @@ mod tests {
         let mut zero_last_line = valid_geometry_bytes();
         zero_last_line[CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_LAST_LINE] = 0;
         assert!(parse_valid_geometry(&zero_last_line).is_err());
+
+        for (lines, alignment, side) in [
+            (17, DROP_CAP_ALIGN_TEXT_TOP, DROP_CAP_SIDE_INLINE_START),
+            (3, 0, DROP_CAP_SIDE_INLINE_START),
+            (3, DROP_CAP_ALIGN_TEXT_TOP, 0),
+            (0, DROP_CAP_ALIGN_TEXT_TOP, DROP_CAP_SIDE_INLINE_START),
+        ] {
+            let mut invalid = valid_geometry_bytes();
+            invalid[CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_DROP_CAP_LINES] = lines;
+            invalid[CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_DROP_CAP_ALIGNMENT] = alignment;
+            invalid[CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_DROP_CAP_SIDE] = side;
+            assert!(parse_valid_geometry(&invalid).is_err());
+        }
     }
 
     #[test]
