@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:c9ca45e1723a8c62d3c58a231e4070ff91db4b561e62c71c9642c7afce057e82'
+source_digest: 'sha256:42fa3da8ec9d5098603d4e0ddf881fd99b8c7883ce141dc2c018c14619084bdb'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -371,16 +371,23 @@ glyph into fixed Wasm scratch, then returns one frozen scalar object in O(select
 bulk caller-owned copy. The callback must finish synchronously:
 thenables, engine reentry, and retained-text mutation are rejected, and the indexed view expires on return or throw.
 
-The fragment-relative frontier reserves a transform-returning form of the same callback for live presentation
-deformation. `undefined` remains read-only; an exact 1:1 transform sequence updates renderer-owned per-glyph overrides
-for the current accepted topology. The public shape names local, paragraph, or world coordinates and ordinary transform
-components rather than physical storage, while adapters own packing and adjacent dirty-range uploads. These overrides
-compose after compact layout placement and do not dirty shaping, line fitting, static raster records, batch keys, or draw
-spans. A topology-changing update replaces the positional mapping: index `i` applies to the new glyph at `i`, removed
-tail indexes retire, and appended indexes need new values. Glyph IDs and clusters do not pretend to provide semantic
-continuity across arbitrary middle edits; applications needing that behavior reconcile their own document-domain keys.
-This attached live path complements rather than supersedes `copyGlyphs()`/`breakApart()`, whose detached object
-owns its copied lifecycle and intentionally stops following the source `Text`.
+Three implements the fragment-relative frontier's transform-returning form of the same callback for attached live
+deformation. `undefined` remains read-only. A bare exact-length `Matrix4[]` is Text-local; `{ space, matrices }` names
+layout paragraph coordinates (x-right/y-down), Text-local Three coordinates, or Three world coordinates. Every matrix is
+an absolute affine glyph frame in current visual index order, not a delta or a projective transform. The first transform
+result lazily enables one renderer-owned mat4 storage lane and performs one material/display-list refresh. Later results
+copy only the returned matrices, mark adjacent 16-float record ranges, and cross neither shaping nor render-plan
+publication. Stable physical-slot reuse resets a row before another glyph can inherit it, and `measureGlyphs()` applies
+the same retained matrices to interaction geometry. TypeGPU retains the read-only callback while its direct adapter is
+still a proof of concept; it does not inherit an unproved matrix-storage contract from Three.
+
+These overrides compose after compact layout placement and do not dirty shaping, line fitting, static raster records,
+batch keys, or draw spans. An equal-count topology change reapplies matrix index `i` to the new glyph at `i`; a changed
+count retires the stale exact-length result and requires another callback. Glyph IDs and clusters do not pretend to
+provide semantic continuity across arbitrary middle edits; applications needing that behavior reconcile their own
+document-domain keys. `clearGlyphTransforms()` restores authoritative attached placement. This live path complements
+rather than supersedes `copyGlyphs()`/`breakApart()`, whose detached object owns its copied lifecycle and intentionally
+stops following the source `Text`.
 
 The FontFace source cache coalesces canonical-equivalent locators before I/O and converges different locators onto one
 parsed main-font node after their complete GLB bytes have the same SHA-256 content identity. Every acquisition base is

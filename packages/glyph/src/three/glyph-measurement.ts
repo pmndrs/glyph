@@ -54,6 +54,53 @@ export function measureGlyphPlacements(
   return Object.freeze(measurements);
 }
 
+/** Applies the same absolute glyph-frame matrices used by attached/detached renderer storage. */
+export function transformGlyphMeasurements(
+  measurements: readonly ThreeGlyphMeasurement[],
+  matrices: readonly THREE.Matrix4[],
+): readonly ThreeGlyphMeasurement[] {
+  if (matrices.length !== measurements.length) {
+    throw new RangeError('glyph transform matrices do not match the measured glyph count');
+  }
+  return Object.freeze(
+    measurements.map((measurement, index) => {
+      const originalMatrix = matrices[index]!.clone();
+      const inversePivot = new THREE.Matrix4().makeTranslation(
+        -measurement.drawnOrigin.x,
+        -measurement.drawnOrigin.y,
+        -measurement.drawnOrigin.z,
+      );
+      const transform = originalMatrix.clone().multiply(inversePivot);
+      const localQuad = measurement.localQuad.map((point) => point.clone().applyMatrix4(transform)) as [
+        THREE.Vector3,
+        THREE.Vector3,
+        THREE.Vector3,
+        THREE.Vector3,
+      ];
+      const localInkBounds = new THREE.Box3().setFromPoints(localQuad);
+      const localAdvanceBounds = measurement.localAdvanceBounds.clone().applyMatrix4(transform);
+      const drawnOrigin = measurement.drawnOrigin.clone().applyMatrix4(transform);
+      const point = (anchor: GlyphAnchor, bounds: 'ink' | 'advance' = 'ink') => {
+        const box = bounds === 'ink' ? localInkBounds : localAdvanceBounds;
+        return new THREE.Vector3(
+          axisPoint(box.min.x, box.max.x, anchor.x),
+          axisPoint(box.min.y, box.max.y, anchor.y),
+          axisPoint(box.min.z, box.max.z, anchor.z ?? 'center'),
+        );
+      };
+      return Object.freeze({
+        ...measurement,
+        drawnOrigin,
+        originalMatrix,
+        localQuad: Object.freeze(localQuad),
+        localInkBounds,
+        localAdvanceBounds,
+        anchorPoint: point,
+      });
+    }),
+  );
+}
+
 /** Creates the renderer-neutral source view for a retained portable geometry payload. */
 export function createSuppliedGlyphGeometrySource(
   payload: PortableGeometryPayload,

@@ -649,6 +649,13 @@ complementary ownership boundary: it copies already-shaped glyphs into an indepe
 follows text shaping, layout, or topology updates. Presentation deformation does not feed line breaking or exclusions
 back into layout unless the application separately authors corresponding flow-region geometry.
 
+Three's accepted implementation uses absolute affine `Matrix4` glyph frames. A bare matrix array is Text-local; the
+structured result can name paragraph x-right/y-down, Text-local, or world space. It lazily adds renderer-owned mat4
+storage only after the first transform result, refreshes material/display-list identity once, and thereafter marks only
+the changed 16-float physical-record ranges. Stable-slot ownership prevents a reused record from inheriting a prior
+glyph's matrix. `measureGlyphs()` resolves the same matrices for interaction geometry. TypeGPU remains read-only here
+until its proof-of-concept adapter demonstrates an equally explicit storage, shader, and browser lifecycle.
+
 Migrate `snapshotGlyphOrigins` and the Three `glyphPlacements` path in the atomic cutover. Bounds, raycast, caret, and
 selection must resolve through the core line -> fragment -> visual slice -> local glyph query authority, not a renderer
 snapshot/cache of absolute origins. A renderer may cache GPU resources, but it may not become the semantic placement

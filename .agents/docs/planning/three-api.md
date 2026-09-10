@@ -365,6 +365,38 @@ React raster hooks. The stack carries resource and raster identity, so the user-
 selector. Rust resolves missing glyphs and the command buffer partitions the selected glyphs by the capabilities and
 resources declared by the active Three Codec.
 
+## Deform attached glyphs by visual index
+
+`Text.withGlyphs()` keeps its synchronous borrowed-layout read boundary and may also install one attached presentation
+matrix per current glyph. Returning nothing performs only the read. Returning a bare `Matrix4[]` treats the matrices as
+Text-local; the structured result names paragraph, local, or world coordinates. Matrices are absolute affine glyph
+frames in current visual index order:
+
+```ts
+label.withGlyphs((layout) => ({
+  space: 'world',
+  matrices: Array.from({ length: layout.glyphCount }, (_, index) => {
+    const glyph = layout.glyphAt(index);
+    return physicsBodies[index].matrix
+      .clone()
+      .setPosition(pathX(glyph.x, index), pathY(glyph.y, index), physicsBodies[index].position.z);
+  }),
+}));
+```
+
+The first transform result enables renderer-owned matrix storage and needs the next ordinary `glyph.shape()` to refresh
+the draw materials once. Later callback results update storage ranges immediately and do not reshape, publish another
+render plan, split a batch, or create one draw per glyph. Paragraph coordinates use layout's x-right/y-down convention;
+local and world use Three coordinates. A non-finite, projective, or wrong-length result rejects before it changes the
+current override. `clearGlyphTransforms()` returns the Text to authoritative layout placement.
+
+The index is intentionally positional rather than semantic. After an accepted equal-count edit, matrix `i` follows the
+new glyph at visual index `i`; if the glyph count changes, the old exact-length result is retired. Applications that need
+physics bodies to survive arbitrary middle edits own their document keys and reconcile them when the callback exposes
+the new sequence. `measureGlyphs()` includes the live matrices in its returned origins and bounds. This attached path
+continues to follow Text shaping and lifecycle; use `breakApart()` when the caller instead wants an independently owned,
+already-shaped object.
+
 ## Break committed glyphs into an independent object
 
 `breakApart()` copies the source paragraph's committed drawable records and any committed decoration draws into independently
