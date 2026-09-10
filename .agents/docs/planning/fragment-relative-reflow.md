@@ -906,8 +906,9 @@ HarfRust-safe boundary; resumes body composition at that exact cluster; derives 
 glyph/design bounds or the authored contour; and positions the prefix through the existing body authority. Focused Rust
 evidence covers safe-edge refusal, RTL logical-side mapping, a simultaneous rectangle exclusion, and tapered contour cuts,
 while an attached Three integration proves a combining-mark cap has no duplicated/omitted source glyphs and shares the
-existing x/y renderer path. The live mixed-raster browser matrix still needs to be rerun with the authored contour. The
-public Three path now realizes a Slug cap beside a Bitmap
+existing x/y renderer path. The refreshed live matrix passes Bitmap/MTSDF/Slug on WebGPU/WebGL2 through native TSL and
+the experimental Three/TypeGPU shaders while retaining three draws across every 64-sample reflow sequence. The public
+Three path now realizes a Slug cap beside a Bitmap
 body as two retained raster batches, preserves that topology across a cap-source edit, and matches a simultaneously
 rendered cold paragraph for glyph measurements, cap/body caret hits, and selection rectangles after exclusion movement.
 Explicit multi-line flow now composes the cap beside another exclusion through the public Three
