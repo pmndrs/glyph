@@ -13,7 +13,7 @@ import {
 } from 'three/webgpu';
 
 import { INTER } from '../../fonts';
-import { DEPTH, FONT_SIZE, HOLD, TILE, WORDS } from './config';
+import { DEPTH, FONT_SIZE, HOLD, SLAB, TILE, WORDS } from './config';
 import { heightInk, slabMaterial } from './materials';
 
 /**
@@ -45,10 +45,7 @@ export async function mount(scene: Scene, renderer: WebGPURenderer): Promise<() 
   word.position.set(-TILE.width / 2, FONT_SIZE / 2 + 0.35, 0);
   tileScene.add(word);
 
-  const slab = new Mesh(
-    new PlaneGeometry(TILE.width * 0.9, TILE.height * 0.9, 300, 100),
-    slabMaterial(target.texture, DEPTH),
-  );
+  const slab = new Mesh(new PlaneGeometry(SLAB.width, SLAB.height, 300, 100), slabMaterial(target.texture, DEPTH));
   slab.rotation.x = -0.35;
   const light = new PointLight('#fff1dc', 12, 14, 2);
   scene.add(slab, light);

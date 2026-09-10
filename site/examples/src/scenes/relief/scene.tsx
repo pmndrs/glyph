@@ -7,7 +7,7 @@ import { type PointLight } from 'three/webgpu';
 
 import { INTER } from '../../fonts';
 import { HeightTile, useHeightTile } from './components/HeightTile';
-import { DEPTH, HOLD, TILE, WORDS } from './config';
+import { DEPTH, HOLD, SLAB, WORDS } from './config';
 import { slabMaterial } from './materials';
 
 /**
@@ -24,12 +24,15 @@ export default function Relief() {
   const tile = useHeightTile();
   const [word, setWord] = useState<string>(WORDS[0]);
   const light = useRef<PointLight>(null);
+  const startedAt = useRef<number | null>(null);
   const material = useMemo(() => slabMaterial(tile.texture, DEPTH), [tile.texture]);
 
   useFrame(({ elapsed }) => {
-    const next = WORDS[Math.floor(elapsed / HOLD) % WORDS.length] ?? WORDS[0];
+    if (startedAt.current === null) startedAt.current = elapsed;
+    const sceneElapsed = elapsed - startedAt.current;
+    const next = WORDS[Math.floor(sceneElapsed / HOLD) % WORDS.length] ?? WORDS[0];
     if (next !== word) setWord(next);
-    const a = elapsed * 0.7;
+    const a = sceneElapsed * 0.7;
     light.current?.position.set(Math.cos(a) * 4.5, 2.2 + Math.sin(a * 0.5) * 0.6, 2.6 + Math.sin(a) * 1.6);
   });
 
@@ -38,7 +41,7 @@ export default function Relief() {
       <HeightTile tile={tile} root={handle('tile')} font={inter} word={word} />
       <pointLight ref={light} color="#fff1dc" intensity={12} distance={14} decay={2} />
       <mesh rotation={[-0.35, 0, 0]} material={material}>
-        <planeGeometry args={[TILE.width * 0.9, TILE.height * 0.9, 300, 100]} />
+        <planeGeometry args={[SLAB.width, SLAB.height, 300, 100]} />
       </mesh>
     </>
   );

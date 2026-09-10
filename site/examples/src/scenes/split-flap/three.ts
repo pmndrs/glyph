@@ -4,8 +4,8 @@ import { ThreeConfig, type Text } from '@pmndrs/glyph/three';
 import { Group, InstancedMesh, Matrix4, PlaneGeometry, type Scene } from 'three/webgpu';
 
 import { INTER } from '../../fonts';
-import { BOARDS, fit, flipsBetween, wheelAt } from '../../lib/flap';
-import { CELL, COLUMNS, FLIP_RATE, FONT_SIZE, HOLD, INK, ROWS } from './config';
+import { BOARDS, cellAt, flipsBetween, wheelAt } from '../../lib/flap';
+import { BOARD_SCALE, CELL, COLUMNS, FLIP_RATE, FONT_SIZE, HOLD, INK, ROWS } from './config';
 import { plateMaterial } from './materials';
 
 /** The imperative twin: one Text per cell in a group that flips, and `set()` at the midpoint. */
@@ -16,6 +16,7 @@ export async function mount(scene: Scene): Promise<() => void> {
   await Inter.load();
 
   const board = new Group();
+  board.scale.setScalar(BOARD_SCALE);
   const plates = new InstancedMesh(
     new PlaneGeometry(CELL.width - CELL.gap, CELL.height - CELL.gap),
     plateMaterial(),
@@ -30,9 +31,10 @@ export async function mount(scene: Scene): Promise<() => void> {
     plates.setMatrixAt(index, m.makeTranslation(x, y, -0.01));
     const group = new Group();
     group.position.set(x, y, 0);
+    const shown = cellAt(BOARDS[0] ?? [], index, COLUMNS);
     const text: Text<typeof msdf> = three.createText({
       font: Inter,
-      text: ' ',
+      text: shown,
       style: { fontSize: FONT_SIZE, color: INK, lineHeight: 1 },
       layout: { align: 'center', wrap: 'none' },
       constraints: { width: { mode: 'exact', size: CELL.width } },
@@ -40,13 +42,13 @@ export async function mount(scene: Scene): Promise<() => void> {
     text.position.set(-CELL.width / 2, FONT_SIZE / 2, 0);
     group.add(text);
     board.add(group);
-    return { group, text, shown: ' ', target: ' ', flips: 0, next: 0 };
+    return { group, text, shown, target: shown, flips: 0, next: 0 };
   });
   board.add(plates);
   scene.add(board);
   glyph.shape();
 
-  let shownBoard = -1;
+  let shownBoard = 0;
   let frame = 0;
   let elapsed = 0;
   const tick = (): void => {
@@ -56,7 +58,7 @@ export async function mount(scene: Scene): Promise<() => void> {
       shownBoard = wanted;
       const lines = BOARDS[wanted] ?? [];
       cells.forEach((cell, index) => {
-        cell.target = fit(lines[Math.floor(index / COLUMNS)] ?? '', COLUMNS)[index % COLUMNS] ?? ' ';
+        cell.target = cellAt(lines, index, COLUMNS);
         cell.flips = flipsBetween(cell.shown, cell.target);
         cell.next = elapsed + (index % COLUMNS) * 0.035;
       });
