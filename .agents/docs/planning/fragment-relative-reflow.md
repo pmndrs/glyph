@@ -572,6 +572,11 @@ explicit simplified CPU silhouette plus the text object's planar local-to-world 
 noninvertible transform, a camera on the text plane, and a degenerate/edge-on text-plane projection rather than emitting
 nonfinite geometry.
 
+Projection produces a value; it does not assign exclusion membership. The application explicitly attaches that value to
+each selected paragraph region, projecting separately into each Text-local frame when necessary. The same world object
+may therefore reflow one column, be omitted so another column renders behind it, or use independently transformed copies
+without the renderer inferring policy from geometric intersection.
+
 For a bounds volume, transform its faces to world space, clip them first to the camera-side half-space of the oriented
 text plane and then to the camera frustum including the near plane, and project the surviving vertices/edge
 intersections to NDC. Thus an object wholly behind the text plane or camera contributes no exclusion; an object crossing
@@ -865,8 +870,10 @@ same-line slots, while low-level transaction evidence proves that moving one exc
 that array reordering preserves entity IDs/revisions. Retained exact-width, non-ellipsis flow also unions the old/new
 bounds and margins of multiple changed exclusions in one region, preserves the prefix, recomposes through the complete
 dirty horizon, and retains a suffix only after the exact line/fragment/slot certificate matches; unsupported cases fall
-back to the cold authority. The full LTR/RTL/mixed cold-oracle matrix remains open, so M4 is not complete at this
-checkpoint.
+back to the cold authority. A public justified LTR/RTL/mixed matrix moves two keyed exclusions across distinct block
+bands and matches a cold rebuild across every glyph, bidi, ink, line, and measurement column while retaining the edited
+paragraph's glyph identities. Together with the existing sequential-region and drop-cap/object fixtures, this closes the
+M4 cold-oracle matrix.
 
 ### M5 — projected 3D obstacles and same-source drop caps
 
@@ -886,14 +893,19 @@ duplication, missing clusters, broad reshaping, or adapter-owned layout; both Th
 Current checkpoint: Three now projects caller-known conservative object-local bounds through the camera-side text-plane
 and frustum half-spaces into the existing keyed 2D exclusion model. Perspective/orthographic, crossing, enclosing,
 behind-plane, clipping, quantization, and invalid-transform cases have focused package evidence. Explicit simplified
-silhouettes, the Editorial scene, and live dual-renderer evidence remain open. The same-source drop-cap slice now carries
+silhouettes remain open. Editorial now owns two justified regions, a shaping-safe three-line drop cap, and a rotating box
+projected independently into both columns. Focused Chromium evidence covers all six Bitmap/MTSDF/Slug × WebGPU/WebGL2
+cells through native TSL and the experimental Three/TypeGPU shader path; every cell retains three draws through 64
+projected-obstacle reflows. The same-source drop-cap slice now carries
 bounded line/alignment/side/margin controls through the generated ABI; selects the first complete grapheme through a
 HarfRust-safe boundary; resumes body composition at that exact cluster; derives its conservative cut from retained
 glyph/design bounds; and positions the prefix through the existing body authority. Focused Rust evidence covers safe-edge
 refusal, RTL logical-side mapping, and a simultaneous rectangle exclusion, while an attached Three integration proves a
 combining-mark cap has no duplicated/omitted source glyphs and shares the existing x/y renderer path. Arbitrary cap
-polygons, mixed-raster styling, cap-source text-edit retention, full interaction-query parity, and the combined Editorial
-scene remain open. Explicit multi-line flow now composes the cap beside another exclusion through the public Three
+polygons and live mixed-raster browser parity remain open. The public Three path now realizes a Slug cap beside a Bitmap
+body as two retained raster batches, preserves that topology across a cap-source edit, and matches a simultaneously
+rendered cold paragraph for glyph measurements, cap/body caret hits, and selection rectangles after exclusion movement.
+Explicit multi-line flow now composes the cap beside another exclusion through the public Three
 surface; moving that exclusion reuses dirty-band convergence, rederives and baseline-aligns the cap, and matches a cold
 rebuild before accepting retained suffix lines. Same-length edits inside the cap source now use the retained text-edit
 convergence path: they rederive the cap, recompose every band still affected by the old or new cut, and retain a suffix
