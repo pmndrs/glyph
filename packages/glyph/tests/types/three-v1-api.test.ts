@@ -24,8 +24,10 @@ import {
   defineThreeConfig,
   defineTextMaterial,
   projectTextFlowBounds,
+  projectTextFlowSilhouette,
   span as threeSpan,
   type ProjectTextFlowBoundsOptions,
+  type ProjectTextFlowSilhouetteOptions,
   type ThreeCodec,
   type ThreeHandle,
 } from '../../src/three.js';
@@ -35,8 +37,12 @@ declare const bitmapFont: Font<typeof bitmap>;
 declare const mtsdfFont: Font<typeof msdf>;
 declare const threeGeometry: import('three/webgpu').BufferGeometry;
 declare const projectionOptions: ProjectTextFlowBoundsOptions;
+declare const silhouetteProjectionOptions: ProjectTextFlowSilhouetteOptions;
 
 projectTextFlowBounds(projectionOptions) satisfies import('../../src/text-properties.js').TextFlowExclusion | undefined;
+projectTextFlowSilhouette(silhouetteProjectionOptions) satisfies
+  | import('../../src/text-properties.js').TextFlowExclusion
+  | undefined;
 
 const emphasis = span(bitmapFont, { color: '#ff00ff' });
 const green = span({ color: '#00ff00' });

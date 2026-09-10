@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import * as THREE from 'three/webgpu';
 
-import { projectTextFlowBounds } from '../../dist/three.js';
+import { projectTextFlowBounds, projectTextFlowSilhouette } from '../../dist/three.js';
 
 test('perspective projection clips a camera-side bound onto paragraph flow', () => {
   const camera = new THREE.PerspectiveCamera(90, 1, 0.1, 100);
@@ -159,6 +159,92 @@ test('projection omits behind-plane bounds and rejects degenerate projection sta
   );
 });
 
+test('an explicit silhouette preserves a projected concavity without inflation', () => {
+  const camera = new THREE.OrthographicCamera(-5, 5, 5, -5, 0.1, 100);
+  camera.position.z = 10;
+  const exclusion = projectTextFlowSilhouette({
+    key: 'concave-object',
+    camera,
+    text: new THREE.Object3D(),
+    object: new THREE.Object3D(),
+    silhouette: [
+      new THREE.Vector3(-2, -2, 1),
+      new THREE.Vector3(2, -2, 1),
+      new THREE.Vector3(2, 2, 1),
+      new THREE.Vector3(0, 0.5, 1),
+      new THREE.Vector3(-2, 2, 1),
+    ],
+    flowBounds: [-5, -5, 5, 5],
+  });
+
+  assert.ok(exclusion);
+  assert.equal(exclusion.shape.kind, 'polygon');
+  assert.equal(exclusion.shape.vertices.length, 5);
+  assert.deepEqual(polygonBounds(exclusion.shape.vertices), [-2, -2, 2, 2]);
+  assert.ok(hasReflexVertex(exclusion.shape.vertices));
+});
+
+test('explicit silhouettes clip camera-side geometry and omit fully hidden rings', () => {
+  const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
+  camera.position.z = 10;
+  const common = {
+    camera,
+    text: new THREE.Object3D(),
+    object: new THREE.Object3D(),
+    flowBounds: [-5, -5, 5, 5],
+  };
+  assert.equal(
+    projectTextFlowSilhouette({
+      ...common,
+      key: 'behind-silhouette',
+      silhouette: [new THREE.Vector3(-1, -1, -2), new THREE.Vector3(1, -1, -2), new THREE.Vector3(0, 1, -2)],
+    }),
+    undefined,
+  );
+
+  const clipped = projectTextFlowSilhouette({
+    ...common,
+    key: 'crossing-silhouette',
+    silhouette: [new THREE.Vector3(-1, -1, -1), new THREE.Vector3(1, -1, 1), new THREE.Vector3(0, 1, 1)],
+  });
+  assert.ok(clipped);
+  assert.ok(clipped.shape.vertices.flat().every(Number.isFinite));
+});
+
+test('explicit silhouettes reject malformed caller-authored rings', () => {
+  const camera = new THREE.OrthographicCamera(-5, 5, 5, -5, 0.1, 100);
+  camera.position.z = 10;
+  const common = {
+    key: 'invalid-silhouette',
+    camera,
+    text: new THREE.Object3D(),
+    object: new THREE.Object3D(),
+    flowBounds: [-5, -5, 5, 5],
+  };
+  assert.throws(() => projectTextFlowSilhouette({ ...common, silhouette: [] }), /at least three/);
+  assert.throws(
+    () =>
+      projectTextFlowSilhouette({
+        ...common,
+        silhouette: [new THREE.Vector3(-1, -1, 1), new THREE.Vector3(Number.NaN, -1, 1), new THREE.Vector3(0, 1, 1)],
+      }),
+    /finite values/,
+  );
+  assert.throws(
+    () =>
+      projectTextFlowSilhouette({
+        ...common,
+        silhouette: [
+          new THREE.Vector3(-1, -1, 1),
+          new THREE.Vector3(2, 1, 1),
+          new THREE.Vector3(-1, 1, 1),
+          new THREE.Vector3(1, -1, 1),
+        ],
+      }),
+    /must not self-intersect/,
+  );
+});
+
 function polygonBounds(points) {
   return [
     Math.min(...points.map((point) => point[0])),
@@ -166,4 +252,13 @@ function polygonBounds(points) {
     Math.max(...points.map((point) => point[0])),
     Math.max(...points.map((point) => point[1])),
   ];
+}
+
+function hasReflexVertex(points) {
+  const signs = points.map((point, index) => {
+    const next = points[(index + 1) % points.length];
+    const after = points[(index + 2) % points.length];
+    return Math.sign((next[0] - point[0]) * (after[1] - next[1]) - (next[1] - point[1]) * (after[0] - next[0]));
+  });
+  return signs.some((sign) => sign > 0) && signs.some((sign) => sign < 0);
 }

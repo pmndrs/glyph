@@ -9,8 +9,7 @@ import {
 
 const projectionRegionKey = 'pmndrs-glyph-projection-region';
 
-/** Inputs for projecting one conservative object-local bound into paragraph flow coordinates. */
-export interface ProjectTextFlowBoundsOptions {
+interface ProjectTextFlowOptions {
   /** Stable exclusion key; repeated projections retain the same core identity. */
   readonly key: string;
   /** Camera whose current projection defines camera-to-text-plane occlusion. */
@@ -19,8 +18,6 @@ export interface ProjectTextFlowBoundsOptions {
   readonly text: THREE.Object3D;
   /** Object that owns the local bound. */
   readonly object: THREE.Object3D;
-  /** Conservative object-local bound to project. */
-  readonly bounds: THREE.Box3;
   /** Authored paragraph-flow clipping rectangle. */
   readonly flowBounds: TextFlowBounds;
   /** Conservative layout-space inflation for projection/simplification error. */
@@ -30,14 +27,65 @@ export interface ProjectTextFlowBoundsOptions {
   readonly marginBlock?: number;
 }
 
+/** Inputs for projecting one conservative object-local bound into paragraph flow coordinates. */
+export interface ProjectTextFlowBoundsOptions extends ProjectTextFlowOptions {
+  /** Conservative object-local bound to project. */
+  readonly bounds: THREE.Box3;
+}
+
+/** Inputs for projecting one caller-authored object-local silhouette into paragraph flow coordinates. */
+export interface ProjectTextFlowSilhouetteOptions extends ProjectTextFlowOptions {
+  /** Ordered simple-ring vertices. Concavity is preserved when no projection inflation is requested. */
+  readonly silhouette: readonly THREE.Vector3[];
+}
+
+interface ProjectionContext {
+  readonly flowBounds: TextFlowBounds;
+  readonly projectionError: number;
+  readonly objectToWorld: THREE.Matrix4;
+  readonly worldToText: THREE.Matrix4;
+  readonly textPlane: THREE.Plane;
+  readonly frustum: THREE.Frustum;
+}
+
+interface WorldPolygon {
+  readonly points: readonly THREE.Vector3[];
+  readonly preserveOutline: boolean;
+}
+
 /**
  * Projects a conservative Three object bound onto a text plane. The result describes camera-to-plane occlusion only;
  * it does not inspect depth, material coverage, or GPU pixels. `undefined` means the clipped bound cannot occlude flow.
  */
 export function projectTextFlowBounds(options: ProjectTextFlowBoundsOptions): TextFlowExclusion | undefined {
+  assertFiniteBox(options.bounds);
+  return projectTextFlow(options, ({ objectToWorld, textPlane, frustum }) => ({
+    points: intersectHalfspaces([...boxPlanes(options.bounds, objectToWorld), textPlane, ...frustum.planes]),
+    preserveOutline: false,
+  }));
+}
+
+/**
+ * Projects an ordered object-local silhouette onto a text plane. The projected ring may stay concave; `undefined` means
+ * clipping removed the silhouette, while malformed or self-intersecting projected rings are rejected.
+ */
+export function projectTextFlowSilhouette(options: ProjectTextFlowSilhouetteOptions): TextFlowExclusion | undefined {
+  const silhouette = validatedSilhouette(options.silhouette);
+  return projectTextFlow(options, ({ objectToWorld, textPlane, frustum }) => ({
+    points: clipWorldPolygon(
+      silhouette.map((point) => point.clone().applyMatrix4(objectToWorld)),
+      [textPlane, ...frustum.planes],
+    ),
+    preserveOutline: true,
+  }));
+}
+
+function projectTextFlow(
+  options: ProjectTextFlowOptions,
+  worldPolygon: (context: ProjectionContext) => WorldPolygon,
+): TextFlowExclusion | undefined {
   const flowBounds = normalizedFlowBounds(options.flowBounds);
   const projectionError = normalizedProjectionError(options.projectionError);
-  assertFiniteBox(options.bounds);
   const cameraTag = options.camera as THREE.Camera & {
     readonly isPerspectiveCamera?: boolean;
     readonly isOrthographicCamera?: boolean;
@@ -96,14 +144,20 @@ export function projectTextFlowBounds(options: ProjectTextFlowBoundsOptions): Te
   ) {
     throw new RangeError('camera projection must describe a finite nondegenerate frustum');
   }
-  const planes = [...boxPlanes(options.bounds, options.object.matrixWorld), textPlane, ...frustum.planes];
-  const worldPoints = intersectHalfspaces(planes);
-  if (worldPoints.length === 0) return undefined;
+  const source = worldPolygon({
+    flowBounds,
+    projectionError,
+    objectToWorld: options.object.matrixWorld,
+    worldToText,
+    textPlane,
+    frustum,
+  });
+  if (source.points.length === 0) return undefined;
 
   const raycaster = new THREE.Raycaster();
   const planePoint = new THREE.Vector3();
   const projected: TextFlowPoint[] = [];
-  for (const worldPoint of worldPoints) {
+  for (const worldPoint of source.points) {
     const ndc = worldPoint.clone().project(options.camera);
     if (!isFiniteVector(ndc)) continue;
     raycaster.setFromCamera(new THREE.Vector2(ndc.x, ndc.y), options.camera);
@@ -113,7 +167,8 @@ export function projectTextFlowBounds(options: ProjectTextFlowBoundsOptions): Te
     if (!isFiniteVector(local)) continue;
     projected.push([local.x, -local.y]);
   }
-  let polygon = convexHull(projected);
+  let preserveOutline = source.preserveOutline;
+  let polygon = preserveOutline ? compactRing(projected) : convexHull(projected);
   if (polygon.length < 3) return undefined;
   if (projectionError !== 0) {
     const inflated: TextFlowPoint[] = [];
@@ -126,11 +181,13 @@ export function projectTextFlowBounds(options: ProjectTextFlowBoundsOptions): Te
       );
     }
     polygon = convexHull(inflated);
+    preserveOutline = false;
   }
   polygon = clipToBounds(polygon, flowBounds);
-  polygon = convexHull(
-    polygon.map((point) => [normalizeZero(Math.fround(point[0])), normalizeZero(Math.fround(point[1]))] as const),
+  const narrowed = polygon.map(
+    (point) => [normalizeZero(Math.fround(point[0])), normalizeZero(Math.fround(point[1]))] as const,
   );
+  polygon = preserveOutline ? compactRing(narrowed) : convexHull(narrowed);
   if (polygon.length < 3 || signedArea(polygon) === 0) return undefined;
 
   const normalized = normalizeTextFlow({
@@ -206,6 +263,25 @@ function assertFiniteBox(bounds: THREE.Box3): void {
   }
 }
 
+function validatedSilhouette(value: readonly THREE.Vector3[]): readonly THREE.Vector3[] {
+  if (!Array.isArray(value) || value.length < 3) {
+    throw new RangeError('silhouette must contain at least three ordered vertices');
+  }
+  return value.map((point, index) => {
+    if (point?.isVector3 !== true) {
+      throw new TypeError(`silhouette vertex ${index} must be a Vector3`);
+    }
+    if (!isFiniteVector(point)) {
+      throw new RangeError(`silhouette vertex ${index} must contain only finite values`);
+    }
+    const previous = value[(index + value.length - 1) % value.length]!;
+    if (point.equals(previous)) {
+      throw new RangeError('silhouette must not contain duplicate consecutive vertices');
+    }
+    return point.clone();
+  });
+}
+
 function assertFiniteMatrix(matrix: THREE.Matrix4, label: string): void {
   if (matrix.elements.some((value) => !Number.isFinite(value))) {
     throw new RangeError(`${label} must contain only finite values`);
@@ -241,6 +317,32 @@ function intersectHalfspaces(planes: readonly THREE.Plane[]): THREE.Vector3[] {
     }
   }
   return points;
+}
+
+function clipWorldPolygon(points: readonly THREE.Vector3[], planes: readonly THREE.Plane[]): THREE.Vector3[] {
+  let clipped = points.map((point) => point.clone());
+  for (const plane of planes) {
+    if (clipped.length === 0) return [];
+    const output: THREE.Vector3[] = [];
+    for (let index = 0; index < clipped.length; index += 1) {
+      const current = clipped[index]!;
+      const previous = clipped[(index + clipped.length - 1) % clipped.length]!;
+      const currentDistance = plane.distanceToPoint(current);
+      const previousDistance = plane.distanceToPoint(previous);
+      const tolerance = Number.EPSILON * 256 * Math.max(1, current.length(), previous.length());
+      const currentInside = currentDistance >= -tolerance;
+      const previousInside = previousDistance >= -tolerance;
+      if (currentInside !== previousInside) {
+        const denominator = previousDistance - currentDistance;
+        if (Number.isFinite(denominator) && denominator !== 0) {
+          output.push(previous.clone().lerp(current, previousDistance / denominator));
+        }
+      }
+      if (currentInside) output.push(current.clone());
+    }
+    clipped = output;
+  }
+  return clipped;
 }
 
 function intersectPlanes(first: THREE.Plane, second: THREE.Plane, third: THREE.Plane): THREE.Vector3 | undefined {
@@ -280,6 +382,22 @@ function convexHull(points: readonly TextFlowPoint[]): TextFlowPoint[] {
   lower.pop();
   upper.pop();
   return lower.concat(upper);
+}
+
+function compactRing(points: readonly TextFlowPoint[]): TextFlowPoint[] {
+  const compacted: TextFlowPoint[] = [];
+  for (const point of points) {
+    if (!Number.isFinite(point[0]) || !Number.isFinite(point[1])) continue;
+    const previous = compacted.at(-1);
+    if (previous?.[0] === point[0] && previous[1] === point[1]) continue;
+    compacted.push([point[0], point[1]]);
+  }
+  if (compacted.length > 1) {
+    const first = compacted[0]!;
+    const last = compacted.at(-1)!;
+    if (first[0] === last[0] && first[1] === last[1]) compacted.pop();
+  }
+  return compacted;
 }
 
 function cross(origin: TextFlowPoint, first: TextFlowPoint, second: TextFlowPoint): number {
