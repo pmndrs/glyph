@@ -87,6 +87,8 @@ export interface DropCapLayout {
   readonly marginInline?: number;
   /** Block clearance around cap ink. */
   readonly marginBlock?: number;
+  /** Simple polygon in normalized coordinates over the generated cap exclusion box. */
+  readonly contour?: readonly TextFlowPoint[];
 }
 
 /** Stable paragraph flow properties, independent of the box being measured. */
@@ -304,6 +306,18 @@ export function assertParagraphLayout(value: ParagraphLayout, label = 'paragraph
     optionalEnum(value.dropCap.side, ['inline-start', 'inline-end'], `${label} dropCap side`);
     optionalNonnegativeFinite(value.dropCap.marginInline, `${label} dropCap marginInline`);
     optionalNonnegativeFinite(value.dropCap.marginBlock, `${label} dropCap marginBlock`);
+    if (value.dropCap.contour !== undefined) {
+      const contour = normalizeFlowShape(
+        { kind: 'polygon', vertices: value.dropCap.contour },
+        `${label} dropCap contour`,
+      );
+      if (
+        contour.kind !== 'polygon' ||
+        contour.vertices.some(([inline, block]) => inline < 0 || inline > 1 || block < 0 || block > 1)
+      ) {
+        throw new RangeError(`${label} dropCap contour vertices must stay within [0, 1]`);
+      }
+    }
   }
 }
 

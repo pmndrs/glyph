@@ -56,7 +56,20 @@ type _NoThreeRootBinding = ThreeApi.ThreeRootBinding;
 type _NoThreePublicationBoundary = ThreeApi.ThreePublicationBoundary;
 const warning = threeSpan(warningMaterial, { color: '#ffcc00' });
 const styles = TextStyle.create({ base: { fontSize: 16 }, accent: { color: '#00ff00' } });
-const layouts = ParagraphLayout.create({ centered: { align: 'center' }, wrapped: { wrap: 'word' } });
+const layouts = ParagraphLayout.create({
+  centered: { align: 'center' },
+  wrapped: { wrap: 'word' },
+  contouredCap: {
+    dropCap: {
+      lines: 3,
+      contour: [
+        [0, 0],
+        [1, 0],
+        [0, 1],
+      ],
+    },
+  },
+});
 const constraints = Constraints.create({
   card: { width: { mode: 'at-most', size: 320 } },
   naturalHeight: { height: { mode: 'unconstrained' } },

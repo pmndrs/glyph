@@ -135,6 +135,7 @@ export interface PlannerConstraint {
     readonly side?: 'inline-start' | 'inline-end';
     readonly marginInline?: number;
     readonly marginBlock?: number;
+    readonly contour?: readonly PlannerFlowVertex[];
   };
 }
 
@@ -283,6 +284,9 @@ export function compilePlannerFrameUpdate(frame: PlannerFrameUpdate): Uint8Array
   const exclusionVertexOffsets = exclusions.map((exclusion) =>
     allocate(exclusion.vertices?.length ?? 0, abi.layouts.engineFlowVertex.size, 4, 'exclusion vertices'),
   );
+  const dropCapVertexOffsets = constraints.map((constraint) =>
+    allocate(constraint.dropCap?.contour?.length ?? 0, abi.layouts.engineFlowVertex.size, 4, 'drop cap vertices'),
+  );
   const bytes = new Uint8Array(cursor);
   const view = new DataView(bytes.buffer);
 
@@ -300,7 +304,7 @@ export function compilePlannerFrameUpdate(frame: PlannerFrameUpdate): Uint8Array
   writeParagraphOrderMutations(view, paragraphOrderOffset, paragraphOrderMutations);
   writeTextMutations(view, textOffset, textMutations, textPayloads);
   writeStyleMutations(view, bytes, styleOffset, styleMutations, languageBytes, languageOffsets, featureOffsets);
-  writeConstraints(view, constraintOffset, constraints);
+  writeConstraints(view, constraintOffset, constraints, dropCapVertexOffsets);
   writeRegions(view, regionOffset, regions, regionVertexOffsets);
   writeExclusions(view, exclusionOffset, exclusions, exclusionVertexOffsets);
   writeInlineObjects(view, inlineObjectOffset, inlineObjects);
@@ -527,7 +531,12 @@ function writeDecoration(view: DataView, offset: number, decoration: PlannerDeco
   view.setFloat32(offset + layout.decorationOffset, decoration.offset, true);
 }
 
-function writeConstraints(view: DataView, tableOffset: number, constraints: readonly PlannerConstraint[]): void {
+function writeConstraints(
+  view: DataView,
+  tableOffset: number,
+  constraints: readonly PlannerConstraint[],
+  dropCapVertexOffsets: readonly number[],
+): void {
   const layout = textShaperAbi.layouts.engineConstraint;
   const engine = textShaperAbi.engine;
   for (const [index, value] of constraints.entries()) {
@@ -595,6 +604,11 @@ function writeConstraints(view: DataView, tableOffset: number, constraints: read
       finite(value.dropCap?.marginBlock ?? 0, 'constraint dropCap block margin'),
       true,
     );
+    const contour = value.dropCap?.contour ?? [];
+    view.setUint32(offset + layout.dropCapVerticesOffset, dropCapVertexOffsets[index]!, true);
+    view.setUint16(offset + layout.dropCapVertexCount, u16(contour.length, 'constraint dropCap vertex count'), true);
+    view.setUint16(offset + layout.dropCapReserved, 0, true);
+    writeVertices(view, dropCapVertexOffsets[index]!, contour);
   }
 }
 

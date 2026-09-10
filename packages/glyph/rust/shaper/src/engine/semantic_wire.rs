@@ -162,6 +162,8 @@ pub(crate) struct FlowConstraint {
     pub drop_cap_side: u8,
     pub drop_cap_margin_inline: f32,
     pub drop_cap_margin_block: f32,
+    pub drop_cap_vertices_offset: u32,
+    pub drop_cap_vertex_count: u16,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -354,6 +356,13 @@ impl GeometryBatch<'_> {
                 .ok()?,
             drop_cap_margin_block: read_f32(record, abi::ENGINE_CONSTRAINT_DROP_CAP_MARGIN_BLOCK)
                 .ok()?,
+            drop_cap_vertices_offset: read_u32(
+                record,
+                abi::ENGINE_CONSTRAINT_DROP_CAP_VERTICES_OFFSET,
+            )
+            .ok()?,
+            drop_cap_vertex_count: read_u16(record, abi::ENGINE_CONSTRAINT_DROP_CAP_VERTEX_COUNT)
+                .ok()?,
         })
     }
 
@@ -416,9 +425,24 @@ impl GeometryBatch<'_> {
 
     pub(crate) fn fingerprint(self) -> u64 {
         let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-        for section in [self.constraints, self.inline_objects] {
-            mix_bytes(&mut hash, section);
+        for record in self
+            .constraints
+            .chunks_exact(abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize)
+        {
+            mix_record_without_u32(
+                &mut hash,
+                record,
+                abi::ENGINE_CONSTRAINT_DROP_CAP_VERTICES_OFFSET,
+            );
+            mix_vertex_records(
+                &mut hash,
+                self.request,
+                record,
+                abi::ENGINE_CONSTRAINT_DROP_CAP_VERTICES_OFFSET,
+                abi::ENGINE_CONSTRAINT_DROP_CAP_VERTEX_COUNT,
+            );
         }
+        mix_bytes(&mut hash, self.inline_objects);
         for constraint_index in 0..self.constraint_count() {
             let Some(constraint) = self.constraint(constraint_index) else {
                 continue;
@@ -983,7 +1007,7 @@ pub(crate) fn parse_geometry(
         abi::ENGINE_INLINE_OBJECT_RECORD_SIZE,
         abi::ENGINE_INLINE_OBJECT_RECORD_ALIGNMENT,
     )?;
-    validate_constraints(constraints, limits)?;
+    validate_constraints(request, constraints, limits)?;
     validate_regions(request, regions)?;
     validate_exclusions(request, exclusions)?;
     validate_inline_objects(inline_objects)?;
@@ -1065,7 +1089,11 @@ fn records_span(records: &[u8], stride: u32, span: RecordSpan) -> Result<&[u8], 
     records.get(start..end).ok_or(STATUS_INVALID_REQUEST)
 }
 
-fn validate_constraints(constraints: &[u8], limits: UpdateLimits) -> Result<(), u32> {
+fn validate_constraints(
+    request: &[u8],
+    constraints: &[u8],
+    limits: UpdateLimits,
+) -> Result<(), u32> {
     for record in constraints.chunks_exact(abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize) {
         let width_mode = byte(record, abi::ENGINE_CONSTRAINT_WIDTH_MODE)?;
         let height_mode = byte(record, abi::ENGINE_CONSTRAINT_HEIGHT_MODE)?;
@@ -1119,6 +1147,10 @@ fn validate_constraints(constraints: &[u8], limits: UpdateLimits) -> Result<(), 
         let drop_cap_side = byte(record, abi::ENGINE_CONSTRAINT_DROP_CAP_SIDE)?;
         let drop_cap_margin_inline = finite(record, abi::ENGINE_CONSTRAINT_DROP_CAP_MARGIN_INLINE)?;
         let drop_cap_margin_block = finite(record, abi::ENGINE_CONSTRAINT_DROP_CAP_MARGIN_BLOCK)?;
+        let drop_cap_vertices_offset =
+            read_u32(record, abi::ENGINE_CONSTRAINT_DROP_CAP_VERTICES_OFFSET)?;
+        let drop_cap_vertex_count = read_u16(record, abi::ENGINE_CONSTRAINT_DROP_CAP_VERTEX_COUNT)?;
+        let drop_cap_reserved = read_u16(record, abi::ENGINE_CONSTRAINT_DROP_CAP_RESERVED)?;
         if first_line_indent < 0.0
             || space_before < 0.0
             || space_after < 0.0
@@ -1131,6 +1163,7 @@ fn validate_constraints(constraints: &[u8], limits: UpdateLimits) -> Result<(), 
             )
             || drop_cap_margin_inline < 0.0
             || drop_cap_margin_block < 0.0
+            || drop_cap_reserved != 0
             || !matches!(
                 (drop_cap_lines, drop_cap_alignment, drop_cap_side),
                 (0, 0, 0)
@@ -1142,6 +1175,30 @@ fn validate_constraints(constraints: &[u8], limits: UpdateLimits) -> Result<(), 
             )
         {
             return Err(STATUS_INVALID_REQUEST);
+        }
+        match (
+            drop_cap_lines,
+            drop_cap_vertices_offset,
+            drop_cap_vertex_count,
+        ) {
+            (0, 0, 0) | (1..=16, 0, 0) => {}
+            (1..=16, offset, 3..) if offset != 0 => {
+                let vertices = record_table(
+                    request,
+                    offset,
+                    u32::from(drop_cap_vertex_count),
+                    abi::ENGINE_FLOW_VERTEX_RECORD_SIZE,
+                    abi::ENGINE_FLOW_VERTEX_RECORD_ALIGNMENT,
+                )?;
+                for vertex in vertices.chunks_exact(abi::ENGINE_FLOW_VERTEX_RECORD_SIZE as usize) {
+                    let inline = finite(vertex, abi::ENGINE_FLOW_VERTEX_INLINE)?;
+                    let block = finite(vertex, abi::ENGINE_FLOW_VERTEX_BLOCK)?;
+                    if !(0.0..=1.0).contains(&inline) || !(0.0..=1.0).contains(&block) {
+                        return Err(STATUS_INVALID_REQUEST);
+                    }
+                }
+            }
+            _ => return Err(STATUS_INVALID_REQUEST),
         }
     }
     Ok(())
@@ -1379,6 +1436,20 @@ fn mix_vertex_payload(
     if byte(record, shape).ok() != Some(SHAPE_POLYGON) {
         return;
     }
+    if let (Ok(offset), Ok(count)) = (read_u32(record, offset), read_u16(record, count))
+        && let Ok(vertices) = array(
+            request,
+            offset,
+            u32::from(count),
+            abi::ENGINE_FLOW_VERTEX_RECORD_SIZE,
+            abi::ENGINE_FLOW_VERTEX_RECORD_ALIGNMENT,
+        )
+    {
+        mix_bytes(hash, vertices);
+    }
+}
+
+fn mix_vertex_records(hash: &mut u64, request: &[u8], record: &[u8], offset: usize, count: usize) {
     if let (Ok(offset), Ok(count)) = (read_u32(record, offset), read_u16(record, count))
         && let Ok(vertices) = array(
             request,
@@ -1829,10 +1900,37 @@ mod tests {
             CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_DROP_CAP_MARGIN_BLOCK,
             2.0,
         );
-        let constraint = parse_valid_geometry(&typography)
-            .unwrap()
-            .constraint(0)
-            .unwrap();
+        let contour_offset = typography.len();
+        typography.resize(
+            contour_offset + 3 * abi::ENGINE_FLOW_VERTEX_RECORD_SIZE as usize,
+            0,
+        );
+        write_u32(
+            &mut typography,
+            CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_DROP_CAP_VERTICES_OFFSET,
+            contour_offset as u32,
+        );
+        write_u16(
+            &mut typography,
+            CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_DROP_CAP_VERTEX_COUNT,
+            3,
+        );
+        for (index, (inline, block)) in [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)].into_iter().enumerate()
+        {
+            let vertex = contour_offset + index * abi::ENGINE_FLOW_VERTEX_RECORD_SIZE as usize;
+            write_f32(
+                &mut typography,
+                vertex + abi::ENGINE_FLOW_VERTEX_INLINE,
+                inline,
+            );
+            write_f32(
+                &mut typography,
+                vertex + abi::ENGINE_FLOW_VERTEX_BLOCK,
+                block,
+            );
+        }
+        let geometry = parse_valid_geometry(&typography).unwrap();
+        let constraint = geometry.constraint(0).unwrap();
         assert_eq!(constraint.first_line_indent, 12.0);
         assert_eq!(constraint.justify_min_word_space_ratio, 0.75);
         assert_eq!(constraint.last_line, LAST_LINE_JUSTIFY);
@@ -1841,6 +1939,64 @@ mod tests {
         assert_eq!(constraint.drop_cap_side, DROP_CAP_SIDE_INLINE_END);
         assert_eq!(constraint.drop_cap_margin_inline, 6.0);
         assert_eq!(constraint.drop_cap_margin_block, 2.0);
+        assert_eq!(constraint.drop_cap_vertex_count, 3);
+        assert_eq!(
+            geometry
+                .vertex(constraint.drop_cap_vertices_offset, 1)
+                .unwrap()
+                .inline,
+            1.0
+        );
+        let mut relocated_contour = typography[..contour_offset].to_vec();
+        relocated_contour.resize(contour_offset + 8, 0);
+        relocated_contour.extend_from_slice(&typography[contour_offset..]);
+        write_u32(
+            &mut relocated_contour,
+            CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_DROP_CAP_VERTICES_OFFSET,
+            (contour_offset + 8) as u32,
+        );
+        assert_eq!(
+            parse_valid_geometry(&relocated_contour)
+                .unwrap()
+                .fingerprint(),
+            geometry.fingerprint(),
+            "request placement is not semantic drop-cap geometry",
+        );
+
+        let mut retained = FlowGeometryArena::default();
+        retained.build(geometry).unwrap();
+        assert_eq!(retained.constraints[0].drop_cap_vertices_offset, 0);
+        assert_eq!(
+            retained.vertices[..3],
+            [
+                FlowVertex {
+                    inline: 0.0,
+                    block: 0.0
+                },
+                FlowVertex {
+                    inline: 1.0,
+                    block: 0.0
+                },
+                FlowVertex {
+                    inline: 0.0,
+                    block: 1.0
+                },
+            ]
+        );
+        let mut changed_contour = retained.clone();
+        changed_contour.vertices[1].inline = 0.75;
+        assert_eq!(
+            changed_contour.localized_change_from(&retained).unwrap(),
+            crate::engine::flow_geometry::LocalizedGeometryChange::Unsupported,
+        );
+
+        let mut outside_contour = typography.clone();
+        write_f32(
+            &mut outside_contour,
+            contour_offset + abi::ENGINE_FLOW_VERTEX_INLINE,
+            1.25,
+        );
+        assert!(parse_valid_geometry(&outside_contour).is_err());
 
         for (offset, value) in [
             (abi::ENGINE_CONSTRAINT_FIRST_LINE_INDENT, -1.0),

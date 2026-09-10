@@ -5,7 +5,9 @@ use crate::FontMetrics;
 use super::{
     EngineError, FrameFault,
     cluster_state::{CLUSTER_HARD_BREAK, CLUSTER_SAFE_BEFORE, CLUSTER_SPACE, ClusterArena},
-    flow_geometry::{ExclusionDirtyBand, FlowGeometryArena, InlineCut, InlineSlotArena},
+    flow_geometry::{
+        ExclusionDirtyBand, FlowGeometryArena, InlineCut, InlineSlotArena, polygon_projection,
+    },
     frame::{
         ALIGN_JUSTIFY, ALIGN_START, AXIS_AT_MOST, AXIS_EXACT, DROP_CAP_ALIGN_BASELINE,
         DROP_CAP_ALIGN_TEXT_TOP, DROP_CAP_SIDE_INLINE_START, EXCLUSION_WRAP_INLINE_END,
@@ -59,18 +61,47 @@ pub(crate) struct FlowDropCap {
     ink_block_start: f64,
     ink_block_end: f64,
     margin_block: f64,
+    contour_start: u32,
+    contour_count: u16,
 }
 
 impl FlowDropCap {
     fn cut_for_band(
         self,
+        geometry: &FlowGeometryArena,
         line_ordinal: usize,
         block_start: f64,
         block_end: f64,
-    ) -> Option<InlineCut> {
-        (line_ordinal < usize::from(self.lines)
-            || (self.cut_block_start < block_end && block_start < self.cut_block_end))
-            .then_some(self.cut)
+    ) -> Result<Option<InlineCut>, EngineError> {
+        if line_ordinal >= usize::from(self.lines)
+            && (self.cut_block_start >= block_end || block_start >= self.cut_block_end)
+        {
+            return Ok(None);
+        }
+        if self.contour_count == 0 {
+            return Ok(Some(self.cut));
+        }
+        let block_extent = self.cut_block_end - self.cut_block_start;
+        if !block_extent.is_finite() || block_extent <= 0.0 {
+            return Err(EngineError::InvalidRequest);
+        }
+        let normalized_start =
+            ((block_start - self.cut_block_start) / block_extent).clamp(0.0, 1.0);
+        let normalized_end = ((block_end - self.cut_block_start) / block_extent).clamp(0.0, 1.0);
+        if normalized_start >= normalized_end {
+            return Ok(None);
+        }
+        let contour = geometry.retained_vertices(self.contour_start, self.contour_count)?;
+        let Some(projection) = polygon_projection(contour, normalized_start, normalized_end)?
+        else {
+            return Ok(None);
+        };
+        let inline_extent = self.cut.end - self.cut.start;
+        Ok(Some(InlineCut {
+            start: self.cut.start + projection.start * inline_extent,
+            end: self.cut.start + projection.end * inline_extent,
+            wrap_side: self.cut.wrap_side,
+        }))
     }
 
     fn align_to_body_baseline(&mut self, baseline: f64) {
@@ -263,6 +294,8 @@ fn prepare_drop_cap(
         ink_block_start: envelope.block_start,
         ink_block_end: envelope.block_end,
         margin_block,
+        contour_start: constraint.drop_cap_vertices_offset,
+        contour_count: constraint.drop_cap_vertex_count,
     }))
 }
 
@@ -568,13 +601,15 @@ impl FlowLayoutArena {
                         block,
                         block_end,
                         estimate,
-                        drop_cap.as_ref().and_then(|cap| {
-                            cap.cut_for_band(
+                        match drop_cap.as_ref() {
+                            Some(cap) => cap.cut_for_band(
+                                geometry,
                                 self.lines.len().saturating_sub(thread_line_start),
                                 block,
                                 block + estimate.height(),
-                            )
-                        }),
+                            )?,
+                            None => None,
+                        },
                         constraint.wrap,
                         constraint.align,
                         constraint.width_mode != AXIS_EXACT,
@@ -800,13 +835,15 @@ impl FlowLayoutArena {
                     above: old_line.baseline,
                     below: old_line.height - old_line.baseline,
                 },
-                drop_cap.as_ref().and_then(|cap| {
-                    cap.cut_for_band(
+                match drop_cap.as_ref() {
+                    Some(cap) => cap.cut_for_band(
+                        geometry,
                         candidate.saturating_sub(thread_line_start),
                         old_line.block_start,
                         old_line.block_start + old_line.height,
-                    )
-                }),
+                    )?,
+                    None => None,
+                },
                 wrapping_for_flow_thread(geometry, old_line.flow_thread_id)?,
                 old_line.align,
                 flexible_for_flow_thread(geometry, old_line.flow_thread_id)?,
@@ -828,16 +865,34 @@ impl FlowLayoutArena {
             }
             let metrics_stable =
                 height == old_line.height && new_line.baseline == old_line.baseline;
-            let next_cap_affected = previous.lines.get(candidate + 1).is_some_and(|next| {
+            let next_cap_affected = if let Some(next) = previous.lines.get(candidate + 1) {
                 let ordinal = candidate + 1 - thread_line_start;
-                previous_cap.is_some_and(|cap| {
-                    cap.cut_for_band(ordinal, next.block_start, next.block_start + next.height)
-                        .is_some()
-                }) || drop_cap.is_some_and(|cap| {
-                    cap.cut_for_band(ordinal, next.block_start, next.block_start + next.height)
-                        .is_some()
-                })
-            });
+                let previous_affected = if let Some(cap) = previous_cap {
+                    cap.cut_for_band(
+                        geometry,
+                        ordinal,
+                        next.block_start,
+                        next.block_start + next.height,
+                    )?
+                    .is_some()
+                } else {
+                    false
+                };
+                let pending_affected = if let Some(cap) = drop_cap {
+                    cap.cut_for_band(
+                        geometry,
+                        ordinal,
+                        next.block_start,
+                        next.block_start + next.height,
+                    )?
+                    .is_some()
+                } else {
+                    false
+                };
+                previous_affected || pending_affected
+            } else {
+                false
+            };
             if metrics_stable && cursor.cluster() == old_cluster_end && !next_cap_affected {
                 for suffix in candidate + 1..previous.lines.len() {
                     self.append_retained_line(previous, suffix)?;
@@ -1075,13 +1130,15 @@ impl FlowLayoutArena {
                 block,
                 block_end,
                 estimate,
-                drop_cap.as_ref().and_then(|cap| {
-                    cap.cut_for_band(
+                match drop_cap.as_ref() {
+                    Some(cap) => cap.cut_for_band(
+                        geometry,
                         self.lines.len().saturating_sub(thread_line_start),
                         block,
                         block + estimate.height(),
-                    )
-                }),
+                    )?,
+                    None => None,
+                },
                 constraint.wrap,
                 constraint.align,
                 false,
@@ -1788,7 +1845,7 @@ mod tests {
             LAST_LINE_AUTO, ORIENTATION_MIXED, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE,
             SHAPE_RECTANGLE, WRAP_CHARACTER, WRAP_NONE,
         },
-        semantic_wire::{FlowConstraint, FlowExclusion, FlowRegion},
+        semantic_wire::{FlowConstraint, FlowExclusion, FlowRegion, FlowVertex},
         shaping_state::{ShapeArena, ShapedRun, ShapingRun},
         style_state::ResolvedStyle,
     };
@@ -2100,6 +2157,67 @@ mod tests {
         assert_eq!(rtl_cap.cut.end, f64::from(wide_region.inline_end));
         assert!(rtl_cap.cut.start > f64::from(wide_region.inline_start));
         assert!(rtl_cap.fragment.slot_start > layout.fragments[0].slot_start);
+
+        let mut contour_constraint = drop_cap_constraint;
+        contour_constraint.drop_cap_vertices_offset = 0;
+        contour_constraint.drop_cap_vertex_count = 3;
+        let contour_geometry = FlowGeometryArena {
+            constraints: vec![contour_constraint],
+            regions: vec![RetainedRegion {
+                record: wide_region,
+                vertex_start: 0,
+            }],
+            vertices: vec![
+                FlowVertex {
+                    inline: 0.0,
+                    block: 0.0,
+                },
+                FlowVertex {
+                    inline: 1.0,
+                    block: 0.0,
+                },
+                FlowVertex {
+                    inline: 0.0,
+                    block: 1.0,
+                },
+            ],
+            ..FlowGeometryArena::default()
+        };
+        let contour_cap = prepare_drop_cap(
+            contour_constraint,
+            wide_region,
+            &clusters,
+            &runs,
+            0,
+            0.0,
+            &styles,
+            fixture_metrics,
+            |_| Some(1),
+        )
+        .unwrap()
+        .unwrap();
+        let contour_middle = contour_cap.cut_block_start
+            + (contour_cap.cut_block_end - contour_cap.cut_block_start) * 0.5;
+        let contour_top = contour_cap
+            .cut_for_band(
+                &contour_geometry,
+                0,
+                contour_cap.cut_block_start,
+                contour_middle,
+            )
+            .unwrap()
+            .unwrap();
+        let contour_bottom = contour_cap
+            .cut_for_band(
+                &contour_geometry,
+                1,
+                contour_middle,
+                contour_cap.cut_block_end,
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(contour_top.start, contour_bottom.start);
+        assert!(contour_top.end > contour_bottom.end);
 
         let safe_flags = clusters.flags.clone();
         for flags in &mut clusters.flags[1..] {
@@ -3629,6 +3747,8 @@ mod tests {
             drop_cap_side: 0,
             drop_cap_margin_inline: 0.0,
             drop_cap_margin_block: 0.0,
+            drop_cap_vertices_offset: 0,
+            drop_cap_vertex_count: 0,
         }
     }
 

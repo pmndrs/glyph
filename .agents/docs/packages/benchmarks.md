@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:88c1559ab3b8324cec67c9e4f869ddffd47b1b734c31410be2d56d60996a2a44'
+source_digest: 'sha256:38b8e06d3b29e5b0bfbf9b293fe68c8103d79647e7901b9ef801a516a8acd35f'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -515,8 +515,9 @@ capture attributes most changed-frame CPU time to the single Rust
 A symbol-preserving diagnostic did not provide honest finer Rust attribution because LTO inlines most warm work into the
 export, so internal phase timers are required before claiming a particular Rust loop is dominant.
 
-Editorial is the retained projected-flow integration workload. Its body owns a shaping-safe three-line drop cap and two
-explicit flow regions; a rotating Three box is conservatively projected from perspective camera space into each region as
+Editorial is the retained projected-flow integration workload. Its body owns a shaping-safe three-line drop cap with a
+caller-authored normalized contour and two explicit flow regions; a rotating Three box is conservatively projected from
+perspective camera space into each region as
 one keyed exclusion. Every changed frame records property staging, synchronous publication, and post-publication layout
 separately, while the focused Presentation workflow can select Editorial, one raster technique, and one backend without
 running the complete matrix. The focused Chromium 149 matrix passes Bitmap/MTSDF/Slug on WebGPU and WebGL2 through both
@@ -524,7 +525,8 @@ native TSL and experimental Three/TypeGPU shaders. Each of the twelve cells reta
 reflows. TSL median end-to-end reflow spans 0.950–1.580 ms and its p95 spans 1.445–2.345 ms; TypeGPU medians span
 1.185–1.720 ms and p95 spans 1.510–2.350 ms. Publication dominates the median at 0.740–1.230 ms for TSL and
 0.965–1.320 ms for TypeGPU, while post-publication scene layout remains about 0.005 ms. These are fixed-host observations,
-not portable budgets. The obstacle mesh and material are disposed with the workload generation.
+not portable budgets. Those measurements predate the authored cap contour and must be refreshed before they are cited as
+contour-path evidence. The obstacle mesh and material are disposed with the workload generation.
 
 Paint & Effects is one live paragraph whose per-word hue advances continuously; opacity is shared, bounded white outline and hard shadow are MTSDF-only, and Bitmap plus Slug disable both controls. Paragraph Stress treats text volume as a topology change: moving its volume control immediately rebuilds the repeated corpus, while controls that only alter retained animation or paint state avoid replacement layouts. Dynamic Layout derives its initial three phase-offset widths from the same elapsed animation clock as subsequent frames, awaits every paragraph layout, and publishes the trio atomically; the first visible frame therefore continues directly into animation instead of flashing a uniform-width staging layout. One benchmark-owned interaction component gives navigable live canvases mouse drag and two-finger touch pan; Off-axis additionally enables pinch and wheel zoom. It translates gestures into renderer-neutral view commands and does not put DOM listeners in `@pmndrs/glyph`. Workloads are deliberately not React Activities. They are framework-neutral retained scenes behind the route-owned render host, so a swap releases the old scene's text and font/raster residency without replacing the host canvas, renderer, timestamp timer, or telemetry history. Only the Benchmark and Conformance modes retain React state as Activities. The shared multi-technique workload implementation remains a dynamic chunk; Benchmark schedules a cancellable no-timeout idle import, while pointer hover or keyboard focus warms it immediately. Unsupported idle-callback hosts simply retain interaction warming, so the chunk never enters the initial graph and ordinary Benchmark startup never waits for it. The host serializes scene activation and retains the current scene until its replacement is ready, preventing an asynchronously initialized workload from publishing partial text or inheriting the prior workload's configuration. Renderer-published configuration revisions make product probes causal rather than reflections of React props. Dynamic layout separately reports one completed three-paragraph reflow cost and count instead of hiding reshape work inside the CPU-submit graph. The MTSDF base-level scene and sampling paths require deterministic pixels within each renderer invocation, authenticated artifacts and resource counts, and bounded error against the independent scalar reconstruction. Hardware Apple Metal and headless SwiftShader framebuffer hashes remain labeled observations because filtered analytic coverage is not byte-portable across drivers. The current SwiftShader comparison reports `0.0957/255` mean absolute error, maximum error `10`, and 3,233 pixels above its threshold, all inside the reviewed `0.25/255`, `48`, and 2% envelopes. The current direct WebGPU observation reports framebuffer hash `4da56d…`, 14,400 changed pixels, 2,420 colors, and a 6,798,412-byte compressed artifact; its scalar comparison reports mean absolute error `0.0184937`, maximum error `1`, and zero threshold error pixels. The gate names base-level behavior rather than the removed generated-mip path.
 
