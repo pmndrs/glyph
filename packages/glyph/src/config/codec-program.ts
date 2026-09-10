@@ -3,7 +3,7 @@ import type { RasterTextEffect } from './raster-format.js';
 import type { CodecBufferId, CodecInput, CodecInputScope, CodecOperation } from './codec.js';
 import type { CodecBufferDeclaration, TechniqueSchemaMetadata } from './schema.js';
 import { isTechniqueSchema } from './schema.js';
-import { normalizeCodecProgramSystemBuffers, recordTechniqueCodecBody } from '../internal/codec-program-contract.js';
+import { recordTechniqueCodecBody } from '../internal/codec-program-contract.js';
 
 /** Expression DSL over the codec-program register machine; `compile()` lowers it to the same forward-only `CodecOperation` records as the hand-numbered form. Wire format, validator, and interpreter are unaffected. */
 
@@ -227,7 +227,7 @@ export interface CodecProgramBuilder<
 export interface CodecProgramSystemBuffers {
   readonly stableGlyphId: CodecBufferDeclaration<'u32', readonly ['stableGlyphId']>;
   readonly transformIndex?: CodecBufferDeclaration<'u32', readonly ['transformIndex']>;
-  /** Host-owned occurrence displacement. Raster bodies forward the system object; adapters choose its physical layout. */
+  /** Host-owned occurrence displacement. Raster bodies never receive this declaration; adapters choose its layout. */
   readonly placementOffset?: CodecBufferDeclaration<'f32', readonly ['inlineOffset', 'blockOffset']>;
 }
 
@@ -270,14 +270,41 @@ interface StoreRecord {
   readonly node: Node;
 }
 
-/** Build a program against one technique's authoritative schema. */
+interface TechniqueProgramOptions {
+  readonly inverseFontSize?: boolean;
+  readonly textEffects?: readonly RasterTextEffect[];
+}
+
+/** Build a glyph-local program against one technique's authoritative schema. */
 export function techniqueProgram<const Schema extends TechniqueSchemaMetadata>(
   schema: Schema,
-  options: {
-    readonly inverseFontSize?: boolean;
-    readonly textEffects?: readonly RasterTextEffect[];
-    readonly system?: CodecProgramSystemBuffers;
-  } = {},
+  options: TechniqueProgramOptions = {},
+): TechniqueCodecProgramBuilder<
+  Schema,
+  Schema['buffers'],
+  BindingNames<Schema['binding']['f32']>,
+  BindingNames<Schema['binding']['u32']>
+> {
+  return createTechniqueProgram(schema, options, true);
+}
+
+/** @internal Build the host's absolute decoration-row program; raster codecs use `techniqueProgram`. */
+export function hostAbsoluteTechniqueProgram<const Schema extends TechniqueSchemaMetadata>(
+  schema: Schema,
+  options: TechniqueProgramOptions = {},
+): TechniqueCodecProgramBuilder<
+  Schema,
+  Schema['buffers'],
+  BindingNames<Schema['binding']['f32']>,
+  BindingNames<Schema['binding']['u32']>
+> {
+  return createTechniqueProgram(schema, options, false);
+}
+
+function createTechniqueProgram<const Schema extends TechniqueSchemaMetadata>(
+  schema: Schema,
+  options: TechniqueProgramOptions,
+  relativePlacement: boolean,
 ): TechniqueCodecProgramBuilder<
   Schema,
   Schema['buffers'],
@@ -285,12 +312,14 @@ export function techniqueProgram<const Schema extends TechniqueSchemaMetadata>(
   BindingNames<Schema['binding']['u32']>
 > {
   if (!isTechniqueSchema(schema)) throw new TypeError('technique codec programs need a defined technique schema');
-  if (!isNonArrayObject(options)) throw new TypeError('technique codec options need an object');
+  const rawOptions: unknown = options;
+  if (!isNonArrayObject(rawOptions)) throw new TypeError('technique codec options need an object');
+  if ('system' in rawOptions) {
+    throw new TypeError('technique codec system buffers are host-owned and cannot be authored');
+  }
   if (options.inverseFontSize !== undefined && typeof options.inverseFontSize !== 'boolean') {
     throw new TypeError('technique codec inverseFontSize needs a boolean');
   }
-  const system =
-    options.system === undefined ? undefined : normalizeCodecProgramSystemBuffers(schema.buffers, options.system);
   const program = createCodecProgramBuilder(
     {
       scope: schema.scope,
@@ -300,7 +329,7 @@ export function techniqueProgram<const Schema extends TechniqueSchemaMetadata>(
       ...(options.textEffects === undefined ? {} : { textEffects: options.textEffects }),
     },
     schema,
-    system?.placementOffset !== undefined,
+    relativePlacement,
   );
   let compiled = false;
   return Object.freeze({
@@ -331,24 +360,12 @@ export function techniqueProgram<const Schema extends TechniqueSchemaMetadata>(
         if (buffer.scalar === 'f32') program.storeF32(buffer.id, lanes as readonly CodecF32Value[]);
         else program.storeU32(buffer.id, lanes as readonly CodecU32Value[]);
       }
-      if (system !== undefined) {
-        program.store(system.stableGlyphId, [program.semantics.stableGlyphId]);
-        if (system.transformIndex !== undefined) {
-          program.store(system.transformIndex, [program.semantics.transformIndex]);
-        }
-        if (system.placementOffset !== undefined) {
-          program.store(system.placementOffset, [
-            program.systemSemantics.placementInline,
-            program.systemSemantics.placementBlock,
-          ]);
-        }
-      }
       const body = program.compile();
       recordTechniqueCodecBody(body, {
         schema,
-        stableGlyphId: system?.stableGlyphId.id,
-        transformIndex: system?.transformIndex?.id,
-        placementOffset: system?.placementOffset?.id,
+        stableGlyphId: undefined,
+        transformIndex: undefined,
+        placementOffset: undefined,
       });
       return body;
     },

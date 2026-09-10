@@ -174,8 +174,8 @@ export const bitmapSchema: TechniqueSchema<
 export const bitmapCodec: RasterCodec<typeof bitmap, typeof bitmapSchema> = registerGlyphRasterCodec({
   raster: bitmap,
   schema: bitmapSchema,
-  codecBody(system) {
-    const p = techniqueProgram(bitmapSchema, { system });
+  codecBody() {
+    const p = techniqueProgram(bitmapSchema);
     const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
     const { bearingX, bearingY, width, height, uvOriginX, uvOriginY, uvSizeX, uvSizeY, page } = p.binding;
     return p.compile({

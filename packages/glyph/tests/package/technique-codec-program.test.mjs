@@ -3,12 +3,10 @@ import test from 'node:test';
 
 import { techniqueProgram } from '../../dist/config/codec-program.js';
 import { id } from '../../dist/config/codec.js';
-import { defineCodecBuffers, defineTechniqueSchema } from '../../dist/config/schema.js';
+import { defineTechniqueSchema } from '../../dist/config/schema.js';
 
 const ORIGIN_BUFFER_ID = id.buffer('test.codec-contract/origin');
 const PAGE_BUFFER_ID = id.buffer('test.codec-contract/page');
-const SYSTEM_BUFFER_ID = id.buffer('test.codec-contract/system/stable-glyph-id');
-const OTHER_SYSTEM_BUFFER_ID = id.buffer('test.codec-contract/system/other-stable-glyph-id');
 
 const schema = defineTechniqueSchema({
   technique: 'test.codec-contract',
@@ -20,12 +18,8 @@ const schema = defineTechniqueSchema({
   },
 });
 
-const system = defineCodecBuffers({
-  stableGlyphId: { id: SYSTEM_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
-});
-
 function program() {
-  return techniqueProgram(schema, { system });
+  return techniqueProgram(schema);
 }
 
 test('schema-keyed codec compilation requires every declared buffer exactly once', () => {
@@ -65,19 +59,12 @@ test('codec values reject wrong widths and scalar kinds at the compile call', ()
   );
 });
 
-test('host system lanes are exact and disjoint from technique buffers', () => {
+test('technique authors cannot declare host system memory layout', () => {
   assert.throws(
     () =>
       techniqueProgram(schema, {
         system: { stableGlyphId: { id: ORIGIN_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] } },
       }),
-    /collides with a technique buffer/,
-  );
-  assert.throws(
-    () =>
-      techniqueProgram(schema, {
-        system: { stableGlyphId: { id: OTHER_SYSTEM_BUFFER_ID, scalar: 'f32', lanes: ['stableGlyphId'] } },
-      }),
-    /needs one u32/,
+    /system buffers are host-owned/,
   );
 });

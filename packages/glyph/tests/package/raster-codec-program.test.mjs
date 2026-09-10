@@ -6,14 +6,13 @@ import { id } from '../../dist/config/codec.js';
 import { defineRasterFormat } from '../../dist/config/raster-format.js';
 import { createRasterCodecProgram, registerRasterCodec } from '../../dist/config/raster.js';
 import { defineCodecBuffers, defineTechniqueSchema } from '../../dist/config/schema.js';
+import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 
 const TEST_PROGRAM_VARIANT = 3;
 const TEST_PROGRAM_NAMESPACE = 'test-renderer';
 const ORIGIN_BUFFER_ID = id.buffer('test.raster-codec-program/origin');
 const SYSTEM_BUFFER_ID = id.buffer('test.raster-codec-program/system/stable-glyph-id');
 const PLACEMENT_BUFFER_ID = id.buffer('test.raster-codec-program/system/placement-offset');
-const OTHER_SYSTEM_BUFFER_ID = id.buffer('test.raster-codec-program/system/other-stable-glyph-id');
-const OTHER_PLACEMENT_BUFFER_ID = id.buffer('test.raster-codec-program/system/other-placement-offset');
 
 const technique = defineRasterFormat({
   id: 'test.raster-codec-program',
@@ -27,20 +26,8 @@ const technique = defineRasterFormat({
   },
   dispose() {},
 });
-const wrongSystemTechnique = defineRasterFormat({
-  ...technique,
-  id: 'test.raster-codec-program-wrong-system',
-});
 const schema = defineTechniqueSchema({
   technique: technique.id,
-  scope: 'glyph',
-  binding: {},
-  buffers: { origin: { id: ORIGIN_BUFFER_ID, scalar: 'f32', lanes: ['x', 'y'] } },
-  resources: { payload: { kind: 'buffer' } },
-  render: { resource: 'payload', geometry: { kind: 'synthetic-quad' } },
-});
-const wrongSystemSchema = defineTechniqueSchema({
-  technique: wrongSystemTechnique.id,
   scope: 'glyph',
   binding: {},
   buffers: { origin: { id: ORIGIN_BUFFER_ID, scalar: 'f32', lanes: ['x', 'y'] } },
@@ -50,14 +37,6 @@ const wrongSystemSchema = defineTechniqueSchema({
 const system = defineCodecBuffers({
   stableGlyphId: { id: SYSTEM_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
   placementOffset: { id: PLACEMENT_BUFFER_ID, scalar: 'f32', lanes: ['inlineOffset', 'blockOffset'] },
-});
-const otherSystem = defineCodecBuffers({
-  stableGlyphId: { id: OTHER_SYSTEM_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
-  placementOffset: {
-    id: OTHER_PLACEMENT_BUFFER_ID,
-    scalar: 'f32',
-    lanes: ['inlineOffset', 'blockOffset'],
-  },
 });
 const capabilitySet = {
   capabilities: ['ordered-direct'],
@@ -85,28 +64,15 @@ function plan(codecBody) {
 }
 
 let codecBodyCalls = 0;
-let receivedFrozenHostInputs = false;
-const portable = plan((hostSystem, hostCapabilitySet) => {
+let codecBodyArgumentCount = 0;
+let receivedFrozenCapabilitySet = false;
+const portable = plan((...hostInputs) => {
+  codecBodyArgumentCount = hostInputs.length;
+  const [hostCapabilitySet] = hostInputs;
   codecBodyCalls += 1;
-  receivedFrozenHostInputs =
-    Object.isFrozen(hostSystem) &&
-    Object.isFrozen(hostSystem.stableGlyphId) &&
-    Object.isFrozen(hostSystem.placementOffset) &&
-    Object.isFrozen(hostCapabilitySet);
-  const p = techniqueProgram(schema, { system: hostSystem });
+  receivedFrozenCapabilitySet = Object.isFrozen(hostCapabilitySet);
+  const p = techniqueProgram(schema);
   return p.compile({ origin: [p.semantics.inlineOrigin, p.semantics.blockOrigin] });
-});
-const wrongSystemPortable = registerRasterCodec({
-  raster: wrongSystemTechnique,
-  schema: wrongSystemSchema,
-  programVariant: TEST_PROGRAM_VARIANT,
-  codecBody() {
-    const p = techniqueProgram(wrongSystemSchema, { system: otherSystem });
-    return p.compile({ origin: [p.semantics.inlineOrigin, p.semantics.blockOrigin] });
-  },
-  compileFont() {
-    throw new Error('not used by codec assembly');
-  },
 });
 
 test('portable codec assembly rejects host inputs before invoking technique code', () => {
@@ -148,25 +114,21 @@ test('portable codec assembly owns host identities, system buffers, and variant 
   assert.deepEqual(compiled.capabilitySet, capabilitySet);
   assert.equal(Object.isFrozen(compiled.capabilitySet), true);
   assert.equal(compiled.variant, TEST_PROGRAM_VARIANT);
-  assert.equal(receivedFrozenHostInputs, true);
+  assert.equal(codecBodyArgumentCount, 1);
+  assert.equal(receivedFrozenCapabilitySet, true);
   assert.deepEqual(
     compiled.buffers.map((buffer) => buffer.id),
     [schema.buffers.origin.id, system.stableGlyphId.id, system.placementOffset.id],
   );
-});
-
-test('portable codec assembly rejects a body compiled for different host system lanes', () => {
-  assert.throws(
-    () =>
-      createRasterCodecProgram(wrongSystemPortable, {
-        namespace: TEST_PROGRAM_NAMESPACE,
-        system,
-        capabilitySet,
-        transformMode: 'direct',
-        allocationMode: 'ordered',
-      }),
-    /does not use the requested system buffers/,
-  );
+  const opcodes = textShaperAbi.codec.opcodes;
+  assert.deepEqual(compiled.operations.slice(-6), [
+    { opcode: opcodes.loadU32, target: 0, operand0: 1 },
+    { opcode: opcodes.storeU32, operand0: 0, operand1: 0, immediate0: system.stableGlyphId.id },
+    { opcode: opcodes.loadF32, target: 0, operand0: 0 },
+    { opcode: opcodes.storeF32, operand0: 0, operand1: 0, immediate0: system.placementOffset.id },
+    { opcode: opcodes.loadF32, target: 0, operand0: 1 },
+    { opcode: opcodes.storeF32, operand0: 0, operand1: 1, immediate0: system.placementOffset.id },
+  ]);
 });
 
 test('portable codec assembly rejects structurally copied programs', () => {

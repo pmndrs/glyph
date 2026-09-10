@@ -17,8 +17,6 @@ import {
 import { FontRegistry } from '../../dist/loader.js';
 
 const RECT_BUFFER_ID = id.buffer('test.three-plan-program/rect');
-const STABLE_GLYPH_BUFFER_ID = id.buffer('test.three-plan-program/system/stable-glyph-id');
-const TRANSFORM_BUFFER_ID = id.buffer('test.three-plan-program/system/transform-index');
 await glyph.init();
 
 const portablePrograms = new Map();
@@ -55,8 +53,8 @@ const rasterProgram = (techniqueIdentity, declaration = {}) => {
     portable = registerRasterCodec({
       raster: technique,
       schema,
-      codecBody(system) {
-        const program = techniqueProgram(schema, { system });
+      codecBody() {
+        const program = techniqueProgram(schema);
         return program.compile(
           Object.fromEntries(
             Object.entries(schema.buffers).map(([name, buffer]) => [
@@ -248,7 +246,7 @@ test('a technique registered after an engine exists is refused, not silently dro
   );
 });
 
-test('engine construction rejects a portable body compiled for different system lanes', async () => {
+test('engine construction supplies system lanes outside portable codec authoring', async () => {
   const technique = defineRasterFormat({
     id: 'test-wrong-system-lanes',
     kind: 'test',
@@ -273,12 +271,7 @@ test('engine construction rejects a portable body compiled for different system 
     raster: technique,
     schema,
     codecBody() {
-      const authoring = techniqueProgram(schema, {
-        system: {
-          stableGlyphId: { id: STABLE_GLYPH_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
-          transformIndex: { id: TRANSFORM_BUFFER_ID, scalar: 'u32', lanes: ['transformIndex'] },
-        },
-      });
+      const authoring = techniqueProgram(schema);
       return authoring.compile({});
     },
     compileFont() {},
@@ -298,10 +291,9 @@ test('engine construction rejects a portable body compiled for different system 
     },
   });
 
-  assert.throws(
-    () => glyph.handle('three:program-registration:wrong-system', ThreeConfig),
-    /codec body does not use the requested system buffers/,
-  );
+  const handle = glyph.handle('three:program-registration:host-system', ThreeConfig);
+  assert.ok(handle);
+  handle.dispose();
 });
 
 async function fontForTechnique(technique) {

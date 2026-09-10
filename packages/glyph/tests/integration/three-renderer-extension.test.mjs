@@ -56,8 +56,8 @@ const suppliedGeometrySchema = defineTechniqueSchema({
 const suppliedGeometryCodec = registerRasterCodec({
   raster: suppliedGeometryTechnique,
   schema: suppliedGeometrySchema,
-  codecBody(system) {
-    const program = techniqueProgram(suppliedGeometrySchema, { system });
+  codecBody() {
+    const program = techniqueProgram(suppliedGeometrySchema);
     return program.compile({ origin: [program.semantics.inlineOrigin, program.semantics.blockOrigin] });
   },
   compileFont(compiler) {
