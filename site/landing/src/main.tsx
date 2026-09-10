@@ -35,10 +35,7 @@ function Exposure() {
 // theme at module scope, which defeats tree-shaking.
 const DevOverlays = import.meta.env.DEV ? lazy(() => import('./dev/panel')) : null;
 
-/**
- * The page's own handle rather than R3F's implicit default, because this scene
- * asks for `independent` compositing and that is chosen on the config.
- */
+/** The page's own handle keeps its font and renderer resources page-local. */
 function LandingGlyph({ children }: { children: ReactNode }) {
   return <GlyphProvider handle={use(landingHandle())}>{children}</GlyphProvider>;
 }
