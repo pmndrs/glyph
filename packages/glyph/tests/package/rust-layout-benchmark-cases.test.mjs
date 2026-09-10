@@ -13,6 +13,7 @@ test('the maintained benchmark case registry keeps specialized corpus requiremen
   assert.equal(rustLayoutBenchmarkCases('latin').includes('justify'), true);
   assert.equal(rustLayoutBenchmarkCases('latin').includes('active-column-resize'), true);
   assert.equal(rustLayoutBenchmarkCases('latin').includes('position-query'), true);
+  assert.equal(rustLayoutBenchmarkCases('latin').includes('adopt-position-query'), true);
   assert.equal(rustLayoutBenchmarkCases('latin').includes('equivalent-width'), true);
   assert.equal(rustLayoutBenchmarkCases('latin').includes('bidi-resize'), false);
   assert.equal(rustLayoutBenchmarkCases('bidi').includes('bidi-resize'), true);
@@ -58,6 +59,15 @@ test('reflow cases produce deterministic geometry shapes', () => {
     width: 434,
     revision: 5,
   });
+  assert.deepEqual(rustLayoutBenchmarkInitialGeometry('adopt-position-query', base), {
+    ...base,
+    width: 434,
+  });
+  assert.deepEqual(rustLayoutBenchmarkGeometry('adopt-position-query', 3, base), {
+    ...base,
+    width: 434,
+    revision: 5,
+  });
 
   const first = rustLayoutBenchmarkGeometry('equivalent-width', 0, base);
   const second = rustLayoutBenchmarkGeometry('equivalent-width', 1, base);
@@ -96,7 +106,7 @@ test('equivalent-width rejects render-plan writes while retaining publication ge
   );
 });
 
-test('active-column-resize requires every measured update to publish', () => {
+test('active resize and adopted query cases require every measured update to publish', () => {
   const settled = { publicationGeneration: 7, patchCount: 1, writeBytes: 8 };
   assert.doesNotThrow(() =>
     assertRustLayoutBenchmarkResult('active-column-resize', settled, {
@@ -114,4 +124,22 @@ test('active-column-resize requires every measured update to publish', () => {
       }),
     /active-column-resize did not publish a changed layout at generation 8/u,
   );
+  for (const name of ['adopt-measure-query', 'adopt-position-query']) {
+    assert.doesNotThrow(() =>
+      assertRustLayoutBenchmarkResult(name, settled, {
+        publicationGeneration: 8,
+        patchCount: 1,
+        writeBytes: 8,
+      }),
+    );
+    assert.throws(
+      () =>
+        assertRustLayoutBenchmarkResult(name, settled, {
+          publicationGeneration: 8,
+          patchCount: 0,
+          writeBytes: 0,
+        }),
+      new RegExp(`${name} did not publish a changed layout at generation 8`, 'u'),
+    );
+  }
 });

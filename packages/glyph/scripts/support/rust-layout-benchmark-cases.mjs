@@ -9,6 +9,7 @@ const benchmarkCases = [
   'measure-query',
   'position-query',
   'adopt-measure-query',
+  'adopt-position-query',
   'suffix-edit',
   'localized-edit',
   'localized-splice',
@@ -22,7 +23,7 @@ export function rustLayoutBenchmarkCases(corpus) {
 }
 
 export function rustLayoutBenchmarkGeometry(name, index, base) {
-  if (name === 'active-column-resize' || name === 'position-query') {
+  if (name === 'active-column-resize' || name === 'position-query' || name === 'adopt-position-query') {
     return {
       ...base,
       width: index % 2 === 0 ? 420 : 434,
@@ -49,13 +50,13 @@ export function rustLayoutBenchmarkGeometry(name, index, base) {
 
 export function rustLayoutBenchmarkInitialGeometry(name, base) {
   if (name === 'justify') return { ...base, align: 'justify' };
-  if (name === 'active-column-resize') return { ...base, width: 434 };
+  if (name === 'active-column-resize' || name === 'adopt-position-query') return { ...base, width: 434 };
   return base;
 }
 
 export function assertRustLayoutBenchmarkResult(name, previous, next) {
   if (
-    (name === 'active-column-resize' || name === 'adopt-measure-query') &&
+    (name === 'active-column-resize' || name === 'adopt-measure-query' || name === 'adopt-position-query') &&
     (next.patchCount === 0 || next.writeBytes === 0)
   ) {
     throw new Error(`${name} did not publish a changed layout at generation ${next.publicationGeneration}`);
