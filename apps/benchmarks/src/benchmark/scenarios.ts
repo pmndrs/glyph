@@ -1,6 +1,6 @@
 import type { BenchmarkScenario } from './contracts';
 import { ADVANCED_SHAPING_CASES } from '../workloads/advanced-shaping/scene';
-const ADVANCED_SHAPING_HASH = 'ae66ee48';
+const ADVANCED_SHAPING_HASH = 'f718256d';
 const UPDATED_EXTERNAL_RASTER_GLYPHS = 13;
 
 function deterministicValidation(hashes: readonly string[]): string {

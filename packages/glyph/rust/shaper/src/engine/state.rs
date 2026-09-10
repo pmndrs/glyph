@@ -847,7 +847,6 @@ impl TextEngine {
         let source_u32 = positioned.semantic_u32();
         let mut glyphs = Vec::new();
         let mut semantic_glyphs = Vec::new();
-        let mut placements = Vec::new();
         let mut semantic_f32: [Vec<f32>; SEMANTIC_F32_FIELD_COUNT] =
             core::array::from_fn(|_| Vec::new());
         let mut semantic_u32: [Vec<u32>; SEMANTIC_U32_FIELD_COUNT] =
@@ -872,12 +871,6 @@ impl TextEngine {
                 .map_err(|_| EngineError::ResultTooLarge)?;
             semantic_glyphs.push(*semantic);
             glyphs.push(glyph);
-            placements.push(
-                positioned
-                    .placement()
-                    .glyph_translation(glyph_index)
-                    .ok_or(EngineError::InvalidRequest)?,
-            );
             for (destination, values) in semantic_f32.iter_mut().zip(source_f32.iter()) {
                 if values.is_empty() {
                     continue;
@@ -905,7 +898,6 @@ impl TextEngine {
                     transform_id: paragraph_id,
                     glyphs: &glyphs,
                     semantic_glyphs: &semantic_glyphs,
-                    placement: super::codec_gather::GlyphPlacementInput::Direct(&placements),
                     semantic_change_masks: &[],
                     semantic_f32: &semantic_f32_refs,
                     semantic_u32: &semantic_u32_refs,
@@ -1957,7 +1949,6 @@ fn append_planner_gather(
             transform_id: ordered.id,
             glyphs: positioned.glyphs(),
             semantic_glyphs: positioned.semantic_glyphs(),
-            placement: super::codec_gather::GlyphPlacementInput::Segments(positioned.placement()),
             semantic_change_masks,
             semantic_f32: &semantic_f32,
             semantic_u32: &semantic_u32,

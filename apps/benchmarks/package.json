@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "pnpm --filter @pmndrs/glyph build && vite",
     "build": "node ./scripts/build.mts",
+    "size": "node ./scripts/measure-package-sizes.mts",
     "test": "node ./scripts/test.mts",
     "check": "node ./scripts/check.mts"
   },

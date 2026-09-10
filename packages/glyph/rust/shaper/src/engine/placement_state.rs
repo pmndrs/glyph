@@ -329,6 +329,7 @@ impl PlacementState {
         Ok(())
     }
 
+    #[cfg(any(test, feature = "kernel-lab"))]
     pub(crate) fn glyph_translation(&self, glyph_index: usize) -> Option<SegmentTranslation> {
         let segment = *self.glyph_segment_indices.get(glyph_index)?;
         self.translations.get(usize::try_from(segment).ok()?)

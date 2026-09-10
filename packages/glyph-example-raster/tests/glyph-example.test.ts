@@ -317,8 +317,8 @@ const stripGeometry = triangleStripGeometry(glyphExampleIndexedQuadGeometry);
 const suppliedGlyphExampleCodec = registerRasterCodec({
   raster: suppliedGlyphExample,
   schema: suppliedGlyphExampleSchema,
-  codecBody(system) {
-    const p = techniqueProgram(suppliedGlyphExampleSchema, { system });
+  codecBody() {
+    const p = techniqueProgram(suppliedGlyphExampleSchema);
     const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
     const { inset, red, green, blue, alpha } = p.binding;
     const insetPixels = f32.mul(inset, fontSize);

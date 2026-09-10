@@ -19,6 +19,7 @@ export interface RenderTechniqueTypeGpuLabReport {
   readonly initialVisiblePixels: number;
   readonly updatedVisiblePixels: number;
   readonly changedPixels: number;
+  readonly coldMismatchPixels: number;
   readonly recoveredDraws: number;
   readonly recoveredVisiblePixels: number;
   readonly idleGpuSubmissions: number;
@@ -47,17 +48,17 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
     await fontFace.glyphExample.load();
     text = handle.createText({
       font: fontFace.glyphExample,
-      text: 'Portable TypeGPU',
+      text: 'Portable TypeGPU reflow',
       fontSize: 64,
-      width: 768,
+      width: 360,
       height: 192,
     });
     try {
-      glyph.shape();
+      publishGlyphs('initial narrow layout');
       const initial = handle.drawList;
       const initialPixels = await renderer.readPixels();
-      text.update({ text: 'Updated WebGPU', color: '#ff40a0' });
-      glyph.shape();
+      text.update({ width: 720 });
+      publishGlyphs('retained width reflow');
       const updated = handle.drawList;
       const updatedPixels = await renderer.readPixels();
       gpuDevice.destroy();
@@ -70,20 +71,19 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       handle = glyph.handle('benchmark:typegpu:recovered', defineExampleConfig(renderer));
       text = handle.createText({
         font: fontFace.glyphExample,
-        text: 'Updated WebGPU',
-        color: '#ff40a0',
+        text: 'Portable TypeGPU reflow',
         fontSize: 64,
-        width: 768,
+        width: 720,
         height: 192,
       });
-      glyph.shape();
+      publishGlyphs('cold wide layout');
       const recovered = handle.drawList;
       const recoveredPixels = await renderer.readPixels();
       const submissionSamples: number[] = [];
       for (let index = 0; index < SUBMISSION_WARMUP + SUBMISSION_SAMPLES; index += 1) {
         text.update({ text: index % 2 === 0 ? 'Pipeline WebGPU' : 'Updated WebGPU' });
         const started = performance.now();
-        glyph.shape();
+        publishGlyphs('submission sample');
         const sampled = handle.drawList;
         const duration = performance.now() - started;
         if (sampled.draws.length === 0) throw new Error('the TypeGPU submission benchmark produced no draw');
@@ -94,11 +94,11 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       if (submissionsBeforeIdle !== 1 + SUBMISSION_WARMUP + SUBMISSION_SAMPLES) {
         throw new Error('the TypeGPU renderer lab did not submit every measured frame');
       }
-      glyph.shape();
+      publishGlyphs('idle frame');
       const idleGpuSubmissions = renderer.submittedPasses - submissionsBeforeIdle;
       const submissionsBeforeDispose = renderer.submittedPasses;
       text.dispose();
-      glyph.shape();
+      publishGlyphs('clear frame');
       textDisposed = true;
       const clearedPixels = await renderer.readPixels();
       const report = Object.freeze({
@@ -107,6 +107,7 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
         initialVisiblePixels: visiblePixelCount(initialPixels),
         updatedVisiblePixels: visiblePixelCount(updatedPixels),
         changedPixels: changedPixelCount(initialPixels, updatedPixels),
+        coldMismatchPixels: changedPixelCount(updatedPixels, recoveredPixels),
         recoveredDraws: recovered.draws.length,
         recoveredVisiblePixels: visiblePixelCount(recoveredPixels),
         idleGpuSubmissions,
@@ -122,6 +123,7 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
         report.initialVisiblePixels === 0 ||
         report.updatedVisiblePixels === 0 ||
         report.changedPixels === 0 ||
+        report.coldMismatchPixels !== 0 ||
         report.recoveredDraws === 0 ||
         report.recoveredVisiblePixels === 0 ||
         report.idleGpuSubmissions !== 0 ||
@@ -143,6 +145,15 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
     fontFace?.dispose();
     for (const ownedRenderer of renderers.reverse()) ownedRenderer.dispose();
     for (const ownedDevice of devices.reverse()) ownedDevice.destroy();
+  }
+}
+
+function publishGlyphs(label: string): void {
+  try {
+    glyph.shape();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`TypeGPU renderer lab failed during ${label}: ${detail}`, { cause: error });
   }
 }
 

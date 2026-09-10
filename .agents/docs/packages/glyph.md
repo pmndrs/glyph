@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:60b7f352c912bc27d75ba88e61ad9c546faca6af18a5bbc227207929bfc0a511'
+source_digest: 'sha256:625198510fb3976bf414a7d361091f3c11d797f5cce6443f27ec2d28ca0f2875'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1276,13 +1276,15 @@ representation lab finds mismatches in every tested compact candidate. The activ
 420/434-unit widths and fails on any zero-patch sample.
 
 Those counterexamples close the old-bit question for the rejected indexed placement-table experiment. The package is
-pre-alpha and now publishes one direct-offset raster contract without a compatibility branch. CPU semantic/query output
-retains the established absolute f32 origins produced by the ordered f64 positioning fold and one final narrow. Raster
-Codec programs instead receive a hidden engine-owned f32x2 occurrence offset and stable glyph-local geometry; Three and
-direct TypeGPU perform the same ordered local-plus-offset f32 addition before coverage. Codec authors continue to name
-semantic and raster values rather than slots, tables, bind groups, or physical buffer layouts. A 65,536-case finite
-arithmetic regression proves this is the same commutative f32 addition the former Codec-side absolute raster origin used;
-tiny-world, justification, cancellation, retained-update, and browser-pixel evidence still gate milestone completion.
+pre-alpha and now publishes one direct-offset raster contract without a compatibility branch. Each rendered glyph's
+semantic row owns its final inline/block origin under the re-pinned additive f32 contract. Gather resolves that row by
+`LayoutGlyph.semantic_glyph_index`; it does not resolve a shared compact CPU segment or build a second placement vector.
+Raster Codec programs receive the hidden engine-owned f32x2 occurrence origin alongside stable glyph-local geometry;
+Three and direct TypeGPU perform the same ordered local-plus-origin f32 addition before coverage. Codec authors continue
+to name semantic and raster values rather than slots, tables, bind groups, or physical buffer layouts. A 65,536-case
+finite arithmetic regression proves this is the same commutative f32 addition the former Codec-side absolute raster
+origin used; tiny-world, justification, cancellation, retained-update, and browser-pixel evidence still gate milestone
+completion.
 
 Static local coordinates cannot be anchored to visual slices because width changes move dense-CJK slice boundaries. The
 exact anchor policy remains evidence-gated; an admissible bounded-local form may use fixed, break-independent numeric
@@ -1309,9 +1311,9 @@ f64 reassociation counterexamples remain authoritative for the future CPU cutove
 
 Break-independent numeric blocks and compact placement segments are now production-owned and populated by the single
 positioning traversal. Justification, L1/L2, hanging, boundary ownership, and exact f64 translation remain in core; only
-the resolved x/y offset reaches a renderer. CPU semantic/query rows still publish absolute coordinates from the same
-local-plus-offset operation. Visual-span proof rows and planner-scoped run handles remain test/kernel-lab evidence because
-the direct-offset renderer contract does not consume indexed run identity.
+each rendered glyph's resolved semantic x/y origin reaches a renderer. CPU semantic/query rows and renderer placement use
+the same ordered local-plus-origin f32 operation. Visual-span proof rows and planner-scoped run handles remain
+test/kernel-lab evidence because the direct-offset renderer contract does not consume indexed run identity.
 
 Retained geometry-only positioning has a matching guarded path for visually trivial, boundary-free, undecorated text. It
 reuses committed glyph-local, raster, and effect rows, walks the existing positioning authority only to rebuild compact
@@ -1320,13 +1322,13 @@ identity and exact outline presence authenticate the retained rows; any mismatch
 then resolves changed Codec dependencies and updates semantic position inputs plus CPU ink bounds without repeating font
 selection, raster resource lookup, or full `PlanGlyph` construction. Other changes use the general authorities.
 
-Two fresh 31-sample ordered Bitmap repeats after the projected-flow and drop-cap checkpoints pool to `3.013 / 3.183 ms`
-median/p95 for 21,805 Latin glyphs and `2.394 / 2.526 ms` for 21,978 dense-CJK glyphs. The exact main comparison measured
-`3.769 / 3.852 ms` for Latin; its clean CJK repeat measured `2.974 / 3.127 ms`, while a separate noisy pass is excluded
-from the p95 comparison. The retained candidate is therefore 20.1% faster at the Latin median and 19.5% faster at the
-CJK median, with 17.4% and 19.2% lower p95 respectively. Every active-resize sample still emits one unchanged f32x2
+Fresh 31-sample ordered Bitmap repeats after direct semantic-origin resolution measure `2.883 / 2.928 ms` median/p95
+for 21,805 Latin glyphs and `2.246 / 2.283 ms` for 21,978 dense-CJK glyphs. The exact clean main comparison measured
+`3.767 / 3.850 ms` for Latin and `2.974 / 3.127 ms` for CJK. The retained candidate is therefore 23.5% faster at the
+Latin median and 24.5% faster at the CJK median, with 23.9% and 27.0% lower p95 respectively. Every active-resize sample
+still emits one unchanged f32x2
 direct-offset patch—174,440 bytes for Latin and 175,824 bytes for CJK—so these results establish a CPU positioning win,
-not the final compact-publication result. These 8-warmup/62-sample checkpoints are directional evidence; the final
+not the final compact-publication result. These 8-warmup/31-sample checkpoints are directional evidence; the final
 40-warmup/101-sample interleaved release matrix remains open.
 
 The current renderer contract is exercised as product code rather than a synthetic placement graph. Direct TypeGPU
@@ -1346,7 +1348,7 @@ the direct engine-owned f32x2 occurrence offset described above. TypeGPU remains
 shared buffer limit.
 
 The replacement direction keeps the existing batches, physical instances, order indirection, primitive spans, and draws.
-Core exposes a direct x/y occurrence offset through an engine-owned semantic placement seam. A portable
+Core exposes each rendered glyph's direct x/y occurrence origin through an engine-owned semantic placement seam. A portable
 `RasterCodec.codecBody` receives only the frozen renderer capability set and authors glyph-local technique outputs; after
 that body is authenticated, package-private host assembly appends stable identity, optional transform identity, and the
 x/y offset stores. Codec authors therefore describe glyph meaning and raster inputs, not slots, tables, bind groups, or

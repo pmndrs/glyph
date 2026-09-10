@@ -1604,6 +1604,13 @@ function disposeEntries(entries: readonly WorkloadEntry[]): void {
     entry.labelText?.dispose();
     entry.bounds?.geometry.dispose();
     entry.bounds?.material.dispose();
+    entry.editorialObstacle?.geometry.dispose();
+    const obstacleMaterial = entry.editorialObstacle?.material;
+    if (Array.isArray(obstacleMaterial)) {
+      for (const material of obstacleMaterial) material.dispose();
+    } else {
+      obstacleMaterial?.dispose();
+    }
   }
 }
 

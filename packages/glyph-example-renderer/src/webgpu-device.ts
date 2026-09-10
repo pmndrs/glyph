@@ -24,15 +24,18 @@ import {
 const positionLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x3));
 const uvLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2));
 const originLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
+const placementLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const sizeLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const colorLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const viewportLayout = tgpu.bindGroupLayout({ viewport: { uniform: d.vec2f } });
+const PLACEMENT_BUFFER_NAME = 'placementOffset';
 
 const vertexMain = tgpu.vertexFn({
   in: {
     position: d.vec3f,
     uv: d.vec2f,
     origin: d.vec2f,
+    placementOffset: d.vec2f,
     size: d.vec2f,
     color: d.vec4f,
   },
@@ -44,7 +47,7 @@ const vertexMain = tgpu.vertexFn({
     TypeGpuGlyphExampleVertexInput({
       quadPosition: input.position.xy,
       quadUv: input.uv,
-      instance: { origin: input.origin, size: input.size, color: input.color },
+      instance: { origin: input.origin.add(input.placementOffset), size: input.size, color: input.color },
     }),
   );
   const viewport = viewportLayout.$.viewport;
@@ -133,6 +136,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
         position: positionLayout.attrib,
         uv: uvLayout.attrib,
         origin: originLayout.attrib,
+        placementOffset: placementLayout.attrib,
         size: sizeLayout.attrib,
         color: colorLayout.attrib,
       },
@@ -377,6 +381,17 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
           byBytes.set(bytes, { buffer: this.#root.unwrap(typed), byteLength: bytes.byteLength });
           prepared.set(name, byBytes);
         }
+        const placements = prepared.get(PLACEMENT_BUFFER_NAME) ?? new Map<Uint8Array, GpuInstanceBuffer>();
+        if (!placements.has(realized.placementOffset)) {
+          const count = recordCount(realized.placementOffset, 2, 'host placement-offset');
+          const typed = this.#createInstanceBuffer(PLACEMENT_BUFFER_NAME, 2, count);
+          typed.write(exactBuffer(realized.placementOffset));
+          placements.set(realized.placementOffset, {
+            buffer: this.#root.unwrap(typed),
+            byteLength: realized.placementOffset.byteLength,
+          });
+          prepared.set(PLACEMENT_BUFFER_NAME, placements);
+        }
       }
       return prepared;
     } catch (error) {
@@ -426,6 +441,12 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
           throw new Error(`TypeGPU example renderer has no realized "${geometryName}" geometry`);
         }
         const origin = gpuBufferForDraw(buffers, realized, 'origin');
+        const placementOffset = gpuBufferForBytes(
+          buffers,
+          PLACEMENT_BUFFER_NAME,
+          realized.placementOffset,
+          'host placement-offset',
+        );
         const size = gpuBufferForDraw(buffers, realized, 'size');
         const color = gpuBufferForDraw(buffers, realized, 'color');
         const drawGeometry = realized.geometry;
@@ -434,6 +455,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
           .with(positionLayout, geometry.position)
           .with(uvLayout, geometry.uv)
           .with(originLayout, origin)
+          .with(placementLayout, placementOffset)
           .with(sizeLayout, size)
           .with(colorLayout, color)
           .with(pass)
@@ -455,6 +477,8 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
   #createInstanceBuffer(name: string, vectorWidth: number, count: number) {
     if (name === 'origin' && vectorWidth === 2)
       return this.#root.createBuffer(originLayout.schemaForCount(count)).$usage('vertex');
+    if (name === PLACEMENT_BUFFER_NAME && vectorWidth === 2)
+      return this.#root.createBuffer(placementLayout.schemaForCount(count)).$usage('vertex');
     if (name === 'size' && vectorWidth === 2)
       return this.#root.createBuffer(sizeLayout.schemaForCount(count)).$usage('vertex');
     if (name === 'color' && vectorWidth === 4)
@@ -546,6 +570,24 @@ function gpuBufferForDraw(
   const buffer = bytes === undefined ? undefined : buffers.get(name)?.get(bytes)?.buffer;
   if (buffer === undefined) throw new Error(`TypeGPU example renderer has no realized "${name}" buffer for this draw`);
   return buffer;
+}
+
+function gpuBufferForBytes(
+  buffers: ReadonlyMap<string, ReadonlyMap<Uint8Array, GpuInstanceBuffer>>,
+  name: string,
+  bytes: Uint8Array,
+  label: string,
+): GPUBuffer {
+  const buffer = buffers.get(name)?.get(bytes)?.buffer;
+  if (buffer === undefined) throw new Error(`TypeGPU example renderer has no realized ${label} buffer for this draw`);
+  return buffer;
+}
+
+function recordCount(bytes: Uint8Array, vectorWidth: number, label: string): number {
+  const recordBytes = vectorWidth * 4;
+  if (bytes.byteLength % recordBytes !== 0)
+    throw new RangeError(`TypeGPU example renderer ${label} has a partial record`);
+  return bytes.byteLength / recordBytes;
 }
 
 function gpuOperationError(operation: string, error: GPUError): Error {

@@ -27,6 +27,9 @@ export interface ComparisonWorkloadEntry {
   readonly text: WorkloadText;
   readonly labelText?: WorkloadText;
   readonly bounds?: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicNodeMaterial>;
+  readonly editorialObstacle?: THREE.Mesh;
+  readonly editorialObstacleBounds?: THREE.Box3;
+  editorialProjectionInitialized?: boolean;
   readonly role: 'primary' | 'secondary';
   virtualIconIndex?: number;
   disposed?: boolean;
