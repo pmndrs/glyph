@@ -2,6 +2,13 @@
 
 ## 2026-09-10
 
+- **Closed the public bidi/exclusion and drop-cap query matrix** — A real Inter/Amiri integration moves two keyed
+  exclusions through justified LTR, RTL, and mixed-level paragraphs crossing both block bands. Every published glyph,
+  bidi, ink, line, and measurement column matches a cold rebuild while the retained paragraphs preserve their glyph
+  identities. The same-source cap fixture now realizes a Slug cap beside a Bitmap body as two retained raster batches;
+  moving another exclusion preserves those batches and matches a simultaneously rendered cold paragraph for glyph
+  measurements, cap/body caret hits, and selection rectangles. The complete Three integration file passes 54/54.
+
 - **Retained same-length edits through drop-cap source changes** — the text-edit convergence path now rederives current
   same-source cap geometry, starts again at the first body line when cap content or geometry changes, reapplies both old
   and new cap influence through every affected band, and retains the suffix only after cursor and metric convergence. A
@@ -25,8 +32,11 @@
   174,440/175,824-byte f32x2 patch and preserves draw topology.
   The optimized shaper is 1,325,689 raw / 511,751 gzip / 393,474 Brotli bytes. The reviewed consumer graphs are 44,703
   raw / 11,682 gzip for config, 230,346 / 43,525 for direct TypeGPU, 540,499 / 133,033 for Three, and 648,878 /
-  146,273 for Three plus TypeGPU; their ceilings were re-priced with bounded headroom. The 40-warmup/101-sample release
-  matrix, transfer attribution, and editorial soak remain open.
+  146,273 for Three plus TypeGPU; their ceilings were re-priced with bounded headroom. The focused Editorial browser
+  matrix is green across Bitmap/MTSDF/Slug, WebGPU/WebGL2, and both native TSL and experimental Three/TypeGPU shaders.
+  Every cell retains three draws through 64 projected-obstacle reflows; median end-to-end reflow is `0.950–1.580 ms` for
+  TSL and `1.185–1.720 ms` for TypeGPU, with publication accounting for `0.740–1.230 ms` and `0.965–1.320 ms`
+  respectively. The 40-warmup/101-sample release matrix and transfer attribution remain open.
 
 - **Extended localized exclusion convergence through drop-cap paragraphs** — the retained exact-width flow path now
   rederives same-source cap geometry, reapplies its cut, and realigns baseline caps while recomposing a moved exclusion's

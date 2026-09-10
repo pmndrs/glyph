@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:625198510fb3976bf414a7d361091f3c11d797f5cce6443f27ec2d28ca0f2875'
+source_digest: 'sha256:18cd21719422ba1b48e275b170cdff5f6f1c05f205db8643ab0d486c0b318b2a'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -521,6 +521,9 @@ normalizes coordinates to their exact finite f32 wire values, rejects duplicate 
 rings, and freezes normalized state before it reaches the retained planner. Stable keys mint entity IDs independently of
 array order, and unchanged entities retain their own geometry revisions when one sibling moves or the flow order changes.
 The Three integration binds this renderer-neutral description to the paragraph transform; React forwards the same model.
+Exclusion membership is explicitly authored per region. Projection helpers return normalized exclusion values but never
+attach them globally: an application may add one projected object to selected columns, omit it so another column renders
+behind the object, or project separate copies into different Text-local frames.
 The retained Rust geometry authority remains unchanged, zero-exclusion paragraphs allocate no exclusion arena, and the
 first nonempty exclusion set reserves 16 retained entries before ordinary geometric growth. Three's former one-exclusion
 feature cap is removed without coupling entity capacity to the separate slot-output limit.

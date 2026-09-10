@@ -41,6 +41,10 @@ const iconSlugFontUrl = new URL(
   '../../../../apps/benchmarks/fixtures/rendering/font-awesome-free-6.7.2-slug.font.glb.gz',
   import.meta.url,
 );
+const interSlugFontUrl = new URL(
+  '../../../../apps/benchmarks/fixtures/rendering/inter-slug.font.glb.gz',
+  import.meta.url,
+);
 const multiTechniqueFontUrl = new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url);
 const glyphAttribute = (bufferId) => `_pmndrsGlyph_${bufferId}`;
 const instrumentedGlyph = instrumentNextGlyphEngine();
@@ -694,10 +698,168 @@ test('public 2D flow accepts keyed polygons and composes around multiple exclusi
   }, /nonzero finite area|must not self-intersect/);
 });
 
+test('moving multiple exclusions matches cold LTR, RTL, and mixed-direction flow', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const [inter, amiri] = await Promise.all([
+    loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] })),
+    loadFont({ baked: { bytes: await readFile(amiriFontUrl) } }, bitmap({ strikes: [16] })),
+  ]);
+  const mixed = createFontStack(inter, amiri);
+  t.after(() => {
+    inter.dispose();
+    amiri.dispose();
+  });
+  const flowAt = (moved) => ({
+    regions: [
+      {
+        key: 'body',
+        shape: { kind: 'rectangle', bounds: [0, 0, 220, 400] },
+        exclusions: [
+          {
+            key: 'upper',
+            shape: { kind: 'rectangle', bounds: moved ? [46, 20, 104, 80] : [18, 20, 76, 80] },
+          },
+          {
+            key: 'lower',
+            shape: {
+              kind: 'polygon',
+              vertices: moved
+                ? [
+                    [116, 84],
+                    [182, 80],
+                    [174, 144],
+                    [108, 140],
+                  ]
+                : [
+                    [140, 84],
+                    [206, 80],
+                    [198, 144],
+                    [132, 140],
+                  ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+  const cases = [
+    {
+      name: 'LTR',
+      font: inter,
+      text: 'alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau '.repeat(
+        2,
+      ),
+      style: { direction: 'ltr', language: 'en' },
+    },
+    {
+      name: 'RTL',
+      font: amiri,
+      text: 'النص العربي يتدفق بوضوح حول العوائق ويتابع القراءة بين الأعمدة دون فقدان ترتيب الكلمات '.repeat(2),
+      style: { direction: 'rtl', language: 'ar' },
+    },
+    {
+      name: 'mixed',
+      font: mixed,
+      text: 'النصPMNDRS2026العربي يتدفق حول object42 ثم يعود إلى العمود التالي مع Latintext واضح '.repeat(2),
+      style: { direction: 'rtl', language: 'ar' },
+    },
+  ];
+  const layoutFields = [
+    'glyphIds',
+    'clusters',
+    'glyphFontSlots',
+    'glyphBidiLevels',
+    'glyphFontSizes',
+    'x',
+    'y',
+    'glyphAdvances',
+    'glyphInkX',
+    'glyphInkY',
+    'glyphInkWidths',
+    'glyphInkHeights',
+    'glyphFlags',
+    'lineTextStarts',
+    'lineTextEnds',
+    'lineGlyphStarts',
+    'lineGlyphCounts',
+    'lineBaselines',
+    'lineAdvances',
+  ];
+
+  for (const fixture of cases) {
+    const properties = {
+      font: fixture.font,
+      text: fixture.text,
+      style: { fontSize: 16, lineHeight: 1.25, ...fixture.style },
+      constraints: {
+        width: { mode: 'exact', size: 220 },
+        height: { mode: 'exact', size: 400 },
+      },
+      layout: { align: 'justify', wrap: 'word' },
+    };
+    const retained = three.createText({ ...properties, flow: flowAt(false) });
+    const initial = retained.glyphs();
+    retained.flow = flowAt(true);
+    const incremental = retained.glyphs();
+    const cold = three.createText({ ...properties, flow: flowAt(true) });
+    const rebuilt = cold.glyphs();
+    try {
+      assert.equal(retained.error, undefined, `${fixture.name} retained flow must publish`);
+      assert.equal(cold.error, undefined, `${fixture.name} cold flow must publish`);
+      assert.ok(incremental.lineCount > 2, `${fixture.name} must exercise multiple exclusion bands`);
+      assert.ok(
+        incremental.lineBaselines.some((baseline) => baseline >= 20 && baseline < 80),
+        `${fixture.name} must cross the upper exclusion band`,
+      );
+      assert.ok(
+        incremental.lineBaselines.some((baseline) => baseline >= 80 && baseline < 144),
+        `${fixture.name} must cross the lower exclusion band`,
+      );
+      assert.notDeepEqual(
+        Array.from(incremental.x),
+        Array.from(initial.x),
+        `${fixture.name} exclusions must move glyphs`,
+      );
+      if (fixture.name === 'LTR') {
+        assert.ok(
+          incremental.glyphBidiLevels.every((level) => (level & 1) === 0),
+          'the LTR fixture must remain visually even-level',
+        );
+      } else if (fixture.name === 'RTL') {
+        assert.ok(
+          incremental.glyphBidiLevels.every((level) => (level & 1) === 1),
+          'the RTL fixture must remain visually odd-level',
+        );
+      } else {
+        assert.ok(new Set(incremental.glyphBidiLevels).size > 1, 'the mixed fixture must resolve multiple bidi levels');
+      }
+      assert.deepEqual(
+        Array.from(incremental.glyphStableIds).sort((left, right) => left - right),
+        Array.from(initial.glyphStableIds).sort((left, right) => left - right),
+        `${fixture.name} exclusion movement must retain glyph identities`,
+      );
+      for (const field of layoutFields) {
+        assert.deepEqual(
+          Array.from(incremental[field]),
+          Array.from(rebuilt[field]),
+          `${fixture.name} ${field} must match cold flow`,
+        );
+      }
+      assert.deepEqual(retained.measure(), cold.measure(), `${fixture.name} measurement must match cold flow`);
+    } finally {
+      retained.dispose();
+      cold.dispose();
+    }
+  }
+});
+
 test('same-source drop caps preserve source ownership and flow body lines beside the cap', async (t) => {
   const three = await createThreeTestHandle(t);
-  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
-  const cap = textSpan({ fontSize: 48 });
+  const [font, capFont] = await Promise.all([
+    loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] })),
+    loadFont({ baked: { bytes: gunzipSync(await readFile(interSlugFontUrl)) } }, slug),
+  ]);
+  const cap = textSpan(capFont, { fontSize: 48 });
   const source = 'f\u0301ollow brown fox jumps over the lazy dog and keeps running through the narrow column';
   const properties = {
     font,
@@ -713,6 +875,7 @@ test('same-source drop caps preserve source ownership and flow body lines beside
   t.after(() => {
     label.dispose();
     font.dispose();
+    capFont.dispose();
   });
 
   const measurement = label.measure();
@@ -741,9 +904,12 @@ test('same-source drop caps preserve source ownership and flow body lines beside
   assert.ok(
     label.measureGlyphs()?.every((measuredGlyph) => measuredGlyph.drawnOrigin.equals(measuredGlyph.shapedOrigin)),
   );
+  assert.equal(rootDraws(scene).length, 2, 'the Slug cap and Bitmap body remain two raster batches');
 
   label.text = txt`${cap`g\u0301`}ollow brown fox jumps over the lazy dog and keeps running through the narrow column`;
+  scene.updateMatrixWorld(true);
   const incremental = label.glyphs();
+  assert.equal(rootDraws(scene).length, 2, 'a retained cap edit preserves mixed-raster draw topology');
   const cold = three.createText({
     ...properties,
     text: txt`${cap`g\u0301`}ollow brown fox jumps over the lazy dog and keeps running through the narrow column`,
@@ -762,6 +928,7 @@ test('same-source drop caps preserve source ownership and flow body lines beside
 test('same-source drop caps compose through an explicit multi-line flow region', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
   const cap = textSpan({ fontSize: 48 });
   const source = 'f\u0301ollow brown fox jumps over the lazy dog and keeps running through the narrow column';
   const formatted = txt`${cap`f\u0301`}ollow brown fox jumps over the lazy dog and keeps running through the narrow column`;
@@ -790,6 +957,8 @@ test('same-source drop caps compose through an explicit multi-line flow region',
     ...properties,
     flow: initialFlow,
   });
+  scene.add(label);
+  scene.updateMatrixWorld(true);
   t.after(() => {
     label.dispose();
     font.dispose();
@@ -801,14 +970,64 @@ test('same-source drop caps compose through an explicit multi-line flow region',
   assert.equal(layout.glyphCount, source.length);
 
   label.flow = movedFlow;
+  scene.updateMatrixWorld(true);
   const incremental = label.glyphs();
   const cold = three.createText({ ...properties, flow: movedFlow });
+  scene.add(cold);
+  scene.updateMatrixWorld(true);
   t.after(() => cold.dispose());
   const coldLayout = cold.glyphs();
   assert.notDeepEqual(Array.from(incremental.x), Array.from(layout.x));
-  for (const field of ['clusters', 'glyphStableIds', 'lineGlyphStarts', 'lineGlyphCounts', 'x', 'y']) {
+  assert.deepEqual(
+    Array.from(incremental.glyphStableIds),
+    Array.from(layout.glyphStableIds),
+    'moving the exclusion must retain the paragraph glyph identities',
+  );
+  for (const field of ['clusters', 'lineGlyphStarts', 'lineGlyphCounts', 'x', 'y']) {
     assert.deepEqual(Array.from(incremental[field]), Array.from(coldLayout[field]), `${field} must match cold flow`);
   }
+  const interactionSnapshot = (text) => {
+    const inspected = text.glyphs();
+    const bodyLine = 3;
+    const bodyGlyph = inspected.lineGlyphStarts[bodyLine];
+    const caret = (glyph, line) => {
+      const result = text.caretAt(inspected.x[glyph], inspected.lineBaselines[line]);
+      return result === undefined
+        ? undefined
+        : {
+            offset: result.offset,
+            leading: result.leading,
+            rect: [result.rect.x, result.rect.y, result.rect.width, result.rect.height],
+          };
+    };
+    const selection = (start, end) =>
+      text.selectionRects(start, end)?.map((rect) => [rect.x, rect.y, rect.width, rect.height]);
+    return {
+      capCaret: caret(0, 0),
+      bodyCaret: caret(bodyGlyph, bodyLine),
+      capSelection: selection(0, 2),
+      bodySelection: selection(2, source.length),
+      measurements: text.measureGlyphs()?.map((glyph) => ({
+        index: glyph.index,
+        sourceIndex: glyph.sourceIndex,
+        shapedOrigin: glyph.shapedOrigin.toArray(),
+        drawnOrigin: glyph.drawnOrigin.toArray(),
+        matrix: glyph.originalMatrix.toArray(),
+        ink: [...glyph.localInkBounds.min.toArray(), ...glyph.localInkBounds.max.toArray()],
+        advance: [...glyph.localAdvanceBounds.min.toArray(), ...glyph.localAdvanceBounds.max.toArray()],
+      })),
+    };
+  };
+  const incrementalInteractions = interactionSnapshot(label);
+  assert.ok(incrementalInteractions.capSelection?.length === 1, 'the complete cap grapheme has one selection rect');
+  assert.ok(incrementalInteractions.bodySelection?.length > 1, 'the body selection spans several composed lines');
+  assert.ok(incrementalInteractions.capCaret !== undefined, 'the cap owns a reachable caret');
+  assert.ok(incrementalInteractions.bodyCaret !== undefined, 'the resumed body owns a reachable caret');
+  assert.deepEqual(
+    incrementalInteractions,
+    interactionSnapshot(cold),
+    'drop-cap measurement, caret, and selection queries must match cold flow',
+  );
 });
 
 test('detached matrix helpers round-trip aliased and independent targets with a hoisted inverse', () => {
