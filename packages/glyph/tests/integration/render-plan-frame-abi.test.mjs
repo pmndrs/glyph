@@ -62,7 +62,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
       abi.layouts.engineInlineObject.size,
     ],
     // Style records carry renderer-neutral paint effects; constraint records carry typography.
-    [24, 116, 84, 8, 60, 48, 60],
+    [24, 116, 92, 8, 60, 48, 60],
   );
   assert.equal(abi.layouts.engineInlineObject.alignment, 4);
   assert.equal(abi.layouts.engineParagraphMutation.size, 12);

@@ -2,6 +2,16 @@
 
 ## 2026-09-10
 
+- **Added a shaping-safe same-source drop-cap slice without changing renderer placement** — `ParagraphLayout.dropCap`
+  carries a one-to-sixteen-line span, logical side, text-top/baseline alignment, and margins through the generated Rust/TS
+  ABI. The core selects one complete grapheme through the first bounded `CLUSTER_SAFE_BEFORE` edge, disables the cap when
+  no edge exists, excludes its retained glyph/design bounds from body slots, resumes the same paragraph at the exact next
+  cluster, and positions both ranges through the existing x/y occurrence path. Focused Rust tests cover RTL side mapping,
+  safe-edge refusal, and a simultaneous independent rectangle exclusion; a real attached Three integration uses a
+  combining-mark cap and proves every source glyph appears once with renderer and shaped origins equal. Arbitrary cap
+  polygons, local-edit retention, mixed-raster Editorial composition, and the complete interaction/browser matrix remain
+  open.
+
 - **Projected known Three bounds into the existing 2D flow model** — `projectTextFlowBounds` accepts one caller-known
   conservative object-local `Box3`, the current object/text transforms, a perspective or orthographic camera, and authored
   paragraph-flow bounds. It intersects the six transformed box planes, camera-side text plane, and six camera-frustum

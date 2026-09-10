@@ -166,6 +166,23 @@ pub(crate) fn visible_glyph_counts(
     }
     let mut total = 0_usize;
     let mut missing = 0_usize;
+    for cap in &flow.drop_caps {
+        for cluster in usize::try_from(cap.fragment.line.cluster_start)
+            .map_err(|_| EngineError::InvalidRequest)?
+            ..usize::try_from(cap.fragment.line.cluster_end)
+                .map_err(|_| EngineError::InvalidRequest)?
+        {
+            let (count, zeros) = range_counts(
+                &clusters.glyph_ids,
+                clusters.glyph_starts[cluster],
+                clusters.glyph_counts[cluster],
+            )?;
+            total = total
+                .checked_add(count)
+                .ok_or(EngineError::ResultTooLarge)?;
+            missing += zeros;
+        }
+    }
     for line in flow.lines.iter().copied() {
         for fragment in line_fragments(flow, line)?.iter().copied() {
             let cluster_start = usize::try_from(fragment.line.cluster_start)
@@ -325,6 +342,16 @@ pub(crate) fn append_measurement(
         };
         content_width = content_width.max(advance);
         content_height = content_height.max(line.block_start + line.height);
+        let drop_cap = (index == 0 || flow.lines[index - 1].flow_thread_id != line.flow_thread_id)
+            .then(|| {
+                flow.drop_caps
+                    .iter()
+                    .find(|cap| cap.line.flow_thread_id == line.flow_thread_id)
+            })
+            .flatten();
+        if let Some(cap) = drop_cap {
+            content_height = content_height.max(cap.line.block_start + cap.line.height);
+        }
         consumed_clusters = consumed_clusters
             .max(usize::try_from(last.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?);
         let item_start = if include_glyphs {
@@ -349,7 +376,7 @@ pub(crate) fn append_measurement(
         target.push(semantic_line_record(
             paragraph_id,
             index,
-            first.line.text_start,
+            drop_cap.map_or(first.line.text_start, |cap| cap.fragment.line.text_start),
             last.line.text_end,
             item_start,
             item_count,
@@ -475,6 +502,14 @@ pub(crate) fn flow_extents(
             .width
             .max(line_inline_extent(flow, line, index, clusters, typography)?);
         extents.height = extents.height.max(line.block_start + line.height);
+        if (index == 0 || flow.lines[index - 1].flow_thread_id != line.flow_thread_id)
+            && let Some(cap) = flow
+                .drop_caps
+                .iter()
+                .find(|cap| cap.line.flow_thread_id == line.flow_thread_id)
+        {
+            extents.height = extents.height.max(cap.line.block_start + cap.line.height);
+        }
         extents.consumed_clusters = extents
             .consumed_clusters
             .max(usize::try_from(last.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?);
@@ -497,11 +532,20 @@ fn line_inline_extent(
         .lines
         .get(index + 1)
         .is_none_or(|next| next.flow_thread_id != line.flow_thread_id);
-    let inline_start = fragments
+    let mut inline_start = fragments
         .iter()
         .map(|fragment| fragment.slot_start)
         .fold(f64::INFINITY, f64::min);
     let mut inline_end = f64::NEG_INFINITY;
+    if (index == 0 || flow.lines[index - 1].flow_thread_id != line.flow_thread_id)
+        && let Some(cap) = flow
+            .drop_caps
+            .iter()
+            .find(|cap| cap.line.flow_thread_id == line.flow_thread_id)
+    {
+        inline_start = inline_start.min(cap.fragment.slot_start);
+        inline_end = inline_end.max(cap.fragment.slot_start + cap.fragment.line.advance);
+    }
     for fragment in fragments.iter().copied() {
         let indent = if fragment.line.cluster_start == 0 {
             typography.first_line_indent
@@ -899,6 +943,11 @@ mod tests {
             justify_max_word_space_ratio: 0.0,
             justify_letter_space_expansion: 0.0,
             last_line: 1,
+            drop_cap_lines: 0,
+            drop_cap_alignment: 0,
+            drop_cap_side: 0,
+            drop_cap_margin_inline: 0.0,
+            drop_cap_margin_block: 0.0,
         }
     }
 

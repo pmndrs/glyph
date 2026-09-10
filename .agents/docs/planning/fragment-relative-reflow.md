@@ -884,7 +884,14 @@ duplication, missing clusters, broad reshaping, or adapter-owned layout; both Th
 Current checkpoint: Three now projects caller-known conservative object-local bounds through the camera-side text-plane
 and frustum half-spaces into the existing keyed 2D exclusion model. Perspective/orthographic, crossing, enclosing,
 behind-plane, clipping, quantization, and invalid-transform cases have focused package evidence. Explicit simplified
-silhouettes, same-source drop-cap mapping/realization, the Editorial scene, and live dual-renderer evidence remain open.
+silhouettes, the Editorial scene, and live dual-renderer evidence remain open. The same-source drop-cap slice now carries
+bounded line/alignment/side/margin controls through the generated ABI; selects the first complete grapheme through a
+HarfRust-safe boundary; resumes body composition at that exact cluster; derives its conservative cut from retained
+glyph/design bounds; and positions the prefix through the existing body authority. Focused Rust evidence covers safe-edge
+refusal, RTL logical-side mapping, and a simultaneous rectangle exclusion, while an attached Three integration proves a
+combining-mark cap has no duplicated/omitted source glyphs and shares the existing x/y renderer path. Arbitrary cap
+polygons, mixed-raster styling, incremental local edits, full interaction-query parity, and the combined Editorial scene
+remain open.
 
 ### M6 — full-matrix closure and oracle retirement
 

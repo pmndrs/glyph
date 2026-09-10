@@ -3961,10 +3961,9 @@ impl ParagraphState {
             && !self.clusters.is_prepared()
             && self.text_edit.is_none()
             && self.boundary_shape.records.is_empty()
-            && geometry
-                .constraints
-                .iter()
-                .all(|constraint| constraint.overflow != OVERFLOW_ELLIPSIS)
+            && geometry.constraints.iter().all(|constraint| {
+                constraint.overflow != OVERFLOW_ELLIPSIS && constraint.drop_cap_lines == 0
+            })
             && let LocalizedGeometryChange::ExclusionBand(dirty) = localized_geometry_change
             && {
                 let (pending_flow, committed_flow) = self.flow_layout.derive_mut();
@@ -3999,10 +3998,9 @@ impl ParagraphState {
         if !self.geometry.is_prepared()
             && !self.style_invalidation.metrics
             && self.boundary_shape.records.is_empty()
-            && geometry
-                .constraints
-                .iter()
-                .all(|constraint| constraint.overflow != OVERFLOW_ELLIPSIS)
+            && geometry.constraints.iter().all(|constraint| {
+                constraint.overflow != OVERFLOW_ELLIPSIS && constraint.drop_cap_lines == 0
+            })
             && let Some(edit) = self.text_edit
             && edit.old_end.saturating_sub(edit.old_start)
                 == edit.new_end.saturating_sub(edit.old_start)
@@ -4037,11 +4035,18 @@ impl ParagraphState {
             self.flow_layout.mark_prepared();
             return Ok(());
         }
-        self.flow_layout.pending_mut().build(
+        self.flow_layout.pending_mut().build_with_drop_cap_context(
             geometry,
             clusters,
+            runs,
             styles,
             &mut self.flow_slot_scratch,
+            self.bidi
+                .active()
+                .paragraph_levels
+                .first()
+                .copied()
+                .unwrap_or(0),
             max_lines,
             max_slots_per_band,
             |handle| shaper.font_metrics(handle),
@@ -4226,6 +4231,11 @@ impl ParagraphState {
         constraint.max_lines = 0;
         constraint.viewport_block_end = INTRINSIC_BLOCK_END;
         constraint.overflow = OVERFLOW_VISIBLE;
+        constraint.drop_cap_lines = 0;
+        constraint.drop_cap_alignment = 0;
+        constraint.drop_cap_side = 0;
+        constraint.drop_cap_margin_inline = 0.0;
+        constraint.drop_cap_margin_block = 0.0;
         region.record.block_end = INTRINSIC_BLOCK_END;
 
         let clusters = self.clusters.active();

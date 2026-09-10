@@ -128,6 +128,14 @@ export interface PlannerConstraint {
   };
   /** Whether the final and hard-broken lines also justify. Defaults to 'auto'. */
   readonly lastLine?: 'auto' | 'justify';
+  /** Same-source shaping-safe drop-cap layout. */
+  readonly dropCap?: {
+    readonly lines: number;
+    readonly align?: 'text-top' | 'baseline';
+    readonly side?: 'inline-start' | 'inline-end';
+    readonly marginInline?: number;
+    readonly marginBlock?: number;
+  };
 }
 
 export interface PlannerFlowVertex {
@@ -568,6 +576,25 @@ function writeConstraints(view: DataView, tableOffset: number, constraints: read
       offset + layout.lastLine,
       enumValue(engine.lastLinePolicies, value.lastLine ?? 'auto', 'constraint lastLine'),
     );
+    view.setUint8(offset + layout.dropCapLines, u8(value.dropCap?.lines ?? 0, 'constraint dropCap lines'));
+    view.setUint8(
+      offset + layout.dropCapAlignment,
+      value.dropCap === undefined ? 0 : dropCapAlignment(value.dropCap.align ?? 'text-top'),
+    );
+    view.setUint8(
+      offset + layout.dropCapSide,
+      value.dropCap === undefined ? 0 : dropCapSide(value.dropCap.side ?? 'inline-start'),
+    );
+    view.setFloat32(
+      offset + layout.dropCapMarginInline,
+      finite(value.dropCap?.marginInline ?? 0, 'constraint dropCap inline margin'),
+      true,
+    );
+    view.setFloat32(
+      offset + layout.dropCapMarginBlock,
+      finite(value.dropCap?.marginBlock ?? 0, 'constraint dropCap block margin'),
+      true,
+    );
   }
 }
 
@@ -725,6 +752,20 @@ function inlineBaseline(value: PlannerInlineObject['baselineAlignment']): number
   return enumValue(baselines, value, 'inline object baselineAlignment');
 }
 
+function dropCapAlignment(value: NonNullable<PlannerConstraint['dropCap']>['align']): number {
+  const alignments = textShaperAbi.engine.dropCapAlignments;
+  return value === 'text-top'
+    ? alignments.textTop
+    : enumValue(alignments, value ?? 'text-top', 'constraint dropCap align');
+}
+
+function dropCapSide(value: NonNullable<PlannerConstraint['dropCap']>['side']): number {
+  const sides = textShaperAbi.engine.dropCapSides;
+  if (value === 'inline-start') return sides.inlineStart;
+  if (value === 'inline-end') return sides.inlineEnd;
+  throw new TypeError('constraint dropCap side is invalid');
+}
+
 function enumValue(values: Readonly<Record<string, number>>, value: string, label: string): number {
   const encoded = values[value];
   if (encoded === undefined) throw new TypeError(`${label} is invalid`);
@@ -741,6 +782,11 @@ function packTag(value: string): number {
 
 function finite(value: number, label: string): number {
   if (!Number.isFinite(value)) throw new RangeError(`${label} must be finite`);
+  return value;
+}
+
+function u8(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 0xff) throw new RangeError(`${label} must be a u8`);
   return value;
 }
 

@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:95441c8da90fe9d300adac506a93ff998e04ebd2feccefbb8b2d997fc3e2949f'
+source_digest: 'sha256:1a8aac0ab95f8119a9e6dbba4efb1bf06228c3c01e3797097aada8ef6a4d3e3d'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -529,7 +529,7 @@ For retained exact-width, non-ellipsis flow with stable region/exclusion topolog
 region now unions their old/new block bounds and margins into one dirty band. Rust retains every preceding line, resumes
 the existing band composer at the retained source cursor, and waits until it crosses the complete future dirty horizon
 before accepting an exact line/fragment/slot suffix certificate. Structural, cross-region, flexible-width, and ellipsis
-changes fall back to the cold authority. Projected known-geometry objects and same-source drop caps remain in
+changes fall back to the cold authority. The remaining projected-object and drop-cap matrix belongs to
 [Milestone 12's fragment-relative reflow plan](../planning/fragment-relative-reflow.md); balanced columns remain deferred.
 
 The Three subpath exposes `projectTextFlowBounds` for the first projected-object slice. Given a conservative object-local
@@ -538,7 +538,17 @@ the exact convex intersection of the transformed bounds with the camera-side tex
 It ray-projects that volume onto paragraph-local inline/block coordinates, applies a declared conservative projection
 error, clips and f32-normalizes the polygon, then returns an ordinary keyed `TextFlowExclusion`. An object wholly behind
 the text plane produces no exclusion. The helper neither reads depth/GPU pixels nor claims hidden-surface or material
-coverage exactness; explicit CPU silhouettes and same-source drop caps remain open.
+coverage exactness; explicit CPU silhouettes remain open.
+
+The shared paragraph layout surface also admits a same-source `dropCap` with a bounded line span, text-top or baseline
+alignment, logical side, and inline/block margins. Rust selects the first complete extended grapheme and extends through
+the first shaping-safe cluster edge within the bounded search; when no safe edge exists it disables the cap rather than
+splitting shaped content. The selected prefix keeps its authored shaping/style/raster data, is positioned by the same
+glyph authority as the body, and becomes an additional conservative glyph/design-bounds cut before body composition.
+Body flow resumes at the exact retained cluster edge, while measurement, inspection, and Three realization merge the cap
+into the first logical line without duplicating source glyphs. Focused evidence covers a combining-mark cap, RTL logical
+side mapping, safe-edge refusal, and simultaneous cap plus rectangle exclusion. Arbitrary cap polygons, mixed-raster
+Editorial realization, local-edit retention, and the complete caret/selection/browser matrix remain Milestone 12.4 work.
 
 ## Renderer Codec
 

@@ -591,7 +591,7 @@ test('TextGroup ancestry cannot smuggle a Text across Glyph roots', async (t) =>
 test('text property registries validate and freeze reusable rules', () => {
   for (const [registry, rules] of [
     [TextStyle, { body: { fontSize: 16 } }],
-    [ParagraphLayout, { centered: { align: 'center' } }],
+    [ParagraphLayout, { centered: { align: 'center', dropCap: { lines: 3, marginInline: 4 } } }],
     [Constraints, { card: { width: { mode: 'at-most', size: 320 } } }],
   ]) {
     const created = registry.create(rules);
@@ -599,6 +599,11 @@ test('text property registries validate and freeze reusable rules', () => {
     assert.ok(Object.isFrozen(Object.values(created)[0]));
   }
   assert.throws(() => Constraints.create({ broken: { width: { mode: 'exact', size: Number.NaN } } }), /size/);
+  assert.throws(() => ParagraphLayout.create({ broken: { dropCap: { lines: 0 } } }), /dropCap lines/);
+  assert.throws(
+    () => ParagraphLayout.create({ broken: { dropCap: { lines: 2, marginInline: -1 } } }),
+    /dropCap marginInline/,
+  );
 });
 
 test('public 2D flow accepts keyed polygons and composes around multiple exclusions', async (t) => {
@@ -687,6 +692,54 @@ test('public 2D flow accepts keyed polygons and composes around multiple exclusi
       ],
     };
   }, /nonzero finite area|must not self-intersect/);
+});
+
+test('same-source drop caps preserve source ownership and flow body lines beside the cap', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const cap = textSpan({ fontSize: 48 });
+  const source = 'f\u0301ollow brown fox jumps over the lazy dog and keeps running through the narrow column';
+  const label = three.createText({
+    font,
+    text: txt`${cap`f\u0301`}ollow brown fox jumps over the lazy dog and keeps running through the narrow column`,
+    style: { fontSize: 16, lineHeight: 20 },
+    constraints: { width: { mode: 'exact', size: 180 } },
+    layout: { wrap: 'word', dropCap: { lines: 3, marginInline: 4 } },
+  });
+  const scene = new THREE.Scene();
+  scene.add(label);
+  scene.updateMatrixWorld();
+  t.after(() => {
+    label.dispose();
+    font.dispose();
+  });
+
+  const measurement = label.measure();
+  assert.equal(label.error, undefined);
+  assert.ok(measurement.lineCount > 0, 'the combined flow must compose at least one body line');
+  const layout = label.glyphs();
+  assert.equal(layout.glyphCount, source.length, 'the source glyph stream has no duplicated or omitted unit');
+  assert.deepEqual(
+    Array.from(layout.clusters),
+    [0, 0, ...Array.from({ length: source.length - 2 }, (_, index) => index + 2)],
+    'the complete combining-mark grapheme stays in the cap and every later source unit stays in the body',
+  );
+  assert.ok(layout.lineCount > 3, 'the fixture must extend beyond the reserved body-line span');
+  assert.equal(layout.lineTextStarts[0], 0, 'the first line owns the cap source prefix');
+
+  const capIndex = layout.clusters.indexOf(0);
+  const firstBodyIndex = layout.clusters.indexOf(2);
+  assert.equal(capIndex, 0);
+  assert.equal(firstBodyIndex, 2);
+  assert.ok(layout.x[firstBodyIndex] > layout.x[capIndex] + 20, 'the first body line starts beside the cap');
+  const firstUncutLineGlyph = layout.lineGlyphStarts[3];
+  assert.ok(
+    layout.x[firstUncutLineGlyph] < layout.x[firstBodyIndex],
+    'body flow returns to the region start after the requested line span',
+  );
+  assert.ok(
+    label.measureGlyphs()?.every((measuredGlyph) => measuredGlyph.drawnOrigin.equals(measuredGlyph.shapedOrigin)),
+  );
 });
 
 test('detached matrix helpers round-trip aliased and independent targets with a hoisted inverse', () => {
