@@ -4,6 +4,9 @@ use alloc::vec::Vec;
 
 use crate::{FontGlyphExtents, FontMetrics, bidi::BidiAnalysis};
 
+#[cfg(any(test, feature = "kernel-lab"))]
+use super::placement_state::{PlacementClass, PlacementState, SlicePlacement};
+
 use super::{
     EngineError, FrameFault,
     cluster_state::{CLUSTER_HARD_BREAK, CLUSTER_SPACE, ClusterArena},
@@ -330,6 +333,10 @@ pub(crate) struct PositionedGlyphArena {
     line_levels: Vec<u8>,
     recomposed_glyphs: Option<RecomposedGlyphRange>,
     decorations: Vec<DecorationRecord>,
+    #[cfg(any(test, feature = "kernel-lab"))]
+    placement: PlacementState,
+    #[cfg(any(test, feature = "kernel-lab"))]
+    placement_fragment_index: u32,
     text_effects: bool,
 }
 
@@ -491,11 +498,22 @@ impl PositionedGlyphArena {
         let visually_ltr = is_trivially_ltr(bidi, runs);
         let mut retained_line_cursor = 0usize;
         for (line_index, line) in flow.lines.iter().copied().enumerate() {
+            #[cfg(any(test, feature = "kernel-lab"))]
+            let placement_line_start = self.placement.begin_line();
             if flow
                 .recomposed_line_range()
                 .is_some_and(|(start, end)| line_index < start || line_index >= end)
             {
                 self.append_retained_line(previous, line_index)?;
+                #[cfg(any(test, feature = "kernel-lab"))]
+                self.rematerialize_line_placement(
+                    flow,
+                    line_index,
+                    clusters,
+                    bidi,
+                    visually_ltr,
+                    typography_for(line.flow_thread_id),
+                )?;
                 continue;
             }
             if let Some(previous_flow) = retained_flow
@@ -513,6 +531,19 @@ impl PositionedGlyphArena {
                 )?
             {
                 self.append_retained_line(previous, previous_line_index)?;
+                #[cfg(any(test, feature = "kernel-lab"))]
+                {
+                    let previous_line = previous_flow
+                        .lines
+                        .get(previous_line_index)
+                        .ok_or(EngineError::InvalidRequest)?;
+                    self.placement.append_retained_line(
+                        &previous.placement,
+                        previous_line_index,
+                        previous_line.fragment_start,
+                        line.fragment_start,
+                    )?;
+                }
                 continue;
             }
             let line_glyph_start = self.glyphs.len();
@@ -534,6 +565,8 @@ impl PositionedGlyphArena {
                 );
                 self.semantic_line_glyph_counts.push(0);
                 self.semantic_line_inline_extents.push(0.0);
+                #[cfg(any(test, feature = "kernel-lab"))]
+                self.placement.finish_line(placement_line_start)?;
                 continue;
             }
             let first = fragments.first().ok_or(EngineError::InvalidRequest)?;
@@ -556,6 +589,10 @@ impl PositionedGlyphArena {
                 .fold(f64::INFINITY, f64::min);
             let typography = typography_for(line.flow_thread_id);
             let mut inline_end = f64::NEG_INFINITY;
+            #[cfg(any(test, feature = "kernel-lab"))]
+            {
+                self.placement_fragment_index = line.fragment_start;
+            }
             for fragment in fragments.iter().copied() {
                 let indent = if fragment.line.cluster_start == 0 {
                     typography.first_line_indent
@@ -598,6 +635,13 @@ impl PositionedGlyphArena {
                     )?
                 };
                 inline_end = inline_end.max(fragment.slot_start + fragment_advance);
+                #[cfg(any(test, feature = "kernel-lab"))]
+                {
+                    self.placement_fragment_index = self
+                        .placement_fragment_index
+                        .checked_add(1)
+                        .ok_or(EngineError::ResultTooLarge)?;
+                }
             }
             self.semantic_line_glyph_starts
                 .push(u32::try_from(semantic_line_start).map_err(|_| EngineError::ResultTooLarge)?);
@@ -624,6 +668,8 @@ impl PositionedGlyphArena {
                 u32::try_from(self.decorations.len().saturating_sub(line_decoration_start))
                     .map_err(|_| EngineError::ResultTooLarge)?,
             );
+            #[cfg(any(test, feature = "kernel-lab"))]
+            self.placement.finish_line(placement_line_start)?;
         }
         self.recomposed_glyphs = flow
             .recomposed_line_range()
@@ -828,6 +874,8 @@ impl PositionedGlyphArena {
         self.visual_clusters.clear();
         self.visual_levels.clear();
         self.line_levels.clear();
+        #[cfg(any(test, feature = "kernel-lab"))]
+        self.placement.clear();
         self.recomposed_glyphs = None;
         self.text_effects = false;
     }
@@ -865,6 +913,120 @@ impl PositionedGlyphArena {
 
     pub(crate) fn semantic_u32(&self) -> [&[u32]; SEMANTIC_U32_FIELD_COUNT] {
         core::array::from_fn(|index| self.semantic_u32[index].as_slice())
+    }
+
+    #[cfg(any(test, feature = "kernel-lab"))]
+    fn rematerialize_line_placement(
+        &mut self,
+        flow: &FlowLayoutArena,
+        line_index: usize,
+        clusters: &ClusterArena,
+        bidi: &BidiAnalysis,
+        visually_ltr: bool,
+        typography: ThreadTypography,
+    ) -> Result<(), EngineError> {
+        let line = *flow
+            .lines
+            .get(line_index)
+            .ok_or(EngineError::InvalidRequest)?;
+        let line_start = self.placement.begin_line();
+        let final_line = flow
+            .lines
+            .get(line_index + 1)
+            .is_none_or(|next| next.flow_thread_id != line.flow_thread_id);
+        let mut fragment_index = line.fragment_start;
+        for fragment in line_fragments(flow, line)?.iter().copied() {
+            let cluster_start = usize::try_from(fragment.line.cluster_start)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let cluster_end = usize::try_from(fragment.line.cluster_end)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let paragraph_level = paragraph_level_at(bidi, fragment.line.text_start);
+            let indent = if fragment.line.cluster_start == 0 {
+                typography.first_line_indent
+            } else {
+                0.0
+            };
+            if visually_ltr
+                && paragraph_level & 1 == 0
+                && indent == 0.0
+                && fragment.boundary_index == super::flow_composition::NO_BOUNDARY
+            {
+                let (justify, mut cursor) = fragment_pen(
+                    line,
+                    fragment,
+                    final_line,
+                    clusters,
+                    cluster_start,
+                    cluster_end,
+                    indent,
+                    typography.justify,
+                    paragraph_level,
+                    false,
+                );
+                let class = if justify.is_zero() {
+                    PlacementClass::Ordinary
+                } else {
+                    PlacementClass::Justified
+                };
+                let layout_runs = clusters.layout_runs();
+                let first = layout_runs
+                    .partition_point(|run| run.cluster_end <= fragment.line.cluster_start);
+                let mut covered = cluster_start;
+                let mut space_ordinal = 0_i64;
+                let mut gap_ordinal = 0_i64;
+                for (run_offset, layout_run) in layout_runs[first..].iter().enumerate() {
+                    let run_start = usize::try_from(layout_run.cluster_start)
+                        .map_err(|_| EngineError::InvalidRequest)?;
+                    if run_start >= cluster_end {
+                        break;
+                    }
+                    let run_end = usize::try_from(layout_run.cluster_end)
+                        .map_err(|_| EngineError::InvalidRequest)?;
+                    let overlap_start = run_start.max(cluster_start);
+                    let overlap_end = run_end.min(cluster_end);
+                    if overlap_start != covered || overlap_start >= overlap_end {
+                        return Err(EngineError::InvalidRequest);
+                    }
+                    self.record_layout_run_slice(
+                        fragment_index,
+                        first + run_offset,
+                        layout_run,
+                        overlap_start,
+                        overlap_end,
+                        clusters,
+                        cursor,
+                        line.block_start + line.baseline,
+                        justify,
+                        space_ordinal,
+                        gap_ordinal,
+                        class,
+                    )?;
+                    for cluster in overlap_start..overlap_end {
+                        if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
+                            continue;
+                        }
+                        let cluster_origin = cursor;
+                        cursor = cluster_origin + clusters.advances[cluster];
+                        apply_justification(
+                            cluster,
+                            clusters,
+                            justify,
+                            &mut cursor,
+                            &mut space_ordinal,
+                            &mut gap_ordinal,
+                        );
+                    }
+                    covered = overlap_end;
+                }
+                if covered != cluster_end {
+                    return Err(EngineError::InvalidRequest);
+                }
+            }
+            fragment_index = fragment_index
+                .checked_add(1)
+                .ok_or(EngineError::ResultTooLarge)?;
+        }
+        self.placement.finish_line(line_start)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1086,6 +1248,10 @@ impl PositionedGlyphArena {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[cfg_attr(
+        any(test, feature = "kernel-lab"),
+        allow(clippy::explicit_counter_loop)
+    )]
     fn position_layout_run_fragment<const TEXT_EFFECTS: bool, const ADJUST: bool>(
         &mut self,
         line: FlowLine,
@@ -1105,6 +1271,8 @@ impl PositionedGlyphArena {
         let first =
             layout_runs.partition_point(|run| run.cluster_end <= fragment.line.cluster_start);
         let mut covered = cluster_start;
+        #[cfg(any(test, feature = "kernel-lab"))]
+        let mut layout_run_index = first;
         for layout_run in &layout_runs[first..] {
             let run_start = usize::try_from(layout_run.cluster_start)
                 .map_err(|_| EngineError::InvalidRequest)?;
@@ -1117,6 +1285,28 @@ impl PositionedGlyphArena {
             let overlap_end = run_end.min(cluster_end);
             if overlap_start != covered || overlap_start >= overlap_end {
                 return Err(EngineError::InvalidRequest);
+            }
+            #[cfg(any(test, feature = "kernel-lab"))]
+            {
+                self.record_layout_run_slice(
+                    self.placement_fragment_index,
+                    layout_run_index,
+                    layout_run,
+                    overlap_start,
+                    overlap_end,
+                    clusters,
+                    state.cursor,
+                    state.baseline,
+                    justify,
+                    state.space_ordinal,
+                    state.gap_ordinal,
+                    if ADJUST {
+                        PlacementClass::Justified
+                    } else {
+                        PlacementClass::Ordinary
+                    },
+                )?;
+                layout_run_index += 1;
             }
             let Some(geometry_cluster) = (overlap_start..overlap_end)
                 .find(|cluster| clusters.flags[*cluster] & CLUSTER_HARD_BREAK == 0)
@@ -1175,6 +1365,94 @@ impl PositionedGlyphArena {
             return Err(EngineError::InvalidRequest);
         }
         Ok(())
+    }
+
+    #[cfg(any(test, feature = "kernel-lab"))]
+    #[allow(clippy::too_many_arguments)]
+    fn record_layout_run_slice(
+        &mut self,
+        fragment_index: u32,
+        layout_run_index: usize,
+        layout_run: &super::cluster_state::LayoutRun,
+        overlap_start: usize,
+        overlap_end: usize,
+        clusters: &ClusterArena,
+        cursor: f64,
+        baseline: f64,
+        justify: JustifyDistribution,
+        space_ordinal: i64,
+        gap_ordinal: i64,
+        class: PlacementClass,
+    ) -> Result<(), EngineError> {
+        let run_start =
+            usize::try_from(layout_run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
+        let glyph_start = clusters.glyph_starts[overlap_start];
+        let final_cluster = overlap_end - 1;
+        let glyph_end = clusters.glyph_starts[final_cluster]
+            .checked_add(clusters.glyph_counts[final_cluster])
+            .ok_or(EngineError::ResultTooLarge)?;
+        let local_prefix = clusters
+            .layout_run_prefix(overlap_start)
+            .ok_or(EngineError::InvalidRequest)?;
+        let run_glyph_start = glyph_start
+            .checked_sub(layout_run.glyph_start)
+            .ok_or(EngineError::InvalidRequest)?;
+        let run_glyph_count = glyph_end
+            .checked_sub(glyph_start)
+            .ok_or(EngineError::InvalidRequest)?;
+        let gap_cluster_count = justify
+            .gap_end
+            .min(overlap_end)
+            .saturating_sub(overlap_start);
+        let (
+            space_ordinal_start,
+            gap_ordinal_start,
+            spaces,
+            gaps,
+            placement_gap_cluster_count,
+            per_space_units,
+            extra_space_units,
+            per_gap_units,
+            extra_gap_units,
+        ) = match class {
+            PlacementClass::Ordinary => (0, 0, 0, 0, 0, 0, 0, 0, 0),
+            PlacementClass::Justified => (
+                u32::try_from(space_ordinal).map_err(|_| EngineError::ResultTooLarge)?,
+                u32::try_from(gap_ordinal).map_err(|_| EngineError::ResultTooLarge)?,
+                justify.spaces,
+                justify.gaps,
+                u32::try_from(gap_cluster_count).map_err(|_| EngineError::ResultTooLarge)?,
+                justify.per_space_units,
+                justify.extra_space_units,
+                justify.per_gap_units,
+                justify.extra_gap_units,
+            ),
+        };
+        self.placement.push_admitted_occurrence(
+            fragment_index,
+            u32::try_from(layout_run_index).map_err(|_| EngineError::ResultTooLarge)?,
+            clusters.stable_ids[run_start],
+            u32::try_from(overlap_start - run_start).map_err(|_| EngineError::ResultTooLarge)?,
+            u32::try_from(overlap_end - overlap_start).map_err(|_| EngineError::ResultTooLarge)?,
+            run_glyph_start,
+            run_glyph_count,
+            glyph_start,
+            SlicePlacement {
+                local_prefix,
+                translation_inline: cursor - local_prefix,
+                translation_block: baseline,
+                space_ordinal_start,
+                gap_ordinal_start,
+                spaces,
+                gaps,
+                gap_cluster_count: placement_gap_cluster_count,
+                per_space_units,
+                extra_space_units,
+                per_gap_units,
+                extra_gap_units,
+            },
+            class,
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1300,25 +1578,14 @@ impl PositionedGlyphArena {
         metrics_for: impl Fn(u32) -> Option<FontMetrics>,
     ) -> Result<(), EngineError> {
         if ADJUST {
-            if clusters.flags[cluster] & CLUSTER_SPACE != 0
-                && cluster < justify.gap_end
-                && state.space_ordinal < i64::from(justify.spaces)
-                && (justify.per_space_units != 0 || justify.extra_space_units != 0)
-            {
-                let units = justify.per_space_units
-                    + i64::from(state.space_ordinal < justify.extra_space_units);
-                state.cursor += super::layout_units::scaled_from_layout_units(units);
-                state.space_ordinal += 1;
-            }
-            if cluster < justify.gap_end
-                && state.gap_ordinal < i64::from(justify.gaps)
-                && (justify.per_gap_units != 0 || justify.extra_gap_units != 0)
-            {
-                let units =
-                    justify.per_gap_units + i64::from(state.gap_ordinal < justify.extra_gap_units);
-                state.cursor += super::layout_units::scaled_from_layout_units(units);
-                state.gap_ordinal += 1;
-            }
+            apply_justification(
+                cluster,
+                clusters,
+                justify,
+                &mut state.cursor,
+                &mut state.space_ordinal,
+                &mut state.gap_ordinal,
+            );
         }
         let PositionedCluster {
             style,
@@ -1951,6 +2218,34 @@ impl PositionedGlyphArena {
             mask |= SEMANTIC_EFFECTS_CHANGE;
         }
         mask
+    }
+}
+
+#[inline]
+fn apply_justification(
+    cluster: usize,
+    clusters: &ClusterArena,
+    justify: JustifyDistribution,
+    cursor: &mut f64,
+    space_ordinal: &mut i64,
+    gap_ordinal: &mut i64,
+) {
+    if clusters.flags[cluster] & CLUSTER_SPACE != 0
+        && cluster < justify.gap_end
+        && *space_ordinal < i64::from(justify.spaces)
+        && (justify.per_space_units != 0 || justify.extra_space_units != 0)
+    {
+        let units = justify.per_space_units + i64::from(*space_ordinal < justify.extra_space_units);
+        *cursor += super::layout_units::scaled_from_layout_units(units);
+        *space_ordinal += 1;
+    }
+    if cluster < justify.gap_end
+        && *gap_ordinal < i64::from(justify.gaps)
+        && (justify.per_gap_units != 0 || justify.extra_gap_units != 0)
+    {
+        let units = justify.per_gap_units + i64::from(*gap_ordinal < justify.extra_gap_units);
+        *cursor += super::layout_units::scaled_from_layout_units(units);
+        *gap_ordinal += 1;
     }
 }
 
@@ -2993,6 +3288,47 @@ mod tests {
 
         assert_shadow_run_positions_match_production(0, 12);
         assert_shadow_run_positions_match_production(8, 10);
+
+        let (_, positioned) = fixture_position_results(0, 12, |_, _, _| {});
+        assert_eq!(positioned.placement.slices().len(), 5);
+        assert_eq!(positioned.placement.placements().len(), 5);
+        assert_eq!(positioned.placement.visual_spans().len(), 4);
+        assert_eq!(
+            positioned.placement.queues(),
+            (&[0, 1, 2, 3, 4][..], &[][..])
+        );
+        let hard_break = positioned.placement.slices().get(4).unwrap();
+        assert_eq!(
+            (hard_break.run_cluster_count, hard_break.run_glyph_count),
+            (1, 0)
+        );
+        assert_eq!(
+            positioned
+                .placement
+                .placements()
+                .get(0)
+                .unwrap()
+                .local_prefix,
+            0.0
+        );
+        assert_eq!(
+            positioned
+                .placement
+                .slices()
+                .get(1)
+                .unwrap()
+                .run_glyph_start,
+            0
+        );
+        assert_eq!(
+            positioned
+                .placement
+                .visual_spans()
+                .get(1)
+                .unwrap()
+                .glyph_start,
+            3
+        );
     }
 
     #[test]
@@ -3408,6 +3744,131 @@ mod tests {
         let advance =
             positioned_fragment_advance(line, fragment, false, &clusters, 0.0, controls).unwrap();
         assert_eq!(advance, 17.000_015_258_789_063);
+    }
+
+    #[test]
+    fn justified_run_slices_retain_exact_distribution_and_ordinal_bases() {
+        let (_text, mut clusters, line, mut fragment) = justify_fixture();
+        clusters.source_runs[4..].fill(1);
+        clusters.stable_ids = (1..=7).collect();
+        clusters.glyph_starts = (0..7).collect();
+        clusters.glyph_counts = vec![1; 7];
+        clusters.rebuild_layout_runs().unwrap();
+        fragment.slot_end = 17.000_015_258_789_063;
+        let controls = JustifyControls {
+            maximum_word_space_ratio: 3.0,
+            letter_space_expansion: 0.75,
+            ..JustifyControls::default()
+        };
+        let justify =
+            justification_adjustment(line, fragment, false, &clusters, 0, 7, 0.0, controls);
+        let mut positioned = PositionedGlyphArena::default();
+        let mut cursor = 0.0;
+        let mut space_ordinal = 0_i64;
+        let mut gap_ordinal = 0_i64;
+        for (run_index, run) in clusters.layout_runs().iter().enumerate() {
+            let start = run.cluster_start as usize;
+            let end = run.cluster_end as usize;
+            positioned
+                .record_layout_run_slice(
+                    0,
+                    run_index,
+                    run,
+                    start,
+                    end,
+                    &clusters,
+                    cursor,
+                    line.baseline,
+                    justify,
+                    space_ordinal,
+                    gap_ordinal,
+                    PlacementClass::Justified,
+                )
+                .unwrap();
+            for cluster in start..end {
+                cursor += clusters.advances[cluster];
+                apply_justification(
+                    cluster,
+                    &clusters,
+                    justify,
+                    &mut cursor,
+                    &mut space_ordinal,
+                    &mut gap_ordinal,
+                );
+            }
+        }
+
+        let first = positioned.placement.placements().get(0).unwrap();
+        let second = positioned.placement.placements().get(1).unwrap();
+        assert_eq!(
+            (
+                first.space_ordinal_start,
+                first.gap_ordinal_start,
+                first.gap_cluster_count,
+                second.space_ordinal_start,
+                second.gap_ordinal_start,
+                second.gap_cluster_count,
+            ),
+            (0, 0, 4, 1, 4, 3)
+        );
+        assert_eq!(first.spaces, 2);
+        assert_eq!(first.gaps, 6);
+        assert_eq!(first.per_space_units, 131_072);
+        assert_eq!(first.extra_space_units, 0);
+        assert_eq!(first.per_gap_units, 49_152);
+        assert_eq!(first.extra_gap_units, 0);
+        assert_eq!(second.per_space_units, first.per_space_units);
+        assert_eq!(second.extra_space_units, first.extra_space_units);
+
+        let exact_fragment = FlowFragment {
+            slot_end: 7.0,
+            ..fragment
+        };
+        let exact = justification_adjustment(
+            line,
+            exact_fragment,
+            false,
+            &clusters,
+            0,
+            7,
+            0.0,
+            JustifyControls::default(),
+        );
+        assert!(exact.is_zero());
+        assert_eq!((exact.spaces, exact.gaps, exact.gap_end), (2, 6, 7));
+        let mut ordinary = PositionedGlyphArena::default();
+        let run = &clusters.layout_runs()[0];
+        ordinary
+            .record_layout_run_slice(
+                0,
+                0,
+                run,
+                run.cluster_start as usize,
+                run.cluster_end as usize,
+                &clusters,
+                0.0,
+                line.baseline,
+                exact,
+                0,
+                0,
+                PlacementClass::Ordinary,
+            )
+            .unwrap();
+        let placement = ordinary.placement.placements().get(0).unwrap();
+        assert_eq!(
+            (
+                placement.space_ordinal_start,
+                placement.gap_ordinal_start,
+                placement.spaces,
+                placement.gaps,
+                placement.gap_cluster_count,
+                placement.per_space_units,
+                placement.extra_space_units,
+                placement.per_gap_units,
+                placement.extra_gap_units,
+            ),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0)
+        );
     }
 
     fn justify_fixture() -> (Vec<u16>, ClusterArena, FlowLine, FlowFragment) {

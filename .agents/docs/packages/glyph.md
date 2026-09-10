@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:d904535a5cb1dda4b61271c2370f67f5b1e3be76b25b141db91e81fec82c1fa4'
+source_digest: 'sha256:c5d0b3a00cf9091ddabc28b9e17f7bd531bb728dbf493b8c426be32ddf3c0e12'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1239,11 +1239,31 @@ it has an explicit occurrence model, and keeps 4,096 homogeneous CJK clusters in
 corpus reconstructs all 332 already-published f32 coordinates exactly from line and observable-slice anchors, but the
 f64 reassociation counterexamples remain authoritative for the future CPU cutover.
 
-Installed Three compilers accept branch-free 3x10, 2x16, and u32 occurrence-map specializations through storage WGSL and
-WebGL2 PBO GLSL as one instanced-mesh representation. The TypeGPU lab proves the lookup expression only. A separate
-placement bind group is rejected: scene plus raster resources and the supported pose and paint callbacks already consume
-WebGPU's guaranteed four groups. The atomic renderer cutover must add occurrence and placement storage to the existing
-scene group; ownership, lifetime, pixels, draw behavior, and callback coexistence remain implementation gates.
+The next checkpoint models run slices, visual spans, placements, and ordinary/justified work queues as SoA lanes shared
+by positioning and the visual oracle. It remains test/kernel-lab only, so normal builds allocate and execute none of it.
+Composite writes roll back as one logical record, geometry-only retained lines remap compacted fragment indexes, and
+text-edit convergence rematerializes placement metadata from current runs rather than copying stale indexes or prefixes.
+Justified placements retain exact wide-unit quotient/remainder, eligible counts, and slice-start ordinals without making
+placement class, run identity, or slice identity a renderer batch key. The first cluster's stable ID is only a
+reconciliation anchor; dense stale-safe slots and generations remain owned by the atomic publication cutover.
+
+Production run identity is now planner-scoped and transactional. A paragraph incarnation prevents a removed/recycled
+paragraph from aliasing its predecessor. Each retained run carries a nonzero canonical revision minted only after an
+exact comparison of its complete text-unit, shaping, cluster, glyph, and local-metric contents; no hash establishes
+equality. Paint, raster binding, placement, absolute offsets, and temporary source-run ordinals are excluded. A dense
+root-owned slot arena binds `{slot, generation}` only into staged cluster state, quarantines retirement through the
+renderer acknowledgement fence, and keeps retained-order reconciliation allocation-free after warmup. Width-only flow
+updates reuse the committed identity without re-running the deep comparison. These handles remain core-private until the
+atomic occurrence-map and placement-table publication consumes them.
+
+Installed Three compilers accept branch-free indexed placement lookup through storage WGSL and WebGL2 PBO GLSL as one
+instanced-mesh representation. The TypeGPU lab proves the lookup expression only. Direct TypeGPU remains a
+proof-of-concept: its current Slug path uses seven technique vertex inputs plus one `stableGlyphId` system input, not an
+immutable shared-engine layout. Stable glyph identity remains a truthful independent lane because Three consumes it for
+CPU-side origin, geometry, copied-plan, and draw-order addressing. The atomic cutover adds a distinct physical occurrence
+map and shared placement table without making either a batch key or draw span. TypeGPU may interleave, widen, or move its
+prototype inputs to storage when that adapter becomes production work. Ownership, lifetime, pixels, draw behavior, and
+callback coexistence remain implementation gates.
 
 The optimized proof Wasm is 1,205,308 bytes, 43 bytes above the 1,205,265-byte frozen baseline. An active-resize
 A/B/B/A check was flat within run spread: baseline medians/p95s were `3.588/3.699` and `3.618/3.790 ms`; proof values

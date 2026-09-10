@@ -166,10 +166,12 @@ real Latin, CJK, bidi, justified, combining-mark, and mixed-size glyphs. Its 14 
 two-glyph cluster and a font-size boundary; cancellation and finite-f32 rejection controls remain visible.
 That is only a normal-range f32 lower bound; it does not override the f64 inline and block reassociation
 counterexamples. Installed Three 0.185.1 compiles branch-free nested occurrence-map lookup for whole-resource 3x10,
-2x16, and u32 map specializations through both storage WGSL and WebGL2 PBO GLSL as one instanced-mesh representation. The direct
-TypeGPU proof establishes only that a separate two-binding placement group can fit beside the saturated eight-buffer
-Slug Codec. Actual TypeGPU renderer storage ownership, bind-group lifetime, callback pressure, pixels, and draw behavior
-remain mandatory M1 evidence, as do browser pixel/fetch evidence and boundary replacement.
+2x16, and u32 map specializations through both storage WGSL and WebGL2 PBO GLSL as one instanced-mesh representation. The
+direct TypeGPU proof compiled only a standalone extra placement group; production rejects that fifth-group shape because
+scene, raster, pose, and paint already consume the four guaranteed groups. Direct TypeGPU is still a proof-of-concept,
+and its current eight vertex inputs are an implementation choice to replace rather than a shared-engine constraint.
+Actual TypeGPU renderer storage ownership, callback pressure, pixels, and draw behavior remain mandatory M1 evidence, as
+do browser pixel/fetch evidence and boundary replacement.
 
 The visual mapping proof intersects source-monotone fragments with retained runs, validates safe cluster boundaries,
 and consumes each selected non-hard-break cluster exactly once in explicit L1/L2 order. Multi-glyph clusters retain
@@ -314,11 +316,12 @@ runs may yield several line slices, but never one retained run per break or glyp
 Each slice caches the ink union for its local glyph range. Derive it from immutable run chunk summaries plus bounded
 edge scans, so a partial CJK run does not force a whole-run bound or a broad per-glyph measurement walk.
 
-The renderer mapping is an M1 decision with two admissible shapes: a coalesced instance/order span carrying one slice
-placement slot as span metadata, or a compact run-indexed occurrence table addressed through the existing indirect
-instance/order stream. Either shape must map every glyph ordinal to exactly one live slice after a break moves, preserve
-material batching and visual order, and avoid per-glyph absolute-origin publication. Reject any candidate that requires
-one draw per run/slice or a branch/search over line breaks in the ordinary vertex path.
+The renderer mapping keeps stable glyph identity separate and adds a distinct per-physical-glyph occurrence map.
+Stable-indirect draws keep their existing logical-to-physical order lookup, then read the placement slot at that physical
+row. Ordered-direct draws use their existing physical instance directly. Both then read the one session placement table
+shared across resource/material batches. This maps every glyph ordinal to exactly one live slice without another visual
+order stream or draw key. Reject any candidate that requires one draw per run/slice or a branch/search over line breaks
+in the ordinary vertex path.
 
 Keep paint/material/raster grouping outside `LayoutRunArena`. Existing codec/resource batch spans reference run-local
 glyph subranges and are intersected with visual slice spans during plan publication. A paint-only update rebuilds those
@@ -575,6 +578,12 @@ This does not claim that WebGPU reads Wasm linear memory directly. GPU upload is
 full intermediate copy: a pure width update writes and uploads compact placement/order/decoration patches and writes
 zero bytes to the static glyph-local buffer.
 
+The retained identity foundation is concrete: each paragraph receives a nonwrapping incarnation, each `LayoutRun`
+receives an exact non-hash canonical revision after complete retained-content comparison, and a planner-scoped dense
+slot arena binds `{slot, generation}` only into pending cluster state. Removed slots remain quarantined until renderer
+acknowledgement. The first cluster's stable text-unit ID is only a reconciliation anchor; it is neither a physical slot
+nor a globally comparable handle. Width-only updates reuse committed handles without rebuilding canonical identity.
+
 Do not zero-scale unused capacity. The built-ins already use static unit quads with an authoritative instance count;
 drawing degenerate slack wastes vertex work and complicates ordering. Reserve capacity and set the live count.
 
@@ -594,12 +603,14 @@ test/lab oracle only at M6 after full matrix closure.
 3. Mark the static run slot as topology-only or widen the exhausted semantic change mask. The current named bits occupy
    0–14 while bit 15 is outside `ALL_SEMANTIC_CHANGES`; define and include a generated `RUN_SLOT_CHANGE` bit (widening the
    mask if needed) or move the slot to a separately versioned topology record. No new field may silently receive a zero
-   dependency mask. Pack or otherwise account for the slot before raising resource limits: base TypeGPU Slug already
-   consumes its declared eight buffers.
+   dependency mask. Account for the occurrence lane explicitly; direct TypeGPU's current eight-input prototype is a
+   measured starting point, not a shared limit the core must encode around.
 4. Version and regenerate the Rust JSON contract, TypeScript declarations, validators, fixtures, and ABI fingerprints in
    the same commit.
 5. Update custom codec/program registration to the new placement contract in the same release. The package remains
    unreleased and carries no demonstrated compatibility obligation that justifies shipping two positioning systems.
+   Keep the stable-ID contract truthful and migrate custom programs to the additional occurrence/placement inputs in the
+   same cut; do not overload identity with a placement slot merely to preserve a prototype adapter's buffer count.
 
 The proof may revise the 8-byte f32 candidate or choose another GPU encoding, but it must not proceed to ABI
 implementation without recording per-technique bytes per active and reserved slice, alignment, translation and
@@ -609,10 +620,10 @@ slices separately; it must not claim bit parity from plain local-f32 addition or
 
 ### GPU data access
 
-Static per-glyph instance data contains local origin/ink/size, run slot, and local ordinal. A stable-addressed occurrence
-or span record associates that glyph range with the current slice placement. The generic material/resource realizer
-resolves final position before invoking the raster coverage graph, so custom material augmentation continues to observe
-the same final-position semantics.
+Static per-glyph instance data contains local origin/ink/size, stable identity, and local ordinal. A distinct
+per-physical-glyph occurrence map stores the current placement slot; it is dynamic placement data, not a batch key or
+static run identity. The generic material/resource realizer resolves final position before invoking the raster coverage
+graph, so custom material augmentation continues to observe the same final-position semantics.
 
 Keep ordinary-only and justification-capable vertex paths separate at whole-batch granularity. The ordinary-only shader
 performs one indexed placement fetch and adds one translation; it does not test bidi, wrapping, decorations, raster type,
@@ -633,13 +644,14 @@ WebGL2 PBO/texture limits. Base `/typegpu` must separately prove storage usage, 
 access, and buffer-limit headroom before it migrates. It has no decoration renderer today and this plan does not imply
 one. No adapter owns a second layout model, and the new placement table must preserve existing scene draw counts.
 
-The source audit fixes the first representation experiment: direct `/typegpu` Slug already occupies all eight declared
-Codec buffer slots, so placement belongs to paragraph/session storage rather than another technique buffer. Three and
-direct TypeGPU currently realize each display-list span as a draw, so slices cannot become spans; one branch-free logical
-instance-to-slice lookup must preserve coalescing. At 22k capacity, Three WebGL2 pads storage to 22,016 records and uploads
-the complete dirty PBO texture: 176,128 bytes for an f32x2 row and 352,256 bytes for f32x4. M1 therefore compares packed
-u32 occurrence maps plus session placement, including the whole padded transfer, rather than pricing the 8-byte placement
-row alone. These are feasibility inputs; no wire representation is accepted yet.
+The source audit records that direct `/typegpu` Slug currently occupies seven technique vertex inputs plus one stable-ID
+input, but `/typegpu` is still a proof-of-concept and that layout is not a shared-engine limit. Its production cutover may
+interleave, widen, or move those prototype inputs to storage to carry the distinct occurrence map and shared placement
+table without extra draws. Three and direct TypeGPU currently realize each display-list span as a draw, so slices cannot
+become spans. At 22k capacity, Three WebGL2 pads storage to 22,016 records and uploads the complete dirty PBO texture:
+176,128 bytes for an f32x2 row and 352,256 bytes for f32x4. M1 therefore prices the changed 4-byte occurrence rows plus
+session placement, including padded transfer. These are feasibility inputs; the numeric placement row remains
+evidence-gated.
 
 ## Milestones and commit boundaries
 
@@ -678,7 +690,8 @@ Exit: attribution supports run placement/publication as the dominant removable w
   mixed-direction, CJK, and justification corpora.
 - Compare run-translation rows with break-anchor plus run-to-line rows. Three already proves indexed storage on WebGPU
   and WebGL2; measure the incremental lookup and limits. Separately prove base `/typegpu` storage binding, instance index,
-  bind-group ownership, and eight-buffer pressure. Record CPU publication bytes and GPU fetch cost for every candidate.
+  bind-group ownership, and a production resource layout within baseline WebGPU limits. Record CPU publication bytes and
+  GPU fetch cost for every candidate.
 - Prove the dense-CJK mapping from a large `LayoutRun` through safe-boundary slices to exact visual instance spans for
   multi-glyph, zero-glyph, combining, ligature, and RTL clusters. Record run/slice/span counts and reject one-run-per-break,
   one-run-per-glyph, per-glyph break search, or one-draw-per-slice designs.
@@ -724,8 +737,9 @@ warmup; production behavior and timing remain unchanged.
 - Teach the generic realization boundary to bind local glyph data and the run/line tables.
 - Migrate Bitmap, MTSDF, Slug, decoration, and custom program registration across `/three` and `/three/typegpu`.
 - Migrate base `/typegpu` Bitmap/MTSDF/Slug in the same tip, using either the shared indexed encoding or an adapter-specific
-  wire encoding already validated in M1 against its eight-buffer ceiling; both derive from the same core authority and it
-  still has no decoration path. If neither encoding passes, M3 and the production cutover do not land.
+  resource encoding validated in M1 against the production callback and baseline-device contract; both derive from the
+  same core authority and it still has no decoration path. If neither encoding passes, M3 and the production cutover do
+  not land.
 - Migrate `snapshotGlyphOrigins`, Three `glyphPlacements`, bounds/raycast/caret/selection queries, generated validators,
   `material-realizer.ts`, and `registerThreeRasterProgram` in the same tip.
 - Preserve custom material override semantics and package optional-dependency/tree-shaking boundaries.

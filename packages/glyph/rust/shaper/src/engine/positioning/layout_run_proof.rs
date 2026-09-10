@@ -921,6 +921,9 @@ mod tests {
             .collect::<Vec<_>>();
         let mut glyph_counts = vec![1; cluster_count];
         glyph_counts[hard_break] = 0;
+        let stable_ids = (1..=cluster_count)
+            .map(|cluster| u32::try_from(cluster).unwrap())
+            .collect::<Vec<_>>();
         let layout_runs = [LayoutRun {
             cluster_start: 0,
             cluster_end: u32::try_from(cluster_count).unwrap(),
@@ -928,12 +931,15 @@ mod tests {
             glyph_count: u32::try_from(hard_break).unwrap(),
             source_run: 0,
             font_handle: 17,
+            canonical_revision: None,
+            run_handle: None,
         }];
         let map = build_visual_instance_map(
             &layout_runs,
             &glyph_starts,
             &glyph_counts,
             &clusters.flags,
+            &stable_ids,
             &fragments,
             &occurrences,
         )
@@ -955,6 +961,7 @@ mod tests {
                 &glyph_starts,
                 &glyph_counts,
                 &unsafe_flags,
+                &stable_ids,
                 &fragments,
                 &occurrences,
             ),
@@ -969,6 +976,7 @@ mod tests {
                 &glyph_starts,
                 &glyph_counts,
                 &clusters.flags,
+                &stable_ids,
                 &boundary_fragments,
                 &occurrences,
             ),
