@@ -5,15 +5,21 @@ use alloc::vec::Vec;
 use crate::{FontGlyphExtents, FontMetrics, bidi::BidiAnalysis};
 
 #[cfg(any(test, feature = "kernel-lab"))]
-use super::placement_state::{PlacementClass, PlacementState, SlicePlacement};
+use super::placement_state::{
+    GlyphSource, LayoutRunOwner, PlacementClass, PlacementState, SlicePlacement, SliceRole,
+};
 
 use super::{
     EngineError, FrameFault,
-    cluster_state::{CLUSTER_HARD_BREAK, CLUSTER_SPACE, ClusterArena},
+    cluster_state::{
+        BoundaryRunRole, CLUSTER_HARD_BREAK, CLUSTER_SPACE, ClusterArena, LayoutRun,
+        LayoutRunSourceKind, RunCanonicalRevision,
+    },
     codec_gather::{LayoutGlyph, PAINT_LAYER_GLYPH},
     flow_composition::{FlowFragment, FlowLayoutArena, FlowLine},
     frame::{ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START},
     identity_index::{IdentityIndex, IdentityIndexError},
+    run_slot::RunHandle,
     shaping_state::{BoundaryShape, BoundaryShapeArena, ShapingRun},
     style_state::{ResolvedStyle, StyleSegment},
 };
@@ -333,6 +339,10 @@ pub(crate) struct PositionedGlyphArena {
     line_levels: Vec<u8>,
     recomposed_glyphs: Option<RecomposedGlyphRange>,
     decorations: Vec<DecorationRecord>,
+    replacement_runs: Vec<LayoutRun>,
+    replacement_run_indices: Vec<[Option<u32>; 2]>,
+    replacement_current_order: Vec<u32>,
+    replacement_previous_order: Vec<u32>,
     #[cfg(any(test, feature = "kernel-lab"))]
     placement: PlacementState,
     #[cfg(any(test, feature = "kernel-lab"))]
@@ -368,6 +378,21 @@ struct FragmentPositionState {
     gap_ordinal: i64,
 }
 
+#[derive(Clone, Copy)]
+#[cfg(any(test, feature = "kernel-lab"))]
+struct PlacementOccurrence {
+    slice_index: u32,
+    placement_slot: u32,
+}
+
+#[cfg(any(test, feature = "kernel-lab"))]
+struct RetainedInstanceCursor {
+    semantic_next: usize,
+    semantic_end: usize,
+    rendered_next: usize,
+    rendered_end: usize,
+}
+
 struct PositionedCluster {
     style: ResolvedStyle,
     font_handle: u32,
@@ -382,6 +407,166 @@ struct GlyphStreams<'a> {
     y_offsets: &'a [i32],
     shape_flags: &'a [u16],
     stable_ids: &'a [u32],
+}
+
+#[derive(Clone, Copy)]
+struct BoundaryRunSpec {
+    source_kind: LayoutRunSourceKind,
+    cluster_start: u32,
+    cluster_end: u32,
+    glyph_start: u32,
+    glyph_count: u32,
+    source_run: u32,
+    font_handle: u32,
+}
+
+#[derive(PartialEq, Eq)]
+struct BoundaryShapeSpan<'a> {
+    glyph_ids: &'a [u16],
+    x_advances: &'a [i32],
+    y_advances: &'a [i32],
+    x_offsets: &'a [i32],
+    y_offsets: &'a [i32],
+    glyph_flags: &'a [u16],
+    stable_ids: &'a [u32],
+}
+
+fn boundary_shape_span<'a>(
+    arena: &'a BoundaryShapeArena,
+    spec: BoundaryRunSpec,
+) -> Result<BoundaryShapeSpan<'a>, EngineError> {
+    let start = usize::try_from(spec.glyph_start).map_err(|_| EngineError::InvalidRequest)?;
+    let end = start
+        .checked_add(usize::try_from(spec.glyph_count).map_err(|_| EngineError::InvalidRequest)?)
+        .ok_or(EngineError::InvalidRequest)?;
+    Ok(BoundaryShapeSpan {
+        glyph_ids: arena
+            .shape
+            .glyph_ids
+            .get(start..end)
+            .ok_or(EngineError::InvalidRequest)?,
+        x_advances: arena
+            .shape
+            .x_advances
+            .get(start..end)
+            .ok_or(EngineError::InvalidRequest)?,
+        y_advances: arena
+            .shape
+            .y_advances
+            .get(start..end)
+            .ok_or(EngineError::InvalidRequest)?,
+        x_offsets: arena
+            .shape
+            .x_offsets
+            .get(start..end)
+            .ok_or(EngineError::InvalidRequest)?,
+        y_offsets: arena
+            .shape
+            .y_offsets
+            .get(start..end)
+            .ok_or(EngineError::InvalidRequest)?,
+        glyph_flags: arena
+            .shape
+            .glyph_flags
+            .get(start..end)
+            .ok_or(EngineError::InvalidRequest)?,
+        stable_ids: arena
+            .stable_ids
+            .get(start..end)
+            .ok_or(EngineError::InvalidRequest)?,
+    })
+}
+
+fn same_boundary_run(
+    current: BoundaryRunSpec,
+    previous: BoundaryRunSpec,
+    current_shape: &BoundaryShapeArena,
+    previous_shape: &BoundaryShapeArena,
+    current_runs: &[ShapingRun],
+    previous_runs: &[ShapingRun],
+) -> Result<bool, EngineError> {
+    if current.source_kind != previous.source_kind
+        || current.font_handle != previous.font_handle
+        || current.glyph_count != previous.glyph_count
+    {
+        return Ok(false);
+    }
+    let current_run = current_runs
+        .get(usize::try_from(current.source_run).map_err(|_| EngineError::InvalidRequest)?)
+        .ok_or(EngineError::InvalidRequest)?;
+    let previous_run = previous_runs
+        .get(usize::try_from(previous.source_run).map_err(|_| EngineError::InvalidRequest)?)
+        .ok_or(EngineError::InvalidRequest)?;
+    let same_metrics = current_run.bidi_level == previous_run.bidi_level
+        && current_run.style.font_size.to_bits() == previous_run.style.font_size.to_bits()
+        && current_run.style.letter_spacing.to_bits()
+            == previous_run.style.letter_spacing.to_bits()
+        && current_run.style.word_spacing.to_bits() == previous_run.style.word_spacing.to_bits()
+        && current_run.style.baseline_shift.to_bits()
+            == previous_run.style.baseline_shift.to_bits();
+    Ok(same_metrics
+        && same_relative_boundary_clusters(current_shape, current, previous_shape, previous)?
+        && boundary_shape_span(current_shape, current)?
+            == boundary_shape_span(previous_shape, previous)?)
+}
+
+fn same_relative_boundary_clusters(
+    current_shape: &BoundaryShapeArena,
+    current: BoundaryRunSpec,
+    previous_shape: &BoundaryShapeArena,
+    previous: BoundaryRunSpec,
+) -> Result<bool, EngineError> {
+    fn clusters(arena: &BoundaryShapeArena, spec: BoundaryRunSpec) -> Result<&[u32], EngineError> {
+        let start = usize::try_from(spec.glyph_start).map_err(|_| EngineError::InvalidRequest)?;
+        let end = start
+            .checked_add(
+                usize::try_from(spec.glyph_count).map_err(|_| EngineError::InvalidRequest)?,
+            )
+            .ok_or(EngineError::InvalidRequest)?;
+        arena
+            .shape
+            .clusters
+            .get(start..end)
+            .ok_or(EngineError::InvalidRequest)
+    }
+    let current = clusters(current_shape, current)?;
+    let previous = clusters(previous_shape, previous)?;
+    let current_base = current.first().copied().unwrap_or(0);
+    let previous_base = previous.first().copied().unwrap_or(0);
+    Ok(current.len() == previous.len()
+        && current.iter().zip(previous).all(|(left, right)| {
+            i64::from(*left) - i64::from(current_base)
+                == i64::from(*right) - i64::from(previous_base)
+        }))
+}
+
+impl BoundaryRunSpec {
+    fn from_boundary(boundary: BoundaryShape, role: BoundaryRunRole) -> Option<Self> {
+        let (glyph_start, glyph_count, font_handle) = match role {
+            BoundaryRunRole::BoundarySource => (
+                boundary.source_glyph_start,
+                boundary.source_glyph_count,
+                boundary.source_font_handle,
+            ),
+            BoundaryRunRole::Ellipsis => (
+                boundary.ellipsis_glyph_start,
+                boundary.ellipsis_glyph_count,
+                boundary.ellipsis_font_handle,
+            ),
+        };
+        (glyph_count != 0).then_some(Self {
+            source_kind: LayoutRunSourceKind::Boundary {
+                flow_thread_id: boundary.flow_thread_id,
+                role,
+            },
+            cluster_start: boundary.cluster_start,
+            cluster_end: boundary.cluster_end,
+            glyph_start,
+            glyph_count,
+            source_run: boundary.source_run,
+            font_handle,
+        })
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -465,17 +650,28 @@ impl PositionedGlyphArena {
         text: &[u16],
         clusters: &ClusterArena,
         runs: &[ShapingRun],
+        previous_runs: &[ShapingRun],
         boundary_shape: &BoundaryShapeArena,
+        previous_boundary_shape: &BoundaryShapeArena,
         styles: &[StyleSegment],
         bidi: &BidiAnalysis,
         identity_index: &mut IdentityIndex,
         next_content_revision: &mut u32,
+        next_run_canonical_revision: &mut u32,
         typography_for: impl Fn(u32) -> ThreadTypography + Copy,
         retained_typography_for: impl Fn(u32) -> ThreadTypography + Copy,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<(), EngineError> {
         self.clear();
+        self.rebuild_replacement_runs(
+            previous,
+            boundary_shape,
+            previous_boundary_shape,
+            runs,
+            previous_runs,
+            next_run_canonical_revision,
+        )?;
         self.text_effects = styles
             .iter()
             .any(|segment| style_has_text_effects(segment.style));
@@ -509,10 +705,15 @@ impl PositionedGlyphArena {
                 self.rematerialize_line_placement(
                     flow,
                     line_index,
+                    text,
                     clusters,
+                    runs,
+                    boundary_shape,
+                    styles,
                     bidi,
                     visually_ltr,
                     typography_for(line.flow_thread_id),
+                    metrics_for,
                 )?;
                 continue;
             }
@@ -600,7 +801,7 @@ impl PositionedGlyphArena {
                     0.0
                 };
                 let fragment_advance = if self.text_effects {
-                    self.position_fragment::<true>(
+                    self.position_fragment::<true, true>(
                         line,
                         fragment,
                         final_line,
@@ -615,9 +816,11 @@ impl PositionedGlyphArena {
                         typography.justify,
                         metrics_for,
                         extents_for,
+                        #[cfg(any(test, feature = "kernel-lab"))]
+                        None,
                     )?
                 } else {
-                    self.position_fragment::<false>(
+                    self.position_fragment::<false, true>(
                         line,
                         fragment,
                         final_line,
@@ -632,6 +835,8 @@ impl PositionedGlyphArena {
                         typography.justify,
                         metrics_for,
                         extents_for,
+                        #[cfg(any(test, feature = "kernel-lab"))]
+                        None,
                     )?
                 };
                 inline_end = inline_end.max(fragment.slot_start + fragment_advance);
@@ -686,6 +891,12 @@ impl PositionedGlyphArena {
                 })
             })
             .transpose()?;
+        #[cfg(any(test, feature = "kernel-lab"))]
+        self.placement.validate_occurrences(
+            self.glyphs.len(),
+            clusters.layout_runs(),
+            &self.replacement_runs,
+        )?;
         // Retained flow proves that only geometry-authored semantic fields can differ.
         self.assign_content_revisions(
             previous,
@@ -855,6 +1066,10 @@ impl PositionedGlyphArena {
 
     pub(crate) fn clear(&mut self) {
         self.decorations.clear();
+        self.replacement_runs.clear();
+        self.replacement_run_indices.clear();
+        self.replacement_current_order.clear();
+        self.replacement_previous_order.clear();
         self.glyphs.clear();
         self.line_glyph_starts.clear();
         self.line_glyph_counts.clear();
@@ -888,6 +1103,175 @@ impl PositionedGlyphArena {
         &self.glyphs
     }
 
+    pub(crate) fn replacement_runs(&self) -> &[LayoutRun] {
+        &self.replacement_runs
+    }
+
+    pub(crate) fn bind_replacement_run_handle(
+        &mut self,
+        index: usize,
+        canonical: RunCanonicalRevision,
+        handle: RunHandle,
+    ) -> Result<(), EngineError> {
+        let run = self
+            .replacement_runs
+            .get_mut(index)
+            .ok_or(EngineError::InvalidRequest)?;
+        if matches!(run.source_kind, LayoutRunSourceKind::Paragraph)
+            || run.canonical_revision != Some(canonical)
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        run.run_handle = Some(handle);
+        Ok(())
+    }
+
+    #[cfg(any(test, feature = "kernel-lab"))]
+    pub(crate) fn bind_placement_run_handles(
+        &mut self,
+        layout_runs: &[LayoutRun],
+    ) -> Result<(), EngineError> {
+        self.placement
+            .bind_run_handles(layout_runs, &self.replacement_runs)
+    }
+
+    fn rebuild_replacement_runs(
+        &mut self,
+        previous: &Self,
+        current_shape: &BoundaryShapeArena,
+        previous_shape: &BoundaryShapeArena,
+        current_runs: &[ShapingRun],
+        previous_runs: &[ShapingRun],
+        next_revision: &mut u32,
+    ) -> Result<(), EngineError> {
+        let capacity = current_shape
+            .records
+            .len()
+            .checked_mul(2)
+            .ok_or(EngineError::ResultTooLarge)?;
+        self.replacement_runs
+            .try_reserve(capacity)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        self.replacement_run_indices
+            .try_reserve(current_shape.records.len())
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        self.replacement_current_order
+            .try_reserve(current_shape.records.len())
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        self.replacement_previous_order
+            .try_reserve(previous_shape.records.len())
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        for index in 0..current_shape.records.len() {
+            self.replacement_current_order
+                .push(u32::try_from(index).map_err(|_| EngineError::ResultTooLarge)?);
+        }
+        for index in 0..previous_shape.records.len() {
+            self.replacement_previous_order
+                .push(u32::try_from(index).map_err(|_| EngineError::ResultTooLarge)?);
+        }
+        self.replacement_current_order
+            .sort_unstable_by_key(|index| {
+                (
+                    current_shape.records[*index as usize].flow_thread_id,
+                    *index,
+                )
+            });
+        self.replacement_previous_order
+            .sort_unstable_by_key(|index| {
+                (
+                    previous_shape.records[*index as usize].flow_thread_id,
+                    *index,
+                )
+            });
+        if self.replacement_current_order.windows(2).any(|pair| {
+            current_shape.records[pair[0] as usize].flow_thread_id
+                == current_shape.records[pair[1] as usize].flow_thread_id
+        }) || self.replacement_previous_order.windows(2).any(|pair| {
+            previous_shape.records[pair[0] as usize].flow_thread_id
+                == previous_shape.records[pair[1] as usize].flow_thread_id
+        }) {
+            return Err(EngineError::InvalidRequest);
+        }
+        self.replacement_run_indices
+            .resize(current_shape.records.len(), [None; 2]);
+        let mut revision_cursor = *next_revision;
+        let mut previous_order_index = 0usize;
+        for current_boundary_index in self.replacement_current_order.iter().copied() {
+            let boundary = current_shape.records[current_boundary_index as usize];
+            while self
+                .replacement_previous_order
+                .get(previous_order_index)
+                .is_some_and(|index| {
+                    previous_shape.records[*index as usize].flow_thread_id < boundary.flow_thread_id
+                })
+            {
+                previous_order_index += 1;
+            }
+            let previous_boundary_index = self
+                .replacement_previous_order
+                .get(previous_order_index)
+                .copied()
+                .filter(|index| {
+                    previous_shape.records[*index as usize].flow_thread_id
+                        == boundary.flow_thread_id
+                });
+            let previous_boundary =
+                previous_boundary_index.map(|index| previous_shape.records[index as usize]);
+            let mut run_indices = [None; 2];
+            for role in [BoundaryRunRole::BoundarySource, BoundaryRunRole::Ellipsis] {
+                let Some(spec) = BoundaryRunSpec::from_boundary(boundary, role) else {
+                    continue;
+                };
+                let role_index = boundary_role_index(role);
+                let previous_run = previous_boundary_index
+                    .and_then(|index| previous.replacement_run_indices.get(index as usize))
+                    .and_then(|indices| indices[role_index])
+                    .and_then(|index| previous.replacement_runs.get(index as usize))
+                    .filter(|run| run.source_kind == spec.source_kind);
+                let previous_spec = previous_boundary
+                    .and_then(|candidate| BoundaryRunSpec::from_boundary(candidate, role))
+                    .filter(|candidate| candidate.source_kind == spec.source_kind);
+                let retained =
+                    if let (Some(run), Some(previous_spec)) = (previous_run, previous_spec) {
+                        same_boundary_run(
+                            spec,
+                            previous_spec,
+                            current_shape,
+                            previous_shape,
+                            current_runs,
+                            previous_runs,
+                        )?
+                        .then_some(run.canonical_revision)
+                        .flatten()
+                    } else {
+                        None
+                    };
+                let canonical_revision = retained
+                    .map(Ok)
+                    .unwrap_or_else(|| RunCanonicalRevision::allocate(&mut revision_cursor))?;
+                let run_index = u32::try_from(self.replacement_runs.len())
+                    .map_err(|_| EngineError::ResultTooLarge)?;
+                self.replacement_runs.push(LayoutRun {
+                    source_kind: spec.source_kind,
+                    cluster_start: spec.cluster_start,
+                    cluster_end: spec.cluster_end,
+                    glyph_start: spec.glyph_start,
+                    glyph_count: spec.glyph_count,
+                    source_run: spec.source_run,
+                    font_handle: spec.font_handle,
+                    canonical_revision: Some(canonical_revision),
+                    run_handle: None,
+                });
+                run_indices[role_index] = Some(run_index);
+            }
+            self.replacement_run_indices[current_boundary_index as usize] = run_indices;
+            if previous_boundary.is_some() {
+                previous_order_index += 1;
+            }
+        }
+        *next_revision = revision_cursor;
+        Ok(())
+    }
     pub(crate) fn semantic_glyphs(&self) -> &[SemanticGlyph] {
         &self.semantic_glyphs
     }
@@ -916,121 +1300,118 @@ impl PositionedGlyphArena {
     }
 
     #[cfg(any(test, feature = "kernel-lab"))]
+    #[allow(clippy::too_many_arguments)]
     fn rematerialize_line_placement(
         &mut self,
         flow: &FlowLayoutArena,
         line_index: usize,
+        text: &[u16],
         clusters: &ClusterArena,
+        runs: &[ShapingRun],
+        boundary_shape: &BoundaryShapeArena,
+        styles: &[StyleSegment],
         bidi: &BidiAnalysis,
         visually_ltr: bool,
         typography: ThreadTypography,
+        metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
     ) -> Result<(), EngineError> {
         let line = *flow
             .lines
             .get(line_index)
             .ok_or(EngineError::InvalidRequest)?;
+        let rendered_next = usize::try_from(
+            *self
+                .line_glyph_starts
+                .last()
+                .ok_or(EngineError::InvalidRequest)?,
+        )
+        .map_err(|_| EngineError::InvalidRequest)?;
+        let count = usize::try_from(
+            *self
+                .line_glyph_counts
+                .last()
+                .ok_or(EngineError::InvalidRequest)?,
+        )
+        .map_err(|_| EngineError::InvalidRequest)?;
+        let rendered_end = rendered_next
+            .checked_add(count)
+            .ok_or(EngineError::InvalidRequest)?;
+        let semantic_next = usize::try_from(
+            *self
+                .semantic_line_glyph_starts
+                .last()
+                .ok_or(EngineError::InvalidRequest)?,
+        )
+        .map_err(|_| EngineError::InvalidRequest)?;
+        let semantic_count = usize::try_from(
+            *self
+                .semantic_line_glyph_counts
+                .last()
+                .ok_or(EngineError::InvalidRequest)?,
+        )
+        .map_err(|_| EngineError::InvalidRequest)?;
+        let semantic_end = semantic_next
+            .checked_add(semantic_count)
+            .ok_or(EngineError::InvalidRequest)?;
+        let mut retained = RetainedInstanceCursor {
+            semantic_next,
+            semantic_end,
+            rendered_next,
+            rendered_end,
+        };
         let line_start = self.placement.begin_line();
         let final_line = flow
             .lines
             .get(line_index + 1)
             .is_none_or(|next| next.flow_thread_id != line.flow_thread_id);
-        let mut fragment_index = line.fragment_start;
-        for fragment in line_fragments(flow, line)?.iter().copied() {
-            let cluster_start = usize::try_from(fragment.line.cluster_start)
-                .map_err(|_| EngineError::InvalidRequest)?;
-            let cluster_end = usize::try_from(fragment.line.cluster_end)
-                .map_err(|_| EngineError::InvalidRequest)?;
-            let paragraph_level = paragraph_level_at(bidi, fragment.line.text_start);
+        let fragments = line_fragments(flow, line)?;
+        if !visually_ltr && let (Some(first), Some(last)) = (fragments.first(), fragments.last()) {
+            prepare_line_levels(
+                &mut self.line_levels,
+                bidi,
+                first.line.text_start,
+                last.line.text_end,
+            )?;
+        }
+        self.placement_fragment_index = line.fragment_start;
+        for fragment in fragments.iter().copied() {
             let indent = if fragment.line.cluster_start == 0 {
                 typography.first_line_indent
             } else {
                 0.0
             };
-            if visually_ltr
-                && paragraph_level & 1 == 0
-                && indent == 0.0
-                && fragment.boundary_index == super::flow_composition::NO_BOUNDARY
-            {
-                let (justify, mut cursor) = fragment_pen(
-                    line,
-                    fragment,
-                    final_line,
-                    clusters,
-                    cluster_start,
-                    cluster_end,
-                    indent,
-                    typography.justify,
-                    paragraph_level,
-                    false,
-                );
-                let class = if justify.is_zero() {
-                    PlacementClass::Ordinary
-                } else {
-                    PlacementClass::Justified
-                };
-                let layout_runs = clusters.layout_runs();
-                let first = layout_runs
-                    .partition_point(|run| run.cluster_end <= fragment.line.cluster_start);
-                let mut covered = cluster_start;
-                let mut space_ordinal = 0_i64;
-                let mut gap_ordinal = 0_i64;
-                for (run_offset, layout_run) in layout_runs[first..].iter().enumerate() {
-                    let run_start = usize::try_from(layout_run.cluster_start)
-                        .map_err(|_| EngineError::InvalidRequest)?;
-                    if run_start >= cluster_end {
-                        break;
-                    }
-                    let run_end = usize::try_from(layout_run.cluster_end)
-                        .map_err(|_| EngineError::InvalidRequest)?;
-                    let overlap_start = run_start.max(cluster_start);
-                    let overlap_end = run_end.min(cluster_end);
-                    if overlap_start != covered || overlap_start >= overlap_end {
-                        return Err(EngineError::InvalidRequest);
-                    }
-                    self.record_layout_run_slice(
-                        fragment_index,
-                        first + run_offset,
-                        layout_run,
-                        overlap_start,
-                        overlap_end,
-                        clusters,
-                        cursor,
-                        line.block_start + line.baseline,
-                        justify,
-                        space_ordinal,
-                        gap_ordinal,
-                        class,
-                    )?;
-                    for cluster in overlap_start..overlap_end {
-                        if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
-                            continue;
-                        }
-                        let cluster_origin = cursor;
-                        cursor = cluster_origin + clusters.advances[cluster];
-                        apply_justification(
-                            cluster,
-                            clusters,
-                            justify,
-                            &mut cursor,
-                            &mut space_ordinal,
-                            &mut gap_ordinal,
-                        );
-                    }
-                    covered = overlap_end;
-                }
-                if covered != cluster_end {
-                    return Err(EngineError::InvalidRequest);
-                }
-            }
-            fragment_index = fragment_index
+            self.position_fragment::<false, false>(
+                line,
+                fragment,
+                final_line,
+                text,
+                clusters,
+                runs,
+                boundary_shape,
+                styles,
+                bidi,
+                visually_ltr,
+                indent,
+                typography.justify,
+                metrics_for,
+                |_, _| None,
+                Some(&mut retained),
+            )?;
+            self.placement_fragment_index = self
+                .placement_fragment_index
                 .checked_add(1)
                 .ok_or(EngineError::ResultTooLarge)?;
+        }
+        if retained.semantic_next != retained.semantic_end
+            || retained.rendered_next != retained.rendered_end
+        {
+            return Err(EngineError::InvalidRequest);
         }
         self.placement.finish_line(line_start)
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn position_fragment<const TEXT_EFFECTS: bool>(
+    fn position_fragment<const TEXT_EFFECTS: bool, const MATERIALIZE_OUTPUT: bool>(
         &mut self,
         line: FlowLine,
         fragment: FlowFragment,
@@ -1046,6 +1427,7 @@ impl PositionedGlyphArena {
         controls: JustifyControls,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+        #[cfg(any(test, feature = "kernel-lab"))] mut retained: Option<&mut RetainedInstanceCursor>,
     ) -> Result<f64, EngineError> {
         let cluster_start = usize::try_from(fragment.line.cluster_start)
             .map_err(|_| EngineError::InvalidRequest)?;
@@ -1066,6 +1448,8 @@ impl PositionedGlyphArena {
         if retained_cluster_end > cluster_end {
             return Err(EngineError::InvalidRequest);
         }
+        #[cfg(any(test, feature = "kernel-lab"))]
+        let hanging_start = hanging_cluster_start(fragment, clusters, cluster_start, cluster_end)?;
         let visual_start = self.visual_clusters.len();
         if !visually_ltr {
             for cluster in cluster_start..retained_cluster_end {
@@ -1090,15 +1474,20 @@ impl PositionedGlyphArena {
         }
 
         let paragraph_level = paragraph_level_at(bidi, fragment.line.text_start);
-        // Whether the hung suffix lands visually FIRST is a property of that cluster's own
-        // resolved level, not of the paragraph: a span-level bidi override can give the
-        // terminating space the opposite parity to the paragraph it sits in. Alignment and
-        // indent deliberately keep asking the paragraph, because CSS resolves `start`/`end`
-        // against the inline base direction; only visual order asks the cluster.
         let hung_leads = if fragment.line.hung_advance == 0.0 {
             false
         } else {
-            let terminating = retained_cluster_end.saturating_sub(1).max(cluster_start);
+            let hanging_end = if cluster_end > cluster_start
+                && clusters.flags[cluster_end - 1] & CLUSTER_HARD_BREAK != 0
+            {
+                cluster_end - 1
+            } else {
+                cluster_end
+            };
+            let terminating = hanging_end
+                .checked_sub(1)
+                .filter(|cluster| *cluster >= cluster_start)
+                .ok_or(EngineError::InvalidRequest)?;
             cluster_level(
                 terminating,
                 fragment.line.text_start,
@@ -1150,15 +1539,16 @@ impl PositionedGlyphArena {
             space_ordinal: 0,
             gap_ordinal: 0,
         };
-        let layout_run_order =
-            visually_ltr && paragraph_level & 1 == 0 && indent == 0.0 && boundary.is_none();
+        let layout_run_order = visually_ltr && paragraph_level & 1 == 0;
         if layout_run_order {
             if justify.is_zero() {
-                self.position_layout_run_fragment::<TEXT_EFFECTS, false>(
+                self.position_layout_run_fragment::<TEXT_EFFECTS, false, MATERIALIZE_OUTPUT>(
                     line,
                     fragment,
                     cluster_start,
                     retained_cluster_end,
+                    #[cfg(any(test, feature = "kernel-lab"))]
+                    hanging_start,
                     clusters,
                     runs,
                     styles,
@@ -1167,13 +1557,17 @@ impl PositionedGlyphArena {
                     &mut state,
                     metrics_for,
                     extents_for,
+                    #[cfg(any(test, feature = "kernel-lab"))]
+                    retained.as_deref_mut(),
                 )?;
             } else {
-                self.position_layout_run_fragment::<TEXT_EFFECTS, true>(
+                self.position_layout_run_fragment::<TEXT_EFFECTS, true, MATERIALIZE_OUTPUT>(
                     line,
                     fragment,
                     cluster_start,
                     retained_cluster_end,
+                    #[cfg(any(test, feature = "kernel-lab"))]
+                    hanging_start,
                     clusters,
                     runs,
                     styles,
@@ -1182,6 +1576,8 @@ impl PositionedGlyphArena {
                     &mut state,
                     metrics_for,
                     extents_for,
+                    #[cfg(any(test, feature = "kernel-lab"))]
+                    retained.as_deref_mut(),
                 )?;
             }
         } else {
@@ -1197,11 +1593,56 @@ impl PositionedGlyphArena {
                     usize::try_from(self.visual_clusters[visual_start + ordinal])
                         .map_err(|_| EngineError::InvalidRequest)?
                 };
+                #[cfg(any(test, feature = "kernel-lab"))]
+                let run_index = clusters
+                    .layout_runs()
+                    .partition_point(|run| run.cluster_end <= cluster as u32);
+                #[cfg(any(test, feature = "kernel-lab"))]
+                let layout_run = clusters
+                    .layout_runs()
+                    .get(run_index)
+                    .filter(|run| run.cluster_start <= cluster as u32)
+                    .ok_or(EngineError::InvalidRequest)?;
+                #[cfg(any(test, feature = "kernel-lab"))]
+                let level = cluster_level(
+                    cluster,
+                    fragment.line.text_start,
+                    clusters,
+                    runs,
+                    &self.line_levels,
+                )?;
+                #[cfg(any(test, feature = "kernel-lab"))]
+                let role = if cluster >= hanging_start && cluster < retained_cluster_end {
+                    SliceRole::HangingSpace
+                } else {
+                    SliceRole::Ordinary
+                };
+                #[cfg(any(test, feature = "kernel-lab"))]
+                let occurrence = self.record_layout_run_slice(
+                    self.placement_fragment_index,
+                    run_index,
+                    layout_run,
+                    cluster,
+                    cluster + 1,
+                    clusters,
+                    state.cursor,
+                    state.baseline,
+                    justify,
+                    state.space_ordinal,
+                    state.gap_ordinal,
+                    if justify.is_zero() {
+                        PlacementClass::Ordinary
+                    } else {
+                        PlacementClass::Justified
+                    },
+                    level & 1 != 0,
+                    None,
+                )?;
                 if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
                     continue;
                 }
                 let geometry = RunGeometry::for_cluster(clusters, styles, cluster)?;
-                let positioned = self.position_cluster::<TEXT_EFFECTS>(
+                let positioned = self.position_cluster::<TEXT_EFFECTS, MATERIALIZE_OUTPUT>(
                     line,
                     fragment,
                     cluster,
@@ -1211,9 +1652,15 @@ impl PositionedGlyphArena {
                     &streams,
                     geometry,
                     &mut state,
+                    #[cfg(any(test, feature = "kernel-lab"))]
+                    occurrence,
+                    #[cfg(any(test, feature = "kernel-lab"))]
+                    role,
+                    #[cfg(any(test, feature = "kernel-lab"))]
+                    retained.as_deref_mut(),
                     extents_for,
                 )?;
-                self.finish_positioned_cluster::<true>(
+                self.finish_positioned_cluster::<true, MATERIALIZE_OUTPUT>(
                     line,
                     cluster,
                     clusters,
@@ -1223,13 +1670,46 @@ impl PositionedGlyphArena {
                     metrics_for,
                 )?;
             }
+            #[cfg(any(test, feature = "kernel-lab"))]
+            if !visually_ltr {
+                for cluster in cluster_start..retained_cluster_end {
+                    if clusters.flags[cluster] & CLUSTER_HARD_BREAK == 0 {
+                        continue;
+                    }
+                    let run_index = clusters
+                        .layout_runs()
+                        .partition_point(|run| run.cluster_end <= cluster as u32);
+                    let layout_run = clusters
+                        .layout_runs()
+                        .get(run_index)
+                        .filter(|run| run.cluster_start <= cluster as u32)
+                        .ok_or(EngineError::InvalidRequest)?;
+                    self.record_layout_run_slice(
+                        self.placement_fragment_index,
+                        run_index,
+                        layout_run,
+                        cluster,
+                        cluster + 1,
+                        clusters,
+                        state.cursor,
+                        state.baseline,
+                        justify,
+                        state.space_ordinal,
+                        state.gap_ordinal,
+                        PlacementClass::Ordinary,
+                        false,
+                        None,
+                    )?;
+                }
+            }
         }
         if state.decorated_run.is_some() {
             self.flush_decorated_run(&mut state.decorated_run, line, metrics_for)?;
         }
         if let Some(boundary) = boundary {
-            let _ = self.position_boundary::<TEXT_EFFECTS>(
+            let _ = self.position_boundary::<TEXT_EFFECTS, MATERIALIZE_OUTPUT>(
                 line,
+                fragment.boundary_index,
                 boundary,
                 state.cursor,
                 baseline,
@@ -1240,6 +1720,8 @@ impl PositionedGlyphArena {
                 boundary_shape,
                 metrics_for,
                 extents_for,
+                #[cfg(any(test, feature = "kernel-lab"))]
+                retained,
             )?;
         }
         Ok(indent
@@ -1252,12 +1734,17 @@ impl PositionedGlyphArena {
         any(test, feature = "kernel-lab"),
         allow(clippy::explicit_counter_loop)
     )]
-    fn position_layout_run_fragment<const TEXT_EFFECTS: bool, const ADJUST: bool>(
+    fn position_layout_run_fragment<
+        const TEXT_EFFECTS: bool,
+        const ADJUST: bool,
+        const MATERIALIZE_OUTPUT: bool,
+    >(
         &mut self,
         line: FlowLine,
         fragment: FlowFragment,
         cluster_start: usize,
         cluster_end: usize,
+        #[cfg(any(test, feature = "kernel-lab"))] hanging_start: usize,
         clusters: &ClusterArena,
         runs: &[ShapingRun],
         styles: &[StyleSegment],
@@ -1266,6 +1753,7 @@ impl PositionedGlyphArena {
         state: &mut FragmentPositionState,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+        #[cfg(any(test, feature = "kernel-lab"))] mut retained: Option<&mut RetainedInstanceCursor>,
     ) -> Result<(), EngineError> {
         let layout_runs = clusters.layout_runs();
         let first =
@@ -1287,25 +1775,28 @@ impl PositionedGlyphArena {
                 return Err(EngineError::InvalidRequest);
             }
             #[cfg(any(test, feature = "kernel-lab"))]
+            let occurrence = self.record_layout_run_slice(
+                self.placement_fragment_index,
+                layout_run_index,
+                layout_run,
+                overlap_start,
+                overlap_end,
+                clusters,
+                state.cursor,
+                state.baseline,
+                justify,
+                state.space_ordinal,
+                state.gap_ordinal,
+                if ADJUST {
+                    PlacementClass::Justified
+                } else {
+                    PlacementClass::Ordinary
+                },
+                false,
+                None,
+            )?;
+            #[cfg(any(test, feature = "kernel-lab"))]
             {
-                self.record_layout_run_slice(
-                    self.placement_fragment_index,
-                    layout_run_index,
-                    layout_run,
-                    overlap_start,
-                    overlap_end,
-                    clusters,
-                    state.cursor,
-                    state.baseline,
-                    justify,
-                    state.space_ordinal,
-                    state.gap_ordinal,
-                    if ADJUST {
-                        PlacementClass::Justified
-                    } else {
-                        PlacementClass::Ordinary
-                    },
-                )?;
                 layout_run_index += 1;
             }
             let Some(geometry_cluster) = (overlap_start..overlap_end)
@@ -1337,7 +1828,7 @@ impl PositionedGlyphArena {
                     style.baseline_shift.to_bits(),
                     geometry.baseline_shift.to_bits()
                 );
-                let positioned = self.position_cluster::<TEXT_EFFECTS>(
+                let positioned = self.position_cluster::<TEXT_EFFECTS, MATERIALIZE_OUTPUT>(
                     line,
                     fragment,
                     cluster,
@@ -1347,9 +1838,19 @@ impl PositionedGlyphArena {
                     streams,
                     geometry,
                     state,
+                    #[cfg(any(test, feature = "kernel-lab"))]
+                    occurrence,
+                    #[cfg(any(test, feature = "kernel-lab"))]
+                    if cluster >= hanging_start && cluster < overlap_end {
+                        SliceRole::HangingSpace
+                    } else {
+                        SliceRole::Ordinary
+                    },
+                    #[cfg(any(test, feature = "kernel-lab"))]
+                    retained.as_deref_mut(),
                     extents_for,
                 )?;
-                self.finish_positioned_cluster::<ADJUST>(
+                self.finish_positioned_cluster::<ADJUST, MATERIALIZE_OUTPUT>(
                     line,
                     cluster,
                     clusters,
@@ -1383,7 +1884,9 @@ impl PositionedGlyphArena {
         space_ordinal: i64,
         gap_ordinal: i64,
         class: PlacementClass,
-    ) -> Result<(), EngineError> {
+        visual_reversed: bool,
+        boundary_index: Option<u32>,
+    ) -> Result<PlacementOccurrence, EngineError> {
         let run_start =
             usize::try_from(layout_run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
         let glyph_start = clusters.glyph_starts[overlap_start];
@@ -1394,10 +1897,10 @@ impl PositionedGlyphArena {
         let local_prefix = clusters
             .layout_run_prefix(overlap_start)
             .ok_or(EngineError::InvalidRequest)?;
-        let run_glyph_start = glyph_start
+        let source_glyph_start = glyph_start
             .checked_sub(layout_run.glyph_start)
             .ok_or(EngineError::InvalidRequest)?;
-        let run_glyph_count = glyph_end
+        let source_glyph_count = glyph_end
             .checked_sub(glyph_start)
             .ok_or(EngineError::InvalidRequest)?;
         let gap_cluster_count = justify
@@ -1428,15 +1931,17 @@ impl PositionedGlyphArena {
                 justify.extra_gap_units,
             ),
         };
-        self.placement.push_admitted_occurrence(
+        let (slice_index, placement_slot) = self.placement.push_admitted_slice(
             fragment_index,
+            LayoutRunOwner::Paragraph,
             u32::try_from(layout_run_index).map_err(|_| EngineError::ResultTooLarge)?,
             clusters.stable_ids[run_start],
+            clusters.stable_ids[overlap_start],
             u32::try_from(overlap_start - run_start).map_err(|_| EngineError::ResultTooLarge)?,
             u32::try_from(overlap_end - overlap_start).map_err(|_| EngineError::ResultTooLarge)?,
-            run_glyph_start,
-            run_glyph_count,
-            glyph_start,
+            GlyphSource::LayoutRun,
+            source_glyph_start,
+            source_glyph_count,
             SlicePlacement {
                 local_prefix,
                 translation_inline: cursor - local_prefix,
@@ -1452,11 +1957,17 @@ impl PositionedGlyphArena {
                 extra_gap_units,
             },
             class,
-        )
+            visual_reversed,
+            boundary_index,
+        )?;
+        Ok(PlacementOccurrence {
+            slice_index,
+            placement_slot,
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn position_cluster<const TEXT_EFFECTS: bool>(
+    fn position_cluster<const TEXT_EFFECTS: bool, const MATERIALIZE_OUTPUT: bool>(
         &mut self,
         line: FlowLine,
         fragment: FlowFragment,
@@ -1467,6 +1978,9 @@ impl PositionedGlyphArena {
         streams: &GlyphStreams<'_>,
         geometry: RunGeometry,
         state: &mut FragmentPositionState,
+        #[cfg(any(test, feature = "kernel-lab"))] occurrence: PlacementOccurrence,
+        #[cfg(any(test, feature = "kernel-lab"))] role: SliceRole,
+        #[cfg(any(test, feature = "kernel-lab"))] mut retained: Option<&mut RetainedInstanceCursor>,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<PositionedCluster, EngineError> {
         let bidi_level = cluster_level(
@@ -1505,30 +2019,47 @@ impl PositionedGlyphArena {
             let flags = streams.shape_flags[adjacency];
             let origin_inline = state.cursor + x_offset;
             let origin_block = state.baseline - y_offset - f64::from(geometry.baseline_shift);
-            let outline = extents_for(font_handle, glyph_id);
+            let outline = if MATERIALIZE_OUTPUT {
+                extents_for(font_handle, glyph_id)
+            } else {
+                None
+            };
             let ink = match outline.as_ref() {
                 Some(extents) => {
                     GlyphInkBox::from_extents(extents, origin_inline, origin_block, scale)
                 }
                 None => GlyphInkBox::empty_at(origin_inline, origin_block),
             };
-            self.semantic_glyphs.push(SemanticGlyph {
-                stable_id,
-                font_handle,
-                cluster: streams.clusters[adjacency],
-                glyph_id: u16::try_from(glyph_id).map_err(|_| EngineError::ResultTooLarge)?,
-                flags,
-                bidi_level,
-                font_size: geometry.font_size,
-                inline_origin: finite_f32(origin_inline)?,
-                block_origin: finite_f32(origin_block)?,
-                inline_advance: nonnegative_f32(x_advance)?,
-                ink_inline_start: finite_f32(ink.inline_start)?,
-                ink_block_start: finite_f32(ink.block_start)?,
-                ink_inline_extent: nonnegative_f32(ink.inline_extent)?,
-                ink_block_extent: nonnegative_f32(ink.block_extent)?,
-            });
-            if outline.is_some() {
+            if MATERIALIZE_OUTPUT {
+                self.semantic_glyphs.push(SemanticGlyph {
+                    stable_id,
+                    font_handle,
+                    cluster: streams.clusters[adjacency],
+                    glyph_id: u16::try_from(glyph_id).map_err(|_| EngineError::ResultTooLarge)?,
+                    flags,
+                    bidi_level,
+                    font_size: geometry.font_size,
+                    inline_origin: finite_f32(origin_inline)?,
+                    block_origin: finite_f32(origin_block)?,
+                    inline_advance: nonnegative_f32(x_advance)?,
+                    ink_inline_start: finite_f32(ink.inline_start)?,
+                    ink_block_start: finite_f32(ink.block_start)?,
+                    ink_inline_extent: nonnegative_f32(ink.inline_extent)?,
+                    ink_block_extent: nonnegative_f32(ink.block_extent)?,
+                });
+            }
+            if MATERIALIZE_OUTPUT && outline.is_some() {
+                #[cfg(any(test, feature = "kernel-lab"))]
+                self.placement.push_emitted_span(
+                    occurrence.slice_index,
+                    occurrence.placement_slot,
+                    u32::try_from(self.glyphs.len()).map_err(|_| EngineError::ResultTooLarge)?,
+                    GlyphSource::LayoutRun,
+                    u32::try_from(adjacency).map_err(|_| EngineError::ResultTooLarge)?,
+                    1,
+                    bidi_level,
+                    role,
+                )?;
                 let semantic_glyph_index = u32::try_from(self.semantic_glyphs.len() - 1)
                     .map_err(|_| EngineError::ResultTooLarge)?;
                 self.push_glyph::<TEXT_EFFECTS>(
@@ -1555,6 +2086,19 @@ impl PositionedGlyphArena {
                     line.flow_thread_id,
                     line.transform_index,
                 );
+            } else if !MATERIALIZE_OUTPUT {
+                #[cfg(any(test, feature = "kernel-lab"))]
+                if let Some(cursor) = retained.as_deref_mut() {
+                    self.record_retained_glyph(
+                        cursor,
+                        occurrence,
+                        GlyphSource::LayoutRun,
+                        u32::try_from(adjacency).map_err(|_| EngineError::ResultTooLarge)?,
+                        bidi_level,
+                        role,
+                        stable_id,
+                    )?;
+                }
             }
             state.cursor += x_advance;
         }
@@ -1567,7 +2111,7 @@ impl PositionedGlyphArena {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn finish_positioned_cluster<const ADJUST: bool>(
+    fn finish_positioned_cluster<const ADJUST: bool, const MATERIALIZE_OUTPUT: bool>(
         &mut self,
         line: FlowLine,
         cluster: usize,
@@ -1586,6 +2130,9 @@ impl PositionedGlyphArena {
                 &mut state.space_ordinal,
                 &mut state.gap_ordinal,
             );
+        }
+        if !MATERIALIZE_OUTPUT {
+            return Ok(());
         }
         let PositionedCluster {
             style,
@@ -1697,9 +2244,10 @@ impl PositionedGlyphArena {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn position_boundary<const TEXT_EFFECTS: bool>(
+    fn position_boundary<const TEXT_EFFECTS: bool, const MATERIALIZE_OUTPUT: bool>(
         &mut self,
         line: FlowLine,
+        _boundary_index: u32,
         boundary: BoundaryShape,
         mut cursor: f64,
         baseline: f64,
@@ -1710,6 +2258,7 @@ impl PositionedGlyphArena {
         arena: &BoundaryShapeArena,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+        #[cfg(any(test, feature = "kernel-lab"))] mut retained: Option<&mut RetainedInstanceCursor>,
     ) -> Result<f64, EngineError> {
         let bidi_level = runs
             .get(usize::try_from(boundary.source_run).map_err(|_| EngineError::InvalidRequest)?)
@@ -1722,7 +2271,23 @@ impl PositionedGlyphArena {
             .saturating_sub(1)
             .max(source_cluster)
             .min(clusters.starts.len().saturating_sub(1));
-        cursor = self.position_boundary_span::<TEXT_EFFECTS>(
+        #[cfg(any(test, feature = "kernel-lab"))]
+        let source_occurrence = (boundary.source_glyph_count != 0)
+            .then(|| {
+                self.record_boundary_slice(
+                    _boundary_index,
+                    boundary.flow_thread_id,
+                    BoundaryRunRole::BoundarySource,
+                    source_cluster.min(clusters.starts.len().saturating_sub(1)),
+                    boundary.source_glyph_start,
+                    boundary.source_glyph_count,
+                    cursor,
+                    baseline,
+                    clusters,
+                )
+            })
+            .transpose()?;
+        cursor = self.position_boundary_span::<TEXT_EFFECTS, MATERIALIZE_OUTPUT>(
             line,
             cursor,
             baseline,
@@ -1739,8 +2304,30 @@ impl PositionedGlyphArena {
             styles,
             metrics_for,
             extents_for,
+            #[cfg(any(test, feature = "kernel-lab"))]
+            source_occurrence,
+            #[cfg(any(test, feature = "kernel-lab"))]
+            SliceRole::CharacterFallback,
+            #[cfg(any(test, feature = "kernel-lab"))]
+            retained.as_deref_mut(),
         )?;
-        self.position_boundary_span::<TEXT_EFFECTS>(
+        #[cfg(any(test, feature = "kernel-lab"))]
+        let replacement_occurrence = (boundary.ellipsis_glyph_count != 0)
+            .then(|| {
+                self.record_boundary_slice(
+                    _boundary_index,
+                    boundary.flow_thread_id,
+                    BoundaryRunRole::Ellipsis,
+                    ellipsis_cluster,
+                    boundary.ellipsis_glyph_start,
+                    boundary.ellipsis_glyph_count,
+                    cursor,
+                    baseline,
+                    clusters,
+                )
+            })
+            .transpose()?;
+        self.position_boundary_span::<TEXT_EFFECTS, MATERIALIZE_OUTPUT>(
             line,
             cursor,
             baseline,
@@ -1757,11 +2344,131 @@ impl PositionedGlyphArena {
             styles,
             metrics_for,
             extents_for,
+            #[cfg(any(test, feature = "kernel-lab"))]
+            replacement_occurrence,
+            #[cfg(any(test, feature = "kernel-lab"))]
+            SliceRole::BoundaryReplacement,
+            #[cfg(any(test, feature = "kernel-lab"))]
+            retained,
         )
     }
 
+    #[cfg(any(test, feature = "kernel-lab"))]
     #[allow(clippy::too_many_arguments)]
-    fn position_boundary_span<const TEXT_EFFECTS: bool>(
+    fn record_boundary_slice(
+        &mut self,
+        boundary_index: u32,
+        flow_thread_id: u32,
+        run_role: BoundaryRunRole,
+        owner_cluster: usize,
+        glyph_start: u32,
+        glyph_count: u32,
+        cursor: f64,
+        baseline: f64,
+        clusters: &ClusterArena,
+    ) -> Result<PlacementOccurrence, EngineError> {
+        let run_index = self
+            .replacement_run_indices
+            .get(usize::try_from(boundary_index).map_err(|_| EngineError::InvalidRequest)?)
+            .and_then(|indices| indices[boundary_role_index(run_role)])
+            .ok_or(EngineError::InvalidRequest)?;
+        let run = self
+            .replacement_runs
+            .get(usize::try_from(run_index).map_err(|_| EngineError::InvalidRequest)?)
+            .filter(|run| {
+                run.source_kind
+                    == LayoutRunSourceKind::Boundary {
+                        flow_thread_id,
+                        role: run_role,
+                    }
+            })
+            .ok_or(EngineError::InvalidRequest)?;
+        if run.glyph_start != glyph_start || run.glyph_count != glyph_count {
+            return Err(EngineError::InvalidRequest);
+        }
+        let local_prefix = 0.0;
+        let (slice_index, placement_slot) = self.placement.push_admitted_slice(
+            self.placement_fragment_index,
+            LayoutRunOwner::Replacement,
+            run_index,
+            flow_thread_id,
+            clusters.stable_ids[owner_cluster],
+            0,
+            0,
+            GlyphSource::Boundary,
+            0,
+            glyph_count,
+            SlicePlacement {
+                local_prefix,
+                translation_inline: cursor - local_prefix,
+                translation_block: baseline,
+                space_ordinal_start: 0,
+                gap_ordinal_start: 0,
+                spaces: 0,
+                gaps: 0,
+                gap_cluster_count: 0,
+                per_space_units: 0,
+                extra_space_units: 0,
+                per_gap_units: 0,
+                extra_gap_units: 0,
+            },
+            PlacementClass::Ordinary,
+            false,
+            Some(boundary_index),
+        )?;
+        Ok(PlacementOccurrence {
+            slice_index,
+            placement_slot,
+        })
+    }
+
+    #[cfg(any(test, feature = "kernel-lab"))]
+    #[allow(clippy::too_many_arguments)]
+    fn record_retained_glyph(
+        &mut self,
+        cursor: &mut RetainedInstanceCursor,
+        occurrence: PlacementOccurrence,
+        glyph_source: GlyphSource,
+        source_glyph: u32,
+        bidi_level: u8,
+        role: SliceRole,
+        stable_id: u32,
+    ) -> Result<(), EngineError> {
+        if cursor.semantic_next >= cursor.semantic_end {
+            return Err(EngineError::InvalidRequest);
+        }
+        let semantic = self
+            .semantic_glyphs
+            .get(cursor.semantic_next)
+            .filter(|semantic| semantic.stable_id == stable_id)
+            .ok_or(EngineError::InvalidRequest)?;
+        let semantic_index = cursor.semantic_next;
+        let rendered = (cursor.rendered_next < cursor.rendered_end)
+            .then(|| self.glyphs.get(cursor.rendered_next))
+            .flatten()
+            .filter(|glyph| usize::try_from(glyph.semantic_glyph_index) == Ok(semantic_index));
+        if let Some(rendered) = rendered {
+            if rendered.stable_id != semantic.stable_id {
+                return Err(EngineError::InvalidRequest);
+            }
+            self.placement.push_emitted_span(
+                occurrence.slice_index,
+                occurrence.placement_slot,
+                u32::try_from(cursor.rendered_next).map_err(|_| EngineError::ResultTooLarge)?,
+                glyph_source,
+                source_glyph,
+                1,
+                bidi_level,
+                role,
+            )?;
+            cursor.rendered_next += 1;
+        }
+        cursor.semantic_next += 1;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn position_boundary_span<const TEXT_EFFECTS: bool, const MATERIALIZE_OUTPUT: bool>(
         &mut self,
         line: FlowLine,
         mut cursor: f64,
@@ -1779,6 +2486,9 @@ impl PositionedGlyphArena {
         styles: &[StyleSegment],
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+        #[cfg(any(test, feature = "kernel-lab"))] occurrence: Option<PlacementOccurrence>,
+        #[cfg(any(test, feature = "kernel-lab"))] role: SliceRole,
+        #[cfg(any(test, feature = "kernel-lab"))] mut retained: Option<&mut RetainedInstanceCursor>,
     ) -> Result<f64, EngineError> {
         let metrics = metrics_for(font_handle)
             .ok_or(EngineError::FontMetricsMissing(FrameFault::default()))?;
@@ -1864,30 +2574,51 @@ impl PositionedGlyphArena {
                 .ok_or(EngineError::InvalidRequest)?;
             let origin_inline = cursor + x_offset;
             let origin_block = baseline - y_offset - f64::from(style.baseline_shift);
-            let outline = extents_for(font_handle, glyph_id);
+            let outline = if MATERIALIZE_OUTPUT {
+                extents_for(font_handle, glyph_id)
+            } else {
+                None
+            };
             let ink = match outline.as_ref() {
                 Some(extents) => {
                     GlyphInkBox::from_extents(extents, origin_inline, origin_block, scale)
                 }
                 None => GlyphInkBox::empty_at(origin_inline, origin_block),
             };
-            self.semantic_glyphs.push(SemanticGlyph {
-                stable_id,
-                font_handle,
-                cluster,
-                glyph_id: u16::try_from(glyph_id).map_err(|_| EngineError::ResultTooLarge)?,
-                flags,
-                bidi_level,
-                font_size: style.font_size,
-                inline_origin: finite_f32(origin_inline)?,
-                block_origin: finite_f32(origin_block)?,
-                inline_advance: nonnegative_f32(x_advance)?,
-                ink_inline_start: finite_f32(ink.inline_start)?,
-                ink_block_start: finite_f32(ink.block_start)?,
-                ink_inline_extent: nonnegative_f32(ink.inline_extent)?,
-                ink_block_extent: nonnegative_f32(ink.block_extent)?,
-            });
-            if outline.is_some() {
+            if MATERIALIZE_OUTPUT {
+                self.semantic_glyphs.push(SemanticGlyph {
+                    stable_id,
+                    font_handle,
+                    cluster,
+                    glyph_id: u16::try_from(glyph_id).map_err(|_| EngineError::ResultTooLarge)?,
+                    flags,
+                    bidi_level,
+                    font_size: style.font_size,
+                    inline_origin: finite_f32(origin_inline)?,
+                    block_origin: finite_f32(origin_block)?,
+                    inline_advance: nonnegative_f32(x_advance)?,
+                    ink_inline_start: finite_f32(ink.inline_start)?,
+                    ink_block_start: finite_f32(ink.block_start)?,
+                    ink_inline_extent: nonnegative_f32(ink.inline_extent)?,
+                    ink_block_extent: nonnegative_f32(ink.block_extent)?,
+                });
+            }
+            if MATERIALIZE_OUTPUT && outline.is_some() {
+                #[cfg(any(test, feature = "kernel-lab"))]
+                {
+                    let occurrence = occurrence.ok_or(EngineError::InvalidRequest)?;
+                    self.placement.push_emitted_span(
+                        occurrence.slice_index,
+                        occurrence.placement_slot,
+                        u32::try_from(self.glyphs.len())
+                            .map_err(|_| EngineError::ResultTooLarge)?,
+                        GlyphSource::Boundary,
+                        u32::try_from(glyph).map_err(|_| EngineError::ResultTooLarge)?,
+                        1,
+                        bidi_level,
+                        role,
+                    )?;
+                }
                 let semantic_glyph_index = u32::try_from(self.semantic_glyphs.len() - 1)
                     .map_err(|_| EngineError::ResultTooLarge)?;
                 self.push_glyph::<TEXT_EFFECTS>(
@@ -1914,6 +2645,20 @@ impl PositionedGlyphArena {
                     line.flow_thread_id,
                     line.transform_index,
                 );
+            } else if !MATERIALIZE_OUTPUT {
+                #[cfg(any(test, feature = "kernel-lab"))]
+                if let Some(cursor) = retained.as_deref_mut() {
+                    let occurrence = occurrence.ok_or(EngineError::InvalidRequest)?;
+                    self.record_retained_glyph(
+                        cursor,
+                        occurrence,
+                        GlyphSource::Boundary,
+                        u32::try_from(glyph).map_err(|_| EngineError::ResultTooLarge)?,
+                        bidi_level,
+                        role,
+                        stable_id,
+                    )?;
+                }
             }
             cursor += x_advance;
             if cluster_override.is_none() {
@@ -2218,6 +2963,13 @@ impl PositionedGlyphArena {
             mask |= SEMANTIC_EFFECTS_CHANGE;
         }
         mask
+    }
+}
+
+const fn boundary_role_index(role: BoundaryRunRole) -> usize {
+    match role {
+        BoundaryRunRole::BoundarySource => 0,
+        BoundaryRunRole::Ellipsis => 1,
     }
 }
 
@@ -2661,6 +3413,36 @@ fn paragraph_level_at(bidi: &BidiAnalysis, offset: u32) -> u8 {
         .unwrap_or(0)
 }
 
+#[cfg(any(test, feature = "kernel-lab"))]
+fn hanging_cluster_start(
+    fragment: FlowFragment,
+    clusters: &ClusterArena,
+    cluster_start: usize,
+    cluster_end: usize,
+) -> Result<usize, EngineError> {
+    if fragment.line.hung_advance == 0.0 {
+        return Ok(cluster_end);
+    }
+    let mut hanging_end = cluster_end;
+    if hanging_end > cluster_start && clusters.flags[hanging_end - 1] & CLUSTER_HARD_BREAK != 0 {
+        hanging_end -= 1;
+    }
+    let mut start = hanging_end;
+    let mut units = 0_i64;
+    while start > cluster_start && clusters.flags[start - 1] & CLUSTER_SPACE != 0 {
+        start -= 1;
+        units = units
+            .checked_add(clusters.advance_units[start])
+            .ok_or(EngineError::ResultTooLarge)?;
+    }
+    if super::layout_units::scaled_from_layout_units(units).to_bits()
+        != fragment.line.hung_advance.to_bits()
+    {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok(start)
+}
+
 fn alignment_offset(align: u8, paragraph_level: u8, available: f64) -> f64 {
     match align {
         ALIGN_CENTER => available * 0.5,
@@ -2945,6 +3727,240 @@ mod tests {
     use super::*;
     use crate::unicode::UnicodeAnalysis;
 
+    fn boundary_record(flow_thread_id: u32, glyph_start: u32) -> BoundaryShape {
+        BoundaryShape {
+            flow_thread_id,
+            source_run: 0,
+            cluster_start: 0,
+            cluster_end: 1,
+            text_end: 1,
+            source_binding_handle: 1,
+            source_font_handle: 1,
+            ellipsis_binding_handle: 0,
+            ellipsis_font_handle: 0,
+            source_glyph_start: glyph_start,
+            source_glyph_count: 1,
+            ellipsis_glyph_start: 0,
+            ellipsis_glyph_count: 0,
+        }
+    }
+
+    fn boundary_arena(records: Vec<BoundaryShape>, clusters: Vec<u32>) -> BoundaryShapeArena {
+        let count = clusters.len();
+        BoundaryShapeArena {
+            records,
+            shape: ShapeArena {
+                runs: Vec::new(),
+                glyph_ids: vec![7; count],
+                clusters,
+                x_advances: vec![64; count],
+                y_advances: vec![0; count],
+                x_offsets: vec![0; count],
+                y_offsets: vec![0; count],
+                glyph_flags: vec![0; count],
+            },
+            stable_ids: vec![11; count],
+        }
+    }
+
+    #[test]
+    fn boundary_cluster_comparison_preserves_signed_relative_order() {
+        let spec = |glyph_start, glyph_count| BoundaryRunSpec {
+            source_kind: LayoutRunSourceKind::Boundary {
+                flow_thread_id: 1,
+                role: BoundaryRunRole::BoundarySource,
+            },
+            cluster_start: 0,
+            cluster_end: 1,
+            glyph_start,
+            glyph_count,
+            source_run: 0,
+            font_handle: 1,
+        };
+        let ascending = boundary_arena(Vec::new(), vec![10, 12, 15]);
+        let shifted_ascending = boundary_arena(Vec::new(), vec![100, 102, 105]);
+        let descending = boundary_arena(Vec::new(), vec![20, 17, 11]);
+        let shifted_descending = boundary_arena(Vec::new(), vec![90, 87, 81]);
+        let differently_spaced_descending = boundary_arena(Vec::new(), vec![90, 86, 81]);
+        let mixed = boundary_arena(Vec::new(), vec![20, 16, 23]);
+        let shifted_mixed = boundary_arena(Vec::new(), vec![50, 46, 53]);
+        assert!(same_relative_boundary_clusters(
+            &ascending,
+            spec(0, 3),
+            &shifted_ascending,
+            spec(0, 3),
+        )
+        .unwrap());
+        assert!(
+            same_relative_boundary_clusters(
+                &descending,
+                spec(0, 3),
+                &shifted_descending,
+                spec(0, 3),
+            )
+            .unwrap()
+        );
+        assert!(
+            same_relative_boundary_clusters(&mixed, spec(0, 3), &shifted_mixed, spec(0, 3),)
+                .unwrap()
+        );
+        assert!(
+            !same_relative_boundary_clusters(&descending, spec(0, 3), &ascending, spec(0, 3),)
+                .unwrap()
+        );
+        assert!(
+            !same_relative_boundary_clusters(
+                &descending,
+                spec(0, 3),
+                &differently_spaced_descending,
+                spec(0, 3),
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn replacement_reconciliation_ignores_record_order_and_binding() {
+        let style = ResolvedStyle::test_typography(16.0, 0.0, 0.0);
+        let runs = [ShapingRun {
+            text_start: 0,
+            text_end: 1,
+            script: 0,
+            direction: 0,
+            bidi_level: 0,
+            style,
+        }];
+        let empty = BoundaryShapeArena::default();
+        let previous_shape = boundary_arena(
+            vec![boundary_record(1, 0), boundary_record(2, 1)],
+            vec![10, 20],
+        );
+        let mut previous = PositionedGlyphArena::default();
+        let no_previous = PositionedGlyphArena::default();
+        let mut revision = 1;
+        previous
+            .rebuild_replacement_runs(
+                &no_previous,
+                &previous_shape,
+                &empty,
+                &runs,
+                &runs,
+                &mut revision,
+            )
+            .unwrap();
+        let previous_revisions = [
+            previous.replacement_runs[previous.replacement_run_indices[0][0].unwrap() as usize]
+                .canonical_revision,
+            previous.replacement_runs[previous.replacement_run_indices[1][0].unwrap() as usize]
+                .canonical_revision,
+        ];
+        let mut reordered_shape = boundary_arena(
+            vec![
+                boundary_record(0, 0),
+                boundary_record(2, 1),
+                boundary_record(1, 2),
+            ],
+            vec![5, 20, 10],
+        );
+        reordered_shape.records[1].source_binding_handle = 99;
+        reordered_shape.records[2].source_binding_handle = 77;
+        let mut next = PositionedGlyphArena::default();
+        next.rebuild_replacement_runs(
+            &previous,
+            &reordered_shape,
+            &previous_shape,
+            &runs,
+            &runs,
+            &mut revision,
+        )
+        .unwrap();
+        assert_eq!(
+            next.replacement_runs[next.replacement_run_indices[1][0].unwrap() as usize]
+                .canonical_revision,
+            previous_revisions[1],
+        );
+        assert_eq!(
+            next.replacement_runs[next.replacement_run_indices[2][0].unwrap() as usize]
+                .canonical_revision,
+            previous_revisions[0],
+        );
+
+        let mut changed_shape = boundary_arena(
+            vec![boundary_record(2, 0), boundary_record(1, 1)],
+            vec![20, 10],
+        );
+        changed_shape.records[0].source_font_handle = 2;
+        changed_shape.shape.x_advances[1] += 1;
+        let mut changed = PositionedGlyphArena::default();
+        changed
+            .rebuild_replacement_runs(
+                &next,
+                &changed_shape,
+                &reordered_shape,
+                &runs,
+                &runs,
+                &mut revision,
+            )
+            .unwrap();
+        assert_ne!(
+            changed.replacement_runs[changed.replacement_run_indices[0][0].unwrap() as usize]
+                .canonical_revision,
+            previous_revisions[1],
+        );
+        assert_ne!(
+            changed.replacement_runs[changed.replacement_run_indices[1][0].unwrap() as usize]
+                .canonical_revision,
+            previous_revisions[0],
+        );
+    }
+
+    #[test]
+    fn retained_cursor_checks_outline_less_semantic_identity() {
+        let (_, mut arena) = fixture_position_results(8, 10, |_, _, _| {});
+        arena.semantic_glyphs = vec![SemanticGlyph {
+            stable_id: 11,
+            ..SemanticGlyph::default()
+        }];
+        arena.glyphs.clear();
+        let slice = arena.placement.slices().get(0).unwrap();
+        let occurrence = PlacementOccurrence {
+            slice_index: 0,
+            placement_slot: slice.placement_slot,
+        };
+        let mut cursor = RetainedInstanceCursor {
+            semantic_next: 0,
+            semantic_end: 1,
+            rendered_next: 0,
+            rendered_end: 0,
+        };
+        arena
+            .record_retained_glyph(
+                &mut cursor,
+                occurrence,
+                GlyphSource::LayoutRun,
+                0,
+                0,
+                SliceRole::Ordinary,
+                11,
+            )
+            .unwrap();
+        assert_eq!((cursor.semantic_next, cursor.rendered_next), (1, 0));
+
+        cursor.semantic_next = 0;
+        assert!(matches!(
+            arena.record_retained_glyph(
+                &mut cursor,
+                occurrence,
+                GlyphSource::LayoutRun,
+                0,
+                0,
+                SliceRole::Ordinary,
+                12,
+            ),
+            Err(EngineError::InvalidRequest)
+        ));
+    }
+
     fn assert_layout_plan_producer_invariants(arena: &PositionedGlyphArena) {
         let glyph_count = arena.glyphs.len();
         assert_eq!(
@@ -3179,8 +4195,9 @@ mod tests {
         )
         .unwrap();
         let mut production = PositionedGlyphArena::default();
+        production.placement.clear();
         production
-            .position_fragment::<false>(
+            .position_fragment::<false, true>(
                 line,
                 fragment,
                 true,
@@ -3195,6 +4212,7 @@ mod tests {
                 JustifyControls::default(),
                 |_| None,
                 extents,
+                None,
             )
             .unwrap();
 
@@ -3299,7 +4317,7 @@ mod tests {
         );
         let hard_break = positioned.placement.slices().get(4).unwrap();
         assert_eq!(
-            (hard_break.run_cluster_count, hard_break.run_glyph_count),
+            (hard_break.run_cluster_count, hard_break.source_glyph_count),
             (1, 0)
         );
         assert_eq!(
@@ -3317,7 +4335,7 @@ mod tests {
                 .slices()
                 .get(1)
                 .unwrap()
-                .run_glyph_start,
+                .source_glyph_start,
             0
         );
         assert_eq!(
@@ -3328,6 +4346,105 @@ mod tests {
                 .unwrap()
                 .glyph_start,
             3
+        );
+    }
+
+    #[test]
+    fn bidi_indent_and_hanging_occurrences_cover_emitted_instances_once() {
+        let (text, mut clusters, mut runs, styles) = layout_run_positioning_fixture();
+        runs[1].bidi_level = 1;
+        let cluster_end = 7_usize;
+        clusters.flags[1] |= CLUSTER_SPACE;
+        clusters.flags[cluster_end - 1] |= CLUSTER_SPACE;
+        let hung_advance = clusters.advances[cluster_end - 1];
+        let advance = clusters.advances[..cluster_end]
+            .iter()
+            .copied()
+            .sum::<f64>()
+            - hung_advance;
+        let line = FlowLine {
+            flow_thread_id: 1,
+            region_id: 2,
+            transform_index: 3,
+            clip_id: 4,
+            fragment_start: 0,
+            fragment_count: 1,
+            align: ALIGN_START,
+            block_start: 0.0,
+            baseline: 8.0,
+            height: 10.0,
+        };
+        let fragment = FlowFragment {
+            line: ComposedLine {
+                cluster_start: 0,
+                cluster_end: u32::try_from(cluster_end).unwrap(),
+                text_start: 0,
+                text_end: clusters.ends[cluster_end - 1],
+                advance,
+                hung_advance,
+                hard_break: false,
+            },
+            slot_start: 0.0,
+            slot_end: 100.0,
+            flexible_end: false,
+            boundary_index: NO_BOUNDARY,
+        };
+        let mut positioned = PositionedGlyphArena::default();
+        positioned.placement.clear();
+        positioned
+            .position_fragment::<false, true>(
+                line,
+                fragment,
+                true,
+                &text,
+                &clusters,
+                &runs,
+                &BoundaryShapeArena::default(),
+                &styles,
+                &BidiAnalysis::default(),
+                false,
+                3.0,
+                JustifyControls::default(),
+                |_| None,
+                |_, _| {
+                    Some(FontGlyphExtents {
+                        x_min: 0,
+                        y_min: -200,
+                        x_max: 500,
+                        y_max: 700,
+                    })
+                },
+                None,
+            )
+            .unwrap();
+
+        positioned
+            .placement
+            .validate_occurrences(positioned.glyphs.len(), clusters.layout_runs(), &[])
+            .unwrap();
+        assert!((0..positioned.placement.slices().len()).any(|index| {
+            positioned
+                .placement
+                .slices()
+                .get(index)
+                .is_some_and(|slice| slice.visual_reversed)
+        }));
+        let role_for = |glyph: u32| {
+            (0..positioned.placement.visual_spans().len()).find_map(|index| {
+                let span = positioned.placement.visual_spans().get(index)?;
+                (span.glyph_source == GlyphSource::LayoutRun
+                    && glyph >= span.glyph_start
+                    && glyph < span.glyph_start + span.glyph_count)
+                    .then_some(span.role)
+            })
+        };
+        assert_eq!(
+            role_for(clusters.glyph_starts[1]),
+            Some(SliceRole::Ordinary)
+        );
+        assert_eq!(
+            role_for(clusters.glyph_starts[cluster_end - 1]),
+            Some(SliceRole::HangingSpace)
         );
     }
 
@@ -3783,6 +4900,8 @@ mod tests {
                     space_ordinal,
                     gap_ordinal,
                     PlacementClass::Justified,
+                    false,
+                    None,
                 )
                 .unwrap();
             for cluster in start..end {
@@ -3852,6 +4971,8 @@ mod tests {
                 0,
                 0,
                 PlacementClass::Ordinary,
+                false,
+                None,
             )
             .unwrap();
         let placement = ordinary.placement.placements().get(0).unwrap();
@@ -4121,6 +5242,7 @@ mod tests {
         let mut index = IdentityIndex::default();
         let mut active = PositionedGlyphArena::default();
         let mut next_revision = 1;
+        let mut next_run_revision = 1;
         active
             .build(
                 &PositionedGlyphArena::default(),
@@ -4129,11 +5251,14 @@ mod tests {
                 &text,
                 &clusters,
                 &runs,
+                &runs,
+                &BoundaryShapeArena::default(),
                 &BoundaryShapeArena::default(),
                 &styles,
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                &mut next_run_revision,
                 |_| ThreadTypography::default(),
                 |_| ThreadTypography::default(),
                 metrics,
@@ -4262,6 +5387,7 @@ mod tests {
         let mut index = IdentityIndex::default();
         let mut active = PositionedGlyphArena::default();
         let mut next_revision = 1;
+        let mut next_run_revision = 1;
         active
             .build(
                 &PositionedGlyphArena::default(),
@@ -4270,11 +5396,14 @@ mod tests {
                 &text,
                 &clusters,
                 &runs,
+                &runs,
+                &BoundaryShapeArena::default(),
                 &BoundaryShapeArena::default(),
                 &styles,
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                &mut next_run_revision,
                 |_| ThreadTypography::default(),
                 |_| ThreadTypography::default(),
                 metrics,
@@ -4316,11 +5445,14 @@ mod tests {
                 &text,
                 &clusters,
                 &runs,
+                &runs,
+                &BoundaryShapeArena::default(),
                 &BoundaryShapeArena::default(),
                 &styles,
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                &mut next_run_revision,
                 |_| ThreadTypography::default(),
                 |_| ThreadTypography::default(),
                 metrics,
@@ -4346,11 +5478,14 @@ mod tests {
                 &text,
                 &clusters,
                 &runs,
+                &runs,
+                &BoundaryShapeArena::default(),
                 &BoundaryShapeArena::default(),
                 &plain_styles,
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                &mut next_run_revision,
                 |_| ThreadTypography::default(),
                 |_| ThreadTypography::default(),
                 metrics,
@@ -4533,6 +5668,7 @@ mod tests {
         let mut index = IdentityIndex::default();
         let mut active = PositionedGlyphArena::default();
         let mut next_revision = 1;
+        let mut next_run_revision = 1;
         active
             .build(
                 &PositionedGlyphArena::default(),
@@ -4541,11 +5677,14 @@ mod tests {
                 &text,
                 &clusters,
                 &runs,
+                &runs,
+                &boundary,
                 &boundary,
                 &styles,
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                &mut next_run_revision,
                 |_| ThreadTypography::default(),
                 |_| ThreadTypography::default(),
                 metrics,
@@ -4553,6 +5692,17 @@ mod tests {
             )
             .unwrap();
 
+        let boundary_span = (0..active.placement.visual_spans().len())
+            .find_map(|index| {
+                active
+                    .placement
+                    .visual_spans()
+                    .get(index)
+                    .filter(|span| span.role == SliceRole::BoundaryReplacement)
+            })
+            .unwrap();
+        assert_eq!(boundary_span.glyph_source, GlyphSource::Boundary);
+        assert_eq!(boundary_span.role, SliceRole::BoundaryReplacement);
         assert_eq!(active.glyphs.len(), 5);
         // Line one centers its 15.0 advance (12.0 retained + 3.0 hyphen) in the 20.0 slot.
         assert_eq!(active.semantic_glyphs[0].inline_origin, 2.5);
@@ -4571,6 +5721,42 @@ mod tests {
         assert_eq!(active.semantic_glyphs[3].block_origin, 18.0);
         // Every glyph, inserted included, receives a content revision.
         assert_eq!(next_revision, 6);
+
+        let retained = FlowLayoutArena {
+            lines: flow.lines.clone(),
+            fragments: flow.fragments.clone(),
+            recomposed_lines: Some((1, 2)),
+            ..FlowLayoutArena::default()
+        };
+        let mut next = PositionedGlyphArena::default();
+        next.build(
+            &active,
+            &retained,
+            Some(&flow),
+            &text,
+            &clusters,
+            &runs,
+            &runs,
+            &boundary,
+            &boundary,
+            &styles,
+            &bidi,
+            &mut index,
+            &mut next_revision,
+            &mut next_run_revision,
+            |_| ThreadTypography::default(),
+            |_| ThreadTypography::default(),
+            metrics,
+            extents,
+        )
+        .unwrap();
+        next.placement
+            .validate_occurrences(
+                next.glyphs.len(),
+                clusters.layout_runs(),
+                &next.replacement_runs,
+            )
+            .unwrap();
     }
 
     #[test]
@@ -4675,6 +5861,7 @@ mod tests {
         let mut index = IdentityIndex::default();
         let mut active = PositionedGlyphArena::default();
         let mut next_revision = 1;
+        let mut next_run_revision = 1;
         active
             .build(
                 &PositionedGlyphArena::default(),
@@ -4683,11 +5870,14 @@ mod tests {
                 &text,
                 &clusters,
                 &runs,
+                &runs,
+                &BoundaryShapeArena::default(),
                 &BoundaryShapeArena::default(),
                 &styles,
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                &mut next_run_revision,
                 |_| ThreadTypography::default(),
                 |_| ThreadTypography::default(),
                 metrics,
@@ -4720,11 +5910,14 @@ mod tests {
                 &text,
                 &clusters,
                 &runs,
+                &runs,
+                &BoundaryShapeArena::default(),
                 &BoundaryShapeArena::default(),
                 &styles,
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                &mut next_run_revision,
                 |_| ThreadTypography::default(),
                 |_| ThreadTypography::default(),
                 metrics,
@@ -4746,11 +5939,14 @@ mod tests {
                 &text,
                 &clusters,
                 &runs,
+                &runs,
+                &BoundaryShapeArena::default(),
                 &BoundaryShapeArena::default(),
                 &styles,
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                &mut next_run_revision,
                 |_| ThreadTypography::default(),
                 |_| ThreadTypography::default(),
                 metrics,
