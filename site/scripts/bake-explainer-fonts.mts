@@ -53,7 +53,7 @@ const jobs = [
   {
     id: 'lovers-quarrel-slug',
     input: resolve(fonts, 'lovers-quarrel-regular.ttf'),
-    rasters: [{ baker: slugBaker, packaging: { artifact: 'embedded', pages: 'embedded' }, options: undefined }],
+    rasters: [{ baker: slugBaker, packaging: { artifact: 'embedded' }, options: undefined }],
     unicodeRanges: latin,
   },
   {
@@ -62,7 +62,7 @@ const jobs = [
     rasters: [
       {
         baker: msdfBaker,
-        packaging: { artifact: 'embedded', pages: 'embedded' },
+        packaging: { artifact: 'embedded' },
         options: { emSize: 32, pixelRange: 6 },
       },
     ],
@@ -71,7 +71,7 @@ const jobs = [
   {
     id: 'geist-slug-alphanumeric',
     input: resolve(fonts, 'geist-regular.ttf'),
-    rasters: [{ baker: slugBaker, packaging: { artifact: 'embedded', pages: 'embedded' }, options: undefined }],
+    rasters: [{ baker: slugBaker, packaging: { artifact: 'embedded' }, options: undefined }],
     unicodeRanges: alphaNumericAscii,
   },
   {
@@ -80,7 +80,7 @@ const jobs = [
     rasters: [
       {
         baker: bitmapBaker,
-        packaging: { artifact: 'embedded', pages: 'embedded' },
+        packaging: { artifact: 'embedded' },
         options: { strikes: [16, 24, 32] },
       },
     ],
@@ -92,11 +92,23 @@ const jobs = [
     rasters: [
       {
         baker: msdfBaker,
-        packaging: { artifact: 'embedded', pages: 'embedded' },
+        packaging: { artifact: 'embedded' },
         options: { emSize: 32, pixelRange: 6 },
       },
     ],
     unicodeRanges: iconPoints,
+  },
+  {
+    id: 'mplus1p-japanese',
+    input: resolve(fonts, 'mplus1p-regular.ttf'),
+    rasters: [
+      {
+        baker: msdfBaker,
+        packaging: { artifact: 'embedded' },
+        options: { emSize: 32, pixelRange: 6 },
+      },
+    ],
+    unicodeRanges: glyphs([0x20, 0x5b57, 0x5f62, 0x6587]),
   },
 ] as const;
 
@@ -125,15 +137,6 @@ for (const job of jobs) {
   console.log(`${job.id} -> ${relative(site, output)}`);
 }
 
-const cjkOutput = resolve(fonts, 'mplus1p-japanese.font.glb');
-await copyFile(resolve(site, 'landing/assets/chorus-japanese.font.glb'), cjkOutput);
-generated.push({
-  id: 'mplus1p-japanese',
-  source: 'mplus1p-regular.ttf',
-  license: 'mplus1p-OFL.txt',
-  output: relative(fonts, cjkOutput),
-});
-
 await writeFile(
   resolve(fonts, 'explainer-fonts.json'),
   `${JSON.stringify(
@@ -152,6 +155,7 @@ function licenseFor(input: string) {
   if (name === 'font-awesome-solid-900.ttf') return 'font-awesome-LICENSE.txt';
   if (name === 'lovers-quarrel-regular.ttf') return 'lovers-quarrel-OFL.txt';
   if (name === 'geist-regular.ttf') return 'geist-OFL.txt';
+  if (name === 'mplus1p-regular.ttf') return 'mplus1p-OFL.txt';
   return 'vt323-OFL.txt';
 }
 
