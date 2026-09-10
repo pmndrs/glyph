@@ -16,9 +16,12 @@ sources:
   - id: roadmap
     resource: ../roadmap/roadmap.md
     title: Canonical implementation roadmap
+  - id: fragment-relative-reflow
+    resource: fragment-relative-reflow.md
+    title: Fragment-relative reflow and LayoutRun placement
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T01:16:02Z'
+  at: '2026-09-09T02:02:17Z'
 ---
 
 # Vertical writing for CJK and mixed scripts
@@ -75,9 +78,8 @@ cross-cutting changes because correctness spans font data, shaping, paragraph
 geometry, interaction coordinates, and every renderer. It should follow
 large-coverage CJK raster paging: vertical shaping without resident glyph pages
 would prove layout but not deliver a usable full-font renderer. It may reuse the
-editorial flow milestone's axis-neutral region vocabulary, but must not be
-hidden inside that milestone or force horizontal callers to pay for vertical
-state.
+[fragment-relative reflow plan's](fragment-relative-reflow.md) axis-neutral region vocabulary, but remains Milestone 19;
+it must not be hidden inside Milestone 12 or force horizontal callers to pay for vertical state.
 
 ## Acceptance gates
 
