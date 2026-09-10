@@ -14,6 +14,7 @@ import {
 import { advancePooledRoots } from './frame-scheduler';
 import { GlyphRenderPool, type GlyphPoolSlot } from './render-pool';
 import { beginGlyphRender, completeGlyphRender } from './render-readiness';
+import { renderGlyphPresentation, type GlyphPresentationState } from './render-presentation';
 import type { ExplainerPageDefinition, GlyphSceneProps } from './page';
 import {
   largestGlyphSurface,
@@ -41,6 +42,7 @@ export type { GlyphSceneInput } from './channel';
 
 type GlyphProxyHandle = HTMLElement & {
   bind(root: GlyphOffscreenRootElement): void;
+  channelId: string;
   copy(surface: OffscreenCanvas | HTMLCanvasElement, frame: GlyphSurfaceSize, opaque: boolean): void;
   releaseFrame(): void;
   rootId: string | undefined;
@@ -51,10 +53,10 @@ type GlyphProxyHandle = HTMLElement & {
 type GlyphR3fRoot = ReturnType<typeof createRoot>;
 type GlyphR3fStore = ReturnType<GlyphR3fRoot['render']>;
 type GlyphPresenter = CanvasRenderingContext2D | ImageBitmapRenderingContext;
-type GlyphPresentationState = Readonly<{
-  camera: Parameters<WebGPURenderer['render']>[1];
-  scene: Parameters<WebGPURenderer['render']>[0];
-}>;
+type GlyphSlotPresentationState = GlyphPresentationState<
+  Parameters<WebGPURenderer['render']>[0],
+  Parameters<WebGPURenderer['render']>[1]
+>;
 
 type GlyphRenderSlot = {
   pool: GlyphPoolSlot<GlyphProxyHandle>;
@@ -72,8 +74,9 @@ type GlyphRenderSlot = {
 
 const roots = new Map<string, GlyphOffscreenRootElement>();
 let rootInstanceId = 0;
+let proxyInstanceId = 0;
 
-function GlyphSlotPresenter({ present }: { present: (state: GlyphPresentationState) => void }) {
+function GlyphSlotPresenter({ present }: { present: (state: GlyphSlotPresentationState) => void }) {
   useFrame((state) => present(state), { phase: 'render' });
   return null;
 }
@@ -95,6 +98,8 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
   #proxies = new Set<GlyphProxyHandle>();
   #visible = new Map<GlyphProxyHandle, Readonly<{ distance: number; ratio: number }>>();
   #sceneOverrides = new Map<GlyphProxyHandle, string>();
+  #pendingInputs = new Map<GlyphProxyHandle, GlyphInputStream>();
+  #priorityProxy: GlyphProxyHandle | undefined;
   #observer: IntersectionObserver | undefined;
   #resizeObserver: ResizeObserver | undefined;
   #resizeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -184,6 +189,8 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     this.#proxies.clear();
     this.#visible.clear();
     this.#sceneOverrides.clear();
+    this.#pendingInputs.clear();
+    this.#priorityProxy = undefined;
     this.#copyMs = 0;
     this.#readyEventSent = false;
     if (this.#registeredId) roots.delete(this.#registeredId);
@@ -234,6 +241,8 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     this.#visible.delete(proxy);
     this.#observer?.unobserve(proxy);
     this.#sceneOverrides.delete(proxy);
+    this.#pendingInputs.delete(proxy);
+    if (this.#priorityProxy === proxy) this.#priorityProxy = undefined;
     this.#frameSizeDirty = true;
     this.setAttribute('data-glyph-proxy-count', String(this.#proxies.size));
     this.#scheduleReconcile();
@@ -296,7 +305,10 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
 
   #rankVisible() {
     const ranked = [...this.#visible.entries()].sort(
-      (a, b) => a[1].distance - b[1].distance || b[1].ratio - a[1].ratio,
+      (a, b) =>
+        Number(b[0] === this.#priorityProxy) - Number(a[0] === this.#priorityProxy) ||
+        a[1].distance - b[1].distance ||
+        b[1].ratio - a[1].ratio,
     );
     return ranked.map(([key], index) => [key, ranked.length - index] as const);
   }
@@ -351,6 +363,12 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
         slot.proxy = proxy;
         slot.inputs.clear();
         proxy.setActive(false);
+      }
+      const pendingInputs = this.#pendingInputs.get(proxy);
+      if (pendingInputs !== undefined) {
+        for (const input of pendingInputs.drain()) slot.inputs.push(input);
+        this.#pendingInputs.delete(proxy);
+        if (this.#priorityProxy === proxy) this.#priorityProxy = undefined;
       }
       const scene = this.#sceneFor(proxy);
       if (isNewProxy || slot.scene !== scene) {
@@ -565,13 +583,13 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     this.setAttribute('data-glyph-frame', `${next.width}x${next.height}@${next.dpr}`);
   }
 
-  #presentSlot(slot: GlyphRenderSlot, state: GlyphPresentationState) {
+  #presentSlot(slot: GlyphRenderSlot, state: GlyphSlotPresentationState) {
     const renderer = this.#renderer;
     const surface = this.#surface;
     const proxy = slot.proxy;
     if (!renderer || !surface || !proxy || !slot.ready || slot.resizing) return;
     renderer.setViewport(0, 0, this.#frameSize.width, this.#frameSize.height);
-    renderer.render(state.scene, state.camera);
+    renderGlyphPresentation(renderer, state);
     const copyStartedAt = performance.now();
     proxy.copy(surface, this.#frameSize, this.hasAttribute('opaque'));
     const copyElapsed = performance.now() - copyStartedAt;
@@ -703,7 +721,17 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
         const targets = this.#targetProxies(message.target);
         for (const proxy of targets) {
           const slot = [...this.#slots.values()].find((candidate) => candidate.proxy === proxy);
-          slot?.inputs.push(message.payload);
+          if (slot !== undefined) slot.inputs.push(message.payload);
+          else {
+            let pending = this.#pendingInputs.get(proxy);
+            if (pending === undefined) {
+              pending = new GlyphInputStream();
+              this.#pendingInputs.set(proxy, pending);
+            }
+            pending.push(message.payload);
+            this.#priorityProxy = proxy;
+            this.#scheduleReconcile();
+          }
         }
       } else if (message.type === 'scene' && isGlyphSceneChange(message.payload)) {
         const targets = this.#targetProxies(message.target);
@@ -730,7 +758,7 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
       return mostVisible === undefined ? [...this.#proxies].slice(0, 1) : [mostVisible];
     }
     if (target.rootId && target.rootId !== this.id) return [];
-    if (target.proxyId) return [...this.#proxies].filter((proxy) => proxy.id === target.proxyId);
+    if (target.proxyId) return [...this.#proxies].filter((proxy) => proxy.channelId === target.proxyId);
     return [...this.#proxies];
   }
 
@@ -778,6 +806,7 @@ export class GlyphProxyElement extends HTMLElement {
   #canvas: HTMLCanvasElement | undefined;
   #presenter: GlyphPresenter | undefined;
   #root: GlyphOffscreenRootElement | undefined;
+  #instanceId = `glyph-proxy-${++proxyInstanceId}`;
   #onRootReady = () => this.#bind();
   #onFadeOut = (event: TransitionEvent) => {
     if (event.target !== this || event.propertyName !== 'opacity' || this.style.opacity !== '0') return;
@@ -790,6 +819,10 @@ export class GlyphProxyElement extends HTMLElement {
 
   get scene() {
     return this.getAttribute('data-scene') ?? 'default';
+  }
+
+  get channelId() {
+    return this.id || this.#instanceId;
   }
 
   connectedCallback() {
@@ -905,7 +938,7 @@ export class GlyphProxyElement extends HTMLElement {
         x: point?.x ?? event.clientX - rect.left,
         y: point?.y ?? event.clientY - rect.top,
       },
-      this.id ? { proxyId: this.id } : 'root',
+      { proxyId: this.channelId },
     );
   };
 
@@ -926,7 +959,7 @@ export class GlyphProxyElement extends HTMLElement {
         x: point?.x ?? event.clientX - rect.left,
         y: point?.y ?? event.clientY - rect.top,
       },
-      this.id ? { proxyId: this.id } : 'root',
+      { proxyId: this.channelId },
     );
   };
 
@@ -946,7 +979,7 @@ export class GlyphProxyElement extends HTMLElement {
         x: point?.x ?? event.clientX - rect.left,
         y: point?.y ?? event.clientY - rect.top,
       },
-      this.id ? { proxyId: this.id } : 'root',
+      { proxyId: this.channelId },
     );
   };
 
@@ -958,7 +991,7 @@ export class GlyphProxyElement extends HTMLElement {
         pointerId: event.pointerId,
         value: event.pointerType,
       },
-      this.id ? { proxyId: this.id } : 'root',
+      { proxyId: this.channelId },
     );
   };
 
@@ -974,11 +1007,11 @@ export class GlyphProxyElement extends HTMLElement {
           x: point?.x ?? rect.width / 2,
           y: point?.y ?? rect.height / 2,
         },
-        this.id ? { proxyId: this.id } : 'root',
+        { proxyId: this.channelId },
       );
       return;
     }
-    this.#root?.sendInput({ type: 'keydown', value: event.key }, this.id ? { proxyId: this.id } : 'root');
+    this.#root?.sendInput({ type: 'keydown', value: event.key }, { proxyId: this.channelId });
   };
 }
 
