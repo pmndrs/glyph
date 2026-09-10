@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:932382f01a346abe6c507102001efc95db2b092a96b7e9c2bbf3bcf29b71af68'
+source_digest: 'sha256:95441c8da90fe9d300adac506a93ff998e04ebd2feccefbb8b2d997fc3e2949f'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -531,6 +531,14 @@ the existing band composer at the retained source cursor, and waits until it cro
 before accepting an exact line/fragment/slot suffix certificate. Structural, cross-region, flexible-width, and ellipsis
 changes fall back to the cold authority. Projected known-geometry objects and same-source drop caps remain in
 [Milestone 12's fragment-relative reflow plan](../planning/fragment-relative-reflow.md); balanced columns remain deferred.
+
+The Three subpath exposes `projectTextFlowBounds` for the first projected-object slice. Given a conservative object-local
+`Box3`, current object/text transforms, a perspective or orthographic camera, and a rectangular flow clip, it computes
+the exact convex intersection of the transformed bounds with the camera-side text-plane half-space and camera frustum.
+It ray-projects that volume onto paragraph-local inline/block coordinates, applies a declared conservative projection
+error, clips and f32-normalizes the polygon, then returns an ordinary keyed `TextFlowExclusion`. An object wholly behind
+the text plane produces no exclusion. The helper neither reads depth/GPU pixels nor claims hidden-surface or material
+coverage exactness; explicit CPU silhouettes and same-source drop caps remain open.
 
 ## Renderer Codec
 
