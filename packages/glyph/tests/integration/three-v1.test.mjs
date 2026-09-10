@@ -613,7 +613,7 @@ test('public 2D flow accepts keyed polygons and composes around multiple exclusi
   const text = three.createText({
     font,
     text: 'iiiiiiiiiiiiiiiiiiii',
-    layout: { wrap: 'character' },
+    layout: { wrap: 'word', dropCap: { lines: 3, marginInline: 4 } },
     constraints: {
       width: { mode: 'exact', size: 120 },
       height: { mode: 'exact', size: 80 },
@@ -740,6 +740,58 @@ test('same-source drop caps preserve source ownership and flow body lines beside
   assert.ok(
     label.measureGlyphs()?.every((measuredGlyph) => measuredGlyph.drawnOrigin.equals(measuredGlyph.shapedOrigin)),
   );
+});
+
+test('same-source drop caps compose through an explicit multi-line flow region', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const cap = textSpan({ fontSize: 48 });
+  const source = 'f\u0301ollow brown fox jumps over the lazy dog and keeps running through the narrow column';
+  const formatted = txt`${cap`f\u0301`}ollow brown fox jumps over the lazy dog and keeps running through the narrow column`;
+  const flowAt = (inlineStart) => ({
+    regions: [
+      {
+        key: 'body',
+        shape: { kind: 'rectangle', bounds: [0, 0, 180, 180] },
+        exclusions: [{ key: 'lower-float', shape: { kind: 'rectangle', bounds: [inlineStart, 70, 175, 110] } }],
+      },
+    ],
+  });
+  const initialFlow = flowAt(130);
+  const movedFlow = flowAt(105);
+  const properties = {
+    font,
+    text: formatted,
+    style: { fontSize: 16, lineHeight: 1.25 },
+    constraints: {
+      width: { mode: 'exact', size: 180 },
+      height: { mode: 'exact', size: 180 },
+    },
+    layout: { wrap: 'word', dropCap: { lines: 3, marginInline: 4 } },
+  };
+  const label = three.createText({
+    ...properties,
+    flow: initialFlow,
+  });
+  t.after(() => {
+    label.dispose();
+    font.dispose();
+  });
+
+  const layout = label.glyphs();
+  assert.equal(label.error, undefined);
+  assert.ok(layout.lineCount > 3);
+  assert.equal(layout.glyphCount, source.length);
+
+  label.flow = movedFlow;
+  const incremental = label.glyphs();
+  const cold = three.createText({ ...properties, flow: movedFlow });
+  t.after(() => cold.dispose());
+  const coldLayout = cold.glyphs();
+  assert.notDeepEqual(Array.from(incremental.x), Array.from(layout.x));
+  for (const field of ['clusters', 'glyphStableIds', 'lineGlyphStarts', 'lineGlyphCounts', 'x', 'y']) {
+    assert.deepEqual(Array.from(incremental[field]), Array.from(coldLayout[field]), `${field} must match cold flow`);
+  }
 });
 
 test('detached matrix helpers round-trip aliased and independent targets with a hoisted inverse', () => {

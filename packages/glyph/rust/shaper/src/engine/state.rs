@@ -3957,13 +3957,21 @@ impl ParagraphState {
         let max_slots_per_band =
             usize::try_from(max_slots_per_band).map_err(|_| EngineError::ResultTooLarge)?;
         let max_lines = usize::try_from(max_lines).map_err(|_| EngineError::ResultTooLarge)?;
+        let paragraph_level = self
+            .bidi
+            .active()
+            .paragraph_levels
+            .first()
+            .copied()
+            .unwrap_or(0);
         if !self.style_invalidation.metrics
             && !self.clusters.is_prepared()
             && self.text_edit.is_none()
             && self.boundary_shape.records.is_empty()
-            && geometry.constraints.iter().all(|constraint| {
-                constraint.overflow != OVERFLOW_ELLIPSIS && constraint.drop_cap_lines == 0
-            })
+            && geometry
+                .constraints
+                .iter()
+                .all(|constraint| constraint.overflow != OVERFLOW_ELLIPSIS)
             && let LocalizedGeometryChange::ExclusionBand(dirty) = localized_geometry_change
             && {
                 let (pending_flow, committed_flow) = self.flow_layout.derive_mut();
@@ -3971,9 +3979,11 @@ impl ParagraphState {
                     committed_flow,
                     geometry,
                     clusters,
+                    runs,
                     styles,
                     &mut self.flow_slot_scratch,
                     dirty,
+                    paragraph_level,
                     max_lines,
                     max_slots_per_band,
                     |handle| shaper.font_metrics(handle),
@@ -4041,12 +4051,7 @@ impl ParagraphState {
             runs,
             styles,
             &mut self.flow_slot_scratch,
-            self.bidi
-                .active()
-                .paragraph_levels
-                .first()
-                .copied()
-                .unwrap_or(0),
+            paragraph_level,
             max_lines,
             max_slots_per_band,
             |handle| shaper.font_metrics(handle),
