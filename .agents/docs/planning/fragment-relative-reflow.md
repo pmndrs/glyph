@@ -890,8 +890,10 @@ HarfRust-safe boundary; resumes body composition at that exact cluster; derives 
 glyph/design bounds; and positions the prefix through the existing body authority. Focused Rust evidence covers safe-edge
 refusal, RTL logical-side mapping, and a simultaneous rectangle exclusion, while an attached Three integration proves a
 combining-mark cap has no duplicated/omitted source glyphs and shares the existing x/y renderer path. Arbitrary cap
-polygons, mixed-raster styling, incremental local edits, full interaction-query parity, and the combined Editorial scene
-remain open.
+polygons, mixed-raster styling, cap-source text-edit retention, full interaction-query parity, and the combined Editorial
+scene remain open. Explicit multi-line flow now composes the cap beside another exclusion through the public Three
+surface; moving that exclusion reuses dirty-band convergence, rederives and baseline-aligns the cap, and matches a cold
+rebuild before accepting retained suffix lines.
 
 ### M6 — full-matrix closure and oracle retirement
 

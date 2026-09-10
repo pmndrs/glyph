@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:1a8aac0ab95f8119a9e6dbba4efb1bf06228c3c01e3797097aada8ef6a4d3e3d'
+source_digest: 'sha256:15f004618e4b899f6bb21eaf8123b39339aa6337e42ce177609b971c91c0f4ae'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -529,7 +529,10 @@ For retained exact-width, non-ellipsis flow with stable region/exclusion topolog
 region now unions their old/new block bounds and margins into one dirty band. Rust retains every preceding line, resumes
 the existing band composer at the retained source cursor, and waits until it crosses the complete future dirty horizon
 before accepting an exact line/fragment/slot suffix certificate. Structural, cross-region, flexible-width, and ellipsis
-changes fall back to the cold authority. The remaining projected-object and drop-cap matrix belongs to
+changes fall back to the cold authority. Drop-cap paragraphs use the same path: the core rederives the cap from current
+run geometry, reapplies its cut while recomposing the dirty band, realigns baseline-aligned caps from the retained or new
+first body line, and accepts the suffix only when it matches the cold authority. The remaining projected-object and
+drop-cap matrix belongs to
 [Milestone 12's fragment-relative reflow plan](../planning/fragment-relative-reflow.md); balanced columns remain deferred.
 
 The Three subpath exposes `projectTextFlowBounds` for the first projected-object slice. Given a conservative object-local
@@ -547,8 +550,9 @@ splitting shaped content. The selected prefix keeps its authored shaping/style/r
 glyph authority as the body, and becomes an additional conservative glyph/design-bounds cut before body composition.
 Body flow resumes at the exact retained cluster edge, while measurement, inspection, and Three realization merge the cap
 into the first logical line without duplicating source glyphs. Focused evidence covers a combining-mark cap, RTL logical
-side mapping, safe-edge refusal, and simultaneous cap plus rectangle exclusion. Arbitrary cap polygons, mixed-raster
-Editorial realization, local-edit retention, and the complete caret/selection/browser matrix remain Milestone 12.4 work.
+side mapping, safe-edge refusal, an explicit multi-line region with another exclusion, and incremental exclusion movement
+matching a cold rebuild for both text-top and baseline alignment. Arbitrary cap polygons, mixed-raster Editorial
+realization, cap-source text-edit retention, and the complete caret/selection/browser matrix remain Milestone 12.4 work.
 
 ## Renderer Codec
 
