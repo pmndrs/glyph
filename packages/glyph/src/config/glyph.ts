@@ -3,7 +3,7 @@ import type { FontFaceRasterOf, FontFaceSelection } from '../font-face.js';
 import type { BorrowedGlyphLayout, GlyphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
 import type { FontSelection } from '../loaded-font.js';
 import type { RasterFormatMetadata } from './raster-format.js';
-import type { Constraints, ParagraphLayout, TextStyle } from '../text-properties.js';
+import type { Constraints, ParagraphLayout, TextFlow, TextStyle } from '../text-properties.js';
 import type { PortableResource } from './resources.js';
 import type { CodecBuffer, CodecDescriptor, CodecIdFactory, CodecProgram } from './codec.js';
 import type {
@@ -441,6 +441,8 @@ export interface GlyphTextState<Format extends RasterFormatMetadata, MaterialInp
   readonly style?: TextStyle;
   readonly layout?: ParagraphLayout;
   readonly constraints?: Constraints;
+  /** Paragraph-local 2D flow regions and exclusions. */
+  readonly flow?: TextFlow;
 }
 
 /** Narrow integration controller held privately by an adapter's Text object. */

@@ -39,6 +39,42 @@ export interface Constraints {
   readonly height?: AxisConstraint;
 }
 
+/** Paragraph-local inline/block bounds ordered as start-inline, start-block, end-inline, end-block. */
+export type TextFlowBounds = readonly [number, number, number, number];
+
+/** One paragraph-local point ordered as inline then block. */
+export type TextFlowPoint = readonly [number, number];
+
+/** A bounded 2D region or exclusion ring. Polygon rings are implicitly closed. */
+export type TextFlowShape =
+  | Readonly<{ kind: 'rectangle'; bounds: TextFlowBounds }>
+  | Readonly<{ kind: 'polygon'; vertices: readonly TextFlowPoint[] }>;
+
+/** One exclusion authored in its containing region's paragraph-local coordinate space. */
+export interface TextFlowExclusion {
+  /** Stable authoring key; array order is not identity. */
+  readonly key: string;
+  readonly shape: TextFlowShape;
+  readonly wrapSide?: 'both' | 'inline-start' | 'inline-end' | 'largest';
+  readonly marginInline?: number;
+  readonly marginBlock?: number;
+}
+
+/** One sequential paragraph flow region and its local exclusions. */
+export interface TextFlowRegion {
+  /** Stable authoring key; array order is flow order, not identity. */
+  readonly key: string;
+  readonly shape: TextFlowShape;
+  /** Optional clipping bounds; defaults to the shape bounds. */
+  readonly clip?: TextFlowBounds;
+  readonly exclusions?: readonly TextFlowExclusion[];
+}
+
+/** Ordered paragraph-local regions through which one text source flows. */
+export interface TextFlow {
+  readonly regions: readonly TextFlowRegion[];
+}
+
 /** Stable paragraph flow properties, independent of the box being measured. */
 export interface ParagraphLayout {
   readonly maxLines?: number;
@@ -106,6 +142,8 @@ export interface ParagraphBaseProperties<Format extends RasterFormatMetadata> {
   readonly layout?: PropertyList<ParagraphLayout>;
   /** Bounds imposed on the measured and rendered paragraph. */
   readonly constraints?: PropertyList<Constraints>;
+  /** Explicit sequential 2D regions and exclusions; replaces generated columns when present. */
+  readonly flow?: TextFlow;
   readonly rasterPixelRatio?: number;
   readonly order?: number;
 }
@@ -248,6 +286,172 @@ export function assertConstraints(value: Constraints, label = 'text constraints'
   assertRecord(value, label);
   assertAxis(value.width, `${label} width`);
   assertAxis(value.height, `${label} height`);
+}
+
+/** @internal Validate, normalize winding, and freeze one public flow description. */
+export function normalizeTextFlow(value: TextFlow, label = 'text flow'): TextFlow {
+  assertRecord(value, label);
+  if (!Array.isArray(value.regions) || value.regions.length === 0) {
+    throw new TypeError(`${label} regions must be a nonempty array`);
+  }
+  const sourceRegions = value.regions as readonly TextFlowRegion[];
+  const regionKeys = new Set<string>();
+  const regions = sourceRegions.map((region, regionIndex) => {
+    const regionLabel = `${label} region ${regionIndex}`;
+    assertRecord(region, regionLabel);
+    const key = flowKey(region.key, `${regionLabel} key`);
+    if (regionKeys.has(key)) throw new TypeError(`${label} region key "${key}" is duplicated`);
+    regionKeys.add(key);
+    const shape = normalizeFlowShape(region.shape, `${regionLabel} shape`);
+    const clip = region.clip === undefined ? undefined : normalizeFlowBounds(region.clip, `${regionLabel} clip`);
+    const exclusionKeys = new Set<string>();
+    const exclusions = (region.exclusions ?? []).map((exclusion, exclusionIndex) => {
+      const exclusionLabel = `${regionLabel} exclusion ${exclusionIndex}`;
+      assertRecord(exclusion, exclusionLabel);
+      const exclusionKey = flowKey(exclusion.key, `${exclusionLabel} key`);
+      if (exclusionKeys.has(exclusionKey)) {
+        throw new TypeError(`${regionLabel} exclusion key "${exclusionKey}" is duplicated`);
+      }
+      exclusionKeys.add(exclusionKey);
+      optionalEnum(exclusion.wrapSide, ['both', 'inline-start', 'inline-end', 'largest'], `${exclusionLabel} wrapSide`);
+      const marginInline = normalizeOptionalFlowMargin(exclusion.marginInline, `${exclusionLabel} marginInline`);
+      const marginBlock = normalizeOptionalFlowMargin(exclusion.marginBlock, `${exclusionLabel} marginBlock`);
+      return Object.freeze({
+        key: exclusionKey,
+        shape: normalizeFlowShape(exclusion.shape, `${exclusionLabel} shape`),
+        ...(exclusion.wrapSide === undefined ? {} : { wrapSide: exclusion.wrapSide }),
+        ...(marginInline === undefined ? {} : { marginInline }),
+        ...(marginBlock === undefined ? {} : { marginBlock }),
+      });
+    });
+    return Object.freeze({
+      key,
+      shape,
+      ...(clip === undefined ? {} : { clip }),
+      ...(exclusions.length === 0 ? {} : { exclusions: Object.freeze(exclusions) }),
+    });
+  });
+  return Object.freeze({ regions: Object.freeze(regions) });
+}
+
+function normalizeFlowShape(value: TextFlowShape, label: string): TextFlowShape {
+  assertRecord(value, label);
+  if (value.kind === 'rectangle') {
+    return Object.freeze({ kind: 'rectangle', bounds: normalizeFlowBounds(value.bounds, `${label} bounds`) });
+  }
+  if (value.kind !== 'polygon' || !Array.isArray(value.vertices) || value.vertices.length < 3) {
+    throw new TypeError(`${label} must be a rectangle or a polygon with at least three vertices`);
+  }
+  const vertices = value.vertices.map((point, index) => normalizeFlowPoint(point, `${label} vertex ${index}`));
+  for (let index = 0; index < vertices.length; index += 1) {
+    const next = vertices[(index + 1) % vertices.length]!;
+    if (samePoint(vertices[index]!, next)) throw new TypeError(`${label} has consecutive duplicate vertices`);
+  }
+  for (let first = 0; first < vertices.length; first += 1) {
+    for (let second = first + 1; second < vertices.length; second += 1) {
+      if (samePoint(vertices[first]!, vertices[second]!)) throw new TypeError(`${label} repeats a vertex`);
+    }
+  }
+  const area = signedArea(vertices);
+  if (!Number.isFinite(area) || area === 0) throw new RangeError(`${label} must have nonzero finite area`);
+  assertSimplePolygon(vertices, label);
+  if (area < 0) vertices.reverse();
+  return Object.freeze({ kind: 'polygon', vertices: Object.freeze(vertices) });
+}
+
+function normalizeFlowBounds(value: TextFlowBounds, label: string): TextFlowBounds {
+  if (!Array.isArray(value) || value.length !== 4) {
+    throw new TypeError(`${label} must contain four finite coordinates`);
+  }
+  const bounds: TextFlowBounds = [
+    finiteFlowCoordinate(value[0], label),
+    finiteFlowCoordinate(value[1], label),
+    finiteFlowCoordinate(value[2], label),
+    finiteFlowCoordinate(value[3], label),
+  ];
+  if (bounds[0] >= bounds[2] || bounds[1] >= bounds[3]) {
+    throw new RangeError(`${label} must have positive inline and block extents`);
+  }
+  return Object.freeze(bounds);
+}
+
+function normalizeFlowPoint(value: TextFlowPoint, label: string): TextFlowPoint {
+  if (!Array.isArray(value) || value.length !== 2) {
+    throw new TypeError(`${label} must contain two finite coordinates`);
+  }
+  return Object.freeze([finiteFlowCoordinate(value[0], label), finiteFlowCoordinate(value[1], label)]);
+}
+
+function normalizeOptionalFlowMargin(value: number | undefined, label: string): number | undefined {
+  if (value === undefined) return undefined;
+  const margin = finiteFlowCoordinate(value, label);
+  if (margin < 0) throw new RangeError(`${label} must be nonnegative`);
+  return margin;
+}
+
+function finiteFlowCoordinate(value: number, label: string): number {
+  const narrowed = Math.fround(value);
+  if (!Number.isFinite(value) || !Number.isFinite(narrowed)) {
+    throw new TypeError(`${label} must contain finite f32 coordinates`);
+  }
+  return narrowed === 0 ? 0 : narrowed;
+}
+
+function signedArea(vertices: readonly TextFlowPoint[]): number {
+  let twiceArea = 0;
+  for (let index = 0; index < vertices.length; index += 1) {
+    const first = vertices[index]!;
+    const second = vertices[(index + 1) % vertices.length]!;
+    twiceArea += first[0] * second[1] - second[0] * first[1];
+  }
+  return twiceArea;
+}
+
+function assertSimplePolygon(vertices: readonly TextFlowPoint[], label: string): void {
+  for (let first = 0; first < vertices.length; first += 1) {
+    const firstNext = (first + 1) % vertices.length;
+    for (let second = first + 1; second < vertices.length; second += 1) {
+      const secondNext = (second + 1) % vertices.length;
+      if (first === second || first === secondNext || firstNext === second || firstNext === secondNext) continue;
+      if (segmentsIntersect(vertices[first]!, vertices[firstNext]!, vertices[second]!, vertices[secondNext]!)) {
+        throw new TypeError(`${label} must not self-intersect`);
+      }
+    }
+  }
+}
+
+function segmentsIntersect(a: TextFlowPoint, b: TextFlowPoint, c: TextFlowPoint, d: TextFlowPoint): boolean {
+  const abC = orientation(a, b, c);
+  const abD = orientation(a, b, d);
+  const cdA = orientation(c, d, a);
+  const cdB = orientation(c, d, b);
+  if (abC === 0 && onSegment(a, b, c)) return true;
+  if (abD === 0 && onSegment(a, b, d)) return true;
+  if (cdA === 0 && onSegment(c, d, a)) return true;
+  if (cdB === 0 && onSegment(c, d, b)) return true;
+  return Math.sign(abC) !== Math.sign(abD) && Math.sign(cdA) !== Math.sign(cdB);
+}
+
+function orientation(a: TextFlowPoint, b: TextFlowPoint, c: TextFlowPoint): number {
+  return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+}
+
+function onSegment(a: TextFlowPoint, b: TextFlowPoint, point: TextFlowPoint): boolean {
+  return (
+    Math.min(a[0], b[0]) <= point[0] &&
+    point[0] <= Math.max(a[0], b[0]) &&
+    Math.min(a[1], b[1]) <= point[1] &&
+    point[1] <= Math.max(a[1], b[1])
+  );
+}
+
+function samePoint(left: TextFlowPoint, right: TextFlowPoint): boolean {
+  return Object.is(left[0], right[0]) && Object.is(left[1], right[1]);
+}
+
+function flowKey(value: string, label: string): string {
+  if (typeof value !== 'string' || value.length === 0) throw new TypeError(`${label} must be a nonempty string`);
+  return value;
 }
 
 function assertAxis(value: AxisConstraint | undefined, label: string): void {
