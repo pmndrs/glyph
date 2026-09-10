@@ -32,8 +32,17 @@ body {
 
 /* ── One scene, filling the page ─────────────────────────────────────────── */
 
-glyph-proxy.preview {
+.preview-shell {
+  position: relative;
+  width: 100%;
   height: 100%;
+  overflow: hidden;
+  background: var(--ink);
+}
+
+glyph-proxy.preview {
+  position: absolute !important;
+  inset: 0;
   margin: 0;
   border: 0;
   border-radius: 0;
@@ -108,13 +117,34 @@ html[data-mode='gallery'] #root {
   transition: border-color 200ms ease;
 }
 
+.card-stage {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background: var(--ink);
+}
+
+.card-stage:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  aspect-ratio: auto !important;
+}
+
+.card-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .card:has(glyph-proxy[data-glyph-state='live']) {
   border-color: #3a4560;
 }
 
 .card glyph-proxy {
-  flex: 1;
-  min-height: 0;
+  position: absolute !important;
+  inset: 0;
   margin: 0;
   border: 0;
   border-radius: 0;
@@ -149,4 +179,37 @@ html[data-mode='gallery'] #root {
 
 .card footer a:hover {
   color: var(--paper);
+}
+
+.fullscreen-control {
+  position: absolute;
+  z-index: 4;
+  top: 0.7rem;
+  right: 0.7rem;
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  padding: 0.4rem;
+  border: 1px solid rgb(231 236 246 / 28%);
+  border-radius: 0.45rem;
+  background: rgb(7 8 11 / 72%);
+  color: var(--paper);
+  cursor: pointer;
+  place-items: center;
+  backdrop-filter: blur(6px);
+}
+
+.fullscreen-control:hover,
+.fullscreen-control:focus-visible {
+  border-color: rgb(231 236 246 / 70%);
+  background: rgb(7 8 11 / 90%);
+}
+
+.fullscreen-control svg {
+  width: 100%;
+  height: 100%;
+}
+
+.preview-fullscreen {
+  position: fixed;
 }

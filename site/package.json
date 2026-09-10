@@ -11,6 +11,7 @@
     "bake:explainer-fonts": "node ./scripts/bake-explainer-fonts.mts",
     "copy:docs-assets": "node ./scripts/copy-docs-assets.mts",
     "build:landing": "vite build",
+    "bake:chorus": "node ./scripts/bake-chorus.mts",
     "check": "pnpm typecheck && pnpm check:examples && pnpm check:snippets && pnpm lint && pnpm format:check && pnpm test && pnpm build:docs-components && pnpm check:docs && pnpm build:landing",
     "check:examples": "tsc --noEmit -p tsconfig.examples.json && pnpm build:examples",
     "check:snippets": "node ./scripts/check-doc-snippets.mts",

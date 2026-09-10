@@ -11,8 +11,8 @@ import { ACCENT, PAPER } from '../../theme';
  * Runs inside one paragraph. Each nested Text overrides one thing — a color,
  * a font, a material — and inherits the rest. Nothing here is an offset:
  * the tree is the document, and the boundaries fall where the tree says.
- * The script face is the landing wordmark's subset, so its run spells the
- * one word it can: glyph.
+ * The script face is the docs' decorative subset, so its run spells the word
+ * it was baked to cover: glyph.
  */
 const tint = defineTextMaterial((context) => {
   const material = context.createDefaultMaterial();

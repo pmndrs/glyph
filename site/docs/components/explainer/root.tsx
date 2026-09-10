@@ -139,6 +139,7 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     this.#resizeObserver = new ResizeObserver(() => this.#resize());
     this.#resizeObserver.observe(this);
     window.addEventListener('resize', this.#onWindowResize);
+    document.addEventListener('fullscreenchange', this.#onWindowResize);
     window.addEventListener('scroll', this.#onWindowScroll, { passive: true });
     this.#discover();
     this.#started = true;
@@ -160,6 +161,7 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     this.#retireTimer = undefined;
     this.removeAttribute('data-glyph-resizing');
     window.removeEventListener('resize', this.#onWindowResize);
+    document.removeEventListener('fullscreenchange', this.#onWindowResize);
     window.removeEventListener('scroll', this.#onWindowScroll);
     this.#statsPanel?.remove();
     this.#statsPanel = undefined;
