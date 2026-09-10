@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "customConditions": ["source"],
+    "declaration": false,
+    "declarationMap": false,
+    "isolatedDeclarations": false,
+    "jsx": "preserve",
+    "jsxImportSource": "vue",
+    "lib": ["DOM", "DOM.Iterable", "ES2025"],
+    "types": ["vite/client"]
+  },
+  "vueCompilerOptions": {
+    "strictTemplates": true,
+    "dataAttributes": ["data-*"]
+  },
+  "include": ["src", "vite.config.ts"]
+}

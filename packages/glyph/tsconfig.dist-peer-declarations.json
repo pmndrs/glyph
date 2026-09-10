@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "customConditions": [],
+    "jsx": "react-jsx",
     "noEmit": true,
     "rootDir": ".",
     "skipLibCheck": true,
@@ -11,6 +12,8 @@
     "tests/types/r3f-v1-api.test.ts",
     "tests/types/subpath-exports.test.ts",
     "tests/types/tsl-api.test.ts",
-    "tests/types/typegpu-api.test.ts"
+    "tests/types/typegpu-api.test.ts",
+    "tests/types/vue-api.test.ts",
+    "tests/types/vue-text-tsx.test.tsx"
   ]
 }

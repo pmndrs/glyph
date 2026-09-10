@@ -347,6 +347,7 @@ const coreJavaScript = await measureJavaScript(
       '/packages/glyph/dist/runtime-bake-worker',
       '/packages/glyph/dist/internal/font-face-transfer-runtime',
       '/packages/glyph/dist/react',
+      '/packages/glyph/dist/vue',
       '/packages/glyph/dist/three',
       '/packages/glyph/dist/raster/bitmap',
       '/packages/glyph/dist/raster/msdf',
@@ -376,6 +377,7 @@ const glyphConfig = await measureJavaScript(
     expectedDynamic: [],
     excludedInitial: [
       '/packages/glyph/dist/react',
+      '/packages/glyph/dist/vue',
       '/packages/glyph/dist/three',
       '/packages/glyph/dist/shaders/tsl',
       '/packages/glyph/dist/three/',
@@ -394,6 +396,7 @@ const typegpuIntegration = await measureJavaScript(
     expectedDynamic: [],
     excludedInitial: [
       '/packages/glyph/dist/react',
+      '/packages/glyph/dist/vue',
       '/packages/glyph/dist/three',
       '/packages/glyph/dist/shaders/tsl',
       '/packages/glyph/dist/three/',

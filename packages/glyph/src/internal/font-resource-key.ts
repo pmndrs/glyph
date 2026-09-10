@@ -5,8 +5,8 @@ import { canonicalJson } from './raster-identity.js';
 const sourceIds = new WeakMap<object, number>();
 let nextSourceId = 1;
 
-/** Canonical identity for one React-owned FontFace declaration and raster request. */
-export function reactFontResourceKey(source: FontFaceSource, format: FontFaceConfig['format']): string {
+/** Canonical identity for one adapter-owned FontFace declaration and raster request. */
+export function fontResourceKey(source: FontFaceSource, format: FontFaceConfig['format']): string {
   return `${fontFaceSourceKey(source)}:${fontFaceFormatIdentity(format)}`;
 }
 

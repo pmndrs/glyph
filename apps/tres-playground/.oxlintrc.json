@@ -1,0 +1,24 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "perf": "warn",
+    "suspicious": "warn"
+  },
+  "env": {
+    "browser": true,
+    "es2025": true
+  },
+  "rules": {
+    "eslint/no-await-in-loop": "off",
+    "eslint/no-restricted-imports": [
+      "error",
+      {
+        "paths": ["three"],
+        "patterns": ["three/src/*", "three/addons/*", "three/examples/*"]
+      }
+    ],
+    "unicorn/require-module-specifiers": "off"
+  },
+  "ignorePatterns": ["dist/**"]
+}

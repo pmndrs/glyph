@@ -13,6 +13,7 @@ okf_version: '0.2'
 - [TypeGPU hello world](../../apps/typegpu-hello-world/README.md) — high-level TypeGPU setup and caller-owned render passes.
 - [Three.js text API](planning/three-api.md) — authoritative Three-native loader, explicit `TextGroup` batching, reusable text across group disposal, retained non-throwing errors, ordering, and lifecycle contract.
 - [React font loading](guides/react.md) — direct FontFace, lifecycle-owning hooks, provider aliases, Suspense cache, retry, and cleanup.
+- [Vue and TresJS font loading](guides/vue.md) — direct FontFace, lifecycle-owning composables, provider aliases, reactive readiness, and per-canvas roots.
 - [Glyph integration API](planning/core-api.md) — current root application vocabulary and renderer-neutral GlyphConfig contract.
 - [Font and engine ownership plan](planning/font-runtime-ownership.md) — historical ownership analysis that led to immutable fonts and config-owned handle roots.
 - [Rust layout engine design](planning/rust-layout-engine.md) — superseded historical proposal; current engine and renderer contracts live in the Glyph integration API and renderer integration guide.

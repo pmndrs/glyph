@@ -1,0 +1,32 @@
+{
+  "name": "@pmndrs/glyph-tres-playground",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm build && pnpm live:check",
+    "dev": "vite",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint --deny-warnings .",
+    "live:check": "node ./scripts/live-check.mts",
+    "typecheck": "vue-tsgo --noEmit"
+  },
+  "dependencies": {
+    "@pmndrs/glyph": "workspace:*",
+    "@tresjs/core": "5.8.3",
+    "three": "0.185.1",
+    "vue": "3.5.42"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "@types/three": "0.185.4",
+    "@vitejs/plugin-vue": "6.0.8",
+    "oxfmt": "0.35.0",
+    "oxlint": "1.75.0",
+    "typescript": "7.0.2",
+    "vite": "8.1.5",
+    "vitexec": "0.1.17",
+    "vue-tsgo": "0.3.0"
+  }
+}
