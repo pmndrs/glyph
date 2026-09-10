@@ -8,13 +8,9 @@ import { slugCodec } from '../../raster/slug.js';
 
 const system = defineCodecBuffers({
   stableGlyphId: { id: id.buffer('glyph-typegpu/stable-glyph'), scalar: 'u32', lanes: ['stableGlyphId'] },
-  placementOffset: {
-    id: id.buffer('glyph-typegpu/placement-offset'),
-    scalar: 'f32',
-    lanes: ['inlineOffset', 'blockOffset'],
-  },
+  placementSlot: { id: id.buffer('glyph-typegpu/placement-slot'), scalar: 'u32', lanes: ['placementSlot'] },
 });
-export const TYPEGPU_PLACEMENT_OFFSET_BUFFER_ID: CodecBufferId = system.placementOffset.id;
+export const TYPEGPU_PLACEMENT_SLOT_BUFFER_ID: CodecBufferId = system.placementSlot.id;
 const capabilitySet: CodecCapabilitySet = {
   capabilities: ['storage-buffers', 'alias-vec2', 'alias-vec4', 'ordered-direct'],
   maxBufferBytes: 16 * 1024 * 1024,

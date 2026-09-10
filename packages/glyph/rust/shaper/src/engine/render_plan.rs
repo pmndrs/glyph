@@ -9,8 +9,12 @@ pub const RESOURCE_ACTION_RETAIN: u16 = 3;
 
 pub const BUFFER_ORDERED_DIRECT: u16 = 1;
 pub const BUFFER_STABLE_INDIRECT: u16 = 2;
+pub const BUFFER_SESSION_SHARED: u16 = 3;
 /// Reserved non-codec binding ID for the stable-indirect logical-order buffer.
 pub const CODEC_BUFFER_ORDER: u16 = u16::MAX;
+pub const CODEC_BUFFER_PLACEMENT: u16 = u16::MAX - 1;
+
+pub const SESSION_PLACEMENT_BUFFER_ID: u32 = 0x7fff_ffff;
 
 pub const PATCH_ALLOCATE_OR_RESIZE: u16 = 1;
 pub const PATCH_WRITE: u16 = 2;
@@ -166,6 +170,10 @@ pub struct RenderPlanView<'a> {
     pub retirements: &'a [RetirementRecord],
     pub diagnostics: &'a [DiagnosticRecord],
     pub payload: &'a [u8],
+    pub session_buffers: &'a [BufferRecord],
+    pub session_patches: &'a [PatchRecord],
+    pub session_retirements: &'a [RetirementRecord],
+    pub session_payload: &'a [u8],
 }
 
 const _: () = assert!(core::mem::size_of::<ResourceRecord>() == 40);

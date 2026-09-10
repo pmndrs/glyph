@@ -3,6 +3,7 @@ use alloc::vec::Vec;
 use super::{
     EngineError,
     cluster_state::{LayoutRun, LayoutRunSourceKind, RunCanonicalRevision},
+    placement_slot::PlacementHandle,
     run_slot::RunHandle,
 };
 
@@ -99,7 +100,7 @@ pub(crate) enum GlyphSource {
 }
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum LayoutRunOwner {
     Paragraph,
     Replacement,
@@ -111,6 +112,7 @@ pub(crate) struct PlacementSegment {
     pub layout_run_owner: LayoutRunOwner,
     pub layout_run_index: u32,
     pub run_handle: Option<RunHandle>,
+    pub placement_handle: Option<PlacementHandle>,
     pub canonical_revision: Option<RunCanonicalRevision>,
     pub identity: PlacementIdentity,
     pub segment_anchor: u32,
@@ -428,6 +430,7 @@ impl PlacementState {
             layout_run_owner,
             layout_run_index,
             run_handle: None,
+            placement_handle: None,
             canonical_revision: None,
             identity: PlacementIdentity::StableSource {
                 segment_anchor,
@@ -735,6 +738,7 @@ impl PlacementState {
                 retained.new_fragment_start + (slice.fragment_index - retained.old_fragment_start);
             slice.layout_run_index = self.resolve_run(slice, layout_runs, replacement_runs)?.0;
             slice.run_handle = None;
+            slice.placement_handle = None;
             let placement = previous.translations.row(slice_start + relative);
             self.segments.push(slice);
             self.translations.push(placement);
@@ -860,6 +864,35 @@ impl PlacementState {
             self.segments.rows[index].run_handle = run.run_handle;
         }
         Ok(())
+    }
+
+    pub(crate) fn segment_rows(&self) -> &[PlacementSegment] {
+        &self.segments.rows
+    }
+
+    pub(crate) fn translations(&self) -> &[SegmentTranslation] {
+        &self.translations.rows
+    }
+
+    pub(crate) fn glyph_segment_indices(&self) -> &[u32] {
+        &self.glyph_segment_indices
+    }
+
+    pub(crate) fn bind_placement_handles(
+        &mut self,
+        handles: &[PlacementHandle],
+    ) -> Result<(), EngineError> {
+        if handles.len() != self.segments.len() {
+            return Err(EngineError::InvalidRequest);
+        }
+        for (segment, handle) in self.segments.rows.iter_mut().zip(handles) {
+            segment.placement_handle = Some(*handle);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn placement_handle(&self, segment_index: usize) -> Option<PlacementHandle> {
+        self.segments.get(segment_index)?.placement_handle
     }
 
     #[cfg(test)]

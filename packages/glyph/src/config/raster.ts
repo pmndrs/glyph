@@ -28,6 +28,7 @@ import {
   attachHostCodecProgramSystemBuffers,
   type CompiledCodecProgramBody,
   type CodecProgramSystemBuffers,
+  type CodecProgramU32StoreTarget,
 } from './codec-program.js';
 import { assertTechniqueCodecBody, normalizeCodecProgramSystemBuffers } from '../internal/codec-program-contract.js';
 import {
@@ -49,7 +50,7 @@ import {
 import { assertCodecIdFactory, CodecIdScope } from '../internal/render-id.js';
 /** System buffers are owned by the engine and are deliberately absent from a Codec technique schema. */
 export type RasterCodecSystem = CodecProgramSystemBuffers & {
-  readonly placementOffset: NonNullable<CodecProgramSystemBuffers['placementOffset']>;
+  readonly placementSlot: NonNullable<CodecProgramSystemBuffers['placementSlot']>;
 };
 
 /** Renderer-neutral codec body, before an engine assigns program and capability identities. */
@@ -159,6 +160,8 @@ export interface RasterCodecProgramOptions {
   readonly transformMode: CodecTransformMode;
   readonly allocationMode: CodecAllocationMode;
   readonly ids?: CodecIdFactory;
+  /** Adapter-owned packing for the placement semantic; omitted means its dedicated system buffer. */
+  readonly placementSlotTarget?: CodecProgramU32StoreTarget;
 }
 
 /** Assemble one engine CodecProgram from a registered renderer-neutral raster Codec. */
@@ -192,25 +195,26 @@ export function createRasterCodecProgram<Format extends RasterFormatMetadata, Sc
     assertCodecIdFactory(options.ids, 'raster codec ids');
   }
   const normalizedSystem = normalizeCodecProgramSystemBuffers(codec.schema.buffers, options.system);
-  const placementOffset = normalizedSystem.placementOffset;
-  if (placementOffset === undefined) {
-    throw new TypeError('raster codec system needs a host-owned placementOffset buffer');
+  const placementSlot = normalizedSystem.placementSlot;
+  if (placementSlot === undefined) {
+    throw new TypeError('raster codec system needs a host-owned placementSlot buffer');
   }
-  const system: RasterCodecSystem = Object.freeze({ ...normalizedSystem, placementOffset });
+  const system: RasterCodecSystem = Object.freeze({ ...normalizedSystem, placementSlot });
+  const placementSlotTarget = normalizePlacementSlotTarget(codec.schema, options.placementSlotTarget);
   const capabilitySet = normalizeCodecCapabilitySet(options.capabilitySet, 'raster codec capability set');
   const ids = options.ids ?? new CodecIdScope();
   const compiledTechniqueId = ids.technique(codec.raster);
   const compiledProgramId = ids.program(codec.raster, options.namespace, options.programName);
   const authoredBody = codec.codecBody(capabilitySet);
   assertTechniqueCodecBody(authoredBody, codec.schema);
-  const body = attachHostCodecProgramSystemBuffers(authoredBody, codec.schema, system);
-  assertTechniqueCodecBody(body, codec.schema, system);
+  const body = attachHostCodecProgramSystemBuffers(authoredBody, codec.schema, system, placementSlotTarget);
+  assertTechniqueCodecBody(body, codec.schema, system, placementSlotTarget);
   return Object.freeze({
     ...createCodecProgram(
       compiledTechniqueId,
       compiledProgramId,
       body,
-      [...schemaCodecBuffers(codec.schema), ...systemCodecBuffers(system)],
+      [...schemaCodecBuffers(codec.schema), ...systemCodecBuffers(system, placementSlotTarget)],
       options.transformMode,
       options.allocationMode,
     ),
@@ -653,14 +657,39 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
   return isRecord(value) && typeof value.then === 'function';
 }
 
-function systemCodecBuffers(system: RasterCodecSystem): CodecBuffer[] {
+function systemCodecBuffers(
+  system: RasterCodecSystem,
+  placementSlotTarget: CodecProgramU32StoreTarget | undefined,
+): CodecBuffer[] {
   return [
     { id: system.stableGlyphId.id, scalar: 'u32', vectorWidth: 1 },
-    { id: system.placementOffset.id, scalar: 'f32', vectorWidth: 2 },
+    ...(placementSlotTarget === undefined
+      ? [{ id: system.placementSlot.id, scalar: 'u32' as const, vectorWidth: 1 }]
+      : []),
     ...(system.transformIndex === undefined
       ? []
       : [{ id: system.transformIndex.id, scalar: 'u32' as const, vectorWidth: 1 }]),
   ];
+}
+
+function normalizePlacementSlotTarget(
+  schema: TechniqueSchemaMetadata,
+  value: CodecProgramU32StoreTarget | undefined,
+): CodecProgramU32StoreTarget | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value) || !Number.isSafeInteger(value.buffer) || !Number.isSafeInteger(value.lane)) {
+    throw new TypeError('placementSlotTarget needs an existing u32 technique buffer and lane');
+  }
+  const declaration = Object.values(schema.buffers).find((buffer) => buffer.id === value.buffer);
+  if (
+    declaration?.scalar !== 'u32' ||
+    value.lane < 0 ||
+    value.lane >= declaration.lanes.length ||
+    !declaration.lanes[value.lane]?.startsWith('unused')
+  ) {
+    throw new TypeError('placementSlotTarget needs an unused lane in an existing u32 technique buffer');
+  }
+  return Object.freeze({ buffer: declaration.id, lane: value.lane });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

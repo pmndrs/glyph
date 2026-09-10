@@ -1,4 +1,8 @@
-import type { CompiledCodecProgramBody, CodecProgramSystemBuffers } from '../config/codec-program.js';
+import type {
+  CompiledCodecProgramBody,
+  CodecProgramSystemBuffers,
+  CodecProgramU32StoreTarget,
+} from '../config/codec-program.js';
 import type { CodecBufferDeclaration, CodecBufferDeclarations, TechniqueSchemaMetadata } from '../config/schema.js';
 import type { CodecBufferId } from '../config/codec.js';
 import { assertGlyphId } from './glyph-id.js';
@@ -7,7 +11,7 @@ interface CompiledCodecMetadata {
   readonly schema: TechniqueSchemaMetadata;
   readonly stableGlyphId: CodecBufferId | undefined;
   readonly transformIndex: CodecBufferId | undefined;
-  readonly placementOffset: CodecBufferId | undefined;
+  readonly placementSlot: CodecProgramU32StoreTarget | undefined;
 }
 
 const metadata = new WeakMap<object, CompiledCodecMetadata>();
@@ -24,8 +28,8 @@ export function normalizeCodecProgramSystemBuffers(
   const stableGlyphId = snapshotSystemBuffer(value.stableGlyphId, 'stableGlyphId');
   const transformIndex =
     value.transformIndex === undefined ? undefined : snapshotSystemBuffer(value.transformIndex, 'transformIndex');
-  const placementOffset =
-    value.placementOffset === undefined ? undefined : snapshotPlacementBuffer(value.placementOffset);
+  const placementSlot =
+    value.placementSlot === undefined ? undefined : snapshotSystemBuffer(value.placementSlot, 'placementSlot');
   const ids = new Set(Object.values(technique).map((buffer) => buffer.id));
   if (ids.has(stableGlyphId.id)) throw new TypeError('stableGlyphId system buffer collides with a technique buffer');
   if (transformIndex !== undefined) {
@@ -36,18 +40,18 @@ export function normalizeCodecProgramSystemBuffers(
       throw new TypeError('transformIndex system buffer collides with a technique buffer');
     }
   }
-  if (placementOffset !== undefined) {
-    if (placementOffset.id === stableGlyphId.id || placementOffset.id === transformIndex?.id) {
-      throw new TypeError('placementOffset system buffer collides with another system buffer');
+  if (placementSlot !== undefined) {
+    if (placementSlot.id === stableGlyphId.id || placementSlot.id === transformIndex?.id) {
+      throw new TypeError('placementSlot system buffer collides with another system buffer');
     }
-    if (ids.has(placementOffset.id)) {
-      throw new TypeError('placementOffset system buffer collides with a technique buffer');
+    if (ids.has(placementSlot.id)) {
+      throw new TypeError('placementSlot system buffer collides with a technique buffer');
     }
   }
   return Object.freeze({
     stableGlyphId,
     ...(transformIndex === undefined ? {} : { transformIndex }),
-    ...(placementOffset === undefined ? {} : { placementOffset }),
+    ...(placementSlot === undefined ? {} : { placementSlot }),
   });
 }
 
@@ -55,48 +59,28 @@ export function assertTechniqueCodecBody<Schema extends TechniqueSchemaMetadata>
   body: unknown,
   schema: Schema,
   system?: CodecProgramSystemBuffers,
+  placementSlotTarget?: CodecProgramU32StoreTarget,
 ): asserts body is CompiledCodecProgramBody<Schema> {
   const compiled = typeof body === 'object' && body !== null ? metadata.get(body) : undefined;
   if (compiled?.schema !== schema) {
     throw new TypeError(`technique "${schema.technique}" codec body does not belong to its registered schema`);
   }
+  const expectedPlacement =
+    system?.placementSlot === undefined
+      ? undefined
+      : (placementSlotTarget ?? { buffer: system.placementSlot.id, lane: 0 });
   if (
     system !== undefined &&
     (compiled.stableGlyphId !== system.stableGlyphId.id ||
       compiled.transformIndex !== system.transformIndex?.id ||
-      compiled.placementOffset !== system.placementOffset?.id)
+      compiled.placementSlot?.buffer !== expectedPlacement?.buffer ||
+      compiled.placementSlot?.lane !== expectedPlacement?.lane)
   ) {
     throw new TypeError(`technique "${schema.technique}" codec body does not use the requested system buffers`);
   }
 }
 
-function snapshotPlacementBuffer(
-  value: unknown,
-): CodecBufferDeclaration<'f32', readonly ['inlineOffset', 'blockOffset']> {
-  if (!isRecord(value)) throw new TypeError('placementOffset system buffer needs two f32 offset lanes');
-  const lanes = value.lanes;
-  const id = value.id;
-  if (
-    typeof id !== 'number' ||
-    !Number.isSafeInteger(id) ||
-    id <= 0 ||
-    id > 0xffff ||
-    value.scalar !== 'f32' ||
-    !Array.isArray(lanes) ||
-    lanes.length !== 2 ||
-    lanes[0] !== 'inlineOffset' ||
-    lanes[1] !== 'blockOffset'
-  ) {
-    throw new TypeError('placementOffset system buffer needs f32 "inlineOffset" and "blockOffset" lanes');
-  }
-  return Object.freeze({
-    id: assertGlyphId(id, 'buffer', 'placementOffset system buffer id'),
-    scalar: 'f32',
-    lanes: ['inlineOffset', 'blockOffset'] as const,
-  });
-}
-
-function snapshotSystemBuffer<const Name extends 'stableGlyphId' | 'transformIndex'>(
+function snapshotSystemBuffer<const Name extends 'stableGlyphId' | 'transformIndex' | 'placementSlot'>(
   value: unknown,
   name: Name,
 ): CodecBufferDeclaration<'u32', readonly [Name]> {

@@ -255,9 +255,14 @@ that would have shown what it meant. Span offsets resolve onto the extended grap
 on the Three surface (D-265).
 
 The planned adapter does not expose a mutable glyph snapshot that writes back into live paragraph storage. Detached
-per-glyph manipulation must consume `RetainedText.copyGlyphs()` into an independently owned TypeGPU render object, just
-as Three imports the same planner-assisted checkpoint into `Glyphs`. That renderer-specific object remains future work;
-the superseded `snapshotGlyphs()` / `applyGlyphs()` / `restoreGlyphs()` surface is not reserved here.
+per-glyph manipulation consumes `RetainedText.copyGlyphs()` into an independently owned TypeGPU render object, just as
+Three imports the same planner-assisted checkpoint into `Glyphs`; that object stops following source text updates.
+Separately, the shared `Text.withGlyphs()` callback may return an exact-length live presentation-transform sequence for
+the current accepted glyph topology. TypeGPU packs those logical local/paragraph/world transforms into its own sidecar
+and updates their dirty ranges without mutating shaping or layout storage. Indexes are positional after every accepted
+topology change; the adapter does not infer persistent identity from glyph IDs or clusters. This is neither snapshot/apply/restore nor a
+detached ownership transfer, so the superseded `snapshotGlyphs()` / `applyGlyphs()` / `restoreGlyphs()` surface remains
+unreserved.
 
 `setTransform()` copies exactly 16 finite column-major values into retained engine state. Transform and visibility changes
 dirty only the target's transform/visibility storage; they do not call core shaping. The program may repeat matrices per

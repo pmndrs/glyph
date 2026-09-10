@@ -29,7 +29,6 @@ interface DrawOwner {
   glyphStorage?(storageKey: string):
     | Readonly<{
         transforms: THREE.StorageInstancedBufferAttribute;
-        pivots: THREE.StorageInstancedBufferAttribute;
       }>
     | undefined;
 }
@@ -148,6 +147,7 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
           transform,
           context.transformGeneration,
           drawGeometry.key,
+          decoration ? 'placement:none' : `placement:${context.placementTable?.storageKey ?? 'missing'}`,
         );
         const reusable = previous.get(key)?.shift();
         if (reusable !== undefined) {
@@ -173,7 +173,6 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
         const glyphStorage = stableIds === undefined ? undefined : owner.glyphStorage?.(glyphStorageKey(stableIds));
         if (glyphStorage !== undefined) {
           geometry.setAttribute('_pmndrsGlyphInstanceTransforms', glyphStorage.transforms);
-          geometry.setAttribute('_pmndrsGlyphInstancePivots', glyphStorage.pivots);
         }
         if (transform.kind === 'indexed') geometry.setAttribute('_pmndrsGlyphTransforms', context.transformAttribute);
         const mesh = new THREE.Mesh(geometry, material);
@@ -266,6 +265,7 @@ function drawRealizationKey(
   transform: TransformRealization,
   transformGeneration: number,
   geometry: string,
+  placementKey: string,
 ): string {
   // The Rust plan compiler publishes Codec buffers in declaration order and the stable order buffer last.
   // Preserve that package-owned order instead of sorting the complete binding set for every realized span.
@@ -274,5 +274,5 @@ function drawRealizationKey(
     transform.kind === 'direct'
       ? `direct:${transform.transformId}`
       : transformProgramKey(transform, transformGeneration);
-  return `${programKey}:${resourceKey}:${materialKey}:${clipId}:${depthKey}:${transformKey}:${geometry}:${bufferKey}`;
+  return `${programKey}:${resourceKey}:${materialKey}:${clipId}:${depthKey}:${transformKey}:${geometry}:${placementKey}:${bufferKey}`;
 }

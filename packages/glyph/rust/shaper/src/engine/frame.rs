@@ -95,8 +95,6 @@ pub(crate) const SEMANTIC_F32_INVERSE_FONT_SIZE: u8 = 12;
 pub(crate) const SEMANTIC_F32_OUTLINE_WIDTH_EM: u8 = 13;
 pub(crate) const SEMANTIC_F32_SHADOW_OFFSET_X_EM: u8 = 14;
 pub(crate) const SEMANTIC_F32_SHADOW_OFFSET_Y_EM: u8 = 15;
-pub(crate) const SEMANTIC_F32_PLACEMENT_INLINE: u8 = 16;
-pub(crate) const SEMANTIC_F32_PLACEMENT_BLOCK: u8 = 17;
 pub(crate) const SEMANTIC_U32_FOREGROUND_RGBA: u8 = 0;
 pub(crate) const SEMANTIC_U32_CLUSTER_ID: u8 = 1;
 pub(crate) const SEMANTIC_U32_REGION_ID: u8 = 2;
@@ -105,6 +103,7 @@ pub(crate) const SEMANTIC_U32_TRANSFORM_INDEX: u8 = 4;
 pub(crate) const SEMANTIC_U32_STABLE_GLYPH_ID: u8 = 5;
 pub(crate) const SEMANTIC_U32_OUTLINE_RGBA: u8 = 6;
 pub(crate) const SEMANTIC_U32_SHADOW_RGBA: u8 = 7;
+pub(crate) const SEMANTIC_U32_PLACEMENT_SLOT: u8 = 8;
 pub(crate) const PARAGRAPH_MUTATION_UPSERT: u8 = 1;
 pub(crate) const PARAGRAPH_MUTATION_REMOVE: u8 = 2;
 

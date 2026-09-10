@@ -7,7 +7,7 @@ export type ScalarArray = Float32Array | Uint32Array | Uint16Array;
 
 declare const threeCodecAttributeNameBrand: unique symbol;
 export type ThreeCodecAttributeName = string & { readonly [threeCodecAttributeNameBrand]: true };
-export type ThreeBufferBindingId = CodecBufferId | 'order';
+export type ThreeBufferBindingId = CodecBufferId | 'order' | 'placement';
 
 export interface RetainedBuffer {
   readonly binding: ThreeBufferBinding;

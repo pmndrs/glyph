@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:c9a34a6284740855b552eaadc145541e58c2cdb50ff9ca7d05e82ed5e7400048'
+source_digest: 'sha256:6e711e6be929929fd50cc0c3b94dc0492dd245c2a755d1cdc577e4b5245776a0'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -370,6 +370,17 @@ few glyphs. Its fixed descriptor serializes no per-glyph semantic table; each in
 glyph into fixed Wasm scratch, then returns one frozen scalar object in O(selected) work. Full `glyphs()` remains the
 bulk caller-owned copy. The callback must finish synchronously:
 thenables, engine reentry, and retained-text mutation are rejected, and the indexed view expires on return or throw.
+
+The fragment-relative frontier reserves a transform-returning form of the same callback for live presentation
+deformation. `undefined` remains read-only; an exact 1:1 transform sequence updates renderer-owned per-glyph overrides
+for the current accepted topology. The public shape names local, paragraph, or world coordinates and ordinary transform
+components rather than physical storage, while adapters own packing and adjacent dirty-range uploads. These overrides
+compose after compact layout placement and do not dirty shaping, line fitting, static raster records, batch keys, or draw
+spans. A topology-changing update replaces the positional mapping: index `i` applies to the new glyph at `i`, removed
+tail indexes retire, and appended indexes need new values. Glyph IDs and clusters do not pretend to provide semantic
+continuity across arbitrary middle edits; applications needing that behavior reconcile their own document-domain keys.
+This attached live path complements rather than supersedes `copyGlyphs()`/`breakApart()`, whose detached object
+owns its copied lifecycle and intentionally stops following the source `Text`.
 
 The FontFace source cache coalesces canonical-equivalent locators before I/O and converges different locators onto one
 parsed main-font node after their complete GLB bytes have the same SHA-256 content identity. Every acquisition base is
@@ -1282,16 +1293,14 @@ legacy-bit-preserving transform: deterministic inline and block counterexamples 
 representation lab finds mismatches in every tested compact candidate. The active-resize benchmark alternates
 420/434-unit widths and fails on any zero-patch sample.
 
-Those counterexamples close the old-bit question for the rejected indexed placement-table experiment. The package is
-pre-alpha and now publishes one direct-offset raster contract without a compatibility branch. Each rendered glyph's
-semantic row owns its final inline/block origin under the re-pinned additive f32 contract. Gather resolves that row by
-`LayoutGlyph.semantic_glyph_index`; it does not resolve a shared compact CPU segment or build a second placement vector.
-Raster Codec programs receive the hidden engine-owned f32x2 occurrence origin alongside stable glyph-local geometry;
-Three and direct TypeGPU perform the same ordered local-plus-origin f32 addition before coverage. Codec authors continue
-to name semantic and raster values rather than slots, tables, bind groups, or physical buffer layouts. A 65,536-case
-finite arithmetic regression proves this is the same commutative f32 addition the former Codec-side absolute raster
-origin used; tiny-world, justification, cancellation, retained-update, and browser-pixel evidence still gate milestone
-completion.
+Those counterexamples close the old-bit question for the retained additive placement model. The package is pre-alpha and
+publishes one indexed placement contract without a compatibility branch. Each rendered glyph's semantic row carries an
+engine-owned `placementSlot`; the planner resolves that slot to one root-scoped f32x2 x/y row shared by every compatible
+resource and material batch. Raster Codec authors continue to name semantic and raster values rather than slots, tables,
+bind groups, or physical buffer layouts. Package-private host assembly stores the slot, and each adapter chooses its
+physical packing before applying the same ordered local-plus-placement f32 addition. A 65,536-case finite arithmetic
+regression proves this is the same commutative f32 addition the former Codec-side absolute raster origin used;
+tiny-world, justification, cancellation, retained-update, and browser-pixel evidence still gate milestone completion.
 
 Static local coordinates cannot be anchored to visual slices because width changes move dense-CJK slice boundaries. The
 exact anchor policy remains evidence-gated; an admissible bounded-local form may use fixed, break-independent numeric
@@ -1316,11 +1325,11 @@ it has an explicit occurrence model, and keeps 4,096 homogeneous CJK clusters in
 corpus reconstructs all 332 already-published f32 coordinates exactly from line and observable-slice anchors, but the
 f64 reassociation counterexamples remain authoritative for the future CPU cutover.
 
-Break-independent numeric blocks and compact placement segments are now production-owned and populated by the single
-positioning traversal. Justification, L1/L2, hanging, boundary ownership, and exact f64 translation remain in core; only
-each rendered glyph's resolved semantic x/y origin reaches a renderer. CPU semantic/query rows and renderer placement use
-the same ordered local-plus-origin f32 operation. Visual-span proof rows and planner-scoped run handles remain
-test/kernel-lab evidence because the direct-offset renderer contract does not consume indexed run identity.
+Break-independent numeric blocks, compact placement segments, planner-scoped run handles, and placement slots are now
+production-owned and populated by the single positioning traversal. Justification, L1/L2, hanging, boundary ownership,
+and exact f64 translation remain in core; the renderer receives only a per-glyph u32 slot and the selected f32x2 row.
+CPU semantic/query rows and renderer placement use the same ordered local-plus-placement f32 operation. Run, word,
+numeric-block, role, bidi, and justification metadata do not cross the renderer boundary.
 
 Retained geometry-only positioning has a matching guarded path for visually trivial, boundary-free, undecorated text. It
 reuses committed glyph-local, raster, and effect rows, walks the existing positioning authority only to rebuild compact
@@ -1329,51 +1338,53 @@ identity and exact outline presence authenticate the retained rows; any mismatch
 then resolves changed Codec dependencies and updates semantic position inputs plus CPU ink bounds without repeating font
 selection, raster resource lookup, or full `PlanGlyph` construction. Other changes use the general authorities.
 
-The final A/B/B/A ordered Bitmap comparison uses 40 warmups and two 101-sample passes per revision. Pooled current
+The intermediate direct-offset A/B/B/A ordered Bitmap comparison used 40 warmups and two 101-sample passes per revision. Pooled candidate
 median/p95 is `2.874 / 2.915 ms` for 21,805 Latin glyphs and `2.233 / 2.258 ms` for 21,978 dense-CJK glyphs. Exact clean
 main measures `3.697 / 3.754 ms` for Latin and `2.909 / 2.968 ms` for CJK. The retained candidate is therefore 22.3%
 faster at the Latin median and 23.2% faster at the CJK median, with 22.4% and 23.9% lower p95 respectively. Every
-active-resize sample still emits one unchanged f32x2 direct-offset patch—174,440 bytes for Latin and 175,824 bytes for
-CJK—so these results establish a CPU positioning win, not the final compact-publication result. The full direct occurrence
-upload remains the next transfer frontier; it is not a missing Three range-update optimization.
+active-resize sample still emitted one glyph-wide f32x2 patch—174,440 bytes for Latin and 175,824 bytes for CJK—so these
+results establish the retained CPU positioning win but do not measure the current indexed publication path.
 
-The maintained `adopt-position-query` case prepares borrowed-layout positioning before timing the remaining transaction.
+A corrected indexed-publication smoke over the same 21,805-glyph Latin resize produced 3,903 active placement rows and
+one 31,224-byte session-table patch on every measured update. It produced zero placement-slot writes and zero
+static/raster writes because the stable word-root assignments did not change. This is the expected compact transfer shape,
+not yet a performance comparison: the five-sample smoke exists to authenticate the dirty buffers and byte count before the
+full interleaved benchmark gauntlet.
+
+The intermediate direct-offset `adopt-position-query` case prepared borrowed-layout positioning before timing the remaining transaction.
 For the same final Latin fixture, measurement is `0.220 / 0.227 ms`, measurement plus positioning is
 `1.222 / 1.248 ms`, and adoption plus retained gather, plan compilation, and publication is `1.655 / 1.688 ms`. The
 dense-CJK publication tail is `0.973 / 0.998 ms`. These phases explain the complete median rather than forming a second
-layout path: direct offset publication is about 58% of the Latin total, per-glyph positioning about 35%, and line fitting
+layout path: glyph-wide direct-offset publication was about 58% of the Latin total, per-glyph positioning about 35%, and line fitting
 about 8% after rounding.
 
-The current renderer contract is exercised as product code rather than a synthetic placement graph. Direct TypeGPU
+The current indexed renderer contract is exercised as product code rather than a synthetic placement graph. Direct TypeGPU
 renders Bitmap/MSDF/Slug through project Chromium WebGPU with nonzero-alpha counts `2148/2010/1992`. Native Three TSL and
 the experimental Three/TypeGPU shader set each pass Bitmap/MSDF/Slug, retained storage/draw, detached-copy, decoration,
 and custom-composition gates on WebGPU and forced WebGL2 with identical per-backend counts. These runs close the basic
-direct-offset browser-realization gate; the full editorial pixel/performance and soak matrix remains open.
+indexed browser-realization gate; the full editorial pixel/performance and soak matrix remains open. Three's Slug path
+stores `placementSlot` in the existing unused `bandCounts.z` lane, so its seven technique storage inputs plus the shared
+placement table stay within the WebGPU minimum limit of eight without a texture lookup or extra draw. Direct TypeGPU
+remains a proof-of-concept and may choose a different adapter-local packing without changing the shared Codec semantics.
 
-Planner-scoped run identity and canonical comparison remain test/kernel-lab execution. They validate split/merge,
-replacement-run, and acknowledgement behavior, but release width updates do not pay for run-slot reconciliation because
-the accepted direct-offset publication does not expose indexed run handles.
+Planner-scoped run and placement allocators reconcile the compact CPU topology transactionally and quarantine retired
+slots until renderer acknowledgement. They validate split/merge, replacement-run, abort/retry, and stale-handle behavior;
+their handles remain core-private and never become batch or draw identity.
 
-The placement-slot/session-table ABI and renderer implementation were withdrawn before release. They preserved draw
-topology and reduced some writes, but added an occurrence lookup, slot lifetime, reconciliation, and CPU bookkeeping while
-still failing the end-to-end performance gate. The generated ABI, Codec contract, Three, and direct TypeGPU instead use
-the direct engine-owned f32x2 occurrence offset described above. TypeGPU remains a proof-of-concept and does not define a
-shared buffer limit.
+The indexed direction keeps the existing batches, physical instances, order indirection, primitive spans, and draws.
+Stable-indirect rendering resolves logical to physical instance first; ordered-direct rendering already has the physical
+instance; both then read `placementSlot[physical]` and the shared session row. A portable `RasterCodec.codecBody` receives
+only the frozen renderer capability set and authors glyph-local technique outputs. After authenticating that body,
+package-private host assembly appends stable identity, optional transform identity, and the slot store. Codec authors
+therefore describe glyph meaning and raster inputs, not slot allocation, tables, bind groups, or backend memory layout,
+and they cannot accidentally omit or collide with system lanes. An adapter may keep a separate u32 lane or pack the slot
+into a proven-unused technique lane without changing the public Codec plan or creating a run/slice batch key.
 
-The replacement direction keeps the existing batches, physical instances, order indirection, primitive spans, and draws.
-Core exposes each rendered glyph's direct x/y occurrence origin through an engine-owned semantic placement seam. A portable
-`RasterCodec.codecBody` receives only the frozen renderer capability set and authors glyph-local technique outputs; after
-that body is authenticated, package-private host assembly appends stable identity, optional transform identity, and the
-x/y offset stores. Codec authors therefore describe glyph meaning and raster inputs, not slots, tables, bind groups, or
-backend memory layout, and they cannot accidentally omit or collide with system lanes. Each adapter may realize the
-engine-owned offset as the most suitable internal attribute or storage representation without changing the public Codec
-plan or creating a run/slice batch key.
-
-The withdrawn placement-slot target remains useful negative evidence: it reduced some publication bytes but stayed slower
-than the applicable baseline, so fewer bytes alone did not justify its additional state. Its earlier cleanup checkpoint
-still ran 4–5% slower than main while publishing the baseline 170.4/171.7 KiB. The retained-static direct-offset path above
-now beats that baseline without changing draws; the remaining byte frontier is to serialize compact offsets without
-turning run, word, block, segment, or slice identity into a renderer-visible key.
+An earlier indexed cleanup checkpoint remained 4–5% slower than main while still publishing the baseline 170.4/171.7 KiB;
+that result is negative evidence about the incomplete implementation, not the current 31,224-byte publication shape. The
+intermediate direct-offset candidate isolated a real retained CPU speedup but preserved glyph-wide transfer. The current
+indexed candidate combines that retained positioning work with compact session rows; its end-to-end performance is still
+unproven until the full interleaved benchmark is run.
 
 The benchmark also owns a `position-query` case that runs the same break-changing flow and positioning tail through the
 borrowed-layout mask while excluding gather, plan compilation, publication, and inspection copies. On the pinned M4 host,
@@ -1385,7 +1396,7 @@ and from `3.650` to `3.607 ms` for dense CJK. Embedding each retained local rast
 `LayoutGlyph` row then removed two parallel per-glyph vectors and their retained-copy/gather traffic. On the exact rebuilt
 source, complete Latin measured `3.864 / 3.994 ms` median/p95 and dense CJK measured `3.195 / 3.218 ms`, with low
 `2.21% / 1.23%` relative standard deviation. This confirmed that duplicate origin storage materially amplified the dense
-CJK regression, but the subsequently withdrawn placement-table design still did not beat the same-contract baseline.
+CJK regression, but that earlier incomplete indexed design still did not beat the same-contract baseline.
 Those measurements remain attribution history rather than the current package state.
 
 [^slug-shader-core]: The directory is the single renderer-independent expression of the analytic Slug fill algorithm.

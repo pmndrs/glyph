@@ -28,7 +28,7 @@ export type TypedResourceCommand = Readonly<{
 export type TypedBufferCommand = Readonly<{
   kind: 'ensure';
   buffer: TypedBuffer;
-  program: TypedProgram;
+  program: TypedProgram | undefined;
   scalarType: 'f32' | 'u32' | 'u16';
   vectorWidth: number;
   capacityRecords: number;
@@ -181,7 +181,7 @@ export interface InternalBufferIdentity {
   readonly id: number;
   readonly generation: number;
   readonly programId: number;
-  readonly bindingId: number | 'order';
+  readonly bindingId: number | 'order' | 'placement';
 }
 
 class BorrowedTypedCommandTreeView implements BorrowedTypedCommandTree {
@@ -478,14 +478,14 @@ export class TypedCommandTreeMapper {
     id: number,
     generation: number,
     programId: number,
-    bindingId: number | 'order',
+    bindingId: number | 'order' | 'placement',
   ): TypedBuffer {
     const buffer = this.buffer(id, generation, programId, bindingId);
     state.bufferOverlay.set(id, buffer);
     return buffer;
   }
 
-  buffer(id: number, generation: number, programId = 0, bindingId: number | 'order' = 0): TypedBuffer {
+  buffer(id: number, generation: number, programId = 0, bindingId: number | 'order' | 'placement' = 0): TypedBuffer {
     const key = `${id}:${generation}`;
     let buffer = this.#buffers.get(key);
     if (buffer === undefined) {
@@ -582,7 +582,11 @@ export class TypedCommandTreeMapper {
       view.u32(offset + bufferLayout.id),
       view.u32(offset + bufferLayout.generation),
       view.u32(offset + bufferLayout.programId),
-      binding === textShaperAbi.engine.internalBufferBindings.order ? 'order' : binding,
+      binding === textShaperAbi.engine.internalBufferBindings.order
+        ? 'order'
+        : binding === textShaperAbi.engine.internalBufferBindings.placement
+          ? 'placement'
+          : binding,
     );
   }
 
@@ -716,12 +720,17 @@ class BufferCommandView implements TypedBufferCommand {
       this.#view.u32(this.#offset + bufferLayout.id),
       this.#view.u32(this.#offset + bufferLayout.generation),
       this.#view.u32(this.#offset + bufferLayout.programId),
-      binding === textShaperAbi.engine.internalBufferBindings.order ? 'order' : binding,
+      binding === textShaperAbi.engine.internalBufferBindings.order
+        ? 'order'
+        : binding === textShaperAbi.engine.internalBufferBindings.placement
+          ? 'placement'
+          : binding,
     );
   }
 
-  get program(): TypedProgram {
-    return this.#mapper.program(this.#view.u32(this.#offset + bufferLayout.programId));
+  get program(): TypedProgram | undefined {
+    const id = this.#view.u32(this.#offset + bufferLayout.programId);
+    return id === 0 ? undefined : this.#mapper.program(id);
   }
 
   get scalarType(): TypedBufferCommand['scalarType'] {

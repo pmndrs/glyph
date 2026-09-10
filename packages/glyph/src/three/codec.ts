@@ -28,11 +28,11 @@ import {
 } from '../config/schema.js';
 import { bitmapCodec } from '../raster/bitmap.js';
 import { msdfCodec } from '../raster/msdf.js';
-import { slugCodec } from '../raster/slug.js';
+import { slugCodec, slugSchema } from '../raster/slug.js';
 
 const THREE_STABLE_GLYPH_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/stable-glyph');
 const THREE_TRANSFORM_INDEX_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/transform-index');
-const THREE_PLACEMENT_OFFSET_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/placement-offset');
+const THREE_PLACEMENT_SLOT_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/placement-slot');
 const DECORATION_RECT_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/decoration/rect');
 const DECORATION_PACKED_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/decoration/packed');
 
@@ -48,25 +48,21 @@ export const threeSystemBuffers: {
     readonly scalar: 'u32';
     readonly lanes: readonly ['transformIndex'];
   };
-  readonly placementOffset: {
-    readonly id: typeof THREE_PLACEMENT_OFFSET_BUFFER_ID;
-    readonly scalar: 'f32';
-    readonly lanes: readonly ['inlineOffset', 'blockOffset'];
+  readonly placementSlot: {
+    readonly id: typeof THREE_PLACEMENT_SLOT_BUFFER_ID;
+    readonly scalar: 'u32';
+    readonly lanes: readonly ['placementSlot'];
   };
 } = defineCodecBuffers({
   stableGlyphId: { id: THREE_STABLE_GLYPH_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
   transformIndex: { id: THREE_TRANSFORM_INDEX_BUFFER_ID, scalar: 'u32', lanes: ['transformIndex'] },
-  placementOffset: {
-    id: THREE_PLACEMENT_OFFSET_BUFFER_ID,
-    scalar: 'f32',
-    lanes: ['inlineOffset', 'blockOffset'],
-  },
+  placementSlot: { id: THREE_PLACEMENT_SLOT_BUFFER_ID, scalar: 'u32', lanes: ['placementSlot'] },
 });
 
 export const TRANSFORM_BUFFER_ID: CodecBufferId = threeSystemBuffers.transformIndex.id;
 
 export const STABLE_GLYPH_BUFFER_ID: CodecBufferId = threeSystemBuffers.stableGlyphId.id;
-export const PLACEMENT_OFFSET_BUFFER_ID: CodecBufferId = threeSystemBuffers.placementOffset.id;
+export const PLACEMENT_SLOT_BUFFER_ID: CodecBufferId = threeSystemBuffers.placementSlot.id;
 
 /** Decoration is a reserved technique of the Three Codec, not a raster technique: rows are resource-free and fill the gather lanes directly. */
 export const decorationSchema: TechniqueSchema<
@@ -157,6 +153,7 @@ export function threeCodecDescriptor(
     createRasterCodecProgram(slugCodec, {
       namespace: THREE_PROGRAM_NAMESPACE,
       system: codecSystemBuffers(modes.slug),
+      placementSlotTarget: { buffer: slugSchema.buffers.bandCounts.id, lane: 2 },
       capabilitySet,
       transformMode: modes.slug,
       allocationMode,
@@ -220,7 +217,7 @@ function codecSystemBuffers(transformMode: ThreeTransformMode): RasterCodecSyste
   return {
     stableGlyphId: threeSystemBuffers.stableGlyphId,
     ...(transformMode === 'indexed' ? { transformIndex: threeSystemBuffers.transformIndex } : {}),
-    placementOffset: threeSystemBuffers.placementOffset,
+    placementSlot: threeSystemBuffers.placementSlot,
   };
 }
 
