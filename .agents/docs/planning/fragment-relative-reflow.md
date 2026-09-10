@@ -890,10 +890,12 @@ M4 cold-oracle matrix.
 Exit: perspective and orthographic projection cases are finite/conservative; the workload shows no overlap,
 duplication, missing clusters, broad reshaping, or adapter-owned layout; both Three renderer paths agree.
 
-Current checkpoint: Three now projects caller-known conservative object-local bounds through the camera-side text-plane
-and frustum half-spaces into the existing keyed 2D exclusion model. Perspective/orthographic, crossing, enclosing,
-behind-plane, clipping, quantization, and invalid-transform cases have focused package evidence. Explicit simplified
-silhouettes remain open. Editorial now owns two justified regions, a shaping-safe three-line drop cap, and a rotating box
+Current checkpoint: Three now projects caller-known conservative object-local bounds or ordered simplified silhouettes
+through the camera-side text-plane and frustum half-spaces into the existing keyed 2D exclusion model. A zero-inflation
+silhouette preserves its validated simple concavity; conservative inflation intentionally produces a hull.
+Perspective/orthographic, crossing, enclosing, behind-plane, clipping, quantization, malformed-ring, and
+invalid-transform cases have focused package evidence. Editorial now owns two justified regions, a shaping-safe
+three-line drop cap, and a rotating box
 projected independently into both columns. Focused Chromium evidence covers all six Bitmap/MTSDF/Slug × WebGPU/WebGL2
 cells through native TSL and the experimental Three/TypeGPU shader path; every cell retains three draws through 64
 projected-obstacle reflows. The same-source drop-cap slice now carries

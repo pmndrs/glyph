@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:18cd21719422ba1b48e275b170cdff5f6f1c05f205db8643ab0d486c0b318b2a'
+source_digest: 'sha256:70724b1e696284a6a5e436dcba4a0f410bf30f6145d4a09265750e8cb13cd637'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -538,13 +538,14 @@ first body line, and accepts the suffix only when it matches the cold authority.
 drop-cap matrix belongs to
 [Milestone 12's fragment-relative reflow plan](../planning/fragment-relative-reflow.md); balanced columns remain deferred.
 
-The Three subpath exposes `projectTextFlowBounds` for the first projected-object slice. Given a conservative object-local
-`Box3`, current object/text transforms, a perspective or orthographic camera, and a rectangular flow clip, it computes
-the exact convex intersection of the transformed bounds with the camera-side text-plane half-space and camera frustum.
-It ray-projects that volume onto paragraph-local inline/block coordinates, applies a declared conservative projection
-error, clips and f32-normalizes the polygon, then returns an ordinary keyed `TextFlowExclusion`. An object wholly behind
-the text plane produces no exclusion. The helper neither reads depth/GPU pixels nor claims hidden-surface or material
-coverage exactness; explicit CPU silhouettes remain open.
+The Three subpath exposes `projectTextFlowBounds` and `projectTextFlowSilhouette` for projected-object flow. The bounds
+helper computes the exact convex intersection of a conservative transformed `Box3` with the camera-side text-plane and
+camera-frustum half-spaces. The silhouette helper accepts an ordered finite object-local `Vector3` ring, clips its edges
+through the same half-spaces, and preserves a validated simple concavity when projection inflation is zero. Both helpers
+ray-project their surviving geometry onto paragraph-local inline/block coordinates, clip and f32-normalize the result,
+and return an ordinary keyed `TextFlowExclusion`; declared projection error conservatively expands the result through a
+convex hull. Geometry wholly behind the text plane produces no exclusion. Neither helper reads depth/GPU pixels nor
+claims hidden-surface or material-coverage exactness.
 
 The shared paragraph layout surface also admits a same-source `dropCap` with a bounded line span, text-top or baseline
 alignment, logical side, and inline/block margins. Rust selects the first complete extended grapheme and extends through
