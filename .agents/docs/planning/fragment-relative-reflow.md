@@ -680,8 +680,9 @@ paths. The engine publishes exactly two f32 values per rendered occurrence; Thre
 direct TypeGPU owns an adapter-local instance layout. Exact justification arithmetic remains CPU SoA state that produces
 ordinary x/y rows. CPU semantic/query output retains absolute origins, while raster realization consumes the same f32
 operands in the commuted addition proven bit-identical by the deterministic arithmetic corpus. Per-technique browser
-pixels, active/capacity transfer bytes, and release size remain acceptance gates; implementation does not by itself close
-the milestone's CPU/publication-performance gate.
+realization now passes direct TypeGPU on project Chromium WebGPU and both Three shader sets on WebGPU plus forced WebGL2,
+without changing draw/storage identity. Active/capacity transfer bytes, the complete editorial pixel matrix, and release
+size remain acceptance gates; implementation does not by itself close the milestone's CPU/publication-performance gate.
 
 ### GPU data access
 
@@ -893,7 +894,9 @@ combining-mark cap has no duplicated/omitted source glyphs and shares the existi
 polygons, mixed-raster styling, cap-source text-edit retention, full interaction-query parity, and the combined Editorial
 scene remain open. Explicit multi-line flow now composes the cap beside another exclusion through the public Three
 surface; moving that exclusion reuses dirty-band convergence, rederives and baseline-aligns the cap, and matches a cold
-rebuild before accepting retained suffix lines.
+rebuild before accepting retained suffix lines. Same-length edits inside the cap source now use the retained text-edit
+convergence path: they rederive the cap, recompose every band still affected by the old or new cut, and retain a suffix
+only after the source cursor and line metrics converge to the cold authority.
 
 ### M6 — full-matrix closure and oracle retirement
 

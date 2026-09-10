@@ -699,13 +699,14 @@ test('same-source drop caps preserve source ownership and flow body lines beside
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const cap = textSpan({ fontSize: 48 });
   const source = 'f\u0301ollow brown fox jumps over the lazy dog and keeps running through the narrow column';
-  const label = three.createText({
+  const properties = {
     font,
     text: txt`${cap`f\u0301`}ollow brown fox jumps over the lazy dog and keeps running through the narrow column`,
     style: { fontSize: 16, lineHeight: 20 },
     constraints: { width: { mode: 'exact', size: 180 } },
     layout: { wrap: 'word', dropCap: { lines: 3, marginInline: 4 } },
-  });
+  };
+  const label = three.createText(properties);
   const scene = new THREE.Scene();
   scene.add(label);
   scene.updateMatrixWorld();
@@ -740,6 +741,22 @@ test('same-source drop caps preserve source ownership and flow body lines beside
   assert.ok(
     label.measureGlyphs()?.every((measuredGlyph) => measuredGlyph.drawnOrigin.equals(measuredGlyph.shapedOrigin)),
   );
+
+  label.text = txt`${cap`g\u0301`}ollow brown fox jumps over the lazy dog and keeps running through the narrow column`;
+  const incremental = label.glyphs();
+  const cold = three.createText({
+    ...properties,
+    text: txt`${cap`g\u0301`}ollow brown fox jumps over the lazy dog and keeps running through the narrow column`,
+  });
+  t.after(() => cold.dispose());
+  const coldLayout = cold.glyphs();
+  for (const field of ['glyphIds', 'clusters', 'lineGlyphStarts', 'lineGlyphCounts', 'x', 'y']) {
+    assert.deepEqual(
+      Array.from(incremental[field]),
+      Array.from(coldLayout[field]),
+      `${field} must match cold cap edit`,
+    );
+  }
 });
 
 test('same-source drop caps compose through an explicit multi-line flow region', async (t) => {

@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:15f004618e4b899f6bb21eaf8123b39339aa6337e42ce177609b971c91c0f4ae'
+source_digest: 'sha256:60b7f352c912bc27d75ba88e61ad9c546faca6af18a5bbc227207929bfc0a511'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -551,8 +551,10 @@ glyph authority as the body, and becomes an additional conservative glyph/design
 Body flow resumes at the exact retained cluster edge, while measurement, inspection, and Three realization merge the cap
 into the first logical line without duplicating source glyphs. Focused evidence covers a combining-mark cap, RTL logical
 side mapping, safe-edge refusal, an explicit multi-line region with another exclusion, and incremental exclusion movement
-matching a cold rebuild for both text-top and baseline alignment. Arbitrary cap polygons, mixed-raster Editorial
-realization, cap-source text-edit retention, and the complete caret/selection/browser matrix remain Milestone 12.4 work.
+matching a cold rebuild for both text-top and baseline alignment. Same-length edits inside the cap source now rederive
+the cap, recompose through every cap-affected band, and retain the exact cold-equivalent suffix once the line state
+converges. Arbitrary cap polygons, mixed-raster Editorial realization, and the complete caret/selection/browser matrix
+remain Milestone 12.4 work.
 
 ## Renderer Codec
 
@@ -1318,13 +1320,20 @@ identity and exact outline presence authenticate the retained rows; any mismatch
 then resolves changed Codec dependencies and updates semantic position inputs plus CPU ink bounds without repeating font
 selection, raster resource lookup, or full `PlanGlyph` construction. Other changes use the general authorities.
 
-Two 31-sample ordered Bitmap repeats on the pinned M4 host pool to `3.237 / 3.377 ms` median/p95 for 21,805 Latin glyphs
-and `2.493 / 2.583 ms` for 21,978 dense-CJK glyphs. The exact main comparison measured `3.769 / 3.852 ms` for Latin and
-a `3.091 ms` pooled CJK median; one noisy main CJK pass prevents a useful pooled p95 comparison. The retained candidate is
-therefore 14.1% faster at the Latin median and 19.4% faster at the CJK median. Its isolated 21,805-glyph positioning query
-measures `1.447 / 1.498 ms`. Every active-resize sample still emits one unchanged f32x2 direct-offset patch—174,440 bytes
-for Latin and 175,824 bytes for CJK—so these results establish a CPU positioning win, not the final compact-publication
-result.
+Two fresh 31-sample ordered Bitmap repeats after the projected-flow and drop-cap checkpoints pool to `3.013 / 3.183 ms`
+median/p95 for 21,805 Latin glyphs and `2.394 / 2.526 ms` for 21,978 dense-CJK glyphs. The exact main comparison measured
+`3.769 / 3.852 ms` for Latin; its clean CJK repeat measured `2.974 / 3.127 ms`, while a separate noisy pass is excluded
+from the p95 comparison. The retained candidate is therefore 20.1% faster at the Latin median and 19.5% faster at the
+CJK median, with 17.4% and 19.2% lower p95 respectively. Every active-resize sample still emits one unchanged f32x2
+direct-offset patch—174,440 bytes for Latin and 175,824 bytes for CJK—so these results establish a CPU positioning win,
+not the final compact-publication result. These 8-warmup/62-sample checkpoints are directional evidence; the final
+40-warmup/101-sample interleaved release matrix remains open.
+
+The current renderer contract is exercised as product code rather than a synthetic placement graph. Direct TypeGPU
+renders Bitmap/MSDF/Slug through project Chromium WebGPU with nonzero-alpha counts `2148/2010/1992`. Native Three TSL and
+the experimental Three/TypeGPU shader set each pass Bitmap/MSDF/Slug, retained storage/draw, detached-copy, decoration,
+and custom-composition gates on WebGPU and forced WebGL2 with identical per-backend counts. These runs close the basic
+direct-offset browser-realization gate; the full editorial pixel/performance and soak matrix remains open.
 
 Planner-scoped run identity and canonical comparison remain test/kernel-lab execution. They validate split/merge,
 replacement-run, and acknowledgement behavior, but release width updates do not pay for run-slot reconciliation because
