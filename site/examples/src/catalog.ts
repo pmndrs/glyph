@@ -228,6 +228,18 @@ export const EXAMPLES = {
     stage: {},
     load: () => import('./scenes/shaping/scene'),
   },
+  'marble-type': {
+    title: 'Marble type',
+    page: '/docs/text/materials',
+    stage: {},
+    load: () => import('./scenes/marble-type/scene'),
+  },
+  'card-cycle': {
+    title: 'Card cycle',
+    page: '/docs/text/materials',
+    stage: { lit: true },
+    load: () => import('./scenes/card-cycle/scene'),
+  },
 } as const satisfies Record<string, ExampleEntry>;
 
 export type ExampleSlug = keyof typeof EXAMPLES;

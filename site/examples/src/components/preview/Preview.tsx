@@ -21,7 +21,14 @@ export function Preview({ slug, entry }: { readonly slug: ExampleSlug; readonly 
   return (
     <div ref={shell} className="preview-shell">
       <glyph-explainer-root id="preview" data-explainer-page="examples" max-slots="1" max-dpr="1.5" opaque />
-      <glyph-proxy fit="cover" className="preview" root="preview" data-scene={slug} aria-label={entry.title} />
+      <glyph-proxy
+        fit="cover"
+        className="preview"
+        root="preview"
+        data-scene={slug}
+        tabIndex={0}
+        aria-label={entry.title}
+      />
       <button
         className="fullscreen-control preview-fullscreen"
         type="button"
