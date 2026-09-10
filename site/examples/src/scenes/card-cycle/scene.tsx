@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { type Group } from 'three/webgpu';
 
-import { INTER } from '../../fonts';
+import { ICONS_MSDF, ICONS_MSDF_OPTIONS, INTER } from '../../fonts';
 import { useSceneInputs } from '../../lib/inputs';
 import {
   CARD_DEPTH,
@@ -32,10 +32,10 @@ import {
   stepCycle,
   writeCardTransform,
 } from './config';
-import { createPaperMaterial, foilInk } from './materials';
+import { createCardSurfaceMaterial, foilInk } from './materials';
 
 const CARD_SLOTS = [0, 1] as const;
-const EMPTY_TRANSFORM: CardTransform = { x: 0, y: 0, z: 0, rotationY: 0 };
+const EMPTY_TRANSFORM: CardTransform = { x: 0, y: 0, z: 0, rotationX: 0, rotationY: 0, rotationZ: 0 };
 
 /**
  * Two physical cards, not a pool: whichever card is top turns twice about its
@@ -45,9 +45,12 @@ const EMPTY_TRANSFORM: CardTransform = { x: 0, y: 0, z: 0, rotationY: 0 };
  */
 export default function CardCycle() {
   const inter = useMsdf(INTER);
+  const icons = useMsdf(ICONS_MSDF, ICONS_MSDF_OPTIONS);
   const inputs = useSceneInputs();
   const tilt = useRef<Group>(null);
   const cards = useRef<(Group | null)[]>([null, null]);
+  const fronts = useRef<(Group | null)[]>([null, null]);
+  const backs = useRef<(Group | null)[]>([null, null]);
   const cycle = useRef(createCycleState());
   const motion = useRef({ targetX: 0, targetY: 0, x: 0, y: 0 });
   const transforms = useRef<CardTransform[]>([{ ...EMPTY_TRANSFORM }, { ...EMPTY_TRANSFORM }]);
@@ -55,14 +58,14 @@ export default function CardCycle() {
     () => new RoundedBoxGeometry(CARD_WIDTH, CARD_HEIGHT, CARD_DEPTH, CARD_SEGMENTS, CARD_RADIUS),
     [],
   );
-  const paper = useMemo(() => createPaperMaterial(), []);
+  const surface = useMemo(() => createCardSurfaceMaterial(), []);
 
   useEffect(
     () => () => {
       geometry.dispose();
-      paper.dispose();
+      surface.dispose();
     },
-    [geometry, paper],
+    [geometry, surface],
   );
 
   useFrame(({ size }, delta) => {
@@ -97,16 +100,25 @@ export default function CardCycle() {
       if (transform === undefined || card === null || card === undefined) continue;
       writeCardTransform(transform, slot, cycle.current.top, progress);
       card.position.set(transform.x, transform.y, transform.z);
-      card.rotation.set(0, transform.rotationY, 0);
+      card.rotation.set(transform.rotationX, transform.rotationY, transform.rotationZ);
+      const front = fronts.current[slot];
+      const back = backs.current[slot];
+      const movingTop = cycle.current.flipping && slot === cycle.current.top;
+      const frontFacing = Math.cos(transform.rotationY) >= 0;
+      if (front !== null && front !== undefined) {
+        front.visible = slot === cycle.current.top ? !movingTop || frontFacing : cycle.current.flipping;
+      }
+      if (back !== null && back !== undefined) back.visible = movingTop && !frontFacing;
     }
   });
 
   return (
     <>
-      <ambientLight color="#f5f0e8" intensity={0.72} />
-      <directionalLight color="#fff8ec" intensity={3.2} position={[3.5, 4.5, 5]} />
-      <directionalLight color="#9eb8e9" intensity={1.2} position={[-4, 1, 3]} />
-      <pointLight color="#d9a7b5" intensity={7} distance={7} decay={2} position={[0, -2.6, 2.6]} />
+      <ambientLight color="#8c7c62" intensity={0.3} />
+      <directionalLight color="#fff0bd" intensity={4.8} position={[4.5, 5.5, 6]} />
+      <directionalLight color="#6f8fc9" intensity={2.1} position={[-4, 1.5, 4]} />
+      <pointLight color="#ffc857" intensity={18} distance={8} decay={2} position={[-1.8, -2.2, 3.2]} />
+      <pointLight color="#fff4d2" intensity={12} distance={7} decay={2} position={[2.4, 1.8, 2.5]} />
       <group ref={tilt} position={[0, -0.02, 0]}>
         {CARD_SLOTS.map((slot) => {
           const face = CARD_FACES[slot];
@@ -119,9 +131,26 @@ export default function CardCycle() {
                 cards.current[slot] = group;
               }}
             >
-              <mesh geometry={geometry} material={paper} castShadow receiveShadow />
-              <PrintedFace font={inter} face={face} />
-              <PrintedFace font={inter} face={face} back />
+              <mesh geometry={geometry} material={surface} castShadow receiveShadow />
+              <PrintedFace
+                textFont={inter}
+                iconFont={icons}
+                face={face}
+                initiallyVisible={slot === 0}
+                groupRef={(group) => {
+                  fronts.current[slot] = group;
+                }}
+              />
+              <PrintedFace
+                textFont={inter}
+                iconFont={icons}
+                face={face}
+                back
+                initiallyVisible={false}
+                groupRef={(group) => {
+                  backs.current[slot] = group;
+                }}
+              />
             </group>
           );
         })}
@@ -133,48 +162,66 @@ export default function CardCycle() {
 function PrintedFace({
   back = false,
   face,
-  font,
+  groupRef,
+  iconFont,
+  initiallyVisible,
+  textFont,
 }: {
   readonly back?: boolean;
   readonly face: CardFace;
-  readonly font: Font<typeof msdf>;
+  readonly groupRef: (group: Group | null) => void;
+  readonly iconFont: Font<typeof msdf>;
+  readonly initiallyVisible: boolean;
+  readonly textFont: Font<typeof msdf>;
 }) {
   const direction = back ? Math.PI : 0;
   return (
-    <group rotation={[0, direction, 0]}>
+    <group ref={groupRef} rotation={[0, direction, 0]} visible={initiallyVisible}>
       <group position={[0, 0, CARD_TEXT_Z]}>
-        {back ? <CardBack font={font} ink={face.ink} /> : <CardFront font={font} face={face} />}
+        {back ? (
+          <CardBack textFont={textFont} iconFont={iconFont} face={face} />
+        ) : (
+          <CardFront textFont={textFont} iconFont={iconFont} face={face} />
+        )}
       </group>
     </group>
   );
 }
 
-function CardFront({ face, font }: { readonly face: CardFace; readonly font: Font<typeof msdf> }) {
+function CardFront({
+  face,
+  iconFont,
+  textFont,
+}: {
+  readonly face: CardFace;
+  readonly iconFont: Font<typeof msdf>;
+  readonly textFont: Font<typeof msdf>;
+}) {
   return (
     <>
-      <Corner font={font} rank={face.rank} suit={face.suit} color={face.ink} />
-      <Corner font={font} rank={face.rank} suit={face.suit} color={face.ink} inverted />
+      <Corner textFont={textFont} iconFont={iconFont} rank={face.rank} icon={face.icon} color={face.ink} />
+      <Corner textFont={textFont} iconFont={iconFont} rank={face.rank} icon={face.icon} color={face.ink} inverted />
       <Text
-        font={font}
+        font={textFont}
         material={foilInk}
         style={{ color: face.ink, fontSize: 0.18, letterSpacing: 0.12 }}
         layout={{ align: 'center', wrap: 'none' }}
         constraints={{ width: { mode: 'exact', size: 2.4 } }}
         position={[-1.2, 1.22, 0]}
       >
-        {face.suit}
+        {face.label}
       </Text>
       {face.pips.map((pip, index) => (
         <group key={`${pip.x}:${pip.y}`} position={[pip.x, pip.y, 0]} rotation={[0, 0, pip.inverted ? Math.PI : 0]}>
           <Text
-            font={font}
+            font={iconFont}
             material={foilInk}
             style={{ color: face.ink, fontSize: index === 2 ? 1.04 : 0.76 }}
             layout={{ align: 'center', wrap: 'none' }}
             constraints={{ width: { mode: 'exact', size: 1.1 } }}
             position={[-0.55, 0.28, 0]}
           >
-            *
+            {face.icon}
           </Text>
         </group>
       ))}
@@ -184,16 +231,18 @@ function CardFront({ face, font }: { readonly face: CardFace; readonly font: Fon
 
 function Corner({
   color,
-  font,
+  icon,
+  iconFont,
   inverted = false,
   rank,
-  suit,
+  textFont,
 }: {
   readonly color: string;
-  readonly font: Font<typeof msdf>;
+  readonly icon: string;
+  readonly iconFont: Font<typeof msdf>;
   readonly inverted?: boolean;
   readonly rank: CardFace['rank'];
-  readonly suit: CardFace['suit'];
+  readonly textFont: Font<typeof msdf>;
 }) {
   return (
     <group
@@ -201,7 +250,7 @@ function Corner({
       rotation={[0, 0, inverted ? Math.PI : 0]}
     >
       <Text
-        font={font}
+        font={textFont}
         material={foilInk}
         style={{ color, fontSize: 0.48, lineHeight: 0.85 }}
         layout={{ wrap: 'none' }}
@@ -210,26 +259,34 @@ function Corner({
         {rank}
       </Text>
       <Text
-        font={font}
+        font={iconFont}
         material={foilInk}
-        style={{ color, fontSize: 0.14, letterSpacing: 0.07 }}
+        style={{ color, fontSize: 0.22 }}
         layout={{ wrap: 'none' }}
         constraints={{ width: { mode: 'exact', size: 0.76 } }}
         position={[0, -0.25, 0]}
       >
-        {suit}
+        {icon}
       </Text>
     </group>
   );
 }
 
-function CardBack({ font, ink }: { readonly font: Font<typeof msdf>; readonly ink: string }) {
+function CardBack({
+  face,
+  iconFont,
+  textFont,
+}: {
+  readonly face: CardFace;
+  readonly iconFont: Font<typeof msdf>;
+  readonly textFont: Font<typeof msdf>;
+}) {
   return (
     <>
       <Text
-        font={font}
+        font={textFont}
         material={foilInk}
-        style={{ color: ink, fontSize: 0.16, letterSpacing: 0.18 }}
+        style={{ color: face.ink, fontSize: 0.16, letterSpacing: 0.18 }}
         layout={{ align: 'center', wrap: 'none' }}
         constraints={{ width: { mode: 'exact', size: 2.7 } }}
         position={[-1.35, 1.5, 0]}
@@ -237,24 +294,24 @@ function CardBack({ font, ink }: { readonly font: Font<typeof msdf>; readonly in
         GLYPH
       </Text>
       <Text
-        font={font}
+        font={iconFont}
         material={foilInk}
-        style={{ color: ink, fontSize: 0.88, letterSpacing: 0.03 }}
+        style={{ color: face.ink, fontSize: 1.08 }}
         layout={{ align: 'center', wrap: 'none' }}
         constraints={{ width: { mode: 'exact', size: 2.8 } }}
         position={[-1.4, 0.28, 0]}
       >
-        * * *
+        {face.icon}
       </Text>
       <Text
-        font={font}
+        font={textFont}
         material={foilInk}
-        style={{ color: '#6a5c4b', fontSize: 0.15, letterSpacing: 0.11 }}
+        style={{ color: '#d0a94f', fontSize: 0.15, letterSpacing: 0.11 }}
         layout={{ align: 'center', wrap: 'none' }}
         constraints={{ width: { mode: 'exact', size: 2.7 } }}
         position={[-1.35, -1.35, 0]}
       >
-        CARD CYCLE
+        BLACK EDITION
       </Text>
     </>
   );
