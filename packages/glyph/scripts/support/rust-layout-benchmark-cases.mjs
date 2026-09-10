@@ -7,6 +7,7 @@ const benchmarkCases = [
   'column-resize',
   'active-column-resize',
   'measure-query',
+  'position-query',
   'adopt-measure-query',
   'suffix-edit',
   'localized-edit',
@@ -21,7 +22,7 @@ export function rustLayoutBenchmarkCases(corpus) {
 }
 
 export function rustLayoutBenchmarkGeometry(name, index, base) {
-  if (name === 'active-column-resize') {
+  if (name === 'active-column-resize' || name === 'position-query') {
     return {
       ...base,
       width: index % 2 === 0 ? 420 : 434,
@@ -57,9 +58,7 @@ export function assertRustLayoutBenchmarkResult(name, previous, next) {
     (name === 'active-column-resize' || name === 'adopt-measure-query') &&
     (next.patchCount === 0 || next.writeBytes === 0)
   ) {
-    throw new Error(
-      `${name} did not publish a changed layout at generation ${next.publicationGeneration}`,
-    );
+    throw new Error(`${name} did not publish a changed layout at generation ${next.publicationGeneration}`);
   }
   if (name === 'equivalent-width' && (next.patchCount !== 0 || next.writeBytes !== 0)) {
     throw new Error(

@@ -63,6 +63,13 @@ where
         self.inner.prepare(desired, publication_generation)
     }
 
+    pub(crate) fn prepare_reuse(
+        &mut self,
+        publication_generation: u32,
+    ) -> Result<(), RunSlotError> {
+        self.inner.prepare_reuse(publication_generation)
+    }
+
     pub(crate) fn assignment(&self, index: usize) -> Result<PlacementSlotAssignment, RunSlotError> {
         self.inner
             .assignments()?

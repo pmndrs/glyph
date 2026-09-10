@@ -178,7 +178,7 @@ function measureWarm(name) {
         ...common,
         geometry: rustLayoutBenchmarkGeometry(name, index, baseGeometry),
       });
-    } else if (name === 'measure-query' || name === 'adopt-measure-query') {
+    } else if (name === 'measure-query' || name === 'position-query' || name === 'adopt-measure-query') {
       bytes = updateBytes({
         ...common,
         geometry: rustLayoutBenchmarkGeometry('active-column-resize', index, baseGeometry),
@@ -186,7 +186,9 @@ function measureWarm(name) {
       const queryBytes = bytes.slice();
       new DataView(queryBytes.buffer).setUint32(
         abi.layouts.engineUpdateRequest.semanticViewMask,
-        abi.engine.semanticViewMasks.measurement,
+        name === 'position-query'
+          ? abi.engine.semanticViewMasks.borrowedLayout
+          : abi.engine.semanticViewMasks.measurement,
         true,
       );
       if (name === 'adopt-measure-query') {
@@ -236,7 +238,12 @@ function measureWarm(name) {
       bytes = updateBytes({ ...common, geometry: baseGeometry });
     }
     const previous = state;
-    state = execute(bytes, index < options.warmup, `${name}[${index}]`, name === 'measure-query' ? 1 : undefined);
+    state = execute(
+      bytes,
+      index < options.warmup,
+      `${name}[${index}]`,
+      name === 'measure-query' || name === 'position-query' ? 1 : undefined,
+    );
     assertRustLayoutBenchmarkResult(name, previous, state);
     if (index >= options.warmup) {
       samples.push(state.durationMs);
@@ -466,6 +473,7 @@ function printReport(caseReports) {
   console.log('equivalent-width alternates adjacent f32 widths and requires zero render-plan patches or writes.');
   console.log(
     'measure-query answers the same alternating widths through the paragraph-scoped synchronous measure: no gather, plan, or publication.',
+    'position-query adds only the positioning tail to the same synchronous query through borrowed-layout mode: no gather, plan, publication, or inspection copy.',
   );
   console.log(
     'adopt-measure-query times only adoption, gather, plan compilation, and publication after the same measure query prepared flow and positioning.',

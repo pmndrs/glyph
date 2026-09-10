@@ -12,6 +12,7 @@ import {
 test('the maintained benchmark case registry keeps specialized corpus requirements explicit', () => {
   assert.equal(rustLayoutBenchmarkCases('latin').includes('justify'), true);
   assert.equal(rustLayoutBenchmarkCases('latin').includes('active-column-resize'), true);
+  assert.equal(rustLayoutBenchmarkCases('latin').includes('position-query'), true);
   assert.equal(rustLayoutBenchmarkCases('latin').includes('equivalent-width'), true);
   assert.equal(rustLayoutBenchmarkCases('latin').includes('bidi-resize'), false);
   assert.equal(rustLayoutBenchmarkCases('bidi').includes('bidi-resize'), true);
@@ -48,6 +49,11 @@ test('reflow cases produce deterministic geometry shapes', () => {
     revision: 4,
   });
   assert.deepEqual(rustLayoutBenchmarkGeometry('active-column-resize', 3, base), {
+    ...base,
+    width: 434,
+    revision: 5,
+  });
+  assert.deepEqual(rustLayoutBenchmarkGeometry('position-query', 3, base), {
     ...base,
     width: 434,
     revision: 5,

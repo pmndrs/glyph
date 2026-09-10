@@ -283,6 +283,25 @@ where
         result
     }
 
+    /// Advances an unchanged committed set through one publication without rebuilding its keys.
+    pub(crate) fn prepare_reuse(
+        &mut self,
+        publication_generation: u32,
+    ) -> Result<(), RunSlotError> {
+        if self.prepared {
+            return Err(RunSlotError::AlreadyPrepared);
+        }
+        if publication_generation == 0
+            || publication_generation <= self.committed_publication_generation
+            || publication_generation <= self.acknowledged_publication_generation
+        {
+            return Err(RunSlotError::InvalidPublicationGeneration);
+        }
+        self.begin_prepare(publication_generation)?;
+        self.prepared = true;
+        Ok(())
+    }
+
     fn prepare_retained(
         &mut self,
         desired: &[DesiredRun<Key, Canonical>],
@@ -778,6 +797,24 @@ mod tests {
         assert_eq!(arena.prepare_counts(), (1, 2));
         arena.commit();
         arena.commit();
+    }
+
+    #[test]
+    fn unchanged_publication_reuses_the_complete_committed_set() {
+        let mut arena = RunSlotArena::default();
+        arena
+            .prepare(&[run(10, 1, 1.0), run(20, 2, 2.0)], 1)
+            .unwrap();
+        let committed = handles(&arena);
+        arena.commit();
+
+        arena.prepare_reuse(2).unwrap();
+        assert!(arena.assignments().unwrap().is_empty());
+        assert_eq!(arena.required_slots().unwrap(), 2);
+        arena.commit();
+        assert_eq!(arena.get(committed[0]).unwrap().0, &10);
+        assert_eq!(arena.get(committed[1]).unwrap().0, &20);
+        arena.acknowledge(2).unwrap();
     }
 
     #[test]

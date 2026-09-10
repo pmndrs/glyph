@@ -1532,13 +1532,22 @@ impl TextEngine {
                         .map_err(|error| error.in_paragraph(paragraph_id))?
                 };
             }
-            planner.prepare_run_slots(publication_generation)?;
-            planner.prepare_placement_slots(publication_generation)?;
             let positioned_changed = planner.lifecycle_changed
                 || planner
                     .paragraphs
                     .iter()
                     .any(|paragraph| paragraph.positioned_changed);
+            planner.prepare_run_slots(publication_generation)?;
+            if positioned_changed {
+                planner.prepare_placement_slots(publication_generation)?;
+            } else {
+                planner
+                    .placement_slots
+                    .prepare_reuse(publication_generation)
+                    .map_err(run_slot_error)?;
+                planner.pending_placement_slot_count = planner.placement_slot_count;
+                planner.session_placement_rows.clear();
+            }
             let reuse_ordered_plan = !checkpoint
                 && !positioned_changed
                 && request.compositing_independent == planner.compositing_independent
