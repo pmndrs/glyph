@@ -241,7 +241,7 @@ function slugProgram(abi) {
   const context = programContext(abi, 'glyph', 8, 6, true);
   const { loadF32, loadU32, binary, constantF32, constantU32, storeF32, storeU32 } = context;
   loadF32(context.f32InputCount);
-  loadU32(20, context.placementU32Input);
+  loadU32(30, context.placementU32Input);
   for (let fieldIndex = 0; fieldIndex < 6; fieldIndex += 1) {
     loadU32(21 + fieldIndex, context.bindingU32Start + fieldIndex);
   }
@@ -262,14 +262,9 @@ function slugProgram(abi) {
   ]);
   stores(storeU32, [
     [6, [21, 22, 23, 24]],
-    [7, [25, 26, 29, 29]],
+    [7, [25, 26, 30, 29]],
   ]);
-  storeU32(8, 0, 20);
-  return program(context, [
-    ...floatBuffers(abi, [4, 4, 4, 4, 4]),
-    ...uintBuffers(abi, [4, 4], 6),
-    { id: 8, scalar: abi.codec.scalarTypes.u32, vectorWidth: 1 },
-  ]);
+  return program(context, [...floatBuffers(abi, [4, 4, 4, 4, 4]), ...uintBuffers(abi, [4, 4], 6)]);
 }
 
 function programContext(abi, bindingScope, bindingF32Count, bindingU32Count, inverseFontSize = false) {

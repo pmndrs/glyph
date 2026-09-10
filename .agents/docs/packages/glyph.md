@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:6e711e6be929929fd50cc0c3b94dc0492dd245c2a755d1cdc577e4b5245776a0'
+source_digest: 'sha256:c9ca45e1723a8c62d3c58a231e4070ff91db4b561e62c71c9642c7afce057e82'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1348,8 +1348,18 @@ results establish the retained CPU positioning win but do not measure the curren
 A corrected indexed-publication smoke over the same 21,805-glyph Latin resize produced 3,903 active placement rows and
 one 31,224-byte session-table patch on every measured update. It produced zero placement-slot writes and zero
 static/raster writes because the stable word-root assignments did not change. This is the expected compact transfer shape,
-not yet a performance comparison: the five-sample smoke exists to authenticate the dirty buffers and byte count before the
-full interleaved benchmark gauntlet.
+and the five-sample smoke authenticated the dirty buffers and byte count before the full interleaved benchmark gauntlet.
+
+The corrected indexed A/B matrix pools three independent 101-sample passes after 40 warmups for both exact
+`2094243668bcf5462cff0ac3b1f7faf52cba3b6c` main and the candidate. Bitmap Latin improves from
+`3.741 / 3.829 ms` median/p95 to `2.584 / 2.680 ms` while writes fall from 174,440 to 31,224 bytes; dense-CJK Bitmap
+improves from `2.986 / 3.153 ms` to `2.268 / 2.292 ms` while its two alternating states write 103,880 or 109,200 bytes
+instead of 175,824. Justified Latin improves from `3.675 / 3.726 ms` to `3.447 / 3.491 ms` and writes 31,344 bytes
+instead of 174,440. MTSDF and Slug Latin improve from `4.079 / 4.131 ms` and `4.031 / 4.098 ms` to
+`2.683 / 2.708 ms` and `2.639 / 2.743 ms`; both write 31,224 rather than 348,880 bytes. Mixed bidi is the explicit
+exception: it regresses from `3.956 / 4.065 ms` to `4.520 / 4.685 ms` while reducing publication from 176,352 to
+35,856 bytes. The bidi CPU regression remains open for browser end-to-end attribution; it is not averaged into a general
+speedup claim.
 
 The intermediate direct-offset `adopt-position-query` case prepared borrowed-layout positioning before timing the remaining transaction.
 For the same final Latin fixture, measurement is `0.220 / 0.227 ms`, measurement plus positioning is
@@ -1362,10 +1372,12 @@ The current indexed renderer contract is exercised as product code rather than a
 renders Bitmap/MSDF/Slug through project Chromium WebGPU with nonzero-alpha counts `2148/2010/1992`. Native Three TSL and
 the experimental Three/TypeGPU shader set each pass Bitmap/MSDF/Slug, retained storage/draw, detached-copy, decoration,
 and custom-composition gates on WebGPU and forced WebGL2 with identical per-backend counts. These runs close the basic
-indexed browser-realization gate; the full editorial pixel/performance and soak matrix remains open. Three's Slug path
-stores `placementSlot` in the existing unused `bandCounts.z` lane, so its seven technique storage inputs plus the shared
-placement table stay within the WebGPU minimum limit of eight without a texture lookup or extra draw. Direct TypeGPU
-remains a proof-of-concept and may choose a different adapter-local packing without changing the shared Codec semantics.
+indexed browser-realization gate; the full editorial pixel/performance and soak matrix remains open. Both Three and direct
+TypeGPU store Slug's `placementSlot` in the existing unused `bandCounts.z` lane. Slug therefore retains seven technique
+records plus its separate stable-glyph identity record under the eight-buffer Codec contract; its vertex pipeline binds
+the seven technique records and reads one shared scene-owned x/y placement table from storage. Placement uses neither a
+texture nor an additional Codec buffer or draw. Direct TypeGPU remains a proof-of-concept, but this measured physical
+choice no longer exceeds the contract it advertises.
 
 Planner-scoped run and placement allocators reconcile the compact CPU topology transactionally and quarantine retired
 slots until renderer acknowledgement. They validate split/merge, replacement-run, abort/retry, and stale-handle behavior;

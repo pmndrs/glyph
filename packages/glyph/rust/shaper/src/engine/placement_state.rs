@@ -353,18 +353,23 @@ impl PlacementState {
         segment: PlacementSegment,
         placement: SegmentTranslation,
     ) -> Result<u32, EngineError> {
+        let published_inline = placement.translation_inline as f32;
+        let published_block = placement.translation_block as f32;
         if (cfg!(not(test)) && segment.canonical_revision.is_none())
             || (segment.numeric_block_ordinal == u32::MAX && segment.source_glyph_count != 0)
+            || !placement.translation_inline.is_finite()
+            || !placement.translation_block.is_finite()
+            || !published_inline.is_finite()
+            || !published_block.is_finite()
         {
             return Err(EngineError::InvalidRequest);
         }
         if let Some((last_index, previous, previous_placement)) = self.last_segment
             && usize::try_from(last_index).ok() == self.segments.len().checked_sub(1)
             && same_segment_key(previous, segment)
-            && previous_placement.translation_inline.to_bits()
-                == placement.translation_inline.to_bits()
-            && previous_placement.translation_block.to_bits()
-                == placement.translation_block.to_bits()
+            && (previous_placement.translation_inline as f32).to_bits()
+                == published_inline.to_bits()
+            && (previous_placement.translation_block as f32).to_bits() == published_block.to_bits()
             && let Some((cluster_start, cluster_count)) = joined_span(
                 previous.run_cluster_start,
                 previous.run_cluster_count,
@@ -404,6 +409,59 @@ impl PlacementState {
         self.translations.push(placement);
         self.last_segment = Some((index, segment, placement));
         Ok(index)
+    }
+
+    pub(crate) fn extend_last_segment(
+        &mut self,
+        segment_index: u32,
+        run_cluster_start: u32,
+        run_cluster_count: u32,
+        source_glyph_start: u32,
+        source_glyph_count: u32,
+    ) -> Result<(), EngineError> {
+        let (last_index, previous, placement) = self
+            .last_segment
+            .filter(|(last_index, _, _)| *last_index == segment_index)
+            .ok_or(EngineError::InvalidRequest)?;
+        let index = usize::try_from(last_index).map_err(|_| EngineError::InvalidRequest)?;
+        if index.checked_add(1) != Some(self.segments.len()) {
+            return Err(EngineError::InvalidRequest);
+        }
+        let (cluster_start, cluster_count) = joined_span(
+            previous.run_cluster_start,
+            previous.run_cluster_count,
+            run_cluster_start,
+            run_cluster_count,
+        )
+        .ok_or(EngineError::InvalidRequest)?;
+        let (glyph_start, glyph_count) = joined_span(
+            previous.source_glyph_start,
+            previous.source_glyph_count,
+            source_glyph_start,
+            source_glyph_count,
+        )
+        .ok_or(EngineError::InvalidRequest)?;
+        let stored = self
+            .segments
+            .rows
+            .get_mut(index)
+            .ok_or(EngineError::InvalidRequest)?;
+        stored.run_cluster_start = cluster_start;
+        stored.run_cluster_count = cluster_count;
+        stored.source_glyph_start = glyph_start;
+        stored.source_glyph_count = glyph_count;
+        self.last_segment = Some((
+            last_index,
+            PlacementSegment {
+                run_cluster_start: cluster_start,
+                run_cluster_count: cluster_count,
+                source_glyph_start: glyph_start,
+                source_glyph_count: glyph_count,
+                ..previous
+            },
+            placement,
+        ));
+        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -601,6 +659,20 @@ impl PlacementState {
         layout_runs: &[LayoutRun],
         replacement_runs: &[LayoutRun],
     ) -> Result<(), EngineError> {
+        let (segment_start, segment_end) = line_span(
+            &previous.line_segment_starts,
+            &previous.line_segment_counts,
+            retained.line_index,
+            previous.segments.len(),
+        )?;
+        if (segment_start..segment_end).any(|index| {
+            previous
+                .segments
+                .get(index)
+                .is_none_or(|segment| !hinted_run_matches(segment, layout_runs, replacement_runs))
+        }) {
+            self.prepare_run_resolution(layout_runs, replacement_runs)?;
+        }
         let checkpoint = self.checkpoint();
         let result =
             self.append_retained_line_inner(previous, retained, layout_runs, replacement_runs);
@@ -1081,6 +1153,25 @@ fn resolve_run<'a>(
         .ok_or(EngineError::InvalidRequest)
 }
 
+fn hinted_run_matches(
+    segment: PlacementSegment,
+    layout_runs: &[LayoutRun],
+    replacement_runs: &[LayoutRun],
+) -> bool {
+    let runs = match segment.layout_run_owner {
+        LayoutRunOwner::Paragraph => layout_runs,
+        LayoutRunOwner::Replacement => replacement_runs,
+    };
+    usize::try_from(segment.layout_run_index)
+        .ok()
+        .and_then(|index| runs.get(index))
+        .is_some_and(|run| {
+            segment
+                .canonical_revision
+                .is_none_or(|revision| run.canonical_revision == Some(revision))
+        })
+}
+
 fn prepare_run_lookup(
     lookup: &mut Vec<(RunCanonicalRevision, u32)>,
     runs: &[LayoutRun],
@@ -1171,6 +1262,57 @@ mod tests {
     use super::*;
     use crate::engine::cluster_state::BoundaryRunRole;
     use crate::engine::run_slot::{DesiredRun, RunSlotArena};
+
+    fn adjacent_segment(cluster: u32) -> PlacementSegment {
+        PlacementSegment {
+            fragment_index: 0,
+            layout_run_owner: LayoutRunOwner::Paragraph,
+            layout_run_index: 0,
+            run_handle: None,
+            placement_handle: None,
+            canonical_revision: None,
+            identity: PlacementIdentity::StableSource {
+                segment_anchor: 1,
+                source_anchor: 1,
+            },
+            segment_anchor: 1,
+            source_anchor: cluster + 1,
+            numeric_block_ordinal: 0,
+            run_cluster_start: cluster,
+            run_cluster_count: 1,
+            glyph_source: GlyphSource::LayoutRun,
+            source_glyph_start: cluster,
+            source_glyph_count: 1,
+        }
+    }
+
+    #[test]
+    fn segments_merge_by_the_published_f32_translation() {
+        let mut state = PlacementState::default();
+        let first = state
+            .push_segment(
+                adjacent_segment(0),
+                SegmentTranslation {
+                    translation_inline: 1.0,
+                    translation_block: 2.0,
+                },
+            )
+            .unwrap();
+        let second = state
+            .push_segment(
+                adjacent_segment(1),
+                SegmentTranslation {
+                    translation_inline: 1.0 + f64::EPSILON,
+                    translation_block: 2.0 + f64::EPSILON,
+                },
+            )
+            .unwrap();
+
+        assert_eq!((first, second), (0, 0));
+        assert_eq!(state.segments().len(), 1);
+        assert_eq!(state.segments().get(0).unwrap().run_cluster_count, 2);
+        assert_eq!(state.segments().get(0).unwrap().source_glyph_count, 2);
+    }
 
     #[test]
     fn one_segment_can_own_multiple_visual_spans() {
