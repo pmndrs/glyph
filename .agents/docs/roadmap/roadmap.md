@@ -868,6 +868,9 @@ Deliver:
 
 - stable run-local glyph geometry plus compact transactional placement, publication, and query derivation with exact
   current i64-decision, f64-positioning, and f32-output behavior;
+- opt-in live per-glyph deformation through `Text.withGlyphs()`: an undefined callback result remains a synchronous
+  bounded read, while an exact-length transform result updates attached glyph presentation in local, paragraph, or world
+  space without reshaping; detached copies retain their independent ownership and frozen shaping lifecycle;
 - responsive justified columns around authored convex or concave polygon cutouts, projected known-geometry 3D objects,
   and same-source drop caps, with explicit fragment reading order;
 - deterministic LTR, RTL, mixed-direction, complex-script, drop-cap, and moving-obstacle conformance cases;

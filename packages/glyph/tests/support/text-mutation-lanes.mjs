@@ -1,17 +1,21 @@
-/** Differential harness: an edited node must be indistinguishable, lane for lane and bit for bit, from one built fresh from the same content — no rounding, since that would hide a stale slot whose retained bytes are merely close. This module owns the oracle and scene plumbing; each test file owns its own corpus. */
+/** Differential harness: an edited node must be semantically indistinguishable from one built fresh from the same content. Geometry lanes remain bit-exact; lifecycle-local identity and placement-slot numbers are validated by their own authorities. */
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 
 import { glyph, span, txt } from '@pmndrs/glyph';
+import { slugSchema } from '@pmndrs/glyph/raster/slug';
 import { loadFont } from '../../dist/loader.js';
 import { ThreeConfig } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 // The identity lane is named by the codec contract that packs it, not by a literal here.
-import { STABLE_GLYPH_BUFFER_ID, TRANSFORM_BUFFER_ID } from '../../dist/three/codec.js';
+import { PLACEMENT_SLOT_BUFFER_ID, STABLE_GLYPH_BUFFER_ID, TRANSFORM_BUFFER_ID } from '../../dist/three/codec.js';
 
 export const IDENTITY_LANE = `_pmndrsGlyph_${STABLE_GLYPH_BUFFER_ID}`;
+export const PLACEMENT_SLOT_LANE = `_pmndrsGlyph_${PLACEMENT_SLOT_BUFFER_ID}`;
+const SLUG_BAND_COUNTS_LANE = `_pmndrsGlyph_${slugSchema.buffers.bandCounts.id}`;
+const SLUG_PLACEMENT_SLOT_COMPONENT = 2;
 const TRANSFORM_INDEX_LANE = `_pmndrsGlyph_${TRANSFORM_BUFFER_ID}`;
 const TRANSFORM_TABLE = '_pmndrsGlyphTransforms';
 
@@ -155,7 +159,7 @@ export function lanes(mounted) {
   };
 }
 
-/** Stable/packed identity lanes are exempt from direct fresh-build comparison — retaining a glyph's identity across an edit is the point — and are instead held to the local invariant in `identityPositions` below. Every other lane must match exactly. */
+/** Lifecycle-local identity, transform, and placement-slot lanes are validated by their own authorities. Every geometry lane must match exactly. */
 export function assertMatchesFreshBuild(font, mounted, paragraphs, context) {
   const fresh = mount(font, paragraphs);
   try {
@@ -198,12 +202,39 @@ export function assertMatchesFreshBuild(font, mounted, paragraphs, context) {
           assertTransformBindings(want, expected, `${context}: draw ${index} fresh`);
           continue;
         }
+        if (name === PLACEMENT_SLOT_LANE) {
+          assert.equal(
+            draw.attributes[name].length,
+            expected.attributes[name].length,
+            `${context}: draw ${index} packed ${name} length`,
+          );
+          continue;
+        }
+        if (name === SLUG_BAND_COUNTS_LANE) {
+          assertEqualExceptComponent(
+            draw.attributes[name],
+            expected.attributes[name],
+            4,
+            SLUG_PLACEMENT_SLOT_COMPONENT,
+            `${context}: draw ${index} packed ${name}`,
+          );
+          continue;
+        }
         // The packed lane. This is what the GPU samples, and the only lane that caught the defect.
         assert.deepEqual(draw.attributes[name], expected.attributes[name], `${context}: draw ${index} packed ${name}`);
       }
     }
   } finally {
     unmount(fresh);
+  }
+}
+
+/** Three packs Slug's lifecycle-local placement slot into bandCounts.z; the remaining band-count lanes stay geometric. */
+function assertEqualExceptComponent(actual, expected, width, omitted, where) {
+  assert.equal(actual.length, expected.length, `${where} length`);
+  for (let index = 0; index < actual.length; index += 1) {
+    if (index % width === omitted) continue;
+    assert.equal(actual[index], expected[index], `${where} scalar ${index}`);
   }
 }
 

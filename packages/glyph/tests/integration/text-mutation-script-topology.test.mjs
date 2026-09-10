@@ -13,6 +13,7 @@ import {
   IDENTITY_LANE,
   lanes,
   mount,
+  PLACEMENT_SLOT_LANE,
   seededRandom,
   timeout,
   unmount,
@@ -412,7 +413,7 @@ function graphemeUnits(source) {
   return [...GRAPHEMES.segment(source)].map((entry) => entry.segment);
 }
 
-/** Negative control: proves `assertMatchesFreshBuild` can see a difference. Without this, every assertion above could pass against a corrupt buffer. Corrupting one float in one packed lane must fail, per lane. */
+/** Negative control: proves every bit-exact packed lane can expose corruption. Placement-slot numbers are lifecycle-local and have a separate mapping oracle. */
 test('the differential oracle fails when a single packed float is corrupted', { timeout }, async () => {
   const shaping = CASES.find((entry) => entry.id === 'indic-reordering');
   const font = await fonts.load('devanagari');
@@ -424,7 +425,9 @@ test('the differential oracle fails when a single packed float is corrupted', { 
 
     const drawn = lanes(mounted).draws;
     assert.ok(drawn.length > 0, 'the control needs at least one draw to corrupt');
-    const packed = Object.keys(drawn[0].attributes).sort();
+    const packed = Object.keys(drawn[0].attributes)
+      .filter((name) => name !== PLACEMENT_SLOT_LANE)
+      .sort();
     assert.ok(packed.length > 0, 'the control needs at least one packed instanced lane to corrupt');
 
     for (const name of packed) {

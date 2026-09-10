@@ -77,8 +77,11 @@ export interface DetachedGlyph {
 }
 
 interface DetachedGlyphStorage {
+  /** Shader matrix already composed with the inverse rest pivot. */
   readonly transforms: THREE.StorageInstancedBufferAttribute;
-  readonly pivots: THREE.StorageInstancedBufferAttribute;
+  /** Public matrices retain the user-facing pivot-relative contract. */
+  readonly matrices: Float32Array;
+  readonly pivots: Float32Array;
 }
 
 interface DetachedGlyphRecordAddress {
@@ -98,6 +101,8 @@ export class Glyphs extends THREE.Object3D {
   readonly #storages = new Map<string, DetachedGlyphStorage>();
   readonly #worldLocal = new THREE.Matrix4();
   readonly #worldInverse = new THREE.Matrix4();
+  readonly #composed = new THREE.Matrix4();
+  readonly #inversePivot = new THREE.Matrix4();
   #disposed = false;
 
   static {
@@ -151,17 +156,19 @@ export class Glyphs extends THREE.Object3D {
         prepareGlyphStorage(storageKey, capacityRecords) {
           const existing = owner.#storages.get(storageKey);
           if (existing !== undefined) {
-            if (existing.pivots.count !== capacityRecords) {
+            if (existing.transforms.count / 4 !== capacityRecords) {
               throw new Error('detached glyph plan changed physical record capacity during realization');
             }
             return;
           }
           const capacity = Math.max(1, capacityRecords);
           const transforms = new THREE.StorageInstancedBufferAttribute(new Float32Array(capacity * 16), 4);
-          const pivots = new THREE.StorageInstancedBufferAttribute(new Float32Array(capacity * 2), 2);
           transforms.setUsage(THREE.DynamicDrawUsage);
-          pivots.setUsage(THREE.StaticDrawUsage);
-          owner.#storages.set(storageKey, { transforms, pivots });
+          owner.#storages.set(storageKey, {
+            transforms,
+            matrices: new Float32Array(capacity * 16),
+            pivots: new Float32Array(capacity * 2),
+          });
         },
         glyphStorage(storageKey) {
           return owner.#storages.get(storageKey);
@@ -190,7 +197,7 @@ export class Glyphs extends THREE.Object3D {
           if (storage === undefined) {
             throw new Error(`detached glyph ${placement.index} references unknown physical record storage`);
           }
-          if (address.index < 0 || address.index >= storage.pivots.count) {
+          if (address.index < 0 || address.index >= storage.transforms.count / 4) {
             throw new RangeError(
               `detached glyph ${placement.index} exceeds the copied plan's physical record capacity`,
             );
@@ -207,7 +214,6 @@ export class Glyphs extends THREE.Object3D {
       if (copy === undefined) target?.dispose();
       for (const storage of this.#storages.values()) {
         storage.transforms.dispose();
-        storage.pivots.dispose();
       }
       this.#storages.clear();
       throw error;
@@ -231,14 +237,18 @@ export class Glyphs extends THREE.Object3D {
   getMatrixAt(index: number, target: THREE.Matrix4): void {
     this.#assertActive();
     const { storage, index: record } = this.#record(index);
-    target.fromArray(storage.transforms.array as Float32Array, record * 16);
+    target.fromArray(storage.matrices, record * 16);
   }
 
   setMatrixAt(index: number, matrix: THREE.Matrix4): void {
     this.#assertActive();
     const { storage, index: record } = this.#record(index);
     const offset = record * 16;
-    storage.transforms.array.set(matrix.elements, offset);
+    storage.matrices.set(matrix.elements, offset);
+    const pivotOffset = record * 2;
+    this.#inversePivot.makeTranslation(-storage.pivots[pivotOffset]!, -storage.pivots[pivotOffset + 1]!, 0);
+    this.#composed.copy(matrix).multiply(this.#inversePivot);
+    storage.transforms.array.set(this.#composed.elements, offset);
     markStorageAttributeUpdated(storage.transforms, offset, 16);
   }
 
@@ -275,7 +285,6 @@ export class Glyphs extends THREE.Object3D {
     for (const storage of this.#storages.values()) {
       try {
         storage.transforms.dispose();
-        storage.pivots.dispose();
       } catch (error) {
         failure ??= error;
       }
@@ -291,15 +300,16 @@ export class Glyphs extends THREE.Object3D {
       const storage = this.#storages.get(address.storageKey);
       if (storage === undefined) throw new Error(`detached glyph ${index} lost its physical record storage`);
       const transforms = storage.transforms.array as Float32Array;
-      const pivots = storage.pivots.array as Float32Array;
       const record = address.index;
       const x = placement.x;
       const y = -placement.y;
-      pivots.set([x, y], record * 2);
-      new THREE.Matrix4().makeTranslation(x, y, 0).toArray(transforms, record * 16);
+      storage.pivots.set([x, y], record * 2);
+      this.#composed.makeTranslation(x, y, 0);
+      this.#composed.toArray(storage.matrices, record * 16);
+      this.#inversePivot.makeTranslation(-x, -y, 0);
+      this.#composed.multiply(this.#inversePivot).toArray(transforms, record * 16);
     }
     for (const storage of this.#storages.values()) {
-      storage.pivots.needsUpdate = true;
       storage.transforms.needsUpdate = true;
     }
   }

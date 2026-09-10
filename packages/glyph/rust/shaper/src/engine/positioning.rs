@@ -20,6 +20,7 @@ use super::{
     frame::{ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START},
     identity_index::{IdentityIndex, IdentityIndexError},
     line_composition::ComposedLine,
+    placement_slot::PlacementHandle,
     run_local::{
         ClusterFinish, RunLocalArena, RunLocalBuildError, RunLocalGlyph, RunLocalGlyphInput,
         RunLocalWriter,
@@ -35,7 +36,7 @@ pub(crate) const SEMANTIC_F32_CHANGE_FIELD_COUNT: usize = 8;
 pub(crate) const SEMANTIC_U32_BASE_FIELD_COUNT: usize = 6;
 pub(crate) const SEMANTIC_U32_FIELD_COUNT: usize = 8;
 pub(crate) const SEMANTIC_EFFECTS_CHANGE: u16 = 1 << 14;
-pub(crate) const SEMANTIC_PLACEMENT_CHANGE: u16 = 1 << 15;
+pub(crate) const SEMANTIC_PLACEMENT_SLOT_CHANGE: u16 = 1 << 15;
 pub(crate) const ALL_SEMANTIC_CHANGES: u16 = u16::MAX;
 const CAPTURE_RUN_PLACEMENT: bool = true;
 
@@ -1390,6 +1391,66 @@ impl PositionedGlyphArena {
             .bind_run_handles(layout_runs, &self.replacement_runs)
     }
 
+    pub(crate) fn placement_segments(&self) -> &[super::placement_state::PlacementSegment] {
+        self.placement.segment_rows()
+    }
+
+    pub(crate) fn placement_translations(&self) -> &[SegmentTranslation] {
+        self.placement.translations()
+    }
+
+    pub(crate) fn glyph_segment_indices(&self) -> &[u32] {
+        self.placement.glyph_segment_indices()
+    }
+
+    pub(crate) fn placement_handle(&self, segment_index: usize) -> Option<PlacementHandle> {
+        self.placement.placement_handle(segment_index)
+    }
+
+    pub(crate) fn bind_placement_handles(
+        &mut self,
+        handles: &[PlacementHandle],
+        previous: Option<&Self>,
+        next_revision: &mut u32,
+    ) -> Result<(), EngineError> {
+        self.placement.bind_placement_handles(handles)?;
+        let segment_indices = self.placement.glyph_segment_indices();
+        if segment_indices.len() != self.glyphs.len()
+            || self.semantic_change_masks.len() != self.glyphs.len()
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        for (index, ((glyph, mask), &segment_index)) in self
+            .glyphs
+            .iter_mut()
+            .zip(&mut self.semantic_change_masks)
+            .zip(segment_indices)
+            .enumerate()
+        {
+            let handle = handles
+                .get(usize::try_from(segment_index).map_err(|_| EngineError::InvalidRequest)?)
+                .copied()
+                .ok_or(EngineError::InvalidRequest)?;
+            let placement_slot = handle.slot().get();
+            let placement_changed = previous
+                .and_then(|positioned| positioned.glyphs.get(index))
+                .is_none_or(|committed| {
+                    committed.stable_id != glyph.stable_id
+                        || committed.placement_slot != placement_slot
+                });
+            glyph.placement_slot = placement_slot;
+            if placement_changed {
+                if *mask == 0 {
+                    let revision = (*next_revision).max(1);
+                    *next_revision = revision.checked_add(1).ok_or(EngineError::ResultTooLarge)?;
+                    glyph.content_revision = revision;
+                }
+                *mask |= SEMANTIC_PLACEMENT_SLOT_CHANGE;
+            }
+        }
+        Ok(())
+    }
+
     fn rebuild_replacement_runs(
         &mut self,
         previous: &Self,
@@ -2252,13 +2313,14 @@ impl PositionedGlyphArena {
                 layout_run_index: u32::try_from(layout_run_index)
                     .map_err(|_| EngineError::ResultTooLarge)?,
                 run_handle: layout_run.run_handle,
+                placement_handle: None,
                 canonical_revision: layout_run.canonical_revision,
                 identity: if allow_dense_identity && placement_cluster.dense {
                     PlacementIdentity::Dense
                 } else {
                     PlacementIdentity::StableSource {
                         segment_anchor: placement_cluster.segment_anchor,
-                        source_anchor: clusters.stable_ids[overlap_start],
+                        source_anchor: placement_cluster.segment_anchor,
                     }
                 },
                 segment_anchor: placement_cluster.segment_anchor,
@@ -2384,6 +2446,7 @@ impl PositionedGlyphArena {
                         LayoutGlyph {
                             stable_id,
                             content_revision: 0,
+                            placement_slot: u32::MAX,
                             semantic_glyph_index,
                             binding_handle,
                             font_handle,
@@ -2725,6 +2788,7 @@ impl PositionedGlyphArena {
                 layout_run_owner: LayoutRunOwner::Replacement,
                 layout_run_index: run_index,
                 run_handle: run.run_handle,
+                placement_handle: None,
                 canonical_revision: run.canonical_revision,
                 identity: PlacementIdentity::StableSource {
                     segment_anchor: clusters.stable_ids[owner_cluster],
@@ -3010,6 +3074,7 @@ impl PositionedGlyphArena {
                         LayoutGlyph {
                             stable_id,
                             content_revision: 0,
+                            placement_slot: u32::MAX,
                             semantic_glyph_index,
                             binding_handle,
                             font_handle,
@@ -3243,9 +3308,6 @@ impl PositionedGlyphArena {
                 if next_glyph.block_start.to_bits() != old_glyph.block_start.to_bits() {
                     mask |= 1 << 7;
                 }
-                if occurrence_origin_changed(self, slot, previous, slot) {
-                    mask |= SEMANTIC_PLACEMENT_CHANGE;
-                }
             }
             self.assign_content_revision_with_mask(
                 slot,
@@ -3333,9 +3395,6 @@ impl PositionedGlyphArena {
         if next.block_start.to_bits() != old.block_start.to_bits() {
             mask |= 1 << 7;
         }
-        if occurrence_origin_changed(self, slot, previous, previous_slot) {
-            mask |= SEMANTIC_PLACEMENT_CHANGE;
-        }
         for field in 0..SEMANTIC_U32_BASE_FIELD_COUNT {
             if self.semantic_u32[field][slot] != previous.semantic_u32[field][previous_slot] {
                 mask |= 1 << (SEMANTIC_F32_CHANGE_FIELD_COUNT + field);
@@ -3355,28 +3414,6 @@ impl PositionedGlyphArena {
             mask |= SEMANTIC_EFFECTS_CHANGE;
         }
         mask
-    }
-}
-
-fn occurrence_origin_changed(
-    next: &PositionedGlyphArena,
-    next_glyph: usize,
-    previous: &PositionedGlyphArena,
-    previous_glyph: usize,
-) -> bool {
-    let origin = |arena: &PositionedGlyphArena, glyph_index: usize| {
-        let glyph = arena.glyphs.get(glyph_index)?;
-        let semantic_index = usize::try_from(glyph.semantic_glyph_index).ok()?;
-        let semantic = arena.semantic_glyphs.get(semantic_index)?;
-        Some((
-            semantic.inline_origin.to_bits(),
-            semantic.block_origin.to_bits(),
-        ))
-    };
-    match (origin(next, next_glyph), origin(previous, previous_glyph)) {
-        (Some(next), Some(previous)) => next != previous,
-        (None, None) => false,
-        _ => true,
     }
 }
 
@@ -6811,10 +6848,7 @@ mod tests {
         assert_eq!(pending.semantic_glyphs[0].inline_origin, 5.0);
         assert_eq!(pending.glyphs[0].content_revision, 3);
         assert_eq!(pending.glyphs[1].content_revision, 4);
-        assert_eq!(
-            pending.semantic_change_masks,
-            [1 | SEMANTIC_PLACEMENT_CHANGE, 1 | SEMANTIC_PLACEMENT_CHANGE,]
-        );
+        assert_eq!(pending.semantic_change_masks, [1, 1]);
         assert_eq!(next_revision, 5);
 
         let mut metadata_flow = FlowLayoutArena {
@@ -6903,6 +6937,7 @@ mod tests {
         let glyph = |stable_id, revision| LayoutGlyph {
             stable_id,
             content_revision: revision,
+            placement_slot: 0,
             semantic_glyph_index: stable_id - 1,
             binding_handle: 1,
             font_handle: 1,
@@ -6977,6 +7012,7 @@ mod tests {
             let glyph = LayoutGlyph {
                 stable_id: 1,
                 content_revision: 7,
+                placement_slot: 0,
                 semantic_glyph_index: 0,
                 binding_handle: 2,
                 font_handle: 3,
@@ -7061,6 +7097,7 @@ mod tests {
         let glyph = LayoutGlyph {
             stable_id: 1,
             content_revision: 7,
+            placement_slot: 0,
             semantic_glyph_index: 0,
             binding_handle: 2,
             font_handle: 3,
@@ -7106,7 +7143,10 @@ mod tests {
             false,
         )
         .unwrap();
-        assert_eq!(next.semantic_change_masks, [SEMANTIC_PLACEMENT_CHANGE]);
-        assert_eq!(next.glyphs[0].content_revision, 30);
+        assert_eq!(next.semantic_change_masks, [0]);
+        assert_eq!(
+            next.glyphs[0].content_revision,
+            previous.glyphs[0].content_revision
+        );
     }
 }

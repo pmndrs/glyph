@@ -25,11 +25,14 @@ use super::{
         PreparedUpdate, RootRevision, UpdateRequest,
     },
     identity_index::IdentityIndex,
+    placement_slot::{DesiredPlacement, PlacementHandle, PlacementSlotArena},
+    placement_state::{GlyphSource, LayoutRunOwner, PlacementIdentity, PlacementSegment},
     positioning::{PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT},
     render_plan::RenderPlanView,
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
     run_slot::{DesiredRun, RunSlotArena, RunSlotChange, RunSlotError},
     semantic_wire::RecordSpan,
+    session_placement::{SessionPlacementInput, SessionPlacementRow},
     shaping_state::{BoundaryShape, BoundaryShapeArena, ShapeArena, ShapingRun, ShapingRunArena},
     sort,
     staged::{Staged, StyleStage, TextStage},
@@ -226,6 +229,12 @@ struct PlannerState {
     pending_next_paragraph_incarnation: u32,
     run_slots: RunSlotArena<RunLogicalKey, RunCanonicalRevision>,
     desired_runs: Vec<DesiredRun<RunLogicalKey, RunCanonicalRevision>>,
+    placement_slots: PlacementSlotArena<PlacementLogicalKey, ()>,
+    desired_placements: Vec<DesiredPlacement<PlacementLogicalKey, ()>>,
+    desired_placement_handles: Vec<PlacementHandle>,
+    session_placement_rows: Vec<SessionPlacementRow>,
+    placement_slot_count: u32,
+    pending_placement_slot_count: u32,
     spare_paragraph: Option<ParagraphState>,
     paragraphs: Vec<RetainedParagraph>,
     semantic_order: Vec<ParagraphOrder>,
@@ -278,6 +287,17 @@ enum RunLogicalAnchor {
         flow_thread_id: u32,
         role: BoundaryRunRole,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct PlacementLogicalKey {
+    paragraph: ParagraphIncarnation,
+    run_owner: LayoutRunOwner,
+    run_revision: RunCanonicalRevision,
+    identity: PlacementIdentity,
+    source_anchor: u32,
+    numeric_block_ordinal: u32,
+    glyph_source: GlyphSource,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -851,6 +871,7 @@ impl TextEngine {
             core::array::from_fn(|_| Vec::new());
         let mut semantic_u32: [Vec<u32>; SEMANTIC_U32_FIELD_COUNT] =
             core::array::from_fn(|_| Vec::new());
+        let mut selected_placement_slots = Vec::new();
         let mut found = 0usize;
         for (glyph_index, source) in source_glyphs.iter().enumerate() {
             if requested.binary_search(&source.stable_id).is_err() {
@@ -871,6 +892,7 @@ impl TextEngine {
                 .map_err(|_| EngineError::ResultTooLarge)?;
             semantic_glyphs.push(*semantic);
             glyphs.push(glyph);
+            selected_placement_slots.push(source.placement_slot);
             for (destination, values) in semantic_f32.iter_mut().zip(source_f32.iter()) {
                 if values.is_empty() {
                     continue;
@@ -887,6 +909,48 @@ impl TextEngine {
         }
         if found != requested.len() {
             return Err(EngineError::InvalidRequest);
+        }
+        selected_placement_slots.sort_unstable();
+        selected_placement_slots.dedup();
+        let mut source_placement_rows = Vec::new();
+        source_placement_rows
+            .try_reserve(positioned.placement_segments().len())
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        for (segment_index, translation) in positioned.placement_translations().iter().enumerate() {
+            let handle = positioned
+                .placement_handle(segment_index)
+                .ok_or(EngineError::InvalidRequest)?;
+            source_placement_rows.push((handle.slot().get(), *translation));
+        }
+        source_placement_rows.sort_unstable_by_key(|(slot, _)| *slot);
+        if source_placement_rows
+            .windows(2)
+            .any(|rows| rows[0].0 == rows[1].0)
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        let mut placement_rows = Vec::new();
+        placement_rows
+            .try_reserve(selected_placement_slots.len())
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        for (slot, source_slot) in selected_placement_slots.iter().copied().enumerate() {
+            let source_index = source_placement_rows
+                .binary_search_by_key(&source_slot, |(candidate, _)| *candidate)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let translation = source_placement_rows[source_index].1;
+            placement_rows.push(SessionPlacementRow {
+                slot: u32::try_from(slot).map_err(|_| EngineError::ResultTooLarge)?,
+                inline: translation.translation_inline as f32,
+                block: translation.translation_block as f32,
+            });
+        }
+        for glyph in &mut glyphs {
+            glyph.placement_slot = u32::try_from(
+                selected_placement_slots
+                    .binary_search(&glyph.placement_slot)
+                    .map_err(|_| EngineError::InvalidRequest)?,
+            )
+            .map_err(|_| EngineError::ResultTooLarge)?;
         }
         let semantic_f32_refs: Vec<&[f32]> = semantic_f32.iter().map(Vec::as_slice).collect();
         let semantic_u32_refs: Vec<&[u32]> = semantic_u32.iter().map(Vec::as_slice).collect();
@@ -919,6 +983,17 @@ impl TextEngine {
                 true,
                 1,
                 0,
+            )
+            .map_err(plan_error)?;
+        compiler
+            .prepare_session(
+                SessionPlacementInput {
+                    placement_rows: &placement_rows,
+                    placement_capacity: u32::try_from(selected_placement_slots.len())
+                        .map_err(|_| EngineError::ResultTooLarge)?,
+                },
+                1,
+                true,
             )
             .map_err(plan_error)?;
         Ok(compiler)
@@ -1288,6 +1363,10 @@ impl TextEngine {
                 .acknowledge(request.acknowledged_publication_generation)
                 .map_err(run_slot_error)?;
         }
+        planner
+            .placement_slots
+            .acknowledge(request.acknowledged_publication_generation)
+            .map_err(run_slot_error)?;
         planner.acknowledged_publication_generation = request.acknowledged_publication_generation;
         // Candidate adoption: a retained speculative transaction whose committed
         // revision and lifecycle input match this frame hands its pending state and
@@ -1463,6 +1542,17 @@ impl TextEngine {
                         .map_err(run_slot_error)?;
                 }
             }
+            if positioned_changed || checkpoint {
+                planner
+                    .prepare_placement_slots(publication_generation, &mut next_content_revision)?;
+            } else {
+                planner
+                    .placement_slots
+                    .prepare_reuse(publication_generation)
+                    .map_err(run_slot_error)?;
+                planner.pending_placement_slot_count = planner.placement_slot_count;
+                planner.session_placement_rows.clear();
+            }
             let reuse_ordered_plan = !checkpoint
                 && !positioned_changed
                 && request.compositing_independent == planner.compositing_independent
@@ -1533,6 +1623,17 @@ impl TextEngine {
                         checkpoint,
                         publication_generation,
                         request.acknowledged_publication_generation,
+                    )
+                    .map_err(plan_error)?;
+                planner
+                    .plan
+                    .prepare_session(
+                        SessionPlacementInput {
+                            placement_rows: &planner.session_placement_rows,
+                            placement_capacity: planner.pending_placement_slot_count,
+                        },
+                        publication_generation,
+                        checkpoint,
                     )
                     .map_err(plan_error)?;
                 gather_output_matches_next = true;
@@ -1699,7 +1800,13 @@ impl TextEngine {
         if RETAIN_RUN_HANDLES {
             planner.run_slots.commit();
         }
+        planner.placement_slots.commit();
         planner.desired_runs.clear();
+        planner.desired_placements.clear();
+        planner.desired_placement_handles.clear();
+        planner.session_placement_rows.clear();
+        planner.placement_slot_count = planner.pending_placement_slot_count;
+        planner.pending_placement_slot_count = 0;
         planner.commit_paragraphs();
         planner.next_glyph_id = planner.pending_next_glyph_id;
         planner.next_content_revision = planner.pending_next_content_revision;
@@ -1734,6 +1841,23 @@ fn prepared_gather_key(prepared: PreparedUpdate, revision: RootRevision) -> Gath
         codec_fingerprint: prepared.codec_fingerprint,
         capability_set: prepared.capability_set,
     }
+}
+
+fn placement_logical_key(
+    paragraph: ParagraphIncarnation,
+    segment: PlacementSegment,
+) -> Result<PlacementLogicalKey, EngineError> {
+    Ok(PlacementLogicalKey {
+        paragraph,
+        run_owner: segment.layout_run_owner,
+        run_revision: segment
+            .canonical_revision
+            .ok_or(EngineError::InvalidRequest)?,
+        identity: segment.identity,
+        source_anchor: segment.source_anchor,
+        numeric_block_ordinal: segment.numeric_block_ordinal,
+        glyph_source: segment.glyph_source,
+    })
 }
 
 /// Whether any live paragraph carries decoration records, using pending state when prepared —
@@ -2610,13 +2734,161 @@ impl PlannerState {
         result
     }
 
+    fn prepare_placement_slots(
+        &mut self,
+        publication_generation: u32,
+        next_content_revision: &mut u32,
+    ) -> Result<(), EngineError> {
+        let mut desired = core::mem::take(&mut self.desired_placements);
+        let mut handles = core::mem::take(&mut self.desired_placement_handles);
+        let mut rows = core::mem::take(&mut self.session_placement_rows);
+        desired.clear();
+        handles.clear();
+        rows.clear();
+        let result = (|| {
+            let required = self
+                .active_order()
+                .iter()
+                .try_fold(0usize, |total, order| {
+                    let paragraph = self
+                        .paragraph(order.id)
+                        .ok_or(EngineError::InvalidRequest)?;
+                    total
+                        .checked_add(
+                            paragraph
+                                .state
+                                .positioned
+                                .active()
+                                .placement_segments()
+                                .len(),
+                        )
+                        .ok_or(EngineError::ResultTooLarge)
+                })?;
+            desired
+                .try_reserve(required)
+                .map_err(|_| EngineError::ResultTooLarge)?;
+            handles
+                .try_reserve(required)
+                .map_err(|_| EngineError::ResultTooLarge)?;
+            rows.try_reserve(required)
+                .map_err(|_| EngineError::ResultTooLarge)?;
+            for order in self.active_order() {
+                let paragraph = self
+                    .paragraph(order.id)
+                    .ok_or(EngineError::InvalidRequest)?;
+                for segment in paragraph.state.positioned.active().placement_segments() {
+                    desired.push(DesiredRun::new(
+                        placement_logical_key(paragraph.incarnation, *segment)?,
+                        (),
+                    ));
+                }
+            }
+            self.placement_slots
+                .prepare(&desired, publication_generation)
+                .map_err(run_slot_error)?;
+            let assignment_count = self
+                .placement_slots
+                .assignment_count()
+                .map_err(run_slot_error)?;
+            if assignment_count != desired.len() {
+                return Err(EngineError::InvalidRequest);
+            }
+            self.pending_placement_slot_count = self
+                .placement_slots
+                .required_slots()
+                .map_err(run_slot_error)?;
+            for index in 0..assignment_count {
+                handles.push(
+                    self.placement_slots
+                        .assignment(index)
+                        .map_err(run_slot_error)?
+                        .handle(),
+                );
+            }
+            let mut assignment_start = 0usize;
+            for order_index in 0..self.active_order().len() {
+                let paragraph_id = self.active_order()[order_index].id;
+                let segment_count = self
+                    .paragraph(paragraph_id)
+                    .ok_or(EngineError::InvalidRequest)?
+                    .state
+                    .positioned
+                    .active()
+                    .placement_segments()
+                    .len();
+                let assignment_end = assignment_start
+                    .checked_add(segment_count)
+                    .ok_or(EngineError::ResultTooLarge)?;
+                for relative in 0..segment_count {
+                    let translation = self
+                        .paragraph(paragraph_id)
+                        .and_then(|paragraph| {
+                            paragraph
+                                .state
+                                .positioned
+                                .active()
+                                .placement_translations()
+                                .get(relative)
+                        })
+                        .copied()
+                        .ok_or(EngineError::InvalidRequest)?;
+                    rows.push(SessionPlacementRow {
+                        slot: handles[assignment_start + relative].slot().get(),
+                        inline: translation.translation_inline as f32,
+                        block: translation.translation_block as f32,
+                    });
+                }
+                let paragraph = self
+                    .paragraph_mut(paragraph_id)
+                    .ok_or(EngineError::InvalidRequest)?;
+                if paragraph.state.positioned.is_prepared() {
+                    let (pending, committed) = paragraph.state.positioned.derive_mut();
+                    pending.bind_placement_handles(
+                        &handles[assignment_start..assignment_end],
+                        Some(committed),
+                        next_content_revision,
+                    )?;
+                } else {
+                    let positioned = paragraph.state.positioned.committed();
+                    for relative in 0..segment_count {
+                        if positioned.placement_handle(relative)
+                            != Some(handles[assignment_start + relative])
+                        {
+                            return Err(EngineError::InvalidRequest);
+                        }
+                    }
+                    if positioned.glyph_segment_indices().len() != positioned.glyphs().len() {
+                        return Err(EngineError::InvalidRequest);
+                    }
+                }
+                assignment_start = assignment_end;
+            }
+            if rows.windows(2).any(|pair| pair[0].slot >= pair[1].slot) {
+                rows.sort_unstable_by_key(|row| row.slot);
+            }
+            if assignment_start != assignment_count {
+                return Err(EngineError::InvalidRequest);
+            }
+            Ok(())
+        })();
+        self.desired_placements = desired;
+        self.desired_placement_handles = handles;
+        self.session_placement_rows = rows;
+        result
+    }
+
     fn abort_pending(&mut self) {
         self.speculative = None;
         self.plan.abort();
         if RETAIN_RUN_HANDLES {
             self.run_slots.abort();
         }
+        self.placement_slots.abort();
         self.desired_runs.clear();
+        self.desired_placements.clear();
+        self.desired_placement_handles.clear();
+        self.session_placement_rows.clear();
+        self.pending_placement_slot_count = self.placement_slot_count;
         self.semantic_records.clear();
         self.semantic_input_spans.clear();
         for paragraph in &mut self.paragraphs {

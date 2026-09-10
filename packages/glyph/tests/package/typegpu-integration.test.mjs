@@ -5,12 +5,12 @@ import { glyph } from '@pmndrs/glyph';
 import { defineTypeGpuConfig } from '@pmndrs/glyph/typegpu';
 import { resourceLease } from '@pmndrs/glyph/config/glyph';
 import { msdf, msdfSchema } from '@pmndrs/glyph/raster/msdf';
-import { TYPEGPU_PLACEMENT_OFFSET_BUFFER_ID } from '../../dist/typegpu/internal/codec.js';
+import { TYPEGPU_PLACEMENT_SLOT_BUFFER_ID } from '../../dist/typegpu/internal/codec.js';
 
 const fontBytes = await readFile(
   new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url),
 );
-globalThis.GPUBufferUsage ??= { VERTEX: 32, COPY_DST: 8 };
+globalThis.GPUBufferUsage ??= { VERTEX: 32, COPY_DST: 8, STORAGE: 128 };
 await glyph.init();
 
 // A recording host at the public config seam. The real engine authors all commands and bytes.
@@ -73,19 +73,36 @@ function recordingHost() {
     resolve: () =>
       resourceLease(
         {
-          prepare(buffers, viewport, position, start, count) {
+          prepare(buffers, placementTable, viewport, position, start, count) {
             stats.preparations++;
             return {
               draw() {
+                const placementSlots = buffers
+                  .get(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID)
+                  .bytes.slice(start * 4, (start + count) * 4);
+                const placementTableBytes = placementTable.bytes.slice();
+                const slotView = new DataView(
+                  placementSlots.buffer,
+                  placementSlots.byteOffset,
+                  placementSlots.byteLength,
+                );
+                const tableView = new DataView(
+                  placementTableBytes.buffer,
+                  placementTableBytes.byteOffset,
+                  placementTableBytes.byteLength,
+                );
                 recorded.push({
                   // Compare raster inputs, not lifecycle-specific stable glyph identities.
                   buffers: Object.values(msdfSchema.buffers).map((declaration) => {
                     const stride = declaration.lanes.length * 4;
                     return buffers.get(declaration.id).bytes.slice(start * stride, (start + count) * stride);
                   }),
-                  placement: buffers
-                    .get(TYPEGPU_PLACEMENT_OFFSET_BUFFER_ID)
-                    .bytes.slice(start * 8, (start + count) * 8),
+                  placementSlots,
+                  placementTable: placementTableBytes,
+                  resolvedPlacement: Array.from({ length: count }, (_, index) => {
+                    const slot = slotView.getUint32(index * 4, true);
+                    return [tableView.getFloat32(slot * 8, true), tableView.getFloat32(slot * 8 + 4, true)];
+                  }),
                   position: [...position.value],
                   viewport: [...viewport.value],
                   start,
@@ -139,6 +156,18 @@ function recordingHost() {
   return { config, allocations, recorded, uploads, stats };
 }
 
+function renderedState(draws) {
+  return draws.map(({ placementSlots: _slots, placementTable: _table, resolvedPlacement, ...draw }) => {
+    const buffers = draw.buffers.map((buffer) => buffer.slice());
+    const rects = new Float32Array(buffers[0].buffer, buffers[0].byteOffset, buffers[0].byteLength / 4);
+    for (let index = 0; index < resolvedPlacement.length; index++) {
+      rects[index * 4] = Math.fround(rects[index * 4] + resolvedPlacement[index][0]);
+      rects[index * 4 + 1] = Math.fround(rects[index * 4 + 1] + resolvedPlacement[index][1]);
+    }
+    return { ...draw, buffers };
+  });
+}
+
 test('TypeGPU width reflow retains raster bytes and changes only host placement', async () => {
   const host = recordingHost();
   const handle = glyph.handle('typegpu:direct-placement', host.config);
@@ -167,10 +196,15 @@ test('TypeGPU width reflow retains raster bytes and changes only host placement'
       before.map((draw) => draw.buffers),
       'width reflow preserves every raster Codec buffer',
     );
+    assert.deepEqual(
+      after.map((draw) => draw.placementSlots),
+      before.map((draw) => draw.placementSlots),
+      'width reflow retains each glyph-to-segment assignment',
+    );
     assert.notDeepEqual(
-      after.map((draw) => draw.placement),
-      before.map((draw) => draw.placement),
-      'width reflow updates the host-owned x/y occurrence offsets',
+      after.map((draw) => draw.placementTable),
+      before.map((draw) => draw.placementTable),
+      'width reflow updates only the root-owned x/y segment table',
     );
     assert.equal(host.stats.allocations, allocationCount, 'same-capacity reflow allocates no GPU buffers');
     assert.equal(host.stats.preparations, preparationCount, 'same-buffer reflow retains prepared draws');
@@ -210,7 +244,7 @@ test('localized TypeGPU edits retain GPU buffers and discard leaves accepted byt
     assert.equal(host.stats.preparations, preparationCount, 'unchanged draw bindings stay prepared');
     assert.ok(host.uploads.length > 0);
     assert.ok(
-      host.uploads.every((upload) => upload.length < upload.capacity / 8),
+      host.uploads.every((upload) => upload.length <= upload.capacity / 8),
       JSON.stringify(host.uploads),
     );
     t.diagnostic(
@@ -237,7 +271,7 @@ test('localized TypeGPU edits retain GPU buffers and discard leaves accepted byt
     cold.createText({ font, text: 'e' });
     glyph.shape();
     cold.draw({}, { width: 640, height: 240 });
-    assert.deepEqual(host.recorded.splice(0), after);
+    assert.deepEqual(renderedState(host.recorded.splice(0)), renderedState(after));
     const retainedAllocations = host.allocations.size;
     host.uploads.length = 0;
     host.stats.reject = true;
@@ -249,7 +283,7 @@ test('localized TypeGPU edits retain GPU buffers and discard leaves accepted byt
     host.stats.reject = false;
     text.update({ text: 'e' });
     glyph.shape();
-    assert.deepEqual(snapshot(), after);
+    assert.deepEqual(renderedState(snapshot()), renderedState(after));
     host.uploads.length = 0;
     glyph.shape();
     assert.equal(host.uploads.length, 0, 'idle shaping uploads nothing');

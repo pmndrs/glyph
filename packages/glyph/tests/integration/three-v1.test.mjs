@@ -23,6 +23,7 @@ import { msdfSchema } from '../../dist/raster/msdf.js';
 import { slugSchema } from '../../dist/raster/slug.js';
 import { decorationSchema, threeSystemBuffers } from '../../dist/three/codec.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
+import { compileNodeMaterial } from '../support/node-material-shaders.mjs';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 const densityFontUrl = new URL(
@@ -1033,8 +1034,8 @@ test('same-source drop caps compose through an explicit multi-line flow region',
     const inspected = text.glyphs();
     const bodyLine = 3;
     const bodyGlyph = inspected.lineGlyphStarts[bodyLine];
-    const caret = (glyph, line) => {
-      const result = text.caretAt(inspected.x[glyph], inspected.lineBaselines[line]);
+    const caret = (glyphIndex, line) => {
+      const result = text.caretAt(inspected.x[glyphIndex], inspected.lineBaselines[line]);
       return result === undefined
         ? undefined
         : {
@@ -1050,14 +1051,14 @@ test('same-source drop caps compose through an explicit multi-line flow region',
       bodyCaret: caret(bodyGlyph, bodyLine),
       capSelection: selection(0, 2),
       bodySelection: selection(2, source.length),
-      measurements: text.measureGlyphs()?.map((glyph) => ({
-        index: glyph.index,
-        sourceIndex: glyph.sourceIndex,
-        shapedOrigin: glyph.shapedOrigin.toArray(),
-        drawnOrigin: glyph.drawnOrigin.toArray(),
-        matrix: glyph.originalMatrix.toArray(),
-        ink: [...glyph.localInkBounds.min.toArray(), ...glyph.localInkBounds.max.toArray()],
-        advance: [...glyph.localAdvanceBounds.min.toArray(), ...glyph.localAdvanceBounds.max.toArray()],
+      measurements: text.measureGlyphs()?.map((placement) => ({
+        index: placement.index,
+        sourceIndex: placement.sourceIndex,
+        shapedOrigin: placement.shapedOrigin.toArray(),
+        drawnOrigin: placement.drawnOrigin.toArray(),
+        matrix: placement.originalMatrix.toArray(),
+        ink: [...placement.localInkBounds.min.toArray(), ...placement.localInkBounds.max.toArray()],
+        advance: [...placement.localAdvanceBounds.min.toArray(), ...placement.localAdvanceBounds.max.toArray()],
       })),
     };
   };
@@ -2170,8 +2171,8 @@ test('Three reflow patches only host placement while retaining raster geometry, 
   assert.ok(draw);
   const origins = draw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.origin.id));
   const originalOrigins = origins.array.slice();
-  const placement = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.placementOffset.id));
-  const originalPlacement = placement.array.slice();
+  const placementSlots = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.placementSlot.id));
+  const originalPlacementSlots = placementSlots.array.slice();
   const originalY = [...label.glyphs().y];
 
   label.set({ constraints: { width: { mode: 'exact', size: 90 } } });
@@ -2182,7 +2183,11 @@ test('Three reflow patches only host placement while retaining raster geometry, 
   assert.equal(reflowed[0].material, materials[0], 'the material remains reusable across reflow');
   assert.equal(materials.length, 1, 'reflow does not realize a second material');
   assert.deepEqual(origins.array, originalOrigins, 'break changes preserve glyph-local raster geometry');
-  assert.notDeepEqual(placement.array, originalPlacement, 'break changes rewrite the host-owned x/y placement data');
+  assert.deepEqual(
+    placementSlots.array,
+    originalPlacementSlots,
+    'break changes retain each glyph-to-segment assignment',
+  );
   assert.notDeepEqual([...label.glyphs().y], originalY, 'the public positioned layout still moves between lines');
 
   label.dispose();
@@ -2237,6 +2242,14 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async (t)
     [2, 4],
     'Bitmap vec2 and Slug vec4 records must coexist without a user technique selector',
   );
+  const slugDraw = draws.find((draw) => draw.geometry.getAttribute(glyphAttribute(slugSchema.buffers.planeRect.id)));
+  assert.ok(slugDraw);
+  const slugVertex = compileNodeMaterial(slugDraw).vertex;
+  const slugStorageBindings = slugVertex.match(/var<storage/g) ?? [];
+  assert.ok(
+    slugStorageBindings.length <= 8,
+    `Slug needs ${String(slugStorageBindings.length)} WebGPU vertex storage buffers`,
+  );
 
   const [detached] = label.breakApart();
   scene.add(detached);
@@ -2244,6 +2257,16 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async (t)
   scene.updateMatrixWorld(true);
   const detachedDraws = detached.children.filter((child) => child.isMesh);
   assert.equal(detachedDraws.length, 2, 'the detached copy must preserve both renderer-program batches');
+  const detachedSlugDraw = detachedDraws.find((draw) =>
+    draw.geometry.getAttribute(glyphAttribute(slugSchema.buffers.planeRect.id)),
+  );
+  assert.ok(detachedSlugDraw);
+  const detachedSlugVertex = compileNodeMaterial(detachedSlugDraw).vertex;
+  const detachedSlugStorageDeclarations = detachedSlugVertex.match(/^.*var<storage.*$/gm) ?? [];
+  assert.ok(
+    detachedSlugStorageDeclarations.length <= 8,
+    `detached Slug storage bindings:\n${detachedSlugStorageDeclarations.join('\n')}`,
+  );
   const transformStorages = detachedDraws.map((draw) => draw.geometry.getAttribute('_pmndrsGlyphInstanceTransforms'));
   assert.ok(transformStorages.every(Boolean));
   assert.equal(

@@ -158,6 +158,7 @@ pub(crate) fn build_visual_instance_map(
                 layout_run_index: u32::try_from(run_index)
                     .map_err(|_| EngineError::ResultTooLarge)?,
                 run_handle: None,
+                placement_handle: None,
                 canonical_revision: None,
                 identity: super::placement_state::PlacementIdentity::StableSource {
                     segment_anchor: cluster_stable_ids

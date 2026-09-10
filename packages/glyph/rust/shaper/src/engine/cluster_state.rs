@@ -66,7 +66,7 @@ pub(crate) struct PlacementCluster {
     pub block_anchor_block: f64,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct RunCanonicalRevision(NonZeroU32);
 
 impl RunCanonicalRevision {

@@ -227,8 +227,14 @@ export interface CodecProgramBuilder<
 export interface CodecProgramSystemBuffers {
   readonly stableGlyphId: CodecBufferDeclaration<'u32', readonly ['stableGlyphId']>;
   readonly transformIndex?: CodecBufferDeclaration<'u32', readonly ['transformIndex']>;
-  /** Host-owned occurrence displacement. Raster bodies never receive this declaration; adapters choose its layout. */
-  readonly placementOffset?: CodecBufferDeclaration<'f32', readonly ['inlineOffset', 'blockOffset']>;
+  /** Host-owned occurrence indirection. Raster bodies never receive this declaration; adapters choose its layout. */
+  readonly placementSlot?: CodecBufferDeclaration<'u32', readonly ['placementSlot']>;
+}
+
+/** Adapter-owned physical target for one host semantic. Portable raster bodies never select this packing. */
+export interface CodecProgramU32StoreTarget {
+  readonly buffer: CodecBufferId;
+  readonly lane: number;
 }
 
 /** @internal Attach engine-owned stores after a technique body has been authored and authenticated. */
@@ -236,40 +242,41 @@ export function attachHostCodecProgramSystemBuffers<Schema extends TechniqueSche
   body: CompiledCodecProgramBody<Schema>,
   schema: Schema,
   system: CodecProgramSystemBuffers,
+  placementSlotTarget?: CodecProgramU32StoreTarget,
 ): CompiledCodecProgramBody<Schema> {
   const opcodes = textShaperAbi.codec.opcodes;
-  const operations = [...body.operations];
-  const storeU32 = (input: number, buffer: CodecBufferId): void => {
+  const placementTarget =
+    system.placementSlot === undefined
+      ? undefined
+      : (placementSlotTarget ?? { buffer: system.placementSlot.id, lane: 0 });
+  const operations =
+    placementSlotTarget === undefined
+      ? [...body.operations]
+      : body.operations.filter(
+          (operation) =>
+            !(
+              operation.opcode === opcodes.storeU32 &&
+              operation.immediate0 === placementSlotTarget.buffer &&
+              (operation.operand1 ?? 0) === placementSlotTarget.lane
+            ),
+        );
+  const storeU32 = (input: number, buffer: CodecBufferId, lane = 0): void => {
     operations.push(
       { opcode: opcodes.loadU32, target: 0, operand0: input },
-      { opcode: opcodes.storeU32, operand0: 0, operand1: 0, immediate0: buffer },
-    );
-  };
-  const storeF32 = (input: number, buffer: CodecBufferId, lane: number): void => {
-    operations.push(
-      { opcode: opcodes.loadF32, target: 0, operand0: input },
-      { opcode: opcodes.storeF32, operand0: 0, operand1: lane, immediate0: buffer },
+      { opcode: opcodes.storeU32, operand0: 0, operand1: lane, immediate0: buffer },
     );
   };
   storeU32(1, system.stableGlyphId.id);
   if (system.transformIndex !== undefined) storeU32(0, system.transformIndex.id);
-  if (system.placementOffset !== undefined) {
-    storeF32(0, system.placementOffset.id, 0);
-    storeF32(1, system.placementOffset.id, 1);
-  }
+  if (placementTarget !== undefined) storeU32(2, placementTarget.buffer, placementTarget.lane);
   const attached = { ...body, operations };
   recordTechniqueCodecBody(attached, {
     schema,
     stableGlyphId: system.stableGlyphId.id,
     transformIndex: system.transformIndex?.id,
-    placementOffset: system.placementOffset?.id,
+    placementSlot: placementTarget,
   });
   return attached;
-}
-
-interface CodecProgramSystemSemantics {
-  readonly placementInline: CodecF32Value;
-  readonly placementBlock: CodecF32Value;
 }
 
 type CodecBufferLaneValues<Buffer extends CodecBufferDeclaration> = CodecLaneTuple<Buffer['scalar'], Buffer['lanes']>;
@@ -401,7 +408,7 @@ function createTechniqueProgram<const Schema extends TechniqueSchemaMetadata>(
         schema,
         stableGlyphId: undefined,
         transformIndex: undefined,
-        placementOffset: undefined,
+        placementSlot: undefined,
       });
       return body;
     },
@@ -423,7 +430,7 @@ function createCodecProgramBuilder<
   options: CodecProgramOptions<F32, U32>,
   schema: Schema,
   relativePlacement: boolean,
-): CodecProgramBuilder<F32, U32, Schema> & { readonly systemSemantics: CodecProgramSystemSemantics } {
+): CodecProgramBuilder<F32, U32, Schema> {
   if (!isNonArrayObject(options)) throw new TypeError('codec program options need an object');
   if (!(typeof options.scope === 'string' && Object.hasOwn(textShaperAbi.codec.inputScopes, options.scope))) {
     throw new TypeError('codec program scope is not a codec input scope');
@@ -459,7 +466,8 @@ function createCodecProgramBuilder<
     (hasShadow ? 2 : 0) +
     (options.inverseFontSize === true ? 1 : 0) +
     bindingF32Names.length;
-  const u32InputCount = 2 + (hasOutline ? 1 : 0) + (hasShadow ? 1 : 0) + bindingU32Names.length;
+  const u32InputCount =
+    2 + (relativePlacement ? 1 : 0) + (hasOutline ? 1 : 0) + (hasShadow ? 1 : 0) + bindingU32Names.length;
   if (f32InputCount > MAX_REGISTERS || u32InputCount > MAX_REGISTERS) {
     throw new RangeError(`codec input fields exceed the ${MAX_REGISTERS}-slot register file`);
   }
@@ -470,11 +478,11 @@ function createCodecProgramBuilder<
   const inputs: CodecInput[] = [
     {
       scope: 'semantic',
-      field: relativePlacement ? semanticF32.placementInline : semanticF32.inlineOrigin,
+      field: semanticF32.inlineOrigin,
     },
     {
       scope: 'semantic',
-      field: relativePlacement ? semanticF32.placementBlock : semanticF32.blockOrigin,
+      field: semanticF32.blockOrigin,
     },
     { scope: 'semantic', field: semanticF32.fontSize },
     { scope: 'semantic', field: semanticF32.foregroundRed },
@@ -492,6 +500,7 @@ function createCodecProgramBuilder<
     ...bindingF32Names.map((_, field) => ({ scope: options.scope, field })),
     { scope: 'semantic', field: semanticU32.transformIndex },
     { scope: 'semantic', field: semanticU32.stableGlyphId },
+    ...(relativePlacement ? [{ scope: 'semantic' as const, field: semanticU32.placementSlot }] : []),
     ...(hasOutline ? [{ scope: 'semantic' as const, field: semanticU32.outlineRgba }] : []),
     ...(hasShadow ? [{ scope: 'semantic' as const, field: semanticU32.shadowRgba }] : []),
     ...bindingU32Names.map((_, field) => ({ scope: options.scope, field })),
@@ -500,11 +509,11 @@ function createCodecProgramBuilder<
   let nextF32 = 0;
   const loadF32 = (label: string): CodecF32Value =>
     f32Value({ kind: 'loadF32', input: nextF32++, label, authoringScope });
-  const placementInline = loadF32('placement.inline');
-  const placementBlock = loadF32('placement.block');
+  const inlineOrigin = loadF32('inlineOrigin');
+  const blockOrigin = loadF32('blockOrigin');
   const semantics: CodecProgramSemantics = {
-    inlineOrigin: relativePlacement ? constantF32(0) : placementInline,
-    blockOrigin: relativePlacement ? constantF32(0) : placementBlock,
+    inlineOrigin,
+    blockOrigin,
     fontSize: loadF32('fontSize'),
     color: {
       red: loadF32('color.red'),
@@ -514,13 +523,23 @@ function createCodecProgramBuilder<
     },
     outline: hasOutline
       ? {
-          color: u32Value({ kind: 'loadU32', input: 2, label: 'outline.color', authoringScope }),
+          color: u32Value({
+            kind: 'loadU32',
+            input: 2 + (relativePlacement ? 1 : 0),
+            label: 'outline.color',
+            authoringScope,
+          }),
           widthEm: loadF32('outline.widthEm'),
         }
       : undefined,
     shadow: hasShadow
       ? {
-          color: u32Value({ kind: 'loadU32', input: hasOutline ? 3 : 2, label: 'shadow.color', authoringScope }),
+          color: u32Value({
+            kind: 'loadU32',
+            input: 2 + (relativePlacement ? 1 : 0) + (hasOutline ? 1 : 0),
+            label: 'shadow.color',
+            authoringScope,
+          }),
           offsetXEm: loadF32('shadow.offsetXEm'),
           offsetYEm: loadF32('shadow.offsetYEm'),
         }
@@ -531,7 +550,7 @@ function createCodecProgramBuilder<
   };
   const binding: Record<string, CodecF32Value | CodecU32Value> = {};
   for (const name of bindingF32Names) binding[name] = loadF32(name);
-  const bindingU32Offset = 2 + (hasOutline ? 1 : 0) + (hasShadow ? 1 : 0);
+  const bindingU32Offset = 2 + (relativePlacement ? 1 : 0) + (hasOutline ? 1 : 0) + (hasShadow ? 1 : 0);
   for (const [index, name] of bindingU32Names.entries()) {
     binding[name] = u32Value({ kind: 'loadU32', input: bindingU32Offset + index, label: name, authoringScope });
   }
@@ -541,7 +560,6 @@ function createCodecProgramBuilder<
 
   return {
     semantics,
-    systemSemantics: { placementInline, placementBlock },
     // The two validated name lists above are the only keys written into this owned record.
     binding: binding as CodecProgramBuilder<F32, U32, Schema>['binding'],
     store(buffer, lanes) {

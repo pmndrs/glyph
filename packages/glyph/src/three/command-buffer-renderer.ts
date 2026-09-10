@@ -55,11 +55,10 @@ export interface ThreeRendererHost {
   objectForTransform?(transformId: number, source: THREE.Object3D): THREE.Object3D;
   /** Allocates detached per-record storage before any material captures it. */
   prepareGlyphStorage?(storageKey: string, capacityRecords: number): void;
-  /** Resolves per-record transforms and pivots for one physical record index space. */
+  /** Resolves shader-ready per-record transforms for one physical record index space. */
   glyphStorage?(storageKey: string):
     | Readonly<{
         transforms: THREE.StorageInstancedBufferAttribute;
-        pivots: THREE.StorageInstancedBufferAttribute;
       }>
     | undefined;
 }
@@ -242,6 +241,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     for (const texture of this.#bitmapTextures.values()) texture.dispose();
     for (const atlas of this.#msdfAtlases.values()) atlas.dispose();
     for (const page of this.#slugPages.values()) page.dispose();
+    for (const buffer of this.#buffers.values()) buffer.attribute.dispose();
     this.#materials.clear();
     this.#bitmapTextures.clear();
     this.#msdfAtlases.clear();
@@ -287,6 +287,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     }
     const context: PreparationContext = {
       buffers: replacesDraws ? new Map(this.#buffers) : this.#buffers,
+      placementTable: undefined,
       resources: replacesDraws ? new Map(this.#resources) : this.#resources,
       bitmapTextures: replacesDraws ? new Map(this.#bitmapTextures) : this.#bitmapTextures,
       msdfAtlases: replacesDraws ? new Map(this.#msdfAtlases) : this.#msdfAtlases,
@@ -302,7 +303,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     this.#preparation = context;
     try {
       this.#readBoundResources(frame, context);
-      this.#readBoundBuffers(frame, context.buffers);
+      this.#readBoundBuffers(frame, context);
       preparedDraws =
         frame.displayList.kind === 'replace'
           ? prepareDrawReplacement({
@@ -358,6 +359,8 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
 
   #commit(prepared: PreparedPublication): unknown | undefined {
     let failure: unknown;
+    const retainedBuffers = new Set(prepared.context.buffers.values());
+    const retiredBuffers = [...this.#buffers.values()].filter((buffer) => !retainedBuffers.has(buffer));
     const attempt = (operation: () => void): void => {
       try {
         operation();
@@ -405,6 +408,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     for (const material of prepared.context.newMaterials) this.#ownedMaterials.add(material);
     for (const material of prepared.retiredMaterials) attempt(() => material.dispose());
     for (const texture of prepared.retiredTextures) attempt(() => texture.dispose());
+    for (const buffer of retiredBuffers) attempt(() => buffer.attribute.dispose());
     for (const draw of this.#draws) attempt(() => draw.updateMatrixWorld(false));
     this.#originRecords.clear();
     return failure;
@@ -436,16 +440,23 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     }
   }
 
-  #readBoundBuffers(frame: CommandBufferView<ThreeBindings>, buffers: Map<ThreeBufferBinding, RetainedBuffer>): void {
+  #readBoundBuffers(frame: CommandBufferView<ThreeBindings>, context: PreparationContext): void {
+    const { buffers } = context;
+    context.placementTable = [...buffers.values()].find((buffer) => buffer.codecBufferId === 'placement');
+    let placementUpdated = false;
     for (const command of frame.updates.buffers) {
       if (buffers.has(command.buffer)) continue;
       const declaration = command.buffer.input.declaration;
-      const codecBufferId = declaration.kind === 'order' ? 'order' : declaration.value.id;
+      const codecBufferId =
+        declaration.kind === 'order' ? 'order' : declaration.kind === 'placement' ? 'placement' : declaration.value.id;
+      if (codecBufferId === 'placement' && placementUpdated) {
+        throw new Error('Three received more than one session placement table');
+      }
       const array = scalarArray(command.scalarType, command.byteLength);
       const attribute = new THREE.StorageInstancedBufferAttribute(array, command.vectorWidth);
       attribute.setUsage(THREE.DynamicDrawUsage);
       attribute.needsUpdate = true;
-      buffers.set(command.buffer, {
+      const retained: RetainedBuffer = {
         binding: command.buffer,
         storageKey: `buffer:${this.#bindingId(command.buffer)}`,
         codecBufferId,
@@ -455,7 +466,12 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
         capacityRecords: command.capacityRecords,
         array,
         attribute,
-      });
+      };
+      buffers.set(command.buffer, retained);
+      if (codecBufferId === 'placement') {
+        context.placementTable = retained;
+        placementUpdated = true;
+      }
     }
   }
 
@@ -512,6 +528,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
   #applyBoundRetirements(frame: CommandBufferView<ThreeBindings>, context: PreparationContext): void {
     for (const retirement of frame.updates.retirements) {
       if (retirement.kind === 'buffer') {
+        if (context.placementTable?.binding === retirement.buffer) context.placementTable = undefined;
         context.buffers.delete(retirement.buffer);
         for (const [key, realization] of context.materials) {
           if (realization.buffers.includes(retirement.buffer)) context.materials.delete(key);
@@ -629,6 +646,15 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     for (const texture of context.newTextures) {
       try {
         texture.dispose();
+      } catch {
+        // Candidate cleanup cannot replace the error that caused the rejection.
+      }
+    }
+    const retainedBuffers = new Set(this.#buffers.values());
+    for (const buffer of context.buffers.values()) {
+      if (retainedBuffers.has(buffer)) continue;
+      try {
+        buffer.attribute.dispose();
       } catch {
         // Candidate cleanup cannot replace the error that caused the rejection.
       }
