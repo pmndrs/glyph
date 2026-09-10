@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:20385486c1683ff6af15f1f57fb990b9660c7c07e18c1552f4829cccd96b9bc7'
+source_digest: 'sha256:932382f01a346abe6c507102001efc95db2b092a96b7e9c2bbf3bcf29b71af68'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -525,7 +525,11 @@ The retained Rust geometry authority remains unchanged, zero-exclusion paragraph
 first nonempty exclusion set reserves 16 retained entries before ordinary geometric growth. Three's former one-exclusion
 feature cap is removed without coupling entity capacity to the separate slot-output limit.
 
-Obstacle-local dirty-band convergence, projected known-geometry objects, and same-source drop caps remain in
+For retained exact-width, non-ellipsis flow with stable region/exclusion topology, moving any number of exclusions in one
+region now unions their old/new block bounds and margins into one dirty band. Rust retains every preceding line, resumes
+the existing band composer at the retained source cursor, and waits until it crosses the complete future dirty horizon
+before accepting an exact line/fragment/slot suffix certificate. Structural, cross-region, flexible-width, and ellipsis
+changes fall back to the cold authority. Projected known-geometry objects and same-source drop caps remain in
 [Milestone 12's fragment-relative reflow plan](../planning/fragment-relative-reflow.md); balanced columns remain deferred.
 
 ## Renderer Codec

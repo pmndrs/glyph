@@ -18,7 +18,7 @@ use super::{
         RetainedGather,
     },
     flow_composition::{EllipsisReplacement, FlowLayoutArena},
-    flow_geometry::FlowGeometryArena,
+    flow_geometry::{FlowGeometryArena, LocalizedGeometryChange},
     font_binding::FontRenderBinding,
     frame::{
         CommittedUpdate, MeasuredParagraph, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE,
@@ -3946,10 +3946,56 @@ impl ParagraphState {
         let style_storage = &self.styles.active().arena;
         let runs = self.shaping_runs.active().runs();
         let text = self.text.active().units.as_slice();
+        let localized_geometry_change = if self.geometry.is_prepared() {
+            self.geometry
+                .pending()
+                .localized_change_from(self.geometry.committed())?
+        } else {
+            LocalizedGeometryChange::Unchanged
+        };
         let geometry = self.geometry.active();
         let max_slots_per_band =
             usize::try_from(max_slots_per_band).map_err(|_| EngineError::ResultTooLarge)?;
         let max_lines = usize::try_from(max_lines).map_err(|_| EngineError::ResultTooLarge)?;
+        if !self.style_invalidation.metrics
+            && !self.clusters.is_prepared()
+            && self.text_edit.is_none()
+            && self.boundary_shape.records.is_empty()
+            && geometry
+                .constraints
+                .iter()
+                .all(|constraint| constraint.overflow != OVERFLOW_ELLIPSIS)
+            && let LocalizedGeometryChange::ExclusionBand(dirty) = localized_geometry_change
+            && {
+                let (pending_flow, committed_flow) = self.flow_layout.derive_mut();
+                pending_flow.rebuild_after_exclusion_change_until_state_converges(
+                    committed_flow,
+                    geometry,
+                    clusters,
+                    styles,
+                    &mut self.flow_slot_scratch,
+                    dirty,
+                    max_lines,
+                    max_slots_per_band,
+                    |handle| shaper.font_metrics(handle),
+                    |stack_handle| {
+                        font_stacks
+                            .binary_search_by_key(&stack_handle, |stack| stack.handle)
+                            .ok()
+                            .and_then(|index| font_stacks[index].fonts.first().copied())
+                            .and_then(|handle| {
+                                font_bindings
+                                    .iter()
+                                    .find(|binding| binding.handle == handle)
+                                    .map(|binding| binding.shaping_handle)
+                            })
+                    },
+                )?
+            }
+        {
+            self.flow_layout.mark_prepared();
+            return Ok(());
+        }
         if !self.geometry.is_prepared()
             && !self.style_invalidation.metrics
             && self.boundary_shape.records.is_empty()
