@@ -55,6 +55,15 @@ export function compileEngineGeometry(
   const inlineEnd = width.mode === 'unconstrained' ? 0x01_00_00_00 : width.size;
   const blockEnd = height.mode === 'unconstrained' ? 0x01_00_00_00 : height.size;
   const maxLines = layout?.maxLines ?? 0;
+  const dropCap = layout?.dropCap;
+  const encodedDropCap = (() => {
+    if (dropCap === undefined) return undefined;
+    const { contour, ...values } = dropCap;
+    return {
+      ...values,
+      ...(contour === undefined ? {} : { contour: contour.map(([inline, block]) => ({ inline, block })) }),
+    };
+  })();
   const columnWidth = (inlineEnd - columns.gap * (columns.count - 1)) / columns.count;
   if (columns.count > 1 && columnWidth <= 0) {
     throw new RangeError('layout columns and gap leave no positive column measure');
@@ -85,7 +94,7 @@ export function compileEngineGeometry(
       ...(layout?.spaceAfter === undefined ? {} : { spaceAfter: layout.spaceAfter }),
       ...(layout?.justify === undefined ? {} : { justify: layout.justify }),
       ...(layout?.lastLine === undefined ? {} : { lastLine: layout.lastLine }),
-      ...(layout?.dropCap === undefined ? {} : { dropCap: layout.dropCap }),
+      ...(encodedDropCap === undefined ? {} : { dropCap: encodedDropCap }),
     },
     regions: Array.from({ length: columns.count }, (_, column) => {
       const inlineStart = column * (columnWidth + columns.gap);

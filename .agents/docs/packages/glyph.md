@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:70724b1e696284a6a5e436dcba4a0f410bf30f6145d4a09265750e8cb13cd637'
+source_digest: 'sha256:7f2825d23064a38006269ef23ed2cbceeb80854418543e4fb6964637ec36afd6'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -548,7 +548,8 @@ convex hull. Geometry wholly behind the text plane produces no exclusion. Neithe
 claims hidden-surface or material-coverage exactness.
 
 The shared paragraph layout surface also admits a same-source `dropCap` with a bounded line span, text-top or baseline
-alignment, logical side, and inline/block margins. Rust selects the first complete extended grapheme and extends through
+alignment, logical side, inline/block margins, and an optional caller-authored simple contour normalized over the
+generated cap exclusion box. Rust selects the first complete extended grapheme and extends through
 the first shaping-safe cluster edge within the bounded search; when no safe edge exists it disables the cap rather than
 splitting shaped content. The selected prefix keeps its authored shaping/style/raster data, is positioned by the same
 glyph authority as the body, and becomes an additional conservative glyph/design-bounds cut before body composition.
@@ -557,8 +558,9 @@ into the first logical line without duplicating source glyphs. Focused evidence 
 side mapping, safe-edge refusal, an explicit multi-line region with another exclusion, and incremental exclusion movement
 matching a cold rebuild for both text-top and baseline alignment. Same-length edits inside the cap source now rederive
 the cap, recompose through every cap-affected band, and retain the exact cold-equivalent suffix once the line state
-converges. Arbitrary cap polygons, mixed-raster Editorial realization, and the complete caret/selection/browser matrix
-remain Milestone 12.4 work.
+converges. When a contour is present, Rust intersects it with each body-line band and conservatively reduces the result
+to the logical-side inline cut while preserving cap placement and source ownership. The refreshed live Editorial contour
+matrix and complete caret/selection/browser matrix remain Milestone 12.4 work.
 
 ## Renderer Codec
 

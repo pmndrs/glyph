@@ -608,6 +608,34 @@ test('text property registries validate and freeze reusable rules', () => {
     () => ParagraphLayout.create({ broken: { dropCap: { lines: 2, marginInline: -1 } } }),
     /dropCap marginInline/,
   );
+  ParagraphLayout.create({
+    contoured: {
+      dropCap: {
+        lines: 3,
+        contour: [
+          [0, 0],
+          [1, 0],
+          [0, 1],
+        ],
+      },
+    },
+  });
+  assert.throws(
+    () =>
+      ParagraphLayout.create({
+        broken: {
+          dropCap: {
+            lines: 2,
+            contour: [
+              [0, 0],
+              [1.1, 0],
+              [0, 1],
+            ],
+          },
+        },
+      }),
+    /within \[0, 1\]/,
+  );
 });
 
 test('public 2D flow accepts keyed polygons and composes around multiple exclusions', async (t) => {
@@ -866,7 +894,18 @@ test('same-source drop caps preserve source ownership and flow body lines beside
     text: txt`${cap`f\u0301`}ollow brown fox jumps over the lazy dog and keeps running through the narrow column`,
     style: { fontSize: 16, lineHeight: 20 },
     constraints: { width: { mode: 'exact', size: 180 } },
-    layout: { wrap: 'word', dropCap: { lines: 3, marginInline: 4 } },
+    layout: {
+      wrap: 'word',
+      dropCap: {
+        lines: 3,
+        marginInline: 4,
+        contour: [
+          [0, 0],
+          [1, 0],
+          [0, 1],
+        ],
+      },
+    },
   };
   const label = three.createText(properties);
   const scene = new THREE.Scene();
@@ -896,6 +935,10 @@ test('same-source drop caps preserve source ownership and flow body lines beside
   assert.equal(capIndex, 0);
   assert.equal(firstBodyIndex, 2);
   assert.ok(layout.x[firstBodyIndex] > layout.x[capIndex] + 20, 'the first body line starts beside the cap');
+  assert.ok(
+    layout.x[layout.lineGlyphStarts[1]] < layout.x[firstBodyIndex],
+    'the caller-authored triangular contour gives the next body line more inline space',
+  );
   const firstUncutLineGlyph = layout.lineGlyphStarts[3];
   assert.ok(
     layout.x[firstUncutLineGlyph] < layout.x[firstBodyIndex],

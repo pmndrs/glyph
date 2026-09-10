@@ -948,6 +948,8 @@ mod tests {
             drop_cap_side: 0,
             drop_cap_margin_inline: 0.0,
             drop_cap_margin_block: 0.0,
+            drop_cap_vertices_offset: 0,
+            drop_cap_vertex_count: 0,
         }
     }
 

@@ -341,6 +341,9 @@ struct EngineConstraintRecord {
     drop_cap_side: u8,
     drop_cap_margin_inline: f32,
     drop_cap_margin_block: f32,
+    drop_cap_vertices_offset: u32,
+    drop_cap_vertex_count: u16,
+    drop_cap_reserved: u16,
 }
 
 #[repr(C)]
@@ -1493,6 +1496,21 @@ field_offset!(
     EngineConstraintRecord,
     drop_cap_margin_block
 );
+field_offset!(
+    ENGINE_CONSTRAINT_DROP_CAP_VERTICES_OFFSET,
+    EngineConstraintRecord,
+    drop_cap_vertices_offset
+);
+field_offset!(
+    ENGINE_CONSTRAINT_DROP_CAP_VERTEX_COUNT,
+    EngineConstraintRecord,
+    drop_cap_vertex_count
+);
+field_offset!(
+    ENGINE_CONSTRAINT_DROP_CAP_RESERVED,
+    EngineConstraintRecord,
+    drop_cap_reserved
+);
 field_offset!(ENGINE_FLOW_VERTEX_INLINE, EngineFlowVertexRecord, inline);
 field_offset!(ENGINE_FLOW_VERTEX_BLOCK, EngineFlowVertexRecord, block);
 field_offset!(ENGINE_REGION_ID, EngineRegionRecord, id);
@@ -2320,7 +2338,10 @@ pub fn json() -> String {
                 "dropCapAlignment": ENGINE_CONSTRAINT_DROP_CAP_ALIGNMENT,
                 "dropCapSide": ENGINE_CONSTRAINT_DROP_CAP_SIDE,
                 "dropCapMarginInline": ENGINE_CONSTRAINT_DROP_CAP_MARGIN_INLINE,
-                "dropCapMarginBlock": ENGINE_CONSTRAINT_DROP_CAP_MARGIN_BLOCK
+                "dropCapMarginBlock": ENGINE_CONSTRAINT_DROP_CAP_MARGIN_BLOCK,
+                "dropCapVerticesOffset": ENGINE_CONSTRAINT_DROP_CAP_VERTICES_OFFSET,
+                "dropCapVertexCount": ENGINE_CONSTRAINT_DROP_CAP_VERTEX_COUNT,
+                "dropCapReserved": ENGINE_CONSTRAINT_DROP_CAP_RESERVED
             },
             "engineFlowVertex": {
                 "size": ENGINE_FLOW_VERTEX_RECORD_SIZE,

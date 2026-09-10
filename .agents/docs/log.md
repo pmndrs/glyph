@@ -2,6 +2,14 @@
 
 ## 2026-09-10
 
+- **Authored normalized same-source drop-cap contours** — `DropCapLayout.contour` now accepts a validated simple polygon
+  in normalized coordinates over the existing generated cap exclusion box. The generated ABI retains the contour beside
+  the cap controls; Rust validates, fingerprints, stages, and projects it conservatively into each body-line band while
+  preserving the existing source selection, placement, alignment, side, and margin semantics. Focused evidence covers
+  exact frame-wire serialization, tapered line cuts, a mixed Slug-cap/Bitmap-body retained edit, all 330 Rust library
+  tests, all 54 Three integration tests, and the strict public type project. Editorial now authors the contour; its live
+  twelve-cell browser matrix remains to be refreshed before the prior timing evidence is attributed to this path.
+
 - **Projected explicit Three silhouettes without flattening their concavity** — `projectTextFlowSilhouette` accepts an
   ordered finite object-local `Vector3` ring, clips it through the camera-side text plane and camera frustum, ray-projects
   it into paragraph flow coordinates, and returns the existing normalized keyed exclusion. Zero-inflation projections

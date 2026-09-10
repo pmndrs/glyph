@@ -609,9 +609,11 @@ transactionally. The initial model specifies cap height in lines, baseline/cap a
 caller-authored polygon. Raster program is per display run, so a Slug cap beside Bitmap or MTSDF body text shares core
 layout and source mapping without adapter-owned realization logic.
 
-The first production slice uses transformed glyph/design bounds or an explicit polygon. Outline-tight automatic flow is
-separately evidence-gated because the retained shaping artifact does not own contour points. Arbitrary rendered-pixel
-occlusion remains out of scope.
+The first production slice uses transformed glyph/design bounds or an explicit caller-authored contour normalized over
+that generated exclusion box. The contour preserves the existing height, alignment, logical-side, and margin controls;
+the core conservatively projects its intersection with each body-line band into one logical-side inline cut. Outline-tight
+automatic flow is separately evidence-gated because the retained shaping artifact does not own contour points. Arbitrary
+rendered-pixel occlusion remains out of scope.
 
 The Editorial acceptance scene combines a stylized same-source drop cap with justified columns and a moving 3D object.
 The object repeatedly approaches, intersects, passes through, and exits the text plane so its projected polygon changes
@@ -895,16 +897,17 @@ through the camera-side text-plane and frustum half-spaces into the existing key
 silhouette preserves its validated simple concavity; conservative inflation intentionally produces a hull.
 Perspective/orthographic, crossing, enclosing, behind-plane, clipping, quantization, malformed-ring, and
 invalid-transform cases have focused package evidence. Editorial now owns two justified regions, a shaping-safe
-three-line drop cap, and a rotating box
+three-line drop cap with a normalized simple contour, and a rotating box
 projected independently into both columns. Focused Chromium evidence covers all six Bitmap/MTSDF/Slug × WebGPU/WebGL2
 cells through native TSL and the experimental Three/TypeGPU shader path; every cell retains three draws through 64
 projected-obstacle reflows. The same-source drop-cap slice now carries
 bounded line/alignment/side/margin controls through the generated ABI; selects the first complete grapheme through a
 HarfRust-safe boundary; resumes body composition at that exact cluster; derives its conservative cut from retained
-glyph/design bounds; and positions the prefix through the existing body authority. Focused Rust evidence covers safe-edge
-refusal, RTL logical-side mapping, and a simultaneous rectangle exclusion, while an attached Three integration proves a
-combining-mark cap has no duplicated/omitted source glyphs and shares the existing x/y renderer path. Arbitrary cap
-polygons and live mixed-raster browser parity remain open. The public Three path now realizes a Slug cap beside a Bitmap
+glyph/design bounds or the authored contour; and positions the prefix through the existing body authority. Focused Rust
+evidence covers safe-edge refusal, RTL logical-side mapping, a simultaneous rectangle exclusion, and tapered contour cuts,
+while an attached Three integration proves a combining-mark cap has no duplicated/omitted source glyphs and shares the
+existing x/y renderer path. The live mixed-raster browser matrix still needs to be rerun with the authored contour. The
+public Three path now realizes a Slug cap beside a Bitmap
 body as two retained raster batches, preserves that topology across a cap-source edit, and matches a simultaneously
 rendered cold paragraph for glyph measurements, cap/body caret hits, and selection rectangles after exclusion movement.
 Explicit multi-line flow now composes the cap beside another exclusion through the public Three

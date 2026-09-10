@@ -84,6 +84,16 @@ impl FlowGeometryArena {
             let mut constraint = geometry
                 .constraint(index)
                 .ok_or(EngineError::InvalidRequest)?;
+            constraint.drop_cap_vertices_offset = if constraint.drop_cap_vertex_count == 0 {
+                0
+            } else {
+                append_vertices(
+                    &mut self.vertices,
+                    geometry,
+                    constraint.drop_cap_vertices_offset,
+                    constraint.drop_cap_vertex_count,
+                )?
+            };
             let source_region_start = usize::try_from(constraint.region_start)
                 .map_err(|_| EngineError::InvalidRequest)?;
             constraint.region_start =
@@ -141,6 +151,14 @@ impl FlowGeometryArena {
         self.vertices.clear();
     }
 
+    pub(crate) fn retained_vertices(
+        &self,
+        start: u32,
+        count: u16,
+    ) -> Result<&[FlowVertex], EngineError> {
+        polygon_vertices(self, start, count)
+    }
+
     pub(crate) fn localized_change_from(
         &self,
         previous: &Self,
@@ -150,6 +168,14 @@ impl FlowGeometryArena {
             || self.exclusions.len() != previous.exclusions.len()
         {
             return Ok(LocalizedGeometryChange::Unsupported);
+        }
+        for (next, old) in self.constraints.iter().zip(&previous.constraints) {
+            if self.retained_vertices(next.drop_cap_vertices_offset, next.drop_cap_vertex_count)?
+                != previous
+                    .retained_vertices(old.drop_cap_vertices_offset, old.drop_cap_vertex_count)?
+            {
+                return Ok(LocalizedGeometryChange::Unsupported);
+            }
         }
         for (next, old) in self.regions.iter().zip(&previous.regions) {
             if !same_region_geometry(self, next, previous, old)? {
@@ -523,7 +549,7 @@ fn polygon_section(
     Ok(())
 }
 
-fn polygon_projection(
+pub(crate) fn polygon_projection(
     vertices: &[FlowVertex],
     block_start: f64,
     block_end: f64,

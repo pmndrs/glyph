@@ -36,6 +36,14 @@ const EDITORIAL_BOUNDED_JUSTIFY = {
 } as const;
 
 const EDITORIAL_DROP_CAP_COLOR = '#e87938';
+const EDITORIAL_DROP_CAP_CONTOUR = [
+  [0, 0],
+  [1, 0],
+  [1, 0.3],
+  [0.6, 0.3],
+  [0.85, 1],
+  [0, 1],
+] as const;
 const EDITORIAL_OBSTACLE_COLOR = 0x2dd4bf;
 const EDITORIAL_FLOW_REGION_KEYS = ['editorial-left', 'editorial-right'] as const;
 const EDITORIAL_OBSTACLE_KEY = 'editorial-projected-object';
@@ -152,7 +160,12 @@ export function createEditorialEntries(
       wrap: 'word',
       align: 'justify',
       firstLineIndent: context.fontSize * 1.5,
-      dropCap: { lines: 3, marginInline: context.fontSize * 0.2, marginBlock: context.fontSize * 0.05 },
+      dropCap: {
+        lines: 3,
+        marginInline: context.fontSize * 0.2,
+        marginBlock: context.fontSize * 0.05,
+        contour: EDITORIAL_DROP_CAP_CONTOUR,
+      },
       justify: EDITORIAL_JUSTIFY,
       overflow: 'clip',
     },
