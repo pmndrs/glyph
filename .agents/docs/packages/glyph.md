@@ -560,7 +560,8 @@ matching a cold rebuild for both text-top and baseline alignment. Same-length ed
 the cap, recompose through every cap-affected band, and retain the exact cold-equivalent suffix once the line state
 converges. When a contour is present, Rust intersects it with each body-line band and conservatively reduces the result
 to the logical-side inline cut while preserving cap placement and source ownership. The refreshed live Editorial contour
-matrix and complete caret/selection/browser matrix remain Milestone 12.4 work.
+matrix passes all twelve raster/backend/shader cells with three retained draws; the complete caret/selection interaction
+matrix remains Milestone 12.4 work.
 
 ## Renderer Codec
 
@@ -1328,14 +1329,13 @@ identity and exact outline presence authenticate the retained rows; any mismatch
 then resolves changed Codec dependencies and updates semantic position inputs plus CPU ink bounds without repeating font
 selection, raster resource lookup, or full `PlanGlyph` construction. Other changes use the general authorities.
 
-Fresh 31-sample ordered Bitmap repeats after direct semantic-origin resolution measure `2.883 / 2.928 ms` median/p95
-for 21,805 Latin glyphs and `2.246 / 2.283 ms` for 21,978 dense-CJK glyphs. The exact clean main comparison measured
-`3.767 / 3.850 ms` for Latin and `2.974 / 3.127 ms` for CJK. The retained candidate is therefore 23.5% faster at the
-Latin median and 24.5% faster at the CJK median, with 23.9% and 27.0% lower p95 respectively. Every active-resize sample
-still emits one unchanged f32x2
-direct-offset patch—174,440 bytes for Latin and 175,824 bytes for CJK—so these results establish a CPU positioning win,
-not the final compact-publication result. These 8-warmup/31-sample checkpoints are directional evidence; the final
-40-warmup/101-sample interleaved release matrix remains open.
+The final A/B/B/A ordered Bitmap comparison uses 40 warmups and two 101-sample passes per revision. Pooled current
+median/p95 is `2.874 / 2.915 ms` for 21,805 Latin glyphs and `2.233 / 2.258 ms` for 21,978 dense-CJK glyphs. Exact clean
+main measures `3.697 / 3.754 ms` for Latin and `2.909 / 2.968 ms` for CJK. The retained candidate is therefore 22.3%
+faster at the Latin median and 23.2% faster at the CJK median, with 22.4% and 23.9% lower p95 respectively. Every
+active-resize sample still emits one unchanged f32x2 direct-offset patch—174,440 bytes for Latin and 175,824 bytes for
+CJK—so these results establish a CPU positioning win, not the final compact-publication result. The full direct occurrence
+upload remains the next transfer frontier; it is not a missing Three range-update optimization.
 
 The current renderer contract is exercised as product code rather than a synthetic placement graph. Direct TypeGPU
 renders Bitmap/MSDF/Slug through project Chromium WebGPU with nonzero-alpha counts `2148/2010/1992`. Native Three TSL and
