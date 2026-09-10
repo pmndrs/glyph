@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:7f95a1008091590623c6380533bb4f853323ab4cc1be25fbc6b5dacc86ec74f4'
+source_digest: 'sha256:f461c034ace613b9c1d30397621857be7ad14529ca4c5f7ed916ad9db383ce77'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1229,6 +1229,17 @@ translation arithmetic as a universal numeric replacement: deterministic inline 
 f32 bits, and a 4,111-case representation lab finds mismatches in every tested compact candidate. The active-resize
 benchmark alternates 420/434-unit widths and fails on any zero-patch sample. This narrows the next work; it does not yet
 authorize an ABI or renderer cutover.
+
+The next proof joins independent multi-fragment bidi, per-fragment hanging-space, and justification-site oracles to a
+safe-boundary visual mapper. It preserves multi-glyph cluster order and glyphless ownership, rejects boundary replacement
+until it has an explicit occurrence model, and keeps 4,096 homogeneous CJK clusters in one retained run. A 166-glyph
+real corpus reconstructs all 332 already-published f32 coordinates exactly from line and observable-slice anchors, but
+the f64 reassociation counterexamples remain authoritative for the future CPU cutover.
+
+Installed Three compilers accept branch-free 3x10, 2x16, and u32 occurrence-map specializations through storage WGSL and
+WebGL2 PBO GLSL as one instanced-mesh representation. The TypeGPU lab proves only that a separate placement group fits
+beside the saturated eight-buffer Slug Codec; real renderer storage ownership, lifetime, pixels, draw behavior, and
+custom-callback pressure remain open M1 gates.
 
 The optimized proof Wasm is 1,205,308 bytes, 43 bytes above the 1,205,265-byte frozen baseline. An active-resize
 A/B/B/A check was flat within run spread: baseline medians/p95s were `3.588/3.699` and `3.618/3.790 ms`; proof values
