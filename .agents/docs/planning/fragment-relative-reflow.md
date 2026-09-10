@@ -142,6 +142,22 @@ production SIMD. Its `text-shaper.wasm` is 1,205,265 bytes with SHA-256
 `1.493 / 3.743 ms`. The paired measurement-only lane measured `0.192 / 0.226 ms`. These are an attribution checkpoint,
 not the required three-round baseline or a merge claim.
 
+The first M1 proof keeps `LayoutRun` and both consumers behind test/kernel-lab compilation. Maximal adjacent
+`(source_run, font_handle)` topology preserves gapless cluster ownership and contiguous glyph spans; 4,096 homogeneous
+CJK clusters remain one run even across legal breaks, paint bindings, and negative advances. The extent walker is
+`O(log R + overlapping R)` and samples font metrics once per intersecting non-hard-break run. Ordinary base-LTR,
+zero-indent slices match current output across the normal mixed/fallback/ligature corpus, while deterministic inline and
+block counterexamples prove that algebraically reassociated run-local-plus-translation `f64` is not universally bit-exact.
+The separate 4,111-case representation lab likewise records 221 plain-f32, 129 high/low-translation, and 915
+break-anchor final-bit mismatches. These results reject those forms as universal semantic/query encodings; they do not
+select a GPU encoding without real-corpus shader, pixel, byte, and fetch-cost evidence. The active resize case alternates
+420 and 434 caller units and rejects every zero-patch sample; Latin, dense-CJK, and bidi smoke runs all published on every
+measured update. M1 remains open for bidi, justification, boundary replacement, visual-span mapping, and renderer proof.
+The optimized proof artifact is 1,205,308 bytes, 43 bytes above the frozen baseline despite no production-path source
+change. A same-driver A/B/B/A active-resize check measured baseline medians/p95s of `3.588/3.699` and `3.618/3.790 ms`
+versus proof `3.620/3.765` and `3.615/3.747 ms`; that is flat within run spread, not a speed claim. Instruction/code-size
+admission remains part of the completed M1 gate rather than being inferred from cfg isolation.
+
 ## Compatibility with the merged engine
 
 This is a factoring of the post-shaping positioning/publication tail, not another text engine. Preserve these merged
@@ -619,8 +635,8 @@ correctness, package, browser, performance, and documentation gates all pass.
   Wasm, and benchmark-driver hashes.
 - Add benchmark/lab-only phase accounting for line fit, run/glyph positioning, boundary shaping, decorations,
   semantic query, codec gather, plan diff, and publication; record records and bytes, not wall time inside production.
-- Add maintained `justify`, `bidi-resize`, and `equivalent-width` cases plus Bitmap/MTSDF/Slug CJK fixtures before using
-  those lanes as gates.
+- Add maintained `active-column-resize`, `justify`, `bidi-resize`, and `equivalent-width` cases plus Bitmap/MTSDF/Slug
+  CJK fixtures before using those lanes as gates.
 - Reproduce the 22k width/measurement evidence in three interleaved baseline rounds.
 
 Exit: attribution supports run placement/publication as the dominant removable work. If not, stop and update this plan.
