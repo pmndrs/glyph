@@ -5,7 +5,7 @@ use crate::FontMetrics;
 use super::{
     EngineError, FrameFault,
     cluster_state::{CLUSTER_HARD_BREAK, ClusterArena},
-    flow_geometry::{FlowGeometryArena, InlineSlotArena},
+    flow_geometry::{ExclusionDirtyBand, FlowGeometryArena, InlineSlotArena},
     frame::{
         ALIGN_JUSTIFY, AXIS_AT_MOST, AXIS_EXACT, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS,
         WRITING_HORIZONTAL_TB,
@@ -367,6 +367,207 @@ impl FlowLayoutArena {
                 self.clear();
                 return Ok(false);
             }
+        }
+        self.clear();
+        Ok(false)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn rebuild_after_exclusion_change_until_state_converges(
+        &mut self,
+        previous: &Self,
+        geometry: &FlowGeometryArena,
+        clusters: &ClusterArena,
+        styles: &[StyleSegment],
+        slots: &mut InlineSlotArena,
+        dirty: ExclusionDirtyBand,
+        max_lines: usize,
+        max_slots_per_band: usize,
+        metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
+        first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
+    ) -> Result<bool, EngineError> {
+        self.clear();
+        if !previous.ellipsis_threads.is_empty()
+            || previous.lines.is_empty()
+            || previous.lines.len() > max_lines
+            || previous
+                .lines
+                .iter()
+                .any(|line| usize::from(line.fragment_count) > max_slots_per_band)
+        {
+            return Ok(false);
+        }
+        let Some(region_index) = geometry
+            .regions
+            .iter()
+            .position(|region| region.record.id == dirty.region_id)
+        else {
+            return Ok(false);
+        };
+        let region = geometry
+            .regions
+            .get(region_index)
+            .ok_or(EngineError::InvalidRequest)?;
+        let Some(constraint) = geometry.constraints.iter().copied().find(|constraint| {
+            let Ok(start) = usize::try_from(constraint.region_start) else {
+                return false;
+            };
+            start <= region_index
+                && region_index < start.saturating_add(usize::from(constraint.region_count))
+        }) else {
+            return Ok(false);
+        };
+        if constraint.width_mode != AXIS_EXACT || constraint.overflow == OVERFLOW_ELLIPSIS {
+            return Ok(false);
+        }
+        let Some(region_line_start) = previous
+            .lines
+            .iter()
+            .position(|line| line.region_id == dirty.region_id)
+        else {
+            return Ok(false);
+        };
+        let region_line_end = previous
+            .lines
+            .iter()
+            .rposition(|line| line.region_id == dirty.region_id)
+            .ok_or(EngineError::InvalidRequest)?
+            .checked_add(1)
+            .ok_or(EngineError::ResultTooLarge)?;
+        if previous.lines[region_line_start..region_line_end]
+            .iter()
+            .any(|line| {
+                line.region_id != dirty.region_id
+                    || line.flow_thread_id != constraint.flow_thread_id
+            })
+        {
+            return Ok(false);
+        }
+        let mut prefix_end = region_line_start;
+        while let Some(line) = previous.lines.get(prefix_end).copied() {
+            if line.region_id != dirty.region_id
+                || line.block_start + line.height > dirty.block_start
+            {
+                break;
+            }
+            prefix_end += 1;
+        }
+        self.reserve(previous.lines.len(), previous.fragments.len())?;
+        for line_index in 0..prefix_end {
+            self.append_retained_line(previous, line_index)?;
+        }
+        let previous_thread_line = previous.lines[..prefix_end]
+            .iter()
+            .rposition(|line| line.flow_thread_id == constraint.flow_thread_id);
+        let cursor_start = if let Some(line_index) = previous_thread_line {
+            line_fragments(previous, previous.lines[line_index])?
+                .last()
+                .and_then(|fragment| usize::try_from(fragment.line.cluster_end).ok())
+                .ok_or(EngineError::InvalidRequest)?
+        } else {
+            cluster_for_offset(clusters, constraint.resume_cluster)?
+        };
+        let mut cursor = LineCursor::at_cluster(cursor_start);
+        let mut block = if prefix_end > region_line_start {
+            let line = previous.lines[prefix_end - 1];
+            line.block_start + line.height
+        } else {
+            let constraint_region_start = usize::try_from(constraint.region_start)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let first_region = constraint_region_start
+                .checked_add(usize::from(constraint.resume_region))
+                .ok_or(EngineError::InvalidRequest)?;
+            let mut start = f64::from(region.record.block_start);
+            if region_index == first_region {
+                start += f64::from(constraint.resume_block_offset);
+                if constraint.resume_cluster == 0 && constraint.resume_region == 0 {
+                    start += f64::from(constraint.space_before);
+                }
+            }
+            start
+        };
+        let constraint_line_limit = if constraint.max_lines == 0 {
+            max_lines
+        } else {
+            usize::try_from(constraint.max_lines)
+                .map_err(|_| EngineError::ResultTooLarge)?
+                .min(max_lines)
+        };
+        let thread_line_start = previous
+            .lines
+            .iter()
+            .position(|line| line.flow_thread_id == constraint.flow_thread_id)
+            .ok_or(EngineError::InvalidRequest)?;
+        let mut old_search = prefix_end;
+        let block_end = f64::from(region.record.block_end);
+        while !cursor.is_complete(clusters.starts.len())
+            && self.lines.len().saturating_sub(thread_line_start) < constraint_line_limit
+            && self.lines.len() < max_lines
+            && block < block_end
+        {
+            let estimate = extents_for_cluster(
+                clusters,
+                styles,
+                cursor
+                    .cluster()
+                    .min(clusters.starts.len().saturating_sub(1)),
+                metrics_for,
+                first_font_for_stack,
+            )?;
+            let estimate = positive_extents(estimate, styles, clusters, cursor.cluster())?;
+            let composed_block = block;
+            let Some(height) = self.compose_band(
+                geometry,
+                region_index,
+                constraint.flow_thread_id,
+                region.record.id,
+                region.record.transform_index,
+                if constraint.overflow == OVERFLOW_CLIP {
+                    region.record.id
+                } else {
+                    0
+                },
+                clusters,
+                styles,
+                slots,
+                &mut cursor,
+                block,
+                block_end,
+                estimate,
+                constraint.wrap,
+                constraint.align,
+                false,
+                f64::from(constraint.first_line_indent),
+                constraint_word_space_shrink(&constraint),
+                max_slots_per_band,
+                metrics_for,
+                first_font_for_stack,
+            )?
+            else {
+                block += estimate.height();
+                continue;
+            };
+            block += height;
+            if composed_block < dirty.block_end {
+                continue;
+            }
+            while old_search < region_line_end
+                && previous.lines[old_search].block_start < composed_block
+            {
+                old_search += 1;
+            }
+            let new_line_index = self.lines.len() - 1;
+            if old_search >= region_line_end
+                || old_search != new_line_index
+                || !same_flow_line_state(self, new_line_index, previous, old_search)?
+            {
+                continue;
+            }
+            for suffix in old_search + 1..previous.lines.len() {
+                self.append_retained_line(previous, suffix)?;
+            }
+            self.recomposed_lines = Some((prefix_end, old_search + 1));
+            return Ok(true);
         }
         self.clear();
         Ok(false)
@@ -790,6 +991,55 @@ fn line_fragments(flow: &FlowLayoutArena, line: FlowLine) -> Result<&[FlowFragme
         .ok_or(EngineError::InvalidRequest)
 }
 
+fn same_flow_line_state(
+    left: &FlowLayoutArena,
+    left_index: usize,
+    right: &FlowLayoutArena,
+    right_index: usize,
+) -> Result<bool, EngineError> {
+    let left_line = *left
+        .lines
+        .get(left_index)
+        .ok_or(EngineError::InvalidRequest)?;
+    let right_line = *right
+        .lines
+        .get(right_index)
+        .ok_or(EngineError::InvalidRequest)?;
+    if left_line.flow_thread_id != right_line.flow_thread_id
+        || left_line.region_id != right_line.region_id
+        || left_line.transform_index != right_line.transform_index
+        || left_line.clip_id != right_line.clip_id
+        || left_line.fragment_count != right_line.fragment_count
+        || left_line.align != right_line.align
+        || left_line.block_start.to_bits() != right_line.block_start.to_bits()
+        || left_line.baseline.to_bits() != right_line.baseline.to_bits()
+        || left_line.height.to_bits() != right_line.height.to_bits()
+    {
+        return Ok(false);
+    }
+    let left_fragments = line_fragments(left, left_line)?;
+    let right_fragments = line_fragments(right, right_line)?;
+    Ok(left_fragments.len() == right_fragments.len()
+        && left_fragments
+            .iter()
+            .zip(right_fragments)
+            .all(|(left, right)| same_flow_fragment_state(*left, *right)))
+}
+
+fn same_flow_fragment_state(left: FlowFragment, right: FlowFragment) -> bool {
+    left.line.cluster_start == right.line.cluster_start
+        && left.line.cluster_end == right.line.cluster_end
+        && left.line.text_start == right.line.text_start
+        && left.line.text_end == right.line.text_end
+        && left.line.advance.to_bits() == right.line.advance.to_bits()
+        && left.line.hung_advance.to_bits() == right.line.hung_advance.to_bits()
+        && left.line.hard_break == right.line.hard_break
+        && left.slot_start.to_bits() == right.slot_start.to_bits()
+        && left.slot_end.to_bits() == right.slot_end.to_bits()
+        && left.flexible_end == right.flexible_end
+        && left.boundary_index == right.boundary_index
+}
+
 fn cluster_text_end(clusters: &ClusterArena, cluster_end: usize) -> u32 {
     clusters
         .starts
@@ -969,7 +1219,7 @@ mod tests {
     use super::*;
     use crate::engine::{
         cluster_state::{CLUSTER_SAFE_BEFORE, ClusterBuildInput},
-        flow_geometry::{RetainedExclusion, RetainedRegion},
+        flow_geometry::{LocalizedGeometryChange, RetainedExclusion, RetainedRegion},
         frame::{
             ALIGN_START, AXIS_EXACT, BLOCK_ALIGN_START, EXCLUSION_WRAP_BOTH, LAST_LINE_AUTO,
             ORIENTATION_MIXED, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE, SHAPE_RECTANGLE,
@@ -2018,6 +2268,105 @@ mod tests {
         assert!(changed.lines.is_empty());
         assert!(changed.fragments.is_empty());
         assert_eq!(changed.recomposed_line_range(), None);
+    }
+
+    #[test]
+    fn localized_exclusion_move_recomposes_through_the_dirty_band_and_matches_cold() {
+        let clusters = uniform_clusters(30, 2.0);
+        let styles = [uniform_style(30)];
+        let metrics = |_| {
+            Some(FontMetrics {
+                units_per_em: 1_000,
+                ascender: 800,
+                descender: -200,
+                line_gap: 0,
+                underline_position: -100,
+                underline_thickness: 50,
+                strikeout_position: 300,
+                strikeout_size: 50,
+            })
+        };
+        let geometry_at = |block_start: f32, revision: u32| {
+            let mut record = exclusion();
+            record.geometry_revision = revision;
+            record.block_start = block_start;
+            record.block_end = block_start + 10.0;
+            FlowGeometryArena {
+                constraints: vec![constraint()],
+                regions: vec![RetainedRegion {
+                    record: region(),
+                    vertex_start: 0,
+                }],
+                exclusions: vec![RetainedExclusion {
+                    record,
+                    vertex_start: 0,
+                }],
+                vertices: vec![],
+            }
+        };
+        let previous_geometry = geometry_at(10.0, 1);
+        let next_geometry = geometry_at(20.0, 2);
+        let LocalizedGeometryChange::ExclusionBand(dirty) = next_geometry
+            .localized_change_from(&previous_geometry)
+            .unwrap()
+        else {
+            panic!("moving one retained exclusion must yield one dirty band");
+        };
+        assert_eq!(dirty.region_id, 7);
+        assert_eq!(dirty.block_start, 10.0);
+        assert_eq!(dirty.block_end, 30.0);
+
+        let mut previous = FlowLayoutArena::default();
+        previous
+            .build(
+                &previous_geometry,
+                &clusters,
+                &styles,
+                &mut InlineSlotArena::default(),
+                16,
+                4,
+                metrics,
+                |_| Some(1),
+            )
+            .unwrap();
+        let mut cold = FlowLayoutArena::default();
+        cold.build(
+            &next_geometry,
+            &clusters,
+            &styles,
+            &mut InlineSlotArena::default(),
+            16,
+            4,
+            metrics,
+            |_| Some(1),
+        )
+        .unwrap();
+        let retained_prefix = previous.fragments[0];
+        let retained_suffix = previous.fragments[5..].to_vec();
+
+        let mut incremental = FlowLayoutArena::default();
+        assert!(
+            incremental
+                .rebuild_after_exclusion_change_until_state_converges(
+                    &previous,
+                    &next_geometry,
+                    &clusters,
+                    &styles,
+                    &mut InlineSlotArena::default(),
+                    dirty,
+                    16,
+                    4,
+                    metrics,
+                    |_| Some(1),
+                )
+                .unwrap()
+        );
+
+        assert_eq!(incremental.lines, cold.lines);
+        assert_eq!(incremental.fragments, cold.fragments);
+        assert_eq!(incremental.fragments[0], retained_prefix);
+        assert_eq!(incremental.fragments[5..], retained_suffix);
+        assert_eq!(incremental.recomposed_line_range(), Some((1, 4)));
     }
 
     #[test]

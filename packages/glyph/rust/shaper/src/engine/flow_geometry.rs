@@ -40,6 +40,20 @@ pub(crate) struct RetainedExclusion {
     pub vertex_start: u32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ExclusionDirtyBand {
+    pub region_id: u32,
+    pub block_start: f64,
+    pub block_end: f64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum LocalizedGeometryChange {
+    Unchanged,
+    ExclusionBand(ExclusionDirtyBand),
+    Unsupported,
+}
+
 #[derive(Clone, Default, PartialEq)]
 pub(crate) struct FlowGeometryArena {
     pub constraints: Vec<FlowConstraint>,
@@ -119,6 +133,119 @@ impl FlowGeometryArena {
         self.exclusions.clear();
         self.vertices.clear();
     }
+
+    pub(crate) fn localized_change_from(
+        &self,
+        previous: &Self,
+    ) -> Result<LocalizedGeometryChange, EngineError> {
+        if self.constraints != previous.constraints
+            || self.regions.len() != previous.regions.len()
+            || self.exclusions.len() != previous.exclusions.len()
+        {
+            return Ok(LocalizedGeometryChange::Unsupported);
+        }
+        for (next, old) in self.regions.iter().zip(&previous.regions) {
+            if !same_region_geometry(self, next, previous, old)? {
+                return Ok(LocalizedGeometryChange::Unsupported);
+            }
+        }
+        let mut dirty: Option<ExclusionDirtyBand> = None;
+        for (next, old) in self.exclusions.iter().zip(&previous.exclusions) {
+            if next.record.id != old.record.id || next.record.region_id != old.record.region_id {
+                return Ok(LocalizedGeometryChange::Unsupported);
+            }
+            if same_exclusion_geometry(self, next, previous, old)? {
+                continue;
+            }
+            let old_start = f64::from(old.record.block_start) - f64::from(old.record.margin_block);
+            let old_end = f64::from(old.record.block_end) + f64::from(old.record.margin_block);
+            let next_start =
+                f64::from(next.record.block_start) - f64::from(next.record.margin_block);
+            let next_end = f64::from(next.record.block_end) + f64::from(next.record.margin_block);
+            let block_start = old_start.min(next_start);
+            let block_end = old_end.max(next_end);
+            if !block_start.is_finite() || !block_end.is_finite() || block_start >= block_end {
+                return Err(EngineError::InvalidRequest);
+            }
+            match &mut dirty {
+                Some(band) if band.region_id == next.record.region_id => {
+                    band.block_start = band.block_start.min(block_start);
+                    band.block_end = band.block_end.max(block_end);
+                }
+                Some(_) => return Ok(LocalizedGeometryChange::Unsupported),
+                None => {
+                    dirty = Some(ExclusionDirtyBand {
+                        region_id: next.record.region_id,
+                        block_start,
+                        block_end,
+                    });
+                }
+            }
+        }
+        Ok(dirty.map_or(
+            LocalizedGeometryChange::Unchanged,
+            LocalizedGeometryChange::ExclusionBand,
+        ))
+    }
+}
+
+fn same_region_geometry(
+    left_geometry: &FlowGeometryArena,
+    left: &RetainedRegion,
+    right_geometry: &FlowGeometryArena,
+    right: &RetainedRegion,
+) -> Result<bool, EngineError> {
+    let left_record = left.record;
+    let right_record = right.record;
+    Ok(left_record.id == right_record.id
+        && left_record.transform_index == right_record.transform_index
+        && left_record.vertex_count == right_record.vertex_count
+        && left_record.exclusion_start == right_record.exclusion_start
+        && left_record.exclusion_count == right_record.exclusion_count
+        && left_record.shape == right_record.shape
+        && left_record.writing_mode == right_record.writing_mode
+        && left_record.text_orientation == right_record.text_orientation
+        && left_record.inline_start.to_bits() == right_record.inline_start.to_bits()
+        && left_record.block_start.to_bits() == right_record.block_start.to_bits()
+        && left_record.inline_end.to_bits() == right_record.inline_end.to_bits()
+        && left_record.block_end.to_bits() == right_record.block_end.to_bits()
+        && left_record.clip_inline_start.to_bits() == right_record.clip_inline_start.to_bits()
+        && left_record.clip_block_start.to_bits() == right_record.clip_block_start.to_bits()
+        && left_record.clip_inline_end.to_bits() == right_record.clip_inline_end.to_bits()
+        && left_record.clip_block_end.to_bits() == right_record.clip_block_end.to_bits()
+        && polygon_vertices(left_geometry, left.vertex_start, left_record.vertex_count)?
+            == polygon_vertices(
+                right_geometry,
+                right.vertex_start,
+                right_record.vertex_count,
+            )?)
+}
+
+fn same_exclusion_geometry(
+    left_geometry: &FlowGeometryArena,
+    left: &RetainedExclusion,
+    right_geometry: &FlowGeometryArena,
+    right: &RetainedExclusion,
+) -> Result<bool, EngineError> {
+    let left_record = left.record;
+    let right_record = right.record;
+    Ok(left_record.id == right_record.id
+        && left_record.region_id == right_record.region_id
+        && left_record.vertex_count == right_record.vertex_count
+        && left_record.shape == right_record.shape
+        && left_record.wrap_side == right_record.wrap_side
+        && left_record.inline_start.to_bits() == right_record.inline_start.to_bits()
+        && left_record.block_start.to_bits() == right_record.block_start.to_bits()
+        && left_record.inline_end.to_bits() == right_record.inline_end.to_bits()
+        && left_record.block_end.to_bits() == right_record.block_end.to_bits()
+        && left_record.margin_inline.to_bits() == right_record.margin_inline.to_bits()
+        && left_record.margin_block.to_bits() == right_record.margin_block.to_bits()
+        && polygon_vertices(left_geometry, left.vertex_start, left_record.vertex_count)?
+            == polygon_vertices(
+                right_geometry,
+                right.vertex_start,
+                right_record.vertex_count,
+            )?)
 }
 
 impl InlineSlotArena {
@@ -613,6 +740,69 @@ mod tests {
                     end: 100.0,
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn localized_change_unions_multiple_exclusions_and_ignores_revision_only_updates() {
+        let mut region_record = region(SHAPE_RECTANGLE, 0, 2);
+        region_record.exclusion_count = 2;
+        let mut first = exclusion(SHAPE_RECTANGLE, 0);
+        first.inline_start = 20.0;
+        first.inline_end = 30.0;
+        first.block_start = 10.0;
+        first.block_end = 20.0;
+        let mut second = first;
+        second.id = 3;
+        second.inline_start = 70.0;
+        second.inline_end = 80.0;
+        second.block_start = 40.0;
+        second.block_end = 50.0;
+        let previous = FlowGeometryArena {
+            regions: vec![RetainedRegion {
+                record: region_record,
+                vertex_start: 0,
+            }],
+            exclusions: vec![
+                RetainedExclusion {
+                    record: first,
+                    vertex_start: 0,
+                },
+                RetainedExclusion {
+                    record: second,
+                    vertex_start: 0,
+                },
+            ],
+            ..FlowGeometryArena::default()
+        };
+
+        let mut revisions_only = previous.clone();
+        revisions_only.regions[0].record.geometry_revision = 2;
+        revisions_only.exclusions[0].record.geometry_revision = 2;
+        revisions_only.exclusions[1].record.geometry_revision = 3;
+        assert_eq!(
+            revisions_only.localized_change_from(&previous).unwrap(),
+            LocalizedGeometryChange::Unchanged
+        );
+
+        let mut moved = revisions_only;
+        moved.exclusions[0].record.block_start = 20.0;
+        moved.exclusions[0].record.block_end = 30.0;
+        moved.exclusions[1].record.block_start = 35.0;
+        moved.exclusions[1].record.block_end = 45.0;
+        assert_eq!(
+            moved.localized_change_from(&previous).unwrap(),
+            LocalizedGeometryChange::ExclusionBand(ExclusionDirtyBand {
+                region_id: 1,
+                block_start: 10.0,
+                block_end: 50.0,
+            })
+        );
+
+        moved.regions[0].record.inline_end = 90.0;
+        assert_eq!(
+            moved.localized_change_from(&previous).unwrap(),
+            LocalizedGeometryChange::Unsupported
         );
     }
 

@@ -860,8 +860,11 @@ Current checkpoint: public 2D authoring, stable keyed IDs, per-entity revision r
 validation, React/Three threading, removal of the one-exclusion cap, and the first-use 16-entry retained exclusion reserve
 are implemented. A public integration fixture composes one polygon region around two simultaneous exclusions into three
 same-line slots, while low-level transaction evidence proves that moving one exclusion advances only its revision and
-that array reordering preserves entity IDs/revisions. Dirty-band invalidation, forward suffix convergence, and the full
-LTR/RTL/mixed cold-oracle matrix remain open, so M4 is not complete at this checkpoint.
+that array reordering preserves entity IDs/revisions. Retained exact-width, non-ellipsis flow also unions the old/new
+bounds and margins of multiple changed exclusions in one region, preserves the prefix, recomposes through the complete
+dirty horizon, and retains a suffix only after the exact line/fragment/slot certificate matches; unsupported cases fall
+back to the cold authority. The full LTR/RTL/mixed cold-oracle matrix remains open, so M4 is not complete at this
+checkpoint.
 
 ### M5 — projected 3D obstacles and same-source drop caps
 
