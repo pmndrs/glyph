@@ -5,12 +5,12 @@
  *
  * - Inter Latin: Basic Latin (U+0020–007E) with Bitmap 32, MSDF, and Slug in one GLB.
  * - Font Awesome world: six globe glyphs, the same three formats.
- * - Playwrite: the landing wordmark script face, Slug only.
+ * - Lovers Quarrel: the docs script face, Slug only.
  * - Chorus faces: per-script MSDF subsets (emSize 32, pixelRange 6) of the word "glyph" in many languages.
  */
 export const INTER = new URL('../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url).href;
 export const ICONS = new URL('../../../apps/r3f-hello-world/assets/font-awesome-world.font.glb', import.meta.url).href;
-export const PLAYWRITE = new URL('../../landing/assets/playwrite-glyph.font.glb', import.meta.url).href;
+export const PLAYWRITE = new URL('../../docs/assets/fonts/lovers-quarrel-slug.font.glb', import.meta.url).href;
 
 /** Strikes the checked-in Inter GLB actually carries; a different tuple would be a different raster. */
 export const INTER_STRIKES = { strikes: [32] } as const;

@@ -4,7 +4,7 @@ import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
-import { WORDS } from '../landing/src/chorus-words';
+import { WORDS } from '../landing/src/chorus-words.ts';
 
 const run = promisify(execFile);
 const here = dirname(fileURLToPath(import.meta.url));
