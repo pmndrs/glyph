@@ -9,6 +9,8 @@ import {
   summarizePlacementCandidates,
 } from '../../scripts/support/placement-representation-lab.mjs';
 
+const FLOAT32_INPUT = new DataView(new ArrayBuffer(4));
+
 test('plain f32 placement has a pinned double-rounding counterexample', () => {
   const result = evaluatePlacementSample({
     name: 'f32-boundary-double-rounding',
@@ -95,3 +97,45 @@ test('the deterministic corpus reports error without claiming an encoding is bit
     },
   });
 });
+
+test('direct raster offsets preserve the current f32 origin operation bits', () => {
+  const samples = [
+    0,
+    -0,
+    2 ** -149,
+    -(2 ** -149),
+    1,
+    -1,
+    16_777_216,
+    -16_777_216,
+    3.4028234663852886e38,
+    -3.4028234663852886e38,
+  ];
+  let state = 0x7a11_ce55;
+  for (let index = 0; index < 65_536; index += 1) {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    samples.push(float32FromBits(state >>> 0));
+  }
+
+  for (let index = 0; index + 1 < samples.length; index += 2) {
+    const origin = Math.fround(samples[index]);
+    const bearing = Math.fround(samples[index + 1]);
+    if (!Number.isFinite(origin) || !Number.isFinite(bearing)) continue;
+
+    const legacyInline = Math.fround(origin + bearing);
+    const directInline = Math.fround(bearing + origin);
+    if (Number.isFinite(legacyInline)) assert.equal(float32Bits(directInline), float32Bits(legacyInline));
+
+    const legacyBlock = Math.fround(origin - bearing);
+    const localBlock = Math.fround(0 - bearing);
+    const directBlock = Math.fround(localBlock + origin);
+    if (Number.isFinite(legacyBlock)) assert.equal(float32Bits(directBlock), float32Bits(legacyBlock));
+  }
+});
+
+function float32FromBits(bits) {
+  FLOAT32_INPUT.setUint32(0, bits, false);
+  return FLOAT32_INPUT.getFloat32(0, false);
+}

@@ -9,6 +9,7 @@ use super::{
         SEMANTIC_F32_BLOCK_ORIGIN, SEMANTIC_F32_FOREGROUND_ALPHA, SEMANTIC_F32_FOREGROUND_BLUE,
         SEMANTIC_F32_FOREGROUND_GREEN, SEMANTIC_F32_FOREGROUND_RED, SEMANTIC_F32_INLINE_ORIGIN,
         SEMANTIC_F32_INVERSE_FONT_SIZE, SEMANTIC_F32_OUTLINE_WIDTH_EM,
+        SEMANTIC_F32_PLACEMENT_BLOCK, SEMANTIC_F32_PLACEMENT_INLINE,
         SEMANTIC_F32_SHADOW_OFFSET_X_EM, SEMANTIC_F32_SHADOW_OFFSET_Y_EM, SEMANTIC_U32_CLUSTER_ID,
         SEMANTIC_U32_FOREGROUND_RGBA, SEMANTIC_U32_OUTLINE_RGBA, SEMANTIC_U32_SHADOW_RGBA,
     },
@@ -999,6 +1000,22 @@ fn derived_semantic_f32(
             glyph.block_origin
         }));
     }
+    if field == SEMANTIC_F32_PLACEMENT_INLINE || field == SEMANTIC_F32_PLACEMENT_BLOCK {
+        let semantic_index = input
+            .glyphs
+            .get(glyph_index)
+            .and_then(|glyph| usize::try_from(glyph.semantic_glyph_index).ok())
+            .ok_or(GatherError::SourceFieldMissing)?;
+        let glyph = input
+            .semantic_glyphs
+            .get(semantic_index)
+            .ok_or(GatherError::SourceFieldMissing)?;
+        return Ok(Some(if field == SEMANTIC_F32_PLACEMENT_INLINE {
+            glyph.inline_origin
+        } else {
+            glyph.block_origin
+        }));
+    }
     if field == SEMANTIC_F32_INVERSE_FONT_SIZE {
         let font_size = input
             .glyphs
@@ -1205,6 +1222,14 @@ mod tests {
         );
         assert_eq!(
             derived_semantic_f32(SEMANTIC_F32_BLOCK_ORIGIN, input, 0),
+            Ok(Some(-3.25))
+        );
+        assert_eq!(
+            derived_semantic_f32(SEMANTIC_F32_PLACEMENT_INLINE, input, 0),
+            Ok(Some(12.5))
+        );
+        assert_eq!(
+            derived_semantic_f32(SEMANTIC_F32_PLACEMENT_BLOCK, input, 0),
             Ok(Some(-3.25))
         );
     }

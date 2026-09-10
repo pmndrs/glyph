@@ -11,7 +11,9 @@ const TEST_PROGRAM_VARIANT = 3;
 const TEST_PROGRAM_NAMESPACE = 'test-renderer';
 const ORIGIN_BUFFER_ID = id.buffer('test.raster-codec-program/origin');
 const SYSTEM_BUFFER_ID = id.buffer('test.raster-codec-program/system/stable-glyph-id');
+const PLACEMENT_BUFFER_ID = id.buffer('test.raster-codec-program/system/placement-offset');
 const OTHER_SYSTEM_BUFFER_ID = id.buffer('test.raster-codec-program/system/other-stable-glyph-id');
+const OTHER_PLACEMENT_BUFFER_ID = id.buffer('test.raster-codec-program/system/other-placement-offset');
 
 const technique = defineRasterFormat({
   id: 'test.raster-codec-program',
@@ -47,9 +49,15 @@ const wrongSystemSchema = defineTechniqueSchema({
 });
 const system = defineCodecBuffers({
   stableGlyphId: { id: SYSTEM_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
+  placementOffset: { id: PLACEMENT_BUFFER_ID, scalar: 'f32', lanes: ['inlineOffset', 'blockOffset'] },
 });
 const otherSystem = defineCodecBuffers({
   stableGlyphId: { id: OTHER_SYSTEM_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
+  placementOffset: {
+    id: OTHER_PLACEMENT_BUFFER_ID,
+    scalar: 'f32',
+    lanes: ['inlineOffset', 'blockOffset'],
+  },
 });
 const capabilitySet = {
   capabilities: ['ordered-direct'],
@@ -81,7 +89,10 @@ let receivedFrozenHostInputs = false;
 const portable = plan((hostSystem, hostCapabilitySet) => {
   codecBodyCalls += 1;
   receivedFrozenHostInputs =
-    Object.isFrozen(hostSystem) && Object.isFrozen(hostSystem.stableGlyphId) && Object.isFrozen(hostCapabilitySet);
+    Object.isFrozen(hostSystem) &&
+    Object.isFrozen(hostSystem.stableGlyphId) &&
+    Object.isFrozen(hostSystem.placementOffset) &&
+    Object.isFrozen(hostCapabilitySet);
   const p = techniqueProgram(schema, { system: hostSystem });
   return p.compile({ origin: [p.semantics.inlineOrigin, p.semantics.blockOrigin] });
 });
@@ -113,6 +124,7 @@ test('portable codec assembly rejects host inputs before invoking technique code
     [{ ...valid, transformMode: 'sideways' }, /transform mode/],
     [{ ...valid, allocationMode: 'recycling' }, /allocation mode/],
     [{ ...valid, system: {} }, /stableGlyphId system buffer/],
+    [{ ...valid, system: { stableGlyphId: system.stableGlyphId } }, /placementOffset/],
     [{ ...valid, capabilitySet: { ...capabilitySet, capabilities: [] } }, /supports no allocation strategy/],
     [{ ...valid, ids: {} }, /ids/],
     [{ ...valid, identityRegistry: id }, /renamed to ids/],
@@ -139,7 +151,7 @@ test('portable codec assembly owns host identities, system buffers, and variant 
   assert.equal(receivedFrozenHostInputs, true);
   assert.deepEqual(
     compiled.buffers.map((buffer) => buffer.id),
-    [schema.buffers.origin.id, system.stableGlyphId.id],
+    [schema.buffers.origin.id, system.stableGlyphId.id, system.placementOffset.id],
   );
 });
 

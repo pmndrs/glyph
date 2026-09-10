@@ -669,11 +669,13 @@ oracle only at M6 after full matrix closure.
    pre-alpha, and the deliberately re-pinned final-coordinate contract does not justify shipping two positioning systems.
    Keep the stable-ID contract truthful and hide adapter allocation details behind the engine boundary.
 
-The universal 8-byte offset must not proceed to ABI implementation without recording per-technique active/capacity bytes,
-alignment, and rounding order. Exact justification arithmetic remains CPU SoA state that
-produces ordinary rows. CPU semantic/query output and renderer realization share the re-pinned operation order.
-Acceptance records signed and absolute deltas from the old absolute-f32 oracle plus pixel evidence for ordinary and
-justified slices separately; old-bit parity is not required, but the predeclared error and pixel bounds are.
+The universal 8-byte offset is now implemented in the generated semantic contract and the Three/direct-TypeGPU adapter
+paths. The engine publishes exactly two f32 values per rendered occurrence; Three owns its retained PBO/storage form and
+direct TypeGPU owns an adapter-local instance layout. Exact justification arithmetic remains CPU SoA state that produces
+ordinary x/y rows. CPU semantic/query output retains absolute origins, while raster realization consumes the same f32
+operands in the commuted addition proven bit-identical by the deterministic arithmetic corpus. Per-technique browser
+pixels, active/capacity transfer bytes, and release size remain acceptance gates; implementation does not by itself close
+the milestone's CPU/publication-performance gate.
 
 ### GPU data access
 

@@ -167,7 +167,9 @@ export interface CodecColorChannels {
 }
 
 export interface CodecProgramSemantics {
+  /** Glyph-local inline origin; the host applies the paragraph occurrence separately. */
   readonly inlineOrigin: CodecF32Value;
+  /** Glyph-local block origin; the host applies the paragraph occurrence separately. */
   readonly blockOrigin: CodecF32Value;
   readonly fontSize: CodecF32Value;
   readonly color: CodecColorChannels;
@@ -225,6 +227,13 @@ export interface CodecProgramBuilder<
 export interface CodecProgramSystemBuffers {
   readonly stableGlyphId: CodecBufferDeclaration<'u32', readonly ['stableGlyphId']>;
   readonly transformIndex?: CodecBufferDeclaration<'u32', readonly ['transformIndex']>;
+  /** Host-owned occurrence displacement. Raster bodies forward the system object; adapters choose its physical layout. */
+  readonly placementOffset?: CodecBufferDeclaration<'f32', readonly ['inlineOffset', 'blockOffset']>;
+}
+
+interface CodecProgramSystemSemantics {
+  readonly placementInline: CodecF32Value;
+  readonly placementBlock: CodecF32Value;
 }
 
 type CodecBufferLaneValues<Buffer extends CodecBufferDeclaration> = CodecLaneTuple<Buffer['scalar'], Buffer['lanes']>;
@@ -291,6 +300,7 @@ export function techniqueProgram<const Schema extends TechniqueSchemaMetadata>(
       ...(options.textEffects === undefined ? {} : { textEffects: options.textEffects }),
     },
     schema,
+    system?.placementOffset !== undefined,
   );
   let compiled = false;
   return Object.freeze({
@@ -326,12 +336,19 @@ export function techniqueProgram<const Schema extends TechniqueSchemaMetadata>(
         if (system.transformIndex !== undefined) {
           program.store(system.transformIndex, [program.semantics.transformIndex]);
         }
+        if (system.placementOffset !== undefined) {
+          program.store(system.placementOffset, [
+            program.systemSemantics.placementInline,
+            program.systemSemantics.placementBlock,
+          ]);
+        }
       }
       const body = program.compile();
       recordTechniqueCodecBody(body, {
         schema,
         stableGlyphId: system?.stableGlyphId.id,
         transformIndex: system?.transformIndex?.id,
+        placementOffset: system?.placementOffset?.id,
       });
       return body;
     },
@@ -342,14 +359,18 @@ export function codecProgram<
   const F32 extends readonly string[] = readonly [],
   const U32 extends readonly string[] = readonly [],
 >(options: CodecProgramOptions<F32, U32>): CodecProgramBuilder<F32, U32> {
-  return createCodecProgramBuilder(options, undefined);
+  return createCodecProgramBuilder(options, undefined, false);
 }
 
 function createCodecProgramBuilder<
   const F32 extends readonly string[],
   const U32 extends readonly string[],
   Schema extends TechniqueSchemaMetadata | undefined,
->(options: CodecProgramOptions<F32, U32>, schema: Schema): CodecProgramBuilder<F32, U32, Schema> {
+>(
+  options: CodecProgramOptions<F32, U32>,
+  schema: Schema,
+  relativePlacement: boolean,
+): CodecProgramBuilder<F32, U32, Schema> & { readonly systemSemantics: CodecProgramSystemSemantics } {
   if (!isNonArrayObject(options)) throw new TypeError('codec program options need an object');
   if (!(typeof options.scope === 'string' && Object.hasOwn(textShaperAbi.codec.inputScopes, options.scope))) {
     throw new TypeError('codec program scope is not a codec input scope');
@@ -394,8 +415,14 @@ function createCodecProgramBuilder<
   // Semantic geometry and paint precede binding fields; system identities precede
   // packed effect colors and binding u32 fields.
   const inputs: CodecInput[] = [
-    { scope: 'semantic', field: semanticF32.inlineOrigin },
-    { scope: 'semantic', field: semanticF32.blockOrigin },
+    {
+      scope: 'semantic',
+      field: relativePlacement ? semanticF32.placementInline : semanticF32.inlineOrigin,
+    },
+    {
+      scope: 'semantic',
+      field: relativePlacement ? semanticF32.placementBlock : semanticF32.blockOrigin,
+    },
     { scope: 'semantic', field: semanticF32.fontSize },
     { scope: 'semantic', field: semanticF32.foregroundRed },
     { scope: 'semantic', field: semanticF32.foregroundGreen },
@@ -420,9 +447,11 @@ function createCodecProgramBuilder<
   let nextF32 = 0;
   const loadF32 = (label: string): CodecF32Value =>
     f32Value({ kind: 'loadF32', input: nextF32++, label, authoringScope });
+  const placementInline = loadF32('placement.inline');
+  const placementBlock = loadF32('placement.block');
   const semantics: CodecProgramSemantics = {
-    inlineOrigin: loadF32('inlineOrigin'),
-    blockOrigin: loadF32('blockOrigin'),
+    inlineOrigin: relativePlacement ? constantF32(0) : placementInline,
+    blockOrigin: relativePlacement ? constantF32(0) : placementBlock,
     fontSize: loadF32('fontSize'),
     color: {
       red: loadF32('color.red'),
@@ -459,6 +488,7 @@ function createCodecProgramBuilder<
 
   return {
     semantics,
+    systemSemantics: { placementInline, placementBlock },
     // The two validated name lists above are the only keys written into this owned record.
     binding: binding as CodecProgramBuilder<F32, U32, Schema>['binding'],
     store(buffer, lanes) {

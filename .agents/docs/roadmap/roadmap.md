@@ -173,9 +173,11 @@ These rows replace the former separate backlog. Each is intended to become one f
 
 Item 12.1 used merged commit `2094243668bcf5462cff0ac3b1f7faf52cba3b6c` as its exact baseline and is complete. Item
 12.2 is active. The indexed placement-slot/session-table candidate was withdrawn after it missed the same-contract
-performance gate; production is back on absolute origins while test/kernel-lab retains the run/segment proof. The next
-cut is a direct engine-owned x/y occurrence offset with unchanged batches and draws, followed by Three and TypeGPU adapter
-evidence. The dependency does not include unrelated open work grouped under 11.18.
+performance gate. The direct engine-owned x/y occurrence offset is now implemented through the generated semantic
+contract, Three, and direct TypeGPU without changing batches or draws; CPU semantic queries retain absolute origins and
+the compact run/segment proof remains test/kernel-lab state. The remaining 12.2 work is the compact CPU/publication
+cutover, browser pixels, release size, and final performance evidence. The dependency does not include unrelated open work
+grouped under 11.18.
 
 ## Milestone 0 — accept contracts and versions
 

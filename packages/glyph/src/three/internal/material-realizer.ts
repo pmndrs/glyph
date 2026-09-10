@@ -146,7 +146,8 @@ export class ThreeMaterialRealizer {
   ): THREE.NodeMaterial {
     const atlas = textureArrayResource(resource.resolved, 'atlas', 'r8unorm', 'Bitmap');
     const part = schemaDrawBuffers(bitmapSchema, buffers, 'Bitmap');
-    const required = [part.origin, part.size, part.uvOrigin, part.uvSize, part.color, part.page];
+    const placement = placementOffsetBuffer(buffers);
+    const required = [part.origin, part.size, part.uvOrigin, part.uvSize, part.color, part.page, placement];
     const key = this.#cacheKey('bitmap', resource, selection, required, buffers, transform, addressing, [
       `snap=${String(this.#owner.pixelSnapping ?? selection?.pixelSnapping ?? false)}`,
     ]);
@@ -154,9 +155,10 @@ export class ThreeMaterialRealizer {
     if (cached !== undefined) return cached.material;
     const texture = this.#textureArray(resource.binding, atlas, 'bitmap');
     const instance = physicalInstance(runInstance(), addressing);
+    const offset = storageVec2(placement, instance);
     const shader = this.#coordinator.shaders.bitmapShader(
       {
-        origin: storageVec2(part.origin, instance),
+        origin: storageVec2(part.origin, instance).add(offset),
         size: storageVec2(part.size, instance),
         uvOrigin: storageVec2(part.uvOrigin, instance),
         uvSize: storageVec2(part.uvSize, instance),
@@ -189,18 +191,20 @@ export class ThreeMaterialRealizer {
     const atlas = resourceGroup(resource.resolved, 'atlas', 'MSDF');
     const data = textureArrayMember(atlas, 'texture', 'rgba8unorm', 'MSDF');
     const part = schemaDrawBuffers(msdfSchema, buffers, 'MSDF');
-    const required = [part.rect, part.uvRect, part.uvBounds, part.color, part.effectColor, part.page];
+    const placement = placementOffsetBuffer(buffers);
+    const required = [part.rect, part.uvRect, part.uvBounds, part.color, part.effectColor, part.page, placement];
     const key = this.#cacheKey('msdf', resource, selection, required, buffers, transform, addressing);
     const cached = this.#context.materials.get(key);
     if (cached !== undefined) return cached.material;
     const instance = physicalInstance(runInstance(), addressing);
     const field = (buffer: RetainedBuffer) => storageVec4(buffer, instance);
     const rect = field(part.rect);
+    const offset = storageVec2(placement, instance);
     const uvRect = field(part.uvRect);
     const page = field(part.page);
     const shader = this.#coordinator.shaders.msdfShader(
       {
-        origin: rect.xy,
+        origin: rect.xy.add(offset),
         size: rect.zw,
         uvOrigin: uvRect.xy,
         uvSize: uvRect.zw,
@@ -240,6 +244,7 @@ export class ThreeMaterialRealizer {
   ): THREE.NodeMaterial {
     const page = resourceGroup(resource.resolved, 'page', 'Slug');
     const part = schemaDrawBuffers(slugSchema, buffers, 'Slug');
+    const placement = placementOffsetBuffer(buffers);
     const required = [
       part.rect,
       part.planeRect,
@@ -248,6 +253,7 @@ export class ThreeMaterialRealizer {
       part.inverseFontSize,
       part.tableStarts,
       part.bandCounts,
+      placement,
     ];
     const key = this.#cacheKey('slug', resource, selection, required, buffers, transform, addressing);
     const cached = this.#context.materials.get(key);
@@ -255,6 +261,7 @@ export class ThreeMaterialRealizer {
     const instance = physicalInstance(runInstance(), addressing);
     const field = (buffer: RetainedBuffer) => storageVec4(buffer, instance);
     const rect = field(part.rect);
+    const offset = storageVec2(placement, instance);
     const planeRect = field(part.planeRect);
     const addresses = storageUvec4(part.tableStarts, instance);
     const counts = storageUvec4(part.bandCounts, instance);
@@ -271,7 +278,7 @@ export class ThreeMaterialRealizer {
     );
     const shader = this.#coordinator.shaders.slugShader(
       {
-        origin: rect.xy,
+        origin: rect.xy.add(offset),
         size: rect.zw,
         emOrigin: planeRect.xy,
         emSize: planeRect.zw,
@@ -314,6 +321,8 @@ export class ThreeMaterialRealizer {
     const cached = this.#context.materials.get(key);
     if (cached !== undefined) return cached.material;
     const instance = physicalInstance(runInstance(), addressing);
+    const placement = placementOffsetBuffer(buffers);
+    const offset = storageVec2(placement, instance);
     const namedBuffers = new Map<string, ThreeRasterProgramBuffer>();
     for (const [name, declaration] of Object.entries(resolved.program.schema.buffers)) {
       const source = buffers.get(declaration.id);
@@ -337,7 +346,8 @@ export class ThreeMaterialRealizer {
         instance,
         material: selection?.material,
         root: this.#root(selection),
-        transformPosition: (position) => this.#position(position, instance, buffers, transform),
+        transformPosition: (position) =>
+          this.#position(TSL.vec3(position.xy.add(offset), position.z), instance, buffers, transform),
       }),
     );
     this.#retain(key, material, resource, materialBuffers(required, transform, addressing), transform.kind);
@@ -543,6 +553,12 @@ function schemaDrawBuffers<Buffers extends CodecBufferDeclarations>(
     resolved[name] = buffer;
   }
   return resolved as { readonly [Name in keyof Buffers]: RetainedBuffer };
+}
+
+function placementOffsetBuffer(buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>): RetainedBuffer {
+  const placement = buffers.get(threeSystemBuffers.placementOffset.id);
+  if (placement === undefined) throw new Error('glyph draw is missing its host placement-offset buffer');
+  return placement;
 }
 
 function runInstance(): THREE.Node<'uint'> {

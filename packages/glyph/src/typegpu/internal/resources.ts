@@ -32,6 +32,7 @@ import {
 } from '../../shaders/typegpu/slug/slug-texture.js';
 import type { TypeGpuConfigOptions, TypeGpuPositionTransform, TypeGpuColorTransform } from '../config.js';
 import { bitmapPageAccessor } from '../../shaders/typegpu/bitmap-shader.js';
+import { TYPEGPU_PLACEMENT_OFFSET_BUFFER_ID } from './codec.js';
 
 export interface Draw {
   draw(pass: TgpuRenderPass | GPURenderPassEncoder, bindGroups: readonly TgpuBindGroup[]): void;
@@ -72,6 +73,7 @@ const u2 = tgpu.vertexLayout(d.disarrayOf(d.uint32x2), 'instance');
 const u4 = tgpu.vertexLayout(d.disarrayOf(d.uint32x4), 'instance');
 // Each attribute needs its own layout identity, even when its physical shape matches.
 const originLayout = v2;
+const placementLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const sizeLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const uvOriginLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const uvSizeLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
@@ -157,6 +159,7 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
       in: {
         index: d.builtin.vertexIndex,
         origin: d.vec2f,
+        placement: d.vec2f,
         size: d.vec2f,
         uvOrigin: d.vec2f,
         uvSize: d.vec2f,
@@ -168,7 +171,7 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
       'use gpu';
       const unit = corner(input.index);
       return {
-        position: project(bitmapQuadPosition(input.origin, input.size, unit)),
+        position: project(bitmapQuadPosition(input.origin.add(input.placement), input.size, unit)),
         uv: bitmapAtlasUv(input.uvOrigin, input.uvSize, unit),
         color: input.color,
         layer: input.layer,
@@ -189,6 +192,7 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
         fragment,
         attribs: {
           origin: originLayout.attrib,
+          placement: placementLayout.attrib,
           size: sizeLayout.attrib,
           uvOrigin: uvOriginLayout.attrib,
           uvSize: uvSizeLayout.attrib,
@@ -208,6 +212,7 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
         const draw = pipeline
           .with(group)
           .with(originLayout, buffers.get(b.origin.id)!)
+          .with(placementLayout, buffers.get(TYPEGPU_PLACEMENT_OFFSET_BUFFER_ID)!)
           .with(sizeLayout, buffers.get(b.size.id)!)
           .with(uvOriginLayout, buffers.get(b.uvOrigin.id)!)
           .with(uvSizeLayout, buffers.get(b.uvSize.id)!)
@@ -251,6 +256,7 @@ function msdfResource(
       in: {
         index: d.builtin.vertexIndex,
         rect: d.vec4f,
+        placement: d.vec2f,
         uvRect: d.vec4f,
         bounds: d.vec4f,
         color: d.vec4f,
@@ -265,7 +271,7 @@ function msdfResource(
         unitPosition: d.vec3f(unit, 0),
         unitUv: unit,
         instance: {
-          origin: input.rect.xy,
+          origin: input.rect.xy.add(input.placement),
           size: input.rect.zw,
           uvOrigin: input.uvRect.xy,
           uvSize: input.uvRect.zw,
@@ -317,6 +323,7 @@ function msdfResource(
         fragment,
         attribs: {
           rect: rectLayout.attrib,
+          placement: placementLayout.attrib,
           uvRect: uvRectLayout.attrib,
           bounds: boundsLayout.attrib,
           color: colorLayout.attrib,
@@ -336,6 +343,7 @@ function msdfResource(
         const draw = pipeline
           .with(group)
           .with(rectLayout, buffers.get(b.rect.id)!)
+          .with(placementLayout, buffers.get(TYPEGPU_PLACEMENT_OFFSET_BUFFER_ID)!)
           .with(uvRectLayout, buffers.get(b.uvRect.id)!)
           .with(boundsLayout, buffers.get(b.uvBounds.id)!)
           .with(colorLayout, buffers.get(b.color.id)!)
@@ -376,6 +384,7 @@ function slugResource(
       in: {
         index: d.builtin.vertexIndex,
         rect: d.vec4f,
+        placement: d.vec2f,
         plane: d.vec4f,
         band: d.vec4f,
         color: d.vec4f,
@@ -387,7 +396,10 @@ function slugResource(
     })((input) => {
       'use gpu';
       const unit = corner(input.index);
-      const local = d.vec2f(input.rect.x + unit.x * input.rect.z, -(input.rect.y + unit.y * input.rect.w));
+      const local = d.vec2f(
+        input.rect.x + input.placement.x + unit.x * input.rect.z,
+        -(input.rect.y + input.placement.y + unit.y * input.rect.w),
+      );
       const normal = d.vec2f((unit.x - 0.5) * input.rect.z, -(unit.y - 0.5) * input.rect.w);
       const em = d.vec2f(input.plane.x + unit.x * input.plane.z, input.plane.y - unit.y * input.plane.w);
       // Local homogeneous projection derivatives keep Slug's half-pixel expansion in screen space.
@@ -450,6 +462,7 @@ function slugResource(
         fragment,
         attribs: {
           rect: rectLayout.attrib,
+          placement: placementLayout.attrib,
           plane: planeLayout.attrib,
           band: bandLayout.attrib,
           color: colorLayout.attrib,
@@ -472,6 +485,7 @@ function slugResource(
         const draw = pipeline
           .with(group)
           .with(rectLayout, buffers.get(b.rect.id)!)
+          .with(placementLayout, buffers.get(TYPEGPU_PLACEMENT_OFFSET_BUFFER_ID)!)
           .with(planeLayout, buffers.get(b.planeRect.id)!)
           .with(bandLayout, buffers.get(b.bandTransform.id)!)
           .with(colorLayout, buffers.get(b.color.id)!)

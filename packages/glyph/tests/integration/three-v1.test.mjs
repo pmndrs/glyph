@@ -1675,7 +1675,7 @@ test('Three retires materials bound to a replaced buffer generation', async (t) 
   fontDomain.dispose();
 });
 
-test('Three reflow patches positioned origins without rebuilding draws or materials', async (t) => {
+test('Three reflow patches only host placement while retaining raster geometry, draws, and materials', async (t) => {
   const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
   const font = await fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
@@ -1698,6 +1698,8 @@ test('Three reflow patches positioned origins without rebuilding draws or materi
   assert.ok(draw);
   const origins = draw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.origin.id));
   const originalOrigins = origins.array.slice();
+  const placement = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.placementOffset.id));
+  const originalPlacement = placement.array.slice();
   const originalY = [...label.glyphs().y];
 
   label.set({ constraints: { width: { mode: 'exact', size: 90 } } });
@@ -1707,7 +1709,8 @@ test('Three reflow patches positioned origins without rebuilding draws or materi
   assert.equal(reflowed[0], draw, 'same-capacity origin patches retain the realized draw');
   assert.equal(reflowed[0].material, materials[0], 'the material remains reusable across reflow');
   assert.equal(materials.length, 1, 'reflow does not realize a second material');
-  assert.notDeepEqual(origins.array, originalOrigins, 'break changes rewrite only the positioned origin data');
+  assert.deepEqual(origins.array, originalOrigins, 'break changes preserve glyph-local raster geometry');
+  assert.notDeepEqual(placement.array, originalPlacement, 'break changes rewrite the host-owned x/y placement data');
   assert.notDeepEqual([...label.glyphs().y], originalY, 'the public positioned layout still moves between lines');
 
   label.dispose();
