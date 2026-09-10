@@ -330,8 +330,6 @@ pub struct DecorationRecord {
 #[derive(Default)]
 pub(crate) struct PositionedGlyphArena {
     glyphs: Vec<LayoutGlyph>,
-    raster_inline_origins: Vec<f32>,
-    raster_block_origins: Vec<f32>,
     line_glyph_starts: Vec<u32>,
     line_glyph_counts: Vec<u32>,
     line_decoration_starts: Vec<u32>,
@@ -942,11 +940,6 @@ impl PositionedGlyphArena {
                 })
             })
             .transpose()?;
-        if self.raster_inline_origins.len() != self.glyphs.len()
-            || self.raster_block_origins.len() != self.glyphs.len()
-        {
-            return Err(EngineError::InvalidRequest);
-        }
         self.placement.validate_occurrences(
             self.glyphs.len(),
             clusters.layout_runs(),
@@ -1048,18 +1041,6 @@ impl PositionedGlyphArena {
                 .map_err(|_| EngineError::ResultTooLarge)?;
             self.glyphs.push(glyph);
         }
-        self.raster_inline_origins.extend_from_slice(
-            previous
-                .raster_inline_origins
-                .get(glyph_start..glyph_end)
-                .ok_or(EngineError::InvalidRequest)?,
-        );
-        self.raster_block_origins.extend_from_slice(
-            previous
-                .raster_block_origins
-                .get(glyph_start..glyph_end)
-                .ok_or(EngineError::InvalidRequest)?,
-        );
         for (target, source) in self.semantic_f32[..SEMANTIC_F32_BASE_FIELD_COUNT]
             .iter_mut()
             .zip(&previous.semantic_f32[..SEMANTIC_F32_BASE_FIELD_COUNT])
@@ -1139,8 +1120,6 @@ impl PositionedGlyphArena {
         self.replacement_current_order.clear();
         self.replacement_previous_order.clear();
         self.glyphs.clear();
-        self.raster_inline_origins.clear();
-        self.raster_block_origins.clear();
         self.line_glyph_starts.clear();
         self.line_glyph_counts.clear();
         self.line_decoration_starts.clear();
@@ -1462,10 +1441,6 @@ impl PositionedGlyphArena {
 
     pub(crate) fn semantic_glyphs(&self) -> &[SemanticGlyph] {
         &self.semantic_glyphs
-    }
-
-    pub(crate) fn raster_origins(&self) -> (&[f32], &[f32]) {
-        (&self.raster_inline_origins, &self.raster_block_origins)
     }
 
     pub(crate) fn glyph_placement_translation(
@@ -2136,13 +2111,13 @@ impl PositionedGlyphArena {
                             depth_key: PAINT_LAYER_GLYPH,
                             font_size: geometry.font_size,
                             raster_pixel_ratio: style.raster_pixel_ratio,
-                            inline_start: ink_inline_start,
-                            block_start: ink_block_start,
+                            raster_inline_origin: local.inline_origin,
+                            raster_block_origin: local.block_origin,
                             inline_extent: local.ink_inline_extent,
                             block_extent: local.ink_block_extent,
                         },
-                        local.inline_origin,
-                        local.block_origin,
+                        ink_inline_start,
+                        ink_block_start,
                         GlyphPublication {
                             style,
                             cluster: clusters.stable_ids[cluster],
@@ -2688,13 +2663,13 @@ impl PositionedGlyphArena {
                             depth_key: PAINT_LAYER_GLYPH,
                             font_size: style.font_size,
                             raster_pixel_ratio: style.raster_pixel_ratio,
-                            inline_start: ink_inline_start,
-                            block_start: ink_block_start,
+                            raster_inline_origin: local.inline_origin,
+                            raster_block_origin: local.block_origin,
                             inline_extent: local.ink_inline_extent,
                             block_extent: local.ink_block_extent,
                         },
-                        local.inline_origin,
-                        local.block_origin,
+                        ink_inline_start,
+                        ink_block_start,
                         GlyphPublication {
                             style,
                             cluster: semantic_id,
@@ -2741,16 +2716,14 @@ impl PositionedGlyphArena {
     fn push_glyph<const TEXT_EFFECTS: bool>(
         &mut self,
         glyph: LayoutGlyph,
-        raster_inline_origin: f32,
-        raster_block_origin: f32,
+        ink_inline_start: f32,
+        ink_block_start: f32,
         publication: GlyphPublication,
     ) {
         self.glyphs.push(glyph);
-        self.raster_inline_origins.push(raster_inline_origin);
-        self.raster_block_origins.push(raster_block_origin);
         let f32_values = [
-            glyph.inline_start,
-            glyph.block_start,
+            ink_inline_start,
+            ink_block_start,
             glyph.inline_extent,
             glyph.block_extent,
             glyph.font_size,
@@ -2908,13 +2881,13 @@ impl PositionedGlyphArena {
             if next_glyph.clip_id != old_glyph.clip_id {
                 mask = ALL_SEMANTIC_CHANGES;
             } else {
-                if self.raster_inline_origins[slot].to_bits()
-                    != previous.raster_inline_origins[slot].to_bits()
+                if next_glyph.raster_inline_origin.to_bits()
+                    != old_glyph.raster_inline_origin.to_bits()
                 {
                     mask |= 1 << 6;
                 }
-                if self.raster_block_origins[slot].to_bits()
-                    != previous.raster_block_origins[slot].to_bits()
+                if next_glyph.raster_block_origin.to_bits()
+                    != old_glyph.raster_block_origin.to_bits()
                 {
                     mask |= 1 << 7;
                 }
@@ -2999,14 +2972,10 @@ impl PositionedGlyphArena {
                 mask |= 1 << field;
             }
         }
-        if self.raster_inline_origins[slot].to_bits()
-            != previous.raster_inline_origins[previous_slot].to_bits()
-        {
+        if next.raster_inline_origin.to_bits() != old.raster_inline_origin.to_bits() {
             mask |= 1 << 6;
         }
-        if self.raster_block_origins[slot].to_bits()
-            != previous.raster_block_origins[previous_slot].to_bits()
-        {
+        if next.raster_block_origin.to_bits() != old.raster_block_origin.to_bits() {
             mask |= 1 << 7;
         }
         for field in 0..SEMANTIC_U32_BASE_FIELD_COUNT {
@@ -4281,12 +4250,12 @@ mod tests {
             assert_ne!(glyph.content_revision, 0);
             assert_ne!(glyph.binding_handle, 0);
             assert_ne!(glyph.font_handle, 0);
-            assert!(glyph.inline_start.is_finite());
-            assert!(glyph.block_start.is_finite());
+            assert!(glyph.raster_inline_origin.is_finite());
+            assert!(glyph.raster_block_origin.is_finite());
             assert!(glyph.inline_extent.is_finite() && glyph.inline_extent >= 0.0);
             assert!(glyph.block_extent.is_finite() && glyph.block_extent >= 0.0);
-            assert!((glyph.inline_start + glyph.inline_extent).is_finite());
-            assert!((glyph.block_start + glyph.block_extent).is_finite());
+            assert!((glyph.raster_inline_origin + glyph.inline_extent).is_finite());
+            assert!((glyph.raster_block_origin + glyph.block_extent).is_finite());
         }
         for decoration in &arena.decorations {
             assert!(decoration.inline_start.is_finite());
@@ -4537,8 +4506,6 @@ mod tests {
     fn assert_run_positions_match_renderer_placement(cluster_start: usize, cluster_end: usize) {
         let (expected, production) =
             fixture_position_results(cluster_start, cluster_end, |_, _, _| {});
-        let (raster_inline, raster_block) = production.raster_origins();
-
         assert_eq!(production.semantic_glyphs.len(), expected.len());
         assert_eq!(production.glyphs.len(), expected.len());
         for (index, ((semantic, layout), expected)) in production
@@ -4550,12 +4517,12 @@ mod tests {
         {
             let translation = production.glyph_placement_translation(index).unwrap();
             let placed_inline = placed_f32(
-                raster_inline[index],
+                layout.raster_inline_origin,
                 finite_f32(translation.translation_inline).unwrap(),
             )
             .unwrap();
             let placed_block = placed_f32(
-                raster_block[index],
+                layout.raster_block_origin,
                 finite_f32(translation.translation_block).unwrap(),
             )
             .unwrap();
@@ -4575,11 +4542,11 @@ mod tests {
                 expected.ink_block_extent.to_bits()
             );
             assert_eq!(
-                layout.inline_start.to_bits(),
+                production.semantic_f32[0][index].to_bits(),
                 semantic.ink_inline_start.to_bits()
             );
             assert_eq!(
-                layout.block_start.to_bits(),
+                production.semantic_f32[1][index].to_bits(),
                 semantic.ink_block_start.to_bits()
             );
             assert_eq!(
@@ -4777,7 +4744,7 @@ mod tests {
         let legacy_absolute = shadow[0].block_origin;
         let translation = production.glyph_placement_translation(0).unwrap();
         let renderer = placed_f32(
-            production.raster_block_origins[0],
+            production.glyphs[0].raster_block_origin,
             finite_f32(translation.translation_block).unwrap(),
         )
         .unwrap();
@@ -6193,9 +6160,9 @@ mod tests {
         assert_eq!(active.glyphs.len(), 2);
         assert_eq!(active.glyphs[0].content_revision, 1);
         assert_eq!(active.glyphs[1].content_revision, 2);
-        assert_eq!(active.glyphs[0].inline_start, 4.0);
-        assert_eq!(active.glyphs[1].inline_start, 10.0);
-        assert_eq!(active.glyphs[0].block_start, 1.0);
+        assert_eq!(active.semantic_f32[0][0], 4.0);
+        assert_eq!(active.semantic_f32[0][1], 10.0);
+        assert_eq!(active.semantic_f32[1][0], 1.0);
         assert_eq!(active.semantic_glyphs[0].inline_origin, 4.0);
         assert_eq!(active.semantic_glyphs[1].inline_origin, 10.0);
         assert_eq!(active.semantic_glyphs[0].block_origin, 8.0);
@@ -6278,12 +6245,6 @@ mod tests {
             reordered.semantic_u32[field].extend(active.semantic_u32[field].iter().rev().copied());
         }
         reordered
-            .raster_inline_origins
-            .extend(active.raster_inline_origins.iter().rev().copied());
-        reordered
-            .raster_block_origins
-            .extend(active.raster_block_origins.iter().rev().copied());
-        reordered
             .assign_content_revisions(&active, &mut index, &mut next_revision, false)
             .unwrap();
         assert_eq!(reordered.glyphs[0].content_revision, 2);
@@ -6307,8 +6268,8 @@ mod tests {
             depth_key: 0,
             font_size: 16.0,
             raster_pixel_ratio: 1.0,
-            inline_start: stable_id as f32,
-            block_start: 0.0,
+            raster_inline_origin: stable_id as f32,
+            raster_block_origin: 0.0,
             inline_extent: 8.0,
             block_extent: 16.0,
         };
@@ -6336,8 +6297,6 @@ mod tests {
             for field in &mut arena.semantic_u32 {
                 field.extend([1, 2, 3]);
             }
-            arena.raster_inline_origins.extend([1.0, 2.0, 3.0]);
-            arena.raster_block_origins.extend([1.0, 2.0, 3.0]);
             arena
         };
         let previous = make_arena();
@@ -6384,8 +6343,8 @@ mod tests {
                 depth_key: PAINT_LAYER_GLYPH,
                 font_size: 16.0,
                 raster_pixel_ratio: 1.0,
-                inline_start: 8.0,
-                block_start: 9.0,
+                raster_inline_origin: if changed { 13.0 } else { 8.0 },
+                raster_block_origin: if changed { 14.0 } else { 9.0 },
                 inline_extent: 10.0,
                 block_extent: 11.0,
             };
@@ -6401,8 +6360,6 @@ mod tests {
             let mut arena = PositionedGlyphArena {
                 glyphs: vec![glyph],
                 semantic_glyphs: vec![semantic],
-                raster_inline_origins: vec![if changed { 13.0 } else { 8.0 }],
-                raster_block_origins: vec![if changed { 14.0 } else { 9.0 }],
                 ..PositionedGlyphArena::default()
             };
             for (field, values) in arena.semantic_f32.iter_mut().enumerate() {

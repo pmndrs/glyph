@@ -872,15 +872,12 @@ impl TextEngine {
             .paragraph(paragraph_id)
             .ok_or(EngineError::InvalidRequest)?;
         let positioned = paragraph.state.positioned.committed();
-        let (source_raster_inline, source_raster_block) = positioned.raster_origins();
         let source_glyphs = positioned.glyphs();
         let source_semantic = positioned.semantic_glyphs();
         let source_f32 = positioned.semantic_f32();
         let source_u32 = positioned.semantic_u32();
         let mut glyphs = Vec::new();
         let mut semantic_glyphs = Vec::new();
-        let mut raster_inline_origins = Vec::new();
-        let mut raster_block_origins = Vec::new();
         let mut copied_placements = Vec::new();
         let mut semantic_f32: [Vec<f32>; SEMANTIC_F32_FIELD_COUNT] =
             core::array::from_fn(|_| Vec::new());
@@ -906,16 +903,6 @@ impl TextEngine {
                 .map_err(|_| EngineError::ResultTooLarge)?;
             semantic_glyphs.push(*semantic);
             glyphs.push(glyph);
-            raster_inline_origins.push(
-                *source_raster_inline
-                    .get(glyph_index)
-                    .ok_or(EngineError::InvalidRequest)?,
-            );
-            raster_block_origins.push(
-                *source_raster_block
-                    .get(glyph_index)
-                    .ok_or(EngineError::InvalidRequest)?,
-            );
             copied_placements.push((
                 glyph.placement_slot,
                 positioned
@@ -983,8 +970,6 @@ impl TextEngine {
                 LayoutPlanInput {
                     transform_id: paragraph_id,
                     glyphs: &glyphs,
-                    raster_inline_origins: &raster_inline_origins,
-                    raster_block_origins: &raster_block_origins,
                     semantic_glyphs: &semantic_glyphs,
                     semantic_change_masks: &[],
                     semantic_f32: &semantic_f32_refs,
@@ -2038,7 +2023,6 @@ fn append_planner_gather(
             .paragraph(ordered.id)
             .ok_or(EngineError::InvalidRequest)?;
         let positioned = paragraph.state.positioned.active();
-        let (raster_inline_origins, raster_block_origins) = positioned.raster_origins();
         let semantic_f32 = positioned.semantic_f32();
         let semantic_u32 = positioned.semantic_u32();
         let semantic_change_masks = if retaining && !paragraph.positioned_changed {
@@ -2049,8 +2033,6 @@ fn append_planner_gather(
         let input = LayoutPlanInput {
             transform_id: ordered.id,
             glyphs: positioned.glyphs(),
-            raster_inline_origins,
-            raster_block_origins,
             semantic_glyphs: positioned.semantic_glyphs(),
             semantic_change_masks,
             semantic_f32: &semantic_f32,

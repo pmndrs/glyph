@@ -77,8 +77,8 @@ pub struct LayoutGlyph {
     pub depth_key: u32,
     pub font_size: f32,
     pub raster_pixel_ratio: f32,
-    pub inline_start: f32,
-    pub block_start: f32,
+    pub raster_inline_origin: f32,
+    pub raster_block_origin: f32,
     pub inline_extent: f32,
     pub block_extent: f32,
 }
@@ -87,8 +87,6 @@ pub struct LayoutGlyph {
 pub struct LayoutPlanInput<'a> {
     pub transform_id: u32,
     pub glyphs: &'a [LayoutGlyph],
-    pub(crate) raster_inline_origins: &'a [f32],
-    pub(crate) raster_block_origins: &'a [f32],
     pub(crate) semantic_glyphs: &'a [SemanticGlyph],
     pub semantic_change_masks: &'a [u16],
     pub semantic_f32: &'a [&'a [f32]],
@@ -281,7 +279,6 @@ impl CodecGatherWorkspace {
         input: LayoutPlanInput<'_>,
         mut binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
     ) -> Result<RetainedGather, GatherError> {
-        validate_layout_input(input)?;
         let mut cursor = self.retained_cursor;
         let mut source_cursor = self.retained_source_cursor;
         let mut cached_font_handle = None;
@@ -467,7 +464,6 @@ impl CodecGatherWorkspace {
         source_start: usize,
         mut binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
     ) -> Result<(), GatherError> {
-        validate_layout_input(input)?;
         let remaining = input.glyphs.len().saturating_sub(source_start);
         if source_start > input.glyphs.len() {
             return Err(GatherError::InvalidSemanticShape);
@@ -921,10 +917,44 @@ fn plan_glyph(
         material_id: glyph.material_id,
         clip_id: glyph.clip_id,
         depth_key: glyph.depth_key,
-        inline_start: glyph.inline_start,
-        block_start: glyph.block_start,
+        inline_start: plan_ink_start(input, glyph_index, true)?,
+        block_start: plan_ink_start(input, glyph_index, false)?,
         inline_extent: glyph.inline_extent,
         block_extent: glyph.block_extent,
+    })
+}
+
+fn plan_ink_start(
+    input: LayoutPlanInput<'_>,
+    glyph_index: usize,
+    inline: bool,
+) -> Result<f32, GatherError> {
+    let field = usize::from(!inline);
+    if let Some(value) = input
+        .semantic_f32
+        .get(field)
+        .and_then(|values| values.get(glyph_index))
+        .copied()
+    {
+        return Ok(value);
+    }
+    let glyph = input
+        .glyphs
+        .get(glyph_index)
+        .ok_or(GatherError::SourceFieldMissing)?;
+    if let Some(semantic) = input.semantic_glyphs.get(
+        usize::try_from(glyph.semantic_glyph_index).map_err(|_| GatherError::SourceFieldMissing)?,
+    ) {
+        return Ok(if inline {
+            semantic.ink_inline_start
+        } else {
+            semantic.ink_block_start
+        });
+    }
+    Ok(if inline {
+        glyph.raster_inline_origin
+    } else {
+        glyph.raster_block_origin
     })
 }
 
@@ -981,16 +1011,18 @@ fn derived_semantic_f32(
     glyph_index: usize,
 ) -> Result<Option<f32>, GatherError> {
     if field == SEMANTIC_F32_INLINE_ORIGIN || field == SEMANTIC_F32_BLOCK_ORIGIN {
-        let local = if field == SEMANTIC_F32_INLINE_ORIGIN {
-            input.raster_inline_origins
+        let value = if field == SEMANTIC_F32_INLINE_ORIGIN {
+            input
+                .glyphs
+                .get(glyph_index)
+                .map(|glyph| glyph.raster_inline_origin)
         } else {
-            input.raster_block_origins
+            input
+                .glyphs
+                .get(glyph_index)
+                .map(|glyph| glyph.raster_block_origin)
         };
-        return local
-            .get(glyph_index)
-            .copied()
-            .map(Some)
-            .ok_or(GatherError::SourceFieldMissing);
+        return value.map(Some).ok_or(GatherError::SourceFieldMissing);
     }
     if field == SEMANTIC_F32_INVERSE_FONT_SIZE {
         let font_size = input
@@ -1028,15 +1060,6 @@ fn derived_semantic_f32(
     } else {
         (f64::from(channel) / 255.0) as f32
     }))
-}
-
-fn validate_layout_input(input: LayoutPlanInput<'_>) -> Result<(), GatherError> {
-    if input.raster_inline_origins.len() != input.glyphs.len()
-        || input.raster_block_origins.len() != input.glyphs.len()
-    {
-        return Err(GatherError::InvalidSemanticShape);
-    }
-    Ok(())
 }
 
 fn optional_semantic_f32(
@@ -1149,16 +1172,12 @@ mod tests {
     use alloc::vec;
 
     const CAPABILITY: CapabilitySetId = CapabilitySetId(1);
-    static TEST_RASTER_ORIGINS: [f32; 65_536] = [0.0; 65_536];
-
-    fn test_raster_origins(len: usize) -> &'static [f32] {
-        &TEST_RASTER_ORIGINS[..len]
-    }
-
     #[test]
     fn derives_codec_fields_from_local_raster_origins() {
         let mut glyphs = [layout_glyph(1, 0)];
         glyphs[0].semantic_glyph_index = 1;
+        glyphs[0].raster_inline_origin = 101.25;
+        glyphs[0].raster_block_origin = -202.5;
         let semantic_glyphs = [
             SemanticGlyph {
                 stable_id: 99,
@@ -1187,8 +1206,6 @@ mod tests {
         let input = LayoutPlanInput {
             transform_id: 1,
             glyphs: &glyphs,
-            raster_inline_origins: &[101.25],
-            raster_block_origins: &[-202.5],
             semantic_glyphs: &semantic_glyphs,
             semantic_change_masks: &[],
             semantic_f32: &[],
@@ -1225,24 +1242,21 @@ mod tests {
     }
 
     #[test]
-    fn rejects_missing_or_misaligned_local_raster_origins() {
+    fn embedded_local_raster_origins_need_no_parallel_vectors() {
         let binding = binding();
         let codec = codec();
         let glyphs = [layout_glyph(1, 0)];
         let input = LayoutPlanInput {
             transform_id: 1,
             glyphs: &glyphs,
-            raster_inline_origins: &[],
-            raster_block_origins: &[0.0],
             semantic_glyphs: &[],
             semantic_change_masks: &[],
             semantic_f32: &[&[0.0]],
             semantic_u32: &[&[0]],
         };
-        assert_eq!(
-            CodecGatherWorkspace::default().gather(&codec, CAPABILITY, input, |_| Some(&binding)),
-            Err(GatherError::InvalidSemanticShape)
-        );
+        CodecGatherWorkspace::default()
+            .gather(&codec, CAPABILITY, input, |_| Some(&binding))
+            .unwrap();
     }
 
     #[test]
@@ -1262,8 +1276,6 @@ mod tests {
                 LayoutPlanInput {
                     transform_id: 1,
                     glyphs: &glyphs,
-                    raster_inline_origins: test_raster_origins(glyphs.len()),
-                    raster_block_origins: test_raster_origins(glyphs.len()),
                     semantic_glyphs: &[],
                     semantic_change_masks: &[],
                     semantic_f32: &[&semantic_x],
@@ -1334,8 +1346,6 @@ mod tests {
                 LayoutPlanInput {
                     transform_id: 1,
                     glyphs: &glyphs,
-                    raster_inline_origins: test_raster_origins(glyphs.len()),
-                    raster_block_origins: test_raster_origins(glyphs.len()),
                     semantic_glyphs: &[],
                     semantic_change_masks: &[],
                     semantic_f32: &[&initial_x],
@@ -1361,8 +1371,6 @@ mod tests {
                     LayoutPlanInput {
                         transform_id: 1,
                         glyphs: &changed_glyphs,
-                        raster_inline_origins: test_raster_origins(changed_glyphs.len()),
-                        raster_block_origins: test_raster_origins(changed_glyphs.len()),
                         semantic_glyphs: &[],
                         semantic_change_masks: &[0, 1],
                         semantic_f32: &[&changed_x],
@@ -1392,8 +1400,6 @@ mod tests {
                     LayoutPlanInput {
                         transform_id: 1,
                         glyphs: &changed_topology,
-                        raster_inline_origins: test_raster_origins(changed_topology.len()),
-                        raster_block_origins: test_raster_origins(changed_topology.len()),
                         semantic_glyphs: &[],
                         semantic_change_masks: &[
                             0,
@@ -1415,8 +1421,6 @@ mod tests {
                 LayoutPlanInput {
                     transform_id: 1,
                     glyphs: &changed_topology,
-                    raster_inline_origins: test_raster_origins(changed_topology.len()),
-                    raster_block_origins: test_raster_origins(changed_topology.len()),
                     semantic_glyphs: &[],
                     semantic_change_masks: &[0, crate::engine::positioning::ALL_SEMANTIC_CHANGES],
                     semantic_f32: &[&changed_x],
@@ -1449,8 +1453,6 @@ mod tests {
             LayoutPlanInput {
                 transform_id: 1,
                 glyphs: &first,
-                raster_inline_origins: test_raster_origins(first.len()),
-                raster_block_origins: test_raster_origins(first.len()),
                 semantic_glyphs: &[],
                 semantic_change_masks: &[],
                 semantic_f32: &[&first_x],
@@ -1459,8 +1461,6 @@ mod tests {
             LayoutPlanInput {
                 transform_id: 2,
                 glyphs: &second,
-                raster_inline_origins: test_raster_origins(second.len()),
-                raster_block_origins: test_raster_origins(second.len()),
                 semantic_glyphs: &[],
                 semantic_change_masks: &[],
                 semantic_f32: &[&second_x],
@@ -1515,8 +1515,6 @@ mod tests {
                 LayoutPlanInput {
                     transform_id: 1,
                     glyphs: &glyphs,
-                    raster_inline_origins: test_raster_origins(glyphs.len()),
-                    raster_block_origins: test_raster_origins(glyphs.len()),
                     semantic_glyphs: &[],
                     semantic_change_masks: &[],
                     semantic_f32: &[&semantic_x],
@@ -1538,8 +1536,6 @@ mod tests {
                     LayoutPlanInput {
                         transform_id: 1,
                         glyphs: &revised,
-                        raster_inline_origins: test_raster_origins(revised.len()),
-                        raster_block_origins: test_raster_origins(revised.len()),
                         semantic_glyphs: &[],
                         semantic_change_masks: &[0, 1],
                         semantic_f32: &[&moved_x],
@@ -1600,8 +1596,6 @@ mod tests {
                 LayoutPlanInput {
                     transform_id: 1,
                     glyphs: &[glyph],
-                    raster_inline_origins: test_raster_origins(1),
-                    raster_block_origins: test_raster_origins(1),
                     semantic_glyphs: &[],
                     semantic_change_masks: &[],
                     semantic_f32: &[&semantic_x],
@@ -1622,8 +1616,6 @@ mod tests {
                     LayoutPlanInput {
                         transform_id: 1,
                         glyphs: &[glyph],
-                        raster_inline_origins: test_raster_origins(1),
-                        raster_block_origins: test_raster_origins(1),
                         semantic_glyphs: &[],
                         semantic_change_masks: &[1 << 4],
                         semantic_f32: &[&semantic_x],
@@ -1653,8 +1645,6 @@ mod tests {
                 LayoutPlanInput {
                     transform_id: 1,
                     glyphs: &glyphs,
-                    raster_inline_origins: test_raster_origins(glyphs.len()),
-                    raster_block_origins: test_raster_origins(glyphs.len()),
                     semantic_glyphs: &[],
                     semantic_change_masks: &[],
                     semantic_f32: &[],
@@ -1671,8 +1661,6 @@ mod tests {
                 LayoutPlanInput {
                     transform_id: 1,
                     glyphs: &glyphs,
-                    raster_inline_origins: test_raster_origins(glyphs.len()),
-                    raster_block_origins: test_raster_origins(glyphs.len()),
                     semantic_glyphs: &[],
                     semantic_change_masks: &[],
                     semantic_f32: &[],
@@ -1689,8 +1677,6 @@ mod tests {
                 LayoutPlanInput {
                     transform_id: 1,
                     glyphs: &glyphs,
-                    raster_inline_origins: test_raster_origins(glyphs.len()),
-                    raster_block_origins: test_raster_origins(glyphs.len()),
                     semantic_glyphs: &[],
                     semantic_change_masks: &[],
                     semantic_f32: &[],
@@ -1723,8 +1709,6 @@ mod tests {
         let initial = LayoutPlanInput {
             transform_id: 1,
             glyphs: before,
-            raster_inline_origins: test_raster_origins(before.len()),
-            raster_block_origins: test_raster_origins(before.len()),
             semantic_glyphs: &[],
             semantic_change_masks: &[],
             semantic_f32: &[&semantic_before],
@@ -1733,8 +1717,6 @@ mod tests {
         let edited = LayoutPlanInput {
             transform_id: 1,
             glyphs: after,
-            raster_inline_origins: test_raster_origins(after.len()),
-            raster_block_origins: test_raster_origins(after.len()),
             semantic_glyphs: &[],
             semantic_change_masks: masks,
             semantic_f32: &[&semantic_after],
@@ -1827,8 +1809,6 @@ mod tests {
             let input = LayoutPlanInput {
                 transform_id: 1,
                 glyphs: &glyphs,
-                raster_inline_origins: test_raster_origins(glyphs.len()),
-                raster_block_origins: test_raster_origins(glyphs.len()),
                 semantic_glyphs: &[],
                 semantic_change_masks: masks,
                 semantic_f32: &semantic_f32,
@@ -2007,8 +1987,6 @@ mod tests {
             let input = LayoutPlanInput {
                 transform_id,
                 glyphs,
-                raster_inline_origins: test_raster_origins(glyphs.len()),
-                raster_block_origins: test_raster_origins(glyphs.len()),
                 semantic_glyphs: &[],
                 semantic_change_masks: masks,
                 semantic_f32: &semantic_f32,
@@ -2229,7 +2207,7 @@ mod tests {
         let before_second = [layout_glyph(3, 0)];
         let mut changed = layout_glyph(2, 1);
         changed.content_revision = 2;
-        changed.inline_start = 12.0;
+        changed.raster_inline_origin = 12.0;
         changed.inline_extent = 9.0;
         let after_first = [layout_glyph(1, 0), changed];
         let after_second = [layout_glyph(3, 0)];
@@ -2332,8 +2310,8 @@ mod tests {
             depth_key: 0,
             font_size: 16.0,
             raster_pixel_ratio: 2.0,
-            inline_start: glyph_id as f32 * 10.0,
-            block_start: 0.0,
+            raster_inline_origin: glyph_id as f32 * 10.0,
+            raster_block_origin: 0.0,
             inline_extent: 8.0,
             block_extent: 16.0,
         }
@@ -2557,8 +2535,6 @@ mod tests {
                     LayoutPlanInput {
                         transform_id: 3,
                         glyphs: &glyphs,
-                        raster_inline_origins: test_raster_origins(glyphs.len()),
-                        raster_block_origins: test_raster_origins(glyphs.len()),
                         semantic_glyphs: &[],
                         semantic_change_masks: &[],
                         semantic_f32: &[&semantic_x],
