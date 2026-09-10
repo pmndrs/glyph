@@ -4008,9 +4008,10 @@ impl ParagraphState {
         if !self.geometry.is_prepared()
             && !self.style_invalidation.metrics
             && self.boundary_shape.records.is_empty()
-            && geometry.constraints.iter().all(|constraint| {
-                constraint.overflow != OVERFLOW_ELLIPSIS && constraint.drop_cap_lines == 0
-            })
+            && geometry
+                .constraints
+                .iter()
+                .all(|constraint| constraint.overflow != OVERFLOW_ELLIPSIS)
             && let Some(edit) = self.text_edit
             && edit.old_end.saturating_sub(edit.old_start)
                 == edit.new_end.saturating_sub(edit.old_start)
@@ -4021,9 +4022,11 @@ impl ParagraphState {
                     geometry,
                     self.clusters.committed(),
                     clusters,
+                    runs,
                     styles,
                     &mut self.flow_slot_scratch,
                     u32::try_from(edit.old_start).map_err(|_| EngineError::ResultTooLarge)?,
+                    paragraph_level,
                     max_lines,
                     max_slots_per_band,
                     |handle| shaper.font_metrics(handle),

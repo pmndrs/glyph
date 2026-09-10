@@ -2,6 +2,21 @@
 
 ## 2026-09-10
 
+- **Retained same-length edits through drop-cap source changes** — the text-edit convergence path now rederives current
+  same-source cap geometry, starts again at the first body line when cap content or geometry changes, reapplies both old
+  and new cap influence through every affected band, and retains the suffix only after cursor and metric convergence. A
+  focused Rust test changes the cap glyph geometry and proves the incremental line, fragment, cap, and suffix state equals
+  a cold rebuild; the attached Three test changes a combining-mark cap through the public text surface and remains
+  cold-equivalent.
+
+- **Refreshed direct-offset CPU and browser evidence** — two current 31-sample ordered Bitmap repeats measure
+  `3.013 / 3.183 ms` median/p95 for 21,805 Latin glyphs and `2.394 / 2.526 ms` for 21,978 dense-CJK glyphs. Against exact
+  main's `3.769 / 3.852 ms` Latin and clean `2.974 / 3.127 ms` CJK repeat, those are 20.1%/17.4% and 19.5%/19.2%
+  median/p95 improvements. Each update still writes one 174,440/175,824-byte x/y patch and preserves draw topology.
+  Direct TypeGPU now passes Bitmap/MSDF/Slug on project Chromium WebGPU; native Three TSL and the experimental
+  Three/TypeGPU shader set pass all three rasters, retained draw/storage, detached-copy, decoration, and composition on
+  WebGPU and forced WebGL2. The 40-warmup/101-sample release matrix, transfer attribution, and editorial soak remain open.
+
 - **Extended localized exclusion convergence through drop-cap paragraphs** — the retained exact-width flow path now
   rederives same-source cap geometry, reapplies its cut, and realigns baseline caps while recomposing a moved exclusion's
   dirty band. A Rust baseline-aligned fixture proves retained-prefix/suffix output equals a cold rebuild, and a public
@@ -14,8 +29,7 @@
   cluster, and positions both ranges through the existing x/y occurrence path. Focused Rust tests cover RTL side mapping,
   safe-edge refusal, and a simultaneous independent rectangle exclusion; a real attached Three integration uses a
   combining-mark cap and proves every source glyph appears once with renderer and shaped origins equal. Arbitrary cap
-  polygons, local-edit retention, mixed-raster Editorial composition, and the complete interaction/browser matrix remain
-  open.
+  polygons, mixed-raster Editorial composition, and the complete interaction/browser matrix remain open.
 
 - **Projected known Three bounds into the existing 2D flow model** — `projectTextFlowBounds` accepts one caller-known
   conservative object-local `Box3`, the current object/text transforms, a perspective or orthographic camera, and authored
