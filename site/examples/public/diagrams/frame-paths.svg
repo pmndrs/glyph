@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 260" width="960" height="260" role="img" aria-labelledby="t d">
+  <title id="t">Two paths through a frame</title>
+  <desc id="d">A semantic change goes through one Wasm batch for every dirty root and a decode-and-commit; a transform-only change syncs matrices without entering Wasm. Both end at the host renderer drawing the meshes.</desc>
+  <defs>
+    <style>
+      .bg { fill: #07080b; }
+      .lane { fill: #0e1118; stroke: #1c2130; stroke-width: 1; }
+      .box { fill: #141927; stroke: #2a3247; stroke-width: 1.25; rx: 8; }
+      .box.js { stroke: #70d6ff; } .box.rs { stroke: #ffd166; } .box.out { stroke: #a855f7; } .box.gpu { stroke: #34d399; } .box.dim { stroke: #2a3247; }
+      .label { font: 600 16px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #e7ecf6; }
+      .sub { font: 400 13px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #97a1b4; }
+      .lanename { font: 600 11px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #97a1b4; letter-spacing: 0.12em; }
+      .mono { font: 500 12.5px/1 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; fill: #ffd166; }
+      .mono.cyan { fill: #70d6ff; } .mono.green { fill: #34d399; }
+      .edge { fill: none; stroke: #4a5570; stroke-width: 1.5; marker-end: url(#arrow); }
+      .edge.hot { stroke: #a855f7; marker-end: url(#arrowv); } .edge.fast { stroke: #34d399; marker-end: url(#arrowg); } .edge.dash { stroke-dasharray: 5 4; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5570"/></marker>
+    <marker id="arrowv" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a855f7"/></marker>
+    <marker id="arrowg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#34d399"/></marker>
+  </defs>
+  <rect class="bg" width="960" height="260" rx="14"/>
+  <rect class="box js" x="40" y="48" width="196" height="56"/>
+  <text class="label" x="56" y="72">Semantic change</text>
+  <text class="sub" x="56" y="92">text, style, layout, font, material</text>
+  <rect class="box rs" x="300" y="48" width="260" height="56"/>
+  <text class="label" x="316" y="72">glyph.shape()</text>
+  <text class="sub" x="316" y="92">one Wasm batch for every dirty root</text>
+  <rect class="box out" x="624" y="48" width="140" height="56"/>
+  <text class="label" x="640" y="72">decode</text>
+  <text class="sub" x="640" y="92">commit or discard</text>
+  <rect class="box js" x="40" y="160" width="196" height="56"/>
+  <text class="label" x="56" y="184">Transform change</text>
+  <text class="sub" x="56" y="204">position, rotation, scale, visible</text>
+  <rect class="box gpu" x="300" y="160" width="260" height="56"/>
+  <text class="label" x="316" y="184">Transform sync</text>
+  <text class="sub" x="316" y="204">matrices only; Wasm is never entered</text>
+  <rect class="box gpu" x="820" y="104" width="112" height="56"/>
+  <text class="label" x="836" y="128">Render</text>
+  <text class="sub" x="836" y="148">host draws</text>
+  <path class="edge" d="M 236 76 L 300 76"/>
+  <path class="edge hot" d="M 560 76 L 624 76"/>
+  <path class="edge" d="M 764 76 C 800 76, 800 132, 820 132"/>
+  <path class="edge fast" d="M 236 188 L 300 188"/>
+  <path class="edge fast" d="M 560 188 C 800 188, 800 132, 820 132"/>
+</svg>
