@@ -8,6 +8,8 @@ import { float, normalize, positionLocal, uniform, vec2, vec3 } from 'three/tsl'
 import { DoubleSide, MeshPhysicalNodeMaterial, NormalBlending, PMREMGenerator, Renderer } from 'three/webgpu';
 
 import { INTER } from '../../fonts';
+import { MetalBloom } from './components/MetalBloom';
+import { RefractiveShards } from './components/RefractiveShards';
 
 /**
  * Lit text. The factory keeps the base contract the default sets, then swaps
@@ -34,32 +36,44 @@ const lit = defineTextMaterial((context) => {
   material.normalNode = normalize(vec3(lean.x, lean.y, 1));
   material.colorNode = context.shader.color;
   material.opacityNode = context.shader.opacity;
-  material.metalnessNode = float(0.62);
-  material.roughnessNode = float(0.38);
-  material.envMapIntensity = 0.5;
+  material.metalnessNode = float(0.88);
+  material.roughnessNode = float(0.16);
+  material.clearcoat = 0.3;
+  material.clearcoatRoughness = 0.12;
+  material.envMapIntensity = 1.35;
   return material;
 });
 
 export default function Materials() {
   const inter = useMsdf(INTER);
   const key = useRef<import('three/webgpu').DirectionalLight>(null);
+  const flare = useRef<import('three/webgpu').PointLight>(null);
 
   useFrame(({ elapsed }) => {
     const t = elapsed * 0.5;
     key.current?.position.set(Math.cos(t) * 5, Math.sin(t * 0.7) * 2.5, 4);
+    flare.current?.position.set(Math.cos(t * 0.7) * 3.4, 1.65 + Math.sin(t) * 0.35, 2.2);
   });
 
   return (
     <>
-      <directionalLight ref={key} color="#f2f6ff" intensity={3.4} />
+      <MetalBloom />
+      <directionalLight ref={key} color="#f2f6ff" intensity={4.2} />
+      <pointLight ref={flare} color="#67e8f9" intensity={9} distance={8} decay={2} />
+      <pointLight color="#f0abfc" intensity={5} distance={7} decay={2} position={[-3.4, -1.2, 2.4]} />
       <RoomEnvironmentMap />
+      <RefractiveShards />
+      <mesh position={[0, 1.65, -0.8]}>
+        <sphereGeometry args={[0.08, 16, 16]} />
+        <meshBasicNodeMaterial color="#ffffff" toneMapped={false} />
+      </mesh>
       <Text
         font={inter}
         material={lit}
-        style={{ fontSize: 1.5, color: '#e7ecf6' }}
+        style={{ fontSize: 1.5, color: '#dce8ff' }}
         layout={{ align: 'center', wrap: 'none' }}
         constraints={{ width: { mode: 'exact', size: 9 } }}
-        position={[-4.5, 0.75, 0]}
+        position={[-4.5, 0.72, 0]}
         onError={console.error}
       >
         Metal
