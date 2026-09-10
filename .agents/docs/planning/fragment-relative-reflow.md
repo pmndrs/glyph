@@ -881,6 +881,11 @@ checkpoint.
 Exit: perspective and orthographic projection cases are finite/conservative; the workload shows no overlap,
 duplication, missing clusters, broad reshaping, or adapter-owned layout; both Three renderer paths agree.
 
+Current checkpoint: Three now projects caller-known conservative object-local bounds through the camera-side text-plane
+and frustum half-spaces into the existing keyed 2D exclusion model. Perspective/orthographic, crossing, enclosing,
+behind-plane, clipping, quantization, and invalid-transform cases have focused package evidence. Explicit simplified
+silhouettes, same-source drop-cap mapping/realization, the Editorial scene, and live dual-renderer evidence remain open.
+
 ### M6 — full-matrix closure and oracle retirement
 
 - Run the full existing and new flow/drop-cap/projection matrix across core and adapters; no typography or query behavior
