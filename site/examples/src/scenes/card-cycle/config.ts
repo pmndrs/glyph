@@ -1,3 +1,5 @@
+import iconMap from '../../../../docs/assets/fonts/font-awesome-icons.json';
+
 /** A card stays inside the short edge of the gallery's default 16:9 crop while it arcs. */
 export const CARD_WIDTH = 3.45;
 export const CARD_HEIGHT = 4.6;
@@ -18,7 +20,8 @@ export const TILT_Y = 0.2;
 
 export interface CardFace {
   readonly rank: 'A' | 'K';
-  readonly suit: 'STAR' | 'MOON';
+  readonly label: 'ROCKET' | 'BOLT';
+  readonly icon: string;
   readonly ink: string;
   readonly pips: readonly PipPosition[];
 }
@@ -26,7 +29,7 @@ export interface CardFace {
 export interface PipPosition {
   readonly x: number;
   readonly y: number;
-  /** Turns the asterisk upside down for the lower half of a traditional card layout. */
+  /** Turns the icon upside down for the lower half of a traditional card layout. */
   readonly inverted?: boolean;
 }
 
@@ -36,8 +39,9 @@ const PIP_COLUMNS = [-0.72, 0, 0.72] as const;
 export const CARD_FACES: readonly CardFace[] = [
   {
     rank: 'A',
-    suit: 'STAR',
-    ink: '#9c3d48',
+    label: 'ROCKET',
+    icon: String.fromCodePoint(iconMap.icons.rocket),
+    ink: '#f6cf6b',
     pips: [
       { x: 0, y: 0.62 },
       { x: 0, y: 0 },
@@ -46,8 +50,9 @@ export const CARD_FACES: readonly CardFace[] = [
   },
   {
     rank: 'K',
-    suit: 'MOON',
-    ink: '#294f8d',
+    label: 'BOLT',
+    icon: String.fromCodePoint(iconMap.icons.bolt),
+    ink: '#dca83f',
     pips: [
       { x: PIP_COLUMNS[0], y: 0.84 },
       { x: PIP_COLUMNS[2], y: 0.84 },
@@ -70,7 +75,9 @@ export interface CardTransform {
   x: number;
   y: number;
   z: number;
+  rotationX: number;
   rotationY: number;
+  rotationZ: number;
 }
 
 export function createCycleState(): CycleState {
@@ -104,17 +111,21 @@ export function writeCardTransform(out: CardTransform, card: 0 | 1, top: 0 | 1, 
     out.x = 0;
     out.y = 0;
     out.z = card === top ? TOP_Z : BOTTOM_Z;
+    out.rotationX = 0;
     out.rotationY = 0;
+    out.rotationZ = 0;
     return;
   }
 
   const eased = smoothstep(progress);
   const arc = Math.sin(progress * Math.PI);
-  out.x = arc * 0.46;
-  out.y = arc * 0.42;
-  // Negative Z is away from the stage camera: the active card visibly travels behind the stack.
-  out.z = TOP_Z + (BOTTOM_Z - TOP_Z) * eased - arc * 0.32;
+  out.x = arc * 1.05;
+  out.y = arc * 0.62;
+  // Move toward the camera before landing behind the stack so the cycle reads in all three axes.
+  out.z = TOP_Z + (BOTTOM_Z - TOP_Z) * eased + arc * 0.95;
+  out.rotationX = -arc * 0.18;
   out.rotationY = progress * Math.PI * 2;
+  out.rotationZ = arc * 0.12;
 }
 
 /** A frame-rate-independent one-pole damping step for the gallery pointer target. */

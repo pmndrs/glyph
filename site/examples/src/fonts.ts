@@ -10,6 +10,9 @@
  */
 export const INTER = new URL('../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url).href;
 export const ICONS = new URL('../../../apps/r3f-hello-world/assets/font-awesome-world.font.glb', import.meta.url).href;
+/** Named Font Awesome subset used by the docs and richer gallery examples. */
+export const ICONS_MSDF = new URL('../../docs/assets/fonts/font-awesome-icons-msdf.font.glb', import.meta.url).href;
+export const ICONS_MSDF_OPTIONS = { emSize: 32, pixelRange: 6 } as const;
 export const PLAYWRITE = new URL('../../docs/assets/fonts/lovers-quarrel-slug.font.glb', import.meta.url).href;
 
 /** Strikes the checked-in Inter GLB actually carries; a different tuple would be a different raster. */
