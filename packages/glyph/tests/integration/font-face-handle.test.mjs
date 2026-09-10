@@ -37,6 +37,11 @@ const portableSystemBuffers = defineCodecBuffers({
     scalar: 'u32',
     lanes: ['stableGlyphId'],
   },
+  placementOffset: {
+    id: id.buffer('test.font-face-portable-config/placement-offset'),
+    scalar: 'f32',
+    lanes: ['inlineOffset', 'blockOffset'],
+  },
 });
 await glyph.init();
 

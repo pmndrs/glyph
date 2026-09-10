@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:a0b905000d0748c187a30bf3b039dda0304ffc3bcdafeff47a6099ce49dcdb47'
+source_digest: 'sha256:58aed5a05209df25d3ba7e0a870dc509a3c2c84ad3779fed37ce88c40f3f0614'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1239,11 +1239,13 @@ representation lab finds mismatches in every tested compact candidate. The activ
 420/434-unit widths and fails on any zero-patch sample.
 
 Those counterexamples close the old-bit question for the rejected indexed placement-table experiment. The package is
-pre-alpha and may deliberately repin its final coordinate arithmetic, but no new numeric contract is currently enabled.
-Production CPU publication and every renderer again consume the established absolute f32 origins produced by the
-ordered f64 positioning fold and one final narrow. A later direct-offset cutover must define one shared operation order,
-predeclare its finite error bound, and pass tiny-world, cancellation, large-coordinate, justification, and browser-pixel
-evidence before replacing that authority.
+pre-alpha and now publishes one direct-offset raster contract without a compatibility branch. CPU semantic/query output
+retains the established absolute f32 origins produced by the ordered f64 positioning fold and one final narrow. Raster
+Codec programs instead receive a hidden engine-owned f32x2 occurrence offset and stable glyph-local geometry; Three and
+direct TypeGPU perform the same ordered local-plus-offset f32 addition before coverage. Codec authors continue to name
+semantic and raster values rather than slots, tables, bind groups, or physical buffer layouts. A 65,536-case finite
+arithmetic regression proves this is the same commutative f32 addition the former Codec-side absolute raster origin used;
+tiny-world, justification, cancellation, retained-update, and browser-pixel evidence still gate milestone completion.
 
 Static local coordinates cannot be anchored to visual slices because width changes move dense-CJK slice boundaries. The
 exact anchor policy remains evidence-gated; an admissible bounded-local form may use fixed, break-independent numeric
@@ -1270,7 +1272,9 @@ f64 reassociation counterexamples remain authoritative for the future CPU cutove
 
 Break-independent numeric blocks, compact placement segments, and visual-span ownership remain test/kernel-lab proof
 state. They exercise the existing positioning traversal and keep justification, L1/L2, hanging, and boundary metadata in
-core, but release builds do not construct, reconcile, or publish that dormant state while it has no shipping consumer.
+core, but release builds do not yet construct or reconcile that compact state. The shipping direct-offset buffer is still
+expanded from absolute positioned glyph rows, so width changes retain the prior 8-byte-per-glyph publication and the
+compact CPU/publication cut remains open.
 
 The proof also retains planner-scoped run identity and canonical comparison machinery under test/kernel-lab compilation.
 It remains useful for validating split/merge, replacement-run, and acknowledgement behavior, but release width updates do

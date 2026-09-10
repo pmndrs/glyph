@@ -33,7 +33,8 @@ pub(crate) const SEMANTIC_F32_CHANGE_FIELD_COUNT: usize = 8;
 pub(crate) const SEMANTIC_U32_BASE_FIELD_COUNT: usize = 6;
 pub(crate) const SEMANTIC_U32_FIELD_COUNT: usize = 8;
 pub(crate) const SEMANTIC_EFFECTS_CHANGE: u16 = 1 << 14;
-pub(crate) const ALL_SEMANTIC_CHANGES: u16 = (1 << 15) - 1;
+pub(crate) const SEMANTIC_PLACEMENT_CHANGE: u16 = 1 << 15;
+pub(crate) const ALL_SEMANTIC_CHANGES: u16 = u16::MAX;
 const CAPTURE_RUN_PLACEMENT: bool = cfg!(any(test, feature = "kernel-lab"));
 
 const BIDI_BN: u8 = 9;
@@ -2932,10 +2933,10 @@ impl PositionedGlyphArena {
                 let next = self.semantic_glyphs[next_glyph.semantic_glyph_index as usize];
                 let old = previous.semantic_glyphs[old_glyph.semantic_glyph_index as usize];
                 if next.inline_origin.to_bits() != old.inline_origin.to_bits() {
-                    mask |= 1 << 6;
+                    mask |= (1 << 6) | SEMANTIC_PLACEMENT_CHANGE;
                 }
                 if next.block_origin.to_bits() != old.block_origin.to_bits() {
-                    mask |= 1 << 7;
+                    mask |= (1 << 7) | SEMANTIC_PLACEMENT_CHANGE;
                 }
             }
             self.assign_content_revision_with_mask(
@@ -3022,10 +3023,10 @@ impl PositionedGlyphArena {
         let old_semantic =
             previous.semantic_glyphs[previous.glyphs[previous_slot].semantic_glyph_index as usize];
         if next_semantic.inline_origin.to_bits() != old_semantic.inline_origin.to_bits() {
-            mask |= 1 << 6;
+            mask |= (1 << 6) | SEMANTIC_PLACEMENT_CHANGE;
         }
         if next_semantic.block_origin.to_bits() != old_semantic.block_origin.to_bits() {
-            mask |= 1 << 7;
+            mask |= (1 << 7) | SEMANTIC_PLACEMENT_CHANGE;
         }
         for field in 0..SEMANTIC_U32_BASE_FIELD_COUNT {
             if self.semantic_u32[field][slot] != previous.semantic_u32[field][previous_slot] {
@@ -6245,7 +6246,13 @@ mod tests {
             .unwrap();
         assert_eq!(pending.glyphs[0].content_revision, 3);
         assert_eq!(pending.glyphs[1].content_revision, 4);
-        assert_eq!(pending.semantic_change_masks, [1 | (1 << 6), 1 | (1 << 6)]);
+        assert_eq!(
+            pending.semantic_change_masks,
+            [
+                1 | (1 << 6) | SEMANTIC_PLACEMENT_CHANGE,
+                1 | (1 << 6) | SEMANTIC_PLACEMENT_CHANGE,
+            ]
+        );
         assert_eq!(next_revision, 5);
 
         let mut reordered = PositionedGlyphArena::default();

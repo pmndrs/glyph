@@ -5,6 +5,7 @@ import { glyph } from '@pmndrs/glyph';
 import { defineTypeGpuConfig } from '@pmndrs/glyph/typegpu';
 import { resourceLease } from '@pmndrs/glyph/config/glyph';
 import { msdf, msdfSchema } from '@pmndrs/glyph/raster/msdf';
+import { TYPEGPU_PLACEMENT_OFFSET_BUFFER_ID } from '../../dist/typegpu/internal/codec.js';
 
 const fontBytes = await readFile(
   new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url),
@@ -82,6 +83,9 @@ function recordingHost() {
                     const stride = declaration.lanes.length * 4;
                     return buffers.get(declaration.id).bytes.slice(start * stride, (start + count) * stride);
                   }),
+                  placement: buffers
+                    .get(TYPEGPU_PLACEMENT_OFFSET_BUFFER_ID)
+                    .bytes.slice(start * 8, (start + count) * 8),
                   position: [...position.value],
                   viewport: [...viewport.value],
                   start,
@@ -134,6 +138,49 @@ function recordingHost() {
   };
   return { config, allocations, recorded, uploads, stats };
 }
+
+test('TypeGPU width reflow retains raster bytes and changes only host placement', async () => {
+  const host = recordingHost();
+  const handle = glyph.handle('typegpu:direct-placement', host.config);
+  const font = glyph.fontFace(new Blob([fontBytes]), { format: msdf });
+  try {
+    await font.load();
+    const text = handle.createText({
+      font,
+      text: 'alpha beta gamma delta epsilon zeta eta theta',
+      constraints: { width: { mode: 'exact', size: 300 } },
+    });
+    glyph.shape();
+    handle.draw({}, { width: 640, height: 240 });
+    const before = host.recorded.splice(0);
+    const allocationCount = host.stats.allocations;
+    const preparationCount = host.stats.preparations;
+
+    text.update({ constraints: { width: { mode: 'exact', size: 90 } } });
+    glyph.shape();
+    handle.draw({}, { width: 640, height: 240 });
+    const after = host.recorded.splice(0);
+
+    assert.equal(after.length, before.length, 'width reflow preserves draw topology');
+    assert.deepEqual(
+      after.map((draw) => draw.buffers),
+      before.map((draw) => draw.buffers),
+      'width reflow preserves every raster Codec buffer',
+    );
+    assert.notDeepEqual(
+      after.map((draw) => draw.placement),
+      before.map((draw) => draw.placement),
+      'width reflow updates the host-owned x/y occurrence offsets',
+    );
+    assert.equal(host.stats.allocations, allocationCount, 'same-capacity reflow allocates no GPU buffers');
+    assert.equal(host.stats.preparations, preparationCount, 'same-buffer reflow retains prepared draws');
+    text.dispose();
+  } finally {
+    handle.dispose();
+    font.dispose();
+  }
+  assert.equal(host.allocations.size, 0);
+});
 
 test('localized TypeGPU edits retain GPU buffers and discard leaves accepted bytes untouched', async (t) => {
   const host = recordingHost();

@@ -13,8 +13,8 @@ import {
   type CodecProgramId,
   type CodecTechniqueId,
 } from '../config/codec.js';
-import { techniqueProgram } from '../config/codec-program.js';
-import { createRasterCodecProgram } from '../config/raster.js';
+import { techniqueProgram, type CodecProgramSystemBuffers } from '../config/codec-program.js';
+import { createRasterCodecProgram, type RasterCodecSystem } from '../config/raster.js';
 import {
   defineCodecBuffers,
   defineTechniqueSchema,
@@ -28,6 +28,7 @@ import { slugCodec } from '../raster/slug.js';
 
 const THREE_STABLE_GLYPH_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/stable-glyph');
 const THREE_TRANSFORM_INDEX_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/transform-index');
+const THREE_PLACEMENT_OFFSET_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/placement-offset');
 const DECORATION_RECT_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/decoration/rect');
 const DECORATION_PACKED_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/decoration/packed');
 
@@ -43,14 +44,25 @@ export const threeSystemBuffers: {
     readonly scalar: 'u32';
     readonly lanes: readonly ['transformIndex'];
   };
+  readonly placementOffset: {
+    readonly id: typeof THREE_PLACEMENT_OFFSET_BUFFER_ID;
+    readonly scalar: 'f32';
+    readonly lanes: readonly ['inlineOffset', 'blockOffset'];
+  };
 } = defineCodecBuffers({
   stableGlyphId: { id: THREE_STABLE_GLYPH_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
   transformIndex: { id: THREE_TRANSFORM_INDEX_BUFFER_ID, scalar: 'u32', lanes: ['transformIndex'] },
+  placementOffset: {
+    id: THREE_PLACEMENT_OFFSET_BUFFER_ID,
+    scalar: 'f32',
+    lanes: ['inlineOffset', 'blockOffset'],
+  },
 });
 
 export const TRANSFORM_BUFFER_ID: CodecBufferId = threeSystemBuffers.transformIndex.id;
 
 export const STABLE_GLYPH_BUFFER_ID: CodecBufferId = threeSystemBuffers.stableGlyphId.id;
+export const PLACEMENT_OFFSET_BUFFER_ID: CodecBufferId = threeSystemBuffers.placementOffset.id;
 
 /** Decoration is a reserved technique of the Three Codec, not a raster technique: rows are resource-free and fill the gather lanes directly. */
 export const decorationSchema: TechniqueSchema<
@@ -179,7 +191,7 @@ function decorationProgram(
   transformMode: ThreeTransformMode,
   allocationMode: ThreeAllocationMode,
 ): CodecProgram {
-  const p = techniqueProgram(decorationSchema, { system: codecSystemBuffers(transformMode) });
+  const p = techniqueProgram(decorationSchema, { system: decorationSystemBuffers(transformMode) });
   const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
   return {
     ...createCodecProgram(
@@ -198,8 +210,19 @@ function decorationProgram(
   };
 }
 
-function codecSystemBuffers(transformMode: ThreeTransformMode) {
-  return transformMode === 'indexed' ? threeSystemBuffers : { stableGlyphId: threeSystemBuffers.stableGlyphId };
+function codecSystemBuffers(transformMode: ThreeTransformMode): RasterCodecSystem {
+  return {
+    stableGlyphId: threeSystemBuffers.stableGlyphId,
+    ...(transformMode === 'indexed' ? { transformIndex: threeSystemBuffers.transformIndex } : {}),
+    placementOffset: threeSystemBuffers.placementOffset,
+  };
+}
+
+function decorationSystemBuffers(transformMode: ThreeTransformMode): CodecProgramSystemBuffers {
+  return {
+    stableGlyphId: threeSystemBuffers.stableGlyphId,
+    ...(transformMode === 'indexed' ? { transformIndex: threeSystemBuffers.transformIndex } : {}),
+  };
 }
 
 /** Every Three program publishes its schema's buffers, then the Codec's own system buffers. */

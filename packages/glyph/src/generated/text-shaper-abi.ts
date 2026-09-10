@@ -179,6 +179,8 @@ export const textShaperAbi = {
       "inlineStart": 0,
       "inverseFontSize": 12,
       "outlineWidthEm": 13,
+      "placementBlock": 17,
+      "placementInline": 16,
       "rasterPixelRatio": 5,
       "shadowOffsetXEm": 14,
       "shadowOffsetYEm": 15

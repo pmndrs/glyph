@@ -44,7 +44,9 @@ import {
 } from './codec.js';
 import { assertCodecIdFactory, CodecIdScope } from '../internal/render-id.js';
 /** System buffers are owned by the engine and are deliberately absent from a Codec technique schema. */
-export type RasterCodecSystem = CodecProgramSystemBuffers;
+export type RasterCodecSystem = CodecProgramSystemBuffers & {
+  readonly placementOffset: NonNullable<CodecProgramSystemBuffers['placementOffset']>;
+};
 
 /** Renderer-neutral codec body, before an engine assigns program and capability identities. */
 export type RasterCodecBodyFactory<Schema extends TechniqueSchemaMetadata = TechniqueSchemaMetadata> = (
@@ -186,7 +188,12 @@ export function createRasterCodecProgram<Format extends RasterFormatMetadata, Sc
   if (options.ids !== undefined) {
     assertCodecIdFactory(options.ids, 'raster codec ids');
   }
-  const system = normalizeCodecProgramSystemBuffers(codec.schema.buffers, options.system);
+  const normalizedSystem = normalizeCodecProgramSystemBuffers(codec.schema.buffers, options.system);
+  const placementOffset = normalizedSystem.placementOffset;
+  if (placementOffset === undefined) {
+    throw new TypeError('raster codec system needs a host-owned placementOffset buffer');
+  }
+  const system: RasterCodecSystem = Object.freeze({ ...normalizedSystem, placementOffset });
   const capabilitySet = normalizeCodecCapabilitySet(options.capabilitySet, 'raster codec capability set');
   const ids = options.ids ?? new CodecIdScope();
   const compiledTechniqueId = ids.technique(codec.raster);
@@ -644,6 +651,7 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
 function systemCodecBuffers(system: RasterCodecSystem): CodecBuffer[] {
   return [
     { id: system.stableGlyphId.id, scalar: 'u32', vectorWidth: 1 },
+    { id: system.placementOffset.id, scalar: 'f32', vectorWidth: 2 },
     ...(system.transformIndex === undefined
       ? []
       : [{ id: system.transformIndex.id, scalar: 'u32' as const, vectorWidth: 1 }]),
