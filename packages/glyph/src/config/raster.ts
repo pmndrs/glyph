@@ -24,8 +24,12 @@ import {
   type PortableTextureArrayPayload,
   type PortableTexturePayload,
 } from './resources.js';
-import type { CompiledCodecProgramBody, CodecProgramSystemBuffers } from './codec-program.js';
-import { assertTechniqueCodecBody, normalizeCodecProgramSystemBuffers } from '../internal/codec-program-contract.js';
+import { type CompiledCodecProgramBody, type CodecProgramSystemBuffers } from './codec-program.js';
+import {
+  assertTechniqueCodecBody,
+  attachHostCodecProgramSystemBuffers,
+  normalizeCodecProgramSystemBuffers,
+} from '../internal/codec-program-contract.js';
 import {
   schemaCodecBuffers,
   type TechniqueBindingDeclaration,
@@ -50,7 +54,6 @@ export type RasterCodecSystem = CodecProgramSystemBuffers & {
 
 /** Renderer-neutral codec body, before an engine assigns program and capability identities. */
 export type RasterCodecBodyFactory<Schema extends TechniqueSchemaMetadata = TechniqueSchemaMetadata> = (
-  system: RasterCodecSystem,
   capabilities: CodecCapabilitySet,
 ) => CompiledCodecProgramBody<Schema>;
 
@@ -198,7 +201,9 @@ export function createRasterCodecProgram<Format extends RasterFormatMetadata, Sc
   const ids = options.ids ?? new CodecIdScope();
   const compiledTechniqueId = ids.technique(codec.raster);
   const compiledProgramId = ids.program(codec.raster, options.namespace, options.programName);
-  const body = codec.codecBody(system, capabilitySet);
+  const authoredBody = codec.codecBody(capabilitySet);
+  assertTechniqueCodecBody(authoredBody, codec.schema);
+  const body = attachHostCodecProgramSystemBuffers(authoredBody, codec.schema, system);
   assertTechniqueCodecBody(body, codec.schema, system);
   return Object.freeze({
     ...createCodecProgram(

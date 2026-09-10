@@ -58,8 +58,8 @@ function collisionPlan(technique, resource) {
   return registerRasterCodec({
     raster: technique,
     schema,
-    codecBody(system) {
-      const program = techniqueProgram(schema, { system });
+    codecBody() {
+      const program = techniqueProgram(schema);
       return program.compile({
         origin: [program.semantics.inlineOrigin, program.semantics.blockOrigin],
       });

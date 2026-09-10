@@ -181,8 +181,8 @@ export const glyphExampleCodecDefinition: RasterCodec<typeof glyphExample, typeo
   raster: glyphExample,
   schema: glyphExampleSchema,
   programVariant: 0,
-  codecBody(system) {
-    const p = techniqueProgram(glyphExampleSchema, { system });
+  codecBody(capabilities) {
+    const p = techniqueProgram(glyphExampleSchema);
     const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
     const { inset, red, green, blue, alpha } = p.binding;
     const insetPixels = f32.mul(inset, fontSize);
@@ -216,9 +216,11 @@ export const glyphExampleCodecDefinition: RasterCodec<typeof glyphExample, typeo
 };
 ```
 
-The `codecBody` member is the Codec technique expression body compiled into a renderer's Codec program. `compileFont()` runs
-for a font binding, not once per frame or glyph;
-its result is portable binding data and leased resource payloads.
+The `codecBody` member receives the renderer's frozen capability set and returns the portable technique expression body.
+It describes glyph-local semantics and declared raster buffers only. Glyph owns stable identity, transforms, and x/y
+placement; package-private host assembly appends those system stores after authenticating the body, so portable authors
+do not choose buffer IDs, interleaving, attributes, storage, or bind groups. `compileFont()` runs for a font binding, not
+once per frame or glyph; its result is portable binding data and leased resource payloads.
 
 Register the portable Codec from the package's side-effectful main path:
 

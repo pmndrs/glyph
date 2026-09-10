@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:987946b3294aeb87a98cffa49b750420c820b98c072bfa5ec58dafce1bc199a0'
+source_digest: 'sha256:7988d1b075d82f6dc451184f67f9573693ed34636dbcf5d862d65269832fffc7'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1294,8 +1294,11 @@ the direct engine-owned f32x2 occurrence offset described above. TypeGPU remains
 shared buffer limit.
 
 The replacement direction keeps the existing batches, physical instances, order indirection, primitive spans, and draws.
-Core will expose a direct x/y occurrence offset through an engine-owned semantic placement seam; Codec authors describe
-glyph meaning and raster inputs, not slots, tables, bind groups, or backend memory layout. Each adapter may realize that
+Core exposes a direct x/y occurrence offset through an engine-owned semantic placement seam. A portable
+`RasterCodec.codecBody` receives only the frozen renderer capability set and authors glyph-local technique outputs; after
+that body is authenticated, package-private host assembly appends stable identity, optional transform identity, and the
+x/y offset stores. Codec authors therefore describe glyph meaning and raster inputs, not slots, tables, bind groups, or
+backend memory layout, and they cannot accidentally omit or collide with system lanes. Each adapter may realize the
 engine-owned offset as the most suitable internal attribute or storage representation without changing the public Codec
 plan or creating a run/slice batch key.
 

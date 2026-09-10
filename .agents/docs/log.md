@@ -2,6 +2,14 @@
 
 ## 2026-09-10
 
+- **Internalized Codec system-buffer layout below raster authoring** — A portable `RasterCodec.codecBody` now receives
+  only the frozen renderer capability set and authors glyph-local technique buffers. After authenticating that body, the
+  engine appends stable-glyph identity, optional transform identity, and the direct f32x2 placement offset through a
+  package-private host step. Codec authors can neither declare nor collide with those buffers, and adapter-specific
+  interleaving, attributes, or storage remain below the portable contract. Focused package and integration tests inspect
+  the compiled operation tail and prove that host stores remain present. This is an ownership/API correction, not a
+  performance claim; the current width path still publishes one offset per rendered glyph.
+
 - **Skipped retained raster reconstruction for position-only changes** — Retained gather now proves that the active
   Codec outputs depend only on semantic position fields before updating those fields and CPU ink bounds in place. That
   path does not repeat font binding selection, raster resource lookup, or full `PlanGlyph` construction; any glyph,
@@ -14,9 +22,10 @@
 
 - **Cut direct occurrence offsets through Codec and both renderers** — The generated semantic contract now carries
   engine-owned placement-inline and placement-block values, while raster Codec authors continue to describe only glyph
-  semantics and declared raster buffers. `techniqueProgram` stores one hidden f32x2 host offset; Three applies it before
-  Bitmap, MTSDF, Slug, or external-raster vertex work, and direct TypeGPU realizes the same values as an adapter-local
-  instance input. Stable glyph identity, batch keys, primitives, spans, draws, and decorations are unchanged. A
+  semantics and declared raster buffers. Package-private host assembly stores one hidden f32x2 offset after the portable
+  body is authenticated; Three applies it before Bitmap, MTSDF, Slug, or external-raster vertex work, and direct TypeGPU
+  realizes the same values as an adapter-local instance input. Stable glyph identity, batch keys, primitives, spans,
+  draws, and decorations are unchanged. A
   deterministic 65,536-case arithmetic test proves the new local-plus-offset operation has the same final f32 bits as
   the former Codec-side absolute-origin addition for every admitted finite sample. Package evidence covers retained Three
   material/draw identity and static raster bytes, direct TypeGPU static-buffer retention, and 968 package tests. The

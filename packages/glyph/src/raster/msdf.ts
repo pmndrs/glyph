@@ -200,8 +200,8 @@ export const msdfSchema: TechniqueSchema<
 export const msdfCodec: RasterCodec<typeof msdf, typeof msdfSchema> = registerGlyphRasterCodec({
   raster: msdf,
   schema: msdfSchema,
-  codecBody(system) {
-    const p = techniqueProgram(msdfSchema, { textEffects: msdf.textEffects, system });
+  codecBody() {
+    const p = techniqueProgram(msdfSchema, { textEffects: msdf.textEffects });
     const { inlineOrigin, blockOrigin, fontSize, color, outline, shadow } = p.semantics;
     if (outline === undefined || shadow === undefined) {
       throw new Error('MSDF text effects are not configured');

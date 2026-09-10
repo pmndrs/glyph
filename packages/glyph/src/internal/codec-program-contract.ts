@@ -1,6 +1,7 @@
 import type { CompiledCodecProgramBody, CodecProgramSystemBuffers } from '../config/codec-program.js';
 import type { CodecBufferDeclaration, CodecBufferDeclarations, TechniqueSchemaMetadata } from '../config/schema.js';
 import type { CodecBufferId } from '../config/codec.js';
+import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { assertGlyphId } from './glyph-id.js';
 
 interface CompiledCodecMetadata {
@@ -14,6 +15,41 @@ const metadata = new WeakMap<object, CompiledCodecMetadata>();
 
 export function recordTechniqueCodecBody(body: object, value: CompiledCodecMetadata): void {
   metadata.set(body, value);
+}
+
+export function attachHostCodecProgramSystemBuffers<Schema extends TechniqueSchemaMetadata>(
+  body: CompiledCodecProgramBody<Schema>,
+  schema: Schema,
+  system: CodecProgramSystemBuffers,
+): CompiledCodecProgramBody<Schema> {
+  const opcodes = textShaperAbi.codec.opcodes;
+  const operations = [...body.operations];
+  const storeU32 = (input: number, buffer: CodecBufferId): void => {
+    operations.push(
+      { opcode: opcodes.loadU32, target: 0, operand0: input },
+      { opcode: opcodes.storeU32, operand0: 0, operand1: 0, immediate0: buffer },
+    );
+  };
+  const storeF32 = (input: number, buffer: CodecBufferId, lane: number): void => {
+    operations.push(
+      { opcode: opcodes.loadF32, target: 0, operand0: input },
+      { opcode: opcodes.storeF32, operand0: 0, operand1: lane, immediate0: buffer },
+    );
+  };
+  storeU32(1, system.stableGlyphId.id);
+  if (system.transformIndex !== undefined) storeU32(0, system.transformIndex.id);
+  if (system.placementOffset !== undefined) {
+    storeF32(0, system.placementOffset.id, 0);
+    storeF32(1, system.placementOffset.id, 1);
+  }
+  const attached = { ...body, operations };
+  recordTechniqueCodecBody(attached, {
+    schema,
+    stableGlyphId: system.stableGlyphId.id,
+    transformIndex: system.transformIndex?.id,
+    placementOffset: system.placementOffset?.id,
+  });
+  return attached;
 }
 
 export function normalizeCodecProgramSystemBuffers(

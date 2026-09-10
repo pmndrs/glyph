@@ -655,9 +655,10 @@ may exist only behind test/lab compilation as a numeric/pixel comparison oracle 
 cutover lands; it is never a selectable production mode or an exact-bit compatibility fallback. Retire the test/lab
 oracle only at M6 after full matrix closure.
 
-1. Add one engine-owned semantic x/y occurrence offset for every rendered glyph. Codec authors consume final semantic
-   placement and never declare a slot, table, bind group, or backend memory layout. The offset carries no justification,
-   class, role, bidi, or block metadata.
+1. Add one engine-owned semantic x/y occurrence offset for every rendered glyph. Codec authors produce glyph-local
+   technique outputs and never receive or declare the host system buffers; package-private assembly appends the x/y
+   store after authenticating the body. Authors never declare a slot, table, bind group, or backend memory layout. The
+   offset carries no justification, class, role, bidi, or block metadata.
 2. Let each adapter choose its internal physical realization while retaining one aligned occurrence per existing physical
    glyph record. The shared contract specifies the values and operation order, not whether an adapter uses vertex
    attributes, storage, or interleaving.

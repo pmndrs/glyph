@@ -13,8 +13,9 @@ import {
   type CodecProgramId,
   type CodecTechniqueId,
 } from '../config/codec.js';
-import { techniqueProgram, type CodecProgramSystemBuffers } from '../config/codec-program.js';
+import { hostAbsoluteTechniqueProgram, type CodecProgramSystemBuffers } from '../config/codec-program.js';
 import { createRasterCodecProgram, type RasterCodecSystem } from '../config/raster.js';
+import { attachHostCodecProgramSystemBuffers } from '../internal/codec-program-contract.js';
 import {
   defineCodecBuffers,
   defineTechniqueSchema,
@@ -191,16 +192,18 @@ function decorationProgram(
   transformMode: ThreeTransformMode,
   allocationMode: ThreeAllocationMode,
 ): CodecProgram {
-  const p = techniqueProgram(decorationSchema, { system: decorationSystemBuffers(transformMode) });
+  const p = hostAbsoluteTechniqueProgram(decorationSchema);
   const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
+  const system = decorationSystemBuffers(transformMode);
+  const authoredBody = p.compile({
+    rect: [inlineOrigin, blockOrigin, fontSize, color.red],
+    packed: [p.binding.color, p.binding.flags],
+  });
   return {
     ...createCodecProgram(
       techniqueId,
       programId,
-      p.compile({
-        rect: [inlineOrigin, blockOrigin, fontSize, color.red],
-        packed: [p.binding.color, p.binding.flags],
-      }),
+      attachHostCodecProgramSystemBuffers(authoredBody, decorationSchema, system),
       programBuffers(decorationSchema, transformMode),
       transformMode,
       allocationMode,
