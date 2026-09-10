@@ -22,7 +22,7 @@
     "lint": "oxlint --deny-warnings --config .oxlintrc.json docs/components examples/src",
     "preview": "node ./scripts/preview.mts",
     "preview:landing": "vite preview --host 127.0.0.1 --port 5173 --strictPort",
-    "test": "vitest run --root . docs/components scripts",
+    "test": "vitest run --root . docs/components examples/src/lib scripts",
     "typecheck": "tsc --noEmit",
     "format": "oxfmt docs/components landing/src examples/src scripts .oxlintrc.json package.json tsconfig.json tsconfig.examples.json vite.config.ts vite.examples.config.ts"
   },

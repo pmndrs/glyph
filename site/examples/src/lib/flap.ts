@@ -24,6 +24,12 @@ export function fit(line: string, columns: number): string {
   return line.toUpperCase().padEnd(columns).slice(0, columns);
 }
 
+/** The fitted character for one row-major cell in a board message. */
+export function cellAt(lines: readonly string[], index: number, columns: number): string {
+  const line = fit(lines[Math.floor(index / columns)] ?? '', columns);
+  return line[index % columns] ?? ' ';
+}
+
 /** The board's messages, one per row, cycling. */
 export const BOARDS: readonly (readonly string[])[] = [
   [

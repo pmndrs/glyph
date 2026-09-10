@@ -6,8 +6,8 @@ import { useMemo, useRef } from 'react';
 import { type Group, InstancedMesh, Matrix4, PlaneGeometry } from 'three/webgpu';
 
 import { INTER } from '../../fonts';
-import { BOARDS, fit, flipsBetween, wheelAt } from '../../lib/flap';
-import { CELL, COLUMNS, FLIP_RATE, FONT_SIZE, HOLD, INK, ROWS } from './config';
+import { BOARDS, cellAt, flipsBetween, wheelAt } from '../../lib/flap';
+import { BOARD_SCALE, CELL, COLUMNS, FLIP_RATE, FONT_SIZE, HOLD, INK, ROWS } from './config';
 import { plateMaterial } from './materials';
 
 /**
@@ -33,9 +33,13 @@ export default function SplitFlap() {
   const inter = useMsdf(INTER);
   // The cells are records the frame loop owns; render never reads them, only the index list below.
   const cells = useRef<Cell[]>(
-    CELL_INDICES.map(() => ({ text: null, group: null, shown: ' ', target: ' ', flips: 0, next: 0 })),
+    CELL_INDICES.map((index) => {
+      const shown = cellAt(BOARDS[0] ?? [], index, COLUMNS);
+      return { text: null, group: null, shown, target: shown, flips: 0, next: 0 };
+    }),
   );
-  const board = useRef(-1);
+  const board = useRef(0);
+  const startedAt = useRef<number | null>(null);
   const plates = useMemo(() => {
     const mesh = new InstancedMesh(
       new PlaneGeometry(CELL.width - CELL.gap, CELL.height - CELL.gap),
@@ -53,26 +57,27 @@ export default function SplitFlap() {
   }, []);
 
   useFrame(({ elapsed }) => {
-    const wanted = Math.floor(elapsed / HOLD) % BOARDS.length;
+    if (startedAt.current === null) startedAt.current = elapsed;
+    const sceneElapsed = elapsed - startedAt.current;
+    const wanted = Math.floor(sceneElapsed / HOLD) % BOARDS.length;
     if (wanted !== board.current) {
       board.current = wanted;
       const lines = BOARDS[wanted] ?? [];
       cells.current.forEach((cell, index) => {
-        const line = fit(lines[Math.floor(index / COLUMNS)] ?? '', COLUMNS);
-        cell.target = line[index % COLUMNS] ?? ' ';
+        cell.target = cellAt(lines, index, COLUMNS);
         cell.flips = flipsBetween(cell.shown, cell.target);
         // Cells start in a ripple from the left, a few frames apart.
-        cell.next = elapsed + (index % COLUMNS) * 0.035;
+        cell.next = sceneElapsed + (index % COLUMNS) * 0.035;
       });
     }
     for (const cell of cells.current) {
       if (cell.group === null || cell.text === null) continue;
-      if (cell.flips === 0 || elapsed < cell.next) {
+      if (cell.flips === 0 || sceneElapsed < cell.next) {
         cell.group.rotation.x = 0;
         continue;
       }
       // One flip: the top half falls (0 → −π/2), the character swaps, the new one rises (π/2 → 0).
-      const t = Math.min((elapsed - cell.next) * FLIP_RATE, 1);
+      const t = Math.min((sceneElapsed - cell.next) * FLIP_RATE, 1);
       if (t >= 0.5 && cell.text.text === cell.shown) {
         cell.shown = wheelAt(cell.shown, 1);
         cell.text.set({ text: cell.shown });
@@ -80,14 +85,14 @@ export default function SplitFlap() {
       cell.group.rotation.x = t < 0.5 ? -t * Math.PI : (1 - t) * Math.PI;
       if (t >= 1) {
         cell.flips -= 1;
-        cell.next = elapsed;
+        cell.next = sceneElapsed;
         cell.group.rotation.x = 0;
       }
     }
   });
 
   return (
-    <group position={[0, 0.1, 0]}>
+    <group position={[0, 0.1, 0]} scale={BOARD_SCALE}>
       <primitive object={plates} />
       {CELL_INDICES.map((index) => (
         <group
@@ -109,7 +114,7 @@ export default function SplitFlap() {
             constraints={{ width: { mode: 'exact', size: CELL.width } }}
             position={[-CELL.width / 2, FONT_SIZE / 2, 0]}
           >
-            {' '}
+            {cellAt(BOARDS[0] ?? [], index, COLUMNS)}
           </Text>
         </group>
       ))}
