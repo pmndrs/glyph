@@ -1,16 +1,19 @@
 use alloc::vec::Vec;
 use core::num::NonZeroU32;
 
-use crate::{FontMetrics, unicode::UnicodeAnalysis};
+use crate::{FontGlyphExtents, FontMetrics, unicode::UnicodeAnalysis};
 
 use super::{
     EngineError, FrameFault,
     frame::{WRAP_CHARACTER, WRAP_NONE, WRAP_WORD},
     identity_index::{IdentityIndex, IdentityIndexError},
+    run_local::{NumericBlockSpan, RunLocalArena},
     run_slot::RunHandle,
     shaping_state::{ShapeArena, ShapingRun},
     style_state::{StyleArena, StyleSegment},
 };
+
+use super::run_local::{ClusterFinish, RunLocalBuildError, RunLocalGlyphInput};
 
 pub(crate) const CLUSTER_SAFE_BEFORE: u8 = 1 << 0;
 pub(crate) const CLUSTER_REQUIRED_BREAK: u8 = 1 << 1;
@@ -43,11 +46,29 @@ pub(crate) struct WordBreakRecord {
     pub space_units: i32,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum WordSidecarMode {
+    #[default]
+    Unbuilt,
+    Short,
+    Sparse,
+    Dense,
+    Overflow,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct PlacementCluster {
+    pub segment_anchor: u32,
+    pub numeric_block_ordinal: u32,
+    pub block_local_prefix: f64,
+    pub block_anchor_inline: f64,
+    pub block_anchor_block: f64,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct RunCanonicalRevision(NonZeroU32);
 
 impl RunCanonicalRevision {
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) const fn get(self) -> u32 {
         self.0.get()
     }
@@ -84,6 +105,7 @@ pub(crate) struct LayoutRun {
     pub glyph_count: u32,
     pub source_run: u32,
     pub font_handle: u32,
+    pub numeric_blocks: NumericBlockSpan,
     /// Exact retained local-content token. `None` exists only while a pending cluster arena is
     /// being built; every committed run has a revision assigned by the shared finalizer.
     pub canonical_revision: Option<RunCanonicalRevision>,
@@ -216,7 +238,7 @@ pub(crate) struct ClusterArena {
     pub chunk_auxiliary_sums: Vec<i64>,
     pub chunk_flags_or: Vec<u8>,
     pub word_breaks: Vec<WordBreakRecord>,
-    pub(crate) word_breaks_valid: bool,
+    pub(crate) word_sidecar_mode: WordSidecarMode,
     /// Per-cluster `units_per_em` of the owning shaped font (0 while unshaped),
     /// resolved once at cluster build. Positioning derives its scale from the
     /// CURRENT style's font size and this column, so font-size-only style changes
@@ -245,8 +267,7 @@ pub(crate) struct ClusterArena {
     pub(super) shaped: Vec<u8>,
     pub(super) unsafe_before: Vec<u8>,
     pub(super) layout_runs: LayoutRunArena,
-    #[cfg(any(test, feature = "kernel-lab"))]
-    pub(super) layout_run_prefixes: Vec<f64>,
+    pub(super) run_local: RunLocalArena,
 }
 
 pub(crate) struct ClusterBuildInput<'a> {
@@ -283,8 +304,6 @@ impl ClusterArena {
         reserve(&mut self.index_at, capacity.saturating_add(1))?;
         reserve(&mut self.shaped, capacity)?;
         reserve(&mut self.unsafe_before, capacity)?;
-        #[cfg(any(test, feature = "kernel-lab"))]
-        reserve(&mut self.layout_run_prefixes, capacity)?;
         Ok(())
     }
 
@@ -631,20 +650,20 @@ impl ClusterArena {
             &mut self.chunk_flags_or,
         );
         self.word_breaks.clear();
-        self.word_breaks_valid = false;
+        self.word_sidecar_mode = WordSidecarMode::Unbuilt;
         Ok(())
     }
 
-    /// Lazily derives the sparse word index only when active geometry needs word
-    /// wrapping. Once valid, width-only reflow reuses it without another scan.
+    /// Derives the word-root sidecar used by wrapping and stable placement segments.
+    /// Width-only reflow reuses the selected representation without another scan.
     pub(crate) fn ensure_word_breaks(&mut self) -> Result<(), EngineError> {
-        if self.word_breaks_valid {
+        if self.word_sidecar_mode != WordSidecarMode::Unbuilt {
             return Ok(());
         }
         self.word_breaks.clear();
         // Below one chunk, scalar composition is cheaper than allocating a sidecar.
         if self.flags.len() < LAYOUT_CHUNK {
-            self.word_breaks_valid = true;
+            self.word_sidecar_mode = WordSidecarMode::Short;
             return Ok(());
         }
         let mut opportunity_count = 0usize;
@@ -656,7 +675,7 @@ impl ClusterArena {
         // Dense break streams stay on chunk/scalar composition; sparse records would rival the
         // source lanes, while negative-prefix summaries preserve first-overflow semantics.
         if opportunity_count.saturating_mul(2) >= self.flags.len() {
-            self.word_breaks_valid = true;
+            self.word_sidecar_mode = WordSidecarMode::Dense;
             return Ok(());
         }
         reserve(&mut self.word_breaks, opportunity_count.saturating_add(1))?;
@@ -670,12 +689,12 @@ impl ClusterArena {
             if flags & (CLUSTER_ALLOWED_BREAK | CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK) != 0 {
                 let Ok(segment_advance) = i32::try_from(advance_units) else {
                     self.word_breaks.clear();
-                    self.word_breaks_valid = true;
+                    self.word_sidecar_mode = WordSidecarMode::Overflow;
                     return Ok(());
                 };
                 let Ok(segment_space) = i32::try_from(space_units) else {
                     self.word_breaks.clear();
-                    self.word_breaks_valid = true;
+                    self.word_sidecar_mode = WordSidecarMode::Overflow;
                     return Ok(());
                 };
                 self.word_breaks.push(WordBreakRecord {
@@ -697,12 +716,12 @@ impl ClusterArena {
         {
             let Ok(segment_advance) = i32::try_from(advance_units) else {
                 self.word_breaks.clear();
-                self.word_breaks_valid = true;
+                self.word_sidecar_mode = WordSidecarMode::Overflow;
                 return Ok(());
             };
             let Ok(segment_space) = i32::try_from(space_units) else {
                 self.word_breaks.clear();
-                self.word_breaks_valid = true;
+                self.word_sidecar_mode = WordSidecarMode::Overflow;
                 return Ok(());
             };
             self.word_breaks.push(WordBreakRecord {
@@ -711,7 +730,7 @@ impl ClusterArena {
                 space_units: segment_space,
             });
         }
-        self.word_breaks_valid = true;
+        self.word_sidecar_mode = WordSidecarMode::Sparse;
         Ok(())
     }
 
@@ -821,8 +840,6 @@ impl ClusterArena {
         copy_lane!(index_at);
         copy_lane!(shaped);
         copy_lane!(unsafe_before);
-        #[cfg(any(test, feature = "kernel-lab"))]
-        copy_lane!(layout_run_prefixes);
         self.layout_runs.reserve(source.layout_runs.runs.len())?;
         self.layout_runs
             .runs
@@ -898,8 +915,6 @@ impl ClusterArena {
             self.advances[cluster] = advance;
         }
         self.refresh_layout_units()?;
-        #[cfg(any(test, feature = "kernel-lab"))]
-        self.rebuild_layout_run_prefixes()?;
         Ok(Some(()))
     }
 
@@ -1084,7 +1099,7 @@ impl ClusterArena {
         self.chunk_auxiliary_sums.clear();
         self.chunk_flags_or.clear();
         self.word_breaks.clear();
-        self.word_breaks_valid = false;
+        self.word_sidecar_mode = WordSidecarMode::Unbuilt;
         self.units_per_em.clear();
         self.flags.clear();
         self.style_indexes.clear();
@@ -1105,12 +1120,158 @@ impl ClusterArena {
         self.shaped.clear();
         self.unsafe_before.clear();
         self.layout_runs.clear();
-        #[cfg(any(test, feature = "kernel-lab"))]
-        self.layout_run_prefixes.clear();
+        self.run_local.clear();
     }
 
     pub(crate) fn layout_runs(&self) -> &[LayoutRun] {
         &self.layout_runs.runs
+    }
+
+    #[cfg(test)]
+    pub(crate) fn run_local(&self) -> &RunLocalArena {
+        &self.run_local
+    }
+
+    pub(crate) fn placement_cluster(
+        &self,
+        run: LayoutRun,
+        direction: u8,
+        cluster: usize,
+    ) -> Result<PlacementCluster, EngineError> {
+        let run_start =
+            usize::try_from(run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
+        let run_end = usize::try_from(run.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+        if cluster < run_start
+            || cluster >= run_end
+            || self.word_sidecar_mode == WordSidecarMode::Unbuilt
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        let run_offset = if direction & 1 == 0 {
+            cluster - run_start
+        } else {
+            run_end - cluster - 1
+        };
+        if self.flags[cluster] & CLUSTER_HARD_BREAK != 0 && self.glyph_counts[cluster] == 0 {
+            return Ok(PlacementCluster {
+                segment_anchor: self.stable_ids[cluster],
+                numeric_block_ordinal: u32::MAX,
+                block_local_prefix: 0.0,
+                block_anchor_inline: 0.0,
+                block_anchor_block: 0.0,
+            });
+        }
+        let block_lane = usize::try_from(run.numeric_blocks.cluster_start)
+            .map_err(|_| EngineError::InvalidRequest)?
+            .checked_add(run_offset)
+            .ok_or(EngineError::ResultTooLarge)?;
+        let block_index = *self
+            .run_local
+            .cluster_blocks()
+            .get(block_lane)
+            .filter(|index| **index != u32::MAX)
+            .ok_or(EngineError::InvalidRequest)?;
+        let block = *self
+            .run_local
+            .blocks()
+            .get(usize::try_from(block_index).map_err(|_| EngineError::InvalidRequest)?)
+            .ok_or(EngineError::InvalidRequest)?;
+        let numeric_block_ordinal = block_index
+            .checked_sub(run.numeric_blocks.start)
+            .filter(|ordinal| *ordinal < run.numeric_blocks.count)
+            .ok_or(EngineError::InvalidRequest)?;
+        let segment_root = match self.word_sidecar_mode {
+            WordSidecarMode::Dense => run_start,
+            WordSidecarMode::Sparse => {
+                let record = self
+                    .word_breaks
+                    .partition_point(|record| record.cluster_end as usize <= cluster);
+                if record == 0 {
+                    0
+                } else {
+                    self.word_breaks[record - 1].cluster_end as usize
+                }
+            }
+            WordSidecarMode::Short | WordSidecarMode::Overflow => {
+                let mut root = cluster;
+                while root > 0
+                    && self.flags[root - 1]
+                        & (CLUSTER_ALLOWED_BREAK | CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK)
+                        == 0
+                {
+                    root -= 1;
+                }
+                root
+            }
+            WordSidecarMode::Unbuilt => return Err(EngineError::InvalidRequest),
+        };
+        Ok(PlacementCluster {
+            segment_anchor: if self.word_sidecar_mode == WordSidecarMode::Dense {
+                self.stable_ids[run_start]
+            } else {
+                *self
+                    .stable_ids
+                    .get(segment_root)
+                    .ok_or(EngineError::InvalidRequest)?
+            },
+            numeric_block_ordinal,
+            block_local_prefix: *self
+                .run_local
+                .cluster_prefixes()
+                .get(block_lane)
+                .ok_or(EngineError::InvalidRequest)?,
+            block_anchor_inline: block.anchor_inline,
+            block_anchor_block: block.anchor_block,
+        })
+    }
+
+    pub(crate) fn rebuild_run_local_geometry(
+        &mut self,
+        runs: &[ShapingRun],
+        styles: &[StyleSegment],
+        extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+    ) -> Result<(), EngineError> {
+        for run in &mut self.layout_runs.runs {
+            run.numeric_blocks = NumericBlockSpan::default();
+        }
+        let mut run_local = core::mem::take(&mut self.run_local);
+        run_local.clear();
+        let result = (|| {
+            for run_index in 0..self.layout_runs.runs.len() {
+                let run = self.layout_runs.runs[run_index];
+                let direction = usize::try_from(run.source_run)
+                    .ok()
+                    .and_then(|source| runs.get(source))
+                    .map(|run| run.direction)
+                    .or_else(|| (run.glyph_count == 0).then_some(0))
+                    .ok_or(EngineError::InvalidRequest)?;
+                let start =
+                    usize::try_from(run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
+                let end =
+                    usize::try_from(run.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+                let mut writer = run_local.begin_run();
+                if direction & 1 == 0 {
+                    for cluster in start..end {
+                        append_run_local_cluster(&mut writer, self, styles, cluster, extents_for)?;
+                    }
+                } else {
+                    for cluster in (start..end).rev() {
+                        append_run_local_cluster(&mut writer, self, styles, cluster, extents_for)?;
+                    }
+                }
+                self.layout_runs.runs[run_index].numeric_blocks =
+                    writer.finish().map_err(run_local_error)?;
+            }
+            Ok(())
+        })();
+        if result.is_err() {
+            run_local.clear();
+            for run in &mut self.layout_runs.runs {
+                run.numeric_blocks = NumericBlockSpan::default();
+            }
+        }
+        self.run_local = run_local;
+        result
     }
 
     pub(crate) fn bind_layout_run_handle(
@@ -1129,11 +1290,6 @@ impl ClusterArena {
         }
         run.run_handle = Some(handle);
         Ok(())
-    }
-
-    #[cfg(any(test, feature = "kernel-lab"))]
-    pub(crate) fn layout_run_prefix(&self, cluster: usize) -> Option<f64> {
-        self.layout_run_prefixes.get(cluster).copied()
     }
 
     pub(super) fn rebuild_layout_runs(&mut self) -> Result<(), EngineError> {
@@ -1165,30 +1321,11 @@ impl ClusterArena {
                     .ok_or(EngineError::InvalidRequest)?,
                 source_run,
                 font_handle,
+                numeric_blocks: NumericBlockSpan::default(),
                 canonical_revision: None,
                 run_handle: None,
             })?;
             cluster_start = cluster_end;
-        }
-        #[cfg(any(test, feature = "kernel-lab"))]
-        self.rebuild_layout_run_prefixes()?;
-        Ok(())
-    }
-
-    #[cfg(any(test, feature = "kernel-lab"))]
-    fn rebuild_layout_run_prefixes(&mut self) -> Result<(), EngineError> {
-        self.layout_run_prefixes.clear();
-        reserve(&mut self.layout_run_prefixes, self.starts.len())?;
-        for run_index in 0..self.layout_runs.runs.len() {
-            let run = self.layout_runs.runs[run_index];
-            let start =
-                usize::try_from(run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
-            let end = usize::try_from(run.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
-            let mut prefix = 0.0;
-            for cluster in start..end {
-                self.layout_run_prefixes.push(prefix);
-                prefix += self.advances[cluster];
-            }
         }
         Ok(())
     }
@@ -1499,6 +1636,66 @@ impl ClusterArena {
             return Err(EngineError::InvalidRequest);
         }
         Ok(index)
+    }
+}
+
+fn append_run_local_cluster(
+    writer: &mut super::run_local::RunLocalWriter<'_>,
+    clusters: &ClusterArena,
+    styles: &[StyleSegment],
+    cluster: usize,
+    extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+) -> Result<(), EngineError> {
+    if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
+        return writer.push_detached_cluster().map_err(run_local_error);
+    }
+    let style = styles
+        .get(
+            usize::try_from(clusters.style_indexes[cluster])
+                .map_err(|_| EngineError::InvalidRequest)?,
+        )
+        .ok_or(EngineError::InvalidRequest)?
+        .style;
+    let units_per_em = clusters.units_per_em[cluster];
+    if units_per_em == 0.0 {
+        return Err(EngineError::InvalidRequest);
+    }
+    let font_handle = clusters.font_handles[cluster];
+    let scale = f64::from(style.font_size) / units_per_em;
+    let start =
+        usize::try_from(clusters.glyph_starts[cluster]).map_err(|_| EngineError::InvalidRequest)?;
+    let end = start
+        .checked_add(
+            usize::try_from(clusters.glyph_counts[cluster])
+                .map_err(|_| EngineError::InvalidRequest)?,
+        )
+        .ok_or(EngineError::InvalidRequest)?;
+    writer.begin_cluster().map_err(run_local_error)?;
+    for glyph in start..end {
+        let glyph_id = u32::from(clusters.glyph_ids[glyph]);
+        writer
+            .push_glyph(RunLocalGlyphInput {
+                source_glyph: u32::try_from(glyph).map_err(|_| EngineError::ResultTooLarge)?,
+                x_advance: clusters.glyph_x_advances[glyph],
+                x_offset: clusters.glyph_x_offsets[glyph],
+                y_offset: clusters.glyph_y_offsets[glyph],
+                baseline_shift: style.baseline_shift,
+                scale,
+                outline: extents_for(font_handle, glyph_id),
+            })
+            .map_err(run_local_error)?;
+    }
+    writer
+        .finish_cluster(ClusterFinish::Resync(clusters.advances[cluster]))
+        .map_err(run_local_error)
+}
+
+fn run_local_error(error: RunLocalBuildError) -> EngineError {
+    match error {
+        RunLocalBuildError::AllocationFailed => EngineError::ResultTooLarge,
+        RunLocalBuildError::InvalidSource | RunLocalBuildError::LocalGeometryOutOfRange => {
+            EngineError::InvalidRequest
+        }
     }
 }
 
@@ -2037,6 +2234,7 @@ mod tests {
                     glyph_count: 3,
                     source_run: 0,
                     font_handle: 10,
+                    numeric_blocks: NumericBlockSpan::default(),
                     canonical_revision: None,
                     run_handle: None,
                 },
@@ -2048,6 +2246,7 @@ mod tests {
                     glyph_count: 1,
                     source_run: 0,
                     font_handle: 20,
+                    numeric_blocks: NumericBlockSpan::default(),
                     canonical_revision: None,
                     run_handle: None,
                 },
@@ -2059,6 +2258,7 @@ mod tests {
                     glyph_count: 3,
                     source_run: 1,
                     font_handle: 20,
+                    numeric_blocks: NumericBlockSpan::default(),
                     canonical_revision: None,
                     run_handle: None,
                 },
@@ -2070,12 +2270,49 @@ mod tests {
                     glyph_count: 3,
                     source_run: 1,
                     font_handle: 10,
+                    numeric_blocks: NumericBlockSpan::default(),
                     canonical_revision: None,
                     run_handle: None,
                 },
             ]
         );
         assert_shadow_topology(&arena);
+    }
+
+    #[test]
+    fn paragraph_run_owns_direction_canonical_numeric_rows() {
+        let style = ResolvedStyle::test_typography(10.0, 0.0, 0.0);
+        let mut fixture = canonical_fixture(&[b'a' as u16, b'b' as u16], &[10, 11], &[0, 0], style);
+        fixture.shaping_runs[0].direction = 1;
+        fixture.shaping_runs[0].bidi_level = 1;
+
+        fixture
+            .arena
+            .rebuild_run_local_geometry(&fixture.shaping_runs, &fixture.styles, |_, _| {
+                Some(FontGlyphExtents {
+                    x_min: 0,
+                    y_min: 0,
+                    x_max: 500,
+                    y_max: 700,
+                })
+            })
+            .unwrap();
+
+        assert_eq!(fixture.arena.layout_runs()[0].numeric_blocks.count, 1);
+        assert_eq!(
+            fixture.arena.layout_runs()[0].numeric_blocks.cluster_count,
+            2
+        );
+        let blocks = fixture.arena.run_local().blocks();
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].source_glyph_start, 0);
+        assert_eq!(blocks[0].source_glyph_count, 2);
+        let rows = fixture.arena.run_local().rows();
+        assert_eq!(rows.len(), 2);
+        assert_eq!([rows[0].source_glyph, rows[1].source_glyph], [1, 0]);
+        assert_eq!([rows[0].pen_inline, rows[1].pen_inline], [0.0, 1.0]);
+        assert_eq!(fixture.arena.run_local().cluster_blocks(), [0, 0]);
+        assert_eq!(fixture.arena.run_local().cluster_prefixes(), [0.0, 1.0]);
     }
 
     #[test]
@@ -2194,11 +2431,6 @@ mod tests {
 
         assert_eq!(arena.layout_runs().len(), 1);
         assert_eq!(arena.layout_runs()[0].cluster_end, COUNT as u32);
-        let expected = arena.advances[..COUNT - 1]
-            .iter()
-            .fold(0.0, |prefix, advance| prefix + *advance);
-        assert_eq!(arena.layout_run_prefixes.len(), COUNT);
-        assert_eq!(arena.layout_run_prefix(COUNT - 1), Some(expected));
         assert_shadow_topology(&arena);
     }
 
@@ -2860,7 +3092,6 @@ mod tests {
         assert_lane!(index_at);
         assert_lane!(shaped);
         assert_lane!(unsafe_before);
-        assert_lane!(layout_run_prefixes);
         assert_eq!(retained_next_id, cold_next_id);
     }
 
@@ -3204,7 +3435,7 @@ mod tests {
         dense.ensure_word_breaks().unwrap();
         assert!(dense.word_breaks.is_empty());
         assert_eq!(dense.word_breaks.capacity(), 0);
-        assert!(dense.word_breaks_valid);
+        assert_eq!(dense.word_sidecar_mode, WordSidecarMode::Dense);
         assert!(dense.chunk_flags_or[0] & CHUNK_NEGATIVE_ADVANCE != 0);
     }
 }

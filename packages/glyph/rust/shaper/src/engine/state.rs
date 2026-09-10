@@ -22,7 +22,7 @@ use super::{
     font_binding::FontRenderBinding,
     frame::{
         CommittedUpdate, MeasuredParagraph, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE,
-        PreparedUpdate, RootRevision, UpdateRequest, WRAP_WORD,
+        PreparedUpdate, RootRevision, UpdateRequest,
     },
     identity_index::IdentityIndex,
     positioning::{PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT},
@@ -2557,19 +2557,16 @@ impl PlannerState {
                         }
                     }
                 }
-                #[cfg(any(test, feature = "kernel-lab"))]
-                {
-                    let paragraph = self
-                        .paragraph_mut(paragraph_id)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    if paragraph.state.positioned.is_prepared() {
-                        let layout_runs = paragraph.state.clusters.active().layout_runs();
-                        paragraph
-                            .state
-                            .positioned
-                            .pending_mut()
-                            .bind_placement_run_handles(layout_runs)?;
-                    }
+                let paragraph = self
+                    .paragraph_mut(paragraph_id)
+                    .ok_or(EngineError::InvalidRequest)?;
+                if paragraph.state.positioned.is_prepared() {
+                    let layout_runs = paragraph.state.clusters.active().layout_runs();
+                    paragraph
+                        .state
+                        .positioned
+                        .pending_mut()
+                        .bind_placement_run_handles(layout_runs)?;
                 }
             }
             if assignment_index != assignment_count {
@@ -3714,7 +3711,7 @@ impl ParagraphState {
         let runs = self.shaping_runs.active().runs();
         if runs.is_empty() {
             self.clusters.pending_mut().clear();
-            return self.finish_cluster_preparation();
+            return self.finish_cluster_preparation(shaper);
         }
         // A metrics-only restyle retains the shape, so the cluster arena needs
         // only its advance lanes re-derived from the retained adjacency stream
@@ -3732,7 +3729,7 @@ impl ParagraphState {
                 .refresh_scales_from_stream(committed_clusters, styles)?
                 .is_some()
         } {
-            return self.finish_cluster_preparation();
+            return self.finish_cluster_preparation(shaper);
         }
         let shape = self.shape.active();
         let build_input = || ClusterBuildInput {
@@ -3765,7 +3762,7 @@ impl ParagraphState {
                 self.abort_clusters();
                 return Err(error);
             }
-            return self.finish_cluster_preparation();
+            return self.finish_cluster_preparation(shaper);
         }
         self.clusters
             .pending_mut()
@@ -3779,12 +3776,20 @@ impl ParagraphState {
             self.abort_clusters();
             return Err(error);
         }
-        self.finish_cluster_preparation()
+        self.finish_cluster_preparation(shaper)
     }
 
     /// Completes every cluster-producing path through one exact retained-run comparison.
     /// Width-only updates never reach this method because they prepare no cluster stage.
-    fn finish_cluster_preparation(&mut self) -> Result<(), EngineError> {
+    fn finish_cluster_preparation(&mut self, shaper: &ShaperRegistry) -> Result<(), EngineError> {
+        if let Err(error) = self.clusters.pending_mut().rebuild_run_local_geometry(
+            self.shaping_runs.active().runs(),
+            self.styles.active().resolved.segments(),
+            |handle, glyph| shaper.font_glyph_extents(handle, glyph),
+        ) {
+            self.abort_clusters();
+            return Err(error);
+        }
         let current = RunCanonicalInput {
             text: &self.text.active().units,
             text_unit_ids: &self.text.active().unit_ids,
@@ -3892,15 +3897,7 @@ impl ParagraphState {
         // unrepresentable rather than something each caller has to remember to repair.
         self.abort_positioned();
         self.pending_boundary_shape.clear();
-        let needs_word_breaks = self
-            .geometry
-            .active()
-            .constraints
-            .iter()
-            .any(|constraint| constraint.wrap == WRAP_WORD);
-        if needs_word_breaks {
-            self.clusters.active_mut().ensure_word_breaks()?;
-        }
+        self.clusters.active_mut().ensure_word_breaks()?;
         let clusters = self.clusters.active();
         let styles = self.styles.active().resolved.segments();
         let style_storage = &self.styles.active().arena;

@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:9565d42e55ddb5cf2219b95b3d606e942d02e8e357cffff9705dd8f670a81803'
+source_digest: 'sha256:a6c0dc689ea994494df5303dbd2f72cb98248a2a9a80c95c97599e9a9048ae5c'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1266,16 +1266,17 @@ it has an explicit occurrence model, and keeps 4,096 homogeneous CJK clusters in
 corpus reconstructs all 332 already-published f32 coordinates exactly from line and observable-slice anchors, but the
 f64 reassociation counterexamples remain authoritative for the future CPU cutover.
 
-The next checkpoint models run slices, visual spans, placements, and ordinary/justified work queues as SoA lanes shared
-by positioning and the visual oracle. It remains test/kernel-lab only, so normal builds allocate and execute none of it.
-Composite writes roll back as one logical record, geometry-only retained lines remap compacted fragment indexes, and
-text-edit convergence rematerializes placement metadata from current runs rather than copying stale indexes or prefixes.
-Justified placements retain exact wide-unit quotient/remainder, eligible counts, slice-start ordinals, class, role, bidi,
-and block metadata only in CPU SoA lanes. Sparse prose preserves safe word-root placement slots across movement and splits
-inside a word only at a real displacement or boundary change; dense CJK follows fixed numeric blocks and current visual
-segments. Every segment selects the same exact f32x2 x/y renderer/session row as ordinary text. No justification sidecar,
-renderer mode, raster-program split, or renderer batch key is planned. The first cluster's stable ID is only a
-reconciliation anchor; dense stale-safe slots and generations remain owned by the atomic publication cutover.
+The current core checkpoint stages break-independent numeric blocks and compact placement segments in normal execution
+beside the still-authoritative absolute glyph output. Each segment owns exactly one parallel f64 `{inline, block}`
+translation row; justification quotient/remainder, ordinals, class, role, and bidi state are not placement-row fields.
+The existing positioning traversal is the only arithmetic/emission walk. Sparse prose merges adjacent clusters only when
+their stable word root, numeric block, run identity, and exact translation agree; dense CJK retains large LayoutRuns and
+segments only where displacement or numeric-block ownership changes. Visual spans separately retain L1/L2 order and
+hanging/boundary roles, and every rendered glyph records one segment index. Retained lines copy and rebind compact
+segment/span records transactionally instead of replaying glyph positioning; a failed compact validation returns to the
+same normal positioning traversal. This staging has no ABI or renderer consumer yet and therefore makes no performance
+claim. The atomic publication cutover still owns dense acknowledgement-gated placement slots, f32x2 x/y rows, and removal
+of the absolute materializer.
 
 Production run identity is now planner-scoped and transactional. A paragraph incarnation prevents a removed/recycled
 paragraph from aliasing its predecessor. Each retained run carries a nonzero canonical revision minted only after an

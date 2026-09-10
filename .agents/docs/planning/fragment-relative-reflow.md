@@ -317,20 +317,22 @@ the committed topology lifetime in which it exists. It does not borrow a zero-gl
 paragraph-source run whose text it replaces. Creation, replacement, removal, abort, and renderer-acknowledged retirement
 follow the same staged ownership rules as paragraph-source runs.
 
-### `LayoutRunSliceArena`
+### Placement segments and visual spans
 
-One dynamic source slice identifies a contiguous cluster/glyph subrange of a `LayoutRun` placed into one
-`FlowFragment`. CPU SoA lanes retain run ID/generation, run-local cluster and glyph start/count, local prefix,
-occurrence role, and the closed `Ordinary`/`Justified` placement class. Final-line, hard-break, role, line-resolved L1,
-and L2 identity remain CPU composition metadata; none enters the renderer placement row.
+One dynamic placement segment identifies a contiguous cluster/glyph subrange of a `LayoutRun` placed with one exact
+inline/block translation. CPU SoA lanes retain run identity, canonical revision, run-local cluster and glyph spans,
+stable segment anchor, and numeric-block ordinal. Separate visual spans retain final-line, hard-break, hanging,
+replacement, line-resolved L1, and L2 ownership. Justification quotient/remainder and ordinals remain in the existing
+CPU composition state; none of this metadata enters the renderer placement row.
 
 The placement unit is the nonempty intersection of one source slice, one fixed numeric block, and one stability-aware
 visual segment after L1/L2. Sparse prose retains safe word-root segments from the existing word sidecar even when adjacent
 segments currently have equal translations, so glyph-to-placement-slot ownership survives movement across lines,
 exclusions, and justification. Split inside a word only for an actual displacement or boundary change. Dense CJK retains
 large `LayoutRun` topology and uses fixed numeric blocks plus current visual segments, never one run or row per glyph.
-Classification appends occurrences to homogeneous queues, so neither hot kernel switches on class or role. This split is
-placement metadata only: it does not create a retained run, static glyph rewrite, batch key, or draw.
+The existing positioning traversal computes these segments while it performs the authoritative cluster walk; there is
+no parallel glyph-positioning pass or placement-class queue. This split is placement metadata only: it does not create a
+retained run, static glyph rewrite, batch key, or draw.
 
 Each slice caches the ink union for its local glyph range. Derive it from immutable run chunk summaries plus bounded
 edge scans, so a partial CJK run does not force a whole-run bound or a broad per-glyph measurement walk.
@@ -431,28 +433,22 @@ Decorations are separate entities, one per continuous decorating group per visua
 paint program, depth layer, and run-span provenance. They remain unit-quad instances and do not cause glyph
 geometry regeneration.
 
-## Phase-specialized systems
+## Phase boundaries without duplicate placement
 
-Classify work once per invalid paragraph and append entity IDs to explicit dense queues:
+Keep the existing explicit composition, boundary-shaping, bidi, decoration, and publication phases, but do not add
+parallel ordinary/justified placement queues. The one positioning traversal already owns the exact pen, justification,
+L1/L2, hanging, boundary, semantic, and glyph-emission order. It records placement segments and visual spans as compact
+side effects of that walk. Raster technique remains absent from positioning, while role and bidi metadata remain absent
+from the placement translation row.
 
-- `compose_word_queue`
-- `compose_character_queue`
-- `shape_boundary_replacements`
-- `reorder_bidi_lines`
-- `place_ordinary_slices`
-- `place_justified_slices`
-- `rebuild_decoration_spans`
-- `publish_slice_placements`
-- `publish_visual_order`
-
-Each queue has one narrow loop over homogeneous records. The ordinary placement loop reads run advance and writes
-line translation; it has no branch for wrap mode, bidi, justification, decorations, ellipsis, or raster technique.
-Character fallback, justification, and boundary replacement are separate systems rather than conditions inside that
-loop.
+Classify word/character/no-wrap composition before the walk, derive boundary replacement and line-resolved bidi state at
+their existing phase boundaries, then publish placement and visual-order changes independently after positioning.
+Retained lines may compact-copy and rebind their segment/span ranges; failed compact validation returns to the same
+positioning traversal rather than a second rematerialization algorithm.
 
 Line composition may remain serial where a prefix sum determines the next legal break. It should operate on word/break
-records, not glyphs. Placement of the selected runs and dirty comparison of placement rows are independent dense
-passes and are the only initial SIMD candidates.
+records, not glyphs. Dirty comparison and publication of the resulting placement rows are independent dense passes and
+are the initial SIMD candidates; placement arithmetic itself retains one authority.
 
 ## Required typography behavior
 
@@ -493,20 +489,19 @@ the same visual paint result as the independent oracle.
 
 ### Justification
 
-Word-space justification moves following slice roots; it does not rewrite glyph-local origins. Letter/cluster expansion
-uses the CPU-only `Justified` placement class. Store static gap identity with glyph-local data, then retain the visual
-starting ordinal and exact wide-fixed-point quotient/remainder in CPU SoA lanes scoped to one `FlowFragment`:
+Word-space justification moves following segment roots; it does not rewrite glyph-local origins. Store static gap
+identity with glyph-local data, then evaluate the visual starting ordinal and exact wide-fixed-point quotient/remainder
+in CPU composition state scoped to one `FlowFragment`:
 
 ```text
 ordinal * quotient + min(ordinal, remainder)
 ```
 
-`PlacementClass` selects homogeneous CPU queues, not a raster program, batch key, or renderer mode. The justified system
-evaluates the expression above and writes ordinary f32x2 x/y rows through the stability-aware segmentation rule: retain
-safe word-root slots even when adjacent translations match, and split within a word only at an actual displacement or
-boundary change. The existing occurrence map selects those rows without changing draws or raster programs. Because
-inter-character expansion moves glyphs inside a run, the justified query kernel must publish a post-expansion ink summary
-or walk that specialized slice; translating a pre-justification summary is not sufficient.
+The existing cluster traversal evaluates the expression above and writes ordinary f32x2 x/y rows through the
+stability-aware segmentation rule: retain safe word-root slots even when adjacent translations match, and split within a
+word only at an actual displacement or boundary change. The occurrence map selects those rows without changing draws or
+raster programs. Because inter-character expansion moves glyphs inside a run, the justified query kernel must publish a
+post-expansion ink summary or walk that specialized segment; translating a pre-justification summary is not sufficient.
 Quotient/remainder and ordinal zero reset independently for every fragment. The final-line decision is made once for the
 logical `FlowLine`, so a nonterminal slot is never mistaken for a paragraph-final line. Final-line, inter-character, and
 script-specific justification policies select CPU queues before traversal; renderer program selection remains solely a
@@ -781,21 +776,28 @@ deltas from the old oracle stay inside a predeclared bound; pixel evidence is ac
 and CJK mapping, per-technique bytes, buffer lifetime, and regression gates pass. Otherwise revise the one new contract
 before touching the ABI; do not activate an absolute compatibility path.
 
-### M2 — core implementation, test/lab oracle only
+### M2 — core staging beside the absolute-position oracle
 
-- Implement the run arenas and specialized queues without executing both paths in shipping builds.
+- Retain break-independent numeric blocks and compact placement-segment/visual-span SoA state in normal builds while the
+  existing absolute glyph output remains the only publication and renderer input.
+- Populate that state from the single existing positioning traversal. Do not add a parallel placement walk or duplicate
+  justification arithmetic; segment translation is exactly f64 inline/block and all role, bidi, block, and justification
+  metadata remains outside the renderer row.
 - Implement every existing word/character/no-wrap, dense CJK, bidi L1/L2, hanging-space, justification, decoration,
   ellipsis, measurement, hit-test, borrowed/full glyph-query, detached-slice, and custom-program behavior before cutover.
-- Compute measurement and borrowed per-glyph query results from run-local data in test/lab builds.
+- Copy and rebind retained line segment/span topology transactionally by run canonical revision and stable segment anchor;
+  if compact validation fails, use the same normal positioning traversal, not a second rematerializer.
+- Keep every rendered glyph mapped to exactly one segment while outline-less semantic glyphs, glyphless clusters, hard
+  breaks, and boundary replacement retain explicit source ownership without fabricating instances.
 - Keep the prior first-party glyph-wide materializer only as a test oracle for topology and measured numeric/pixel delta;
   do not ship two first-party width paths.
 - Preserve shaping, local edits, font-size invalidation, ellipsis boundary shaping, commit/abort, and identity semantics.
   Prove a paint/material/raster/decorating-only update changes render/decor spans without changing `LayoutRun` or
   placement identity/revisions.
 
-Exit: the existing-behavior matrix has exact non-coordinate parity, final coordinates satisfy the newly declared
-cross-consumer contract and error/pixel gates, and steady state is allocation-free after warmup; production behavior and
-timing remain unchanged until the atomic cutover.
+Exit: compact core state is total over the existing behavior matrix, exact current absolute output remains unchanged,
+retained resolution is bounded and steady state is allocation-free after warmup. The checkpoint makes no performance
+claim until M3 removes absolute publication and a warmed width change writes zero static glyph bytes.
 
 ### M3 — atomic core, ABI, query, and renderer cutover
 
