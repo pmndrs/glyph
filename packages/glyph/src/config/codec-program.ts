@@ -231,6 +231,42 @@ export interface CodecProgramSystemBuffers {
   readonly placementOffset?: CodecBufferDeclaration<'f32', readonly ['inlineOffset', 'blockOffset']>;
 }
 
+/** @internal Attach engine-owned stores after a technique body has been authored and authenticated. */
+export function attachHostCodecProgramSystemBuffers<Schema extends TechniqueSchemaMetadata>(
+  body: CompiledCodecProgramBody<Schema>,
+  schema: Schema,
+  system: CodecProgramSystemBuffers,
+): CompiledCodecProgramBody<Schema> {
+  const opcodes = textShaperAbi.codec.opcodes;
+  const operations = [...body.operations];
+  const storeU32 = (input: number, buffer: CodecBufferId): void => {
+    operations.push(
+      { opcode: opcodes.loadU32, target: 0, operand0: input },
+      { opcode: opcodes.storeU32, operand0: 0, operand1: 0, immediate0: buffer },
+    );
+  };
+  const storeF32 = (input: number, buffer: CodecBufferId, lane: number): void => {
+    operations.push(
+      { opcode: opcodes.loadF32, target: 0, operand0: input },
+      { opcode: opcodes.storeF32, operand0: 0, operand1: lane, immediate0: buffer },
+    );
+  };
+  storeU32(1, system.stableGlyphId.id);
+  if (system.transformIndex !== undefined) storeU32(0, system.transformIndex.id);
+  if (system.placementOffset !== undefined) {
+    storeF32(0, system.placementOffset.id, 0);
+    storeF32(1, system.placementOffset.id, 1);
+  }
+  const attached = { ...body, operations };
+  recordTechniqueCodecBody(attached, {
+    schema,
+    stableGlyphId: system.stableGlyphId.id,
+    transformIndex: system.transformIndex?.id,
+    placementOffset: system.placementOffset?.id,
+  });
+  return attached;
+}
+
 interface CodecProgramSystemSemantics {
   readonly placementInline: CodecF32Value;
   readonly placementBlock: CodecF32Value;
