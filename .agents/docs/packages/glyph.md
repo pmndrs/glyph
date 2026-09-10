@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:f461c034ace613b9c1d30397621857be7ad14529ca4c5f7ed916ad9db383ce77'
+source_digest: 'sha256:d904535a5cb1dda4b61271c2370f67f5b1e3be76b25b141db91e81fec82c1fa4'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1216,12 +1216,15 @@ glyph-wide absolute-positioning materialization only through the single-model cu
 [fragment-relative reflow plan](../planning/fragment-relative-reflow.md). Until its shadow and renderer feasibility gates
 pass, the current positioned arena remains authoritative and no public contour or drop-cap behavior is implied.
 
-The M0/M1 harness is intentionally non-shipping: test and kernel-lab builds derive maximal shaping-compatible
-`LayoutRun` intervals from retained cluster ownership while the production path remains unchanged. Maintained benchmark
-cases now isolate justified, mixed-bidi, equivalent-width, and dense-CJK reflow and retain raw publication counters. The
-first frozen Bitmap checkpoint measured 22k width updates at `1.144 / 3.605 ms` aggregate median/p95 and
-`1.493 / 3.743 ms` on the active 174,440-byte publication subset; measurement-only was `0.192 / 0.226 ms`. Those values
-are an attribution checkpoint, not final performance evidence.
+The M0/M1 harness first derived maximal shaping-compatible `LayoutRun` intervals from retained cluster ownership without
+changing production execution. The first production slice now retains those intervals in `ClusterArena`, makes them the
+sole flow-extents traversal, and uses them to hoist font geometry for boundary-free, zero-indent, trivial-order
+positioning, including justified lines. Bidi, boundary replacement, and indented fragments still use the same shared
+cluster-emission authority without run-level hoisting. Maintained benchmark cases isolate justified, mixed-bidi,
+equivalent-width, and dense-CJK reflow and retain raw publication counters. The frozen pre-cutover Bitmap checkpoint
+measured 22k width updates at `1.144 / 3.605 ms` aggregate median/p95 and `1.493 / 3.743 ms` on the active 174,440-byte
+publication subset; measurement-only was `0.192 / 0.226 ms`. Those values remain attribution baselines, not performance
+claims for the production slice.
 
 The first shadow consumers now prove maximal `(source_run, font_handle)` runs, one-run dense CJK, run-bounded line
 extents, and ordinary base-LTR slice parity without entering production execution. They also reject plain local-plus-
@@ -1230,16 +1233,17 @@ f32 bits, and a 4,111-case representation lab finds mismatches in every tested c
 benchmark alternates 420/434-unit widths and fails on any zero-patch sample. This narrows the next work; it does not yet
 authorize an ABI or renderer cutover.
 
-The next proof joins independent multi-fragment bidi, per-fragment hanging-space, and justification-site oracles to a
-safe-boundary visual mapper. It preserves multi-glyph cluster order and glyphless ownership, rejects boundary replacement
-until it has an explicit occurrence model, and keeps 4,096 homogeneous CJK clusters in one retained run. A 166-glyph
-real corpus reconstructs all 332 already-published f32 coordinates exactly from line and observable-slice anchors, but
-the f64 reassociation counterexamples remain authoritative for the future CPU cutover.
+The visual proof joins independent multi-fragment bidi, per-fragment hanging-space, and justification-site oracles to a
+safe-boundary mapper. It preserves multi-glyph cluster order and glyphless ownership, rejects boundary replacement until
+it has an explicit occurrence model, and keeps 4,096 homogeneous CJK clusters in one retained run. A 166-glyph real
+corpus reconstructs all 332 already-published f32 coordinates exactly from line and observable-slice anchors, but the
+f64 reassociation counterexamples remain authoritative for the future CPU cutover.
 
 Installed Three compilers accept branch-free 3x10, 2x16, and u32 occurrence-map specializations through storage WGSL and
-WebGL2 PBO GLSL as one instanced-mesh representation. The TypeGPU lab proves only that a separate placement group fits
-beside the saturated eight-buffer Slug Codec; real renderer storage ownership, lifetime, pixels, draw behavior, and
-custom-callback pressure remain open M1 gates.
+WebGL2 PBO GLSL as one instanced-mesh representation. The TypeGPU lab proves the lookup expression only. A separate
+placement bind group is rejected: scene plus raster resources and the supported pose and paint callbacks already consume
+WebGPU's guaranteed four groups. The atomic renderer cutover must add occurrence and placement storage to the existing
+scene group; ownership, lifetime, pixels, draw behavior, and callback coexistence remain implementation gates.
 
 The optimized proof Wasm is 1,205,308 bytes, 43 bytes above the 1,205,265-byte frozen baseline. An active-resize
 A/B/B/A check was flat within run spread: baseline medians/p95s were `3.588/3.699` and `3.618/3.790 ms`; proof values
