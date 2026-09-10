@@ -5,7 +5,7 @@ description: Demonstrates retained bitmap, MSDF, and Slug text rendering in call
 resource: ../../../apps/typegpu-hello-world
 workspace_package: '@pmndrs/glyph-typegpu-hello-world'
 documentation_type: reference
-source_digest: 'sha256:8db6cd47bf10dacd99b0cb23516994073670dbd97dd5d12e9836a879ac8840e9'
+source_digest: 'sha256:de45152cc0af49d9622b23851447cffc57434312840b5c0cfa2534742d2980bd'
 tags: [package, example, typegpu, webgpu, vite]
 sources:
   - id: manifest

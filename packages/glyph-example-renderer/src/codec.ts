@@ -5,21 +5,17 @@ import { createRasterCodecProgram } from '@pmndrs/glyph/config/raster';
 import { defineCodecBuffers } from '@pmndrs/glyph/config/schema';
 import { glyphExampleCodec } from '@pmndrs/glyph-example-raster';
 
-const EXAMPLE_OCCURRENCE_BUFFER_ID: CodecBufferId = id.buffer('glyph-example-renderer/occurrence');
+const EXAMPLE_STABLE_GLYPH_BUFFER_ID: CodecBufferId = id.buffer('glyph-example-renderer/stable-glyph');
 
-/** The Codec's occurrence row: stable identity plus dynamic placement and host inputs. */
+/** The Codec's own system lane: glyph identity that survives reflow within a paragraph. */
 export const exampleSystemBuffers: {
-  readonly occurrence: {
-    readonly id: typeof EXAMPLE_OCCURRENCE_BUFFER_ID;
+  readonly stableGlyphId: {
+    readonly id: typeof EXAMPLE_STABLE_GLYPH_BUFFER_ID;
     readonly scalar: 'u32';
-    readonly lanes: readonly ['stableGlyphId', 'placementSlot', 'transformIndex', 'foregroundRgba'];
+    readonly lanes: readonly ['stableGlyphId'];
   };
 } = defineCodecBuffers({
-  occurrence: {
-    id: EXAMPLE_OCCURRENCE_BUFFER_ID,
-    scalar: 'u32',
-    lanes: ['stableGlyphId', 'placementSlot', 'transformIndex', 'foregroundRgba'],
-  },
+  stableGlyphId: { id: EXAMPLE_STABLE_GLYPH_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
 });
 
 /** Stable namespace used to derive this renderer's numeric program identity. */

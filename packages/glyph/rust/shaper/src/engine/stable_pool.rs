@@ -8,14 +8,12 @@ use super::identity_index::{IdentityIndex, IdentityIndexError};
 pub struct SlotIdentity {
     pub stable_id: u32,
     pub content_revision: u32,
-    pub placement_slot: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SlotAssignment {
     pub stable_id: u32,
     pub content_revision: u32,
-    pub placement_slot: u32,
     pub slot: u32,
     pub changed: bool,
 }
@@ -24,7 +22,6 @@ pub struct SlotAssignment {
 struct SlotState {
     stable_id: u32,
     content_revision: u32,
-    placement_slot: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -140,12 +137,10 @@ impl StableSlotPool {
                 let changed = self.slots.get(slot as usize).is_none_or(|state| {
                     state.stable_id != identity.stable_id
                         || state.content_revision != identity.content_revision
-                        || state.placement_slot != identity.placement_slot
                 });
                 self.assignments.push(SlotAssignment {
                     stable_id: identity.stable_id,
                     content_revision: identity.content_revision,
-                    placement_slot: identity.placement_slot,
                     slot,
                     changed,
                 });
@@ -222,10 +217,8 @@ impl StableSlotPool {
             self.assignments.push(SlotAssignment {
                 stable_id: identity.stable_id,
                 content_revision: identity.content_revision,
-                placement_slot: identity.placement_slot,
                 slot,
-                changed: state.content_revision != identity.content_revision
-                    || state.placement_slot != identity.placement_slot,
+                changed: state.content_revision != identity.content_revision,
             });
         }
 
@@ -278,7 +271,6 @@ impl StableSlotPool {
             self.slots[assignment.slot as usize] = SlotState {
                 stable_id: assignment.stable_id,
                 content_revision: assignment.content_revision,
-                placement_slot: assignment.placement_slot,
             };
         }
         self.committed_live_count = self.pending_live_count;
@@ -519,33 +511,6 @@ mod tests {
     }
 
     #[test]
-    fn placement_change_keeps_the_physical_slot_and_marks_the_row_dirty() {
-        let mut pool = StableSlotPool::default();
-        pool.prepare(
-            &[SlotIdentity {
-                stable_id: 1,
-                content_revision: 1,
-                placement_slot: 3,
-            }],
-            1,
-        )
-        .unwrap();
-        pool.commit().unwrap();
-
-        pool.prepare(
-            &[SlotIdentity {
-                stable_id: 1,
-                content_revision: 1,
-                placement_slot: 9,
-            }],
-            2,
-        )
-        .unwrap();
-        assert_eq!(slots(&pool), vec![0]);
-        assert_eq!(changed_slots(&pool), vec![0]);
-    }
-
-    #[test]
     fn abort_returns_reclaimed_allocations_without_committing_identity() {
         let mut pool = StableSlotPool::default();
         pool.prepare(&identities(&[(1, 1), (2, 1)]), 1).unwrap();
@@ -580,7 +545,6 @@ mod tests {
             .map(|&(stable_id, content_revision)| SlotIdentity {
                 stable_id,
                 content_revision,
-                placement_slot: 0,
             })
             .collect()
     }

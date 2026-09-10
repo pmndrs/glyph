@@ -967,7 +967,6 @@ mod tests {
             retirements: &retirements,
             diagnostics: &diagnostics,
             payload: &[1, 2, 3, 4],
-            ..RenderPlanView::default()
         };
         let mut transport = FrameTransport::new(256, 1024).unwrap();
         let staged = transport.stage_plan(plan).unwrap();

@@ -1,4 +1,4 @@
-import type { CodecBufferId, CodecCapabilitySet, CodecDescriptor, CodecIdFactory } from '../../index.js';
+import type { CodecCapabilitySet, CodecDescriptor, CodecIdFactory } from '../../index.js';
 import { id } from '../../config/codec.js';
 import { defineCodecBuffers } from '../../config/schema.js';
 import { createRasterCodecProgram } from '../../config/raster.js';
@@ -6,13 +6,8 @@ import { bitmapCodec } from '../../raster/bitmap.js';
 import { msdfCodec } from '../../raster/msdf.js';
 import { slugCodec } from '../../raster/slug.js';
 
-export const TYPEGPU_OCCURRENCE_BUFFER_ID: CodecBufferId = id.buffer('glyph-typegpu/occurrence');
 const system = defineCodecBuffers({
-  occurrence: {
-    id: TYPEGPU_OCCURRENCE_BUFFER_ID,
-    scalar: 'u32',
-    lanes: ['stableGlyphId', 'placementSlot', 'transformIndex', 'foregroundRgba'],
-  },
+  stableGlyphId: { id: id.buffer('glyph-typegpu/stable-glyph'), scalar: 'u32', lanes: ['stableGlyphId'] },
 });
 const capabilitySet: CodecCapabilitySet = {
   capabilities: ['storage-buffers', 'alias-vec2', 'alias-vec4', 'ordered-direct'],

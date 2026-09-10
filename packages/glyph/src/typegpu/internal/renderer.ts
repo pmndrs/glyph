@@ -4,7 +4,6 @@ import { d } from 'typegpu';
 import type { CodecBufferId, CommandBufferView, GlyphRenderer, PreparedRendererCommit } from '../../index.js';
 import type { Bindings, BufferBinding } from './bindings.js';
 import type { Draw, TypeGpuResource } from './resources.js';
-import { TYPEGPU_OCCURRENCE_BUFFER_ID } from './codec.js';
 
 export interface TypeGpuTransform {
   readonly position: TgpuUniform<d.Vec2f>;
@@ -47,7 +46,6 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
   readonly #root: TgpuRoot;
   readonly #viewport: TgpuUniform<d.Vec2f>;
   #buffers = new Map<BufferBinding, RetainedBuffer>();
-  #placementTable: RetainedBuffer | undefined;
   #spans: readonly Span[] = [];
   #draws: readonly Draw[] = [];
   #disposed = false;
@@ -103,12 +101,7 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
         if (previous !== undefined) next.set(previous.bytes.subarray(0, next.length));
         const gpu = this.#root.device.createBuffer({
           size: Math.max(4, next.byteLength),
-          usage:
-            update.buffer.input.declaration.kind === 'placement' ||
-            (update.buffer.input.declaration.kind === 'codec' &&
-              update.buffer.input.declaration.value.id === TYPEGPU_OCCURRENCE_BUFFER_ID)
-              ? GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
-              : GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+          usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
         });
         allocated.push(gpu);
         const target = { bytes: next, gpu };
@@ -156,11 +149,6 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
       for (const retirement of frame.updates.retirements) {
         if (retirement.kind === 'buffer') buffers.delete(retirement.buffer);
       }
-      const placementTables = [...buffers.entries()].filter(
-        ([binding]) => binding.input.declaration.kind === 'placement',
-      );
-      if (placementTables.length > 1) throw new Error('TypeGPU received more than one session placement table');
-      const placementTable = placementTables[0]?.[1];
       let spans = this.#spans;
       if (frame.displayList.kind === 'replace') {
         const next: Span[] = [];
@@ -181,7 +169,7 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
         spans = next;
       }
       const draws =
-        spans === this.#spans && allocated.length === 0 && placementTable === this.#placementTable
+        spans === this.#spans && allocated.length === 0
           ? this.#draws
           : spans.map((span, index) => {
               const previous = this.#spans[index];
@@ -204,15 +192,7 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
                 if (binding.input.declaration.kind === 'codec')
                   named.set(binding.input.declaration.value.id, buffers.get(binding)!.gpu);
               }
-              if (placementTable === undefined) throw new Error('TypeGPU glyph draw is missing its session placement table');
-              return span.resource.prepare(
-                named,
-                placementTable.gpu,
-                this.#viewport,
-                span.transform.position,
-                span.start,
-                span.count,
-              );
+              return span.resource.prepare(named, this.#viewport, span.transform.position, span.start, span.count);
             });
       let active = true;
       return {
@@ -233,7 +213,6 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
           }
           for (const [key, previous] of this.#buffers) if (buffers.get(key) !== previous) previous.gpu.destroy();
           this.#buffers = buffers;
-          this.#placementTable = placementTable;
           this.#spans = spans;
           this.#draws = draws;
         },
@@ -254,7 +233,6 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
     this.#disposed = true;
     for (const value of this.#buffers.values()) value.gpu.destroy();
     this.#buffers.clear();
-    this.#placementTable = undefined;
     this.#draws = [];
     this.#spans = [];
     this.#viewport.buffer.destroy();

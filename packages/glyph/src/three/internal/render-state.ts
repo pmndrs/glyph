@@ -92,7 +92,6 @@ export interface PreparedDrawReplacement {
 
 export interface PreparationContext {
   readonly buffers: Map<ThreeBufferBinding, RetainedBuffer>;
-  placementTable: RetainedBuffer | undefined;
   readonly resources: Map<ThreeResolvedResourceBinding, RetainedResource>;
   readonly bitmapTextures: Map<ThreeResolvedResourceBinding, RetainedTextureLease>;
   readonly msdfAtlases: Map<ThreeResolvedResourceBinding, RetainedTextureLease>;

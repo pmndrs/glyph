@@ -32,7 +32,6 @@ import {
 } from '../../shaders/typegpu/slug/slug-texture.js';
 import type { TypeGpuConfigOptions, TypeGpuPositionTransform, TypeGpuColorTransform } from '../config.js';
 import { bitmapPageAccessor } from '../../shaders/typegpu/bitmap-shader.js';
-import { TYPEGPU_OCCURRENCE_BUFFER_ID } from './codec.js';
 
 export interface Draw {
   draw(pass: TgpuRenderPass | GPURenderPassEncoder, bindGroups: readonly TgpuBindGroup[]): void;
@@ -40,7 +39,6 @@ export interface Draw {
 export interface TypeGpuResource {
   prepare(
     buffers: ReadonlyMap<CodecBufferId, GPUBuffer>,
-    placementTable: GPUBuffer,
     viewport: TgpuUniform<d.Vec2f>,
     position: TgpuUniform<d.Vec2f>,
     start: number,
@@ -66,12 +64,7 @@ function shaderRoot(options: PipelineOptions) {
     .with(colorTransform, options.transformColor ?? defaultColor);
 }
 
-const scene = tgpu.bindGroupLayout({
-  viewport: { uniform: d.vec2f },
-  position: { uniform: d.vec2f },
-  occurrences: { storage: d.arrayOf(d.vec4u), access: 'readonly', visibility: ['vertex'] },
-  placements: { storage: d.arrayOf(d.vec2f), access: 'readonly', visibility: ['vertex'] },
-});
+const scene = tgpu.bindGroupLayout({ viewport: { uniform: d.vec2f }, position: { uniform: d.vec2f } });
 const v2 = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const v4 = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const u1 = tgpu.vertexLayout(d.disarrayOf(d.uint32), 'instance');
@@ -90,6 +83,7 @@ const pageLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const planeLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const bandLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const inverseLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
+const countsLayout = tgpu.vertexLayout(d.disarrayOf(d.uint32x4), 'instance');
 
 function corner(index: number): d.v2f {
   'use gpu';
@@ -102,10 +96,6 @@ function project(position: d.v3f): d.v4f {
   'use gpu';
   const pixel = d.vec2f(position.x, -position.y).add(scene.$.position);
   return positionTransform.$(d.vec3f(pixel, position.z), scene.$.viewport);
-}
-function placedOrigin(origin: d.v2f, instance: number): d.v2f {
-  'use gpu';
-  return origin.add(scene.$.placements[scene.$.occurrences[instance]!.y]!);
 }
 function target(options: PipelineOptions): GPUColorTargetState {
   return {
@@ -166,7 +156,6 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
     const vertex = tgpu.vertexFn({
       in: {
         index: d.builtin.vertexIndex,
-        instance: d.builtin.instanceIndex,
         origin: d.vec2f,
         size: d.vec2f,
         uvOrigin: d.vec2f,
@@ -179,7 +168,7 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
       'use gpu';
       const unit = corner(input.index);
       return {
-        position: project(bitmapQuadPosition(placedOrigin(input.origin, input.instance), input.size, unit)),
+        position: project(bitmapQuadPosition(input.origin, input.size, unit)),
         uv: bitmapAtlasUv(input.uvOrigin, input.uvSize, unit),
         color: input.color,
         layer: input.layer,
@@ -213,10 +202,8 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
     pipeline.initSync();
     return {
       dispose: () => atlas.destroy(),
-      prepare(buffers, placementTable, viewport, position, start, count) {
-        const occurrences = buffers.get(TYPEGPU_OCCURRENCE_BUFFER_ID);
-        if (occurrences === undefined) throw new Error('TypeGPU glyph draw is missing its occurrence lane');
-        const group = root.createBindGroup(scene, { viewport, position, occurrences, placements: placementTable });
+      prepare(buffers, viewport, position, start, count) {
+        const group = root.createBindGroup(scene, { viewport, position });
         const b = bitmapSchema.buffers;
         const draw = pipeline
           .with(group)
@@ -263,7 +250,6 @@ function msdfResource(
     const vertex = tgpu.vertexFn({
       in: {
         index: d.builtin.vertexIndex,
-        instance: d.builtin.instanceIndex,
         rect: d.vec4f,
         uvRect: d.vec4f,
         bounds: d.vec4f,
@@ -279,7 +265,7 @@ function msdfResource(
         unitPosition: d.vec3f(unit, 0),
         unitUv: unit,
         instance: {
-          origin: placedOrigin(input.rect.xy, input.instance),
+          origin: input.rect.xy,
           size: input.rect.zw,
           uvOrigin: input.uvRect.xy,
           uvSize: input.uvRect.zw,
@@ -344,10 +330,8 @@ function msdfResource(
     pipeline.initSync();
     return {
       dispose: () => atlas.destroy(),
-      prepare(buffers, placementTable, viewport, position, start, count) {
-        const occurrences = buffers.get(TYPEGPU_OCCURRENCE_BUFFER_ID);
-        if (occurrences === undefined) throw new Error('TypeGPU glyph draw is missing its occurrence lane');
-        const group = root.createBindGroup(scene, { viewport, position, occurrences, placements: placementTable });
+      prepare(buffers, viewport, position, start, count) {
+        const group = root.createBindGroup(scene, { viewport, position });
         const b = msdfSchema.buffers;
         const draw = pipeline
           .with(group)
@@ -386,25 +370,24 @@ function slugResource(
       color: d.vec4f,
       band: d.vec4f,
       starts: d.interpolate('flat', d.vec4u),
-      counts: d.interpolate('flat', d.vec2u),
+      counts: d.interpolate('flat', d.vec4u),
     };
     const vertex = tgpu.vertexFn({
       in: {
         index: d.builtin.vertexIndex,
-        instance: d.builtin.instanceIndex,
         rect: d.vec4f,
         plane: d.vec4f,
         band: d.vec4f,
+        color: d.vec4f,
         inverse: d.vec4f,
         starts: d.vec4u,
+        counts: d.vec4u,
       },
       out: { position: d.builtin.position, ...varyings },
     })((input) => {
       'use gpu';
       const unit = corner(input.index);
-      const occurrence = scene.$.occurrences[input.instance]!;
-      const origin = placedOrigin(input.rect.xy, input.instance);
-      const local = d.vec2f(origin.x + unit.x * input.rect.z, -(origin.y + unit.y * input.rect.w));
+      const local = d.vec2f(input.rect.x + unit.x * input.rect.z, -(input.rect.y + unit.y * input.rect.w));
       const normal = d.vec2f((unit.x - 0.5) * input.rect.z, -(unit.y - 0.5) * input.rect.w);
       const em = d.vec2f(input.plane.x + unit.x * input.plane.z, input.plane.y - unit.y * input.plane.w);
       // Local homogeneous projection derivatives keep Slug's half-pixel expansion in screen space.
@@ -424,10 +407,10 @@ function slugResource(
       return {
         position: project(d.vec3f(local.add(dilated.xy), 0)),
         coordinate: dilated.zw,
-        color: decorationPaint(d.vec2u(occurrence.w, d.u32(0))),
+        color: input.color,
         band: input.band,
         starts: input.starts,
-        counts: d.vec2u(d.u32(input.inverse.y), d.u32(input.inverse.z)),
+        counts: input.counts,
       };
     });
     const fragment = tgpu.fragmentFn({ in: { position: d.builtin.position, ...varyings }, out: d.vec4f })((input) => {
@@ -469,8 +452,10 @@ function slugResource(
           rect: rectLayout.attrib,
           plane: planeLayout.attrib,
           band: bandLayout.attrib,
+          color: colorLayout.attrib,
           inverse: inverseLayout.attrib,
           starts: u4.attrib,
+          counts: countsLayout.attrib,
         },
         targets: target(options),
         multisample: { count: options.sampleCount ?? 1 },
@@ -481,18 +466,18 @@ function slugResource(
       dispose: () => {
         for (const value of textures) value.destroy();
       },
-      prepare(buffers, placementTable, viewport, position, start, count) {
-        const occurrences = buffers.get(TYPEGPU_OCCURRENCE_BUFFER_ID);
-        if (occurrences === undefined) throw new Error('TypeGPU glyph draw is missing its occurrence lane');
-        const group = root.createBindGroup(scene, { viewport, position, occurrences, placements: placementTable });
+      prepare(buffers, viewport, position, start, count) {
+        const group = root.createBindGroup(scene, { viewport, position });
         const b = slugSchema.buffers;
         const draw = pipeline
           .with(group)
           .with(rectLayout, buffers.get(b.rect.id)!)
           .with(planeLayout, buffers.get(b.planeRect.id)!)
           .with(bandLayout, buffers.get(b.bandTransform.id)!)
+          .with(colorLayout, buffers.get(b.color.id)!)
           .with(inverseLayout, buffers.get(b.inverseFontSize.id)!)
-          .with(u4, buffers.get(b.tableStarts.id)!);
+          .with(u4, buffers.get(b.tableStarts.id)!)
+          .with(countsLayout, buffers.get(b.bandCounts.id)!);
         return preparedDraw(root, draw, start, count);
       },
     };

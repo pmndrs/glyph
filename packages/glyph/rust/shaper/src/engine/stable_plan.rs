@@ -619,7 +619,6 @@ impl StablePlanCompiler {
             SlotIdentity {
                 stable_id: 0,
                 content_revision: 0,
-                placement_slot: 0,
             },
         );
         let mut cursor = 0_u32;
@@ -641,7 +640,6 @@ impl StablePlanCompiler {
             self.batch_identities[destination] = SlotIdentity {
                 stable_id: glyph.stable_id,
                 content_revision: glyph.content_revision,
-                placement_slot: input.placement_slot(input_index)?,
             };
             self.pending_batches[pending_index].cursor = self.pending_batches[pending_index]
                 .cursor
@@ -1869,7 +1867,6 @@ mod tests {
                 CAPABILITY,
                 StablePlanInput {
                     glyphs: &[block_changed],
-                    placement_slots: &[0],
                     semantic_change_masks: &[1 << 1],
                     f32_fields: &[&[1.0]],
                     u32_fields: &[],
@@ -1895,7 +1892,6 @@ mod tests {
                 CAPABILITY,
                 StablePlanInput {
                     glyphs: &[glyph(1, 3)],
-                    placement_slots: &[0],
                     semantic_change_masks: &[1],
                     f32_fields: &[&[2.0]],
                     u32_fields: &[],
@@ -1911,68 +1907,6 @@ mod tests {
             .unwrap();
         assert_eq!(plan.patches.len(), 1);
         assert_eq!(plan.payload, 2.0_f32.to_le_bytes());
-    }
-
-    #[test]
-    fn placement_slot_changes_patch_only_the_occurrence_lane_without_changing_topology() {
-        let codec = placement_codec();
-        let mut compiler = StablePlanCompiler::default();
-        let glyphs = [glyph(1, 1)];
-        compiler
-            .prepare(
-                &codec,
-                CAPABILITY,
-                StablePlanInput {
-                    glyphs: &glyphs,
-                    placement_slots: &[3],
-                    semantic_change_masks: &[u16::MAX],
-                    f32_fields: &[&[1.0]],
-                    u32_fields: &[&[3]],
-                    order_independent: false,
-                },
-                true,
-                1,
-                0,
-            )
-            .unwrap();
-        let first = compiler
-            .plan_view(7, CAPABILITY, codec.fingerprint())
-            .unwrap();
-        let placement_buffer = first
-            .buffers
-            .iter()
-            .find(|buffer| buffer.codec_buffer_id == 2)
-            .unwrap()
-            .id;
-        let primitives = first.primitives.to_vec();
-        let draws = first.draws.to_vec();
-        compiler.commit().unwrap();
-
-        compiler
-            .prepare(
-                &codec,
-                CAPABILITY,
-                StablePlanInput {
-                    glyphs: &glyphs,
-                    placement_slots: &[9],
-                    semantic_change_masks: &[1 << 15],
-                    f32_fields: &[&[1.0]],
-                    u32_fields: &[&[9]],
-                    order_independent: false,
-                },
-                false,
-                2,
-                0,
-            )
-            .unwrap();
-        let delta = compiler
-            .plan_view(7, CAPABILITY, codec.fingerprint())
-            .unwrap();
-        assert_eq!(delta.primitives, primitives);
-        assert_eq!(delta.draws, draws);
-        assert_eq!(delta.patches.len(), 1);
-        assert_eq!(delta.patches[0].buffer_id, placement_buffer);
-        assert_eq!(delta.payload, 9_u32.to_le_bytes());
     }
 
     #[test]
@@ -2145,7 +2079,6 @@ mod tests {
                 CAPABILITY,
                 StablePlanInput {
                     glyphs: &glyphs,
-                    placement_slots: &[0; 4],
                     semantic_change_masks: &[],
                     f32_fields: &[&[1.0, 2.0, 3.0, 4.0]],
                     u32_fields: &[],
@@ -2190,7 +2123,6 @@ mod tests {
                 CAPABILITY,
                 StablePlanInput {
                     glyphs: &glyphs,
-                    placement_slots: &[0; 4],
                     semantic_change_masks: &[],
                     f32_fields: &[&[1.0, 2.0, 3.0, 4.0]],
                     u32_fields: &[],
@@ -2344,14 +2276,12 @@ mod tests {
         publication_generation: u32,
         acknowledged_publication_generation: u32,
     ) {
-        let placement_slots = vec![0; glyphs.len()];
         compiler
             .prepare(
                 codec,
                 CAPABILITY,
                 StablePlanInput {
                     glyphs,
-                    placement_slots: &placement_slots,
                     semantic_change_masks: &[],
                     f32_fields: &[x],
                     u32_fields: &[],
@@ -2388,35 +2318,6 @@ mod tests {
 
     fn codec(partition_materials: bool) -> ValidatedCodec {
         codec_with_budget(partition_materials, 8)
-    }
-
-    fn placement_codec() -> ValidatedCodec {
-        let mut descriptor = descriptor_with_budget(false, 8);
-        let program = &mut descriptor.programs[0];
-        program.u32_input_count = 1;
-        program
-            .inputs
-            .push(crate::engine::codec::InputSource::semantic(8));
-        program.buffers.push(BufferSchema::packed(
-            BufferId(2),
-            ScalarType::U32,
-            1,
-            BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST,
-            1,
-        ));
-        program.operations.extend([
-            Operation::LoadU32 {
-                target: 1,
-                field: 0,
-            },
-            Operation::StoreU32 {
-                source: 1,
-                buffer: BufferId(2),
-                lane: 0,
-            },
-        ]);
-        descriptor.capability_sets[0].max_buffers_per_draw = 3;
-        ValidatedCodec::new(descriptor).unwrap()
     }
 
     fn codec_with_budget(partition_materials: bool, fragmentation_budget: u16) -> ValidatedCodec {

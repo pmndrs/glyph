@@ -182,8 +182,6 @@ export interface CodecProgramSemantics {
   readonly inverseFontSize: CodecF32Value | undefined;
   readonly transformIndex: CodecU32Value;
   readonly stableGlyphId: CodecU32Value;
-  readonly placementSlot: CodecU32Value;
-  readonly foregroundRgba: CodecU32Value;
 }
 
 export interface CodecProgramOptions<
@@ -225,10 +223,8 @@ export interface CodecProgramBuilder<
 }
 
 export interface CodecProgramSystemBuffers {
-  readonly occurrence: CodecBufferDeclaration<
-    'u32',
-    readonly ['stableGlyphId', 'placementSlot', 'transformIndex', 'foregroundRgba']
-  >;
+  readonly stableGlyphId: CodecBufferDeclaration<'u32', readonly ['stableGlyphId']>;
+  readonly transformIndex?: CodecBufferDeclaration<'u32', readonly ['transformIndex']>;
 }
 
 type CodecBufferLaneValues<Buffer extends CodecBufferDeclaration> = CodecLaneTuple<Buffer['scalar'], Buffer['lanes']>;
@@ -326,17 +322,16 @@ export function techniqueProgram<const Schema extends TechniqueSchemaMetadata>(
         else program.storeU32(buffer.id, lanes as readonly CodecU32Value[]);
       }
       if (system !== undefined) {
-        program.store(system.occurrence, [
-          program.semantics.stableGlyphId,
-          program.semantics.placementSlot,
-          program.semantics.transformIndex,
-          program.semantics.foregroundRgba,
-        ]);
+        program.store(system.stableGlyphId, [program.semantics.stableGlyphId]);
+        if (system.transformIndex !== undefined) {
+          program.store(system.transformIndex, [program.semantics.transformIndex]);
+        }
       }
       const body = program.compile();
       recordTechniqueCodecBody(body, {
         schema,
-        occurrence: system?.occurrence.id,
+        stableGlyphId: system?.stableGlyphId.id,
+        transformIndex: system?.transformIndex?.id,
       });
       return body;
     },
@@ -390,7 +385,7 @@ function createCodecProgramBuilder<
     (hasShadow ? 2 : 0) +
     (options.inverseFontSize === true ? 1 : 0) +
     bindingF32Names.length;
-  const u32InputCount = 4 + (hasOutline ? 1 : 0) + (hasShadow ? 1 : 0) + bindingU32Names.length;
+  const u32InputCount = 2 + (hasOutline ? 1 : 0) + (hasShadow ? 1 : 0) + bindingU32Names.length;
   if (f32InputCount > MAX_REGISTERS || u32InputCount > MAX_REGISTERS) {
     throw new RangeError(`codec input fields exceed the ${MAX_REGISTERS}-slot register file`);
   }
@@ -417,8 +412,6 @@ function createCodecProgramBuilder<
     ...bindingF32Names.map((_, field) => ({ scope: options.scope, field })),
     { scope: 'semantic', field: semanticU32.transformIndex },
     { scope: 'semantic', field: semanticU32.stableGlyphId },
-    { scope: 'semantic', field: semanticU32.placementSlot },
-    { scope: 'semantic', field: semanticU32.foregroundRgba },
     ...(hasOutline ? [{ scope: 'semantic' as const, field: semanticU32.outlineRgba }] : []),
     ...(hasShadow ? [{ scope: 'semantic' as const, field: semanticU32.shadowRgba }] : []),
     ...bindingU32Names.map((_, field) => ({ scope: options.scope, field })),
@@ -439,13 +432,13 @@ function createCodecProgramBuilder<
     },
     outline: hasOutline
       ? {
-          color: u32Value({ kind: 'loadU32', input: 4, label: 'outline.color', authoringScope }),
+          color: u32Value({ kind: 'loadU32', input: 2, label: 'outline.color', authoringScope }),
           widthEm: loadF32('outline.widthEm'),
         }
       : undefined,
     shadow: hasShadow
       ? {
-          color: u32Value({ kind: 'loadU32', input: hasOutline ? 5 : 4, label: 'shadow.color', authoringScope }),
+          color: u32Value({ kind: 'loadU32', input: hasOutline ? 3 : 2, label: 'shadow.color', authoringScope }),
           offsetXEm: loadF32('shadow.offsetXEm'),
           offsetYEm: loadF32('shadow.offsetYEm'),
         }
@@ -453,12 +446,10 @@ function createCodecProgramBuilder<
     inverseFontSize: options.inverseFontSize === true ? loadF32('inverseFontSize') : undefined,
     transformIndex: u32Value({ kind: 'loadU32', input: 0, label: 'transformIndex', authoringScope }),
     stableGlyphId: u32Value({ kind: 'loadU32', input: 1, label: 'stableGlyphId', authoringScope }),
-    placementSlot: u32Value({ kind: 'loadU32', input: 2, label: 'placementSlot', authoringScope }),
-    foregroundRgba: u32Value({ kind: 'loadU32', input: 3, label: 'foregroundRgba', authoringScope }),
   };
   const binding: Record<string, CodecF32Value | CodecU32Value> = {};
   for (const name of bindingF32Names) binding[name] = loadF32(name);
-  const bindingU32Offset = 4 + (hasOutline ? 1 : 0) + (hasShadow ? 1 : 0);
+  const bindingU32Offset = 2 + (hasOutline ? 1 : 0) + (hasShadow ? 1 : 0);
   for (const [index, name] of bindingU32Names.entries()) {
     binding[name] = u32Value({ kind: 'loadU32', input: bindingU32Offset + index, label: name, authoringScope });
   }

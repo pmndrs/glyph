@@ -14,11 +14,10 @@ use crate::{
 use crate::{
     STATUS_INVALID_REQUEST,
     engine::render_plan::{
-        BUFFER_SESSION_SHARED, CODEC_BUFFER_PLACEMENT, PATCH_ALLOCATE_OR_RESIZE, PATCH_COPY,
-        PATCH_FILL, PATCH_RETIRE, PRIMITIVE_CLIP, PRIMITIVE_CODEC, PRIMITIVE_DECORATION,
-        PRIMITIVE_GLYPH, PRIMITIVE_INLINE_OBJECT, RESOURCE_ACTION_CREATE, RESOURCE_ACTION_RETAIN,
-        RESOURCE_ACTION_UPDATE, RETIRE_BUFFER, RETIRE_OUTPUT_BYTES, RETIRE_RESOURCE,
-        RETIRE_SLOT_RANGE, SESSION_PLACEMENT_BUFFER_ID,
+        PATCH_ALLOCATE_OR_RESIZE, PATCH_COPY, PATCH_FILL, PATCH_RETIRE, PRIMITIVE_CLIP,
+        PRIMITIVE_CODEC, PRIMITIVE_DECORATION, PRIMITIVE_GLYPH, PRIMITIVE_INLINE_OBJECT,
+        RESOURCE_ACTION_CREATE, RESOURCE_ACTION_RETAIN, RESOURCE_ACTION_UPDATE, RETIRE_BUFFER,
+        RETIRE_OUTPUT_BYTES, RETIRE_RESOURCE, RETIRE_SLOT_RANGE,
     },
     engine::semantic_view::{
         SEMANTIC_CARET, SEMANTIC_CLUSTER, SEMANTIC_FRAGMENT, SEMANTIC_GLYPH,
@@ -60,16 +59,9 @@ pub(crate) fn encode_publication(
         .get_mut(..byte_length)
         .ok_or(STATUS_RESULT_TOO_LARGE)?;
     bytes.fill(0);
-    if !plan.payload.is_empty() || !plan.session_payload.is_empty() {
+    if !plan.payload.is_empty() {
         let start = usize::try_from(layout.payload_offset).map_err(|_| STATUS_RESULT_TOO_LARGE)?;
-        let primary_end = start
-            .checked_add(plan.payload.len())
-            .ok_or(STATUS_RESULT_TOO_LARGE)?;
-        let session_end = primary_end
-            .checked_add(plan.session_payload.len())
-            .ok_or(STATUS_RESULT_TOO_LARGE)?;
-        bytes[start..primary_end].copy_from_slice(plan.payload);
-        bytes[primary_end..session_end].copy_from_slice(plan.session_payload);
+        bytes[start..start + plan.payload.len()].copy_from_slice(plan.payload);
     }
     write_records(
         bytes,
@@ -92,26 +84,7 @@ pub(crate) fn encode_publication(
         plan.buffers,
         write_buffer,
     );
-    write_records_after(
-        bytes,
-        layout.buffers,
-        BUFFER_RECORD_SIZE,
-        plan.buffers.len(),
-        plan.session_buffers,
-        write_buffer,
-    );
     write_patch_records(bytes, layout.patches, layout.payload_offset, plan.patches);
-    let session_payload_offset = layout
-        .payload_offset
-        .checked_add(u32::try_from(plan.payload.len()).map_err(|_| STATUS_RESULT_TOO_LARGE)?)
-        .ok_or(STATUS_RESULT_TOO_LARGE)?;
-    write_patch_records_after(
-        bytes,
-        layout.patches,
-        plan.patches.len(),
-        session_payload_offset,
-        plan.session_patches,
-    );
     write_records(
         bytes,
         layout.primitives,
@@ -131,14 +104,6 @@ pub(crate) fn encode_publication(
         layout.retirements,
         RETIREMENT_RECORD_SIZE,
         plan.retirements,
-        write_retirement,
-    );
-    write_records_after(
-        bytes,
-        layout.retirements,
-        RETIREMENT_RECORD_SIZE,
-        plan.retirements.len(),
-        plan.session_retirements,
         write_retirement,
     );
     write_records(
@@ -202,17 +167,12 @@ pub(crate) fn publication_layout(
     #[cfg(any(test, feature = "debug-validation"))]
     validate_plan(plan, semantic_views)?;
     let mut cursor = ENGINE_RESULT_HEADER_SIZE;
-    let payload_length = plan
-        .payload
-        .len()
-        .checked_add(plan.session_payload.len())
-        .ok_or(STATUS_RESULT_TOO_LARGE)?;
-    let payload_offset = if payload_length == 0 {
+    let payload_offset = if plan.payload.is_empty() {
         0
     } else {
         cursor = align(cursor, PAYLOAD_ALIGNMENT)?;
         let offset = cursor;
-        cursor = add_bytes(cursor, payload_length, 1)?;
+        cursor = add_bytes(cursor, plan.payload.len(), 1)?;
         offset
     };
     let semantic_views = add_table(
@@ -229,13 +189,13 @@ pub(crate) fn publication_layout(
     )?;
     let buffers = add_table(
         &mut cursor,
-        combined_len(plan.buffers.len(), plan.session_buffers.len())?,
+        plan.buffers.len(),
         BUFFER_RECORD_SIZE,
         BUFFER_RECORD_ALIGNMENT,
     )?;
     let patches = add_table(
         &mut cursor,
-        combined_len(plan.patches.len(), plan.session_patches.len())?,
+        plan.patches.len(),
         PATCH_RECORD_SIZE,
         PATCH_RECORD_ALIGNMENT,
     )?;
@@ -253,7 +213,7 @@ pub(crate) fn publication_layout(
     )?;
     let retirements = add_table(
         &mut cursor,
-        combined_len(plan.retirements.len(), plan.session_retirements.len())?,
+        plan.retirements.len(),
         RETIREMENT_RECORD_SIZE,
         RETIREMENT_RECORD_ALIGNMENT,
     )?;
@@ -335,24 +295,6 @@ fn validate_plan(plan: RenderPlanView<'_>, semantic_views: &[SemanticRecord]) ->
             return Err(STATUS_INVALID_REQUEST);
         }
     }
-    if plan.session_buffers.len() > 1 {
-        return Err(STATUS_INVALID_REQUEST);
-    }
-    for record in plan.session_buffers {
-        let placement = record.id == SESSION_PLACEMENT_BUFFER_ID
-            && record.codec_buffer_id == CODEC_BUFFER_PLACEMENT
-            && record.scalar_type == 1
-            && record.vector_width == 2;
-        if record.generation == 0
-            || record.program_id != 0
-            || record.strategy != BUFFER_SESSION_SHARED
-            || record.live_records > record.capacity_records
-            || record.order_buffer_id != 0
-            || !placement
-        {
-            return Err(STATUS_INVALID_REQUEST);
-        }
-    }
     for record in plan.patches {
         if record.buffer_id == 0
             || record.buffer_generation == 0
@@ -382,7 +324,6 @@ fn validate_plan(plan: RenderPlanView<'_>, semantic_views: &[SemanticRecord]) ->
             return Err(STATUS_INVALID_REQUEST);
         }
     }
-    validate_session_patches(plan.session_patches, plan.session_payload)?;
     for record in plan.primitives {
         if record.id == 0
             || !matches!(
@@ -433,46 +374,7 @@ fn validate_plan(plan: RenderPlanView<'_>, semantic_views: &[SemanticRecord]) ->
             return Err(STATUS_INVALID_REQUEST);
         }
     }
-    for record in plan.session_retirements {
-        if record.kind != RETIRE_BUFFER
-            || record.id != SESSION_PLACEMENT_BUFFER_ID
-            || record.generation == 0
-        {
-            return Err(STATUS_INVALID_REQUEST);
-        }
-    }
     Ok(())
-}
-
-#[cfg(any(test, feature = "debug-validation"))]
-fn validate_session_patches(records: &[PatchRecord], payload: &[u8]) -> Result<(), u32> {
-    for record in records {
-        if record.buffer_id != SESSION_PLACEMENT_BUFFER_ID
-            || record.buffer_generation == 0
-            || !matches!(record.opcode, PATCH_ALLOCATE_OR_RESIZE | PATCH_WRITE)
-        {
-            return Err(STATUS_INVALID_REQUEST);
-        }
-        if record.opcode == PATCH_WRITE {
-            let start =
-                usize::try_from(record.payload_start).map_err(|_| STATUS_INVALID_REQUEST)?;
-            let length = usize::try_from(record.byte_length).map_err(|_| STATUS_INVALID_REQUEST)?;
-            if start
-                .checked_add(length)
-                .filter(|end| *end <= payload.len())
-                .is_none()
-            {
-                return Err(STATUS_INVALID_REQUEST);
-            }
-        } else if record.payload_start != 0 {
-            return Err(STATUS_INVALID_REQUEST);
-        }
-    }
-    Ok(())
-}
-
-fn combined_len(first: usize, second: usize) -> Result<usize, u32> {
-    first.checked_add(second).ok_or(STATUS_RESULT_TOO_LARGE)
 }
 
 fn add_table(
@@ -539,21 +441,6 @@ fn write_records<Record: Copy>(
     }
 }
 
-fn write_records_after<Record: Copy>(
-    bytes: &mut [u8],
-    span: TableSpan,
-    stride: u32,
-    prefix_count: usize,
-    records: &[Record],
-    write: fn(&mut [u8], usize, Record),
-) {
-    let start = span.offset as usize + prefix_count * stride as usize;
-    let stride = stride as usize;
-    for (index, record) in records.iter().copied().enumerate() {
-        write(bytes, start + index * stride, record);
-    }
-}
-
 fn write_patch_records(
     bytes: &mut [u8],
     span: TableSpan,
@@ -561,24 +448,6 @@ fn write_patch_records(
     records: &[PatchRecord],
 ) {
     let start = span.offset as usize;
-    for (index, record) in records.iter().copied().enumerate() {
-        write_patch(
-            bytes,
-            start + index * PATCH_RECORD_SIZE as usize,
-            record,
-            payload_offset,
-        );
-    }
-}
-
-fn write_patch_records_after(
-    bytes: &mut [u8],
-    span: TableSpan,
-    prefix_count: usize,
-    payload_offset: u32,
-    records: &[PatchRecord],
-) {
-    let start = span.offset as usize + prefix_count * PATCH_RECORD_SIZE as usize;
     for (index, record) in records.iter().copied().enumerate() {
         write_patch(
             bytes,
@@ -907,36 +776,6 @@ mod tests {
             value0: 14,
             ..DiagnosticRecord::default()
         }];
-        let session_buffer = [BufferRecord {
-            id: SESSION_PLACEMENT_BUFFER_ID,
-            generation: 1,
-            program_id: 0,
-            codec_buffer_id: CODEC_BUFFER_PLACEMENT,
-            scalar_type: 1,
-            vector_width: 2,
-            strategy: BUFFER_SESSION_SHARED,
-            live_records: 1,
-            capacity_records: 1,
-            byte_length: 8,
-            ..BufferRecord::default()
-        }];
-        let session_patches = [
-            PatchRecord {
-                opcode: PATCH_ALLOCATE_OR_RESIZE,
-                buffer_id: SESSION_PLACEMENT_BUFFER_ID,
-                buffer_generation: 1,
-                byte_length: 8,
-                ..PatchRecord::default()
-            },
-            PatchRecord {
-                opcode: PATCH_WRITE,
-                buffer_id: SESSION_PLACEMENT_BUFFER_ID,
-                buffer_generation: 1,
-                byte_length: 8,
-                ..PatchRecord::default()
-            },
-        ];
-        let session_payload = [1, 2, 3, 4, 5, 6, 7, 8];
         let plan = RenderPlanView {
             codec_handle: 15,
             capability_set: 16,
@@ -949,10 +788,6 @@ mod tests {
             retirements: &retirement,
             diagnostics: &diagnostic,
             payload: &[0xaa, 0xbb, 0xcc, 0xdd, 0xee],
-            session_buffers: &session_buffer,
-            session_patches: &session_patches,
-            session_payload: &session_payload,
-            ..RenderPlanView::default()
         };
         let expected = publication_layout(plan, &semantic).unwrap();
         let mut bytes = vec![0x7f; expected.byte_length as usize + 16];
@@ -970,30 +805,6 @@ mod tests {
         assert_eq!(
             &bytes[layout.payload_offset as usize..layout.payload_offset as usize + 5],
             plan.payload
-        );
-        assert_eq!(
-            &bytes[layout.payload_offset as usize + 5..layout.payload_offset as usize + 13],
-            session_payload
-        );
-        assert_eq!(layout.buffers.count, 2);
-        assert_eq!(layout.patches.count, 3);
-        assert_eq!(
-            read_u32(
-                &bytes,
-                layout.buffers.offset as usize + BUFFER_RECORD_SIZE as usize + BUFFER_ID,
-            )
-            .unwrap(),
-            SESSION_PLACEMENT_BUFFER_ID,
-        );
-        assert_eq!(
-            read_u32(
-                &bytes,
-                layout.patches.offset as usize
-                    + 2 * PATCH_RECORD_SIZE as usize
-                    + PATCH_PAYLOAD_OFFSET,
-            )
-            .unwrap(),
-            layout.payload_offset + 5,
         );
         assert_eq!(
             read_u32(&bytes, layout.primitives.offset as usize + PRIMITIVE_ID).unwrap(),

@@ -123,11 +123,7 @@ defineTechniqueSchema({
 });
 
 const system = defineCodecBuffers({
-  occurrence: {
-    id: id.buffer('type-schema/occurrence'),
-    scalar: 'u32',
-    lanes: ['stableGlyphId', 'placementSlot', 'transformIndex', 'foregroundRgba'],
-  },
+  stableGlyphId: { id: id.buffer('type-schema/stable-glyph'), scalar: 'u32', lanes: ['stableGlyphId'] },
 } as const);
 const p = techniqueProgram(schema, { system });
 const { fontSize } = p.semantics;
@@ -162,8 +158,8 @@ const rectId: number = schema.buffers.rect.id;
 void rectId;
 
 // System buffers use the same construct without entering the technique store map.
-const occurrenceBufferId: number = system.occurrence.id;
-void occurrenceBufferId;
+const stableGlyphBufferId: number = system.stableGlyphId.id;
+void stableGlyphBufferId;
 
 // The first-party bitmap technique publishes its schema from its own subpath.
 const bitmapColorId: number = bitmapSchema.buffers.color.id;

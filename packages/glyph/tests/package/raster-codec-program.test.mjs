@@ -46,18 +46,10 @@ const wrongSystemSchema = defineTechniqueSchema({
   render: { resource: 'payload', geometry: { kind: 'synthetic-quad' } },
 });
 const system = defineCodecBuffers({
-  occurrence: {
-    id: SYSTEM_BUFFER_ID,
-    scalar: 'u32',
-    lanes: ['stableGlyphId', 'placementSlot', 'transformIndex', 'foregroundRgba'],
-  },
+  stableGlyphId: { id: SYSTEM_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
 });
 const otherSystem = defineCodecBuffers({
-  occurrence: {
-    id: OTHER_SYSTEM_BUFFER_ID,
-    scalar: 'u32',
-    lanes: ['stableGlyphId', 'placementSlot', 'transformIndex', 'foregroundRgba'],
-  },
+  stableGlyphId: { id: OTHER_SYSTEM_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
 });
 const capabilitySet = {
   capabilities: ['ordered-direct'],
@@ -89,7 +81,7 @@ let receivedFrozenHostInputs = false;
 const portable = plan((hostSystem, hostCapabilitySet) => {
   codecBodyCalls += 1;
   receivedFrozenHostInputs =
-    Object.isFrozen(hostSystem) && Object.isFrozen(hostSystem.occurrence) && Object.isFrozen(hostCapabilitySet);
+    Object.isFrozen(hostSystem) && Object.isFrozen(hostSystem.stableGlyphId) && Object.isFrozen(hostCapabilitySet);
   const p = techniqueProgram(schema, { system: hostSystem });
   return p.compile({ origin: [p.semantics.inlineOrigin, p.semantics.blockOrigin] });
 });
@@ -120,7 +112,7 @@ test('portable codec assembly rejects host inputs before invoking technique code
     [{ ...valid, programName: '' }, /programName/],
     [{ ...valid, transformMode: 'sideways' }, /transform mode/],
     [{ ...valid, allocationMode: 'recycling' }, /allocation mode/],
-    [{ ...valid, system: {} }, /occurrence system buffer/],
+    [{ ...valid, system: {} }, /stableGlyphId system buffer/],
     [{ ...valid, capabilitySet: { ...capabilitySet, capabilities: [] } }, /supports no allocation strategy/],
     [{ ...valid, ids: {} }, /ids/],
     [{ ...valid, identityRegistry: id }, /renamed to ids/],
@@ -147,7 +139,7 @@ test('portable codec assembly owns host identities, system buffers, and variant 
   assert.equal(receivedFrozenHostInputs, true);
   assert.deepEqual(
     compiled.buffers.map((buffer) => buffer.id),
-    [schema.buffers.origin.id, system.occurrence.id],
+    [schema.buffers.origin.id, system.stableGlyphId.id],
   );
 });
 

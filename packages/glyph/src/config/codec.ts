@@ -189,14 +189,13 @@ export function programContext(
     ...Array.from({ length: bindingF32Count }, (_, field) => ({ scope: bindingScope, field })),
     { scope: 'semantic', field: semanticU32.transformIndex },
     { scope: 'semantic', field: semanticU32.stableGlyphId },
-    { scope: 'semantic', field: semanticU32.placementSlot },
     ...Array.from({ length: bindingU32Count }, (_, field) => ({ scope: bindingScope, field })),
   ];
   return {
     inputs,
     operations,
     f32InputCount: 7 + (inverseFontSize ? 1 : 0) + bindingF32Count,
-    u32InputCount: bindingU32Count + 3,
+    u32InputCount: bindingU32Count + 2,
     loadF32(count) {
       for (let field = 0; field < count; field += 1) {
         operations.push({ opcode: textShaperAbi.codec.opcodes.loadF32, target: field, operand0: field });
