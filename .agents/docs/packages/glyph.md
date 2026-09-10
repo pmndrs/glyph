@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:b0745d99833774fcbf05b87590ef9a60221bcc8fa9e5125547a5c37495f322b7'
+source_digest: 'sha256:f87872d6e0b567e6db77ef3f5d55f1ce02376e295f7ba3492a65426c702436d3'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1315,14 +1315,15 @@ close.
 The benchmark also owns a `position-query` case that runs the same break-changing flow and positioning tail through the
 borrowed-layout mask while excluding gather, plan compilation, publication, and inspection copies. On the pinned M4 host,
 623 rendered Bitmap glyphs measured `0.061 ms` on the frozen main baseline and `0.109 ms` after the initial cutover;
-shrinking the shipping run-local glyph row reduced the frontier result to `0.105–0.106 ms`. The matching complete
-active-resize result remains `0.160 ms` versus main's `0.102–0.105 ms`, so the current CPU regression is attributable to
-placement-sidecar construction rather than the old positioning arithmetic or renderer bytes. A placement-arena reuse fast
+shrinking the shipping run-local glyph row reduced the frontier result to `0.105–0.106 ms`. Direct row addressing for
+source-order runs then reduced a stable 22k-glyph positioning comparison from `2.776–2.823 ms` to `2.695–2.701 ms` without
+changing RTL/fallback lookup. The matching complete 22k active-resize path improved from `4.067` to `3.893 ms` for Latin
+and from `3.650` to `3.607 ms` for dense CJK. This confirms that run-local lookup contributes to the CPU regression, but
+placement-sidecar construction remains the dominant unfinished work rather than renderer bytes. A placement-arena reuse fast
 path separately restores unchanged no-op updates from `0.004–0.005 ms` to `0.001 ms`; it does not improve changed-width
-frames. At 22k rendered glyphs the current target measured `4.067 ms` Latin and `3.650 ms` dense CJK while writing 39.8 KiB
-and 101.4 KiB respectively, versus the frozen main measurements of `3.769 ms`/170.4 KiB and the clean CJK pass of
-`2.974 ms`/171.7 KiB. These are actionable attribution results, not an accepted performance gate: CPU bookkeeping still
-outweighs the reduced upload bytes.
+frames. The updated 22k target still trails frozen main (`3.769 ms` Latin and the clean `2.974 ms` CJK pass) while writing
+39.8 KiB and 101.4 KiB instead of 170.4 KiB and 171.7 KiB. These are actionable attribution results, not an accepted
+performance gate: CPU bookkeeping still outweighs the reduced upload bytes, especially for dense CJK.
 
 [^slug-shader-core]: The directory is the single renderer-independent expression of the analytic Slug fill algorithm.
 

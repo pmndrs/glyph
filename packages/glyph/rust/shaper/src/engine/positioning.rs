@@ -1715,6 +1715,7 @@ impl PositionedGlyphArena {
                     styles,
                     &streams,
                     geometry,
+                    false,
                     &mut state,
                     occurrence,
                     role,
@@ -1928,6 +1929,7 @@ impl PositionedGlyphArena {
                                 styles,
                                 streams,
                                 geometry,
+                                direction & 1 == 0,
                                 state,
                                 occurrence,
                                 segment_role,
@@ -2036,6 +2038,7 @@ impl PositionedGlyphArena {
         styles: &[StyleSegment],
         streams: &GlyphStreams<'_>,
         geometry: RunGeometry,
+        source_order_rows: bool,
         state: &mut FragmentPositionState,
         occurrence: PlacementOccurrence,
         role: SliceRole,
@@ -2074,12 +2077,16 @@ impl PositionedGlyphArena {
             let x_advance = f64::from(streams.x_advances[adjacency]).abs() * scale;
             let flags = streams.shape_flags[adjacency];
             if MATERIALIZE_OUTPUT {
-                let local = clusters
-                    .run_local()
-                    .row_for_source_glyph(
-                        u32::try_from(adjacency).map_err(|_| EngineError::ResultTooLarge)?,
-                    )
-                    .ok_or(EngineError::InvalidRequest)?;
+                let source_glyph =
+                    u32::try_from(adjacency).map_err(|_| EngineError::ResultTooLarge)?;
+                let local = if source_order_rows {
+                    clusters
+                        .run_local()
+                        .row_for_source_order_glyph(source_glyph)
+                } else {
+                    clusters.run_local().row_for_source_glyph(source_glyph)
+                }
+                .ok_or(EngineError::InvalidRequest)?;
                 let origin_inline = placed_f32(local.inline_origin, occurrence.translation_inline)?;
                 let origin_block = placed_f32(local.block_origin, occurrence.translation_block)?;
                 let ink_inline_start =

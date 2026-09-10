@@ -108,6 +108,13 @@ impl RunLocalArena {
         self.rows.get(usize::try_from(row).ok()?)
     }
 
+    pub(crate) fn row_for_source_order_glyph(&self, source_glyph: u32) -> Option<&RunLocalGlyph> {
+        let index = usize::try_from(source_glyph).ok()?;
+        let row = self.rows.get(index)?;
+        debug_assert_eq!(self.source_rows.get(index), Some(&source_glyph));
+        Some(row)
+    }
+
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn cluster_blocks(&self) -> &[u32] {
         &self.cluster_blocks
@@ -865,5 +872,32 @@ mod tests {
         assert_eq!(arena.rows().len(), 4_096);
         assert_eq!(arena.rows()[4_095].source_glyph, 4_095);
         assert_eq!(arena.rows()[4_095].pen_inline, 4_095.0);
+    }
+
+    #[test]
+    fn source_order_rows_remain_direct_after_a_reversed_run() {
+        let mut arena = RunLocalArena::default();
+        let mut reversed = arena.begin_run();
+        for source_glyph in [1, 0] {
+            reversed.begin_cluster().unwrap();
+            reversed.push_glyph(glyph(source_glyph, 1)).unwrap();
+            reversed.finish_cluster(ClusterFinish::Resync(1.0)).unwrap();
+        }
+        reversed.finish().unwrap();
+
+        let mut source_order = arena.begin_run();
+        for source_glyph in [2, 3] {
+            source_order.begin_cluster().unwrap();
+            source_order.push_glyph(glyph(source_glyph, 1)).unwrap();
+            source_order
+                .finish_cluster(ClusterFinish::Resync(1.0))
+                .unwrap();
+        }
+        source_order.finish().unwrap();
+
+        assert_eq!(arena.row_for_source_glyph(0).unwrap().source_glyph, 0);
+        assert_eq!(arena.row_for_source_glyph(1).unwrap().source_glyph, 1);
+        assert_eq!(arena.row_for_source_order_glyph(2).unwrap().source_glyph, 2);
+        assert_eq!(arena.row_for_source_order_glyph(3).unwrap().source_glyph, 3);
     }
 }
