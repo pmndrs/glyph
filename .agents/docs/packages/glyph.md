@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:1a2ad6229047dae54d47277be9cd49c71054b4040c000943c0361e67af1cfa23'
+source_digest: 'sha256:eb7a9a1b795172787289974bc4d18f16126e619a0ee26f306083ec0cef315d60'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -41,6 +41,12 @@ sources:
   - id: text-properties
     resource: ../../../packages/glyph/src/text-properties.ts
     title: Paragraph input contract
+  - id: native-graphemes
+    resource: ../../../packages/glyph/src/internal/native-graphemes.ts
+    title: Experimental native grapheme segmentation for the micro-engine lane
+  - id: native-grapheme-benchmark
+    resource: ../../../packages/glyph/scripts/benchmark-native-graphemes.mts
+    title: Native versus pinned grapheme correctness, throughput, and size workflow
   - id: layout-query
     resource: ../../../packages/glyph/src/layout.ts
     title: Explicit layout-query values
@@ -875,6 +881,18 @@ loops and shares their exact invariants instead. The 22k-glyph complete Rust ben
 a 20-warmup/51-sample cold check measured 15.452 ms median / 15.670 ms p95 at 1.0% RSD.
 
 ## Current size and performance evidence
+
+The experimental micro-engine grapheme lane uses a lazily constructed native `Intl.Segmenter` and throws synchronously
+when that capability is absent. It is intentionally internal and unreferenced by every production entry, so the spike
+adds zero bytes to current application bundles and does not weaken the full engine's pinned agreement with Rust. The
+package-owned `glyph:native-grapheme-spike` workflow measures the two alternatives without publishing either as a new API.
+
+On the repository-pinned Node 24.18.0 host (ICU 78.3, Unicode 17), both the native and pinned implementations pass all
+766 official Unicode 17 extended-grapheme vectors. Isolated ESM bundles measure 669 raw / 420 gzip / 359 Brotli bytes for
+the native lane and 9,271 / 4,321 / 3,502 bytes for the pinned lane: native saves 3,901 gzip bytes. Across 1,000 passes of
+the 766 independent vectors, native completes 666 passes/s and pinned completes 4,361 passes/s on this host. This supports
+native segmentation as a substantial byte reduction for the capability-gated micro engine, not as a speed optimization
+or a replacement for the deterministic full engine.
 
 The latest checked package-size record after the tsdown distribution cutover reports:
 
