@@ -5,7 +5,7 @@ description: Demonstrates the public Vue adapter rendering Bitmap, MSDF, and Slu
 resource: ../../../apps/tres-playground
 workspace_package: '@pmndrs/glyph-tres-playground'
 documentation_type: reference
-source_digest: 'sha256:241ca2f62dde8dfd82d981654fb7f736b2237007cdba131b293583d2fc15a080'
+source_digest: 'sha256:b141a9f91881c7cb7ed02b8bef5e99744fab4c9e6f849fb60af87967fae633b2'
 tags: [package, example, vue, tresjs, vite]
 sources:
   - id: manifest
@@ -31,8 +31,8 @@ This private Vite application proves the public `@pmndrs/glyph/vue` adapter insi
 the checked Inter and Font Awesome GLBs owned by `@pmndrs/glyph-examples` rather than baking its own assets.
 
 `App.vue` creates Three's `WebGPURenderer` through the `renderer` prop, keeps TresJS in `on-demand` render mode, and
-renders HTML controls for the raster format and the greeting text. `Scene.vue` runs inside the canvas: it sizes an
-orthographic camera from the Tres `sizes`, loads the Latin and icon fonts through `useBitmap`, `useMsdf`, and
+renders HTML controls for the raster format and the greeting text. `Scene.vue` runs inside the canvas: it places a
+perspective camera at the distance where one world unit at z = 0 is one CSS pixel of the Tres `sizes`, loads the Latin and icon fonts through `useBitmap`, `useMsdf`, and
 `useSlug`, renders one keyed greeting `<Text>` whose nested `<Text>` binds the globe glyph to the icon font, and batches
 three Slug labels in a `<TextGroup>`. The scene publishes its Scene and greeting paragraph to a module the browser probe
 reads.

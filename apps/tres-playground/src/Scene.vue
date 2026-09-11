@@ -5,8 +5,8 @@ import { useMsdf } from '@pmndrs/glyph/vue/msdf';
 import { useSlug } from '@pmndrs/glyph/vue/slug';
 import type { RasterFormatMetadata } from '@pmndrs/glyph';
 import { useTres } from '@tresjs/core';
-import type { OrthographicCamera } from 'three/webgpu';
-import { computed, shallowRef, watchEffect } from 'vue';
+import { Vector3 } from 'three/webgpu';
+import { computed, shallowRef } from 'vue';
 
 import iconFontUrl from '../../r3f-hello-world/assets/font-awesome-world.font.glb?url';
 import latinFontUrl from '../../r3f-hello-world/assets/inter-latin.font.glb?url';
@@ -15,7 +15,7 @@ import { COLORS, RASTER_FORMATS, WORLD_ICON, playground, type RasterFormatName }
 const props = defineProps<{ format: RasterFormatName; message: string }>();
 const emit = defineEmits<{ error: [error: unknown] }>();
 
-const { sizes, scene, invalidate } = useTres();
+const { sizes, scene } = useTres();
 playground.scene = scene.value;
 
 // Each composable owns one declaration and its mounted Font lease for this component's lifetime. The three
@@ -41,20 +41,14 @@ const labelFont = computed(() => latin.slug.font.value);
 const width = computed(() => sizes.width.value);
 const height = computed(() => sizes.height.value);
 
-// Template refs through `useTemplateRef` are deep-readonly proxies; Three objects and the adapter's `instance`
-// carry private fields and must stay raw, so plain shallow refs receive them instead.
-const camera = shallowRef<OrthographicCamera | null>(null);
-watchEffect(() => {
-  const current = camera.value;
-  if (current === null) return;
-  current.left = -width.value / 2;
-  current.right = width.value / 2;
-  current.top = height.value / 2;
-  current.bottom = -height.value / 2;
-  current.updateProjectionMatrix();
-  invalidate();
-});
+// The layout speaks in CSS pixels. A perspective camera at this distance shows exactly `height` world units across
+// the viewport at z = 0, so one unit there is one pixel. Tres updates the aspect on resize; the distance follows here.
+const CAMERA_FOV = 45;
+const cameraDistance = computed(() => height.value / 2 / Math.tan((CAMERA_FOV / 2) * (Math.PI / 180)));
+const cameraPosition = computed(() => new Vector3(0, 0, cameraDistance.value));
 
+// Template refs through `useTemplateRef` are deep-readonly proxies; Three objects and the adapter's `instance`
+// carry private fields and must stay raw, so a plain shallow ref receives it instead.
 const hello = shallowRef<VueTextInstance<RasterFormatMetadata> | null>(null);
 playground.hello = () => hello.value?.instance;
 
@@ -63,8 +57,8 @@ const labelWidth = 112;
 </script>
 
 <template>
-  <!-- The camera stays at the origin: an orthographic frustum from -1000 to 1000 already contains the z=0 text. -->
-  <TresOrthographicCamera ref="camera" :near="-1000" :far="1000" />
+  <!-- Tres aims a camera at the origin when it has no `look-at`; a position must be passed or Tres moves it to (3, 3, 3). -->
+  <TresPerspectiveCamera :fov="CAMERA_FOV" :near="1" :far="cameraDistance * 2" :position="cameraPosition" />
   <!-- One retained paragraph per raster format: the key remounts the Three object when the technique changes. -->
   <Text
     v-if="activeFont !== undefined && activeIcon !== undefined"
