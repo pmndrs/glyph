@@ -5,7 +5,7 @@ description: Demonstrates the public Vue adapter rendering Bitmap, MSDF, and Slu
 resource: ../../../apps/tres-playground
 workspace_package: '@pmndrs/glyph-tres-playground'
 documentation_type: reference
-source_digest: 'sha256:b141a9f91881c7cb7ed02b8bef5e99744fab4c9e6f849fb60af87967fae633b2'
+source_digest: 'sha256:3b8bfbf2f42cd458f090ca0678826e3f8a9509e151694e55ef1dfbb5052e64c8'
 tags: [package, example, vue, tresjs, vite]
 sources:
   - id: manifest

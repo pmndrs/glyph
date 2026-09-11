@@ -67,9 +67,8 @@ import {
   type VueFontSelectionInput,
 } from './vue/internal/flatten-slots.js';
 
-// Tres constructs catalogue entries with `new target(...args)` and disposes them through `remove()`. These private
-// names exist only so the custom renderer can do that for the retained Three classes; applications use the
-// wrapper components, never the tags.
+// Private catalogue tags so Tres can `new target(...args)` and `remove()` the retained Three classes; applications
+// use the wrapper components, never the tags.
 const textTag = 'PmndrsGlyphText';
 const textGroupTag = 'PmndrsGlyphTextGroup';
 registerCatalogue();
@@ -106,7 +105,6 @@ type VueFontSelection<Technique extends RasterFormatMetadata> =
   | FontFaceSelection<FontFaceFormat<Technique> | undefined>
   | (RasterFormatMetadata extends Technique ? string : never);
 
-/** Props of the Vue `Text` component. Ordinary Object3D props pass through to the retained Three object. */
 export interface VueTextProps<Technique extends RasterFormatMetadata> {
   readonly font?: VueFontSelection<Technique>;
   /** Text shaping and presentation properties inherited by nested Text spans. */
@@ -127,7 +125,6 @@ export interface VueTextGroupProps extends TextGroupOptions {
   readonly [passThrough: string]: unknown;
 }
 
-/** The public instance a template ref to `Text` resolves to. */
 export interface VueTextInstance<Technique extends RasterFormatMetadata> extends ComponentPublicInstance {
   /** The retained Three `Text`, or `undefined` until every font selection has loaded. */
   readonly instance: ThreeText<Technique> | undefined;
@@ -186,9 +183,6 @@ let nextDefaultRootId = 1;
 let defaultThreeHandleValue: ThreeHandle | undefined;
 let defaultThreeHandlePromise: Promise<ThreeHandle> | undefined;
 
-// ---------------------------------------------------------------------------------------------------------------
-// Default handle and per-canvas default root
-
 function getInitializedDefaultThreeHandle(): ThreeHandle | undefined {
   if (defaultThreeHandleValue?.disposed === true) {
     defaultThreeHandleValue = undefined;
@@ -218,7 +212,6 @@ function defaultThreeHandle(): Promise<ThreeHandle> {
   return initialization;
 }
 
-/** A shallowRef that settles to the default handle; synchronous when Glyph already initialized. */
 function useDefaultThreeHandle(): Readonly<ShallowRef<ThreeHandle | undefined>> {
   const handle = shallowRef<ThreeHandle | undefined>(getInitializedDefaultThreeHandle());
   if (handle.value === undefined) {
@@ -317,10 +310,6 @@ function defaultGlyphContext(tres: TresContext, handle: ThreeHandle): DefaultGly
   return resource;
 }
 
-/**
- * Resolve the Glyph context a Text, TextGroup, or composable uses: the nearest provider, otherwise the
- * canvas-local default root. Retention follows the calling component's scope.
- */
 function useSelectedGlyphContext(): GlyphContextRef {
   const provided = inject(glyphContextKey, undefined);
   if (provided !== undefined) return provided;
@@ -371,9 +360,6 @@ function assertNoHandleAttribute(attrs: Record<string, unknown>, owner: 'Text' |
     throw new TypeError(`Vue ${owner} does not accept a handle prop; select custom handles with GlyphProvider`);
   }
 }
-
-// ---------------------------------------------------------------------------------------------------------------
-// GlyphProvider
 
 interface ProviderFontFaces {
   readonly byName: ReadonlyMap<string, FontFace>;
@@ -544,9 +530,6 @@ export const GlyphProvider: GlyphProviderComponent = defineComponent({
   },
 }) as unknown as GlyphProviderComponent;
 
-// ---------------------------------------------------------------------------------------------------------------
-// Font resolution shared by Text and the flattener
-
 function resolveVueTextFont(
   selection: VueFontSelectionInput,
   context: GlyphVueContext,
@@ -559,10 +542,7 @@ function resolveVueTextFont(
   return face;
 }
 
-/**
- * Loaded-state tracker for the FontFace selections one paragraph depends on. Missing loads start together so
- * nested fonts never form a waterfall; each settlement bumps a revision the render function reads.
- */
+// Missing loads start together so nested fonts never form a waterfall.
 function createFontLoadTracker(reportError: (error: unknown) => void) {
   const revision = shallowRef(0);
   const requested = new WeakSet<FontFaceSelection>();
@@ -571,7 +551,6 @@ function createFontLoadTracker(reportError: (error: unknown) => void) {
     active = false;
   });
   return {
-    /** Start every missing load, then report whether all selections are loaded right now. */
     ensureLoaded(handle: ThreeHandle, selections: readonly FontFaceSelection[]): boolean {
       void revision.value;
       let ready = true;
@@ -596,7 +575,6 @@ function createFontLoadTracker(reportError: (error: unknown) => void) {
   };
 }
 
-/** Mounted immutable Font leases for FontFace selections, acquired per paragraph and released with its scope. */
 function createFontLeases() {
   const leases = new Map<FontFaceSelection, Font<RasterFormatMetadata>>();
   const release = (keep?: ReadonlySet<FontFaceSelection>): void => {
@@ -615,15 +593,12 @@ function createFontLeases() {
       leases.set(selection, font);
       return font;
     },
-    /** Drop leases the current paragraph no longer references; call only after the object applied the new state. */
+    // Call only after the object applied the new state.
     prune(keep: ReadonlySet<FontFaceSelection>): void {
       release(keep);
     },
   };
 }
-
-// ---------------------------------------------------------------------------------------------------------------
-// Text
 
 type DesiredVueText = Partial<StandaloneTextProperties<RasterFormatMetadata>> & {
   readonly font: FontSelection<RasterFormatMetadata>;
@@ -640,7 +615,6 @@ type TextConstructorArguments = readonly [
 interface TextPublication {
   readonly key: string;
   readonly args: TextConstructorArguments;
-  /** The state the retained object currently holds, starting with what its constructor received. */
   applied: DesiredVueText;
 }
 
@@ -778,9 +752,6 @@ function desiredText(
   });
 }
 
-// ---------------------------------------------------------------------------------------------------------------
-// TextGroup
-
 type TextGroupConstructorArguments = readonly [typeof threeTextConstructionToken, TextGroupOptions, ThreeRootHost];
 
 /** Vue retained batching boundary for descendant Text components. */
@@ -854,9 +825,6 @@ export const TextGroup: TextGroupComponent = defineComponent({
   },
 }) as unknown as TextGroupComponent;
 
-// ---------------------------------------------------------------------------------------------------------------
-// useFont
-
 type SelectedHookFontConfig<Format> = Readonly<{ format: FontFaceFormatInput<Format> }>;
 type DefaultHookFontConfig = Readonly<{ format?: FontFaceFormat }>;
 
@@ -866,7 +834,6 @@ type TechniqueOfHookFormat<Format> = Format extends RasterFormatMetadata
     ? Technique
     : RasterFormatMetadata;
 
-/** Reactive result of `useFont`: the mounted lease once loaded, the failure if any, and an awaitable for Suspense. */
 export interface UseFontResult<Technique extends RasterFormatMetadata> {
   readonly font: Readonly<ShallowRef<Font<Technique> | undefined>>;
   readonly error: Readonly<ShallowRef<unknown>>;

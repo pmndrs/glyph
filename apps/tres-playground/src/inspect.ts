@@ -14,12 +14,11 @@ export const WORLD_ICON = '\uf0ac';
 
 interface PlaygroundState {
   scene: Scene | undefined;
-  /** The retained Three paragraph currently showing the greeting, if its fonts have loaded. */
   hello: () => Text<import('@pmndrs/glyph').RasterFormatMetadata> | undefined;
   format: () => RasterFormatName;
 }
 
-/** Live state the browser probe reads; the scene publishes it, nothing else depends on it. */
+/** Live state the browser probe reads. */
 export const playground: PlaygroundState = {
   scene: undefined,
   hello: () => undefined,

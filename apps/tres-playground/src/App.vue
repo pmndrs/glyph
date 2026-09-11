@@ -11,8 +11,6 @@ const message = ref('Hello world');
 const failure = ref<string | undefined>();
 playground.format = () => format.value;
 
-// Glyph renders through Three's WebGPU renderer, which falls back to WebGL2 on its own. Tres awaits `init()`
-// because the instance reports `isRenderer`.
 function createRenderer(context: TresRendererSetupContext): WebGPURenderer {
   const renderer = new WebGPURenderer({ antialias: true, canvas: toValue(context.canvas) });
   renderer.toneMapping = NoToneMapping;

@@ -1,10 +1,8 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-// `vitexec --gpu` is deliberately not used: it exposes `navigator.gpu` even where no adapter can back it, and
-// `WebGPURenderer` then skips its WebGL2 fallback. Without the flag the renderer picks the backend it can use.
-
-/** `vitexec` exits 0 even after a browser exception, so the probe prints its marker as the last statement. */
+// No `--gpu`: it exposes `navigator.gpu` where no adapter backs it and WebGPURenderer then skips its WebGL2 fallback.
+// `vitexec` exits 0 even after a browser exception, so the probe prints a marker as its last statement.
 const applicationRoot = fileURLToPath(new URL('..', import.meta.url));
 const probe = { file: './scripts/live-check.probe.ts', marker: 'tres-playground-live-ok', path: '/' } as const;
 

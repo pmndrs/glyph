@@ -8,10 +8,8 @@ import type { PropertyList, TextStyle } from '../../text-properties.js';
 import type { RasterFormatMetadata } from '../../config/raster-format.js';
 import type { ThreeTextMaterial } from '../../three/material.js';
 
-/** A font selection as a Vue caller may write it: a loaded selection, a FontFace selection, or a provider alias. */
 export type VueFontSelectionInput = FontSelection<RasterFormatMetadata> | FontFaceSelection | string;
 
-/** One inline run awaiting FontFace resolution; offsets are cluster-aligned in the concatenated text. */
 export interface PendingVueTextSpan {
   readonly start: number;
   readonly end: number;
@@ -23,11 +21,9 @@ export interface PendingVueTextSpan {
 export interface PendingFlattenedVueText {
   readonly text: string;
   readonly spans: readonly PendingVueTextSpan[];
-  /** Distinct FontFace selections the paragraph must load before it can construct. */
   readonly fontFaces: readonly FontFaceSelection[];
 }
 
-/** What the walker needs from the adapter: component identity and the provider-aware font resolver. */
 export interface FlattenVueTextOptions {
   readonly isText: (type: unknown) => boolean;
   readonly resolveFont: (selection: VueFontSelectionInput) => FontSelection<RasterFormatMetadata> | FontFaceSelection;
@@ -111,7 +107,7 @@ function invalidChild(): TypeError {
   return new TypeError('Vue Text children must be text, numbers, arrays, or nested Text components');
 }
 
-/** A component VNode carries a string, an array, or a slots object; only the default slot is text content. */
+// Only the default slot is text content.
 function componentChildren(vnode: VNode): unknown {
   const { children } = vnode;
   if (children === null || typeof children !== 'object' || Array.isArray(children)) return children;

@@ -18,8 +18,6 @@ const emit = defineEmits<{ error: [error: unknown] }>();
 const { sizes, scene } = useTres();
 playground.scene = scene.value;
 
-// Each composable owns one declaration and its mounted Font lease for this component's lifetime. The three
-// formats load in parallel so switching never waits.
 const bitmapOptions = { strikes: [32] } as const;
 const latin = {
   bitmap: useBitmap(latinFontUrl, bitmapOptions),
@@ -41,14 +39,12 @@ const labelFont = computed(() => latin.slug.font.value);
 const width = computed(() => sizes.width.value);
 const height = computed(() => sizes.height.value);
 
-// The layout speaks in CSS pixels. A perspective camera at this distance shows exactly `height` world units across
-// the viewport at z = 0, so one unit there is one pixel. Tres updates the aspect on resize; the distance follows here.
+// At this distance the camera shows exactly `height` world units at z = 0, so one unit is one CSS pixel.
 const CAMERA_FOV = 45;
 const cameraDistance = computed(() => height.value / 2 / Math.tan((CAMERA_FOV / 2) * (Math.PI / 180)));
 const cameraPosition = computed(() => new Vector3(0, 0, cameraDistance.value));
 
-// Template refs through `useTemplateRef` are deep-readonly proxies; Three objects and the adapter's `instance`
-// carry private fields and must stay raw, so a plain shallow ref receives it instead.
+// `useTemplateRef` returns a deep-readonly proxy; Three objects carry private fields and must stay raw.
 const hello = shallowRef<VueTextInstance<RasterFormatMetadata> | null>(null);
 playground.hello = () => hello.value?.instance;
 
@@ -57,9 +53,8 @@ const labelWidth = 112;
 </script>
 
 <template>
-  <!-- Tres aims a camera at the origin when it has no `look-at`; a position must be passed or Tres moves it to (3, 3, 3). -->
+  <!-- Without a position Tres moves the camera to (3, 3, 3). -->
   <TresPerspectiveCamera :fov="CAMERA_FOV" :near="1" :far="cameraDistance * 2" :position="cameraPosition" />
-  <!-- One retained paragraph per raster format: the key remounts the Three object when the technique changes. -->
   <Text
     v-if="activeFont !== undefined && activeIcon !== undefined"
     ref="hello"
@@ -74,7 +69,6 @@ const labelWidth = 112;
   >
     {{ message }} <Text :font="activeIcon" :style="{ color: COLORS[format] }">{{ WORLD_ICON }}</Text>
   </Text>
-  <!-- A TextGroup lets the planner batch the three labels into one draw. -->
   <TextGroup v-if="labelFont !== undefined" name="format-labels" :position="[0, height / 2 - 48, 0]">
     <Text
       v-for="(candidate, index) in RASTER_FORMATS"
