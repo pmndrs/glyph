@@ -5,7 +5,7 @@ description: Proves the root GlyphConfig integration surface through a real Type
 resource: ../../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:4e64a77f97bf862a5f4d0ae69ffe0ec6621b6b3b0e07b00c2a309788d2339256'
+source_digest: 'sha256:306500812b5f15edf2dc352551f217d0a917b2316323a469ffe9d538d21e60d6'
 tags: [package, glyph-config, codec, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -55,7 +55,7 @@ The package is a standing consumer proof. Production source imports only `@pmndr
 the raster's explicit `/typegpu` shader subpath—never `internal/`, `generated/`, a removed `/core` subpath, `/three`, or
 Three itself. Its Codec supplies its own system lane, capability set, allocation mode, transform mode, and program
 namespace while reusing the raster format's portable Codec body. The portable body receives no system-buffer object;
-package-private host assembly adds stable identity and direct occurrence-origin storage after body authentication. The
+package-private host assembly adds stable identity and the engine-owned placement slot after body authentication. The
 package root exposes a custom `source` condition for
 opted-in workspace tools; default consumers resolve built ESM and declarations.
 
@@ -82,9 +82,11 @@ root instances, and instance spans. Candidate resources, retained buffers, patch
 local maps; `commit()` swaps them atomically, while `discard()` leaves the previous accepted device state untouched. Only
 accepted renderer-owned state survives after the borrowed view expires.
 
-The example Codec consumes stable glyph identity and direct f32x2 occurrence origin as distinct system semantics. The
-renderer resolves the aligned origin buffer beside each physical glyph record and adds it once to the raster-local origin;
-there is no placement slot, shared table, batch key, or draw key.
+The example Codec consumes stable glyph identity and placement-slot occurrence identity as distinct system semantics.
+The renderer receives the root-scoped f32x2 placement table outside the Codec plan, resolves each physical record's slot,
+and materializes its own direct offset stream before adding that offset once to the raster-local origin. This intentionally
+shows that Codec authors describe raster meaning while renderer adapters own memory-layout choices; neither the slot nor
+the shared table becomes a batch or draw key.
 
 `RecordingExampleRendererDevice` is the deterministic CPU oracle. It reads already-bound raster format, program, variant,
 named buffers, geometry, resources, ordered batches/root instances, and instance spans before one commit changes accepted
@@ -92,7 +94,7 @@ state. It validates only renderer and user/config requirements; it does not reva
 Rejected candidates discard staging and leave accepted state untouched.
 
 `TypeGpuExampleRendererDevice` is the concrete renderer device. It realizes GLB-like position, UV, and index accessors;
-creates TypeGPU/WebGPU vertex, index, raster-instance, and host occurrence-origin buffers; builds the selected pipeline;
+creates TypeGPU/WebGPU vertex, index, raster-instance, and adapter-local occurrence-origin buffers; builds the selected pipeline;
 encodes an indexed instanced pass; and submits to an offscreen `rgba8unorm` target. A retained width change preserves draw
 count and existing raster-local bytes, changes the occurrence origins, and must match a cold root at the same width.
 Empty idle deltas produce no submission, while accepted removal clears the target. The hardware recovery proof disposes

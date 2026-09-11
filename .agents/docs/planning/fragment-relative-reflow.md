@@ -207,8 +207,10 @@ performance gate. The lazy-absolute-semantic checkpoint subsequently removes the
 101-sample passes after 20 warmups pool to `3.437 / 3.491 ms` median/p95 versus the recorded fresh-main
 `3.953 / 4.071 ms`, while preserving the compact 35,856-byte publication. Ordinary Latin, justified Latin, and dense
 CJK also remain faster at `1.562`, `2.229`, and `2.277 ms` pooled medians. One justified pass contained host stalls, so
-its independent clean `2.189 / 2.210 ms` pass is the p95 evidence. M8 still cannot close before the complete
-browser/editorial matrix.
+its independent clean `2.189 / 2.210 ms` pass is the p95 evidence. The complete browser/editorial matrix subsequently
+passes all 120 Presentation cells across both shader stacks, WebGPU/WebGL2, and Bitmap/MTSDF/Slug while preserving
+workload draw topology. Editorial holds exactly three draws and measures `0.990–1.710 ms` median reflow. The dedicated
+direct-TypeGPU WebGPU gate and reviewed release-size check also pass, so M8 is closed.
 
 ## Compatibility with the merged engine
 
@@ -731,8 +733,8 @@ positioned semantic state keeps local origin/ink values plus its placement-segme
 and CPU/plan bounds materialize absolute origins only at their read edge. Raster realization consumes the same f32
 operands in the commuted addition proven bit-identical by the deterministic arithmetic corpus. Per-technique browser
 realization now passes direct TypeGPU on project Chromium WebGPU and both Three shader sets on WebGPU plus forced WebGL2,
-without changing draw/storage identity. Active/capacity transfer bytes, the complete editorial pixel matrix, and release
-size remain acceptance gates; implementation does not by itself close the milestone's CPU/publication-performance gate.
+without changing draw/storage identity. The complete 120-cell Presentation matrix, compact transfer-byte assertions,
+reviewed release-size check, and final CPU/publication measurements close the cutover gates.
 
 ### GPU data access
 

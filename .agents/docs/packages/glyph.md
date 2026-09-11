@@ -1449,8 +1449,11 @@ pass measured `2.189 / 2.210 ms`. Compared with the recorded same-host fresh-mai
 2.995 ms` for ordinary/justified/bidi/CJK), all four paths are now faster, including mixed bidi by 13.0%. Each update
 still publishes only the compact placement data: 31,224 bytes ordinary, 31,344 justified, 35,856 bidi, and 98,560 bytes
 across three dense-CJK patches in this final state. The exact package gate passes 982/982 tests plus Rust, type, fuzz,
-and format checks. The remaining performance acceptance work is the full editorial/browser matrix, not a known CPU
-resize regression.
+and format checks. The subsequent browser gauntlet passes all 120 Presentation cells: both native TSL and Three/TypeGPU,
+10 workloads, WebGPU/WebGL2, and Bitmap/MTSDF/Slug. Editorial preserves exactly three draws and measures
+`0.990–1.710 ms` median reflow across those full runs. Direct TypeGPU's dedicated Chromium WebGPU gate also passes all
+three rasters. The reviewed size check accepts a 554-byte raw shaper increase (0.04%); adapter and font sizes are
+unchanged. There is no remaining known CPU, publication, renderer, or size regression in this cutover.
 
 The benchmark also owns a `position-query` case that runs the same break-changing flow and positioning tail through the
 borrowed-layout mask while excluding gather, plan compilation, publication, and inspection copies. On the pinned M4 host,

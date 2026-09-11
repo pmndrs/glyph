@@ -2,6 +2,20 @@
 
 ## 2026-09-11
 
+- **Closed the LayoutRun browser, size, and performance matrix** — Both native TSL and Three/TypeGPU Presentation paths
+  pass all 60 workload/backend/technique cells: 10 workloads, WebGPU and WebGL2, and Bitmap/MTSDF/Slug. The matrix keeps
+  every workload visible, preserves its expected draw topology, and covers Editorial, 11,510-glyph Paragraph Stress,
+  projected off-axis text, dynamic layout, paint effects, and rich text. Editorial retains exactly three draws and its
+  64-sample median reflow spans `0.990–1.710 ms` across the full runs. Direct TypeGPU's project-Chromium WebGPU gate also
+  passes all three rasters with nonzero-alpha counts `9280/7875/7497`. The reviewed size check passes after recording the
+  shaper's 554-byte raw increase (0.04%); every JavaScript adapter and font artifact is unchanged.
+
+- **Migrated the public example renderer to the retained placement contract** — The root gauntlet caught its custom
+  Codec still declaring the removed direct f32x2 occurrence buffer. Its Codec now declares only stable glyph identity and
+  the required engine placement slot. The deterministic adapter consumes the root-scoped placement table and resolves
+  slots into its own direct f32x2 stream, keeping backend memory layout out of portable raster authoring while preserving
+  the example's simple vertex pipeline. The package's five focused tests and strict TypeScript/lint/format gate pass.
+
 - **Deferred absolute semantic placement to query and bounds edges** — Positioned semantic rows now retain glyph-local
   origin and ink coordinates plus their compact placement-segment index. Width-only placement changes preserve semantic
   content revisions and static Codec inputs; public glyph queries and CPU/plan ink bounds compose absolute f32 values
