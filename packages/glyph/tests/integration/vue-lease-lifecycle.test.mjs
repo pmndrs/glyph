@@ -210,6 +210,39 @@ test('Text waits for an unloaded FontFace selection and constructs once it loads
   assert.equal(vueHandle.textCount, 0);
 });
 
+test('Text reports a failed FontFace load once and does not restart it on re-render', async () => {
+  const face = glyph.fontFace(new Blob([new Uint8Array([0])], { type: 'model/gltf-binary' }), {
+    format: bitmap({ strikes: [16] }),
+  });
+  const errors = [];
+  const width = shallowRef(300);
+  const host = await mountTres(() =>
+    h(GlyphProvider, { handle: vueHandle }, () =>
+      h(
+        Text,
+        { font: face.bitmap, constraints: { width: { mode: 'exact', size: width.value } }, onError: (e) => errors.push(e) },
+        () => 'broken',
+      ),
+    ),
+  );
+  try {
+    await assert.rejects(face.bitmap.load());
+    await settle();
+    assert.equal(errors.length, 1, 'the adapter reports the failed load once');
+    for (const size of [320, 340, 360]) {
+      width.value = size;
+      await nextTick();
+      await assert.rejects(face.bitmap.load());
+      await settle();
+    }
+    assert.equal(errors.length, 1, 'a re-render after a failure must not restart the load or re-emit the error');
+    assert.equal(vueHandle.textCount, 0, 'no paragraph constructs for a font that failed to load');
+  } finally {
+    await host.unmount();
+    face.dispose();
+  }
+});
+
 test('GlyphProvider resolves a scoped string alias and never disposes a caller-owned FontFace', async () => {
   const face = glyph.fontFace(new Blob([await readFile(multiFormatFontUrl)], { type: 'model/gltf-binary' }), {
     format: msdf,

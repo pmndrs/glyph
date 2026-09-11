@@ -545,6 +545,9 @@ function resolveVueTextFont(
 function createFontLoadTracker(reportError: (error: unknown) => void) {
   const revision = shallowRef(0);
   const requested = new WeakSet<FontFaceSelection>();
+  // The face store forgets a rejected load, so an unmarked failure would refetch and re-emit on every re-render.
+  let failed = new WeakSet<FontFaceSelection>();
+  let failedHandle: ThreeHandle | undefined;
   let active = true;
   onScopeDispose(() => {
     active = false;
@@ -552,11 +555,16 @@ function createFontLoadTracker(reportError: (error: unknown) => void) {
   return {
     ensureLoaded(handle: ThreeHandle, selections: readonly FontFaceSelection[]): boolean {
       void revision.value;
+      if (failedHandle !== handle) {
+        failed = new WeakSet();
+        failedHandle = handle;
+      }
+      const marks = failed;
       let ready = true;
       for (const selection of selections) {
         if (isThreeHandleFontLoaded(handle, selection)) continue;
         ready = false;
-        if (requested.has(selection)) continue;
+        if (requested.has(selection) || marks.has(selection)) continue;
         requested.add(selection);
         loadThreeHandleFont(handle, selection).then(
           () => {
@@ -565,6 +573,7 @@ function createFontLoadTracker(reportError: (error: unknown) => void) {
           },
           (error: unknown) => {
             requested.delete(selection);
+            marks.add(selection);
             if (active) reportError(error);
           },
         );
