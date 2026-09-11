@@ -17,12 +17,13 @@ export const packageSizeBudgets = {
     brotliBytes: 10_500,
   },
   // `/typegpu` is the higher-level direct renderer over all three first-party formats. With optional peers external,
-  // direct x/y occurrence placement measures 230,346 raw / 227,423 minified / 43,525 gzip / 36,803 Brotli.
+  // the final transactional occurrence-slot and shared-placement path measures 233,947 raw / 231,004 minified /
+  // 44,210 gzip / 37,331 Brotli. Keep less than one percent raw/minified headroom and bounded compression variance.
   'typegpu-direct-renderer-js': {
-    rawBytes: 232_000,
-    minifiedBytes: 229_000,
-    gzipBytes: 44_000,
-    brotliBytes: 37_500,
+    rawBytes: 236_000,
+    minifiedBytes: 233_000,
+    gzipBytes: 45_000,
+    brotliBytes: 38_000,
   },
   'font-validator-js': {
     // The current tsdown graph is 734,377 raw / 584,675 minified / 138,073 gzip / 113,039 Brotli. Keep a small
@@ -72,29 +73,29 @@ export const packageSizeBudgets = {
   // the gate un-repinned; this branch changed no Rust behaviour (formatting only), and the
   // measured artifact is byte-identical to its base commit.
   // The selective glyph borrow adds bounded demand-read ABI code without changing the retained A/B publication path.
-  // The LayoutRun frontier, incremental exclusion/drop-cap flow, and direct semantic-origin publication now measure
-  // 1,325,689 raw / 511,751 gzip / 393,474 Brotli; the ceiling retains less than one percent raw headroom.
+  // The completed LayoutRun frontier, incremental exclusion/drop-cap flow, and lazy absolute semantic placement measure
+  // 1,374,150 raw / 532,034 gzip / 409,424 Brotli; the ceiling retains less than one percent headroom.
   'text-shaper-wasm': {
-    rawBytes: 1_335_000,
-    minifiedBytes: 1_335_000,
-    gzipBytes: 516_000,
-    brotliBytes: 397_000,
+    rawBytes: 1_385_000,
+    minifiedBytes: 1_385_000,
+    gzipBytes: 536_000,
+    brotliBytes: 413_000,
   },
-  // Three realization plus the projected-flow and direct-origin root graph measures 540,499 raw / 528,391 minified /
-  // 133,033 gzip / 109,018 Brotli after tsdown shared-chunk bundling.
+  // Three realization plus the projected-flow, placement-table, and live-transform root graph measures 554,014 raw /
+  // 541,710 minified / 136,538 gzip / 111,754 Brotli after tsdown shared-chunk bundling.
   'three-runtime-js': {
-    rawBytes: 545_000,
-    minifiedBytes: 533_000,
-    gzipBytes: 135_000,
-    brotliBytes: 111_000,
+    rawBytes: 558_000,
+    minifiedBytes: 546_000,
+    gzipBytes: 138_000,
+    brotliBytes: 113_000,
   },
-  // `/three/typegpu` prices the complete optional integration at 648,878 raw / 634,994 minified /
-  // 146,273 gzip / 119,573 Brotli with peers external.
+  // `/three/typegpu` prices the complete optional integration at 662,332 raw / 648,309 minified /
+  // 149,746 gzip / 122,207 Brotli with peers external.
   'three-typegpu-runtime-js': {
-    rawBytes: 654_000,
-    minifiedBytes: 640_000,
-    gzipBytes: 148_000,
-    brotliBytes: 121_000,
+    rawBytes: 667_000,
+    minifiedBytes: 653_000,
+    gzipBytes: 152_000,
+    brotliBytes: 124_000,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,
