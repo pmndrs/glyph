@@ -176,8 +176,9 @@ Item 12.1 used merged commit `2094243668bcf5462cff0ac3b1f7faf52cba3b6c` as its e
 performance gate. The direct engine-owned x/y occurrence offset is now implemented through the generated semantic
 contract, Three, and direct TypeGPU without changing batches or draws; CPU semantic queries retain absolute origins and
 the compact run/segment proof remains test/kernel-lab state. The remaining 12.2 work is the compact CPU/publication
-cutover, browser pixels, release size, and final performance evidence. The dependency does not include unrelated open work
-grouped under 11.18.
+cutover, browser pixels, release size, and performance closure. Fresh-main A/B/B/A evidence is positive for ordinary
+Latin, justified Latin, and dense CJK, but mixed bidi remains 11.5% median / 10.9% p95 slower and therefore keeps the gate
+open. The dependency does not include unrelated open work grouped under 11.18.
 
 ## Milestone 0 — accept contracts and versions
 

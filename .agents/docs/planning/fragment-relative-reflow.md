@@ -197,8 +197,13 @@ authenticates the compact dirty shape. The next retained-CPU checkpoint precompu
 cluster and replaces its per-rendered-glyph segment-index lane with one instance count per compact segment. An exact
 A/B/B/A against branch parent `2b6d5eb3` is positive for all measured resize paths: justified Latin −6.7% median,
 mixed bidi −1.9%, ordinary Latin −1.7%, and dense CJK −0.7%, with identical publication bytes. A 202-sample cold check
-limits median cost to +0.4% Latin and +0.5% CJK. This closes the local optimization decision; the fresh-main full
-interleaved performance comparison remains open.
+limits median cost to +0.4% Latin and +0.5% CJK. A later same-machine A/B/B/A used freshly fetched `origin/main`
+`ee56fa48` and candidate `8221aa87`, 20 warmups plus 101 measured updates per pass. The main tip has the exact
+`20942436` shaper bytes because its intervening change is README-only. Pooled ordinary Latin improves 32.3% median and
+32.7% p95, dense CJK improves 24.5%/24.6%, and justified Latin improves 2.6%/11.1%; publication falls from
+174,440–175,824 bytes to 31,224–109,200 bytes. Mixed bidi remains the explicit failure: 11.5% median and 10.9% p95 slower
+despite reducing publication from 176,352 to 35,856 bytes. This closes fresh-main attribution, not the performance gate;
+M8 cannot close while the mixed-bidi regression or the browser/editorial matrix remains open.
 
 ## Compatibility with the merged engine
 
