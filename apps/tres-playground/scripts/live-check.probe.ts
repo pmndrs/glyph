@@ -19,6 +19,9 @@ for (const [format, draws] of [
   console.log(`${format}: ${String(counts.records)} records in ${String(counts.draws)} draws`);
 }
 
+// The backdrop is plain Three geometry without glyph run metadata, so it never counts toward the draws above.
+await waitFor(() => playground.scene?.getObjectByName('backdrop'), 'the backdrop group never mounted');
+
 console.log('tres-playground-live-ok');
 
 async function waitForFormat(

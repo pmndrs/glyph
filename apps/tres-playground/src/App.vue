@@ -39,7 +39,7 @@ function createRenderer(context: TresRendererSetupContext): WebGPURenderer {
     v-else
     :renderer="createRenderer"
     clear-color="#07090f"
-    render-mode="on-demand"
+    render-mode="always"
     window-size
     @error="(error: unknown) => (failure = String(error))"
   >
