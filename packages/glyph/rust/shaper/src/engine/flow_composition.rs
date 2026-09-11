@@ -4,14 +4,18 @@ use crate::FontMetrics;
 
 use super::{
     EngineError, FrameFault,
-    cluster_state::{CLUSTER_HARD_BREAK, ClusterArena},
-    flow_geometry::{FlowGeometryArena, InlineSlotArena},
+    cluster_state::{CLUSTER_HARD_BREAK, CLUSTER_SAFE_BEFORE, CLUSTER_SPACE, ClusterArena},
+    flow_geometry::{
+        ExclusionDirtyBand, FlowGeometryArena, InlineCut, InlineSlotArena, polygon_projection,
+    },
     frame::{
-        ALIGN_JUSTIFY, AXIS_AT_MOST, AXIS_EXACT, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS,
-        WRITING_HORIZONTAL_TB,
+        ALIGN_JUSTIFY, ALIGN_START, AXIS_AT_MOST, AXIS_EXACT, DROP_CAP_ALIGN_BASELINE,
+        DROP_CAP_ALIGN_TEXT_TOP, DROP_CAP_SIDE_INLINE_START, EXCLUSION_WRAP_INLINE_END,
+        EXCLUSION_WRAP_INLINE_START, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, WRITING_HORIZONTAL_TB,
     },
     line_composition::{ComposedLine, LineCursor, layout_next_line_integer},
     semantic_wire::FlowConstraint,
+    shaping_state::ShapingRun,
     style_state::StyleSegment,
 };
 
@@ -41,6 +45,77 @@ pub(crate) struct FlowFragment {
 }
 
 pub(crate) const NO_BOUNDARY: u32 = u32::MAX;
+
+const DROP_CAP_MAX_CLUSTERS: usize = 64;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct FlowDropCap {
+    pub body_resume_cluster: u32,
+    pub line: FlowLine,
+    pub fragment: FlowFragment,
+    cut: InlineCut,
+    cut_block_start: f64,
+    cut_block_end: f64,
+    lines: u8,
+    alignment: u8,
+    ink_block_start: f64,
+    ink_block_end: f64,
+    margin_block: f64,
+    contour_start: u32,
+    contour_count: u16,
+}
+
+impl FlowDropCap {
+    fn cut_for_band(
+        self,
+        geometry: &FlowGeometryArena,
+        line_ordinal: usize,
+        block_start: f64,
+        block_end: f64,
+    ) -> Result<Option<InlineCut>, EngineError> {
+        if line_ordinal >= usize::from(self.lines)
+            && (self.cut_block_start >= block_end || block_start >= self.cut_block_end)
+        {
+            return Ok(None);
+        }
+        if self.contour_count == 0 {
+            return Ok(Some(self.cut));
+        }
+        let block_extent = self.cut_block_end - self.cut_block_start;
+        if !block_extent.is_finite() || block_extent <= 0.0 {
+            return Err(EngineError::InvalidRequest);
+        }
+        let normalized_start =
+            ((block_start - self.cut_block_start) / block_extent).clamp(0.0, 1.0);
+        let normalized_end = ((block_end - self.cut_block_start) / block_extent).clamp(0.0, 1.0);
+        if normalized_start >= normalized_end {
+            return Ok(None);
+        }
+        let contour = geometry.retained_vertices(self.contour_start, self.contour_count)?;
+        let Some(projection) = polygon_projection(contour, normalized_start, normalized_end)?
+        else {
+            return Ok(None);
+        };
+        let inline_extent = self.cut.end - self.cut.start;
+        Ok(Some(InlineCut {
+            start: self.cut.start + projection.start * inline_extent,
+            end: self.cut.start + projection.end * inline_extent,
+            wrap_side: self.cut.wrap_side,
+        }))
+    }
+
+    fn align_to_body_baseline(&mut self, baseline: f64) {
+        if self.alignment != DROP_CAP_ALIGN_BASELINE {
+            return;
+        }
+        self.line.block_start = baseline + self.ink_block_start;
+        self.line.baseline = -self.ink_block_start;
+        self.cut_block_start = baseline + self.ink_block_start - self.margin_block;
+        self.cut_block_end = self
+            .cut_block_end
+            .max(baseline + self.ink_block_end + self.margin_block);
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct EllipsisTarget {
@@ -74,10 +149,248 @@ impl LineExtents {
     }
 }
 
+#[derive(Clone, Copy)]
+struct DropCapEnvelope {
+    inline_start: f64,
+    inline_end: f64,
+    block_start: f64,
+    block_end: f64,
+    advance: f64,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn prepare_drop_cap(
+    constraint: FlowConstraint,
+    region: super::semantic_wire::FlowRegion,
+    clusters: &ClusterArena,
+    runs: &[ShapingRun],
+    paragraph_level: u8,
+    body_block_start: f64,
+    styles: &[StyleSegment],
+    metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
+    first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
+) -> Result<Option<FlowDropCap>, EngineError> {
+    if constraint.drop_cap_lines == 0
+        || constraint.resume_cluster != 0
+        || constraint.resume_region != 0
+        || clusters.starts.len() < 2
+        || clusters.flags[0] & (CLUSTER_HARD_BREAK | CLUSTER_SPACE) != 0
+        || region.writing_mode != WRITING_HORIZONTAL_TB
+    {
+        return Ok(None);
+    }
+    let search_end = clusters
+        .starts
+        .len()
+        .saturating_sub(1)
+        .min(DROP_CAP_MAX_CLUSTERS);
+    let Some(cluster_end) =
+        (1..=search_end).find(|cluster| clusters.flags[*cluster] & CLUSTER_SAFE_BEFORE != 0)
+    else {
+        return Ok(None);
+    };
+    if clusters.flags[..cluster_end]
+        .iter()
+        .any(|flags| flags & CLUSTER_HARD_BREAK != 0)
+    {
+        return Ok(None);
+    }
+    let envelope = drop_cap_envelope(clusters, runs, cluster_end)?;
+    if envelope.advance <= 0.0 {
+        return Ok(None);
+    }
+    let body_extents = positive_extents(
+        extents_for_cluster(
+            clusters,
+            styles,
+            cluster_end,
+            metrics_for,
+            first_font_for_stack,
+        )?,
+        styles,
+        clusters,
+        cluster_end,
+    )?;
+    let inline_start = f64::from(region.inline_start);
+    let inline_end = f64::from(region.inline_end);
+    let margin_inline = f64::from(constraint.drop_cap_margin_inline);
+    let margin_block = f64::from(constraint.drop_cap_margin_block);
+    let logical_start = constraint.drop_cap_side == DROP_CAP_SIDE_INLINE_START;
+    let physical_start = logical_start == (paragraph_level & 1 == 0);
+    let pen = if physical_start {
+        inline_start - envelope.inline_start
+    } else {
+        inline_end - envelope.inline_end
+    };
+    let cut = if physical_start {
+        InlineCut {
+            start: inline_start,
+            end: pen + envelope.inline_end + margin_inline,
+            wrap_side: EXCLUSION_WRAP_INLINE_END,
+        }
+    } else {
+        InlineCut {
+            start: pen + envelope.inline_start - margin_inline,
+            end: inline_end,
+            wrap_side: EXCLUSION_WRAP_INLINE_START,
+        }
+    };
+    if !pen.is_finite()
+        || !cut.start.is_finite()
+        || !cut.end.is_finite()
+        || cut.start >= cut.end
+        || cut.end - cut.start >= inline_end - inline_start
+    {
+        return Ok(None);
+    }
+    let baseline = match constraint.drop_cap_alignment {
+        DROP_CAP_ALIGN_TEXT_TOP => body_block_start - envelope.block_start,
+        DROP_CAP_ALIGN_BASELINE => body_block_start + body_extents.above,
+        _ => return Err(EngineError::InvalidRequest),
+    };
+    let line_height = envelope.block_end - envelope.block_start;
+    let minimum_block_end =
+        body_block_start + body_extents.height() * f64::from(constraint.drop_cap_lines);
+    let line = FlowLine {
+        flow_thread_id: constraint.flow_thread_id,
+        region_id: region.id,
+        transform_index: region.transform_index,
+        clip_id: if constraint.overflow == OVERFLOW_CLIP {
+            region.id
+        } else {
+            0
+        },
+        fragment_start: 0,
+        fragment_count: 1,
+        align: ALIGN_START,
+        block_start: baseline + envelope.block_start,
+        baseline: -envelope.block_start,
+        height: line_height,
+    };
+    let fragment = FlowFragment {
+        line: ComposedLine {
+            cluster_start: 0,
+            cluster_end: u32::try_from(cluster_end).map_err(|_| EngineError::ResultTooLarge)?,
+            text_start: clusters.starts[0],
+            text_end: clusters.ends[cluster_end - 1],
+            advance: envelope.advance,
+            hung_advance: 0.0,
+            hard_break: false,
+        },
+        slot_start: pen,
+        slot_end: pen + envelope.advance,
+        flexible_end: false,
+        boundary_index: NO_BOUNDARY,
+    };
+    Ok(Some(FlowDropCap {
+        body_resume_cluster: fragment.line.cluster_end,
+        line,
+        fragment,
+        cut,
+        cut_block_start: line.block_start - margin_block,
+        cut_block_end: (line.block_start + line.height + margin_block).max(minimum_block_end),
+        lines: constraint.drop_cap_lines,
+        alignment: constraint.drop_cap_alignment,
+        ink_block_start: envelope.block_start,
+        ink_block_end: envelope.block_end,
+        margin_block,
+        contour_start: constraint.drop_cap_vertices_offset,
+        contour_count: constraint.drop_cap_vertex_count,
+    }))
+}
+
+fn drop_cap_envelope(
+    clusters: &ClusterArena,
+    runs: &[ShapingRun],
+    cluster_end: usize,
+) -> Result<DropCapEnvelope, EngineError> {
+    let mut inline_start = 0.0_f64;
+    let mut inline_end = 0.0_f64;
+    let mut block_start = f64::INFINITY;
+    let mut block_end = f64::NEG_INFINITY;
+    let mut negative_prefix = 0.0_f64;
+    let mut positive_prefix = 0.0_f64;
+    let layout_runs = clusters.layout_runs();
+    for cluster in 0..cluster_end {
+        let run_index = layout_runs.partition_point(|run| run.cluster_end <= cluster as u32);
+        let run = *layout_runs
+            .get(run_index)
+            .filter(|run| run.cluster_start <= cluster as u32)
+            .ok_or(EngineError::InvalidRequest)?;
+        let direction = runs
+            .get(usize::try_from(run.source_run).map_err(|_| EngineError::InvalidRequest)?)
+            .map(|run| run.direction)
+            .ok_or(EngineError::InvalidRequest)?;
+        let placement = clusters.placement_cluster(run, direction, cluster)?;
+        let advance = clusters.advances[cluster];
+        let mut cluster_inline_start = 0.0_f64.min(advance);
+        let mut cluster_inline_end = 0.0_f64.max(advance);
+        let glyph_start = usize::try_from(clusters.glyph_starts[cluster])
+            .map_err(|_| EngineError::InvalidRequest)?;
+        let glyph_end = glyph_start
+            .checked_add(
+                usize::try_from(clusters.glyph_counts[cluster])
+                    .map_err(|_| EngineError::InvalidRequest)?,
+            )
+            .ok_or(EngineError::ResultTooLarge)?;
+        for source_glyph in glyph_start..glyph_end {
+            let row = clusters
+                .run_local()
+                .row_for_source_glyph(
+                    u32::try_from(source_glyph).map_err(|_| EngineError::ResultTooLarge)?,
+                )
+                .ok_or(EngineError::InvalidRequest)?;
+            let origin = f64::from(row.inline_origin) + placement.block_anchor_inline
+                - placement.block_local_prefix;
+            cluster_inline_start = cluster_inline_start.min(origin);
+            cluster_inline_end = cluster_inline_end.max(origin + f64::from(row.inline_advance));
+            let origin_block = f64::from(row.block_origin) + placement.block_anchor_block;
+            block_start = block_start.min(origin_block);
+            block_end = block_end.max(origin_block);
+            if row.has_outline {
+                let ink_inline = f64::from(row.ink_inline_start) + placement.block_anchor_inline
+                    - placement.block_local_prefix;
+                cluster_inline_start = cluster_inline_start.min(ink_inline);
+                cluster_inline_end =
+                    cluster_inline_end.max(ink_inline + f64::from(row.ink_inline_extent));
+                let ink_block = f64::from(row.ink_block_start) + placement.block_anchor_block;
+                block_start = block_start.min(ink_block);
+                block_end = block_end.max(ink_block + f64::from(row.ink_block_extent));
+            }
+        }
+        inline_start = inline_start.min(negative_prefix + cluster_inline_start);
+        inline_end = inline_end.max(positive_prefix + cluster_inline_end);
+        negative_prefix += advance.min(0.0);
+        positive_prefix += advance.max(0.0);
+    }
+    let advance = clusters.advances[..cluster_end]
+        .iter()
+        .copied()
+        .sum::<f64>();
+    if !inline_start.is_finite()
+        || !inline_end.is_finite()
+        || !block_start.is_finite()
+        || !block_end.is_finite()
+        || !advance.is_finite()
+        || inline_start > inline_end
+        || block_start > block_end
+    {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok(DropCapEnvelope {
+        inline_start,
+        inline_end,
+        block_start,
+        block_end,
+        advance,
+    })
+}
+
 #[derive(Default)]
 pub(crate) struct FlowLayoutArena {
     pub lines: Vec<FlowLine>,
     pub fragments: Vec<FlowFragment>,
+    pub drop_caps: Vec<FlowDropCap>,
     pub(crate) ellipsis_threads: Vec<u32>,
     pub(crate) recomposed_lines: Option<(usize, usize)>,
 }
@@ -90,7 +403,54 @@ impl FlowLayoutArena {
     ) -> Result<(), EngineError> {
         reserve(&mut self.lines, line_capacity)?;
         reserve(&mut self.fragments, fragment_capacity)?;
+        reserve(&mut self.drop_caps, 1)?;
         reserve(&mut self.ellipsis_threads, line_capacity)
+    }
+
+    fn append_reconciled_drop_caps(
+        &mut self,
+        previous: &Self,
+        geometry: &FlowGeometryArena,
+        flow_thread_id: u32,
+        replacement: Option<FlowDropCap>,
+    ) -> Result<(), EngineError> {
+        if !self.drop_caps.is_empty() {
+            return Err(EngineError::InvalidRequest);
+        }
+        let previous_has_replacement = previous
+            .drop_caps
+            .iter()
+            .any(|cap| cap.line.flow_thread_id == flow_thread_id);
+        let capacity = previous
+            .drop_caps
+            .len()
+            .checked_add(usize::from(
+                replacement.is_some() && !previous_has_replacement,
+            ))
+            .ok_or(EngineError::ResultTooLarge)?;
+        reserve(&mut self.drop_caps, capacity)?;
+
+        let mut previous_index = 0;
+        for constraint in &geometry.constraints {
+            let previous_cap = previous
+                .drop_caps
+                .get(previous_index)
+                .copied()
+                .filter(|cap| cap.line.flow_thread_id == constraint.flow_thread_id);
+            if constraint.flow_thread_id == flow_thread_id {
+                previous_index += usize::from(previous_cap.is_some());
+                if let Some(cap) = replacement {
+                    self.drop_caps.push(cap);
+                }
+            } else if let Some(cap) = previous_cap {
+                self.drop_caps.push(cap);
+                previous_index += 1;
+            }
+        }
+        if previous_index != previous.drop_caps.len() {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -105,6 +465,34 @@ impl FlowLayoutArena {
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
     ) -> Result<(), EngineError> {
+        self.build_with_drop_cap_context(
+            geometry,
+            clusters,
+            &[],
+            styles,
+            slots,
+            0,
+            max_lines,
+            max_slots_per_band,
+            metrics_for,
+            first_font_for_stack,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn build_with_drop_cap_context(
+        &mut self,
+        geometry: &FlowGeometryArena,
+        clusters: &ClusterArena,
+        runs: &[ShapingRun],
+        styles: &[StyleSegment],
+        slots: &mut InlineSlotArena,
+        paragraph_level: u8,
+        max_lines: usize,
+        max_slots_per_band: usize,
+        metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
+        first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
+    ) -> Result<(), EngineError> {
         self.clear();
         if clusters.starts.is_empty() || geometry.constraints.is_empty() {
             return Ok(());
@@ -114,8 +502,6 @@ impl FlowLayoutArena {
         let likely_lines = clusters.starts.len().min(max_lines);
         self.reserve(likely_lines, likely_lines)?;
         for constraint in geometry.constraints.iter().copied() {
-            let resume = cluster_for_offset(clusters, constraint.resume_cluster)?;
-            let mut cursor = LineCursor::at_cluster(resume);
             let region_start = usize::try_from(constraint.region_start)
                 .map_err(|_| EngineError::InvalidRequest)?;
             let first_region = region_start
@@ -124,6 +510,33 @@ impl FlowLayoutArena {
             let region_end = region_start
                 .checked_add(usize::from(constraint.region_count))
                 .ok_or(EngineError::InvalidRequest)?;
+            let first_region_record = geometry
+                .regions
+                .get(first_region)
+                .ok_or(EngineError::InvalidRequest)?
+                .record;
+            let mut first_block = f64::from(first_region_record.block_start);
+            first_block += f64::from(constraint.resume_block_offset);
+            if constraint.resume_cluster == 0 && constraint.resume_region == 0 {
+                first_block += f64::from(constraint.space_before);
+            }
+            let mut drop_cap = prepare_drop_cap(
+                constraint,
+                first_region_record,
+                clusters,
+                runs,
+                paragraph_level,
+                first_block,
+                styles,
+                metrics_for,
+                first_font_for_stack,
+            )?;
+            let resume = if let Some(cap) = drop_cap.as_ref() {
+                usize::try_from(cap.body_resume_cluster).map_err(|_| EngineError::InvalidRequest)?
+            } else {
+                cluster_for_offset(clusters, constraint.resume_cluster)?
+            };
+            let mut cursor = LineCursor::at_cluster(resume);
             let constraint_line_limit = if constraint.max_lines == 0 {
                 max_lines
             } else {
@@ -188,6 +601,15 @@ impl FlowLayoutArena {
                         block,
                         block_end,
                         estimate,
+                        match drop_cap.as_ref() {
+                            Some(cap) => cap.cut_for_band(
+                                geometry,
+                                self.lines.len().saturating_sub(thread_line_start),
+                                block,
+                                block + estimate.height(),
+                            )?,
+                            None => None,
+                        },
                         constraint.wrap,
                         constraint.align,
                         constraint.width_mode != AXIS_EXACT,
@@ -197,7 +619,15 @@ impl FlowLayoutArena {
                         metrics_for,
                         first_font_for_stack,
                     )? {
-                        Some(height) => block += height,
+                        Some(height) => {
+                            if self.lines.len() == thread_line_start + 1
+                                && let (Some(cap), Some(line)) =
+                                    (drop_cap.as_mut(), self.lines.last())
+                            {
+                                cap.align_to_body_baseline(line.block_start + line.baseline);
+                            }
+                            block += height;
+                        }
                         None => block += estimate.height(),
                     }
                 }
@@ -227,6 +657,11 @@ impl FlowLayoutArena {
                     flexible_inline_limit(&constraint),
                 )?;
             }
+            if self.lines.len() > thread_line_start
+                && let Some(cap) = drop_cap
+            {
+                self.drop_caps.push(cap);
+            }
         }
         Ok(())
     }
@@ -238,9 +673,11 @@ impl FlowLayoutArena {
         geometry: &FlowGeometryArena,
         previous_clusters: &ClusterArena,
         clusters: &ClusterArena,
+        runs: &[ShapingRun],
         styles: &[StyleSegment],
         slots: &mut InlineSlotArena,
         edit_offset: u32,
+        paragraph_level: u8,
         max_lines: usize,
         max_slots_per_band: usize,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
@@ -258,7 +695,16 @@ impl FlowLayoutArena {
         {
             return Ok(false);
         }
-        let Some(line_index) = previous.lines.iter().position(|line| {
+        let edited_cap = previous.drop_caps.iter().copied().find(|cap| {
+            cap.fragment.line.text_start <= edit_offset
+                && edit_offset
+                    < cap
+                        .fragment
+                        .line
+                        .text_end
+                        .max(cap.fragment.line.text_start.saturating_add(1))
+        });
+        let edited_line = previous.lines.iter().position(|line| {
             line_fragments(previous, *line).is_ok_and(|fragments| {
                 fragments.iter().any(|fragment| {
                     fragment.line.text_start <= edit_offset
@@ -269,17 +715,83 @@ impl FlowLayoutArena {
                                 .max(fragment.line.text_start.saturating_add(1))
                 })
             })
-        }) else {
+        });
+        let Some(mut line_index) = edited_cap
+            .and_then(|cap| {
+                previous
+                    .lines
+                    .iter()
+                    .position(|line| line.flow_thread_id == cap.line.flow_thread_id)
+            })
+            .or(edited_line)
+        else {
             return Ok(false);
         };
+        let flow_thread_id = edited_cap
+            .map(|cap| cap.line.flow_thread_id)
+            .unwrap_or(previous.lines[line_index].flow_thread_id);
+        let constraint = *geometry
+            .constraints
+            .iter()
+            .find(|constraint| constraint.flow_thread_id == flow_thread_id)
+            .ok_or(EngineError::InvalidRequest)?;
+        let region_start =
+            usize::try_from(constraint.region_start).map_err(|_| EngineError::InvalidRequest)?;
+        let first_region_index = region_start
+            .checked_add(usize::from(constraint.resume_region))
+            .ok_or(EngineError::InvalidRequest)?;
+        let first_region = geometry
+            .regions
+            .get(first_region_index)
+            .ok_or(EngineError::InvalidRequest)?
+            .record;
+        let mut first_block =
+            f64::from(first_region.block_start) + f64::from(constraint.resume_block_offset);
+        if constraint.resume_cluster == 0 && constraint.resume_region == 0 {
+            first_block += f64::from(constraint.space_before);
+        }
+        let mut drop_cap = prepare_drop_cap(
+            constraint,
+            first_region,
+            clusters,
+            runs,
+            paragraph_level,
+            first_block,
+            styles,
+            metrics_for,
+            first_font_for_stack,
+        )?;
+        let previous_cap = previous
+            .drop_caps
+            .iter()
+            .copied()
+            .find(|cap| cap.line.flow_thread_id == flow_thread_id);
+        let thread_line_start = previous
+            .lines
+            .iter()
+            .position(|line| line.flow_thread_id == flow_thread_id)
+            .ok_or(EngineError::InvalidRequest)?;
+        if edited_cap.is_some() || previous_cap != drop_cap {
+            line_index = thread_line_start;
+        }
         let first_line = previous.lines[line_index];
         let old_fragments = line_fragments(previous, first_line)?;
         let Some(first_fragment) = old_fragments.first() else {
             return Ok(false);
         };
-        let cluster_start = usize::try_from(first_fragment.line.cluster_start)
-            .map_err(|_| EngineError::InvalidRequest)?;
-        if previous_clusters.stable_ids.get(cluster_start) != clusters.stable_ids.get(cluster_start)
+        let cluster_start = if line_index == thread_line_start {
+            match drop_cap.as_ref() {
+                Some(cap) => usize::try_from(cap.body_resume_cluster)
+                    .map_err(|_| EngineError::InvalidRequest)?,
+                None => cluster_for_offset(clusters, constraint.resume_cluster)?,
+            }
+        } else {
+            usize::try_from(first_fragment.line.cluster_start)
+                .map_err(|_| EngineError::InvalidRequest)?
+        };
+        if previous_cap == drop_cap
+            && previous_clusters.stable_ids.get(cluster_start)
+                != clusters.stable_ids.get(cluster_start)
         {
             return Ok(false);
         }
@@ -323,6 +835,15 @@ impl FlowLayoutArena {
                     above: old_line.baseline,
                     below: old_line.height - old_line.baseline,
                 },
+                match drop_cap.as_ref() {
+                    Some(cap) => cap.cut_for_band(
+                        geometry,
+                        candidate.saturating_sub(thread_line_start),
+                        old_line.block_start,
+                        old_line.block_start + old_line.height,
+                    )?,
+                    None => None,
+                },
                 wrapping_for_flow_thread(geometry, old_line.flow_thread_id)?,
                 old_line.align,
                 flexible_for_flow_thread(geometry, old_line.flow_thread_id)?,
@@ -337,12 +858,46 @@ impl FlowLayoutArena {
                 return Ok(false);
             };
             let new_line = *self.lines.last().ok_or(EngineError::InvalidRequest)?;
+            if candidate == thread_line_start
+                && let Some(cap) = drop_cap.as_mut()
+            {
+                cap.align_to_body_baseline(new_line.block_start + new_line.baseline);
+            }
             let metrics_stable =
                 height == old_line.height && new_line.baseline == old_line.baseline;
-            if metrics_stable && cursor.cluster() == old_cluster_end {
+            let next_cap_affected = if let Some(next) = previous.lines.get(candidate + 1) {
+                let ordinal = candidate + 1 - thread_line_start;
+                let previous_affected = if let Some(cap) = previous_cap {
+                    cap.cut_for_band(
+                        geometry,
+                        ordinal,
+                        next.block_start,
+                        next.block_start + next.height,
+                    )?
+                    .is_some()
+                } else {
+                    false
+                };
+                let pending_affected = if let Some(cap) = drop_cap {
+                    cap.cut_for_band(
+                        geometry,
+                        ordinal,
+                        next.block_start,
+                        next.block_start + next.height,
+                    )?
+                    .is_some()
+                } else {
+                    false
+                };
+                previous_affected || pending_affected
+            } else {
+                false
+            };
+            if metrics_stable && cursor.cluster() == old_cluster_end && !next_cap_affected {
                 for suffix in candidate + 1..previous.lines.len() {
                     self.append_retained_line(previous, suffix)?;
                 }
+                self.append_reconciled_drop_caps(previous, geometry, flow_thread_id, drop_cap)?;
                 let previous_flexible_end = previous.flexible_inline_end(old_line.flow_thread_id);
                 let next_flexible_end =
                     if flexible_for_flow_thread(geometry, old_line.flow_thread_id)? {
@@ -367,6 +922,268 @@ impl FlowLayoutArena {
                 self.clear();
                 return Ok(false);
             }
+        }
+        self.clear();
+        Ok(false)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn rebuild_after_exclusion_change_until_state_converges(
+        &mut self,
+        previous: &Self,
+        geometry: &FlowGeometryArena,
+        clusters: &ClusterArena,
+        runs: &[ShapingRun],
+        styles: &[StyleSegment],
+        slots: &mut InlineSlotArena,
+        dirty: ExclusionDirtyBand,
+        paragraph_level: u8,
+        max_lines: usize,
+        max_slots_per_band: usize,
+        metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
+        first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
+    ) -> Result<bool, EngineError> {
+        self.clear();
+        if !previous.ellipsis_threads.is_empty()
+            || previous.lines.is_empty()
+            || previous.lines.len() > max_lines
+            || previous
+                .lines
+                .iter()
+                .any(|line| usize::from(line.fragment_count) > max_slots_per_band)
+        {
+            return Ok(false);
+        }
+        let Some(region_index) = geometry
+            .regions
+            .iter()
+            .position(|region| region.record.id == dirty.region_id)
+        else {
+            return Ok(false);
+        };
+        let region = geometry
+            .regions
+            .get(region_index)
+            .ok_or(EngineError::InvalidRequest)?;
+        let Some(constraint) = geometry.constraints.iter().copied().find(|constraint| {
+            let Ok(start) = usize::try_from(constraint.region_start) else {
+                return false;
+            };
+            start <= region_index
+                && region_index < start.saturating_add(usize::from(constraint.region_count))
+        }) else {
+            return Ok(false);
+        };
+        if constraint.width_mode != AXIS_EXACT || constraint.overflow == OVERFLOW_ELLIPSIS {
+            return Ok(false);
+        }
+        let constraint_region_start =
+            usize::try_from(constraint.region_start).map_err(|_| EngineError::InvalidRequest)?;
+        let first_region_index = constraint_region_start
+            .checked_add(usize::from(constraint.resume_region))
+            .ok_or(EngineError::InvalidRequest)?;
+        let first_region_record = geometry
+            .regions
+            .get(first_region_index)
+            .ok_or(EngineError::InvalidRequest)?
+            .record;
+        let mut first_block =
+            f64::from(first_region_record.block_start) + f64::from(constraint.resume_block_offset);
+        if constraint.resume_cluster == 0 && constraint.resume_region == 0 {
+            first_block += f64::from(constraint.space_before);
+        }
+        let mut drop_cap = prepare_drop_cap(
+            constraint,
+            first_region_record,
+            clusters,
+            runs,
+            paragraph_level,
+            first_block,
+            styles,
+            metrics_for,
+            first_font_for_stack,
+        )?;
+        let Some(region_line_start) = previous
+            .lines
+            .iter()
+            .position(|line| line.region_id == dirty.region_id)
+        else {
+            return Ok(false);
+        };
+        let region_line_end = previous
+            .lines
+            .iter()
+            .rposition(|line| line.region_id == dirty.region_id)
+            .ok_or(EngineError::InvalidRequest)?
+            .checked_add(1)
+            .ok_or(EngineError::ResultTooLarge)?;
+        if previous.lines[region_line_start..region_line_end]
+            .iter()
+            .any(|line| {
+                line.region_id != dirty.region_id
+                    || line.flow_thread_id != constraint.flow_thread_id
+            })
+        {
+            return Ok(false);
+        }
+        let mut prefix_end = region_line_start;
+        while let Some(line) = previous.lines.get(prefix_end).copied() {
+            if line.region_id != dirty.region_id
+                || line.block_start + line.height > dirty.block_start
+            {
+                break;
+            }
+            prefix_end += 1;
+        }
+        self.reserve(previous.lines.len(), previous.fragments.len())?;
+        reserve(&mut self.drop_caps, previous.drop_caps.len().max(1))?;
+        for line_index in 0..prefix_end {
+            self.append_retained_line(previous, line_index)?;
+        }
+        if let Some(cap) = drop_cap.as_mut()
+            && let Some(first_line) = self
+                .lines
+                .iter()
+                .find(|line| line.flow_thread_id == constraint.flow_thread_id)
+        {
+            cap.align_to_body_baseline(first_line.block_start + first_line.baseline);
+        }
+        let previous_thread_line = previous.lines[..prefix_end]
+            .iter()
+            .rposition(|line| line.flow_thread_id == constraint.flow_thread_id);
+        let cursor_start = if let Some(line_index) = previous_thread_line {
+            line_fragments(previous, previous.lines[line_index])?
+                .last()
+                .and_then(|fragment| usize::try_from(fragment.line.cluster_end).ok())
+                .ok_or(EngineError::InvalidRequest)?
+        } else {
+            if let Some(cap) = drop_cap.as_ref() {
+                usize::try_from(cap.body_resume_cluster).map_err(|_| EngineError::InvalidRequest)?
+            } else {
+                cluster_for_offset(clusters, constraint.resume_cluster)?
+            }
+        };
+        let mut cursor = LineCursor::at_cluster(cursor_start);
+        let mut block = if prefix_end > region_line_start {
+            let line = previous.lines[prefix_end - 1];
+            line.block_start + line.height
+        } else {
+            let constraint_region_start = usize::try_from(constraint.region_start)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let first_region = constraint_region_start
+                .checked_add(usize::from(constraint.resume_region))
+                .ok_or(EngineError::InvalidRequest)?;
+            let mut start = f64::from(region.record.block_start);
+            if region_index == first_region {
+                start += f64::from(constraint.resume_block_offset);
+                if constraint.resume_cluster == 0 && constraint.resume_region == 0 {
+                    start += f64::from(constraint.space_before);
+                }
+            }
+            start
+        };
+        let constraint_line_limit = if constraint.max_lines == 0 {
+            max_lines
+        } else {
+            usize::try_from(constraint.max_lines)
+                .map_err(|_| EngineError::ResultTooLarge)?
+                .min(max_lines)
+        };
+        let thread_line_start = previous
+            .lines
+            .iter()
+            .position(|line| line.flow_thread_id == constraint.flow_thread_id)
+            .ok_or(EngineError::InvalidRequest)?;
+        let mut old_search = prefix_end;
+        let block_end = f64::from(region.record.block_end);
+        while !cursor.is_complete(clusters.starts.len())
+            && self.lines.len().saturating_sub(thread_line_start) < constraint_line_limit
+            && self.lines.len() < max_lines
+            && block < block_end
+        {
+            let estimate = extents_for_cluster(
+                clusters,
+                styles,
+                cursor
+                    .cluster()
+                    .min(clusters.starts.len().saturating_sub(1)),
+                metrics_for,
+                first_font_for_stack,
+            )?;
+            let estimate = positive_extents(estimate, styles, clusters, cursor.cluster())?;
+            let composed_block = block;
+            let Some(height) = self.compose_band(
+                geometry,
+                region_index,
+                constraint.flow_thread_id,
+                region.record.id,
+                region.record.transform_index,
+                if constraint.overflow == OVERFLOW_CLIP {
+                    region.record.id
+                } else {
+                    0
+                },
+                clusters,
+                styles,
+                slots,
+                &mut cursor,
+                block,
+                block_end,
+                estimate,
+                match drop_cap.as_ref() {
+                    Some(cap) => cap.cut_for_band(
+                        geometry,
+                        self.lines.len().saturating_sub(thread_line_start),
+                        block,
+                        block + estimate.height(),
+                    )?,
+                    None => None,
+                },
+                constraint.wrap,
+                constraint.align,
+                false,
+                f64::from(constraint.first_line_indent),
+                constraint_word_space_shrink(&constraint),
+                max_slots_per_band,
+                metrics_for,
+                first_font_for_stack,
+            )?
+            else {
+                block += estimate.height();
+                continue;
+            };
+            if self.lines.len() == thread_line_start + 1
+                && let (Some(cap), Some(line)) = (drop_cap.as_mut(), self.lines.last())
+            {
+                cap.align_to_body_baseline(line.block_start + line.baseline);
+            }
+            block += height;
+            if composed_block < dirty.block_end {
+                continue;
+            }
+            while old_search < region_line_end
+                && previous.lines[old_search].block_start < composed_block
+            {
+                old_search += 1;
+            }
+            let new_line_index = self.lines.len() - 1;
+            if old_search >= region_line_end
+                || old_search != new_line_index
+                || !same_flow_line_state(self, new_line_index, previous, old_search)?
+            {
+                continue;
+            }
+            for suffix in old_search + 1..previous.lines.len() {
+                self.append_retained_line(previous, suffix)?;
+            }
+            self.append_reconciled_drop_caps(
+                previous,
+                geometry,
+                constraint.flow_thread_id,
+                drop_cap,
+            )?;
+            self.recomposed_lines = Some((prefix_end, old_search + 1));
+            return Ok(true);
         }
         self.clear();
         Ok(false)
@@ -405,6 +1222,7 @@ impl FlowLayoutArena {
         block_start: f64,
         region_block_end: f64,
         initial_extents: LineExtents,
+        extra_cut: Option<InlineCut>,
         wrap: u8,
         align: u8,
         flexible_width: bool,
@@ -424,12 +1242,13 @@ impl FlowLayoutArena {
                 *cursor = saved_cursor;
                 return Ok(None);
             }
-            let available = slot_arena.resolve_band(
+            let available = slot_arena.resolve_band_with_cut(
                 geometry,
                 region_index,
                 block_start,
                 block_start + height,
                 max_slots,
+                extra_cut,
             )?;
             let region_inline_end = f64::from(
                 geometry
@@ -605,6 +1424,7 @@ impl FlowLayoutArena {
     pub(crate) fn clear(&mut self) {
         self.lines.clear();
         self.fragments.clear();
+        self.drop_caps.clear();
         self.ellipsis_threads.clear();
         self.recomposed_lines = None;
     }
@@ -790,6 +1610,55 @@ fn line_fragments(flow: &FlowLayoutArena, line: FlowLine) -> Result<&[FlowFragme
         .ok_or(EngineError::InvalidRequest)
 }
 
+fn same_flow_line_state(
+    left: &FlowLayoutArena,
+    left_index: usize,
+    right: &FlowLayoutArena,
+    right_index: usize,
+) -> Result<bool, EngineError> {
+    let left_line = *left
+        .lines
+        .get(left_index)
+        .ok_or(EngineError::InvalidRequest)?;
+    let right_line = *right
+        .lines
+        .get(right_index)
+        .ok_or(EngineError::InvalidRequest)?;
+    if left_line.flow_thread_id != right_line.flow_thread_id
+        || left_line.region_id != right_line.region_id
+        || left_line.transform_index != right_line.transform_index
+        || left_line.clip_id != right_line.clip_id
+        || left_line.fragment_count != right_line.fragment_count
+        || left_line.align != right_line.align
+        || left_line.block_start.to_bits() != right_line.block_start.to_bits()
+        || left_line.baseline.to_bits() != right_line.baseline.to_bits()
+        || left_line.height.to_bits() != right_line.height.to_bits()
+    {
+        return Ok(false);
+    }
+    let left_fragments = line_fragments(left, left_line)?;
+    let right_fragments = line_fragments(right, right_line)?;
+    Ok(left_fragments.len() == right_fragments.len()
+        && left_fragments
+            .iter()
+            .zip(right_fragments)
+            .all(|(left, right)| same_flow_fragment_state(*left, *right)))
+}
+
+fn same_flow_fragment_state(left: FlowFragment, right: FlowFragment) -> bool {
+    left.line.cluster_start == right.line.cluster_start
+        && left.line.cluster_end == right.line.cluster_end
+        && left.line.text_start == right.line.text_start
+        && left.line.text_end == right.line.text_end
+        && left.line.advance.to_bits() == right.line.advance.to_bits()
+        && left.line.hung_advance.to_bits() == right.line.hung_advance.to_bits()
+        && left.line.hard_break == right.line.hard_break
+        && left.slot_start.to_bits() == right.slot_start.to_bits()
+        && left.slot_end.to_bits() == right.slot_end.to_bits()
+        && left.flexible_end == right.flexible_end
+        && left.boundary_index == right.boundary_index
+}
+
 fn cluster_text_end(clusters: &ClusterArena, cluster_end: usize) -> u32 {
     clusters
         .starts
@@ -969,13 +1838,14 @@ mod tests {
     use super::*;
     use crate::engine::{
         cluster_state::{CLUSTER_SAFE_BEFORE, ClusterBuildInput},
-        flow_geometry::{RetainedExclusion, RetainedRegion},
+        flow_geometry::{LocalizedGeometryChange, RetainedExclusion, RetainedRegion},
         frame::{
-            ALIGN_START, AXIS_EXACT, BLOCK_ALIGN_START, EXCLUSION_WRAP_BOTH, LAST_LINE_AUTO,
-            ORIENTATION_MIXED, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE, SHAPE_RECTANGLE,
-            WRAP_CHARACTER, WRAP_NONE,
+            ALIGN_START, AXIS_EXACT, BLOCK_ALIGN_START, DROP_CAP_ALIGN_BASELINE,
+            DROP_CAP_ALIGN_TEXT_TOP, DROP_CAP_SIDE_INLINE_START, EXCLUSION_WRAP_BOTH,
+            LAST_LINE_AUTO, ORIENTATION_MIXED, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE,
+            SHAPE_RECTANGLE, WRAP_CHARACTER, WRAP_NONE,
         },
-        semantic_wire::{FlowConstraint, FlowExclusion, FlowRegion},
+        semantic_wire::{FlowConstraint, FlowExclusion, FlowRegion, FlowVertex},
         shaping_state::{ShapeArena, ShapedRun, ShapingRun},
         style_state::ResolvedStyle,
     };
@@ -1154,6 +2024,306 @@ mod tests {
             scalar_range_extents(&clusters, &styles, composed_range(0, 4))
         );
         assert_eq!(calls.get(), 1);
+    }
+
+    #[test]
+    fn same_source_drop_cap_resumes_body_at_safe_boundary_and_cuts_first_lines() {
+        let cap_style = ResolvedStyle::test_typography(30.0, 0.0, 0.0);
+        let body_style = ResolvedStyle::test_typography(10.0, 0.0, 0.0);
+        let styles = [
+            StyleSegment {
+                text_start: 0,
+                text_end: 1,
+                style: cap_style,
+            },
+            StyleSegment {
+                text_start: 1,
+                text_end: 7,
+                style: body_style,
+            },
+        ];
+        let runs = [
+            ShapingRun {
+                text_start: 0,
+                text_end: 1,
+                script: u32::from_be_bytes(*b"Latn"),
+                direction: 4,
+                bidi_level: 0,
+                style: cap_style,
+            },
+            ShapingRun {
+                text_start: 1,
+                text_end: 7,
+                script: u32::from_be_bytes(*b"Latn"),
+                direction: 4,
+                bidi_level: 0,
+                style: body_style,
+            },
+        ];
+        let mut clusters =
+            retained_clusters("Abc def", &styles, &runs, &[(0, 9, 0, 1), (1, 9, 1, 7)]);
+        clusters
+            .rebuild_run_local_geometry(&runs, &styles, |_, _| {
+                Some(crate::FontGlyphExtents {
+                    x_min: 0,
+                    y_min: -200,
+                    x_max: 500,
+                    y_max: 800,
+                })
+            })
+            .unwrap();
+        clusters.ensure_word_breaks().unwrap();
+        clusters.ensure_placement_segment_anchors().unwrap();
+        let mut drop_cap_constraint = constraint();
+        drop_cap_constraint.drop_cap_lines = 3;
+        drop_cap_constraint.drop_cap_alignment = DROP_CAP_ALIGN_TEXT_TOP;
+        drop_cap_constraint.drop_cap_side = DROP_CAP_SIDE_INLINE_START;
+        drop_cap_constraint.drop_cap_margin_inline = 2.0;
+        let mut wide_region = region();
+        wide_region.inline_end = 40.0;
+        wide_region.clip_inline_end = 40.0;
+        wide_region.exclusion_count = 0;
+        let geometry = FlowGeometryArena {
+            constraints: vec![drop_cap_constraint],
+            regions: vec![RetainedRegion {
+                record: wide_region,
+                vertex_start: 0,
+            }],
+            ..FlowGeometryArena::default()
+        };
+        assert!(
+            prepare_drop_cap(
+                drop_cap_constraint,
+                wide_region,
+                &clusters,
+                &runs,
+                0,
+                0.0,
+                &styles,
+                fixture_metrics,
+                |_| Some(1),
+            )
+            .unwrap()
+            .is_some(),
+        );
+        let mut layout = FlowLayoutArena::default();
+        layout
+            .build_with_drop_cap_context(
+                &geometry,
+                &clusters,
+                &runs,
+                &styles,
+                &mut InlineSlotArena::default(),
+                0,
+                8,
+                4,
+                fixture_metrics,
+                |_| Some(1),
+            )
+            .unwrap();
+
+        assert_eq!(layout.drop_caps.len(), 1);
+        let cap = layout.drop_caps[0];
+        assert_eq!(cap.fragment.line.cluster_start, 0);
+        assert_eq!(cap.fragment.line.cluster_end, 1);
+        assert_eq!(cap.body_resume_cluster, 1);
+        assert_eq!(layout.fragments[0].line.cluster_start, 1);
+        assert!(layout.fragments[0].slot_start > wide_region.inline_start.into());
+        assert_eq!(
+            usize::try_from(cap.fragment.line.cluster_end).unwrap()
+                + layout
+                    .fragments
+                    .iter()
+                    .map(|fragment| {
+                        usize::try_from(fragment.line.cluster_end - fragment.line.cluster_start)
+                            .unwrap()
+                    })
+                    .sum::<usize>(),
+            clusters.starts.len(),
+        );
+
+        let rtl_cap = prepare_drop_cap(
+            drop_cap_constraint,
+            wide_region,
+            &clusters,
+            &runs,
+            1,
+            0.0,
+            &styles,
+            fixture_metrics,
+            |_| Some(1),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(rtl_cap.cut.end, f64::from(wide_region.inline_end));
+        assert!(rtl_cap.cut.start > f64::from(wide_region.inline_start));
+        assert!(rtl_cap.fragment.slot_start > layout.fragments[0].slot_start);
+
+        let mut contour_constraint = drop_cap_constraint;
+        contour_constraint.drop_cap_vertices_offset = 0;
+        contour_constraint.drop_cap_vertex_count = 3;
+        let contour_geometry = FlowGeometryArena {
+            constraints: vec![contour_constraint],
+            regions: vec![RetainedRegion {
+                record: wide_region,
+                vertex_start: 0,
+            }],
+            vertices: vec![
+                FlowVertex {
+                    inline: 0.0,
+                    block: 0.0,
+                },
+                FlowVertex {
+                    inline: 1.0,
+                    block: 0.0,
+                },
+                FlowVertex {
+                    inline: 0.0,
+                    block: 1.0,
+                },
+            ],
+            ..FlowGeometryArena::default()
+        };
+        let contour_cap = prepare_drop_cap(
+            contour_constraint,
+            wide_region,
+            &clusters,
+            &runs,
+            0,
+            0.0,
+            &styles,
+            fixture_metrics,
+            |_| Some(1),
+        )
+        .unwrap()
+        .unwrap();
+        let contour_middle = contour_cap.cut_block_start
+            + (contour_cap.cut_block_end - contour_cap.cut_block_start) * 0.5;
+        let contour_top = contour_cap
+            .cut_for_band(
+                &contour_geometry,
+                0,
+                contour_cap.cut_block_start,
+                contour_middle,
+            )
+            .unwrap()
+            .unwrap();
+        let contour_bottom = contour_cap
+            .cut_for_band(
+                &contour_geometry,
+                1,
+                contour_middle,
+                contour_cap.cut_block_end,
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(contour_top.start, contour_bottom.start);
+        assert!(contour_top.end > contour_bottom.end);
+
+        let safe_flags = clusters.flags.clone();
+        for flags in &mut clusters.flags[1..] {
+            *flags &= !CLUSTER_SAFE_BEFORE;
+        }
+        assert!(
+            prepare_drop_cap(
+                drop_cap_constraint,
+                wide_region,
+                &clusters,
+                &runs,
+                0,
+                0.0,
+                &styles,
+                fixture_metrics,
+                |_| Some(1),
+            )
+            .unwrap()
+            .is_none(),
+            "a cap must disable rather than split an unsafe shaping prefix",
+        );
+        clusters.flags.copy_from_slice(&safe_flags);
+
+        let mut region_with_object = wide_region;
+        region_with_object.exclusion_count = 1;
+        let object = FlowExclusion {
+            id: 11,
+            region_id: wide_region.id,
+            geometry_revision: 1,
+            vertices_offset: 0,
+            vertex_count: 0,
+            shape: SHAPE_RECTANGLE,
+            wrap_side: EXCLUSION_WRAP_BOTH,
+            inline_start: 30.0,
+            block_start: 0.0,
+            inline_end: 32.0,
+            block_end: 60.0,
+            margin_inline: 0.0,
+            margin_block: 0.0,
+        };
+        let combined_geometry = FlowGeometryArena {
+            constraints: vec![drop_cap_constraint],
+            regions: vec![RetainedRegion {
+                record: region_with_object,
+                vertex_start: 0,
+            }],
+            exclusions: vec![RetainedExclusion {
+                record: object,
+                vertex_start: 0,
+            }],
+            ..FlowGeometryArena::default()
+        };
+        let mut combined = FlowLayoutArena::default();
+        combined
+            .build_with_drop_cap_context(
+                &combined_geometry,
+                &clusters,
+                &runs,
+                &styles,
+                &mut InlineSlotArena::default(),
+                0,
+                8,
+                4,
+                fixture_metrics,
+                |_| Some(1),
+            )
+            .unwrap();
+        assert_eq!(combined.drop_caps.len(), 1);
+        assert!(!combined.lines.is_empty());
+        assert!(
+            combined
+                .fragments
+                .iter()
+                .any(|fragment| fragment.slot_start >= 32.0)
+        );
+
+        let mut later_cap = cap;
+        later_cap.line.flow_thread_id = 2;
+        let previous = FlowLayoutArena {
+            drop_caps: vec![later_cap],
+            ..FlowLayoutArena::default()
+        };
+        let mut later_constraint = drop_cap_constraint;
+        later_constraint.flow_thread_id = 2;
+        let ordered_geometry = FlowGeometryArena {
+            constraints: vec![drop_cap_constraint, later_constraint],
+            ..FlowGeometryArena::default()
+        };
+        let mut reconciled = FlowLayoutArena::default();
+        reconciled
+            .append_reconciled_drop_caps(
+                &previous,
+                &ordered_geometry,
+                drop_cap_constraint.flow_thread_id,
+                Some(cap),
+            )
+            .unwrap();
+        assert_eq!(
+            reconciled
+                .drop_caps
+                .iter()
+                .map(|cap| cap.line.flow_thread_id)
+                .collect::<Vec<_>>(),
+            [1, 2],
+        );
     }
 
     #[test]
@@ -1821,9 +2991,11 @@ mod tests {
                     &geometry,
                     &previous_clusters,
                     &changed_clusters,
+                    &[],
                     &styles,
                     &mut InlineSlotArena::default(),
                     2,
+                    0,
                     8,
                     1,
                     metrics,
@@ -1835,6 +3007,135 @@ mod tests {
         assert_eq!(changed.fragments[0], retained_prefix);
         assert_eq!(changed.fragments[1].line.advance, 3.0);
         assert_eq!(changed.fragments[2], retained_suffix);
+    }
+
+    #[test]
+    fn localized_drop_cap_source_edit_recomposes_cap_bands_and_reuses_suffix() {
+        let text = "Abc def ghi jkl mno pqr";
+        let text_end = u32::try_from(text.encode_utf16().count()).unwrap();
+        let cap_style = ResolvedStyle::test_typography(30.0, 0.0, 0.0);
+        let body_style = ResolvedStyle::test_typography(10.0, 0.0, 0.0);
+        let styles = [
+            StyleSegment {
+                text_start: 0,
+                text_end: 1,
+                style: cap_style,
+            },
+            StyleSegment {
+                text_start: 1,
+                text_end,
+                style: body_style,
+            },
+        ];
+        let runs = [
+            ShapingRun {
+                text_start: 0,
+                text_end: 1,
+                script: u32::from_be_bytes(*b"Latn"),
+                direction: 4,
+                bidi_level: 0,
+                style: cap_style,
+            },
+            ShapingRun {
+                text_start: 1,
+                text_end,
+                script: u32::from_be_bytes(*b"Latn"),
+                direction: 4,
+                bidi_level: 0,
+                style: body_style,
+            },
+        ];
+        let shaped = [(0, 9, 0, 1), (1, 9, 1, text_end)];
+        let prepare_clusters = |cap_advance: i32| {
+            let mut clusters = retained_clusters(text, &styles, &runs, &shaped);
+            clusters.glyph_x_advances[0] = cap_advance;
+            clusters.advances[0] =
+                f64::from(cap_advance) * f64::from(cap_style.font_size) / 1_000.0;
+            clusters
+                .rebuild_run_local_geometry(&runs, &styles, |_, _| {
+                    Some(crate::FontGlyphExtents {
+                        x_min: 0,
+                        y_min: -200,
+                        x_max: 500,
+                        y_max: 800,
+                    })
+                })
+                .unwrap();
+            clusters.ensure_word_breaks().unwrap();
+            clusters.ensure_placement_segment_anchors().unwrap();
+            clusters
+        };
+        let previous_clusters = prepare_clusters(500);
+        let changed_clusters = prepare_clusters(520);
+        let mut flow_constraint = constraint();
+        flow_constraint.drop_cap_lines = 3;
+        flow_constraint.drop_cap_alignment = DROP_CAP_ALIGN_TEXT_TOP;
+        flow_constraint.drop_cap_side = DROP_CAP_SIDE_INLINE_START;
+        flow_constraint.drop_cap_margin_inline = 2.0;
+        let mut wide_region = region();
+        wide_region.inline_end = 40.0;
+        wide_region.clip_inline_end = 40.0;
+        wide_region.exclusion_count = 0;
+        let geometry = FlowGeometryArena {
+            constraints: vec![flow_constraint],
+            regions: vec![RetainedRegion {
+                record: wide_region,
+                vertex_start: 0,
+            }],
+            ..FlowGeometryArena::default()
+        };
+        let build = |clusters: &ClusterArena| {
+            let mut layout = FlowLayoutArena::default();
+            layout
+                .build_with_drop_cap_context(
+                    &geometry,
+                    clusters,
+                    &runs,
+                    &styles,
+                    &mut InlineSlotArena::default(),
+                    0,
+                    8,
+                    4,
+                    fixture_metrics,
+                    |_| Some(1),
+                )
+                .unwrap();
+            layout
+        };
+        let previous = build(&previous_clusters);
+        assert!(previous.lines.len() > usize::from(flow_constraint.drop_cap_lines));
+        let mut changed = FlowLayoutArena::default();
+        assert!(
+            changed
+                .rebuild_until_state_converges(
+                    &previous,
+                    &geometry,
+                    &previous_clusters,
+                    &changed_clusters,
+                    &runs,
+                    &styles,
+                    &mut InlineSlotArena::default(),
+                    0,
+                    0,
+                    8,
+                    4,
+                    fixture_metrics,
+                    |_| Some(1),
+                )
+                .unwrap()
+        );
+        let cold = build(&changed_clusters);
+        assert_eq!(changed.lines, cold.lines);
+        assert_eq!(changed.fragments, cold.fragments);
+        assert_eq!(changed.drop_caps, cold.drop_caps);
+        assert_eq!(
+            changed.recomposed_line_range(),
+            Some((0, usize::from(flow_constraint.drop_cap_lines)))
+        );
+        assert_eq!(
+            &changed.lines[usize::from(flow_constraint.drop_cap_lines)..],
+            &previous.lines[usize::from(flow_constraint.drop_cap_lines)..]
+        );
     }
 
     #[test]
@@ -1915,9 +3216,11 @@ mod tests {
                     &geometry,
                     &previous_clusters,
                     &changed_clusters,
+                    &[],
                     &styles,
                     &mut InlineSlotArena::default(),
                     3,
+                    0,
                     8,
                     1,
                     metrics,
@@ -2005,9 +3308,11 @@ mod tests {
                     &geometry,
                     &previous_clusters,
                     &changed_clusters,
+                    &[],
                     &styles,
                     &mut InlineSlotArena::default(),
                     2,
+                    0,
                     8,
                     1,
                     metrics,
@@ -2018,6 +3323,220 @@ mod tests {
         assert!(changed.lines.is_empty());
         assert!(changed.fragments.is_empty());
         assert_eq!(changed.recomposed_line_range(), None);
+    }
+
+    #[test]
+    fn localized_exclusion_move_recomposes_through_the_dirty_band_and_matches_cold() {
+        let clusters = uniform_clusters(30, 2.0);
+        let styles = [uniform_style(30)];
+        let metrics = |_| {
+            Some(FontMetrics {
+                units_per_em: 1_000,
+                ascender: 800,
+                descender: -200,
+                line_gap: 0,
+                underline_position: -100,
+                underline_thickness: 50,
+                strikeout_position: 300,
+                strikeout_size: 50,
+            })
+        };
+        let geometry_at = |block_start: f32, revision: u32| {
+            let mut record = exclusion();
+            record.geometry_revision = revision;
+            record.block_start = block_start;
+            record.block_end = block_start + 10.0;
+            FlowGeometryArena {
+                constraints: vec![constraint()],
+                regions: vec![RetainedRegion {
+                    record: region(),
+                    vertex_start: 0,
+                }],
+                exclusions: vec![RetainedExclusion {
+                    record,
+                    vertex_start: 0,
+                }],
+                vertices: vec![],
+            }
+        };
+        let previous_geometry = geometry_at(10.0, 1);
+        let next_geometry = geometry_at(20.0, 2);
+        let LocalizedGeometryChange::ExclusionBand(dirty) = next_geometry
+            .localized_change_from(&previous_geometry)
+            .unwrap()
+        else {
+            panic!("moving one retained exclusion must yield one dirty band");
+        };
+        assert_eq!(dirty.region_id, 7);
+        assert_eq!(dirty.block_start, 10.0);
+        assert_eq!(dirty.block_end, 30.0);
+
+        let mut previous = FlowLayoutArena::default();
+        previous
+            .build(
+                &previous_geometry,
+                &clusters,
+                &styles,
+                &mut InlineSlotArena::default(),
+                16,
+                4,
+                metrics,
+                |_| Some(1),
+            )
+            .unwrap();
+        let mut cold = FlowLayoutArena::default();
+        cold.build(
+            &next_geometry,
+            &clusters,
+            &styles,
+            &mut InlineSlotArena::default(),
+            16,
+            4,
+            metrics,
+            |_| Some(1),
+        )
+        .unwrap();
+        let retained_prefix = previous.fragments[0];
+        let retained_suffix = previous.fragments[5..].to_vec();
+
+        let mut incremental = FlowLayoutArena::default();
+        assert!(
+            incremental
+                .rebuild_after_exclusion_change_until_state_converges(
+                    &previous,
+                    &next_geometry,
+                    &clusters,
+                    &[],
+                    &styles,
+                    &mut InlineSlotArena::default(),
+                    dirty,
+                    0,
+                    16,
+                    4,
+                    metrics,
+                    |_| Some(1),
+                )
+                .unwrap()
+        );
+
+        assert_eq!(incremental.lines, cold.lines);
+        assert_eq!(incremental.fragments, cold.fragments);
+        assert_eq!(incremental.fragments[0], retained_prefix);
+        assert_eq!(incremental.fragments[5..], retained_suffix);
+        assert_eq!(incremental.recomposed_line_range(), Some((1, 4)));
+    }
+
+    #[test]
+    fn localized_exclusion_move_preserves_a_drop_cap_and_matches_cold() {
+        let text = "aaaaaaaaaa\n".repeat(15);
+        let text_end = u32::try_from(text.len()).unwrap();
+        let style = ResolvedStyle::test_typography(2.0, 0.0, 0.0);
+        let styles = [StyleSegment {
+            text_start: 0,
+            text_end,
+            style,
+        }];
+        let runs = [ShapingRun {
+            text_start: 0,
+            text_end,
+            script: u32::from_be_bytes(*b"Latn"),
+            direction: 4,
+            bidi_level: 0,
+            style,
+        }];
+        let mut clusters = retained_clusters(&text, &styles, &runs, &[(0, 9, 0, text_end)]);
+        clusters
+            .rebuild_run_local_geometry(&runs, &styles, |_, _| {
+                Some(crate::FontGlyphExtents {
+                    x_min: 0,
+                    y_min: -200,
+                    x_max: 500,
+                    y_max: 800,
+                })
+            })
+            .unwrap();
+        clusters.ensure_word_breaks().unwrap();
+        clusters.ensure_placement_segment_anchors().unwrap();
+
+        let mut flow_constraint = constraint();
+        flow_constraint.max_lines = 64;
+        flow_constraint.drop_cap_lines = 3;
+        flow_constraint.drop_cap_alignment = DROP_CAP_ALIGN_BASELINE;
+        flow_constraint.drop_cap_side = DROP_CAP_SIDE_INLINE_START;
+        flow_constraint.drop_cap_margin_inline = 0.5;
+        let flow_region = region();
+        let geometry_at = |block_start: f32, revision: u32| {
+            let mut record = exclusion();
+            record.geometry_revision = revision;
+            record.block_start = block_start;
+            record.block_end = block_start + 10.0;
+            FlowGeometryArena {
+                constraints: vec![flow_constraint],
+                regions: vec![RetainedRegion {
+                    record: flow_region,
+                    vertex_start: 0,
+                }],
+                exclusions: vec![RetainedExclusion {
+                    record,
+                    vertex_start: 0,
+                }],
+                vertices: vec![],
+            }
+        };
+        let previous_geometry = geometry_at(10.0, 1);
+        let next_geometry = geometry_at(20.0, 2);
+        let LocalizedGeometryChange::ExclusionBand(dirty) = next_geometry
+            .localized_change_from(&previous_geometry)
+            .unwrap()
+        else {
+            panic!("moving the retained exclusion must yield one dirty band");
+        };
+
+        let build = |geometry: &FlowGeometryArena| {
+            let mut flow = FlowLayoutArena::default();
+            flow.build_with_drop_cap_context(
+                geometry,
+                &clusters,
+                &runs,
+                &styles,
+                &mut InlineSlotArena::default(),
+                0,
+                64,
+                4,
+                fixture_metrics,
+                |_| Some(1),
+            )
+            .unwrap();
+            flow
+        };
+        let previous = build(&previous_geometry);
+        let cold = build(&next_geometry);
+        let mut incremental = FlowLayoutArena::default();
+        let retained = incremental
+            .rebuild_after_exclusion_change_until_state_converges(
+                &previous,
+                &next_geometry,
+                &clusters,
+                &runs,
+                &styles,
+                &mut InlineSlotArena::default(),
+                dirty,
+                0,
+                64,
+                4,
+                fixture_metrics,
+                |_| Some(1),
+            )
+            .unwrap();
+        assert!(
+            retained,
+            "the moved exclusion must converge past its dirty band"
+        );
+
+        assert_eq!(incremental.lines, cold.lines);
+        assert_eq!(incremental.fragments, cold.fragments);
+        assert_eq!(incremental.drop_caps, cold.drop_caps);
+        assert!(incremental.recomposed_line_range().is_some());
     }
 
     #[test]
@@ -2226,6 +3745,13 @@ mod tests {
             justify_max_word_space_ratio: 0.0,
             justify_letter_space_expansion: 0.0,
             last_line: LAST_LINE_AUTO,
+            drop_cap_lines: 0,
+            drop_cap_alignment: 0,
+            drop_cap_side: 0,
+            drop_cap_margin_inline: 0.0,
+            drop_cap_margin_block: 0.0,
+            drop_cap_vertices_offset: 0,
+            drop_cap_vertex_count: 0,
         }
     }
 

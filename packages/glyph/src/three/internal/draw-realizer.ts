@@ -29,7 +29,6 @@ interface DrawOwner {
   glyphStorage?(storageKey: string):
     | Readonly<{
         transforms: THREE.StorageInstancedBufferAttribute;
-        pivots: THREE.StorageInstancedBufferAttribute;
       }>
     | undefined;
 }
@@ -52,7 +51,6 @@ interface PrepareDrawReplacementOptions {
 /** Builds one ordered Three draw-tree replacement without mutating the committed scene. */
 export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): PreparedDrawReplacement {
   const { context, owner, bindingId } = options;
-  prepareOwnerGlyphStorage(context.buffers, owner);
   const materials = new ThreeMaterialRealizer({
     coordinator: options.coordinator,
     owner,
@@ -126,6 +124,8 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
           decoration || resolvedResource === undefined ? undefined : glyphOriginBuffer(resolvedResource);
         const origins = originDeclaration === undefined ? undefined : byCodecId.get(originDeclaration.id);
         const stableIds = decoration ? undefined : byCodecId.get(threeSystemBuffers.stableGlyphId.id);
+        if (stableIds !== undefined) owner.prepareGlyphStorage?.(glyphStorageKey(stableIds), stableIds.capacityRecords);
+        const glyphStorage = stableIds === undefined ? undefined : owner.glyphStorage?.(glyphStorageKey(stableIds));
         if (originDeclaration !== undefined && origins !== undefined && stableIds !== undefined) {
           nextOriginSegments.push({
             origins,
@@ -148,6 +148,8 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
           transform,
           context.transformGeneration,
           drawGeometry.key,
+          decoration ? 'placement:none' : `placement:${context.placementTable?.storageKey ?? 'missing'}`,
+          glyphStorage === undefined ? 'glyph-transform:none' : `glyph-transform:${glyphStorageKey(stableIds!)}`,
         );
         const reusable = previous.get(key)?.shift();
         if (reusable !== undefined) {
@@ -170,10 +172,8 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
 
         const geometry = realizeGeometry(drawGeometry, span.recordCount);
         for (const buffer of byCodecId.values()) geometry.setAttribute(buffer.threeAttributeName, buffer.attribute);
-        const glyphStorage = stableIds === undefined ? undefined : owner.glyphStorage?.(glyphStorageKey(stableIds));
         if (glyphStorage !== undefined) {
           geometry.setAttribute('_pmndrsGlyphInstanceTransforms', glyphStorage.transforms);
-          geometry.setAttribute('_pmndrsGlyphInstancePivots', glyphStorage.pivots);
         }
         if (transform.kind === 'indexed') geometry.setAttribute('_pmndrsGlyphTransforms', context.transformAttribute);
         const mesh = new THREE.Mesh(geometry, material);
@@ -223,15 +223,6 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
   };
 }
 
-function prepareOwnerGlyphStorage(buffers: ReadonlyMap<ThreeBufferBinding, RetainedBuffer>, owner: DrawOwner): void {
-  if (owner.prepareGlyphStorage === undefined) return;
-  for (const buffer of buffers.values()) {
-    if (buffer.codecBufferId === threeSystemBuffers.stableGlyphId.id) {
-      owner.prepareGlyphStorage(glyphStorageKey(buffer), buffer.capacityRecords);
-    }
-  }
-}
-
 function transformRealization(
   buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
   transformId: number,
@@ -266,6 +257,8 @@ function drawRealizationKey(
   transform: TransformRealization,
   transformGeneration: number,
   geometry: string,
+  placementKey: string,
+  glyphTransformKey: string,
 ): string {
   // The Rust plan compiler publishes Codec buffers in declaration order and the stable order buffer last.
   // Preserve that package-owned order instead of sorting the complete binding set for every realized span.
@@ -274,5 +267,5 @@ function drawRealizationKey(
     transform.kind === 'direct'
       ? `direct:${transform.transformId}`
       : transformProgramKey(transform, transformGeneration);
-  return `${programKey}:${resourceKey}:${materialKey}:${clipId}:${depthKey}:${transformKey}:${geometry}:${bufferKey}`;
+  return `${programKey}:${resourceKey}:${materialKey}:${clipId}:${depthKey}:${transformKey}:${geometry}:${placementKey}:${glyphTransformKey}:${bufferKey}`;
 }

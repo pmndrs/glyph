@@ -31,6 +31,7 @@ import type {
   ComparisonWorkloadAnimationScratch,
   ComparisonWorkloadConfiguration,
   ComparisonWorkloadId,
+  ComparisonWorkloadReflowPhases,
 } from '../../../workloads/comparison/contracts';
 import {
   committedTextMetrics,
@@ -45,7 +46,7 @@ import { mtsdfDataConfiguration, type MtsdfRasterConfiguration } from '../../../
 import { slugDataConfiguration, type SlugRasterConfiguration } from '../../../techniques/slug/metadata';
 import { createCanvasSurface } from '../../../renderer/canvas-surface';
 import type { LiveFrameTelemetrySnapshot } from '../../../renderer/live-frame-telemetry';
-import { createTextUpdateTelemetry } from '../../../renderer/text-update-telemetry';
+import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from '../../../renderer/text-update-telemetry';
 import {
   loadBenchmarkFontAsset,
   type BakedSlugArtifactSource,
@@ -129,6 +130,7 @@ export type ComparisonWorkloadStats = RuntimeLiveStats & {
   readonly appliedShowLayoutBounds: boolean;
   readonly reflowCount: number;
   readonly lastReflowMs: number;
+  readonly reflowTimings: TextUpdateTimingSummary;
   readonly paintRevision: number;
   readonly lastPaintUpdateMs: number;
   readonly sourceTextLength: number;
@@ -377,6 +379,7 @@ async function createComparisonWorkloadRuntime(
   });
   let camera = createWorkloadCamera(configuration.workload, width, height);
   const textUpdateTelemetry = createTextUpdateTelemetry();
+  const reflowTelemetry = createTextUpdateTelemetry();
   const visibleEntryMetrics: MutableVisibleEntryMetrics = {
     drawCount: 0,
     glyphCount: 0,
@@ -844,9 +847,15 @@ async function createComparisonWorkloadRuntime(
       });
     }
     const startupMs = performance.now() - startupStarted;
-    const recordReflow = (duration: number): void => {
+    const recordReflow = (duration: number, phases?: ComparisonWorkloadReflowPhases): void => {
       reflowCount += 1;
       lastReflowMs = duration;
+      reflowTelemetry.record({
+        scheduleMs: phases?.stageMs ?? 0,
+        readyMs: phases?.publishMs ?? 0,
+        sceneMs: phases?.layoutMs ?? 0,
+        totalMs: duration,
+      });
     };
 
     const renderFrame = (timestamp: number, renderScene = true): void => {
@@ -992,6 +1001,7 @@ async function createComparisonWorkloadRuntime(
           appliedShowLayoutBounds: configuration.showLayoutBounds,
           reflowCount,
           lastReflowMs,
+          reflowTimings: reflowTelemetry.summary(),
           paintRevision,
           lastPaintUpdateMs,
           sourceTextLength: visibleEntryMetrics.sourceTextLength,
@@ -1222,7 +1232,7 @@ function animateEntries(
   scene: THREE.Scene,
   scratch: ComparisonWorkloadAnimationScratch,
   onError: (error: unknown) => void,
-  onReflow: (duration: number) => void,
+  onReflow: (duration: number, phases?: ComparisonWorkloadReflowPhases) => void,
   camera?: THREE.OrthographicCamera | THREE.PerspectiveCamera,
 ): void {
   comparisonWorkloadDefinition(configuration.workload).animate(
@@ -1594,6 +1604,13 @@ function disposeEntries(entries: readonly WorkloadEntry[]): void {
     entry.labelText?.dispose();
     entry.bounds?.geometry.dispose();
     entry.bounds?.material.dispose();
+    entry.editorialObstacle?.geometry.dispose();
+    const obstacleMaterial = entry.editorialObstacle?.material;
+    if (Array.isArray(obstacleMaterial)) {
+      for (const material of obstacleMaterial) material.dispose();
+    } else {
+      obstacleMaterial?.dispose();
+    }
   }
 }
 

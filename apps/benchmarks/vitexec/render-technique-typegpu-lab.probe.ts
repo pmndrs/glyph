@@ -8,6 +8,7 @@ if (
   report.initialVisiblePixels < 1 ||
   report.updatedVisiblePixels < 1 ||
   report.changedPixels < 1 ||
+  report.coldMismatchPixels !== 0 ||
   report.recoveredDraws < 1 ||
   report.recoveredVisiblePixels < 1 ||
   report.idleGpuSubmissions !== 0 ||

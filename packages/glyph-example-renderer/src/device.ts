@@ -19,7 +19,7 @@ import {
 
 import type { ExampleBindings, ExampleBufferBinding, ExampleResolvedResource } from './config.js';
 import type { ExampleDraw, ExampleDrawList, ExamplePrimitiveRecord } from './draw-list.js';
-import { EXAMPLE_RENDERER_PROGRAM_NAMESPACE } from './codec.js';
+import { EXAMPLE_RENDERER_PROGRAM_NAMESPACE, exampleSystemBuffers } from './codec.js';
 
 /** One named instance-buffer input required by an example renderer shader. */
 export interface ExampleRendererShaderBuffer {
@@ -142,6 +142,8 @@ export interface ExampleRealizedDraw extends ExampleDrawBindings {
   readonly draw: ExampleDraw;
   readonly primitive: ExamplePrimitiveRecord;
   readonly geometry: ExampleGeometry;
+  /** Adapter-local direct offsets resolved from the engine-owned occurrence slots and shared placement table. */
+  readonly placementOffset: Uint8Array;
 }
 
 /** Deterministic CPU oracle and reference implementation of the bound renderer contract. */
@@ -347,8 +349,55 @@ function realizeDraw(
   for (const name of Object.keys(shader.variant.resources)) {
     if (!namedResources.has(name)) throw new Error(`example renderer is missing its required "${name}" resource`);
   }
+  const placementSlotBinding = draw.buffers.find(
+    (candidate) =>
+      candidate.input.declaration.kind === 'codec' &&
+      candidate.input.declaration.value.id === exampleSystemBuffers.placementSlot.id,
+  );
+  const placementSlots = placementSlotBinding === undefined ? undefined : buffers.get(placementSlotBinding);
+  if (placementSlots === undefined) throw new Error('example renderer is missing its placement-slot buffer');
+  if (placementSlots.scalarType !== 'u32' || placementSlots.vectorWidth !== 1) {
+    throw new TypeError('example renderer placement slots must contain u32 records');
+  }
+  const placementTables = [...buffers.values()].filter(
+    (candidate) => candidate.binding.input.declaration.kind === 'placement',
+  );
+  if (placementTables.length !== 1) throw new Error('example renderer needs exactly one shared placement table');
+  const placementTable = placementTables[0]!;
+  if (placementTable.scalarType !== 'f32' || placementTable.vectorWidth !== 2) {
+    throw new TypeError('example renderer placement table must contain f32x2 records');
+  }
+  const placementOffset = resolvePlacementOffsets(placementSlots.bytes, placementTable.bytes);
   const geometry = geometryFor(shader.variant.geometry, namedResources, draw.primitive.recordCount);
-  return Object.freeze({ draw, primitive: draw.primitive, geometry, buffers: namedBuffers, resources: namedResources });
+  return Object.freeze({
+    draw,
+    primitive: draw.primitive,
+    geometry,
+    buffers: namedBuffers,
+    resources: namedResources,
+    placementOffset,
+  });
+}
+
+function resolvePlacementOffsets(slots: Uint8Array, table: Uint8Array): Uint8Array {
+  if (slots.byteLength % Uint32Array.BYTES_PER_ELEMENT !== 0) {
+    throw new RangeError('example renderer placement-slot buffer has a partial record');
+  }
+  const rowBytes = 2 * Float32Array.BYTES_PER_ELEMENT;
+  if (table.byteLength % rowBytes !== 0) {
+    throw new RangeError('example renderer placement table has a partial record');
+  }
+  const result = new Uint8Array((slots.byteLength / Uint32Array.BYTES_PER_ELEMENT) * rowBytes);
+  const slotView = new DataView(slots.buffer, slots.byteOffset, slots.byteLength);
+  for (let index = 0; index < result.byteLength / rowBytes; index += 1) {
+    const slot = slotView.getUint32(index * Uint32Array.BYTES_PER_ELEMENT, true);
+    const source = slot * rowBytes;
+    if (source + rowBytes > table.byteLength) {
+      throw new RangeError('example renderer placement slot exceeds the shared table');
+    }
+    result.set(table.subarray(source, source + rowBytes), index * rowBytes);
+  }
+  return result;
 }
 
 function cloneBuffers(

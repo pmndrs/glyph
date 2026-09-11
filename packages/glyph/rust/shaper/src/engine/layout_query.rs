@@ -11,8 +11,10 @@ use super::{
     flow_composition::{FlowFragment, FlowLayoutArena, FlowLine, NO_BOUNDARY},
     flow_geometry::FlowGeometryArena,
     frame::{AXIS_AT_MOST, AXIS_EXACT, AXIS_UNCONSTRAINED},
+    placement_state::SegmentTranslation,
     positioning::{
-        SemanticGlyph, ThreadTypography, constraint_typography, positioned_fragment_advance,
+        PositionedSemanticGlyph, ThreadTypography, constraint_typography,
+        positioned_fragment_advance,
     },
     semantic_view::{
         SEMANTIC_GLYPH, SEMANTIC_LINE, SEMANTIC_PARAGRAPH_MEASUREMENT, SemanticRecord,
@@ -41,7 +43,12 @@ struct InkBounds {
 }
 
 impl InkBounds {
-    fn join_glyph(&mut self, glyph: &SemanticGlyph) {
+    fn join_glyph(
+        &mut self,
+        glyph: PositionedSemanticGlyph,
+        translation: SegmentTranslation,
+    ) -> Result<(), EngineError> {
+        let glyph = glyph.placed(translation)?;
         let inline_min = f64::from(glyph.ink_inline_start);
         let block_min = f64::from(glyph.ink_block_start);
         let inline_max = inline_min + f64::from(glyph.ink_inline_extent);
@@ -58,6 +65,7 @@ impl InkBounds {
             self.block_max = block_max;
             self.joined = true;
         }
+        Ok(())
     }
 
     fn join(&mut self, other: Self) {
@@ -123,28 +131,36 @@ fn semantic_line_record(
 /// The ink box of one line's glyph span. An out-of-range or absent span yields an unjoined box,
 /// which is the same answer a query that skipped positioning gives.
 fn line_ink_bounds(
-    positioned_glyphs: &[SemanticGlyph],
+    positioned_glyphs: &[PositionedSemanticGlyph],
+    placement_translations: &[SegmentTranslation],
     starts: &[u32],
     counts: &[u32],
     index: usize,
-) -> InkBounds {
+) -> Result<InkBounds, EngineError> {
     let mut bounds = InkBounds::default();
     let (Some(start), Some(count)) = (starts.get(index), counts.get(index)) else {
-        return bounds;
+        return Ok(bounds);
     };
     let (Ok(start), Ok(count)) = (usize::try_from(*start), usize::try_from(*count)) else {
-        return bounds;
+        return Ok(bounds);
     };
     let Some(span) = start
         .checked_add(count)
         .and_then(|end| positioned_glyphs.get(start..end))
     else {
-        return bounds;
+        return Ok(bounds);
     };
-    for glyph in span {
-        bounds.join_glyph(glyph);
+    for glyph in span.iter().copied() {
+        let translation = placement_translations
+            .get(
+                usize::try_from(glyph.placement_segment)
+                    .map_err(|_| EngineError::InvalidRequest)?,
+            )
+            .copied()
+            .ok_or(EngineError::InvalidRequest)?;
+        bounds.join_glyph(glyph, translation)?;
     }
-    bounds
+    Ok(bounds)
 }
 
 /// The visible glyph totals of a composed flow, derived at line level from the
@@ -166,6 +182,23 @@ pub(crate) fn visible_glyph_counts(
     }
     let mut total = 0_usize;
     let mut missing = 0_usize;
+    for cap in &flow.drop_caps {
+        for cluster in usize::try_from(cap.fragment.line.cluster_start)
+            .map_err(|_| EngineError::InvalidRequest)?
+            ..usize::try_from(cap.fragment.line.cluster_end)
+                .map_err(|_| EngineError::InvalidRequest)?
+        {
+            let (count, zeros) = range_counts(
+                &clusters.glyph_ids,
+                clusters.glyph_starts[cluster],
+                clusters.glyph_counts[cluster],
+            )?;
+            total = total
+                .checked_add(count)
+                .ok_or(EngineError::ResultTooLarge)?;
+            missing += zeros;
+        }
+    }
     for line in flow.lines.iter().copied() {
         for fragment in line_fragments(flow, line)?.iter().copied() {
             let cluster_start = usize::try_from(fragment.line.cluster_start)
@@ -241,7 +274,8 @@ pub(crate) fn append_measurement(
     visible_glyphs: (usize, usize),
     geometry: &FlowGeometryArena,
     flow: &FlowLayoutArena,
-    positioned_glyphs: &[SemanticGlyph],
+    positioned_glyphs: &[PositionedSemanticGlyph],
+    placement_translations: &[SegmentTranslation],
     semantic_line_glyph_starts: &[u32],
     semantic_line_glyph_counts: &[u32],
     semantic_line_inline_extents: Option<&[f64]>,
@@ -325,6 +359,16 @@ pub(crate) fn append_measurement(
         };
         content_width = content_width.max(advance);
         content_height = content_height.max(line.block_start + line.height);
+        let drop_cap = (index == 0 || flow.lines[index - 1].flow_thread_id != line.flow_thread_id)
+            .then(|| {
+                flow.drop_caps
+                    .iter()
+                    .find(|cap| cap.line.flow_thread_id == line.flow_thread_id)
+            })
+            .flatten();
+        if let Some(cap) = drop_cap {
+            content_height = content_height.max(cap.line.block_start + cap.line.height);
+        }
         consumed_clusters = consumed_clusters
             .max(usize::try_from(last.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?);
         let item_start = if include_glyphs {
@@ -342,14 +386,15 @@ pub(crate) fn append_measurement(
         };
         let line_ink = line_ink_bounds(
             positioned_glyphs,
+            placement_translations,
             semantic_line_glyph_starts,
             semantic_line_glyph_counts,
             index,
-        );
+        )?;
         target.push(semantic_line_record(
             paragraph_id,
             index,
-            first.line.text_start,
+            drop_cap.map_or(first.line.text_start, |cap| cap.fragment.line.text_start),
             last.line.text_end,
             item_start,
             item_count,
@@ -370,7 +415,15 @@ pub(crate) fn append_measurement(
         if target.len() != glyph_record_start {
             return Err(EngineError::InvalidRequest);
         }
-        for glyph in positioned_glyphs {
+        for glyph in positioned_glyphs.iter().copied() {
+            let translation = placement_translations
+                .get(
+                    usize::try_from(glyph.placement_segment)
+                        .map_err(|_| EngineError::InvalidRequest)?,
+                )
+                .copied()
+                .ok_or(EngineError::InvalidRequest)?;
+            let glyph = glyph.placed(translation)?;
             target.push(SemanticRecord {
                 id: glyph.stable_id,
                 kind: SEMANTIC_GLYPH,
@@ -475,6 +528,14 @@ pub(crate) fn flow_extents(
             .width
             .max(line_inline_extent(flow, line, index, clusters, typography)?);
         extents.height = extents.height.max(line.block_start + line.height);
+        if (index == 0 || flow.lines[index - 1].flow_thread_id != line.flow_thread_id)
+            && let Some(cap) = flow
+                .drop_caps
+                .iter()
+                .find(|cap| cap.line.flow_thread_id == line.flow_thread_id)
+        {
+            extents.height = extents.height.max(cap.line.block_start + cap.line.height);
+        }
         extents.consumed_clusters = extents
             .consumed_clusters
             .max(usize::try_from(last.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?);
@@ -497,11 +558,20 @@ fn line_inline_extent(
         .lines
         .get(index + 1)
         .is_none_or(|next| next.flow_thread_id != line.flow_thread_id);
-    let inline_start = fragments
+    let mut inline_start = fragments
         .iter()
         .map(|fragment| fragment.slot_start)
         .fold(f64::INFINITY, f64::min);
     let mut inline_end = f64::NEG_INFINITY;
+    if (index == 0 || flow.lines[index - 1].flow_thread_id != line.flow_thread_id)
+        && let Some(cap) = flow
+            .drop_caps
+            .iter()
+            .find(|cap| cap.line.flow_thread_id == line.flow_thread_id)
+    {
+        inline_start = inline_start.min(cap.fragment.slot_start);
+        inline_end = inline_end.max(cap.fragment.slot_start + cap.fragment.line.advance);
+    }
     for fragment in fragments.iter().copied() {
         let indent = if fragment.line.cluster_start == 0 {
             typography.first_line_indent
@@ -624,6 +694,7 @@ mod tests {
             &geometry,
             &flow,
             &[layout_glyph(3), layout_glyph(0)],
+            &[SegmentTranslation::default()],
             &[0],
             &[2],
             None,
@@ -687,6 +758,7 @@ mod tests {
             &geometry,
             &flow,
             &positioned,
+            &[SegmentTranslation::default()],
             &[0],
             &[2],
             Some(&[7.0]),
@@ -726,6 +798,7 @@ mod tests {
             &geometry,
             &flow,
             &positioned,
+            &[SegmentTranslation::default()],
             &[0],
             &[2],
             Some(&[7.0]),
@@ -789,6 +862,7 @@ mod tests {
             (0, 0),
             &geometry,
             &flow,
+            &[],
             &[],
             &[0],
             &[0],
@@ -857,6 +931,7 @@ mod tests {
             &geometry,
             &flow,
             &[],
+            &[],
             &[0],
             &[0],
             Some(&[140.64]),
@@ -899,11 +974,18 @@ mod tests {
             justify_max_word_space_ratio: 0.0,
             justify_letter_space_expansion: 0.0,
             last_line: 1,
+            drop_cap_lines: 0,
+            drop_cap_alignment: 0,
+            drop_cap_side: 0,
+            drop_cap_margin_inline: 0.0,
+            drop_cap_margin_block: 0.0,
+            drop_cap_vertices_offset: 0,
+            drop_cap_vertex_count: 0,
         }
     }
 
-    fn layout_glyph(glyph_id: u16) -> SemanticGlyph {
-        SemanticGlyph {
+    fn layout_glyph(glyph_id: u16) -> PositionedSemanticGlyph {
+        PositionedSemanticGlyph {
             stable_id: u32::from(glyph_id) + 1,
             font_handle: 1,
             glyph_id,
@@ -912,12 +994,12 @@ mod tests {
             font_size: 16.0,
             inline_origin: 0.0,
             block_origin: 0.0,
-            ..SemanticGlyph::default()
+            ..PositionedSemanticGlyph::default()
         }
     }
 
-    fn inked_glyph(glyph_id: u16, inline_start: f32, block_start: f32) -> SemanticGlyph {
-        SemanticGlyph {
+    fn inked_glyph(glyph_id: u16, inline_start: f32, block_start: f32) -> PositionedSemanticGlyph {
+        PositionedSemanticGlyph {
             ink_inline_start: inline_start,
             ink_block_start: block_start,
             ink_inline_extent: 3.0,
@@ -968,6 +1050,10 @@ mod tests {
         // The second glyph overhangs the first on both axes, which is the case an advance-derived
         // extent gets wrong.
         let positioned = [inked_glyph(3, -1.0, -2.0), inked_glyph(4, 5.0, 1.0)];
+        let placement = [SegmentTranslation {
+            translation_inline: 10.0,
+            translation_block: 20.0,
+        }];
         let mut records = vec![];
         append_measurement(
             &mut records,
@@ -978,6 +1064,7 @@ mod tests {
             &geometry,
             &flow,
             &positioned,
+            &placement,
             &[0],
             &[2],
             Some(&[7.0]),
@@ -995,12 +1082,15 @@ mod tests {
         assert_eq!(line.block_start, 4.0);
         assert_eq!(line.ascent, 4.0);
         assert_eq!(line.block_extent - line.ascent, 1.0);
-        // Ink spans [-1, 8) inline and [-2, 7) block, which is wider than the 7.0 advance.
-        assert_eq!(line.ink_inline_start, -1.0);
+        // Local ink spans [-1, 8) inline and [-2, 7) block. The query composes the retained
+        // placement once while preserving its 9x9 union.
+        assert_eq!(line.ink_inline_start, 9.0);
         assert_eq!(line.ink_inline_extent, 9.0);
-        assert_eq!(line.ink_block_start, -2.0);
+        assert_eq!(line.ink_block_start, 18.0);
         assert_eq!(line.ink_block_extent, 9.0);
         assert!(line.ink_inline_extent > line.inline_extent);
+        assert_eq!(records[2].inline_start, 10.0);
+        assert_eq!(records[2].block_start, 20.0);
 
         assert_eq!(
             paragraph.flags & MEASUREMENT_FLAG_INK_BOUNDS,
@@ -1012,7 +1102,7 @@ mod tests {
         assert_eq!(paragraph.ink_block_start, line.ink_block_start);
         assert_eq!(paragraph.ink_block_extent, line.ink_block_extent);
         assert_eq!(records[2].inline_advance, 4.0);
-        assert_eq!(records[2].ink_inline_start, -1.0);
+        assert_eq!(records[2].ink_inline_start, 9.0);
     }
 
     /// A query that positioned nothing must not publish an ink box at the origin.
@@ -1061,6 +1151,7 @@ mod tests {
             (2, 0),
             &geometry,
             &flow,
+            &[],
             &[],
             &[],
             &[],

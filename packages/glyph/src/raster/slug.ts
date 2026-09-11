@@ -222,8 +222,8 @@ export const slugSchema: TechniqueSchema<
 export const slugCodec: RasterCodec<typeof slug, typeof slugSchema> = registerGlyphRasterCodec({
   raster: slug,
   schema: slugSchema,
-  codecBody(system) {
-    const p = techniqueProgram(slugSchema, { inverseFontSize: true, system });
+  codecBody() {
+    const p = techniqueProgram(slugSchema, { inverseFontSize: true });
     const { inlineOrigin, blockOrigin, fontSize, color, inverseFontSize } = p.semantics;
     if (inverseFontSize === undefined) throw new TypeError('the Slug program declares inverseFontSize');
     const {

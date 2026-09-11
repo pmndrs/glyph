@@ -9,20 +9,21 @@ export const packageSizeBudgets = {
   },
   // GlyphConfig, Codec, schema, raster-format helpers, and the zero-copy command-buffer contract.
   'glyph-config-js': {
-    // Wildcard config leaves now isolate this renderer-neutral graph at 42,451 raw / 42,188 minified /
-    // 11,023 gzip / 9,742 Brotli. Keep that reduction protected rather than retaining the bundled-era ceiling.
-    rawBytes: 44_000,
-    minifiedBytes: 44_000,
-    gzipBytes: 11_500,
-    brotliBytes: 10_200,
+    // The direct occurrence-origin and projected-flow contracts measure 44,703 raw / 44,426 minified /
+    // 11,682 gzip / 10,251 Brotli. Keep bounded headroom without restoring the old bundled graph.
+    rawBytes: 46_000,
+    minifiedBytes: 46_000,
+    gzipBytes: 12_000,
+    brotliBytes: 10_500,
   },
   // `/typegpu` is the higher-level direct renderer over all three first-party formats. With optional peers external,
-  // it measures 225,879 raw / 222,963 minified / 42,571 gzip / 36,048 Brotli on the complete paragraph stack.
+  // the final transactional occurrence-slot and shared-placement path measures 233,947 raw / 231,004 minified /
+  // 44,210 gzip / 37,331 Brotli. Keep less than one percent raw/minified headroom and bounded compression variance.
   'typegpu-direct-renderer-js': {
-    rawBytes: 227_000,
-    minifiedBytes: 224_000,
-    gzipBytes: 43_000,
-    brotliBytes: 36_500,
+    rawBytes: 236_000,
+    minifiedBytes: 233_000,
+    gzipBytes: 45_000,
+    brotliBytes: 38_000,
   },
   'font-validator-js': {
     // The current tsdown graph is 734,377 raw / 584,675 minified / 138,073 gzip / 113,039 Brotli. Keep a small
@@ -72,28 +73,29 @@ export const packageSizeBudgets = {
   // the gate un-repinned; this branch changed no Rust behaviour (formatting only), and the
   // measured artifact is byte-identical to its base commit.
   // The selective glyph borrow adds bounded demand-read ABI code without changing the retained A/B publication path.
+  // The completed LayoutRun frontier, incremental exclusion/drop-cap flow, and lazy absolute semantic placement measure
+  // 1,374,150 raw / 532,034 gzip / 409,424 Brotli; the ceiling retains less than one percent headroom.
   'text-shaper-wasm': {
-    rawBytes: 1_208_000,
-    minifiedBytes: 1_208_000,
-    gzipBytes: 470_000,
-    brotliBytes: 368_000,
+    rawBytes: 1_385_000,
+    minifiedBytes: 1_385_000,
+    gzipBytes: 536_000,
+    brotliBytes: 413_000,
   },
-  // Three realization plus the root graph measures 501,283 raw / 489,958 minified / 123,383 gzip / 101,597 Brotli
-  // after tsdown shared-chunk bundling and the single-graph font-loader consolidation. The old raw ceiling described
-  // unbundled tsc output and no longer measured the published graph; these ceilings track the actual consumer graph.
+  // Three realization plus the projected-flow, placement-table, and live-transform root graph measures 554,014 raw /
+  // 541,710 minified / 136,538 gzip / 111,754 Brotli after tsdown shared-chunk bundling.
   'three-runtime-js': {
-    rawBytes: 525_000,
-    minifiedBytes: 512_000,
-    gzipBytes: 128_000,
-    brotliBytes: 106_000,
+    rawBytes: 558_000,
+    minifiedBytes: 546_000,
+    gzipBytes: 138_000,
+    brotliBytes: 113_000,
   },
-  // `/three/typegpu` prices the complete optional integration; selective glyph inspection measures
-  // 626,784 raw / 613,457 minified / 140,711 gzip / 115,199 Brotli with peers external.
+  // `/three/typegpu` prices the complete optional integration at 662,332 raw / 648,309 minified /
+  // 149,746 gzip / 122,207 Brotli with peers external.
   'three-typegpu-runtime-js': {
-    rawBytes: 630_000,
-    minifiedBytes: 617_000,
-    gzipBytes: 142_000,
-    brotliBytes: 117_000,
+    rawBytes: 667_000,
+    minifiedBytes: 653_000,
+    gzipBytes: 152_000,
+    brotliBytes: 124_000,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,

@@ -5,21 +5,25 @@ use alloc::vec::Vec;
 use crate::{FontGlyphExtents, FontMetrics, bidi::BidiAnalysis};
 
 use super::placement_state::{
-    GlyphSource, LayoutRunOwner, PlacementState, SegmentTranslation, SliceRole,
+    GlyphSource, LayoutRunOwner, PlacementIdentity, PlacementState, RetainedLinePlacement,
+    RetainedSegmentRemap, SegmentTranslation, SliceRole,
 };
 
 use super::{
     EngineError, FrameFault,
     cluster_state::{
         BoundaryRunRole, CLUSTER_HARD_BREAK, CLUSTER_SPACE, ClusterArena, LayoutRun,
-        LayoutRunSourceKind, RunCanonicalRevision,
+        LayoutRunSourceKind, PlacementCluster, RunCanonicalRevision,
     },
     codec_gather::{LayoutGlyph, PAINT_LAYER_GLYPH},
-    flow_composition::{FlowFragment, FlowLayoutArena, FlowLine},
+    flow_composition::{FlowDropCap, FlowFragment, FlowLayoutArena, FlowLine},
     frame::{ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START},
     identity_index::{IdentityIndex, IdentityIndexError},
+    line_composition::ComposedLine,
+    placement_slot::PlacementHandle,
     run_local::{
-        ClusterFinish, RunLocalArena, RunLocalBuildError, RunLocalGlyphInput, RunLocalWriter,
+        ClusterFinish, RunLocalArena, RunLocalBuildError, RunLocalGlyph, RunLocalGlyphInput,
+        RunLocalWriter,
     },
     run_slot::RunHandle,
     shaping_state::{BoundaryShape, BoundaryShapeArena, ShapingRun},
@@ -32,7 +36,9 @@ pub(crate) const SEMANTIC_F32_CHANGE_FIELD_COUNT: usize = 8;
 pub(crate) const SEMANTIC_U32_BASE_FIELD_COUNT: usize = 6;
 pub(crate) const SEMANTIC_U32_FIELD_COUNT: usize = 8;
 pub(crate) const SEMANTIC_EFFECTS_CHANGE: u16 = 1 << 14;
-pub(crate) const ALL_SEMANTIC_CHANGES: u16 = (1 << 15) - 1;
+pub(crate) const SEMANTIC_PLACEMENT_SLOT_CHANGE: u16 = 1 << 15;
+pub(crate) const ALL_SEMANTIC_CHANGES: u16 = u16::MAX;
+const CAPTURE_RUN_PLACEMENT: bool = true;
 
 const BIDI_BN: u8 = 9;
 const BIDI_B: u8 = 10;
@@ -74,7 +80,59 @@ pub(crate) struct SemanticGlyph {
 
 const _: () = assert!(core::mem::size_of::<SemanticGlyph>() == 52);
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct PositionedSemanticGlyph {
+    pub stable_id: u32,
+    pub font_handle: u32,
+    pub cluster: u32,
+    pub glyph_id: u16,
+    pub flags: u16,
+    pub bidi_level: u8,
+    pub font_size: f32,
+    pub inline_origin: f32,
+    pub block_origin: f32,
+    pub inline_advance: f32,
+    pub ink_inline_start: f32,
+    pub ink_block_start: f32,
+    pub ink_inline_extent: f32,
+    pub ink_block_extent: f32,
+    pub placement_segment: u32,
+}
+
+const _: () = assert!(core::mem::size_of::<PositionedSemanticGlyph>() == 56);
+
+impl PositionedSemanticGlyph {
+    pub(crate) fn placed(
+        self,
+        translation: SegmentTranslation,
+    ) -> Result<SemanticGlyph, EngineError> {
+        Ok(SemanticGlyph {
+            stable_id: self.stable_id,
+            font_handle: self.font_handle,
+            cluster: self.cluster,
+            glyph_id: self.glyph_id,
+            flags: self.flags,
+            bidi_level: self.bidi_level,
+            font_size: self.font_size,
+            inline_origin: placed_f32(self.inline_origin, translation.translation_inline as f32)?,
+            block_origin: placed_f32(self.block_origin, translation.translation_block as f32)?,
+            inline_advance: self.inline_advance,
+            ink_inline_start: placed_f32(
+                self.ink_inline_start,
+                translation.translation_inline as f32,
+            )?,
+            ink_block_start: placed_f32(
+                self.ink_block_start,
+                translation.translation_block as f32,
+            )?,
+            ink_inline_extent: self.ink_inline_extent,
+            ink_block_extent: self.ink_block_extent,
+        })
+    }
+}
+
 /// The ink box the render record and the semantic record must agree on, derived once per glyph.
+#[cfg(any(test, feature = "kernel-lab"))]
 #[derive(Clone, Copy)]
 struct GlyphInkBox {
     inline_start: f64,
@@ -83,6 +141,7 @@ struct GlyphInkBox {
     block_extent: f64,
 }
 
+#[cfg(any(test, feature = "kernel-lab"))]
 impl GlyphInkBox {
     /// A glyph with no outline still occupies its origin. Reporting the degenerate box there keeps
     /// every semantic glyph's ink box in one coordinate space instead of leaving a hole.
@@ -329,7 +388,7 @@ pub(crate) struct PositionedGlyphArena {
     line_glyph_counts: Vec<u32>,
     line_decoration_starts: Vec<u32>,
     line_decoration_counts: Vec<u32>,
-    semantic_glyphs: Vec<SemanticGlyph>,
+    semantic_glyphs: Vec<PositionedSemanticGlyph>,
     semantic_line_glyph_starts: Vec<u32>,
     semantic_line_glyph_counts: Vec<u32>,
     semantic_line_inline_extents: Vec<f64>,
@@ -349,6 +408,8 @@ pub(crate) struct PositionedGlyphArena {
     placement: PlacementState,
     placement_fragment_index: u32,
     text_effects: bool,
+    #[cfg(test)]
+    retained_static_geometry: bool,
 }
 
 /// Two resolved styles share one decoration line when every declared decoration field
@@ -382,6 +443,26 @@ struct FragmentPositionState {
 #[derive(Clone, Copy)]
 struct PlacementOccurrence {
     segment_index: u32,
+    translation_inline: f32,
+    translation_block: f32,
+}
+
+#[derive(Clone, Copy)]
+struct ActiveFallbackPlacement {
+    layout_run_index: usize,
+    cluster: usize,
+    direction: u8,
+    placement_cluster: PlacementCluster,
+    occurrence: PlacementOccurrence,
+}
+
+#[derive(Clone, Copy)]
+struct GlyphPublication {
+    style: ResolvedStyle,
+    cluster: u32,
+    region: u32,
+    flow_thread: u32,
+    transform_index: u32,
 }
 
 struct RetainedInstanceCursor {
@@ -389,6 +470,20 @@ struct RetainedInstanceCursor {
     semantic_end: usize,
     rendered_next: usize,
     rendered_end: usize,
+}
+
+#[derive(Clone, Copy)]
+struct RetainedGlyphUpdate {
+    line: FlowLine,
+    local: RunLocalGlyph,
+    occurrence: PlacementOccurrence,
+    glyph_source: GlyphSource,
+    source_glyph: u32,
+    bidi_level: u8,
+    role: SliceRole,
+    stable_id: u32,
+    glyph_id: u32,
+    font_handle: u32,
 }
 
 struct PositionedCluster {
@@ -400,9 +495,6 @@ struct PositionedCluster {
 struct GlyphStreams<'a> {
     ids: &'a [u16],
     clusters: &'a [u32],
-    x_advances: &'a [i32],
-    x_offsets: &'a [i32],
-    y_offsets: &'a [i32],
     shape_flags: &'a [u16],
     stable_ids: &'a [u32],
 }
@@ -573,7 +665,6 @@ struct RunGeometry {
     units_per_em: f64,
     font_size: f32,
     baseline_shift: f32,
-    scale: f64,
 }
 
 impl RunGeometry {
@@ -610,7 +701,6 @@ impl RunGeometry {
             units_per_em,
             font_size,
             baseline_shift,
-            scale: f64::from(font_size) / units_per_em,
         })
     }
 }
@@ -662,29 +752,36 @@ impl PositionedGlyphArena {
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<(), EngineError> {
         self.clear();
-        self.rebuild_replacement_runs(
-            previous,
-            boundary_shape,
-            previous_boundary_shape,
-            runs,
-            previous_runs,
-            next_run_canonical_revision,
-        )?;
-        self.rebuild_replacement_run_local(
-            boundary_shape,
-            text,
-            clusters,
-            runs,
-            styles,
-            metrics_for,
-            extents_for,
-        )?;
-        self.placement
-            .prepare_run_resolution(clusters.layout_runs(), &self.replacement_runs)?;
+        if CAPTURE_RUN_PLACEMENT {
+            self.rebuild_replacement_runs(
+                previous,
+                boundary_shape,
+                previous_boundary_shape,
+                runs,
+                previous_runs,
+                next_run_canonical_revision,
+            )?;
+        }
+        if CAPTURE_RUN_PLACEMENT {
+            self.rebuild_replacement_run_local(
+                boundary_shape,
+                text,
+                clusters,
+                runs,
+                styles,
+                metrics_for,
+                extents_for,
+            )?;
+        }
         self.text_effects = styles
             .iter()
             .any(|segment| style_has_text_effects(segment.style));
-        self.reserve(clusters.glyph_ids.len())?;
+        let glyph_capacity = clusters
+            .glyph_ids
+            .len()
+            .checked_add(boundary_shape.shape.glyph_ids.len())
+            .ok_or(EngineError::ResultTooLarge)?;
+        self.reserve(glyph_capacity)?;
         if self.text_effects {
             for field in &mut self.semantic_f32[SEMANTIC_F32_BASE_FIELD_COUNT..] {
                 reserve(field, clusters.glyph_ids.len())?;
@@ -701,30 +798,73 @@ impl PositionedGlyphArena {
         reserve(&mut self.semantic_line_glyph_counts, flow.lines.len())?;
         reserve(&mut self.semantic_line_inline_extents, flow.lines.len())?;
         let visually_ltr = is_trivially_ltr(bidi, runs);
+        let retains_same_cluster_sequence = match retained_flow {
+            Some(previous_flow) => same_contiguous_positioned_cluster_range(flow, previous_flow)?,
+            None => false,
+        };
+        let retain_static_geometry = retains_same_cluster_sequence
+            && visually_ltr
+            && boundary_shape.records.is_empty()
+            && previous_boundary_shape.records.is_empty()
+            && previous.replacement_runs.is_empty()
+            && styles
+                .iter()
+                .all(|segment| segment.style.decoration_flags == 0);
+        let mut retained_instances = retain_static_geometry
+            .then(|| self.retain_static_glyph_state(previous))
+            .transpose()?;
+        #[cfg(test)]
+        {
+            self.retained_static_geometry = retained_instances.is_some();
+        }
         let mut retained_line_cursor = 0usize;
+        let mut drop_cap_cursor = 0usize;
         for (line_index, line) in flow.lines.iter().copied().enumerate() {
-            let placement_line_start = self.placement.begin_line();
-            if flow
-                .recomposed_line_range()
-                .is_some_and(|(start, end)| line_index < start || line_index >= end)
+            let placement_line_start = CAPTURE_RUN_PLACEMENT.then(|| self.placement.begin_line());
+            if retained_instances.is_none()
+                && flow
+                    .recomposed_line_range()
+                    .is_some_and(|(start, end)| line_index < start || line_index >= end)
             {
+                #[cfg(any(test, feature = "kernel-lab"))]
+                let previous_glyph_start = *previous
+                    .line_glyph_starts
+                    .get(line_index)
+                    .ok_or(EngineError::InvalidRequest)?;
+                let previous_glyph_count = *previous
+                    .line_glyph_counts
+                    .get(line_index)
+                    .ok_or(EngineError::InvalidRequest)?;
+                if !CAPTURE_RUN_PLACEMENT {
+                    self.append_retained_line(previous, line_index, None)?;
+                    continue;
+                }
                 match self.placement.append_retained_line(
                     &previous.placement,
-                    line_index,
-                    previous.placement.line_fragment_start(line_index)?,
-                    line.fragment_start,
+                    RetainedLinePlacement {
+                        line_index,
+                        old_fragment_start: previous.placement.line_fragment_start(line_index)?,
+                        new_fragment_start: line.fragment_start,
+                        #[cfg(any(test, feature = "kernel-lab"))]
+                        old_instance_start: previous_glyph_start,
+                        instance_count: previous_glyph_count,
+                        new_instance_start: u32::try_from(self.glyphs.len())
+                            .map_err(|_| EngineError::ResultTooLarge)?,
+                    },
                     clusters.layout_runs(),
                     &self.replacement_runs,
                 ) {
-                    Ok(()) => {
-                        self.append_retained_line(previous, line_index)?;
+                    Ok(remap) => {
+                        self.append_retained_line(previous, line_index, Some(remap))?;
                         continue;
                     }
                     Err(EngineError::InvalidRequest) => {}
                     Err(error) => return Err(error),
                 }
             }
-            if let Some(previous_flow) = retained_flow
+            if retained_instances.is_none()
+                && flow.drop_caps.is_empty()
+                && let Some(previous_flow) = retained_flow
                 && let Some(previous_line_index) = equivalent_retained_line(
                     flow,
                     line_index,
@@ -742,25 +882,49 @@ impl PositionedGlyphArena {
                     .lines
                     .get(previous_line_index)
                     .ok_or(EngineError::InvalidRequest)?;
+                #[cfg(any(test, feature = "kernel-lab"))]
+                let previous_glyph_start = *previous
+                    .line_glyph_starts
+                    .get(previous_line_index)
+                    .ok_or(EngineError::InvalidRequest)?;
+                let previous_glyph_count = *previous
+                    .line_glyph_counts
+                    .get(previous_line_index)
+                    .ok_or(EngineError::InvalidRequest)?;
+                if !CAPTURE_RUN_PLACEMENT {
+                    self.append_retained_line(previous, previous_line_index, None)?;
+                    continue;
+                }
                 match self.placement.append_retained_line(
                     &previous.placement,
-                    previous_line_index,
-                    previous_line.fragment_start,
-                    line.fragment_start,
+                    RetainedLinePlacement {
+                        line_index: previous_line_index,
+                        old_fragment_start: previous_line.fragment_start,
+                        new_fragment_start: line.fragment_start,
+                        #[cfg(any(test, feature = "kernel-lab"))]
+                        old_instance_start: previous_glyph_start,
+                        instance_count: previous_glyph_count,
+                        new_instance_start: u32::try_from(self.glyphs.len())
+                            .map_err(|_| EngineError::ResultTooLarge)?,
+                    },
                     clusters.layout_runs(),
                     &self.replacement_runs,
                 ) {
-                    Ok(()) => {
-                        self.append_retained_line(previous, previous_line_index)?;
+                    Ok(remap) => {
+                        self.append_retained_line(previous, previous_line_index, Some(remap))?;
                         continue;
                     }
                     Err(EngineError::InvalidRequest) => {}
                     Err(error) => return Err(error),
                 }
             }
-            let line_glyph_start = self.glyphs.len();
+            let line_glyph_start = retained_instances
+                .as_ref()
+                .map_or(self.glyphs.len(), |cursor| cursor.rendered_next);
             let line_decoration_start = self.decorations.len();
-            let semantic_line_start = self.semantic_glyphs.len();
+            let semantic_line_start = retained_instances
+                .as_ref()
+                .map_or(self.semantic_glyphs.len(), |cursor| cursor.semantic_next);
             let fragments = line_fragments(flow, line)?;
             if fragments.is_empty() {
                 self.line_glyph_starts.push(
@@ -777,11 +941,61 @@ impl PositionedGlyphArena {
                 );
                 self.semantic_line_glyph_counts.push(0);
                 self.semantic_line_inline_extents.push(0.0);
-                self.placement.finish_line(placement_line_start)?;
+                if let Some(placement_line_start) = placement_line_start {
+                    self.placement.finish_line(placement_line_start)?;
+                }
                 continue;
             }
             let first = fragments.first().ok_or(EngineError::InvalidRequest)?;
             let last = fragments.last().ok_or(EngineError::InvalidRequest)?;
+            let first_thread_line =
+                line_index == 0 || flow.lines[line_index - 1].flow_thread_id != line.flow_thread_id;
+            let drop_cap = first_thread_line
+                .then(|| flow.drop_caps.get(drop_cap_cursor).copied())
+                .flatten()
+                .filter(|cap| cap.line.flow_thread_id == line.flow_thread_id);
+            if drop_cap.is_some() {
+                drop_cap_cursor += 1;
+            }
+            let mut inline_start = fragments
+                .iter()
+                .map(|fragment| fragment.slot_start)
+                .fold(f64::INFINITY, f64::min);
+            let mut inline_end = f64::NEG_INFINITY;
+            if let Some(cap) = drop_cap {
+                self.placement_fragment_index = line.fragment_start;
+                let cap_advance = if self.text_effects {
+                    self.position_drop_cap::<true>(
+                        cap,
+                        text,
+                        clusters,
+                        runs,
+                        boundary_shape,
+                        styles,
+                        bidi,
+                        visually_ltr,
+                        metrics_for,
+                        extents_for,
+                        retained_instances.as_mut(),
+                    )?
+                } else {
+                    self.position_drop_cap::<false>(
+                        cap,
+                        text,
+                        clusters,
+                        runs,
+                        boundary_shape,
+                        styles,
+                        bidi,
+                        visually_ltr,
+                        metrics_for,
+                        extents_for,
+                        retained_instances.as_mut(),
+                    )?
+                };
+                inline_start = inline_start.min(cap.fragment.slot_start);
+                inline_end = inline_end.max(cap.fragment.slot_start + cap_advance);
+            }
             if !visually_ltr {
                 prepare_line_levels(
                     &mut self.line_levels,
@@ -794,12 +1008,7 @@ impl PositionedGlyphArena {
                 .lines
                 .get(line_index + 1)
                 .is_none_or(|next| next.flow_thread_id != line.flow_thread_id);
-            let inline_start = fragments
-                .iter()
-                .map(|fragment| fragment.slot_start)
-                .fold(f64::INFINITY, f64::min);
             let typography = typography_for(line.flow_thread_id);
-            let mut inline_end = f64::NEG_INFINITY;
             self.placement_fragment_index = line.fragment_start;
             for fragment in fragments.iter().copied() {
                 let indent = if fragment.line.cluster_start == 0 {
@@ -807,8 +1016,46 @@ impl PositionedGlyphArena {
                 } else {
                     0.0
                 };
-                let fragment_advance = if self.text_effects {
-                    self.position_fragment::<true, true>(
+                let fragment_advance = if let Some(cursor) = retained_instances.as_mut() {
+                    if self.text_effects {
+                        self.position_fragment::<true>(
+                            line,
+                            fragment,
+                            final_line,
+                            text,
+                            clusters,
+                            runs,
+                            boundary_shape,
+                            styles,
+                            bidi,
+                            visually_ltr,
+                            indent,
+                            typography.justify,
+                            metrics_for,
+                            extents_for,
+                            Some(cursor),
+                        )?
+                    } else {
+                        self.position_fragment::<false>(
+                            line,
+                            fragment,
+                            final_line,
+                            text,
+                            clusters,
+                            runs,
+                            boundary_shape,
+                            styles,
+                            bidi,
+                            visually_ltr,
+                            indent,
+                            typography.justify,
+                            metrics_for,
+                            extents_for,
+                            Some(cursor),
+                        )?
+                    }
+                } else if self.text_effects {
+                    self.position_fragment::<true>(
                         line,
                         fragment,
                         final_line,
@@ -826,7 +1073,7 @@ impl PositionedGlyphArena {
                         None,
                     )?
                 } else {
-                    self.position_fragment::<false, true>(
+                    self.position_fragment::<false>(
                         line,
                         fragment,
                         final_line,
@@ -854,8 +1101,9 @@ impl PositionedGlyphArena {
                 .push(u32::try_from(semantic_line_start).map_err(|_| EngineError::ResultTooLarge)?);
             self.semantic_line_glyph_counts.push(
                 u32::try_from(
-                    self.semantic_glyphs
-                        .len()
+                    retained_instances
+                        .as_ref()
+                        .map_or(self.semantic_glyphs.len(), |cursor| cursor.semantic_next)
                         .saturating_sub(semantic_line_start),
                 )
                 .map_err(|_| EngineError::ResultTooLarge)?,
@@ -865,8 +1113,13 @@ impl PositionedGlyphArena {
             self.line_glyph_starts
                 .push(u32::try_from(line_glyph_start).map_err(|_| EngineError::ResultTooLarge)?);
             self.line_glyph_counts.push(
-                u32::try_from(self.glyphs.len().saturating_sub(line_glyph_start))
-                    .map_err(|_| EngineError::ResultTooLarge)?,
+                u32::try_from(
+                    retained_instances
+                        .as_ref()
+                        .map_or(self.glyphs.len(), |cursor| cursor.rendered_next)
+                        .saturating_sub(line_glyph_start),
+                )
+                .map_err(|_| EngineError::ResultTooLarge)?,
             );
             self.line_decoration_starts.push(
                 u32::try_from(line_decoration_start).map_err(|_| EngineError::ResultTooLarge)?,
@@ -875,7 +1128,18 @@ impl PositionedGlyphArena {
                 u32::try_from(self.decorations.len().saturating_sub(line_decoration_start))
                     .map_err(|_| EngineError::ResultTooLarge)?,
             );
-            self.placement.finish_line(placement_line_start)?;
+            if let Some(placement_line_start) = placement_line_start {
+                self.placement.finish_line(placement_line_start)?;
+            }
+        }
+        if retained_instances.as_ref().is_some_and(|cursor| {
+            cursor.semantic_next != cursor.semantic_end
+                || cursor.rendered_next != cursor.rendered_end
+        }) {
+            return Err(EngineError::InvalidRequest);
+        }
+        if drop_cap_cursor != flow.drop_caps.len() {
+            return Err(EngineError::InvalidRequest);
         }
         self.recomposed_glyphs = flow
             .recomposed_line_range()
@@ -892,11 +1156,13 @@ impl PositionedGlyphArena {
                 })
             })
             .transpose()?;
-        self.placement.validate_occurrences(
-            self.glyphs.len(),
-            clusters.layout_runs(),
-            &self.replacement_runs,
-        )?;
+        if CAPTURE_RUN_PLACEMENT {
+            self.placement.validate_occurrences(
+                self.glyphs.len(),
+                clusters.layout_runs(),
+                &self.replacement_runs,
+            )?;
+        }
         // Retained flow proves that only geometry-authored semantic fields can differ.
         self.assign_content_revisions(
             previous,
@@ -910,6 +1176,7 @@ impl PositionedGlyphArena {
         &mut self,
         previous: &Self,
         line_index: usize,
+        segment_remap: Option<RetainedSegmentRemap>,
     ) -> Result<(), EngineError> {
         let glyph_start = usize::try_from(
             *previous
@@ -1055,13 +1322,70 @@ impl PositionedGlyphArena {
                 .get(line_index)
                 .ok_or(EngineError::InvalidRequest)?,
         );
-        self.semantic_glyphs.extend_from_slice(
-            previous
-                .semantic_glyphs
-                .get(semantic_start..semantic_end)
-                .ok_or(EngineError::InvalidRequest)?,
-        );
+        let previous_semantics = previous
+            .semantic_glyphs
+            .get(semantic_start..semantic_end)
+            .ok_or(EngineError::InvalidRequest)?;
+        self.semantic_glyphs
+            .try_reserve(previous_semantics.len())
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        for previous_semantic in previous_semantics {
+            let mut semantic = *previous_semantic;
+            if let Some(remap) = segment_remap {
+                let offset = semantic
+                    .placement_segment
+                    .checked_sub(remap.previous_start)
+                    .filter(|offset| *offset < remap.count)
+                    .ok_or(EngineError::InvalidRequest)?;
+                semantic.placement_segment = remap
+                    .next_start
+                    .checked_add(offset)
+                    .ok_or(EngineError::ResultTooLarge)?;
+            }
+            self.semantic_glyphs.push(semantic);
+        }
         Ok(())
+    }
+
+    fn retain_static_glyph_state(
+        &mut self,
+        previous: &Self,
+    ) -> Result<RetainedInstanceCursor, EngineError> {
+        if !self.glyphs.is_empty()
+            || !self.semantic_glyphs.is_empty()
+            || previous.text_effects != self.text_effects
+            || !previous.decorations.is_empty()
+            || previous.semantic_f32[..SEMANTIC_F32_BASE_FIELD_COUNT]
+                .iter()
+                .any(|field| field.len() != previous.glyphs.len())
+            || previous.semantic_u32[..SEMANTIC_U32_BASE_FIELD_COUNT]
+                .iter()
+                .any(|field| field.len() != previous.glyphs.len())
+            || (self.text_effects
+                && (previous.semantic_f32[SEMANTIC_F32_BASE_FIELD_COUNT..]
+                    .iter()
+                    .any(|field| field.len() != previous.glyphs.len())
+                    || previous.semantic_u32[SEMANTIC_U32_BASE_FIELD_COUNT..]
+                        .iter()
+                        .any(|field| field.len() != previous.glyphs.len())))
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        self.glyphs.extend_from_slice(&previous.glyphs);
+        self.semantic_glyphs
+            .extend_from_slice(&previous.semantic_glyphs);
+        for (target, source) in self.semantic_f32.iter_mut().zip(&previous.semantic_f32) {
+            target.extend_from_slice(source);
+        }
+        for (target, source) in self.semantic_u32.iter_mut().zip(&previous.semantic_u32) {
+            target.extend_from_slice(source);
+        }
+        Ok(RetainedInstanceCursor {
+            semantic_next: 0,
+            semantic_end: self.semantic_glyphs.len(),
+            rendered_next: 0,
+            rendered_end: self.glyphs.len(),
+        })
     }
 
     pub(crate) fn clear(&mut self) {
@@ -1093,6 +1417,10 @@ impl PositionedGlyphArena {
         self.placement.clear();
         self.recomposed_glyphs = None;
         self.text_effects = false;
+        #[cfg(test)]
+        {
+            self.retained_static_geometry = false;
+        }
     }
 
     pub(crate) fn decorations(&self) -> &[DecorationRecord] {
@@ -1137,6 +1465,71 @@ impl PositionedGlyphArena {
     ) -> Result<(), EngineError> {
         self.placement
             .bind_run_handles(layout_runs, &self.replacement_runs)
+    }
+
+    pub(crate) fn placement_segments(&self) -> &[super::placement_state::PlacementSegment] {
+        self.placement.segment_rows()
+    }
+
+    pub(crate) fn placement_translations(&self) -> &[SegmentTranslation] {
+        self.placement.translations()
+    }
+
+    pub(crate) fn placement_instance_count(&self) -> Result<usize, EngineError> {
+        self.placement.instance_count()
+    }
+
+    pub(crate) fn placement_handle(&self, segment_index: usize) -> Option<PlacementHandle> {
+        self.placement.placement_handle(segment_index)
+    }
+
+    pub(crate) fn bind_placement_handles(
+        &mut self,
+        handles: &[PlacementHandle],
+        previous: Option<&Self>,
+        next_revision: &mut u32,
+    ) -> Result<(), EngineError> {
+        self.placement.bind_placement_handles(handles)?;
+        let segment_instance_counts = self.placement.segment_instance_counts();
+        if segment_instance_counts.len() != handles.len()
+            || self.semantic_change_masks.len() != self.glyphs.len()
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        let mut instance_start = 0usize;
+        for (&instance_count, handle) in segment_instance_counts.iter().zip(handles) {
+            let instance_end = instance_start
+                .checked_add(
+                    usize::try_from(instance_count).map_err(|_| EngineError::ResultTooLarge)?,
+                )
+                .filter(|end| *end <= self.glyphs.len())
+                .ok_or(EngineError::InvalidRequest)?;
+            let placement_slot = handle.slot().get();
+            for index in instance_start..instance_end {
+                let glyph = &mut self.glyphs[index];
+                let mask = &mut self.semantic_change_masks[index];
+                let placement_changed = previous
+                    .and_then(|positioned| positioned.glyphs.get(index))
+                    .is_none_or(|committed| {
+                        committed.stable_id != glyph.stable_id
+                            || committed.placement_slot != placement_slot
+                    });
+                glyph.placement_slot = placement_slot;
+                if placement_changed {
+                    if *mask == 0 {
+                        let revision = (*next_revision).max(1);
+                        *next_revision =
+                            revision.checked_add(1).ok_or(EngineError::ResultTooLarge)?;
+                        glyph.content_revision = revision;
+                    }
+                    *mask |= SEMANTIC_PLACEMENT_SLOT_CHANGE;
+                }
+            }
+            instance_start = instance_end;
+        }
+        (instance_start == self.glyphs.len())
+            .then_some(())
+            .ok_or(EngineError::InvalidRequest)
     }
 
     fn rebuild_replacement_runs(
@@ -1338,8 +1731,26 @@ impl PositionedGlyphArena {
         result
     }
 
-    pub(crate) fn semantic_glyphs(&self) -> &[SemanticGlyph] {
+    pub(crate) fn semantic_glyphs(&self) -> &[PositionedSemanticGlyph] {
         &self.semantic_glyphs
+    }
+
+    pub(crate) fn placed_semantic_glyph(&self, index: usize) -> Result<SemanticGlyph, EngineError> {
+        let glyph = self
+            .semantic_glyphs
+            .get(index)
+            .copied()
+            .ok_or(EngineError::InvalidRequest)?;
+        let translation = self
+            .placement
+            .translations()
+            .get(
+                usize::try_from(glyph.placement_segment)
+                    .map_err(|_| EngineError::InvalidRequest)?,
+            )
+            .copied()
+            .ok_or(EngineError::InvalidRequest)?;
+        glyph.placed(translation)
     }
 
     pub(crate) fn semantic_line_glyph_spans(&self) -> (&[u32], &[u32]) {
@@ -1366,7 +1777,49 @@ impl PositionedGlyphArena {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn position_fragment<const TEXT_EFFECTS: bool, const MATERIALIZE_OUTPUT: bool>(
+    fn position_drop_cap<const TEXT_EFFECTS: bool>(
+        &mut self,
+        cap: FlowDropCap,
+        text: &[u16],
+        clusters: &ClusterArena,
+        runs: &[ShapingRun],
+        boundary_shape: &BoundaryShapeArena,
+        styles: &[StyleSegment],
+        bidi: &BidiAnalysis,
+        visually_ltr: bool,
+        metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
+        extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+        retained: Option<&mut RetainedInstanceCursor>,
+    ) -> Result<f64, EngineError> {
+        if !visually_ltr {
+            prepare_line_levels(
+                &mut self.line_levels,
+                bidi,
+                cap.fragment.line.text_start,
+                cap.fragment.line.text_end,
+            )?;
+        }
+        self.position_fragment::<TEXT_EFFECTS>(
+            cap.line,
+            cap.fragment,
+            false,
+            text,
+            clusters,
+            runs,
+            boundary_shape,
+            styles,
+            bidi,
+            visually_ltr,
+            0.0,
+            JustifyControls::default(),
+            metrics_for,
+            extents_for,
+            retained,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn position_fragment<const TEXT_EFFECTS: bool>(
         &mut self,
         line: FlowLine,
         fragment: FlowFragment,
@@ -1480,9 +1933,6 @@ impl PositionedGlyphArena {
         let streams = GlyphStreams {
             ids: &clusters.glyph_ids[..stream_len],
             clusters: &clusters.glyph_clusters[..stream_len],
-            x_advances: &clusters.glyph_x_advances[..stream_len],
-            x_offsets: &clusters.glyph_x_offsets[..stream_len],
-            y_offsets: &clusters.glyph_y_offsets[..stream_len],
             shape_flags: &clusters.glyph_shape_flags[..stream_len],
             stable_ids: &clusters.glyph_stable_ids[..stream_len],
         };
@@ -1496,7 +1946,7 @@ impl PositionedGlyphArena {
         let layout_run_order = visually_ltr && paragraph_level & 1 == 0;
         if layout_run_order {
             if justify.is_zero() {
-                self.position_layout_run_fragment::<TEXT_EFFECTS, false, MATERIALIZE_OUTPUT>(
+                self.position_layout_run_fragment::<TEXT_EFFECTS, false>(
                     line,
                     fragment,
                     cluster_start,
@@ -1513,7 +1963,7 @@ impl PositionedGlyphArena {
                     retained.as_deref_mut(),
                 )?;
             } else {
-                self.position_layout_run_fragment::<TEXT_EFFECTS, true, MATERIALIZE_OUTPUT>(
+                self.position_layout_run_fragment::<TEXT_EFFECTS, true>(
                     line,
                     fragment,
                     cluster_start,
@@ -1536,6 +1986,9 @@ impl PositionedGlyphArena {
             } else {
                 self.visual_clusters.len().saturating_sub(visual_start)
             };
+            let mut layout_run_cache = None;
+            let mut geometry_cache = None;
+            let mut active_placement = None;
             for ordinal in 0..visual_count {
                 let cluster = if visually_ltr {
                     cluster_start + ordinal
@@ -1543,52 +1996,129 @@ impl PositionedGlyphArena {
                     usize::try_from(self.visual_clusters[visual_start + ordinal])
                         .map_err(|_| EngineError::InvalidRequest)?
                 };
-                let run_index = clusters
-                    .layout_runs()
-                    .partition_point(|run| run.cluster_end <= cluster as u32);
-                let layout_run = clusters
-                    .layout_runs()
-                    .get(run_index)
-                    .filter(|run| run.cluster_start <= cluster as u32)
-                    .ok_or(EngineError::InvalidRequest)?;
                 let role = if cluster >= hanging_start && cluster < retained_cluster_end {
                     SliceRole::HangingSpace
                 } else {
                     SliceRole::Ordinary
                 };
-                let occurrence = self.record_layout_run_segment(
-                    self.placement_fragment_index,
-                    run_index,
-                    layout_run,
-                    cluster,
-                    cluster + 1,
-                    clusters,
-                    runs[usize::try_from(layout_run.source_run)
-                        .map_err(|_| EngineError::InvalidRequest)?]
-                    .direction,
-                    state.cursor,
-                    state.baseline,
-                )?;
+                let (run_index, layout_run) =
+                    layout_run_for_cluster(clusters, cluster, &mut layout_run_cache)?;
+                let occurrence = if CAPTURE_RUN_PLACEMENT {
+                    let direction = layout_run_direction(layout_run, runs)?;
+                    let placement_cluster =
+                        clusters.placement_cluster(layout_run, direction, cluster)?;
+                    let translation_inline = finite_f32(
+                        state.cursor - placement_cluster.block_local_prefix
+                            + placement_cluster.block_anchor_inline,
+                    )?;
+                    let translation_block =
+                        finite_f32(state.baseline + placement_cluster.block_anchor_block)?;
+                    let adjacent =
+                        active_placement.is_some_and(|active: ActiveFallbackPlacement| {
+                            active.layout_run_index == run_index
+                                && if direction & 1 == 0 {
+                                    active.cluster.checked_add(1) == Some(cluster)
+                                } else {
+                                    cluster.checked_add(1) == Some(active.cluster)
+                                }
+                                && active.direction == direction
+                                && active.placement_cluster.segment_anchor
+                                    == placement_cluster.segment_anchor
+                                && active.placement_cluster.dense == placement_cluster.dense
+                                && active.placement_cluster.numeric_block_ordinal
+                                    == placement_cluster.numeric_block_ordinal
+                                && active.occurrence.translation_inline.to_bits()
+                                    == translation_inline.to_bits()
+                                && active.occurrence.translation_block.to_bits()
+                                    == translation_block.to_bits()
+                        });
+                    let occurrence = if justify.is_zero() && adjacent {
+                        let occurrence = active_placement
+                            .ok_or(EngineError::InvalidRequest)?
+                            .occurrence;
+                        self.extend_layout_run_segment(
+                            occurrence.segment_index,
+                            &layout_run,
+                            cluster,
+                            clusters,
+                        )?;
+                        occurrence
+                    } else {
+                        self.record_layout_run_segment(
+                            self.placement_fragment_index,
+                            run_index,
+                            &layout_run,
+                            cluster,
+                            cluster + 1,
+                            clusters,
+                            placement_cluster,
+                            false,
+                            state.cursor,
+                            state.baseline,
+                        )?
+                    };
+                    active_placement = Some(ActiveFallbackPlacement {
+                        layout_run_index: run_index,
+                        cluster,
+                        direction,
+                        placement_cluster,
+                        occurrence,
+                    });
+                    occurrence
+                } else {
+                    PlacementOccurrence {
+                        segment_index: u32::MAX,
+                        translation_inline: 0.0,
+                        translation_block: 0.0,
+                    }
+                };
                 if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
                     continue;
                 }
-                let geometry = RunGeometry::for_cluster(clusters, styles, cluster)?;
-                let positioned = self.position_cluster::<TEXT_EFFECTS, MATERIALIZE_OUTPUT>(
+                let style_index = usize::try_from(clusters.style_indexes[cluster])
+                    .map_err(|_| EngineError::InvalidRequest)?;
+                let style = styles
+                    .get(style_index)
+                    .ok_or(EngineError::InvalidRequest)?
+                    .style;
+                let geometry = match geometry_cache {
+                    Some((cached_run, geometry)) if cached_run == run_index => geometry,
+                    _ => {
+                        let geometry = RunGeometry::for_values(
+                            clusters.font_handles[cluster],
+                            clusters.units_per_em[cluster],
+                            style.font_size,
+                            style.baseline_shift,
+                        )?;
+                        geometry_cache = Some((run_index, geometry));
+                        geometry
+                    }
+                };
+                let positioned = self.position_cluster::<TEXT_EFFECTS>(
                     line,
-                    fragment,
                     cluster,
+                    if visually_ltr {
+                        cluster_level(
+                            cluster,
+                            fragment.line.text_start,
+                            clusters,
+                            runs,
+                            &self.line_levels,
+                        )?
+                    } else {
+                        self.visual_levels[visual_start + ordinal]
+                    },
                     clusters,
-                    runs,
-                    styles,
                     &streams,
                     geometry,
+                    style,
                     &mut state,
                     occurrence,
                     role,
                     retained.as_deref_mut(),
                     extents_for,
                 )?;
-                self.finish_positioned_cluster::<true, MATERIALIZE_OUTPUT>(
+                self.finish_positioned_cluster::<true>(
                     line,
                     cluster,
                     clusters,
@@ -1596,6 +2126,7 @@ impl PositionedGlyphArena {
                     justify,
                     &mut state,
                     metrics_for,
+                    retained.is_none(),
                 )?;
             }
             if !visually_ltr {
@@ -1603,27 +2134,25 @@ impl PositionedGlyphArena {
                     if clusters.flags[cluster] & CLUSTER_HARD_BREAK == 0 {
                         continue;
                     }
-                    let run_index = clusters
-                        .layout_runs()
-                        .partition_point(|run| run.cluster_end <= cluster as u32);
-                    let layout_run = clusters
-                        .layout_runs()
-                        .get(run_index)
-                        .filter(|run| run.cluster_start <= cluster as u32)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    self.record_layout_run_segment(
-                        self.placement_fragment_index,
-                        run_index,
-                        layout_run,
-                        cluster,
-                        cluster + 1,
-                        clusters,
-                        runs[usize::try_from(layout_run.source_run)
-                            .map_err(|_| EngineError::InvalidRequest)?]
-                        .direction,
-                        state.cursor,
-                        state.baseline,
-                    )?;
+                    let (run_index, layout_run) =
+                        layout_run_for_cluster(clusters, cluster, &mut layout_run_cache)?;
+                    if CAPTURE_RUN_PLACEMENT {
+                        let direction = layout_run_direction(layout_run, runs)?;
+                        let placement_cluster =
+                            clusters.placement_cluster(layout_run, direction, cluster)?;
+                        self.record_layout_run_segment(
+                            self.placement_fragment_index,
+                            run_index,
+                            &layout_run,
+                            cluster,
+                            cluster + 1,
+                            clusters,
+                            placement_cluster,
+                            false,
+                            state.cursor,
+                            state.baseline,
+                        )?;
+                    }
                 }
             }
         }
@@ -1631,7 +2160,7 @@ impl PositionedGlyphArena {
             self.flush_decorated_run(&mut state.decorated_run, line, metrics_for)?;
         }
         if let Some(boundary) = boundary {
-            let _ = self.position_boundary::<TEXT_EFFECTS, MATERIALIZE_OUTPUT>(
+            let _ = self.position_boundary::<TEXT_EFFECTS>(
                 line,
                 fragment.boundary_index,
                 boundary,
@@ -1657,11 +2186,7 @@ impl PositionedGlyphArena {
         any(test, feature = "kernel-lab"),
         allow(clippy::explicit_counter_loop)
     )]
-    fn position_layout_run_fragment<
-        const TEXT_EFFECTS: bool,
-        const ADJUST: bool,
-        const MATERIALIZE_OUTPUT: bool,
-    >(
+    fn position_layout_run_fragment<const TEXT_EFFECTS: bool, const ADJUST: bool>(
         &mut self,
         line: FlowLine,
         fragment: FlowFragment,
@@ -1678,6 +2203,12 @@ impl PositionedGlyphArena {
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
         mut retained: Option<&mut RetainedInstanceCursor>,
     ) -> Result<(), EngineError> {
+        if cluster_start > cluster_end {
+            return Err(EngineError::InvalidRequest);
+        }
+        if cluster_start == cluster_end {
+            return Ok(());
+        }
         let layout_runs = clusters.layout_runs();
         let first =
             layout_runs.partition_point(|run| run.cluster_end <= fragment.line.cluster_start);
@@ -1695,93 +2226,186 @@ impl PositionedGlyphArena {
             if overlap_start != covered || overlap_start >= overlap_end {
                 return Err(EngineError::InvalidRequest);
             }
-            let direction = usize::try_from(layout_run.source_run)
-                .ok()
-                .and_then(|source| runs.get(source))
-                .map(|run| run.direction)
-                .or_else(|| (layout_run.glyph_count == 0).then_some(0))
-                .ok_or(EngineError::InvalidRequest)?;
+            let direction = layout_run_direction(*layout_run, runs)?;
             let Some(geometry_cluster) = (overlap_start..overlap_end)
                 .find(|cluster| clusters.flags[*cluster] & CLUSTER_HARD_BREAK == 0)
             else {
-                for cluster in overlap_start..overlap_end {
-                    self.record_layout_run_segment(
-                        self.placement_fragment_index,
-                        layout_run_index,
-                        layout_run,
-                        cluster,
-                        cluster + 1,
-                        clusters,
-                        direction,
-                        state.cursor,
-                        state.baseline,
-                    )?;
+                if CAPTURE_RUN_PLACEMENT {
+                    for cluster in overlap_start..overlap_end {
+                        let placement_cluster =
+                            clusters.placement_cluster(*layout_run, direction, cluster)?;
+                        self.record_layout_run_segment(
+                            self.placement_fragment_index,
+                            layout_run_index,
+                            layout_run,
+                            cluster,
+                            cluster + 1,
+                            clusters,
+                            placement_cluster,
+                            true,
+                            state.cursor,
+                            state.baseline,
+                        )?;
+                    }
                 }
                 covered = overlap_end;
                 continue;
             };
             let geometry = RunGeometry::for_cluster(clusters, styles, geometry_cluster)?;
             debug_assert_eq!(layout_run.font_handle, geometry.font_handle);
-            for cluster in overlap_start..overlap_end {
+            if !CAPTURE_RUN_PLACEMENT {
+                for cluster in overlap_start..overlap_end {
+                    if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
+                        continue;
+                    }
+                    debug_assert_eq!(clusters.font_handles[cluster], geometry.font_handle);
+                    debug_assert_eq!(
+                        clusters.units_per_em[cluster].to_bits(),
+                        geometry.units_per_em.to_bits()
+                    );
+                    let style_index = usize::try_from(clusters.style_indexes[cluster])
+                        .map_err(|_| EngineError::InvalidRequest)?;
+                    let style = styles
+                        .get(style_index)
+                        .ok_or(EngineError::InvalidRequest)?
+                        .style;
+                    debug_assert_eq!(style.font_size.to_bits(), geometry.font_size.to_bits());
+                    debug_assert_eq!(
+                        style.baseline_shift.to_bits(),
+                        geometry.baseline_shift.to_bits()
+                    );
+                    let role = if cluster >= hanging_start {
+                        SliceRole::HangingSpace
+                    } else {
+                        SliceRole::Ordinary
+                    };
+                    let positioned = self.position_cluster::<TEXT_EFFECTS>(
+                        line,
+                        cluster,
+                        cluster_level(
+                            cluster,
+                            fragment.line.text_start,
+                            clusters,
+                            runs,
+                            &self.line_levels,
+                        )?,
+                        clusters,
+                        streams,
+                        geometry,
+                        style,
+                        state,
+                        PlacementOccurrence {
+                            segment_index: u32::MAX,
+                            translation_inline: 0.0,
+                            translation_block: 0.0,
+                        },
+                        role,
+                        retained.as_deref_mut(),
+                        extents_for,
+                    )?;
+                    self.finish_positioned_cluster::<ADJUST>(
+                        line,
+                        cluster,
+                        clusters,
+                        positioned,
+                        justify,
+                        state,
+                        metrics_for,
+                        retained.is_none(),
+                    )?;
+                }
+                covered = overlap_end;
+                continue;
+            }
+            let mut cluster = overlap_start;
+            while cluster < overlap_end {
+                let segment_start = cluster;
+                let segment_role = if segment_start >= hanging_start {
+                    SliceRole::HangingSpace
+                } else {
+                    SliceRole::Ordinary
+                };
+                let (placement_cluster, stable_segment_end) = if ADJUST {
+                    (
+                        clusters.placement_cluster(*layout_run, direction, segment_start)?,
+                        segment_start + 1,
+                    )
+                } else {
+                    clusters.placement_segment_monotone(*layout_run, direction, segment_start)?
+                };
+                let mut segment_end = segment_start + 1;
+                if !ADJUST
+                    && direction & 1 == 0
+                    && clusters.flags[segment_start] & CLUSTER_HARD_BREAK == 0
+                {
+                    segment_end = stable_segment_end.min(overlap_end);
+                    if segment_start < hanging_start {
+                        segment_end = segment_end.min(hanging_start);
+                    }
+                }
                 let occurrence = self.record_layout_run_segment(
                     self.placement_fragment_index,
                     layout_run_index,
                     layout_run,
-                    cluster,
-                    cluster + 1,
+                    segment_start,
+                    segment_end,
                     clusters,
-                    direction,
+                    placement_cluster,
+                    true,
                     state.cursor,
                     state.baseline,
                 )?;
-                if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
-                    continue;
+                while cluster < segment_end {
+                    if clusters.flags[cluster] & CLUSTER_HARD_BREAK == 0 {
+                        debug_assert_eq!(clusters.font_handles[cluster], geometry.font_handle);
+                        debug_assert_eq!(
+                            clusters.units_per_em[cluster].to_bits(),
+                            geometry.units_per_em.to_bits()
+                        );
+                        let style_index = usize::try_from(clusters.style_indexes[cluster])
+                            .map_err(|_| EngineError::InvalidRequest)?;
+                        let style = styles
+                            .get(style_index)
+                            .ok_or(EngineError::InvalidRequest)?
+                            .style;
+                        debug_assert_eq!(style.font_size.to_bits(), geometry.font_size.to_bits());
+                        debug_assert_eq!(
+                            style.baseline_shift.to_bits(),
+                            geometry.baseline_shift.to_bits()
+                        );
+                        let positioned = self.position_cluster::<TEXT_EFFECTS>(
+                            line,
+                            cluster,
+                            cluster_level(
+                                cluster,
+                                fragment.line.text_start,
+                                clusters,
+                                runs,
+                                &self.line_levels,
+                            )?,
+                            clusters,
+                            streams,
+                            geometry,
+                            style,
+                            state,
+                            occurrence,
+                            segment_role,
+                            retained.as_deref_mut(),
+                            extents_for,
+                        )?;
+                        self.finish_positioned_cluster::<ADJUST>(
+                            line,
+                            cluster,
+                            clusters,
+                            positioned,
+                            justify,
+                            state,
+                            metrics_for,
+                            retained.is_none(),
+                        )?;
+                    }
+                    cluster += 1;
                 }
-                debug_assert_eq!(clusters.source_runs[cluster], layout_run.source_run);
-                debug_assert_eq!(clusters.font_handles[cluster], geometry.font_handle);
-                debug_assert_eq!(
-                    clusters.units_per_em[cluster].to_bits(),
-                    geometry.units_per_em.to_bits()
-                );
-                let style_index = usize::try_from(clusters.style_indexes[cluster])
-                    .map_err(|_| EngineError::InvalidRequest)?;
-                let style = styles
-                    .get(style_index)
-                    .ok_or(EngineError::InvalidRequest)?
-                    .style;
-                debug_assert_eq!(style.font_size.to_bits(), geometry.font_size.to_bits());
-                debug_assert_eq!(
-                    style.baseline_shift.to_bits(),
-                    geometry.baseline_shift.to_bits()
-                );
-                let positioned = self.position_cluster::<TEXT_EFFECTS, MATERIALIZE_OUTPUT>(
-                    line,
-                    fragment,
-                    cluster,
-                    clusters,
-                    runs,
-                    styles,
-                    streams,
-                    geometry,
-                    state,
-                    occurrence,
-                    if cluster >= hanging_start && cluster < overlap_end {
-                        SliceRole::HangingSpace
-                    } else {
-                        SliceRole::Ordinary
-                    },
-                    retained.as_deref_mut(),
-                    extents_for,
-                )?;
-                self.finish_positioned_cluster::<ADJUST, MATERIALIZE_OUTPUT>(
-                    line,
-                    cluster,
-                    clusters,
-                    positioned,
-                    justify,
-                    state,
-                    metrics_for,
-                )?;
             }
             covered = overlap_end;
         }
@@ -1800,10 +2424,18 @@ impl PositionedGlyphArena {
         overlap_start: usize,
         overlap_end: usize,
         clusters: &ClusterArena,
-        direction: u8,
+        placement_cluster: PlacementCluster,
+        allow_dense_identity: bool,
         cursor: f64,
         baseline: f64,
     ) -> Result<PlacementOccurrence, EngineError> {
+        if !CAPTURE_RUN_PLACEMENT {
+            return Ok(PlacementOccurrence {
+                segment_index: u32::MAX,
+                translation_inline: 0.0,
+                translation_block: 0.0,
+            });
+        }
         let run_start =
             usize::try_from(layout_run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
         let glyph_start = clusters.glyph_starts[overlap_start];
@@ -1817,9 +2449,13 @@ impl PositionedGlyphArena {
         let source_glyph_count = glyph_end
             .checked_sub(glyph_start)
             .ok_or(EngineError::InvalidRequest)?;
-        let placement_cluster =
-            clusters.placement_cluster(*layout_run, direction, overlap_start)?;
         let local_prefix = placement_cluster.block_local_prefix;
+        let translation = SegmentTranslation {
+            translation_inline: cursor - local_prefix + placement_cluster.block_anchor_inline,
+            translation_block: baseline + placement_cluster.block_anchor_block,
+        };
+        let translation_inline = finite_f32(translation.translation_inline)?;
+        let translation_block = finite_f32(translation.translation_block)?;
         let segment_index = self.placement.push_segment(
             super::placement_state::PlacementSegment {
                 fragment_index,
@@ -1827,9 +2463,18 @@ impl PositionedGlyphArena {
                 layout_run_index: u32::try_from(layout_run_index)
                     .map_err(|_| EngineError::ResultTooLarge)?,
                 run_handle: layout_run.run_handle,
+                placement_handle: None,
                 canonical_revision: layout_run.canonical_revision,
-                run_identity_anchor: clusters.stable_ids[run_start],
+                identity: if allow_dense_identity && placement_cluster.dense {
+                    PlacementIdentity::Dense
+                } else {
+                    PlacementIdentity::StableSource {
+                        segment_anchor: placement_cluster.segment_anchor,
+                        source_anchor: placement_cluster.segment_anchor,
+                    }
+                },
                 segment_anchor: placement_cluster.segment_anchor,
+                source_anchor: clusters.stable_ids[overlap_start],
                 numeric_block_ordinal: placement_cluster.numeric_block_ordinal,
                 run_cluster_start: u32::try_from(overlap_start - run_start)
                     .map_err(|_| EngineError::ResultTooLarge)?,
@@ -1839,47 +2484,55 @@ impl PositionedGlyphArena {
                 source_glyph_start,
                 source_glyph_count,
             },
-            SegmentTranslation {
-                translation_inline: cursor - local_prefix + placement_cluster.block_anchor_inline,
-                translation_block: baseline + placement_cluster.block_anchor_block,
-            },
+            translation,
         )?;
-        Ok(PlacementOccurrence { segment_index })
+        Ok(PlacementOccurrence {
+            segment_index,
+            translation_inline,
+            translation_block,
+        })
+    }
+
+    fn extend_layout_run_segment(
+        &mut self,
+        segment_index: u32,
+        layout_run: &LayoutRun,
+        cluster: usize,
+        clusters: &ClusterArena,
+    ) -> Result<(), EngineError> {
+        let run_start =
+            usize::try_from(layout_run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
+        let source_glyph_start = clusters.glyph_starts[cluster]
+            .checked_sub(layout_run.glyph_start)
+            .ok_or(EngineError::InvalidRequest)?;
+        self.placement.extend_last_segment(
+            segment_index,
+            u32::try_from(cluster - run_start).map_err(|_| EngineError::ResultTooLarge)?,
+            1,
+            source_glyph_start,
+            clusters.glyph_counts[cluster],
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn position_cluster<const TEXT_EFFECTS: bool, const MATERIALIZE_OUTPUT: bool>(
+    #[inline(always)]
+    fn position_cluster<const TEXT_EFFECTS: bool>(
         &mut self,
         line: FlowLine,
-        fragment: FlowFragment,
         cluster: usize,
+        bidi_level: u8,
         clusters: &ClusterArena,
-        runs: &[ShapingRun],
-        styles: &[StyleSegment],
         streams: &GlyphStreams<'_>,
         geometry: RunGeometry,
+        style: ResolvedStyle,
         state: &mut FragmentPositionState,
         occurrence: PlacementOccurrence,
         role: SliceRole,
         mut retained: Option<&mut RetainedInstanceCursor>,
-        extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+        _extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<PositionedCluster, EngineError> {
-        let bidi_level = cluster_level(
-            cluster,
-            fragment.line.text_start,
-            clusters,
-            runs,
-            &self.line_levels,
-        )?;
-        let style_index = usize::try_from(clusters.style_indexes[cluster])
-            .map_err(|_| EngineError::InvalidRequest)?;
-        let style = styles
-            .get(style_index)
-            .ok_or(EngineError::InvalidRequest)?
-            .style;
         let binding_handle = clusters.binding_handles[cluster];
         let font_handle = geometry.font_handle;
-        let scale = geometry.scale;
         let cluster_origin = state.cursor;
         let glyph_start = usize::try_from(clusters.glyph_starts[cluster])
             .map_err(|_| EngineError::InvalidRequest)?;
@@ -1894,25 +2547,30 @@ impl PositionedGlyphArena {
         for adjacency in glyph_start..adjacency_end {
             let stable_id = streams.stable_ids[adjacency];
             let glyph_id = u32::from(streams.ids[adjacency]);
-            let x_advance = f64::from(streams.x_advances[adjacency]).abs() * scale;
-            let x_offset = f64::from(streams.x_offsets[adjacency]) * scale;
-            let y_offset = f64::from(streams.y_offsets[adjacency]) * scale;
             let flags = streams.shape_flags[adjacency];
-            let origin_inline = state.cursor + x_offset;
-            let origin_block = state.baseline - y_offset - f64::from(geometry.baseline_shift);
-            let outline = if MATERIALIZE_OUTPUT {
-                extents_for(font_handle, glyph_id)
+            let source_glyph = u32::try_from(adjacency).map_err(|_| EngineError::ResultTooLarge)?;
+            let local = *clusters
+                .run_local()
+                .row_for_source_glyph(source_glyph)
+                .ok_or(EngineError::InvalidRequest)?;
+            if let Some(cursor) = retained.as_deref_mut() {
+                self.update_retained_glyph(
+                    cursor,
+                    RetainedGlyphUpdate {
+                        line,
+                        local,
+                        occurrence,
+                        glyph_source: GlyphSource::LayoutRun,
+                        source_glyph,
+                        bidi_level,
+                        role,
+                        stable_id,
+                        glyph_id,
+                        font_handle,
+                    },
+                )?;
             } else {
-                None
-            };
-            let ink = match outline.as_ref() {
-                Some(extents) => {
-                    GlyphInkBox::from_extents(extents, origin_inline, origin_block, scale)
-                }
-                None => GlyphInkBox::empty_at(origin_inline, origin_block),
-            };
-            if MATERIALIZE_OUTPUT {
-                self.semantic_glyphs.push(SemanticGlyph {
+                self.semantic_glyphs.push(PositionedSemanticGlyph {
                     stable_id,
                     font_handle,
                     cluster: streams.clusters[adjacency],
@@ -1920,63 +2578,59 @@ impl PositionedGlyphArena {
                     flags,
                     bidi_level,
                     font_size: geometry.font_size,
-                    inline_origin: finite_f32(origin_inline)?,
-                    block_origin: finite_f32(origin_block)?,
-                    inline_advance: nonnegative_f32(x_advance)?,
-                    ink_inline_start: finite_f32(ink.inline_start)?,
-                    ink_block_start: finite_f32(ink.block_start)?,
-                    ink_inline_extent: nonnegative_f32(ink.inline_extent)?,
-                    ink_block_extent: nonnegative_f32(ink.block_extent)?,
+                    inline_origin: local.inline_origin,
+                    block_origin: local.block_origin,
+                    inline_advance: local.inline_advance,
+                    ink_inline_start: local.ink_inline_start,
+                    ink_block_start: local.ink_block_start,
+                    ink_inline_extent: local.ink_inline_extent,
+                    ink_block_extent: local.ink_block_extent,
+                    placement_segment: occurrence.segment_index,
                 });
+                if local.has_outline {
+                    self.placement.push_emitted_span(
+                        occurrence.segment_index,
+                        u32::try_from(self.glyphs.len())
+                            .map_err(|_| EngineError::ResultTooLarge)?,
+                        GlyphSource::LayoutRun,
+                        source_glyph,
+                        1,
+                        bidi_level,
+                        role,
+                    )?;
+                    let semantic_glyph_index = u32::try_from(self.semantic_glyphs.len() - 1)
+                        .map_err(|_| EngineError::ResultTooLarge)?;
+                    self.push_glyph::<TEXT_EFFECTS>(
+                        LayoutGlyph {
+                            stable_id,
+                            content_revision: 0,
+                            placement_slot: u32::MAX,
+                            semantic_glyph_index,
+                            binding_handle,
+                            font_handle,
+                            glyph_id,
+                            material_id: style.material_id,
+                            clip_id: line.clip_id,
+                            depth_key: PAINT_LAYER_GLYPH,
+                            font_size: geometry.font_size,
+                            raster_pixel_ratio: style.raster_pixel_ratio,
+                            inline_start: local.inline_origin,
+                            block_start: local.block_origin,
+                            inline_extent: local.ink_inline_extent,
+                            block_extent: local.ink_block_extent,
+                        },
+                        local.ink_inline_start,
+                        local.ink_block_start,
+                        GlyphPublication {
+                            style,
+                            cluster: clusters.stable_ids[cluster],
+                            region: line.region_id,
+                            flow_thread: line.flow_thread_id,
+                            transform_index: line.transform_index,
+                        },
+                    );
+                }
             }
-            if MATERIALIZE_OUTPUT && outline.is_some() {
-                self.placement.push_emitted_span(
-                    occurrence.segment_index,
-                    u32::try_from(self.glyphs.len()).map_err(|_| EngineError::ResultTooLarge)?,
-                    GlyphSource::LayoutRun,
-                    u32::try_from(adjacency).map_err(|_| EngineError::ResultTooLarge)?,
-                    1,
-                    bidi_level,
-                    role,
-                )?;
-                let semantic_glyph_index = u32::try_from(self.semantic_glyphs.len() - 1)
-                    .map_err(|_| EngineError::ResultTooLarge)?;
-                self.push_glyph::<TEXT_EFFECTS>(
-                    LayoutGlyph {
-                        stable_id,
-                        content_revision: 0,
-                        semantic_glyph_index,
-                        binding_handle,
-                        font_handle,
-                        glyph_id,
-                        material_id: style.material_id,
-                        clip_id: line.clip_id,
-                        depth_key: PAINT_LAYER_GLYPH,
-                        font_size: geometry.font_size,
-                        raster_pixel_ratio: style.raster_pixel_ratio,
-                        inline_start: finite_f32(ink.inline_start)?,
-                        block_start: finite_f32(ink.block_start)?,
-                        inline_extent: nonnegative_f32(ink.inline_extent)?,
-                        block_extent: nonnegative_f32(ink.block_extent)?,
-                    },
-                    style,
-                    clusters.stable_ids[cluster],
-                    line.region_id,
-                    line.flow_thread_id,
-                    line.transform_index,
-                );
-            } else if !MATERIALIZE_OUTPUT && let Some(cursor) = retained.as_deref_mut() {
-                self.record_retained_glyph(
-                    cursor,
-                    occurrence,
-                    GlyphSource::LayoutRun,
-                    u32::try_from(adjacency).map_err(|_| EngineError::ResultTooLarge)?,
-                    bidi_level,
-                    role,
-                    stable_id,
-                )?;
-            }
-            state.cursor += x_advance;
         }
         state.cursor = cluster_origin + clusters.advances[cluster];
         Ok(PositionedCluster {
@@ -1987,7 +2641,8 @@ impl PositionedGlyphArena {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn finish_positioned_cluster<const ADJUST: bool, const MATERIALIZE_OUTPUT: bool>(
+    #[inline(always)]
+    fn finish_positioned_cluster<const ADJUST: bool>(
         &mut self,
         line: FlowLine,
         cluster: usize,
@@ -1996,6 +2651,7 @@ impl PositionedGlyphArena {
         justify: JustifyDistribution,
         state: &mut FragmentPositionState,
         metrics_for: impl Fn(u32) -> Option<FontMetrics>,
+        materialize_output: bool,
     ) -> Result<(), EngineError> {
         if ADJUST {
             apply_justification(
@@ -2007,7 +2663,7 @@ impl PositionedGlyphArena {
                 &mut state.gap_ordinal,
             );
         }
-        if !MATERIALIZE_OUTPUT {
+        if !materialize_output {
             return Ok(());
         }
         let PositionedCluster {
@@ -2120,7 +2776,7 @@ impl PositionedGlyphArena {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn position_boundary<const TEXT_EFFECTS: bool, const MATERIALIZE_OUTPUT: bool>(
+    fn position_boundary<const TEXT_EFFECTS: bool>(
         &mut self,
         line: FlowLine,
         _boundary_index: u32,
@@ -2162,7 +2818,7 @@ impl PositionedGlyphArena {
                 )
             })
             .transpose()?;
-        cursor = self.position_boundary_span::<TEXT_EFFECTS, MATERIALIZE_OUTPUT>(
+        cursor = self.position_boundary_span::<TEXT_EFFECTS>(
             line,
             cursor,
             baseline,
@@ -2198,7 +2854,7 @@ impl PositionedGlyphArena {
                 )
             })
             .transpose()?;
-        self.position_boundary_span::<TEXT_EFFECTS, MATERIALIZE_OUTPUT>(
+        self.position_boundary_span::<TEXT_EFFECTS>(
             line,
             cursor,
             baseline,
@@ -2234,6 +2890,13 @@ impl PositionedGlyphArena {
         baseline: f64,
         clusters: &ClusterArena,
     ) -> Result<PlacementOccurrence, EngineError> {
+        if !CAPTURE_RUN_PLACEMENT {
+            return Ok(PlacementOccurrence {
+                segment_index: u32::MAX,
+                translation_inline: 0.0,
+                translation_block: 0.0,
+            });
+        }
         let run_index = self
             .replacement_run_indices
             .get(usize::try_from(boundary_index).map_err(|_| EngineError::InvalidRequest)?)
@@ -2271,15 +2934,26 @@ impl PositionedGlyphArena {
             .cluster_prefixes()
             .get(block_lane)
             .ok_or(EngineError::InvalidRequest)?;
+        let translation = SegmentTranslation {
+            translation_inline: cursor - local_prefix + block.anchor_inline,
+            translation_block: baseline + block.anchor_block,
+        };
+        let translation_inline = finite_f32(translation.translation_inline)?;
+        let translation_block = finite_f32(translation.translation_block)?;
         let segment_index = self.placement.push_segment(
             super::placement_state::PlacementSegment {
                 fragment_index: self.placement_fragment_index,
                 layout_run_owner: LayoutRunOwner::Replacement,
                 layout_run_index: run_index,
                 run_handle: run.run_handle,
+                placement_handle: None,
                 canonical_revision: run.canonical_revision,
-                run_identity_anchor: flow_thread_id,
+                identity: PlacementIdentity::StableSource {
+                    segment_anchor: clusters.stable_ids[owner_cluster],
+                    source_anchor: clusters.stable_ids[owner_cluster],
+                },
                 segment_anchor: clusters.stable_ids[owner_cluster],
+                source_anchor: clusters.stable_ids[owner_cluster],
                 numeric_block_ordinal: block_index
                     .checked_sub(run.numeric_blocks.start)
                     .filter(|ordinal| *ordinal < run.numeric_blocks.count)
@@ -2290,12 +2964,72 @@ impl PositionedGlyphArena {
                 source_glyph_start: 0,
                 source_glyph_count: glyph_count,
             },
-            SegmentTranslation {
-                translation_inline: cursor - local_prefix + block.anchor_inline,
-                translation_block: baseline + block.anchor_block,
-            },
+            translation,
         )?;
-        Ok(PlacementOccurrence { segment_index })
+        Ok(PlacementOccurrence {
+            segment_index,
+            translation_inline,
+            translation_block,
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn update_retained_glyph(
+        &mut self,
+        cursor: &mut RetainedInstanceCursor,
+        update: RetainedGlyphUpdate,
+    ) -> Result<(), EngineError> {
+        if cursor.semantic_next >= cursor.semantic_end {
+            return Err(EngineError::InvalidRequest);
+        }
+        let semantic = self
+            .semantic_glyphs
+            .get(cursor.semantic_next)
+            .filter(|semantic| {
+                semantic.stable_id == update.stable_id
+                    && u32::from(semantic.glyph_id) == update.glyph_id
+                    && semantic.font_handle == update.font_handle
+            })
+            .ok_or(EngineError::InvalidRequest)?;
+        let semantic_index = cursor.semantic_next;
+        let rendered = (cursor.rendered_next < cursor.rendered_end)
+            .then(|| self.glyphs.get(cursor.rendered_next))
+            .flatten()
+            .filter(|glyph| usize::try_from(glyph.semantic_glyph_index) == Ok(semantic_index));
+        if update.local.has_outline != rendered.is_some() {
+            return Err(EngineError::InvalidRequest);
+        }
+        if let Some(rendered) = rendered {
+            if rendered.stable_id != semantic.stable_id {
+                return Err(EngineError::InvalidRequest);
+            }
+            self.placement.push_emitted_span(
+                update.occurrence.segment_index,
+                u32::try_from(cursor.rendered_next).map_err(|_| EngineError::ResultTooLarge)?,
+                update.glyph_source,
+                update.source_glyph,
+                1,
+                update.bidi_level,
+                update.role,
+            )?;
+            let glyph = self
+                .glyphs
+                .get_mut(cursor.rendered_next)
+                .ok_or(EngineError::InvalidRequest)?;
+            glyph.clip_id = update.line.clip_id;
+            self.semantic_u32[2][cursor.rendered_next] = update.line.region_id;
+            self.semantic_u32[3][cursor.rendered_next] = update.line.flow_thread_id;
+            self.semantic_u32[4][cursor.rendered_next] = update.line.transform_index;
+            cursor.rendered_next += 1;
+        }
+        let semantic = self
+            .semantic_glyphs
+            .get_mut(semantic_index)
+            .ok_or(EngineError::InvalidRequest)?;
+        semantic.bidi_level = update.bidi_level;
+        semantic.placement_segment = update.occurrence.segment_index;
+        cursor.semantic_next += 1;
+        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2337,16 +3071,17 @@ impl PositionedGlyphArena {
             )?;
             cursor.rendered_next += 1;
         }
+        self.semantic_glyphs[cursor.semantic_next].placement_segment = occurrence.segment_index;
         cursor.semantic_next += 1;
         Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn position_boundary_span<const TEXT_EFFECTS: bool, const MATERIALIZE_OUTPUT: bool>(
+    fn position_boundary_span<const TEXT_EFFECTS: bool>(
         &mut self,
         line: FlowLine,
         mut cursor: f64,
-        baseline: f64,
+        _baseline: f64,
         glyph_start: u32,
         glyph_count: u32,
         binding_handle: u32,
@@ -2359,7 +3094,7 @@ impl PositionedGlyphArena {
         clusters: &ClusterArena,
         styles: &[StyleSegment],
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
-        extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+        _extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
         occurrence: Option<PlacementOccurrence>,
         role: SliceRole,
         mut retained: Option<&mut RetainedInstanceCursor>,
@@ -2421,22 +3156,6 @@ impl PositionedGlyphArena {
             )
             .abs()
                 * scale;
-            let x_offset = f64::from(
-                arena
-                    .shape
-                    .x_offsets
-                    .get(glyph)
-                    .copied()
-                    .ok_or(EngineError::InvalidRequest)?,
-            ) * scale;
-            let y_offset = f64::from(
-                arena
-                    .shape
-                    .y_offsets
-                    .get(glyph)
-                    .copied()
-                    .ok_or(EngineError::InvalidRequest)?,
-            ) * scale;
             let stable_id = *arena
                 .stable_ids
                 .get(glyph)
@@ -2446,21 +3165,15 @@ impl PositionedGlyphArena {
                 .glyph_flags
                 .get(glyph)
                 .ok_or(EngineError::InvalidRequest)?;
-            let origin_inline = cursor + x_offset;
-            let origin_block = baseline - y_offset - f64::from(style.baseline_shift);
-            let outline = if MATERIALIZE_OUTPUT {
-                extents_for(font_handle, glyph_id)
-            } else {
-                None
-            };
-            let ink = match outline.as_ref() {
-                Some(extents) => {
-                    GlyphInkBox::from_extents(extents, origin_inline, origin_block, scale)
-                }
-                None => GlyphInkBox::empty_at(origin_inline, origin_block),
-            };
-            if MATERIALIZE_OUTPUT {
-                self.semantic_glyphs.push(SemanticGlyph {
+            if retained.is_none() {
+                let local = self
+                    .replacement_run_local
+                    .row_for_source_glyph(
+                        u32::try_from(glyph).map_err(|_| EngineError::ResultTooLarge)?,
+                    )
+                    .ok_or(EngineError::InvalidRequest)?;
+                let occurrence = occurrence.ok_or(EngineError::InvalidRequest)?;
+                self.semantic_glyphs.push(PositionedSemanticGlyph {
                     stable_id,
                     font_handle,
                     cluster,
@@ -2468,18 +3181,16 @@ impl PositionedGlyphArena {
                     flags,
                     bidi_level,
                     font_size: style.font_size,
-                    inline_origin: finite_f32(origin_inline)?,
-                    block_origin: finite_f32(origin_block)?,
-                    inline_advance: nonnegative_f32(x_advance)?,
-                    ink_inline_start: finite_f32(ink.inline_start)?,
-                    ink_block_start: finite_f32(ink.block_start)?,
-                    ink_inline_extent: nonnegative_f32(ink.inline_extent)?,
-                    ink_block_extent: nonnegative_f32(ink.block_extent)?,
+                    inline_origin: local.inline_origin,
+                    block_origin: local.block_origin,
+                    inline_advance: local.inline_advance,
+                    ink_inline_start: local.ink_inline_start,
+                    ink_block_start: local.ink_block_start,
+                    ink_inline_extent: local.ink_inline_extent,
+                    ink_block_extent: local.ink_block_extent,
+                    placement_segment: occurrence.segment_index,
                 });
-            }
-            if MATERIALIZE_OUTPUT && outline.is_some() {
-                {
-                    let occurrence = occurrence.ok_or(EngineError::InvalidRequest)?;
+                if local.has_outline {
                     self.placement.push_emitted_span(
                         occurrence.segment_index,
                         u32::try_from(self.glyphs.len())
@@ -2490,34 +3201,39 @@ impl PositionedGlyphArena {
                         bidi_level,
                         role,
                     )?;
+                    let semantic_glyph_index = u32::try_from(self.semantic_glyphs.len() - 1)
+                        .map_err(|_| EngineError::ResultTooLarge)?;
+                    self.push_glyph::<TEXT_EFFECTS>(
+                        LayoutGlyph {
+                            stable_id,
+                            content_revision: 0,
+                            placement_slot: u32::MAX,
+                            semantic_glyph_index,
+                            binding_handle,
+                            font_handle,
+                            glyph_id,
+                            material_id: style.material_id,
+                            clip_id: line.clip_id,
+                            depth_key: PAINT_LAYER_GLYPH,
+                            font_size: style.font_size,
+                            raster_pixel_ratio: style.raster_pixel_ratio,
+                            inline_start: local.inline_origin,
+                            block_start: local.block_origin,
+                            inline_extent: local.ink_inline_extent,
+                            block_extent: local.ink_block_extent,
+                        },
+                        local.ink_inline_start,
+                        local.ink_block_start,
+                        GlyphPublication {
+                            style,
+                            cluster: semantic_id,
+                            region: line.region_id,
+                            flow_thread: line.flow_thread_id,
+                            transform_index: line.transform_index,
+                        },
+                    );
                 }
-                let semantic_glyph_index = u32::try_from(self.semantic_glyphs.len() - 1)
-                    .map_err(|_| EngineError::ResultTooLarge)?;
-                self.push_glyph::<TEXT_EFFECTS>(
-                    LayoutGlyph {
-                        stable_id,
-                        content_revision: 0,
-                        semantic_glyph_index,
-                        binding_handle,
-                        font_handle,
-                        glyph_id,
-                        material_id: style.material_id,
-                        clip_id: line.clip_id,
-                        depth_key: PAINT_LAYER_GLYPH,
-                        font_size: style.font_size,
-                        raster_pixel_ratio: style.raster_pixel_ratio,
-                        inline_start: finite_f32(ink.inline_start)?,
-                        block_start: finite_f32(ink.block_start)?,
-                        inline_extent: nonnegative_f32(ink.inline_extent)?,
-                        block_extent: nonnegative_f32(ink.block_extent)?,
-                    },
-                    style,
-                    semantic_id,
-                    line.region_id,
-                    line.flow_thread_id,
-                    line.transform_index,
-                );
-            } else if !MATERIALIZE_OUTPUT && let Some(cursor) = retained.as_deref_mut() {
+            } else if let Some(cursor) = retained.as_deref_mut() {
                 let occurrence = occurrence.ok_or(EngineError::InvalidRequest)?;
                 self.record_retained_glyph(
                     cursor,
@@ -2554,16 +3270,14 @@ impl PositionedGlyphArena {
     fn push_glyph<const TEXT_EFFECTS: bool>(
         &mut self,
         glyph: LayoutGlyph,
-        style: ResolvedStyle,
-        cluster: u32,
-        region: u32,
-        flow_thread: u32,
-        transform_index: u32,
+        ink_inline_start: f32,
+        ink_block_start: f32,
+        publication: GlyphPublication,
     ) {
         self.glyphs.push(glyph);
         let f32_values = [
-            glyph.inline_start,
-            glyph.block_start,
+            ink_inline_start,
+            ink_block_start,
             glyph.inline_extent,
             glyph.block_extent,
             glyph.font_size,
@@ -2576,11 +3290,11 @@ impl PositionedGlyphArena {
             field.push(value);
         }
         let u32_values = [
-            apply_opacity(style.foreground_rgba, style.opacity),
-            cluster,
-            region,
-            flow_thread,
-            transform_index,
+            apply_opacity(publication.style.foreground_rgba, publication.style.opacity),
+            publication.cluster,
+            publication.region,
+            publication.flow_thread,
+            publication.transform_index,
             glyph.stable_id,
         ];
         for (field, value) in self.semantic_u32[..SEMANTIC_U32_BASE_FIELD_COUNT]
@@ -2590,12 +3304,18 @@ impl PositionedGlyphArena {
             field.push(value);
         }
         if TEXT_EFFECTS {
-            let inverse_font_size = 1.0 / style.font_size;
-            self.semantic_f32[6].push(style.outline_width * inverse_font_size);
-            self.semantic_f32[7].push(style.shadow_offset_x * inverse_font_size);
-            self.semantic_f32[8].push(style.shadow_offset_y * inverse_font_size);
-            self.semantic_u32[6].push(apply_opacity(style.outline_rgba, style.opacity));
-            self.semantic_u32[7].push(apply_opacity(style.shadow_rgba, style.opacity));
+            let inverse_font_size = 1.0 / publication.style.font_size;
+            self.semantic_f32[6].push(publication.style.outline_width * inverse_font_size);
+            self.semantic_f32[7].push(publication.style.shadow_offset_x * inverse_font_size);
+            self.semantic_f32[8].push(publication.style.shadow_offset_y * inverse_font_size);
+            self.semantic_u32[6].push(apply_opacity(
+                publication.style.outline_rgba,
+                publication.style.opacity,
+            ));
+            self.semantic_u32[7].push(apply_opacity(
+                publication.style.shadow_rgba,
+                publication.style.opacity,
+            ));
         }
     }
 
@@ -2715,12 +3435,10 @@ impl PositionedGlyphArena {
             if next_glyph.clip_id != old_glyph.clip_id {
                 mask = ALL_SEMANTIC_CHANGES;
             } else {
-                let next = self.semantic_glyphs[next_glyph.semantic_glyph_index as usize];
-                let old = previous.semantic_glyphs[old_glyph.semantic_glyph_index as usize];
-                if next.inline_origin.to_bits() != old.inline_origin.to_bits() {
+                if next_glyph.inline_start.to_bits() != old_glyph.inline_start.to_bits() {
                     mask |= 1 << 6;
                 }
-                if next.block_origin.to_bits() != old.block_origin.to_bits() {
+                if next_glyph.block_start.to_bits() != old_glyph.block_start.to_bits() {
                     mask |= 1 << 7;
                 }
             }
@@ -2804,13 +3522,10 @@ impl PositionedGlyphArena {
                 mask |= 1 << field;
             }
         }
-        let next_semantic = self.semantic_glyphs[self.glyphs[slot].semantic_glyph_index as usize];
-        let previous_semantic =
-            previous.semantic_glyphs[previous.glyphs[previous_slot].semantic_glyph_index as usize];
-        if next_semantic.inline_origin.to_bits() != previous_semantic.inline_origin.to_bits() {
+        if next.inline_start.to_bits() != old.inline_start.to_bits() {
             mask |= 1 << 6;
         }
-        if next_semantic.block_origin.to_bits() != previous_semantic.block_origin.to_bits() {
+        if next.block_start.to_bits() != old.block_start.to_bits() {
             mask |= 1 << 7;
         }
         for field in 0..SEMANTIC_U32_BASE_FIELD_COUNT {
@@ -3109,6 +3824,92 @@ fn line_fragments(flow: &FlowLayoutArena, line: FlowLine) -> Result<&[FlowFragme
         .ok_or(EngineError::InvalidRequest)
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PositionedClusterRange {
+    Empty,
+    Contiguous { start: u32, end: u32 },
+    Discontiguous,
+}
+
+fn same_contiguous_positioned_cluster_range(
+    current: &FlowLayoutArena,
+    previous: &FlowLayoutArena,
+) -> Result<bool, EngineError> {
+    let current = contiguous_positioned_cluster_range(current)?;
+    let previous = contiguous_positioned_cluster_range(previous)?;
+    Ok(matches!(
+        (current, previous),
+        (PositionedClusterRange::Empty, PositionedClusterRange::Empty)
+    ) || matches!(
+        (current, previous),
+        (
+            PositionedClusterRange::Contiguous {
+                start: current_start,
+                end: current_end,
+            },
+            PositionedClusterRange::Contiguous {
+                start: previous_start,
+                end: previous_end,
+            },
+        ) if current_start == previous_start && current_end == previous_end
+    ))
+}
+
+fn contiguous_positioned_cluster_range(
+    flow: &FlowLayoutArena,
+) -> Result<PositionedClusterRange, EngineError> {
+    let mut range = PositionedClusterRange::Empty;
+    let mut drop_cap_cursor = 0usize;
+    for (line_index, line) in flow.lines.iter().copied().enumerate() {
+        let first_thread_line =
+            line_index == 0 || flow.lines[line_index - 1].flow_thread_id != line.flow_thread_id;
+        if first_thread_line
+            && let Some(drop_cap) = flow
+                .drop_caps
+                .get(drop_cap_cursor)
+                .filter(|cap| cap.line.flow_thread_id == line.flow_thread_id)
+        {
+            append_positioned_cluster_range(&mut range, drop_cap.fragment.line)?;
+            drop_cap_cursor += 1;
+        }
+        for fragment in line_fragments(flow, line)? {
+            append_positioned_cluster_range(&mut range, fragment.line)?;
+        }
+    }
+    if drop_cap_cursor != flow.drop_caps.len() {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok(range)
+}
+
+fn append_positioned_cluster_range(
+    range: &mut PositionedClusterRange,
+    line: ComposedLine,
+) -> Result<(), EngineError> {
+    if line.cluster_start > line.cluster_end {
+        return Err(EngineError::InvalidRequest);
+    }
+    if line.cluster_start == line.cluster_end {
+        return Ok(());
+    }
+    *range = match *range {
+        PositionedClusterRange::Empty => PositionedClusterRange::Contiguous {
+            start: line.cluster_start,
+            end: line.cluster_end,
+        },
+        PositionedClusterRange::Contiguous { start, end } if end == line.cluster_start => {
+            PositionedClusterRange::Contiguous {
+                start,
+                end: line.cluster_end,
+            }
+        }
+        PositionedClusterRange::Contiguous { .. } | PositionedClusterRange::Discontiguous => {
+            PositionedClusterRange::Discontiguous
+        }
+    };
+    Ok(())
+}
+
 // Each argument is one independently compared positioning input. Packing them
 // into a context would hide the proof boundary without reducing caller state.
 #[allow(clippy::too_many_arguments)]
@@ -3290,6 +4091,39 @@ fn cluster_level(
     }
 }
 
+fn layout_run_direction(run: LayoutRun, runs: &[ShapingRun]) -> Result<u8, EngineError> {
+    usize::try_from(run.source_run)
+        .ok()
+        .and_then(|source| runs.get(source))
+        .map(|run| run.direction)
+        .or_else(|| (run.glyph_count == 0).then_some(0))
+        .ok_or(EngineError::InvalidRequest)
+}
+
+fn layout_run_for_cluster(
+    clusters: &ClusterArena,
+    cluster: usize,
+    cached: &mut Option<(usize, LayoutRun)>,
+) -> Result<(usize, LayoutRun), EngineError> {
+    let cluster = u32::try_from(cluster).map_err(|_| EngineError::InvalidRequest)?;
+    if let Some((index, run)) = *cached
+        && run.cluster_start <= cluster
+        && cluster < run.cluster_end
+    {
+        return Ok((index, run));
+    }
+    let index = clusters
+        .layout_runs()
+        .partition_point(|run| run.cluster_end <= cluster);
+    let run = *clusters
+        .layout_runs()
+        .get(index)
+        .filter(|run| run.cluster_start <= cluster)
+        .ok_or(EngineError::InvalidRequest)?;
+    *cached = Some((index, run));
+    Ok((index, run))
+}
+
 fn reorder_l2(indices: &mut [u32], levels: &mut [u8], start: usize) {
     let range = &levels[start..];
     let maximum = range.iter().copied().max().unwrap_or(0);
@@ -3394,6 +4228,8 @@ pub(crate) fn flow_positioning_equivalent(
     committed_typography: impl Fn(u32) -> ThreadTypography + Copy,
 ) -> Result<bool, EngineError> {
     if pending.lines.len() != committed.lines.len()
+        || !pending.drop_caps.is_empty()
+        || !committed.drop_caps.is_empty()
         || !pending.ellipsis_threads().is_empty()
         || !committed.ellipsis_threads().is_empty()
     {
@@ -3757,6 +4593,14 @@ fn finite_f32(value: f64) -> Result<f32, EngineError> {
         .ok_or(EngineError::InvalidRequest)
 }
 
+pub(crate) fn placed_f32(local: f32, translation: f32) -> Result<f32, EngineError> {
+    let value = local + translation;
+    value
+        .is_finite()
+        .then_some(value)
+        .ok_or(EngineError::InvalidRequest)
+}
+
 fn nonnegative_f32(value: f64) -> Result<f32, EngineError> {
     let value = finite_f32(value)?;
     (value >= 0.0)
@@ -3826,6 +4670,57 @@ mod tests {
             },
             stable_ids: vec![11; count],
         }
+    }
+
+    fn flow_with_fragment_ranges(ranges: &[(u32, u32)]) -> FlowLayoutArena {
+        let fragments = ranges
+            .iter()
+            .copied()
+            .map(|(cluster_start, cluster_end)| FlowFragment {
+                line: ComposedLine {
+                    cluster_start,
+                    cluster_end,
+                    text_start: cluster_start,
+                    text_end: cluster_end,
+                    advance: 0.0,
+                    hung_advance: 0.0,
+                    hard_break: false,
+                },
+                slot_start: 0.0,
+                slot_end: 100.0,
+                flexible_end: false,
+                boundary_index: NO_BOUNDARY,
+            })
+            .collect();
+        FlowLayoutArena {
+            lines: vec![FlowLine {
+                flow_thread_id: 1,
+                region_id: 1,
+                transform_index: 0,
+                clip_id: 0,
+                fragment_start: 0,
+                fragment_count: u16::try_from(ranges.len()).unwrap(),
+                align: ALIGN_START,
+                block_start: 0.0,
+                baseline: 10.0,
+                height: 12.0,
+            }],
+            fragments,
+            ..FlowLayoutArena::default()
+        }
+    }
+
+    #[test]
+    fn static_geometry_retention_requires_the_same_contiguous_cluster_sequence() {
+        let previous = flow_with_fragment_ranges(&[(0, 3), (3, 8)]);
+        let reflowed = flow_with_fragment_ranges(&[(0, 2), (2, 5), (5, 8)]);
+        assert!(same_contiguous_positioned_cluster_range(&reflowed, &previous).unwrap());
+
+        let clipped = flow_with_fragment_ranges(&[(0, 5)]);
+        assert!(!same_contiguous_positioned_cluster_range(&clipped, &previous).unwrap());
+
+        let discontiguous = flow_with_fragment_ranges(&[(0, 3), (4, 8)]);
+        assert!(!same_contiguous_positioned_cluster_range(&discontiguous, &previous).unwrap());
     }
 
     #[test]
@@ -3982,12 +4877,16 @@ mod tests {
     #[test]
     fn retained_cursor_checks_outline_less_semantic_identity() {
         let (_, mut arena) = fixture_position_results(8, 10, |_, _, _| {});
-        arena.semantic_glyphs = vec![SemanticGlyph {
+        arena.semantic_glyphs = vec![PositionedSemanticGlyph {
             stable_id: 11,
-            ..SemanticGlyph::default()
+            ..PositionedSemanticGlyph::default()
         }];
         arena.glyphs.clear();
-        let occurrence = PlacementOccurrence { segment_index: 0 };
+        let occurrence = PlacementOccurrence {
+            segment_index: 0,
+            translation_inline: 0.0,
+            translation_block: 0.0,
+        };
         let mut cursor = RetainedInstanceCursor {
             semantic_next: 0,
             semantic_end: 1,
@@ -4245,6 +5144,7 @@ mod tests {
             )
             .unwrap();
         clusters.ensure_word_breaks().unwrap();
+        clusters.ensure_placement_segment_anchors().unwrap();
         clusters
             .rebuild_run_local_geometry(runs, styles, extents_for)
             .unwrap();
@@ -4296,6 +5196,7 @@ mod tests {
                 y_max: 700,
             })
         };
+        prepare_positioning_clusters(&mut clusters, &text, &runs, &styles, extents);
         let expected = shadow_base_ltr_unindented_fragment_positions(
             line, fragment, &clusters, &styles, extents,
         )
@@ -4303,7 +5204,7 @@ mod tests {
         let mut production = PositionedGlyphArena::default();
         production.placement.clear();
         production
-            .position_fragment::<false, true>(
+            .position_fragment::<false>(
                 line,
                 fragment,
                 true,
@@ -4325,38 +5226,42 @@ mod tests {
         (expected, production)
     }
 
-    fn assert_shadow_run_positions_match_production(cluster_start: usize, cluster_end: usize) {
+    fn assert_run_positions_match_renderer_placement(cluster_start: usize, cluster_end: usize) {
         let (expected, production) =
             fixture_position_results(cluster_start, cluster_end, |_, _, _| {});
-
         assert_eq!(production.semantic_glyphs.len(), expected.len());
         assert_eq!(production.glyphs.len(), expected.len());
-        for ((semantic, layout), expected) in production
+        for (index, ((semantic, layout), expected)) in production
             .semantic_glyphs
             .iter()
             .zip(&production.glyphs)
             .zip(expected)
+            .enumerate()
         {
+            let placed_semantic = production.placed_semantic_glyph(index).unwrap();
+            let translation = production.placement.glyph_translation(index).unwrap();
+            let placed_inline = placed_f32(
+                layout.inline_start,
+                finite_f32(translation.translation_inline).unwrap(),
+            )
+            .unwrap();
+            let placed_block = placed_f32(
+                layout.block_start,
+                finite_f32(translation.translation_block).unwrap(),
+            )
+            .unwrap();
             assert_eq!(semantic.stable_id, expected.stable_id);
             assert_eq!(
-                semantic.inline_origin.to_bits(),
-                expected.inline_origin.to_bits()
+                placed_semantic.inline_origin.to_bits(),
+                placed_inline.to_bits()
             );
             assert_eq!(
-                semantic.block_origin.to_bits(),
-                expected.block_origin.to_bits()
+                placed_semantic.block_origin.to_bits(),
+                placed_block.to_bits()
             );
             assert_eq!(
                 semantic.inline_advance.to_bits(),
                 expected.inline_advance.to_bits()
-            );
-            assert_eq!(
-                semantic.ink_inline_start.to_bits(),
-                expected.ink_inline_start.to_bits()
-            );
-            assert_eq!(
-                semantic.ink_block_start.to_bits(),
-                expected.ink_block_start.to_bits()
             );
             assert_eq!(
                 semantic.ink_inline_extent.to_bits(),
@@ -4367,12 +5272,12 @@ mod tests {
                 expected.ink_block_extent.to_bits()
             );
             assert_eq!(
-                layout.inline_start.to_bits(),
-                expected.ink_inline_start.to_bits()
+                production.semantic_f32[0][index].to_bits(),
+                semantic.ink_inline_start.to_bits()
             );
             assert_eq!(
-                layout.block_start.to_bits(),
-                expected.ink_block_start.to_bits()
+                production.semantic_f32[1][index].to_bits(),
+                semantic.ink_block_start.to_bits()
             );
             assert_eq!(
                 layout.inline_extent.to_bits(),
@@ -4386,7 +5291,7 @@ mod tests {
     }
 
     #[test]
-    fn base_ltr_unindented_layout_run_segments_match_absolute_positioning() {
+    fn base_ltr_unindented_layout_run_segments_match_renderer_placement() {
         let (_, clusters, _, _) = layout_run_positioning_fixture();
         assert_eq!(
             clusters
@@ -4399,25 +5304,19 @@ mod tests {
                     run.font_handle
                 ))
                 .collect::<Vec<_>>(),
-            [
-                (0, 3, 0, 11),
-                (3, 5, 1, 11),
-                (5, 7, 1, 22),
-                (7, 11, 2, 22),
-                (11, 12, u32::MAX, 0)
-            ]
+            [(0, 5, 0, 11), (5, 11, 1, 22), (11, 12, u32::MAX, 0)]
         );
         assert_eq!(clusters.glyph_counts, [1, 2, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0]);
         assert!(clusters.advances[..3].iter().all(|advance| *advance < 0.0));
 
-        assert_shadow_run_positions_match_production(0, 12);
-        assert_shadow_run_positions_match_production(8, 10);
+        assert_run_positions_match_renderer_placement(0, 12);
+        assert_run_positions_match_renderer_placement(8, 10);
 
         let (_, positioned) = fixture_position_results(0, 12, |_, _, _| {});
-        assert_eq!(positioned.placement.segments().len(), 8);
-        assert_eq!(positioned.placement.translations().len(), 8);
-        assert_eq!(positioned.placement.visual_spans().len(), 7);
-        let hard_break = positioned.placement.segments().get(7).unwrap();
+        assert_eq!(positioned.placement.segments().len(), 7);
+        assert_eq!(positioned.placement.segment_count(), 7);
+        assert_eq!(positioned.placement.visual_spans().len(), 6);
+        let hard_break = positioned.placement.segments().get(6).unwrap();
         assert_eq!(
             (hard_break.run_cluster_count, hard_break.source_glyph_count),
             (1, 0)
@@ -4425,8 +5324,7 @@ mod tests {
         assert!(
             positioned
                 .placement
-                .translations()
-                .get(0)
+                .translation(0)
                 .unwrap()
                 .translation_inline
                 .is_finite()
@@ -4447,7 +5345,7 @@ mod tests {
                 .get(1)
                 .unwrap()
                 .glyph_start,
-            3
+            5
         );
     }
 
@@ -4494,7 +5392,7 @@ mod tests {
         let mut positioned = PositionedGlyphArena::default();
         positioned.placement.clear();
         positioned
-            .position_fragment::<false, true>(
+            .position_fragment::<false>(
                 line,
                 fragment,
                 true,
@@ -4551,20 +5449,94 @@ mod tests {
     }
 
     #[test]
-    fn large_late_slice_rejects_plain_f64_local_plus_translation() {
-        let (shadow, production) = fixture_position_results(8, 10, |clusters, _, _| {
-            clusters.advances[7] = 2_f64.powi(53);
-        });
-        let absolute = production.semantic_glyphs[0].inline_origin;
-        let reassociated = shadow[0].inline_origin;
+    fn bidi_fallback_records_an_unowned_hard_break() {
+        let (text, clusters, mut runs, styles) = layout_run_positioning_fixture();
+        runs[1].bidi_level = 1;
+        let cluster_end = clusters.starts.len();
+        let line = FlowLine {
+            flow_thread_id: 1,
+            region_id: 2,
+            transform_index: 3,
+            clip_id: 4,
+            fragment_start: 0,
+            fragment_count: 1,
+            align: ALIGN_START,
+            block_start: 0.0,
+            baseline: 8.0,
+            height: 10.0,
+        };
+        let fragment = FlowFragment {
+            line: ComposedLine {
+                cluster_start: 0,
+                cluster_end: u32::try_from(cluster_end).unwrap(),
+                text_start: 0,
+                text_end: clusters.ends[cluster_end - 1],
+                advance: clusters.advances.iter().copied().sum(),
+                hung_advance: 0.0,
+                hard_break: true,
+            },
+            slot_start: 0.0,
+            slot_end: 100.0,
+            flexible_end: false,
+            boundary_index: NO_BOUNDARY,
+        };
+        let mut positioned = PositionedGlyphArena::default();
+        positioned.placement.clear();
+        positioned
+            .position_fragment::<false>(
+                line,
+                fragment,
+                true,
+                &text,
+                &clusters,
+                &runs,
+                &BoundaryShapeArena::default(),
+                &styles,
+                &BidiAnalysis::default(),
+                false,
+                0.0,
+                JustifyControls::default(),
+                |_| None,
+                |_, _| {
+                    Some(FontGlyphExtents {
+                        x_min: 0,
+                        y_min: -200,
+                        x_max: 500,
+                        y_max: 700,
+                    })
+                },
+                None,
+            )
+            .unwrap();
 
-        assert_eq!(absolute.to_bits(), 0x4974_2405);
-        assert_eq!(reassociated.to_bits(), 0x4974_2400);
-        assert_ne!(absolute.to_bits(), reassociated.to_bits());
+        let segment_count = positioned.placement.segment_count();
+        let hard_break = positioned
+            .placement
+            .segments()
+            .get(segment_count - 1)
+            .unwrap();
+        assert_eq!(hard_break.source_glyph_count, 0);
+        assert_eq!(hard_break.run_cluster_count, 1);
+        assert_eq!(
+            hard_break.segment_anchor,
+            clusters.stable_ids[cluster_end - 1]
+        );
     }
 
     #[test]
-    fn normal_range_block_origin_rejects_reassociated_translation() {
+    fn renderer_f32_placement_is_the_numeric_authority() {
+        let local = 16_777_217.0_f64 as f32;
+        let translation = -16_777_216.0_f32;
+        let placed = placed_f32(local, translation).unwrap();
+        let legacy_absolute = 1.0_f64 as f32;
+
+        assert_eq!(placed.to_bits(), 0.0_f32.to_bits());
+        assert_eq!(legacy_absolute.to_bits(), 1.0_f32.to_bits());
+        assert_ne!(placed.to_bits(), legacy_absolute.to_bits());
+    }
+
+    #[test]
+    fn normal_range_block_origin_uses_renderer_f32_placement() {
         let (shadow, production) = fixture_position_results(8, 10, |clusters, styles, line| {
             styles[0].style.font_size = f32::from_bits(0x4177_65c4);
             styles[0].style.baseline_shift = f32::from_bits(0x4202_277e);
@@ -4573,12 +5545,19 @@ mod tests {
             let glyph = usize::try_from(clusters.glyph_starts[8]).unwrap();
             clusters.glyph_y_offsets[glyph] = -1_938;
         });
-        let absolute = production.semantic_glyphs[0].block_origin;
-        let reassociated = shadow[0].block_origin;
+        let placed = production.placed_semantic_glyph(0).unwrap().block_origin;
+        let legacy_absolute = shadow[0].block_origin;
+        let translation = production.placement.glyph_translation(0).unwrap();
+        let renderer = placed_f32(
+            production.glyphs[0].block_start,
+            finite_f32(translation.translation_block).unwrap(),
+        )
+        .unwrap();
 
-        assert_eq!(absolute.to_bits(), 0xb2e5_6040);
-        assert_eq!(reassociated.to_bits(), 0xb2e5_6042);
-        assert_ne!(absolute.to_bits(), reassociated.to_bits());
+        assert_eq!(placed.to_bits(), renderer.to_bits());
+        assert_eq!(placed.to_bits(), 0.0_f32.to_bits());
+        assert_eq!(legacy_absolute.to_bits(), 0xb2e5_6042);
+        assert_ne!(placed.to_bits(), legacy_absolute.to_bits());
     }
 
     #[test]
@@ -4784,6 +5763,7 @@ mod tests {
                 slot_end,
                 ..fragment
             }],
+            drop_caps: alloc::vec::Vec::new(),
             ellipsis_threads: alloc::vec::Vec::new(),
             recomposed_lines: None,
         };
@@ -5019,6 +5999,7 @@ mod tests {
         let mut gap_ordinal = 0_i64;
         for (run_index, run) in clusters.layout_runs().iter().enumerate() {
             for cluster in run.cluster_start as usize..run.cluster_end as usize {
+                let placement_cluster = clusters.placement_cluster(*run, 0, cluster).unwrap();
                 positioned
                     .record_layout_run_segment(
                         0,
@@ -5027,7 +6008,8 @@ mod tests {
                         cluster,
                         cluster + 1,
                         &clusters,
-                        0,
+                        placement_cluster,
+                        false,
                         cursor,
                         line.baseline,
                     )
@@ -5043,18 +6025,16 @@ mod tests {
                 );
             }
         }
-        assert_eq!(positioned.placement.translations().len(), 7);
+        assert_eq!(positioned.placement.segment_count(), 7);
         assert!(
             positioned
                 .placement
-                .translations()
-                .get(1)
+                .translation(1)
                 .unwrap()
                 .translation_inline
                 > positioned
                     .placement
-                    .translations()
-                    .get(0)
+                    .translation(0)
                     .unwrap()
                     .translation_inline
         );
@@ -5802,22 +6782,74 @@ mod tests {
         assert_eq!(boundary_span.role, SliceRole::BoundaryReplacement);
         assert_eq!(active.glyphs.len(), 5);
         // Line one centers its 15.0 advance (12.0 retained + 3.0 hyphen) in the 20.0 slot.
-        assert_eq!(active.semantic_glyphs[0].inline_origin, 2.5);
-        assert_eq!(active.semantic_glyphs[1].inline_origin, 8.5);
+        assert_eq!(active.placed_semantic_glyph(0).unwrap().inline_origin, 2.5);
+        assert_eq!(active.placed_semantic_glyph(1).unwrap().inline_origin, 8.5);
         // The inserted hyphen follows the retained clusters with its own glyph identity.
         assert_eq!(active.glyphs[2].glyph_id, 45);
         assert_eq!(active.glyphs[2].stable_id, 777);
-        assert_eq!(active.semantic_glyphs[2].inline_origin, 14.5);
-        assert_eq!(active.semantic_glyphs[2].block_origin, 8.0);
+        assert_eq!(active.placed_semantic_glyph(2).unwrap().inline_origin, 14.5);
+        assert_eq!(active.placed_semantic_glyph(2).unwrap().block_origin, 8.0);
         // The inserted glyph has no source cluster: its published cluster is the boundary
         // text position itself, while style and paint anchor to the neighbor cluster.
         assert_eq!(active.semantic_glyphs[2].cluster, 2);
         // The following line is unaffected by the inserted glyph.
-        assert_eq!(active.semantic_glyphs[3].inline_origin, 4.0);
-        assert_eq!(active.semantic_glyphs[4].inline_origin, 10.0);
-        assert_eq!(active.semantic_glyphs[3].block_origin, 18.0);
+        assert_eq!(active.placed_semantic_glyph(3).unwrap().inline_origin, 4.0);
+        assert_eq!(active.placed_semantic_glyph(4).unwrap().inline_origin, 10.0);
+        assert_eq!(active.placed_semantic_glyph(3).unwrap().block_origin, 18.0);
         // Every glyph, inserted included, receives a content revision.
         assert_eq!(next_revision, 6);
+
+        let ellipsis_only_flow = FlowLayoutArena {
+            lines: vec![FlowLine {
+                fragment_start: 0,
+                fragment_count: 1,
+                ..lines[0]
+            }],
+            fragments: vec![FlowFragment {
+                line: ComposedLine {
+                    cluster_start: 2,
+                    cluster_end: 2,
+                    text_start: 2,
+                    text_end: 2,
+                    advance: 3.0,
+                    hung_advance: 0.0,
+                    hard_break: false,
+                },
+                slot_start: 0.0,
+                slot_end: 20.0,
+                flexible_end: false,
+                boundary_index: 0,
+            }],
+            ..FlowLayoutArena::default()
+        };
+        let mut ellipsis_only = PositionedGlyphArena::default();
+        let mut ellipsis_index = IdentityIndex::default();
+        let mut ellipsis_revision = 1;
+        let mut ellipsis_run_revision = 1;
+        ellipsis_only
+            .build(
+                &PositionedGlyphArena::default(),
+                &ellipsis_only_flow,
+                None,
+                &text,
+                &clusters,
+                &runs,
+                &runs,
+                &boundary,
+                &BoundaryShapeArena::default(),
+                &styles,
+                &bidi,
+                &mut ellipsis_index,
+                &mut ellipsis_revision,
+                &mut ellipsis_run_revision,
+                |_| ThreadTypography::default(),
+                |_| ThreadTypography::default(),
+                metrics,
+                extents,
+            )
+            .unwrap();
+        assert_eq!(ellipsis_only.glyphs.len(), 1);
+        assert_eq!(ellipsis_only.glyphs[0].stable_id, 777);
 
         let retained = FlowLayoutArena {
             lines: flow.lines.clone(),
@@ -5986,15 +7018,15 @@ mod tests {
         assert_eq!(active.glyphs.len(), 2);
         assert_eq!(active.glyphs[0].content_revision, 1);
         assert_eq!(active.glyphs[1].content_revision, 2);
-        assert_eq!(active.glyphs[0].inline_start, 4.0);
-        assert_eq!(active.glyphs[1].inline_start, 10.0);
-        assert_eq!(active.glyphs[0].block_start, 1.0);
-        assert_eq!(active.semantic_glyphs[0].inline_origin, 4.0);
-        assert_eq!(active.semantic_glyphs[1].inline_origin, 10.0);
-        assert_eq!(active.semantic_glyphs[0].block_origin, 8.0);
+        assert_eq!(active.semantic_f32[0][0], -6.0);
+        assert_eq!(active.semantic_f32[0][1], 0.0);
+        assert_eq!(active.semantic_f32[1][0], -3.5);
+        assert_eq!(active.placed_semantic_glyph(0).unwrap().inline_origin, 4.0);
+        assert_eq!(active.placed_semantic_glyph(1).unwrap().inline_origin, 10.0);
+        assert_eq!(active.placed_semantic_glyph(0).unwrap().block_origin, 8.0);
         assert_ne!(
             active.semantic_f32[1][0],
-            active.semantic_glyphs[0].block_origin
+            active.placed_semantic_glyph(0).unwrap().block_origin
         );
         assert_eq!(active.semantic_u32[0], [u32::MAX, u32::MAX]);
         assert_eq!(next_revision, 3);
@@ -6027,13 +7059,19 @@ mod tests {
         assert_eq!(pending.glyphs[1].content_revision, 2);
         assert_eq!(next_revision, 3);
 
+        let retained_flow = FlowLayoutArena {
+            lines: flow.lines.clone(),
+            fragments: flow.fragments.clone(),
+            ..FlowLayoutArena::default()
+        };
+        flow.recomposed_lines = Some((0, 1));
         flow.fragments[0].slot_start = 1.0;
         flow.fragments[0].slot_end = 21.0;
         pending
             .build(
                 &active,
                 &flow,
-                None,
+                Some(&retained_flow),
                 &text,
                 &clusters,
                 &runs,
@@ -6051,10 +7089,75 @@ mod tests {
                 extents,
             )
             .unwrap();
-        assert_eq!(pending.glyphs[0].content_revision, 3);
-        assert_eq!(pending.glyphs[1].content_revision, 4);
+        assert!(pending.retained_static_geometry);
+        assert_eq!(
+            pending.glyphs[0].inline_start,
+            active.glyphs[0].inline_start
+        );
+        assert_eq!(pending.placed_semantic_glyph(0).unwrap().inline_origin, 5.0);
+        assert_eq!(pending.glyphs[0].content_revision, 1);
+        assert_eq!(pending.glyphs[1].content_revision, 2);
+        assert_eq!(pending.semantic_change_masks, [0, 0]);
+        assert_eq!(next_revision, 3);
+
+        let mut metadata_flow = FlowLayoutArena {
+            lines: flow.lines.clone(),
+            fragments: flow.fragments.clone(),
+            recomposed_lines: flow.recomposed_lines,
+            ..FlowLayoutArena::default()
+        };
+        metadata_flow.lines[0].region_id = 19;
+        metadata_flow.lines[0].flow_thread_id = 17;
+        metadata_flow.lines[0].transform_index = 29;
+        metadata_flow.lines[0].clip_id = 39;
+        let mut metadata_pending = PositionedGlyphArena::default();
+        metadata_pending
+            .build(
+                &active,
+                &metadata_flow,
+                Some(&retained_flow),
+                &text,
+                &clusters,
+                &runs,
+                &runs,
+                &BoundaryShapeArena::default(),
+                &BoundaryShapeArena::default(),
+                &styles,
+                &bidi,
+                &mut index,
+                &mut next_revision,
+                &mut next_run_revision,
+                |_| ThreadTypography::default(),
+                |_| ThreadTypography::default(),
+                metrics,
+                extents,
+            )
+            .unwrap();
+        assert!(metadata_pending.retained_static_geometry);
+        assert_eq!(
+            metadata_pending.glyphs[0].inline_start,
+            active.glyphs[0].inline_start
+        );
+        assert_eq!(
+            metadata_pending.glyphs[0].block_start,
+            active.glyphs[0].block_start
+        );
+        assert_eq!(
+            metadata_pending.glyphs[0].inline_extent,
+            active.glyphs[0].inline_extent
+        );
+        assert_eq!(
+            metadata_pending.glyphs[0].block_extent,
+            active.glyphs[0].block_extent
+        );
+        assert_eq!(metadata_pending.glyphs[0].clip_id, 39);
+        assert_eq!(metadata_pending.semantic_u32[2], [19, 19]);
+        assert_eq!(metadata_pending.semantic_u32[3], [17, 17]);
+        assert_eq!(metadata_pending.semantic_u32[4], [29, 29]);
+        assert_eq!(metadata_pending.semantic_change_masks, [u16::MAX, u16::MAX]);
         assert_eq!(next_revision, 5);
 
+        active.placement.clear();
         let mut reordered = PositionedGlyphArena::default();
         reordered.glyphs.extend(active.glyphs.iter().rev().copied());
         reordered
@@ -6079,10 +7182,66 @@ mod tests {
     }
 
     #[test]
+    fn retained_line_copy_rebases_local_placement_segments() {
+        let mut previous = PositionedGlyphArena::default();
+        previous.glyphs.push(LayoutGlyph {
+            stable_id: 1,
+            content_revision: 1,
+            placement_slot: 0,
+            semantic_glyph_index: 0,
+            binding_handle: 1,
+            font_handle: 1,
+            glyph_id: 1,
+            material_id: 0,
+            clip_id: 0,
+            depth_key: 0,
+            font_size: 16.0,
+            raster_pixel_ratio: 1.0,
+            inline_start: 0.0,
+            block_start: 0.0,
+            inline_extent: 1.0,
+            block_extent: 1.0,
+        });
+        previous.semantic_glyphs.push(PositionedSemanticGlyph {
+            stable_id: 1,
+            placement_segment: 5,
+            ..PositionedSemanticGlyph::default()
+        });
+        previous.line_glyph_starts.push(0);
+        previous.line_glyph_counts.push(1);
+        previous.line_decoration_starts.push(0);
+        previous.line_decoration_counts.push(0);
+        previous.semantic_line_glyph_starts.push(0);
+        previous.semantic_line_glyph_counts.push(1);
+        previous.semantic_line_inline_extents.push(1.0);
+        for field in &mut previous.semantic_f32[..SEMANTIC_F32_BASE_FIELD_COUNT] {
+            field.push(0.0);
+        }
+        for field in &mut previous.semantic_u32[..SEMANTIC_U32_BASE_FIELD_COUNT] {
+            field.push(0);
+        }
+
+        let mut next = PositionedGlyphArena::default();
+        next.append_retained_line(
+            &previous,
+            0,
+            Some(RetainedSegmentRemap {
+                previous_start: 5,
+                next_start: 2,
+                count: 1,
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(next.semantic_glyphs[0].placement_segment, 2);
+    }
+
+    #[test]
     fn converged_lines_assign_revisions_only_inside_the_recomposed_glyph_range() {
         let glyph = |stable_id, revision| LayoutGlyph {
             stable_id,
             content_revision: revision,
+            placement_slot: 0,
             semantic_glyph_index: stable_id - 1,
             binding_handle: 1,
             font_handle: 1,
@@ -6104,7 +7263,7 @@ mod tests {
             };
             arena
                 .semantic_glyphs
-                .extend([1, 2, 3].map(|stable_id| SemanticGlyph {
+                .extend([1, 2, 3].map(|stable_id| PositionedSemanticGlyph {
                     stable_id,
                     font_handle: 1,
                     cluster: stable_id,
@@ -6113,7 +7272,7 @@ mod tests {
                     font_size: 16.0,
                     inline_origin: stable_id as f32,
                     block_origin: 0.0,
-                    ..SemanticGlyph::default()
+                    ..PositionedSemanticGlyph::default()
                 }));
             for field in &mut arena.semantic_f32 {
                 field.extend([1.0, 2.0, 3.0]);
@@ -6157,6 +7316,7 @@ mod tests {
             let glyph = LayoutGlyph {
                 stable_id: 1,
                 content_revision: 7,
+                placement_slot: 0,
                 semantic_glyph_index: 0,
                 binding_handle: 2,
                 font_handle: 3,
@@ -6166,19 +7326,19 @@ mod tests {
                 depth_key: PAINT_LAYER_GLYPH,
                 font_size: 16.0,
                 raster_pixel_ratio: 1.0,
-                inline_start: 8.0,
-                block_start: 9.0,
+                inline_start: if changed { 13.0 } else { 8.0 },
+                block_start: if changed { 14.0 } else { 9.0 },
                 inline_extent: 10.0,
                 block_extent: 11.0,
             };
-            let semantic = SemanticGlyph {
+            let semantic = PositionedSemanticGlyph {
                 stable_id: 1,
                 font_handle: 3,
                 cluster: 12,
                 glyph_id: 4,
                 inline_origin: if changed { 13.0 } else { 8.0 },
                 block_origin: if changed { 14.0 } else { 9.0 },
-                ..SemanticGlyph::default()
+                ..PositionedSemanticGlyph::default()
             };
             let mut arena = PositionedGlyphArena {
                 glyphs: vec![glyph],
@@ -6234,5 +7394,63 @@ mod tests {
         assert_same_revisions(&previous, make_arena(true, 1), make_arena(true, 1));
         assert_same_revisions(&previous, make_arena(false, 2), make_arena(false, 2));
         assert_same_revisions(&previous, make_arena(false, 1), make_arena(false, 1));
+    }
+
+    #[test]
+    fn direct_occurrence_origin_owns_the_placement_change_bit() {
+        let glyph = LayoutGlyph {
+            stable_id: 1,
+            content_revision: 7,
+            placement_slot: 0,
+            semantic_glyph_index: 0,
+            binding_handle: 2,
+            font_handle: 3,
+            glyph_id: 4,
+            material_id: 5,
+            clip_id: 0,
+            depth_key: PAINT_LAYER_GLYPH,
+            font_size: 16.0,
+            raster_pixel_ratio: 1.0,
+            inline_start: 0.0,
+            block_start: 0.0,
+            inline_extent: 10.0,
+            block_extent: 11.0,
+        };
+        let arena = |inline_origin| {
+            let mut arena = PositionedGlyphArena {
+                glyphs: vec![glyph],
+                semantic_glyphs: vec![PositionedSemanticGlyph {
+                    stable_id: 1,
+                    font_handle: 3,
+                    glyph_id: 4,
+                    inline_origin,
+                    block_origin: 9.0,
+                    ..PositionedSemanticGlyph::default()
+                }],
+                ..PositionedGlyphArena::default()
+            };
+            for values in &mut arena.semantic_f32 {
+                values.push(0.0);
+            }
+            for values in &mut arena.semantic_u32 {
+                values.push(0);
+            }
+            arena
+        };
+        let previous = arena(8.0);
+        let mut next = arena(12.0);
+        let mut next_revision = 30;
+        next.assign_content_revisions(
+            &previous,
+            &mut IdentityIndex::default(),
+            &mut next_revision,
+            false,
+        )
+        .unwrap();
+        assert_eq!(next.semantic_change_masks, [0]);
+        assert_eq!(
+            next.glyphs[0].content_revision,
+            previous.glyphs[0].content_revision
+        );
     }
 }

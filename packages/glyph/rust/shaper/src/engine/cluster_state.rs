@@ -10,7 +10,7 @@ use super::{
     run_local::{NumericBlockSpan, RunLocalArena},
     run_slot::RunHandle,
     shaping_state::{ShapeArena, ShapingRun},
-    style_state::{StyleArena, StyleSegment},
+    style_state::{ResolvedStyle, StyleArena, StyleSegment},
 };
 
 use super::run_local::{ClusterFinish, RunLocalBuildError, RunLocalGlyphInput};
@@ -59,13 +59,14 @@ pub(crate) enum WordSidecarMode {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct PlacementCluster {
     pub segment_anchor: u32,
+    pub dense: bool,
     pub numeric_block_ordinal: u32,
     pub block_local_prefix: f64,
     pub block_anchor_inline: f64,
     pub block_anchor_block: f64,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct RunCanonicalRevision(NonZeroU32);
 
 impl RunCanonicalRevision {
@@ -87,7 +88,7 @@ pub(crate) enum BoundaryRunRole {
     Ellipsis,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum LayoutRunSourceKind {
     Paragraph,
     Boundary {
@@ -103,6 +104,8 @@ pub(crate) struct LayoutRun {
     pub cluster_end: u32,
     pub glyph_start: u32,
     pub glyph_count: u32,
+    /// First shaping run in this geometry run. Adjacent script runs may merge when direction,
+    /// bidi level, selected font, and layout geometry agree.
     pub source_run: u32,
     pub font_handle: u32,
     pub numeric_blocks: NumericBlockSpan,
@@ -239,6 +242,9 @@ pub(crate) struct ClusterArena {
     pub chunk_flags_or: Vec<u8>,
     pub word_breaks: Vec<WordBreakRecord>,
     pub(crate) word_sidecar_mode: WordSidecarMode,
+    // Stable word/run root per cluster. Positioning reads this directly instead of
+    // rediscovering roots while every changed line is traversed.
+    pub(super) placement_segment_anchors: Vec<u32>,
     /// Per-cluster `units_per_em` of the owning shaped font (0 while unshaped),
     /// resolved once at cluster build. Positioning derives its scale from the
     /// CURRENT style's font size and this column, so font-size-only style changes
@@ -285,6 +291,7 @@ impl ClusterArena {
         reserve(&mut self.ends, capacity)?;
         reserve(&mut self.advances, capacity)?;
         reserve(&mut self.advance_units, capacity)?;
+        reserve(&mut self.placement_segment_anchors, capacity)?;
         reserve(&mut self.units_per_em, capacity)?;
         reserve(&mut self.flags, capacity)?;
         reserve(&mut self.style_indexes, capacity)?;
@@ -377,7 +384,7 @@ impl ClusterArena {
         }
         self.build_index(text.len())?;
         self.aggregate_shape(runs, shape, metrics_for)?;
-        self.rebuild_layout_runs()?;
+        self.rebuild_layout_runs_for_shaping(runs)?;
         self.apply_break_flags(unicode)?;
         self.refresh_layout_units()?;
         Ok(())
@@ -587,7 +594,7 @@ impl ClusterArena {
                 self.flags[cluster] |= CLUSTER_SAFE_BEFORE;
             }
         }
-        self.rebuild_layout_runs()?;
+        self.rebuild_layout_runs_for_shaping(runs)?;
         if cluster_start > 0 {
             self.flags[cluster_start - 1] &= !CLUSTER_ALLOWED_BREAK;
         }
@@ -651,6 +658,7 @@ impl ClusterArena {
         );
         self.word_breaks.clear();
         self.word_sidecar_mode = WordSidecarMode::Unbuilt;
+        self.placement_segment_anchors.clear();
         Ok(())
     }
 
@@ -732,6 +740,60 @@ impl ClusterArena {
         }
         self.word_sidecar_mode = WordSidecarMode::Sparse;
         Ok(())
+    }
+
+    pub(crate) fn ensure_placement_segment_anchors(&mut self) -> Result<(), EngineError> {
+        if self.placement_segment_anchors.len() == self.starts.len() {
+            return Ok(());
+        }
+        if self.word_sidecar_mode == WordSidecarMode::Unbuilt {
+            return Err(EngineError::InvalidRequest);
+        }
+        self.placement_segment_anchors.clear();
+        reserve(&mut self.placement_segment_anchors, self.starts.len())?;
+        let mut covered = 0usize;
+        for run in &self.layout_runs.runs {
+            let run_start =
+                usize::try_from(run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
+            let run_end =
+                usize::try_from(run.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+            if run_start != covered || run_start >= run_end || run_end > self.starts.len() {
+                return Err(EngineError::InvalidRequest);
+            }
+            let run_anchor = *self
+                .stable_ids
+                .get(run_start)
+                .filter(|anchor| **anchor != 0)
+                .ok_or(EngineError::InvalidRequest)?;
+            let mut word_anchor = run_anchor;
+            for cluster in run_start..run_end {
+                let hard_break = self.flags[cluster] & CLUSTER_HARD_BREAK != 0
+                    && self.glyph_counts[cluster] == 0;
+                let anchor = if hard_break {
+                    self.stable_ids[cluster]
+                } else if self.word_sidecar_mode == WordSidecarMode::Dense {
+                    run_anchor
+                } else {
+                    word_anchor
+                };
+                if anchor == 0 {
+                    return Err(EngineError::InvalidRequest);
+                }
+                self.placement_segment_anchors.push(anchor);
+                if self.word_sidecar_mode != WordSidecarMode::Dense
+                    && self.flags[cluster]
+                        & (CLUSTER_ALLOWED_BREAK | CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK)
+                        != 0
+                    && cluster + 1 < run_end
+                {
+                    word_anchor = self.stable_ids[cluster + 1];
+                }
+            }
+            covered = run_end;
+        }
+        (covered == self.starts.len())
+            .then_some(())
+            .ok_or(EngineError::InvalidRequest)
     }
 
     /// Derives minimum-content and maximum-content inline extents from one scan over
@@ -1100,6 +1162,7 @@ impl ClusterArena {
         self.chunk_flags_or.clear();
         self.word_breaks.clear();
         self.word_sidecar_mode = WordSidecarMode::Unbuilt;
+        self.placement_segment_anchors.clear();
         self.units_per_em.clear();
         self.flags.clear();
         self.style_indexes.clear();
@@ -1127,12 +1190,62 @@ impl ClusterArena {
         &self.layout_runs.runs
     }
 
-    #[cfg(test)]
     pub(crate) fn run_local(&self) -> &RunLocalArena {
         &self.run_local
     }
 
     pub(crate) fn placement_cluster(
+        &self,
+        run: LayoutRun,
+        direction: u8,
+        cluster: usize,
+    ) -> Result<PlacementCluster, EngineError> {
+        self.placement_cluster_at(run, direction, cluster)
+    }
+
+    pub(crate) fn placement_segment_monotone(
+        &self,
+        run: LayoutRun,
+        direction: u8,
+        cluster: usize,
+    ) -> Result<(PlacementCluster, usize), EngineError> {
+        let placement = self.placement_cluster_at(run, direction, cluster)?;
+        if direction & 1 != 0 || self.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
+            return Ok((placement, cluster + 1));
+        }
+        let run_end = usize::try_from(run.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+        let mut segment_end = cluster + 1;
+        while segment_end < run_end
+            && self.placement_segment_anchors[segment_end] == placement.segment_anchor
+        {
+            segment_end += 1;
+        }
+        let run_start =
+            usize::try_from(run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
+        let block_lane_start = usize::try_from(run.numeric_blocks.cluster_start)
+            .map_err(|_| EngineError::InvalidRequest)?;
+        let block_lane = block_lane_start
+            .checked_add(cluster - run_start)
+            .ok_or(EngineError::ResultTooLarge)?;
+        let block = *self
+            .run_local
+            .cluster_blocks()
+            .get(block_lane)
+            .ok_or(EngineError::InvalidRequest)?;
+        let mut block_end = cluster + 1;
+        while block_end < segment_end
+            && self
+                .run_local
+                .cluster_blocks()
+                .get(block_lane_start + (block_end - run_start))
+                == Some(&block)
+        {
+            block_end += 1;
+        }
+        Ok((placement, block_end))
+    }
+
+    fn placement_cluster_at(
         &self,
         run: LayoutRun,
         direction: u8,
@@ -1155,6 +1268,7 @@ impl ClusterArena {
         if self.flags[cluster] & CLUSTER_HARD_BREAK != 0 && self.glyph_counts[cluster] == 0 {
             return Ok(PlacementCluster {
                 segment_anchor: self.stable_ids[cluster],
+                dense: false,
                 numeric_block_ordinal: u32::MAX,
                 block_local_prefix: 0.0,
                 block_anchor_inline: 0.0,
@@ -1180,40 +1294,14 @@ impl ClusterArena {
             .checked_sub(run.numeric_blocks.start)
             .filter(|ordinal| *ordinal < run.numeric_blocks.count)
             .ok_or(EngineError::InvalidRequest)?;
-        let segment_root = match self.word_sidecar_mode {
-            WordSidecarMode::Dense => run_start,
-            WordSidecarMode::Sparse => {
-                let record = self
-                    .word_breaks
-                    .partition_point(|record| record.cluster_end as usize <= cluster);
-                if record == 0 {
-                    0
-                } else {
-                    self.word_breaks[record - 1].cluster_end as usize
-                }
-            }
-            WordSidecarMode::Short | WordSidecarMode::Overflow => {
-                let mut root = cluster;
-                while root > 0
-                    && self.flags[root - 1]
-                        & (CLUSTER_ALLOWED_BREAK | CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK)
-                        == 0
-                {
-                    root -= 1;
-                }
-                root
-            }
-            WordSidecarMode::Unbuilt => return Err(EngineError::InvalidRequest),
-        };
+        let segment_anchor = *self
+            .placement_segment_anchors
+            .get(cluster)
+            .filter(|anchor| **anchor != 0)
+            .ok_or(EngineError::InvalidRequest)?;
         Ok(PlacementCluster {
-            segment_anchor: if self.word_sidecar_mode == WordSidecarMode::Dense {
-                self.stable_ids[run_start]
-            } else {
-                *self
-                    .stable_ids
-                    .get(segment_root)
-                    .ok_or(EngineError::InvalidRequest)?
-            },
+            segment_anchor,
+            dense: self.word_sidecar_mode == WordSidecarMode::Dense,
             numeric_block_ordinal,
             block_local_prefix: *self
                 .run_local
@@ -1292,7 +1380,34 @@ impl ClusterArena {
         Ok(())
     }
 
+    #[cfg(test)]
     pub(super) fn rebuild_layout_runs(&mut self) -> Result<(), EngineError> {
+        self.rebuild_layout_runs_with(|left, right| left == right)
+    }
+
+    fn rebuild_layout_runs_for_shaping(&mut self, runs: &[ShapingRun]) -> Result<(), EngineError> {
+        self.rebuild_layout_runs_with(|left, right| {
+            match (
+                usize::try_from(left).ok().and_then(|index| runs.get(index)),
+                usize::try_from(right)
+                    .ok()
+                    .and_then(|index| runs.get(index)),
+            ) {
+                (Some(left), Some(right)) => {
+                    left.direction == right.direction
+                        && left.bidi_level == right.bidi_level
+                        && run_layout_compatible(left.style, right.style)
+                }
+                (None, None) => left == NO_SOURCE_RUN && right == NO_SOURCE_RUN,
+                _ => false,
+            }
+        })
+    }
+
+    fn rebuild_layout_runs_with(
+        &mut self,
+        compatible_source_runs: impl Fn(u32, u32) -> bool,
+    ) -> Result<(), EngineError> {
         self.layout_runs.clear();
         let mut cluster_start = 0usize;
         while cluster_start < self.starts.len() {
@@ -1300,7 +1415,7 @@ impl ClusterArena {
             let font_handle = self.font_handles[cluster_start];
             let mut cluster_end = cluster_start + 1;
             while cluster_end < self.starts.len()
-                && self.source_runs[cluster_end] == source_run
+                && compatible_source_runs(source_run, self.source_runs[cluster_end])
                 && self.font_handles[cluster_end] == font_handle
             {
                 cluster_end += 1;
@@ -1756,7 +1871,6 @@ fn runs_canonically_equal(
             previous_clusters_range.clone(),
             previous,
         )?
-        || !shaping_identity_equal(current_run, current, previous_run, previous)?
     {
         return Ok(false);
     }
@@ -1784,6 +1898,14 @@ fn runs_canonically_equal(
                 != lane(&previous_clusters.shaped, previous_cluster)?
             || lane(&current_clusters.unsafe_before, current_cluster)?
                 != lane(&previous_clusters.unsafe_before, previous_cluster)?
+            || !cluster_direction_equal(
+                current_clusters,
+                current_cluster,
+                current,
+                previous_clusters,
+                previous_cluster,
+                previous,
+            )?
             || !geometric_style_equal(
                 current_style,
                 current.style_arena,
@@ -1931,13 +2053,21 @@ fn geometric_style_equal(
         && current_arena.resolved_features(current) == previous_arena.resolved_features(previous)
 }
 
-fn shaping_identity_equal(
-    current_run: LayoutRun,
+fn run_layout_compatible(left: ResolvedStyle, right: ResolvedStyle) -> bool {
+    left.same_layout_sources(right)
+}
+
+fn cluster_direction_equal(
+    current_clusters: &ClusterArena,
+    current_cluster: usize,
     current: RunCanonicalInput<'_>,
-    previous_run: LayoutRun,
+    previous_clusters: &ClusterArena,
+    previous_cluster: usize,
     previous: RunCanonicalInput<'_>,
 ) -> Result<bool, EngineError> {
-    match (current_run.source_run, previous_run.source_run) {
+    let current_source = lane(&current_clusters.source_runs, current_cluster)?;
+    let previous_source = lane(&previous_clusters.source_runs, previous_cluster)?;
+    match (current_source, previous_source) {
         (NO_SOURCE_RUN, NO_SOURCE_RUN) => Ok(true),
         (NO_SOURCE_RUN, _) | (_, NO_SOURCE_RUN) => Ok(false),
         (current_index, previous_index) => {
@@ -1949,8 +2079,7 @@ fn shaping_identity_equal(
                 .shaping_runs
                 .get(usize::try_from(previous_index).map_err(|_| EngineError::InvalidRequest)?)
                 .ok_or(EngineError::InvalidRequest)?;
-            Ok(current_run.script == previous_run.script
-                && current_run.direction == previous_run.direction
+            Ok(current_run.direction == previous_run.direction
                 && current_run.bidi_level == previous_run.bidi_level)
         }
     }
@@ -2432,6 +2561,43 @@ mod tests {
         assert_eq!(arena.layout_runs().len(), 1);
         assert_eq!(arena.layout_runs()[0].cluster_end, COUNT as u32);
         assert_shadow_topology(&arena);
+    }
+
+    #[test]
+    fn layout_runs_merge_script_boundaries_but_keep_direction_and_geometry() {
+        let mut arena = shadow_topology(&[0, 1, 2, 3, 4, 5], &[9, 9, 9, 9, 9, 10], &[1; 6]);
+        let mut runs = Vec::new();
+        for (index, (script, direction, bidi_level, font_size)) in [
+            (1, 0, 0, 16.0),
+            (2, 0, 0, 16.0),
+            (3, 1, 1, 16.0),
+            (4, 0, 2, 16.0),
+            (5, 0, 0, 20.0),
+            (6, 0, 0, 20.0),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            runs.push(ShapingRun {
+                text_start: index as u32,
+                text_end: index as u32 + 1,
+                script,
+                direction,
+                bidi_level,
+                style: ResolvedStyle::test_typography(font_size, 0.0, 0.0),
+            });
+        }
+
+        arena.rebuild_layout_runs_for_shaping(&runs).unwrap();
+
+        assert_eq!(
+            arena
+                .layout_runs()
+                .iter()
+                .map(|run| (run.cluster_start, run.cluster_end))
+                .collect::<Vec<_>>(),
+            [(0, 2), (2, 3), (3, 4), (4, 5), (5, 6)]
+        );
     }
 
     #[test]
@@ -3437,5 +3603,42 @@ mod tests {
         assert_eq!(dense.word_breaks.capacity(), 0);
         assert_eq!(dense.word_sidecar_mode, WordSidecarMode::Dense);
         assert!(dense.chunk_flags_or[0] & CHUNK_NEGATIVE_ADVANCE != 0);
+    }
+
+    #[test]
+    fn placement_segment_anchors_are_precomputed_from_stable_word_and_run_roots() {
+        let mut fixture = canonical_fixture(
+            &[1, 2, 3, 4, 5, 6],
+            &[11, 12, 13, 14, 15, 16],
+            &[0, 0, 0, 0, 1, 1],
+            ResolvedStyle::default(),
+        );
+        fixture.arena.flags[1] |= CLUSTER_ALLOWED_BREAK;
+        fixture.arena.refresh_layout_units().unwrap();
+        fixture.arena.ensure_word_breaks().unwrap();
+        fixture.arena.ensure_placement_segment_anchors().unwrap();
+
+        assert_eq!(fixture.arena.word_sidecar_mode, WordSidecarMode::Short);
+        assert_eq!(
+            fixture.arena.placement_segment_anchors,
+            [11, 11, 13, 13, 15, 15]
+        );
+
+        let count = LAYOUT_CHUNK * 2;
+        let text = vec![1; count];
+        let stable_ids = (1..=u32::try_from(count).unwrap()).collect::<Vec<_>>();
+        let source_runs = vec![0; count];
+        let mut dense =
+            canonical_fixture(&text, &stable_ids, &source_runs, ResolvedStyle::default());
+        dense
+            .arena
+            .flags
+            .fill(CLUSTER_ALLOWED_BREAK | CLUSTER_SAFE_BEFORE);
+        dense.arena.refresh_layout_units().unwrap();
+        dense.arena.ensure_word_breaks().unwrap();
+        dense.arena.ensure_placement_segment_anchors().unwrap();
+
+        assert_eq!(dense.arena.word_sidecar_mode, WordSidecarMode::Dense);
+        assert_eq!(dense.arena.placement_segment_anchors, vec![1; count]);
     }
 }

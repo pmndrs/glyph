@@ -997,6 +997,7 @@ fn u32_input_dependency(source: InputSource) -> u16 {
     match source.field {
         0..=5 => 1 << (8 + source.field),
         6..=7 => super::positioning::SEMANTIC_EFFECTS_CHANGE,
+        8 => super::positioning::SEMANTIC_PLACEMENT_SLOT_CHANGE,
         _ => 0,
     }
 }
@@ -1969,10 +1970,11 @@ mod tests {
         let effect = super::super::positioning::SEMANTIC_EFFECTS_CHANGE;
         assert_eq!(f32_input_dependency(InputSource::semantic(13)), effect);
         assert_eq!(f32_input_dependency(InputSource::semantic(15)), effect);
+        let placement = super::super::positioning::SEMANTIC_PLACEMENT_SLOT_CHANGE;
         assert_eq!(f32_input_dependency(InputSource::semantic(16)), 0);
         assert_eq!(u32_input_dependency(InputSource::semantic(6)), effect);
         assert_eq!(u32_input_dependency(InputSource::semantic(7)), effect);
-        assert_eq!(u32_input_dependency(InputSource::semantic(8)), 0);
+        assert_eq!(u32_input_dependency(InputSource::semantic(8)), placement);
     }
 
     #[test]

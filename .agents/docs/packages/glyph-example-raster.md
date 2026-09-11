@@ -5,7 +5,7 @@ description: Proves the portable raster boundary and ships matching TypeGPU and 
 resource: ../../../packages/glyph-example-raster
 workspace_package: '@pmndrs/glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:9c6c29f7b70a56b52437790d95802cf53af78f2f329a2c089492949e617109e9'
+source_digest: 'sha256:bb89113a897420e375d33ca750b845ab3efb6512a2073c3824f64a888bbe2a11'
 tags: [package, raster, extension-proof, typegpu, tsl]
 sources:
   - id: manifest
@@ -78,7 +78,9 @@ keeps the registration; the portable definition and shader subpaths remain free 
 The `/typegpu` and `/tsl` subpaths export shader functions and the same named-input descriptor; they do not register a
 renderer or own resource/material caches. A Three consumer imports `/tsl` and manually calls public
 `registerThreeRasterProgram`, while the example renderer imports `/typegpu`. The Codec body describes the exact Rust
-inputs, buffers, scalar operations, and storage/draw keys. A cold compiler lowers validated glyph colors and inset data
+inputs, buffers, scalar operations, and storage/draw keys without receiving host system-buffer declarations. After the
+portable body is authenticated, the Glyph host appends stable identity and the direct f32x2 occurrence origin; the raster
+author therefore needs no knowledge of adapter memory layout. A cold compiler lowers validated glyph colors and inset data
 into one font binding and retains the supplied indexed quad under that stable resource identity; the selected host binds
 the resulting origin, size, and color buffers plus geometry to its shader. The package no longer owns a
 `ParagraphBatchTarget`, target revision, slack planner, dirty-range upload loop, or mesh transaction.

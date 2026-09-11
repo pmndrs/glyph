@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import * as THREE from 'three/webgpu';
 
 import type { ComparisonWorkloadEntry } from '../shared/scene-entry';
-import { layoutEditorialEntries } from './scene';
+import { editorialFlow, layoutEditorialEntries, positionEditorialObstacle } from './scene';
 
 function editorialEntry(
   width: number,
@@ -41,5 +42,46 @@ describe('editorial layout', () => {
     expect(body.measure).toHaveBeenCalledTimes(1);
     expect(lede.position).toMatchObject({ x: 300, y: -240, z: 0 });
     expect(body.position).toMatchObject({ x: 300, y: -320, z: 0 });
+  });
+
+  it('authors two ordered columns with independently routed exclusions', () => {
+    const leftExclusion = {
+      key: 'left-object',
+      shape: { kind: 'rectangle', bounds: [10, 20, 30, 40] },
+    } as const;
+    const rightExclusion = {
+      key: 'right-object',
+      shape: { kind: 'rectangle', bounds: [240, 30, 270, 60] },
+    } as const;
+
+    const flow = editorialFlow(500, 700, 20, [leftExclusion, rightExclusion]);
+
+    expect(flow.regions).toEqual([
+      {
+        key: 'editorial-left',
+        shape: { kind: 'rectangle', bounds: [0, 0, 240, 700] },
+        exclusions: [leftExclusion],
+      },
+      {
+        key: 'editorial-right',
+        shape: { kind: 'rectangle', bounds: [260, 0, 500, 700] },
+        exclusions: [rightExclusion],
+      },
+    ]);
+  });
+
+  it('moves the projected object across the text plane deterministically', () => {
+    const obstacle = new THREE.Object3D();
+    const animationSpeed = 30;
+    const rate = 0.25 + animationSpeed * 0.0175;
+
+    positionEditorialObstacle(obstacle, 500, 700, animationSpeed, 0);
+    const cameraSideZ = obstacle.position.z;
+    positionEditorialObstacle(obstacle, 500, 700, animationSpeed, Math.PI / (0.00042 * rate));
+
+    expect(cameraSideZ).toBeGreaterThan(0);
+    expect(obstacle.position.z).toBeLessThan(0);
+    expect(obstacle.position.toArray().every(Number.isFinite)).toBe(true);
+    expect([obstacle.rotation.x, obstacle.rotation.y, obstacle.rotation.z].every(Number.isFinite)).toBe(true);
   });
 });

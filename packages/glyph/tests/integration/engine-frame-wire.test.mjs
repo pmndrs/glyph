@@ -433,15 +433,26 @@ test('production frame compiler encodes typography controls and their defaults',
     return new DataView(bytes.buffer, bytes.byteOffset + offset, layout.size);
   };
 
-  const full = record(
-    compile({
-      firstLineIndent: 24,
-      spaceBefore: 8,
-      spaceAfter: 4,
-      justify: { minWordSpaceRatio: 0.75, maxWordSpaceRatio: 2.5, letterSpaceExpansion: 0.5 },
-      lastLine: 'justify',
-    }),
-  );
+  const fullBytes = compile({
+    firstLineIndent: 24,
+    spaceBefore: 8,
+    spaceAfter: 4,
+    justify: { minWordSpaceRatio: 0.75, maxWordSpaceRatio: 2.5, letterSpaceExpansion: 0.5 },
+    lastLine: 'justify',
+    dropCap: {
+      lines: 3,
+      align: 'baseline',
+      side: 'inline-end',
+      marginInline: 6,
+      marginBlock: 2,
+      contour: [
+        { inline: 0, block: 0 },
+        { inline: 1, block: 0 },
+        { inline: 0, block: 1 },
+      ],
+    },
+  });
+  const full = record(fullBytes);
   assert.equal(full.getFloat32(layout.firstLineIndent, true), 24);
   assert.equal(full.getFloat32(layout.spaceBefore, true), 8);
   assert.equal(full.getFloat32(layout.spaceAfter, true), 4);
@@ -449,6 +460,30 @@ test('production frame compiler encodes typography controls and their defaults',
   assert.equal(full.getFloat32(layout.justifyMaxWordSpaceRatio, true), 2.5);
   assert.equal(full.getFloat32(layout.justifyLetterSpaceExpansion, true), 0.5);
   assert.equal(full.getUint8(layout.lastLine), abi.engine.lastLinePolicies.justify);
+  assert.equal(full.getUint8(layout.dropCapLines), 3);
+  assert.equal(full.getUint8(layout.dropCapAlignment), abi.engine.dropCapAlignments.baseline);
+  assert.equal(full.getUint8(layout.dropCapSide), abi.engine.dropCapSides.inlineEnd);
+  assert.equal(full.getFloat32(layout.dropCapMarginInline, true), 6);
+  assert.equal(full.getFloat32(layout.dropCapMarginBlock, true), 2);
+  assert.equal(full.getUint16(layout.dropCapVertexCount, true), 3);
+  assert.equal(full.getUint16(layout.dropCapReserved, true), 0);
+  const contourOffset = full.getUint32(layout.dropCapVerticesOffset, true);
+  const contour = new DataView(
+    fullBytes.buffer,
+    fullBytes.byteOffset + contourOffset,
+    3 * abi.layouts.engineFlowVertex.size,
+  );
+  assert.deepEqual(
+    Array.from({ length: 3 }, (_, index) => [
+      contour.getFloat32(index * abi.layouts.engineFlowVertex.size + abi.layouts.engineFlowVertex.inline, true),
+      contour.getFloat32(index * abi.layouts.engineFlowVertex.size + abi.layouts.engineFlowVertex.block, true),
+    ]),
+    [
+      [0, 0],
+      [1, 0],
+      [0, 1],
+    ],
+  );
 
   const defaults = record(compile({}));
   assert.equal(defaults.getFloat32(layout.firstLineIndent, true), 0);
@@ -458,8 +493,16 @@ test('production frame compiler encodes typography controls and their defaults',
   assert.equal(defaults.getFloat32(layout.justifyMaxWordSpaceRatio, true), 0);
   assert.equal(defaults.getFloat32(layout.justifyLetterSpaceExpansion, true), 0);
   assert.equal(defaults.getUint8(layout.lastLine), abi.engine.lastLinePolicies.auto);
+  assert.equal(defaults.getUint8(layout.dropCapLines), 0);
+  assert.equal(defaults.getUint8(layout.dropCapAlignment), 0);
+  assert.equal(defaults.getUint8(layout.dropCapSide), 0);
+  assert.equal(defaults.getFloat32(layout.dropCapMarginInline, true), 0);
+  assert.equal(defaults.getFloat32(layout.dropCapMarginBlock, true), 0);
+  assert.equal(defaults.getUint32(layout.dropCapVerticesOffset, true), 0);
+  assert.equal(defaults.getUint16(layout.dropCapVertexCount, true), 0);
 
   assert.throws(() => compile({ firstLineIndent: Number.NaN }), /firstLineIndent/);
+  assert.throws(() => compile({ dropCap: { lines: 256 } }), /dropCap lines/);
 });
 
 function assertOwnedFrameRangesDoNotOverlap(bytes, abi) {

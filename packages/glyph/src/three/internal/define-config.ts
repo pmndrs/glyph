@@ -63,7 +63,7 @@ export function createThreeConfig(options: ThreeConfigOptions, shaders: ThreeSha
         maxClusters: 65_536,
         maxLines: 65_536,
         maxRegions: 65_536,
-        maxExclusions: 1,
+        maxExclusions: 65_536,
         maxInlineObjects: 1,
         maxSlotsPerBand: 8,
         maxOutputBytes: 64 * 1024 * 1024,

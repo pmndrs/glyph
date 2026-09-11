@@ -36,7 +36,13 @@ import { GlyphFontError } from './loader.js';
 import { type FontSelection, type FontStack } from './loaded-font.js';
 import { mergePropertyList } from './property-list.js';
 import { reactFontResourceKey } from './internal/react-font-resource-key.js';
-import { type Constraints, type ParagraphLayout, type PropertyList, type TextStyle } from './text-properties.js';
+import {
+  type Constraints,
+  type ParagraphLayout,
+  type PropertyList,
+  type TextFlow,
+  type TextStyle,
+} from './text-properties.js';
 import type { RasterFormatMetadata } from './config/raster-format.js';
 import {
   acquireThreeHandleFont,
@@ -106,6 +112,8 @@ export type R3fTextProps<Technique extends RasterFormatMetadata> = Object3DProps
   readonly layout?: PropertyList<ParagraphLayout>;
   /** Bounds imposed on this root Text paragraph. */
   readonly constraints?: PropertyList<Constraints>;
+  /** Explicit sequential 2D flow regions and exclusions. */
+  readonly flow?: TextFlow;
   readonly rasterPixelRatio?: number;
   readonly material?: ThreeTextMaterial;
   readonly pixelSnapping?: boolean;
@@ -1173,6 +1181,7 @@ function textProperties<Technique extends RasterFormatMetadata>(
     ...(properties.style === undefined ? {} : { style: properties.style }),
     ...(properties.layout === undefined ? {} : { layout: properties.layout }),
     ...(properties.constraints === undefined ? {} : { constraints: properties.constraints }),
+    ...(properties.flow === undefined ? {} : { flow: properties.flow }),
     ...(properties.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: properties.rasterPixelRatio }),
     ...(properties.material === undefined ? {} : { material: properties.material }),
     ...(properties.pixelSnapping === undefined ? {} : { pixelSnapping: properties.pixelSnapping }),
@@ -1189,6 +1198,7 @@ function objectProperties<Technique extends RasterFormatMetadata>(
     'style',
     'layout',
     'constraints',
+    'flow',
     'rasterPixelRatio',
     'material',
     'pixelSnapping',
@@ -1223,7 +1233,8 @@ function sameDesiredText<Technique extends RasterFormatMetadata>(
     left.material !== right.material ||
     !sameSnapshot(left.style, right.style) ||
     !sameSnapshot(left.layout, right.layout) ||
-    !sameSnapshot(left.constraints, right.constraints)
+    !sameSnapshot(left.constraints, right.constraints) ||
+    !sameSnapshot(left.flow, right.flow)
   )
     return false;
   return true;

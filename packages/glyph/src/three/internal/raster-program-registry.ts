@@ -5,6 +5,7 @@ import type { RasterFormatMetadata } from '../../config/raster-format.js';
 import { threeCodecCapabilitySet, threeSystemBuffers } from '../codec.js';
 import type { ThreeRasterMaterialContext } from '../raster-program.js';
 import type { NodeMaterial } from 'three/webgpu';
+import { slugSchema } from '../../raster/slug.js';
 
 export interface RuntimeThreeRasterVariant {
   readonly id: string;
@@ -108,10 +109,19 @@ function compileProgram<Format extends RasterFormatMetadata, Schema extends Tech
   identities: CodecIdFactory,
   transformMode: 'indexed' | 'direct',
 ): CompiledThreeRasterProgram {
-  const system = transformMode === 'indexed' ? threeSystemBuffers : { stableGlyphId: threeSystemBuffers.stableGlyphId };
+  const system =
+    transformMode === 'indexed'
+      ? threeSystemBuffers
+      : {
+          stableGlyphId: threeSystemBuffers.stableGlyphId,
+          placementSlot: threeSystemBuffers.placementSlot,
+        };
   const codec = createRasterCodecProgram(portable, {
     namespace: 'three',
     system,
+    ...((portable.schema as TechniqueSchemaMetadata) === slugSchema
+      ? { placementSlotTarget: { buffer: slugSchema.buffers.bandCounts.id, lane: 2 } }
+      : {}),
     capabilitySet: threeCodecCapabilitySet(),
     transformMode,
     allocationMode: 'ordered',

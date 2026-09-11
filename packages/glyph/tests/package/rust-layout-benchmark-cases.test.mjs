@@ -12,6 +12,8 @@ import {
 test('the maintained benchmark case registry keeps specialized corpus requirements explicit', () => {
   assert.equal(rustLayoutBenchmarkCases('latin').includes('justify'), true);
   assert.equal(rustLayoutBenchmarkCases('latin').includes('active-column-resize'), true);
+  assert.equal(rustLayoutBenchmarkCases('latin').includes('position-query'), true);
+  assert.equal(rustLayoutBenchmarkCases('latin').includes('adopt-position-query'), true);
   assert.equal(rustLayoutBenchmarkCases('latin').includes('equivalent-width'), true);
   assert.equal(rustLayoutBenchmarkCases('latin').includes('bidi-resize'), false);
   assert.equal(rustLayoutBenchmarkCases('bidi').includes('bidi-resize'), true);
@@ -26,17 +28,25 @@ test('the maintained benchmark case registry keeps specialized corpus requiremen
 
 test('reflow cases produce deterministic geometry shapes', () => {
   const base = { width: 600, height: 1_000, maxLines: 100, revision: 1 };
-  assert.deepEqual(rustLayoutBenchmarkInitialGeometry('justify', base), { ...base, align: 'justify' });
+  assert.deepEqual(rustLayoutBenchmarkInitialGeometry('justify', base), {
+    ...base,
+    width: 434,
+    align: 'justify',
+  });
   assert.deepEqual(rustLayoutBenchmarkGeometry('justify', 3, base), {
     ...base,
-    width: 441,
+    width: 434,
     revision: 5,
     align: 'justify',
   });
   assert.deepEqual(rustLayoutBenchmarkGeometry('bidi-resize', 3, base), {
     ...base,
-    width: 441,
+    width: 434,
     revision: 5,
+  });
+  assert.deepEqual(rustLayoutBenchmarkInitialGeometry('bidi-resize', base), {
+    ...base,
+    width: 434,
   });
   assert.deepEqual(rustLayoutBenchmarkInitialGeometry('active-column-resize', base), {
     ...base,
@@ -48,6 +58,20 @@ test('reflow cases produce deterministic geometry shapes', () => {
     revision: 4,
   });
   assert.deepEqual(rustLayoutBenchmarkGeometry('active-column-resize', 3, base), {
+    ...base,
+    width: 434,
+    revision: 5,
+  });
+  assert.deepEqual(rustLayoutBenchmarkGeometry('position-query', 3, base), {
+    ...base,
+    width: 434,
+    revision: 5,
+  });
+  assert.deepEqual(rustLayoutBenchmarkInitialGeometry('adopt-position-query', base), {
+    ...base,
+    width: 434,
+  });
+  assert.deepEqual(rustLayoutBenchmarkGeometry('adopt-position-query', 3, base), {
     ...base,
     width: 434,
     revision: 5,
@@ -90,7 +114,7 @@ test('equivalent-width rejects render-plan writes while retaining publication ge
   );
 });
 
-test('active-column-resize requires every measured update to publish', () => {
+test('active reflow and adopted query cases require every measured update to publish', () => {
   const settled = { publicationGeneration: 7, patchCount: 1, writeBytes: 8 };
   assert.doesNotThrow(() =>
     assertRustLayoutBenchmarkResult('active-column-resize', settled, {
@@ -108,4 +132,22 @@ test('active-column-resize requires every measured update to publish', () => {
       }),
     /active-column-resize did not publish a changed layout at generation 8/u,
   );
+  for (const name of ['adopt-measure-query', 'adopt-position-query', 'justify', 'bidi-resize']) {
+    assert.doesNotThrow(() =>
+      assertRustLayoutBenchmarkResult(name, settled, {
+        publicationGeneration: 8,
+        patchCount: 1,
+        writeBytes: 8,
+      }),
+    );
+    assert.throws(
+      () =>
+        assertRustLayoutBenchmarkResult(name, settled, {
+          publicationGeneration: 8,
+          patchCount: 0,
+          writeBytes: 0,
+        }),
+      new RegExp(`${name} did not publish a changed layout at generation 8`, 'u'),
+    );
+  }
 });

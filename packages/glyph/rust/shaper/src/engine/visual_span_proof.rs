@@ -158,10 +158,17 @@ pub(crate) fn build_visual_instance_map(
                 layout_run_index: u32::try_from(run_index)
                     .map_err(|_| EngineError::ResultTooLarge)?,
                 run_handle: None,
+                placement_handle: None,
                 canonical_revision: None,
-                run_identity_anchor: cluster_stable_ids[usize::try_from(run.cluster_start)
-                    .map_err(|_| EngineError::InvalidRequest)?],
+                identity: super::placement_state::PlacementIdentity::StableSource {
+                    segment_anchor: cluster_stable_ids
+                        [usize::try_from(covered).map_err(|_| EngineError::InvalidRequest)?],
+                    source_anchor: cluster_stable_ids
+                        [usize::try_from(covered).map_err(|_| EngineError::InvalidRequest)?],
+                },
                 segment_anchor: cluster_stable_ids
+                    [usize::try_from(covered).map_err(|_| EngineError::InvalidRequest)?],
+                source_anchor: cluster_stable_ids
                     [usize::try_from(covered).map_err(|_| EngineError::InvalidRequest)?],
                 numeric_block_ordinal: u32::MAX,
                 run_cluster_start: covered - run.cluster_start,
@@ -489,8 +496,8 @@ mod tests {
         );
         assert_eq!(map.glyph_indices, (0..10).collect::<Vec<_>>());
         assert_eq!(map.occurrence_slots, [0, 0, 0, 1, 2, 3, 3, 3, 4, 4]);
-        assert_eq!(map.slices[0].run_identity_anchor, 1);
-        assert_eq!(map.slices[1].run_identity_anchor, 1);
+        assert_eq!(map.slices[0].segment_anchor, 1);
+        assert_eq!(map.slices[1].segment_anchor, 4);
     }
 
     #[test]

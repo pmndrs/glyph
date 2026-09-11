@@ -147,7 +147,6 @@ function measureWarm(name) {
   const samples = [];
   const plans = [];
   for (let index = 0; index < options.warmup + options.repetitions; index += 1) {
-    const revision = index + 2;
     const common = {
       expectedEngineRevision: state.engineRevision,
       consumedRevision: state.revision,
@@ -179,19 +178,26 @@ function measureWarm(name) {
         ...common,
         geometry: rustLayoutBenchmarkGeometry(name, index, baseGeometry),
       });
-    } else if (name === 'measure-query' || name === 'adopt-measure-query') {
+    } else if (
+      name === 'measure-query' ||
+      name === 'position-query' ||
+      name === 'adopt-measure-query' ||
+      name === 'adopt-position-query'
+    ) {
       bytes = updateBytes({
         ...common,
-        geometry: { ...baseGeometry, width: 420 + index * 7, revision },
+        geometry: rustLayoutBenchmarkGeometry('active-column-resize', index, baseGeometry),
       });
       const queryBytes = bytes.slice();
       new DataView(queryBytes.buffer).setUint32(
         abi.layouts.engineUpdateRequest.semanticViewMask,
-        abi.engine.semanticViewMasks.measurement,
+        name === 'position-query' || name === 'adopt-position-query'
+          ? abi.engine.semanticViewMasks.borrowedLayout
+          : abi.engine.semanticViewMasks.measurement,
         true,
       );
-      if (name === 'adopt-measure-query') {
-        execute(queryBytes, index < options.warmup, `adopt-measure-query.prepare[${index}]`, 1);
+      if (name === 'adopt-measure-query' || name === 'adopt-position-query') {
+        execute(queryBytes, index < options.warmup, `${name}.prepare[${index}]`, 1);
       } else {
         bytes = queryBytes;
       }
@@ -237,7 +243,12 @@ function measureWarm(name) {
       bytes = updateBytes({ ...common, geometry: baseGeometry });
     }
     const previous = state;
-    state = execute(bytes, index < options.warmup, `${name}[${index}]`, name === 'measure-query' ? 1 : undefined);
+    state = execute(
+      bytes,
+      index < options.warmup,
+      `${name}[${index}]`,
+      name === 'measure-query' || name === 'position-query' ? 1 : undefined,
+    );
     assertRustLayoutBenchmarkResult(name, previous, state);
     if (index >= options.warmup) {
       samples.push(state.durationMs);
@@ -296,11 +307,23 @@ function execute(bytes, allowGrowth = false, operation = 'text_update', measureP
   const patchesOffset = result.getUint32(layout.patchesOffset, true);
   const patchLayout = abi.layouts.enginePatch;
   let writeBytes = 0;
+  const patchBuffers = {};
   for (let index = 0; index < patchCount; index += 1) {
     const at = resultPointer + patchesOffset + index * patchLayout.size;
     const patch = new DataView(memory.buffer, at, patchLayout.size);
+    const bufferId = patch.getUint32(patchLayout.bufferId, true);
+    const attribution = (patchBuffers[bufferId] ??= { patches: 0, writeBytes: 0, writeGaps: {} });
+    attribution.patches += 1;
     if (patch.getUint8(patchLayout.opcode) === abi.engine.patchOpcodes.write) {
-      writeBytes += patch.getUint32(patchLayout.byteLength, true);
+      const byteLength = patch.getUint32(patchLayout.byteLength, true);
+      const destinationOffset = patch.getUint32(patchLayout.destinationOffset, true);
+      if (attribution.writeEnd !== undefined && destinationOffset >= attribution.writeEnd) {
+        const gap = destinationOffset - attribution.writeEnd;
+        attribution.writeGaps[gap] = (attribution.writeGaps[gap] ?? 0) + 1;
+      }
+      attribution.writeEnd = destinationOffset + byteLength;
+      writeBytes += byteLength;
+      attribution.writeBytes += byteLength;
     }
   }
   const primitiveCount = result.getUint32(layout.primitiveCount, true);
@@ -314,6 +337,21 @@ function execute(bytes, allowGrowth = false, operation = 'text_update', measureP
       glyphCount += primitive.getUint16(primitiveLayout.recordCount, true);
     }
   }
+  const bufferCount = result.getUint32(layout.bufferCount, true);
+  const buffersOffset = result.getUint32(layout.buffersOffset, true);
+  const bufferLayout = abi.layouts.engineBuffer;
+  const bufferRecords = {};
+  for (let index = 0; index < bufferCount; index += 1) {
+    const at = resultPointer + buffersOffset + index * bufferLayout.size;
+    const bufferRecord = new DataView(memory.buffer, at, bufferLayout.size);
+    const id = bufferRecord.getUint32(bufferLayout.id, true);
+    bufferRecords[id] = {
+      generation: bufferRecord.getUint32(bufferLayout.generation, true),
+      liveRecords: bufferRecord.getUint32(bufferLayout.liveRecords, true),
+      capacityRecords: bufferRecord.getUint32(bufferLayout.capacityRecords, true),
+      byteLength: bufferRecord.getUint32(bufferLayout.byteLength, true),
+    };
+  }
   return {
     durationMs,
     engineRevision: result.getUint32(layout.engineRevision, true),
@@ -323,6 +361,8 @@ function execute(bytes, allowGrowth = false, operation = 'text_update', measureP
     glyphCount,
     patchCount,
     writeBytes,
+    patchBuffers,
+    bufferRecords,
   };
 }
 
@@ -397,6 +437,8 @@ function summarize(name, glyphs, samples, plans) {
         glyphCount: plans[index]?.glyphCount ?? 0,
         patchCount: plans[index]?.patchCount ?? 0,
         writeBytes: plans[index]?.writeBytes ?? 0,
+        patchBuffers: plans[index]?.patchBuffers ?? {},
+        bufferRecords: plans[index]?.bufferRecords ?? {},
       })),
     });
   }
@@ -436,9 +478,10 @@ function printReport(caseReports) {
   console.log('equivalent-width alternates adjacent f32 widths and requires zero render-plan patches or writes.');
   console.log(
     'measure-query answers the same alternating widths through the paragraph-scoped synchronous measure: no gather, plan, or publication.',
+    'position-query adds only the positioning tail to the same synchronous query through borrowed-layout mode: no gather, plan, publication, or inspection copy.',
   );
   console.log(
-    'adopt-measure-query times only adoption, gather, plan compilation, and publication after the same measure query prepared flow and positioning.',
+    'adopt-measure-query includes the positioning tail plus adoption, gather, plan compilation, and publication after measurement prepared flow only; adopt-position-query isolates adoption, gather, plan compilation, and publication after borrowed-layout prepared positioning.',
   );
   console.log(
     'publish-measurement and publish-inspection isolate semantic-sidecar overhead against the otherwise identical no-op publication.',

@@ -46,6 +46,9 @@ Custom callback checks cover uniform-driven perspective and color changes, fragm
 offscreen clipping, and isolation from the default config across all three raster formats. Explicit bind-group checks
 verify chaining, last-group replacement, immutable parent views, missing groups, named roots, and saved-view disposal.
 The test requires its explicit completion marker and propagates browser-probe failure to the shell.
+The retained-reflow case also exercises the shared f32x2 placement table and per-occurrence placement slot for Bitmap,
+MTSDF, and Slug while the caller-owned callback groups remain active; the direct adapter remains a proof-of-concept rather
+than a constraint on the renderer-neutral buffer layout.
 An analytic MSDF readback checks fill and shadow coverage at 0, 45, and 90 degrees against an independently derived
 constant-coverage value. The former `fwidth` footprint is rendered alongside as a negative control that must disagree
 at 45 degrees. No golden image regeneration is involved.

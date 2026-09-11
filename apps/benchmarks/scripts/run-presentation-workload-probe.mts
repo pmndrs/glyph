@@ -25,8 +25,8 @@ if (address === null || address === undefined || typeof address === 'string') {
   throw new Error('Vite did not publish a local TCP address');
 }
 
-const workloads = [
-  { id: 'editorial', label: 'Editorial', fontSize: 24, layoutWidthRatio: 0.82, amount: 50, camera: 'orthographic' },
+const allWorkloads = [
+  { id: 'editorial', label: 'Editorial', fontSize: 24, layoutWidthRatio: 0.82, amount: 50, camera: 'perspective' },
   { id: 'text-ladder', label: 'Text ladder', fontSize: 24, layoutWidthRatio: 0.82, amount: 50, camera: 'orthographic' },
   {
     id: 'zoom-text',
@@ -86,6 +86,12 @@ const workloads = [
     camera: 'orthographic',
   },
 ] as const;
+const selectedWorkload = process.env.PRESENTATION_WORKLOAD;
+const workloads =
+  selectedWorkload === undefined ? allWorkloads : allWorkloads.filter((workload) => workload.id === selectedWorkload);
+if (workloads.length === 0) {
+  throw new RangeError(`PRESENTATION_WORKLOAD is not a maintained presentation workload: ${selectedWorkload}`);
+}
 
 const consoleProblems: string[] = [];
 const presentationIntervalMs = 7_000;
@@ -192,6 +198,11 @@ try {
       `glyphs=${String(settled.glyphCount)}`,
     );
     await assertPresentationRemainsVisible(page, workload.id, backend);
+    if (workload.id === 'editorial') {
+      const reflow = await readReflowTelemetry(page);
+      if (reflow.sampleCount < 3) throw new Error('editorial did not publish enough retained reflow samples');
+      console.log('presentation-workload-reflow', workload.id, JSON.stringify(reflow));
+    }
     await waitForSettledWorkload(page, workload, backend, true);
     const retainedCanvas = await page.evaluate(() => {
       const scope = globalThis as typeof globalThis & { presentationProbeCanvas: Element | undefined };
@@ -292,6 +303,41 @@ async function readBatching(page: Page): Promise<{ readonly drawCount: number; r
   return page.evaluate(() => {
     const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
     return { drawCount: Number(viewport?.dataset.drawCount), glyphCount: Number(viewport?.dataset.glyphCount) };
+  });
+}
+
+interface ReflowTelemetry {
+  readonly sampleCount: number;
+  readonly medianMs: number;
+  readonly p95Ms: number;
+  readonly medianStageMs: number;
+  readonly medianPublishMs: number;
+  readonly medianLayoutMs: number;
+  readonly p95StageMs: number;
+  readonly p95PublishMs: number;
+  readonly p95LayoutMs: number;
+}
+
+async function readReflowTelemetry(page: Page): Promise<ReflowTelemetry> {
+  return page.evaluate(() => {
+    const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
+    if (viewport === null) throw new Error('comparison viewport is missing');
+    const number = (name: string): number => {
+      const value = Number(viewport.getAttribute(name));
+      if (!Number.isFinite(value)) throw new Error(`comparison viewport ${name} is not finite`);
+      return value;
+    };
+    return {
+      sampleCount: number('data-reflow-sample-count'),
+      medianMs: number('data-reflow-median-ms'),
+      p95Ms: number('data-reflow-p95-ms'),
+      medianStageMs: number('data-reflow-median-stage-ms'),
+      medianPublishMs: number('data-reflow-median-publish-ms'),
+      medianLayoutMs: number('data-reflow-median-layout-ms'),
+      p95StageMs: number('data-reflow-p95-stage-ms'),
+      p95PublishMs: number('data-reflow-p95-publish-ms'),
+      p95LayoutMs: number('data-reflow-p95-layout-ms'),
+    };
   });
 }
 

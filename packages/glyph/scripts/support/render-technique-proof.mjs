@@ -128,8 +128,9 @@ function proof(abi, descriptor, allocation, binding) {
 function bitmapProgram(abi, glyphScope) {
   const context = programContext(abi, glyphScope, 8, 1);
   const { loadF32, loadU32, binary, storeF32, storeU32 } = context;
-  loadF32(15);
-  loadU32(29, 0);
+  loadF32(context.f32InputCount);
+  loadU32(28, context.placementU32Input);
+  loadU32(29, context.bindingU32Start);
   binary('multiplyF32', 15, 7, 2);
   binary('addF32', 16, 0, 15);
   binary('multiplyF32', 17, 8, 2);
@@ -144,7 +145,8 @@ function bitmapProgram(abi, glyphScope) {
     [5, [3, 4, 5, 6]],
   ]);
   storeU32(6, 0, 29);
-  return program(context, [...floatBuffers(abi, [2, 2, 2, 2, 4]), ...uintBuffers(abi, [1], 6)]);
+  storeU32(7, 0, 28);
+  return program(context, [...floatBuffers(abi, [2, 2, 2, 2, 4]), ...uintBuffers(abi, [1, 1], 6)]);
 }
 
 function mtsdfProgram(abi) {
@@ -202,40 +204,47 @@ function mtsdfProgram(abi) {
   copyF32(3, 2, 18);
   copyF32(3, 3, 19);
   for (let lane = 0; lane < 4; lane += 1) copyF32(4, lane, 3 + lane);
-  loadU32(0, 0);
-  storeU32(5, 0, 0);
   loadU32(0, 1);
+  storeU32(5, 0, 0);
+  loadU32(0, 2);
   storeU32(5, 1, 0);
   copyF32(6, 0, 8);
   copyF32(6, 1, 9);
   copyF32(6, 2, 7);
-  loadU32(0, 2);
+  loadU32(0, 3);
   operations.push({ opcode: abi.codec.opcodes.convertU32ToF32, target: 1, operand0: 0 });
   storeF32(6, 3, 1);
+  loadU32(0, 0);
+  storeU32(7, 0, 0);
   const context = {
     inputs: [
       ...semanticFields.map((inputField) => ({ scope: 'semantic', field: inputField })),
       ...Array.from({ length: 10 }, (_, fieldIndex) => ({ scope: 'glyph', field: fieldIndex })),
+      { scope: 'semantic', field: semanticU32.placementSlot },
       { scope: 'semantic', field: semanticU32.outlineRgba },
       { scope: 'semantic', field: semanticU32.shadowRgba },
       { scope: 'glyph', field: 0 },
     ],
     operations,
     f32InputCount: 20,
-    u32InputCount: 3,
+    u32InputCount: 4,
   };
   return program(context, [
     ...floatBuffers(abi, [4, 4, 4, 4]),
     ...uintBuffers(abi, [2], 5),
     { id: 6, scalar: abi.codec.scalarTypes.f32, vectorWidth: 4 },
+    { id: 7, scalar: abi.codec.scalarTypes.u32, vectorWidth: 1 },
   ]);
 }
 
 function slugProgram(abi) {
   const context = programContext(abi, 'glyph', 8, 6, true);
   const { loadF32, loadU32, binary, constantF32, constantU32, storeF32, storeU32 } = context;
-  loadF32(16);
-  for (let fieldIndex = 0; fieldIndex < 6; fieldIndex += 1) loadU32(21 + fieldIndex, fieldIndex);
+  loadF32(context.f32InputCount);
+  loadU32(30, context.placementU32Input);
+  for (let fieldIndex = 0; fieldIndex < 6; fieldIndex += 1) {
+    loadU32(21 + fieldIndex, context.bindingU32Start + fieldIndex);
+  }
   binary('multiplyF32', 16, 8, 2);
   binary('addF32', 17, 0, 16);
   binary('multiplyF32', 18, 9, 2);
@@ -253,7 +262,7 @@ function slugProgram(abi) {
   ]);
   stores(storeU32, [
     [6, [21, 22, 23, 24]],
-    [7, [25, 26, 29, 29]],
+    [7, [25, 26, 30, 29]],
   ]);
   return program(context, [...floatBuffers(abi, [4, 4, 4, 4, 4]), ...uintBuffers(abi, [4, 4], 6)]);
 }
@@ -261,6 +270,8 @@ function slugProgram(abi) {
 function programContext(abi, bindingScope, bindingF32Count, bindingU32Count, inverseFontSize = false) {
   const operations = [];
   const semantic = abi.engine.semanticF32Fields;
+  const semanticU32 = abi.engine.semanticU32Fields;
+  const f32InputCount = 7 + (inverseFontSize ? 1 : 0) + bindingF32Count;
   const inputs = [
     { scope: 'semantic', field: semantic.inlineOrigin },
     { scope: 'semantic', field: semantic.blockOrigin },
@@ -271,9 +282,9 @@ function programContext(abi, bindingScope, bindingF32Count, bindingU32Count, inv
     { scope: 'semantic', field: semantic.foregroundAlpha },
     ...(inverseFontSize ? [{ scope: 'semantic', field: semantic.inverseFontSize }] : []),
     ...Array.from({ length: bindingF32Count }, (_, fieldIndex) => ({ scope: bindingScope, field: fieldIndex })),
+    { scope: 'semantic', field: semanticU32.placementSlot },
     ...Array.from({ length: bindingU32Count }, (_, fieldIndex) => ({ scope: bindingScope, field: fieldIndex })),
   ];
-  const f32InputCount = 7 + (inverseFontSize ? 1 : 0) + bindingF32Count;
   return {
     inputs,
     operations,
@@ -311,7 +322,9 @@ function programContext(abi, bindingScope, bindingF32Count, bindingU32Count, inv
       });
     },
     f32InputCount,
-    u32InputCount: bindingU32Count,
+    placementU32Input: 0,
+    bindingU32Start: 1,
+    u32InputCount: bindingU32Count + 1,
   };
 }
 

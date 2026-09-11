@@ -69,6 +69,7 @@ export const textShaperAbi = {
     },
     "bufferStrategies": {
       "orderedDirect": 1,
+      "sessionShared": 3,
       "stableIndirect": 2
     },
     "decorationFlags": {
@@ -87,6 +88,14 @@ export const textShaperAbi = {
       "wavy": 5
     },
     "defaultRootTextCapacity": 1024,
+    "dropCapAlignments": {
+      "baseline": 2,
+      "textTop": 1
+    },
+    "dropCapSides": {
+      "inlineEnd": 2,
+      "inlineStart": 1
+    },
     "exclusionWrapSides": {
       "both": 1,
       "inlineEnd": 3,
@@ -118,7 +127,11 @@ export const textShaperAbi = {
       "textTop": 2
     },
     "internalBufferBindings": {
-      "order": 65535
+      "order": 65535,
+      "placement": 65534
+    },
+    "internalBufferIds": {
+      "placement": 2147483647
     },
     "lastLinePolicies": {
       "auto": 1,
@@ -199,6 +212,7 @@ export const textShaperAbi = {
       "flowThreadId": 3,
       "foregroundRgba": 0,
       "outlineRgba": 6,
+      "placementSlot": 8,
       "regionId": 2,
       "shadowRgba": 7,
       "stableGlyphId": 5,
@@ -425,6 +439,14 @@ export const textShaperAbi = {
       "align": 47,
       "alignment": 4,
       "blockAlign": 49,
+      "dropCapAlignment": 82,
+      "dropCapLines": 81,
+      "dropCapMarginBlock": 88,
+      "dropCapMarginInline": 84,
+      "dropCapReserved": 98,
+      "dropCapSide": 83,
+      "dropCapVertexCount": 96,
+      "dropCapVerticesOffset": 92,
       "firstLineIndent": 56,
       "flags": 50,
       "flowThreadId": 0,
@@ -443,7 +465,7 @@ export const textShaperAbi = {
       "resumeBlockOffset": 24,
       "resumeCluster": 36,
       "resumeRegion": 42,
-      "size": 84,
+      "size": 100,
       "spaceAfter": 64,
       "spaceBefore": 60,
       "viewportBlockEnd": 20,

@@ -155,7 +155,7 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
 
       const boundBuffers = Array.from(source.updates.buffers, (command) => {
         const record = this.#mapper.bufferIdentity(command.buffer);
-        const program = this.#program(command.program);
+        const program = command.program === undefined ? undefined : this.#program(command.program);
         let retained = buffers.get(record.id);
         if (retained?.generation !== record.generation) {
           const declaration = this.#bufferDeclaration(record.programId, record.bindingId);
@@ -411,8 +411,9 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
     return value;
   }
 
-  #bufferDeclaration(programId: number, bindingId: number | 'order') {
+  #bufferDeclaration(programId: number, bindingId: number | 'order' | 'placement') {
     if (bindingId === 'order') return Object.freeze({ kind: 'order' as const });
+    if (bindingId === 'placement') return Object.freeze({ kind: 'placement' as const });
     const program = this.#programsById.get(programId)!;
     const declaration = program.buffers.find((buffer: CodecBuffer) => (buffer.id as number) === bindingId)!;
     return Object.freeze({ kind: 'codec' as const, value: declaration });

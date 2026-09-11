@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 use core::num::NonZeroU32;
 
 /// Dense planner-local storage index. It has no meaning outside its owning [`RunSlotArena`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct RunSlot(u32);
 
 impl RunSlot {
@@ -19,7 +19,7 @@ impl RunSlot {
 }
 
 /// Nonzero, nonwrapping incarnation of one physical run slot.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct RunGeneration(NonZeroU32);
 
 impl RunGeneration {
@@ -41,7 +41,7 @@ impl RunGeneration {
 }
 
 /// Opaque identity of one committed or prepared run in a planner-local namespace.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct RunHandle {
     slot: RunSlot,
     generation: RunGeneration,
@@ -258,21 +258,24 @@ where
         }
         u32::try_from(desired.len()).map_err(|_| RunSlotError::ArithmeticOverflow)?;
 
-        let retained = self.matches_committed_order(desired)?;
         self.begin_prepare(publication_generation)?;
-        let result = if retained {
-            #[cfg(test)]
-            {
-                self.retained_prepare_count += 1;
+        let result = self.prepare_retained(desired).and_then(|retained| {
+            if retained {
+                #[cfg(test)]
+                {
+                    self.retained_prepare_count += 1;
+                }
+                Ok(())
+            } else {
+                self.assignments.clear();
+                self.writes.clear();
+                #[cfg(test)]
+                {
+                    self.structural_prepare_count += 1;
+                }
+                self.prepare_structural(desired)
             }
-            self.prepare_retained(desired)
-        } else {
-            #[cfg(test)]
-            {
-                self.structural_prepare_count += 1;
-            }
-            self.prepare_structural(desired)
-        };
+        });
 
         if result.is_err() {
             self.abort();
@@ -280,14 +283,36 @@ where
         result
     }
 
-    fn matches_committed_order(
-        &self,
+    /// Advances an unchanged committed set through one publication without rebuilding its keys.
+    pub(crate) fn prepare_reuse(
+        &mut self,
+        publication_generation: u32,
+    ) -> Result<(), RunSlotError> {
+        if self.prepared {
+            return Err(RunSlotError::AlreadyPrepared);
+        }
+        if publication_generation == 0
+            || publication_generation <= self.committed_publication_generation
+            || publication_generation <= self.acknowledged_publication_generation
+        {
+            return Err(RunSlotError::InvalidPublicationGeneration);
+        }
+        self.begin_prepare(publication_generation)?;
+        self.prepared = true;
+        Ok(())
+    }
+
+    fn prepare_retained(
+        &mut self,
         desired: &[DesiredRun<Key, Canonical>],
     ) -> Result<bool, RunSlotError> {
         if desired.len() != self.committed_order.len() {
             return Ok(false);
         }
-        for (run, &slot) in desired.iter().zip(&self.committed_order) {
+        reserve(&mut self.assignments, desired.len())?;
+        reserve(&mut self.writes, desired.len())?;
+        for (index, run) in desired.iter().enumerate() {
+            let slot = self.committed_order[index];
             let occupant = self
                 .slot_state(slot)?
                 .occupant
@@ -296,18 +321,6 @@ where
             if occupant.logical_key != run.logical_key {
                 return Ok(false);
             }
-        }
-        Ok(true)
-    }
-
-    fn prepare_retained(
-        &mut self,
-        desired: &[DesiredRun<Key, Canonical>],
-    ) -> Result<(), RunSlotError> {
-        reserve(&mut self.assignments, desired.len())?;
-        reserve(&mut self.writes, desired.len())?;
-        for (index, run) in desired.iter().enumerate() {
-            let slot = self.committed_order[index];
             let state = self.slot_state(slot)?;
             let occupant = state
                 .occupant
@@ -338,10 +351,29 @@ where
             self.assignments.push(RunSlotAssignment { handle, change });
         }
         self.prepared = true;
-        Ok(())
+        Ok(true)
     }
 
     fn prepare_structural(
+        &mut self,
+        desired: &[DesiredRun<Key, Canonical>],
+    ) -> Result<(), RunSlotError> {
+        if desired
+            .windows(2)
+            .any(|pair| pair[0].logical_key == pair[1].logical_key)
+        {
+            return Err(RunSlotError::DuplicateLogicalKey);
+        }
+        if desired
+            .windows(2)
+            .all(|pair| pair[0].logical_key < pair[1].logical_key)
+        {
+            return self.prepare_sorted_structural(desired);
+        }
+        self.prepare_indexed_structural(desired)
+    }
+
+    fn prepare_sorted_structural(
         &mut self,
         desired: &[DesiredRun<Key, Canonical>],
     ) -> Result<(), RunSlotError> {
@@ -349,9 +381,60 @@ where
         reserve(&mut self.pending_order, desired.len())?;
         reserve(&mut self.assignments, desired.len())?;
         reserve(&mut self.writes, desired.len())?;
+        reserve(&mut self.retirements, self.slots.len())?;
+
+        let mut committed = 0usize;
         for run in desired {
-            self.pending_index
-                .push((run.logical_key, RunSlot(u32::MAX)));
+            while let Some(&(key, slot)) = self.committed_index.get(committed) {
+                if key >= run.logical_key {
+                    break;
+                }
+                self.retire_slot(slot)?;
+                committed += 1;
+            }
+            let existing = self
+                .committed_index
+                .get(committed)
+                .copied()
+                .filter(|(key, _)| *key == run.logical_key)
+                .map(|(_, slot)| slot);
+            if existing.is_some() {
+                committed += 1;
+            }
+            let (handle, change) = self.assign_run(run, existing)?;
+            self.pending_index.push((run.logical_key, handle.slot));
+            self.pending_order.push(handle.slot);
+            self.assignments.push(RunSlotAssignment { handle, change });
+        }
+        while let Some(&(_, slot)) = self.committed_index.get(committed) {
+            self.retire_slot(slot)?;
+            committed += 1;
+        }
+        self.finish_structural_prepare()
+    }
+
+    fn prepare_indexed_structural(
+        &mut self,
+        desired: &[DesiredRun<Key, Canonical>],
+    ) -> Result<(), RunSlotError> {
+        reserve(&mut self.pending_index, desired.len())?;
+        reserve(&mut self.pending_order, desired.len())?;
+        reserve(&mut self.assignments, desired.len())?;
+        reserve(&mut self.writes, desired.len())?;
+        let placeholder = RunSlotAssignment {
+            handle: RunHandle {
+                slot: RunSlot(u32::MAX),
+                generation: RunGeneration::INITIAL,
+            },
+            change: RunSlotChange::Retained,
+        };
+        for (index, run) in desired.iter().enumerate() {
+            self.pending_index.push((
+                run.logical_key,
+                RunSlot(u32::try_from(index).map_err(|_| RunSlotError::ArithmeticOverflow)?),
+            ));
+            self.pending_order.push(RunSlot(u32::MAX));
+            self.assignments.push(placeholder);
         }
         self.pending_index.sort_unstable_by_key(|entry| entry.0);
         if self
@@ -361,79 +444,97 @@ where
         {
             return Err(RunSlotError::DuplicateLogicalKey);
         }
-
-        for run in desired {
-            let (handle, change) = match self.find_committed(&run.logical_key) {
-                Some(slot) => {
-                    let state = self.slot_state(slot)?;
-                    let occupant = state
-                        .occupant
-                        .as_ref()
-                        .ok_or(RunSlotError::ArithmeticOverflow)?;
-                    if occupant.canonical == run.canonical {
-                        (
-                            RunHandle {
-                                slot,
-                                generation: state.generation,
-                            },
-                            RunSlotChange::Retained,
-                        )
-                    } else {
-                        let handle = RunHandle {
-                            slot,
-                            generation: state.generation.next()?,
-                        };
-                        self.writes.push(PendingWrite {
-                            handle,
-                            occupant: Occupant {
-                                logical_key: run.logical_key,
-                                canonical: run.canonical,
-                            },
-                        });
-                        (handle, RunSlotChange::Updated)
-                    }
-                }
-                None => {
-                    let handle = self.allocate_slot()?;
-                    self.writes.push(PendingWrite {
-                        handle,
-                        occupant: Occupant {
-                            logical_key: run.logical_key,
-                            canonical: run.canonical,
-                        },
-                    });
-                    (handle, RunSlotChange::Allocated)
-                }
-            };
-
-            let pending = self
-                .pending_index
-                .binary_search_by(|entry| entry.0.cmp(&run.logical_key))
-                .map_err(|_| RunSlotError::ArithmeticOverflow)?;
-            self.pending_index[pending].1 = handle.slot;
-            self.pending_order.push(handle.slot);
-            self.assignments.push(RunSlotAssignment { handle, change });
-        }
-
         reserve(&mut self.retirements, self.slots.len())?;
-        for (slot_index, state) in self.slots.iter().enumerate() {
-            let Some(occupant) = &state.occupant else {
-                continue;
-            };
-            if self
-                .pending_index
-                .binary_search_by(|entry| entry.0.cmp(&occupant.logical_key))
-                .is_err()
-            {
-                let slot = RunSlot(
-                    u32::try_from(slot_index).map_err(|_| RunSlotError::ArithmeticOverflow)?,
-                );
-                self.retirements.push(RunHandle {
+        let mut committed = 0usize;
+        for pending in 0..self.pending_index.len() {
+            let (key, original) = self.pending_index[pending];
+            while let Some(&(committed_key, slot)) = self.committed_index.get(committed) {
+                if committed_key >= key {
+                    break;
+                }
+                self.retire_slot(slot)?;
+                committed += 1;
+            }
+            let existing = self
+                .committed_index
+                .get(committed)
+                .copied()
+                .filter(|(committed_key, _)| *committed_key == key)
+                .map(|(_, slot)| slot);
+            if existing.is_some() {
+                committed += 1;
+            }
+            let original =
+                usize::try_from(original.0).map_err(|_| RunSlotError::ArithmeticOverflow)?;
+            let (handle, change) = self.assign_run(&desired[original], existing)?;
+            self.pending_index[pending].1 = handle.slot;
+            self.pending_order[original] = handle.slot;
+            self.assignments[original] = RunSlotAssignment { handle, change };
+        }
+        while let Some(&(_, slot)) = self.committed_index.get(committed) {
+            self.retire_slot(slot)?;
+            committed += 1;
+        }
+        self.finish_structural_prepare()
+    }
+
+    fn assign_run(
+        &mut self,
+        run: &DesiredRun<Key, Canonical>,
+        existing: Option<RunSlot>,
+    ) -> Result<(RunHandle, RunSlotChange), RunSlotError> {
+        let Some(slot) = existing else {
+            let handle = self.allocate_slot()?;
+            self.writes.push(PendingWrite {
+                handle,
+                occupant: Occupant {
+                    logical_key: run.logical_key,
+                    canonical: run.canonical,
+                },
+            });
+            return Ok((handle, RunSlotChange::Allocated));
+        };
+        let state = self.slot_state(slot)?;
+        let occupant = state
+            .occupant
+            .as_ref()
+            .ok_or(RunSlotError::ArithmeticOverflow)?;
+        if occupant.canonical == run.canonical {
+            return Ok((
+                RunHandle {
                     slot,
                     generation: state.generation,
-                });
-            }
+                },
+                RunSlotChange::Retained,
+            ));
         }
+        let handle = RunHandle {
+            slot,
+            generation: state.generation.next()?,
+        };
+        self.writes.push(PendingWrite {
+            handle,
+            occupant: Occupant {
+                logical_key: run.logical_key,
+                canonical: run.canonical,
+            },
+        });
+        Ok((handle, RunSlotChange::Updated))
+    }
+
+    fn retire_slot(&mut self, slot: RunSlot) -> Result<(), RunSlotError> {
+        let state = self.slot_state(slot)?;
+        if state.occupant.is_none() {
+            return Err(RunSlotError::ArithmeticOverflow);
+        }
+        self.retirements.push(RunHandle {
+            slot,
+            generation: state.generation,
+        });
+        Ok(())
+    }
+
+    fn finish_structural_prepare(&mut self) -> Result<(), RunSlotError> {
         reserve(&mut self.quarantine, self.retirements.len())?;
 
         let required_slots = usize::try_from(self.pending_slot_count)
@@ -573,13 +674,6 @@ where
         ]
     }
 
-    fn find_committed(&self, key: &Key) -> Option<RunSlot> {
-        self.committed_index
-            .binary_search_by(|entry| entry.0.cmp(key))
-            .ok()
-            .map(|index| self.committed_index[index].1)
-    }
-
     fn slot_state(&self, slot: RunSlot) -> Result<&RunSlotState<Key, Canonical>, RunSlotError> {
         self.slots
             .get(slot.0 as usize)
@@ -698,14 +792,35 @@ mod tests {
             arena.assignments().unwrap()[1].change(),
             RunSlotChange::Updated
         );
+        let retained = handles(&arena);
         arena.commit();
 
         arena
             .prepare(&[run(20, 3, 2.0), run(10, 1, 1.0)], 3)
             .unwrap();
         assert_eq!(arena.prepare_counts(), (1, 2));
+        assert_eq!(handles(&arena), [retained[1], retained[0]]);
+        assert!(arena.retirements().unwrap().is_empty());
         arena.commit();
         arena.commit();
+    }
+
+    #[test]
+    fn unchanged_publication_reuses_the_complete_committed_set() {
+        let mut arena = RunSlotArena::default();
+        arena
+            .prepare(&[run(10, 1, 1.0), run(20, 2, 2.0)], 1)
+            .unwrap();
+        let committed = handles(&arena);
+        arena.commit();
+
+        arena.prepare_reuse(2).unwrap();
+        assert!(arena.assignments().unwrap().is_empty());
+        assert_eq!(arena.required_slots().unwrap(), 2);
+        arena.commit();
+        assert_eq!(arena.get(committed[0]).unwrap().0, &10);
+        assert_eq!(arena.get(committed[1]).unwrap().0, &20);
+        arena.acknowledge(2).unwrap();
     }
 
     #[test]

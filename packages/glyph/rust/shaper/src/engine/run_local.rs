@@ -33,8 +33,11 @@ pub(crate) struct NumericBlock {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct RunLocalGlyph {
+    #[cfg(any(test, feature = "kernel-lab"))]
     pub source_glyph: u32,
+    #[cfg(any(test, feature = "kernel-lab"))]
     pub block_index: u32,
+    #[cfg(any(test, feature = "kernel-lab"))]
     pub pen_inline: f64,
     pub inline_origin: f32,
     pub block_origin: f32,
@@ -70,6 +73,7 @@ pub(crate) enum ClusterFinish {
 pub(crate) struct RunLocalArena {
     blocks: Vec<NumericBlock>,
     rows: Vec<RunLocalGlyph>,
+    source_rows: Vec<u32>,
     cluster_blocks: Vec<u32>,
     cluster_prefixes: Vec<f64>,
     pending_block_rows: Vec<PendingGlyph>,
@@ -81,6 +85,7 @@ impl RunLocalArena {
     pub(crate) fn clear(&mut self) {
         self.blocks.clear();
         self.rows.clear();
+        self.source_rows.clear();
         self.cluster_blocks.clear();
         self.cluster_prefixes.clear();
         self.pending_block_rows.clear();
@@ -96,6 +101,19 @@ impl RunLocalArena {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn rows(&self) -> &[RunLocalGlyph] {
         &self.rows
+    }
+
+    pub(crate) fn row_for_source_glyph(&self, source_glyph: u32) -> Option<&RunLocalGlyph> {
+        let row = *self.source_rows.get(usize::try_from(source_glyph).ok()?)?;
+        self.rows.get(usize::try_from(row).ok()?)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn row_for_source_order_glyph(&self, source_glyph: u32) -> Option<&RunLocalGlyph> {
+        let index = usize::try_from(source_glyph).ok()?;
+        let row = self.rows.get(index)?;
+        debug_assert_eq!(self.source_rows.get(index), Some(&source_glyph));
+        Some(row)
     }
 
     #[cfg_attr(not(test), allow(dead_code))]
@@ -341,6 +359,19 @@ impl RunLocalWriter<'_> {
                     .checked_add(1)
                     .ok_or(RunLocalBuildError::AllocationFailed)?,
             );
+            let source_glyph = usize::try_from(row.source_glyph)
+                .map_err(|_| RunLocalBuildError::AllocationFailed)?;
+            if self.arena.source_rows.len() <= source_glyph {
+                let additional = source_glyph + 1 - self.arena.source_rows.len();
+                reserve(&mut self.arena.source_rows, additional)?;
+                self.arena.source_rows.resize(source_glyph + 1, u32::MAX);
+            }
+            if self.arena.source_rows[source_glyph] != u32::MAX {
+                return Err(RunLocalBuildError::InvalidSource);
+            }
+            let row_index = u32::try_from(self.arena.rows.len())
+                .map_err(|_| RunLocalBuildError::AllocationFailed)?;
+            self.arena.source_rows[source_glyph] = row_index;
             self.arena
                 .rows
                 .push(row.finish(block_index, anchor_inline, anchor_block)?);
@@ -394,6 +425,7 @@ struct RawGlyph {
 #[derive(Clone, Copy)]
 struct PendingGlyph {
     source_glyph: u32,
+    #[cfg(any(test, feature = "kernel-lab"))]
     pen_inline: f64,
     inline_origin: f64,
     block_origin: f64,
@@ -425,6 +457,7 @@ impl RawGlyph {
         }
         Ok(PendingGlyph {
             source_glyph: self.source_glyph,
+            #[cfg(any(test, feature = "kernel-lab"))]
             pen_inline,
             inline_origin,
             block_origin: self.block_origin,
@@ -445,9 +478,14 @@ impl PendingGlyph {
         anchor_inline: f64,
         anchor_block: f64,
     ) -> Result<RunLocalGlyph, RunLocalBuildError> {
+        #[cfg(not(any(test, feature = "kernel-lab")))]
+        let _ = block_index;
         Ok(RunLocalGlyph {
+            #[cfg(any(test, feature = "kernel-lab"))]
             source_glyph: self.source_glyph,
+            #[cfg(any(test, feature = "kernel-lab"))]
             block_index,
+            #[cfg(any(test, feature = "kernel-lab"))]
             pen_inline: self.pen_inline,
             inline_origin: local_f32(self.inline_origin - anchor_inline)?,
             block_origin: local_f32(self.block_origin - anchor_block)?,
@@ -835,5 +873,32 @@ mod tests {
         assert_eq!(arena.rows().len(), 4_096);
         assert_eq!(arena.rows()[4_095].source_glyph, 4_095);
         assert_eq!(arena.rows()[4_095].pen_inline, 4_095.0);
+    }
+
+    #[test]
+    fn source_order_rows_remain_direct_after_a_reversed_run() {
+        let mut arena = RunLocalArena::default();
+        let mut reversed = arena.begin_run();
+        for source_glyph in [1, 0] {
+            reversed.begin_cluster().unwrap();
+            reversed.push_glyph(glyph(source_glyph, 1)).unwrap();
+            reversed.finish_cluster(ClusterFinish::Resync(1.0)).unwrap();
+        }
+        reversed.finish().unwrap();
+
+        let mut source_order = arena.begin_run();
+        for source_glyph in [2, 3] {
+            source_order.begin_cluster().unwrap();
+            source_order.push_glyph(glyph(source_glyph, 1)).unwrap();
+            source_order
+                .finish_cluster(ClusterFinish::Resync(1.0))
+                .unwrap();
+        }
+        source_order.finish().unwrap();
+
+        assert_eq!(arena.row_for_source_glyph(0).unwrap().source_glyph, 0);
+        assert_eq!(arena.row_for_source_glyph(1).unwrap().source_glyph, 1);
+        assert_eq!(arena.row_for_source_order_glyph(2).unwrap().source_glyph, 2);
+        assert_eq!(arena.row_for_source_order_glyph(3).unwrap().source_glyph, 3);
     }
 }
