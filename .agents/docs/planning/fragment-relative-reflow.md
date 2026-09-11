@@ -193,7 +193,12 @@ segments, assigns each rendered glyph one engine-owned u32 `placementSlot`, and 
 row per active segment. Codec authors do not declare the slot, table, or backend memory layout. Batches, physical
 instances, order indirection, primitives, spans, and draws remain unchanged. A corrected 21,805-glyph Latin resize smoke
 published 3,903 rows in one 31,224-byte session-table patch with zero placement-slot and zero static/raster writes. That
-authenticates the compact dirty shape; the full interleaved performance comparison remains open.
+authenticates the compact dirty shape. The next retained-CPU checkpoint precomputes stable word/run roots once per
+cluster and replaces its per-rendered-glyph segment-index lane with one instance count per compact segment. An exact
+A/B/B/A against branch parent `2b6d5eb3` is positive for all measured resize paths: justified Latin −6.7% median,
+mixed bidi −1.9%, ordinary Latin −1.7%, and dense CJK −0.7%, with identical publication bytes. A 202-sample cold check
+limits median cost to +0.4% Latin and +0.5% CJK. This closes the local optimization decision; the fresh-main full
+interleaved performance comparison remains open.
 
 ## Compatibility with the merged engine
 

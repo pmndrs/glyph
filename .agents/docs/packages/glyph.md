@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:42fa3da8ec9d5098603d4e0ddf881fd99b8c7883ce141dc2c018c14619084bdb'
+source_digest: 'sha256:a68a43bc0a88b8ea6a0a2c4eb86ed2becfdb709965e6472dbc1c1988ccab05f0'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1338,6 +1338,15 @@ and exact f64 translation remain in core; the renderer receives only a per-glyph
 CPU semantic/query rows and renderer placement use the same ordered local-plus-placement f32 operation. Run, word,
 numeric-block, role, bidi, and justification metadata do not cross the renderer boundary.
 
+`ClusterArena` prepares one stable u32 placement-segment anchor per cluster after word fitting and LayoutRun topology are
+available. Short, sparse, and overflow word-sidecar modes retain the stable word root; dense break streams retain the
+LayoutRun root, and a glyphless hard break owns its own stable cluster ID. Positioning therefore resolves the segment
+anchor in O(1) instead of searching backward or advancing a sparse-record cursor for every visited cluster. The
+positioned placement arena stores one rendered-instance count per compact segment rather than repeating one segment
+index for every rendered glyph. Retained lines copy those compact counts, and final slot binding walks each contiguous
+segment-owned glyph range once. Word fitting remains independently usable without LayoutRun state; paragraph flow
+prepares placement anchors as an explicit subsequent step.
+
 Retained geometry-only positioning has a matching guarded path for visually trivial, boundary-free, undecorated text. It
 reuses committed glyph-local, raster, and effect rows, walks the existing positioning authority only to rebuild compact
 placement and absolute CPU query coordinates, and refreshes clip, region, thread, and transform metadata. Stable/glyph/font
@@ -1367,6 +1376,16 @@ instead of 174,440. MTSDF and Slug Latin improve from `4.079 / 4.131 ms` and `4.
 exception: it regresses from `3.956 / 4.065 ms` to `4.520 / 4.685 ms` while reducing publication from 176,352 to
 35,856 bytes. The bidi CPU regression remains open for browser end-to-end attribution; it is not averaged into a general
 speedup claim.
+
+A follow-up same-harness A/B/B/A comparison isolates the compact-count and precomputed-anchor change against exact
+branch parent `2b6d5eb3`. Each resize pass used 8 warmups and 31 measured samples, pooling 62 samples per revision.
+Justified Latin improves from `3.450 / 3.616 ms` median/p95 to `3.218 / 3.251 ms` (−6.7%/−10.1%); mixed bidi improves
+from `4.490 / 4.603 ms` to `4.404 / 4.503 ms` (−1.9%/−2.2%); ordinary Latin improves from `2.584 / 2.656 ms` to
+`2.540 / 2.624 ms` (−1.7%/−1.2%); and dense CJK improves from `2.293 / 2.324 ms` to `2.278 / 2.306 ms`
+(−0.7%/−0.8%). Patch counts and bytes are unchanged: 31,344 justified, 35,856 bidi, 31,224 ordinary Latin, and the
+same alternating 103,880/109,200 dense-CJK bytes. A separate 20-warmup, 202-sample-per-revision cold comparison measures
+only +0.4%/+0.5% Latin/CJK median; p95 changes −1.9%/+1.5%. The optimized Wasm is 339 raw bytes smaller. This is
+incremental attribution against the immediate parent, not a substitute for the final fresh-main performance gauntlet.
 
 The intermediate direct-offset `adopt-position-query` case prepared borrowed-layout positioning before timing the remaining transaction.
 For the same final Latin fixture, measurement is `0.220 / 0.227 ms`, measurement plus positioning is
@@ -1402,8 +1421,9 @@ into a proven-unused technique lane without changing the public Codec plan or cr
 An earlier indexed cleanup checkpoint remained 4–5% slower than main while still publishing the baseline 170.4/171.7 KiB;
 that result is negative evidence about the incomplete implementation, not the current 31,224-byte publication shape. The
 intermediate direct-offset candidate isolated a real retained CPU speedup but preserved glyph-wide transfer. The current
-indexed candidate combines that retained positioning work with compact session rows; its end-to-end performance is still
-unproven until the full interleaved benchmark is run.
+indexed candidate combines that retained positioning work with compact session rows. Its immediate-parent A/B is
+directionally positive across ordinary, justified, bidi, and dense-CJK resize, while the final freshly built main
+comparison and complete workload matrix remain open.
 
 The benchmark also owns a `position-query` case that runs the same break-changing flow and positioning tail through the
 borrowed-layout mask while excluding gather, plan compilation, publication, and inspection copies. On the pinned M4 host,

@@ -242,6 +242,9 @@ pub(crate) struct ClusterArena {
     pub chunk_flags_or: Vec<u8>,
     pub word_breaks: Vec<WordBreakRecord>,
     pub(crate) word_sidecar_mode: WordSidecarMode,
+    // Stable word/run root per cluster. Positioning reads this directly instead of
+    // rediscovering roots while every changed line is traversed.
+    pub(super) placement_segment_anchors: Vec<u32>,
     /// Per-cluster `units_per_em` of the owning shaped font (0 while unshaped),
     /// resolved once at cluster build. Positioning derives its scale from the
     /// CURRENT style's font size and this column, so font-size-only style changes
@@ -288,6 +291,7 @@ impl ClusterArena {
         reserve(&mut self.ends, capacity)?;
         reserve(&mut self.advances, capacity)?;
         reserve(&mut self.advance_units, capacity)?;
+        reserve(&mut self.placement_segment_anchors, capacity)?;
         reserve(&mut self.units_per_em, capacity)?;
         reserve(&mut self.flags, capacity)?;
         reserve(&mut self.style_indexes, capacity)?;
@@ -654,6 +658,7 @@ impl ClusterArena {
         );
         self.word_breaks.clear();
         self.word_sidecar_mode = WordSidecarMode::Unbuilt;
+        self.placement_segment_anchors.clear();
         Ok(())
     }
 
@@ -735,6 +740,60 @@ impl ClusterArena {
         }
         self.word_sidecar_mode = WordSidecarMode::Sparse;
         Ok(())
+    }
+
+    pub(crate) fn ensure_placement_segment_anchors(&mut self) -> Result<(), EngineError> {
+        if self.placement_segment_anchors.len() == self.starts.len() {
+            return Ok(());
+        }
+        if self.word_sidecar_mode == WordSidecarMode::Unbuilt {
+            return Err(EngineError::InvalidRequest);
+        }
+        self.placement_segment_anchors.clear();
+        reserve(&mut self.placement_segment_anchors, self.starts.len())?;
+        let mut covered = 0usize;
+        for run in &self.layout_runs.runs {
+            let run_start =
+                usize::try_from(run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
+            let run_end =
+                usize::try_from(run.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+            if run_start != covered || run_start >= run_end || run_end > self.starts.len() {
+                return Err(EngineError::InvalidRequest);
+            }
+            let run_anchor = *self
+                .stable_ids
+                .get(run_start)
+                .filter(|anchor| **anchor != 0)
+                .ok_or(EngineError::InvalidRequest)?;
+            let mut word_anchor = run_anchor;
+            for cluster in run_start..run_end {
+                let hard_break = self.flags[cluster] & CLUSTER_HARD_BREAK != 0
+                    && self.glyph_counts[cluster] == 0;
+                let anchor = if hard_break {
+                    self.stable_ids[cluster]
+                } else if self.word_sidecar_mode == WordSidecarMode::Dense {
+                    run_anchor
+                } else {
+                    word_anchor
+                };
+                if anchor == 0 {
+                    return Err(EngineError::InvalidRequest);
+                }
+                self.placement_segment_anchors.push(anchor);
+                if self.word_sidecar_mode != WordSidecarMode::Dense
+                    && self.flags[cluster]
+                        & (CLUSTER_ALLOWED_BREAK | CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK)
+                        != 0
+                    && cluster + 1 < run_end
+                {
+                    word_anchor = self.stable_ids[cluster + 1];
+                }
+            }
+            covered = run_end;
+        }
+        (covered == self.starts.len())
+            .then_some(())
+            .ok_or(EngineError::InvalidRequest)
     }
 
     /// Derives minimum-content and maximum-content inline extents from one scan over
@@ -1103,6 +1162,7 @@ impl ClusterArena {
         self.chunk_flags_or.clear();
         self.word_breaks.clear();
         self.word_sidecar_mode = WordSidecarMode::Unbuilt;
+        self.placement_segment_anchors.clear();
         self.units_per_em.clear();
         self.flags.clear();
         self.style_indexes.clear();
@@ -1140,17 +1200,7 @@ impl ClusterArena {
         direction: u8,
         cluster: usize,
     ) -> Result<PlacementCluster, EngineError> {
-        self.placement_cluster_at(run, direction, cluster, None)
-    }
-
-    pub(crate) fn placement_cluster_cached(
-        &self,
-        run: LayoutRun,
-        direction: u8,
-        cluster: usize,
-        word_break_cursor: &mut usize,
-    ) -> Result<PlacementCluster, EngineError> {
-        self.placement_cluster_at(run, direction, cluster, Some(word_break_cursor))
+        self.placement_cluster_at(run, direction, cluster)
     }
 
     pub(crate) fn placement_segment_monotone(
@@ -1158,35 +1208,18 @@ impl ClusterArena {
         run: LayoutRun,
         direction: u8,
         cluster: usize,
-        word_break_cursor: &mut usize,
     ) -> Result<(PlacementCluster, usize), EngineError> {
-        let placement =
-            self.placement_cluster_at(run, direction, cluster, Some(word_break_cursor))?;
+        let placement = self.placement_cluster_at(run, direction, cluster)?;
         if direction & 1 != 0 || self.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
             return Ok((placement, cluster + 1));
         }
         let run_end = usize::try_from(run.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
-        let word_end = match self.word_sidecar_mode {
-            WordSidecarMode::Dense => run_end,
-            WordSidecarMode::Sparse => self
-                .word_breaks
-                .get(*word_break_cursor)
-                .and_then(|record| usize::try_from(record.cluster_end).ok())
-                .ok_or(EngineError::InvalidRequest)?
-                .min(run_end),
-            WordSidecarMode::Short | WordSidecarMode::Overflow => {
-                let mut end = cluster + 1;
-                while end < run_end
-                    && self.flags[end - 1]
-                        & (CLUSTER_ALLOWED_BREAK | CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK)
-                        == 0
-                {
-                    end += 1;
-                }
-                end
-            }
-            WordSidecarMode::Unbuilt => return Err(EngineError::InvalidRequest),
-        };
+        let mut segment_end = cluster + 1;
+        while segment_end < run_end
+            && self.placement_segment_anchors[segment_end] == placement.segment_anchor
+        {
+            segment_end += 1;
+        }
         let run_start =
             usize::try_from(run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
         let block_lane_start = usize::try_from(run.numeric_blocks.cluster_start)
@@ -1200,7 +1233,7 @@ impl ClusterArena {
             .get(block_lane)
             .ok_or(EngineError::InvalidRequest)?;
         let mut block_end = cluster + 1;
-        while block_end < word_end
+        while block_end < segment_end
             && self
                 .run_local
                 .cluster_blocks()
@@ -1217,7 +1250,6 @@ impl ClusterArena {
         run: LayoutRun,
         direction: u8,
         cluster: usize,
-        word_break_cursor: Option<&mut usize>,
     ) -> Result<PlacementCluster, EngineError> {
         let run_start =
             usize::try_from(run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
@@ -1262,64 +1294,13 @@ impl ClusterArena {
             .checked_sub(run.numeric_blocks.start)
             .filter(|ordinal| *ordinal < run.numeric_blocks.count)
             .ok_or(EngineError::InvalidRequest)?;
-        let segment_root = match self.word_sidecar_mode {
-            WordSidecarMode::Dense => run_start,
-            WordSidecarMode::Sparse => {
-                let record = match word_break_cursor {
-                    Some(cursor) => {
-                        if *cursor > self.word_breaks.len() {
-                            *cursor = self
-                                .word_breaks
-                                .partition_point(|record| record.cluster_end as usize <= cluster);
-                        } else {
-                            while *cursor > 0
-                                && self.word_breaks[*cursor - 1].cluster_end as usize > cluster
-                            {
-                                *cursor -= 1;
-                            }
-                            while self
-                                .word_breaks
-                                .get(*cursor)
-                                .is_some_and(|record| record.cluster_end as usize <= cluster)
-                            {
-                                *cursor += 1;
-                            }
-                        }
-                        *cursor
-                    }
-                    None => self
-                        .word_breaks
-                        .partition_point(|record| record.cluster_end as usize <= cluster),
-                };
-                let root = if record == 0 {
-                    0
-                } else {
-                    self.word_breaks[record - 1].cluster_end as usize
-                };
-                root.max(run_start)
-            }
-            WordSidecarMode::Short | WordSidecarMode::Overflow => {
-                let mut root = cluster;
-                while root > 0
-                    && self.flags[root - 1]
-                        & (CLUSTER_ALLOWED_BREAK | CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK)
-                        == 0
-                {
-                    root -= 1;
-                }
-                root
-            }
-            WordSidecarMode::Unbuilt => return Err(EngineError::InvalidRequest),
-        };
+        let segment_anchor = *self
+            .placement_segment_anchors
+            .get(cluster)
+            .filter(|anchor| **anchor != 0)
+            .ok_or(EngineError::InvalidRequest)?;
         Ok(PlacementCluster {
-            segment_anchor: if self.word_sidecar_mode == WordSidecarMode::Dense {
-                self.stable_ids[run_start]
-            } else {
-                *self
-                    .stable_ids
-                    .get(segment_root)
-                    .ok_or(EngineError::InvalidRequest)?
-            },
+            segment_anchor,
             dense: self.word_sidecar_mode == WordSidecarMode::Dense,
             numeric_block_ordinal,
             block_local_prefix: *self
@@ -3622,5 +3603,42 @@ mod tests {
         assert_eq!(dense.word_breaks.capacity(), 0);
         assert_eq!(dense.word_sidecar_mode, WordSidecarMode::Dense);
         assert!(dense.chunk_flags_or[0] & CHUNK_NEGATIVE_ADVANCE != 0);
+    }
+
+    #[test]
+    fn placement_segment_anchors_are_precomputed_from_stable_word_and_run_roots() {
+        let mut fixture = canonical_fixture(
+            &[1, 2, 3, 4, 5, 6],
+            &[11, 12, 13, 14, 15, 16],
+            &[0, 0, 0, 0, 1, 1],
+            ResolvedStyle::default(),
+        );
+        fixture.arena.flags[1] |= CLUSTER_ALLOWED_BREAK;
+        fixture.arena.refresh_layout_units().unwrap();
+        fixture.arena.ensure_word_breaks().unwrap();
+        fixture.arena.ensure_placement_segment_anchors().unwrap();
+
+        assert_eq!(fixture.arena.word_sidecar_mode, WordSidecarMode::Short);
+        assert_eq!(
+            fixture.arena.placement_segment_anchors,
+            [11, 11, 13, 13, 15, 15]
+        );
+
+        let count = LAYOUT_CHUNK * 2;
+        let text = vec![1; count];
+        let stable_ids = (1..=u32::try_from(count).unwrap()).collect::<Vec<_>>();
+        let source_runs = vec![0; count];
+        let mut dense =
+            canonical_fixture(&text, &stable_ids, &source_runs, ResolvedStyle::default());
+        dense
+            .arena
+            .flags
+            .fill(CLUSTER_ALLOWED_BREAK | CLUSTER_SAFE_BEFORE);
+        dense.arena.refresh_layout_units().unwrap();
+        dense.arena.ensure_word_breaks().unwrap();
+        dense.arena.ensure_placement_segment_anchors().unwrap();
+
+        assert_eq!(dense.arena.word_sidecar_mode, WordSidecarMode::Dense);
+        assert_eq!(dense.arena.placement_segment_anchors, vec![1; count]);
     }
 }

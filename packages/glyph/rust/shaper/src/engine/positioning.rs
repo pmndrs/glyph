@@ -731,9 +731,6 @@ impl PositionedGlyphArena {
             .checked_add(boundary_shape.shape.glyph_ids.len())
             .ok_or(EngineError::ResultTooLarge)?;
         self.reserve(glyph_capacity)?;
-        if CAPTURE_RUN_PLACEMENT {
-            self.placement.reserve_glyphs(glyph_capacity)?;
-        }
         if self.text_effects {
             for field in &mut self.semantic_f32[SEMANTIC_F32_BASE_FIELD_COUNT..] {
                 reserve(field, clusters.glyph_ids.len())?;
@@ -778,6 +775,7 @@ impl PositionedGlyphArena {
                     .recomposed_line_range()
                     .is_some_and(|(start, end)| line_index < start || line_index >= end)
             {
+                #[cfg(any(test, feature = "kernel-lab"))]
                 let previous_glyph_start = *previous
                     .line_glyph_starts
                     .get(line_index)
@@ -796,6 +794,7 @@ impl PositionedGlyphArena {
                         line_index,
                         old_fragment_start: previous.placement.line_fragment_start(line_index)?,
                         new_fragment_start: line.fragment_start,
+                        #[cfg(any(test, feature = "kernel-lab"))]
                         old_instance_start: previous_glyph_start,
                         instance_count: previous_glyph_count,
                         new_instance_start: u32::try_from(self.glyphs.len())
@@ -832,6 +831,7 @@ impl PositionedGlyphArena {
                     .lines
                     .get(previous_line_index)
                     .ok_or(EngineError::InvalidRequest)?;
+                #[cfg(any(test, feature = "kernel-lab"))]
                 let previous_glyph_start = *previous
                     .line_glyph_starts
                     .get(previous_line_index)
@@ -850,6 +850,7 @@ impl PositionedGlyphArena {
                         line_index: previous_line_index,
                         old_fragment_start: previous_line.fragment_start,
                         new_fragment_start: line.fragment_start,
+                        #[cfg(any(test, feature = "kernel-lab"))]
                         old_instance_start: previous_glyph_start,
                         instance_count: previous_glyph_count,
                         new_instance_start: u32::try_from(self.glyphs.len())
@@ -1406,8 +1407,8 @@ impl PositionedGlyphArena {
         self.placement.translations()
     }
 
-    pub(crate) fn glyph_segment_indices(&self) -> &[u32] {
-        self.placement.glyph_segment_indices()
+    pub(crate) fn placement_instance_count(&self) -> Result<usize, EngineError> {
+        self.placement.instance_count()
     }
 
     pub(crate) fn placement_handle(&self, segment_index: usize) -> Option<PlacementHandle> {
@@ -1421,41 +1422,46 @@ impl PositionedGlyphArena {
         next_revision: &mut u32,
     ) -> Result<(), EngineError> {
         self.placement.bind_placement_handles(handles)?;
-        let segment_indices = self.placement.glyph_segment_indices();
-        if segment_indices.len() != self.glyphs.len()
+        let segment_instance_counts = self.placement.segment_instance_counts();
+        if segment_instance_counts.len() != handles.len()
             || self.semantic_change_masks.len() != self.glyphs.len()
         {
             return Err(EngineError::InvalidRequest);
         }
-        for (index, ((glyph, mask), &segment_index)) in self
-            .glyphs
-            .iter_mut()
-            .zip(&mut self.semantic_change_masks)
-            .zip(segment_indices)
-            .enumerate()
-        {
-            let handle = handles
-                .get(usize::try_from(segment_index).map_err(|_| EngineError::InvalidRequest)?)
-                .copied()
+        let mut instance_start = 0usize;
+        for (&instance_count, handle) in segment_instance_counts.iter().zip(handles) {
+            let instance_end = instance_start
+                .checked_add(
+                    usize::try_from(instance_count).map_err(|_| EngineError::ResultTooLarge)?,
+                )
+                .filter(|end| *end <= self.glyphs.len())
                 .ok_or(EngineError::InvalidRequest)?;
             let placement_slot = handle.slot().get();
-            let placement_changed = previous
-                .and_then(|positioned| positioned.glyphs.get(index))
-                .is_none_or(|committed| {
-                    committed.stable_id != glyph.stable_id
-                        || committed.placement_slot != placement_slot
-                });
-            glyph.placement_slot = placement_slot;
-            if placement_changed {
-                if *mask == 0 {
-                    let revision = (*next_revision).max(1);
-                    *next_revision = revision.checked_add(1).ok_or(EngineError::ResultTooLarge)?;
-                    glyph.content_revision = revision;
+            for index in instance_start..instance_end {
+                let glyph = &mut self.glyphs[index];
+                let mask = &mut self.semantic_change_masks[index];
+                let placement_changed = previous
+                    .and_then(|positioned| positioned.glyphs.get(index))
+                    .is_none_or(|committed| {
+                        committed.stable_id != glyph.stable_id
+                            || committed.placement_slot != placement_slot
+                    });
+                glyph.placement_slot = placement_slot;
+                if placement_changed {
+                    if *mask == 0 {
+                        let revision = (*next_revision).max(1);
+                        *next_revision =
+                            revision.checked_add(1).ok_or(EngineError::ResultTooLarge)?;
+                        glyph.content_revision = revision;
+                    }
+                    *mask |= SEMANTIC_PLACEMENT_SLOT_CHANGE;
                 }
-                *mask |= SEMANTIC_PLACEMENT_SLOT_CHANGE;
             }
+            instance_start = instance_end;
         }
-        Ok(())
+        (instance_start == self.glyphs.len())
+            .then_some(())
+            .ok_or(EngineError::InvalidRequest)
     }
 
     fn rebuild_replacement_runs(
@@ -1896,7 +1902,6 @@ impl PositionedGlyphArena {
             };
             let mut layout_run_cache = None;
             let mut geometry_cache = None;
-            let mut word_break_cursor = usize::MAX;
             let mut active_placement = None;
             for ordinal in 0..visual_count {
                 let cluster = if visually_ltr {
@@ -1914,12 +1919,8 @@ impl PositionedGlyphArena {
                     layout_run_for_cluster(clusters, cluster, &mut layout_run_cache)?;
                 let occurrence = if CAPTURE_RUN_PLACEMENT {
                     let direction = layout_run_direction(layout_run, runs)?;
-                    let placement_cluster = clusters.placement_cluster_cached(
-                        layout_run,
-                        direction,
-                        cluster,
-                        &mut word_break_cursor,
-                    )?;
+                    let placement_cluster =
+                        clusters.placement_cluster(layout_run, direction, cluster)?;
                     let translation_inline = finite_f32(
                         state.cursor - placement_cluster.block_local_prefix
                             + placement_cluster.block_anchor_inline,
@@ -2051,12 +2052,8 @@ impl PositionedGlyphArena {
                         layout_run_for_cluster(clusters, cluster, &mut layout_run_cache)?;
                     if CAPTURE_RUN_PLACEMENT {
                         let direction = layout_run_direction(layout_run, runs)?;
-                        let placement_cluster = clusters.placement_cluster_cached(
-                            layout_run,
-                            direction,
-                            cluster,
-                            &mut word_break_cursor,
-                        )?;
+                        let placement_cluster =
+                            clusters.placement_cluster(layout_run, direction, cluster)?;
                         self.record_layout_run_segment(
                             self.placement_fragment_index,
                             run_index,
@@ -2144,18 +2141,13 @@ impl PositionedGlyphArena {
                 return Err(EngineError::InvalidRequest);
             }
             let direction = layout_run_direction(*layout_run, runs)?;
-            let mut word_break_cursor = usize::MAX;
             let Some(geometry_cluster) = (overlap_start..overlap_end)
                 .find(|cluster| clusters.flags[*cluster] & CLUSTER_HARD_BREAK == 0)
             else {
                 if CAPTURE_RUN_PLACEMENT {
                     for cluster in overlap_start..overlap_end {
-                        let (placement_cluster, _) = clusters.placement_segment_monotone(
-                            *layout_run,
-                            direction,
-                            cluster,
-                            &mut word_break_cursor,
-                        )?;
+                        let placement_cluster =
+                            clusters.placement_cluster(*layout_run, direction, cluster)?;
                         self.record_layout_run_segment(
                             self.placement_fragment_index,
                             layout_run_index,
@@ -2247,12 +2239,14 @@ impl PositionedGlyphArena {
                 } else {
                     SliceRole::Ordinary
                 };
-                let (placement_cluster, stable_segment_end) = clusters.placement_segment_monotone(
-                    *layout_run,
-                    direction,
-                    segment_start,
-                    &mut word_break_cursor,
-                )?;
+                let (placement_cluster, stable_segment_end) = if ADJUST {
+                    (
+                        clusters.placement_cluster(*layout_run, direction, segment_start)?,
+                        segment_start + 1,
+                    )
+                } else {
+                    clusters.placement_segment_monotone(*layout_run, direction, segment_start)?
+                };
                 let mut segment_end = segment_start + 1;
                 if !ADJUST
                     && direction & 1 == 0
@@ -5094,6 +5088,7 @@ mod tests {
             )
             .unwrap();
         clusters.ensure_word_breaks().unwrap();
+        clusters.ensure_placement_segment_anchors().unwrap();
         clusters
             .rebuild_run_local_geometry(runs, styles, extents_for)
             .unwrap();

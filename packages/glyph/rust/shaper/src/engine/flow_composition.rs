@@ -2073,6 +2073,7 @@ mod tests {
             })
             .unwrap();
         clusters.ensure_word_breaks().unwrap();
+        clusters.ensure_placement_segment_anchors().unwrap();
         let mut drop_cap_constraint = constraint();
         drop_cap_constraint.drop_cap_lines = 3;
         drop_cap_constraint.drop_cap_alignment = DROP_CAP_ALIGN_TEXT_TOP;
@@ -3061,6 +3062,7 @@ mod tests {
                 })
                 .unwrap();
             clusters.ensure_word_breaks().unwrap();
+            clusters.ensure_placement_segment_anchors().unwrap();
             clusters
         };
         let previous_clusters = prepare_clusters(500);
@@ -3454,6 +3456,7 @@ mod tests {
             })
             .unwrap();
         clusters.ensure_word_breaks().unwrap();
+        clusters.ensure_placement_segment_anchors().unwrap();
 
         let mut flow_constraint = constraint();
         flow_constraint.max_lines = 64;
