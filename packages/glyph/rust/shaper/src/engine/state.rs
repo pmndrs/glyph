@@ -293,7 +293,7 @@ enum RunLogicalAnchor {
 struct PlacementLogicalKey {
     paragraph: ParagraphIncarnation,
     run_owner: LayoutRunOwner,
-    run_revision: RunCanonicalRevision,
+    run_source: LayoutRunSourceKind,
     identity: PlacementIdentity,
     source_anchor: u32,
     numeric_block_ordinal: u32,
@@ -1846,18 +1846,17 @@ fn prepared_gather_key(prepared: PreparedUpdate, revision: RootRevision) -> Gath
 fn placement_logical_key(
     paragraph: ParagraphIncarnation,
     segment: PlacementSegment,
-) -> Result<PlacementLogicalKey, EngineError> {
-    Ok(PlacementLogicalKey {
+    run_source: LayoutRunSourceKind,
+) -> PlacementLogicalKey {
+    PlacementLogicalKey {
         paragraph,
         run_owner: segment.layout_run_owner,
-        run_revision: segment
-            .canonical_revision
-            .ok_or(EngineError::InvalidRequest)?,
+        run_source,
         identity: segment.identity,
         source_anchor: segment.source_anchor,
         numeric_block_ordinal: segment.numeric_block_ordinal,
         glyph_source: segment.glyph_source,
-    })
+    }
 }
 
 /// Whether any live paragraph carries decoration records, using pending state when prepared —
@@ -2776,9 +2775,23 @@ impl PlannerState {
                 let paragraph = self
                     .paragraph(order.id)
                     .ok_or(EngineError::InvalidRequest)?;
-                for segment in paragraph.state.positioned.active().placement_segments() {
+                let positioned = paragraph.state.positioned.active();
+                for segment in positioned.placement_segments() {
+                    let run_index = usize::try_from(segment.layout_run_index)
+                        .map_err(|_| EngineError::InvalidRequest)?;
+                    let run_source = match segment.layout_run_owner {
+                        LayoutRunOwner::Paragraph => paragraph
+                            .state
+                            .clusters
+                            .active()
+                            .layout_runs()
+                            .get(run_index),
+                        LayoutRunOwner::Replacement => positioned.replacement_runs().get(run_index),
+                    }
+                    .map(|run| run.source_kind)
+                    .ok_or(EngineError::InvalidRequest)?;
                     desired.push(DesiredRun::new(
-                        placement_logical_key(paragraph.incarnation, *segment)?,
+                        placement_logical_key(paragraph.incarnation, *segment, run_source),
                         (),
                     ));
                 }
@@ -5413,6 +5426,54 @@ mod tests {
     use crate::engine::style_state::ResolvedStyle;
 
     use super::*;
+
+    #[test]
+    fn placement_identity_survives_run_geometry_revisions_but_distinguishes_boundary_roles() {
+        let mut next_revision = 1;
+        let first_revision = RunCanonicalRevision::allocate(&mut next_revision).unwrap();
+        let second_revision = RunCanonicalRevision::allocate(&mut next_revision).unwrap();
+        let segment = PlacementSegment {
+            fragment_index: 0,
+            layout_run_owner: LayoutRunOwner::Replacement,
+            layout_run_index: 0,
+            run_handle: None,
+            placement_handle: None,
+            canonical_revision: Some(first_revision),
+            identity: PlacementIdentity::StableSource {
+                segment_anchor: 17,
+                source_anchor: 17,
+            },
+            segment_anchor: 17,
+            source_anchor: 17,
+            numeric_block_ordinal: 0,
+            run_cluster_start: 0,
+            run_cluster_count: 1,
+            glyph_source: GlyphSource::Boundary,
+            source_glyph_start: 0,
+            source_glyph_count: 1,
+        };
+        let paragraph = ParagraphIncarnation(NonZeroU32::new(3).unwrap());
+        let source = LayoutRunSourceKind::Boundary {
+            flow_thread_id: 9,
+            role: BoundaryRunRole::BoundarySource,
+        };
+        let ellipsis = LayoutRunSourceKind::Boundary {
+            flow_thread_id: 9,
+            role: BoundaryRunRole::Ellipsis,
+        };
+
+        let first = placement_logical_key(paragraph, segment, source);
+        let revised = placement_logical_key(
+            paragraph,
+            PlacementSegment {
+                canonical_revision: Some(second_revision),
+                ..segment
+            },
+            source,
+        );
+        assert_eq!(first, revised);
+        assert_ne!(first, placement_logical_key(paragraph, segment, ellipsis));
+    }
 
     #[test]
     fn width_only_cluster_prepare_skips_canonical_comparison() {

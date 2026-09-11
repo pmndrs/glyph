@@ -88,7 +88,7 @@ pub(crate) enum BoundaryRunRole {
     Ellipsis,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum LayoutRunSourceKind {
     Paragraph,
     Boundary {
