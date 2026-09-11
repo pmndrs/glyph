@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:adb1f198ffe717a2b9b59dc6a154ba8b74edfbc2757ae75acb356d2f8a7bf45f'
+source_digest: 'sha256:a9bb975f5ebe0ccc396691b529345e408c5fd311c39b7235a8721ebe42011d58'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1348,11 +1348,14 @@ segment-owned glyph range once. Word fitting remains independently usable withou
 prepares placement anchors as an explicit subsequent step.
 
 Retained geometry-only positioning has a matching guarded path for visually trivial, boundary-free, undecorated text. It
-reuses committed glyph-local, raster, and effect rows, walks the existing positioning authority only to rebuild compact
-placement and absolute CPU query coordinates, and refreshes clip, region, thread, and transform metadata. Stable/glyph/font
-identity and exact outline presence authenticate the retained rows; any mismatch aborts the candidate. Retained gather
-then resolves changed Codec dependencies and updates semantic position inputs plus CPU ink bounds without repeating font
-selection, raster resource lookup, or full `PlanGlyph` construction. Other changes use the general authorities.
+reuses committed glyph-local, raster, and effect rows, copies compact placement metadata, and refreshes clip, region,
+thread, and transform metadata. Internal positioned semantic rows keep local origin and ink coordinates plus their
+placement-segment index; pure placement changes therefore preserve their content revision and do not dirty static Codec
+position inputs. Public borrowed/full glyph queries and CPU/plan ink bounds compose absolute f32 values lazily from the
+authoritative segment translation. Retained gather resolves only genuinely changed Codec dependencies without repeating
+font selection, raster resource lookup, full `PlanGlyph` construction, or glyph-position arithmetic. Stable/glyph/font
+identity and exact outline presence authenticate retained rows; any mismatch aborts the candidate. Other changes use the
+general authorities.
 
 Placement-slot identity follows the stable occurrence source rather than the run's geometry revision. Paragraph,
 boundary-source, and ellipsis runs remain distinct source kinds, but changing font metrics or other canonical run geometry
@@ -1437,6 +1440,17 @@ measured updates per pass, pooling 202 samples per revision. Candidate `8221aa87
 (−2.6%/−11.1%). Mixed bidi regresses from `3.953 / 4.071 ms` to `4.407 / 4.516 ms` (+11.5%/+10.9%) even though
 publication falls from 176,352 to 35,856 bytes. The fresh-main CPU/publication comparison is therefore complete but the
 performance gate remains open on mixed bidi and the full browser/editorial matrix.
+
+The subsequent lazy-absolute-semantic checkpoint removes the remaining width-only semantic position rewrite rather than
+changing line fitting, batching, draws, or the renderer placement contract. Two final 20-warmup/101-sample passes pool to
+`1.562 / 1.615 ms` median/p95 for ordinary Latin, `3.437 / 3.491 ms` for mixed bidi, and `2.277 / 2.298 ms` for dense
+CJK. Justified Latin pools to a `2.229 ms` median; one pass suffered unrelated host stalls, while the independent clean
+pass measured `2.189 / 2.210 ms`. Compared with the recorded same-host fresh-main medians (`3.725 / 3.281 / 3.953 /
+2.995 ms` for ordinary/justified/bidi/CJK), all four paths are now faster, including mixed bidi by 13.0%. Each update
+still publishes only the compact placement data: 31,224 bytes ordinary, 31,344 justified, 35,856 bidi, and 98,560 bytes
+across three dense-CJK patches in this final state. The exact package gate passes 982/982 tests plus Rust, type, fuzz,
+and format checks. The remaining performance acceptance work is the full editorial/browser matrix, not a known CPU
+resize regression.
 
 The benchmark also owns a `position-query` case that runs the same break-changing flow and positioning tail through the
 borrowed-layout mask while excluding gather, plan compilation, publication, and inspection copies. On the pinned M4 host,

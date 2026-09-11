@@ -750,10 +750,7 @@ impl TextEngine {
             .state
             .positioned
             .active()
-            .semantic_glyphs()
-            .get(glyph_index)
-            .copied()
-            .ok_or(EngineError::InvalidRequest)
+            .placed_semantic_glyph(glyph_index)
     }
 
     #[cfg(test)]
@@ -962,6 +959,7 @@ impl TextEngine {
                     transform_id: paragraph_id,
                     glyphs: &glyphs,
                     semantic_glyphs: &semantic_glyphs,
+                    placement_translations: positioned.placement_translations(),
                     semantic_change_masks: &[],
                     semantic_f32: &semantic_f32_refs,
                     semantic_u32: &semantic_u32_refs,
@@ -2037,6 +2035,11 @@ fn append_paragraph_measurement(
         } else {
             &[]
         },
+        if positioned_matches_flow {
+            positioned.placement_translations()
+        } else {
+            &[]
+        },
         line_glyph_starts,
         line_glyph_counts,
         positioned_matches_flow.then(|| positioned.semantic_line_inline_extents()),
@@ -2072,6 +2075,7 @@ fn append_planner_gather(
             transform_id: ordered.id,
             glyphs: positioned.glyphs(),
             semantic_glyphs: positioned.semantic_glyphs(),
+            placement_translations: positioned.placement_translations(),
             semantic_change_masks,
             semantic_f32: &semantic_f32,
             semantic_u32: &semantic_u32,

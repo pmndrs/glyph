@@ -13,8 +13,9 @@ use super::{
         SEMANTIC_U32_FOREGROUND_RGBA, SEMANTIC_U32_OUTLINE_RGBA, SEMANTIC_U32_PLACEMENT_SLOT,
         SEMANTIC_U32_SHADOW_RGBA,
     },
+    placement_state::SegmentTranslation,
     plan_input::{PlanGlyph, PlanInput},
-    positioning::{ALL_SEMANTIC_CHANGES, SEMANTIC_PLACEMENT_SLOT_CHANGE, SemanticGlyph},
+    positioning::{ALL_SEMANTIC_CHANGES, PositionedSemanticGlyph, SEMANTIC_PLACEMENT_SLOT_CHANGE},
 };
 
 const POSITION_ONLY_CHANGES: u16 =
@@ -90,7 +91,8 @@ pub struct LayoutGlyph {
 pub struct LayoutPlanInput<'a> {
     pub transform_id: u32,
     pub glyphs: &'a [LayoutGlyph],
-    pub(crate) semantic_glyphs: &'a [SemanticGlyph],
+    pub(crate) semantic_glyphs: &'a [PositionedSemanticGlyph],
+    pub(crate) placement_translations: &'a [SegmentTranslation],
     pub semantic_change_masks: &'a [u16],
     pub semantic_f32: &'a [&'a [f32]],
     pub semantic_u32: &'a [&'a [u32]],
@@ -1033,6 +1035,34 @@ fn plan_ink_start(
     glyph_index: usize,
     inline: bool,
 ) -> Result<f32, GatherError> {
+    let glyph = input
+        .glyphs
+        .get(glyph_index)
+        .ok_or(GatherError::SourceFieldMissing)?;
+    if let Some(semantic) = input.semantic_glyphs.get(
+        usize::try_from(glyph.semantic_glyph_index).map_err(|_| GatherError::SourceFieldMissing)?,
+    ) {
+        let translation = input
+            .placement_translations
+            .get(
+                usize::try_from(semantic.placement_segment)
+                    .map_err(|_| GatherError::SourceFieldMissing)?,
+            )
+            .ok_or(GatherError::SourceFieldMissing)?;
+        return super::positioning::placed_f32(
+            if inline {
+                semantic.ink_inline_start
+            } else {
+                semantic.ink_block_start
+            },
+            if inline {
+                translation.translation_inline as f32
+            } else {
+                translation.translation_block as f32
+            },
+        )
+        .map_err(|_| GatherError::InvalidSemanticShape);
+    }
     let field = usize::from(!inline);
     if let Some(value) = input
         .semantic_f32
@@ -1041,19 +1071,6 @@ fn plan_ink_start(
         .copied()
     {
         return Ok(value);
-    }
-    let glyph = input
-        .glyphs
-        .get(glyph_index)
-        .ok_or(GatherError::SourceFieldMissing)?;
-    if let Some(semantic) = input.semantic_glyphs.get(
-        usize::try_from(glyph.semantic_glyph_index).map_err(|_| GatherError::SourceFieldMissing)?,
-    ) {
-        return Ok(if inline {
-            semantic.ink_inline_start
-        } else {
-            semantic.ink_block_start
-        });
     }
     Ok(if inline {
         glyph.inline_start
@@ -1286,7 +1303,7 @@ mod tests {
         glyphs[0].inline_start = 101.25;
         glyphs[0].block_start = -202.5;
         let semantic_glyphs = [
-            SemanticGlyph {
+            PositionedSemanticGlyph {
                 stable_id: 99,
                 font_handle: 1,
                 cluster: 0,
@@ -1295,9 +1312,9 @@ mod tests {
                 font_size: 16.0,
                 inline_origin: 500.0,
                 block_origin: 500.0,
-                ..SemanticGlyph::default()
+                ..PositionedSemanticGlyph::default()
             },
-            SemanticGlyph {
+            PositionedSemanticGlyph {
                 stable_id: 1,
                 font_handle: 1,
                 cluster: 0,
@@ -1306,18 +1323,28 @@ mod tests {
                 font_size: 16.0,
                 inline_origin: 12.5,
                 block_origin: -3.25,
-                ..SemanticGlyph::default()
+                ink_inline_start: 2.0,
+                ink_block_start: 3.0,
+                ..PositionedSemanticGlyph::default()
             },
         ];
         let foreground = [0xff20_4080];
+        let placement = [SegmentTranslation {
+            translation_inline: 10.0,
+            translation_block: -20.0,
+        }];
+        let retained_local_ink = [&[900.0][..], &[800.0][..]];
         let input = LayoutPlanInput {
             transform_id: 1,
             glyphs: &glyphs,
             semantic_glyphs: &semantic_glyphs,
+            placement_translations: &placement,
             semantic_change_masks: &[],
-            semantic_f32: &[],
+            semantic_f32: &retained_local_ink,
             semantic_u32: &[&foreground],
         };
+        assert_eq!(plan_ink_start(input, 0, true), Ok(12.0));
+        assert_eq!(plan_ink_start(input, 0, false), Ok(-17.0));
         assert_eq!(
             derived_semantic_f32(SEMANTIC_F32_FOREGROUND_RED, input, 0),
             Ok(Some(f32::from_bits(SRGB8_TO_LINEAR_BITS[128])))
@@ -1357,6 +1384,7 @@ mod tests {
             transform_id: 1,
             glyphs: &glyphs,
             semantic_glyphs: &[],
+            placement_translations: &[],
             semantic_change_masks: &[],
             semantic_f32: &[&[0.0]],
             semantic_u32: &[&[0]],
@@ -1384,6 +1412,7 @@ mod tests {
                     transform_id: 1,
                     glyphs: &glyphs,
                     semantic_glyphs: &[],
+                    placement_translations: &[SegmentTranslation::default()],
                     semantic_change_masks: &[],
                     semantic_f32: &[&semantic_x],
                     semantic_u32: &[&semantic_kind],
@@ -1454,6 +1483,7 @@ mod tests {
                     transform_id: 1,
                     glyphs: &glyphs,
                     semantic_glyphs: &[],
+                    placement_translations: &[SegmentTranslation::default()],
                     semantic_change_masks: &[],
                     semantic_f32: &[&initial_x],
                     semantic_u32: &[&semantic_kind],
@@ -1479,6 +1509,7 @@ mod tests {
                         transform_id: 1,
                         glyphs: &changed_glyphs,
                         semantic_glyphs: &[],
+                        placement_translations: &[SegmentTranslation::default()],
                         semantic_change_masks: &[0, 1],
                         semantic_f32: &[&changed_x],
                         semantic_u32: &[&semantic_kind],
@@ -1508,6 +1539,7 @@ mod tests {
                         transform_id: 1,
                         glyphs: &changed_topology,
                         semantic_glyphs: &[],
+                        placement_translations: &[SegmentTranslation::default()],
                         semantic_change_masks: &[
                             0,
                             super::super::positioning::ALL_SEMANTIC_CHANGES
@@ -1529,6 +1561,7 @@ mod tests {
                     transform_id: 1,
                     glyphs: &changed_topology,
                     semantic_glyphs: &[],
+                    placement_translations: &[],
                     semantic_change_masks: &[0, crate::engine::positioning::ALL_SEMANTIC_CHANGES],
                     semantic_f32: &[&changed_x],
                     semantic_u32: &[&semantic_kind],
@@ -1561,6 +1594,7 @@ mod tests {
                 transform_id: 1,
                 glyphs: &first,
                 semantic_glyphs: &[],
+                placement_translations: &[],
                 semantic_change_masks: &[],
                 semantic_f32: &[&first_x],
                 semantic_u32: &[&first_kind],
@@ -1569,6 +1603,7 @@ mod tests {
                 transform_id: 2,
                 glyphs: &second,
                 semantic_glyphs: &[],
+                placement_translations: &[],
                 semantic_change_masks: &[],
                 semantic_f32: &[&second_x],
                 semantic_u32: &[&second_kind],
@@ -1623,6 +1658,7 @@ mod tests {
                     transform_id: 1,
                     glyphs: &glyphs,
                     semantic_glyphs: &[],
+                    placement_translations: &[],
                     semantic_change_masks: &[],
                     semantic_f32: &[&semantic_x],
                     semantic_u32: &[&semantic_kind],
@@ -1644,6 +1680,7 @@ mod tests {
                         transform_id: 1,
                         glyphs: &revised,
                         semantic_glyphs: &[],
+                        placement_translations: &[],
                         semantic_change_masks: &[0, 1],
                         semantic_f32: &[&moved_x],
                         semantic_u32: &[&semantic_kind],
@@ -1674,13 +1711,13 @@ mod tests {
         let codec = placement_codec();
         let mut glyph = layout_glyph(1, 0);
         glyph.placement_slot = 3;
-        let before = [SemanticGlyph {
+        let before = [PositionedSemanticGlyph {
             stable_id: 1,
             inline_origin: 12.5,
             block_origin: -3.25,
             ink_inline_start: 11.0,
             ink_block_start: -5.0,
-            ..SemanticGlyph::default()
+            ..PositionedSemanticGlyph::default()
         }];
         let cluster_ids = [77];
         let mut workspace = CodecGatherWorkspace::default();
@@ -1692,6 +1729,7 @@ mod tests {
                     transform_id: 1,
                     glyphs: &[glyph],
                     semantic_glyphs: &before,
+                    placement_translations: &[SegmentTranslation::default()],
                     semantic_change_masks: &[],
                     semantic_f32: &[],
                     semantic_u32: &[&[], &cluster_ids],
@@ -1702,13 +1740,13 @@ mod tests {
 
         glyph.content_revision = 2;
         glyph.placement_slot = 9;
-        let after = [SemanticGlyph {
+        let after = [PositionedSemanticGlyph {
             stable_id: 1,
             inline_origin: 42.25,
             block_origin: 9.5,
             ink_inline_start: 40.0,
             ink_block_start: 8.0,
-            ..SemanticGlyph::default()
+            ..PositionedSemanticGlyph::default()
         }];
         assert!(workspace.begin_retained(&codec, 1).unwrap());
         assert_eq!(
@@ -1720,6 +1758,7 @@ mod tests {
                         transform_id: 1,
                         glyphs: &[glyph],
                         semantic_glyphs: &after,
+                        placement_translations: &[SegmentTranslation::default()],
                         semantic_change_masks: &[(1 << 0)
                             | (1 << 1)
                             | SEMANTIC_PLACEMENT_SLOT_CHANGE],
@@ -1778,6 +1817,7 @@ mod tests {
                     transform_id: 1,
                     glyphs: &[glyph],
                     semantic_glyphs: &[],
+                    placement_translations: &[],
                     semantic_change_masks: &[],
                     semantic_f32: &[&semantic_x],
                     semantic_u32: &[&semantic_kind],
@@ -1798,6 +1838,7 @@ mod tests {
                         transform_id: 1,
                         glyphs: &[glyph],
                         semantic_glyphs: &[],
+                        placement_translations: &[],
                         semantic_change_masks: &[1 << 4],
                         semantic_f32: &[&semantic_x],
                         semantic_u32: &[&semantic_kind],
@@ -1827,6 +1868,7 @@ mod tests {
                     transform_id: 1,
                     glyphs: &glyphs,
                     semantic_glyphs: &[],
+                    placement_translations: &[],
                     semantic_change_masks: &[],
                     semantic_f32: &[],
                     semantic_u32: &[],
@@ -1843,6 +1885,7 @@ mod tests {
                     transform_id: 1,
                     glyphs: &glyphs,
                     semantic_glyphs: &[],
+                    placement_translations: &[],
                     semantic_change_masks: &[],
                     semantic_f32: &[],
                     semantic_u32: &[],
@@ -1859,6 +1902,7 @@ mod tests {
                     transform_id: 1,
                     glyphs: &glyphs,
                     semantic_glyphs: &[],
+                    placement_translations: &[],
                     semantic_change_masks: &[],
                     semantic_f32: &[],
                     semantic_u32: &[],
@@ -1891,6 +1935,7 @@ mod tests {
             transform_id: 1,
             glyphs: before,
             semantic_glyphs: &[],
+            placement_translations: &[],
             semantic_change_masks: &[],
             semantic_f32: &[&semantic_before],
             semantic_u32: &[&kinds_before],
@@ -1899,6 +1944,7 @@ mod tests {
             transform_id: 1,
             glyphs: after,
             semantic_glyphs: &[],
+            placement_translations: &[],
             semantic_change_masks: masks,
             semantic_f32: &[&semantic_after],
             semantic_u32: &[&kinds_after],
@@ -1991,6 +2037,7 @@ mod tests {
                 transform_id: 1,
                 glyphs: &glyphs,
                 semantic_glyphs: &[],
+                placement_translations: &[],
                 semantic_change_masks: masks,
                 semantic_f32: &semantic_f32,
                 semantic_u32: &semantic_u32,
@@ -2169,6 +2216,7 @@ mod tests {
                 transform_id,
                 glyphs,
                 semantic_glyphs: &[],
+                placement_translations: &[],
                 semantic_change_masks: masks,
                 semantic_f32: &semantic_f32,
                 semantic_u32: &semantic_u32,
@@ -2741,6 +2789,7 @@ mod tests {
                         transform_id: 3,
                         glyphs: &glyphs,
                         semantic_glyphs: &[],
+                        placement_translations: &[],
                         semantic_change_masks: &[],
                         semantic_f32: &[&semantic_x],
                         semantic_u32: &[&semantic_kind],
