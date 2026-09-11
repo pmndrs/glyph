@@ -81,7 +81,7 @@ const body = useMsdf('/fonts/Inter.font.glb');
 
 <template>
   <Text v-if="body.font.value" :font="body.font.value">Body copy</Text>
-  <Text v-if="label.font.value" :font="label.font.value" :style="{ fontSize: 16 }">Label</Text>
+  <Text v-if="label.font.value" :font="label.font.value" :text-style="{ fontSize: 16 }">Label</Text>
 </template>
 ```
 

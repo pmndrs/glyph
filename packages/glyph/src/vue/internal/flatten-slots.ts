@@ -30,15 +30,24 @@ export interface FlattenVueTextOptions {
   readonly isFontFaceSelection: (value: unknown) => value is FontFaceSelection;
 }
 
+/** Resolved inline run properties after inheritance; `style` is one merged record. */
 interface InlineProperties {
   readonly font?: VueFontSelectionInput;
   readonly style?: TextStyle;
   readonly material?: ThreeTextMaterial;
 }
 
+/** Properties as stated on a nested Text vnode; `textStyle` is still an unmerged property list. */
+interface StatedInlineProperties {
+  readonly font?: VueFontSelectionInput;
+  readonly textStyle?: PropertyList<TextStyle>;
+  readonly material?: ThreeTextMaterial;
+}
+
 /** Vue attaches these to every VNode; they are never Text properties. */
 const VNODE_BOOKKEEPING = new Set(['key', 'ref', 'ref_for', 'ref_key']);
-const INLINE_TEXT_PROPERTIES = new Set(['font', 'material', 'style']);
+// Nested Text accepts `textStyle`, never `style`: Vue normalizes a `style` prop into one object before the walker runs.
+const INLINE_TEXT_PROPERTIES = new Set(['font', 'material', 'textStyle']);
 
 /** Boundaries are JOIN offsets in the concatenated text; when a JOIN fuses a grapheme cluster across children, `resolveRangesToClusters` gives the fused cluster the earlier child's style. */
 export function flattenVueText(
@@ -115,7 +124,7 @@ function componentChildren(vnode: VNode): unknown {
   return typeof slot === 'function' ? (slot as () => unknown)() : undefined;
 }
 
-function nestedProperties(vnode: VNode): InlineProperties {
+function nestedProperties(vnode: VNode): StatedInlineProperties {
   const props = vnode.props ?? {};
   const inline: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(props)) {
@@ -126,15 +135,15 @@ function nestedProperties(vnode: VNode): InlineProperties {
     }
     inline[name] = value;
   }
-  return inline as InlineProperties;
+  return inline as StatedInlineProperties;
 }
 
 function camelize(key: string): string {
   return key.replaceAll(/-(\w)/g, (_, letter: string) => letter.toUpperCase());
 }
 
-function inlineProperties(properties: InlineProperties, inherited: InlineProperties): InlineProperties {
-  const statedStyle = mergePropertyList(properties.style as PropertyList<TextStyle>, 'nested Text style');
+function inlineProperties(properties: StatedInlineProperties, inherited: InlineProperties): InlineProperties {
+  const statedStyle = mergePropertyList(properties.textStyle, 'nested Text textStyle');
   const style =
     Object.keys(statedStyle).length === 0 ? inherited.style : Object.freeze({ ...inherited.style, ...statedStyle });
   const font = properties.font ?? inherited.font;

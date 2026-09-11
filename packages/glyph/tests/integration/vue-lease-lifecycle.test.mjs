@@ -68,7 +68,7 @@ test('mounting and unmounting a Vue Text returns every paragraph lease', async (
           Text,
           {
             font: fixture.font,
-            style: { fontSize: 20, lineHeight: 1.25 },
+            textStyle: { fontSize: 20, lineHeight: 1.25 },
             constraints: { width: { mode: 'exact', size: 300 } },
             layout: { wrap: 'word' },
           },
@@ -133,7 +133,7 @@ test('a nested Text flattens into the outer paragraph without a second Three obj
     h(GlyphProvider, { handle: vueHandle }, () =>
       h(Text, { font: fixture.font, ref: text.ref }, () => [
         'Hello ',
-        h(Text, { style: { color: '#ff2f00' } }, () => 'world'),
+        h(Text, { textStyle: { color: '#ff2f00' } }, () => 'world'),
       ]),
     ),
   );
@@ -146,11 +146,26 @@ test('a nested Text flattens into the outer paragraph without a second Three obj
   }
 });
 
+test('a root textStyle list reaches the Three Text as a list', async () => {
+  const fixture = await loadFixture();
+  const text = capture();
+  const textStyle = [{ fontSize: 16, lineHeight: 1.25 }, false, { fontSize: 24 }];
+  const host = await mountTres(() => h(Text, { font: fixture.font, textStyle, ref: text.ref }, () => 'list'));
+  try {
+    assert.deepEqual(text.instance.style, { fontSize: 24, lineHeight: 1.25 });
+  } finally {
+    await host.unmount();
+    fixture.dispose();
+  }
+});
+
 test('a reactive style change applies through exactly one set call', async () => {
   const fixture = await loadFixture();
   const style = shallowRef({ fontSize: 16 });
   const text = capture();
-  const host = await mountTres(() => h(Text, { font: fixture.font, style: style.value, ref: text.ref }, () => 'set'));
+  const host = await mountTres(() =>
+    h(Text, { font: fixture.font, textStyle: style.value, ref: text.ref }, () => 'set'),
+  );
   try {
     const object = text.instance;
     let calls = 0;

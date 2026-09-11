@@ -14,8 +14,8 @@ function TsxTypeAssertions() {
   useBitmap('/fonts/Inter.font.glb', { strikes: [16] }).font.value satisfies Font<typeof bitmap> | undefined;
   return (
     <TextGroup renderOrder={1}>
-      <Text font={bitmapFont} style={{ fontSize: 16 }} position={[0, 0, 0]}>
-        Typed <Text style={{ color: 'red' }}>TSX</Text>
+      <Text font={bitmapFont} textStyle={{ fontSize: 16 }} position={[0, 0, 0]}>
+        Typed <Text textStyle={{ color: 'red' }}>TSX</Text>
       </Text>
       {loaded === undefined ? null : (
         <Text

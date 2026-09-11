@@ -18,7 +18,7 @@ declare const material: ThreeTextMaterial;
 const three: ThreeHandle = glyph.handle('three:vue-type-fixture', ThreeConfig);
 const msdfFace = glyph.fontFace('/fonts/Inter.font.glb', { format: msdf });
 
-const inline = h(Text, { style: { color: '#ff00ff' } }, () => 'span');
+const inline = h(Text, { textStyle: { color: '#ff00ff' } }, () => 'span');
 const label = h(Text, { font: bitmapFont, material, pixelSnapping: true, position: [0, 1, 0] }, () => [
   'Typed ',
   inline,

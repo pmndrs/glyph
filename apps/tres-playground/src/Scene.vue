@@ -64,10 +64,10 @@ const labelWidth = 112;
     :constraints="{ width: { mode: 'exact', size: width } }"
     :layout="{ align: 'center', wrap: 'none' }"
     :position="[-width / 2, 32, 0]"
-    :style="{ color: '#f4f7ff', fontSize: 64, lineHeight: 1 }"
+    :text-style="{ color: '#f4f7ff', fontSize: 64, lineHeight: 1 }"
     @error="(error: unknown) => emit('error', error)"
   >
-    {{ message }} <Text :font="activeIcon" :style="{ color: COLORS[format] }">{{ WORLD_ICON }}</Text>
+    {{ message }} <Text :font="activeIcon" :text-style="{ color: COLORS[format] }">{{ WORLD_ICON }}</Text>
   </Text>
   <TextGroup v-if="labelFont !== undefined" name="format-labels" :position="[0, height / 2 - 48, 0]">
     <Text
@@ -77,7 +77,7 @@ const labelWidth = 112;
       :constraints="{ width: { mode: 'exact', size: labelWidth } }"
       :layout="{ align: 'center', wrap: 'none' }"
       :position="[(index - (RASTER_FORMATS.length - 1) / 2) * labelGap - labelWidth / 2, 22, 0]"
-      :style="{ color: candidate === format ? COLORS[candidate] : '#aeb9cf', fontSize: 16, letterSpacing: 0.8 }"
+      :text-style="{ color: candidate === format ? COLORS[candidate] : '#aeb9cf', fontSize: 16, letterSpacing: 0.8 }"
     >
       {{ candidate.toUpperCase() }}
     </Text>

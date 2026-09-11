@@ -107,8 +107,7 @@ type VueFontSelection<Technique extends RasterFormatMetadata> =
 
 export interface VueTextProps<Technique extends RasterFormatMetadata> {
   readonly font?: VueFontSelection<Technique>;
-  /** Text shaping and presentation properties inherited by nested Text spans. */
-  readonly style?: PropertyList<TextStyle>;
+  readonly textStyle?: PropertyList<TextStyle>;
   /** Paragraph flow properties; nested Text spans cannot set this property. */
   readonly layout?: PropertyList<ParagraphLayout>;
   /** Bounds imposed on this root Text paragraph. */
@@ -620,7 +619,7 @@ interface TextPublication {
 
 const textPropDefinitions = {
   font: { type: null as unknown as PropType<VueFontSelectionInput>, required: false },
-  style: { type: null as unknown as PropType<PropertyList<TextStyle>>, required: false },
+  textStyle: { type: null as unknown as PropType<PropertyList<TextStyle>>, required: false },
   layout: { type: null as unknown as PropType<PropertyList<ParagraphLayout>>, required: false },
   constraints: { type: null as unknown as PropType<PropertyList<Constraints>>, required: false },
   rasterPixelRatio: { type: Number, required: false },
@@ -725,7 +724,7 @@ function loadedFont(
 
 function desiredText(
   props: Readonly<{
-    style?: PropertyList<TextStyle> | undefined;
+    textStyle?: PropertyList<TextStyle> | undefined;
     layout?: PropertyList<ParagraphLayout> | undefined;
     constraints?: PropertyList<Constraints> | undefined;
     rasterPixelRatio?: number | undefined;
@@ -743,7 +742,7 @@ function desiredText(
   return Object.freeze({
     font: loadedFont(outerFont, loaded),
     text: Object.freeze({ text: flattened.text, spans: Object.freeze(spans) }) as FormattedText<RasterFormatMetadata>,
-    ...(props.style === undefined ? {} : { style: props.style }),
+    ...(props.textStyle === undefined ? {} : { style: props.textStyle }),
     ...(props.layout === undefined ? {} : { layout: props.layout }),
     ...(props.constraints === undefined ? {} : { constraints: props.constraints }),
     ...(props.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: props.rasterPixelRatio }),
