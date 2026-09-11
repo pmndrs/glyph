@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:a68a43bc0a88b8ea6a0a2c4eb86ed2becfdb709965e6472dbc1c1988ccab05f0'
+source_digest: 'sha256:adb1f198ffe717a2b9b59dc6a154ba8b74edfbc2757ae75acb356d2f8a7bf45f'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1353,6 +1353,13 @@ placement and absolute CPU query coordinates, and refreshes clip, region, thread
 identity and exact outline presence authenticate the retained rows; any mismatch aborts the candidate. Retained gather
 then resolves changed Codec dependencies and updates semantic position inputs plus CPU ink bounds without repeating font
 selection, raster resource lookup, or full `PlanGlyph` construction. Other changes use the general authorities.
+
+Placement-slot identity follows the stable occurrence source rather than the run's geometry revision. Paragraph,
+boundary-source, and ellipsis runs remain distinct source kinds, but changing font metrics or other canonical run geometry
+does not by itself retire and rewrite the per-glyph placement-slot lane. The run generation still changes independently
+and guards static local geometry. In the maintained full font-size update, this separation reduced candidate publication
+from 456.5 KiB to 371.3 KiB by removing the redundant approximately 85 KiB occurrence rewrite; the measured CPU timing
+change was within noise and is not claimed as a speedup.
 
 The intermediate direct-offset A/B/B/A ordered Bitmap comparison used 40 warmups and two 101-sample passes per revision. Pooled candidate
 median/p95 is `2.874 / 2.915 ms` for 21,805 Latin glyphs and `2.233 / 2.258 ms` for 21,978 dense-CJK glyphs. Exact clean

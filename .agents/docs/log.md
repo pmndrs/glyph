@@ -2,6 +2,15 @@
 
 ## 2026-09-10
 
+- **Separated placement occurrence identity from run geometry revisions** — Placement slots now key on paragraph
+  incarnation, exact paragraph/boundary-source/ellipsis run source, stable segment/source anchors, numeric block, and
+  glyph source. A font or local-geometry revision continues to bump the owning run generation without needlessly
+  retiring every otherwise-stable placement occurrence. The maintained full font-size update drops from 456.5 KiB to
+  371.3 KiB by removing the approximately 85 KiB per-glyph placement-slot rewrite; its CPU timing change is within noise.
+  Focused state tests prove geometry-revision retention and distinct boundary-source/ellipsis identities. Three attempted
+  mixed-bidi micro-optimizations—an extra cluster-row index, deferred segment extension, and source-order row scatter—were
+  neutral or slower and were removed rather than folded into the checkpoint.
+
 - **Measured the retained-placement checkpoint against freshly fetched main** — Same-machine A/B/B/A runs compare
   candidate `8221aa87` with `origin/main` `ee56fa48`; main's shaper is byte-identical to `20942436` because the intervening
   change is README-only. Each pass used 20 warmups and 101 measured 22k-glyph ordered-Bitmap width updates. Pooled
