@@ -35,7 +35,8 @@ import { glyph } from './glyph.js';
 import { GlyphFontError } from './loader.js';
 import { type FontSelection, type FontStack } from './loaded-font.js';
 import { mergePropertyList } from './property-list.js';
-import { reactFontResourceKey } from './internal/react-font-resource-key.js';
+import { sameDesiredText } from './internal/desired-text.js';
+import { fontResourceKey } from './internal/font-resource-key.js';
 import { type Constraints, type ParagraphLayout, type PropertyList, type TextStyle } from './text-properties.js';
 import type { RasterFormatMetadata } from './config/raster-format.js';
 import {
@@ -441,11 +442,11 @@ function sameProviderFontFaceDeclaration(left: GlyphProviderFontFace, right: Gly
   if (left === right) return true;
   if (isFontFaceSelection(left) || isFontFaceSelection(right)) return false;
   const leftKey = isProviderFontFaceConfig(left)
-    ? reactFontResourceKey(left.src, left.format)
-    : reactFontResourceKey(left, undefined);
+    ? fontResourceKey(left.src, left.format)
+    : fontResourceKey(left, undefined);
   const rightKey = isProviderFontFaceConfig(right)
-    ? reactFontResourceKey(right.src, right.format)
-    : reactFontResourceKey(right, undefined);
+    ? fontResourceKey(right.src, right.format)
+    : fontResourceKey(right, undefined);
   return leftKey === rightKey;
 }
 
@@ -785,7 +786,7 @@ function useFontHook(input: FontFaceSource, config: DefaultHookFontConfig = {}):
 function preloadFont(input: FontFaceSource): Promise<void>;
 function preloadFont<const Format>(input: FontFaceSource, config: SelectedHookFontConfig<Format>): Promise<void>;
 function preloadFont(input: FontFaceSource, config: DefaultHookFontConfig = {}): Promise<void> {
-  const key = reactFontResourceKey(input, config.format);
+  const key = fontResourceKey(input, config.format);
   const existing = defaultFontPreloads.get(key);
   if (existing !== undefined) return existing.promise;
   const preload: DefaultFontPreload = { promise: Promise.resolve(), resource: undefined };
@@ -811,7 +812,7 @@ function preloadFont(input: FontFaceSource, config: DefaultHookFontConfig = {}):
 function clearFont(input: FontFaceSource): void;
 function clearFont<const Format>(input: FontFaceSource, config: SelectedHookFontConfig<Format>): void;
 function clearFont(input: FontFaceSource, config: DefaultHookFontConfig = {}): void {
-  const key = reactFontResourceKey(input, config.format);
+  const key = fontResourceKey(input, config.format);
   const preload = defaultFontPreloads.get(key);
   defaultFontPreloads.delete(key);
   preload?.resource?.clear();
@@ -839,7 +840,7 @@ function reactFontFaceResource(
     cache = new Map();
     reactFontFaces.set(handle, cache);
   }
-  const key = reactFontResourceKey(input, config.format);
+  const key = fontResourceKey(input, config.format);
   const existing = cache.get(key);
   if (existing !== undefined && (!existing.face.disposed || existing.status === 'rejected')) return existing;
   const face = hookFontFace(input, config);
@@ -1209,36 +1210,4 @@ function assertNoHandleProp(properties: object, owner: 'Text' | 'TextGroup'): vo
   if (Object.hasOwn(properties, 'handle')) {
     throw new TypeError(`R3F ${owner} does not accept a handle prop; select custom handles with GlyphProvider`);
   }
-}
-
-function sameDesiredText<Technique extends RasterFormatMetadata>(
-  left: (Partial<StandaloneTextProperties<Technique>> & { readonly text: TextInput<Technique> }) | undefined,
-  right: Partial<StandaloneTextProperties<Technique>> & { readonly text: TextInput<Technique> },
-): boolean {
-  if (
-    left === undefined ||
-    left.font !== right.font ||
-    !sameSnapshot(left.text, right.text) ||
-    left.rasterPixelRatio !== right.rasterPixelRatio ||
-    left.material !== right.material ||
-    !sameSnapshot(left.style, right.style) ||
-    !sameSnapshot(left.layout, right.layout) ||
-    !sameSnapshot(left.constraints, right.constraints)
-  )
-    return false;
-  return true;
-}
-
-function sameSnapshot(left: unknown, right: unknown): boolean {
-  if (Object.is(left, right)) return true;
-  if (typeof left !== 'object' || left === null || typeof right !== 'object' || right === null) return false;
-  if (Array.isArray(left) || Array.isArray(right)) {
-    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
-    return left.every((value, index) => sameSnapshot(value, right[index]));
-  }
-  const leftRecord = left as Readonly<Record<string, unknown>>;
-  const rightRecord = right as Readonly<Record<string, unknown>>;
-  const keys = Object.keys(leftRecord);
-  if (keys.length !== Object.keys(rightRecord).length) return false;
-  return keys.every((key) => key in rightRecord && sameSnapshot(leftRecord[key], rightRecord[key]));
 }

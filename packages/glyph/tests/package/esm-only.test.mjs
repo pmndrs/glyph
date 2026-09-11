@@ -55,6 +55,7 @@ test('the published contract is ESM-only', async () => {
     './three/*',
     './three/typegpu',
     './react/*',
+    './vue/*',
     './raster/*',
     './config/*',
   ]) {
@@ -75,6 +76,7 @@ test('the published contract is ESM-only', async () => {
     './three/renderer-resources',
     './three/text',
     './raster/internal/*',
+    './vue/internal/*',
     './shaders/tsl/internal/*',
     './shaders/tsl/slug/internal/*',
     './shaders/typegpu/internal/*',

@@ -94,6 +94,27 @@
       }
     },
     {
+      "files": ["src/vue.ts", "src/vue/**", "tests/**/vue-*.mjs", "tests/types/vue-*.ts", "tests/types/vue-*.tsx"],
+      "rules": {
+        "react/rules-of-hooks": "off",
+        "react/react-compiler": "off",
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "paths": ["three", "@react-three/fiber", "@react-three/fiber/webgpu", "react"],
+            "patterns": [
+              "three/src/*",
+              "three/addons/*",
+              "three/examples/*",
+              "**/generated/**",
+              "**/core/**",
+              "**/tsl/**"
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["src/shaders/tsl/**", "src/three/typegpu/internal/**"],
       "rules": {
         "eslint/no-restricted-imports": [

@@ -114,6 +114,11 @@ test('integrations re-export root names only when their own signatures use them'
       entry: await declaration('react.d.ts'),
       body: (await declaration('react.d.ts')).replaceAll(/export\s+(?:type\s+)?\{[^}]*\}\s+from\s+[^;]+;/gs, ''),
     },
+    {
+      name: './vue',
+      entry: await declaration('vue.d.ts'),
+      body: (await declaration('vue.d.ts')).replaceAll(/export\s+(?:type\s+)?\{[^}]*\}\s+from\s+[^;]+;/gs, ''),
+    },
   ];
 
   for (const { name, entry, body } of entries) {
