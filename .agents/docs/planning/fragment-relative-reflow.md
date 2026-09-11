@@ -202,8 +202,13 @@ limits median cost to +0.4% Latin and +0.5% CJK. A later same-machine A/B/B/A us
 `20942436` shaper bytes because its intervening change is README-only. Pooled ordinary Latin improves 32.3% median and
 32.7% p95, dense CJK improves 24.5%/24.6%, and justified Latin improves 2.6%/11.1%; publication falls from
 174,440–175,824 bytes to 31,224–109,200 bytes. Mixed bidi remains the explicit failure: 11.5% median and 10.9% p95 slower
-despite reducing publication from 176,352 to 35,856 bytes. This closes fresh-main attribution, not the performance gate;
-M8 cannot close while the mixed-bidi regression or the browser/editorial matrix remains open.
+despite reducing publication from 176,352 to 35,856 bytes. This closes the earlier fresh-main attribution, not the final
+performance gate. The lazy-absolute-semantic checkpoint subsequently removes the mixed-bidi CPU regression: two final
+101-sample passes after 20 warmups pool to `3.437 / 3.491 ms` median/p95 versus the recorded fresh-main
+`3.953 / 4.071 ms`, while preserving the compact 35,856-byte publication. Ordinary Latin, justified Latin, and dense
+CJK also remain faster at `1.562`, `2.229`, and `2.277 ms` pooled medians. One justified pass contained host stalls, so
+its independent clean `2.189 / 2.210 ms` pass is the p95 evidence. M8 still cannot close before the complete
+browser/editorial matrix.
 
 ## Compatibility with the merged engine
 
@@ -721,8 +726,10 @@ oracle only at M6 after full matrix closure.
 
 The u32 occurrence slot and root-scoped 8-byte placement row are now implemented in the generated semantic contract and
 the Three/direct-TypeGPU adapter paths. Three owns its retained PBO/storage form and direct TypeGPU owns an adapter-local
-storage layout. Exact justification arithmetic remains CPU SoA state that produces ordinary x/y rows. CPU semantic/query
-output retains absolute origins, while raster realization consumes the same f32 operands in the commuted addition proven bit-identical by the deterministic arithmetic corpus. Per-technique browser
+storage layout. Exact justification arithmetic remains CPU SoA state that produces ordinary x/y rows. Internal retained
+positioned semantic state keeps local origin/ink values plus its placement-segment index; public semantic/query output
+and CPU/plan bounds materialize absolute origins only at their read edge. Raster realization consumes the same f32
+operands in the commuted addition proven bit-identical by the deterministic arithmetic corpus. Per-technique browser
 realization now passes direct TypeGPU on project Chromium WebGPU and both Three shader sets on WebGPU plus forced WebGL2,
 without changing draw/storage identity. Active/capacity transfer bytes, the complete editorial pixel matrix, and release
 size remain acceptance gates; implementation does not by itself close the milestone's CPU/publication-performance gate.

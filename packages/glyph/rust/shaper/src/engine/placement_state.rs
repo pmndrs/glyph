@@ -141,7 +141,7 @@ pub(crate) struct VisualInstanceSpan {
     pub role: SliceRole,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct SegmentTranslation {
     pub translation_inline: f64,
     pub translation_block: f64,
@@ -282,6 +282,13 @@ pub(crate) struct RetainedLinePlacement {
     pub old_instance_start: u32,
     pub instance_count: u32,
     pub new_instance_start: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct RetainedSegmentRemap {
+    pub previous_start: u32,
+    pub next_start: u32,
+    pub count: u32,
 }
 
 impl PlacementState {
@@ -655,7 +662,7 @@ impl PlacementState {
         retained: RetainedLinePlacement,
         layout_runs: &[LayoutRun],
         replacement_runs: &[LayoutRun],
-    ) -> Result<(), EngineError> {
+    ) -> Result<RetainedSegmentRemap, EngineError> {
         let (segment_start, segment_end) = line_span(
             &previous.line_segment_starts,
             &previous.line_segment_counts,
@@ -701,7 +708,7 @@ impl PlacementState {
         retained: RetainedLinePlacement,
         layout_runs: &[LayoutRun],
         replacement_runs: &[LayoutRun],
-    ) -> Result<(), EngineError> {
+    ) -> Result<RetainedSegmentRemap, EngineError> {
         #[cfg(not(any(test, feature = "kernel-lab")))]
         let _ = retained.new_instance_start;
         if !self.has_aligned_lanes() || !previous.has_aligned_lanes() {
@@ -817,7 +824,11 @@ impl PlacementState {
             self.last_visual_span = Some(span);
         }
         self.push_line_record(slice_line_span, visual_line_span);
-        Ok(())
+        Ok(RetainedSegmentRemap {
+            previous_start: u32::try_from(slice_start).map_err(|_| EngineError::ResultTooLarge)?,
+            next_start: u32::try_from(next_slice_start).map_err(|_| EngineError::ResultTooLarge)?,
+            count: u32::try_from(slice_count).map_err(|_| EngineError::ResultTooLarge)?,
+        })
     }
 
     #[cfg(test)]

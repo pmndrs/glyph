@@ -6,7 +6,7 @@ use crate::{FontGlyphExtents, FontMetrics, bidi::BidiAnalysis};
 
 use super::placement_state::{
     GlyphSource, LayoutRunOwner, PlacementIdentity, PlacementState, RetainedLinePlacement,
-    SegmentTranslation, SliceRole,
+    RetainedSegmentRemap, SegmentTranslation, SliceRole,
 };
 
 use super::{
@@ -79,6 +79,57 @@ pub(crate) struct SemanticGlyph {
 }
 
 const _: () = assert!(core::mem::size_of::<SemanticGlyph>() == 52);
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct PositionedSemanticGlyph {
+    pub stable_id: u32,
+    pub font_handle: u32,
+    pub cluster: u32,
+    pub glyph_id: u16,
+    pub flags: u16,
+    pub bidi_level: u8,
+    pub font_size: f32,
+    pub inline_origin: f32,
+    pub block_origin: f32,
+    pub inline_advance: f32,
+    pub ink_inline_start: f32,
+    pub ink_block_start: f32,
+    pub ink_inline_extent: f32,
+    pub ink_block_extent: f32,
+    pub placement_segment: u32,
+}
+
+const _: () = assert!(core::mem::size_of::<PositionedSemanticGlyph>() == 56);
+
+impl PositionedSemanticGlyph {
+    pub(crate) fn placed(
+        self,
+        translation: SegmentTranslation,
+    ) -> Result<SemanticGlyph, EngineError> {
+        Ok(SemanticGlyph {
+            stable_id: self.stable_id,
+            font_handle: self.font_handle,
+            cluster: self.cluster,
+            glyph_id: self.glyph_id,
+            flags: self.flags,
+            bidi_level: self.bidi_level,
+            font_size: self.font_size,
+            inline_origin: placed_f32(self.inline_origin, translation.translation_inline as f32)?,
+            block_origin: placed_f32(self.block_origin, translation.translation_block as f32)?,
+            inline_advance: self.inline_advance,
+            ink_inline_start: placed_f32(
+                self.ink_inline_start,
+                translation.translation_inline as f32,
+            )?,
+            ink_block_start: placed_f32(
+                self.ink_block_start,
+                translation.translation_block as f32,
+            )?,
+            ink_inline_extent: self.ink_inline_extent,
+            ink_block_extent: self.ink_block_extent,
+        })
+    }
+}
 
 /// The ink box the render record and the semantic record must agree on, derived once per glyph.
 #[cfg(any(test, feature = "kernel-lab"))]
@@ -337,7 +388,7 @@ pub(crate) struct PositionedGlyphArena {
     line_glyph_counts: Vec<u32>,
     line_decoration_starts: Vec<u32>,
     line_decoration_counts: Vec<u32>,
-    semantic_glyphs: Vec<SemanticGlyph>,
+    semantic_glyphs: Vec<PositionedSemanticGlyph>,
     semantic_line_glyph_starts: Vec<u32>,
     semantic_line_glyph_counts: Vec<u32>,
     semantic_line_inline_extents: Vec<f64>,
@@ -785,7 +836,7 @@ impl PositionedGlyphArena {
                     .get(line_index)
                     .ok_or(EngineError::InvalidRequest)?;
                 if !CAPTURE_RUN_PLACEMENT {
-                    self.append_retained_line(previous, line_index)?;
+                    self.append_retained_line(previous, line_index, None)?;
                     continue;
                 }
                 match self.placement.append_retained_line(
@@ -803,8 +854,8 @@ impl PositionedGlyphArena {
                     clusters.layout_runs(),
                     &self.replacement_runs,
                 ) {
-                    Ok(()) => {
-                        self.append_retained_line(previous, line_index)?;
+                    Ok(remap) => {
+                        self.append_retained_line(previous, line_index, Some(remap))?;
                         continue;
                     }
                     Err(EngineError::InvalidRequest) => {}
@@ -841,7 +892,7 @@ impl PositionedGlyphArena {
                     .get(previous_line_index)
                     .ok_or(EngineError::InvalidRequest)?;
                 if !CAPTURE_RUN_PLACEMENT {
-                    self.append_retained_line(previous, previous_line_index)?;
+                    self.append_retained_line(previous, previous_line_index, None)?;
                     continue;
                 }
                 match self.placement.append_retained_line(
@@ -859,8 +910,8 @@ impl PositionedGlyphArena {
                     clusters.layout_runs(),
                     &self.replacement_runs,
                 ) {
-                    Ok(()) => {
-                        self.append_retained_line(previous, previous_line_index)?;
+                    Ok(remap) => {
+                        self.append_retained_line(previous, previous_line_index, Some(remap))?;
                         continue;
                     }
                     Err(EngineError::InvalidRequest) => {}
@@ -1125,6 +1176,7 @@ impl PositionedGlyphArena {
         &mut self,
         previous: &Self,
         line_index: usize,
+        segment_remap: Option<RetainedSegmentRemap>,
     ) -> Result<(), EngineError> {
         let glyph_start = usize::try_from(
             *previous
@@ -1270,12 +1322,28 @@ impl PositionedGlyphArena {
                 .get(line_index)
                 .ok_or(EngineError::InvalidRequest)?,
         );
-        self.semantic_glyphs.extend_from_slice(
-            previous
-                .semantic_glyphs
-                .get(semantic_start..semantic_end)
-                .ok_or(EngineError::InvalidRequest)?,
-        );
+        let previous_semantics = previous
+            .semantic_glyphs
+            .get(semantic_start..semantic_end)
+            .ok_or(EngineError::InvalidRequest)?;
+        self.semantic_glyphs
+            .try_reserve(previous_semantics.len())
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        for previous_semantic in previous_semantics {
+            let mut semantic = *previous_semantic;
+            if let Some(remap) = segment_remap {
+                let offset = semantic
+                    .placement_segment
+                    .checked_sub(remap.previous_start)
+                    .filter(|offset| *offset < remap.count)
+                    .ok_or(EngineError::InvalidRequest)?;
+                semantic.placement_segment = remap
+                    .next_start
+                    .checked_add(offset)
+                    .ok_or(EngineError::ResultTooLarge)?;
+            }
+            self.semantic_glyphs.push(semantic);
+        }
         Ok(())
     }
 
@@ -1663,8 +1731,26 @@ impl PositionedGlyphArena {
         result
     }
 
-    pub(crate) fn semantic_glyphs(&self) -> &[SemanticGlyph] {
+    pub(crate) fn semantic_glyphs(&self) -> &[PositionedSemanticGlyph] {
         &self.semantic_glyphs
+    }
+
+    pub(crate) fn placed_semantic_glyph(&self, index: usize) -> Result<SemanticGlyph, EngineError> {
+        let glyph = self
+            .semantic_glyphs
+            .get(index)
+            .copied()
+            .ok_or(EngineError::InvalidRequest)?;
+        let translation = self
+            .placement
+            .translations()
+            .get(
+                usize::try_from(glyph.placement_segment)
+                    .map_err(|_| EngineError::InvalidRequest)?,
+            )
+            .copied()
+            .ok_or(EngineError::InvalidRequest)?;
+        glyph.placed(translation)
     }
 
     pub(crate) fn semantic_line_glyph_spans(&self) -> (&[u32], &[u32]) {
@@ -2484,13 +2570,7 @@ impl PositionedGlyphArena {
                     },
                 )?;
             } else {
-                let origin_inline = placed_f32(local.inline_origin, occurrence.translation_inline)?;
-                let origin_block = placed_f32(local.block_origin, occurrence.translation_block)?;
-                let ink_inline_start =
-                    placed_f32(local.ink_inline_start, occurrence.translation_inline)?;
-                let ink_block_start =
-                    placed_f32(local.ink_block_start, occurrence.translation_block)?;
-                self.semantic_glyphs.push(SemanticGlyph {
+                self.semantic_glyphs.push(PositionedSemanticGlyph {
                     stable_id,
                     font_handle,
                     cluster: streams.clusters[adjacency],
@@ -2498,13 +2578,14 @@ impl PositionedGlyphArena {
                     flags,
                     bidi_level,
                     font_size: geometry.font_size,
-                    inline_origin: origin_inline,
-                    block_origin: origin_block,
+                    inline_origin: local.inline_origin,
+                    block_origin: local.block_origin,
                     inline_advance: local.inline_advance,
-                    ink_inline_start,
-                    ink_block_start,
+                    ink_inline_start: local.ink_inline_start,
+                    ink_block_start: local.ink_block_start,
                     ink_inline_extent: local.ink_inline_extent,
                     ink_block_extent: local.ink_block_extent,
+                    placement_segment: occurrence.segment_index,
                 });
                 if local.has_outline {
                     self.placement.push_emitted_span(
@@ -2538,8 +2619,8 @@ impl PositionedGlyphArena {
                             inline_extent: local.ink_inline_extent,
                             block_extent: local.ink_block_extent,
                         },
-                        ink_inline_start,
-                        ink_block_start,
+                        local.ink_inline_start,
+                        local.ink_block_start,
                         GlyphPublication {
                             style,
                             cluster: clusters.stable_ids[cluster],
@@ -2901,22 +2982,6 @@ impl PositionedGlyphArena {
         if cursor.semantic_next >= cursor.semantic_end {
             return Err(EngineError::InvalidRequest);
         }
-        let origin_inline = placed_f32(
-            update.local.inline_origin,
-            update.occurrence.translation_inline,
-        )?;
-        let origin_block = placed_f32(
-            update.local.block_origin,
-            update.occurrence.translation_block,
-        )?;
-        let ink_inline_start = placed_f32(
-            update.local.ink_inline_start,
-            update.occurrence.translation_inline,
-        )?;
-        let ink_block_start = placed_f32(
-            update.local.ink_block_start,
-            update.occurrence.translation_block,
-        )?;
         let semantic = self
             .semantic_glyphs
             .get(cursor.semantic_next)
@@ -2952,8 +3017,6 @@ impl PositionedGlyphArena {
                 .get_mut(cursor.rendered_next)
                 .ok_or(EngineError::InvalidRequest)?;
             glyph.clip_id = update.line.clip_id;
-            self.semantic_f32[0][cursor.rendered_next] = ink_inline_start;
-            self.semantic_f32[1][cursor.rendered_next] = ink_block_start;
             self.semantic_u32[2][cursor.rendered_next] = update.line.region_id;
             self.semantic_u32[3][cursor.rendered_next] = update.line.flow_thread_id;
             self.semantic_u32[4][cursor.rendered_next] = update.line.transform_index;
@@ -2964,10 +3027,7 @@ impl PositionedGlyphArena {
             .get_mut(semantic_index)
             .ok_or(EngineError::InvalidRequest)?;
         semantic.bidi_level = update.bidi_level;
-        semantic.inline_origin = origin_inline;
-        semantic.block_origin = origin_block;
-        semantic.ink_inline_start = ink_inline_start;
-        semantic.ink_block_start = ink_block_start;
+        semantic.placement_segment = update.occurrence.segment_index;
         cursor.semantic_next += 1;
         Ok(())
     }
@@ -3011,6 +3071,7 @@ impl PositionedGlyphArena {
             )?;
             cursor.rendered_next += 1;
         }
+        self.semantic_glyphs[cursor.semantic_next].placement_segment = occurrence.segment_index;
         cursor.semantic_next += 1;
         Ok(())
     }
@@ -3112,13 +3173,7 @@ impl PositionedGlyphArena {
                     )
                     .ok_or(EngineError::InvalidRequest)?;
                 let occurrence = occurrence.ok_or(EngineError::InvalidRequest)?;
-                let origin_inline = placed_f32(local.inline_origin, occurrence.translation_inline)?;
-                let origin_block = placed_f32(local.block_origin, occurrence.translation_block)?;
-                let ink_inline_start =
-                    placed_f32(local.ink_inline_start, occurrence.translation_inline)?;
-                let ink_block_start =
-                    placed_f32(local.ink_block_start, occurrence.translation_block)?;
-                self.semantic_glyphs.push(SemanticGlyph {
+                self.semantic_glyphs.push(PositionedSemanticGlyph {
                     stable_id,
                     font_handle,
                     cluster,
@@ -3126,13 +3181,14 @@ impl PositionedGlyphArena {
                     flags,
                     bidi_level,
                     font_size: style.font_size,
-                    inline_origin: origin_inline,
-                    block_origin: origin_block,
+                    inline_origin: local.inline_origin,
+                    block_origin: local.block_origin,
                     inline_advance: local.inline_advance,
-                    ink_inline_start,
-                    ink_block_start,
+                    ink_inline_start: local.ink_inline_start,
+                    ink_block_start: local.ink_block_start,
                     ink_inline_extent: local.ink_inline_extent,
                     ink_block_extent: local.ink_block_extent,
+                    placement_segment: occurrence.segment_index,
                 });
                 if local.has_outline {
                     self.placement.push_emitted_span(
@@ -3166,8 +3222,8 @@ impl PositionedGlyphArena {
                             inline_extent: local.ink_inline_extent,
                             block_extent: local.ink_block_extent,
                         },
-                        ink_inline_start,
-                        ink_block_start,
+                        local.ink_inline_start,
+                        local.ink_block_start,
                         GlyphPublication {
                             style,
                             cluster: semantic_id,
@@ -4537,7 +4593,7 @@ fn finite_f32(value: f64) -> Result<f32, EngineError> {
         .ok_or(EngineError::InvalidRequest)
 }
 
-fn placed_f32(local: f32, translation: f32) -> Result<f32, EngineError> {
+pub(crate) fn placed_f32(local: f32, translation: f32) -> Result<f32, EngineError> {
     let value = local + translation;
     value
         .is_finite()
@@ -4821,9 +4877,9 @@ mod tests {
     #[test]
     fn retained_cursor_checks_outline_less_semantic_identity() {
         let (_, mut arena) = fixture_position_results(8, 10, |_, _, _| {});
-        arena.semantic_glyphs = vec![SemanticGlyph {
+        arena.semantic_glyphs = vec![PositionedSemanticGlyph {
             stable_id: 11,
-            ..SemanticGlyph::default()
+            ..PositionedSemanticGlyph::default()
         }];
         arena.glyphs.clear();
         let occurrence = PlacementOccurrence {
@@ -5182,6 +5238,7 @@ mod tests {
             .zip(expected)
             .enumerate()
         {
+            let placed_semantic = production.placed_semantic_glyph(index).unwrap();
             let translation = production.placement.glyph_translation(index).unwrap();
             let placed_inline = placed_f32(
                 layout.inline_start,
@@ -5194,8 +5251,14 @@ mod tests {
             )
             .unwrap();
             assert_eq!(semantic.stable_id, expected.stable_id);
-            assert_eq!(semantic.inline_origin.to_bits(), placed_inline.to_bits());
-            assert_eq!(semantic.block_origin.to_bits(), placed_block.to_bits());
+            assert_eq!(
+                placed_semantic.inline_origin.to_bits(),
+                placed_inline.to_bits()
+            );
+            assert_eq!(
+                placed_semantic.block_origin.to_bits(),
+                placed_block.to_bits()
+            );
             assert_eq!(
                 semantic.inline_advance.to_bits(),
                 expected.inline_advance.to_bits()
@@ -5482,7 +5545,7 @@ mod tests {
             let glyph = usize::try_from(clusters.glyph_starts[8]).unwrap();
             clusters.glyph_y_offsets[glyph] = -1_938;
         });
-        let placed = production.semantic_glyphs[0].block_origin;
+        let placed = production.placed_semantic_glyph(0).unwrap().block_origin;
         let legacy_absolute = shadow[0].block_origin;
         let translation = production.placement.glyph_translation(0).unwrap();
         let renderer = placed_f32(
@@ -6719,20 +6782,20 @@ mod tests {
         assert_eq!(boundary_span.role, SliceRole::BoundaryReplacement);
         assert_eq!(active.glyphs.len(), 5);
         // Line one centers its 15.0 advance (12.0 retained + 3.0 hyphen) in the 20.0 slot.
-        assert_eq!(active.semantic_glyphs[0].inline_origin, 2.5);
-        assert_eq!(active.semantic_glyphs[1].inline_origin, 8.5);
+        assert_eq!(active.placed_semantic_glyph(0).unwrap().inline_origin, 2.5);
+        assert_eq!(active.placed_semantic_glyph(1).unwrap().inline_origin, 8.5);
         // The inserted hyphen follows the retained clusters with its own glyph identity.
         assert_eq!(active.glyphs[2].glyph_id, 45);
         assert_eq!(active.glyphs[2].stable_id, 777);
-        assert_eq!(active.semantic_glyphs[2].inline_origin, 14.5);
-        assert_eq!(active.semantic_glyphs[2].block_origin, 8.0);
+        assert_eq!(active.placed_semantic_glyph(2).unwrap().inline_origin, 14.5);
+        assert_eq!(active.placed_semantic_glyph(2).unwrap().block_origin, 8.0);
         // The inserted glyph has no source cluster: its published cluster is the boundary
         // text position itself, while style and paint anchor to the neighbor cluster.
         assert_eq!(active.semantic_glyphs[2].cluster, 2);
         // The following line is unaffected by the inserted glyph.
-        assert_eq!(active.semantic_glyphs[3].inline_origin, 4.0);
-        assert_eq!(active.semantic_glyphs[4].inline_origin, 10.0);
-        assert_eq!(active.semantic_glyphs[3].block_origin, 18.0);
+        assert_eq!(active.placed_semantic_glyph(3).unwrap().inline_origin, 4.0);
+        assert_eq!(active.placed_semantic_glyph(4).unwrap().inline_origin, 10.0);
+        assert_eq!(active.placed_semantic_glyph(3).unwrap().block_origin, 18.0);
         // Every glyph, inserted included, receives a content revision.
         assert_eq!(next_revision, 6);
 
@@ -6955,15 +7018,15 @@ mod tests {
         assert_eq!(active.glyphs.len(), 2);
         assert_eq!(active.glyphs[0].content_revision, 1);
         assert_eq!(active.glyphs[1].content_revision, 2);
-        assert_eq!(active.semantic_f32[0][0], 4.0);
-        assert_eq!(active.semantic_f32[0][1], 10.0);
-        assert_eq!(active.semantic_f32[1][0], 1.0);
-        assert_eq!(active.semantic_glyphs[0].inline_origin, 4.0);
-        assert_eq!(active.semantic_glyphs[1].inline_origin, 10.0);
-        assert_eq!(active.semantic_glyphs[0].block_origin, 8.0);
+        assert_eq!(active.semantic_f32[0][0], -6.0);
+        assert_eq!(active.semantic_f32[0][1], 0.0);
+        assert_eq!(active.semantic_f32[1][0], -3.5);
+        assert_eq!(active.placed_semantic_glyph(0).unwrap().inline_origin, 4.0);
+        assert_eq!(active.placed_semantic_glyph(1).unwrap().inline_origin, 10.0);
+        assert_eq!(active.placed_semantic_glyph(0).unwrap().block_origin, 8.0);
         assert_ne!(
             active.semantic_f32[1][0],
-            active.semantic_glyphs[0].block_origin
+            active.placed_semantic_glyph(0).unwrap().block_origin
         );
         assert_eq!(active.semantic_u32[0], [u32::MAX, u32::MAX]);
         assert_eq!(next_revision, 3);
@@ -7031,11 +7094,11 @@ mod tests {
             pending.glyphs[0].inline_start,
             active.glyphs[0].inline_start
         );
-        assert_eq!(pending.semantic_glyphs[0].inline_origin, 5.0);
-        assert_eq!(pending.glyphs[0].content_revision, 3);
-        assert_eq!(pending.glyphs[1].content_revision, 4);
-        assert_eq!(pending.semantic_change_masks, [1, 1]);
-        assert_eq!(next_revision, 5);
+        assert_eq!(pending.placed_semantic_glyph(0).unwrap().inline_origin, 5.0);
+        assert_eq!(pending.glyphs[0].content_revision, 1);
+        assert_eq!(pending.glyphs[1].content_revision, 2);
+        assert_eq!(pending.semantic_change_masks, [0, 0]);
+        assert_eq!(next_revision, 3);
 
         let mut metadata_flow = FlowLayoutArena {
             lines: flow.lines.clone(),
@@ -7092,7 +7155,7 @@ mod tests {
         assert_eq!(metadata_pending.semantic_u32[3], [17, 17]);
         assert_eq!(metadata_pending.semantic_u32[4], [29, 29]);
         assert_eq!(metadata_pending.semantic_change_masks, [u16::MAX, u16::MAX]);
-        assert_eq!(next_revision, 7);
+        assert_eq!(next_revision, 5);
 
         active.placement.clear();
         let mut reordered = PositionedGlyphArena::default();
@@ -7115,7 +7178,62 @@ mod tests {
         assert_eq!(reordered.glyphs[0].content_revision, 2);
         assert_eq!(reordered.glyphs[1].content_revision, 1);
         assert_eq!(reordered.semantic_change_masks, [0, 0]);
-        assert_eq!(next_revision, 7);
+        assert_eq!(next_revision, 5);
+    }
+
+    #[test]
+    fn retained_line_copy_rebases_local_placement_segments() {
+        let mut previous = PositionedGlyphArena::default();
+        previous.glyphs.push(LayoutGlyph {
+            stable_id: 1,
+            content_revision: 1,
+            placement_slot: 0,
+            semantic_glyph_index: 0,
+            binding_handle: 1,
+            font_handle: 1,
+            glyph_id: 1,
+            material_id: 0,
+            clip_id: 0,
+            depth_key: 0,
+            font_size: 16.0,
+            raster_pixel_ratio: 1.0,
+            inline_start: 0.0,
+            block_start: 0.0,
+            inline_extent: 1.0,
+            block_extent: 1.0,
+        });
+        previous.semantic_glyphs.push(PositionedSemanticGlyph {
+            stable_id: 1,
+            placement_segment: 5,
+            ..PositionedSemanticGlyph::default()
+        });
+        previous.line_glyph_starts.push(0);
+        previous.line_glyph_counts.push(1);
+        previous.line_decoration_starts.push(0);
+        previous.line_decoration_counts.push(0);
+        previous.semantic_line_glyph_starts.push(0);
+        previous.semantic_line_glyph_counts.push(1);
+        previous.semantic_line_inline_extents.push(1.0);
+        for field in &mut previous.semantic_f32[..SEMANTIC_F32_BASE_FIELD_COUNT] {
+            field.push(0.0);
+        }
+        for field in &mut previous.semantic_u32[..SEMANTIC_U32_BASE_FIELD_COUNT] {
+            field.push(0);
+        }
+
+        let mut next = PositionedGlyphArena::default();
+        next.append_retained_line(
+            &previous,
+            0,
+            Some(RetainedSegmentRemap {
+                previous_start: 5,
+                next_start: 2,
+                count: 1,
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(next.semantic_glyphs[0].placement_segment, 2);
     }
 
     #[test]
@@ -7145,7 +7263,7 @@ mod tests {
             };
             arena
                 .semantic_glyphs
-                .extend([1, 2, 3].map(|stable_id| SemanticGlyph {
+                .extend([1, 2, 3].map(|stable_id| PositionedSemanticGlyph {
                     stable_id,
                     font_handle: 1,
                     cluster: stable_id,
@@ -7154,7 +7272,7 @@ mod tests {
                     font_size: 16.0,
                     inline_origin: stable_id as f32,
                     block_origin: 0.0,
-                    ..SemanticGlyph::default()
+                    ..PositionedSemanticGlyph::default()
                 }));
             for field in &mut arena.semantic_f32 {
                 field.extend([1.0, 2.0, 3.0]);
@@ -7213,14 +7331,14 @@ mod tests {
                 inline_extent: 10.0,
                 block_extent: 11.0,
             };
-            let semantic = SemanticGlyph {
+            let semantic = PositionedSemanticGlyph {
                 stable_id: 1,
                 font_handle: 3,
                 cluster: 12,
                 glyph_id: 4,
                 inline_origin: if changed { 13.0 } else { 8.0 },
                 block_origin: if changed { 14.0 } else { 9.0 },
-                ..SemanticGlyph::default()
+                ..PositionedSemanticGlyph::default()
             };
             let mut arena = PositionedGlyphArena {
                 glyphs: vec![glyph],
@@ -7301,13 +7419,13 @@ mod tests {
         let arena = |inline_origin| {
             let mut arena = PositionedGlyphArena {
                 glyphs: vec![glyph],
-                semantic_glyphs: vec![SemanticGlyph {
+                semantic_glyphs: vec![PositionedSemanticGlyph {
                     stable_id: 1,
                     font_handle: 3,
                     glyph_id: 4,
                     inline_origin,
                     block_origin: 9.0,
-                    ..SemanticGlyph::default()
+                    ..PositionedSemanticGlyph::default()
                 }],
                 ..PositionedGlyphArena::default()
             };
