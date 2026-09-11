@@ -255,7 +255,7 @@ pub(crate) struct PlacementState {
     line_visual_span_starts: Vec<u32>,
     #[cfg(any(test, feature = "kernel-lab"))]
     line_visual_span_counts: Vec<u32>,
-    glyph_segment_indices: Vec<u32>,
+    segment_instance_counts: Vec<u32>,
     paragraph_run_lookup: Vec<(RunCanonicalRevision, u32)>,
     replacement_run_lookup: Vec<(RunCanonicalRevision, u32)>,
     last_segment: Option<(u32, PlacementSegment, SegmentTranslation)>,
@@ -270,7 +270,7 @@ struct PlacementCheckpoint {
     visual_spans: usize,
     translations: usize,
     lines: usize,
-    glyph_segment_indices: usize,
+    segment_instance_counts: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -278,6 +278,7 @@ pub(crate) struct RetainedLinePlacement {
     pub line_index: usize,
     pub old_fragment_start: u32,
     pub new_fragment_start: u32,
+    #[cfg(any(test, feature = "kernel-lab"))]
     pub old_instance_start: u32,
     pub instance_count: u32,
     pub new_instance_start: u32,
@@ -295,7 +296,7 @@ impl PlacementState {
         self.line_visual_span_starts.clear();
         #[cfg(any(test, feature = "kernel-lab"))]
         self.line_visual_span_counts.clear();
-        self.glyph_segment_indices.clear();
+        self.segment_instance_counts.clear();
         self.paragraph_run_lookup.clear();
         self.replacement_run_lookup.clear();
         self.last_segment = None;
@@ -322,19 +323,17 @@ impl PlacementState {
         (self.segments.len(), visual_span_start)
     }
 
-    pub(crate) fn reserve_glyphs(&mut self, capacity: usize) -> Result<(), EngineError> {
-        if self.glyph_segment_indices.capacity() < capacity {
-            self.glyph_segment_indices
-                .try_reserve_exact(capacity.saturating_sub(self.glyph_segment_indices.len()))
-                .map_err(|_| EngineError::ResultTooLarge)?;
-        }
-        Ok(())
-    }
-
     #[cfg(any(test, feature = "kernel-lab"))]
     pub(crate) fn glyph_translation(&self, glyph_index: usize) -> Option<SegmentTranslation> {
-        let segment = *self.glyph_segment_indices.get(glyph_index)?;
-        self.translations.get(usize::try_from(segment).ok()?)
+        let mut instance_start = 0usize;
+        for (segment, &count) in self.segment_instance_counts.iter().enumerate() {
+            let instance_end = instance_start.checked_add(usize::try_from(count).ok()?)?;
+            if glyph_index < instance_end {
+                return self.translations.get(segment);
+            }
+            instance_start = instance_end;
+        }
+        None
     }
 
     pub(crate) fn finish_line(&mut self, start: (usize, usize)) -> Result<(), EngineError> {
@@ -405,8 +404,12 @@ impl PlacementState {
         let index = u32::try_from(self.segments.len()).map_err(|_| EngineError::ResultTooLarge)?;
         self.segments.reserve(1)?;
         self.translations.reserve(1)?;
+        self.segment_instance_counts
+            .try_reserve(1)
+            .map_err(|_| EngineError::ResultTooLarge)?;
         self.segments.push(segment);
         self.translations.push(placement);
+        self.segment_instance_counts.push(0);
         self.last_segment = Some((index, segment, placement));
         Ok(index)
     }
@@ -483,6 +486,9 @@ impl PlacementState {
             u32::try_from(self.segments.len()).map_err(|_| EngineError::ResultTooLarge)?;
         self.segments.reserve(1)?;
         self.translations.reserve(1)?;
+        self.segment_instance_counts
+            .try_reserve(1)
+            .map_err(|_| EngineError::ResultTooLarge)?;
         self.segments.push(PlacementSegment {
             fragment_index,
             layout_run_owner,
@@ -504,6 +510,7 @@ impl PlacementState {
             source_glyph_count,
         });
         self.translations.push(placement);
+        self.segment_instance_counts.push(0);
         Ok(segment_index)
     }
 
@@ -579,21 +586,14 @@ impl PlacementState {
         if glyph_count == 0 {
             return Ok(());
         }
-        let glyph_count_usize =
-            usize::try_from(glyph_count).map_err(|_| EngineError::ResultTooLarge)?;
-        #[cfg(not(any(test, feature = "kernel-lab")))]
-        if self
-            .glyph_segment_indices
-            .len()
-            .checked_add(glyph_count_usize)
-            .is_none_or(|required| required > self.glyph_segment_indices.capacity())
-        {
-            return Err(EngineError::ResultTooLarge);
-        }
-        #[cfg(any(test, feature = "kernel-lab"))]
-        self.glyph_segment_indices
-            .try_reserve(glyph_count_usize)
-            .map_err(|_| EngineError::ResultTooLarge)?;
+        let segment = usize::try_from(segment_index).map_err(|_| EngineError::InvalidRequest)?;
+        let next_instance_count = self
+            .segment_instance_counts
+            .get(segment)
+            .copied()
+            .ok_or(EngineError::InvalidRequest)?
+            .checked_add(glyph_count)
+            .ok_or(EngineError::ResultTooLarge)?;
         #[cfg(not(any(test, feature = "kernel-lab")))]
         {
             let _ = (
@@ -603,8 +603,7 @@ impl PlacementState {
                 resolved_level,
                 role,
             );
-            self.glyph_segment_indices
-                .extend(core::iter::repeat_n(segment_index, glyph_count_usize));
+            self.segment_instance_counts[segment] = next_instance_count;
             Ok(())
         }
         #[cfg(any(test, feature = "kernel-lab"))]
@@ -622,14 +621,13 @@ impl PlacementState {
                     .glyph_count
                     .checked_add(glyph_count)
                     .ok_or(EngineError::ResultTooLarge)?;
+                self.segment_instance_counts[segment] = next_instance_count;
                 let final_index = self.visual_spans.len() - 1;
                 self.visual_spans.glyph_counts[final_index] = count;
                 self.last_visual_span = Some(VisualInstanceSpan {
                     glyph_count: count,
                     ..last
                 });
-                self.glyph_segment_indices
-                    .extend(core::iter::repeat_n(segment_index, glyph_count_usize));
                 return Ok(());
             }
             self.visual_spans.reserve(1)?;
@@ -644,10 +642,9 @@ impl PlacementState {
                 resolved_level,
                 role,
             };
+            self.segment_instance_counts[segment] = next_instance_count;
             self.visual_spans.push(span);
             self.last_visual_span = Some(span);
-            self.glyph_segment_indices
-                .extend(core::iter::repeat_n(segment_index, glyph_count_usize));
             Ok(())
         }
     }
@@ -736,17 +733,13 @@ impl PlacementState {
         let visual_line_span = span_record(line_start.1, next_visual_end)?;
         #[cfg(not(any(test, feature = "kernel-lab")))]
         let visual_line_span = (0, 0);
-        let old_instance_end = retained
-            .old_instance_start
-            .checked_add(retained.instance_count)
-            .ok_or(EngineError::InvalidRequest)?;
-        let old_instance_range = usize::try_from(retained.old_instance_start)
-            .map_err(|_| EngineError::InvalidRequest)?
-            ..usize::try_from(old_instance_end).map_err(|_| EngineError::InvalidRequest)?;
-        let retained_segments = previous
-            .glyph_segment_indices
-            .get(old_instance_range)
-            .ok_or(EngineError::InvalidRequest)?;
+        let retained_instance_count = previous.segment_instance_counts[slice_start..slice_end]
+            .iter()
+            .try_fold(0u32, |total, count| total.checked_add(*count))
+            .ok_or(EngineError::ResultTooLarge)?;
+        if retained_instance_count != retained.instance_count {
+            return Err(EngineError::InvalidRequest);
+        }
         for index in slice_start..slice_end {
             let slice = previous
                 .segments
@@ -785,23 +778,13 @@ impl PlacementState {
                 .filter(|offset| *offset < slice_count)
                 .ok_or(EngineError::InvalidRequest)?;
         }
-        for &old_segment in retained_segments {
-            (old_segment as usize)
-                .checked_sub(slice_start)
-                .filter(|offset| *offset < slice_count)
-                .ok_or(EngineError::InvalidRequest)?;
-        }
-
         self.segments.reserve(slice_count)?;
         self.translations.reserve(slice_count)?;
+        self.segment_instance_counts
+            .try_reserve(slice_count)
+            .map_err(|_| EngineError::ResultTooLarge)?;
         #[cfg(any(test, feature = "kernel-lab"))]
         self.visual_spans.reserve(visual_count)?;
-        self.glyph_segment_indices
-            .try_reserve(
-                usize::try_from(retained.instance_count)
-                    .map_err(|_| EngineError::ResultTooLarge)?,
-            )
-            .map_err(|_| EngineError::ResultTooLarge)?;
         self.reserve_line_record()?;
 
         for relative in 0..slice_count {
@@ -814,6 +797,8 @@ impl PlacementState {
             let placement = previous.translations.row(slice_start + relative);
             self.segments.push(slice);
             self.translations.push(placement);
+            self.segment_instance_counts
+                .push(previous.segment_instance_counts[slice_start + relative]);
             self.last_segment = Some((
                 u32::try_from(self.segments.len() - 1).map_err(|_| EngineError::ResultTooLarge)?,
                 slice,
@@ -830,13 +815,6 @@ impl PlacementState {
             span.segment_index = next_slice as u32;
             self.visual_spans.push(span);
             self.last_visual_span = Some(span);
-        }
-        for &old_segment in retained_segments {
-            let relative = old_segment as usize - slice_start;
-            self.glyph_segment_indices.push(
-                u32::try_from(next_slice_start + relative)
-                    .map_err(|_| EngineError::ResultTooLarge)?,
-            );
         }
         self.push_line_record(slice_line_span, visual_line_span);
         Ok(())
@@ -864,21 +842,37 @@ impl PlacementState {
         #[cfg(not(any(test, feature = "kernel-lab")))]
         {
             let _ = (layout_runs, replacement_runs);
-            (self.glyph_segment_indices.len() == instance_count)
+            (self.instance_count()? == instance_count)
                 .then_some(())
                 .ok_or(EngineError::InvalidRequest)
         }
         #[cfg(any(test, feature = "kernel-lab"))]
         {
             let mut instance_cursor = 0_u32;
+            let mut counted_segment = 0usize;
+            let mut counted_instances = 0u32;
             for index in 0..self.visual_spans.len() {
                 let span = self.visual_spans.row(index);
+                let segment_index =
+                    usize::try_from(span.segment_index).map_err(|_| EngineError::InvalidRequest)?;
+                while counted_segment < segment_index {
+                    if self.segment_instance_counts.get(counted_segment).copied()
+                        != Some(counted_instances)
+                    {
+                        return Err(EngineError::InvalidRequest);
+                    }
+                    counted_segment += 1;
+                    counted_instances = 0;
+                }
+                if counted_segment != segment_index {
+                    return Err(EngineError::InvalidRequest);
+                }
+                counted_instances = counted_instances
+                    .checked_add(span.glyph_count)
+                    .ok_or(EngineError::ResultTooLarge)?;
                 let segment = self
                     .segments
-                    .get(
-                        usize::try_from(span.segment_index)
-                            .map_err(|_| EngineError::InvalidRequest)?,
-                    )
+                    .get(segment_index)
                     .ok_or(EngineError::InvalidRequest)?;
                 let run = self.resolve_run(segment, layout_runs, replacement_runs)?.1;
                 let source_start = run
@@ -903,9 +897,16 @@ impl PlacementState {
                     .checked_add(span.glyph_count)
                     .ok_or(EngineError::ResultTooLarge)?;
             }
+            while counted_segment < self.segment_instance_counts.len() {
+                if self.segment_instance_counts[counted_segment] != counted_instances {
+                    return Err(EngineError::InvalidRequest);
+                }
+                counted_segment += 1;
+                counted_instances = 0;
+            }
             if usize::try_from(instance_cursor).map_err(|_| EngineError::ResultTooLarge)?
                 != instance_count
-                || self.glyph_segment_indices.len() != instance_count
+                || self.instance_count()? != instance_count
             {
                 return Err(EngineError::InvalidRequest);
             }
@@ -946,8 +947,17 @@ impl PlacementState {
         &self.translations.rows
     }
 
-    pub(crate) fn glyph_segment_indices(&self) -> &[u32] {
-        &self.glyph_segment_indices
+    pub(crate) fn segment_instance_counts(&self) -> &[u32] {
+        &self.segment_instance_counts
+    }
+
+    pub(crate) fn instance_count(&self) -> Result<usize, EngineError> {
+        self.segment_instance_counts
+            .iter()
+            .try_fold(0usize, |total, count| {
+                let count = usize::try_from(*count).map_err(|_| EngineError::ResultTooLarge)?;
+                total.checked_add(count).ok_or(EngineError::ResultTooLarge)
+            })
     }
 
     pub(crate) fn bind_placement_handles(
@@ -984,7 +994,7 @@ impl PlacementState {
             visual_spans: self.visual_spans.len(),
             translations: self.translations.len(),
             lines: self.line_segment_starts.len(),
-            glyph_segment_indices: self.glyph_segment_indices.len(),
+            segment_instance_counts: self.segment_instance_counts.len(),
         }
     }
 
@@ -999,8 +1009,8 @@ impl PlacementState {
         self.line_visual_span_starts.truncate(checkpoint.lines);
         #[cfg(any(test, feature = "kernel-lab"))]
         self.line_visual_span_counts.truncate(checkpoint.lines);
-        self.glyph_segment_indices
-            .truncate(checkpoint.glyph_segment_indices);
+        self.segment_instance_counts
+            .truncate(checkpoint.segment_instance_counts);
         self.last_segment = self.segments.len().checked_sub(1).map(|index| {
             (
                 u32::try_from(index).expect("placement segment index already fit u32"),
@@ -1020,10 +1030,6 @@ impl PlacementState {
 
     fn is_valid(&self) -> bool {
         self.has_aligned_lanes()
-            && self
-                .glyph_segment_indices
-                .iter()
-                .all(|index| (*index as usize) < self.segments.len())
     }
 
     fn has_aligned_lanes(&self) -> bool {
@@ -1041,6 +1047,7 @@ impl PlacementState {
             }
             && self.translations.is_valid()
             && self.segments.len() == self.translations.len()
+            && self.segments.len() == self.segment_instance_counts.len()
             && self.line_segment_starts.len() == self.line_segment_counts.len()
     }
 
@@ -1344,6 +1351,8 @@ mod tests {
         assert_eq!(state.visual_spans().len(), 2);
         assert_eq!(state.line_segment_counts, [1]);
         assert_eq!(state.line_visual_span_counts, [2]);
+        assert_eq!(state.segment_instance_counts, [4]);
+        assert_eq!(state.instance_count().unwrap(), 4);
     }
 
     #[test]

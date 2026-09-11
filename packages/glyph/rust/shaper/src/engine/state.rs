@@ -2857,7 +2857,7 @@ impl PlannerState {
                             return Err(EngineError::InvalidRequest);
                         }
                     }
-                    if positioned.glyph_segment_indices().len() != positioned.glyphs().len() {
+                    if positioned.placement_instance_count()? != positioned.glyphs().len() {
                         return Err(EngineError::InvalidRequest);
                     }
                 }
@@ -4204,6 +4204,9 @@ impl ParagraphState {
         self.abort_positioned();
         self.pending_boundary_shape.clear();
         self.clusters.active_mut().ensure_word_breaks()?;
+        self.clusters
+            .active_mut()
+            .ensure_placement_segment_anchors()?;
         let clusters = self.clusters.active();
         let styles = self.styles.active().resolved.segments();
         let style_storage = &self.styles.active().arena;
