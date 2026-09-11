@@ -1422,8 +1422,14 @@ An earlier indexed cleanup checkpoint remained 4–5% slower than main while sti
 that result is negative evidence about the incomplete implementation, not the current 31,224-byte publication shape. The
 intermediate direct-offset candidate isolated a real retained CPU speedup but preserved glyph-wide transfer. The current
 indexed candidate combines that retained positioning work with compact session rows. Its immediate-parent A/B is
-directionally positive across ordinary, justified, bidi, and dense-CJK resize, while the final freshly built main
-comparison and complete workload matrix remain open.
+directionally positive across ordinary, justified, bidi, and dense-CJK resize. A subsequent same-machine A/B/B/A against
+freshly fetched `origin/main` `ee56fa48` (README-only after the byte-identical `20942436` shaper) used 20 warmups and 101
+measured updates per pass, pooling 202 samples per revision. Candidate `8221aa87` improves ordinary Latin from
+`3.725 / 3.856 ms` median/p95 to `2.523 / 2.594 ms` (−32.3%/−32.7%), dense CJK from `2.995 / 3.040 ms` to
+`2.261 / 2.291 ms` (−24.5%/−24.6%), and justified Latin from `3.281 / 3.685 ms` to `3.195 / 3.276 ms`
+(−2.6%/−11.1%). Mixed bidi regresses from `3.953 / 4.071 ms` to `4.407 / 4.516 ms` (+11.5%/+10.9%) even though
+publication falls from 176,352 to 35,856 bytes. The fresh-main CPU/publication comparison is therefore complete but the
+performance gate remains open on mixed bidi and the full browser/editorial matrix.
 
 The benchmark also owns a `position-query` case that runs the same break-changing flow and positioning tail through the
 borrowed-layout mask while excluding gather, plan compilation, publication, and inspection copies. On the pinned M4 host,
