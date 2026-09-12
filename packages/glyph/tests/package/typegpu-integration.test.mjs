@@ -40,9 +40,10 @@ function recordingHost() {
   const recorded = [];
   const uploads = [];
   const stats = { allocations: 0, preparations: 0, reject: false };
-  function buffer(size) {
+  function buffer(size, usage = 0) {
     const value = {
       bytes: new Uint8Array(size),
+      usage,
       destroyed: false,
       destroy() {
         this.destroyed = true;
@@ -64,13 +65,13 @@ function recordingHost() {
       };
     },
     device: {
-      createBuffer({ size }) {
+      createBuffer({ size, usage }) {
         stats.allocations++;
-        return buffer(size);
+        return buffer(size, usage);
       },
       queue: {
         writeBuffer(target, offset, bytes) {
-          uploads.push({ offset, length: bytes.byteLength, capacity: target.bytes.byteLength });
+          uploads.push({ offset, length: bytes.byteLength, capacity: target.bytes.byteLength, usage: target.usage });
           target.bytes.set(bytes, offset);
         },
       },
@@ -264,9 +265,15 @@ test('localized TypeGPU edits retain GPU buffers and discard leaves accepted byt
     assert.equal(host.stats.allocations, allocationCount, 'same-capacity edits allocate no GPU buffers');
     assert.equal(host.stats.preparations, preparationCount, 'unchanged draw bindings stay prepared');
     assert.ok(host.uploads.length > 0);
+    const vertexUploads = host.uploads.filter((upload) => (upload.usage & GPUBufferUsage.VERTEX) !== 0);
     assert.ok(
-      host.uploads.every((upload) => upload.length <= upload.capacity / 8),
-      JSON.stringify(host.uploads),
+      vertexUploads.every((upload) => upload.length <= upload.capacity / 8),
+      JSON.stringify(vertexUploads),
+    );
+    const storageUploads = host.uploads.filter((upload) => (upload.usage & GPUBufferUsage.STORAGE) !== 0);
+    assert.ok(
+      storageUploads.every((upload) => upload.length <= 6 * 2 * Float32Array.BYTES_PER_ELEMENT),
+      JSON.stringify(storageUploads),
     );
     t.diagnostic(
       `Localized edit: ${host.uploads.reduce((sum, upload) => sum + upload.length, 0)} bytes uploaded; zero GPU allocations or draw preparations.`,
