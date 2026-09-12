@@ -227,7 +227,11 @@ pub fn record_alignment(
 }
 
 pub fn buffer_record_alignment(schema: &super::codec::BufferSchema, byte_alignment: u32) -> u32 {
-    byte_alignment / gcd(byte_alignment, u32::from(schema.stride))
+    record_alignment_for_stride(u32::from(schema.stride), byte_alignment)
+}
+
+pub fn record_alignment_for_stride(byte_stride: u32, byte_alignment: u32) -> u32 {
+    byte_alignment / gcd(byte_alignment, byte_stride)
 }
 
 pub fn align_up(value: u32, alignment: u32) -> Result<u32, PackingError> {

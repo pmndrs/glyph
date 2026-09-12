@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 
 use super::{
     codec::{
-        ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, CapabilitySetId,
+        ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, CapabilitySet, CapabilitySetId,
         CodecExecutionError, ValidatedCodec,
     },
     ordered_plan::OrderedPlanCompiler,
@@ -174,6 +174,7 @@ impl RenderPlanCompiler {
     pub(crate) fn prepare_session(
         &mut self,
         input: SessionPlacementInput<'_>,
+        capability: &CapabilitySet,
         publication_generation: u32,
         checkpoint: bool,
     ) -> Result<(), RenderPlanCompilerError> {
@@ -181,7 +182,7 @@ impl RenderPlanCompiler {
             return Err(RenderPlanCompilerError::NotPrepared);
         }
         self.session
-            .prepare(input, publication_generation, checkpoint)?;
+            .prepare(input, capability, publication_generation, checkpoint)?;
         Ok(())
     }
 

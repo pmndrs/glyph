@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:75e0be4180d72d6dfbbfad1ee3f5bc92199243c9d4017c7345f67a7c84dc7f34'
+source_digest: 'sha256:aebef87ab6f90bd6417a867e476f833370c50a18ca8af1ad019dd5c2976ee6c2'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -512,6 +512,9 @@ Rust publishes one revision containing:
 - resource bindings;
 - ordered draw commands with raster-format/program, resource, material, transform, and clip identity;
 - optional semantic measurement or inspection sections only when explicitly demanded.
+
+The root-scoped placement table uses the same capability-selected alignment, coalescing, fragmentation, and whole-buffer
+upload policy as retained Codec buffers; it does not carry a separate fixed range-packing heuristic.
 
 Metric-only style changes refresh retained shaping-run typography before cluster aggregation but reuse the HarfRust glyph
 result. Font size, letter spacing, word spacing, line height, and baseline changes therefore rebuild advances and

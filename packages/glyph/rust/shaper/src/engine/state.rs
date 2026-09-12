@@ -994,6 +994,9 @@ impl TextEngine {
                     placement_capacity: u32::try_from(selected_placement_slots.len())
                         .map_err(|_| EngineError::ResultTooLarge)?,
                 },
+                codec
+                    .capability_set(capability_set)
+                    .ok_or(EngineError::InvalidRequest)?,
                 1,
                 true,
             )
@@ -1636,6 +1639,9 @@ impl TextEngine {
                             placement_rows: &planner.session_placement_rows,
                             placement_capacity: planner.pending_placement_slot_count,
                         },
+                        codec
+                            .capability_set(capability_set)
+                            .ok_or(EngineError::InvalidRequest)?,
                         publication_generation,
                         checkpoint,
                     )
