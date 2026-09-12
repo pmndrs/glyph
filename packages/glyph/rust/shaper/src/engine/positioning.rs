@@ -38,8 +38,6 @@ pub(crate) const SEMANTIC_U32_FIELD_COUNT: usize = 8;
 pub(crate) const SEMANTIC_EFFECTS_CHANGE: u16 = 1 << 14;
 pub(crate) const SEMANTIC_PLACEMENT_SLOT_CHANGE: u16 = 1 << 15;
 pub(crate) const ALL_SEMANTIC_CHANGES: u16 = u16::MAX;
-const CAPTURE_RUN_PLACEMENT: bool = true;
-
 const BIDI_BN: u8 = 9;
 const BIDI_B: u8 = 10;
 const BIDI_S: u8 = 11;
@@ -752,27 +750,23 @@ impl PositionedGlyphArena {
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<(), EngineError> {
         self.clear();
-        if CAPTURE_RUN_PLACEMENT {
-            self.rebuild_replacement_runs(
-                previous,
-                boundary_shape,
-                previous_boundary_shape,
-                runs,
-                previous_runs,
-                next_run_canonical_revision,
-            )?;
-        }
-        if CAPTURE_RUN_PLACEMENT {
-            self.rebuild_replacement_run_local(
-                boundary_shape,
-                text,
-                clusters,
-                runs,
-                styles,
-                metrics_for,
-                extents_for,
-            )?;
-        }
+        self.rebuild_replacement_runs(
+            previous,
+            boundary_shape,
+            previous_boundary_shape,
+            runs,
+            previous_runs,
+            next_run_canonical_revision,
+        )?;
+        self.rebuild_replacement_run_local(
+            boundary_shape,
+            text,
+            clusters,
+            runs,
+            styles,
+            metrics_for,
+            extents_for,
+        )?;
         self.text_effects = styles
             .iter()
             .any(|segment| style_has_text_effects(segment.style));
@@ -820,7 +814,7 @@ impl PositionedGlyphArena {
         let mut retained_line_cursor = 0usize;
         let mut drop_cap_cursor = 0usize;
         for (line_index, line) in flow.lines.iter().copied().enumerate() {
-            let placement_line_start = CAPTURE_RUN_PLACEMENT.then(|| self.placement.begin_line());
+            let placement_line_start = Some(self.placement.begin_line());
             if retained_instances.is_none()
                 && flow
                     .recomposed_line_range()
@@ -835,10 +829,6 @@ impl PositionedGlyphArena {
                     .line_glyph_counts
                     .get(line_index)
                     .ok_or(EngineError::InvalidRequest)?;
-                if !CAPTURE_RUN_PLACEMENT {
-                    self.append_retained_line(previous, line_index, None)?;
-                    continue;
-                }
                 match self.placement.append_retained_line(
                     &previous.placement,
                     RetainedLinePlacement {
@@ -891,10 +881,6 @@ impl PositionedGlyphArena {
                     .line_glyph_counts
                     .get(previous_line_index)
                     .ok_or(EngineError::InvalidRequest)?;
-                if !CAPTURE_RUN_PLACEMENT {
-                    self.append_retained_line(previous, previous_line_index, None)?;
-                    continue;
-                }
                 match self.placement.append_retained_line(
                     &previous.placement,
                     RetainedLinePlacement {
@@ -1156,13 +1142,11 @@ impl PositionedGlyphArena {
                 })
             })
             .transpose()?;
-        if CAPTURE_RUN_PLACEMENT {
-            self.placement.validate_occurrences(
-                self.glyphs.len(),
-                clusters.layout_runs(),
-                &self.replacement_runs,
-            )?;
-        }
+        self.placement.validate_occurrences(
+            self.glyphs.len(),
+            clusters.layout_runs(),
+            &self.replacement_runs,
+        )?;
         // Retained flow proves that only geometry-authored semantic fields can differ.
         self.assign_content_revisions(
             previous,
@@ -2003,75 +1987,65 @@ impl PositionedGlyphArena {
                 };
                 let (run_index, layout_run) =
                     layout_run_for_cluster(clusters, cluster, &mut layout_run_cache)?;
-                let occurrence = if CAPTURE_RUN_PLACEMENT {
-                    let direction = layout_run_direction(layout_run, runs)?;
-                    let placement_cluster =
-                        clusters.placement_cluster(layout_run, direction, cluster)?;
-                    let translation_inline = finite_f32(
-                        state.cursor - placement_cluster.block_local_prefix
-                            + placement_cluster.block_anchor_inline,
-                    )?;
-                    let translation_block =
-                        finite_f32(state.baseline + placement_cluster.block_anchor_block)?;
-                    let adjacent =
-                        active_placement.is_some_and(|active: ActiveFallbackPlacement| {
-                            active.layout_run_index == run_index
-                                && if direction & 1 == 0 {
-                                    active.cluster.checked_add(1) == Some(cluster)
-                                } else {
-                                    cluster.checked_add(1) == Some(active.cluster)
-                                }
-                                && active.direction == direction
-                                && active.placement_cluster.segment_anchor
-                                    == placement_cluster.segment_anchor
-                                && active.placement_cluster.dense == placement_cluster.dense
-                                && active.placement_cluster.numeric_block_ordinal
-                                    == placement_cluster.numeric_block_ordinal
-                                && active.occurrence.translation_inline.to_bits()
-                                    == translation_inline.to_bits()
-                                && active.occurrence.translation_block.to_bits()
-                                    == translation_block.to_bits()
-                        });
-                    let occurrence = if justify.is_zero() && adjacent {
-                        let occurrence = active_placement
-                            .ok_or(EngineError::InvalidRequest)?
-                            .occurrence;
-                        self.extend_layout_run_segment(
-                            occurrence.segment_index,
-                            &layout_run,
-                            cluster,
-                            clusters,
-                        )?;
-                        occurrence
-                    } else {
-                        self.record_layout_run_segment(
-                            self.placement_fragment_index,
-                            run_index,
-                            &layout_run,
-                            cluster,
-                            cluster + 1,
-                            clusters,
-                            placement_cluster,
-                            false,
-                            state.cursor,
-                            state.baseline,
-                        )?
-                    };
-                    active_placement = Some(ActiveFallbackPlacement {
-                        layout_run_index: run_index,
+                let direction = layout_run_direction(layout_run, runs)?;
+                let placement_cluster =
+                    clusters.placement_cluster(layout_run, direction, cluster)?;
+                let translation_inline = finite_f32(
+                    state.cursor - placement_cluster.block_local_prefix
+                        + placement_cluster.block_anchor_inline,
+                )?;
+                let translation_block =
+                    finite_f32(state.baseline + placement_cluster.block_anchor_block)?;
+                let adjacent = active_placement.is_some_and(|active: ActiveFallbackPlacement| {
+                    active.layout_run_index == run_index
+                        && if direction & 1 == 0 {
+                            active.cluster.checked_add(1) == Some(cluster)
+                        } else {
+                            cluster.checked_add(1) == Some(active.cluster)
+                        }
+                        && active.direction == direction
+                        && active.placement_cluster.segment_anchor
+                            == placement_cluster.segment_anchor
+                        && active.placement_cluster.dense == placement_cluster.dense
+                        && active.placement_cluster.numeric_block_ordinal
+                            == placement_cluster.numeric_block_ordinal
+                        && active.occurrence.translation_inline.to_bits()
+                            == translation_inline.to_bits()
+                        && active.occurrence.translation_block.to_bits()
+                            == translation_block.to_bits()
+                });
+                let occurrence = if justify.is_zero() && adjacent {
+                    let occurrence = active_placement
+                        .ok_or(EngineError::InvalidRequest)?
+                        .occurrence;
+                    self.extend_layout_run_segment(
+                        occurrence.segment_index,
+                        &layout_run,
                         cluster,
-                        direction,
-                        placement_cluster,
-                        occurrence,
-                    });
+                        clusters,
+                    )?;
                     occurrence
                 } else {
-                    PlacementOccurrence {
-                        segment_index: u32::MAX,
-                        translation_inline: 0.0,
-                        translation_block: 0.0,
-                    }
+                    self.record_layout_run_segment(
+                        self.placement_fragment_index,
+                        run_index,
+                        &layout_run,
+                        cluster,
+                        cluster + 1,
+                        clusters,
+                        placement_cluster,
+                        false,
+                        state.cursor,
+                        state.baseline,
+                    )?
                 };
+                active_placement = Some(ActiveFallbackPlacement {
+                    layout_run_index: run_index,
+                    cluster,
+                    direction,
+                    placement_cluster,
+                    occurrence,
+                });
                 if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
                     continue;
                 }
@@ -2136,23 +2110,21 @@ impl PositionedGlyphArena {
                     }
                     let (run_index, layout_run) =
                         layout_run_for_cluster(clusters, cluster, &mut layout_run_cache)?;
-                    if CAPTURE_RUN_PLACEMENT {
-                        let direction = layout_run_direction(layout_run, runs)?;
-                        let placement_cluster =
-                            clusters.placement_cluster(layout_run, direction, cluster)?;
-                        self.record_layout_run_segment(
-                            self.placement_fragment_index,
-                            run_index,
-                            &layout_run,
-                            cluster,
-                            cluster + 1,
-                            clusters,
-                            placement_cluster,
-                            false,
-                            state.cursor,
-                            state.baseline,
-                        )?;
-                    }
+                    let direction = layout_run_direction(layout_run, runs)?;
+                    let placement_cluster =
+                        clusters.placement_cluster(layout_run, direction, cluster)?;
+                    self.record_layout_run_segment(
+                        self.placement_fragment_index,
+                        run_index,
+                        &layout_run,
+                        cluster,
+                        cluster + 1,
+                        clusters,
+                        placement_cluster,
+                        false,
+                        state.cursor,
+                        state.baseline,
+                    )?;
                 }
             }
         }
@@ -2230,93 +2202,27 @@ impl PositionedGlyphArena {
             let Some(geometry_cluster) = (overlap_start..overlap_end)
                 .find(|cluster| clusters.flags[*cluster] & CLUSTER_HARD_BREAK == 0)
             else {
-                if CAPTURE_RUN_PLACEMENT {
-                    for cluster in overlap_start..overlap_end {
-                        let placement_cluster =
-                            clusters.placement_cluster(*layout_run, direction, cluster)?;
-                        self.record_layout_run_segment(
-                            self.placement_fragment_index,
-                            layout_run_index,
-                            layout_run,
-                            cluster,
-                            cluster + 1,
-                            clusters,
-                            placement_cluster,
-                            true,
-                            state.cursor,
-                            state.baseline,
-                        )?;
-                    }
+                for cluster in overlap_start..overlap_end {
+                    let placement_cluster =
+                        clusters.placement_cluster(*layout_run, direction, cluster)?;
+                    self.record_layout_run_segment(
+                        self.placement_fragment_index,
+                        layout_run_index,
+                        layout_run,
+                        cluster,
+                        cluster + 1,
+                        clusters,
+                        placement_cluster,
+                        true,
+                        state.cursor,
+                        state.baseline,
+                    )?;
                 }
                 covered = overlap_end;
                 continue;
             };
             let geometry = RunGeometry::for_cluster(clusters, styles, geometry_cluster)?;
             debug_assert_eq!(layout_run.font_handle, geometry.font_handle);
-            if !CAPTURE_RUN_PLACEMENT {
-                for cluster in overlap_start..overlap_end {
-                    if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
-                        continue;
-                    }
-                    debug_assert_eq!(clusters.font_handles[cluster], geometry.font_handle);
-                    debug_assert_eq!(
-                        clusters.units_per_em[cluster].to_bits(),
-                        geometry.units_per_em.to_bits()
-                    );
-                    let style_index = usize::try_from(clusters.style_indexes[cluster])
-                        .map_err(|_| EngineError::InvalidRequest)?;
-                    let style = styles
-                        .get(style_index)
-                        .ok_or(EngineError::InvalidRequest)?
-                        .style;
-                    debug_assert_eq!(style.font_size.to_bits(), geometry.font_size.to_bits());
-                    debug_assert_eq!(
-                        style.baseline_shift.to_bits(),
-                        geometry.baseline_shift.to_bits()
-                    );
-                    let role = if cluster >= hanging_start {
-                        SliceRole::HangingSpace
-                    } else {
-                        SliceRole::Ordinary
-                    };
-                    let positioned = self.position_cluster::<TEXT_EFFECTS>(
-                        line,
-                        cluster,
-                        cluster_level(
-                            cluster,
-                            fragment.line.text_start,
-                            clusters,
-                            runs,
-                            &self.line_levels,
-                        )?,
-                        clusters,
-                        streams,
-                        geometry,
-                        style,
-                        state,
-                        PlacementOccurrence {
-                            segment_index: u32::MAX,
-                            translation_inline: 0.0,
-                            translation_block: 0.0,
-                        },
-                        role,
-                        retained.as_deref_mut(),
-                        extents_for,
-                    )?;
-                    self.finish_positioned_cluster::<ADJUST>(
-                        line,
-                        cluster,
-                        clusters,
-                        positioned,
-                        justify,
-                        state,
-                        metrics_for,
-                        retained.is_none(),
-                    )?;
-                }
-                covered = overlap_end;
-                continue;
-            }
             let mut cluster = overlap_start;
             while cluster < overlap_end {
                 let segment_start = cluster;
@@ -2429,13 +2335,6 @@ impl PositionedGlyphArena {
         cursor: f64,
         baseline: f64,
     ) -> Result<PlacementOccurrence, EngineError> {
-        if !CAPTURE_RUN_PLACEMENT {
-            return Ok(PlacementOccurrence {
-                segment_index: u32::MAX,
-                translation_inline: 0.0,
-                translation_block: 0.0,
-            });
-        }
         let run_start =
             usize::try_from(layout_run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
         let glyph_start = clusters.glyph_starts[overlap_start];
@@ -2890,13 +2789,6 @@ impl PositionedGlyphArena {
         baseline: f64,
         clusters: &ClusterArena,
     ) -> Result<PlacementOccurrence, EngineError> {
-        if !CAPTURE_RUN_PLACEMENT {
-            return Ok(PlacementOccurrence {
-                segment_index: u32::MAX,
-                translation_inline: 0.0,
-                translation_block: 0.0,
-            });
-        }
         let run_index = self
             .replacement_run_indices
             .get(usize::try_from(boundary_index).map_err(|_| EngineError::InvalidRequest)?)
