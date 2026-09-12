@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:19139caf8f2ebc2d766c07f8558a7cd147c7444867ef96443d014d16d5f85841'
+source_digest: 'sha256:9809521b93dbd16cf16b23ff4142f010f6f287f08bede99267dae7134ba5af2a'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -371,15 +371,16 @@ glyph into fixed Wasm scratch, then returns one frozen scalar object in O(select
 bulk caller-owned copy. The callback must finish synchronously:
 thenables, engine reentry, and retained-text mutation are rejected, and the indexed view expires on return or throw.
 
-Three implements the fragment-relative frontier's transform-returning form of the same callback for attached live
-deformation. `undefined` remains read-only. A bare exact-length `Matrix4[]` is Text-local; `{ space, matrices }` names
-layout paragraph coordinates (x-right/y-down), Text-local Three coordinates, or Three world coordinates. Every matrix is
-an absolute affine glyph frame in current visual index order, not a delta or a projective transform. The first transform
-result lazily enables one renderer-owned mat4 storage lane and performs one material/display-list refresh. Later results
-copy only the returned matrices, mark adjacent 16-float record ranges, and cross neither shaping nor render-plan
-publication. Stable physical-slot reuse resets a row before another glyph can inherit it, and `measureGlyphs()` applies
-the same retained matrices to interaction geometry. TypeGPU retains the read-only callback while its direct adapter is
-still a proof of concept; it does not inherit an unproved matrix-storage contract from Three.
+Three exposes attached live deformation separately through `Text.transformGlyphs(callback)`, leaving the shared
+`withGlyphs()` contract as a generic synchronous borrowed read. A bare exact-length `Matrix4[]` is Text-local;
+`{ space, matrices }` names layout paragraph coordinates (x-right/y-down), Text-local Three coordinates, or Three world
+coordinates. Every matrix is an absolute affine glyph frame in current visual index order, not a delta or a projective
+transform. The first transform result lazily enables one renderer-owned mat4 storage lane and performs one
+material/display-list refresh. Later results copy only the returned matrices, mark adjacent 16-float record ranges, and
+cross neither shaping nor render-plan publication. Stable physical-slot reuse resets a row before another glyph can
+inherit it, and `measureGlyphs()` applies the same retained matrices to interaction geometry. TypeGPU retains only the
+read callback while its direct adapter is still a proof of concept; it does not inherit an unproved matrix-storage
+contract from Three.
 
 These overrides compose after compact layout placement and do not dirty shaping, line fitting, static raster records,
 batch keys, or draw spans. An equal-count topology change reapplies matrix index `i` to the new glyph at `i`; a changed

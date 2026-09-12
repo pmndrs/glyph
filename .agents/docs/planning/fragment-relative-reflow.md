@@ -649,14 +649,14 @@ existing fixed Wasm scratch from slice placement plus local glyph data. `glyphs(
 materialize caller-owned arrays because the caller requested a full copy; they are not resize hot paths. Query results
 must remain synchronous, lifetime-bounded, and invalid after the callback.
 
-Milestone 12 also extends that callback into an opt-in live deformation boundary. Returning `undefined` keeps the
-existing read-only behavior. Returning one transform for every glyph in the borrowed layout installs or updates a
-presentation override for that exact accepted topology; a different length, an expired view, reentry, or non-finite
-transform rejects atomically. The logical API exposes glyph-indexed local, paragraph, or world-space transforms rather
-than buffer lanes or shader layouts. Adapters pack the result into renderer-owned dirty ranges and compose it after the
-ordinary run/segment x/y placement, so a physics tick can update only overridden glyph transforms without reshaping,
-changing batch or draw topology, or republishing unchanged raster data. Full 3D position/rotation/scale or matrix
-transforms are part of the acceptance surface, not a Three-only snapshot convention.
+Milestone 12 adds the distinct `transformGlyphs(callback)` live deformation boundary while preserving
+`withGlyphs(callback)` as a generic read. Returning one transform for every glyph in the borrowed layout installs or
+updates a presentation override for that exact accepted topology; a different length, an expired view, reentry, or
+non-finite transform rejects atomically. The logical API exposes glyph-indexed local, paragraph, or world-space
+transforms rather than buffer lanes or shader layouts. Adapters pack the result into renderer-owned dirty ranges and
+compose it after the ordinary run/segment x/y placement, so a physics tick can update only overridden glyph transforms
+without reshaping, changing batch or draw topology, or republishing unchanged raster data. Full 3D
+position/rotation/scale or matrix transforms are part of the acceptance surface, not a Three-only snapshot convention.
 
 An accepted topology change replaces the positional index mapping and causes the next callback to observe the new glyph
 count and order. Transform index `i` then applies to whichever glyph occupies index `i`; removed trailing indexes retire
@@ -1014,8 +1014,9 @@ The shadow oracle and final implementation cover:
 - continuous and discontinuous under/content/over decorations;
 - measure-before-render, measure-after-render, width no-op, hit testing, `withGlyphs`, full glyph copies, and detached
   slices;
-- read-only and transform-returning `withGlyphs` callbacks; exact 1:1 length validation; local, paragraph, and world-space
-  per-glyph deformation; physics-frame dirty-range updates without reshaping or draw churn; topology-change rebinding;
+- generic read-only `withGlyphs` callbacks and distinct transform-returning `transformGlyphs` callbacks; exact 1:1
+  length validation; local, paragraph, and world-space per-glyph deformation; physics-frame dirty-range updates without
+  reshaping or draw churn; topology-change rebinding;
   atomic rejection; and detached-copy lifecycle independence;
 - commit, abort, retry, removal, independent exclusion/slot capacity growth, publication acknowledgement, vertex/range
   retirement, generation reuse, stale-handle rejection, and `ResultTooLarge` rollback;
