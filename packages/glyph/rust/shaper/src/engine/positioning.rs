@@ -2373,10 +2373,7 @@ impl PositionedGlyphArena {
                 identity: if allow_dense_identity && placement_cluster.dense {
                     PlacementIdentity::Dense
                 } else {
-                    PlacementIdentity::StableSource {
-                        segment_anchor: placement_cluster.segment_anchor,
-                        source_anchor: placement_cluster.segment_anchor,
-                    }
+                    PlacementIdentity::StableSource
                 },
                 segment_anchor: placement_cluster.segment_anchor,
                 source_anchor: clusters.stable_ids[overlap_start],
@@ -2847,10 +2844,7 @@ impl PositionedGlyphArena {
                 run_handle: run.run_handle,
                 placement_handle: None,
                 canonical_revision: run.canonical_revision,
-                identity: PlacementIdentity::StableSource {
-                    segment_anchor: clusters.stable_ids[owner_cluster],
-                    source_anchor: clusters.stable_ids[owner_cluster],
-                },
+                identity: PlacementIdentity::StableSource,
                 segment_anchor: clusters.stable_ids[owner_cluster],
                 source_anchor: clusters.stable_ids[owner_cluster],
                 numeric_block_ordinal: block_index

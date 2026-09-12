@@ -87,10 +87,7 @@ pub(crate) enum SliceRole {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum PlacementIdentity {
-    StableSource {
-        segment_anchor: u32,
-        source_anchor: u32,
-    },
+    StableSource,
     Dense,
 }
 
@@ -507,10 +504,7 @@ impl PlacementState {
             run_handle: None,
             placement_handle: None,
             canonical_revision: None,
-            identity: PlacementIdentity::StableSource {
-                segment_anchor,
-                source_anchor: segment_anchor,
-            },
+            identity: PlacementIdentity::StableSource,
             segment_anchor,
             source_anchor: segment_anchor,
             numeric_block_ordinal: u32::MAX,
@@ -1297,10 +1291,7 @@ mod tests {
             run_handle: None,
             placement_handle: None,
             canonical_revision: None,
-            identity: PlacementIdentity::StableSource {
-                segment_anchor: 1,
-                source_anchor: 1,
-            },
+            identity: PlacementIdentity::StableSource,
             segment_anchor: 1,
             source_anchor: cluster + 1,
             numeric_block_ordinal: 0,
