@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:29075e31e739e9d2b069bd9d61282ceea92c391fbd401b1f3207c171a7253841'
+source_digest: 'sha256:19139caf8f2ebc2d766c07f8558a7cd147c7444867ef96443d014d16d5f85841'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -553,7 +553,10 @@ For retained exact-width, non-ellipsis flow with stable region/exclusion topolog
 region now unions their old/new block bounds and margins into one dirty band. Rust retains every preceding line, resumes
 the existing band composer at the retained source cursor, and waits until it crosses the complete future dirty horizon
 before accepting an exact line/fragment/slot suffix certificate. Structural, cross-region, flexible-width, and ellipsis
-changes fall back to the cold authority. Drop-cap paragraphs use the same path: the core rederives the cap from current
+changes fall back to the cold authority. Edit-driven and exclusion-driven convergence share one eligibility check, flow and
+drop-cap context builder, retained-suffix publisher, and font-resolution input; their stopping rules remain explicit because
+an edit follows prior line slots while a dirty exclusion must cross its future block horizon. Drop-cap paragraphs use the same
+path: the core rederives the cap from current
 run geometry, reapplies its cut while recomposing the dirty band, realigns baseline-aligned caps from the retained or new
 first body line, and accepts the suffix only when it matches the cold authority. The remaining projected-object and
 drop-cap matrix belongs to

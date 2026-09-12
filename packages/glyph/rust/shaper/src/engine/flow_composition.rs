@@ -666,6 +666,85 @@ impl FlowLayoutArena {
         Ok(())
     }
 
+    fn supports_local_convergence(
+        previous: &Self,
+        max_lines: usize,
+        max_slots_per_band: usize,
+    ) -> bool {
+        previous.ellipsis_threads.is_empty()
+            && !previous.lines.is_empty()
+            && previous.lines.len() <= max_lines
+            && previous
+                .lines
+                .iter()
+                .all(|line| usize::from(line.fragment_count) <= max_slots_per_band)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn convergence_context(
+        previous: &Self,
+        geometry: &FlowGeometryArena,
+        constraint: FlowConstraint,
+        clusters: &ClusterArena,
+        runs: &[ShapingRun],
+        styles: &[StyleSegment],
+        paragraph_level: u8,
+        metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
+        first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
+    ) -> Result<(Option<FlowDropCap>, Option<FlowDropCap>, usize), EngineError> {
+        let region_start =
+            usize::try_from(constraint.region_start).map_err(|_| EngineError::InvalidRequest)?;
+        let first_region_index = region_start
+            .checked_add(usize::from(constraint.resume_region))
+            .ok_or(EngineError::InvalidRequest)?;
+        let first_region = geometry
+            .regions
+            .get(first_region_index)
+            .ok_or(EngineError::InvalidRequest)?
+            .record;
+        let mut first_block =
+            f64::from(first_region.block_start) + f64::from(constraint.resume_block_offset);
+        if constraint.resume_cluster == 0 && constraint.resume_region == 0 {
+            first_block += f64::from(constraint.space_before);
+        }
+        let drop_cap = prepare_drop_cap(
+            constraint,
+            first_region,
+            clusters,
+            runs,
+            paragraph_level,
+            first_block,
+            styles,
+            metrics_for,
+            first_font_for_stack,
+        )?;
+        let previous_cap = previous
+            .drop_caps
+            .iter()
+            .copied()
+            .find(|cap| cap.line.flow_thread_id == constraint.flow_thread_id);
+        let thread_line_start = previous
+            .lines
+            .iter()
+            .position(|line| line.flow_thread_id == constraint.flow_thread_id)
+            .ok_or(EngineError::InvalidRequest)?;
+        Ok((drop_cap, previous_cap, thread_line_start))
+    }
+
+    fn append_converged_suffix(
+        &mut self,
+        previous: &Self,
+        geometry: &FlowGeometryArena,
+        flow_thread_id: u32,
+        replacement_cap: Option<FlowDropCap>,
+        converged_line: usize,
+    ) -> Result<(), EngineError> {
+        for suffix in converged_line + 1..previous.lines.len() {
+            self.append_retained_line(previous, suffix)?;
+        }
+        self.append_reconciled_drop_caps(previous, geometry, flow_thread_id, replacement_cap)
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn rebuild_until_state_converges(
         &mut self,
@@ -684,13 +763,7 @@ impl FlowLayoutArena {
         first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
     ) -> Result<bool, EngineError> {
         self.clear();
-        if !previous.ellipsis_threads.is_empty()
-            || previous.lines.is_empty()
-            || previous.lines.len() > max_lines
-            || previous
-                .lines
-                .iter()
-                .any(|line| usize::from(line.fragment_count) > max_slots_per_band)
+        if !Self::supports_local_convergence(previous, max_lines, max_slots_per_band)
             || previous_clusters.starts.len() != clusters.starts.len()
         {
             return Ok(false);
@@ -735,42 +808,17 @@ impl FlowLayoutArena {
             .iter()
             .find(|constraint| constraint.flow_thread_id == flow_thread_id)
             .ok_or(EngineError::InvalidRequest)?;
-        let region_start =
-            usize::try_from(constraint.region_start).map_err(|_| EngineError::InvalidRequest)?;
-        let first_region_index = region_start
-            .checked_add(usize::from(constraint.resume_region))
-            .ok_or(EngineError::InvalidRequest)?;
-        let first_region = geometry
-            .regions
-            .get(first_region_index)
-            .ok_or(EngineError::InvalidRequest)?
-            .record;
-        let mut first_block =
-            f64::from(first_region.block_start) + f64::from(constraint.resume_block_offset);
-        if constraint.resume_cluster == 0 && constraint.resume_region == 0 {
-            first_block += f64::from(constraint.space_before);
-        }
-        let mut drop_cap = prepare_drop_cap(
+        let (mut drop_cap, previous_cap, thread_line_start) = Self::convergence_context(
+            previous,
+            geometry,
             constraint,
-            first_region,
             clusters,
             runs,
-            paragraph_level,
-            first_block,
             styles,
+            paragraph_level,
             metrics_for,
             first_font_for_stack,
         )?;
-        let previous_cap = previous
-            .drop_caps
-            .iter()
-            .copied()
-            .find(|cap| cap.line.flow_thread_id == flow_thread_id);
-        let thread_line_start = previous
-            .lines
-            .iter()
-            .position(|line| line.flow_thread_id == flow_thread_id)
-            .ok_or(EngineError::InvalidRequest)?;
         if edited_cap.is_some() || previous_cap != drop_cap {
             line_index = thread_line_start;
         }
@@ -894,10 +942,13 @@ impl FlowLayoutArena {
                 false
             };
             if metrics_stable && cursor.cluster() == old_cluster_end && !next_cap_affected {
-                for suffix in candidate + 1..previous.lines.len() {
-                    self.append_retained_line(previous, suffix)?;
-                }
-                self.append_reconciled_drop_caps(previous, geometry, flow_thread_id, drop_cap)?;
+                self.append_converged_suffix(
+                    previous,
+                    geometry,
+                    flow_thread_id,
+                    drop_cap,
+                    candidate,
+                )?;
                 let previous_flexible_end = previous.flexible_inline_end(old_line.flow_thread_id);
                 let next_flexible_end =
                     if flexible_for_flow_thread(geometry, old_line.flow_thread_id)? {
@@ -944,14 +995,7 @@ impl FlowLayoutArena {
         first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
     ) -> Result<bool, EngineError> {
         self.clear();
-        if !previous.ellipsis_threads.is_empty()
-            || previous.lines.is_empty()
-            || previous.lines.len() > max_lines
-            || previous
-                .lines
-                .iter()
-                .any(|line| usize::from(line.fragment_count) > max_slots_per_band)
-        {
+        if !Self::supports_local_convergence(previous, max_lines, max_slots_per_band) {
             return Ok(false);
         }
         let Some(region_index) = geometry
@@ -977,29 +1021,14 @@ impl FlowLayoutArena {
         if constraint.width_mode != AXIS_EXACT || constraint.overflow == OVERFLOW_ELLIPSIS {
             return Ok(false);
         }
-        let constraint_region_start =
-            usize::try_from(constraint.region_start).map_err(|_| EngineError::InvalidRequest)?;
-        let first_region_index = constraint_region_start
-            .checked_add(usize::from(constraint.resume_region))
-            .ok_or(EngineError::InvalidRequest)?;
-        let first_region_record = geometry
-            .regions
-            .get(first_region_index)
-            .ok_or(EngineError::InvalidRequest)?
-            .record;
-        let mut first_block =
-            f64::from(first_region_record.block_start) + f64::from(constraint.resume_block_offset);
-        if constraint.resume_cluster == 0 && constraint.resume_region == 0 {
-            first_block += f64::from(constraint.space_before);
-        }
-        let mut drop_cap = prepare_drop_cap(
+        let (mut drop_cap, _, thread_line_start) = Self::convergence_context(
+            previous,
+            geometry,
             constraint,
-            first_region_record,
             clusters,
             runs,
-            paragraph_level,
-            first_block,
             styles,
+            paragraph_level,
             metrics_for,
             first_font_for_stack,
         )?;
@@ -1089,11 +1118,6 @@ impl FlowLayoutArena {
                 .map_err(|_| EngineError::ResultTooLarge)?
                 .min(max_lines)
         };
-        let thread_line_start = previous
-            .lines
-            .iter()
-            .position(|line| line.flow_thread_id == constraint.flow_thread_id)
-            .ok_or(EngineError::InvalidRequest)?;
         let mut old_search = prefix_end;
         let block_end = f64::from(region.record.block_end);
         while !cursor.is_complete(clusters.starts.len())
@@ -1173,14 +1197,12 @@ impl FlowLayoutArena {
             {
                 continue;
             }
-            for suffix in old_search + 1..previous.lines.len() {
-                self.append_retained_line(previous, suffix)?;
-            }
-            self.append_reconciled_drop_caps(
+            self.append_converged_suffix(
                 previous,
                 geometry,
                 constraint.flow_thread_id,
                 drop_cap,
+                old_search,
             )?;
             self.recomposed_lines = Some((prefix_end, old_search + 1));
             return Ok(true);
