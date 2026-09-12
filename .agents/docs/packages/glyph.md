@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:aebef87ab6f90bd6417a867e476f833370c50a18ca8af1ad019dd5c2976ee6c2'
+source_digest: 'sha256:29075e31e739e9d2b069bd9d61282ceea92c391fbd401b1f3207c171a7253841'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1356,7 +1356,9 @@ reuses committed glyph-local, raster, and effect rows, copies compact placement 
 thread, and transform metadata. Internal positioned semantic rows keep local origin and ink coordinates plus their
 placement-segment index; pure placement changes therefore preserve their content revision and do not dirty static Codec
 position inputs. Public borrowed/full glyph queries and CPU/plan ink bounds compose absolute f32 values lazily from the
-authoritative segment translation. Retained gather resolves only genuinely changed Codec dependencies without repeating
+authoritative segment translation. Plan gather requires that positioned semantic row and translation and derives semantic
+identity from the same row; malformed internal input is rejected rather than interpreting local coordinates as absolute or
+falling back to a parallel semantic lane. Retained gather resolves only genuinely changed Codec dependencies without repeating
 font selection, raster resource lookup, full `PlanGlyph` construction, or glyph-position arithmetic. Stable/glyph/font
 identity and exact outline presence authenticate retained rows; any mismatch aborts the candidate. Other changes use the
 general authorities.
