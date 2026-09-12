@@ -25,10 +25,12 @@ use super::{
         ClusterFinish, RunLocalArena, RunLocalBuildError, RunLocalGlyph, RunLocalGlyphInput,
         RunLocalWriter,
     },
-    run_slot::RunHandle,
     shaping_state::{BoundaryShape, BoundaryShapeArena, ShapingRun},
     style_state::{ResolvedStyle, StyleSegment},
 };
+
+#[cfg(any(test, feature = "kernel-lab"))]
+use super::run_slot::RunHandle;
 
 pub(crate) const SEMANTIC_F32_BASE_FIELD_COUNT: usize = 6;
 pub(crate) const SEMANTIC_F32_FIELD_COUNT: usize = 9;
@@ -1424,6 +1426,7 @@ impl PositionedGlyphArena {
         &self.replacement_run_local
     }
 
+    #[cfg(any(test, feature = "kernel-lab"))]
     pub(crate) fn bind_replacement_run_handle(
         &mut self,
         index: usize,
@@ -1443,6 +1446,7 @@ impl PositionedGlyphArena {
         Ok(())
     }
 
+    #[cfg(any(test, feature = "kernel-lab"))]
     pub(crate) fn bind_placement_run_handles(
         &mut self,
         layout_runs: &[LayoutRun],
@@ -1642,6 +1646,7 @@ impl PositionedGlyphArena {
                     font_handle: spec.font_handle,
                     numeric_blocks: Default::default(),
                     canonical_revision: Some(canonical_revision),
+                    #[cfg(any(test, feature = "kernel-lab"))]
                     run_handle: None,
                 });
                 run_indices[role_index] = Some(run_index);
@@ -2361,6 +2366,7 @@ impl PositionedGlyphArena {
                 layout_run_owner: LayoutRunOwner::Paragraph,
                 layout_run_index: u32::try_from(layout_run_index)
                     .map_err(|_| EngineError::ResultTooLarge)?,
+                #[cfg(any(test, feature = "kernel-lab"))]
                 run_handle: layout_run.run_handle,
                 placement_handle: None,
                 canonical_revision: layout_run.canonical_revision,
@@ -2837,6 +2843,7 @@ impl PositionedGlyphArena {
                 fragment_index: self.placement_fragment_index,
                 layout_run_owner: LayoutRunOwner::Replacement,
                 layout_run_index: run_index,
+                #[cfg(any(test, feature = "kernel-lab"))]
                 run_handle: run.run_handle,
                 placement_handle: None,
                 canonical_revision: run.canonical_revision,

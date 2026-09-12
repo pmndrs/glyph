@@ -4,8 +4,10 @@ use super::{
     EngineError,
     cluster_state::{LayoutRun, LayoutRunSourceKind, RunCanonicalRevision},
     placement_slot::PlacementHandle,
-    run_slot::RunHandle,
 };
+
+#[cfg(any(test, feature = "kernel-lab"))]
+use super::run_slot::RunHandle;
 
 #[cfg(any(test, feature = "kernel-lab"))]
 macro_rules! define_arena {
@@ -111,6 +113,7 @@ pub(crate) struct PlacementSegment {
     pub fragment_index: u32,
     pub layout_run_owner: LayoutRunOwner,
     pub layout_run_index: u32,
+    #[cfg(any(test, feature = "kernel-lab"))]
     pub run_handle: Option<RunHandle>,
     pub placement_handle: Option<PlacementHandle>,
     pub canonical_revision: Option<RunCanonicalRevision>,
@@ -330,7 +333,7 @@ impl PlacementState {
         (self.segments.len(), visual_span_start)
     }
 
-    #[cfg(any(test, feature = "kernel-lab"))]
+    #[cfg(test)]
     pub(crate) fn glyph_translation(&self, glyph_index: usize) -> Option<SegmentTranslation> {
         let mut instance_start = 0usize;
         for (segment, &count) in self.segment_instance_counts.iter().enumerate() {
@@ -500,6 +503,7 @@ impl PlacementState {
             fragment_index,
             layout_run_owner,
             layout_run_index,
+            #[cfg(any(test, feature = "kernel-lab"))]
             run_handle: None,
             placement_handle: None,
             canonical_revision: None,
@@ -799,7 +803,10 @@ impl PlacementState {
             slice.fragment_index =
                 retained.new_fragment_start + (slice.fragment_index - retained.old_fragment_start);
             slice.layout_run_index = self.resolve_run(slice, layout_runs, replacement_runs)?.0;
-            slice.run_handle = None;
+            #[cfg(any(test, feature = "kernel-lab"))]
+            {
+                slice.run_handle = None;
+            }
             slice.placement_handle = None;
             let placement = previous.translations.row(slice_start + relative);
             self.segments.push(slice);
@@ -925,6 +932,7 @@ impl PlacementState {
         }
     }
 
+    #[cfg(any(test, feature = "kernel-lab"))]
     pub(crate) fn bind_run_handles(
         &mut self,
         layout_runs: &[LayoutRun],

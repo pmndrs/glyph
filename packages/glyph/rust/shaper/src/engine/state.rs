@@ -8,10 +8,7 @@ use crate::{
 };
 
 use super::{
-    cluster_state::{
-        BoundaryRunRole, ClusterArena, ClusterBuildInput, LayoutRunSourceKind, RunCanonicalInput,
-        RunCanonicalRevision,
-    },
+    cluster_state::{ClusterArena, ClusterBuildInput, LayoutRunSourceKind, RunCanonicalInput},
     codec::{ALLOCATION_ORDERED_DIRECT, CapabilitySetId, ValidatedCodec},
     codec_gather::{
         CodecGatherWorkspace, DEFAULT_GATHER_RECORD_CAPACITY, GatherError, LayoutPlanInput,
@@ -30,7 +27,7 @@ use super::{
     positioning::{PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT},
     render_plan::RenderPlanView,
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
-    run_slot::{DesiredRun, RunSlotArena, RunSlotChange, RunSlotError},
+    run_slot::RunSlotError,
     semantic_wire::RecordSpan,
     session_placement::{SessionPlacementInput, SessionPlacementRow},
     shaping_state::{BoundaryShape, BoundaryShapeArena, ShapeArena, ShapingRun, ShapingRunArena},
@@ -41,7 +38,10 @@ use super::{
     },
 };
 
-const RETAIN_RUN_HANDLES: bool = cfg!(any(test, feature = "kernel-lab"));
+#[cfg(any(test, feature = "kernel-lab"))]
+use super::cluster_state::{BoundaryRunRole, RunCanonicalRevision};
+#[cfg(any(test, feature = "kernel-lab"))]
+use super::run_slot::{DesiredRun, RunSlotArena, RunSlotChange};
 
 /// What a rejected frame can name about its own cause.
 ///
@@ -227,7 +227,9 @@ struct PlannerState {
     pending_next_content_revision: u32,
     next_paragraph_incarnation: u32,
     pending_next_paragraph_incarnation: u32,
+    #[cfg(any(test, feature = "kernel-lab"))]
     run_slots: RunSlotArena<RunLogicalKey, RunCanonicalRevision>,
+    #[cfg(any(test, feature = "kernel-lab"))]
     desired_runs: Vec<DesiredRun<RunLogicalKey, RunCanonicalRevision>>,
     placement_slots: PlacementSlotArena<PlacementLogicalKey, ()>,
     desired_placements: Vec<DesiredPlacement<PlacementLogicalKey, ()>>,
@@ -274,12 +276,14 @@ impl ParagraphIncarnation {
     }
 }
 
+#[cfg(any(test, feature = "kernel-lab"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct RunLogicalKey {
     paragraph: ParagraphIncarnation,
     anchor: RunLogicalAnchor,
 }
 
+#[cfg(any(test, feature = "kernel-lab"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum RunLogicalAnchor {
     Text(NonZeroU32),
@@ -1355,7 +1359,8 @@ impl TextEngine {
         // A completed renderer fence is external monotonic state. Validate and accept it
         // before taking an adoptable speculative transaction; later preparation aborts do
         // not roll the fence back.
-        if RETAIN_RUN_HANDLES {
+        #[cfg(any(test, feature = "kernel-lab"))]
+        {
             planner
                 .run_slots
                 .acknowledge(request.acknowledged_publication_generation)
@@ -1513,7 +1518,8 @@ impl TextEngine {
                     .paragraphs
                     .iter()
                     .any(|paragraph| paragraph.positioned_changed);
-            if RETAIN_RUN_HANDLES {
+            #[cfg(any(test, feature = "kernel-lab"))]
+            {
                 let run_slots_changed = planner.lifecycle_changed
                     || planner.paragraphs.iter().any(|paragraph| {
                         paragraph.state.clusters.is_prepared()
@@ -1795,11 +1801,12 @@ impl TextEngine {
             return Err(EngineError::RevisionConflict);
         }
         planner.plan.commit().map_err(plan_error)?;
-        if RETAIN_RUN_HANDLES {
+        #[cfg(any(test, feature = "kernel-lab"))]
+        {
             planner.run_slots.commit();
+            planner.desired_runs.clear();
         }
         planner.placement_slots.commit();
-        planner.desired_runs.clear();
         planner.desired_placements.clear();
         planner.desired_placement_handles.clear();
         planner.session_placement_rows.clear();
@@ -2540,6 +2547,7 @@ impl PlannerState {
         }
     }
 
+    #[cfg(any(test, feature = "kernel-lab"))]
     fn prepare_run_slots(&mut self, publication_generation: u32) -> Result<(), EngineError> {
         let mut desired = core::mem::take(&mut self.desired_runs);
         desired.clear();
@@ -2794,7 +2802,7 @@ impl PlannerState {
                     }
                     .map(|run| run.source_kind)
                     .ok_or(EngineError::InvalidRequest)?;
-                    desired.push(DesiredRun::new(
+                    desired.push(DesiredPlacement::new(
                         placement_logical_key(paragraph.incarnation, *segment, run_source),
                         (),
                     ));
@@ -2897,11 +2905,12 @@ impl PlannerState {
     fn abort_pending(&mut self) {
         self.speculative = None;
         self.plan.abort();
-        if RETAIN_RUN_HANDLES {
+        #[cfg(any(test, feature = "kernel-lab"))]
+        {
             self.run_slots.abort();
+            self.desired_runs.clear();
         }
         self.placement_slots.abort();
-        self.desired_runs.clear();
         self.desired_placements.clear();
         self.desired_placement_handles.clear();
         self.session_placement_rows.clear();
