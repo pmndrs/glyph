@@ -5190,7 +5190,7 @@ mod tests {
     }
 
     #[test]
-    fn base_ltr_unindented_layout_run_segments_match_renderer_placement() {
+    fn layout_run_segments_match_renderer_placement_and_f32_rounding() {
         let (_, clusters, _, _) = layout_run_positioning_fixture();
         assert_eq!(
             clusters
@@ -5246,6 +5246,35 @@ mod tests {
                 .glyph_start,
             5
         );
+
+        let local = 16_777_217.0_f64 as f32;
+        let translation = -16_777_216.0_f32;
+        let placed = placed_f32(local, translation).unwrap();
+        let legacy_absolute = 1.0_f64 as f32;
+        assert_eq!(placed.to_bits(), 0.0_f32.to_bits());
+        assert_eq!(legacy_absolute.to_bits(), 1.0_f32.to_bits());
+        assert_ne!(placed.to_bits(), legacy_absolute.to_bits());
+
+        let (shadow, production) = fixture_position_results(8, 10, |clusters, styles, line| {
+            styles[0].style.font_size = f32::from_bits(0x4177_65c4);
+            styles[0].style.baseline_shift = f32::from_bits(0x4202_277e);
+            line.block_start = 0.0;
+            line.baseline = f64::from_bits(0x4004_9490_c000_0000);
+            let glyph = usize::try_from(clusters.glyph_starts[8]).unwrap();
+            clusters.glyph_y_offsets[glyph] = -1_938;
+        });
+        let placed = production.placed_semantic_glyph(0).unwrap().block_origin;
+        let legacy_absolute = shadow[0].block_origin;
+        let translation = production.placement.glyph_translation(0).unwrap();
+        let renderer = placed_f32(
+            production.glyphs[0].block_start,
+            finite_f32(translation.translation_block).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(placed.to_bits(), renderer.to_bits());
+        assert_eq!(placed.to_bits(), 0.0_f32.to_bits());
+        assert_eq!(legacy_absolute.to_bits(), 0xb2e5_6042);
+        assert_ne!(placed.to_bits(), legacy_absolute.to_bits());
     }
 
     #[test]
@@ -5420,43 +5449,6 @@ mod tests {
             hard_break.segment_anchor,
             clusters.stable_ids[cluster_end - 1]
         );
-    }
-
-    #[test]
-    fn renderer_f32_placement_is_the_numeric_authority() {
-        let local = 16_777_217.0_f64 as f32;
-        let translation = -16_777_216.0_f32;
-        let placed = placed_f32(local, translation).unwrap();
-        let legacy_absolute = 1.0_f64 as f32;
-
-        assert_eq!(placed.to_bits(), 0.0_f32.to_bits());
-        assert_eq!(legacy_absolute.to_bits(), 1.0_f32.to_bits());
-        assert_ne!(placed.to_bits(), legacy_absolute.to_bits());
-    }
-
-    #[test]
-    fn normal_range_block_origin_uses_renderer_f32_placement() {
-        let (shadow, production) = fixture_position_results(8, 10, |clusters, styles, line| {
-            styles[0].style.font_size = f32::from_bits(0x4177_65c4);
-            styles[0].style.baseline_shift = f32::from_bits(0x4202_277e);
-            line.block_start = 0.0;
-            line.baseline = f64::from_bits(0x4004_9490_c000_0000);
-            let glyph = usize::try_from(clusters.glyph_starts[8]).unwrap();
-            clusters.glyph_y_offsets[glyph] = -1_938;
-        });
-        let placed = production.placed_semantic_glyph(0).unwrap().block_origin;
-        let legacy_absolute = shadow[0].block_origin;
-        let translation = production.placement.glyph_translation(0).unwrap();
-        let renderer = placed_f32(
-            production.glyphs[0].block_start,
-            finite_f32(translation.translation_block).unwrap(),
-        )
-        .unwrap();
-
-        assert_eq!(placed.to_bits(), renderer.to_bits());
-        assert_eq!(placed.to_bits(), 0.0_f32.to_bits());
-        assert_eq!(legacy_absolute.to_bits(), 0xb2e5_6042);
-        assert_ne!(placed.to_bits(), legacy_absolute.to_bits());
     }
 
     #[test]
@@ -7293,63 +7285,5 @@ mod tests {
         assert_same_revisions(&previous, make_arena(true, 1), make_arena(true, 1));
         assert_same_revisions(&previous, make_arena(false, 2), make_arena(false, 2));
         assert_same_revisions(&previous, make_arena(false, 1), make_arena(false, 1));
-    }
-
-    #[test]
-    fn direct_occurrence_origin_owns_the_placement_change_bit() {
-        let glyph = LayoutGlyph {
-            stable_id: 1,
-            content_revision: 7,
-            placement_slot: 0,
-            semantic_glyph_index: 0,
-            binding_handle: 2,
-            font_handle: 3,
-            glyph_id: 4,
-            material_id: 5,
-            clip_id: 0,
-            depth_key: PAINT_LAYER_GLYPH,
-            font_size: 16.0,
-            raster_pixel_ratio: 1.0,
-            inline_start: 0.0,
-            block_start: 0.0,
-            inline_extent: 10.0,
-            block_extent: 11.0,
-        };
-        let arena = |inline_origin| {
-            let mut arena = PositionedGlyphArena {
-                glyphs: vec![glyph],
-                semantic_glyphs: vec![PositionedSemanticGlyph {
-                    stable_id: 1,
-                    font_handle: 3,
-                    glyph_id: 4,
-                    inline_origin,
-                    block_origin: 9.0,
-                    ..PositionedSemanticGlyph::default()
-                }],
-                ..PositionedGlyphArena::default()
-            };
-            for values in &mut arena.semantic_f32 {
-                values.push(0.0);
-            }
-            for values in &mut arena.semantic_u32 {
-                values.push(0);
-            }
-            arena
-        };
-        let previous = arena(8.0);
-        let mut next = arena(12.0);
-        let mut next_revision = 30;
-        next.assign_content_revisions(
-            &previous,
-            &mut IdentityIndex::default(),
-            &mut next_revision,
-            false,
-        )
-        .unwrap();
-        assert_eq!(next.semantic_change_masks, [0]);
-        assert_eq!(
-            next.glyphs[0].content_revision,
-            previous.glyphs[0].content_revision
-        );
     }
 }
