@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:a9bb975f5ebe0ccc396691b529345e408c5fd311c39b7235a8721ebe42011d58'
+source_digest: 'sha256:75e0be4180d72d6dfbbfad1ee3f5bc92199243c9d4017c7345f67a7c84dc7f34'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1332,11 +1332,12 @@ it has an explicit occurrence model, and keeps 4,096 homogeneous CJK clusters in
 corpus reconstructs all 332 already-published f32 coordinates exactly from line and observable-slice anchors, but the
 f64 reassociation counterexamples remain authoritative for the future CPU cutover.
 
-Break-independent numeric blocks, compact placement segments, planner-scoped run handles, and placement slots are now
-production-owned and populated by the single positioning traversal. Justification, L1/L2, hanging, boundary ownership,
-and exact f64 translation remain in core; the renderer receives only a per-glyph u32 slot and the selected f32x2 row.
-CPU semantic/query rows and renderer placement use the same ordered local-plus-placement f32 operation. Run, word,
-numeric-block, role, bidi, and justification metadata do not cross the renderer boundary.
+Break-independent numeric blocks, compact placement segments, and placement slots are production-owned and populated by
+the single positioning traversal. Planner-scoped run-handle reconciliation remains test/kernel-lab evidence and is absent
+from release state. Justification, L1/L2, hanging, boundary ownership, and exact f64 translation remain in core; the
+renderer receives only a per-glyph u32 slot and the selected f32x2 row. CPU semantic/query rows and renderer placement use
+the same ordered local-plus-placement f32 operation. Run, word, numeric-block, role, bidi, and justification metadata do
+not cross the renderer boundary.
 
 `ClusterArena` prepares one stable u32 placement-segment anchor per cluster after word fitting and LayoutRun topology are
 available. Short, sparse, and overflow word-sidecar modes retain the stable word root; dense break streams retain the
@@ -1415,9 +1416,9 @@ the seven technique records and reads one shared scene-owned x/y placement table
 texture nor an additional Codec buffer or draw. Direct TypeGPU remains a proof-of-concept, but this measured physical
 choice no longer exceeds the contract it advertises.
 
-Planner-scoped run and placement allocators reconcile the compact CPU topology transactionally and quarantine retired
-slots until renderer acknowledgement. They validate split/merge, replacement-run, abort/retry, and stale-handle behavior;
-their handles remain core-private and never become batch or draw identity.
+The planner-scoped placement allocator reconciles compact CPU placement topology transactionally and quarantines retired
+slots until renderer acknowledgement. The test/kernel-lab run allocator separately validates split/merge,
+replacement-run, abort/retry, and stale-handle behavior without becoming release, batch, or draw identity.
 
 The indexed direction keeps the existing batches, physical instances, order indirection, primitive spans, and draws.
 Stable-indirect rendering resolves logical to physical instance first; ordered-direct rendering already has the physical
