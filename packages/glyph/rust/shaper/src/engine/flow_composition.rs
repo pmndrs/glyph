@@ -2646,7 +2646,7 @@ mod tests {
     }
 
     #[test]
-    fn line_height_uses_the_stack_primary_and_can_be_tighter_than_natural_metrics() {
+    fn explicit_line_height_uses_the_stack_primary_and_publishes_tight_flow() {
         let clusters = quantized(ClusterArena {
             starts: vec![0],
             ends: vec![1],
@@ -2663,83 +2663,57 @@ mod tests {
         style.font_stack_handle = 7;
         style.has_line_height = true;
         style.line_height = 0.92;
+        let metrics = |handle| match handle {
+            1 => Some(FontMetrics {
+                units_per_em: 1_000,
+                ascender: 800,
+                descender: -200,
+                line_gap: 360,
+                underline_position: -100,
+                underline_thickness: 50,
+                strikeout_position: 300,
+                strikeout_size: 50,
+            }),
+            2 => panic!("selected fallback metrics must not determine the line box"),
+            _ => None,
+        };
+        let primary_font = |stack| (stack == 7).then_some(1);
         let styles = [StyleSegment {
             text_start: 0,
             text_end: 1,
             style,
         }];
-        let extents = extents_for_cluster(
-            &clusters,
-            &styles,
-            0,
-            |handle| match handle {
-                1 => Some(FontMetrics {
-                    units_per_em: 1_000,
-                    ascender: 800,
-                    descender: -200,
-                    line_gap: 360,
-                    underline_position: -100,
-                    underline_thickness: 50,
-                    strikeout_position: 300,
-                    strikeout_size: 50,
-                }),
-                2 => panic!("selected fallback metrics must not determine the line box"),
-                _ => None,
-            },
-            |stack| (stack == 7).then_some(1),
-        )
-        .unwrap();
+        let extents = extents_for_cluster(&clusters, &styles, 0, metrics, primary_font).unwrap();
         assert!((extents.height() - 9.2).abs() < 1e-5);
         assert!((extents.above - 7.6).abs() < 1e-5);
         assert!((extents.below - 1.6).abs() < 1e-5);
 
         let mut tight_style = style;
         tight_style.line_height = 0.5;
-        let tight = extents_for_cluster(
-            &clusters,
-            &[StyleSegment {
-                text_start: 0,
-                text_end: 1,
-                style: tight_style,
-            }],
-            0,
-            |handle| match handle {
-                1 => Some(FontMetrics {
-                    units_per_em: 1_000,
-                    ascender: 800,
-                    descender: -200,
-                    line_gap: 360,
-                    underline_position: -100,
-                    underline_thickness: 50,
-                    strikeout_position: 300,
-                    strikeout_size: 50,
-                }),
-                2 => panic!("selected fallback metrics must not determine the line box"),
-                _ => None,
-            },
-            |stack| (stack == 7).then_some(1),
-        )
-        .unwrap();
+        let tight_styles = [StyleSegment {
+            text_start: 0,
+            text_end: 1,
+            style: tight_style,
+        }];
+        let tight =
+            extents_for_cluster(&clusters, &tight_styles, 0, metrics, primary_font).unwrap();
         assert!((tight.height() - 5.0).abs() < 1e-5);
         assert!((tight.above - 5.5).abs() < 1e-5);
         assert!((tight.below + 0.5).abs() < 1e-5);
-    }
 
-    #[test]
-    fn full_flow_publishes_tight_explicit_line_height() {
-        let clusters = uniform_clusters(1, 1.0);
-        let mut style = ResolvedStyle::test_typography(10.0, 0.0, 0.0);
-        style.has_line_height = true;
-        style.line_height = 0.5;
-        let layout = composed(
-            &plain_geometry(constraint()),
-            &clusters,
-            &[StyleSegment {
-                text_start: 0,
-                text_end: 1,
-                style,
-            }],
-        );
+        let mut layout = FlowLayoutArena::default();
+        layout
+            .build(
+                &plain_geometry(constraint()),
+                &clusters,
+                &tight_styles,
+                &mut InlineSlotArena::default(),
+                8,
+                4,
+                metrics,
+                primary_font,
+            )
+            .unwrap();
 
         assert_eq!(layout.lines.len(), 1);
         assert_eq!(layout.lines[0].baseline, 5.5);
@@ -3590,7 +3564,7 @@ mod tests {
                     text_start: 0,
                     text_end: 2,
                     advance: 6.0,
-                    hung_advance: 0.0,
+                    hung_advance: 3.0,
                     hard_break: false,
                 },
                 slot_start: 0.0,
@@ -3617,61 +3591,6 @@ mod tests {
         assert_eq!(layout.fragments[0].line.cluster_end, 1);
         assert_eq!(layout.fragments[0].line.text_end, 1);
         assert_eq!(layout.fragments[0].line.advance, 8.0);
-    }
-
-    #[test]
-    fn ellipsis_truncation_clears_a_hung_terminating_space() {
-        // The fit may hand truncation a line whose trailing space hangs. Once the
-        // replacement terminates the line that suffix is gone or interior, so the hung
-        // width must not survive: RTL positioning discounts it from the pen, and a stale
-        // value would shift every glyph on the line by a space it no longer owns.
-        let clusters = quantized(ClusterArena {
-            starts: vec![0, 1, 2, 3],
-            ends: vec![1, 2, 3, 4],
-            advances: vec![3.0; 4],
-            flags: vec![CLUSTER_SAFE_BEFORE; 4],
-            ..ClusterArena::default()
-        });
-        let mut layout = FlowLayoutArena {
-            lines: vec![FlowLine {
-                flow_thread_id: 7,
-                region_id: 1,
-                transform_index: 0,
-                clip_id: 1,
-                fragment_start: 0,
-                fragment_count: 1,
-                align: ALIGN_START,
-                block_start: 0.0,
-                baseline: 8.0,
-                height: 10.0,
-            }],
-            fragments: vec![FlowFragment {
-                line: ComposedLine {
-                    cluster_start: 0,
-                    cluster_end: 2,
-                    text_start: 0,
-                    text_end: 2,
-                    advance: 6.0,
-                    hung_advance: 3.0,
-                    hard_break: false,
-                },
-                slot_start: 0.0,
-                slot_end: 10.0,
-                flexible_end: false,
-                boundary_index: NO_BOUNDARY,
-            }],
-            ..FlowLayoutArena::default()
-        };
-
-        layout
-            .truncate_for_ellipsis(7, &clusters, |cluster_end, _| {
-                Ok(EllipsisReplacement {
-                    cluster_start: cluster_end,
-                    advance_adjustment: 5.0,
-                })
-            })
-            .unwrap()
-            .unwrap();
         assert_eq!(
             layout.fragments[0].line.hung_advance, 0.0,
             "the ellipsis terminates the line, so nothing hangs off its end",

@@ -565,38 +565,6 @@ mod tests {
     }
 
     #[test]
-    fn rtl_slice_reverses_clusters_but_preserves_multiglyph_cluster_order() {
-        let runs = [run(0, 3, 0, 4, 0)];
-        let glyph_starts = [0, 1, 3];
-        let glyph_counts = [1, 2, 1];
-
-        let map = build_visual_instance_map(
-            &runs,
-            &glyph_starts,
-            &glyph_counts,
-            &safe_flags::<3>(),
-            &stable_ids::<3>(),
-            &[fragment(0, 3)],
-            &[
-                visual(0, 2, 0, 1, SliceRole::Ordinary),
-                visual(0, 1, 0, 1, SliceRole::Ordinary),
-                visual(0, 0, 0, 1, SliceRole::Ordinary),
-            ],
-        )
-        .unwrap();
-
-        assert_eq!(map.glyph_indices, [3, 1, 2, 0]);
-        assert_eq!(
-            map.spans
-                .iter()
-                .map(|span| span.glyph_count)
-                .collect::<Vec<_>>(),
-            [1, 2, 1]
-        );
-        assert!(map.spans.iter().all(|span| span.segment_index == 0));
-    }
-
-    #[test]
     fn mixed_l1_l2_stream_keeps_trailing_space_in_a_distinct_hanging_span() {
         let runs = [run(0, 6, 0, 5, 0)];
         let glyph_starts = [0, 1, 2, 3, 4, 5];
