@@ -3,7 +3,11 @@
 use alloc::vec::Vec;
 
 use super::{
-    codec::{BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, ScalarType},
+    codec::{BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, CapabilitySet, ScalarType},
+    plan_packing::{
+        PackingError, RecordRange, align_record_range, coalesce_buffer_ranges, grown_capacity,
+        record_alignment_for_stride,
+    },
     render_plan::{
         BUFFER_SESSION_SHARED, BufferRecord, CODEC_BUFFER_PLACEMENT, PATCH_ALLOCATE_OR_RESIZE,
         PATCH_WRITE, PatchRecord, RETIRE_BUFFER, RenderPlanView, RetirementRecord,
@@ -12,7 +16,8 @@ use super::{
 };
 
 const MIN_CAPACITY: u32 = 16;
-const MAX_COALESCED_GAP_BYTES: u32 = 128;
+const PLACEMENT_STRIDE: u32 = 8;
+const PLACEMENT_STRIDE_BYTES: usize = 8;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct SessionPlacementRow {
@@ -61,6 +66,7 @@ pub(crate) struct SessionPlacementCompiler {
     patches: Vec<PatchRecord>,
     retirements: Vec<RetirementRecord>,
     payload: Vec<u8>,
+    dirty_ranges: Vec<RecordRange>,
     publication_generation: u32,
     prepared: bool,
 }
@@ -69,6 +75,7 @@ impl SessionPlacementCompiler {
     pub(crate) fn prepare(
         &mut self,
         input: SessionPlacementInput<'_>,
+        capability: &CapabilitySet,
         publication_generation: u32,
         checkpoint: bool,
     ) -> Result<(), SessionPlacementError> {
@@ -81,8 +88,12 @@ impl SessionPlacementCompiler {
         validate_input(input)?;
         self.clear_pending();
         self.publication_generation = publication_generation;
-        let result =
-            self.prepare_placement(input.placement_rows, input.placement_capacity, checkpoint);
+        let result = self.prepare_placement(
+            input.placement_rows,
+            input.placement_capacity,
+            capability,
+            checkpoint,
+        );
         if result.is_err() {
             self.clear_pending();
             return result;
@@ -139,6 +150,7 @@ impl SessionPlacementCompiler {
         &mut self,
         rows: &[SessionPlacementRow],
         live_records: u32,
+        capability: &CapabilitySet,
         checkpoint: bool,
     ) -> Result<(), SessionPlacementError> {
         if live_records == 0 {
@@ -155,10 +167,15 @@ impl SessionPlacementCompiler {
             .as_ref()
             .is_none_or(|buffer| buffer.capacity < live_records);
         let (id, generation) = if replaced {
+            let record_alignment =
+                record_alignment_for_stride(PLACEMENT_STRIDE, capability.update_alignment);
             let capacity = grown_capacity(
-                self.placement.as_ref().map_or(0, |buffer| buffer.capacity),
+                self.placement
+                    .as_ref()
+                    .map_or(MIN_CAPACITY.max(record_alignment), |buffer| buffer.capacity),
                 live_records,
-            )?;
+            )
+            .map_err(packing_error)?;
             let generation = next_generation(self.placement.as_ref())?;
             let allocation = allocate_buffer(
                 SESSION_PLACEMENT_BUFFER_ID,
@@ -206,8 +223,13 @@ impl SessionPlacementCompiler {
             rows,
             id,
             generation,
-            &mut self.patches,
-            &mut self.payload,
+            &mut PlacementWriteOutput {
+                capability,
+                live_records,
+                dirty_ranges: &mut self.dirty_ranges,
+                patches: &mut self.patches,
+                payload: &mut self.payload,
+            },
         )?;
         self.pending_placement = PendingBuffer {
             replace: replaced,
@@ -224,6 +246,7 @@ impl SessionPlacementCompiler {
         self.patches.clear();
         self.retirements.clear();
         self.payload.clear();
+        self.dirty_ranges.clear();
         self.publication_generation = 0;
     }
 
@@ -246,19 +269,6 @@ fn validate_input(input: SessionPlacementInput<'_>) -> Result<(), SessionPlaceme
         previous = Some(row.slot);
     }
     Ok(())
-}
-
-fn grown_capacity(current: u32, required: u32) -> Result<u32, SessionPlacementError> {
-    if required <= current {
-        return Ok(current);
-    }
-    let mut capacity = current.max(MIN_CAPACITY);
-    while capacity < required {
-        capacity = capacity
-            .checked_mul(2)
-            .ok_or(SessionPlacementError::ArithmeticOverflow)?;
-    }
-    Ok(capacity)
 }
 
 fn next_generation(buffer: Option<&SessionBuffer>) -> Result<u32, SessionPlacementError> {
@@ -363,98 +373,128 @@ fn push_retirement(
     Ok(())
 }
 
+struct PlacementWriteOutput<'a> {
+    capability: &'a CapabilitySet,
+    live_records: u32,
+    dirty_ranges: &'a mut Vec<RecordRange>,
+    patches: &'a mut Vec<PatchRecord>,
+    payload: &'a mut Vec<u8>,
+}
+
 fn write_placement_ranges(
     previous: Option<&SessionBuffer>,
     rows: &[SessionPlacementRow],
     id: u32,
     generation: u32,
-    patches: &mut Vec<PatchRecord>,
-    payload: &mut Vec<u8>,
+    output: &mut PlacementWriteOutput<'_>,
 ) -> Result<(), SessionPlacementError> {
-    let mut index = 0usize;
-    while index < rows.len() {
-        let row = rows[index];
-        if previous.is_some_and(|buffer| same_placement(buffer, row)) {
-            index += 1;
+    output.dirty_ranges.clear();
+    let record_alignment =
+        record_alignment_for_stride(PLACEMENT_STRIDE, output.capability.update_alignment);
+    for row in rows {
+        if previous.is_some_and(|buffer| same_placement(buffer, *row)) {
             continue;
         }
-        let start_slot = row.slot;
-        let payload_start = payload.len();
-        let mut final_changed_index = index;
-        let mut final_changed_slot = start_slot;
-        let mut candidate = index + 1;
-        while candidate < rows.len() {
-            let candidate_row = rows[candidate];
-            if !previous.is_some_and(|buffer| same_placement(buffer, candidate_row)) {
-                let gap_bytes = candidate_row
-                    .slot
-                    .checked_sub(final_changed_slot)
-                    .and_then(|slots| slots.checked_sub(1))
-                    .and_then(|slots| slots.checked_mul(8))
-                    .ok_or(SessionPlacementError::InvalidInput)?;
-                if gap_bytes > MAX_COALESCED_GAP_BYTES {
-                    break;
-                }
-                final_changed_index = candidate;
-                final_changed_slot = candidate_row.slot;
-            }
-            candidate += 1;
+        reserve(output.dirty_ranges, 1)?;
+        output.dirty_ranges.push(
+            align_record_range(
+                RecordRange {
+                    start: row.slot,
+                    end: row
+                        .slot
+                        .checked_add(1)
+                        .ok_or(SessionPlacementError::ArithmeticOverflow)?,
+                },
+                record_alignment,
+            )
+            .map_err(packing_error)?,
+        );
+    }
+    coalesce_buffer_ranges(
+        output.dirty_ranges,
+        PLACEMENT_STRIDE,
+        output.capability,
+        output.live_records,
+    )
+    .map_err(packing_error)?;
+
+    let mut row_index = 0usize;
+    for range in output.dirty_ranges.iter().copied() {
+        while rows
+            .get(row_index)
+            .is_some_and(|row| row.slot < range.start)
+        {
+            row_index += 1;
         }
+        let payload_start = output.payload.len();
         let count = usize::try_from(
-            final_changed_slot
-                .checked_sub(start_slot)
-                .and_then(|distance| distance.checked_add(1))
+            range
+                .end
+                .checked_sub(range.start)
                 .ok_or(SessionPlacementError::ArithmeticOverflow)?,
         )
         .map_err(|_| SessionPlacementError::ArithmeticOverflow)?;
         reserve(
-            payload,
+            output.payload,
             count
-                .checked_mul(8)
+                .checked_mul(PLACEMENT_STRIDE_BYTES)
                 .ok_or(SessionPlacementError::ArithmeticOverflow)?,
         )?;
-        let mut row_index = index;
         for offset in 0..count {
-            let slot = start_slot
+            let slot = range
+                .start
                 .checked_add(
                     u32::try_from(offset).map_err(|_| SessionPlacementError::ArithmeticOverflow)?,
                 )
                 .ok_or(SessionPlacementError::ArithmeticOverflow)?;
             if rows.get(row_index).is_some_and(|row| row.slot == slot) {
                 let row = rows[row_index];
-                payload.extend_from_slice(&row.inline.to_le_bytes());
-                payload.extend_from_slice(&row.block.to_le_bytes());
+                output.payload.extend_from_slice(&row.inline.to_le_bytes());
+                output.payload.extend_from_slice(&row.block.to_le_bytes());
                 row_index += 1;
             } else if let Some(buffer) = previous {
                 let start = usize::try_from(slot)
                     .ok()
-                    .and_then(|slot| slot.checked_mul(8))
+                    .and_then(|slot| slot.checked_mul(PLACEMENT_STRIDE_BYTES))
                     .ok_or(SessionPlacementError::ArithmeticOverflow)?;
                 let end = start
-                    .checked_add(8)
+                    .checked_add(PLACEMENT_STRIDE_BYTES)
                     .ok_or(SessionPlacementError::ArithmeticOverflow)?;
-                payload.extend_from_slice(
+                output.payload.extend_from_slice(
                     buffer
                         .bytes
                         .get(start..end)
                         .ok_or(SessionPlacementError::InvalidInput)?,
                 );
             } else {
-                payload.extend_from_slice(&[0; 8]);
+                output
+                    .payload
+                    .extend_from_slice(&[0; PLACEMENT_STRIDE_BYTES]);
             }
         }
         push_write(
             id,
             generation,
-            start_slot as usize,
+            usize::try_from(range.start).map_err(|_| SessionPlacementError::ArithmeticOverflow)?,
             count,
             payload_start,
-            8,
-            patches,
+            PLACEMENT_STRIDE_BYTES,
+            output.patches,
         )?;
-        index = final_changed_index + 1;
     }
     Ok(())
+}
+
+fn packing_error(error: PackingError) -> SessionPlacementError {
+    match error {
+        PackingError::AllocationFailed => SessionPlacementError::AllocationFailed,
+        PackingError::ArithmeticOverflow | PackingError::CapacityExceeded => {
+            SessionPlacementError::ArithmeticOverflow
+        }
+        PackingError::InvalidIdentity | PackingError::Codec(_) => {
+            SessionPlacementError::InvalidInput
+        }
+    }
 }
 
 fn push_write(
@@ -572,6 +612,23 @@ fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), SessionPlace
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::codec::CapabilitySetId;
+
+    fn capability() -> CapabilitySet {
+        CapabilitySet {
+            id: CapabilitySetId(0),
+            flags: 0,
+            max_buffer_bytes: 4096,
+            update_alignment: 4,
+            coalesce_gap_bytes: 128,
+            range_call_penalty_bytes: 0,
+            max_buffers_per_draw: 8,
+            max_resources_per_draw: 8,
+            max_indirect_draws: 0,
+            fragmentation_budget: 8,
+            whole_buffer_threshold_basis_points: 10_000,
+        }
+    }
 
     fn row(slot: u32, inline: f32, block: f32) -> SessionPlacementRow {
         SessionPlacementRow {
@@ -598,6 +655,7 @@ mod tests {
                     placement_rows: &[row(0, 1.0, 2.0), row(2, 3.0, 4.0)],
                     placement_capacity: 3,
                 },
+                &capability(),
                 1,
                 false,
             )
@@ -631,6 +689,7 @@ mod tests {
                     placement_rows: &[row(0, 1.0, 2.0), row(2, 5.0, 4.0)],
                     placement_capacity: 3,
                 },
+                &capability(),
                 2,
                 false,
             )
@@ -659,6 +718,7 @@ mod tests {
                     placement_rows: &[row(0, 1.0, 2.0)],
                     placement_capacity: 1,
                 },
+                &capability(),
                 1,
                 false,
             )
@@ -670,6 +730,7 @@ mod tests {
                     placement_rows: &[row(0, 1.0, 2.0), row(16, 7.0, 8.0)],
                     placement_capacity: 17,
                 },
+                &capability(),
                 2,
                 false,
             )
@@ -706,10 +767,10 @@ mod tests {
             placement_rows: &[row(0, 1.0, 2.0), row(2, 3.0, 4.0)],
             placement_capacity: 3,
         };
-        compiler.prepare(input, 1, false).unwrap();
+        compiler.prepare(input, &capability(), 1, false).unwrap();
         compiler.commit();
 
-        compiler.prepare(input, 2, true).unwrap();
+        compiler.prepare(input, &capability(), 2, true).unwrap();
         let view = compiler.view();
         assert_eq!(view.buffers.len(), 1);
         assert_eq!(view.buffers[0].generation, 1);
@@ -740,6 +801,7 @@ mod tests {
                     placement_rows: &[row(0, 1.0, 2.0), row(1, 9.0, 10.0), row(2, 3.0, 4.0)],
                     placement_capacity: 21,
                 },
+                &capability(),
                 1,
                 false,
             )
@@ -752,6 +814,7 @@ mod tests {
                     placement_rows: &[row(0, 5.0, 6.0), row(2, 7.0, 8.0), row(20, 11.0, 12.0)],
                     placement_capacity: 21,
                 },
+                &capability(),
                 2,
                 false,
             )
@@ -777,20 +840,96 @@ mod tests {
     }
 
     #[test]
+    fn placement_writes_follow_the_selected_capability_policy() {
+        let rows = [
+            row(0, 1.0, 2.0),
+            row(1, 3.0, 4.0),
+            row(2, 5.0, 6.0),
+            row(20, 7.0, 8.0),
+        ];
+        for (gap, expected_writes, expected_first_bytes) in [(0, 2, 8), (8, 1, 24)] {
+            let mut selected = capability();
+            selected.coalesce_gap_bytes = gap;
+            let mut compiler = SessionPlacementCompiler::default();
+            compiler
+                .prepare(
+                    SessionPlacementInput {
+                        placement_rows: &rows,
+                        placement_capacity: 21,
+                    },
+                    &selected,
+                    1,
+                    false,
+                )
+                .unwrap();
+            compiler.commit();
+
+            let changed = [
+                row(0, 9.0, 2.0),
+                row(1, 3.0, 4.0),
+                row(2, 11.0, 6.0),
+                row(20, 7.0, 8.0),
+            ];
+            compiler
+                .prepare(
+                    SessionPlacementInput {
+                        placement_rows: &changed,
+                        placement_capacity: 21,
+                    },
+                    &selected,
+                    2,
+                    false,
+                )
+                .unwrap();
+            let writes: Vec<_> = compiler
+                .view()
+                .patches
+                .iter()
+                .filter(|patch| patch.opcode == PATCH_WRITE)
+                .collect();
+            assert_eq!(writes.len(), expected_writes);
+            assert_eq!(writes[0].byte_length, expected_first_bytes);
+        }
+
+        let mut aligned = capability();
+        aligned.update_alignment = 32;
+        let mut compiler = SessionPlacementCompiler::default();
+        compiler
+            .prepare(
+                SessionPlacementInput {
+                    placement_rows: &[row(1, 1.0, 2.0)],
+                    placement_capacity: 2,
+                },
+                &aligned,
+                1,
+                false,
+            )
+            .unwrap();
+        let write = compiler
+            .view()
+            .patches
+            .iter()
+            .find(|patch| patch.opcode == PATCH_WRITE)
+            .unwrap();
+        assert_eq!(write.destination_offset, 0);
+        assert_eq!(write.byte_length, 32);
+    }
+
+    #[test]
     fn abort_retry_is_deterministic_and_removal_is_explicit() {
         let mut compiler = SessionPlacementCompiler::default();
         let input = SessionPlacementInput {
             placement_rows: &[row(1, -3.0, 9.0)],
             placement_capacity: 2,
         };
-        compiler.prepare(input, 1, false).unwrap();
+        compiler.prepare(input, &capability(), 1, false).unwrap();
         let first = (
             compiler.view().buffers.to_vec(),
             compiler.view().patches.to_vec(),
             compiler.view().payload.to_vec(),
         );
         compiler.abort();
-        compiler.prepare(input, 1, false).unwrap();
+        compiler.prepare(input, &capability(), 1, false).unwrap();
         assert_eq!(compiler.view().buffers, first.0);
         assert_eq!(compiler.view().patches, first.1);
         assert_eq!(compiler.view().payload, first.2);
@@ -801,6 +940,7 @@ mod tests {
                     placement_rows: &[],
                     placement_capacity: 0,
                 },
+                &capability(),
                 2,
                 false,
             )
@@ -824,6 +964,7 @@ mod tests {
                         placement_rows: &input,
                         placement_capacity: 2,
                     },
+                    &capability(),
                     1,
                     false,
                 ),
