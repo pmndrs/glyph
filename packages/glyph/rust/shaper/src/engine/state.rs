@@ -4262,6 +4262,19 @@ impl ParagraphState {
             .first()
             .copied()
             .unwrap_or(0);
+        let metrics_for = |handle| shaper.font_metrics(handle);
+        let first_font_for_stack = |stack_handle| {
+            font_stacks
+                .binary_search_by_key(&stack_handle, |stack| stack.handle)
+                .ok()
+                .and_then(|index| font_stacks[index].fonts.first().copied())
+                .and_then(|handle| {
+                    font_bindings
+                        .iter()
+                        .find(|binding| binding.handle == handle)
+                        .map(|binding| binding.shaping_handle)
+                })
+        };
         if !self.style_invalidation.metrics
             && !self.clusters.is_prepared()
             && self.text_edit.is_none()
@@ -4284,19 +4297,8 @@ impl ParagraphState {
                     paragraph_level,
                     max_lines,
                     max_slots_per_band,
-                    |handle| shaper.font_metrics(handle),
-                    |stack_handle| {
-                        font_stacks
-                            .binary_search_by_key(&stack_handle, |stack| stack.handle)
-                            .ok()
-                            .and_then(|index| font_stacks[index].fonts.first().copied())
-                            .and_then(|handle| {
-                                font_bindings
-                                    .iter()
-                                    .find(|binding| binding.handle == handle)
-                                    .map(|binding| binding.shaping_handle)
-                            })
-                    },
+                    metrics_for,
+                    first_font_for_stack,
                 )?
             }
         {
@@ -4327,19 +4329,8 @@ impl ParagraphState {
                     paragraph_level,
                     max_lines,
                     max_slots_per_band,
-                    |handle| shaper.font_metrics(handle),
-                    |stack_handle| {
-                        font_stacks
-                            .binary_search_by_key(&stack_handle, |stack| stack.handle)
-                            .ok()
-                            .and_then(|index| font_stacks[index].fonts.first().copied())
-                            .and_then(|handle| {
-                                font_bindings
-                                    .iter()
-                                    .find(|binding| binding.handle == handle)
-                                    .map(|binding| binding.shaping_handle)
-                            })
-                    },
+                    metrics_for,
+                    first_font_for_stack,
                 )?
             }
         {
@@ -4355,19 +4346,8 @@ impl ParagraphState {
             paragraph_level,
             max_lines,
             max_slots_per_band,
-            |handle| shaper.font_metrics(handle),
-            |stack_handle| {
-                font_stacks
-                    .binary_search_by_key(&stack_handle, |stack| stack.handle)
-                    .ok()
-                    .and_then(|index| font_stacks[index].fonts.first().copied())
-                    .and_then(|handle| {
-                        font_bindings
-                            .iter()
-                            .find(|binding| binding.handle == handle)
-                            .map(|binding| binding.shaping_handle)
-                    })
-            },
+            metrics_for,
+            first_font_for_stack,
         )?;
         let mut ellipsis_index = 0usize;
         while ellipsis_index < self.flow_layout.pending_mut().ellipsis_threads().len() {

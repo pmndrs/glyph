@@ -557,8 +557,10 @@ must not scan glyphs to derive it.
 
 ### Editorial regions, exclusions, and local convergence
 
-Retain `FlowGeometryArena`, `InlineSlotArena`, and `FlowLayoutArena::rebuild_until_state_converges` as the only region,
-slot-subtraction, and convergence authorities; strengthen them instead of adding parallel systems. Compare committed
+Retain `FlowGeometryArena`, `InlineSlotArena`, and `FlowLayoutArena` as the only region, slot-subtraction, and convergence
+authorities; strengthen them instead of adding parallel systems. Its edit and exclusion entry paths share eligibility,
+flow/drop-cap context, retained-suffix publication, and font-resolution inputs while preserving their distinct stopping
+rules. Compare committed
 and pending geometry by stable entity ID, generation, and revision. Build the ordered block intervals affected by the
 union of every changed binding's old and new bounds, including margin. Preserve the prefix before the earliest interval.
 Recompose forward, but do not test convergence before the dirty horizon—the end of the last affected interval or later
