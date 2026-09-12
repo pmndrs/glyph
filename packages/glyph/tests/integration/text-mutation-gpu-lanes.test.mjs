@@ -102,21 +102,6 @@ for (const technique of Object.keys(TECHNIQUES)) {
         unmount(mounted);
       }
     });
-
-    test(`${technique}: ${label} across a styled multi-node group`, { timeout }, async () => {
-      const font = await fonts.load(technique);
-      // The edit lands on the middle node, so the nodes around it must keep their own transform,
-      // colour, and size lanes while the record run under them shifts.
-      const before = styledScene(['STEADY', from, 'ANCHOR']);
-      const edited = styledScene(['STEADY', to, 'ANCHOR']);
-      const mounted = mount(font, before);
-      try {
-        edit(mounted, font, edited);
-        assertMatchesFreshBuild(font, mounted, edited, `${technique} styled group ${from}->${to}`);
-      } finally {
-        unmount(mounted);
-      }
-    });
   }
 
   test(`${technique}: repeated edits without remounting`, { timeout }, async () => {
@@ -139,8 +124,8 @@ for (const technique of Object.keys(TECHNIQUES)) {
     const alphabet = 'ACEIRTVX';
     for (const seed of [1, 7, 13, 29]) {
       const random = seededRandom(seed);
-      // Every seed drives a styled three-node group, so a chaotic edit has to keep the untouched
-      // nodes' colour, size, transform, and ratio lanes intact as well as its own.
+      // This higher-order sequence owns the styled multi-node invariant for every technique: every
+      // edit has to keep the untouched nodes' colour, size, transform, and ratio lanes intact.
       let texts = ['ACTIVATE', 'ACTIVATE', 'ACTIVATE'];
       const mounted = mount(font, styledScene(texts));
       try {

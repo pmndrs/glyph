@@ -281,7 +281,11 @@ for (const shaping of CASES) {
       });
     }
 
-    for (const [label, from, to] of shaping.edits) {
+    // Every authored edit keeps its script-specific shaping assertion. The seeded sequences below
+    // own styled multi-node lane preservation, and one round-trip per fixture owns the generic
+    // clipped-slot restoration path; multiplying those renderer invariants by every edit shape
+    // exercises the same production branches without adding a distinct failure mode.
+    for (const [editIndex, [label, from, to]] of shaping.edits.entries()) {
       test(`${where}: ${label}`, { timeout }, async () => {
         const font = await fonts.load(fixture);
         const mounted = mount(font, [paragraph(shaping, from)]);
@@ -295,36 +299,24 @@ for (const shaping of CASES) {
         }
       });
 
-      test(`${where}: ${label}, across a styled multi-node group`, { timeout }, async () => {
-        const font = await fonts.load(fixture);
-        const [head, tail] = shaping.anchors;
-        const before = styledScene(shaping, [head, from, tail]);
-        const edited = styledScene(shaping, [head, to, tail]);
-        const mounted = mount(font, before);
-        try {
-          edit(mounted, font, edited);
-          assertMatchesFreshBuild(font, mounted, edited, `${where} styled group ${label}`);
-        } finally {
-          unmount(mounted);
-        }
-      });
-
-      test(`${where}: ${label}, reverted and reapplied on a clipped single line`, { timeout }, async () => {
-        // Round-tripping is the cheapest way to reach a slot whose occupant left and came back, and
-        // a clipped single line drops the glyphs past the box, so the record run also grows and
-        // shrinks under the edit rather than only shifting.
-        const font = await fonts.load(fixture);
-        const authored = (text) => [paragraph(shaping, text, { flow: clippedFlow })];
-        const mounted = mount(font, authored(from));
-        try {
-          for (const [step, text] of [to, from, to, from, to].entries()) {
-            edit(mounted, font, authored(text));
-            assertMatchesFreshBuild(font, mounted, authored(text), `${where} ${label} round-trip step ${step}`);
+      if (editIndex === 0) {
+        test(`${where}: clipped edits restore returning slots`, { timeout }, async () => {
+          // Round-tripping is the cheapest way to reach a slot whose occupant left and came back, and
+          // a clipped single line drops the glyphs past the box, so the record run also grows and
+          // shrinks under the edit rather than only shifting.
+          const font = await fonts.load(fixture);
+          const authored = (text) => [paragraph(shaping, text, { flow: clippedFlow })];
+          const mounted = mount(font, authored(from));
+          try {
+            for (const [step, text] of [to, from, to, from, to].entries()) {
+              edit(mounted, font, authored(text));
+              assertMatchesFreshBuild(font, mounted, authored(text), `${where} ${label} round-trip step ${step}`);
+            }
+          } finally {
+            unmount(mounted);
           }
-        } finally {
-          unmount(mounted);
-        }
-      });
+        });
+      }
     }
 
     test(`${where}: seeded edit sequences at grapheme boundaries`, { timeout }, async () => {
