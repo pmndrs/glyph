@@ -3087,9 +3087,10 @@ test('Text.withGlyphs demand-reads scalar records only inside one synchronous bo
     assert.throws(() => label.set({ text: 'reentrant mutation' }), /cannot be reentered/);
     assert.throws(() => label.measure(), /cannot be reentered/);
     assert.throws(() => glyph.shape(), /cannot be reentered/);
+    return 'borrowed';
   });
 
-  assert.equal(returned, undefined, 'a read-only borrow has no presentation result');
+  assert.equal(returned, 'borrowed', 'the borrowed read returns its synchronous callback result');
   assert.equal(instrumentedGlyph.latestSemanticRecordCount, 0, 'borrow setup serializes no semantic records');
   assert.equal(instrumentedGlyph.borrowedGlyphReads, 2, 'only explicitly selected glyphs cross the Wasm ABI');
   assert.equal(label.text, 'Borrowed glyph records wrap across two lines');
@@ -3114,7 +3115,7 @@ test('Text.withGlyphs demand-reads scalar records only inside one synchronous bo
   font.dispose();
 });
 
-test('Text.withGlyphs installs live local matrices without reshaping later frames', async (t) => {
+test('Text.transformGlyphs installs live local matrices without reshaping later frames', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
@@ -3125,7 +3126,7 @@ test('Text.withGlyphs installs live local matrices without reshaping later frame
 
   const baselineBytes = three.gpuBytes;
   const targetX = [];
-  label.withGlyphs((layout) => {
+  label.transformGlyphs((layout) => {
     const matrices = [];
     for (let index = 0; index < layout.glyphCount; index += 1) {
       const glyphRecord = layout.glyphAt(index);
@@ -3163,7 +3164,7 @@ test('Text.withGlyphs installs live local matrices without reshaping later frame
   }
 
   const crossings = instrumentedGlyph.crossings;
-  label.withGlyphs((layout) => {
+  label.transformGlyphs((layout) => {
     const matrices = [];
     for (let index = 0; index < layout.glyphCount; index += 1) {
       const glyphRecord = layout.glyphAt(index);
@@ -3183,7 +3184,7 @@ test('Text.withGlyphs installs live local matrices without reshaping later frame
     attribute.clearUpdateRanges();
     unchangedVersions.set(attribute, attribute.version);
   }
-  label.withGlyphs((layout) => ({
+  label.transformGlyphs((layout) => ({
     space: 'local',
     matrices: Array.from({ length: layout.glyphCount }, (_, index) => {
       const glyphRecord = layout.glyphAt(index);
@@ -3194,7 +3195,7 @@ test('Text.withGlyphs installs live local matrices without reshaping later frame
     assert.equal(attribute.version, unchangedVersions.get(attribute), 'unchanged matrices do not dirty storage');
     assert.equal(attribute.updateRanges.length, 0, 'unchanged matrices schedule no upload range');
   }
-  label.withGlyphs((layout) => ({
+  label.transformGlyphs((layout) => ({
     space: 'local',
     matrices: Array.from({ length: layout.glyphCount }, (_, index) => {
       const glyphRecord = layout.glyphAt(index);
@@ -3211,13 +3212,13 @@ test('Text.withGlyphs installs live local matrices without reshaping later frame
   );
 
   assert.throws(
-    () => label.withGlyphs(() => []),
+    () => label.transformGlyphs(() => []),
     /returned 0 matrices/u,
     'a deformation result must cover the current glyph index domain exactly',
   );
   assert.throws(
     () =>
-      label.withGlyphs((layout) => {
+      label.transformGlyphs((layout) => {
         const matrix = new THREE.Matrix4();
         matrix.elements[3] = 0.25;
         return Array.from({ length: layout.glyphCount }, () => matrix);
@@ -3226,7 +3227,7 @@ test('Text.withGlyphs installs live local matrices without reshaping later frame
     'projective matrices cannot silently lose their homogeneous coordinate',
   );
   let paragraphTarget;
-  label.withGlyphs((layout) => {
+  label.transformGlyphs((layout) => {
     const matrices = [];
     for (let index = 0; index < layout.glyphCount; index += 1) {
       const glyphRecord = layout.glyphAt(index);
@@ -3241,7 +3242,7 @@ test('Text.withGlyphs installs live local matrices without reshaping later frame
 
   label.position.set(5, 7, 0);
   scene.updateMatrixWorld(true);
-  label.withGlyphs((layout) => ({
+  label.transformGlyphs((layout) => ({
     space: 'world',
     matrices: Array.from({ length: layout.glyphCount }, (_, index) =>
       new THREE.Matrix4().makeTranslation(100 + index, 50, 2),
@@ -3274,7 +3275,7 @@ test('live glyph transforms follow positional indexes across accepted topology',
   scene.add(label);
   glyph.shape();
 
-  label.withGlyphs((layout) =>
+  label.transformGlyphs((layout) =>
     Array.from({ length: layout.glyphCount }, (_, index) =>
       new THREE.Matrix4().makeTranslation(20 + index * 20, 5, index),
     ),

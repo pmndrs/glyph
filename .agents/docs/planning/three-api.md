@@ -367,13 +367,13 @@ resources declared by the active Three Codec.
 
 ## Deform attached glyphs by visual index
 
-`Text.withGlyphs()` keeps its synchronous borrowed-layout read boundary and may also install one attached presentation
-matrix per current glyph. Returning nothing performs only the read. Returning a bare `Matrix4[]` treats the matrices as
-Text-local; the structured result names paragraph, local, or world coordinates. Matrices are absolute affine glyph
-frames in current visual index order:
+`Text.withGlyphs()` is the generic synchronous borrowed-layout read boundary and returns the callback's value.
+`Text.transformGlyphs()` separately installs one attached presentation matrix per current glyph. Returning a bare
+`Matrix4[]` treats the matrices as Text-local; the structured result names paragraph, local, or world coordinates.
+Matrices are absolute affine glyph frames in current visual index order:
 
 ```ts
-label.withGlyphs((layout) => ({
+label.transformGlyphs((layout) => ({
   space: 'world',
   matrices: Array.from({ length: layout.glyphCount }, (_, index) => {
     const glyph = layout.glyphAt(index);

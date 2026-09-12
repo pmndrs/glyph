@@ -57,9 +57,9 @@
   Latin/CJK, and the optimized Wasm is 339 raw bytes smaller. The full Rust and Unicode conformance suites pass; the
   final fresh-main/full-workload gauntlet remains open.
 
-- **Added attached Three glyph deformation without reopening layout or batching** — `Text.withGlyphs()` now treats an
-  undefined callback result as the existing bounded read and an exact-length affine `Matrix4` result as live
-  presentation. Bare arrays are Text-local; structured results name paragraph x-right/y-down, Text-local, or world
+- **Added attached Three glyph deformation without reopening layout or batching** — `Text.withGlyphs()` remains the
+  generic synchronous bounded read, while `Text.transformGlyphs()` accepts an exact-length affine `Matrix4` result as
+  live presentation. Bare arrays are Text-local; structured results name paragraph x-right/y-down, Text-local, or world
   space. The first result lazily allocates renderer-owned mat4 storage and refreshes material/display-list identity once;
   later updates compare f32 rows, mark only changed adjacent 16-float physical-record ranges, and do not cross shaping or
   render-plan publication. An unchanged full result or unchanged world transform schedules zero matrix uploads; changing
