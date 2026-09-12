@@ -24,8 +24,10 @@ export async function runBenchmarkTest(options: { readonly runtimePackagesReady?
 }
 
 if (isMainModule(import.meta.url)) {
-  runBenchmarkTest().catch((error: unknown) => {
-    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-    process.exitCode = 2;
-  });
+  runBenchmarkTest({ runtimePackagesReady: process.argv.includes('--runtime-packages-ready') }).catch(
+    (error: unknown) => {
+      process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+      process.exitCode = 2;
+    },
+  );
 }
