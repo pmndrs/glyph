@@ -93,6 +93,7 @@ struct RegisteredFont {
 pub(crate) struct FontMetrics {
     pub units_per_em: u16,
     pub ascender: i16,
+    pub cap_height: u16,
     pub descender: i16,
     pub line_gap: i16,
     pub underline_position: i16,
@@ -214,16 +215,29 @@ impl ShaperRegistry {
         let (underline_position, underline_thickness) = unpack_decoration_metrics(underline_packed);
         let (strikeout_position, strikeout_size) = unpack_decoration_metrics(strikeout_packed);
         let metrics = match (font.head(), font.hhea()) {
-            (Ok(head), Ok(hhea)) => FontMetrics {
-                units_per_em: head.units_per_em(),
-                ascender: hhea.ascender().to_i16(),
-                descender: hhea.descender().to_i16(),
-                line_gap: hhea.line_gap().to_i16(),
-                underline_position,
-                underline_thickness,
-                strikeout_position,
-                strikeout_size,
-            },
+            (Ok(head), Ok(hhea)) => {
+                let units_per_em = head.units_per_em();
+                let fallback_cap_height =
+                    u16::try_from((u32::from(units_per_em) * 66 + 50) / 100).unwrap_or(u16::MAX);
+                let cap_height = font
+                    .os2()
+                    .ok()
+                    .and_then(|os2| os2.s_cap_height())
+                    .and_then(|height| u16::try_from(height).ok())
+                    .filter(|height| *height != 0)
+                    .unwrap_or(fallback_cap_height);
+                FontMetrics {
+                    units_per_em,
+                    ascender: hhea.ascender().to_i16(),
+                    cap_height,
+                    descender: hhea.descender().to_i16(),
+                    line_gap: hhea.line_gap().to_i16(),
+                    underline_position,
+                    underline_thickness,
+                    strikeout_position,
+                    strikeout_size,
+                }
+            }
             _ => return STATUS_INVALID_FONT,
         };
         match self.font_handles.binary_search(&handle) {
@@ -766,7 +780,7 @@ mod tests {
         let extents = alloc::vec![0u8; glyph_count * 8];
         let availability = alloc::vec![0u8; glyph_count.div_ceil(8)];
         let mut registry = ShaperRegistry::default();
-        // Inter-Regular 4.1: post -348/140, OS/2 671/140 — packed as (position << 16) | thickness.
+        // Inter-Regular 4.1: OS/2 cap-height 1490 and strikeout 671/140, post underline -348/140.
         assert_eq!(
             registry.register_font(
                 7,
@@ -779,6 +793,7 @@ mod tests {
             STATUS_OK
         );
         let metrics = registry.font_metrics(7).expect("registered font metrics");
+        assert_eq!(metrics.cap_height, 1490);
         assert_eq!(metrics.underline_position, -348);
         assert_eq!(metrics.underline_thickness, 140);
         assert_eq!(metrics.strikeout_position, 671);

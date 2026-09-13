@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:10d992b93922a8a61af9b8ac67ee26ac9f7440d822fb0d9b03c3fc9ce8f044f6'
+source_digest: 'sha256:4343e59c4b3a182596ffa90e8effc27f5398f29005abd6a11029863184b50041'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -556,9 +556,11 @@ and return an ordinary keyed `TextFlowExclusion`; declared projection error cons
 convex hull. Geometry wholly behind the text plane produces no exclusion. Neither helper reads depth/GPU pixels nor
 claims hidden-surface or material-coverage exactness.
 
-The shared paragraph layout surface also admits a same-source `dropCap` with a bounded line span, text-top or baseline
-alignment, logical side, inline/block margins, and an optional caller-authored simple contour normalized over the
-generated cap exclusion box. Rust selects the first complete extended grapheme and extends through
+The shared paragraph layout surface also admits a same-source `dropCap` with a bounded line span, cap-height text-top or
+baseline alignment, logical side, inline/block margins, and an optional caller-authored simple contour normalized over
+the generated cap exclusion box. Text-top alignment uses the shaping face's retained OpenType `sCapHeight` against the
+surrounding stack's first available font and synthesizes `.66em` when the metric is absent; line-box leading therefore
+does not lift the initial above the body cap line. Rust selects the first complete extended grapheme and extends through
 the first shaping-safe cluster edge within the bounded search; when no safe edge exists it disables the cap rather than
 splitting shaped content. The selected prefix keeps its authored shaping/style/raster data, is positioned by the same
 glyph authority as the body, and becomes an additional conservative glyph/design-bounds cut before body composition.

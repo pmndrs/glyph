@@ -77,9 +77,9 @@ export interface TextFlow {
 
 /** Layout controls for a shaping-safe drop cap drawn from the paragraph's source prefix. */
 export interface DropCapLayout {
-  /** Minimum body-line span reserved beside the cap. */
+  /** Minimum body-line span reserved beside the authored-size cap. */
   readonly lines: number;
-  /** Vertical alignment of the cap. Defaults to `text-top`. */
+  /** Vertical alignment of the cap. `text-top` aligns font cap-height; defaults to `text-top`. */
   readonly align?: 'text-top' | 'baseline';
   /** Logical side of the paragraph. Defaults to `inline-start`. */
   readonly side?: 'inline-start' | 'inline-end';

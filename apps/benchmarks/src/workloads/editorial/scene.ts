@@ -37,7 +37,9 @@ const EDITORIAL_BOUNDED_JUSTIFY = {
 
 const EDITORIAL_DROP_CAP_COLOR = '#e87938';
 const EDITORIAL_BODY_LINE_HEIGHT = 1.15;
-const EDITORIAL_DROP_CAP_SCALE = 2.75;
+const EDITORIAL_DROP_CAP_SCALE = 2.58;
+const EDITORIAL_DROP_CAP_INLINE_MARGIN = 0.35;
+const EDITORIAL_COLUMN_GAP_SCALE = 1.2;
 const EDITORIAL_DROP_CAP_CONTOUR = [
   [0, 0],
   [1, 0],
@@ -166,14 +168,14 @@ export function createEditorialEntries(
       align: 'justify',
       dropCap: {
         lines: 2,
-        marginInline: context.fontSize * 0.2,
+        marginInline: context.fontSize * EDITORIAL_DROP_CAP_INLINE_MARGIN,
         marginBlock: context.fontSize * 0.05,
         contour: EDITORIAL_DROP_CAP_CONTOUR,
       },
       justify: EDITORIAL_JUSTIFY,
       overflow: 'clip',
     },
-    flow: editorialFlow(width, editorialBodyHeight(context.fontSize), context.fontSize),
+    flow: editorialFlow(width, editorialBodyHeight(context.fontSize), context.fontSize * EDITORIAL_COLUMN_GAP_SCALE),
   });
   const obstacleSize = context.fontSize * EDITORIAL_OBSTACLE_SCALE;
   const obstacleGeometry = new THREE.BoxGeometry(obstacleSize, obstacleSize, obstacleSize);
@@ -261,7 +263,13 @@ export function animateEditorialEntries(
     const width = editorialColumnWidth(configuration, viewportWidth, motionTimestamp);
     const bodyHeight = editorialBodyHeight(configuration.fontSize);
     positionEditorialObstacle(body.editorialObstacle, width, bodyHeight, configuration.animationSpeed, motionTimestamp);
-    const flow = projectedEditorialFlow(body, camera, width, bodyHeight, configuration.fontSize);
+    const flow = projectedEditorialFlow(
+      body,
+      camera,
+      width,
+      bodyHeight,
+      configuration.fontSize * EDITORIAL_COLUMN_GAP_SCALE,
+    );
     if (
       !configuration.animationEnabled &&
       body.editorialProjectionInitialized === true &&

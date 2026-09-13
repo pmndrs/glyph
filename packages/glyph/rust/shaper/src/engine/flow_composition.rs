@@ -138,6 +138,13 @@ struct LineExtents {
     below: f64,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct ClusterLineMetrics {
+    extents: LineExtents,
+    cap_height: f64,
+    baseline_shift: f64,
+}
+
 impl LineExtents {
     fn height(self) -> f64 {
         self.above + self.below
@@ -199,18 +206,15 @@ fn prepare_drop_cap(
     if envelope.advance <= 0.0 {
         return Ok(None);
     }
-    let body_extents = positive_extents(
-        extents_for_cluster(
-            clusters,
-            styles,
-            cluster_end,
-            metrics_for,
-            first_font_for_stack,
-        )?,
-        styles,
+    let body_metrics = line_metrics_for_cluster(
         clusters,
+        styles,
         cluster_end,
+        metrics_for,
+        first_font_for_stack,
     )?;
+    let body_extents = positive_extents(body_metrics.extents, styles, clusters, cluster_end)?;
+    let cap_over = cap_over_alignment_for_cluster(clusters, styles, 0, metrics_for)?;
     let inline_start = f64::from(region.inline_start);
     let inline_end = f64::from(region.inline_end);
     let margin_inline = f64::from(constraint.drop_cap_margin_inline);
@@ -244,7 +248,12 @@ fn prepare_drop_cap(
         return Ok(None);
     }
     let baseline = match constraint.drop_cap_alignment {
-        DROP_CAP_ALIGN_TEXT_TOP => body_block_start - envelope.block_start,
+        DROP_CAP_ALIGN_TEXT_TOP => {
+            let body_cap_start = body_block_start + body_extents.above
+                - body_metrics.baseline_shift
+                - body_metrics.cap_height;
+            body_cap_start + cap_over
+        }
         DROP_CAP_ALIGN_BASELINE => body_block_start + body_extents.above,
         _ => return Err(EngineError::InvalidRequest),
     };
@@ -1773,6 +1782,19 @@ fn extents_for_cluster(
     metrics_for: impl Fn(u32) -> Option<FontMetrics>,
     first_font_for_stack: impl Fn(u32) -> Option<u32>,
 ) -> Result<LineExtents, EngineError> {
+    Ok(
+        line_metrics_for_cluster(clusters, styles, index, metrics_for, first_font_for_stack)?
+            .extents,
+    )
+}
+
+fn line_metrics_for_cluster(
+    clusters: &ClusterArena,
+    styles: &[StyleSegment],
+    index: usize,
+    metrics_for: impl Fn(u32) -> Option<FontMetrics>,
+    first_font_for_stack: impl Fn(u32) -> Option<u32>,
+) -> Result<ClusterLineMetrics, EngineError> {
     let style_index = usize::try_from(
         *clusters
             .style_indexes
@@ -1807,11 +1829,47 @@ fn extents_for_cluster(
         (natural - ascent - descent).max(0.0)
     };
     let shift = f64::from(style.baseline_shift);
-    Ok(LineExtents {
-        // Preserve negative half-leading; clamping either side makes tight line boxes too tall.
-        above: ascent + leading * 0.5 + shift,
-        below: descent + leading * 0.5 - shift,
+    Ok(ClusterLineMetrics {
+        extents: LineExtents {
+            // Preserve negative half-leading; clamping either side makes tight line boxes too tall.
+            above: ascent + leading * 0.5 + shift,
+            below: descent + leading * 0.5 - shift,
+        },
+        cap_height: f64::from(metrics.cap_height) * scale,
+        baseline_shift: shift,
     })
+}
+
+fn cap_over_alignment_for_cluster(
+    clusters: &ClusterArena,
+    styles: &[StyleSegment],
+    index: usize,
+    metrics_for: impl Fn(u32) -> Option<FontMetrics>,
+) -> Result<f64, EngineError> {
+    let style_index = usize::try_from(
+        *clusters
+            .style_indexes
+            .get(index)
+            .ok_or(EngineError::InvalidRequest)?,
+    )
+    .map_err(|_| EngineError::InvalidRequest)?;
+    let style = styles
+        .get(style_index)
+        .ok_or(EngineError::InvalidRequest)?
+        .style;
+    // Initial-letter alignment follows the face that actually shaped the cap, unlike the body
+    // line box, whose metrics intentionally come from the authored stack's primary face.
+    let font_handle = *clusters
+        .font_handles
+        .get(index)
+        .ok_or(EngineError::InvalidRequest)?;
+    let metrics =
+        metrics_for(font_handle).ok_or(EngineError::FontMetricsMissing(FrameFault::default()))?;
+    if metrics.units_per_em == 0 {
+        return Err(EngineError::InvalidRequest);
+    }
+    let scale = f64::from(style.font_size) / f64::from(metrics.units_per_em);
+    Ok(f64::from(style.baseline_shift) + f64::from(metrics.cap_height) * scale)
 }
 
 fn positive_extents(
@@ -1879,6 +1937,7 @@ mod tests {
         Some(FontMetrics {
             units_per_em: 1_000,
             ascender: 800,
+            cap_height: 700,
             descender: -200,
             line_gap: 100,
             underline_position: -100,
@@ -2146,6 +2205,9 @@ mod tests {
 
         assert_eq!(layout.drop_caps.len(), 1);
         let cap = layout.drop_caps[0];
+        // The cap's 700-unit alignment height meets the body's cap-height even though the
+        // fixture glyph deliberately carries another 100 units of ink above it.
+        assert_eq!(cap.line.block_start, -1.5);
         assert_eq!(cap.fragment.line.cluster_start, 0);
         assert_eq!(cap.fragment.line.cluster_end, 1);
         assert_eq!(cap.body_resume_cluster, 1);
@@ -2517,6 +2579,7 @@ mod tests {
                     Some(FontMetrics {
                         units_per_em: 1_000,
                         ascender: 800,
+                        cap_height: 700,
                         descender: -200,
                         line_gap: 0,
                         underline_position: -100,
@@ -2590,6 +2653,7 @@ mod tests {
                     Some(FontMetrics {
                         units_per_em: 1_000,
                         ascender: 800,
+                        cap_height: 700,
                         descender: -200,
                         line_gap: 0,
                         underline_position: -100,
@@ -2667,6 +2731,7 @@ mod tests {
             1 => Some(FontMetrics {
                 units_per_em: 1_000,
                 ascender: 800,
+                cap_height: 700,
                 descender: -200,
                 line_gap: 360,
                 underline_position: -100,
@@ -2757,6 +2822,7 @@ mod tests {
                     Some(FontMetrics {
                         units_per_em: 1_000,
                         ascender: 800,
+                        cap_height: 700,
                         descender: -200,
                         line_gap: 0,
                         underline_position: -100,
@@ -2830,6 +2896,7 @@ mod tests {
                     Some(FontMetrics {
                         units_per_em: 1_000,
                         ascender: 800,
+                        cap_height: 700,
                         descender: -200,
                         line_gap: 0,
                         underline_position: -100,
@@ -2874,6 +2941,7 @@ mod tests {
             Some(FontMetrics {
                 units_per_em: 1_000,
                 ascender: 800,
+                cap_height: 700,
                 descender: -200,
                 line_gap: 0,
                 underline_position: -100,
@@ -2956,6 +3024,7 @@ mod tests {
             Some(FontMetrics {
                 units_per_em: 1_000,
                 ascender: 800,
+                cap_height: 700,
                 descender: -200,
                 line_gap: 0,
                 underline_position: -100,
@@ -3173,6 +3242,7 @@ mod tests {
             Some(FontMetrics {
                 units_per_em: 1_000,
                 ascender: 800,
+                cap_height: 700,
                 descender: -200,
                 line_gap: 0,
                 underline_position: -100,
@@ -3275,6 +3345,7 @@ mod tests {
             Some(FontMetrics {
                 units_per_em: 1_000,
                 ascender: 800,
+                cap_height: 700,
                 descender: -200,
                 line_gap: 0,
                 underline_position: -100,
@@ -3329,6 +3400,7 @@ mod tests {
             Some(FontMetrics {
                 units_per_em: 1_000,
                 ascender: 800,
+                cap_height: 700,
                 descender: -200,
                 line_gap: 0,
                 underline_position: -100,
@@ -3643,6 +3715,7 @@ mod tests {
                     Some(FontMetrics {
                         units_per_em: 1_000,
                         ascender: 800,
+                        cap_height: 700,
                         descender: -200,
                         line_gap: 0,
                         underline_position: -100,

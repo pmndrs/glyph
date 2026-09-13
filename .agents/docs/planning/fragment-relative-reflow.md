@@ -623,9 +623,11 @@ conservative exclusion before composing the remaining clusters.
 The cap and body retain one source-coordinate domain. The cap entity records selected UTF-16 range, cluster range,
 display-run ID, body-resume cluster, and source-to-display mapping. Caret, selection, hit testing, `withGlyphs`, and full
 glyph inspection merge the two realized ranges without duplication or omission. Local edits recompute the safe boundary
-transactionally. The initial model specifies cap height in lines, baseline/cap alignment, margin, side, and optional
-caller-authored polygon. Raster program is per display run, so a Slug cap beside Bitmap or MTSDF body text shares core
-layout and source mapping without adapter-owned realization logic.
+transactionally. The initial model specifies a minimum body-line span, baseline/cap alignment, margin, side, and optional
+caller-authored polygon. Cap alignment uses the initial's actual shaping face and the surrounding first-available font's
+OpenType cap-height metric, with the CSS Inline `.66em` synthesis when that metric is absent; authored span style retains
+control of the initial's size. Raster program is per display run, so a Slug cap beside Bitmap or MTSDF body text shares
+core layout and source mapping without adapter-owned realization logic.
 
 The first production slice uses transformed glyph/design bounds or an explicit caller-authored contour normalized over
 that generated exclusion box. The contour preserves the existing height, alignment, logical-side, and margin controls;

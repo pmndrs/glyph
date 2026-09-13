@@ -2,6 +2,13 @@
 
 ## 2026-09-13
 
+- **Aligned same-source drop caps to typographic cap-height** — Corrected `text-top` placement to align the cap-height
+  of the face that actually shaped the initial with the surrounding first-available font's cap-height, rather than
+  aligning cap ink to the line box's leading edge. The shaper reads `sCapHeight` from its retained `OS/2` table and uses
+  the CSS Inline fallback of `.66em` when that metric is absent. The Editorial specimen now uses a two-line cap sized
+  to meet its second baseline and a slightly wider column gutter; its projected cube remains centered across both
+  columns and retains the same three-draw renderer topology.
+
 - **Repaired fresh-clone bootstrap guidance** — Made the required `mise trust` consent step explicit, ran installation and
   development through non-interactive `mise exec`, documented that matching ambient Node, pnpm, and Rust toolchains remain
   supported without mise, and corrected the knowledge-base workflows to name Ruby 3.1+ as an external check-only
