@@ -57,18 +57,6 @@ impl PlacementHandle {
     }
 }
 
-/// One desired live placement identity.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct DesiredPlacement<Key> {
-    logical_key: Key,
-}
-
-impl<Key> DesiredPlacement<Key> {
-    pub(crate) const fn new(logical_key: Key) -> Self {
-        Self { logical_key }
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PlacementSlotError {
     AllocationFailed,
@@ -83,14 +71,9 @@ pub(crate) enum PlacementSlotError {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Occupant<Key> {
-    logical_key: Key,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct PlacementSlotState<Key> {
     generation: PlacementGeneration,
-    occupant: Option<Occupant<Key>>,
+    occupant: Option<Key>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -102,7 +85,7 @@ struct QuarantinedPlacementSlot {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct PendingWrite<Key> {
     handle: PlacementHandle,
-    occupant: Occupant<Key>,
+    logical_key: Key,
 }
 
 /// Transactional dense placement storage owned by exactly one retained planner/root.
@@ -215,7 +198,7 @@ where
     /// checks complete before the transaction becomes observable as prepared.
     pub(crate) fn prepare(
         &mut self,
-        desired: &[DesiredPlacement<Key>],
+        desired: &[Key],
         publication_generation: u32,
     ) -> Result<(), PlacementSlotError> {
         if self.prepared {
@@ -273,10 +256,7 @@ where
         Ok(())
     }
 
-    fn prepare_retained(
-        &mut self,
-        desired: &[DesiredPlacement<Key>],
-    ) -> Result<bool, PlacementSlotError> {
+    fn prepare_retained(&mut self, desired: &[Key]) -> Result<bool, PlacementSlotError> {
         if desired.len() != self.committed_order.len() {
             return Ok(false);
         }
@@ -288,7 +268,7 @@ where
                 .occupant
                 .as_ref()
                 .ok_or(PlacementSlotError::ArithmeticOverflow)?;
-            if occupant.logical_key != placement.logical_key {
+            if *occupant != *placement {
                 return Ok(false);
             }
             self.assignments.push(PlacementHandle {
@@ -300,29 +280,17 @@ where
         Ok(true)
     }
 
-    fn prepare_structural(
-        &mut self,
-        desired: &[DesiredPlacement<Key>],
-    ) -> Result<(), PlacementSlotError> {
-        if desired
-            .windows(2)
-            .any(|pair| pair[0].logical_key == pair[1].logical_key)
-        {
+    fn prepare_structural(&mut self, desired: &[Key]) -> Result<(), PlacementSlotError> {
+        if desired.windows(2).any(|pair| pair[0] == pair[1]) {
             return Err(PlacementSlotError::DuplicateLogicalKey);
         }
-        if desired
-            .windows(2)
-            .all(|pair| pair[0].logical_key < pair[1].logical_key)
-        {
+        if desired.windows(2).all(|pair| pair[0] < pair[1]) {
             return self.prepare_sorted_structural(desired);
         }
         self.prepare_indexed_structural(desired)
     }
 
-    fn prepare_sorted_structural(
-        &mut self,
-        desired: &[DesiredPlacement<Key>],
-    ) -> Result<(), PlacementSlotError> {
+    fn prepare_sorted_structural(&mut self, desired: &[Key]) -> Result<(), PlacementSlotError> {
         reserve(&mut self.pending_index, desired.len())?;
         reserve(&mut self.pending_order, desired.len())?;
         reserve(&mut self.assignments, desired.len())?;
@@ -332,7 +300,7 @@ where
         let mut committed = 0usize;
         for placement in desired {
             while let Some(&(key, slot)) = self.committed_index.get(committed) {
-                if key >= placement.logical_key {
+                if key >= *placement {
                     break;
                 }
                 self.retire_slot(slot)?;
@@ -342,14 +310,13 @@ where
                 .committed_index
                 .get(committed)
                 .copied()
-                .filter(|(key, _)| *key == placement.logical_key)
+                .filter(|(key, _)| *key == *placement)
                 .map(|(_, slot)| slot);
             if existing.is_some() {
                 committed += 1;
             }
             let handle = self.assign_placement(placement, existing)?;
-            self.pending_index
-                .push((placement.logical_key, handle.slot));
+            self.pending_index.push((*placement, handle.slot));
             self.pending_order.push(handle.slot);
             self.assignments.push(handle);
         }
@@ -360,10 +327,7 @@ where
         self.finish_structural_prepare()
     }
 
-    fn prepare_indexed_structural(
-        &mut self,
-        desired: &[DesiredPlacement<Key>],
-    ) -> Result<(), PlacementSlotError> {
+    fn prepare_indexed_structural(&mut self, desired: &[Key]) -> Result<(), PlacementSlotError> {
         reserve(&mut self.pending_index, desired.len())?;
         reserve(&mut self.pending_order, desired.len())?;
         reserve(&mut self.assignments, desired.len())?;
@@ -374,7 +338,7 @@ where
         };
         for (index, placement) in desired.iter().enumerate() {
             self.pending_index.push((
-                placement.logical_key,
+                *placement,
                 PlacementSlot(
                     u32::try_from(index).map_err(|_| PlacementSlotError::ArithmeticOverflow)?,
                 ),
@@ -426,16 +390,14 @@ where
 
     fn assign_placement(
         &mut self,
-        placement: &DesiredPlacement<Key>,
+        logical_key: &Key,
         existing: Option<PlacementSlot>,
     ) -> Result<PlacementHandle, PlacementSlotError> {
         let Some(slot) = existing else {
             let handle = self.allocate_slot()?;
             self.writes.push(PendingWrite {
                 handle,
-                occupant: Occupant {
-                    logical_key: placement.logical_key,
-                },
+                logical_key: *logical_key,
             });
             return Ok(handle);
         };
@@ -444,7 +406,7 @@ where
             .occupant
             .as_ref()
             .ok_or(PlacementSlotError::ArithmeticOverflow)?;
-        if occupant.logical_key != placement.logical_key {
+        if *occupant != *logical_key {
             return Err(PlacementSlotError::ArithmeticOverflow);
         }
         Ok(PlacementHandle {
@@ -514,7 +476,7 @@ where
             if slot_index == self.slots.len() {
                 self.slots.push(PlacementSlotState {
                     generation: write.handle.generation,
-                    occupant: Some(write.occupant),
+                    occupant: Some(write.logical_key),
                 });
             } else {
                 let state = &mut self.slots[slot_index];
@@ -522,7 +484,7 @@ where
                     state.occupant.is_none() || state.generation != write.handle.generation
                 );
                 state.generation = write.handle.generation;
-                state.occupant = Some(write.occupant);
+                state.occupant = Some(write.logical_key);
             }
         }
         debug_assert_eq!(self.slots.len(), self.pending_slot_count as usize);
@@ -633,8 +595,8 @@ mod tests {
     use super::*;
     use alloc::vec;
 
-    fn placement(key: u64) -> DesiredPlacement<u64> {
-        DesiredPlacement::new(key)
+    const fn placement(key: u64) -> u64 {
+        key
     }
 
     fn handles(arena: &PlacementSlotArena<u64>) -> Vec<PlacementHandle> {
@@ -643,7 +605,7 @@ mod tests {
 
     fn committed_key(arena: &PlacementSlotArena<u64>, handle: PlacementHandle) -> Option<u64> {
         let state = arena.slots.get(handle.slot.0 as usize)?;
-        (state.generation == handle.generation).then_some(state.occupant.as_ref()?.logical_key)
+        (state.generation == handle.generation).then_some(*state.occupant.as_ref()?)
     }
 
     #[test]

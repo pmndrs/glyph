@@ -22,7 +22,7 @@ use super::{
         PreparedUpdate, RootRevision, UpdateRequest,
     },
     identity_index::IdentityIndex,
-    placement_slot_arena::{DesiredPlacement, PlacementSlotArena, PlacementSlotError},
+    placement_slot_arena::{PlacementSlotArena, PlacementSlotError},
     placement_state::{GlyphSource, LayoutRunOwner, PlacementIdentity, PlacementSegment},
     positioning::{PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT},
     render_plan::RenderPlanView,
@@ -225,7 +225,7 @@ struct PlannerState {
     next_paragraph_incarnation: u32,
     pending_next_paragraph_incarnation: u32,
     placement_slots: PlacementSlotArena<PlacementLogicalKey>,
-    desired_placements: Vec<DesiredPlacement<PlacementLogicalKey>>,
+    desired_placements: Vec<PlacementLogicalKey>,
     session_placement_rows: Vec<SessionPlacementRow>,
     placement_slot_count: u32,
     pending_placement_slot_count: u32,
@@ -2541,11 +2541,11 @@ impl PlannerState {
                     }
                     .map(|run| run.source_kind)
                     .ok_or(EngineError::InvalidRequest)?;
-                    desired.push(DesiredPlacement::new(placement_logical_key(
+                    desired.push(placement_logical_key(
                         paragraph.incarnation,
                         *segment,
                         run_source,
-                    )));
+                    ));
                 }
             }
             self.placement_slots

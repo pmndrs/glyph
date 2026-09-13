@@ -2,6 +2,12 @@
 
 ## 2026-09-13
 
+- **Finished the placement-slot vocabulary fold** — Classified the retained allocator against D-358 and removed its
+  two remaining one-field generic wrappers. The planner now passes its already domain-specific `PlacementLogicalKey`
+  values directly, and slot state retains `Option<Key>` rather than wrapping the same key again. Allocation,
+  acknowledgement quarantine, generation, reorder, commit, and abort behavior are unchanged; all eight allocator
+  lifecycle tests and the complete 321-test Rust unit lane remain green.
+
 - **Removed the justified placement-segmentation penalty** — Kept the existing exact F16.16 quotient/remainder
   distribution and the SIMD flag scan, but stopped forcing every adjusted trivial-order fragment into one placement
   segment per cluster. Word-space-only adjustment now reuses the retained stable word/numeric-block segments and ends a
