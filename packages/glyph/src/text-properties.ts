@@ -343,7 +343,7 @@ export function normalizeTextFlow(value: TextFlow, label = 'text flow'): TextFlo
     if (regionKeys.has(key)) throw new TypeError(`${label} region key "${key}" is duplicated`);
     regionKeys.add(key);
     const shape = normalizeFlowShape(region.shape, `${regionLabel} shape`);
-    const clip = region.clip === undefined ? undefined : normalizeFlowBounds(region.clip, `${regionLabel} clip`);
+    const clip = region.clip === undefined ? undefined : normalizeTextFlowBounds(region.clip, `${regionLabel} clip`);
     const exclusionKeys = new Set<string>();
     const exclusions = (region.exclusions ?? []).map((exclusion, exclusionIndex) => {
       const exclusionLabel = `${regionLabel} exclusion ${exclusionIndex}`;
@@ -353,16 +353,7 @@ export function normalizeTextFlow(value: TextFlow, label = 'text flow'): TextFlo
         throw new TypeError(`${regionLabel} exclusion key "${exclusionKey}" is duplicated`);
       }
       exclusionKeys.add(exclusionKey);
-      optionalEnum(exclusion.wrapSide, ['both', 'inline-start', 'inline-end', 'largest'], `${exclusionLabel} wrapSide`);
-      const marginInline = normalizeOptionalFlowMargin(exclusion.marginInline, `${exclusionLabel} marginInline`);
-      const marginBlock = normalizeOptionalFlowMargin(exclusion.marginBlock, `${exclusionLabel} marginBlock`);
-      return Object.freeze({
-        key: exclusionKey,
-        shape: normalizeFlowShape(exclusion.shape, `${exclusionLabel} shape`),
-        ...(exclusion.wrapSide === undefined ? {} : { wrapSide: exclusion.wrapSide }),
-        ...(marginInline === undefined ? {} : { marginInline }),
-        ...(marginBlock === undefined ? {} : { marginBlock }),
-      });
+      return normalizeFlowExclusion(exclusion, exclusionLabel, exclusionKey);
     });
     return Object.freeze({
       key,
@@ -374,10 +365,29 @@ export function normalizeTextFlow(value: TextFlow, label = 'text flow'): TextFlo
   return Object.freeze({ regions: Object.freeze(regions) });
 }
 
+/** @internal Validate, normalize winding, and freeze one public flow exclusion. */
+export function normalizeTextFlowExclusion(value: TextFlowExclusion, label = 'text flow exclusion'): TextFlowExclusion {
+  assertRecord(value, label);
+  return normalizeFlowExclusion(value, label, flowKey(value.key, `${label} key`));
+}
+
+function normalizeFlowExclusion(value: TextFlowExclusion, label: string, key: string): TextFlowExclusion {
+  optionalEnum(value.wrapSide, ['both', 'inline-start', 'inline-end', 'largest'], `${label} wrapSide`);
+  const marginInline = normalizeOptionalFlowMargin(value.marginInline, `${label} marginInline`);
+  const marginBlock = normalizeOptionalFlowMargin(value.marginBlock, `${label} marginBlock`);
+  return Object.freeze({
+    key,
+    shape: normalizeFlowShape(value.shape, `${label} shape`),
+    ...(value.wrapSide === undefined ? {} : { wrapSide: value.wrapSide }),
+    ...(marginInline === undefined ? {} : { marginInline }),
+    ...(marginBlock === undefined ? {} : { marginBlock }),
+  });
+}
+
 function normalizeFlowShape(value: TextFlowShape, label: string): TextFlowShape {
   assertRecord(value, label);
   if (value.kind === 'rectangle') {
-    return Object.freeze({ kind: 'rectangle', bounds: normalizeFlowBounds(value.bounds, `${label} bounds`) });
+    return Object.freeze({ kind: 'rectangle', bounds: normalizeTextFlowBounds(value.bounds, `${label} bounds`) });
   }
   if (value.kind !== 'polygon' || !Array.isArray(value.vertices) || value.vertices.length < 3) {
     throw new TypeError(`${label} must be a rectangle or a polygon with at least three vertices`);
@@ -399,7 +409,8 @@ function normalizeFlowShape(value: TextFlowShape, label: string): TextFlowShape 
   return Object.freeze({ kind: 'polygon', vertices: Object.freeze(vertices) });
 }
 
-function normalizeFlowBounds(value: TextFlowBounds, label: string): TextFlowBounds {
+/** @internal Validate, f32-normalize, and freeze one public flow rectangle. */
+export function normalizeTextFlowBounds(value: TextFlowBounds, label: string): TextFlowBounds {
   if (!Array.isArray(value) || value.length !== 4) {
     throw new TypeError(`${label} must contain four finite coordinates`);
   }

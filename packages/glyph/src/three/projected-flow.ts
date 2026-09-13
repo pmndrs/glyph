@@ -1,13 +1,12 @@
 import * as THREE from 'three/webgpu';
 
 import {
-  normalizeTextFlow,
+  normalizeTextFlowBounds,
+  normalizeTextFlowExclusion,
   type TextFlowBounds,
   type TextFlowExclusion,
   type TextFlowPoint,
 } from '../text-properties.js';
-
-const projectionRegionKey = 'pmndrs-glyph-projection-region';
 
 interface ProjectTextFlowOptions {
   /** Stable exclusion key; repeated projections retain the same core identity. */
@@ -84,7 +83,7 @@ function projectTextFlow(
   options: ProjectTextFlowOptions,
   worldPolygon: (context: ProjectionContext) => WorldPolygon,
 ): TextFlowExclusion | undefined {
-  const flowBounds = normalizedFlowBounds(options.flowBounds);
+  const flowBounds = normalizeTextFlowBounds(options.flowBounds, 'text flow region 0 shape bounds');
   const projectionError = normalizedProjectionError(options.projectionError);
   const cameraTag = options.camera as THREE.Camera & {
     readonly isPerspectiveCamera?: boolean;
@@ -190,33 +189,16 @@ function projectTextFlow(
   polygon = preserveOutline ? compactRing(narrowed) : convexHull(narrowed);
   if (polygon.length < 3 || signedArea(polygon) === 0) return undefined;
 
-  const normalized = normalizeTextFlow({
-    regions: [
-      {
-        key: projectionRegionKey,
-        shape: { kind: 'rectangle', bounds: flowBounds },
-        exclusions: [
-          {
-            key: options.key,
-            shape: { kind: 'polygon', vertices: polygon },
-            ...(options.wrapSide === undefined ? {} : { wrapSide: options.wrapSide }),
-            ...(options.marginInline === undefined ? {} : { marginInline: options.marginInline }),
-            ...(options.marginBlock === undefined ? {} : { marginBlock: options.marginBlock }),
-          },
-        ],
-      },
-    ],
-  });
-  return normalized.regions[0]!.exclusions![0]!;
-}
-
-function normalizedFlowBounds(bounds: TextFlowBounds): TextFlowBounds {
-  const normalized = normalizeTextFlow({
-    regions: [{ key: projectionRegionKey, shape: { kind: 'rectangle', bounds } }],
-  });
-  const shape = normalized.regions[0]!.shape;
-  if (shape.kind !== 'rectangle') throw new TypeError('projected flow bounds must be rectangular');
-  return shape.bounds;
+  return normalizeTextFlowExclusion(
+    {
+      key: options.key,
+      shape: { kind: 'polygon', vertices: polygon },
+      ...(options.wrapSide === undefined ? {} : { wrapSide: options.wrapSide }),
+      ...(options.marginInline === undefined ? {} : { marginInline: options.marginInline }),
+      ...(options.marginBlock === undefined ? {} : { marginBlock: options.marginBlock }),
+    },
+    'text flow region 0 exclusion 0',
+  );
 }
 
 function normalizedProjectionError(value: number | undefined): number {
