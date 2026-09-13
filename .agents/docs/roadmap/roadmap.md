@@ -73,7 +73,7 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 |     9 |   ✅   | Port/rewrite and validate Slug                                        | XL     | 7                   | Outline-accurate text passes correctness, packing, visual, and GPU performance gates.                        |
 |    10 |   ✅   | Harden the merged v0 renderer baseline                                | L      | 8–9                 | Bitmap, MSDF, and Slug merge as independent modules over one shaping/layout result; no release is published. |
 |    11 |   🟡   | Extract the renderer-neutral batched core and engine target contract  | XL     | 10                  | One explicit batch renders through Three.js and Wayfare without renderer dependencies in portable core.      |
-|    12 |   🟡   | Implement fragment-relative reflow and editorial contour flow         | XL     | 11.16               | Run-placement patches and exact justified 2D/3D contour/drop-cap renderer gates pass.                        |
+|    12 |   ✅   | Implement fragment-relative reflow and editorial contour flow         | XL     | 11.16               | Run-placement patches and exact justified 2D/3D contour/drop-cap renderer gates pass.                        |
 
 Milestones 0–10 are closed. Milestone 11 remains active on its independent release work; Milestone 12 is an authorized
 additive frontier over the landed retained core and D-352–D-354 rather than a dependency on every open 11.x item.
