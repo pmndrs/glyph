@@ -42,9 +42,21 @@ test('application types stay at root while integration construction lives on con
   for (const name of ['GlyphConfig', 'Codec', 'TechniqueSchema', 'RasterFormat']) {
     assert.equal(root.has(name), true, `applications must be able to name ${name} from the root`);
   }
-  for (const retiredRootName of ['loadFont', 'createFontLibrary', 'FontLibrary', 'createParagraph', 'Paragraph']) {
+  for (const retiredRootName of [
+    'loadFont',
+    'createFontLibrary',
+    'FontLibrary',
+    'createParagraph',
+    'Paragraph',
+    'CodecAllocationMode',
+  ]) {
     assert.equal(root.has(retiredRootName), false, `root must not publish retired API ${retiredRootName}`);
   }
+  assert.equal(
+    published(await declaration('three.d.ts')).has('ThreeAllocationMode'),
+    false,
+    'the Three integration must not publish the retired allocation mode',
+  );
 
   const leaves = {
     'config/glyph.d.ts': ['defineGlyphConfig', 'defineGlyphSchema', 'resourceLease'],

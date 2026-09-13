@@ -18,7 +18,6 @@ pub enum RenderPlanCompilerError {
     NotPrepared,
     CapabilitySetMissing,
     ProgramMissing,
-    UnsupportedStrategy,
     InvalidInputShape,
     InvalidIdentity,
     InvalidResource,
@@ -61,7 +60,6 @@ impl RenderPlanCompilerError {
             | Self::NotPrepared
             | Self::CapabilitySetMissing
             | Self::ProgramMissing
-            | Self::UnsupportedStrategy
             | Self::InvalidInputShape
             | Self::InvalidIdentity
             | Self::InvalidResource
@@ -94,7 +92,6 @@ fn plan_result_too_large(error: PlanError) -> bool {
         | PlanError::NotPrepared
         | PlanError::CapabilitySetMissing
         | PlanError::ProgramMissing
-        | PlanError::UnsupportedStrategy
         | PlanError::InvalidInputShape
         | PlanError::InvalidIdentity
         | PlanError::DuplicateIdentity

@@ -661,7 +661,7 @@ function preflightCapabilitySet(set: CodecCapabilitySet, label: string): void {
   u16(set.wholeBufferThresholdBasisPoints, `${label} wholeBufferThresholdBasisPoints`);
 
   if (!set.capabilities.includes('ordered-direct')) {
-    throw new RangeError(`${label} supports no allocation strategy`);
+    throw new RangeError(`${label} does not support ordered storage`);
   }
   if (
     set.maxBufferBytes === 0 ||

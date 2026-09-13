@@ -12,7 +12,6 @@ pub enum PlanError {
     NotPrepared,
     CapabilitySetMissing,
     ProgramMissing,
-    UnsupportedStrategy,
     InvalidInputShape,
     InvalidIdentity,
     DuplicateIdentity,

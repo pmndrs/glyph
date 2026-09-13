@@ -33,10 +33,11 @@ use crate::{
         CODEC_PROGRAM_F32_INPUT_COUNT, CODEC_PROGRAM_ID, CODEC_PROGRAM_INPUT_COUNT,
         CODEC_PROGRAM_INPUT_START, CODEC_PROGRAM_OPERATION_COUNT, CODEC_PROGRAM_OPERATION_START,
         CODEC_PROGRAM_PAINT_CAPABILITIES, CODEC_PROGRAM_PRIMITIVE_KIND,
-        CODEC_PROGRAM_RECORD_ALIGNMENT, CODEC_PROGRAM_RECORD_SIZE, CODEC_PROGRAM_RESERVED1,
-        CODEC_PROGRAM_RESOURCE_KIND_MASK, CODEC_PROGRAM_SEMANTIC_VIEW_MASK,
-        CODEC_PROGRAM_STORAGE_KEY_MASK, CODEC_PROGRAM_TECHNIQUE_ID, CODEC_PROGRAM_U32_INPUT_COUNT,
-        CODEC_PROGRAM_VARIANT, CODEC_PROGRAMS_OFFSET, CODEC_REQUEST_HEADER_SIZE,
+        CODEC_PROGRAM_RECORD_ALIGNMENT, CODEC_PROGRAM_RECORD_SIZE, CODEC_PROGRAM_RESERVED0,
+        CODEC_PROGRAM_RESERVED1, CODEC_PROGRAM_RESOURCE_KIND_MASK,
+        CODEC_PROGRAM_SEMANTIC_VIEW_MASK, CODEC_PROGRAM_STORAGE_KEY_MASK,
+        CODEC_PROGRAM_TECHNIQUE_ID, CODEC_PROGRAM_U32_INPUT_COUNT, CODEC_PROGRAM_VARIANT,
+        CODEC_PROGRAMS_OFFSET, CODEC_REQUEST_HEADER_SIZE,
     },
     engine::codec::{
         BufferId, BufferSchema, CapabilitySet, CapabilitySetId, CodecDescriptor, INPUT_GLYPH,
@@ -134,7 +135,9 @@ pub(crate) fn parse_codec(bytes: &[u8]) -> Result<ValidatedCodec, u32> {
             PRIMITIVE_DECORATION => PRIMITIVE_DECORATION,
             _ => return Err(STATUS_INVALID_REQUEST),
         };
-        if read_u16(record, CODEC_PROGRAM_RESERVED1)? != 0 {
+        if read_u16(record, CODEC_PROGRAM_RESERVED0)? != 0
+            || read_u16(record, CODEC_PROGRAM_RESERVED1)? != 0
+        {
             return Err(STATUS_INVALID_REQUEST);
         }
         let selected_buffers = indexed_records(
@@ -531,6 +534,14 @@ mod tests {
         let mut unknown_input = valid_codec_bytes();
         unknown_input[INPUTS_OFFSET + CODEC_INPUT_SCOPE] = u8::MAX;
         assert_eq!(parse_codec(&unknown_input), Err(STATUS_INVALID_REQUEST));
+
+        let mut reserved_program = valid_codec_bytes();
+        put_u16(
+            &mut reserved_program[PROGRAMS_OFFSET..],
+            CODEC_PROGRAM_RESERVED0,
+            1,
+        );
+        assert_eq!(parse_codec(&reserved_program), Err(STATUS_INVALID_REQUEST));
     }
 
     #[test]

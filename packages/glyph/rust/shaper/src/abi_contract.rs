@@ -744,6 +744,7 @@ field_offset!(
 );
 field_offset!(CODEC_PROGRAM_BUFFER_START, CodecProgramRecord, buffer_start);
 field_offset!(CODEC_PROGRAM_BUFFER_COUNT, CodecProgramRecord, buffer_count);
+field_offset!(CODEC_PROGRAM_RESERVED0, CodecProgramRecord, reserved0);
 field_offset!(
     CODEC_PROGRAM_PRIMITIVE_KIND,
     CodecProgramRecord,
@@ -2103,6 +2104,7 @@ pub fn json() -> String {
                 "primitiveKind": CODEC_PROGRAM_PRIMITIVE_KIND,
                 "operationStart": CODEC_PROGRAM_OPERATION_START,
                 "operationCount": CODEC_PROGRAM_OPERATION_COUNT,
+                "reserved0": CODEC_PROGRAM_RESERVED0,
                 "inputStart": CODEC_PROGRAM_INPUT_START,
                 "inputCount": CODEC_PROGRAM_INPUT_COUNT,
                 "reserved1": CODEC_PROGRAM_RESERVED1

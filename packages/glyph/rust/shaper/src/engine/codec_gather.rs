@@ -1260,9 +1260,9 @@ mod tests {
     use crate::engine::{
         codec::{
             BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE, BUFFER_USAGE_COPY_DST,
-            BUFFER_USAGE_STORAGE, BufferId, BufferSchema,
-            CAP_ORDERED_DIRECT, CAP_STORAGE_BUFFERS, CapabilitySet, CodecDescriptor, InputSource,
-            Operation, ProgramCapabilities, ProgramDescriptor, ProgramId, ScalarType, TechniqueId,
+            BUFFER_USAGE_STORAGE, BufferId, BufferSchema, CAP_ORDERED_DIRECT, CAP_STORAGE_BUFFERS,
+            CapabilitySet, CodecDescriptor, InputSource, Operation, ProgramCapabilities,
+            ProgramDescriptor, ProgramId, ScalarType, TechniqueId,
         },
         font_binding::{FieldTable, FontResource, FontStrike},
         render_plan_compiler::RenderPlanCompiler,

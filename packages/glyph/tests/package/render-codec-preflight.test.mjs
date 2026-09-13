@@ -467,9 +467,9 @@ const semanticRejections = [
     /not a known codec capability/,
   ],
   [
-    'capabilities with no allocation support',
+    'capabilities without ordered storage',
     (d) => (d.capabilitySets[0].capabilities = ['storage-buffers']),
-    /supports no allocation strategy/,
+    /does not support ordered storage/,
   ],
   ['zero max buffer bytes', (d) => (d.capabilitySets[0].maxBufferBytes = 0), /limits need nonzero capacity/],
   [

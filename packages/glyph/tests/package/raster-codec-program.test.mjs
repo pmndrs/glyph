@@ -96,7 +96,7 @@ test('portable codec assembly rejects host inputs before invoking technique code
     [{ ...valid, transformMode: 'sideways' }, /transform mode/],
     [{ ...valid, system: {} }, /stableGlyphId system buffer/],
     [{ ...valid, system: { stableGlyphId: system.stableGlyphId } }, /placementSlot/],
-    [{ ...valid, capabilitySet: { ...capabilitySet, capabilities: [] } }, /supports no allocation strategy/],
+    [{ ...valid, capabilitySet: { ...capabilitySet, capabilities: [] } }, /does not support ordered storage/],
     [{ ...valid, ids: {} }, /ids/],
     [{ ...valid, identityRegistry: id }, /renamed to ids/],
   ];

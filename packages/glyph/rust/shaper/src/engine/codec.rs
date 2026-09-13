@@ -2131,6 +2131,16 @@ mod tests {
         );
         assert_eq!(codec.program(CapabilitySetId(3), BITMAP, 0), None);
 
+        let mut retired_stable = valid_capability_set();
+        retired_stable.flags |= 1 << 5;
+        assert_eq!(
+            ValidatedCodec::new(CodecDescriptor {
+                capability_sets: vec![retired_stable],
+                programs: vec![valid_program()],
+            }),
+            Err(CodecError::InvalidCapabilityFlags)
+        );
+
         let mut invalid_cost = valid_capability_set();
         invalid_cost.whole_buffer_threshold_basis_points = 10_001;
         assert_eq!(

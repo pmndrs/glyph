@@ -551,13 +551,12 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       if (!(segment.origins.array instanceof Float32Array) || !(segment.stableIds.array instanceof Uint32Array))
         continue;
       for (let index = segment.start; index < segment.start + segment.count; index += 1) {
-        const recordIndex = index;
-        const stableId = segment.stableIds.array[recordIndex]!;
-        const offset = recordIndex * segment.origins.vectorWidth;
+        const stableId = segment.stableIds.array[index]!;
+        const offset = index * segment.origins.vectorWidth;
         this.#originRecords.set(stableId, {
           buffer: segment.origins,
           storageKey: segment.storageKey,
-          index: recordIndex,
+          index,
           geometry: segment.geometry,
           drawIndex: segment.drawIndex,
           targetX: segment.origins.array[offset]!,

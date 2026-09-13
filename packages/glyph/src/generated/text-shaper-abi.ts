@@ -387,6 +387,7 @@ export const textShaperAbi = {
       "paintCapabilities": 24,
       "primitiveKind": 50,
       "programId": 4,
+      "reserved0": 46,
       "reserved1": 62,
       "resourceKindMask": 12,
       "semanticViewMask": 16,

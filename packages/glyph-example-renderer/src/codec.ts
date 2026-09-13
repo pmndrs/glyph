@@ -44,7 +44,6 @@ export function exampleCodecDescriptor(ids?: CodecIdFactory): CodecDescriptor {
         system: exampleSystemBuffers,
         capabilitySet,
         transformMode: 'direct',
-        allocationMode: 'ordered',
         ...(ids === undefined ? {} : { ids }),
       }),
     ],
