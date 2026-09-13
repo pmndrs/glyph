@@ -934,7 +934,6 @@ mod tests {
             font_handle: 17,
             numeric_blocks: Default::default(),
             canonical_revision: None,
-            run_handle: None,
         }];
         let map = build_visual_instance_map(
             &layout_runs,

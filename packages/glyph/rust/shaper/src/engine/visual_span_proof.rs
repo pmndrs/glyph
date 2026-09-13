@@ -157,7 +157,6 @@ pub(crate) fn build_visual_instance_map(
                 layout_run_owner: LayoutRunOwner::Paragraph,
                 layout_run_index: u32::try_from(run_index)
                     .map_err(|_| EngineError::ResultTooLarge)?,
-                run_handle: None,
                 placement_handle: None,
                 canonical_revision: None,
                 identity: super::placement_state::PlacementIdentity::StableSource,
@@ -402,7 +401,6 @@ mod tests {
             font_handle: 17,
             numeric_blocks: Default::default(),
             canonical_revision: None,
-            run_handle: None,
         }
     }
 

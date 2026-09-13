@@ -12,9 +12,6 @@ use super::{
     style_state::{ResolvedStyle, StyleArena, StyleSegment},
 };
 
-#[cfg(any(test, feature = "kernel-lab"))]
-use super::run_slot::RunHandle;
-
 use super::run_local::{ClusterFinish, RunLocalBuildError, RunLocalGlyphInput};
 
 pub(crate) const CLUSTER_SAFE_BEFORE: u8 = 1 << 0;
@@ -114,8 +111,6 @@ pub(crate) struct LayoutRun {
     /// Exact retained local-content token. `None` exists only while a pending cluster arena is
     /// being built; every committed run has a revision assigned by the shared finalizer.
     pub canonical_revision: Option<RunCanonicalRevision>,
-    #[cfg(any(test, feature = "kernel-lab"))]
-    pub run_handle: Option<RunHandle>,
 }
 
 #[derive(Clone, Copy)]
@@ -1363,25 +1358,6 @@ impl ClusterArena {
         result
     }
 
-    #[cfg(any(test, feature = "kernel-lab"))]
-    pub(crate) fn bind_layout_run_handle(
-        &mut self,
-        run_index: usize,
-        canonical_revision: RunCanonicalRevision,
-        handle: RunHandle,
-    ) -> Result<(), EngineError> {
-        let run = self
-            .layout_runs
-            .runs
-            .get_mut(run_index)
-            .ok_or(EngineError::InvalidRequest)?;
-        if run.canonical_revision != Some(canonical_revision) {
-            return Err(EngineError::InvalidRequest);
-        }
-        run.run_handle = Some(handle);
-        Ok(())
-    }
-
     #[cfg(test)]
     pub(super) fn rebuild_layout_runs(&mut self) -> Result<(), EngineError> {
         self.rebuild_layout_runs_with(|left, right| left == right)
@@ -1440,8 +1416,6 @@ impl ClusterArena {
                 font_handle,
                 numeric_blocks: NumericBlockSpan::default(),
                 canonical_revision: None,
-                #[cfg(any(test, feature = "kernel-lab"))]
-                run_handle: None,
             })?;
             cluster_start = cluster_end;
         }
@@ -2368,7 +2342,6 @@ mod tests {
                     font_handle: 10,
                     numeric_blocks: NumericBlockSpan::default(),
                     canonical_revision: None,
-                    run_handle: None,
                 },
                 LayoutRun {
                     source_kind: LayoutRunSourceKind::Paragraph,
@@ -2380,7 +2353,6 @@ mod tests {
                     font_handle: 20,
                     numeric_blocks: NumericBlockSpan::default(),
                     canonical_revision: None,
-                    run_handle: None,
                 },
                 LayoutRun {
                     source_kind: LayoutRunSourceKind::Paragraph,
@@ -2392,7 +2364,6 @@ mod tests {
                     font_handle: 20,
                     numeric_blocks: NumericBlockSpan::default(),
                     canonical_revision: None,
-                    run_handle: None,
                 },
                 LayoutRun {
                     source_kind: LayoutRunSourceKind::Paragraph,
@@ -2404,7 +2375,6 @@ mod tests {
                     font_handle: 10,
                     numeric_blocks: NumericBlockSpan::default(),
                     canonical_revision: None,
-                    run_handle: None,
                 },
             ]
         );

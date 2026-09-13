@@ -29,9 +29,6 @@ use super::{
     style_state::{ResolvedStyle, StyleSegment},
 };
 
-#[cfg(any(test, feature = "kernel-lab"))]
-use super::run_slot::RunHandle;
-
 pub(crate) const SEMANTIC_F32_BASE_FIELD_COUNT: usize = 6;
 pub(crate) const SEMANTIC_F32_FIELD_COUNT: usize = 9;
 pub(crate) const SEMANTIC_F32_CHANGE_FIELD_COUNT: usize = 8;
@@ -1426,35 +1423,6 @@ impl PositionedGlyphArena {
         &self.replacement_run_local
     }
 
-    #[cfg(any(test, feature = "kernel-lab"))]
-    pub(crate) fn bind_replacement_run_handle(
-        &mut self,
-        index: usize,
-        canonical: RunCanonicalRevision,
-        handle: RunHandle,
-    ) -> Result<(), EngineError> {
-        let run = self
-            .replacement_runs
-            .get_mut(index)
-            .ok_or(EngineError::InvalidRequest)?;
-        if matches!(run.source_kind, LayoutRunSourceKind::Paragraph)
-            || run.canonical_revision != Some(canonical)
-        {
-            return Err(EngineError::InvalidRequest);
-        }
-        run.run_handle = Some(handle);
-        Ok(())
-    }
-
-    #[cfg(any(test, feature = "kernel-lab"))]
-    pub(crate) fn bind_placement_run_handles(
-        &mut self,
-        layout_runs: &[LayoutRun],
-    ) -> Result<(), EngineError> {
-        self.placement
-            .bind_run_handles(layout_runs, &self.replacement_runs)
-    }
-
     pub(crate) fn placement_segments(&self) -> &[super::placement_state::PlacementSegment] {
         self.placement.segment_rows()
     }
@@ -1646,8 +1614,6 @@ impl PositionedGlyphArena {
                     font_handle: spec.font_handle,
                     numeric_blocks: Default::default(),
                     canonical_revision: Some(canonical_revision),
-                    #[cfg(any(test, feature = "kernel-lab"))]
-                    run_handle: None,
                 });
                 run_indices[role_index] = Some(run_index);
             }
@@ -2366,8 +2332,6 @@ impl PositionedGlyphArena {
                 layout_run_owner: LayoutRunOwner::Paragraph,
                 layout_run_index: u32::try_from(layout_run_index)
                     .map_err(|_| EngineError::ResultTooLarge)?,
-                #[cfg(any(test, feature = "kernel-lab"))]
-                run_handle: layout_run.run_handle,
                 placement_handle: None,
                 canonical_revision: layout_run.canonical_revision,
                 identity: if allow_dense_identity && placement_cluster.dense {
@@ -2840,8 +2804,6 @@ impl PositionedGlyphArena {
                 fragment_index: self.placement_fragment_index,
                 layout_run_owner: LayoutRunOwner::Replacement,
                 layout_run_index: run_index,
-                #[cfg(any(test, feature = "kernel-lab"))]
-                run_handle: run.run_handle,
                 placement_handle: None,
                 canonical_revision: run.canonical_revision,
                 identity: PlacementIdentity::StableSource,

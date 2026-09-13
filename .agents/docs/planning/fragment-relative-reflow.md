@@ -872,7 +872,7 @@ must reuse static glyph/raster/effect state before the final compact-publication
   placement table; adapters own physical packing and no run/line/slot-allocation field enters the public Codec plan.
 - Define numeric wire representation, change-mask semantics, capacities, range jobs, patches, acknowledgement, and
   retirement in the generated contract without changing batch or draw identity.
-- Publish static glyph-local/numeric-block/run-slot records only on topology or local-geometry changes, never visual-slice
+- Publish static glyph-local and numeric-block records only on topology or local-geometry changes, never visual-slice
   boundary changes.
 - Publish placement, visual-order, and decoration patches on width changes.
 - Teach the generic realization boundary to resolve the occurrence slot and combine local glyph data with the selected
