@@ -51,91 +51,9 @@ pub(crate) struct SegmentTranslation {
 }
 
 #[derive(Default)]
-pub(crate) struct PlacementSegmentArena {
-    rows: Vec<PlacementSegment>,
-}
-
-impl PlacementSegmentArena {
-    pub(crate) fn len(&self) -> usize {
-        self.rows.len()
-    }
-
-    pub(crate) fn get(&self, index: usize) -> Option<PlacementSegment> {
-        self.rows.get(index).copied()
-    }
-
-    fn row(&self, index: usize) -> PlacementSegment {
-        self.rows[index]
-    }
-
-    fn is_valid(&self) -> bool {
-        true
-    }
-
-    fn reserve(&mut self, additional: usize) -> Result<(), EngineError> {
-        self.rows
-            .try_reserve(additional)
-            .map_err(|_| EngineError::ResultTooLarge)
-    }
-
-    fn push(&mut self, row: PlacementSegment) {
-        self.rows.push(row);
-    }
-
-    fn truncate(&mut self, len: usize) {
-        self.rows.truncate(len);
-    }
-
-    fn clear(&mut self) {
-        self.rows.clear();
-    }
-}
-
-#[derive(Default)]
-pub(crate) struct SegmentTranslationArena {
-    rows: Vec<SegmentTranslation>,
-}
-
-impl SegmentTranslationArena {
-    pub(crate) fn len(&self) -> usize {
-        self.rows.len()
-    }
-
-    pub(crate) fn get(&self, index: usize) -> Option<SegmentTranslation> {
-        self.rows.get(index).copied()
-    }
-
-    fn row(&self, index: usize) -> SegmentTranslation {
-        self.rows[index]
-    }
-
-    fn is_valid(&self) -> bool {
-        true
-    }
-
-    fn reserve(&mut self, additional: usize) -> Result<(), EngineError> {
-        self.rows
-            .try_reserve(additional)
-            .map_err(|_| EngineError::ResultTooLarge)
-    }
-
-    fn push(&mut self, row: SegmentTranslation) {
-        self.rows.push(row);
-    }
-
-    fn truncate(&mut self, len: usize) {
-        self.rows.truncate(len);
-    }
-
-    fn clear(&mut self) {
-        self.rows.clear();
-    }
-}
-
-#[derive(Default)]
 pub(crate) struct PlacementState {
-    segments: PlacementSegmentArena,
-    translations: SegmentTranslationArena,
+    segments: Vec<PlacementSegment>,
+    translations: Vec<SegmentTranslation>,
     line_segment_starts: Vec<u32>,
     line_segment_counts: Vec<u32>,
     segment_instance_counts: Vec<u32>,
@@ -198,7 +116,7 @@ impl PlacementState {
         for (segment, &count) in self.segment_instance_counts.iter().enumerate() {
             let instance_end = instance_start.checked_add(usize::try_from(count).ok()?)?;
             if glyph_index < instance_end {
-                return self.translations.get(segment);
+                return self.translations.get(segment).copied();
             }
             instance_start = instance_end;
         }
@@ -248,7 +166,7 @@ impl PlacementState {
             )
         {
             let index = usize::try_from(last_index).map_err(|_| EngineError::InvalidRequest)?;
-            let stored = &mut self.segments.rows[index];
+            let stored = &mut self.segments[index];
             stored.run_cluster_start = cluster_start;
             stored.run_cluster_count = cluster_count;
             stored.source_glyph_start = glyph_start;
@@ -267,8 +185,12 @@ impl PlacementState {
             return Ok(last_index);
         }
         let index = u32::try_from(self.segments.len()).map_err(|_| EngineError::ResultTooLarge)?;
-        self.segments.reserve(1)?;
-        self.translations.reserve(1)?;
+        self.segments
+            .try_reserve(1)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        self.translations
+            .try_reserve(1)
+            .map_err(|_| EngineError::ResultTooLarge)?;
         self.segment_instance_counts
             .try_reserve(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
@@ -311,7 +233,6 @@ impl PlacementState {
         .ok_or(EngineError::InvalidRequest)?;
         let stored = self
             .segments
-            .rows
             .get_mut(index)
             .ok_or(EngineError::InvalidRequest)?;
         stored.run_cluster_start = cluster_start;
@@ -368,7 +289,7 @@ impl PlacementState {
             previous
                 .segments
                 .get(index)
-                .is_none_or(|segment| !hinted_run_matches(segment, layout_runs, replacement_runs))
+                .is_none_or(|segment| !hinted_run_matches(*segment, layout_runs, replacement_runs))
         }) {
             self.prepare_run_resolution(layout_runs, replacement_runs)?;
         }
@@ -441,22 +362,26 @@ impl PlacementState {
                 .new_fragment_start
                 .checked_add(fragment_offset)
                 .ok_or(EngineError::ResultTooLarge)?;
-            self.resolve_run(slice, layout_runs, replacement_runs)?;
+            self.resolve_run(*slice, layout_runs, replacement_runs)?;
         }
-        self.segments.reserve(slice_count)?;
-        self.translations.reserve(slice_count)?;
+        self.segments
+            .try_reserve(slice_count)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        self.translations
+            .try_reserve(slice_count)
+            .map_err(|_| EngineError::ResultTooLarge)?;
         self.segment_instance_counts
             .try_reserve(slice_count)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.reserve_line_record()?;
 
         for relative in 0..slice_count {
-            let mut slice = previous.segments.row(slice_start + relative);
+            let mut slice = previous.segments[slice_start + relative];
             slice.fragment_index =
                 retained.new_fragment_start + (slice.fragment_index - retained.old_fragment_start);
             slice.layout_run_index = self.resolve_run(slice, layout_runs, replacement_runs)?.0;
             slice.placement_handle = None;
-            let placement = previous.translations.row(slice_start + relative);
+            let placement = previous.translations[slice_start + relative];
             self.segments.push(slice);
             self.translations.push(placement);
             self.segment_instance_counts
@@ -476,7 +401,7 @@ impl PlacementState {
     }
 
     #[cfg(test)]
-    pub(crate) fn segments(&self) -> &PlacementSegmentArena {
+    pub(crate) fn segments(&self) -> &[PlacementSegment] {
         &self.segments
     }
 
@@ -487,11 +412,11 @@ impl PlacementState {
     }
 
     pub(crate) fn segment_rows(&self) -> &[PlacementSegment] {
-        &self.segments.rows
+        &self.segments
     }
 
     pub(crate) fn translations(&self) -> &[SegmentTranslation] {
-        &self.translations.rows
+        &self.translations
     }
 
     pub(crate) fn segment_instance_counts(&self) -> &[u32] {
@@ -514,7 +439,7 @@ impl PlacementState {
         if handles.len() != self.segments.len() {
             return Err(EngineError::InvalidRequest);
         }
-        for (segment, handle) in self.segments.rows.iter_mut().zip(handles) {
+        for (segment, handle) in self.segments.iter_mut().zip(handles) {
             segment.placement_handle = Some(*handle);
         }
         Ok(())
@@ -531,7 +456,7 @@ impl PlacementState {
 
     #[cfg(test)]
     pub(crate) fn translation(&self, index: usize) -> Option<SegmentTranslation> {
-        self.translations.get(index)
+        self.translations.get(index).copied()
     }
 
     fn checkpoint(&self) -> PlacementCheckpoint {
@@ -553,8 +478,8 @@ impl PlacementState {
         self.last_segment = self.segments.len().checked_sub(1).map(|index| {
             (
                 u32::try_from(index).expect("placement segment index already fit u32"),
-                self.segments.row(index),
-                self.translations.row(index),
+                self.segments[index],
+                self.translations[index],
             )
         });
     }
@@ -564,9 +489,7 @@ impl PlacementState {
     }
 
     fn has_aligned_lanes(&self) -> bool {
-        self.segments.is_valid()
-            && self.translations.is_valid()
-            && self.segments.len() == self.translations.len()
+        self.segments.len() == self.translations.len()
             && self.segments.len() == self.segment_instance_counts.len()
             && self.line_segment_starts.len() == self.line_segment_counts.len()
     }
@@ -802,8 +725,8 @@ mod tests {
 
         assert_eq!((first, second), (0, 0));
         assert_eq!(state.segments().len(), 1);
-        assert_eq!(state.segments().get(0).unwrap().run_cluster_count, 2);
-        assert_eq!(state.segments().get(0).unwrap().source_glyph_count, 2);
+        assert_eq!(state.segments().first().unwrap().run_cluster_count, 2);
+        assert_eq!(state.segments().first().unwrap().source_glyph_count, 2);
     }
 
     #[test]
@@ -832,7 +755,7 @@ mod tests {
             )
             .unwrap();
         previous.push_segment_instances(segment, 2).unwrap();
-        previous.segments.rows[0].canonical_revision = Some(revisions[2]);
+        previous.segments[0].canonical_revision = Some(revisions[2]);
         previous.finish_line(line).unwrap();
 
         let runs = revisions.map(|canonical_revision| LayoutRun {
@@ -862,7 +785,7 @@ mod tests {
                 &[],
             )
             .unwrap();
-        assert_eq!(state.segments().get(0).unwrap().fragment_index, 9);
+        assert_eq!(state.segments().first().unwrap().fragment_index, 9);
 
         let reordered = [runs[2], runs[0], runs[1]];
         let mut rebound = PlacementState::default();
@@ -880,9 +803,9 @@ mod tests {
                 &[],
             )
             .unwrap();
-        assert_eq!(rebound.segments().get(0).unwrap().layout_run_index, 0);
+        assert_eq!(rebound.segments().first().unwrap().layout_run_index, 0);
 
-        previous.segments.rows[0].canonical_revision =
+        previous.segments[0].canonical_revision =
             Some(RunCanonicalRevision::allocate(&mut next_revision).unwrap());
         let checkpoint = state.checkpoint();
         assert!(matches!(
