@@ -38,10 +38,8 @@ use super::{
     },
 };
 
-#[cfg(any(test, feature = "kernel-lab"))]
+#[cfg(test)]
 use super::cluster_state::{BoundaryRunRole, RunCanonicalRevision};
-#[cfg(any(test, feature = "kernel-lab"))]
-use super::run_slot::{DesiredRun, RunSlotArena, RunSlotChange};
 
 /// What a rejected frame can name about its own cause.
 ///
@@ -227,10 +225,6 @@ struct PlannerState {
     pending_next_content_revision: u32,
     next_paragraph_incarnation: u32,
     pending_next_paragraph_incarnation: u32,
-    #[cfg(any(test, feature = "kernel-lab"))]
-    run_slots: RunSlotArena<RunLogicalKey, RunCanonicalRevision>,
-    #[cfg(any(test, feature = "kernel-lab"))]
-    desired_runs: Vec<DesiredRun<RunLogicalKey, RunCanonicalRevision>>,
     placement_slots: PlacementSlotArena<PlacementLogicalKey, ()>,
     desired_placements: Vec<DesiredPlacement<PlacementLogicalKey, ()>>,
     desired_placement_handles: Vec<PlacementHandle>,
@@ -274,23 +268,6 @@ impl ParagraphIncarnation {
         *next = value.checked_add(1).ok_or(EngineError::RevisionExhausted)?;
         Ok(Self(incarnation))
     }
-}
-
-#[cfg(any(test, feature = "kernel-lab"))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct RunLogicalKey {
-    paragraph: ParagraphIncarnation,
-    anchor: RunLogicalAnchor,
-}
-
-#[cfg(any(test, feature = "kernel-lab"))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum RunLogicalAnchor {
-    Text(NonZeroU32),
-    Boundary {
-        flow_thread_id: u32,
-        role: BoundaryRunRole,
-    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -1363,13 +1340,6 @@ impl TextEngine {
         // A completed renderer fence is external monotonic state. Validate and accept it
         // before taking an adoptable speculative transaction; later preparation aborts do
         // not roll the fence back.
-        #[cfg(any(test, feature = "kernel-lab"))]
-        {
-            planner
-                .run_slots
-                .acknowledge(request.acknowledged_publication_generation)
-                .map_err(run_slot_error)?;
-        }
         planner
             .placement_slots
             .acknowledge(request.acknowledged_publication_generation)
@@ -1522,34 +1492,6 @@ impl TextEngine {
                     .paragraphs
                     .iter()
                     .any(|paragraph| paragraph.positioned_changed);
-            #[cfg(any(test, feature = "kernel-lab"))]
-            {
-                let run_slots_changed = planner.lifecycle_changed
-                    || planner.paragraphs.iter().any(|paragraph| {
-                        paragraph.state.clusters.is_prepared()
-                            || (paragraph.state.positioned.is_prepared()
-                                && (!paragraph
-                                    .state
-                                    .positioned
-                                    .pending()
-                                    .replacement_runs()
-                                    .is_empty()
-                                    || !paragraph
-                                        .state
-                                        .positioned
-                                        .committed()
-                                        .replacement_runs()
-                                        .is_empty()))
-                    });
-                if run_slots_changed {
-                    planner.prepare_run_slots(publication_generation)?;
-                } else {
-                    planner
-                        .run_slots
-                        .prepare_reuse(publication_generation)
-                        .map_err(run_slot_error)?;
-                }
-            }
             if positioned_changed || checkpoint {
                 planner
                     .prepare_placement_slots(publication_generation, &mut next_content_revision)?;
@@ -1808,11 +1750,6 @@ impl TextEngine {
             return Err(EngineError::RevisionConflict);
         }
         planner.plan.commit().map_err(plan_error)?;
-        #[cfg(any(test, feature = "kernel-lab"))]
-        {
-            planner.run_slots.commit();
-            planner.desired_runs.clear();
-        }
         planner.placement_slots.commit();
         planner.desired_placements.clear();
         planner.desired_placement_handles.clear();
@@ -2555,204 +2492,6 @@ impl PlannerState {
         }
     }
 
-    #[cfg(any(test, feature = "kernel-lab"))]
-    fn prepare_run_slots(&mut self, publication_generation: u32) -> Result<(), EngineError> {
-        let mut desired = core::mem::take(&mut self.desired_runs);
-        desired.clear();
-        let result = (|| {
-            let required = self
-                .active_order()
-                .iter()
-                .try_fold(0usize, |total, order| {
-                    let paragraph = self
-                        .paragraph(order.id)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    total
-                        .checked_add(paragraph.state.clusters.active().layout_runs().len())
-                        .and_then(|total| {
-                            total.checked_add(
-                                paragraph.state.positioned.active().replacement_runs().len(),
-                            )
-                        })
-                        .ok_or(EngineError::ResultTooLarge)
-                })?;
-            desired
-                .try_reserve(required)
-                .map_err(|_| EngineError::ResultTooLarge)?;
-            for order in self.active_order() {
-                let paragraph = self
-                    .paragraph(order.id)
-                    .ok_or(EngineError::InvalidRequest)?;
-                let clusters = paragraph.state.clusters.active();
-                for run in clusters.layout_runs() {
-                    if run.source_kind != LayoutRunSourceKind::Paragraph {
-                        return Err(EngineError::InvalidRequest);
-                    }
-                    let cluster = usize::try_from(run.cluster_start)
-                        .map_err(|_| EngineError::InvalidRequest)?;
-                    let first_text_unit_id = clusters
-                        .stable_ids
-                        .get(cluster)
-                        .copied()
-                        .and_then(NonZeroU32::new)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    let canonical = run.canonical_revision.ok_or(EngineError::InvalidRequest)?;
-                    desired.push(DesiredRun::new(
-                        RunLogicalKey {
-                            paragraph: paragraph.incarnation,
-                            anchor: RunLogicalAnchor::Text(first_text_unit_id),
-                        },
-                        canonical,
-                    ));
-                }
-                for run in paragraph.state.positioned.active().replacement_runs() {
-                    let LayoutRunSourceKind::Boundary {
-                        flow_thread_id,
-                        role,
-                    } = run.source_kind
-                    else {
-                        return Err(EngineError::InvalidRequest);
-                    };
-                    let canonical = run.canonical_revision.ok_or(EngineError::InvalidRequest)?;
-                    desired.push(DesiredRun::new(
-                        RunLogicalKey {
-                            paragraph: paragraph.incarnation,
-                            anchor: RunLogicalAnchor::Boundary {
-                                flow_thread_id,
-                                role,
-                            },
-                        },
-                        canonical,
-                    ));
-                }
-            }
-            self.run_slots
-                .prepare(&desired, publication_generation)
-                .map_err(run_slot_error)?;
-            let assignment_count = self.run_slots.assignments().map_err(run_slot_error)?.len();
-            if assignment_count != desired.len() {
-                return Err(EngineError::InvalidRequest);
-            }
-            let mut assignment_index = 0usize;
-            for order_index in 0..self.active_order().len() {
-                let paragraph_id = self.active_order()[order_index].id;
-                let run_count = self
-                    .paragraph(paragraph_id)
-                    .ok_or(EngineError::InvalidRequest)?
-                    .state
-                    .clusters
-                    .active()
-                    .layout_runs()
-                    .len();
-                for run_index in 0..run_count {
-                    let assignment = *self
-                        .run_slots
-                        .assignments()
-                        .map_err(run_slot_error)?
-                        .get(assignment_index)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    assignment_index += 1;
-                    let paragraph = self
-                        .paragraph_mut(paragraph_id)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    if paragraph.state.clusters.is_prepared() {
-                        let canonical = paragraph.state.clusters.pending().layout_runs()[run_index]
-                            .canonical_revision
-                            .ok_or(EngineError::InvalidRequest)?;
-                        paragraph
-                            .state
-                            .clusters
-                            .pending_mut()
-                            .bind_layout_run_handle(run_index, canonical, assignment.handle())?;
-                    } else {
-                        let run = paragraph.state.clusters.committed().layout_runs()[run_index];
-                        if run.source_kind != LayoutRunSourceKind::Paragraph
-                            || assignment.change() != RunSlotChange::Retained
-                            || run.run_handle != Some(assignment.handle())
-                        {
-                            return Err(EngineError::InvalidRequest);
-                        }
-                    }
-                }
-                let replacement_count = self
-                    .paragraph(paragraph_id)
-                    .ok_or(EngineError::InvalidRequest)?
-                    .state
-                    .positioned
-                    .active()
-                    .replacement_runs()
-                    .len();
-                for run_index in 0..replacement_count {
-                    let assignment = *self
-                        .run_slots
-                        .assignments()
-                        .map_err(run_slot_error)?
-                        .get(assignment_index)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    assignment_index += 1;
-                    let paragraph = self
-                        .paragraph_mut(paragraph_id)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    if paragraph.state.positioned.is_prepared() {
-                        let run = paragraph
-                            .state
-                            .positioned
-                            .pending()
-                            .replacement_runs()
-                            .get(run_index)
-                            .ok_or(EngineError::InvalidRequest)?;
-                        if !matches!(run.source_kind, LayoutRunSourceKind::Boundary { .. }) {
-                            return Err(EngineError::InvalidRequest);
-                        }
-                        let canonical =
-                            run.canonical_revision.ok_or(EngineError::InvalidRequest)?;
-                        paragraph
-                            .state
-                            .positioned
-                            .pending_mut()
-                            .bind_replacement_run_handle(
-                                run_index,
-                                canonical,
-                                assignment.handle(),
-                            )?;
-                    } else {
-                        let run = paragraph
-                            .state
-                            .positioned
-                            .committed()
-                            .replacement_runs()
-                            .get(run_index)
-                            .copied()
-                            .ok_or(EngineError::InvalidRequest)?;
-                        if !matches!(run.source_kind, LayoutRunSourceKind::Boundary { .. })
-                            || assignment.change() != RunSlotChange::Retained
-                            || run.run_handle != Some(assignment.handle())
-                        {
-                            return Err(EngineError::InvalidRequest);
-                        }
-                    }
-                }
-                let paragraph = self
-                    .paragraph_mut(paragraph_id)
-                    .ok_or(EngineError::InvalidRequest)?;
-                if paragraph.state.positioned.is_prepared() {
-                    let layout_runs = paragraph.state.clusters.active().layout_runs();
-                    paragraph
-                        .state
-                        .positioned
-                        .pending_mut()
-                        .bind_placement_run_handles(layout_runs)?;
-                }
-            }
-            if assignment_index != assignment_count {
-                return Err(EngineError::InvalidRequest);
-            }
-            Ok(())
-        })();
-        self.desired_runs = desired;
-        result
-    }
-
     fn prepare_placement_slots(
         &mut self,
         publication_generation: u32,
@@ -2913,11 +2652,6 @@ impl PlannerState {
     fn abort_pending(&mut self) {
         self.speculative = None;
         self.plan.abort();
-        #[cfg(any(test, feature = "kernel-lab"))]
-        {
-            self.run_slots.abort();
-            self.desired_runs.clear();
-        }
         self.placement_slots.abort();
         self.desired_placements.clear();
         self.desired_placement_handles.clear();
@@ -5437,7 +5171,6 @@ mod tests {
             fragment_index: 0,
             layout_run_owner: LayoutRunOwner::Replacement,
             layout_run_index: 0,
-            run_handle: None,
             placement_handle: None,
             canonical_revision: Some(first_revision),
             identity: PlacementIdentity::StableSource,

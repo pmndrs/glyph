@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:b636d0bdf55daf630113777a9365ac599c2f06735a06d83aee2cb982ea60504a'
+source_digest: 'sha256:b4bb0b0082a2363a6ea44c19cbc1bcb0304b54aa9407885071b17b5233ee010b'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1340,8 +1340,9 @@ corpus reconstructs all 332 already-published f32 coordinates exactly from line 
 f64 reassociation counterexamples remain authoritative for the future CPU cutover.
 
 Break-independent numeric blocks, compact placement segments, and placement slots are production-owned and populated by
-the single positioning traversal. Planner-scoped run-handle reconciliation remains test/kernel-lab evidence and is absent
-from release state. Justification, L1/L2, hanging, boundary ownership, and exact f64 translation remain in core; the
+the single positioning traversal. A LayoutRun's canonical revision and stable source anchor identify its retained local
+geometry; there is no separate run-slot allocator or renderer-visible run handle. Justification, L1/L2, hanging,
+boundary ownership, and exact f64 translation remain in core; the
 renderer receives only a per-glyph u32 slot and the selected f32x2 row. CPU semantic/query rows and renderer placement use
 the same ordered local-plus-placement f32 operation. Run, word, numeric-block, role, bidi, and justification metadata do
 not cross the renderer boundary.

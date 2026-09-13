@@ -7,9 +7,6 @@ use super::{
 };
 
 #[cfg(any(test, feature = "kernel-lab"))]
-use super::run_slot::RunHandle;
-
-#[cfg(any(test, feature = "kernel-lab"))]
 macro_rules! define_arena {
     (
         $arena:ident, $row:ident,
@@ -110,8 +107,6 @@ pub(crate) struct PlacementSegment {
     pub fragment_index: u32,
     pub layout_run_owner: LayoutRunOwner,
     pub layout_run_index: u32,
-    #[cfg(any(test, feature = "kernel-lab"))]
-    pub run_handle: Option<RunHandle>,
     pub placement_handle: Option<PlacementHandle>,
     pub canonical_revision: Option<RunCanonicalRevision>,
     pub identity: PlacementIdentity,
@@ -500,8 +495,6 @@ impl PlacementState {
             fragment_index,
             layout_run_owner,
             layout_run_index,
-            #[cfg(any(test, feature = "kernel-lab"))]
-            run_handle: None,
             placement_handle: None,
             canonical_revision: None,
             identity: PlacementIdentity::StableSource,
@@ -797,10 +790,6 @@ impl PlacementState {
             slice.fragment_index =
                 retained.new_fragment_start + (slice.fragment_index - retained.old_fragment_start);
             slice.layout_run_index = self.resolve_run(slice, layout_runs, replacement_runs)?.0;
-            #[cfg(any(test, feature = "kernel-lab"))]
-            {
-                slice.run_handle = None;
-            }
             slice.placement_handle = None;
             let placement = previous.translations.row(slice_start + relative);
             self.segments.push(slice);
@@ -924,32 +913,6 @@ impl PlacementState {
             }
             Ok(())
         }
-    }
-
-    #[cfg(any(test, feature = "kernel-lab"))]
-    pub(crate) fn bind_run_handles(
-        &mut self,
-        layout_runs: &[LayoutRun],
-        replacement_runs: &[LayoutRun],
-    ) -> Result<(), EngineError> {
-        for index in 0..self.segments.len() {
-            let segment = self.segments.row(index);
-            if self
-                .resolve_run(segment, layout_runs, replacement_runs)?
-                .1
-                .run_handle
-                .is_none()
-            {
-                return Err(EngineError::InvalidRequest);
-            }
-        }
-        for index in 0..self.segments.len() {
-            let segment = self.segments.row(index);
-            let (run_index, run) = self.resolve_run(segment, layout_runs, replacement_runs)?;
-            self.segments.rows[index].layout_run_index = run_index;
-            self.segments.rows[index].run_handle = run.run_handle;
-        }
-        Ok(())
     }
 
     pub(crate) fn segment_rows(&self) -> &[PlacementSegment] {
@@ -1281,14 +1244,12 @@ fn line_span(
 mod tests {
     use super::*;
     use crate::engine::cluster_state::BoundaryRunRole;
-    use crate::engine::run_slot::{DesiredRun, RunSlotArena};
 
     fn adjacent_segment(cluster: u32) -> PlacementSegment {
         PlacementSegment {
             fragment_index: 0,
             layout_run_owner: LayoutRunOwner::Paragraph,
             layout_run_index: 0,
-            run_handle: None,
             placement_handle: None,
             canonical_revision: None,
             identity: PlacementIdentity::StableSource,
@@ -1404,7 +1365,6 @@ mod tests {
             font_handle: 1,
             numeric_blocks: Default::default(),
             canonical_revision: Some(canonical_revision),
-            run_handle: None,
         });
 
         let mut state = PlacementState::default();
@@ -1469,90 +1429,11 @@ mod tests {
     }
 
     #[test]
-    fn segment_binding_uses_the_owning_layout_run_handle() {
-        let mut state = PlacementState::default();
-        state.clear();
+    fn replacement_segments_validate_distinct_owners_and_partial_outline_spans() {
         let placement = SegmentTranslation {
             translation_inline: 0.0,
             translation_block: 0.0,
         };
-        state
-            .push_admitted_slice(
-                0,
-                LayoutRunOwner::Paragraph,
-                0,
-                13,
-                0,
-                1,
-                GlyphSource::LayoutRun,
-                0,
-                1,
-                placement,
-            )
-            .unwrap();
-
-        let mut slots = RunSlotArena::default();
-        slots.prepare(&[DesiredRun::new(1_u32, 2_u32)], 1).unwrap();
-        let handle = slots.assignments().unwrap()[0].handle();
-        let runs = [LayoutRun {
-            source_kind: LayoutRunSourceKind::Paragraph,
-            cluster_start: 0,
-            cluster_end: 1,
-            glyph_start: 0,
-            glyph_count: 1,
-            source_run: 0,
-            font_handle: 1,
-            numeric_blocks: Default::default(),
-            canonical_revision: None,
-            run_handle: Some(handle),
-        }];
-        state.bind_run_handles(&runs, &[]).unwrap();
-
-        assert_eq!(state.segments().get(0).unwrap().run_handle, Some(handle));
-
-        state.segments.rows[0].run_handle = None;
-        state
-            .push_admitted_slice(
-                0,
-                LayoutRunOwner::Paragraph,
-                1,
-                17,
-                0,
-                1,
-                GlyphSource::LayoutRun,
-                0,
-                1,
-                placement,
-            )
-            .unwrap();
-        assert!(matches!(
-            state.bind_run_handles(&runs, &[]),
-            Err(EngineError::InvalidRequest)
-        ));
-        assert!(
-            state
-                .segments
-                .rows
-                .iter()
-                .all(|segment| segment.run_handle.is_none())
-        );
-    }
-
-    #[test]
-    fn replacement_segments_bind_distinct_handles_and_validate_partial_outline_spans() {
-        let placement = SegmentTranslation {
-            translation_inline: 0.0,
-            translation_block: 0.0,
-        };
-        let mut slots = RunSlotArena::default();
-        slots
-            .prepare(
-                &[DesiredRun::new(1_u32, 1_u32), DesiredRun::new(2_u32, 1_u32)],
-                1,
-            )
-            .unwrap();
-        let source_handle = slots.assignments().unwrap()[0].handle();
-        let ellipsis_handle = slots.assignments().unwrap()[1].handle();
         let replacement_runs = [
             LayoutRun {
                 source_kind: LayoutRunSourceKind::Boundary {
@@ -1567,7 +1448,6 @@ mod tests {
                 font_handle: 1,
                 numeric_blocks: Default::default(),
                 canonical_revision: None,
-                run_handle: Some(source_handle),
             },
             LayoutRun {
                 source_kind: LayoutRunSourceKind::Boundary {
@@ -1582,7 +1462,6 @@ mod tests {
                 font_handle: 1,
                 numeric_blocks: Default::default(),
                 canonical_revision: None,
-                run_handle: Some(ellipsis_handle),
             },
         ];
         let mut state = PlacementState::default();
@@ -1613,17 +1492,12 @@ mod tests {
                 )
                 .unwrap();
         }
-        state.bind_run_handles(&[], &replacement_runs).unwrap();
         state
             .validate_occurrences(2, &[], &replacement_runs)
             .unwrap();
-        assert_eq!(
-            state.segments().get(0).unwrap().run_handle,
-            Some(source_handle)
-        );
-        assert_eq!(
-            state.segments().get(1).unwrap().run_handle,
-            Some(ellipsis_handle)
+        assert_ne!(
+            state.segments().get(0).unwrap().layout_run_index,
+            state.segments().get(1).unwrap().layout_run_index,
         );
 
         state.visual_spans.glyph_starts[1] = 7;
