@@ -4106,6 +4106,7 @@ fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
 mod tests {
     use super::super::{
         cluster_state::{ClusterBuildInput, RunCanonicalInput},
+        placement_slot_arena::PlacementSlotArena,
         shaping_state::{ShapeArena, ShapedRun},
         style_state::StyleArena,
     };
@@ -6533,6 +6534,59 @@ mod tests {
         .unwrap();
 
         assert_eq!(next.semantic_glyphs[0].placement_segment, 2);
+    }
+
+    #[test]
+    fn retained_slot_reassignment_marks_the_exact_placement_delta() {
+        let mut previous = fixture_position_results(0, 3, |_, _, _| {});
+        let segment_count = previous.placement_segments().len();
+        let keys = (1..=u32::try_from(segment_count).unwrap()).collect::<Vec<_>>();
+        let mut initial_slots = PlacementSlotArena::default();
+        initial_slots.prepare(&keys, 1).unwrap();
+        let initial_handles = initial_slots.assignments().unwrap().to_vec();
+        let mut next_revision = 1;
+        previous
+            .semantic_change_masks
+            .resize(previous.glyphs.len(), 0);
+        previous
+            .bind_placement_handles(&initial_handles, None, &mut next_revision)
+            .unwrap();
+
+        let mut current = fixture_position_results(0, 3, |_, _, _| {});
+        for (glyph, retained) in current.glyphs.iter_mut().zip(&previous.glyphs) {
+            glyph.content_revision = retained.content_revision;
+        }
+        current
+            .semantic_change_masks
+            .resize(current.glyphs.len(), 0);
+        let shifted_keys = core::iter::once(0)
+            .chain(keys.iter().copied())
+            .collect::<Vec<_>>();
+        let mut shifted_slots = PlacementSlotArena::default();
+        shifted_slots.prepare(&shifted_keys, 1).unwrap();
+        let shifted_handles = shifted_slots.assignments().unwrap()[1..].to_vec();
+        current
+            .bind_placement_handles(&shifted_handles, Some(&previous), &mut next_revision)
+            .unwrap();
+
+        assert_eq!(
+            current.semantic_change_masks,
+            vec![SEMANTIC_PLACEMENT_SLOT_CHANGE; current.glyphs.len()]
+        );
+        assert_eq!(
+            current
+                .glyphs
+                .iter()
+                .map(|glyph| glyph.placement_slot)
+                .collect::<Vec<_>>(),
+            shifted_handles
+                .iter()
+                .zip(current.placement.segment_instance_counts())
+                .flat_map(|(handle, count)| {
+                    core::iter::repeat_n(handle.slot().get(), usize::try_from(*count).unwrap())
+                })
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]

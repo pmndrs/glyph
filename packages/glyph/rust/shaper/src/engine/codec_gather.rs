@@ -1743,6 +1743,16 @@ mod tests {
         let codec = placement_codec();
         let mut glyph = layout_glyph(1, 0);
         glyph.placement_slot = 3;
+        let transform_indices = [17];
+        let stable_glyph_ids = [glyph.stable_id];
+        let semantic_u32 = [
+            &[][..],
+            &[][..],
+            &[][..],
+            &[][..],
+            &transform_indices[..],
+            &stable_glyph_ids[..],
+        ];
         let before = [PositionedSemanticGlyph {
             stable_id: 1,
             inline_origin: 12.5,
@@ -1751,7 +1761,6 @@ mod tests {
             ink_block_start: -5.0,
             ..PositionedSemanticGlyph::default()
         }];
-        let cluster_ids = [77];
         let mut workspace = CodecGatherWorkspace::default();
         workspace
             .gather(
@@ -1764,7 +1773,7 @@ mod tests {
                     placement_translations: &[SegmentTranslation::default()],
                     semantic_change_masks: &[],
                     semantic_f32: &[],
-                    semantic_u32: &[&[], &cluster_ids],
+                    semantic_u32: &semantic_u32,
                 },
                 |_| Some(&binding),
             )
@@ -1795,7 +1804,7 @@ mod tests {
                             | (1 << 1)
                             | SEMANTIC_PLACEMENT_SLOT_CHANGE],
                         semantic_f32: &[],
-                        semantic_u32: &[&[], &cluster_ids],
+                        semantic_u32: &semantic_u32,
                     },
                     |_| panic!("position-only gather must not resolve the font binding"),
                 )
@@ -1806,7 +1815,9 @@ mod tests {
         let gathered = workspace.view();
         let input = gathered.plan_input();
         assert_eq!(input.placement_slots, [9]);
-        assert_eq!(input.u32_fields[0], [9]);
+        assert_eq!(input.u32_fields[0], [17]);
+        assert_eq!(input.u32_fields[1], [1]);
+        assert_eq!(input.u32_fields[2], [9]);
         assert_eq!(input.glyphs[0].content_revision, 2);
         assert_eq!(input.glyphs[0].inline_start, 40.0);
         assert_eq!(input.glyphs[0].block_start, 8.0);
@@ -2602,12 +2613,23 @@ mod tests {
         let mut descriptor = base_descriptor();
         let program = &mut descriptor.programs[0];
         program.f32_input_count = 0;
-        program.u32_input_count = 1;
-        program.inputs = vec![InputSource::semantic(SEMANTIC_U32_PLACEMENT_SLOT)];
-        program.buffers[0].scalar = ScalarType::U32;
-        program.buffers[0].vector_width = 1;
-        program.buffers[0].alignment = 4;
-        program.buffers[0].stride = 4;
+        program.u32_input_count = 3;
+        program.inputs = vec![
+            InputSource::semantic(super::super::frame::SEMANTIC_U32_TRANSFORM_INDEX),
+            InputSource::semantic(super::super::frame::SEMANTIC_U32_STABLE_GLYPH_ID),
+            InputSource::semantic(SEMANTIC_U32_PLACEMENT_SLOT),
+        ];
+        program.buffers = (1..=3)
+            .map(|id| {
+                BufferSchema::packed(
+                    BufferId(id),
+                    ScalarType::U32,
+                    1,
+                    BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST,
+                    1,
+                )
+            })
+            .collect();
         program.operations = vec![
             Operation::LoadU32 {
                 target: 0,
@@ -2616,6 +2638,24 @@ mod tests {
             Operation::StoreU32 {
                 source: 0,
                 buffer: BufferId(1),
+                lane: 0,
+            },
+            Operation::LoadU32 {
+                target: 1,
+                field: 1,
+            },
+            Operation::StoreU32 {
+                source: 1,
+                buffer: BufferId(2),
+                lane: 0,
+            },
+            Operation::LoadU32 {
+                target: 2,
+                field: 2,
+            },
+            Operation::StoreU32 {
+                source: 2,
+                buffer: BufferId(3),
                 lane: 0,
             },
         ];
