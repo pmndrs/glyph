@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 use super::{
     EngineError,
     cluster_state::{LayoutRun, LayoutRunSourceKind, RunCanonicalRevision},
-    placement_slot::PlacementHandle,
+    placement_slot_arena::PlacementHandle,
 };
 
 #[cfg(any(test, feature = "kernel-lab"))]

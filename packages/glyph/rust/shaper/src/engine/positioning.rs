@@ -20,7 +20,7 @@ use super::{
     frame::{ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START},
     identity_index::{IdentityIndex, IdentityIndexError},
     line_composition::ComposedLine,
-    placement_slot::PlacementHandle,
+    placement_slot_arena::PlacementHandle,
     run_local::{
         ClusterFinish, RunLocalArena, RunLocalBuildError, RunLocalGlyph, RunLocalGlyphInput,
         RunLocalWriter,

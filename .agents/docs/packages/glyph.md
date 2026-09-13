@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:b4bb0b0082a2363a6ea44c19cbc1bcb0304b54aa9407885071b17b5233ee010b'
+source_digest: 'sha256:cac139e13f2d90864636a1d8ec0046ee776ff36fe49fecbd7a96b80a84491484'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1370,10 +1370,10 @@ general authorities.
 
 Placement-slot identity follows the stable occurrence source rather than the run's geometry revision. Paragraph,
 boundary-source, and ellipsis runs remain distinct source kinds, but changing font metrics or other canonical run geometry
-does not by itself retire and rewrite the per-glyph placement-slot lane. The run generation still changes independently
-and guards static local geometry. In the maintained full font-size update, this separation reduced candidate publication
-from 456.5 KiB to 371.3 KiB by removing the redundant approximately 85 KiB occurrence rewrite; the measured CPU timing
-change was within noise and is not claimed as a speedup.
+does not by itself retire and rewrite the per-glyph placement-slot lane. The run canonical revision still changes
+independently and guards static local geometry. In the maintained full font-size update, this separation reduced candidate
+publication from 456.5 KiB to 371.3 KiB by removing the redundant approximately 85 KiB occurrence rewrite; the measured
+CPU timing change was within noise and is not claimed as a speedup.
 
 The intermediate direct-offset A/B/B/A ordered Bitmap comparison used 40 warmups and two 101-sample passes per revision. Pooled candidate
 median/p95 is `2.874 / 2.915 ms` for 21,805 Latin glyphs and `2.233 / 2.258 ms` for 21,978 dense-CJK glyphs. Exact clean
@@ -1427,8 +1427,9 @@ texture nor an additional Codec buffer or draw. Direct TypeGPU remains a proof-o
 choice no longer exceeds the contract it advertises.
 
 The planner-scoped placement allocator reconciles compact CPU placement topology transactionally and quarantines retired
-slots until renderer acknowledgement. The test/kernel-lab run allocator separately validates split/merge,
-replacement-run, abort/retry, and stale-handle behavior without becoming release, batch, or draw identity.
+slots until renderer acknowledgement. Its focused lifecycle tests validate reorder, retirement, acknowledgement,
+abort/retry, and stale-slot reuse directly; there is no parallel run allocator, canonical-update mode, batch identity, or
+draw identity.
 
 The indexed direction keeps the existing batches, physical instances, order indirection, primitive spans, and draws.
 Stable-indirect rendering resolves logical to physical instance first; ordered-direct rendering already has the physical
