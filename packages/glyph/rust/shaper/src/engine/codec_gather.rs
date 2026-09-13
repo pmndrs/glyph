@@ -518,8 +518,7 @@ impl CodecGatherWorkspace {
             }
             *value = semantic_f32(source.field, input, glyph_index)?;
         }
-        let inline_start = plan_ink_start(input, glyph_index, true)?;
-        let block_start = plan_ink_start(input, glyph_index, false)?;
+        let (_, [inline_start, block_start]) = plan_glyph_placement(input, glyph_index)?;
         for (field, value) in values
             .iter()
             .copied()
@@ -999,14 +998,7 @@ fn plan_glyph(
         .resources()
         .get(usize::try_from(selected.resource).map_err(|_| GatherError::ResourceBindingMissing)?)
         .ok_or(GatherError::ResourceBindingMissing)?;
-    let semantic_id = input
-        .semantic_glyphs
-        .get(
-            usize::try_from(glyph.semantic_glyph_index)
-                .map_err(|_| GatherError::SourceFieldMissing)?,
-        )
-        .map(|semantic| semantic.cluster)
-        .ok_or(GatherError::InvalidSemanticShape)?;
+    let (semantic_id, [inline_start, block_start]) = plan_glyph_placement(input, glyph_index)?;
     Ok(PlanGlyph {
         stable_id: glyph.stable_id,
         content_revision: glyph.content_revision,
@@ -1021,18 +1013,17 @@ fn plan_glyph(
         material_id: glyph.material_id,
         clip_id: glyph.clip_id,
         depth_key: glyph.depth_key,
-        inline_start: plan_ink_start(input, glyph_index, true)?,
-        block_start: plan_ink_start(input, glyph_index, false)?,
+        inline_start,
+        block_start,
         inline_extent: glyph.inline_extent,
         block_extent: glyph.block_extent,
     })
 }
 
-fn plan_ink_start(
+fn plan_glyph_placement(
     input: LayoutPlanInput<'_>,
     glyph_index: usize,
-    inline: bool,
-) -> Result<f32, GatherError> {
+) -> Result<(u32, [f32; 2]), GatherError> {
     let glyph = input
         .glyphs
         .get(glyph_index)
@@ -1051,19 +1042,17 @@ fn plan_ink_start(
                 .map_err(|_| GatherError::SourceFieldMissing)?,
         )
         .ok_or(GatherError::InvalidSemanticShape)?;
-    super::positioning::placed_f32(
-        if inline {
-            semantic.ink_inline_start
-        } else {
-            semantic.ink_block_start
-        },
-        if inline {
-            translation.translation_inline as f32
-        } else {
-            translation.translation_block as f32
-        },
+    let inline_start = super::positioning::placed_f32(
+        semantic.ink_inline_start,
+        translation.translation_inline as f32,
     )
-    .map_err(|_| GatherError::InvalidSemanticShape)
+    .map_err(|_| GatherError::InvalidSemanticShape)?;
+    let block_start = super::positioning::placed_f32(
+        semantic.ink_block_start,
+        translation.translation_block as f32,
+    )
+    .map_err(|_| GatherError::InvalidSemanticShape)?;
+    Ok((semantic.cluster, [inline_start, block_start]))
 }
 
 fn same_storage_topology(previous: PlanGlyph, next: PlanGlyph) -> bool {
@@ -1371,27 +1360,24 @@ mod tests {
             semantic_f32: &retained_local_ink,
             semantic_u32: &[&foreground],
         };
-        assert_eq!(plan_ink_start(input, 0, true), Ok(12.0));
-        assert_eq!(plan_ink_start(input, 0, false), Ok(-17.0));
+        assert_eq!(plan_glyph_placement(input, 0), Ok((0, [12.0, -17.0])));
         assert_eq!(
-            plan_ink_start(
+            plan_glyph_placement(
                 LayoutPlanInput {
                     semantic_glyphs: &[],
                     ..input
                 },
                 0,
-                true,
             ),
             Err(GatherError::InvalidSemanticShape)
         );
         assert_eq!(
-            plan_ink_start(
+            plan_glyph_placement(
                 LayoutPlanInput {
                     placement_translations: &[],
                     ..input
                 },
                 0,
-                true,
             ),
             Err(GatherError::InvalidSemanticShape)
         );
