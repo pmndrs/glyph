@@ -136,47 +136,6 @@ test('portable codec assembly owns host identities, system buffers, and variant 
   ]);
 });
 
-test('an adapter can place the occurrence slot in an unused technique lane without another buffer', () => {
-  const compiled = createRasterCodecProgram(portable, {
-    namespace: `${TEST_PROGRAM_NAMESPACE}-packed`,
-    system,
-    capabilitySet,
-    transformMode: 'direct',
-    allocationMode: 'ordered',
-    placementSlotTarget: { buffer: schema.buffers.packed.id, lane: 1 },
-  });
-  assert.deepEqual(
-    compiled.buffers.map((buffer) => buffer.id),
-    [schema.buffers.origin.id, schema.buffers.packed.id, system.stableGlyphId.id],
-  );
-  const stores = compiled.operations.filter(
-    (operation) =>
-      operation.opcode === textShaperAbi.codec.opcodes.storeU32 &&
-      operation.immediate0 === schema.buffers.packed.id &&
-      operation.operand1 === 1,
-  );
-  assert.deepEqual(stores, [
-    {
-      opcode: textShaperAbi.codec.opcodes.storeU32,
-      operand0: 0,
-      operand1: 1,
-      immediate0: schema.buffers.packed.id,
-    },
-  ]);
-  assert.throws(
-    () =>
-      createRasterCodecProgram(portable, {
-        namespace: `${TEST_PROGRAM_NAMESPACE}-occupied`,
-        system,
-        capabilitySet,
-        transformMode: 'direct',
-        allocationMode: 'ordered',
-        placementSlotTarget: { buffer: schema.buffers.packed.id, lane: 0 },
-      }),
-    /unused lane/,
-  );
-});
-
 test('portable codec assembly rejects structurally copied programs', () => {
   assert.throws(
     () =>

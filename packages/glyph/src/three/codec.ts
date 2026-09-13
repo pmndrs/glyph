@@ -13,11 +13,8 @@ import {
   type CodecProgramId,
   type CodecTechniqueId,
 } from '../config/codec.js';
-import {
-  attachHostCodecProgramSystemBuffers,
-  hostAbsoluteTechniqueProgram,
-  type CodecProgramSystemBuffers,
-} from '../config/codec-program.js';
+import { hostAbsoluteTechniqueProgram, type CodecProgramSystemBuffers } from '../config/codec-program.js';
+import { attachHostCodecProgramSystemBuffers } from '../config/codec-program.js';
 import { createRasterCodecProgram, type RasterCodecSystem } from '../config/raster.js';
 import {
   defineCodecBuffers,
@@ -132,6 +129,15 @@ export function threeCodecDescriptor(
     }
   }
   const capabilitySet = threeCodecCapabilitySet();
+  const slugOptions = {
+    namespace: THREE_PROGRAM_NAMESPACE,
+    system: codecSystemBuffers(modes.slug),
+    placementSlotTarget: { buffer: slugSchema.buffers.bandCounts.id, lane: 2 },
+    capabilitySet,
+    transformMode: modes.slug,
+    allocationMode,
+    ids,
+  } as const;
   // The portable assembler validates the handle-supplied factory before Three invokes it directly.
   const rasterPrograms: CodecProgram[] = [
     createRasterCodecProgram(bitmapCodec, {
@@ -150,15 +156,7 @@ export function threeCodecDescriptor(
       allocationMode,
       ids,
     }),
-    createRasterCodecProgram(slugCodec, {
-      namespace: THREE_PROGRAM_NAMESPACE,
-      system: codecSystemBuffers(modes.slug),
-      placementSlotTarget: { buffer: slugSchema.buffers.bandCounts.id, lane: 2 },
-      capabilitySet,
-      transformMode: modes.slug,
-      allocationMode,
-      ids,
-    }),
+    createRasterCodecProgram(slugCodec, slugOptions),
   ];
   const DECORATION_TECHNIQUE_ID = ids.technique(decorationSchema.technique);
   const DECORATION_PROGRAM_ID = ids.program(decorationSchema.technique, THREE_PROGRAM_NAMESPACE);

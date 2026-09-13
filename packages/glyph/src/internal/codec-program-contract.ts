@@ -1,11 +1,12 @@
-import type {
-  CompiledCodecProgramBody,
-  CodecProgramSystemBuffers,
-  CodecProgramU32StoreTarget,
-} from '../config/codec-program.js';
+import type { CompiledCodecProgramBody, CodecProgramSystemBuffers } from '../config/codec-program.js';
 import type { CodecBufferDeclaration, CodecBufferDeclarations, TechniqueSchemaMetadata } from '../config/schema.js';
 import type { CodecBufferId } from '../config/codec.js';
 import { assertGlyphId } from './glyph-id.js';
+
+interface CodecProgramU32StoreTarget {
+  readonly buffer: CodecBufferId;
+  readonly lane: number;
+}
 
 interface CompiledCodecMetadata {
   readonly schema: TechniqueSchemaMetadata;

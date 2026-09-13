@@ -92,6 +92,11 @@ test('application types stay at root while integration construction lives on con
       assert.equal(leaf.has(name), false, `${path} must not publish package-owned helper ${name}`);
     }
   }
+  assert.doesNotMatch(
+    await declaration('config/raster.d.ts'),
+    /placementSlotTarget|CodecProgramU32StoreTarget/,
+    'adapter buffer/lane packing must stay outside the public raster codec contract',
+  );
 });
 
 test('integrations re-export root names only when their own signatures use them', async () => {
