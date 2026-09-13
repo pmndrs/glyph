@@ -535,6 +535,7 @@ function sliderValueOf(value: number | readonly number[]): number {
 
 function workloadHasAnimation(workload: string): boolean {
   return (
+    workload === 'editorial' ||
     workload === 'off-axis-3d' ||
     workload === 'icon-grid' ||
     workload === 'paint-effects' ||

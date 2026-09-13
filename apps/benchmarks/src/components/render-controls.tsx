@@ -530,7 +530,8 @@ function LiveWorkloadControls({
           onChange={(event) => onWorkloadAmount(event.currentTarget.valueAsNumber)}
         />
       )}
-      {(workload === 'off-axis-3d' ||
+      {(workload === 'editorial' ||
+        workload === 'off-axis-3d' ||
         workload === 'icon-grid' ||
         workload === 'paint-effects' ||
         workload === 'zoom-text' ||

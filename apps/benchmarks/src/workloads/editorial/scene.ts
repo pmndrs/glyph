@@ -40,8 +40,8 @@ const EDITORIAL_DROP_CAP_CONTOUR = [
   [0, 0],
   [1, 0],
   [1, 0.3],
-  [0.6, 0.3],
-  [0.85, 1],
+  [0.58, 0.3],
+  [0.58, 1],
   [0, 1],
 ] as const;
 const EDITORIAL_OBSTACLE_COLOR = 0x2dd4bf;
@@ -159,9 +159,8 @@ export function createEditorialEntries(
     layout: {
       wrap: 'word',
       align: 'justify',
-      firstLineIndent: context.fontSize * 1.5,
       dropCap: {
-        lines: 3,
+        lines: 2,
         marginInline: context.fontSize * 0.2,
         marginBlock: context.fontSize * 0.05,
         contour: EDITORIAL_DROP_CAP_CONTOUR,

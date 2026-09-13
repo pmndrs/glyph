@@ -213,9 +213,24 @@ try {
       throw new Error(`${workload.id} did not retain exactly one configured renderer`);
     }
     if (screenshotDirectory !== undefined) {
+      if (workload.id === 'editorial') {
+        await page.getByRole('button', { name: 'Animation: ON', exact: true }).click();
+        const animation = page.getByRole('switch', { name: 'Animate', exact: true });
+        await animation.click();
+        await page.waitForFunction(() => {
+          const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
+          return viewport?.dataset.animationEnabled === 'false' && viewport.dataset.presentationPending === 'false';
+        });
+        await page.mouse.click(1_200, 680);
+        await page.getByRole('switch', { name: 'Animate', exact: true }).waitFor({ state: 'hidden' });
+      }
       await page.screenshot({
         path: resolvePath(screenshotDirectory, `${backend}-${technique}-${workload.id}.png`),
       });
+      if (workload.id === 'editorial') {
+        await page.getByRole('button', { name: 'Animation: OFF', exact: true }).click();
+        await page.getByRole('switch', { name: 'Animate', exact: true }).click();
+      }
     }
   }
   if (technique === 'bitmap') {
