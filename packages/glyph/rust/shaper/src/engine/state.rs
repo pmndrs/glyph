@@ -8,10 +8,7 @@ use crate::{
 };
 
 use super::{
-    cluster_state::{
-        BoundaryRunRole, ClusterArena, ClusterBuildInput, LayoutRunSourceKind, RunCanonicalInput,
-        RunCanonicalRevision,
-    },
+    cluster_state::{ClusterArena, ClusterBuildInput, LayoutRunSourceKind, RunCanonicalInput},
     codec::{ALLOCATION_ORDERED_DIRECT, CapabilitySetId, ValidatedCodec},
     codec_gather::{
         CodecGatherWorkspace, DEFAULT_GATHER_RECORD_CAPACITY, GatherError, LayoutPlanInput,
@@ -25,12 +22,11 @@ use super::{
         PreparedUpdate, RootRevision, UpdateRequest,
     },
     identity_index::IdentityIndex,
-    placement_slot::{DesiredPlacement, PlacementHandle, PlacementSlotArena},
+    placement_slot_arena::{DesiredPlacement, PlacementSlotArena, PlacementSlotError},
     placement_state::{GlyphSource, LayoutRunOwner, PlacementIdentity, PlacementSegment},
     positioning::{PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT},
     render_plan::RenderPlanView,
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
-    run_slot::{DesiredRun, RunSlotArena, RunSlotChange, RunSlotError},
     semantic_wire::RecordSpan,
     session_placement::{SessionPlacementInput, SessionPlacementRow},
     shaping_state::{BoundaryShape, BoundaryShapeArena, ShapeArena, ShapingRun, ShapingRunArena},
@@ -41,7 +37,8 @@ use super::{
     },
 };
 
-const RETAIN_RUN_HANDLES: bool = cfg!(any(test, feature = "kernel-lab"));
+#[cfg(test)]
+use super::cluster_state::{BoundaryRunRole, RunCanonicalRevision};
 
 /// What a rejected frame can name about its own cause.
 ///
@@ -227,11 +224,8 @@ struct PlannerState {
     pending_next_content_revision: u32,
     next_paragraph_incarnation: u32,
     pending_next_paragraph_incarnation: u32,
-    run_slots: RunSlotArena<RunLogicalKey, RunCanonicalRevision>,
-    desired_runs: Vec<DesiredRun<RunLogicalKey, RunCanonicalRevision>>,
-    placement_slots: PlacementSlotArena<PlacementLogicalKey, ()>,
-    desired_placements: Vec<DesiredPlacement<PlacementLogicalKey, ()>>,
-    desired_placement_handles: Vec<PlacementHandle>,
+    placement_slots: PlacementSlotArena<PlacementLogicalKey>,
+    desired_placements: Vec<DesiredPlacement<PlacementLogicalKey>>,
     session_placement_rows: Vec<SessionPlacementRow>,
     placement_slot_count: u32,
     pending_placement_slot_count: u32,
@@ -275,26 +269,12 @@ impl ParagraphIncarnation {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct RunLogicalKey {
-    paragraph: ParagraphIncarnation,
-    anchor: RunLogicalAnchor,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum RunLogicalAnchor {
-    Text(NonZeroU32),
-    Boundary {
-        flow_thread_id: u32,
-        role: BoundaryRunRole,
-    },
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct PlacementLogicalKey {
     paragraph: ParagraphIncarnation,
     run_owner: LayoutRunOwner,
     run_source: LayoutRunSourceKind,
     identity: PlacementIdentity,
+    segment_anchor: u32,
     source_anchor: u32,
     numeric_block_ordinal: u32,
     glyph_source: GlyphSource,
@@ -990,6 +970,9 @@ impl TextEngine {
                     placement_capacity: u32::try_from(selected_placement_slots.len())
                         .map_err(|_| EngineError::ResultTooLarge)?,
                 },
+                codec
+                    .capability_set(capability_set)
+                    .ok_or(EngineError::InvalidRequest)?,
                 1,
                 true,
             )
@@ -1355,16 +1338,10 @@ impl TextEngine {
         // A completed renderer fence is external monotonic state. Validate and accept it
         // before taking an adoptable speculative transaction; later preparation aborts do
         // not roll the fence back.
-        if RETAIN_RUN_HANDLES {
-            planner
-                .run_slots
-                .acknowledge(request.acknowledged_publication_generation)
-                .map_err(run_slot_error)?;
-        }
         planner
             .placement_slots
             .acknowledge(request.acknowledged_publication_generation)
-            .map_err(run_slot_error)?;
+            .map_err(placement_slot_error)?;
         planner.acknowledged_publication_generation = request.acknowledged_publication_generation;
         // Candidate adoption: a retained speculative transaction whose committed
         // revision and lifecycle input match this frame hands its pending state and
@@ -1513,33 +1490,6 @@ impl TextEngine {
                     .paragraphs
                     .iter()
                     .any(|paragraph| paragraph.positioned_changed);
-            if RETAIN_RUN_HANDLES {
-                let run_slots_changed = planner.lifecycle_changed
-                    || planner.paragraphs.iter().any(|paragraph| {
-                        paragraph.state.clusters.is_prepared()
-                            || (paragraph.state.positioned.is_prepared()
-                                && (!paragraph
-                                    .state
-                                    .positioned
-                                    .pending()
-                                    .replacement_runs()
-                                    .is_empty()
-                                    || !paragraph
-                                        .state
-                                        .positioned
-                                        .committed()
-                                        .replacement_runs()
-                                        .is_empty()))
-                    });
-                if run_slots_changed {
-                    planner.prepare_run_slots(publication_generation)?;
-                } else {
-                    planner
-                        .run_slots
-                        .prepare_reuse(publication_generation)
-                        .map_err(run_slot_error)?;
-                }
-            }
             if positioned_changed || checkpoint {
                 planner
                     .prepare_placement_slots(publication_generation, &mut next_content_revision)?;
@@ -1547,7 +1497,7 @@ impl TextEngine {
                 planner
                     .placement_slots
                     .prepare_reuse(publication_generation)
-                    .map_err(run_slot_error)?;
+                    .map_err(placement_slot_error)?;
                 planner.pending_placement_slot_count = planner.placement_slot_count;
                 planner.session_placement_rows.clear();
             }
@@ -1630,6 +1580,9 @@ impl TextEngine {
                             placement_rows: &planner.session_placement_rows,
                             placement_capacity: planner.pending_placement_slot_count,
                         },
+                        codec
+                            .capability_set(capability_set)
+                            .ok_or(EngineError::InvalidRequest)?,
                         publication_generation,
                         checkpoint,
                     )
@@ -1795,13 +1748,8 @@ impl TextEngine {
             return Err(EngineError::RevisionConflict);
         }
         planner.plan.commit().map_err(plan_error)?;
-        if RETAIN_RUN_HANDLES {
-            planner.run_slots.commit();
-        }
         planner.placement_slots.commit();
-        planner.desired_runs.clear();
         planner.desired_placements.clear();
-        planner.desired_placement_handles.clear();
         planner.session_placement_rows.clear();
         planner.placement_slot_count = planner.pending_placement_slot_count;
         planner.pending_placement_slot_count = 0;
@@ -1851,6 +1799,7 @@ fn placement_logical_key(
         run_owner: segment.layout_run_owner,
         run_source,
         identity: segment.identity,
+        segment_anchor: segment.segment_anchor,
         source_anchor: segment.source_anchor,
         numeric_block_ordinal: segment.numeric_block_ordinal,
         glyph_source: segment.glyph_source,
@@ -2540,213 +2489,14 @@ impl PlannerState {
         }
     }
 
-    fn prepare_run_slots(&mut self, publication_generation: u32) -> Result<(), EngineError> {
-        let mut desired = core::mem::take(&mut self.desired_runs);
-        desired.clear();
-        let result = (|| {
-            let required = self
-                .active_order()
-                .iter()
-                .try_fold(0usize, |total, order| {
-                    let paragraph = self
-                        .paragraph(order.id)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    total
-                        .checked_add(paragraph.state.clusters.active().layout_runs().len())
-                        .and_then(|total| {
-                            total.checked_add(
-                                paragraph.state.positioned.active().replacement_runs().len(),
-                            )
-                        })
-                        .ok_or(EngineError::ResultTooLarge)
-                })?;
-            desired
-                .try_reserve(required)
-                .map_err(|_| EngineError::ResultTooLarge)?;
-            for order in self.active_order() {
-                let paragraph = self
-                    .paragraph(order.id)
-                    .ok_or(EngineError::InvalidRequest)?;
-                let clusters = paragraph.state.clusters.active();
-                for run in clusters.layout_runs() {
-                    if run.source_kind != LayoutRunSourceKind::Paragraph {
-                        return Err(EngineError::InvalidRequest);
-                    }
-                    let cluster = usize::try_from(run.cluster_start)
-                        .map_err(|_| EngineError::InvalidRequest)?;
-                    let first_text_unit_id = clusters
-                        .stable_ids
-                        .get(cluster)
-                        .copied()
-                        .and_then(NonZeroU32::new)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    let canonical = run.canonical_revision.ok_or(EngineError::InvalidRequest)?;
-                    desired.push(DesiredRun::new(
-                        RunLogicalKey {
-                            paragraph: paragraph.incarnation,
-                            anchor: RunLogicalAnchor::Text(first_text_unit_id),
-                        },
-                        canonical,
-                    ));
-                }
-                for run in paragraph.state.positioned.active().replacement_runs() {
-                    let LayoutRunSourceKind::Boundary {
-                        flow_thread_id,
-                        role,
-                    } = run.source_kind
-                    else {
-                        return Err(EngineError::InvalidRequest);
-                    };
-                    let canonical = run.canonical_revision.ok_or(EngineError::InvalidRequest)?;
-                    desired.push(DesiredRun::new(
-                        RunLogicalKey {
-                            paragraph: paragraph.incarnation,
-                            anchor: RunLogicalAnchor::Boundary {
-                                flow_thread_id,
-                                role,
-                            },
-                        },
-                        canonical,
-                    ));
-                }
-            }
-            self.run_slots
-                .prepare(&desired, publication_generation)
-                .map_err(run_slot_error)?;
-            let assignment_count = self.run_slots.assignments().map_err(run_slot_error)?.len();
-            if assignment_count != desired.len() {
-                return Err(EngineError::InvalidRequest);
-            }
-            let mut assignment_index = 0usize;
-            for order_index in 0..self.active_order().len() {
-                let paragraph_id = self.active_order()[order_index].id;
-                let run_count = self
-                    .paragraph(paragraph_id)
-                    .ok_or(EngineError::InvalidRequest)?
-                    .state
-                    .clusters
-                    .active()
-                    .layout_runs()
-                    .len();
-                for run_index in 0..run_count {
-                    let assignment = *self
-                        .run_slots
-                        .assignments()
-                        .map_err(run_slot_error)?
-                        .get(assignment_index)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    assignment_index += 1;
-                    let paragraph = self
-                        .paragraph_mut(paragraph_id)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    if paragraph.state.clusters.is_prepared() {
-                        let canonical = paragraph.state.clusters.pending().layout_runs()[run_index]
-                            .canonical_revision
-                            .ok_or(EngineError::InvalidRequest)?;
-                        paragraph
-                            .state
-                            .clusters
-                            .pending_mut()
-                            .bind_layout_run_handle(run_index, canonical, assignment.handle())?;
-                    } else {
-                        let run = paragraph.state.clusters.committed().layout_runs()[run_index];
-                        if run.source_kind != LayoutRunSourceKind::Paragraph
-                            || assignment.change() != RunSlotChange::Retained
-                            || run.run_handle != Some(assignment.handle())
-                        {
-                            return Err(EngineError::InvalidRequest);
-                        }
-                    }
-                }
-                let replacement_count = self
-                    .paragraph(paragraph_id)
-                    .ok_or(EngineError::InvalidRequest)?
-                    .state
-                    .positioned
-                    .active()
-                    .replacement_runs()
-                    .len();
-                for run_index in 0..replacement_count {
-                    let assignment = *self
-                        .run_slots
-                        .assignments()
-                        .map_err(run_slot_error)?
-                        .get(assignment_index)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    assignment_index += 1;
-                    let paragraph = self
-                        .paragraph_mut(paragraph_id)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    if paragraph.state.positioned.is_prepared() {
-                        let run = paragraph
-                            .state
-                            .positioned
-                            .pending()
-                            .replacement_runs()
-                            .get(run_index)
-                            .ok_or(EngineError::InvalidRequest)?;
-                        if !matches!(run.source_kind, LayoutRunSourceKind::Boundary { .. }) {
-                            return Err(EngineError::InvalidRequest);
-                        }
-                        let canonical =
-                            run.canonical_revision.ok_or(EngineError::InvalidRequest)?;
-                        paragraph
-                            .state
-                            .positioned
-                            .pending_mut()
-                            .bind_replacement_run_handle(
-                                run_index,
-                                canonical,
-                                assignment.handle(),
-                            )?;
-                    } else {
-                        let run = paragraph
-                            .state
-                            .positioned
-                            .committed()
-                            .replacement_runs()
-                            .get(run_index)
-                            .copied()
-                            .ok_or(EngineError::InvalidRequest)?;
-                        if !matches!(run.source_kind, LayoutRunSourceKind::Boundary { .. })
-                            || assignment.change() != RunSlotChange::Retained
-                            || run.run_handle != Some(assignment.handle())
-                        {
-                            return Err(EngineError::InvalidRequest);
-                        }
-                    }
-                }
-                let paragraph = self
-                    .paragraph_mut(paragraph_id)
-                    .ok_or(EngineError::InvalidRequest)?;
-                if paragraph.state.positioned.is_prepared() {
-                    let layout_runs = paragraph.state.clusters.active().layout_runs();
-                    paragraph
-                        .state
-                        .positioned
-                        .pending_mut()
-                        .bind_placement_run_handles(layout_runs)?;
-                }
-            }
-            if assignment_index != assignment_count {
-                return Err(EngineError::InvalidRequest);
-            }
-            Ok(())
-        })();
-        self.desired_runs = desired;
-        result
-    }
-
     fn prepare_placement_slots(
         &mut self,
         publication_generation: u32,
         next_content_revision: &mut u32,
     ) -> Result<(), EngineError> {
         let mut desired = core::mem::take(&mut self.desired_placements);
-        let mut handles = core::mem::take(&mut self.desired_placement_handles);
         let mut rows = core::mem::take(&mut self.session_placement_rows);
         desired.clear();
-        handles.clear();
         rows.clear();
         let result = (|| {
             let required = self
@@ -2770,9 +2520,6 @@ impl PlannerState {
             desired
                 .try_reserve(required)
                 .map_err(|_| EngineError::ResultTooLarge)?;
-            handles
-                .try_reserve(required)
-                .map_err(|_| EngineError::ResultTooLarge)?;
             rows.try_reserve(required)
                 .map_err(|_| EngineError::ResultTooLarge)?;
             for order in self.active_order() {
@@ -2794,40 +2541,41 @@ impl PlannerState {
                     }
                     .map(|run| run.source_kind)
                     .ok_or(EngineError::InvalidRequest)?;
-                    desired.push(DesiredRun::new(
-                        placement_logical_key(paragraph.incarnation, *segment, run_source),
-                        (),
-                    ));
+                    desired.push(DesiredPlacement::new(placement_logical_key(
+                        paragraph.incarnation,
+                        *segment,
+                        run_source,
+                    )));
                 }
             }
             self.placement_slots
                 .prepare(&desired, publication_generation)
-                .map_err(run_slot_error)?;
-            let assignment_count = self
+                .map_err(placement_slot_error)?;
+            let assignments = self
                 .placement_slots
-                .assignment_count()
-                .map_err(run_slot_error)?;
+                .assignments()
+                .map_err(placement_slot_error)?;
+            let assignment_count = assignments.len();
             if assignment_count != desired.len() {
                 return Err(EngineError::InvalidRequest);
             }
             self.pending_placement_slot_count = self
                 .placement_slots
                 .required_slots()
-                .map_err(run_slot_error)?;
-            for index in 0..assignment_count {
-                handles.push(
-                    self.placement_slots
-                        .assignment(index)
-                        .map_err(run_slot_error)?
-                        .handle(),
-                );
-            }
+                .map_err(placement_slot_error)?;
+            let active_order = if self.lifecycle_prepared {
+                &self.pending_ordered_paragraphs
+            } else {
+                &self.ordered_paragraphs
+            };
+            let paragraphs = &mut self.paragraphs;
             let mut assignment_start = 0usize;
-            for order_index in 0..self.active_order().len() {
-                let paragraph_id = self.active_order()[order_index].id;
-                let segment_count = self
-                    .paragraph(paragraph_id)
-                    .ok_or(EngineError::InvalidRequest)?
+            for order in active_order {
+                let paragraph_index = paragraphs
+                    .binary_search_by_key(&order.id, |paragraph| paragraph.id)
+                    .map_err(|_| EngineError::InvalidRequest)?;
+                let paragraph = &mut paragraphs[paragraph_index];
+                let segment_count = paragraph
                     .state
                     .positioned
                     .active()
@@ -2837,31 +2585,24 @@ impl PlannerState {
                     .checked_add(segment_count)
                     .ok_or(EngineError::ResultTooLarge)?;
                 for relative in 0..segment_count {
-                    let translation = self
-                        .paragraph(paragraph_id)
-                        .and_then(|paragraph| {
-                            paragraph
-                                .state
-                                .positioned
-                                .active()
-                                .placement_translations()
-                                .get(relative)
-                        })
+                    let translation = paragraph
+                        .state
+                        .positioned
+                        .active()
+                        .placement_translations()
+                        .get(relative)
                         .copied()
                         .ok_or(EngineError::InvalidRequest)?;
                     rows.push(SessionPlacementRow {
-                        slot: handles[assignment_start + relative].slot().get(),
+                        slot: assignments[assignment_start + relative].slot().get(),
                         inline: translation.translation_inline as f32,
                         block: translation.translation_block as f32,
                     });
                 }
-                let paragraph = self
-                    .paragraph_mut(paragraph_id)
-                    .ok_or(EngineError::InvalidRequest)?;
                 if paragraph.state.positioned.is_prepared() {
                     let (pending, committed) = paragraph.state.positioned.derive_mut();
                     pending.bind_placement_handles(
-                        &handles[assignment_start..assignment_end],
+                        &assignments[assignment_start..assignment_end],
                         Some(committed),
                         next_content_revision,
                     )?;
@@ -2869,7 +2610,7 @@ impl PlannerState {
                     let positioned = paragraph.state.positioned.committed();
                     for relative in 0..segment_count {
                         if positioned.placement_handle(relative)
-                            != Some(handles[assignment_start + relative])
+                            != Some(assignments[assignment_start + relative])
                         {
                             return Err(EngineError::InvalidRequest);
                         }
@@ -2889,7 +2630,6 @@ impl PlannerState {
             Ok(())
         })();
         self.desired_placements = desired;
-        self.desired_placement_handles = handles;
         self.session_placement_rows = rows;
         result
     }
@@ -2897,13 +2637,8 @@ impl PlannerState {
     fn abort_pending(&mut self) {
         self.speculative = None;
         self.plan.abort();
-        if RETAIN_RUN_HANDLES {
-            self.run_slots.abort();
-        }
         self.placement_slots.abort();
-        self.desired_runs.clear();
         self.desired_placements.clear();
-        self.desired_placement_handles.clear();
         self.session_placement_rows.clear();
         self.pending_placement_slot_count = self.placement_slot_count;
         self.semantic_records.clear();
@@ -4247,6 +3982,19 @@ impl ParagraphState {
             .first()
             .copied()
             .unwrap_or(0);
+        let metrics_for = |handle| shaper.font_metrics(handle);
+        let first_font_for_stack = |stack_handle| {
+            font_stacks
+                .binary_search_by_key(&stack_handle, |stack| stack.handle)
+                .ok()
+                .and_then(|index| font_stacks[index].fonts.first().copied())
+                .and_then(|handle| {
+                    font_bindings
+                        .iter()
+                        .find(|binding| binding.handle == handle)
+                        .map(|binding| binding.shaping_handle)
+                })
+        };
         if !self.style_invalidation.metrics
             && !self.clusters.is_prepared()
             && self.text_edit.is_none()
@@ -4269,19 +4017,8 @@ impl ParagraphState {
                     paragraph_level,
                     max_lines,
                     max_slots_per_band,
-                    |handle| shaper.font_metrics(handle),
-                    |stack_handle| {
-                        font_stacks
-                            .binary_search_by_key(&stack_handle, |stack| stack.handle)
-                            .ok()
-                            .and_then(|index| font_stacks[index].fonts.first().copied())
-                            .and_then(|handle| {
-                                font_bindings
-                                    .iter()
-                                    .find(|binding| binding.handle == handle)
-                                    .map(|binding| binding.shaping_handle)
-                            })
-                    },
+                    metrics_for,
+                    first_font_for_stack,
                 )?
             }
         {
@@ -4312,19 +4049,8 @@ impl ParagraphState {
                     paragraph_level,
                     max_lines,
                     max_slots_per_band,
-                    |handle| shaper.font_metrics(handle),
-                    |stack_handle| {
-                        font_stacks
-                            .binary_search_by_key(&stack_handle, |stack| stack.handle)
-                            .ok()
-                            .and_then(|index| font_stacks[index].fonts.first().copied())
-                            .and_then(|handle| {
-                                font_bindings
-                                    .iter()
-                                    .find(|binding| binding.handle == handle)
-                                    .map(|binding| binding.shaping_handle)
-                            })
-                    },
+                    metrics_for,
+                    first_font_for_stack,
                 )?
             }
         {
@@ -4340,19 +4066,8 @@ impl ParagraphState {
             paragraph_level,
             max_lines,
             max_slots_per_band,
-            |handle| shaper.font_metrics(handle),
-            |stack_handle| {
-                font_stacks
-                    .binary_search_by_key(&stack_handle, |stack| stack.handle)
-                    .ok()
-                    .and_then(|index| font_stacks[index].fonts.first().copied())
-                    .and_then(|handle| {
-                        font_bindings
-                            .iter()
-                            .find(|binding| binding.handle == handle)
-                            .map(|binding| binding.shaping_handle)
-                    })
-            },
+            metrics_for,
+            first_font_for_stack,
         )?;
         let mut ellipsis_index = 0usize;
         while ellipsis_index < self.flow_layout.pending_mut().ellipsis_threads().len() {
@@ -5383,20 +5098,19 @@ fn plan_error(error: RenderPlanCompilerError) -> EngineError {
     }
 }
 
-fn run_slot_error(error: RunSlotError) -> EngineError {
+fn placement_slot_error(error: PlacementSlotError) -> EngineError {
     match error {
-        RunSlotError::GenerationExhausted | RunSlotError::SlotExhausted => {
+        PlacementSlotError::GenerationExhausted | PlacementSlotError::SlotExhausted => {
             EngineError::RevisionExhausted
         }
-        RunSlotError::AllocationFailed | RunSlotError::ArithmeticOverflow => {
+        PlacementSlotError::AllocationFailed | PlacementSlotError::ArithmeticOverflow => {
             EngineError::ResultTooLarge
         }
-        RunSlotError::InvalidPublicationGeneration | RunSlotError::AcknowledgementRegressed => {
-            EngineError::RevisionConflict
-        }
-        RunSlotError::AlreadyPrepared
-        | RunSlotError::NotPrepared
-        | RunSlotError::DuplicateLogicalKey => EngineError::InvalidRequest,
+        PlacementSlotError::InvalidPublicationGeneration
+        | PlacementSlotError::AcknowledgementRegressed => EngineError::RevisionConflict,
+        PlacementSlotError::AlreadyPrepared
+        | PlacementSlotError::NotPrepared
+        | PlacementSlotError::DuplicateLogicalKey => EngineError::InvalidRequest,
     }
 }
 
@@ -5440,13 +5154,9 @@ mod tests {
             fragment_index: 0,
             layout_run_owner: LayoutRunOwner::Replacement,
             layout_run_index: 0,
-            run_handle: None,
             placement_handle: None,
             canonical_revision: Some(first_revision),
-            identity: PlacementIdentity::StableSource {
-                segment_anchor: 17,
-                source_anchor: 17,
-            },
+            identity: PlacementIdentity::StableSource,
             segment_anchor: 17,
             source_anchor: 17,
             numeric_block_ordinal: 0,

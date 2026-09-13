@@ -2,8 +2,8 @@ import { buildRuntimePackages, isMainModule, runPnpm } from './support/command-c
 import { runBenchmarkBuild } from './build.mts';
 import { runBenchmarkTest } from './test.mts';
 
-export async function runBenchmarkCheck(): Promise<void> {
-  await buildRuntimePackages();
+export async function runBenchmarkCheck(options: { readonly runtimePackagesReady?: boolean } = {}): Promise<void> {
+  if (!options.runtimePackagesReady) await buildRuntimePackages();
   await runPnpm(['exec', 'tsc', '-p', 'tsconfig.json', '--noEmit']);
   await runPnpm(['exec', 'tsc', '-p', 'tsconfig.scripts.json', '--noEmit']);
   await runPnpm(['exec', 'oxlint', '--deny-warnings', '.']);
@@ -13,8 +13,10 @@ export async function runBenchmarkCheck(): Promise<void> {
 }
 
 if (isMainModule(import.meta.url)) {
-  runBenchmarkCheck().catch((error: unknown) => {
-    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-    process.exitCode = 2;
-  });
+  runBenchmarkCheck({ runtimePackagesReady: process.argv.includes('--runtime-packages-ready') }).catch(
+    (error: unknown) => {
+      process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+      process.exitCode = 2;
+    },
+  );
 }

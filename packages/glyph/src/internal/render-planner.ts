@@ -1038,6 +1038,7 @@ class RenderPlannerImpl {
       }
       if (state.geometryDirty) {
         const geometry = compileGeometry(this.#handleState, state, regions.length, exclusions.length);
+        prepareFlowEntityRevisions(state, geometry.regions, geometry.exclusions);
         constraints.push(geometry.constraint);
         regions.push(...geometry.regions);
         exclusions.push(...geometry.exclusions);
@@ -1964,37 +1965,47 @@ function compileGeometry(
   };
 }
 
-function commitFlowEntityRevisions(state: RetainedTextState): void {
-  const revision = state.geometryRevision + 1;
+function prepareFlowEntityRevisions(
+  state: RetainedTextState,
+  compiledRegions: readonly PlannerRegion[],
+  compiledExclusions: readonly PlannerExclusion[],
+): void {
   const regions = state.pendingFlowRegions;
   const exclusions = state.pendingFlowExclusions;
   regions.clear();
   exclusions.clear();
-  for (const [regionIndex, input] of (state.desired.source.flow?.regions ?? []).entries()) {
+  if (state.desired.source.flow === undefined) return;
+  let exclusionIndex = 0;
+  for (const [regionIndex, input] of state.desired.source.flow.regions.entries()) {
+    const compiledRegion = compiledRegions[regionIndex];
+    if (compiledRegion === undefined) throw new Error('compiled flow region count does not match the retained source');
     const transformHandle = state.desired.flowTransforms[regionIndex]!.handle;
-    const previousRegion = state.committedFlowRegions.get(input.region.key);
     regions.set(input.region.key, {
       input: input.region,
       transformHandle,
-      revision:
-        previousRegion !== undefined &&
-        previousRegion.transformHandle === transformHandle &&
-        sameFlowRegion(previousRegion.input, input.region)
-          ? previousRegion.revision
-          : revision,
+      revision: compiledRegion.geometryRevision,
     });
     for (const exclusion of input.exclusions ?? []) {
       const key = flowExclusionIdentity(input.region.key, exclusion.key);
-      const previousExclusion = state.committedFlowExclusions.get(key);
+      const compiledExclusion = compiledExclusions[exclusionIndex];
+      if (compiledExclusion === undefined) {
+        throw new Error('compiled flow exclusion count does not match the retained source');
+      }
       exclusions.set(key, {
         input: exclusion,
-        revision:
-          previousExclusion !== undefined && sameFlowExclusion(previousExclusion.input, exclusion)
-            ? previousExclusion.revision
-            : revision,
+        revision: compiledExclusion.geometryRevision,
       });
+      exclusionIndex += 1;
     }
   }
+  if (compiledRegions.length !== regions.size || compiledExclusions.length !== exclusionIndex) {
+    throw new Error('compiled flow geometry does not match the retained source');
+  }
+}
+
+function commitFlowEntityRevisions(state: RetainedTextState): void {
+  const regions = state.pendingFlowRegions;
+  const exclusions = state.pendingFlowExclusions;
   [state.committedFlowRegions, state.pendingFlowRegions] = [regions, state.committedFlowRegions];
   [state.committedFlowExclusions, state.pendingFlowExclusions] = [exclusions, state.committedFlowExclusions];
 }

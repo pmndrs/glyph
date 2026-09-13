@@ -1,5 +1,49 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-12
+
+- **Reduced the completed fragment-reflow stack without changing its topology** — Classified the final stack against
+  D-355 before editing, then removed the dormant run-handle allocator, completed shadow planners, duplicate visual-span
+  ledger, placement-handle mirror, and pass-through placement wrappers. Shared retained-flow and gather authorities now
+  replace repeated lookups and synthetic normalization paths. Instrumented Rust coverage stayed exactly unchanged while
+  six overlapping tests were removed; built-package Node coverage slightly increased while 241 overlapping cases were
+  consolidated, cutting that measured lane from `91.17 s` to `34.65 s`. The cleanup layer is net `−3,984` lines against
+  PR #175 and preserves the same batches, primitives, draws, stable identities, placement rows, and renderer contract.
+  Exact-head 22k width-reflow medians are `1.483 ms` ordinary Latin, `2.097 ms` justified Latin, `3.360 ms` mixed bidi,
+  and `2.328 ms` dense CJK, with `30.6/30.6/35.1/96.3 KiB` writes. The shaper falls by 7,132 raw / 2,929 gzip / 2,213
+  Brotli bytes relative to #175; Three changes by +554 / +72 / −52 and direct TypeGPU by −5 / +4 / +29 bytes.
+
+- **Kept adapter placement packing out of Codec authoring** — Removed the `{ buffer, lane }` placement target from the
+  public raster-program options and confined the target to stripped package-owned host assembly. Three and TypeGPU retain
+  Slug's existing `bandCounts.z` packing, while portable Codec authors continue to describe glyph-local values without
+  selecting system-buffer memory layout. The declaration boundary now rejects this physical target explicitly.
+
+- **Removed the duplicate placement-handle mirror** — Changed publications now bind positioned segments and build the
+  root x/y table directly from the placement allocator's prepared assignment slice. The planner no longer reserves,
+  copies, clears, or retains a second `Vec<PlacementHandle>` containing identical rows; commit and abort still own the
+  allocator transaction and the session rows independently.
+
+- **Retired the completed M1 shadow oracles** — The full 12.1–12.5 core, renderer, browser, size, and performance matrix
+  is accepted, so the standalone visual-span mapper and multi-fragment shadow planner no longer gate an unresolved
+  cutover. Their production counterparts and focused integration regressions remain. The associated shadow geometry
+  walker and proof-only visual-span ledger were removed with them; production retains the single compact
+  `segment_instance_counts` authority used by publication. This drops more than 3,000 lines without changing batching,
+  renderer output, or shipping positioning arithmetic.
+
+- **Specialized retained slot ownership to placement** — The only shipping user of the former generic run-slot core was
+  the dynamic placement occurrence allocator, always with a unit canonical value. The unreachable canonical-update
+  branch, run assignment/change vocabulary, forwarding placement facade, and run-only tests were removed. The retained
+  implementation still preserves allocation-free same-order reconciliation, structural reorder, renderer-acknowledged
+  quarantine, nonwrapping generation on reuse, and deterministic abort/retry. This is a reduction of one active
+  placement authority, not a replacement allocator or a second code path.
+
+- **Removed the superseded planner run-handle proof** — The accepted indexed-placement design retains dynamic occurrence
+  identity in the acknowledgement-quarantined placement-slot arena; static LayoutRun geometry is already guarded by its
+  canonical revision and stable source anchor. The test/kernel-lab-only second allocator, run handles, transactional
+  binding walk, and duplicate handle-focused tests had no release, ABI, renderer, or query consumer, so they were deleted
+  rather than carried as dormant production-shaped scaffolding. Placement-slot reuse and quarantine, numeric blocks,
+  boundary-run ownership, batching, draws, and renderer publication are unchanged.
+
 ## 2026-09-11
 
 - **Closed the LayoutRun browser, size, and performance matrix** — Both native TSL and Three/TypeGPU Presentation paths
@@ -57,9 +101,9 @@
   Latin/CJK, and the optimized Wasm is 339 raw bytes smaller. The full Rust and Unicode conformance suites pass; the
   final fresh-main/full-workload gauntlet remains open.
 
-- **Added attached Three glyph deformation without reopening layout or batching** — `Text.withGlyphs()` now treats an
-  undefined callback result as the existing bounded read and an exact-length affine `Matrix4` result as live
-  presentation. Bare arrays are Text-local; structured results name paragraph x-right/y-down, Text-local, or world
+- **Added attached Three glyph deformation without reopening layout or batching** — `Text.withGlyphs()` remains the
+  generic synchronous bounded read, while `Text.transformGlyphs()` accepts an exact-length affine `Matrix4` result as
+  live presentation. Bare arrays are Text-local; structured results name paragraph x-right/y-down, Text-local, or world
   space. The first result lazily allocates renderer-owned mat4 storage and refreshes material/display-list identity once;
   later updates compare f32 rows, mark only changed adjacent 16-float physical-record ranges, and do not cross shaping or
   render-plan publication. An unchanged full result or unchanged world transform schedules zero matrix uploads; changing

@@ -557,8 +557,10 @@ must not scan glyphs to derive it.
 
 ### Editorial regions, exclusions, and local convergence
 
-Retain `FlowGeometryArena`, `InlineSlotArena`, and `FlowLayoutArena::rebuild_until_state_converges` as the only region,
-slot-subtraction, and convergence authorities; strengthen them instead of adding parallel systems. Compare committed
+Retain `FlowGeometryArena`, `InlineSlotArena`, and `FlowLayoutArena` as the only region, slot-subtraction, and convergence
+authorities; strengthen them instead of adding parallel systems. Its edit and exclusion entry paths share eligibility,
+flow/drop-cap context, retained-suffix publication, and font-resolution inputs while preserving their distinct stopping
+rules. Compare committed
 and pending geometry by stable entity ID, generation, and revision. Build the ordered block intervals affected by the
 union of every changed binding's old and new bounds, including margin. Preserve the prefix before the earliest interval.
 Recompose forward, but do not test convergence before the dirty horizon—the end of the last affected interval or later
@@ -647,14 +649,14 @@ existing fixed Wasm scratch from slice placement plus local glyph data. `glyphs(
 materialize caller-owned arrays because the caller requested a full copy; they are not resize hot paths. Query results
 must remain synchronous, lifetime-bounded, and invalid after the callback.
 
-Milestone 12 also extends that callback into an opt-in live deformation boundary. Returning `undefined` keeps the
-existing read-only behavior. Returning one transform for every glyph in the borrowed layout installs or updates a
-presentation override for that exact accepted topology; a different length, an expired view, reentry, or non-finite
-transform rejects atomically. The logical API exposes glyph-indexed local, paragraph, or world-space transforms rather
-than buffer lanes or shader layouts. Adapters pack the result into renderer-owned dirty ranges and compose it after the
-ordinary run/segment x/y placement, so a physics tick can update only overridden glyph transforms without reshaping,
-changing batch or draw topology, or republishing unchanged raster data. Full 3D position/rotation/scale or matrix
-transforms are part of the acceptance surface, not a Three-only snapshot convention.
+Milestone 12 adds the distinct `transformGlyphs(callback)` live deformation boundary while preserving
+`withGlyphs(callback)` as a generic read. Returning one transform for every glyph in the borrowed layout installs or
+updates a presentation override for that exact accepted topology; a different length, an expired view, reentry, or
+non-finite transform rejects atomically. The logical API exposes glyph-indexed local, paragraph, or world-space
+transforms rather than buffer lanes or shader layouts. Adapters pack the result into renderer-owned dirty ranges and
+compose it after the ordinary run/segment x/y placement, so a physics tick can update only overridden glyph transforms
+without reshaping, changing batch or draw topology, or republishing unchanged raster data. Full 3D
+position/rotation/scale or matrix transforms are part of the acceptance surface, not a Three-only snapshot convention.
 
 An accepted topology change replaces the positional index mapping and causes the next callback to observe the new glyph
 count and order. Transform index `i` then applies to whichever glyph occupies index `i`; removed trailing indexes retire
@@ -694,11 +696,11 @@ numeric cutover, the invariant is no extra full intermediate copy: a width updat
 geometry, and boundary-replacement topology writes and uploads compact placement/order/decoration patches and writes zero
 bytes to the static glyph-local/numeric-block buffers.
 
-The proof identity foundation is concrete: each paragraph receives a nonwrapping incarnation, each `LayoutRun` receives
-an exact non-hash canonical revision after complete retained-content comparison, and a planner-scoped dense slot arena can
-validate split/merge and retirement behavior. It remains test/kernel-lab state until publication requires stable run
-handles; release width updates do not perform this reconciliation. The first cluster's stable text-unit ID is only a
-reconciliation anchor, never a physical slot or globally comparable handle.
+The retained identity foundation is concrete: each paragraph receives a nonwrapping incarnation and each `LayoutRun`
+receives an exact non-hash canonical revision after complete retained-content comparison. Dynamic placement occurrences
+use the planner-scoped dense placement-slot arena described below; there is no parallel run-slot allocator or
+renderer-visible run handle. The first cluster's stable text-unit ID is only a reconciliation anchor, never a physical
+slot or globally comparable handle.
 
 Do not zero-scale unused capacity. The built-ins already use static unit quads with an authoritative instance count;
 drawing degenerate slack wastes vertex work and complicates ordering. Reserve capacity and set the live count.
@@ -707,9 +709,8 @@ drawing degenerate slack wastes vertex work and complicates ordering. Reserve ca
 
 Replace the glyph-wide absolute placement contract atomically. The shipping engine has one retained placement model:
 `LayoutRun` plus compact run/line placement under the re-pinned final-coordinate operations above. The old materializer
-may exist only behind test/lab compilation as a numeric/pixel comparison oracle and is deleted from production when the
-cutover lands; it is never a selectable production mode or an exact-bit compatibility fallback. Retire the test/lab
-oracle only at M6 after full matrix closure.
+was never a selectable production mode or an exact-bit compatibility fallback. The standalone M1 shadow planner and
+visual mapper were retired after the M6 full-matrix closure; focused production-path regressions remain.
 
 1. Add one engine-owned semantic placement slot for every rendered glyph and one root-scoped f32x2 table row per active
    placement segment. Codec authors produce glyph-local technique outputs and never receive or declare host slot
@@ -870,7 +871,7 @@ must reuse static glyph/raster/effect state before the final compact-publication
   placement table; adapters own physical packing and no run/line/slot-allocation field enters the public Codec plan.
 - Define numeric wire representation, change-mask semantics, capacities, range jobs, patches, acknowledgement, and
   retirement in the generated contract without changing batch or draw identity.
-- Publish static glyph-local/numeric-block/run-slot records only on topology or local-geometry changes, never visual-slice
+- Publish static glyph-local and numeric-block records only on topology or local-geometry changes, never visual-slice
   boundary changes.
 - Publish placement, visual-order, and decoration patches on width changes.
 - Teach the generic realization boundary to resolve the occurrence slot and combine local glyph data with the selected
@@ -968,7 +969,8 @@ only after the source cursor and line metrics converge to the cold authority.
 - Run the full existing and new flow/drop-cap/projection matrix across core and adapters; no typography or query behavior
   is deferred until this milestone.
 - Delete the test oracle only after the full parity matrix and renderer migration are accepted; no legacy production
-  domain remains.
+  domain remains. Completed: the standalone visual-span and multi-fragment shadow modules were removed after the matrix
+  closed.
 
 Exit: the correctness matrix below passes without adapter-specific exceptions.
 
@@ -1012,8 +1014,9 @@ The shadow oracle and final implementation cover:
 - continuous and discontinuous under/content/over decorations;
 - measure-before-render, measure-after-render, width no-op, hit testing, `withGlyphs`, full glyph copies, and detached
   slices;
-- read-only and transform-returning `withGlyphs` callbacks; exact 1:1 length validation; local, paragraph, and world-space
-  per-glyph deformation; physics-frame dirty-range updates without reshaping or draw churn; topology-change rebinding;
+- generic read-only `withGlyphs` callbacks and distinct transform-returning `transformGlyphs` callbacks; exact 1:1
+  length validation; local, paragraph, and world-space per-glyph deformation; physics-frame dirty-range updates without
+  reshaping or draw churn; topology-change rebinding;
   atomic rejection; and detached-copy lifecycle independence;
 - commit, abort, retry, removal, independent exclusion/slot capacity growth, publication acknowledgement, vertex/range
   retirement, generation reuse, stale-handle rejection, and `ResultTooLarge` rollback;
@@ -1073,7 +1076,7 @@ Merge targets:
 
 Record active/reserved run and slice counts, placement/order/decor bytes, static glyph bytes, Wasm retained bytes, CPU
 staging, GPU static and dynamic capacity, per-update publication, and patch count separately. Initial budgets: no
-static-glyph growth above 4 bytes/glyph for the run slot; core placement at most 16 bytes/active slice, with the required
+static-glyph growth above 4 bytes/glyph for the placement slot; core placement at most 16 bytes/active slice, with the required
 GPU row at 8 bytes; and no pool or total high-water increase above 3% without an identified, measured tradeoff accepted
 before merge.
 

@@ -32,15 +32,16 @@ export function codecDescriptor(ids: CodecIdFactory): CodecDescriptor {
     transformMode: 'direct',
     allocationMode: 'ordered',
   } as const;
+  const slugOptions = {
+    ...options,
+    placementSlotTarget: { buffer: slugSchema.buffers.bandCounts.id, lane: 2 },
+  } as const;
   return {
     capabilitySets: [capabilitySet],
     programs: [
       createRasterCodecProgram(bitmapCodec, options),
       createRasterCodecProgram(msdfCodec, options),
-      createRasterCodecProgram(slugCodec, {
-        ...options,
-        placementSlotTarget: { buffer: slugSchema.buffers.bandCounts.id, lane: 2 },
-      }),
+      createRasterCodecProgram(slugCodec, slugOptions),
     ],
   };
 }

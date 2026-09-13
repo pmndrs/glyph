@@ -649,7 +649,11 @@ test('a bake is skipped only when the artifact on disk is the whole result the r
     (await validateFontArtifact(await readFile(output))).document.extensions.PMNDRS_font.rasters.length;
   const bake = async (argv) => {
     const io = captureIo();
-    assert.equal(await runCli(['bake', '--input', input, '--output', output, ...argv], io.io), 0, io.stderr());
+    assert.equal(
+      await runCli(['bake', '--input', input, '--output', output, '--unicodes', 'U+0041', ...argv], io.io),
+      0,
+      io.stderr(),
+    );
     return io.stdout();
   };
 

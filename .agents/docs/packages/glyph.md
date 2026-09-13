@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:a9bb975f5ebe0ccc396691b529345e408c5fd311c39b7235a8721ebe42011d58'
+source_digest: 'sha256:694aa6dee3229505f1314aebc9d1c0f5e2ee486be0c35bf9542d1a59a7f3d722'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -371,15 +371,16 @@ glyph into fixed Wasm scratch, then returns one frozen scalar object in O(select
 bulk caller-owned copy. The callback must finish synchronously:
 thenables, engine reentry, and retained-text mutation are rejected, and the indexed view expires on return or throw.
 
-Three implements the fragment-relative frontier's transform-returning form of the same callback for attached live
-deformation. `undefined` remains read-only. A bare exact-length `Matrix4[]` is Text-local; `{ space, matrices }` names
-layout paragraph coordinates (x-right/y-down), Text-local Three coordinates, or Three world coordinates. Every matrix is
-an absolute affine glyph frame in current visual index order, not a delta or a projective transform. The first transform
-result lazily enables one renderer-owned mat4 storage lane and performs one material/display-list refresh. Later results
-copy only the returned matrices, mark adjacent 16-float record ranges, and cross neither shaping nor render-plan
-publication. Stable physical-slot reuse resets a row before another glyph can inherit it, and `measureGlyphs()` applies
-the same retained matrices to interaction geometry. TypeGPU retains the read-only callback while its direct adapter is
-still a proof of concept; it does not inherit an unproved matrix-storage contract from Three.
+Three exposes attached live deformation separately through `Text.transformGlyphs(callback)`, leaving the shared
+`withGlyphs()` contract as a generic synchronous borrowed read. A bare exact-length `Matrix4[]` is Text-local;
+`{ space, matrices }` names layout paragraph coordinates (x-right/y-down), Text-local Three coordinates, or Three world
+coordinates. Every matrix is an absolute affine glyph frame in current visual index order, not a delta or a projective
+transform. The first transform result lazily enables one renderer-owned mat4 storage lane and performs one
+material/display-list refresh. Later results copy only the returned matrices, mark adjacent 16-float record ranges, and
+cross neither shaping nor render-plan publication. Stable physical-slot reuse resets a row before another glyph can
+inherit it, and `measureGlyphs()` applies the same retained matrices to interaction geometry. TypeGPU retains only the
+read callback while its direct adapter is still a proof of concept; it does not inherit an unproved matrix-storage
+contract from Three.
 
 These overrides compose after compact layout placement and do not dirty shaping, line fitting, static raster records,
 batch keys, or draw spans. An equal-count topology change reapplies matrix index `i` to the new glyph at `i`; a changed
@@ -513,6 +514,9 @@ Rust publishes one revision containing:
 - ordered draw commands with raster-format/program, resource, material, transform, and clip identity;
 - optional semantic measurement or inspection sections only when explicitly demanded.
 
+The root-scoped placement table uses the same capability-selected alignment, coalescing, fragmentation, and whole-buffer
+upload policy as retained Codec buffers; it does not carry a separate fixed range-packing heuristic.
+
 Metric-only style changes refresh retained shaping-run typography before cluster aggregation but reuse the HarfRust glyph
 result. Font size, letter spacing, word spacing, line height, and baseline changes therefore rebuild advances and
 positioning without treating glyph identities as newly shaped content. A public optimized-Wasm regression doubles a
@@ -550,7 +554,10 @@ For retained exact-width, non-ellipsis flow with stable region/exclusion topolog
 region now unions their old/new block bounds and margins into one dirty band. Rust retains every preceding line, resumes
 the existing band composer at the retained source cursor, and waits until it crosses the complete future dirty horizon
 before accepting an exact line/fragment/slot suffix certificate. Structural, cross-region, flexible-width, and ellipsis
-changes fall back to the cold authority. Drop-cap paragraphs use the same path: the core rederives the cap from current
+changes fall back to the cold authority. Edit-driven and exclusion-driven convergence share one eligibility check, flow and
+drop-cap context builder, retained-suffix publisher, and font-resolution input; their stopping rules remain explicit because
+an edit follows prior line slots while a dirty exclusion must cross its future block horizon. Drop-cap paragraphs use the same
+path: the core rederives the cap from current
 run geometry, reapplies its cut while recomposing the dirty band, realigns baseline-aligned caps from the retained or new
 first body line, and accepts the suffix only when it matches the cold authority. The remaining projected-object and
 drop-cap matrix belongs to
@@ -1332,11 +1339,13 @@ it has an explicit occurrence model, and keeps 4,096 homogeneous CJK clusters in
 corpus reconstructs all 332 already-published f32 coordinates exactly from line and observable-slice anchors, but the
 f64 reassociation counterexamples remain authoritative for the future CPU cutover.
 
-Break-independent numeric blocks, compact placement segments, planner-scoped run handles, and placement slots are now
-production-owned and populated by the single positioning traversal. Justification, L1/L2, hanging, boundary ownership,
-and exact f64 translation remain in core; the renderer receives only a per-glyph u32 slot and the selected f32x2 row.
-CPU semantic/query rows and renderer placement use the same ordered local-plus-placement f32 operation. Run, word,
-numeric-block, role, bidi, and justification metadata do not cross the renderer boundary.
+Break-independent numeric blocks, compact placement segments, and placement slots are production-owned and populated by
+the single positioning traversal. A LayoutRun's canonical revision and stable source anchor identify its retained local
+geometry; there is no separate run-slot allocator or renderer-visible run handle. Justification, L1/L2, hanging,
+boundary ownership, and exact f64 translation remain in core; the
+renderer receives only a per-glyph u32 slot and the selected f32x2 row. CPU semantic/query rows and renderer placement use
+the same ordered local-plus-placement f32 operation. Run, word, numeric-block, role, bidi, and justification metadata do
+not cross the renderer boundary.
 
 `ClusterArena` prepares one stable u32 placement-segment anchor per cluster after word fitting and LayoutRun topology are
 available. Short, sparse, and overflow word-sidecar modes retain the stable word root; dense break streams retain the
@@ -1352,17 +1361,19 @@ reuses committed glyph-local, raster, and effect rows, copies compact placement 
 thread, and transform metadata. Internal positioned semantic rows keep local origin and ink coordinates plus their
 placement-segment index; pure placement changes therefore preserve their content revision and do not dirty static Codec
 position inputs. Public borrowed/full glyph queries and CPU/plan ink bounds compose absolute f32 values lazily from the
-authoritative segment translation. Retained gather resolves only genuinely changed Codec dependencies without repeating
+authoritative segment translation. Plan gather requires that positioned semantic row and translation and derives semantic
+identity from the same row; malformed internal input is rejected rather than interpreting local coordinates as absolute or
+falling back to a parallel semantic lane. Retained gather resolves only genuinely changed Codec dependencies without repeating
 font selection, raster resource lookup, full `PlanGlyph` construction, or glyph-position arithmetic. Stable/glyph/font
 identity and exact outline presence authenticate retained rows; any mismatch aborts the candidate. Other changes use the
 general authorities.
 
 Placement-slot identity follows the stable occurrence source rather than the run's geometry revision. Paragraph,
 boundary-source, and ellipsis runs remain distinct source kinds, but changing font metrics or other canonical run geometry
-does not by itself retire and rewrite the per-glyph placement-slot lane. The run generation still changes independently
-and guards static local geometry. In the maintained full font-size update, this separation reduced candidate publication
-from 456.5 KiB to 371.3 KiB by removing the redundant approximately 85 KiB occurrence rewrite; the measured CPU timing
-change was within noise and is not claimed as a speedup.
+does not by itself retire and rewrite the per-glyph placement-slot lane. The run canonical revision still changes
+independently and guards static local geometry. In the maintained full font-size update, this separation reduced candidate
+publication from 456.5 KiB to 371.3 KiB by removing the redundant approximately 85 KiB occurrence rewrite; the measured
+CPU timing change was within noise and is not claimed as a speedup.
 
 The intermediate direct-offset A/B/B/A ordered Bitmap comparison used 40 warmups and two 101-sample passes per revision. Pooled candidate
 median/p95 is `2.874 / 2.915 ms` for 21,805 Latin glyphs and `2.233 / 2.258 ms` for 21,978 dense-CJK glyphs. Exact clean
@@ -1415,9 +1426,19 @@ the seven technique records and reads one shared scene-owned x/y placement table
 texture nor an additional Codec buffer or draw. Direct TypeGPU remains a proof-of-concept, but this measured physical
 choice no longer exceeds the contract it advertises.
 
-Planner-scoped run and placement allocators reconcile the compact CPU topology transactionally and quarantine retired
-slots until renderer acknowledgement. They validate split/merge, replacement-run, abort/retry, and stale-handle behavior;
-their handles remain core-private and never become batch or draw identity.
+The planner-scoped placement allocator reconciles compact CPU placement topology transactionally and quarantines retired
+slots until renderer acknowledgement. Its focused lifecycle tests validate reorder, retirement, acknowledgement,
+abort/retry, and stale-slot reuse directly; there is no parallel run allocator, canonical-update mode, batch identity, or
+draw identity. The standalone M1 visual-span and multi-fragment shadow planners were retired after the complete 12.1–12.5
+core, renderer, browser, size, and performance matrix closed; focused production-path regressions remain authoritative.
+
+The final reduction layer removes 3,984 net lines relative to the accepted placement-publication checkpoint without
+changing batches, primitives, draws, stable identity, or the x/y placement contract. Instrumented Rust production
+coverage is unchanged after consolidating six overlapping tests; built-package Node coverage slightly increases while
+241 overlapping cases are removed. On the same 22k alternating-width harness, the cleaned head measures `1.483 ms`
+ordinary Latin, `2.097 ms` justified Latin, `3.360 ms` mixed bidi, and `2.328 ms` dense CJK median, publishing
+`30.6/30.6/35.1/96.3 KiB` respectively. Against the placement-publication checkpoint, the shaper is 7,132 raw / 2,929
+gzip / 2,213 Brotli bytes smaller; Three changes by +554 / +72 / −52 and direct TypeGPU by −5 / +4 / +29 bytes.
 
 The indexed direction keeps the existing batches, physical instances, order indirection, primitive spans, and draws.
 Stable-indirect rendering resolves logical to physical instance first; ordered-direct rendering already has the physical

@@ -116,17 +116,22 @@ function compileProgram<Format extends RasterFormatMetadata, Schema extends Tech
           stableGlyphId: threeSystemBuffers.stableGlyphId,
           placementSlot: threeSystemBuffers.placementSlot,
         };
-  const codec = createRasterCodecProgram(portable, {
+  const options = {
     namespace: 'three',
     system,
-    ...((portable.schema as TechniqueSchemaMetadata) === slugSchema
-      ? { placementSlotTarget: { buffer: slugSchema.buffers.bandCounts.id, lane: 2 } }
-      : {}),
     capabilitySet: threeCodecCapabilitySet(),
     transformMode,
     allocationMode: 'ordered',
     ids: identities,
-  });
+  } as const;
+  const slugOptions = {
+    ...options,
+    placementSlotTarget: { buffer: slugSchema.buffers.bandCounts.id, lane: 2 },
+  } as const;
+  const codec = createRasterCodecProgram(
+    portable,
+    (portable.schema as TechniqueSchemaMetadata) === slugSchema ? slugOptions : options,
+  );
   return {
     raster: portable.raster,
     schema: portable.schema,

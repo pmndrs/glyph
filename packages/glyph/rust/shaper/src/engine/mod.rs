@@ -36,7 +36,7 @@ pub mod codec_gather;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 pub(crate) mod codec_wire;
 pub mod ordered_plan;
-mod placement_slot;
+mod placement_slot_arena;
 mod placement_state;
 mod plan_draw;
 mod plan_error;
@@ -47,8 +47,6 @@ pub mod render_plan;
 pub mod render_plan_compiler;
 pub(crate) mod render_plan_wire;
 mod run_local;
-#[cfg_attr(not(test), allow(dead_code))]
-mod run_slot;
 pub(crate) mod semantic_view;
 mod semantic_wire;
 mod session_placement;
@@ -61,9 +59,6 @@ pub mod stable_plan;
 mod stable_pool;
 mod staged;
 mod style_state;
-#[cfg(any(test, feature = "kernel-lab"))]
-#[cfg_attr(not(test), allow(dead_code))]
-mod visual_span_proof;
 
 pub(crate) use positioning::SemanticGlyph;
 pub use state::{EngineError, FrameFault, TextEngine};
