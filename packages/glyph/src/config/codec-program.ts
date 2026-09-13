@@ -231,8 +231,7 @@ export interface CodecProgramSystemBuffers {
   readonly placementSlot?: CodecBufferDeclaration<'u32', readonly ['placementSlot']>;
 }
 
-/** Adapter-owned physical target for one host semantic. Portable raster bodies never select this packing. */
-export interface CodecProgramU32StoreTarget {
+interface CodecProgramU32StoreTarget {
   readonly buffer: CodecBufferId;
   readonly lane: number;
 }

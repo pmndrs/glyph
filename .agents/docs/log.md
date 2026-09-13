@@ -2,6 +2,11 @@
 
 ## 2026-09-12
 
+- **Kept adapter placement packing out of Codec authoring** — Removed the `{ buffer, lane }` placement target from the
+  public raster-program options and confined the target to stripped package-owned host assembly. Three and TypeGPU retain
+  Slug's existing `bandCounts.z` packing, while portable Codec authors continue to describe glyph-local values without
+  selecting system-buffer memory layout. The declaration boundary now rejects this physical target explicitly.
+
 - **Removed the duplicate placement-handle mirror** — Changed publications now bind positioned segments and build the
   root x/y table directly from the placement allocator's prepared assignment slice. The planner no longer reserves,
   copies, clears, or retains a second `Vec<PlacementHandle>` containing identical rows; commit and abort still own the

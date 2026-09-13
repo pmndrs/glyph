@@ -28,7 +28,6 @@ import {
   attachHostCodecProgramSystemBuffers,
   type CompiledCodecProgramBody,
   type CodecProgramSystemBuffers,
-  type CodecProgramU32StoreTarget,
 } from './codec-program.js';
 import { assertTechniqueCodecBody, normalizeCodecProgramSystemBuffers } from '../internal/codec-program-contract.js';
 import {
@@ -42,6 +41,7 @@ import {
   normalizeCodecCapabilitySet,
   type CodecAllocationMode,
   type CodecBuffer,
+  type CodecBufferId,
   type CodecCapabilitySet,
   type CodecProgram,
   type CodecTransformMode,
@@ -160,7 +160,14 @@ export interface RasterCodecProgramOptions {
   readonly transformMode: CodecTransformMode;
   readonly allocationMode: CodecAllocationMode;
   readonly ids?: CodecIdFactory;
-  /** Adapter-owned packing for the placement semantic; omitted means its dedicated system buffer. */
+}
+
+interface CodecProgramU32StoreTarget {
+  readonly buffer: CodecBufferId;
+  readonly lane: number;
+}
+
+interface RasterCodecHostOptions {
   readonly placementSlotTarget?: CodecProgramU32StoreTarget;
 }
 
@@ -200,7 +207,10 @@ export function createRasterCodecProgram<Format extends RasterFormatMetadata, Sc
     throw new TypeError('raster codec system needs a host-owned placementSlot buffer');
   }
   const system: RasterCodecSystem = Object.freeze({ ...normalizedSystem, placementSlot });
-  const placementSlotTarget = normalizePlacementSlotTarget(codec.schema, options.placementSlotTarget);
+  const placementSlotTarget = normalizePlacementSlotTarget(
+    codec.schema,
+    (options as RasterCodecProgramOptions & RasterCodecHostOptions).placementSlotTarget,
+  );
   const capabilitySet = normalizeCodecCapabilitySet(options.capabilitySet, 'raster codec capability set');
   const ids = options.ids ?? new CodecIdScope();
   const compiledTechniqueId = ids.technique(codec.raster);
