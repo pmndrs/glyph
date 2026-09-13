@@ -946,8 +946,8 @@ Closes the class of defect behind the displaced-record-slot corruption, in depen
 - [x] every span boundary resolved onto the grapheme cluster grid, by one rule shared between the authored `spans` array and both tree compilers, which resolve at the concatenation join, with a collapsed span kept rather than dropped (D-265);
 - [ ] a render-plan payload that is fully determined before publication, with a non-covering seed failing loudly rather than shipping zeros (D-260);
 - [ ] one address space for change detection, removing the identity guard rather than retaining it as a detector (D-259);
-- [ ] stable-indirect reachable from the public API and under the D-261 oracle, or removed (D-262);
-- [ ] ordered and stable planners unified, gated on the previous item (D-262);
+- [ ] verify the accepted stable-indirect removal with full ordered benchmarks, size, renderer gates, and Opus (D-362);
+- [ ] close the former dual-planner item by proving the ordered-only implementation needs no strategy dispatcher (D-362);
 - [ ] one coordinate space reported by the glyph-origin augmentation lane, with a missing record failing rather than substituting (D-263);
 - [ ] randomized instanced updates in the benchmark harness, whose monotonic reveal exercises only edits that displace nothing.
 

@@ -2,7 +2,6 @@ import {
   compileCodec,
   createCodecProgram,
   id,
-  type CodecAllocationMode,
   type CodecBuffer,
   type CodecBufferId,
   type CodecCapabilitySet,
@@ -91,8 +90,6 @@ export const decorationSchema: TechniqueSchema<
 
 export type ThreeTransformMode = CodecTransformMode;
 
-export type ThreeAllocationMode = CodecAllocationMode;
-
 export interface ThreeFormatTransformModes {
   readonly bitmap: ThreeTransformMode;
   readonly msdf: ThreeTransformMode;
@@ -106,9 +103,8 @@ export function threeCodecBytes(
   ids: CodecIdFactory = id,
   transformMode: ThreeTransformMode | ThreeFormatTransformModes = 'indexed',
   additionalPrograms: readonly CodecProgram[] = [],
-  allocationMode: ThreeAllocationMode = 'ordered',
 ): Uint8Array {
-  return compileCodec(threeCodecDescriptor(ids, transformMode, additionalPrograms, allocationMode));
+  return compileCodec(threeCodecDescriptor(ids, transformMode, additionalPrograms));
 }
 
 /** @internal Assemble the descriptor retained by the Three adapter alongside its compiled wire Codec. */
@@ -116,12 +112,8 @@ export function threeCodecDescriptor(
   ids: CodecIdFactory = id,
   transformMode: ThreeTransformMode | ThreeFormatTransformModes = 'indexed',
   additionalPrograms: readonly CodecProgram[] = [],
-  allocationMode: ThreeAllocationMode = 'ordered',
 ): CodecDescriptor {
   if (!Array.isArray(additionalPrograms)) throw new TypeError('Three additional Codec programs need an array');
-  if (allocationMode !== 'ordered' && allocationMode !== 'stable') {
-    throw new TypeError('Three allocation mode must be "ordered" or "stable"');
-  }
   const modes =
     typeof transformMode === 'string'
       ? { bitmap: transformMode, msdf: transformMode, slug: transformMode }
@@ -138,7 +130,6 @@ export function threeCodecDescriptor(
     placementSlotTarget: { buffer: slugSchema.buffers.bandCounts.id, lane: 2 },
     capabilitySet,
     transformMode: modes.slug,
-    allocationMode,
     ids,
   } as const;
   // The portable assembler validates the handle-supplied factory before Three invokes it directly.
@@ -148,7 +139,6 @@ export function threeCodecDescriptor(
       system: codecSystemBuffers(modes.bitmap),
       capabilitySet,
       transformMode: modes.bitmap,
-      allocationMode,
       ids,
     }),
     createRasterCodecProgram(msdfCodec, {
@@ -156,7 +146,6 @@ export function threeCodecDescriptor(
       system: codecSystemBuffers(modes.msdf),
       capabilitySet,
       transformMode: modes.msdf,
-      allocationMode,
       ids,
     }),
     createRasterCodecProgram(slugCodec, slugOptions),
@@ -165,7 +154,7 @@ export function threeCodecDescriptor(
   const DECORATION_PROGRAM_ID = ids.program(decorationSchema.technique, THREE_PROGRAM_NAMESPACE);
   const programs: CodecProgram[] = [
     ...rasterPrograms,
-    decorationProgram(DECORATION_TECHNIQUE_ID, DECORATION_PROGRAM_ID, modes.bitmap, allocationMode),
+    decorationProgram(DECORATION_TECHNIQUE_ID, DECORATION_PROGRAM_ID, modes.bitmap),
     ...additionalPrograms,
   ];
   return { capabilitySets: [capabilitySet], programs };
@@ -173,7 +162,7 @@ export function threeCodecDescriptor(
 
 export function threeCodecCapabilitySet(): CodecCapabilitySet {
   return {
-    capabilities: ['storage-buffers', 'alias-vec2', 'alias-vec4', 'ordered-direct', 'stable-indirect'],
+    capabilities: ['storage-buffers', 'alias-vec2', 'alias-vec4', 'ordered-direct'],
     maxBufferBytes: 64 * 1024 * 1024,
     updateAlignment: 4,
     coalesceGapBytes: 128,
@@ -191,7 +180,6 @@ function decorationProgram(
   techniqueId: CodecTechniqueId,
   programId: CodecProgramId,
   transformMode: ThreeTransformMode,
-  allocationMode: ThreeAllocationMode,
 ): CodecProgram {
   const p = hostAbsoluteTechniqueProgram(decorationSchema);
   const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
@@ -207,7 +195,6 @@ function decorationProgram(
       attachHostCodecProgramSystemBuffers(authoredBody, decorationSchema, system),
       programBuffers(decorationSchema, transformMode),
       transformMode,
-      allocationMode,
     ),
     primitiveKind: 'decoration',
     resourceKindMask: 0,

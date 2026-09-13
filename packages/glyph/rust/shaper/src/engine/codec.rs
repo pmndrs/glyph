@@ -20,13 +20,8 @@ pub const CAP_INDIRECT_DRAWS: u32 = 1 << 1;
 pub const CAP_ALIAS_VEC2: u32 = 1 << 2;
 pub const CAP_ALIAS_VEC4: u32 = 1 << 3;
 pub const CAP_ORDERED_DIRECT: u32 = 1 << 4;
-pub const CAP_STABLE_INDIRECT: u32 = 1 << 5;
-const CAPABILITY_FLAGS: u32 = CAP_STORAGE_BUFFERS
-    | CAP_INDIRECT_DRAWS
-    | CAP_ALIAS_VEC2
-    | CAP_ALIAS_VEC4
-    | CAP_ORDERED_DIRECT
-    | CAP_STABLE_INDIRECT;
+const CAPABILITY_FLAGS: u32 =
+    CAP_STORAGE_BUFFERS | CAP_INDIRECT_DRAWS | CAP_ALIAS_VEC2 | CAP_ALIAS_VEC4 | CAP_ORDERED_DIRECT;
 
 pub const BATCH_TECHNIQUE: u32 = 1 << 0;
 pub const BATCH_RESOURCE: u32 = 1 << 1;
@@ -52,9 +47,6 @@ pub const BUFFER_USAGE_VERTEX: u32 = 1 << 0;
 pub const BUFFER_USAGE_STORAGE: u32 = 1 << 1;
 pub const BUFFER_USAGE_COPY_DST: u32 = 1 << 2;
 const BUFFER_USAGE_FLAGS: u32 = BUFFER_USAGE_VERTEX | BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST;
-
-pub const ALLOCATION_ORDERED_DIRECT: u16 = 1;
-pub const ALLOCATION_STABLE_INDIRECT: u16 = 2;
 
 pub const OP_LOAD_F32: u8 = 1;
 pub const OP_LOAD_U32: u8 = 2;
@@ -272,7 +264,6 @@ pub struct ProgramDescriptor {
     pub semantic_view_mask: u32,
     pub storage_key_mask: u32,
     pub draw_key_mask: u32,
-    pub allocation_strategy: u16,
     pub f32_input_count: u8,
     pub u32_input_count: u8,
     /// Ordered F32 sources followed by ordered U32 sources.
@@ -361,23 +352,6 @@ impl ValidatedCodec {
                         && program.variant == variant
                 })
             })
-    }
-
-    pub(crate) fn uniform_allocation_strategy(
-        &self,
-        capability_set: CapabilitySetId,
-    ) -> Option<u16> {
-        let mut strategy = None;
-        for program in self.programs.iter().filter(|program| {
-            program.capability_set == capability_set || program.capability_set.0 == 0
-        }) {
-            match strategy {
-                Some(existing) if existing != program.allocation_strategy => return None,
-                Some(_) => {}
-                None => strategy = Some(program.allocation_strategy),
-            }
-        }
-        strategy
     }
 
     pub fn execute(
@@ -580,7 +554,6 @@ fn codec_fingerprint(descriptor: &CodecDescriptor) -> u64 {
         mix_u32(&mut fingerprint, program.semantic_view_mask);
         mix_u32(&mut fingerprint, program.storage_key_mask);
         mix_u32(&mut fingerprint, program.draw_key_mask);
-        mix_u32(&mut fingerprint, u32::from(program.allocation_strategy));
         mix_u32(&mut fingerprint, u32::from(program.variant));
         mix_u32(&mut fingerprint, u32::from(program.f32_input_count));
         mix_u32(&mut fingerprint, u32::from(program.u32_input_count));
@@ -1553,20 +1526,9 @@ fn validate_codec(descriptor: &CodecDescriptor) -> Result<(), CodecError> {
         {
             return Err(CodecError::InvalidBatchKey);
         }
-        if !matches!(
-            program.allocation_strategy,
-            ALLOCATION_ORDERED_DIRECT | ALLOCATION_STABLE_INDIRECT
-        ) {
-            return Err(CodecError::UnsupportedAllocationStrategy);
-        }
-        let required_capability = if program.allocation_strategy == ALLOCATION_ORDERED_DIRECT {
-            CAP_ORDERED_DIRECT
-        } else {
-            CAP_STABLE_INDIRECT
-        };
         if descriptor.capability_sets.iter().any(|set| {
             (program.capability_set.0 == 0 || program.capability_set == set.id)
-                && set.flags & required_capability == 0
+                && set.flags & CAP_ORDERED_DIRECT == 0
         }) {
             return Err(CodecError::UnsupportedAllocationStrategy);
         }
@@ -1611,9 +1573,7 @@ fn validate_capability_sets(capability_sets: &[CapabilitySet]) -> Result<(), Cod
         {
             return Err(CodecError::DuplicateCapabilitySetId);
         }
-        if set.flags & !CAPABILITY_FLAGS != 0
-            || set.flags & (CAP_ORDERED_DIRECT | CAP_STABLE_INDIRECT) == 0
-        {
+        if set.flags & !CAPABILITY_FLAGS != 0 || set.flags & CAP_ORDERED_DIRECT == 0 {
             return Err(CodecError::InvalidCapabilityFlags);
         }
         if set.max_buffer_bytes == 0
@@ -1880,7 +1840,7 @@ mod tests {
     fn valid_capability_set() -> CapabilitySet {
         CapabilitySet {
             id: CAPABILITY,
-            flags: CAP_STORAGE_BUFFERS | CAP_ORDERED_DIRECT | CAP_STABLE_INDIRECT,
+            flags: CAP_STORAGE_BUFFERS | CAP_ORDERED_DIRECT,
             max_buffer_bytes: 64 * 1024 * 1024,
             update_alignment: 4,
             coalesce_gap_bytes: 128,
@@ -1916,7 +1876,6 @@ mod tests {
                 | BATCH_DEPTH
                 | BATCH_ORDER
                 | BATCH_TRANSFORM,
-            allocation_strategy: ALLOCATION_ORDERED_DIRECT,
             f32_input_count: 2,
             u32_input_count: 0,
             inputs: vec![InputSource::semantic(0), InputSource::semantic(1)],
@@ -1975,23 +1934,6 @@ mod tests {
         assert_eq!(u32_input_dependency(InputSource::semantic(6)), effect);
         assert_eq!(u32_input_dependency(InputSource::semantic(7)), effect);
         assert_eq!(u32_input_dependency(InputSource::semantic(8)), placement);
-    }
-
-    #[test]
-    fn reports_only_a_truly_uniform_allocation_strategy() {
-        let ordered = valid_program();
-        let uniform = ValidatedCodec::new(descriptor(vec![ordered.clone()])).unwrap();
-        assert_eq!(
-            uniform.uniform_allocation_strategy(CAPABILITY),
-            Some(ALLOCATION_ORDERED_DIRECT)
-        );
-
-        let mut stable = ordered;
-        stable.technique = TechniqueId(2);
-        stable.id = ProgramId(2);
-        stable.allocation_strategy = ALLOCATION_STABLE_INDIRECT;
-        let mixed = ValidatedCodec::new(descriptor(vec![valid_program(), stable])).unwrap();
-        assert_eq!(mixed.uniform_allocation_strategy(CAPABILITY), None);
     }
 
     #[test]
@@ -2167,14 +2109,13 @@ mod tests {
         webgpu.flags = CAP_ORDERED_DIRECT;
         let mut webgl = valid_capability_set();
         webgl.id = CapabilitySetId(2);
-        webgl.flags = CAP_STABLE_INDIRECT;
+        webgl.flags = CAP_ORDERED_DIRECT;
 
         let mut direct = valid_program();
         direct.capability_set = webgpu.id;
         let mut indirect = valid_program();
         indirect.id = ProgramId(2);
         indirect.capability_set = webgl.id;
-        indirect.allocation_strategy = ALLOCATION_STABLE_INDIRECT;
         let codec = ValidatedCodec::new(CodecDescriptor {
             capability_sets: vec![webgpu, webgl],
             programs: vec![direct, indirect],
@@ -2294,7 +2235,6 @@ mod tests {
                 | BATCH_DEPTH
                 | BATCH_ORDER
                 | BATCH_TRANSFORM,
-            allocation_strategy: ALLOCATION_ORDERED_DIRECT,
             f32_input_count: 1,
             u32_input_count: 1,
             inputs: vec![InputSource::semantic(0), InputSource::semantic(0)],

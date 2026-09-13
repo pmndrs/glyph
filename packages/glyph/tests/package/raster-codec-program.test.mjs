@@ -89,13 +89,11 @@ test('portable codec assembly rejects host inputs before invoking technique code
     system,
     capabilitySet,
     transformMode: 'direct',
-    allocationMode: 'ordered',
   };
   const invalid = [
     [{ ...valid, namespace: '' }, /namespace/],
     [{ ...valid, programName: '' }, /programName/],
     [{ ...valid, transformMode: 'sideways' }, /transform mode/],
-    [{ ...valid, allocationMode: 'recycling' }, /allocation mode/],
     [{ ...valid, system: {} }, /stableGlyphId system buffer/],
     [{ ...valid, system: { stableGlyphId: system.stableGlyphId } }, /placementSlot/],
     [{ ...valid, capabilitySet: { ...capabilitySet, capabilities: [] } }, /supports no allocation strategy/],
@@ -114,7 +112,6 @@ test('portable codec assembly owns host identities, system buffers, and variant 
     system,
     capabilitySet,
     transformMode: 'direct',
-    allocationMode: 'ordered',
   });
   assert.equal(compiled.techniqueId, id.technique(technique));
   assert.equal(compiled.programId, id.program(technique, TEST_PROGRAM_NAMESPACE));
@@ -146,7 +143,6 @@ test('portable codec assembly rejects structurally copied programs', () => {
           system,
           capabilitySet,
           transformMode: 'direct',
-          allocationMode: 'ordered',
         },
       ),
     /needs a registered RasterCodec/,

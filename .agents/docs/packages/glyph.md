@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:593db5ad8258851c19717613cffc366cd9726d767252a08bee058f558acfe6cb'
+source_digest: 'sha256:df8801e383e125e0c671147003fb3da6f38369574f93467bc3772d269912f61f'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -611,11 +611,10 @@ the nonzero `u16` ABI range; registration and Codec compilation still reject con
 
 The first-party Codec can select indexed transform batching, direct per-draw transforms, or a hybrid. Indexed mode adds a
 stable transform-table ID to each rendered glyph so compatible paragraphs may collapse into one draw. Direct mode splits
-draws by transform for integrations that prefer ordinary object matrices. Codec programs may use ordered-direct or
-stable-indirect physical storage. Stable draws carry one reserved u32 order buffer; Three validates its draw/primitive
-addressing once, then uses the same logical-to-physical mapping for raster-format records, transform indices, explicit origin
-queries, and third-party program material contexts. A paragraph always batches its own spans, so no root policy states
-draw order. Ordered-direct remains the first-party default until stable planning meets the same tail-latency target.
+draws by transform for integrations that prefer ordinary object matrices. Physical glyph records use direct logical order;
+the pre-alpha stable-indirect allocation experiment and its renderer order buffer are retired under D-362. Stable glyph
+identity and placement generations remain independent CPU authorities. A paragraph always batches its own spans, so no
+root policy states draw order.
 
 `materialId` is explicit through the frame ABI and command buffer. Three maps it to a `defineTextMaterial()` factory. Material
 identity may split draws without forcing a second copy of the canonical glyph buffers.
@@ -927,7 +926,7 @@ epoch-cleared identity set, one plan-error and result-capacity classifier, one c
 draw-span predicate, and one deliberately out-of-line final primitive/draw emitter. The optimized Wasm moved from
 1,160,505 raw / 442,612 gzip / 348,594 Brotli bytes to 1,159,317 / 442,284 / 347,850, saving 1,188 / 328 / 744 bytes.
 
-The remaining similar bodies are not two implementations of one behavior. Ordered-direct compacts physical records in
+The following is historical evidence for the now-retired alternative. Ordered-direct compacts physical records in
 draw order; stable-indirect preserves slots, publishes a separate order buffer, and quarantines retirements until renderer
 acknowledgement. A symbol-bearing optimized build attributes 33.3 KiB of function bodies to ordered planning and 50.1 KiB
 to stable planning; those complete strategy totals are upper bounds, not deduplicable byte estimates. Their draw compilers
@@ -1452,9 +1451,8 @@ window is `0.573 ms` CPU and `0.858 ms` GPU, versus main's same-machine `0.655/0
 while the `0.005 ms` GPU difference is noise-level parity. Direct TypeGPU's project-Chromium live gate passes Bitmap,
 MTSDF, and Slug with its callback bind groups, placement updates, and disposal lifecycle.
 
-The indexed direction keeps the existing batches, physical instances, order indirection, primitive spans, and draws.
-Stable-indirect rendering resolves logical to physical instance first; ordered-direct rendering already has the physical
-instance; both then read `placementSlot[physical]` and the shared session row. A portable `RasterCodec.codecBody` receives
+The indexed direction keeps the existing batches, physical instances, primitive spans, and draws. Direct physical
+addressing reads `placementSlot[physical]` and the shared session row. A portable `RasterCodec.codecBody` receives
 only the frozen renderer capability set and authors glyph-local technique outputs. After authenticating that body,
 package-private host assembly appends stable identity, optional transform identity, and the slot store. Codec authors
 therefore describe glyph meaning and raster inputs, not slot allocation, tables, bind groups, or backend memory layout,

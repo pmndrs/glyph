@@ -19,7 +19,7 @@ const UNKNOWN_BUFFER_ID = id.buffer('test.codec-preflight/unknown');
 
 function capabilitySet(overrides = {}) {
   return {
-    capabilities: ['storage-buffers', 'ordered-direct', 'stable-indirect'],
+    capabilities: ['storage-buffers', 'ordered-direct'],
     maxBufferBytes: 0xfe_dc_ba_98,
     updateAlignment: 256,
     coalesceGapBytes: 4096,
@@ -74,7 +74,6 @@ function fullDescriptor() {
         paintCapabilities: 12,
         compositingCapabilities: 34,
         variant: 0xffff,
-        allocationStrategy: codec.allocationStrategies.stableIndirect,
         f32InputCount: 2,
         u32InputCount: 2,
         inputs: [
@@ -139,7 +138,7 @@ test('a fully specified codec retains every serialized value exactly', () => {
   assert.equal(view.getUint32(capabilitiesOffset + capability.id, true), 1);
   assert.equal(
     view.getUint32(capabilitiesOffset + capability.flags, true),
-    capabilityFlags.storageBuffers | capabilityFlags.orderedDirect | capabilityFlags.stableIndirect,
+    capabilityFlags.storageBuffers | capabilityFlags.orderedDirect,
   );
   assert.equal(view.getUint32(capabilitiesOffset + capability.maxBufferBytes, true), 0xfe_dc_ba_98);
   assert.equal(view.getUint32(capabilitiesOffset + capability.updateAlignment, true), 256);
@@ -172,10 +171,6 @@ test('a fully specified codec retains every serialized value exactly', () => {
   assert.equal(view.getUint16(first + programLayout.operationCount, true), FULL_OPERATIONS.length);
   assert.equal(view.getUint16(first + programLayout.inputCount, true), 4);
   assert.equal(
-    view.getUint16(first + programLayout.allocationStrategy, true),
-    codec.allocationStrategies.stableIndirect,
-  );
-  assert.equal(
     view.getUint16(first + programLayout.primitiveKind, true),
     textShaperAbi.engine.primitiveKinds.decoration,
   );
@@ -192,10 +187,6 @@ test('a fully specified codec retains every serialized value exactly', () => {
   assert.equal(view.getUint32(second + programLayout.resourceKindMask, true), 1);
   assert.equal(view.getUint32(second + programLayout.semanticViewMask, true), 0);
   assert.equal(view.getUint16(second + programLayout.variant, true), 0);
-  assert.equal(
-    view.getUint16(second + programLayout.allocationStrategy, true),
-    codec.allocationStrategies.orderedDirect,
-  );
   assert.equal(view.getUint16(second + programLayout.primitiveKind, true), textShaperAbi.engine.primitiveKinds.glyph);
   assert.equal(view.getUint32(second + programLayout.bufferStart, true), 3);
   assert.equal(view.getUint32(second + programLayout.operationStart, true), FULL_OPERATIONS.length);
@@ -358,11 +349,6 @@ const numericRejections = [
     /buffer 1 capacityClass needs a u16/,
   ],
   [
-    'an overflowing allocationStrategy',
-    (d) => (d.programs[0].allocationStrategy = 65536),
-    /allocationStrategy needs a u16/,
-  ],
-  [
     'an unknown primitiveKind',
     (d) => (d.programs[0].primitiveKind = 'mesh'),
     /primitiveKind is not glyph or decoration/,
@@ -441,7 +427,7 @@ test('compiler snapshots each declared capability field once', () => {
     enumerable: true,
     get() {
       reads += 1;
-      return ['storage-buffers', 'ordered-direct', 'stable-indirect'];
+      return ['storage-buffers', 'ordered-direct'];
     },
   });
 
@@ -560,15 +546,6 @@ const semanticRejections = [
     'draw keys carrying an unknown batch bit',
     (d) => (d.programs[0].drawKeyMask |= 1 << 8),
     /key masks miss a required batch field/,
-  ],
-  ['an unknown allocation strategy', (d) => (d.programs[0].allocationStrategy = 3), /not a known strategy/],
-  [
-    'stable allocation without stable capability support',
-    (d) =>
-      (d.capabilitySets[0].capabilities = d.capabilitySets[0].capabilities.filter(
-        (value) => value !== 'stable-indirect',
-      )),
-    /lacks the allocation support/,
   ],
   [
     'a declared capability set no program references',

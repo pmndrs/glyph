@@ -67,7 +67,6 @@ function defineFontAwareConfig() {
             system: portableSystemBuffers,
             capabilitySet: portableCapabilities,
             transformMode: 'direct',
-            allocationMode: 'ordered',
             ids,
           }),
         ],

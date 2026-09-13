@@ -121,7 +121,6 @@ function compileProgram<Format extends RasterFormatMetadata, Schema extends Tech
     system,
     capabilitySet: threeCodecCapabilitySet(),
     transformMode,
-    allocationMode: 'ordered',
     ids: identities,
   } as const;
   const slugOptions = {

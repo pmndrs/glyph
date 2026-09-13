@@ -96,7 +96,6 @@ export function parseRustLayoutBenchmarkArguments(arguments_) {
   }
   return {
     technique: normalizeTechnique(readString('--technique', 'bitmap')),
-    allocation: readAllocation(readString('--allocation', 'ordered')),
     wasm: readString('--wasm'),
     corpus,
     case: selectedCase,
@@ -113,11 +112,6 @@ function readBenchmarkCase(value) {
   if (value !== undefined && !benchmarkCases.includes(value)) {
     throw new RangeError(`unknown benchmark case: ${value}`);
   }
-  return value;
-}
-
-function readAllocation(value) {
-  if (value !== 'ordered' && value !== 'stable') throw new RangeError(`unknown allocation strategy: ${value}`);
   return value;
 }
 

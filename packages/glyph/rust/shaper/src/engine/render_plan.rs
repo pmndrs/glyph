@@ -8,10 +8,7 @@ pub const RESOURCE_ACTION_UPDATE: u16 = 2;
 pub const RESOURCE_ACTION_RETAIN: u16 = 3;
 
 pub const BUFFER_ORDERED_DIRECT: u16 = 1;
-pub const BUFFER_STABLE_INDIRECT: u16 = 2;
 pub const BUFFER_SESSION_SHARED: u16 = 3;
-/// Reserved non-codec binding ID for the stable-indirect logical-order buffer.
-pub const CODEC_BUFFER_ORDER: u16 = u16::MAX;
 pub const CODEC_BUFFER_PLACEMENT: u16 = u16::MAX - 1;
 
 pub const SESSION_PLACEMENT_BUFFER_ID: u32 = 0x7fff_ffff;
@@ -63,7 +60,6 @@ pub struct BufferRecord {
     pub live_records: u32,
     pub capacity_records: u32,
     pub byte_length: u32,
-    pub order_buffer_id: u32,
 }
 
 #[repr(C)]
@@ -128,8 +124,6 @@ pub struct DrawRecord {
     pub resource_start: u32,
     pub resource_count: u32,
     pub order_token: u32,
-    pub indirect_buffer_id: u32,
-    pub indirect_offset: u32,
 }
 
 #[repr(C)]
@@ -177,9 +171,9 @@ pub struct RenderPlanView<'a> {
 }
 
 const _: () = assert!(core::mem::size_of::<ResourceRecord>() == 40);
-const _: () = assert!(core::mem::size_of::<BufferRecord>() == 36);
+const _: () = assert!(core::mem::size_of::<BufferRecord>() == 32);
 const _: () = assert!(core::mem::size_of::<PatchRecord>() == 36);
 const _: () = assert!(core::mem::size_of::<PrimitiveRecord>() == 64);
-const _: () = assert!(core::mem::size_of::<DrawRecord>() == 64);
+const _: () = assert!(core::mem::size_of::<DrawRecord>() == 56);
 const _: () = assert!(core::mem::size_of::<RetirementRecord>() == 24);
 const _: () = assert!(core::mem::size_of::<DiagnosticRecord>() == 24);

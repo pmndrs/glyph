@@ -30,7 +30,6 @@ export function codecDescriptor(ids: CodecIdFactory): CodecDescriptor {
     system,
     capabilitySet,
     transformMode: 'direct',
-    allocationMode: 'ordered',
   } as const;
   const slugOptions = {
     ...options,

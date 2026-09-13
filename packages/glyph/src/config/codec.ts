@@ -73,20 +73,13 @@ export interface CodecProgram {
   readonly u32InputCount: number;
   readonly paintCapabilities?: number;
   readonly compositingCapabilities?: number;
-  readonly allocationStrategy?: number;
   readonly inputs: readonly CodecInput[];
   readonly buffers: readonly CodecBuffer[];
   readonly operations: readonly CodecOperation[];
 }
 
 /** A renderer feature the codec compiler may target. */
-export type CodecCapability =
-  | 'storage-buffers'
-  | 'indirect-draws'
-  | 'alias-vec2'
-  | 'alias-vec4'
-  | 'ordered-direct'
-  | 'stable-indirect';
+export type CodecCapability = 'storage-buffers' | 'indirect-draws' | 'alias-vec2' | 'alias-vec4' | 'ordered-direct';
 
 /** Renderer limits and named GPU features available to one codec profile. */
 export interface CodecCapabilitySet {
@@ -147,8 +140,6 @@ registerCodecIdFactory(authoredId);
 export const id: IdFactory = Object.freeze(authoredId);
 
 export type CodecTransformMode = 'direct' | 'indexed';
-export type CodecAllocationMode = 'ordered' | 'stable';
-
 export interface ProgramContext {
   readonly inputs: CodecInput[];
   readonly operations: CodecOperation[];
@@ -245,7 +236,6 @@ export function createCodecProgram(
   context: ProgramBody,
   buffers: readonly CodecBuffer[],
   transformMode: CodecTransformMode,
-  allocationMode: CodecAllocationMode,
 ): CodecProgram {
   nonzeroU32(wireTechniqueId, 'codec technique id');
   nonzeroU32(wireProgramId, 'codec program id');
@@ -256,9 +246,6 @@ export function createCodecProgram(
   if (!Array.isArray(buffers)) throw new TypeError('codec program buffers need an array');
   if (transformMode !== 'direct' && transformMode !== 'indexed') {
     throw new TypeError('codec transform mode must be "direct" or "indexed"');
-  }
-  if (allocationMode !== 'ordered' && allocationMode !== 'stable') {
-    throw new TypeError('codec allocation mode must be "ordered" or "stable"');
   }
   const inputs = Object.freeze(
     context.inputs.map((input, index) => {
@@ -305,10 +292,6 @@ export function createCodecProgram(
     inputs,
     buffers: bufferSnapshots,
     operations,
-    allocationStrategy:
-      allocationMode === 'stable'
-        ? textShaperAbi.codec.allocationStrategies.stableIndirect
-        : textShaperAbi.codec.allocationStrategies.orderedDirect,
     // Paint layers require distinct physical pools so independent compositing can
     // flatten under-decoration, content, and over-decoration draws without copies.
     storageKeyMask: batch.technique | batch.program | batch.resource | batch.depth,
@@ -382,9 +365,6 @@ export function compileCodec(descriptor: CodecDescriptor): Uint8Array {
     }
     if (program.compositingCapabilities !== undefined) {
       u32(program.compositingCapabilities, `${programLabel} compositingCapabilities`);
-    }
-    if (program.allocationStrategy !== undefined) {
-      u16(program.allocationStrategy, `${programLabel} allocationStrategy`);
     }
     if (program.primitiveKind !== undefined) codecPrimitiveKind(program.primitiveKind, `${programLabel} primitiveKind`);
     const variant = u16(program.variant ?? 0, 'codec program variant');
@@ -555,11 +535,6 @@ export function compileCodec(descriptor: CodecDescriptor): Uint8Array {
     view.setUint16(offset + programLayout.bufferCount, value.buffers.length, true);
     view.setUint16(offset + programLayout.operationCount, value.operations.length, true);
     view.setUint16(
-      offset + programLayout.allocationStrategy,
-      value.allocationStrategy ?? textShaperAbi.codec.allocationStrategies.orderedDirect,
-      true,
-    );
-    view.setUint16(
       offset + programLayout.primitiveKind,
       codecPrimitiveKind(value.primitiveKind ?? 'glyph', `codec program ${value.programId} primitiveKind`),
       true,
@@ -685,7 +660,7 @@ function preflightCapabilitySet(set: CodecCapabilitySet, label: string): void {
   u16(set.fragmentationBudget, `${label} fragmentationBudget`);
   u16(set.wholeBufferThresholdBasisPoints, `${label} wholeBufferThresholdBasisPoints`);
 
-  if (!set.capabilities.includes('ordered-direct') && !set.capabilities.includes('stable-indirect')) {
+  if (!set.capabilities.includes('ordered-direct')) {
     throw new RangeError(`${label} supports no allocation strategy`);
   }
   if (
@@ -722,7 +697,7 @@ function preflightProgramSemantics(
   effectiveCapabilitySetId: number,
 ): void {
   const label = `codec program ${program.programId}`;
-  const { batchFields, allocationStrategies } = textShaperAbi.codec;
+  const { batchFields } = textShaperAbi.codec;
   const primitiveKind = program.primitiveKind ?? 'glyph';
   codecPrimitiveKind(primitiveKind, `${label} primitiveKind`);
   // Decoration programs draw without raster resources; every other kind must accept some.
@@ -753,21 +728,14 @@ function preflightProgramSemantics(
     throw new RangeError(`${label} storage/draw key masks miss a required batch field or use an unknown one`);
   }
 
-  const strategy = program.allocationStrategy ?? allocationStrategies.orderedDirect;
-  if (strategy !== allocationStrategies.orderedDirect && strategy !== allocationStrategies.stableIndirect) {
-    throw new RangeError(`${label} allocationStrategy is not a known strategy`);
-  }
-  const requiredCapability: CodecCapability =
-    strategy === allocationStrategies.orderedDirect ? 'ordered-direct' : 'stable-indirect';
-
   preflightProgramBody(program);
 
   for (const [index, set] of capabilitySets.entries()) {
     if (
       (effectiveCapabilitySetId === 0 || effectiveCapabilitySetId === index + 1) &&
-      !set.capabilities.includes(requiredCapability)
+      !set.capabilities.includes('ordered-direct')
     ) {
-      throw new RangeError(`codec capability set ${index} lacks the allocation support ${label} needs`);
+      throw new RangeError(`codec capability set ${index} lacks direct ordered allocation for ${label}`);
     }
   }
 }
@@ -955,8 +923,7 @@ function codecCapability(value: unknown, label: string): CodecCapability {
     value !== 'indirect-draws' &&
     value !== 'alias-vec2' &&
     value !== 'alias-vec4' &&
-    value !== 'ordered-direct' &&
-    value !== 'stable-indirect'
+    value !== 'ordered-direct'
   ) {
     throw new TypeError(`${label} is not a known codec capability`);
   }
@@ -971,7 +938,6 @@ function codecCapabilityFlags(set: CodecCapabilitySet): number {
     'alias-vec2': flags.aliasVec2,
     'alias-vec4': flags.aliasVec4,
     'ordered-direct': flags.orderedDirect,
-    'stable-indirect': flags.stableIndirect,
   };
   return set.capabilities.reduce((combined, capability) => combined | values[capability], 0);
 }

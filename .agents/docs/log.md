@@ -2,6 +2,12 @@
 
 ## 2026-09-13
 
+- **Started the accepted stable-indirect retirement** — Removed the unused stable planner, slot pool, chunked order arena,
+  mixed dispatcher, public Three allocation option, Codec strategy field, render-plan order-buffer fields, and renderer
+  order lookup. Ordered planning remains the sole physical-storage path. Stable glyph identity, placement generations,
+  paragraph rank, batching keys, primitive spans, and draw order remain intact. Final benchmark, compressed-size,
+  renderer, and independent Opus verification are still pending.
+
 - **Restored the Codec host-assembly boundary** — Three now reaches the host-only system-buffer attachment helper through
   the existing `config/raster` assembly module rather than importing a package-internal contract directly. This changes
   no Codec bytes or runtime behavior and closes the top cleanup PR's restricted-import lint failure.

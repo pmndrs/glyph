@@ -52,11 +52,6 @@ mod semantic_wire;
 mod session_placement;
 pub(crate) mod shaping_state;
 pub(crate) mod sort;
-#[cfg_attr(not(test), allow(dead_code))]
-mod stable_order;
-pub mod stable_plan;
-#[cfg_attr(not(test), allow(dead_code))]
-mod stable_pool;
 mod staged;
 mod style_state;
 

@@ -1,10 +1,6 @@
 // Generated from Rust compiler layout facts. Do not edit.
 export const textShaperAbi = {
   "codec": {
-    "allocationStrategies": {
-      "orderedDirect": 1,
-      "stableIndirect": 2
-    },
     "batchFields": {
       "clip": 16,
       "depth": 32,
@@ -25,7 +21,6 @@ export const textShaperAbi = {
       "aliasVec4": 8,
       "indirectDraws": 2,
       "orderedDirect": 16,
-      "stableIndirect": 32,
       "storageBuffers": 1
     },
     "inputScopes": {
@@ -69,8 +64,7 @@ export const textShaperAbi = {
     },
     "bufferStrategies": {
       "orderedDirect": 1,
-      "sessionShared": 3,
-      "stableIndirect": 2
+      "sessionShared": 3
     },
     "decorationFlags": {
       "all": 15,
@@ -127,7 +121,6 @@ export const textShaperAbi = {
       "textTop": 2
     },
     "internalBufferBindings": {
-      "order": 65535,
       "placement": 65534
     },
     "internalBufferIds": {
@@ -381,7 +374,6 @@ export const textShaperAbi = {
     },
     "codecProgram": {
       "alignment": 4,
-      "allocationStrategy": 46,
       "bufferCount": 42,
       "bufferStart": 32,
       "capabilitySetId": 8,
@@ -428,10 +420,9 @@ export const textShaperAbi = {
       "generation": 4,
       "id": 0,
       "liveRecords": 20,
-      "orderBufferId": 32,
       "programId": 8,
       "scalarType": 14,
-      "size": 36,
+      "size": 32,
       "strategy": 16,
       "vectorWidth": 15
     },
@@ -494,8 +485,6 @@ export const textShaperAbi = {
       "depthKey": 20,
       "flags": 10,
       "id": 0,
-      "indirectBufferId": 56,
-      "indirectOffset": 60,
       "materialId": 12,
       "orderToken": 52,
       "primitiveCount": 32,
@@ -504,7 +493,7 @@ export const textShaperAbi = {
       "programVariant": 8,
       "resourceCount": 48,
       "resourceStart": 44,
-      "size": 64,
+      "size": 56,
       "transformId": 24
     },
     "engineExclusion": {

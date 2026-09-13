@@ -24,7 +24,6 @@ import {
   type StagedBufferUpload,
 } from './internal/host-buffer.js';
 import { updateGeometryInstances } from './internal/geometry.js';
-import { physicalRecordIndex } from './internal/material-realizer.js';
 import { prepareDrawReplacement } from './internal/draw-realizer.js';
 import { visibleBelowRoot } from './internal/scene-tree.js';
 import type {
@@ -447,8 +446,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     for (const command of frame.updates.buffers) {
       if (buffers.has(command.buffer)) continue;
       const declaration = command.buffer.input.declaration;
-      const codecBufferId =
-        declaration.kind === 'order' ? 'order' : declaration.kind === 'placement' ? 'placement' : declaration.value.id;
+      const codecBufferId = declaration.kind === 'placement' ? 'placement' : declaration.value.id;
       if (codecBufferId === 'placement' && placementUpdated) {
         throw new Error('Three received more than one session placement table');
       }
@@ -553,7 +551,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       if (!(segment.origins.array instanceof Float32Array) || !(segment.stableIds.array instanceof Uint32Array))
         continue;
       for (let index = segment.start; index < segment.start + segment.count; index += 1) {
-        const recordIndex = physicalRecordIndex(segment.order, index);
+        const recordIndex = index;
         const stableId = segment.stableIds.array[recordIndex]!;
         const offset = recordIndex * segment.origins.vectorWidth;
         this.#originRecords.set(stableId, {

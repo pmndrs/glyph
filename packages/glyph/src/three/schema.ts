@@ -17,7 +17,7 @@ import type { PortableResource } from '../config/resources.js';
 import { bitmap } from '../raster/bitmap.js';
 import { msdf } from '../raster/msdf.js';
 import { slug } from '../raster/slug.js';
-import type { ThreeAllocationMode, ThreeTransformMode } from './codec.js';
+import type { ThreeTransformMode } from './codec.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
 import type { ThreeRoot, ThreeRootOptions } from './text.js';
@@ -97,7 +97,6 @@ export type ThreeHandle = GlyphHandle<ThreeRoot>;
 
 export interface ThreeConfigOptions extends ThreeRootOptions {
   readonly transformMode?: ThreeTransformMode;
-  readonly allocationMode?: ThreeAllocationMode;
   readonly defaultFontFormat?: keyof ThreeFontFormats;
   /** Renderer-wide fallback after span, Text, TextGroup, and root material selection. */
   readonly material?: ThreeTextMaterial;

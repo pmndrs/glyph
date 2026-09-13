@@ -21,8 +21,8 @@ sources:
     resource: ../../../packages/glyph/rust/shaper/src/engine/ordered_plan.rs
     title: Rust ordered-direct changed-range planning
   - id: text-stable-plan
-    resource: ../../../packages/glyph/rust/shaper/src/engine/stable_plan.rs
-    title: Rust stable-indirect physical and order-buffer planning
+    resource: https://github.com/pmndrs/text/blob/c975a2b24c87752551d5f4689b0899fe2f254e59/packages/glyph/rust/shaper/src/engine/stable_plan.rs
+    title: Retired Rust stable-indirect physical and order-buffer planning
   - id: text-three-target
     resource: ../../../packages/glyph/src/three/command-buffer-renderer.ts
     title: Three render-plan executor and update-range forwarding
@@ -187,7 +187,7 @@ renderer-neutral patch ABI.
 | cost constants and backend limits                       | registered renderer capability set | renderer knowledge expressed as validated data, not a callback |
 | packing math                                            | policy program executed by Rust    | existing straight-line data transformation boundary            |
 | byte-range to Three update-range translation            | Three executor                     | backend object and scalar-width knowledge                      |
-| scene matrices and presentation-origin dirty tracking   | Three executor                     | renderer-local data never seen by `pmndrs_glyph_engine_update`                |
+| scene matrices and presentation-origin dirty tracking   | Three executor                     | renderer-local data never seen by `pmndrs_glyph_engine_update` |
 | final GPU command submission                            | Three WebGPU/WebGL backend         | outside the renderer-neutral plan                              |
 
 Adding bucket size or a fixed dirty-bucket count to the public policy now would overfit Flatland. The existing byte-cost

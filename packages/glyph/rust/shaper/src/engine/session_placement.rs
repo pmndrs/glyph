@@ -299,7 +299,6 @@ fn push_binding_and_allocation(
         live_records: buffer.live_records,
         capacity_records: buffer.capacity,
         byte_length: length,
-        order_buffer_id: 0,
     });
     patches.push(PatchRecord {
         opcode: PATCH_ALLOCATE_OR_RESIZE,

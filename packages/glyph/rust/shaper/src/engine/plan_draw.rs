@@ -39,7 +39,6 @@ pub struct GlyphDraw {
     pub buffer_start: u32,
     pub buffer_count: u32,
     pub resource_start: usize,
-    pub indirect: bool,
 }
 
 /// This deliberately remains one out-of-line implementation. Both storage planners emit the
@@ -56,15 +55,6 @@ pub fn push_glyph_draw(
         u32::try_from(emission.logical_order).map_err(|_| PlanDrawError::ArithmeticOverflow)?;
     let resource_start =
         u32::try_from(emission.resource_start).map_err(|_| PlanDrawError::ArithmeticOverflow)?;
-    let indirect_offset = if emission.indirect {
-        emission
-            .record_index
-            .checked_mul(4)
-            .ok_or(PlanDrawError::ArithmeticOverflow)?
-    } else {
-        0
-    };
-
     primitives
         .try_reserve(1)
         .map_err(|_| PlanDrawError::AllocationFailed)?;
@@ -107,12 +97,6 @@ pub fn push_glyph_draw(
         resource_start,
         resource_count: u32::from(emission.primitive_kind != PRIMITIVE_DECORATION),
         order_token: logical_order,
-        indirect_buffer_id: if emission.indirect {
-            emission.buffer_id
-        } else {
-            0
-        },
-        indirect_offset,
         ..DrawRecord::default()
     });
     Ok(())

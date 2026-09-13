@@ -370,10 +370,7 @@ export function renderCodecBytesFromPrograms(abi, programs) {
   const capabilities = [
     {
       id: 1,
-      flags:
-        abi.codec.capabilityFlags.storageBuffers |
-        abi.codec.capabilityFlags.orderedDirect |
-        abi.codec.capabilityFlags.stableIndirect,
+      flags: abi.codec.capabilityFlags.storageBuffers | abi.codec.capabilityFlags.orderedDirect,
       maxBufferBytes: 64 * 1024 * 1024,
       updateAlignment: 4,
       coalesceGapBytes: 128,
@@ -472,11 +469,6 @@ export function renderCodecBytesFromPrograms(abi, programs) {
     view.setUint16(offset + programLayout.bufferCount, descriptor.buffers.length, true);
     view.setUint32(offset + programLayout.operationStart, operationStart, true);
     view.setUint16(offset + programLayout.operationCount, descriptor.operations.length, true);
-    view.setUint16(
-      offset + programLayout.allocationStrategy,
-      descriptor.allocationStrategy ?? abi.codec.allocationStrategies.orderedDirect,
-      true,
-    );
     view.setUint32(offset + programLayout.inputStart, inputStart, true);
     view.setUint16(offset + programLayout.inputCount, programInputs[index].length, true);
     bufferStart += descriptor.buffers.length;

@@ -253,13 +253,6 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
                     clip: details.clip,
                     depthKey: details.depthKey,
                     order: details.order,
-                    indirect:
-                      details.indirect === undefined
-                        ? undefined
-                        : Object.freeze({
-                            buffer: this.#buffer(details.indirect.buffer, buffers),
-                            byteOffset: details.indirect.byteOffset,
-                          }),
                   };
                   if (child.kind === 'batch') {
                     const instances = mapBorrowedSequence(child.instances, bindSpan);
@@ -411,8 +404,7 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
     return value;
   }
 
-  #bufferDeclaration(programId: number, bindingId: number | 'order' | 'placement') {
-    if (bindingId === 'order') return Object.freeze({ kind: 'order' as const });
+  #bufferDeclaration(programId: number, bindingId: number | 'placement') {
     if (bindingId === 'placement') return Object.freeze({ kind: 'placement' as const });
     const program = this.#programsById.get(programId)!;
     const declaration = program.buffers.find((buffer: CodecBuffer) => (buffer.id as number) === bindingId)!;

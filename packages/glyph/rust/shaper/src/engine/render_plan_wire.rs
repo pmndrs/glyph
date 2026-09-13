@@ -14,8 +14,9 @@ use crate::{
 use crate::{
     STATUS_INVALID_REQUEST,
     engine::render_plan::{
-        BUFFER_SESSION_SHARED, CODEC_BUFFER_PLACEMENT, PATCH_ALLOCATE_OR_RESIZE, PATCH_COPY,
-        PATCH_FILL, PATCH_RETIRE, PRIMITIVE_CLIP, PRIMITIVE_CODEC, PRIMITIVE_DECORATION,
+        BUFFER_ORDERED_DIRECT, BUFFER_SESSION_SHARED, CODEC_BUFFER_PLACEMENT,
+        PATCH_ALLOCATE_OR_RESIZE, PATCH_COPY, PATCH_FILL, PATCH_RETIRE, PRIMITIVE_CLIP,
+        PRIMITIVE_CODEC, PRIMITIVE_DECORATION,
         PRIMITIVE_GLYPH, PRIMITIVE_INLINE_OBJECT, RESOURCE_ACTION_CREATE, RESOURCE_ACTION_RETAIN,
         RESOURCE_ACTION_UPDATE, RETIRE_BUFFER, RETIRE_OUTPUT_BYTES, RETIRE_RESOURCE,
         RETIRE_SLOT_RANGE, SESSION_PLACEMENT_BUFFER_ID,
@@ -329,7 +330,7 @@ fn validate_plan(plan: RenderPlanView<'_>, semantic_views: &[SemanticRecord]) ->
             || record.codec_buffer_id == 0
             || !matches!(record.scalar_type, 1..=3)
             || !matches!(record.vector_width, 1..=4)
-            || !matches!(record.strategy, 1..=2)
+            || record.strategy != BUFFER_ORDERED_DIRECT
             || record.live_records > record.capacity_records
         {
             return Err(STATUS_INVALID_REQUEST);
@@ -347,7 +348,6 @@ fn validate_plan(plan: RenderPlanView<'_>, semantic_views: &[SemanticRecord]) ->
             || record.program_id != 0
             || record.strategy != BUFFER_SESSION_SHARED
             || record.live_records > record.capacity_records
-            || record.order_buffer_id != 0
             || !placement
         {
             return Err(STATUS_INVALID_REQUEST);
@@ -653,7 +653,6 @@ fn write_buffer(bytes: &mut [u8], at: usize, value: BufferRecord) {
     u32_at(bytes, at, BUFFER_LIVE_RECORDS, value.live_records);
     u32_at(bytes, at, BUFFER_CAPACITY_RECORDS, value.capacity_records);
     u32_at(bytes, at, BUFFER_BYTE_LENGTH, value.byte_length);
-    u32_at(bytes, at, BUFFER_ORDER_BUFFER_ID, value.order_buffer_id);
 }
 
 fn write_patch(bytes: &mut [u8], at: usize, value: PatchRecord, payload_offset: u32) {
@@ -721,8 +720,6 @@ fn write_draw(bytes: &mut [u8], at: usize, value: DrawRecord) {
     u32_at(bytes, at, DRAW_RESOURCE_START, value.resource_start);
     u32_at(bytes, at, DRAW_RESOURCE_COUNT, value.resource_count);
     u32_at(bytes, at, DRAW_ORDER_TOKEN, value.order_token);
-    u32_at(bytes, at, DRAW_INDIRECT_BUFFER_ID, value.indirect_buffer_id);
-    u32_at(bytes, at, DRAW_INDIRECT_OFFSET, value.indirect_offset);
 }
 
 fn write_retirement(bytes: &mut [u8], at: usize, value: RetirementRecord) {

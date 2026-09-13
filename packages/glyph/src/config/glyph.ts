@@ -52,10 +52,7 @@ export interface GlyphBindingSet {
   readonly transformInput: unknown;
 }
 
-export type GlyphBufferDeclaration =
-  | Readonly<{ kind: 'codec'; value: CodecBuffer }>
-  | Readonly<{ kind: 'order' }>
-  | Readonly<{ kind: 'placement' }>;
+export type GlyphBufferDeclaration = Readonly<{ kind: 'codec'; value: CodecBuffer }> | Readonly<{ kind: 'placement' }>;
 
 export interface GlyphBufferBindingInput<Program extends object> {
   readonly program: Program | undefined;
@@ -95,7 +92,6 @@ export interface GlyphDrawBindingInput<
   readonly clip: ClipIdentity | undefined;
   readonly depthKey: number;
   readonly order: number;
-  readonly indirect: Readonly<{ buffer: Buffer; byteOffset: number }> | undefined;
 }
 
 export interface GlyphBatchBindingInput<

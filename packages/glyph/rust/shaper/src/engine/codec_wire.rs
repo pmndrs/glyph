@@ -27,8 +27,8 @@ use crate::{
         CODEC_OPERATION_COUNT, CODEC_OPERATION_IMMEDIATE0, CODEC_OPERATION_IMMEDIATE1,
         CODEC_OPERATION_IMMEDIATE2, CODEC_OPERATION_OPCODE, CODEC_OPERATION_OPERAND0,
         CODEC_OPERATION_OPERAND1, CODEC_OPERATION_RECORD_ALIGNMENT, CODEC_OPERATION_RECORD_SIZE,
-        CODEC_OPERATION_TARGET, CODEC_OPERATIONS_OFFSET, CODEC_PROGRAM_ALLOCATION_STRATEGY,
-        CODEC_PROGRAM_BUFFER_COUNT, CODEC_PROGRAM_BUFFER_START, CODEC_PROGRAM_CAPABILITY_SET_ID,
+        CODEC_OPERATION_TARGET, CODEC_OPERATIONS_OFFSET, CODEC_PROGRAM_BUFFER_COUNT,
+        CODEC_PROGRAM_BUFFER_START, CODEC_PROGRAM_CAPABILITY_SET_ID,
         CODEC_PROGRAM_COMPOSITING_CAPABILITIES, CODEC_PROGRAM_COUNT, CODEC_PROGRAM_DRAW_KEY_MASK,
         CODEC_PROGRAM_F32_INPUT_COUNT, CODEC_PROGRAM_ID, CODEC_PROGRAM_INPUT_COUNT,
         CODEC_PROGRAM_INPUT_START, CODEC_PROGRAM_OPERATION_COUNT, CODEC_PROGRAM_OPERATION_START,
@@ -165,7 +165,6 @@ pub(crate) fn parse_codec(bytes: &[u8]) -> Result<ValidatedCodec, u32> {
             semantic_view_mask: read_u32(record, CODEC_PROGRAM_SEMANTIC_VIEW_MASK)?,
             storage_key_mask: read_u32(record, CODEC_PROGRAM_STORAGE_KEY_MASK)?,
             draw_key_mask: read_u32(record, CODEC_PROGRAM_DRAW_KEY_MASK)?,
-            allocation_strategy: read_u16(record, CODEC_PROGRAM_ALLOCATION_STRATEGY)?,
             f32_input_count: byte(record, CODEC_PROGRAM_F32_INPUT_COUNT)?,
             u32_input_count: byte(record, CODEC_PROGRAM_U32_INPUT_COUNT)?,
             inputs: decode_inputs(selected_inputs)?,
@@ -606,11 +605,6 @@ mod tests {
                 | crate::engine::codec::BATCH_DEPTH
                 | crate::engine::codec::BATCH_ORDER
                 | crate::engine::codec::BATCH_TRANSFORM,
-        );
-        put_u16(
-            program,
-            CODEC_PROGRAM_ALLOCATION_STRATEGY,
-            crate::engine::codec::ALLOCATION_ORDERED_DIRECT,
         );
         program[CODEC_PROGRAM_F32_INPUT_COUNT] = 2;
         put_u16(program, CODEC_PROGRAM_BUFFER_COUNT, 1);

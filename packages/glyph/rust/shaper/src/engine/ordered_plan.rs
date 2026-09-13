@@ -9,8 +9,7 @@ use core::mem;
 
 use super::{
     codec::{
-        ALLOCATION_ORDERED_DIRECT, BATCH_MATERIAL, BATCH_TRANSFORM, BufferSchema, CapabilitySetId,
-        TechniqueId, ValidatedCodec,
+        BATCH_MATERIAL, BATCH_TRANSFORM, BufferSchema, CapabilitySetId, TechniqueId, ValidatedCodec,
     },
     plan_draw::{GlyphDraw, independent_draw_sort_key, push_glyph_draw},
     plan_input::{draw_fields_compatible, draw_span_compatible, indexed_span_bounds, span_bounds},
@@ -152,25 +151,6 @@ impl OrderedPlanCompiler {
             input,
             checkpoint,
             publication_generation,
-            true,
-        )
-    }
-
-    pub(crate) fn prepare_filtered(
-        &mut self,
-        codec: &ValidatedCodec,
-        capability_set: CapabilitySetId,
-        input: OrderedPlanInput<'_>,
-        checkpoint: bool,
-        publication_generation: u32,
-    ) -> Result<(), OrderedPlanError> {
-        self.prepare_internal(
-            codec,
-            capability_set,
-            input,
-            checkpoint,
-            publication_generation,
-            false,
         )
     }
 
@@ -181,7 +161,6 @@ impl OrderedPlanCompiler {
         input: OrderedPlanInput<'_>,
         checkpoint: bool,
         publication_generation: u32,
-        strict_strategy: bool,
     ) -> Result<(), OrderedPlanError> {
         if self.prepared {
             return Err(OrderedPlanError::AlreadyPrepared);
@@ -201,7 +180,7 @@ impl OrderedPlanCompiler {
             self.retained_topology_preparations += 1;
         }
         if !retained_topology {
-            self.prepare_complete_topology(codec, capability_set, input, strict_strategy)?;
+            self.prepare_complete_topology(codec, capability_set, input)?;
         }
         self.pending_next_buffer_id = self.next_buffer_id;
         self.pending_codec_fingerprint = codec.fingerprint();
@@ -227,54 +206,31 @@ impl OrderedPlanCompiler {
         !self.batches.is_empty()
     }
 
-    pub(crate) fn publishes_bindings(&self) -> bool {
-        self.publish_bindings
-    }
-
     pub fn plan_view(
         &self,
         codec_handle: u32,
         capability_set: CapabilitySetId,
         codec_fingerprint: u64,
     ) -> Result<RenderPlanView<'_>, OrderedPlanError> {
-        self.plan_view_internal(codec_handle, capability_set, codec_fingerprint, false)
-    }
-
-    pub(crate) fn plan_view_forced(
-        &self,
-        codec_handle: u32,
-        capability_set: CapabilitySetId,
-        codec_fingerprint: u64,
-    ) -> Result<RenderPlanView<'_>, OrderedPlanError> {
-        self.plan_view_internal(codec_handle, capability_set, codec_fingerprint, true)
-    }
-
-    fn plan_view_internal(
-        &self,
-        codec_handle: u32,
-        capability_set: CapabilitySetId,
-        codec_fingerprint: u64,
-        force_bindings: bool,
-    ) -> Result<RenderPlanView<'_>, OrderedPlanError> {
         if !self.prepared {
             return Err(OrderedPlanError::NotPrepared);
         }
-        let resources = if self.publish_bindings || force_bindings {
+        let resources = if self.publish_bindings {
             self.resources.as_slice()
         } else {
             &[]
         };
-        let buffers = if self.publish_bindings || force_bindings {
+        let buffers = if self.publish_bindings {
             self.plan_buffers.as_slice()
         } else {
             &[]
         };
-        let primitives = if self.publish_bindings || force_bindings {
+        let primitives = if self.publish_bindings {
             self.primitives.as_slice()
         } else {
             &[]
         };
-        let draws = if self.publish_bindings || force_bindings {
+        let draws = if self.publish_bindings {
             self.draws.as_slice()
         } else {
             &[]
@@ -385,7 +341,6 @@ impl OrderedPlanCompiler {
         codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
         input: OrderedPlanInput<'_>,
-        strict_strategy: bool,
     ) -> Result<(), OrderedPlanError> {
         reserve(&mut self.input_batches, input.glyphs.len())?;
         reserve(&mut self.input_slots, input.glyphs.len())?;
@@ -409,12 +364,6 @@ impl OrderedPlanCompiler {
                     program
                 }
             };
-            if program.allocation_strategy != ALLOCATION_ORDERED_DIRECT {
-                if strict_strategy {
-                    return Err(OrderedPlanError::UnsupportedStrategy);
-                }
-                continue;
-            }
             if program.primitive_kind != PRIMITIVE_DECORATION {
                 let resource_bit = 1_u32
                     .checked_shl(u32::from(glyph.resource_kind - 1))
@@ -959,7 +908,6 @@ impl OrderedPlanCompiler {
                         .capacity
                         .checked_mul(u32::from(schema.stride))
                         .ok_or(OrderedPlanError::ArithmeticOverflow)?,
-                    order_buffer_id: 0,
                 });
             }
             self.pending_batches[batch_index].state.buffer_start =
@@ -1106,7 +1054,6 @@ impl OrderedPlanCompiler {
                     buffer_start: batch.state.buffer_start,
                     buffer_count: u32::from(batch.state.buffer_count),
                     resource_start,
-                    indirect: false,
                     program_id: batch.state.key.program_id,
                 },
             )?;
@@ -1198,7 +1145,6 @@ impl OrderedPlanCompiler {
                         buffer_start: batch.state.buffer_start,
                         buffer_count: u32::from(batch.state.buffer_count),
                         resource_start,
-                        indirect: false,
                         program_id: batch.state.key.program_id,
                     },
                 )?;
@@ -2277,7 +2223,6 @@ mod tests {
                     | crate::engine::codec::BATCH_DEPTH
                     | BATCH_ORDER
                     | if split_transform { BATCH_TRANSFORM } else { 0 },
-                allocation_strategy: ALLOCATION_ORDERED_DIRECT,
                 f32_input_count: 1,
                 u32_input_count: 0,
                 inputs: vec![crate::engine::codec::InputSource::semantic(0)],

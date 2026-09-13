@@ -89,7 +89,6 @@ export type {
   TransformUpdate,
 } from './config/glyph.js';
 export type {
-  CodecAllocationMode,
   CodecBuffer,
   CodecBufferId,
   CodecCapability,

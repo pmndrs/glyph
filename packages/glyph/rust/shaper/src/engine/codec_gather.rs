@@ -1259,11 +1259,10 @@ mod tests {
     use super::*;
     use crate::engine::{
         codec::{
-            ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, BATCH_ORDER, BATCH_PROGRAM,
-            BATCH_RESOURCE, BATCH_TECHNIQUE, BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, BufferId,
-            BufferSchema, CAP_ORDERED_DIRECT, CAP_STABLE_INDIRECT, CAP_STORAGE_BUFFERS,
-            CapabilitySet, CodecDescriptor, InputSource, Operation, ProgramCapabilities,
-            ProgramDescriptor, ProgramId, ScalarType, TechniqueId,
+            BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE, BUFFER_USAGE_COPY_DST,
+            BUFFER_USAGE_STORAGE, BufferId, BufferSchema,
+            CAP_ORDERED_DIRECT, CAP_STORAGE_BUFFERS, CapabilitySet, CodecDescriptor, InputSource,
+            Operation, ProgramCapabilities, ProgramDescriptor, ProgramId, ScalarType, TechniqueId,
         },
         font_binding::{FieldTable, FontResource, FontStrike},
         render_plan_compiler::RenderPlanCompiler,
@@ -2466,7 +2465,7 @@ mod tests {
     }
 
     #[test]
-    fn gathered_producer_contract_compiles_fresh_and_retained_for_both_strategies() {
+    fn gathered_producer_contract_compiles_fresh_and_retained() {
         let binding = binding();
         let before_first = [layout_glyph(1, 0), layout_glyph(2, 1)];
         let before_second = [layout_glyph(3, 0)];
@@ -2482,13 +2481,9 @@ mod tests {
             (2, &after_second, &[]),
         ];
 
-        for strategy in [ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT] {
-            let codec = codec_for_strategy(strategy);
-            let label = if strategy == ALLOCATION_ORDERED_DIRECT {
-                "ordered"
-            } else {
-                "stable"
-            };
+        {
+            let codec = codec();
+            let label = "ordered";
             let mut retained = CodecGatherWorkspace::default();
             retained.reserve_codec(&codec, 16).unwrap();
             assert!(!gather_planner(
@@ -2605,10 +2600,6 @@ mod tests {
         .unwrap()
     }
 
-    fn codec() -> ValidatedCodec {
-        codec_for_strategy(ALLOCATION_ORDERED_DIRECT)
-    }
-
     fn placement_codec() -> ValidatedCodec {
         let mut descriptor = base_descriptor();
         let program = &mut descriptor.programs[0];
@@ -2633,31 +2624,15 @@ mod tests {
         ValidatedCodec::new(descriptor).unwrap()
     }
 
-    fn codec_for_strategy(allocation_strategy: u16) -> ValidatedCodec {
+    fn codec() -> ValidatedCodec {
         let mut descriptor = base_descriptor();
-        descriptor.capability_sets[0].flags = CAP_STORAGE_BUFFERS
-            | if allocation_strategy == ALLOCATION_ORDERED_DIRECT {
-                CAP_ORDERED_DIRECT
-            } else {
-                CAP_STABLE_INDIRECT
-            };
-        descriptor.programs[0].allocation_strategy = allocation_strategy;
+        descriptor.capability_sets[0].flags = CAP_STORAGE_BUFFERS | CAP_ORDERED_DIRECT;
         ValidatedCodec::new(descriptor).unwrap()
     }
 
     fn codec_with_decorations() -> ValidatedCodec {
-        codec_with_decorations_for_strategy(ALLOCATION_ORDERED_DIRECT)
-    }
-
-    fn codec_with_decorations_for_strategy(allocation_strategy: u16) -> ValidatedCodec {
         let mut descriptor = base_descriptor();
-        descriptor.capability_sets[0].flags = CAP_STORAGE_BUFFERS
-            | if allocation_strategy == ALLOCATION_ORDERED_DIRECT {
-                CAP_ORDERED_DIRECT
-            } else {
-                CAP_STABLE_INDIRECT
-            };
-        descriptor.programs[0].allocation_strategy = allocation_strategy;
+        descriptor.capability_sets[0].flags = CAP_STORAGE_BUFFERS | CAP_ORDERED_DIRECT;
         let mut program = descriptor.programs[0].clone();
         program.primitive_kind = 2;
         program.technique = TechniqueId(99);
@@ -2770,7 +2745,7 @@ mod tests {
     }
 
     #[test]
-    fn gathered_decorations_preserve_the_producer_contract_for_both_strategies() {
+    fn gathered_decorations_preserve_the_producer_contract() {
         let binding = binding();
         let underline = crate::engine::positioning::DecorationRecord {
             flags: crate::engine::frame::DECORATION_UNDERLINE,
@@ -2796,13 +2771,9 @@ mod tests {
         let semantic_x = [10.0];
         let semantic_kind = [100];
 
-        for strategy in [ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT] {
-            let codec = codec_with_decorations_for_strategy(strategy);
-            let label = if strategy == ALLOCATION_ORDERED_DIRECT {
-                "ordered decorations"
-            } else {
-                "stable decorations"
-            };
+        {
+            let codec = codec_with_decorations();
+            let label = "ordered decorations";
             let mut workspace = CodecGatherWorkspace::default();
             workspace.begin(&codec, 8).unwrap();
             assert!(
@@ -2910,7 +2881,6 @@ mod tests {
                     | crate::engine::codec::BATCH_DEPTH
                     | BATCH_ORDER
                     | crate::engine::codec::BATCH_TRANSFORM,
-                allocation_strategy: ALLOCATION_ORDERED_DIRECT,
                 f32_input_count: 4,
                 u32_input_count: 4,
                 inputs: vec![

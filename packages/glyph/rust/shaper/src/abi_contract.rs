@@ -3,10 +3,9 @@ use core::mem::{align_of, offset_of, size_of};
 use serde_json::json;
 
 use crate::engine::codec::{
-    ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, BATCH_CLIP, BATCH_DEPTH, BATCH_MATERIAL,
-    BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE, BATCH_TRANSFORM,
-    BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, BUFFER_USAGE_VERTEX, CAP_ALIAS_VEC2,
-    CAP_ALIAS_VEC4, CAP_INDIRECT_DRAWS, CAP_ORDERED_DIRECT, CAP_STABLE_INDIRECT,
+    BATCH_CLIP, BATCH_DEPTH, BATCH_MATERIAL, BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE,
+    BATCH_TECHNIQUE, BATCH_TRANSFORM, BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE,
+    BUFFER_USAGE_VERTEX, CAP_ALIAS_VEC2, CAP_ALIAS_VEC4, CAP_INDIRECT_DRAWS, CAP_ORDERED_DIRECT,
     CAP_STORAGE_BUFFERS, INPUT_GLYPH, INPUT_RESOURCE, INPUT_SEMANTIC, INPUT_STRIKE, OP_ADD_F32,
     OP_CONSTANT_F32, OP_CONSTANT_U32, OP_CONVERT_U32_TO_F32, OP_LESS_THAN_F32, OP_LOAD_F32,
     OP_LOAD_U32, OP_MULTIPLY_F32, OP_SELECT_F32, OP_STORE_F32, OP_STORE_U16, OP_STORE_U32,
@@ -43,13 +42,13 @@ use crate::engine::frame::{
     WRAP_NONE, WRAP_WORD, WRITING_HORIZONTAL_TB, WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
 };
 use crate::engine::render_plan::{
-    BUFFER_ORDERED_DIRECT, BUFFER_SESSION_SHARED, BUFFER_STABLE_INDIRECT, BufferRecord,
-    CODEC_BUFFER_ORDER, CODEC_BUFFER_PLACEMENT, DiagnosticRecord, DrawRecord,
-    PATCH_ALLOCATE_OR_RESIZE, PATCH_COPY, PATCH_FILL, PATCH_RETIRE, PATCH_WRITE, PRIMITIVE_CLIP,
-    PRIMITIVE_CODEC, PRIMITIVE_DECORATION, PRIMITIVE_GLYPH, PRIMITIVE_INLINE_OBJECT, PatchRecord,
-    PrimitiveRecord, RESOURCE_ACTION_CREATE, RESOURCE_ACTION_RETAIN, RESOURCE_ACTION_UPDATE,
-    RETIRE_BUFFER, RETIRE_OUTPUT_BYTES, RETIRE_RESOURCE, RETIRE_SLOT_RANGE, ResourceRecord,
-    RetirementRecord, SESSION_PLACEMENT_BUFFER_ID,
+    BUFFER_ORDERED_DIRECT, BUFFER_SESSION_SHARED, BufferRecord, CODEC_BUFFER_PLACEMENT,
+    DiagnosticRecord, DrawRecord, PATCH_ALLOCATE_OR_RESIZE, PATCH_COPY, PATCH_FILL, PATCH_RETIRE,
+    PATCH_WRITE, PRIMITIVE_CLIP, PRIMITIVE_CODEC, PRIMITIVE_DECORATION, PRIMITIVE_GLYPH,
+    PRIMITIVE_INLINE_OBJECT, PatchRecord, PrimitiveRecord, RESOURCE_ACTION_CREATE,
+    RESOURCE_ACTION_RETAIN, RESOURCE_ACTION_UPDATE, RETIRE_BUFFER, RETIRE_OUTPUT_BYTES,
+    RETIRE_RESOURCE, RETIRE_SLOT_RANGE, ResourceRecord, RetirementRecord,
+    SESSION_PLACEMENT_BUFFER_ID,
 };
 use crate::engine::semantic_view::{
     SEMANTIC_CARET, SEMANTIC_CLUSTER, SEMANTIC_FRAGMENT, SEMANTIC_GLYPH, SEMANTIC_INSERTED_GLYPH,
@@ -110,7 +109,7 @@ struct CodecProgramRecord {
     variant: u16,
     buffer_count: u16,
     operation_count: u16,
-    allocation_strategy: u16,
+    reserved0: u16,
     f32_input_count: u8,
     u32_input_count: u8,
     primitive_kind: u16,
@@ -759,11 +758,6 @@ field_offset!(
     CODEC_PROGRAM_OPERATION_COUNT,
     CodecProgramRecord,
     operation_count
-);
-field_offset!(
-    CODEC_PROGRAM_ALLOCATION_STRATEGY,
-    CodecProgramRecord,
-    allocation_strategy
 );
 field_offset!(
     CODEC_PROGRAM_DRAW_KEY_MASK,
@@ -1929,7 +1923,6 @@ field_offset!(BUFFER_FLAGS, BufferRecord, flags);
 field_offset!(BUFFER_LIVE_RECORDS, BufferRecord, live_records);
 field_offset!(BUFFER_CAPACITY_RECORDS, BufferRecord, capacity_records);
 field_offset!(BUFFER_BYTE_LENGTH, BufferRecord, byte_length);
-field_offset!(BUFFER_ORDER_BUFFER_ID, BufferRecord, order_buffer_id);
 field_offset!(PATCH_OPCODE, PatchRecord, opcode);
 field_offset!(PATCH_FLAGS, PatchRecord, flags);
 field_offset!(PATCH_BUFFER_ID, PatchRecord, buffer_id);
@@ -1977,8 +1970,6 @@ field_offset!(DRAW_BUFFER_COUNT, DrawRecord, buffer_count);
 field_offset!(DRAW_RESOURCE_START, DrawRecord, resource_start);
 field_offset!(DRAW_RESOURCE_COUNT, DrawRecord, resource_count);
 field_offset!(DRAW_ORDER_TOKEN, DrawRecord, order_token);
-field_offset!(DRAW_INDIRECT_BUFFER_ID, DrawRecord, indirect_buffer_id);
-field_offset!(DRAW_INDIRECT_OFFSET, DrawRecord, indirect_offset);
 field_offset!(RETIREMENT_KIND, RetirementRecord, kind);
 field_offset!(RETIREMENT_FLAGS, RetirementRecord, flags);
 field_offset!(RETIREMENT_ID, RetirementRecord, id);
@@ -2112,7 +2103,6 @@ pub fn json() -> String {
                 "primitiveKind": CODEC_PROGRAM_PRIMITIVE_KIND,
                 "operationStart": CODEC_PROGRAM_OPERATION_START,
                 "operationCount": CODEC_PROGRAM_OPERATION_COUNT,
-                "allocationStrategy": CODEC_PROGRAM_ALLOCATION_STRATEGY,
                 "inputStart": CODEC_PROGRAM_INPUT_START,
                 "inputCount": CODEC_PROGRAM_INPUT_COUNT,
                 "reserved1": CODEC_PROGRAM_RESERVED1
@@ -2531,8 +2521,7 @@ pub fn json() -> String {
                 "flags": BUFFER_FLAGS,
                 "liveRecords": BUFFER_LIVE_RECORDS,
                 "capacityRecords": BUFFER_CAPACITY_RECORDS,
-                "byteLength": BUFFER_BYTE_LENGTH,
-                "orderBufferId": BUFFER_ORDER_BUFFER_ID
+                "byteLength": BUFFER_BYTE_LENGTH
             },
             "enginePatch": {
                 "size": PATCH_RECORD_SIZE,
@@ -2587,9 +2576,7 @@ pub fn json() -> String {
                 "bufferCount": DRAW_BUFFER_COUNT,
                 "resourceStart": DRAW_RESOURCE_START,
                 "resourceCount": DRAW_RESOURCE_COUNT,
-                "orderToken": DRAW_ORDER_TOKEN,
-                "indirectBufferId": DRAW_INDIRECT_BUFFER_ID,
-                "indirectOffset": DRAW_INDIRECT_OFFSET
+                "orderToken": DRAW_ORDER_TOKEN
             },
             "engineRetirement": {
                 "size": RETIREMENT_RECORD_SIZE,
@@ -2629,8 +2616,7 @@ pub fn json() -> String {
                 "indirectDraws": CAP_INDIRECT_DRAWS,
                 "aliasVec2": CAP_ALIAS_VEC2,
                 "aliasVec4": CAP_ALIAS_VEC4,
-                "orderedDirect": CAP_ORDERED_DIRECT,
-                "stableIndirect": CAP_STABLE_INDIRECT
+                "orderedDirect": CAP_ORDERED_DIRECT
             },
             "batchFields": {
                 "technique": BATCH_TECHNIQUE,
@@ -2646,10 +2632,6 @@ pub fn json() -> String {
                 "vertex": BUFFER_USAGE_VERTEX,
                 "storage": BUFFER_USAGE_STORAGE,
                 "copyDst": BUFFER_USAGE_COPY_DST
-            },
-            "allocationStrategies": {
-                "orderedDirect": ALLOCATION_ORDERED_DIRECT,
-                "stableIndirect": ALLOCATION_STABLE_INDIRECT
             },
             "scalarTypes": {
                 "f32": ScalarType::F32 as u8,
@@ -2863,11 +2845,9 @@ pub fn json() -> String {
             },
             "bufferStrategies": {
                 "orderedDirect": BUFFER_ORDERED_DIRECT,
-                "stableIndirect": BUFFER_STABLE_INDIRECT,
                 "sessionShared": BUFFER_SESSION_SHARED
             },
             "internalBufferBindings": {
-                "order": CODEC_BUFFER_ORDER,
                 "placement": CODEC_BUFFER_PLACEMENT
             },
             "internalBufferIds": {

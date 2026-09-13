@@ -236,7 +236,6 @@ test('one handle state rejects colliding resource identities when the second fon
       system: threeSystemBuffers,
       capabilitySet,
       transformMode: 'indexed',
-      allocationMode: 'ordered',
       ids,
     };
     return threeCodecDescriptor(ids, 'indexed', [

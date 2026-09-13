@@ -10,7 +10,7 @@ const opcodes = textShaperAbi.codec.opcodes;
 
 function capabilitySet() {
   return {
-    capabilities: ['storage-buffers', 'ordered-direct', 'stable-indirect'],
+    capabilities: ['storage-buffers', 'ordered-direct'],
     maxBufferBytes: 1024 * 1024,
     updateAlignment: 4,
     coalesceGapBytes: 128,
@@ -97,7 +97,7 @@ test('capability profiles are selected from descriptors without exposing wire or
 });
 
 function program(wireTechniqueId, wireProgramId, transformMode = 'direct') {
-  return createCodecProgram(wireTechniqueId, wireProgramId, body, buffers, transformMode, 'ordered');
+  return createCodecProgram(wireTechniqueId, wireProgramId, body, buffers, transformMode);
 }
 
 test('program construction rejects reserved zero wire identities', () => {
@@ -105,12 +105,8 @@ test('program construction rejects reserved zero wire identities', () => {
   assert.throws(() => program(FIRST_TECHNIQUE_ID, ZERO_WIRE_ID), /program id needs a nonzero u32/);
 });
 
-test('program construction rejects unknown host modes immediately', () => {
+test('program construction rejects unknown transform modes immediately', () => {
   assert.throws(() => program(FIRST_TECHNIQUE_ID, SHARED_PROGRAM_ID, 'sideways'), /transform mode/);
-  assert.throws(
-    () => createCodecProgram(FIRST_TECHNIQUE_ID, SHARED_PROGRAM_ID, body, buffers, 'direct', 'recycling'),
-    /allocation mode/,
-  );
 });
 
 test('program construction snapshots accepted body and buffer records', () => {
@@ -120,14 +116,7 @@ test('program construction snapshots accepted body and buffer records', () => {
     operations: body.operations.map((operation) => ({ ...operation })),
   };
   const mutableBuffers = buffers.map((buffer) => ({ ...buffer }));
-  const compiled = createCodecProgram(
-    FIRST_TECHNIQUE_ID,
-    SHARED_PROGRAM_ID,
-    mutableBody,
-    mutableBuffers,
-    'direct',
-    'ordered',
-  );
+  const compiled = createCodecProgram(FIRST_TECHNIQUE_ID, SHARED_PROGRAM_ID, mutableBody, mutableBuffers, 'direct');
   mutableBody.operations[0].opcode = 255;
   mutableBuffers[0].id = 999;
   assert.equal(compiled.operations[0].opcode, opcodes.constantU32);

@@ -153,7 +153,6 @@ export interface InternalDrawBindingDescriptor {
   readonly clip: ClipIdentity | undefined;
   readonly depthKey: number;
   readonly order: number;
-  readonly indirect: Readonly<{ buffer: TypedBuffer; byteOffset: number }> | undefined;
 }
 
 export interface InternalInstanceSpanBindingDescriptor {
@@ -181,7 +180,7 @@ export interface InternalBufferIdentity {
   readonly id: number;
   readonly generation: number;
   readonly programId: number;
-  readonly bindingId: number | 'order' | 'placement';
+  readonly bindingId: number | 'placement';
 }
 
 class BorrowedTypedCommandTreeView implements BorrowedTypedCommandTree {
@@ -374,7 +373,6 @@ export class TypedCommandTreeMapper {
     const resourceCount = view.u32(offset + drawLayout.resourceCount);
     const materialId = view.u32(offset + drawLayout.materialId);
     const clipId = view.u32(offset + drawLayout.clipId);
-    const indirectBufferId = view.u32(offset + drawLayout.indirectBufferId);
     return {
       program: this.program(view.u32(offset + drawLayout.programId)),
       programVariant: view.u16(offset + drawLayout.programVariant),
@@ -389,13 +387,6 @@ export class TypedCommandTreeMapper {
       clip: clipId === 0 ? undefined : intern(this.#clips, clipId, () => createTypedCommandIdentity('clip')),
       depthKey: view.u32(offset + drawLayout.depthKey),
       order: view.u32(offset + drawLayout.orderToken),
-      indirect:
-        indirectBufferId === 0
-          ? undefined
-          : Object.freeze({
-              buffer: this.currentBuffer(state, indirectBufferId),
-              byteOffset: view.u32(offset + drawLayout.indirectOffset),
-            }),
     };
   }
 
@@ -478,14 +469,14 @@ export class TypedCommandTreeMapper {
     id: number,
     generation: number,
     programId: number,
-    bindingId: number | 'order' | 'placement',
+    bindingId: number | 'placement',
   ): TypedBuffer {
     const buffer = this.buffer(id, generation, programId, bindingId);
     state.bufferOverlay.set(id, buffer);
     return buffer;
   }
 
-  buffer(id: number, generation: number, programId = 0, bindingId: number | 'order' | 'placement' = 0): TypedBuffer {
+  buffer(id: number, generation: number, programId = 0, bindingId: number | 'placement' = 0): TypedBuffer {
     const key = `${id}:${generation}`;
     let buffer = this.#buffers.get(key);
     if (buffer === undefined) {
@@ -582,11 +573,7 @@ export class TypedCommandTreeMapper {
       view.u32(offset + bufferLayout.id),
       view.u32(offset + bufferLayout.generation),
       view.u32(offset + bufferLayout.programId),
-      binding === textShaperAbi.engine.internalBufferBindings.order
-        ? 'order'
-        : binding === textShaperAbi.engine.internalBufferBindings.placement
-          ? 'placement'
-          : binding,
+      binding === textShaperAbi.engine.internalBufferBindings.placement ? 'placement' : binding,
     );
   }
 
@@ -720,11 +707,7 @@ class BufferCommandView implements TypedBufferCommand {
       this.#view.u32(this.#offset + bufferLayout.id),
       this.#view.u32(this.#offset + bufferLayout.generation),
       this.#view.u32(this.#offset + bufferLayout.programId),
-      binding === textShaperAbi.engine.internalBufferBindings.order
-        ? 'order'
-        : binding === textShaperAbi.engine.internalBufferBindings.placement
-          ? 'placement'
-          : binding,
+      binding === textShaperAbi.engine.internalBufferBindings.placement ? 'placement' : binding,
     );
   }
 

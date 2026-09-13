@@ -53,7 +53,7 @@ resource realization, borrowed `CommandBufferView`, and concrete TypeGPU/WebGPU 
 
 The package is a standing consumer proof. Production source imports only `@pmndrs/glyph`, the example raster package, and
 the raster's explicit `/typegpu` shader subpath—never `internal/`, `generated/`, a removed `/core` subpath, `/three`, or
-Three itself. Its Codec supplies its own system lane, capability set, allocation mode, transform mode, and program
+Three itself. Its Codec supplies its own system lane, capability set, transform mode, and program
 namespace while reusing the raster format's portable Codec body. The portable body receives no system-buffer object;
 package-private host assembly adds stable identity and the engine-owned placement slot after body authentication. The
 package root exposes a custom `source` condition for

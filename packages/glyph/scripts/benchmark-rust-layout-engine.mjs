@@ -1,4 +1,4 @@
-/* @workflow { "name": "glyph:rust-layout-benchmark", "summary": "Measures the complete retained Rust text_update path with real font data and render-plan publication.", "requirements": "Built @pmndrs/glyph and @pmndrs/glyph/bake packages. Accepts --glyphs, --reps, --warmup, --case, --technique, --corpus, --allocation, --wasm, --json, and --samples.", "writes": "stdout and the optional JSON report path" } */
+/* @workflow { "name": "glyph:rust-layout-benchmark", "summary": "Measures the complete retained Rust text_update path with real font data and render-plan publication.", "requirements": "Built @pmndrs/glyph and @pmndrs/glyph/bake packages. Accepts --glyphs, --reps, --warmup, --case, --technique, --corpus, --wasm, --json, and --samples.", "writes": "stdout and the optional JSON report path" } */
 import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
@@ -36,7 +36,7 @@ const [wasm, artifact] = await Promise.all([
 ]);
 const validated = await validateFontArtifact(artifact);
 const raster = await validateRaster(options.technique, artifact, validated);
-const technique = techniqueProof(abi, options.technique, raster, options.allocation);
+const technique = techniqueProof(abi, options.technique, raster);
 const outputCapacity = technique.outputBytesPerGlyph > 48 ? 8 * 1024 * 1024 : 4 * 1024 * 1024;
 const instance = await WebAssembly.instantiate(await WebAssembly.compile(wasm), {});
 const memory = instance.exports[abi.memory];
@@ -64,7 +64,7 @@ const baseStyle = { textEnd: utf16.length, fontSize: 24, lineHeight: 1.2, raster
 let plannerMemory;
 
 console.log(
-  `technique=${options.technique} corpus=${options.corpus} allocation=${options.allocation} output=${technique.outputBytesPerGlyph} bytes/glyph · memory bytes: instantiate=${memoryAtInstantiation}, initialize=${memoryAfterInitialize}, registered=${memoryAfterRegistration}`,
+  `technique=${options.technique} corpus=${options.corpus} output=${technique.outputBytesPerGlyph} bytes/glyph · memory bytes: instantiate=${memoryAtInstantiation}, initialize=${memoryAfterInitialize}, registered=${memoryAfterRegistration}`,
 );
 
 const reports = [];
@@ -83,7 +83,6 @@ if (options.jsonPath !== undefined) {
         generatedBy: 'glyph:rust-layout-benchmark',
         wasmSha256: createHash('sha256').update(wasm).digest('hex'),
         technique: options.technique,
-        allocation: options.allocation,
         corpus: options.corpus,
         glyphTarget: options.glyphs,
         warmup: options.warmup,
@@ -103,7 +102,6 @@ if (options.samplesPath !== undefined) {
       {
         schemaVersion: 0,
         technique: options.technique,
-        allocation: options.allocation,
         corpus: options.corpus,
         glyphTarget: options.glyphs,
         warmup: options.warmup,

@@ -16,7 +16,6 @@ import type {
   OriginSegment,
   PreparationContext,
   PreparedDrawReplacement,
-  RecordAddressing,
   ReusedDrawUpdate,
   TransformRealization,
 } from './render-state.js';
@@ -99,9 +98,6 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
         const buffer = retained(binding);
         byCodecId.set(buffer.codecBufferId, buffer);
       }
-      const addressing: RecordAddressing = {
-        order: draw.indirect === undefined ? undefined : retained(draw.indirect.buffer),
-      };
       const transform = transformRealization(byCodecId, transformId);
       const materialKey = materials.key(draw.material);
       const renderOrderBase = owner.renderOrderBase ?? draw.material?.renderOrder ?? 0;
@@ -119,8 +115,8 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
         const resolvedResource = resource?.resolved;
         const drawGeometry = resolveDrawGeometry(resolvedResource);
         const material = decoration
-          ? materials.decoration(byCodecId, draw.material, transform, addressing)
-          : materials.glyph(resource!, byCodecId, draw.material, transform, addressing);
+          ? materials.decoration(byCodecId, draw.material, transform)
+          : materials.glyph(resource!, byCodecId, draw.material, transform);
         const originDeclaration =
           decoration || resolvedResource === undefined ? undefined : glyphOriginBuffer(resolvedResource);
         const origins = originDeclaration === undefined ? undefined : byCodecId.get(originDeclaration.id);
@@ -130,7 +126,6 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
             origins,
             stableIds,
             storageKey: glyphStorageKey(stableIds),
-            order: addressing.order,
             geometry: createGeometrySource(drawGeometry),
             start: span.recordIndex,
             count: span.recordCount,
@@ -267,8 +262,7 @@ function drawRealizationKey(
   geometry: string,
   placementKey: string,
 ): string {
-  // The Rust plan compiler publishes Codec buffers in declaration order and the stable order buffer last.
-  // Preserve that package-owned order instead of sorting the complete binding set for every realized span.
+  // The Rust plan compiler publishes Codec buffers in declaration order.
   const bufferKey = [...buffers].map(([codecBufferId, buffer]) => `${codecBufferId}:${buffer.storageKey}`).join(',');
   const transformKey =
     transform.kind === 'direct'

@@ -43,7 +43,6 @@ import {
 import {
   createCodecProgram,
   normalizeCodecCapabilitySet,
-  type CodecAllocationMode,
   type CodecBuffer,
   type CodecCapabilitySet,
   type CodecProgram,
@@ -161,7 +160,6 @@ export interface RasterCodecProgramOptions {
   readonly system: RasterCodecSystem;
   readonly capabilitySet: CodecCapabilitySet;
   readonly transformMode: CodecTransformMode;
-  readonly allocationMode: CodecAllocationMode;
   readonly ids?: CodecIdFactory;
 }
 
@@ -193,9 +191,6 @@ export function createRasterCodecProgram<Format extends RasterFormatMetadata, Sc
   if (options.transformMode !== 'direct' && options.transformMode !== 'indexed') {
     throw new TypeError('raster codec transform mode must be "direct" or "indexed"');
   }
-  if (options.allocationMode !== 'ordered' && options.allocationMode !== 'stable') {
-    throw new TypeError('raster codec allocation mode must be "ordered" or "stable"');
-  }
   if (options.ids !== undefined) {
     assertCodecIdFactory(options.ids, 'raster codec ids');
   }
@@ -224,7 +219,6 @@ export function createRasterCodecProgram<Format extends RasterFormatMetadata, Sc
       body,
       [...schemaCodecBuffers(codec.schema), ...systemCodecBuffers(system, placementSlotTarget)],
       options.transformMode,
-      options.allocationMode,
     ),
     capabilitySet,
     variant: codec.programVariant ?? 0,

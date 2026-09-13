@@ -9,7 +9,7 @@ use crate::{
 
 use super::{
     cluster_state::{ClusterArena, ClusterBuildInput, LayoutRunSourceKind, RunCanonicalInput},
-    codec::{ALLOCATION_ORDERED_DIRECT, CapabilitySetId, ValidatedCodec},
+    codec::{CapabilitySetId, ValidatedCodec},
     codec_gather::{
         CodecGatherWorkspace, DEFAULT_GATHER_RECORD_CAPACITY, GatherError, LayoutPlanInput,
         RetainedGather,
@@ -1503,11 +1503,7 @@ impl TextEngine {
             }
             let reuse_ordered_plan = !checkpoint
                 && !positioned_changed
-                && request.compositing_independent == planner.compositing_independent
-                && codec
-                    .programs()
-                    .iter()
-                    .all(|program| program.allocation_strategy == ALLOCATION_ORDERED_DIRECT);
+                && request.compositing_independent == planner.compositing_independent;
             if reuse_ordered_plan {
                 planner.plan.prepare_reuse().map_err(plan_error)?;
                 gather_output_matches_next = cached_gather == Some(current_gather_key);
@@ -5297,10 +5293,10 @@ mod tests {
         bidi::DIRECTION_RTL,
         engine::{
             codec::{
-                ALLOCATION_ORDERED_DIRECT, BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE,
-                BATCH_TECHNIQUE, BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, BufferId,
-                BufferSchema, CAP_ORDERED_DIRECT, CapabilitySet, CodecDescriptor, Operation,
-                ProgramCapabilities, ProgramDescriptor, ProgramId, ScalarType, TechniqueId,
+                BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE, BUFFER_USAGE_COPY_DST,
+                BUFFER_USAGE_STORAGE, BufferId, BufferSchema, CAP_ORDERED_DIRECT, CapabilitySet,
+                CodecDescriptor, Operation, ProgramCapabilities, ProgramDescriptor, ProgramId,
+                ScalarType, TechniqueId,
             },
             font_binding::{
                 FieldTable, FontRenderBinding, FontResource, FontStrike, MISSING_RESOURCE_INDEX,
@@ -6865,7 +6861,6 @@ mod tests {
                     | crate::engine::codec::BATCH_DEPTH
                     | BATCH_ORDER
                     | crate::engine::codec::BATCH_TRANSFORM,
-                allocation_strategy: ALLOCATION_ORDERED_DIRECT,
                 f32_input_count: 1,
                 u32_input_count: 0,
                 inputs: vec![crate::engine::codec::InputSource::semantic(0)],
