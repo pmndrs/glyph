@@ -1438,7 +1438,7 @@ coverage is unchanged after consolidating six overlapping tests; built-package N
 241 overlapping cases are removed. On the same 22k alternating-width harness, the cleaned head measures `1.483 ms`
 ordinary Latin, `2.097 ms` justified Latin, `3.360 ms` mixed bidi, and `2.328 ms` dense CJK median, publishing
 `30.6/30.6/35.1/96.3 KiB` respectively. Against the placement-publication checkpoint, the shaper is 7,132 raw / 2,929
-gzip / 2,213 Brotli bytes smaller; Three changes by +554 / +72 / −52 and direct TypeGPU by −5 / +4 / −7 bytes.
+gzip / 2,213 Brotli bytes smaller; Three changes by +554 / +72 / −52 and direct TypeGPU by −5 / +4 / +29 bytes.
 
 The indexed direction keeps the existing batches, physical instances, order indirection, primitive spans, and draws.
 Stable-indirect rendering resolves logical to physical instance first; ordered-direct rendering already has the physical
