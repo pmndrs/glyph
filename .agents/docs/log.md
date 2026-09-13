@@ -2,6 +2,22 @@
 
 ## 2026-09-13
 
+- **Removed the justified placement-segmentation penalty** — Kept the existing exact F16.16 quotient/remainder
+  distribution and the SIMD flag scan, but stopped forcing every adjusted trivial-order fragment into one placement
+  segment per cluster. Word-space-only adjustment now reuses the retained stable word/numeric-block segments and ends a
+  segment immediately after each adjusted space; only nonzero letter-gap distribution selects cluster-granular
+  segments. A 50-warmup/501-sample A/B/B/A over the 22k justified width-reflow case reduced median time from
+  `2.067–2.077 ms` to `1.500–1.510 ms` (about 27.3%) with the same one patch and 30.6 KiB write. Ordinary and mixed-bidi
+  controls remained at `1.538 ms` and `3.321 ms`. The optimized shaper grows by 175 raw / 162 gzip / 34 Brotli bytes.
+  This rejects a larger aggregate-count line format for now: the measured cost was placement bookkeeping, not division
+  or the existing second semantic phase.
+
+- **Made Wasm branchlessness evidence-gated** — Added the durable engineering rule distilled from the positioning
+  cleanup: prefer one authority with predictable invariant branches over duplicated const-generic pipelines, and admit
+  explicit SIMD or wider unrolling only inside an isolated scalar-oracled kernel with representative inputs and
+  final-artifact size/performance evidence. The current four-block justification flag scan remains the measured choice;
+  the 27.3% justified improvement came from skipping uniform cluster-granular work around it.
+
 - **Closed the line-break feedback seam** — Kept break admission on the existing exact inclusive F16.16 comparison and
   changed only measurement publication: sizes, content extents, and intrinsic widths now round outward when their f64
   authority is not exactly representable by the public f32 ABI. A pinned counterexample at 39,000,001 layout units used

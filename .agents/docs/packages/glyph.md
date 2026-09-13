@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:5fe59a14eacb34bfb5453d1430fc4465ae31cb2565c3c4e886449894e4c90cfe'
+source_digest: 'sha256:b4919a6fe2e1c23bcb293c9ea72b0de4238218f8e40dae02977e7d9abb9c37bc'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1493,12 +1493,15 @@ source lines and 26,486 raw / 3,200 gzip optimized-Wasm bytes. A 22k A/B/B/A kee
 medians within 0.3%; the longer 501-sample justified comparison is within 0.34%, with identical patches and write bytes.
 This is accepted as prediction-friendly parity rather than preserving duplicated code for an unmeasured theoretical win.
 
-Final reduction removes the compile-time justification and text-effect specialization axes from the positioning
-traversal. Both conditions are invariant for a fragment or build, and the specialized forms duplicated most of the same
-machine code to avoid only a small adjustment tail or optional effect-lane append. One runtime traversal removes 80 Rust
-source lines and 26,486 raw / 3,200 gzip optimized-Wasm bytes. A 22k A/B/B/A keeps ordinary, bidi, and dense-CJK width
-medians within 0.3%; the longer 501-sample justified comparison is within 0.34%, with identical patches and write bytes.
-This is accepted as prediction-friendly parity rather than preserving duplicated code for an unmeasured theoretical win.
+The remaining justified penalty was not the integer division or SIMD space scan. Trivial-order positioning had selected
+one placement segment per cluster whenever any justification was nonzero. Word-space-only distribution now reuses the
+existing stable word/numeric-block segmentation and ends a segment immediately after each adjusted space; nonzero
+letter-gap distribution retains cluster granularity because every gap can move the next glyph. A 50-warmup/501-sample
+A/B/B/A reduces the 22k justified median from `2.067–2.077 ms` to `1.500–1.510 ms` with the same one patch and 30.6 KiB
+write. Ordinary and mixed-bidi controls remain `1.538 ms` and `3.321 ms`. The optimized shaper grows by 175 raw / 162
+gzip / 34 Brotli bytes. The existing exact F16.16 quotient/remainder arithmetic and `simd128` flag scan remain
+authoritative; no aggregate-count line format or second justification model is added without evidence that the retained
+scan is material.
 
 The benchmark also owns a `position-query` case that runs the same break-changing flow and positioning tail through the
 borrowed-layout mask while excluding gather, plan compilation, publication, and inspection copies. On the pinned M4 host,

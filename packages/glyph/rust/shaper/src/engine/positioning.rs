@@ -1582,7 +1582,6 @@ impl PositionedGlyphArena {
                 styles,
                 &streams,
                 justify,
-                !justify.is_zero(),
                 &mut state,
                 metrics_for,
                 extents_for,
@@ -1789,7 +1788,6 @@ impl PositionedGlyphArena {
         styles: &[StyleSegment],
         streams: &GlyphStreams<'_>,
         justify: JustifyDistribution,
-        adjust: bool,
         state: &mut FragmentPositionState,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
@@ -1804,6 +1802,9 @@ impl PositionedGlyphArena {
         let layout_runs = clusters.layout_runs();
         let first =
             layout_runs.partition_point(|run| run.cluster_end <= fragment.line.cluster_start);
+        let adjusts_spaces = justify.per_space_units != 0 || justify.extra_space_units != 0;
+        let adjusts_gaps = justify.per_gap_units != 0 || justify.extra_gap_units != 0;
+        let adjust = adjusts_spaces || adjusts_gaps;
         let mut covered = cluster_start;
         for (layout_run_index, layout_run) in (first..).zip(&layout_runs[first..]) {
             let run_start = usize::try_from(layout_run.cluster_start)
@@ -1846,16 +1847,21 @@ impl PositionedGlyphArena {
             let mut cluster = overlap_start;
             while cluster < overlap_end {
                 let segment_start = cluster;
-                let (placement_cluster, stable_segment_end) = if adjust {
+                let (placement_cluster, stable_segment_end) = if adjusts_gaps {
                     (
                         clusters.placement_cluster(*layout_run, direction, segment_start)?,
                         segment_start + 1,
                     )
                 } else {
-                    clusters.placement_segment_monotone(*layout_run, direction, segment_start)?
+                    clusters.placement_segment_monotone(
+                        *layout_run,
+                        direction,
+                        segment_start,
+                        adjusts_spaces,
+                    )?
                 };
                 let mut segment_end = segment_start + 1;
-                if !adjust
+                if !adjusts_gaps
                     && direction & 1 == 0
                     && clusters.flags[segment_start] & CLUSTER_HARD_BREAK == 0
                 {
@@ -5177,6 +5183,7 @@ mod tests {
         clusters.glyph_x_offsets = vec![0; 7];
         clusters.glyph_y_offsets = vec![0; 7];
         clusters.glyph_shape_flags = vec![0; 7];
+        clusters.glyph_stable_ids = (1..=7).collect();
         clusters.rebuild_layout_runs().unwrap();
         let style = ResolvedStyle::test_typography(1.0, 0.0, 0.0);
         let styles = [StyleSegment {
@@ -5202,7 +5209,15 @@ mod tests {
                 style,
             },
         ];
-        prepare_positioning_clusters(&mut clusters, &text, &runs, &styles, |_, _| None);
+        let extents = |_, _| {
+            Some(FontGlyphExtents {
+                x_min: 0,
+                y_min: -1_000,
+                x_max: 1_000,
+                y_max: 0,
+            })
+        };
+        prepare_positioning_clusters(&mut clusters, &text, &runs, &styles, extents);
         fragment.slot_end = 17.000_015_258_789_063;
         let controls = JustifyControls {
             maximum_word_space_ratio: 3.0,
@@ -5273,6 +5288,55 @@ mod tests {
         );
         assert!(exact.is_zero());
         assert_eq!((exact.spaces, exact.gaps, exact.gap_end), (2, 6, 7));
+
+        let mut gap_adjusted = PositionedGlyphArena::default();
+        gap_adjusted
+            .position_fragment(
+                line,
+                fragment,
+                false,
+                &text,
+                &clusters,
+                &runs,
+                &BoundaryShapeArena::default(),
+                &styles,
+                &BidiAnalysis::default(),
+                true,
+                0.0,
+                controls,
+                |_| None,
+                extents,
+                None,
+            )
+            .unwrap();
+        assert_eq!(gap_adjusted.glyphs.len(), 7);
+        assert_eq!(gap_adjusted.placement.segment_count(), 7);
+
+        let mut word_only = PositionedGlyphArena::default();
+        word_only
+            .position_fragment(
+                line,
+                FlowFragment {
+                    slot_end: 17.0,
+                    ..fragment
+                },
+                false,
+                &text,
+                &clusters,
+                &runs,
+                &BoundaryShapeArena::default(),
+                &styles,
+                &BidiAnalysis::default(),
+                true,
+                0.0,
+                JustifyControls::default(),
+                |_| None,
+                extents,
+                None,
+            )
+            .unwrap();
+        assert_eq!(word_only.glyphs.len(), 7);
+        assert_eq!(word_only.placement.segment_count(), 4);
         assert_eq!(core::mem::size_of::<SegmentTranslation>(), 16);
     }
 

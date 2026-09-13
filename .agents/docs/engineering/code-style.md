@@ -40,7 +40,6 @@ This standard is the canonical code-quality policy for `pmndrs/glyph`. It suppor
 - Retain typed semantic state until the presentation edge. Never recover state by parsing labels, messages, class names, or other display strings.
 - Use classes only for identity, lifecycle, cleanup, encapsulated mutation, or stateful caches. Prefer data and functions otherwise; do not introduce inheritance for variant modeling.
 - Optimize measured repeated work. Preserve behavior with independent invariants and oracles, not snapshots derived only from the implementation being changed.
-
 ## Share durable knowledge, not coincidental mechanics
 
 - Deduplicate stable domain rules and safety invariants that would be dangerous to let drift.
@@ -51,6 +50,16 @@ This standard is the canonical code-quality policy for `pmndrs/glyph`. It suppor
 ## Rust
 
 - Keep portable Wasm crates `no_std + alloc` where their capability permits it. Host-only tools, compression, fixture inspection, and oracle generation stay behind explicit features or binaries.
+- Treat branchlessness as a measured kernel property, not a whole-pipeline design goal. A condition invariant for a build,
+  fragment, run, or other coarse unit is normally predictable; prefer one shared implementation with that branch over
+  const-generic or duplicated pipelines unless a representative end-to-end benchmark proves the duplication wins after
+  optimized-Wasm size is included.
+- Do not make all records pay the most granular work merely to avoid a branch. Select the smallest correct data granularity
+  once at the coarsest invariant boundary, then keep the inner loop straight-line where useful. Measure metadata writes,
+  allocation, publication bytes, and renderer work as well as arithmetic.
+- Admit explicit SIMD and branchless arithmetic one isolated kernel at a time against a scalar byte oracle, representative
+  uniform and adversarial inputs, and final-artifact size. A faster scan does not justify redesigning surrounding records
+  when end-to-end attribution places the cost elsewhere.
 - Use maintained font, shaping, raster, Unicode, and container libraries instead of project-owned parsers when a suitable implementation exists. Project code owns policy and serialization, not a shadow specification implementation.
 - Use error enums and exhaustive matches for operational failure and closed state. Convert enums and newtypes to C/Serde primitives only at the boundary.
 - Add `#[repr(transparent)]` newtypes when primitive values from distinct units, identities, generations, ownership domains, or coordinate spaces could plausibly be mixed. Do not wrap values solely for visual consistency.

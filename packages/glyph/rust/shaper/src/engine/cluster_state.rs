@@ -1204,6 +1204,7 @@ impl ClusterArena {
         run: LayoutRun,
         direction: u8,
         cluster: usize,
+        stop_after_space: bool,
     ) -> Result<(PlacementCluster, usize), EngineError> {
         let placement = self.placement_cluster_at(run, direction, cluster)?;
         if direction & 1 != 0 || self.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
@@ -1213,6 +1214,7 @@ impl ClusterArena {
         let mut segment_end = cluster + 1;
         while segment_end < run_end
             && self.placement_segment_anchors[segment_end] == placement.segment_anchor
+            && (!stop_after_space || self.flags[segment_end - 1] & CLUSTER_SPACE == 0)
         {
             segment_end += 1;
         }
