@@ -11,7 +11,7 @@
   PR #175 and preserves the same batches, primitives, draws, stable identities, placement rows, and renderer contract.
   Exact-head 22k width-reflow medians are `1.483 ms` ordinary Latin, `2.097 ms` justified Latin, `3.360 ms` mixed bidi,
   and `2.328 ms` dense CJK, with `30.6/30.6/35.1/96.3 KiB` writes. The shaper falls by 7,132 raw / 2,929 gzip / 2,213
-  Brotli bytes relative to #175; Three changes by +554 / +72 / −52 and direct TypeGPU by −5 / +4 / −7 bytes.
+  Brotli bytes relative to #175; Three changes by +554 / +72 / −52 and direct TypeGPU by −5 / +4 / +29 bytes.
 
 - **Kept adapter placement packing out of Codec authoring** — Removed the `{ buffer, lane }` placement target from the
   public raster-program options and confined the target to stripped package-owned host assembly. Three and TypeGPU retain
