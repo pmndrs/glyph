@@ -1,5 +1,5 @@
-/* @workflow { "name": "docs:check", "summary": "Validate the Open Knowledge Format agent archive under .agents/docs, including every concept source_digest.", "requirements": "Ruby from the root mise toolchain. Run through mise so the interpreter resolves.", "writes": "stdout" } */
-/* @workflow { "name": "docs:update", "args": ["--write"], "summary": "Re-pin every package concept source_digest from the working tree, then validate the bundle.", "requirements": "Ruby from the root mise toolchain. Run through mise so the interpreter resolves.", "writes": ".agents/docs/packages/*.md source_digest pins and stdout" } */
+/* @workflow { "name": "docs:check", "summary": "Validate the Open Knowledge Format agent archive under .agents/docs, including every concept source_digest.", "requirements": "Ruby 3.1 or newer on PATH. Mise does not install Ruby.", "writes": "stdout" } */
+/* @workflow { "name": "docs:update", "args": ["--write"], "summary": "Re-pin every package concept source_digest from the working tree, then validate the bundle.", "requirements": "Ruby 3.1 or newer on PATH. Mise does not install Ruby.", "writes": ".agents/docs/packages/*.md source_digest pins and stdout" } */
 import { execFile } from 'node:child_process';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';

@@ -160,12 +160,17 @@ Glyph currently provides fonts, styles, alignment, justification, word-wrap, box
 ## Contribute
 
 This repo uses [mise](https://mise.jdx.dev) to make it easier to install and configure the required toolchains.
+Trust the checked-in configuration once per fresh clone before asking mise to install them:
 
 ```sh
 # brew install mise
+mise trust
 mise install
 mise exec -- pnpm install
 mise exec -- pnpm dev
 ```
+
+Mise is optional. With matching Node, pnpm, and Rust tools already on `PATH`, use `pnpm install` and `pnpm dev`
+directly. The full `pnpm check` additionally requires Ruby 3.1 or newer; development does not.
 
 `@pmndrs/glyph` is ESM-only and MIT licensed.

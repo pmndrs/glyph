@@ -2,6 +2,11 @@
 
 ## 2026-09-13
 
+- **Repaired fresh-clone bootstrap guidance** — Made the required `mise trust` consent step explicit, ran installation and
+  development through non-interactive `mise exec`, documented that matching ambient Node, pnpm, and Rust toolchains remain
+  supported without mise, and corrected the knowledge-base workflows to name Ruby 3.1+ as an external check-only
+  dependency rather than claiming the intentionally minimal root mise toolchain installs it.
+
 - **Pruned retired stable-planner guidance** — Removed live integration-guide, API, fragment-placement, dirty-range, and
   package-reference prose that still described allocation strategy selection, logical-order buffers, or the stable
   planner as current. D-362 and this append-only log retain the historical decision and evidence; ordered storage is now
