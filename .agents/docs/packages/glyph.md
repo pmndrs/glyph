@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:cac139e13f2d90864636a1d8ec0046ee776ff36fe49fecbd7a96b80a84491484'
+source_digest: 'sha256:ad27d098b389b70e83ac6e974f72e895792921ce2c0fecd525eb145853fe6e06'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1429,7 +1429,8 @@ choice no longer exceeds the contract it advertises.
 The planner-scoped placement allocator reconciles compact CPU placement topology transactionally and quarantines retired
 slots until renderer acknowledgement. Its focused lifecycle tests validate reorder, retirement, acknowledgement,
 abort/retry, and stale-slot reuse directly; there is no parallel run allocator, canonical-update mode, batch identity, or
-draw identity.
+draw identity. The standalone M1 visual-span and multi-fragment shadow planners were retired after the complete 12.1–12.5
+core, renderer, browser, size, and performance matrix closed; focused production-path regressions remain authoritative.
 
 The indexed direction keeps the existing batches, physical instances, order indirection, primitive spans, and draws.
 Stable-indirect rendering resolves logical to physical instance first; ordered-direct rendering already has the physical

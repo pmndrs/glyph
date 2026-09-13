@@ -59,9 +59,6 @@ pub mod stable_plan;
 mod stable_pool;
 mod staged;
 mod style_state;
-#[cfg(any(test, feature = "kernel-lab"))]
-#[cfg_attr(not(test), allow(dead_code))]
-mod visual_span_proof;
 
 pub(crate) use positioning::SemanticGlyph;
 pub use state::{EngineError, FrameFault, TextEngine};

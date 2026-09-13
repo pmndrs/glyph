@@ -696,11 +696,11 @@ numeric cutover, the invariant is no extra full intermediate copy: a width updat
 geometry, and boundary-replacement topology writes and uploads compact placement/order/decoration patches and writes zero
 bytes to the static glyph-local/numeric-block buffers.
 
-The proof identity foundation is concrete: each paragraph receives a nonwrapping incarnation, each `LayoutRun` receives
-an exact non-hash canonical revision after complete retained-content comparison, and a planner-scoped dense slot arena can
-validate split/merge and retirement behavior. It remains test/kernel-lab state until publication requires stable run
-handles; release width updates do not perform this reconciliation. The first cluster's stable text-unit ID is only a
-reconciliation anchor, never a physical slot or globally comparable handle.
+The retained identity foundation is concrete: each paragraph receives a nonwrapping incarnation and each `LayoutRun`
+receives an exact non-hash canonical revision after complete retained-content comparison. Dynamic placement occurrences
+use the planner-scoped dense placement-slot arena described below; there is no parallel run-slot allocator or
+renderer-visible run handle. The first cluster's stable text-unit ID is only a reconciliation anchor, never a physical
+slot or globally comparable handle.
 
 Do not zero-scale unused capacity. The built-ins already use static unit quads with an authoritative instance count;
 drawing degenerate slack wastes vertex work and complicates ordering. Reserve capacity and set the live count.
@@ -709,9 +709,8 @@ drawing degenerate slack wastes vertex work and complicates ordering. Reserve ca
 
 Replace the glyph-wide absolute placement contract atomically. The shipping engine has one retained placement model:
 `LayoutRun` plus compact run/line placement under the re-pinned final-coordinate operations above. The old materializer
-may exist only behind test/lab compilation as a numeric/pixel comparison oracle and is deleted from production when the
-cutover lands; it is never a selectable production mode or an exact-bit compatibility fallback. Retire the test/lab
-oracle only at M6 after full matrix closure.
+was never a selectable production mode or an exact-bit compatibility fallback. The standalone M1 shadow planner and
+visual mapper were retired after the M6 full-matrix closure; focused production-path regressions remain.
 
 1. Add one engine-owned semantic placement slot for every rendered glyph and one root-scoped f32x2 table row per active
    placement segment. Codec authors produce glyph-local technique outputs and never receive or declare host slot
@@ -970,7 +969,8 @@ only after the source cursor and line metrics converge to the cold authority.
 - Run the full existing and new flow/drop-cap/projection matrix across core and adapters; no typography or query behavior
   is deferred until this milestone.
 - Delete the test oracle only after the full parity matrix and renderer migration are accepted; no legacy production
-  domain remains.
+  domain remains. Completed: the standalone visual-span and multi-fragment shadow modules were removed after the matrix
+  closed.
 
 Exit: the correctness matrix below passes without adapter-specific exceptions.
 
