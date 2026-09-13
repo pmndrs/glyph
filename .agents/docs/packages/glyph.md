@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:0778bac85c9370a316cae4cac42fc7689f71144ecff6159371d92f7e6c345a2e'
+source_digest: 'sha256:694aa6dee3229505f1314aebc9d1c0f5e2ee486be0c35bf9542d1a59a7f3d722'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1431,6 +1431,14 @@ slots until renderer acknowledgement. Its focused lifecycle tests validate reord
 abort/retry, and stale-slot reuse directly; there is no parallel run allocator, canonical-update mode, batch identity, or
 draw identity. The standalone M1 visual-span and multi-fragment shadow planners were retired after the complete 12.1–12.5
 core, renderer, browser, size, and performance matrix closed; focused production-path regressions remain authoritative.
+
+The final reduction layer removes 3,984 net lines relative to the accepted placement-publication checkpoint without
+changing batches, primitives, draws, stable identity, or the x/y placement contract. Instrumented Rust production
+coverage is unchanged after consolidating six overlapping tests; built-package Node coverage slightly increases while
+241 overlapping cases are removed. On the same 22k alternating-width harness, the cleaned head measures `1.483 ms`
+ordinary Latin, `2.097 ms` justified Latin, `3.360 ms` mixed bidi, and `2.328 ms` dense CJK median, publishing
+`30.6/30.6/35.1/96.3 KiB` respectively. Against the placement-publication checkpoint, the shaper is 7,132 raw / 2,929
+gzip / 2,213 Brotli bytes smaller; Three changes by +554 / +72 / −52 and direct TypeGPU by −5 / +4 / −7 bytes.
 
 The indexed direction keeps the existing batches, physical instances, order indirection, primitive spans, and draws.
 Stable-indirect rendering resolves logical to physical instance first; ordered-direct rendering already has the physical
