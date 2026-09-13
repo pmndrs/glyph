@@ -66,7 +66,6 @@ pub(crate) struct SessionPlacementCompiler {
     retirements: Vec<RetirementRecord>,
     payload: Vec<u8>,
     dirty_ranges: Vec<RecordRange>,
-    publication_generation: u32,
     prepared: bool,
 }
 
@@ -86,7 +85,6 @@ impl SessionPlacementCompiler {
         }
         validate_input(input)?;
         self.clear_pending();
-        self.publication_generation = publication_generation;
         let result = self.prepare_placement(
             input.placement_rows,
             input.placement_capacity,
@@ -154,7 +152,6 @@ impl SessionPlacementCompiler {
                 &self.placement,
                 &mut self.pending_placement,
                 &mut self.retirements,
-                self.publication_generation,
             )?;
             return Ok(());
         }
@@ -175,11 +172,7 @@ impl SessionPlacementCompiler {
             let generation = next_generation(self.placement.as_ref())?;
             let allocation = allocate_buffer(generation, capacity, live_records)?;
             push_binding_and_allocation(&mut self.buffers, &mut self.patches, &allocation)?;
-            push_retirement(
-                &self.placement,
-                &mut self.retirements,
-                self.publication_generation,
-            )?;
+            push_retirement(&self.placement, &mut self.retirements)?;
             self.placement_allocation = Some(allocation);
             generation
         } else {
@@ -224,7 +217,6 @@ impl SessionPlacementCompiler {
         self.retirements.clear();
         self.payload.clear();
         self.dirty_ranges.clear();
-        self.publication_generation = 0;
     }
 
     fn finish(&mut self) {
@@ -314,10 +306,9 @@ fn prepare_removal(
     buffer: &Option<SessionBuffer>,
     pending: &mut PendingBuffer,
     retirements: &mut Vec<RetirementRecord>,
-    publication_generation: u32,
 ) -> Result<(), SessionPlacementError> {
     if buffer.is_some() {
-        push_retirement(buffer, retirements, publication_generation)?;
+        push_retirement(buffer, retirements)?;
         pending.remove = true;
     }
     Ok(())
@@ -326,7 +317,6 @@ fn prepare_removal(
 fn push_retirement(
     buffer: &Option<SessionBuffer>,
     retirements: &mut Vec<RetirementRecord>,
-    publication_generation: u32,
 ) -> Result<(), SessionPlacementError> {
     let Some(buffer) = buffer else {
         return Ok(());
@@ -336,7 +326,6 @@ fn push_retirement(
         kind: RETIRE_BUFFER,
         id: SESSION_PLACEMENT_BUFFER_ID,
         generation: buffer.generation,
-        after_publication_generation: publication_generation,
         byte_length: byte_length(buffer)?,
         ..RetirementRecord::default()
     });

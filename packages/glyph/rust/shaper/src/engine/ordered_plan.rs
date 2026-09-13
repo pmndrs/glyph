@@ -87,7 +87,6 @@ struct PrepareContext<'a> {
     capability: &'a super::codec::CapabilitySet,
     input: OrderedPlanInput<'a>,
     checkpoint: bool,
-    publication_generation: u32,
 }
 
 #[derive(Default)]
@@ -191,12 +190,11 @@ impl OrderedPlanCompiler {
             capability,
             input,
             checkpoint,
-            publication_generation,
         };
         for batch_index in 0..self.pending_batches.len() {
             self.prepare_batch(context, batch_index)?;
         }
-        self.prepare_removed_batches(publication_generation)?;
+        self.prepare_removed_batches()?;
         self.compile_bindings(context)?;
         self.prepared = true;
         Ok(())
@@ -559,7 +557,6 @@ impl OrderedPlanCompiler {
             capability,
             input,
             checkpoint,
-            publication_generation,
         } = context;
         let pending = self.pending_batches[batch_index];
         let key = pending.state.key;
@@ -661,7 +658,6 @@ impl OrderedPlanCompiler {
                         kind: RETIRE_BUFFER,
                         id: previous_id,
                         generation: previous_generation,
-                        after_publication_generation: publication_generation,
                         byte_length: previous_length as u32,
                         ..RetirementRecord::default()
                     });
@@ -690,7 +686,6 @@ impl OrderedPlanCompiler {
                     kind: RETIRE_SLOT_RANGE,
                     id: buffer.id,
                     generation: buffer.generation,
-                    after_publication_generation: publication_generation,
                     byte_offset: required
                         .checked_mul(u32::from(buffer.schema.stride))
                         .ok_or(OrderedPlanError::ArithmeticOverflow)?,
@@ -1188,10 +1183,7 @@ impl OrderedPlanCompiler {
         )
     }
 
-    fn prepare_removed_batches(
-        &mut self,
-        publication_generation: u32,
-    ) -> Result<(), OrderedPlanError> {
+    fn prepare_removed_batches(&mut self) -> Result<(), OrderedPlanError> {
         for batch in &self.batches {
             if self
                 .pending_batches
@@ -1219,7 +1211,6 @@ impl OrderedPlanCompiler {
                     kind: RETIRE_RESOURCE,
                     id: batch.key.resource_id,
                     generation: batch.key.resource_generation,
-                    after_publication_generation: publication_generation,
                     ..RetirementRecord::default()
                 });
             }
@@ -1228,7 +1219,6 @@ impl OrderedPlanCompiler {
                     kind: RETIRE_BUFFER,
                     id: buffer.id,
                     generation: buffer.generation,
-                    after_publication_generation: publication_generation,
                     byte_length: buffer.bytes.len() as u32,
                     ..RetirementRecord::default()
                 });

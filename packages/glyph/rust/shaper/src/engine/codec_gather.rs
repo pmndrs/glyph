@@ -529,6 +529,11 @@ impl CodecGatherWorkspace {
                 self.f32_fields[field].set(output_index, value)?;
             }
         }
+        for field in 0..usize::from(program.u32_input_count) {
+            if u32_inputs & (1 << field) != 0 {
+                self.u32_fields[field].set(output_index, glyph.placement_slot)?;
+            }
+        }
         self.glyphs[output_index] = PlanGlyph {
             content_revision: glyph.content_revision,
             inline_start,
@@ -1801,6 +1806,7 @@ mod tests {
         let gathered = workspace.view();
         let input = gathered.plan_input();
         assert_eq!(input.placement_slots, [9]);
+        assert_eq!(input.u32_fields[0], [9]);
         assert_eq!(input.glyphs[0].content_revision, 2);
         assert_eq!(input.glyphs[0].inline_start, 40.0);
         assert_eq!(input.glyphs[0].block_start, 8.0);

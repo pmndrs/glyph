@@ -133,7 +133,6 @@ pub struct RetirementRecord {
     pub flags: u16,
     pub id: u32,
     pub generation: u32,
-    pub after_publication_generation: u32,
     pub byte_offset: u32,
     pub byte_length: u32,
 }
@@ -175,5 +174,5 @@ const _: () = assert!(core::mem::size_of::<BufferRecord>() == 32);
 const _: () = assert!(core::mem::size_of::<PatchRecord>() == 36);
 const _: () = assert!(core::mem::size_of::<PrimitiveRecord>() == 64);
 const _: () = assert!(core::mem::size_of::<DrawRecord>() == 56);
-const _: () = assert!(core::mem::size_of::<RetirementRecord>() == 24);
+const _: () = assert!(core::mem::size_of::<RetirementRecord>() == 20);
 const _: () = assert!(core::mem::size_of::<DiagnosticRecord>() == 24);

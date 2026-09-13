@@ -889,7 +889,6 @@ mod tests {
             kind: RETIRE_BUFFER,
             id: 10,
             generation: 2,
-            after_publication_generation: 3,
             ..RetirementRecord::default()
         }];
         let diagnostics = [DiagnosticRecord {

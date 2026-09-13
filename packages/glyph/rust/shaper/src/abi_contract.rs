@@ -1973,11 +1973,6 @@ field_offset!(RETIREMENT_KIND, RetirementRecord, kind);
 field_offset!(RETIREMENT_FLAGS, RetirementRecord, flags);
 field_offset!(RETIREMENT_ID, RetirementRecord, id);
 field_offset!(RETIREMENT_GENERATION, RetirementRecord, generation);
-field_offset!(
-    RETIREMENT_AFTER_PUBLICATION_GENERATION,
-    RetirementRecord,
-    after_publication_generation
-);
 field_offset!(RETIREMENT_BYTE_OFFSET, RetirementRecord, byte_offset);
 field_offset!(RETIREMENT_BYTE_LENGTH, RetirementRecord, byte_length);
 field_offset!(DIAGNOSTIC_CODE, DiagnosticRecord, code);
@@ -2584,7 +2579,6 @@ pub fn json() -> String {
                 "flags": RETIREMENT_FLAGS,
                 "id": RETIREMENT_ID,
                 "generation": RETIREMENT_GENERATION,
-                "afterPublicationGeneration": RETIREMENT_AFTER_PUBLICATION_GENERATION,
                 "byteOffset": RETIREMENT_BYTE_OFFSET,
                 "byteLength": RETIREMENT_BYTE_LENGTH
             },

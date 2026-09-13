@@ -726,12 +726,6 @@ fn write_retirement(bytes: &mut [u8], at: usize, value: RetirementRecord) {
     u16_at(bytes, at, RETIREMENT_FLAGS, value.flags);
     u32_at(bytes, at, RETIREMENT_ID, value.id);
     u32_at(bytes, at, RETIREMENT_GENERATION, value.generation);
-    u32_at(
-        bytes,
-        at,
-        RETIREMENT_AFTER_PUBLICATION_GENERATION,
-        value.after_publication_generation,
-    );
     u32_at(bytes, at, RETIREMENT_BYTE_OFFSET, value.byte_offset);
     u32_at(bytes, at, RETIREMENT_BYTE_LENGTH, value.byte_length);
 }
@@ -893,7 +887,6 @@ mod tests {
             kind: RETIRE_BUFFER,
             id: 12,
             generation: 2,
-            after_publication_generation: 4,
             ..RetirementRecord::default()
         }];
         let diagnostic = [DiagnosticRecord {

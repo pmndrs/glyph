@@ -674,15 +674,14 @@ export const textShaperAbi = {
       "status": 8
     },
     "engineRetirement": {
-      "afterPublicationGeneration": 12,
       "alignment": 4,
-      "byteLength": 20,
-      "byteOffset": 16,
+      "byteLength": 16,
+      "byteOffset": 12,
       "flags": 2,
       "generation": 8,
       "id": 4,
       "kind": 0,
-      "size": 24
+      "size": 20
     },
     "engineSemanticView": {
       "alignment": 4,
