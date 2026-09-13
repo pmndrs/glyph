@@ -2,6 +2,11 @@
 
 ## 2026-09-13
 
+- **Refreshed retained contracts for outward measurement rounding** — Re-derived the two public paragraph fixtures after
+  D-359 changed measurement publication to round outward. The only new values are the UIKit content height and the
+  unconstrained Japanese CJK width; glyph topology and placement arrays are unchanged. The UIKit generator now checks
+  its retained public exact-height result directly instead of reconstructing a pre-D-359 value from content height.
+
 - **Collapsed borrowed publication bytes to one arena per root** — Engine committed/pending stages and renderer
   candidate transactions remain atomic, but the Wasm result transport no longer alternates two buffers whose bytes
   already expire before the next call. Publication, query, detached-copy, and failure results now share one reusable

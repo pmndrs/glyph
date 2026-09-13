@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:c97d528633b503abcaf3b3555ae2097eb095d7e3d9e89b826aa1143458e2f343'
+source_digest: 'sha256:8b57139fbad01dde81a4633eebbe56aab747c72999174c30c4de273303404fe5'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -595,10 +595,11 @@ rather than GPU submission; it is one local observation, not a portable budget g
 
 The retained bidi/policy/UIKit and full CJK paragraph contracts again have executable generators. Both use the public
 Rust-plan `Text` API, keep each multi-width paragraph resident, and run in deterministic `--check` mode from the ordinary
-benchmark test and bake-fixture gate. The committed contracts remain byte-identical. Historical measurements produced
-before the f32 ABI retain their original numeric literal only when the regenerated public value is exactly f32-equivalent;
-the existing UIKit exact-width rounding seam is independently recomputed before its legacy literal is retained. Any
-material number, layout array, hash, identity, call contract, or document-shape change still fails generation.
+benchmark test and bake-fixture gate. Historical measurements produced before the f32 ABI retain their original numeric
+literal only when the regenerated public value is exactly f32-equivalent. D-359's outward publication deliberately
+re-derived the UIKit content height and unconstrained Japanese CJK width; the UIKit seam now checks its retained public
+exact-height result directly. Any material number, layout array, hash, identity, call contract, or document-shape change
+still fails generation.
 
 The separate live performance observation runs the human WebGPU surface at explicit 1× DPR on Chromium 149 and an Apple `metal-3` adapter. Each paragraph-scale script lane must settle its exact authored state with zero missing glyphs and then publish twelve causal FPS and GPU-report intervals; there are no sleeps or timing thresholds. The refreshed run observed 119.46–120.16 FPS, 0.2–0.3 ms median CPU submission, 0.3–0.5 ms CPU P95, 0.679–3.457 ms median GPU time, and 3.261–5.033 ms GPU P95 across 112–278 glyphs and one to fifteen draws. Initial public `Text` readiness was 7.2–22.0 ms and total startup 17.0–122.9 ms; the first cold Inter fetch dominates the high end. `Text.ready` includes shaping, paragraph layout, and bitmap-batch publication, so it is not mislabeled as a pure shape call; the dedicated HarfRust target owns that narrower metric. These machine observations are authenticated evidence, not cross-device budgets.
 

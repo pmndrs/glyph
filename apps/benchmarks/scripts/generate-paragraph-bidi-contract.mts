@@ -115,12 +115,10 @@ try {
     );
     const atMost = customLayouting.measure(360, YogaMeasureMode.AtMost, 90, YogaMeasureMode.AtMost);
     const exactWidth = customLayouting.measure(420.001, YogaMeasureMode.Exactly, Number.NaN, YogaMeasureMode.Undefined);
-    const expectedExactHeight =
-      Math.ceil(Math.fround(retainedUikit.uikit.resolved.layout.measurement.contentHeight) * 100) / 100;
+    const expectedExactHeight = retainedUikit.uikit.measurements.exactWidth.height;
     if (exactWidth.height !== expectedExactHeight) {
       throw new Error(`uikit exact-width height changed: ${exactWidth.height} !== ${expectedExactHeight}`);
     }
-    const retainedExactWidth = { ...exactWidth, height: retainedUikit.uikit.measurements.exactWidth.height };
     const definite = uikitFixture.resolveYogaLeaf(401.237, YogaMeasureMode.Exactly, 150.111, YogaMeasureMode.Exactly);
     const resolved = uikitFixture.layoutResolvedBox([401.24, 150.12], [7, 11, 13, 17], [1, 2, 3, 4]);
     const document = {
@@ -150,7 +148,7 @@ try {
           minHeight: customLayouting.minHeight,
           firstBaseline: customLayouting.firstBaseline,
         },
-        measurements: { natural, atMost, exactWidth: retainedExactWidth, definite },
+        measurements: { natural, atMost, exactWidth, definite },
         resolved: {
           outerSize: [401.24, 150.12],
           padding: [7, 11, 13, 17],
