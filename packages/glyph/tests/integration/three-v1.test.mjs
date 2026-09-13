@@ -3504,7 +3504,7 @@ test('multi-page Bitmap strikes remain one ordered texture-array draw', async (t
   fontDomain.dispose();
 });
 
-test('large inspection queries grow the inactive A/B result slot to the reported requirement', async (t) => {
+test('large inspection queries grow the result arena to the reported requirement', async (t) => {
   const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 8_192, policy: 'grow' } }));
   const fontDomain = createThreeFontDomain();
   const font = await fontDomain.loadFont(

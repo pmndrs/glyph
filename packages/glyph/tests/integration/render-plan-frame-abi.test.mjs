@@ -9,7 +9,7 @@ const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 const rootId = 5;
 const codecHandle = 11;
 
-test('publishes retained frame transactions through aligned A/B Wasm arenas', async () => {
+test('publishes retained frame transactions through one aligned borrowed Wasm result', async () => {
   const wasm = await readFile(wasmUrl);
   const abi = textShaperAbi;
   const instance = await WebAssembly.instantiate(await WebAssembly.compile(wasm), {});
@@ -148,27 +148,22 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
     revision: 1,
     requiredBaseRevision: 0,
     publicationGeneration: 1,
-    outputSlot: 0,
     flags: abi.engine.resultFlags.checkpoint,
   });
-  const firstHeader = resultBytes(memory, firstPointer, resultLayout).slice();
 
   const warmBuffer = memory.buffer;
   writeRequest(memory, requestPointer, abi, 1, 1, 1);
   const secondPointer = fn.textUpdate(rootId, requestPointer, requestLayout.size);
   assert.strictEqual(memory.buffer, warmBuffer, 'a warm empty transaction must not grow Wasm memory');
-  assert.notEqual(secondPointer, firstPointer);
+  assert.equal(secondPointer, firstPointer);
   assertResult(memory, secondPointer, abi, {
     status: abi.status.ok,
     engineRevision: 2,
     revision: 2,
     requiredBaseRevision: 1,
     publicationGeneration: 2,
-    outputSlot: 1,
     flags: 0,
   });
-  assert.deepEqual(resultBytes(memory, firstPointer, resultLayout), firstHeader);
-  const secondHeader = resultBytes(memory, secondPointer, resultLayout).slice();
 
   writeRequest(memory, requestPointer, abi, 2, 2, 3);
   const futureFencePointer = fn.textUpdate(rootId, requestPointer, requestLayout.size);
@@ -178,24 +173,21 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
     revision: 2,
     requiredBaseRevision: 2,
     publicationGeneration: 2,
-    outputSlot: 0,
     flags: 0,
   });
-  assert.deepEqual(resultBytes(memory, secondPointer, resultLayout), secondHeader);
+  assert.equal(futureFencePointer, secondPointer);
 
   writeRequest(memory, requestPointer, abi, 1, 2, 1);
   const failedPointer = fn.textUpdate(rootId, requestPointer, requestLayout.size);
-  assert.notEqual(failedPointer, secondPointer);
+  assert.equal(failedPointer, secondPointer);
   assertResult(memory, failedPointer, abi, {
     status: abi.status.revisionConflict,
     engineRevision: 2,
     revision: 2,
     requiredBaseRevision: 2,
     publicationGeneration: 2,
-    outputSlot: 0,
     flags: 0,
   });
-  assert.deepEqual(resultBytes(memory, secondPointer, resultLayout), secondHeader);
 
   writeRequest(memory, requestPointer, abi, 2, 0, 2);
   const checkpointPointer = fn.textUpdate(rootId, requestPointer, requestLayout.size);
@@ -205,10 +197,8 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
     revision: 3,
     requiredBaseRevision: 0,
     publicationGeneration: 3,
-    outputSlot: 0,
     flags: abi.engine.resultFlags.checkpoint,
   });
-  const checkpointHeader = resultBytes(memory, checkpointPointer, resultLayout).slice();
 
   assert.equal(fn.reserveRoot(rootId, 512, resultLayout.size, 8), abi.status.ok);
   requestPointer = fn.requestPointer(rootId);
@@ -225,10 +215,9 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
     revision: 4,
     requiredBaseRevision: 3,
     publicationGeneration: 4,
-    outputSlot: 1,
     flags: 0,
   });
-  assert.deepEqual(resultBytes(memory, checkpointPointer, resultLayout), checkpointHeader);
+  assert.equal(insertedPointer, checkpointPointer);
 
   const retainedEditLength = writeRequest(memory, requestPointer, abi, 4, 4, 4, [
     { start: 1, deleteCount: 1, insert: [0x58] },
@@ -241,10 +230,8 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
     revision: 5,
     requiredBaseRevision: 4,
     publicationGeneration: 5,
-    outputSlot: 0,
     flags: 0,
   });
-  const retainedHeader = resultBytes(memory, retainedEditPointer, resultLayout).slice();
 
   const invalidEditLength = writeRequest(memory, requestPointer, abi, 5, 5, 5, [
     { start: 9, deleteCount: 0, insert: [0x21] },
@@ -256,10 +243,9 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
     revision: 5,
     requiredBaseRevision: 5,
     publicationGeneration: 5,
-    outputSlot: 1,
     flags: 0,
   });
-  assert.deepEqual(resultBytes(memory, retainedEditPointer, resultLayout), retainedHeader);
+  assert.equal(invalidEditPointer, retainedEditPointer);
 
   const geometry = geometryRequestBytes(abi, 5, 5, 5);
   new Uint8Array(memory.buffer, requestPointer, geometry.byteLength).set(geometry);
@@ -270,7 +256,6 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
     revision: 6,
     requiredBaseRevision: 5,
     publicationGeneration: 6,
-    outputSlot: 1,
     flags: 0,
   });
   const oldBuffer = memory.buffer;
@@ -425,8 +410,4 @@ function assertResult(memory, pointer, abi, expected) {
   ]) {
     assert.equal(view.getUint32(layout[field], true), 0, field);
   }
-}
-
-function resultBytes(memory, pointer, layout) {
-  return new Uint8Array(memory.buffer, pointer, layout.size);
 }

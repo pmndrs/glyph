@@ -2,6 +2,12 @@
 
 ## 2026-09-13
 
+- **Collapsed borrowed publication bytes to one arena per root** — Engine committed/pending stages and renderer
+  candidate transactions remain atomic, but the Wasm result transport no longer alternates two buffers whose bytes
+  already expire before the next call. Publication, query, detached-copy, and failure results now share one reusable
+  arena; the unused `outputSlot` header field is removed. Rejection still retains renderer-owned accepted state and
+  forces the next engine result to be a checkpoint. The default reservation falls by one result arena per root.
+
 - **Closed cumulative retained-edit revision loss** — The recomposed-range shortcut now yields to the existing full
   stable-identity revision scan whenever an out-of-range retained line had to be rematerialized. This prevents a zero
   content revision from committing and rejecting the following adjacent edit. A focused Rust regression, 1,024-cycle

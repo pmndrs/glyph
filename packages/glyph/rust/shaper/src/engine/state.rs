@@ -793,8 +793,8 @@ impl TextEngine {
 
     /// Builds a complete independent render plan for selected committed glyph records.
     ///
-    /// This query leaves the planner revisions, publication generation, active output slot, and
-    /// acknowledgement fence untouched. The returned compiler owns compacted codec buffers that
+    /// This query leaves planner revisions, publication generation, and the acknowledgement fence
+    /// untouched. The returned compiler owns compacted codec buffers that
     /// the transport can encode as a one-shot checkpoint for a renderer to import.
     pub(crate) fn copy_glyphs(
         &self,

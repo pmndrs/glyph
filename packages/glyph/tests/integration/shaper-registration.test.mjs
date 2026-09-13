@@ -580,7 +580,7 @@ function align(value, alignment) {
   return Math.ceil(value / alignment) * alignment;
 }
 
-/** measureParagraph writes its semantic table to the inactive result slot without publishing — no revision advance, no publication-generation bump. */
+/** measureParagraph overwrites the borrowed result without publishing or advancing revisions. */
 test('measure_paragraph answers synchronously without publishing or burning revisions', async () => {
   const [interArtifact, shaperWasm, abi] = await Promise.all([
     readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),

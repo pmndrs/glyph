@@ -426,7 +426,6 @@ struct EngineResultHeader {
     revision: u32,
     required_base_revision: u32,
     publication_generation: u32,
-    output_slot: u32,
     request_capacity: u32,
     required_request_capacity: u32,
     result_capacity: u32,
@@ -1713,7 +1712,6 @@ field_offset!(
     EngineResultHeader,
     publication_generation
 );
-field_offset!(ENGINE_RESULT_OUTPUT_SLOT, EngineResultHeader, output_slot);
 field_offset!(
     ENGINE_RESULT_REQUEST_CAPACITY,
     EngineResultHeader,
@@ -2417,7 +2415,6 @@ pub fn json() -> String {
                 "revision": ENGINE_RESULT_REVISION,
                 "requiredBaseRevision": ENGINE_RESULT_REQUIRED_BASE_REVISION,
                 "publicationGeneration": ENGINE_RESULT_PUBLICATION_GENERATION,
-                "outputSlot": ENGINE_RESULT_OUTPUT_SLOT,
                 "requestCapacity": ENGINE_RESULT_REQUEST_CAPACITY,
                 "requiredRequestCapacity": ENGINE_RESULT_REQUIRED_REQUEST_CAPACITY,
                 "resultCapacity": ENGINE_RESULT_RESULT_CAPACITY,

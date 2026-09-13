@@ -11,16 +11,15 @@ use crate::{
         ENGINE_RESULT_DIAGNOSTICS_OFFSET, ENGINE_RESULT_DRAW_COUNT, ENGINE_RESULT_DRAWS_OFFSET,
         ENGINE_RESULT_ENGINE_REVISION, ENGINE_RESULT_FAULT_PARAGRAPH_ID,
         ENGINE_RESULT_FAULT_STYLE_ID, ENGINE_RESULT_FLAGS, ENGINE_RESULT_HEADER_ALIGNMENT,
-        ENGINE_RESULT_HEADER_SIZE, ENGINE_RESULT_OUTPUT_SLOT, ENGINE_RESULT_PATCH_COUNT,
-        ENGINE_RESULT_PATCHES_OFFSET, ENGINE_RESULT_PRIMITIVE_COUNT,
-        ENGINE_RESULT_PRIMITIVES_OFFSET, ENGINE_RESULT_PUBLICATION_GENERATION,
-        ENGINE_RESULT_REQUEST_CAPACITY, ENGINE_RESULT_REQUIRED_BASE_REVISION,
-        ENGINE_RESULT_REQUIRED_REQUEST_CAPACITY, ENGINE_RESULT_REQUIRED_RESULT_CAPACITY,
-        ENGINE_RESULT_RESOURCE_COUNT, ENGINE_RESULT_RESOURCES_OFFSET,
-        ENGINE_RESULT_RESULT_CAPACITY, ENGINE_RESULT_RETIREMENT_COUNT,
-        ENGINE_RESULT_RETIREMENTS_OFFSET, ENGINE_RESULT_REVISION, ENGINE_RESULT_ROOT_ID,
-        ENGINE_RESULT_SEMANTICS_COUNT, ENGINE_RESULT_SEMANTICS_OFFSET, ENGINE_RESULT_STATUS,
-        ENGINE_UPDATE_BATCH_ENTRY_SIZE, ENGINE_UPDATE_BATCH_REQUEST_LENGTH,
+        ENGINE_RESULT_HEADER_SIZE, ENGINE_RESULT_PATCH_COUNT, ENGINE_RESULT_PATCHES_OFFSET,
+        ENGINE_RESULT_PRIMITIVE_COUNT, ENGINE_RESULT_PRIMITIVES_OFFSET,
+        ENGINE_RESULT_PUBLICATION_GENERATION, ENGINE_RESULT_REQUEST_CAPACITY,
+        ENGINE_RESULT_REQUIRED_BASE_REVISION, ENGINE_RESULT_REQUIRED_REQUEST_CAPACITY,
+        ENGINE_RESULT_REQUIRED_RESULT_CAPACITY, ENGINE_RESULT_RESOURCE_COUNT,
+        ENGINE_RESULT_RESOURCES_OFFSET, ENGINE_RESULT_RESULT_CAPACITY,
+        ENGINE_RESULT_RETIREMENT_COUNT, ENGINE_RESULT_RETIREMENTS_OFFSET, ENGINE_RESULT_REVISION,
+        ENGINE_RESULT_ROOT_ID, ENGINE_RESULT_SEMANTICS_COUNT, ENGINE_RESULT_SEMANTICS_OFFSET,
+        ENGINE_RESULT_STATUS, ENGINE_UPDATE_BATCH_ENTRY_SIZE, ENGINE_UPDATE_BATCH_REQUEST_LENGTH,
         ENGINE_UPDATE_BATCH_RESULT_POINTER, ENGINE_UPDATE_BATCH_ROOT_ID,
         ENGINE_UPDATE_BATCH_STATUS, ENGINE_UPDATE_REQUEST_HEADER_SIZE,
     },
@@ -142,8 +141,7 @@ struct ArenaBlock([u8; ARENA_ALIGNMENT]);
 
 pub(crate) struct FrameTransport {
     request: AlignedArena,
-    outputs: [AlignedArena; 2],
-    active_slot: Option<usize>,
+    output: AlignedArena,
     publication_generation: u32,
 }
 
@@ -156,11 +154,7 @@ impl FrameTransport {
         }
         Ok(Self {
             request: AlignedArena::new(request_capacity)?,
-            outputs: [
-                AlignedArena::new(result_capacity)?,
-                AlignedArena::new(result_capacity)?,
-            ],
-            active_slot: None,
+            output: AlignedArena::new(result_capacity)?,
             publication_generation: 0,
         })
     }
@@ -172,8 +166,7 @@ impl FrameTransport {
             return Err(STATUS_INVALID_REQUEST);
         }
         self.request.reserve(request_capacity)?;
-        self.outputs[0].reserve(result_capacity)?;
-        self.outputs[1].reserve(result_capacity)
+        self.output.reserve(result_capacity)
     }
 
     pub fn request_pointer(&self) -> usize {
@@ -185,14 +178,13 @@ impl FrameTransport {
     }
 
     pub fn result_capacity(&self) -> u32 {
-        self.outputs[0].capacity().min(self.outputs[1].capacity())
+        self.output.capacity()
     }
 
     pub fn result_status(&self, pointer: usize) -> Option<u32> {
-        self.outputs
-            .iter()
-            .find(|output| output.pointer() == pointer)
-            .and_then(|output| read_u32(output.bytes(), ENGINE_RESULT_STATUS).ok())
+        (self.output.pointer() == pointer)
+            .then(|| read_u32(self.output.bytes(), ENGINE_RESULT_STATUS).ok())
+            .flatten()
     }
 
     pub fn request_at(&self, pointer: usize, length: u32) -> Result<&[u8], u32> {
@@ -217,11 +209,8 @@ impl FrameTransport {
         }
     }
 
-    /// Grows only the inactive output. The currently published pointer remains valid until the
-    /// normal next successful publication for this root switches A/B ownership.
     pub fn reserve_publish_capacity(&mut self, byte_length: u32) -> Result<(), u32> {
-        let slot = self.inactive_slot();
-        self.outputs[slot].reserve(byte_length)
+        self.output.reserve(byte_length)
     }
 
     pub fn next_publication_generation(&self) -> Result<u32, u32> {
@@ -242,10 +231,8 @@ impl FrameTransport {
         semantic_views: &[SemanticRecord],
         layout: EncodedPlanLayout,
     ) -> Result<StagedPlan, u32> {
-        let slot = self.inactive_slot();
-        encode_publication(plan, semantic_views, layout, self.outputs[slot].bytes_mut())?;
+        encode_publication(plan, semantic_views, layout, self.output.bytes_mut())?;
         Ok(StagedPlan {
-            slot,
             codec_handle: plan.codec_handle,
             capability_set: plan.capability_set,
             codec_fingerprint: plan.codec_fingerprint,
@@ -261,94 +248,79 @@ impl FrameTransport {
         plan: RenderPlanView<'_>,
         max_output_bytes: u32,
     ) -> Result<usize, u32> {
-        let slot = self.inactive_slot();
         let layout = super::render_plan_wire::publication_layout(plan, &[])?;
-        encode_publication(plan, &[], layout, self.outputs[slot].bytes_mut())?;
+        encode_publication(plan, &[], layout, self.output.bytes_mut())?;
         if layout.byte_length > max_output_bytes {
             return Err(STATUS_RESULT_TOO_LARGE);
         }
-        self.write_header(
-            slot,
-            HeaderValues {
-                status: 0,
-                fault: FrameFault::default(),
-                flags: RESULT_FLAG_CHECKPOINT,
-                root_id,
-                revision,
-                required_base_revision: 0,
-                publication_generation: self.publication_generation,
-                required_request_capacity: 0,
-                required_result_capacity: 0,
-                codec_handle: plan.codec_handle,
-                capability_set: plan.capability_set,
-                codec_fingerprint: plan.codec_fingerprint,
-                layout,
-            },
-        );
-        Ok(self.outputs[slot].pointer())
+        self.write_header(HeaderValues {
+            status: 0,
+            fault: FrameFault::default(),
+            flags: RESULT_FLAG_CHECKPOINT,
+            root_id,
+            revision,
+            required_base_revision: 0,
+            publication_generation: self.publication_generation,
+            required_request_capacity: 0,
+            required_result_capacity: 0,
+            codec_handle: plan.codec_handle,
+            capability_set: plan.capability_set,
+            codec_fingerprint: plan.codec_fingerprint,
+            layout,
+        });
+        Ok(self.output.pointer())
     }
 
     pub fn publish_success(&mut self, commit: CommittedUpdate, staged: StagedPlan) -> usize {
-        debug_assert_eq!(staged.slot, self.inactive_slot());
         let generation = self.publication_generation + 1;
-        self.write_header(
-            staged.slot,
-            HeaderValues {
-                status: 0,
-                flags: if commit.checkpoint {
-                    RESULT_FLAG_CHECKPOINT
-                } else {
-                    0
-                },
-                root_id: commit.root_id,
-                revision: commit.revision,
-                required_base_revision: commit.required_base_revision,
-                publication_generation: generation,
-                required_request_capacity: 0,
-                fault: FrameFault::default(),
-                required_result_capacity: 0,
-                codec_handle: staged.codec_handle,
-                capability_set: staged.capability_set,
-                codec_fingerprint: staged.codec_fingerprint,
-                layout: staged.layout,
+        self.write_header(HeaderValues {
+            status: 0,
+            flags: if commit.checkpoint {
+                RESULT_FLAG_CHECKPOINT
+            } else {
+                0
             },
-        );
-        self.active_slot = Some(staged.slot);
+            root_id: commit.root_id,
+            revision: commit.revision,
+            required_base_revision: commit.required_base_revision,
+            publication_generation: generation,
+            required_request_capacity: 0,
+            fault: FrameFault::default(),
+            required_result_capacity: 0,
+            codec_handle: staged.codec_handle,
+            capability_set: staged.capability_set,
+            codec_fingerprint: staged.codec_fingerprint,
+            layout: staged.layout,
+        });
         self.publication_generation = generation;
-        self.outputs[staged.slot].pointer()
+        self.output.pointer()
     }
 
-    /// Stages a query result in the inactive slot without publishing: the header and
-    /// semantic table are written for the host to copy out before its next update call
-    /// (host lease), while the active slot, publication generation, and A/B
-    /// alternation stay untouched.
+    /// Stages a query result for the host to copy before its next Wasm call without
+    /// advancing the publication generation.
     pub fn stage_query(
         &mut self,
         root_id: u32,
         revision: RootRevision,
         semantic_views: &[SemanticRecord],
     ) -> Result<usize, u32> {
-        let slot = self.inactive_slot();
-        let layout = encode_query(semantic_views, self.outputs[slot].bytes_mut())?;
-        self.write_header(
-            slot,
-            HeaderValues {
-                status: 0,
-                fault: FrameFault::default(),
-                flags: 0,
-                root_id,
-                revision,
-                required_base_revision: revision.root,
-                publication_generation: self.publication_generation,
-                required_request_capacity: 0,
-                required_result_capacity: 0,
-                codec_handle: 0,
-                capability_set: 0,
-                codec_fingerprint: 0,
-                layout,
-            },
-        );
-        Ok(self.outputs[slot].pointer())
+        let layout = encode_query(semantic_views, self.output.bytes_mut())?;
+        self.write_header(HeaderValues {
+            status: 0,
+            fault: FrameFault::default(),
+            flags: 0,
+            root_id,
+            revision,
+            required_base_revision: revision.root,
+            publication_generation: self.publication_generation,
+            required_request_capacity: 0,
+            required_result_capacity: 0,
+            codec_handle: 0,
+            capability_set: 0,
+            codec_fingerprint: 0,
+            layout,
+        });
+        Ok(self.output.pointer())
     }
 
     pub fn publish_failure(
@@ -360,39 +332,31 @@ impl FrameTransport {
         required_request_capacity: u32,
         required_result_capacity: u32,
     ) -> usize {
-        let slot = self.inactive_slot();
-        self.write_header(
-            slot,
-            HeaderValues {
-                status,
-                fault,
-                flags: 0,
-                root_id,
-                revision,
-                required_base_revision: revision.root,
-                publication_generation: self.publication_generation,
-                required_request_capacity,
-                required_result_capacity,
-                codec_handle: 0,
-                capability_set: 0,
-                codec_fingerprint: 0,
-                layout: EncodedPlanLayout {
-                    byte_length: ENGINE_RESULT_HEADER_SIZE,
-                    ..EncodedPlanLayout::default()
-                },
+        self.write_header(HeaderValues {
+            status,
+            fault,
+            flags: 0,
+            root_id,
+            revision,
+            required_base_revision: revision.root,
+            publication_generation: self.publication_generation,
+            required_request_capacity,
+            required_result_capacity,
+            codec_handle: 0,
+            capability_set: 0,
+            codec_fingerprint: 0,
+            layout: EncodedPlanLayout {
+                byte_length: ENGINE_RESULT_HEADER_SIZE,
+                ..EncodedPlanLayout::default()
             },
-        );
-        self.outputs[slot].pointer()
+        });
+        self.output.pointer()
     }
 
-    fn inactive_slot(&self) -> usize {
-        self.active_slot.map_or(0, |slot| slot ^ 1)
-    }
-
-    fn write_header(&mut self, slot: usize, values: HeaderValues) {
-        let result_capacity = self.outputs[slot].capacity();
+    fn write_header(&mut self, values: HeaderValues) {
+        let result_capacity = self.output.capacity();
         let request_capacity = self.request.capacity();
-        let bytes = self.outputs[slot].bytes_mut();
+        let bytes = self.output.bytes_mut();
         bytes[..ENGINE_RESULT_HEADER_SIZE as usize].fill(0);
         write_u32(bytes, ENGINE_RESULT_ABI_VERSION, ABI_VERSION);
         write_u32(bytes, ENGINE_RESULT_BYTE_LENGTH, values.layout.byte_length);
@@ -411,7 +375,6 @@ impl FrameTransport {
             ENGINE_RESULT_PUBLICATION_GENERATION,
             values.publication_generation,
         );
-        write_u32(bytes, ENGINE_RESULT_OUTPUT_SLOT, [0, 1][slot]);
         write_u32(bytes, ENGINE_RESULT_REQUEST_CAPACITY, request_capacity);
         write_u32(
             bytes,
@@ -511,7 +474,6 @@ struct HeaderValues {
 }
 
 pub(crate) struct StagedPlan {
-    slot: usize,
     codec_handle: u32,
     capability_set: u32,
     codec_fingerprint: u64,
@@ -780,43 +742,35 @@ mod tests {
                 .map(|(_, pointer)| *pointer)
                 .unwrap();
             assert_eq!(transport.result_status(native_pointer), Some(0));
-            let output = transport
-                .outputs
-                .iter()
-                .find(|output| output.pointer() == native_pointer)
-                .unwrap();
             assert_eq!(
-                read_u32(output.bytes(), ENGINE_RESULT_ROOT_ID).unwrap(),
+                read_u32(transport.output.bytes(), ENGINE_RESULT_ROOT_ID).unwrap(),
                 *root_id
             );
         }
     }
 
     #[test]
-    fn growing_an_inactive_output_preserves_the_active_publication_pointer() {
+    fn growing_the_output_preserves_bytes_and_reports_the_new_capacity() {
         let mut transport = FrameTransport::new(256, 256).unwrap();
         let first_plan = transport.stage_plan(plan()).unwrap();
-        let first = transport.publish_success(commit(1), first_plan);
-        let first_header =
-            transport.outputs[0].bytes()[..ENGINE_RESULT_HEADER_SIZE as usize].to_vec();
+        transport.publish_success(commit(1), first_plan);
+        let first_header = transport.output.bytes()[..ENGINE_RESULT_HEADER_SIZE as usize].to_vec();
 
         transport.reserve_publish_capacity(1024).unwrap();
 
-        assert_eq!(first, transport.outputs[0].pointer());
         assert_eq!(
-            &transport.outputs[0].bytes()[..ENGINE_RESULT_HEADER_SIZE as usize],
+            &transport.output.bytes()[..ENGINE_RESULT_HEADER_SIZE as usize],
             first_header
         );
-        assert!(transport.outputs[1].capacity() >= 1024);
+        assert!(transport.output.capacity() >= 1024);
     }
 
     #[test]
-    fn successful_publications_alternate_and_failures_preserve_the_active_slot() {
+    fn publications_and_failures_share_one_borrowed_output() {
         let mut transport = FrameTransport::new(256, 256).unwrap();
         let first_plan = transport.stage_plan(plan()).unwrap();
         let first = transport.publish_success(commit(1), first_plan);
-        let first_bytes = transport.outputs[0].bytes();
-        assert_eq!(read_u32(first_bytes, ENGINE_RESULT_OUTPUT_SLOT).unwrap(), 0);
+        let first_bytes = transport.output.bytes();
         assert_eq!(
             read_u32(first_bytes, ENGINE_RESULT_PUBLICATION_GENERATION).unwrap(),
             1
@@ -830,18 +784,13 @@ mod tests {
             512,
             0,
         );
-        assert_ne!(failure, first);
-        assert_eq!(transport.active_slot, Some(0));
+        assert_eq!(failure, first);
         assert_eq!(transport.publication_generation, 1);
 
         let second_plan = transport.stage_plan(plan()).unwrap();
         let second = transport.publish_success(commit(2), second_plan);
         assert_eq!(second, failure);
-        let second_bytes = transport.outputs[1].bytes();
-        assert_eq!(
-            read_u32(second_bytes, ENGINE_RESULT_OUTPUT_SLOT).unwrap(),
-            1
-        );
+        let second_bytes = transport.output.bytes();
         assert_eq!(
             read_u32(second_bytes, ENGINE_RESULT_PUBLICATION_GENERATION).unwrap(),
             2
@@ -849,21 +798,20 @@ mod tests {
     }
 
     #[test]
-    fn detached_checkpoints_do_not_advance_or_alternate_source_publication_state() {
+    fn detached_checkpoints_do_not_advance_source_publication_state() {
         let mut transport = FrameTransport::new(256, 1024).unwrap();
         let first_plan = transport.stage_plan(plan()).unwrap();
-        transport.publish_success(commit(1), first_plan);
+        let first = transport.publish_success(commit(1), first_plan);
 
         let revision = RootRevision { engine: 7, root: 5 };
         let detached = transport
             .stage_detached_plan(3, revision, plan(), 1024)
             .unwrap();
-        assert_eq!(detached, transport.outputs[1].pointer());
-        assert_eq!(transport.active_slot, Some(0));
+        assert_eq!(detached, first);
         assert_eq!(transport.publication_generation, 1);
         assert_eq!(transport.next_publication_generation().unwrap(), 2);
 
-        let bytes = transport.outputs[1].bytes();
+        let bytes = transport.output.bytes();
         assert_eq!(
             read_u32(bytes, ENGINE_RESULT_FLAGS).unwrap(),
             RESULT_FLAG_CHECKPOINT
@@ -881,11 +829,7 @@ mod tests {
 
         let second_plan = transport.stage_plan(plan()).unwrap();
         let second = transport.publish_success(commit(2), second_plan);
-        assert_eq!(
-            second, detached,
-            "the next source publication still uses the inactive slot"
-        );
-        assert_eq!(transport.active_slot, Some(1));
+        assert_eq!(second, detached);
         assert_eq!(transport.publication_generation, 2);
     }
 
@@ -973,7 +917,7 @@ mod tests {
         let staged = transport.stage_plan(plan).unwrap();
         let expected = staged.layout;
         transport.publish_success(commit(1), staged);
-        let bytes = transport.outputs[0].bytes();
+        let bytes = transport.output.bytes();
         let patch_offset = read_u32(bytes, ENGINE_RESULT_PATCHES_OFFSET).unwrap() as usize;
         let payload_offset = read_u32(bytes, patch_offset + PATCH_PAYLOAD_OFFSET).unwrap() as usize;
         assert_eq!(read_u32(bytes, ENGINE_RESULT_CODEC_HANDLE).unwrap(), 9);

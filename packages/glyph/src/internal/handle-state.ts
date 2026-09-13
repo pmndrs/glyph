@@ -106,7 +106,7 @@ export type HandleEngineFontBinder = <Format extends RasterFormatMetadata>(
   font: Font<Format>,
 ) => HandleEngineFontBinding<Format>;
 
-/** One borrowed A/B render-plan publication; `bytes` point into Wasm memory and expire on the transport's next call. Renderers must consume it synchronously. */
+/** One borrowed render-plan publication. Its Wasm bytes expire on the transport's next call. */
 export interface PlanPublication {
   readonly bytes: Uint8Array;
   readonly memoryBuffer: ArrayBuffer;
@@ -115,7 +115,6 @@ export interface PlanPublication {
   readonly revision: number;
   readonly requiredBaseRevision: number;
   readonly publicationGeneration: number;
-  readonly outputSlot: number;
   readonly flags: number;
   readonly codecHandle: CodecHandle | 0;
   readonly capabilitySet: number;
@@ -1316,7 +1315,7 @@ export class PlanTransport {
     this.#stagedUpdate = undefined;
   }
 
-  /** Answers one paragraph-scoped synchronous measurement without publishing. Result bytes ride the inactive output slot and stay readable only until the next call into this Wasm module; engine revisions, publication generation, and renderer fence are untouched. */
+  /** Answers one paragraph-scoped synchronous measurement without publishing. Result bytes stay readable only until the next Wasm call; revisions and renderer fences are untouched. */
   measureParagraph(request: Uint8Array, paragraphId: ParagraphId, maxOutputBytes: number): PlanPublication {
     this.#assertActive();
     if (!(request instanceof Uint8Array) || request.byteLength === 0) {
@@ -1345,15 +1344,13 @@ export class PlanTransport {
       const header = new DataView(memoryBuffer, resultPointer, layout.size);
       const status = header.getUint32(layout.status, true);
       const requiredResultCapacity = header.getUint32(layout.requiredResultCapacity, true);
-      const availableResultCapacity = Math.min(this.#resultCapacity, header.getUint32(layout.resultCapacity, true));
+      const availableResultCapacity = header.getUint32(layout.resultCapacity, true);
       if (
         status === textShaperAbi.status.resultTooLarge &&
         canRepairResultCapacity &&
         requiredResultCapacity <= maxOutputBytes &&
         requiredResultCapacity > availableResultCapacity
       ) {
-        // Rust gates queries on the smaller active/inactive capacity, so their minimum is the
-        // exact growth boundary; each retry grows both slots beyond it.
         canRepairResultCapacity = false;
         this.reserve(requestLength, requiredResultCapacity);
         continue;
@@ -1546,7 +1543,6 @@ export class PlanTransport {
       revision: header.getUint32(layout.revision, true),
       requiredBaseRevision: header.getUint32(layout.requiredBaseRevision, true),
       publicationGeneration: header.getUint32(layout.publicationGeneration, true),
-      outputSlot: header.getUint32(layout.outputSlot, true),
       flags: header.getUint32(layout.flags, true),
       codecHandle: uint32(header.getUint32(layout.codecHandle, true), 'result codec handle') as CodecHandle | 0,
       capabilitySet: header.getUint32(layout.capabilitySet, true),

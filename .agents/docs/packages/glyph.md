@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:926e62682acf5c6a788c45fe735fa87e855c6c4b44612ad90b75fe8d7e037711'
+source_digest: 'sha256:09f3584c5d0671835969851d8a33af727a1150ab23de0897baa93c3940e489b4'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -126,7 +126,7 @@ font-baker Wasm alone enables a feature-gated `std` adapter for Fontations subse
 pass its `wasm32-unknown-unknown --no-default-features` build. The text engine uses the existing compile-time direct-memory mapping
 for font registrations. Ordinary publication enters once through
 `pmndrs_glyph_engine_update_batch(entriesPointer, count)`, whose entries address the already-written request slice and
-existing A/B result storage for each dirty root. Paragraph-scoped semantic queries remain separate synchronous calls.
+one borrowed result arena for each dirty root. Paragraph-scoped semantic queries remain separate synchronous calls.
 TypeScript does not independently shape, lay out, or pack paragraphs.
 
 The root `glyph` runtime initializes one engine idempotently. `glyph.handle(name, config)` creates independent mutable
@@ -670,7 +670,7 @@ measurements and inspections remain cached until the next semantic mutation.
 The engine additionally exports `pmndrs_glyph_engine_measure_paragraph`, a paragraph-scoped synchronous query beside
 `pmndrs_glyph_engine_update`. It reuses the update request layout with the queried paragraph as an ABI argument, runs
 validation and speculative preparation for that paragraph only, and writes the header plus semantic table into the
-inactive result slot without publishing: no A/B flip, no publication-generation bump, no revision advance, and no
+borrowed result arena without publishing: no publication-generation bump, no revision advance, and no
 renderer-fence acknowledgment. The host must copy the records out before its next update call (host lease). The query
 terminates leave-committed, so the following ordinary frame proceeds from pre-measure revisions with no checkpoint
 hazard.
@@ -1223,8 +1223,8 @@ word sidecar and chunk summaries as fit indexes, retain current shaping and bidi
 changes patch stable run placement instead of republishing unchanged glyph-local geometry. This paragraph records the
 baseline only; it does not claim that `LayoutRun`, public contour authoring, projected objects, or drop caps are implemented.
 
-Large `measure()` and `glyphs()` queries also reserve against the smaller of the active slot's cached capacity and the
-required capacity reported by the failing inactive A/B result slot. Each retry must strictly grow the actual failing slot
+Large `measure()` and `glyphs()` queries reserve against the result arena's reported capacity and required watermark.
+Each retry must strictly grow the arena
 or return the typed engine error. This fixes alternating large inspection queries without an arbitrary retry count and
 without changing normal publication or cached-query work.
 

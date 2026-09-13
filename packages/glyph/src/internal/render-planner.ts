@@ -92,7 +92,7 @@ export interface RenderPlanReader {
   bytes(offset: number, byteLength: number): Uint8Array;
 }
 
-/** A synchronous view into engine-owned A/B memory. */
+/** A synchronous view into engine-owned result memory. */
 export interface BorrowedRenderPlan extends RenderPlanReader {
   readonly delivery: 'borrowed';
 }

@@ -16,20 +16,20 @@ import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 const THREE_CODEC_HANDLE = permanentGlyphId('codec', 'test.text-engine-handle-state/three');
 
-test('measurement growth compares both asymmetric A/B result capacities', () => {
+test('measurement growth uses the exact failing result capacity', () => {
   const memory = { buffer: new ArrayBuffer(2_048) };
   const resultPointer = 512;
   const requestPointer = 64;
   const layout = textShaperAbi.layouts.engineResult;
   let grown = false;
   let reserves = 0;
-  const writeHeader = (status, requiredCapacity, inactiveCapacity) => {
+  const writeHeader = (status, requiredCapacity, resultCapacity) => {
     const header = new DataView(memory.buffer, resultPointer, layout.size);
     new Uint8Array(memory.buffer, resultPointer, layout.size).fill(0);
     header.setUint32(layout.byteLength, layout.size, true);
     header.setUint32(layout.status, status, true);
     header.setUint32(layout.requestCapacity, 64, true);
-    header.setUint32(layout.resultCapacity, inactiveCapacity, true);
+    header.setUint32(layout.resultCapacity, resultCapacity, true);
     header.setUint32(layout.requiredResultCapacity, requiredCapacity, true);
   };
   const exports = {
@@ -42,7 +42,7 @@ test('measurement growth compares both asymmetric A/B result capacities', () => 
       return textShaperAbi.status.ok;
     },
     measureParagraph: () => {
-      if (!grown) writeHeader(textShaperAbi.status.resultTooLarge, 100, 500);
+      if (!grown) writeHeader(textShaperAbi.status.resultTooLarge, 100, 8);
       else writeHeader(textShaperAbi.status.ok, 0, 500);
       return resultPointer;
     },
@@ -60,7 +60,7 @@ test('measurement growth compares both asymmetric A/B result capacities', () => 
 
   const result = transport.measureParagraph(new Uint8Array([1]), paragraph, 1_000);
   assert.equal(result.bytes.byteLength, layout.size);
-  assert.equal(reserves, 1, 'the smaller active slot must trigger one strict growth');
+  assert.equal(reserves, 1, 'the failing arena must trigger one strict growth');
 });
 
 test('measurement growth permits at most one bounded capacity repair', () => {
@@ -157,7 +157,7 @@ test('measurement growth rejects capacity beyond the authored output limit witho
     },
   );
   assert.equal(calls, 1);
-  assert.equal(reserves, 0, 'an over-limit watermark must not grow either A/B result slot');
+  assert.equal(reserves, 0, 'an over-limit watermark must not grow the result arena');
 });
 
 test('a glyph engine owns every configured-handle state it creates', async () => {
