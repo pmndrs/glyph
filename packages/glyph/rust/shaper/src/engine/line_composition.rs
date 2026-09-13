@@ -842,6 +842,41 @@ mod tests {
     }
 
     #[test]
+    fn exact_integer_fit_edge_is_inclusive_and_stable() {
+        let full_width_units = 39_000_001_i64;
+        let first_word_units = 6_553_600_i64;
+        let mut advances = vec![0.0; 65];
+        advances[0] = scaled_from_layout_units(first_word_units);
+        advances[64] = scaled_from_layout_units(full_width_units - first_word_units);
+        let mut flags = vec![0; 65];
+        flags[0] = CLUSTER_ALLOWED_BREAK;
+        let indexed = make_quantized_clusters(&advances, &flags);
+        assert!(!indexed.word_breaks.is_empty());
+        let mut scalar = make_quantized_clusters(&advances, &flags);
+        scalar.word_breaks.clear();
+        scalar.chunk_flags_or.clear();
+
+        for (width_units, expected_end) in [
+            (full_width_units - 1, 1),
+            (full_width_units, 65),
+            (full_width_units + 1, 65),
+        ] {
+            for clusters in [&indexed, &scalar] {
+                let line = layout_next_line_integer(
+                    clusters,
+                    &mut LineCursor::default(),
+                    Some(width_units),
+                    WRAP_WORD,
+                    0.0,
+                )
+                .unwrap()
+                .unwrap();
+                assert_eq!(line.cluster_end, expected_end, "width {width_units}");
+            }
+        }
+    }
+
+    #[test]
     fn chunked_fit_matches_the_scalar_fit_across_multi_chunk_lines() {
         use super::super::cluster_state::LAYOUT_CHUNK;
         use super::super::layout_units::layout_units_from_scaled;

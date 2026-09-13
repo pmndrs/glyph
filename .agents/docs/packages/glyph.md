@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:3effaf525a7e643713519933c020aae55fda837537bde31488e79439e21a07f2'
+source_digest: 'sha256:5fe59a14eacb34bfb5453d1430fc4465ae31cb2565c3c4e886449894e4c90cfe'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1140,6 +1140,13 @@ authoritative shaped advances and intra-line positioning cursor remain `f64`, an
 geometry narrows to the public `f32` contract. The original migration landed as stacked slices with an interleaved
 same-run A/B for each — sides alternated in identical order within one process session because this host drifts several
 percent between sessions. Historical step deltas, medians at the 22,000-glyph corpus:
+
+Break admission is inclusive and exact in that integer lane: equal fits, one layout unit below breaks, and one above
+fits, with indexed and scalar word paths pinned to the same result. Measurement sizes, content extents, and intrinsic
+widths round outward at the public f32 boundary whenever nearest rounding would undershoot their retained f64 authority.
+This prevents a raw measure-to-exact feedback loop from presenting less width than the line it just measured without
+adding a floating epsilon or history-dependent hysteresis. Host adapters still round outward to their own point scale
+after padding, border, and layout-engine arithmetic.
 
 | Slice                                             | Lane deltas (median, rounds consistent)                                                                                                                          |
 | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |

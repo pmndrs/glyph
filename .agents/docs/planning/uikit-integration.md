@@ -139,9 +139,13 @@ This separation matters for Yoga and other retained layout engines: they may mea
 
 ## Measurement feedback discipline
 
-One rule is a hard requirement, not an adapter preference: **round a measured width up to the host's point scale before feeding it back as the next constraint.** Never hand a raw `contentWidth` back as an `exactly` width.
+One rule is a hard requirement, not an adapter preference: **round a measured width up to the host's point scale before feeding it back as the next constraint.** Do this after the host's padding, border, and box-model arithmetic.
 
-Measurements return f32-rounded extents. At knife-edge widths, re-laying-out at exactly the measured number can break one more line than the measurement saw, which measures narrower, which un-breaks — and a reactive layout engine that re-measures every frame turns that into high-frequency break/unbreak flapping with matching CPU churn. This is mechanical and reproducible: sweeping 811 fractional widths through an unrounded measure→constrain loop flips the line count at 39 of them; rounding the fed-back width up to whole units flips zero. The repository's own uikit conformance fixture applies `roundUpToPointScale` to every measure result for exactly this reason.
+Glyph now outward-rounds retained f64 measurement extents at its public f32 ABI, so a raw Glyph measure→exact loop does
+not publish less width than the line it just admitted. Earlier nearest rounding flipped line counts at 39 of 811
+fractional widths. The engine correction uses no epsilon: line fitting remains exact F16.16, and the published f32 is the
+smallest representable value at or above the retained extent. Host arithmetic can still subtract padding or borders and
+land below that value, so the repository's uikit fixture retains `roundUpToPointScale` at the final host boundary.
 
 The stable pattern for a Yoga measure callback:
 

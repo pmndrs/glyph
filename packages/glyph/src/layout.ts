@@ -29,7 +29,7 @@ export interface BaselineMetrics {
   readonly lineHeight: number;
 }
 
-/** Allocation-light paragraph metrics; no per-glyph arrays. `contentWidth`/`contentHeight` are *advance* extents (CSS box measure); `inkBounds` is the *ink* extent (glyph outlines) — using one where the other belongs is a silent visual error. */
+/** Allocation-light paragraph metrics; no per-glyph arrays. Size and content extents round outward at the public f32 boundary so measure-to-exact feedback cannot undershoot the measured layout. `contentWidth`/`contentHeight` are *advance* extents (CSS box measure); `inkBounds` is the *ink* extent (glyph outlines) — using one where the other belongs is a silent visual error. */
 export interface ParagraphMeasurement extends BaselineMetrics {
   /** Whole-paragraph baseline metrics use `firstBaseline` as their reference baseline. */
   readonly ascent: number;
@@ -81,7 +81,7 @@ export interface ParagraphLayoutSummary extends ParagraphMeasurement, ParagraphI
   readonly lines: readonly ParagraphLineMetrics[];
 }
 
-/** Intrinsic (constraint-independent) inline extents from the same measurement pass. `maxContentWidth` is the widest run between forced breaks; `minContentWidth` is the widest run after soft breaks too. Column splits and clipping don't participate. */
+/** Outward-rounded intrinsic inline extents from the same measurement pass. `maxContentWidth` is the widest run between forced breaks; `minContentWidth` is the widest run after soft breaks too. Column splits and clipping don't participate. */
 export interface ParagraphIntrinsicWidths {
   readonly minContentWidth: number;
   readonly maxContentWidth: number;

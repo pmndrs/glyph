@@ -495,11 +495,11 @@ pub(crate) fn append_measurement(
         item_count: u32::try_from(line_count).map_err(|_| EngineError::ResultTooLarge)?,
         inline_start: width,
         block_start: height,
-        inline_extent: finite_nonnegative_f32(full_content_width)?,
-        block_extent: finite_nonnegative_f32(full_content_height)?,
+        inline_extent: finite_nonnegative_measure_f32(full_content_width)?,
+        block_extent: finite_nonnegative_measure_f32(full_content_height)?,
         ascent: finite_nonnegative_f32(first_ascent)?,
-        min_content_width: finite_nonnegative_f32(intrinsics.min_content_width)?,
-        max_content_width: finite_nonnegative_f32(intrinsics.max_content_width)?,
+        min_content_width: finite_nonnegative_measure_f32(intrinsics.min_content_width)?,
+        max_content_width: finite_nonnegative_measure_f32(intrinsics.max_content_width)?,
         ..SemanticRecord::default()
     };
     paragraph_ink.write(&mut target[summary_index])?;
@@ -605,8 +605,8 @@ fn line_fragments(flow: &FlowLayoutArena, line: FlowLine) -> Result<&[FlowFragme
 
 fn resolve_axis(mode: u8, requested: f32, content: f64) -> Result<f32, EngineError> {
     match mode {
-        AXIS_UNCONSTRAINED => finite_nonnegative_f32(content),
-        AXIS_AT_MOST => finite_nonnegative_f32(content.min(f64::from(requested))),
+        AXIS_UNCONSTRAINED => finite_nonnegative_measure_f32(content),
+        AXIS_AT_MOST => finite_nonnegative_measure_f32(content.min(f64::from(requested))),
         AXIS_EXACT => Ok(requested),
         _ => Err(EngineError::InvalidRequest),
     }
@@ -634,6 +634,18 @@ fn finite_nonnegative_f32(value: f64) -> Result<f32, EngineError> {
         return Err(EngineError::InvalidRequest);
     }
     finite_f32(value)
+}
+
+fn finite_nonnegative_measure_f32(value: f64) -> Result<f32, EngineError> {
+    let narrowed = finite_nonnegative_f32(value)?;
+    if f64::from(narrowed) >= value {
+        return Ok(narrowed);
+    }
+    let rounded_up = f32::from_bits(narrowed.to_bits().saturating_add(1));
+    rounded_up
+        .is_finite()
+        .then_some(rounded_up)
+        .ok_or(EngineError::ResultTooLarge)
 }
 
 #[cfg(test)]
@@ -943,8 +955,35 @@ mod tests {
         .unwrap();
 
         assert_eq!(records[0].flags, 0);
-        assert_eq!(records[0].inline_start, 140.64_f32);
-        assert_eq!(records[0].block_start, 140.64_f32);
+        assert!(f64::from(records[0].inline_start) >= 140.64);
+        assert!(f64::from(records[0].block_start) >= 140.64);
+    }
+
+    #[test]
+    fn measured_extent_rounds_outward_across_the_fixed_point_boundary() {
+        use super::super::layout_units::{layout_units_from_scaled, scaled_from_layout_units};
+
+        let content_units = 39_000_001_i64;
+        let content = scaled_from_layout_units(content_units);
+        let nearest = content as f32;
+        assert!(layout_units_from_scaled(f64::from(nearest)) < content_units);
+
+        let published = finite_nonnegative_measure_f32(content).unwrap();
+        assert!(f64::from(published) >= content);
+        assert!(layout_units_from_scaled(f64::from(published)) >= content_units);
+        assert_eq!(finite_nonnegative_measure_f32(600.0).unwrap(), 600.0);
+
+        for units in (1_i64..=1_000_000).step_by(97).chain([
+            16_777_215,
+            16_777_216,
+            39_000_001,
+            1_i64 << 40,
+            (1_i64 << 52) - 1,
+        ]) {
+            let published =
+                finite_nonnegative_measure_f32(scaled_from_layout_units(units)).unwrap();
+            assert!(layout_units_from_scaled(f64::from(published)) >= units);
+        }
     }
 
     fn constraint(width_mode: u8, width: f32, height_mode: u8, height: f32) -> FlowConstraint {
