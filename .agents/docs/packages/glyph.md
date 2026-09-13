@@ -1239,9 +1239,9 @@ invalidates stale positioning by construction.
 ## Fragment-relative reflow frontier
 
 PR #161 is merged. Its retained word fitting, line reuse, partial update sections, paragraph ordering, synchronous queries,
-publication lifecycle, and renderer batching are the baseline rather than open merge gates. Milestone 12.1's proof gate is
-closed and 12.2's single-model cutover is active. Public contour, projected-object, and drop-cap authoring remain later
-milestones; the placement work does not imply those APIs.
+publication lifecycle, and renderer batching are the baseline rather than open merge gates. Milestone 12's proof,
+single-model cutover, renderer integration, and ordered-only cleanup gates are closed. Public contour, projected-object,
+and drop-cap authoring remain later milestones; the placement work does not imply those APIs.
 
 The M0/M1 harness first derived maximal shaping-compatible `LayoutRun` intervals from retained cluster ownership without
 changing production execution. Production now treats those as post-shaping geometry runs: adjacent shaping runs may
@@ -1477,6 +1477,18 @@ source, complete Latin measured `3.864 / 3.994 ms` median/p95 and dense CJK meas
 `2.21% / 1.23%` relative standard deviation. This confirmed that duplicate origin storage materially amplified the dense
 CJK regression, but that earlier incomplete indexed design still did not beat the same-contract baseline.
 Those measurements remain attribution history rather than the current package state.
+
+The final ordered-only verification uses exact `origin/main` `ee56fa48` and cleanup head `8457073d`, with two passes per
+revision, 20 warmups, and 101 measured updates per pass. Pooled medians/p95 are `1.489/1.581 ms` ordinary Latin,
+`1.508/1.589 ms` justified Latin, `3.229/3.351 ms` mixed bidi, and `2.264/2.357 ms` dense CJK. The matching main values are
+`3.639/3.784`, `3.698/3.898`, `3.882/4.027`, and `2.897/3.002 ms`, so every final path is faster by 16.8–59.2% at the
+median. Publication falls from 174,440/174,440/176,352/175,824 bytes to 31,352/31,352/35,896/98,560 bytes. Relative to
+PR #175, the final shaper is 85,192 raw / 26,476 gzip / 15,688 Brotli bytes smaller; browser core is 1,090 / 223 / 82
+bytes smaller; Three is 11,217 / 2,790 / 2,223 bytes smaller; direct TypeGPU is 777 / 186 / 104 bytes smaller; and the
+combined adapter graph is 11,170 / 2,764 / 2,292 bytes smaller. Relative to main, the retained feature costs 83,693 raw /
+36,341 gzip / 29,760 Brotli shaper bytes, 10,837 / 2,808 / 2,185 browser-core bytes, 24,456 / 6,312 / 4,914 Three bytes,
+and 6,616 / 1,277 / 1,026 direct-TypeGPU bytes. These are generated-artifact measurements on the pinned arm64 host; the
+repository size gate accepts them.
 
 [^slug-shader-core]: The directory is the single renderer-independent expression of the analytic Slug fill algorithm.
 
