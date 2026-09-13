@@ -91,9 +91,7 @@ const CASES = [
     fixtures: ['amiri-bitmap', 'amiri-slug'],
     direction: 'rtl',
     language: 'ar',
-    // Arabic letters take initial, medial, final, or isolated forms from their NEIGHBOURS, so an
-    // edit at one offset changes the glyph chosen at the offsets around it. Every case below moves
-    // more glyphs than the edit touches.
+    // Arabic contextual forms let an edit change neighbouring glyphs beyond the touched source range.
     edits: [
       ['deletion inside a joined word reshapes its neighbours', 'العربي', 'العبي'],
       ['deletion at the prefix reshapes the following letter', 'العربي', 'لعربي'],
@@ -117,9 +115,7 @@ const CASES = [
     fixtures: ['amiri-bitmap', 'amiri-slug'],
     direction: 'rtl',
     language: 'ar',
-    // The paragraph resolves right-to-left, so a Latin or digit run inside it is an embedded
-    // left-to-right island. Changing the length of any run renumbers the VISUAL order of every
-    // glyph on the line, while logical order changes only at the edit site.
+    // Embedded LTR islands make an RTL edit renumber visual order beyond the logically changed range.
     edits: [
       ['latin island deleted from an rtl paragraph', 'PMNDRS النص العربي', 'النص العربي'],
       ['latin island inserted into an rtl paragraph', 'النص العربي', 'PMNDRS النص العربي'],
@@ -171,10 +167,7 @@ const CASES = [
     fixtures: ['devanagari'],
     direction: 'ltr',
     language: 'hi',
-    // Devanagari is the sharpest case for identity-space vs slot-space. `ि` (matra i) is typed
-    // AFTER its consonant and rendered BEFORE it, so an insertion at the tail of a cluster displaces
-    // a glyph that precedes it. `्` (virama) joins two consonants into a conjunct, so deleting
-    // one scalar changes the glyph count of the cluster around it.
+    // Pre-base matras and virama conjuncts exercise reordered glyphs and cluster-local glyph-count changes.
     edits: [
       ['virama deleted, splitting a conjunct into two glyphs', 'कर्म', 'करम'],
       ['virama inserted, fusing two consonants into a conjunct', 'करम', 'कर्म'],
@@ -322,9 +315,7 @@ for (const shaping of CASES) {
     });
 
     test(`${where}: seeded edit sequences at scalar boundaries`, { timeout }, async () => {
-      // The harder half: splices land on any scalar boundary, so an edit can cut a conjunct, a
-      // matra, or a ligature in half and change the cluster's glyph count without changing its
-      // length. This is the shape that moves an occupant between record slots.
+      // Scalar-boundary splices may cut shaping units and move occupants between physical record slots.
       await runSequence(shaping, fixture, shaping.alphabet);
     });
   }

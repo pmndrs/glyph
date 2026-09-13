@@ -1810,9 +1810,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
     paragraph.dispose();
   }
 
-  // Justification controls: an unbounded justified last line fills the exact
-  // box; capping word growth at its natural width and bounding letter gaps
-  // leaves the line short by design.
+  // An unbounded justified last line fills the box; bounded word and letter growth may leave it short.
   const justifyLayout = (justify, lastLine) => ({
     align: 'justify',
     ...(justify === undefined ? {} : { justify }),
@@ -1856,10 +1854,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
     paragraph.dispose();
   }
 
-  // Column flow: one paragraph fills side-by-side ordered regions without
-  // balancing. The column height is the flow signal, so the reference layout is
-  // one column at the exact column measure; halving its height (plus a line of
-  // slack) must push the tail of the text into the second column.
+  // Ordered columns do not balance: reducing the height must move the paragraph tail into the second region.
   const columnText = 'the quick brown fox jumps over the lazy dog and keeps running until the column turns';
   const columnMeasureWidth = (420 - 20) / 2;
   const reference = three.createText({

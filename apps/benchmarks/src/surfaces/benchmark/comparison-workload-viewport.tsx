@@ -243,9 +243,8 @@ export function ComparisonWorkloadViewport({
       fontFixture,
       fontSize,
       iconGridView: presentationPreset === 'icon-grid-return' ? 'alternate' : 'origin',
-      // Runtime defaults and the route update are separate reactive stores. During the transition into Off-axis / 3D,
-      // its authored 120% default can therefore be observed for one render with the preceding workload. Keep every
-      // intermediate configuration valid without weakening the scene's workload-specific contract.
+      // Route state can briefly pair a new workload with prior defaults, so every intermediate configuration must
+      // remain valid without weakening the scene contract.
       layoutWidthRatio: workload === 'off-axis-3d' ? layoutWidthRatio : Math.min(layoutWidthRatio, 1),
       paintOpacity,
       paintShadowEnabled,
@@ -327,9 +326,7 @@ export function ComparisonWorkloadViewport({
   useEffect(() => {
     const preview = previewRef.current;
     if (preview === undefined) return;
-    // Applied immediately. The paragraph-stress motion drives width and font size through this same path on its own
-    // animation frames, so delaying here would stall the workload rather than settle an input. Debouncing belongs on
-    // the controls a person drags, not on the path an animation shares with them.
+    // Animation drives this path directly, so updates must apply immediately. Interactive controls own any debounce.
     void preview.update(currentConfiguration()).catch(publishError);
   }, [
     amount,

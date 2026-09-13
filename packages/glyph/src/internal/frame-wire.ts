@@ -262,9 +262,8 @@ export function compilePlannerFrameUpdate(frame: PlannerFrameUpdate): Uint8Array
       ? encoder.encode(mutation.value.language)
       : new Uint8Array(),
   );
-  // Keep every record's variable payloads together in the compiler's one monotonic
-  // allocation stream. The producer test pins disjoint table and payload ranges; the
-  // runtime parser only needs to establish the individual borrowed-slice bounds.
+  // Keep each record's payloads together in the monotonic allocation stream; producer tests prove disjoint ranges,
+  // while the runtime parser checks each borrowed slice.
   const languageOffsets: number[] = [];
   const featureOffsets: number[] = [];
   for (const [index, mutation] of styleMutations.entries()) {

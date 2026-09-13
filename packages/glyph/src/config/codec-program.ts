@@ -424,9 +424,7 @@ function createCodecProgramBuilder<
     throw new RangeError(`codec input fields exceed the ${MAX_REGISTERS}-slot register file`);
   }
 
-  // The input table mirrors the canonical order the engine validated all along:
-  // Semantic geometry and paint precede binding fields; system identities precede
-  // packed effect colors and binding u32 fields.
+  // Match the engine's canonical field order: semantic geometry and paint, bindings, system identities, then effects.
   const inputs: CodecInput[] = [
     {
       scope: 'semantic',

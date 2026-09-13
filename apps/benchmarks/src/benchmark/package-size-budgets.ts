@@ -16,9 +16,8 @@ export const packageSizeBudgets = {
     gzipBytes: 12_000,
     brotliBytes: 10_500,
   },
-  // `/typegpu` is the higher-level direct renderer over all three first-party formats. With optional peers external,
-  // the final transactional occurrence-slot and shared-placement path measures 233,947 raw / 231,004 minified /
-  // 44,210 gzip / 37,331 Brotli. Keep less than one percent raw/minified headroom and bounded compression variance.
+  // `/typegpu` covers all first-party formats with peers external. Its ceiling keeps less than one percent
+  // raw/minified headroom and bounded compression variance.
   'typegpu-direct-renderer-js': {
     rawBytes: 236_000,
     minifiedBytes: 233_000,
@@ -47,50 +46,22 @@ export const packageSizeBudgets = {
     gzipBytes: 148_000,
     brotliBytes: 122_000,
   },
-  // Complete Rust shaping, layout, policy, and command-plan publication. Gzip and Brotli rose for the decoration
-  // rendering feature (D-248): decorating-box cascade state, per-cluster run aggregation, resource-free plan rows,
-  // and paint-order gather passes. The 11.14 typography tier re-priced the ceilings once for all of its layers:
-  // constraint decode/validation, paragraph spacing, first-line indent, bounded justification, and the graduated
-  // D-245 kernels total roughly +1.3 KB raw. The margins cover cross-host build variance: the Linux toolchain
-  // emits equal-length but byte-different wasm (different sha256) whose compressed sizes run a few hundred bytes
-  // above the recorded macOS host's.
-  // The 11.17 measure tier grew the engine by +9,413 raw / +5,028 gzip / +4,014
-  // Brotli: speculative measure transactions, candidate adoption, and the
-  // paragraph query path. The integer-units slices then shrank the tip by a net
-  // -4,228 raw before the retained adjacency stream (+2,209), the metric-only
-  // scale refresh (+1,753), and integer justification (+1,071: euclidean unit
-  // distribution and the Q16 growth caps) priced their layers back in.
-  // Corrected baseline: the recorded ceiling was already exceeded before the style-wire
-  // fixes below it. At the previous commit the measured artifact stood at 1,121,718 raw /
-  // 435,656 gzip / 345,593 Brotli against a 1,117,500 / 434,800 / 344,100 ceiling — an
-  // unpriced overage of 4,218 raw, 856 gzip, and 1,493 Brotli carried by the slice 3b and
-  // slice 4 layers, which re-priced their own evidence but not this ceiling. The style-wire
-  // fixes then added 83 raw while shrinking gzip by 9 and Brotli by 272. These values price
-  // the measured artifact plus the documented cross-host margin, and name the overage rather
-  // than absorbing it silently.
-  // Re-priced once on feat/plan-retention: the glyph-animation tier (cbe727bf) added
-  // +12,071 raw / +4,949 gzip / +8,451 Brotli of Rust shaping and planning code but left
-  // the gate un-repinned; this branch changed no Rust behaviour (formatting only), and the
-  // measured artifact is byte-identical to its base commit.
-  // The selective glyph borrow adds bounded demand-read ABI code without changing the retained A/B publication path.
-  // The completed LayoutRun frontier, incremental exclusion/drop-cap flow, and lazy absolute semantic placement measure
-  // 1,374,150 raw / 532,034 gzip / 409,424 Brotli; the ceiling retains less than one percent headroom.
+  // Complete Rust shaping, layout, Codec execution, and command publication. The ceiling keeps less than one percent
+  // headroom plus bounded cross-host compression variance; feature attribution lives in the decision log.
   'text-shaper-wasm': {
     rawBytes: 1_385_000,
     minifiedBytes: 1_385_000,
     gzipBytes: 536_000,
     brotliBytes: 413_000,
   },
-  // Three realization plus the projected-flow, placement-table, and live-transform root graph measures 554,014 raw /
-  // 541,710 minified / 136,538 gzip / 111,754 Brotli after tsdown shared-chunk bundling.
+  // Three realization includes projected flow and the shared placement table, with peer dependencies external.
   'three-runtime-js': {
     rawBytes: 558_000,
     minifiedBytes: 546_000,
     gzipBytes: 138_000,
     brotliBytes: 113_000,
   },
-  // `/three/typegpu` prices the complete optional integration at 662,332 raw / 648,309 minified /
-  // 149,746 gzip / 122,207 Brotli with peers external.
+  // `/three/typegpu` prices the complete optional integration with peers external.
   'three-typegpu-runtime-js': {
     rawBytes: 667_000,
     minifiedBytes: 653_000,
@@ -103,12 +74,8 @@ export const packageSizeBudgets = {
     gzipBytes: 570_000,
     brotliBytes: 430_000,
   },
-  // Corner protection stopped error correction from flattening corner texels to a single channel.
-  // Those flattened texels held four identical bytes and compressed almost for free; genuine
-  // multi-channel corner data does not. Inter's MTSDF asset grew 8,007,071 to 8,167,575 gzip
-  // (+2.0%) for a fall from 161 to 97 samples missing ground-truth coverage by more than a quarter,
-  // which is fewer than native msdfgen's 101 on the same glyphs. Raw and Brotli both still fit the
-  // reviewed ceiling; only gzip needed re-pricing. See D-293.
+  // Genuine multi-channel corner correction compresses less than flattened texels; the reviewed quality tradeoff
+  // and ceiling change are recorded in D-293.
   'font-inter-mtsdf': {
     rawBytes: 40_000_000,
     minifiedBytes: 40_000_000,
@@ -139,9 +106,8 @@ export const packageSizeBudgets = {
     gzipBytes: 690_000,
     brotliBytes: 510_000,
   },
-  // Shared Three technique graphs use one reviewed cross-host ceiling.
-  // Shader subpaths and Three itself remain external. Each entry measures the public Glyph root, Three adapter, and
-  // exactly one raster format; the largest is 469,999 raw / 459,094 minified / 114,394 gzip / 94,747 Brotli.
+  // Shared Three technique graphs use one cross-host ceiling; each entry measures the public Glyph root, adapter,
+  // and one raster format while shader subpaths and Three remain external.
   'bitmap-runtime-js': {
     rawBytes: 477_000,
     minifiedBytes: 466_000,

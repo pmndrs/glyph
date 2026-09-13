@@ -126,9 +126,8 @@ export function createEditorialEntries(
     },
 ): readonly ComparisonWorkloadEntry[] {
   const width = editorialColumnWidth(context, context.viewportWidth, context.animationElapsedMs);
-  // A real editorial page: one single-measure justified lede, then the body
-  // flowing through two ordered justified columns under it. The amount control
-  // scales how much body text refills the fixed page height.
+  // One justified lede precedes a body flowing through two ordered columns; amount controls how much text refills
+  // the fixed page height.
   const repeats = Math.max(1, Math.round(context.amount / 25));
   const bodyText = Array.from({ length: repeats }, (_, cycle) =>
     EDITORIAL_TEXT.slice(cycle === 0 ? 1 : 0).join(' '),

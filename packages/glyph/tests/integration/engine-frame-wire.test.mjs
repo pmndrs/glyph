@@ -287,9 +287,7 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
 });
 
 test('style payloads stay in per-record order when several paragraphs carry language and features', async () => {
-  // The compiler owns one monotonic allocation stream. Allocating all languages before
-  // all features would interleave the payload order from the second styled paragraph
-  // onward. The live Advanced-shaping workload covers this shape with four paragraphs.
+  // Per-record allocation prevents languages and features from interleaving across styled paragraphs.
   const abi = textShaperAbi;
   const styleMutation = (paragraphId) => ({
     opcode: 'upsert',

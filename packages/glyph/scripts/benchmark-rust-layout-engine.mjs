@@ -422,9 +422,7 @@ function summarize(name, glyphs, samples, plans) {
     throw new Error(`benchmark planned only ${glyphs} glyph records for a ${options.glyphs}-glyph fixture target`);
   }
   if (options.samplesPath !== undefined) {
-    // Raw per-sample attribution rows in measurement order: tail analysis
-    // needs individual samples correlated with their plan output, which the
-    // sorted summary below deliberately discards.
+    // Preserve measurement order so tail analysis can correlate samples with plan output before summary sorting.
     rawSampleRows.push({
       case: name,
       samples: samples.map((durationMs, index) => ({
