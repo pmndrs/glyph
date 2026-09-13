@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:694aa6dee3229505f1314aebc9d1c0f5e2ee486be0c35bf9542d1a59a7f3d722'
+source_digest: 'sha256:500268fbe927fb35e8163018e18bc7c34971d992404eae7083c9d3a5bbb0529f'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -371,24 +371,11 @@ glyph into fixed Wasm scratch, then returns one frozen scalar object in O(select
 bulk caller-owned copy. The callback must finish synchronously:
 thenables, engine reentry, and retained-text mutation are rejected, and the indexed view expires on return or throw.
 
-Three exposes attached live deformation separately through `Text.transformGlyphs(callback)`, leaving the shared
-`withGlyphs()` contract as a generic synchronous borrowed read. A bare exact-length `Matrix4[]` is Text-local;
-`{ space, matrices }` names layout paragraph coordinates (x-right/y-down), Text-local Three coordinates, or Three world
-coordinates. Every matrix is an absolute affine glyph frame in current visual index order, not a delta or a projective
-transform. The first transform result lazily enables one renderer-owned mat4 storage lane and performs one
-material/display-list refresh. Later results copy only the returned matrices, mark adjacent 16-float record ranges, and
-cross neither shaping nor render-plan publication. Stable physical-slot reuse resets a row before another glyph can
-inherit it, and `measureGlyphs()` applies the same retained matrices to interaction geometry. TypeGPU retains only the
-read callback while its direct adapter is still a proof of concept; it does not inherit an unproved matrix-storage
-contract from Three.
-
-These overrides compose after compact layout placement and do not dirty shaping, line fitting, static raster records,
-batch keys, or draw spans. An equal-count topology change reapplies matrix index `i` to the new glyph at `i`; a changed
-count retires the stale exact-length result and requires another callback. Glyph IDs and clusters do not pretend to
-provide semantic continuity across arbitrary middle edits; applications needing that behavior reconcile their own
-document-domain keys. `clearGlyphTransforms()` restores authoritative attached placement. This live path complements
-rather than supersedes `copyGlyphs()`/`breakApart()`, whose detached object owns its copied lifecycle and intentionally
-stops following the source `Text`.
+Attached live deformation is accepted as the future D-356 design but is not shipped by either adapter. The current
+`Text` surface has no `transformGlyphs()` or `clearGlyphTransforms()` methods and allocates no attached matrix sidecar.
+A separately scoped follow-up must prove coordinated Three and TypeGPU storage, lifecycle, interaction geometry, and
+performance before exposing that API. Existing detached `Glyphs` transforms and `copyGlyphs()`/`breakApart()` remain
+the owned, already-shaped manipulation path and intentionally stop following the source `Text`.
 
 The FontFace source cache coalesces canonical-equivalent locators before I/O and converges different locators onto one
 parsed main-font node after their complete GLB bytes have the same SHA-256 content identity. Every acquisition base is
@@ -1437,8 +1424,9 @@ changing batches, primitives, draws, stable identity, or the x/y placement contr
 coverage is unchanged after consolidating six overlapping tests; built-package Node coverage slightly increases while
 241 overlapping cases are removed. On the same 22k alternating-width harness, the cleaned head measures `1.483 ms`
 ordinary Latin, `2.097 ms` justified Latin, `3.360 ms` mixed bidi, and `2.328 ms` dense CJK median, publishing
-`30.6/30.6/35.1/96.3 KiB` respectively. Against the placement-publication checkpoint, the shaper is 7,132 raw / 2,929
-gzip / 2,213 Brotli bytes smaller; Three changes by +554 / +72 / −52 and direct TypeGPU by −5 / +4 / +29 bytes.
+`30.6/30.6/35.1/96.3 KiB` respectively. Against PR #175, the shaper is 7,132 raw / 2,929 gzip / 2,213 Brotli bytes
+smaller. Three is 8,652 raw / 8,426 minified / 2,196 gzip / 1,815 Brotli bytes smaller; Three+TypeGPU is 8,609 /
+8,431 / 2,120 / 1,601 bytes smaller. Direct TypeGPU remains −5 raw / −5 minified / +4 gzip / +29 Brotli bytes.
 
 The indexed direction keeps the existing batches, physical instances, order indirection, primitive spans, and draws.
 Stable-indirect rendering resolves logical to physical instance first; ordered-direct rendering already has the physical

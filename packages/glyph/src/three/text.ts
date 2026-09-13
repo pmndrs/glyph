@@ -43,13 +43,11 @@ import type { ThreePublicationBoundary } from './internal/publication-boundary.j
 import type { ThreeRendererResources } from './internal/renderer-resources.js';
 import {
   measureGlyphPlacements,
-  transformGlyphMeasurements,
   type ThreeGlyphGeometrySource,
   type ThreeGlyphMeasurement,
 } from './glyph-measurement.js';
 import { createGlyphs, setGlyphDrawOrder, type Glyphs } from './glyphs.js';
 import { createDecorations, decorationDraws, type Decorations } from './decorations.js';
-import { LiveGlyphTransformStore } from './internal/live-glyph-transforms.js';
 
 /** Package-private construction capability used by the Three handle and R3F adapter. */
 export const threeTextConstructionToken: unique symbol = Symbol('pmndrs.glyph.three.construct');
@@ -102,38 +100,6 @@ export type TextCommitState =
   | Readonly<{ status: 'pending' }>
   | Readonly<{ status: 'committed'; revision: number }>
   | Readonly<{ status: 'failed'; error: unknown }>;
-
-/** Coordinate space for affine matrices returned by {@link Text.transformGlyphs}. */
-export type ThreeGlyphTransformSpace = 'paragraph' | 'local' | 'world';
-
-/** One complete, index-addressed live glyph transform result. */
-export interface ThreeGlyphTransforms {
-  /** `paragraph` is layout x-right/y-down; `local` and `world` use Three coordinates. */
-  readonly space: ThreeGlyphTransformSpace;
-  /** Absolute affine glyph frames in current visual glyph order, not transform deltas. */
-  readonly matrices: readonly THREE.Matrix4[];
-}
-
-/** A complete live transform result; a bare array is Text-local. */
-export type ThreeGlyphTransformResult = readonly THREE.Matrix4[] | ThreeGlyphTransforms;
-
-interface RetainedGlyphTransforms {
-  readonly space: ThreeGlyphTransformSpace;
-  readonly matrices: Float32Array;
-  appliedStableIds: Uint32Array | undefined;
-}
-
-interface CapturedGlyphTransforms {
-  readonly retained: RetainedGlyphTransforms;
-  readonly stableIds: Uint32Array;
-  readonly x: Float32Array;
-  readonly y: Float32Array;
-}
-
-interface GlyphMatrixConversion {
-  readonly prefix: THREE.Matrix4 | undefined;
-  readonly suffix: THREE.Matrix4 | undefined;
-}
 
 interface DesiredTextState<Format extends RasterFormatMetadata> {
   readonly font: FontSelection<Format>;
@@ -279,7 +245,6 @@ export class ThreeRootHost {
   readonly #services: GlyphRootServices<ThreeBindings, void, ThreePublicationBoundary>;
   readonly #resources: ThreeRendererResources;
   readonly #renderer: ThreeCommandBufferRenderer;
-  readonly #liveGlyphTransforms = new LiveGlyphTransformStore();
   readonly #texts = new Set<THREE.Object3D>();
   readonly #renderObject: ThreePublicationObject;
   readonly #materialRootContext: ThreeRootContext;
@@ -290,7 +255,6 @@ export class ThreeRootHost {
   readonly #renderMemberScratch: Text<RasterFormatMetadata>[] = [];
   #capacity: GlyphBufferCapacity;
   #material: ThreeTextMaterial | undefined;
-  #glyphTransformsEnabled = false;
   #disposed = false;
 
   get handle(): import('./schema.js').ThreeHandle {
@@ -336,14 +300,6 @@ export class ThreeRootHost {
       renderObject: this.#renderObject,
       root: this,
       visibleObject: (object) => this.visible(object),
-      prepareGlyphStorage: (storageKey, capacityRecords) => {
-        if (this.#glyphTransformsEnabled) this.#liveGlyphTransforms.prepare(storageKey, capacityRecords);
-      },
-      glyphStorage: (storageKey) =>
-        this.#glyphTransformsEnabled ? this.#liveGlyphTransforms.get(storageKey) : undefined,
-      prepareGlyphRecord: (storageKey, record, stableId) => {
-        if (this.#glyphTransformsEnabled) this.#liveGlyphTransforms.ensureRecord(storageKey, record, stableId);
-      },
     });
   }
 
@@ -356,12 +312,7 @@ export class ThreeRootHost {
   }
 
   get gpuBytes(): number {
-    return (this.#binding?.gpuBytes ?? 0) + this.#liveGlyphTransforms.byteLength;
-  }
-
-  /** @internal Whether material bindings need the live per-glyph matrix path. */
-  get glyphTransformsEnabled(): boolean {
-    return this.#glyphTransformsEnabled;
+    return this.#binding?.gpuBytes ?? 0;
   }
 
   get material(): ThreeTextMaterial | undefined {
@@ -420,7 +371,6 @@ export class ThreeRootHost {
       this.#binding?.dispose();
       this.#binding = undefined;
     } finally {
-      this.#liveGlyphTransforms.dispose();
       threeRootHosts.delete(this);
       this.#renderObject.removeFromParent();
       this.#scene = undefined;
@@ -541,46 +491,6 @@ export class ThreeRootHost {
   withGlyphs<Result>(text: THREE.Object3D, read: (glyphs: BorrowedGlyphLayout) => Result): Result {
     this.#assertMember(text);
     return this.#rootBinding().withGlyphs(text, read);
-  }
-
-  /** @internal Install one live transform per current visual glyph index. */
-  transformGlyphs(text: THREE.Object3D, transform: (glyphs: BorrowedGlyphLayout) => ThreeGlyphTransformResult): void {
-    this.#assertMember(text);
-    this.#rootBinding().transformGlyphs(text, transform);
-  }
-
-  /** @internal Remove the live transform override for one root member. */
-  clearGlyphTransforms(text: THREE.Object3D): void {
-    this.#assertMember(text);
-    this.#rootBinding().clearGlyphTransforms(text);
-  }
-
-  /** @internal Activates the matrix path once; ordinary roots never allocate its storage. */
-  enableGlyphTransforms(): boolean {
-    this.#assertActive();
-    if (this.#glyphTransformsEnabled) return false;
-    this.#glyphTransformsEnabled = true;
-    return true;
-  }
-
-  /** @internal Apply one absolute Text-local matrix to a physical glyph record. */
-  setGlyphTransform(stableId: number, matrix: THREE.Matrix4, x: number, y: number): boolean {
-    const address = this.#renderer.glyphRecord(stableId);
-    if (address === undefined || this.#liveGlyphTransforms.get(address.storageKey) === undefined) return false;
-    this.#liveGlyphTransforms.setMatrix(address.storageKey, address.index, stableId, matrix, x, y);
-    return true;
-  }
-
-  /** @internal Restore one glyph record to the authoritative layout path. */
-  resetGlyphTransform(stableId: number): void {
-    const address = this.#renderer.glyphRecord(stableId);
-    if (address === undefined || this.#liveGlyphTransforms.get(address.storageKey) === undefined) return;
-    this.#liveGlyphTransforms.reset(address.storageKey, address.index, stableId);
-  }
-
-  /** @internal Retire matrix storage no current draw material can reference. */
-  retainGlyphTransformStorage(): void {
-    this.#liveGlyphTransforms.retain(this.#renderer.glyphStorageKeys());
   }
 
   /** @internal Return the publication-facing view after authenticating root membership. */
@@ -959,22 +869,10 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return inspection;
   }
 
-  /** Reads positioned glyphs synchronously without copying the complete inspection table. */
+  /** Reads selected positioned glyphs without copying the complete layout. */
   withGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result {
     this.#assertActive();
     return this.#root.withGlyphs(this, read);
-  }
-
-  /** Installs one absolute affine transform per current visual glyph index. */
-  transformGlyphs(transform: (glyphs: BorrowedGlyphLayout) => ThreeGlyphTransformResult): void {
-    this.#assertActive();
-    this.#root.transformGlyphs(this, transform);
-  }
-
-  /** Restores this Text to authoritative layout placement without detaching it. */
-  clearGlyphTransforms(): void {
-    this.#assertActive();
-    this.#root.clearGlyphTransforms(this);
   }
 
   commitState(): TextCommitState {
@@ -1001,9 +899,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   measureGlyphs(): readonly ThreeGlyphMeasurement[] | undefined {
     const placements = this.#glyphPlacements();
     if (placements === undefined) return undefined;
-    const measured = measureGlyphPlacements(placements, this.#glyphGeometry(placements));
-    const matrices = this.#binding?.glyphTransformMatrices(this.#root.member(this));
-    return matrices === undefined ? measured : transformGlyphMeasurements(measured, matrices);
+    return measureGlyphPlacements(placements, this.#glyphGeometry(placements));
   }
 
   /** Copies the committed glyphs and optional decorations into independently rendered Three objects. */
@@ -1328,8 +1224,6 @@ class ThreeRootPublication {
   #capacityExceeded: { readonly required: number; readonly size: number } | undefined;
   #materialInvalidated = false;
   readonly #pendingMeasurements = new Set<Text<RasterFormatMetadata>>();
-  readonly #glyphTransforms = new Map<Text<RasterFormatMetadata>, RetainedGlyphTransforms>();
-  #glyphTransformsReady = false;
   #detachedQuery: Text<RasterFormatMetadata> | undefined;
   #detachedQueryCache: DetachedQueryEntry | undefined;
   #disposed = false;
@@ -1449,7 +1343,6 @@ class ThreeRootPublication {
   }
 
   removeText(text: Text<RasterFormatMetadata>): void {
-    this.clearGlyphTransforms(text);
     if (this.#detachedQuery === text) this.#detachedQuery = undefined;
     this.#pendingMeasurements.delete(text);
     if (this.#detachedQueryCache?.text === text) {
@@ -1513,44 +1406,6 @@ class ThreeRootPublication {
     return result;
   }
 
-  transformGlyphs(
-    text: Text<RasterFormatMetadata>,
-    transform: (glyphs: BorrowedGlyphLayout) => ThreeGlyphTransformResult,
-  ): void {
-    this.#assertActive();
-    const texts = this.#root.queryMembers(text);
-    if (this.#needsActiveReconcile(texts)) this.#reconcileQuery(texts, text);
-    const entry = this.#entries.get(text);
-    if (entry === undefined) throw new Error('Text is not retained by this batch');
-    let captured: CapturedGlyphTransforms | undefined;
-    entry.handle.withGlyphs((layout) => {
-      const result = transform(layout);
-      if (isPromiseLike(result)) return result;
-      captured = captureGlyphTransforms(layout, result);
-      return result;
-    });
-    this.#detachedQuery = nearestScene(text) === undefined ? text : undefined;
-    if (captured === undefined) throw new TypeError('transformGlyphs must return a live glyph transform result');
-    const previous = this.#glyphTransforms.get(text);
-    captured.retained.appliedStableIds = previous?.appliedStableIds;
-    if (previous !== undefined) previous.appliedStableIds = undefined;
-    this.#glyphTransforms.set(text, captured.retained);
-    if (this.#root.enableGlyphTransforms()) {
-      this.#glyphTransformsReady = false;
-      this.invalidateMaterial();
-      this.#reconcileEntries(texts);
-      return;
-    }
-    if (this.#glyphTransformsReady) this.#applyGlyphTransforms(text, captured.retained, captured);
-  }
-
-  clearGlyphTransforms(text: Text<RasterFormatMetadata>): void {
-    const retained = this.#glyphTransforms.get(text);
-    if (retained === undefined) return;
-    this.#resetAppliedGlyphTransforms(retained);
-    this.#glyphTransforms.delete(text);
-  }
-
   #reconcileQuery(texts: readonly Text<RasterFormatMetadata>[], text: Text<RasterFormatMetadata>): void {
     const desired = new Set(texts);
     if (nearestScene(text) !== undefined) {
@@ -1608,11 +1463,6 @@ class ThreeRootPublication {
       drawn.incomplete,
     );
     return placements;
-  }
-
-  glyphTransformMatrices(text: Text<RasterFormatMetadata>): readonly THREE.Matrix4[] | undefined {
-    const retained = this.#glyphTransforms.get(text);
-    return retained === undefined ? undefined : localGlyphMatrices(text, retained);
   }
 
   glyphGeometry(stableIds: Uint32Array): ReadonlyMap<number, ThreeGlyphGeometrySource> {
@@ -1674,13 +1524,6 @@ class ThreeRootPublication {
       if (entry !== undefined) reconciler.publishMeasurement(text, entry.handle.measure());
     }
     this.#pendingMeasurements.clear();
-    if (this.#root.glyphTransformsEnabled) {
-      this.#glyphTransformsReady = true;
-      for (const [text, retained] of [...this.#glyphTransforms]) {
-        this.#applyGlyphTransforms(text, retained);
-      }
-      this.#root.retainGlyphTransformStorage();
-    }
   }
 
   rejectShape(): void {
@@ -1691,11 +1534,6 @@ class ThreeRootPublication {
   syncTransforms(worldMatricesCurrent: boolean): void {
     this.#assertActive();
     this.#target.synchronizeTransforms(worldMatricesCurrent, () => this.#services.syncTransforms());
-    if (this.#glyphTransformsReady) {
-      for (const [text, retained] of this.#glyphTransforms) {
-        if (retained.space === 'world') this.#applyGlyphTransforms(text, retained);
-      }
-    }
   }
 
   dispose(): void {
@@ -1722,47 +1560,7 @@ class ThreeRootPublication {
     }
     this.#entries.clear();
     this.#pendingMeasurements.clear();
-    this.#glyphTransforms.clear();
     if (failure !== undefined) throw failure;
-  }
-
-  #applyGlyphTransforms(
-    text: Text<RasterFormatMetadata>,
-    retained: RetainedGlyphTransforms,
-    captured?: CapturedGlyphTransforms,
-  ): void {
-    const layout = captured === undefined ? this.#canonicalInspection(text) : undefined;
-    const glyphCount = captured?.stableIds.length ?? layout?.glyphCount;
-    if (glyphCount === undefined || glyphCount !== retained.matrices.length / 16) {
-      this.#resetAppliedGlyphTransforms(retained);
-      this.#glyphTransforms.delete(text);
-      return;
-    }
-    const conversion = glyphMatrixConversion(text, retained.space);
-    const matrix = new THREE.Matrix4();
-    const stableIds = captured?.stableIds ?? layout!.glyphStableIds;
-    const x = captured?.x ?? layout!.x;
-    const y = captured?.y ?? layout!.y;
-    const previousStableIds = retained.appliedStableIds;
-    const retainedTopology = previousStableIds !== undefined && sameUint32Values(previousStableIds, stableIds);
-    if (previousStableIds !== undefined && !retainedTopology) {
-      const currentStableIds = new Set(stableIds);
-      for (const stableId of previousStableIds) {
-        if (!currentStableIds.has(stableId)) this.#root.resetGlyphTransform(stableId);
-      }
-    }
-    for (let index = 0; index < glyphCount; index += 1) {
-      const stableId = stableIds[index]!;
-      readLocalGlyphMatrix(retained, index, conversion, matrix);
-      this.#root.setGlyphTransform(stableId, matrix, x[index]!, -y[index]!);
-    }
-    if (!retainedTopology) retained.appliedStableIds = stableIds.slice();
-  }
-
-  #resetAppliedGlyphTransforms(retained: RetainedGlyphTransforms): void {
-    if (retained.appliedStableIds === undefined) return;
-    for (const stableId of retained.appliedStableIds) this.#root.resetGlyphTransform(stableId);
-    retained.appliedStableIds = undefined;
   }
 
   #stage(
@@ -1781,8 +1579,7 @@ class ThreeRootPublication {
       presentation,
       this.#root,
       order,
-      (material, pixelSnapping, renderOrder, glyphTransforms) =>
-        this.#materialBindings.get(material, pixelSnapping, renderOrder, glyphTransforms),
+      (material, pixelSnapping, renderOrder) => this.#materialBindings.get(material, pixelSnapping, renderOrder),
     );
     if (previous === undefined) {
       const handle = this.#services.createText(state);
@@ -1842,7 +1639,6 @@ function coreTextState(
     material: ThreeTextMaterial | undefined,
     pixelSnapping: boolean,
     renderOrder: number,
-    glyphTransforms: boolean,
   ) => ThreeMaterialBinding,
 ) {
   const { pixelSnapping, renderOrder } = presentation;
@@ -1850,13 +1646,10 @@ function coreTextState(
     desired.material ?? presentation.material ?? root.material,
     pixelSnapping,
     renderOrder,
-    root.glyphTransformsEnabled,
   );
   const spans = desired.spans.map((span) => {
     const spanMaterial: ThreeMaterialBinding | undefined =
-      span.material === undefined
-        ? undefined
-        : materialBinding(span.material, pixelSnapping, renderOrder, root.glyphTransformsEnabled);
+      span.material === undefined ? undefined : materialBinding(span.material, pixelSnapping, renderOrder);
     return Object.freeze({
       start: span.start,
       end: span.end,
@@ -1879,127 +1672,11 @@ function coreTextState(
   };
 }
 
-function captureGlyphTransforms(
-  layout: BorrowedGlyphLayout,
-  result: ThreeGlyphTransformResult,
-): CapturedGlyphTransforms {
-  const stated: ThreeGlyphTransforms = isGlyphMatrixArray(result) ? { space: 'local', matrices: result } : result;
-  if (
-    typeof stated !== 'object' ||
-    stated === null ||
-    !['paragraph', 'local', 'world'].includes(stated.space) ||
-    !Array.isArray(stated.matrices)
-  ) {
-    throw new TypeError('transformGlyphs must return one Matrix4 array or a { space, matrices } result');
-  }
-  const glyphCount = layout.glyphCount;
-  if (stated.matrices.length !== glyphCount) {
-    throw new RangeError(`transformGlyphs returned ${stated.matrices.length} matrices for ${glyphCount} glyphs`);
-  }
-  const matrices = new Float32Array(glyphCount * 16);
-  const stableIds = new Uint32Array(glyphCount);
-  const x = new Float32Array(glyphCount);
-  const y = new Float32Array(glyphCount);
-  for (let index = 0; index < glyphCount; index += 1) {
-    const matrix = stated.matrices[index];
-    if (matrix?.isMatrix4 !== true || matrix.elements.length !== 16) {
-      throw new TypeError(`transformGlyphs matrix ${index} must be a Three Matrix4`);
-    }
-    for (let lane = 0; lane < 16; lane += 1) {
-      const value = matrix.elements[lane]!;
-      if (!Number.isFinite(value)) throw new RangeError(`transformGlyphs matrix ${index} must be finite`);
-      matrices[index * 16 + lane] = value;
-    }
-    if (
-      matrix.elements[3] !== 0 ||
-      matrix.elements[7] !== 0 ||
-      matrix.elements[11] !== 0 ||
-      matrix.elements[15] !== 1
-    ) {
-      throw new RangeError(`transformGlyphs matrix ${index} must be affine`);
-    }
-    const glyphRecord = layout.glyphAt(index);
-    stableIds[index] = glyphRecord.stableId;
-    x[index] = glyphRecord.x;
-    y[index] = glyphRecord.y;
-  }
-  return {
-    retained: { space: stated.space, matrices, appliedStableIds: undefined },
-    stableIds,
-    x,
-    y,
-  };
-}
-
-function localGlyphMatrices(text: THREE.Object3D, retained: RetainedGlyphTransforms): readonly THREE.Matrix4[] {
-  const count = retained.matrices.length / 16;
-  const matrices = new Array<THREE.Matrix4>(count);
-  const conversion = glyphMatrixConversion(text, retained.space);
-  for (let index = 0; index < count; index += 1) {
-    matrices[index] = readLocalGlyphMatrix(retained, index, conversion, new THREE.Matrix4());
-  }
-  return matrices;
-}
-
-function glyphMatrixConversion(text: THREE.Object3D, space: ThreeGlyphTransformSpace): GlyphMatrixConversion {
-  if (space === 'paragraph') {
-    const flip = new THREE.Matrix4().makeScale(1, -1, 1);
-    return { prefix: flip, suffix: flip };
-  }
-  let prefix: THREE.Matrix4 | undefined;
-  if (space === 'world') {
-    text.updateWorldMatrix(true, false);
-    const determinant = text.matrixWorld.determinant();
-    if (!Number.isFinite(determinant) || determinant === 0) {
-      throw new RangeError('world-space glyph transforms require a finite invertible Text matrixWorld');
-    }
-    prefix = new THREE.Matrix4().copy(text.matrixWorld).invert();
-  }
-  return { prefix, suffix: undefined };
-}
-
-function readLocalGlyphMatrix(
-  retained: RetainedGlyphTransforms,
-  index: number,
-  conversion: GlyphMatrixConversion,
-  target: THREE.Matrix4,
-): THREE.Matrix4 {
-  target.fromArray(retained.matrices, index * 16);
-  if (conversion.prefix !== undefined) target.premultiply(conversion.prefix);
-  if (conversion.suffix !== undefined) target.multiply(conversion.suffix);
-  return target;
-}
-
-function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
-  return (
-    (typeof value === 'object' || typeof value === 'function') &&
-    value !== null &&
-    typeof Reflect.get(value, 'then') === 'function'
-  );
-}
-
-function isGlyphMatrixArray(value: ThreeGlyphTransformResult): value is readonly THREE.Matrix4[] {
-  return Array.isArray(value);
-}
-
-function sameUint32Values(left: Uint32Array, right: Uint32Array): boolean {
-  if (left.length !== right.length) return false;
-  for (let index = 0; index < left.length; index += 1) {
-    if (left[index] !== right[index]) return false;
-  }
-  return true;
-}
-
 class ThreeMaterialBindingCache {
   readonly #default = new Map<string, ThreeMaterialBinding>();
   readonly #custom = new WeakMap<ThreeTextMaterial, Map<string, ThreeMaterialBinding>>();
 
-  get(
-    material: ThreeTextMaterial | undefined,
-    pixelSnapping: boolean,
-    renderOrder: number,
-    glyphTransforms: boolean,
-  ): ThreeMaterialBinding {
+  get(material: ThreeTextMaterial | undefined, pixelSnapping: boolean, renderOrder: number): ThreeMaterialBinding {
     let variants: Map<string, ThreeMaterialBinding>;
     if (material === undefined) {
       variants = this.#default;
@@ -2007,10 +1684,10 @@ class ThreeMaterialBindingCache {
       variants = this.#custom.get(material) ?? new Map();
       this.#custom.set(material, variants);
     }
-    const key = `${pixelSnapping ? 1 : 0}:${String(renderOrder)}:${glyphTransforms ? 1 : 0}`;
+    const key = `${pixelSnapping ? 1 : 0}:${String(renderOrder)}`;
     let binding = variants.get(key);
     if (binding === undefined) {
-      binding = Object.freeze({ material, pixelSnapping, renderOrder, glyphTransforms });
+      binding = Object.freeze({ material, pixelSnapping, renderOrder });
       variants.set(key, binding);
     }
     return binding;

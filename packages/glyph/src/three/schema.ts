@@ -73,8 +73,6 @@ export interface ThreeMaterialBinding {
   readonly material: ThreeTextMaterial | undefined;
   readonly pixelSnapping: boolean;
   readonly renderOrder: number;
-  /** @internal Forces one material refresh when live glyph transforms are first activated. */
-  readonly glyphTransforms: boolean;
 }
 
 export interface ThreeResolvedMaterialBinding extends ThreeMaterialBinding {

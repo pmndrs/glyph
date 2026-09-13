@@ -32,7 +32,6 @@ import {
   type ThreeHandle,
 } from '../../src/three.js';
 import type * as ThreeApi from '../../src/three.js';
-import * as THREE from 'three/webgpu';
 
 declare const bitmapFont: Font<typeof bitmap>;
 declare const mtsdfFont: Font<typeof msdf>;
@@ -196,23 +195,12 @@ label.text = txt`${green`Updated`}`;
 label.constraints = [constraints.card, constraints.naturalHeight];
 const measurement = label.measure();
 void measurement.contentWidth;
-const glyphReadResult = label.withGlyphs((layout) => {
+const borrowedGlyphId: number = label.withGlyphs((layout) => {
   layout satisfies ThreeApi.BorrowedGlyphLayout;
   layout.glyphAt(0) satisfies BorrowedGlyph;
-  return layout.glyphCount;
+  return layout.glyphAt(0).glyphId;
 });
-glyphReadResult satisfies number;
-label.transformGlyphs((layout) =>
-  Array.from({ length: layout.glyphCount }, (_, index) => {
-    const record = layout.glyphAt(index);
-    return new THREE.Matrix4().makeTranslation(record.x, -record.y, 0);
-  }),
-);
-label.transformGlyphs((layout) => ({
-  space: 'world',
-  matrices: Array.from({ length: layout.glyphCount }, () => new THREE.Matrix4()),
-}));
-label.clearGlyphTransforms();
+void borrowedGlyphId;
 
 labels.add(three.createText({ font: mtsdfFont, text: 'Mixed technique' }));
 

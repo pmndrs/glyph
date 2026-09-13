@@ -2,16 +2,26 @@
 
 ## 2026-09-12
 
+- **Deferred attached glyph deformation outside the cleanup stack** — Removed the complete attached Three
+  `Text.transformGlyphs()` implementation, its matrix sidecar, material/storage invalidation, transformed measurement
+  composition, and focused tests from the final fragment-reflow cleanup PR. The generic synchronous
+  `Text.withGlyphs<Result>()` read still returns its callback value, and detached `Glyphs` transforms remain unchanged.
+  D-357 preserves D-356 as an accepted cross-adapter follow-up design while correcting its implementation status;
+  shipping it now requires separately scoped Three and TypeGPU lifecycle, storage, interaction-geometry, and performance
+  evidence.
+
 - **Reduced the completed fragment-reflow stack without changing its topology** — Classified the final stack against
   D-355 before editing, then removed the dormant run-handle allocator, completed shadow planners, duplicate visual-span
   ledger, placement-handle mirror, and pass-through placement wrappers. Shared retained-flow and gather authorities now
   replace repeated lookups and synthetic normalization paths. Instrumented Rust coverage stayed exactly unchanged while
   six overlapping tests were removed; built-package Node coverage slightly increased while 241 overlapping cases were
   consolidated, cutting that measured lane from `91.17 s` to `34.65 s`. The cleanup layer is net `−3,984` lines against
-  PR #175 and preserves the same batches, primitives, draws, stable identities, placement rows, and renderer contract.
+  PR #175 and preserves the same batches, primitives, draws, stable identities, placement rows, and renderer-submission contract.
   Exact-head 22k width-reflow medians are `1.483 ms` ordinary Latin, `2.097 ms` justified Latin, `3.360 ms` mixed bidi,
   and `2.328 ms` dense CJK, with `30.6/30.6/35.1/96.3 KiB` writes. The shaper falls by 7,132 raw / 2,929 gzip / 2,213
-  Brotli bytes relative to #175; Three changes by +554 / +72 / −52 and direct TypeGPU by −5 / +4 / +29 bytes.
+  Brotli bytes relative to #175. Three is 8,652 raw / 8,426 minified / 2,196 gzip / 1,815 Brotli bytes smaller;
+  Three+TypeGPU is 8,609 / 8,431 / 2,120 / 1,601 bytes smaller. Direct TypeGPU remains −5 raw / −5 minified /
+  +4 gzip / +29 Brotli bytes.
 
 - **Kept adapter placement packing out of Codec authoring** — Removed the `{ buffer, lane }` placement target from the
   public raster-program options and confined the target to stripped package-owned host assembly. Three and TypeGPU retain

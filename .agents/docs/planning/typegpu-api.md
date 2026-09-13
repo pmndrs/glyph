@@ -257,12 +257,11 @@ on the Three surface (D-265).
 The planned adapter does not expose a mutable glyph snapshot that writes back into live paragraph storage. Detached
 per-glyph manipulation consumes `RetainedText.copyGlyphs()` into an independently owned TypeGPU render object, just as
 Three imports the same planner-assisted checkpoint into `Glyphs`; that object stops following source text updates.
-Separately, a future TypeGPU `Text.transformGlyphs()` may accept an exact-length live presentation-transform sequence
-for the current glyph topology; the shared `Text.withGlyphs()` remains a generic synchronous read. TypeGPU would pack
-those logical local/paragraph/world transforms into its own sidecar and update dirty ranges without mutating shaping or
-layout storage. Indexes are positional after every accepted topology change; the adapter does not infer persistent
-identity from glyph IDs or clusters. This is neither snapshot/apply/restore nor a detached ownership transfer, so the
-superseded `snapshotGlyphs()` / `applyGlyphs()` / `restoreGlyphs()` surface remains unreserved.
+The accepted D-356 attached `Text.transformGlyphs()` design is an unshipped cross-adapter follow-up; neither TypeGPU nor
+Three exposes it today. The shared `Text.withGlyphs<Result>()` remains a generic synchronous read. A later implementation
+must prove each adapter's sidecar, dirty-range, lifecycle, interaction-geometry, and performance behavior together rather
+than inheriting a Three-only storage contract. This is neither snapshot/apply/restore nor a detached ownership transfer,
+so the superseded `snapshotGlyphs()` / `applyGlyphs()` / `restoreGlyphs()` surface remains unreserved.
 
 `setTransform()` copies exactly 16 finite column-major values into retained engine state. Transform and visibility changes
 dirty only the target's transform/visibility storage; they do not call core shaping. The program may repeat matrices per

@@ -61,8 +61,6 @@ export interface ThreeRendererHost {
         transforms: THREE.StorageInstancedBufferAttribute;
       }>
     | undefined;
-  /** Resets a physical row when stable-slot reuse assigns it to another live glyph. */
-  prepareGlyphRecord?(storageKey: string, record: number, stableId: number): void;
 }
 
 /** Applies retained Rust command-buffer deltas to Three storage attributes and draw objects. */
@@ -185,11 +183,6 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     this.#ensureOriginRecords();
     const record = this.#originRecords.get(stableId);
     return record === undefined ? undefined : { storageKey: record.storageKey, index: record.index };
-  }
-
-  /** Physical storage identities currently borrowed by live glyph materials. */
-  glyphStorageKeys(): ReadonlySet<string> {
-    return new Set(this.#originSegments.map((segment) => segment.storageKey));
   }
 
   /** Material instances owned exclusively by this renderer's current draw branch. */
@@ -563,7 +556,6 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
         const recordIndex = physicalRecordIndex(segment.order, index);
         const stableId = segment.stableIds.array[recordIndex]!;
         const offset = recordIndex * segment.origins.vectorWidth;
-        this.#owner.prepareGlyphRecord?.(segment.storageKey, recordIndex, stableId);
         this.#originRecords.set(stableId, {
           buffer: segment.origins,
           storageKey: segment.storageKey,

@@ -870,10 +870,8 @@ Deliver:
 
 - stable run-local glyph geometry plus compact transactional placement, publication, and query derivation with exact
   current i64-decision, f64-positioning, and f32-output behavior;
-- opt-in live per-glyph deformation through `Text.transformGlyphs()`, separate from the generic synchronous
-  `Text.withGlyphs()` borrowed read; an exact-length transform result updates attached glyph presentation in local,
-  paragraph, or world space without reshaping, while detached copies retain independent ownership and frozen shaping
-  lifecycle;
+- generic synchronous `Text.withGlyphs<Result>()` borrowed reads, while detached glyph copies retain independent
+  ownership and frozen shaping lifecycle;
 - responsive justified columns around authored convex or concave polygon cutouts, projected known-geometry 3D objects,
   and same-source drop caps, with explicit fragment reading order;
 - deterministic LTR, RTL, mixed-direction, complex-script, drop-cap, and moving-obstacle conformance cases;
@@ -883,6 +881,10 @@ Deliver:
 - a reproducible comparison with Pretext that distinguishes approximate browser-compatible line breaking from exact GPU-ready shaping and makes no unmeasured speed claim.
 
 Maintainers intend an editorial piece as a v1 showcase, so the typography that composition depends on is scoped into milestone 11 rather than left here: items 11.12–11.14 cover baked decoration metrics, the break-inserted hyphen contract, and `wordSpacing`, first-line indent, paragraph spacing, and justification controls. This milestone owns the retained placement and contour-flow work that composes those features.
+
+Follow-up: implement the accepted D-356 attached per-glyph deformation design as a separately scoped Three and TypeGPU
+change, with explicit lifecycle, storage, interaction-geometry, and performance evidence before adding
+`Text.transformGlyphs()` or `clearGlyphTransforms()` to either public adapter.
 
 Arbitrary rendered-pixel or depth-buffer occlusion, balanced columns, automatic hyphenation, vertical flow, and a frozen
 general-purpose shape-inside authoring API remain deferred until the initial integration produces evidence.
