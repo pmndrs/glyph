@@ -6,8 +6,8 @@ resource: ../../../packages/glyph/rust/font-baker
 tags: [baking, rust, wasm, typescript, implementation]
 sources:
   - id: 'citation-1'
-    resource: 'api-shapes.md#shared-bake-core'
-    title: 'Shared bake core API contract'
+    resource: '../../../packages/glyph/src/node/bake.ts'
+    title: 'Programmatic bake API'
   - id: 'citation-2'
     resource: 'shaping-data-contract.md'
     title: 'Shaping data contract V0'
@@ -37,7 +37,7 @@ generated:
 
 # Portable font baker implementation evidence
 
-This page records evidence owned by `packages/glyph/rust/font-baker`. It does not repeat program-wide milestone status: the [canonical roadmap](../roadmap/roadmap.md) owns that checklist, while the [bake API contract](api-shapes.md#shared-bake-core) and [shaping data contract](shaping-data-contract.md) own behavior.
+This page records evidence owned by `packages/glyph/rust/font-baker`. It does not repeat program-wide milestone status: the [canonical roadmap](../roadmap/roadmap.md) owns that checklist, while the public bake implementation and [shaping data contract](shaping-data-contract.md) own behavior.
 
 Status key: ✅ complete for the declared slice · 🟡 in progress · ⬜ not started · ⛔ blocked
 

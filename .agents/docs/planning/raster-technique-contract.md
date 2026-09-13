@@ -7,8 +7,8 @@ status: deprecated
 tags: [planning, raster, technique, policy, tsl, typegpu, boundaries]
 sources:
   - id: raster-technique-api
-    resource: raster-technique-api.md
-    title: Raster technique and engine resource API
+    resource: ../guides/technique-implementation-report.md
+    title: Portable raster-format implementation report
   - id: typegpu-shader-authority
     resource: typegpu-first-shader-authority.md
     title: TypeGPU-first shader authority

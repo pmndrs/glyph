@@ -26,9 +26,6 @@ sources:
   - id: three-text
     resource: ../../../packages/glyph/src/three/text.ts
     title: Three Text measurement and synchronization path
-  - id: rust-layout-engine
-    resource: rust-layout-engine.md
-    title: Rust text engine and retained render-plan ABI
   - id: pretext
     resource: https://github.com/chenglou/pretext
     title: Pretext prepared paragraph and streaming line-layout API

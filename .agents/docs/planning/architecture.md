@@ -20,11 +20,11 @@ sources:
     resource: core-api.md
     title: Core text API
   - id: raster-technique
-    resource: raster-technique-api.md
-    title: Raster technique and engine resource API
+    resource: ../guides/technique-implementation-report.md
+    title: Portable raster-format implementation report
   - id: typegpu-api
-    resource: typegpu-api.md
-    title: TypeGPU raster programs and text engine
+    resource: typegpu-first-shader-authority.md
+    title: TypeGPU-first shader authority research
   - id: gpucat-integration
     resource: gpucat-integration.md
     title: External gpucat integration fitness plan
@@ -36,8 +36,8 @@ generated:
 
 # Proposed architecture
 
-Status: proposed; the [core API](core-api.md), [engine contract](engine-integration-contract.md), and engine-specific API
-specifications own exact public interface shapes.
+Status: proposed; the [core API](core-api.md), [renderer integration guide](../guides/renderer-integration.md), and
+engine-specific API specifications own exact public interface shapes.
 
 ## System boundaries
 
@@ -92,7 +92,7 @@ Raster modules are runtime capability values with an inferred literal kind and a
 
 The public kind type is open. Core has no built-in raster union, no requirement that any particular first-party raster package ship with it, and no registry that must be edited when a raster is added. Bitmap, MSDF, Slug, and external packages each own their literal kind and companion contract. A registered raster is generic over its kind, so a decoder cannot accept an artifact from another technique. Invalid property combinations such as a raw font without a raster are represented as uninhabitable unions.
 
-This precision stops at runtime-shaped data. The mutable Three.js `Text` object, paragraphs, font-scoped glyph IDs, and typed-array lengths remain non-generic and are validated by runtime contracts. The React layer derives props from core properties and preserves module inference rather than defining another capability model. The exact signatures live in the [API contract](api-shapes.md).
+This precision stops at runtime-shaped data. The mutable Three.js `Text` object, paragraphs, font-scoped glyph IDs, and typed-array lengths remain non-generic and are validated by runtime contracts. The React layer derives props from core properties and preserves module inference rather than defining another capability model. The exact signatures live in the [core API](core-api.md).
 
 ## What we retain from Three Flatland Slug
 
@@ -302,7 +302,7 @@ flowchart TD
 
 There is no public branch that intentionally bypasses the baked asset probe.
 
-For a source pathname ending in `.ttf`, `.otf`, `.woff`, or `.woff2`, the sibling replaces that suffix with `.font.glb`; other hierarchical pathnames append `.font.glb`. Query parameters are preserved and fragments are excluded from identity. A direct `.glb` input or `{ baked }` object is baked-only. `{ source, baked }` is the explicit override for unrelated paths. The [API contract](api-shapes.md#canonical-url-resolution) is authoritative for edge cases, preload behavior, and examples.
+For a source pathname ending in `.ttf`, `.otf`, `.woff`, or `.woff2`, the sibling replaces that suffix with `.font.glb`; other hierarchical pathnames append `.font.glb`. Query parameters are preserved and fragments are excluded from identity. A direct `.glb` input or `{ baked }` object is baked-only. `{ source, baked }` is the explicit override for unrelated paths. The [core API](core-api.md) is authoritative for edge cases, preload behavior, and examples.
 
 ## `PMNDRS_font` extension family
 
@@ -368,7 +368,7 @@ sequenceDiagram
 
 The core modes are `unconstrained`, `at-most`, and `exactly`; each host translates its own constraint vocabulary. Adapters install only after asynchronous font/shaper readiness when their measurement callbacks are synchronous. Final host geometry is authoritative even when measurement was skipped or produced a different candidate. Paragraph positions remain local to the content box; the host applies node transforms and clipping afterward.
 
-Invalidation is directional: text, font, spans, font size, language, direction, features, letter spacing, or line policy update the paragraph and invalidate host measurement. Parent constraint changes cause the host to remeasure. Raster selection and paint-only changes rebuild or update draw batches without paragraph invalidation. The [API contract](api-shapes.md#third-party-layout-systems) owns the generic constraint and output shapes. The current uikit source mapping and incremental adoption plan are isolated in [uikit integration](uikit-integration.md).
+Invalidation is directional: text, font, spans, font size, language, direction, features, letter spacing, or line policy update the paragraph and invalidate host measurement. Parent constraint changes cause the host to remeasure. Raster selection and paint-only changes rebuild or update draw batches without paragraph invalidation. The [core API](core-api.md) owns the generic constraint and output shapes. The current uikit source mapping and incremental adoption plan are isolated in [uikit integration](uikit-integration.md).
 
 ## Caching
 

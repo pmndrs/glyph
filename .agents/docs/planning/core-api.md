@@ -29,7 +29,7 @@ sources:
     title: Renderer integration guide
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-09-04T02:01:49Z'
+  at: '2026-09-13T15:38:33Z'
 ---
 
 # Glyph integration API
@@ -104,9 +104,9 @@ const config = defineGlyphConfig({
 
 ## Codec and encode
 
-The Codec selected by `GlyphConfig.encode()` describes programs, packed buffer lanes, capabilities, ordering, transform
-mode, and allocation mode. Glyph installs it once per handle. Applications and ordinary renderer code never author or
-consume the engine's numeric IDs.
+The Codec selected by `GlyphConfig.encode()` describes programs, packed buffer lanes, capabilities, ordering, and
+transform mode. Glyph installs it once per handle. Applications and ordinary renderer code never author or consume the
+engine's numeric IDs. Ordered physical storage is package-owned rather than a Codec option.
 
 Changing record layout, batching, or ordering belongs in the Codec. It is not a renderer decoding hook.
 

@@ -25,11 +25,11 @@ sources:
     resource: core-api.md
     title: Target v1 core API
   - id: engine-contract
-    resource: engine-integration-contract.md
-    title: Target v1 engine integration contract
+    resource: ../guides/renderer-integration.md
+    title: Renderer integration guide
   - id: raster-technique
-    resource: raster-technique-api.md
-    title: Target v1 raster technique boundary
+    resource: ../guides/technique-implementation-report.md
+    title: Portable raster-format implementation report
 generated:
   by: openai-codex/gpt-5.6
   at: '2026-08-15T15:53:27Z'

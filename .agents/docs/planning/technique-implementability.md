@@ -183,7 +183,7 @@ Replace unconstrained renderer payload assumptions with a constrained portable r
 
 Do not add GPU objects, `NodeMaterial`, TypeGPU schemas, TSL nodes, or backend handles to this result.
 
-Make the Three material context technique-neutral. The current `ThreeTextMaterialContext` union names only first-party technique ids, so a third-party implementation cannot legally receive a user material. Add a generic declared-output arm and keep first-party convenience arms as renderer-local API details; update `.agents/docs/planning/three-material-authority.md` with the stable contract. The generic material helper must be able to consume the resolved material without reintroducing a per-technique adapter.
+Make the Three material context technique-neutral. The current `ThreeTextMaterialContext` union names only first-party technique ids, so a third-party implementation cannot legally receive a user material. Add a generic declared-output arm and keep first-party convenience arms as renderer-local API details; update the [Three material API](three-api.md#define-a-material) with the stable contract. The generic material helper must be able to consume the resolved material without reintroducing a per-technique adapter.
 
 ### 3. Replace the Three program escape hatch with a generic variant path
 

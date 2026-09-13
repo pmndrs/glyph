@@ -68,7 +68,7 @@ sources:
     title: Milestone 12 responsive flow-region and mixed-raster goals
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-09-09T09:25:07Z'
+  at: '2026-09-13T15:38:33Z'
 ---
 
 # Fragment-relative retained reflow
@@ -368,12 +368,11 @@ Each slice caches the ink union for its local glyph range. Derive it from immuta
 edge scans, so a partial CJK run does not force a whole-run bound or a broad per-glyph measurement walk.
 
 The renderer mapping keeps stable glyph identity separate and adds one engine-owned u32 placement slot for each physical
-glyph occurrence. Stable-indirect draws keep their existing logical-to-physical order lookup; ordered-direct draws keep
-their existing physical instance. The adapter then resolves `placementSlot[physical]` into the root-scoped f32x2 session
-table. This preserves the existing visual-order stream and draw topology. Source slice/block intersection count and L2
-copy-span count are reported separately: an RTL or mixed-level source intersection can require multiple copy spans even
-when it uses one translation. Reject any candidate that requires one draw per run/slice or a branch/search over line
-breaks in the ordinary vertex path.
+glyph occurrence. Ordered planning writes physical instances in visual order, and the adapter resolves
+`placementSlot[physical]` into the root-scoped f32x2 session table. This preserves the existing visual-order stream and
+draw topology. Source slice/block intersection count and L2 copy-span count are reported separately: an RTL or mixed-level
+source intersection can require multiple copy spans even when it uses one translation. Reject any candidate that requires
+one draw per run/slice or a branch/search over line breaks in the ordinary vertex path.
 
 Keep paint/material/raster grouping outside `LayoutRunArena`. Existing codec/resource batch spans reference run-local
 glyph subranges and are intersected with visual slice spans during plan publication. A paint-only update rebuilds those
@@ -457,9 +456,9 @@ row without duplicating it or changing a draw key.
 
 ### Visual line and decoration components
 
-Maintain compact visual-run spans per line: a line references a range of run IDs in visual order. Preserve a
-copy-span representation where unchanged runs can be copied without deciding order per glyph. The current stable
-indirect ordering path remains the correctness fallback for non-contiguous or reordered spans.
+Maintain compact visual-run spans per line: a line references a range of run IDs in visual order. Preserve a copy-span
+representation where unchanged runs can be copied without deciding order per glyph. Ordered planning remains the sole
+physical-storage authority and compacts the resulting visual order directly.
 
 Decorations are separate entities, one per continuous decorating group per visual line. Each holds a line-relative rect,
 paint program, depth layer, and run-span provenance. They remain unit-quad instances and do not cause glyph

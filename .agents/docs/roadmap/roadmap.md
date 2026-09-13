@@ -17,11 +17,11 @@ sources:
     resource: '../planning/core-api.md'
     title: 'Core text API'
   - id: 'engine-integration-contract'
-    resource: '../planning/engine-integration-contract.md'
-    title: 'Engine integration contract'
+    resource: '../planning/core-api.md'
+    title: 'Glyph integration API'
   - id: 'engine-integration-plan'
-    resource: '../planning/engine-integration-boundary.md'
-    title: 'Renderer-neutral extraction plan'
+    resource: '../guides/renderer-integration.md'
+    title: 'Renderer integration guide'
   - id: 'paragraph-query-preparation'
     resource: '../planning/paragraph-query-preparation.md'
     title: 'Paragraph-scoped preparation and synchronous layout queries'
@@ -161,7 +161,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 11.12 |   ✅   | Bake underline position/thickness and strikeout position/size into font metrics without implementing decoration rendering, so text decoration becomes an additive renderer feature instead of an artifact version bump and a re-bake of every shipped font.                                                                                                                                                                                                                                                                                                                    |  S   | 11.6        |
 | 11.13 |   ✅   | Prove the shaping and layout contract can represent a break-inserted hyphen glyph that has no source cluster, and fix the contract if it cannot. Language patterns, break selection, and justification quality controls remain later work.                                                                                                                                                                                                                                                                                                                                     |  M   | 11.6        |
 | 11.14 |   ✅   | Add the professional typography the editorial showcase requires: `wordSpacing`, first-line indent, paragraph space before/after, and justification controls covering minimum/maximum word-space ratio, letter-space expansion, and last-line policy.                                                                                                                                                                                                                                                                                                                           |  L   | 11.12–11.13 |
-| 11.15 |   ⬜   | Settle Three material authority, so applications supply their own `NodeMaterial` and gain lighting, shadows, and depth-composited effects without implementing a raster program. Resolve the open edges in the [material authority concept](../planning/three-material-authority.md) first; it is a recorded proposal, not an accepted design.                                                                                                                                                                                                                                 |  M   | 11.6        |
+| 11.15 |   ⬜   | Settle Three material authority, so applications supply their own `NodeMaterial` and gain lighting, shadows, and depth-composited effects without implementing a raster program. Resolve the open edges in the [Three material API](../planning/three-api.md#define-a-material) first.                                                                                                                                                                                                                                                                          |  M   | 11.6        |
 | 11.16 |   ✅   | Replace duplicate TypeScript shaping, layout, packing, and dirty-plan work with one retained Rust/Wasm frame transaction, validated renderer policy, and incremental render plan; land the Rust, policy/plan, and Three adapter PRs as one coordinated stack after exact Bitmap/MSDF/Slug, benchmark-app, size, and browser parity.                                                                                                                                                                                                                                            |  XL  | 11.6        |
 | 11.17 |   ✅   | Add paragraph-scoped synchronous prepare/query and candidate adoption: measure one pending paragraph per call without compiling a render plan, retain one session transaction with linear identity reservation, and reuse its paragraph-keyed results in the next full frame without a third full buffer.                                                                                                                                                                                                                                                                      |  L   | 11.16       |
 | 11.18 |   🟡   | Complete the Rust engine's realtime publishing set over that proven path: spacing, decorations (solid underline/overline/line-through landed early per D-248; patterned styles and retained decoration diffing remain), ordered column flow and internal one-call rectangle/polygon region and exclusion geometry (landed), interaction geometry, horizontal and vertical writing, bounded CJK tailoring, and optional color-emoji fallback. Public arbitrary-contour authoring, retained `LayoutRun` placement, projected objects, and drop caps belong to the 12.x frontier. |  XL  | 11.16       |
@@ -185,7 +185,7 @@ dependency does not include unrelated open work grouped under 11.18.
 
 ### 0.1 closure checklist
 
-- [x] Candidate core and React surfaces are documented in the [API reference](../planning/api-shapes.md#milestone-01-acceptance-evidence).
+- [x] Candidate core and React surfaces are documented in the [Glyph integration API](../planning/core-api.md).
 - [x] Core font/raster capability inference and positive/negative composition cases have compile-only evidence.
 - [x] Canonical URL forms and invalid source/baked combinations have compile-only evidence.
 - [x] The current root package export is ESM-only and contains no CommonJS condition.
@@ -217,7 +217,7 @@ Milestone 0 is closed. Milestone 1 is now the active dependency.
 
 Deliver:
 
-- maintainer review of the core/React [API](../planning/api-shapes.md), [architecture](../planning/architecture.md), [shaping data](../planning/shaping-data-contract.md), and [raster data](../planning/raster-data-contract.md);
+- maintainer review of the [Glyph integration API](../planning/core-api.md), [architecture](../planning/architecture.md), [shaping data](../planning/shaping-data-contract.md), and [raster data](../planning/raster-data-contract.md);
 - accepted font identity `(FontHandle, LocalGlyphId)` and one-face asset rule;
 - accepted canonical URL, baked-sibling, baked-only, explicit override, and preload rules;
 - accepted ESM-only export map, module-Worker boundary, and absence of CommonJS artifacts;
@@ -792,8 +792,8 @@ move them into the release gate:
 ### Milestone 11 — renderer-neutral batched core and engine targets
 
 This milestone implements the authoritative [README](../../../README.md), [core text API](../planning/core-api.md),
-and [engine integration contract](../planning/engine-integration-contract.md). It removes Three.js from portable entry
-points while preserving the accepted shaping, paragraph, artifact, raster, and visible-generation behavior.
+and [renderer integration guide](../guides/renderer-integration.md). It removes Three.js from portable entry points while
+preserving the accepted shaping, paragraph, artifact, raster, and visible-generation behavior.
 
 Deliver:
 
@@ -830,7 +830,7 @@ host/program-reuse gates extend beyond this 2D adapter.
 
 Only after these gates pass may maintainers declare and publish v1.
 
-The [renderer-neutral extraction plan](../planning/engine-integration-boundary.md) owns the issue sequence and proof matrix.
+The [renderer integration guide](../guides/renderer-integration.md) owns the current integration boundary and proof matrix.
 Engine transforms, scene composition, pass placement, command encoding, GPU synchronization, and device lifecycle remain
 adapter-owned. Core owns physical glyph grouping and ordered variant-bearing text runs; programs own compatible final draws.
 

@@ -10,8 +10,8 @@ sources:
     resource: core-api.md
     title: Core text API
   - id: rust-engine
-    resource: rust-layout-engine.md
-    title: Rust text engine and render-plan ABI
+    resource: ../../../packages/glyph/rust/shaper/src/engine/state.rs
+    title: Retained Rust text engine
   - id: current-font-face
     resource: ../../../packages/glyph/src/font-face.ts
     title: Current renderer-neutral FontFace lifecycle
@@ -32,7 +32,7 @@ sources:
     title: Three.js Object3D
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-09-04T00:13:53Z'
+  at: '2026-09-13T15:38:33Z'
 ---
 
 # Three.js text API
@@ -55,9 +55,9 @@ const three = glyph.handle('main', ThreeConfig);
 Import only the RasterFormat modules an application names explicitly. `ThreeConfig` already supports its built-in
 Bitmap, MSDF, and Slug formats and realizes their Three materials.
 
-`ThreeConfig` is the built-in config value. `defineThreeConfig({ transformMode, allocationMode, capacity })`
-creates an immutable variant. Several named Three handles may coexist over the same loaded FontFace data while owning
-independent roots and renderer state.
+`ThreeConfig` is the built-in config value. `defineThreeConfig({ transformMode, capacity })` creates an immutable variant.
+Several named Three handles may coexist over the same loaded FontFace data while owning independent roots and renderer
+state. Ordered physical storage is the only plan and is not a public option.
 
 ## Resolver, publication object, and actual rendering
 

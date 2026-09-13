@@ -2,6 +2,11 @@
 
 ## 2026-09-13
 
+- **Pruned retired stable-planner guidance** — Removed live integration-guide, API, fragment-placement, dirty-range, and
+  package-reference prose that still described allocation strategy selection, logical-order buffers, or the stable
+  planner as current. D-362 and this append-only log retain the historical decision and evidence; ordered storage is now
+  documented as the sole physical plan without adding benchmark or size claims before final verification.
+
 - **Started the accepted stable-indirect retirement** — Removed the unused stable planner, slot pool, chunked order arena,
   mixed dispatcher, public Three allocation option, Codec strategy field, render-plan order-buffer fields, and renderer
   order lookup. Ordered planning remains the sole physical-storage path. Stable glyph identity, placement generations,

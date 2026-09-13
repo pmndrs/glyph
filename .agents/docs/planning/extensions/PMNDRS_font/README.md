@@ -14,7 +14,7 @@ sources:
     resource: '../../raster-data-contract.md'
     title: 'V0 raster data contract'
   - id: 'citation-4-1'
-    resource: '../../api-shapes.md'
+    resource: '../../core-api.md'
     title: 'Runtime and bake API fixture'
   - id: 'citation-4-2'
     resource: '../../payload-budget.md'

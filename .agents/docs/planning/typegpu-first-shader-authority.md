@@ -10,14 +10,14 @@ sources:
     resource: core-api.md
     title: Core text API
   - id: engine-contract
-    resource: engine-integration-contract.md
-    title: Engine integration contract
+    resource: ../guides/renderer-integration.md
+    title: Renderer integration guide
   - id: raster-technique
-    resource: raster-technique-api.md
-    title: Raster technique and engine resource API
+    resource: ../guides/technique-implementation-report.md
+    title: Portable raster-format implementation report
   - id: typegpu-api
-    resource: typegpu-api.md
-    title: TypeGPU raster programs and text engine
+    resource: ../../../packages/glyph/src/typegpu.ts
+    title: Direct TypeGPU public surface
   - id: three-api
     resource: three-api.md
     title: Three.js text API

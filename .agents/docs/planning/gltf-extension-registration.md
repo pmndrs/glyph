@@ -101,7 +101,7 @@ Shared texture-resource schemas live in [`extensions/schema`](extensions/schema)
 
 - [Shaping data contract V0](shaping-data-contract.md)
 - [Raster data contract V0](raster-data-contract.md)
-- [Runtime and bake API V0](api-shapes.md)
+- [Glyph integration API](core-api.md)
 - [Payload budget](payload-budget.md)
 
 ## Submission readiness gate

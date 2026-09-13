@@ -29,7 +29,7 @@ sources:
     title: Rust audit measurements and inference boundary
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-09-04T05:11:00Z'
+  at: '2026-09-13T15:38:33Z'
 ---
 
 # Glyph alpha merge and fast-follow handoff
@@ -96,16 +96,14 @@ Land Rust work in coherent, reviewable follow-up PRs. Prioritize:
    synchronous re-entry regression test.
 2. R3: refuse disposal of an in-use font binding and prove the status mapping.
 3. R5: repair the chunk-64 trailing-space accounting and add the missing 63/64 boundary case.
-4. R2: first add the D-261 oracle coverage for stable-indirect, then make fallible batch publication transactional.
-5. R4: remove unsafe from the sixteen safe ABI exports, document real safety contracts for the remainder, and make the
+4. R4: remove unsafe from the sixteen safe ABI exports, document real safety contracts for the remainder, and make the
    Wasm ABI visible to a non-vacuous lint gate.
-6. Validate and triage the medium-confidence system findings; do not bulk-apply speculative advice.
+5. Validate and triage the medium-confidence system findings; do not bulk-apply speculative advice.
 
 Preserve the Rust house laws: data-oriented SoA arenas; no Arc/Rc/RefCell/Cow without measured need; zero steady-state
 allocation; no runtime validation in hot loops; iterator-shaped bounds-check elision instead of unchecked indexing;
 panic-free production code; the measured per-crate optimization profiles; generated ABI layout; and scalar-only Wasm C
-ABI calls. Do not split state.rs for line count, delete stable-indirect for bytes, or compare performance artifacts built
-from different sources or flags.
+ABI calls. Do not split state.rs for line count or compare performance artifacts built from different sources or flags.
 
 The completed TypeScript production review already fixed GLY-001 (failed Blob reads poisoned the FontFace source cache)
 and GLY-002 (speculative nested React font prefetch could reject unobserved). Do not redo them. Revalidate these remaining

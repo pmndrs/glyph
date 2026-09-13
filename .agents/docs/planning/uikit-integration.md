@@ -37,7 +37,7 @@ This document is for maintainers integrating `pmndrs/glyph` into pmndrs/uikit. I
 Three-based implementation, the Glyph `Text` queries it uses, and an incremental migration that does not require uikit to
 replace layout, rendering, and editing at once.
 
-The authoritative public types remain in the [API contract](api-shapes.md). This page owns uikit-specific reasoning; uikit terminology and dependencies do not belong in the core package.
+The authoritative public types remain in the [Glyph integration API](core-api.md). This page owns uikit-specific reasoning; uikit terminology and dependencies do not belong in the core package.
 
 ## Evidence from uikit today
 

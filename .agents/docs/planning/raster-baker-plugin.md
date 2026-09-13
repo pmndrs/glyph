@@ -44,7 +44,7 @@ generated:
 
 > [!NOTE]
 > This guide documents the merged, unreleased v0 `RasterModule` surface. The target v1 extraction API is authoritative in
-> the [raster technique and engine resource specification](raster-technique-api.md); this guide will be rewritten against
+> the [portable raster-format implementation report](../guides/technique-implementation-report.md); this guide will be rewritten against
 > that split when implementation replaces the v0 module.
 
 Use this guide to create an ESM package that adds a raster technique to `pmndrs/glyph` without changing or importing its
@@ -56,7 +56,7 @@ internals. The finished package will own:
 - an optional runtime-bake entry loaded only when source fallback is required;
 - retained-update, abort, overflow, and disposal tests.
 
-The exact interfaces remain authoritative in the [API reference](api-shapes.md#raster-module-boundary). The private
+The exact interfaces remain authoritative in the [Glyph integration API](core-api.md). The private
 [`@pmndrs/glyph-example-raster`](../../../packages/glyph-example-raster) workspace package is a complete external proof using
 only public package entry points.
 

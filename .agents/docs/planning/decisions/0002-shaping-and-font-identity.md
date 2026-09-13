@@ -12,7 +12,7 @@ sources:
     resource: ../shaping-data-contract.md
     title: Shaping data contract
   - id: api
-    resource: ../api-shapes.md
+    resource: ../core-api.md
     title: Runtime and bake API V0
 generated:
   by: openai-codex/gpt-5.6

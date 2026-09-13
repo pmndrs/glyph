@@ -3,23 +3,15 @@
 ## Product, API, and execution
 
 - [Project brief](project-brief.md) — product intent, merged v0, target v1, and later horizon.
-- [Merged v0 runtime and bake API](api-shapes.md) — superseded migration fixture; describes the merged v0 surface deleted by the Rust render-plan cutover.
 - [Three.js text API](three-api.md) — authoritative `glyph.fontFace()`, `ThreeConfig`, `TextGroup`, and `Text` surface, including roots, font leases, ordering, and render-loop synchronization.
 - [Planner-assisted detached glyph slices](detached-glyph-slice.md) — synchronous committed-record copies, independent Three.js `Glyphs` and decoration objects, matrix ownership, and first-frame upload invariants.
 - [Glyph integration API](core-api.md) — authoritative application and integrator API for fonts, measurement, GlyphConfig, Codec command data, CommandBufferView, DisplayList, renderer decode, handles, and roots.
-- [Font and engine ownership plan](font-runtime-ownership.md) — accepted breaking migration from runtime-bound loaded fonts and raw shaper hosts to immutable font assets, engine-owned backends, target-bound render planners, deterministic leases, and renderer-owned device pools.
-- [Rust layout engine design](rust-layout-engine.md) — superseded historical proposal; use the Glyph integration API and renderer integration guide for the current contract.
-- [Engine integration contract](engine-integration-contract.md) — superseded historical record; the Rust command buffer replaced this storage and batching contract.
-- [Raster technique and engine resource API](raster-technique-api.md) — superseded historical record; the Rust render-plan cutover replaced these TypeScript binding and packing interfaces.
 - [Session handoff](session-handoff.md) — the decisions, corrections, and open questions from the API hardening session, including why measurement is two calls and what they should be named.
 - [Example renderer](example-renderer.md) — why a non-Three consumer exists, what it proves about the public GlyphConfig contract, and how it divides work with the TypeGPU shader subpath.
 - [Renderer integration guide](../guides/renderer-integration.md) — how to implement a custom engine through one inferred `GlyphConfig` using the same public contract as Three.
-- [TypeGPU raster programs and text engine](typegpu-api.md) — superseded direct-engine proposal; current TypeGPU evidence lives in the GlyphConfig example renderer and explicit shader leaves.
 - [TypeGPU-first shader authority](typegpu-first-shader-authority.md) — exploratory package shape and falsifiable proof ladder for sharing complete raster kernels with direct WebGPU hosts, Three.js, and gpucat without changing core.
-- [Three material authority for text draws](three-material-authority.md) — superseded design record; the current discriminated material context is documented in the Three.js text API.
 - [Merged v0 raster and baker plugin guide](raster-baker-plugin.md) — build against the implemented combined runtime/renderer module before the target v1 extraction replaces it.
 - [Architecture](architecture.md) — system ownership, import boundaries, and runtime flow.
-- [Renderer-neutral core, batching, and engine integration](engine-integration-boundary.md) — superseded extraction plan retained for design history; current integrations use GlyphConfig and renderer decode.
 - [External gpucat integration fitness plan](gpucat-integration.md) — public-surface mapping, external-package boundary, ordering/lifecycle plan, and remaining shader-reuse proof for gpucat.
 - [Canonical roadmap](../roadmap/roadmap.md) — authoritative implementation order and exit gates.
 - [Glyph alpha fast-follow implementation brief](api-alpha-fast-follow.md) — disposable post-merge prompt for the deferred Rust audit and remaining production-review findings; delete it when the accepted work is complete.
@@ -59,7 +51,6 @@
 - [MTSDF generation research](mtsdf-generation-research.md) — primary literature, implementation/license survey, owned Rust boundary, and data-oriented optimization gates.
 - [Grayscale bitmap hinting research](bitmap-hinting-research.md) — native pixel placement, hinted strikes, and four-phase grayscale packing gates.
 - [Renderer capabilities](renderer-capabilities.md) — feature matrix and developer guidance.
-- [Three.js text effect composition](text-effect-composition.md) — superseded bespoke-effects proposal; custom material authority is the selected direction.
 - [Implementation difficulty](implementation-difficulty.md) — relative correctness and performance effort.
 - [Payload budget](payload-budget.md) — serialized, decoded, and resident cost model.
 - [Shaper and baker Wasm size reduction](wasm-size-reduction.md) — measured byte attribution for the distributed Wasm artifacts, the remaining levers, and the staged-table delivery model that keeps one runtime.

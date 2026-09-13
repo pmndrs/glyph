@@ -20,9 +20,6 @@ sources:
   - id: text-ordered-plan
     resource: ../../../packages/glyph/rust/shaper/src/engine/ordered_plan.rs
     title: Rust ordered-direct changed-range planning
-  - id: text-stable-plan
-    resource: https://github.com/pmndrs/text/blob/c975a2b24c87752551d5f4689b0899fe2f254e59/packages/glyph/rust/shaper/src/engine/stable_plan.rs
-    title: Retired Rust stable-indirect physical and order-buffer planning
   - id: text-three-target
     resource: ../../../packages/glyph/src/three/command-buffer-renderer.ts
     title: Three render-plan executor and update-range forwarding
@@ -37,7 +34,7 @@ sources:
     title: Three r185 legacy WebGL attribute uploads
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-15T15:53:27Z'
+  at: '2026-09-13T15:38:33Z'
 ---
 
 # Adaptive dirty-range uploads for retained text plans
@@ -53,8 +50,8 @@ small gaps, bounds fragmentation, and promotes expensive partial updates to one 
 The useful work is therefore narrower:
 
 1. calibrate the existing Rust integer cost model against the installed Three WebGPU and WebGL backends;
-2. make the cost decision per physical buffer, including the stable-indirect order buffer, rather than treating every
-   program stream as if it had the same changed-range economics;
+2. make the cost decision per physical buffer rather than treating every program stream as if it had the same
+   changed-range economics;
 3. use a Flatland-style reusable tracker only for renderer-local matrix and presentation-origin edits, which never cross
    `pmndrs_glyph_engine_update`; and
 4. remove avoidable host allocations while forwarding already-coalesced Rust patches to Three.
@@ -99,10 +96,9 @@ the range-versus-full decision, but it changes the mechanism attributed to the w
 
 ## What the Rust text path already does
 
-The text planner has more information than Flatland's mutation-time tracker. Ordered-direct storage scans stable IDs and
-content revisions in physical order to produce exact contiguous record ranges. Stable-indirect storage sorts changed
-physical slots, creates exact ranges, and separately writes changed 64-entry logical-order chunks. Both reuse retained
-scratch vectors rather than allocating one tracker object per frame.[^text-ordered-plan][^text-stable-plan]
+The text planner has more information than Flatland's mutation-time tracker. Ordered storage scans stable IDs and content
+revisions in physical order to produce exact contiguous record ranges while reusing retained scratch vectors rather than
+allocating one tracker object per frame.[^text-ordered-plan]
 
 `coalesce_ranges` then applies four renderer-declared controls:[^text-packing]
 
@@ -139,13 +135,6 @@ correct ranges and prevents inactive-buffer uploads, but the cost estimate can b
 Range selection should be evaluated per active physical buffer, or by an exactly equivalent active-buffer-weighted
 model. This belongs in the Rust plan compiler after dependency liveness is known, not in policy bytecode and not in the
 Three executor.
-
-### Stable order chunks bypass the adaptive decision
-
-Stable-indirect physical records use `coalesce_ranges`, but changed 64-entry order chunks currently become individual
-patches. Sparse insertions benefit from that precision; broad edits can publish many order-buffer calls. The same
-gap/call/full-live model should consume the changed order chunks before serialization, while preserving chunk retirement
-and fence invariants.
 
 ### Renderer-local writes need their own tracker
 
@@ -209,10 +198,9 @@ Any refinement must preserve these exact properties:
    consumes them.
 7. An empty Three range list is legal only when the intended upload covers the entire allocated typed array; a promoted
    live span otherwise remains explicit, including any required initialized alignment padding.
-8. Stable-indirect order-buffer coalescing preserves logical order, chunk retirement, and fence-delayed slot reuse.
-9. Renderer-local trackers never alter Rust buffer identity, command ordering, draw boundaries, or semantic state.
-10. WebGPU, WebGL fallback, and any native consumer may choose different cost constants but must realize identical final
-    bytes and draws.
+8. Renderer-local trackers never alter Rust buffer identity, command ordering, draw boundaries, or semantic state.
+9. WebGPU, WebGL fallback, and any native consumer may choose different cost constants but must realize identical final
+   bytes and draws.
 
 ## Benchmark and admission matrix
 
@@ -227,7 +215,6 @@ Test these update distributions for Bitmap, MTSDF, and Slug:
 - every 64th and every 256th glyph;
 - contiguous 1%, 5%, 10%, 25%, 50%, 75%, and 100% spans;
 - width-only layout, font-size layout/resource selection, localized text edit, suffix edit, and paragraph reorder;
-- stable-indirect insertion and broad order-buffer rewrite; and
 - transform-only and presentation-origin-only renderer-local changes.
 
 Compare at least these planners:
@@ -256,10 +243,9 @@ three raster techniques. Backend-specific constants are acceptable; backend-spec
 - The current text capability values have not been swept against actual `writeBuffer`, `bufferSubData`, or PBO texture
   costs.
 - The stride-specific Rust coalescing primitive is implemented with focused gap, fragmentation, full-live, and overflow
-  tests. Ordered-direct and stable-indirect physical storage now retain one reusable range vector per possible physical
-  buffer, select ranges through exact semantic dependency masks, align for that buffer's stride, and cost it separately.
-  Stable 64-entry order chunks now use the same cost model and preserve committed bytes inside widened gaps. Identical
-  per-buffer range shapes regroup into one multi-buffer packing job; the ungrouped prototype repeated cold policy
+  tests. Ordered storage retains one reusable range vector per possible physical buffer, selects ranges through exact
+  semantic dependency masks, aligns for that buffer's stride, and costs it separately. Identical per-buffer range shapes
+  regroup into one multi-buffer packing job; the ungrouped prototype repeated cold policy
   execution per stream and regressed Bitmap/MTSDF/Slug by roughly 1.2/2.2/2.4 ms before this correction. After grouping,
   one canonical run measures 15.208/15.940/16.114 ms cold and 3.946/4.370/5.284 ms resize, versus two detached
   `bbd87d3e` baselines of 15.061–15.867 ms cold and 4.101–5.027 ms resize across the three techniques. Standard resize
@@ -277,8 +263,6 @@ three raster techniques. Backend-specific constants are acceptable; backend-spec
 [^text-packing]: `coalesce_ranges` implements gap merging, fragmentation collapse, and a basis-point whole-live threshold in `no_std + alloc` Rust.
 
 [^text-ordered-plan]: Ordered-direct compilation derives changes from retained stable identity and content revision in physical order.
-
-[^text-stable-plan]: Stable-indirect compilation retains physical slots and a separate 64-entry chunked logical-order buffer.
 
 [^three-webgpu]: Three r185 WebGPU emits one `GPUQueue.writeBuffer` call for each declared update range.
 

@@ -32,11 +32,11 @@ sources:
     resource: 'core-api.md'
     title: 'Core text API'
   - id: 'engine-boundary'
-    resource: 'engine-integration-boundary.md'
-    title: 'Renderer-neutral core, batching, and engine integration plan'
+    resource: '../guides/renderer-integration.md'
+    title: 'Renderer integration guide'
   - id: 'engine-integration-contract'
-    resource: 'engine-integration-contract.md'
-    title: 'Engine integration data contract'
+    resource: 'core-api.md'
+    title: 'Glyph integration API'
   - id: gpucat-integration
     resource: gpucat-integration.md
     title: External gpucat integration fitness plan
@@ -86,7 +86,7 @@ Implementation and passing fixtures are evidence, not approval. A proposed row c
 | D-087 | `@pmndrs/glyph` solely owns the optimized font-baker Wasm, Rust source, tooling, and canonical URL. `@pmndrs/glyph/bake` is its Node programmatic surface and `@pmndrs/glyph/runtime-bake` is its explicit browser host; the root graph cannot reach baker or validator code. No second font-baker package is published.                                                        |    Accepted    |
 | D-016 | The root `rust-toolchain.toml` is the sole product Rust authority. The isolated coverage-fuzz workspace has one exact dated nightly authority because libFuzzer needs unstable compiler instrumentation. Root and nested mise configurations consume their contextual idiomatic files instead of duplicating Rust versions; pnpm and Cargo remain the normal command interface. | Settled for V0 |
 
-D-004/005 follow the established uikit split: the core owns every feature and React only reconciles lifecycle and props. Nested text follows React Native's attributed-text model; direct props and Suspense match uikit/Drei conventions. D-006 makes the short string form canonical while preserving explicit source/baked overrides and preload identity. D-007 fixes native ESM, explicit subpath exports, module workers, and `import()`-based lazy boundaries as package invariants. D-008/009 adopt Koota's value-oriented inference at raster/plugin boundaries without applying type-level models to runtime binary data. See the [API contract](api-shapes.md).
+D-004/005 follow the established uikit split: the core owns every feature and React only reconciles lifecycle and props. Nested text follows React Native's attributed-text model; direct props and Suspense match uikit/Drei conventions. D-006 makes the short string form canonical while preserving explicit source/baked overrides and preload identity. D-007 fixes native ESM, explicit subpath exports, module workers, and `import()`-based lazy boundaries as package invariants. D-008/009 adopt Koota's value-oriented inference at raster/plugin boundaries without applying type-level models to runtime binary data. See the [Glyph integration API](core-api.md).
 
 ## Shaping and paragraphs
 
@@ -111,7 +111,7 @@ D-004/005 follow the established uikit split: the core owns every feature and Re
 | D-098 | Post-v1 Milestone 12 adds responsive multi-column flow regions and explicit exclusions over the existing universal shaping result, then proves native-strike bitmap, MTSDF, and Slug in one editorial composition. The first implementation keeps rectangular layout as the common path, uses conservative two-dimensional exclusions, and defers a frozen public API, contour-tight wrapping, arbitrary rendered-pixel occlusion, balanced columns, hyphenation, and vertical flow until evidence exists. |      Accepted; refined by D-355       |
 | D-100 | Post-v1 Milestone 19 adds Japanese vertical writing after large-coverage CJK paging. The first slice uses top-to-bottom shaping, right-to-left columns, OpenType vertical metrics/features, Unicode cluster orientation, interaction geometry, and shared Bitmap/MTSDF/Slug output while preserving a zero-overhead horizontal fast path; tate-chū-yoko, ruby, warichū, Mongolian, and vertical exclusion flow remain deferred.                                                                            |               Accepted                |
 
-The [shaping contract](shaping-data-contract.md), [API contract](api-shapes.md), [uikit integration](uikit-integration.md), and [conformance plan](conformance-plan.md) define the consequences and fixtures.
+The [shaping contract](shaping-data-contract.md), [Glyph integration API](core-api.md), [uikit integration](uikit-integration.md), and [conformance plan](conformance-plan.md) define the consequences and fixtures.
 
 ## Identity and container
 
@@ -154,7 +154,7 @@ Rasters attach only when shaping hash, glyph count, glyph-ID width, raster key, 
 | D-078 | The bake and shaping Wasm modules use `no_std + alloc`, aborting panics, and pinned ABI-private dynamic Talc 5.0.4. Across the optimized four-module corpus it saves 46,610 raw, 15,121 gzip, and 12,121 Brotli bytes relative to `dlmalloc` without changing initial-memory class or artifacts. A 128 MiB global arena is rejected because it saves no meaningful transfer bytes while raising initial memory to about 129 MiB and imposing a fixed ceiling. A request-local scratch arena remains eligible only with proven lifetime ownership outside persistent Worker state. Host code owns gzip/Brotli measurement.                                                                                                                                                                                                                                                                                                  |      Accepted       |
 | D-084 | Font format parsing and outline/metric interpretation use maintained Fontations `read-fonts` and `skrifa`; project code owns bake policy and artifact contracts, not a parallel OpenType parser or geometry engine.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |   Settled for V0    |
 
-The [architecture](architecture.md) owns loading behavior and dependency rules. The [API contract](api-shapes.md) owns host and Worker shapes.
+The [architecture](architecture.md) owns loading behavior and dependency rules. The [Glyph integration API](core-api.md) owns host and Worker shapes.
 
 ## Raster
 

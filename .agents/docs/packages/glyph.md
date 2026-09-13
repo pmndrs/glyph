@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:df8801e383e125e0c671147003fb3da6f38369574f93467bc3772d269912f61f'
+source_digest: 'sha256:10d992b93922a8a61af9b8ac67ee26ac9f7440d822fb0d9b03c3fc9ce8f044f6'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -89,9 +89,6 @@ sources:
   - id: react
     resource: ../../../packages/glyph/src/react.ts
     title: React Three Fiber adapter
-  - id: engine-design
-    resource: ../planning/rust-layout-engine.md
-    title: Rust text engine and render-plan design
   - id: core-api-reference
     resource: ../planning/core-api.md
     title: Glyph integration API reference
@@ -103,7 +100,7 @@ sources:
     title: Planner-assisted detached glyph slice
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-09-09T09:25:07Z'
+  at: '2026-09-13T15:38:33Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -920,20 +917,10 @@ multi-column layouts, and starts with no resume region. The public producer proo
 Text in the same request. Rust no longer pre-scans those relationships before the flow arena consumes the already-bounded
 region table.
 
-A Mori 0.19.1 production-source scan (review profile, same-language threshold 0.85, minimum 40 tokens) corroborated the
-deleted parallel path and identified exact shared planner machinery. Ordered and stable planning now use one retained
-epoch-cleared identity set, one plan-error and result-capacity classifier, one cold physical-buffer allocator, one inline
-draw-span predicate, and one deliberately out-of-line final primitive/draw emitter. The optimized Wasm moved from
-1,160,505 raw / 442,612 gzip / 348,594 Brotli bytes to 1,159,317 / 442,284 / 347,850, saving 1,188 / 328 / 744 bytes.
-
-The following is historical evidence for the now-retired alternative. Ordered-direct compacts physical records in
-draw order; stable-indirect preserves slots, publishes a separate order buffer, and quarantines retirements until renderer
-acknowledgement. A symbol-bearing optimized build attributes 33.3 KiB of function bodies to ordered planning and 50.1 KiB
-to stable planning; those complete strategy totals are upper bounds, not deduplicable byte estimates. Their draw compilers
-resolve different physical address spaces. Normalizing those addresses into another staging array or dispatching through a
-dynamic strategy interface would add hot-path memory traffic or indirect calls, so the audit retains the strategy-local
-loops and shares their exact invariants instead. The 22k-glyph complete Rust benchmark remains within adjacent-run noise;
-a 20-warmup/51-sample cold check measured 15.452 ms median / 15.670 ms p95 at 1.0% RSD.
+A Mori 0.19.1 production-source scan (review profile, same-language threshold 0.85, minimum 40 tokens) first identified
+shared machinery across the former ordered and stable planners. The narrower extraction saved 1,188 raw / 328 gzip / 744
+Brotli bytes, but retained two physical-storage engines. D-362 later retired the unused stable-indirect experiment in full;
+the decision register and append-only log retain its design and benchmark history.
 
 ## Current size and performance evidence
 
@@ -1088,33 +1075,6 @@ identity; the first storage mismatch falls back to complete batch discovery. Thr
 1.164/5.761, 1.153/5.740, and 1.155/5.738 ms median/p95, versus the preceding 1.314/5.863 ms checkpoint. The optimized
 shaper is 1,157,311 raw bytes, a 4,189-byte increase, and retained high-water memory is 79.81 MiB. The repeated median gain
 is established; the roughly 5.74 ms p95 and 81.4–81.6% RSD still fail the tail-latency gate.
-
-The direct benchmark also keeps an independent middle-splice lane. On the current optimized artifact, a sequential
-eight-warmup/31-sample run measures ordered-direct insertion/deletion at 8.452/9.033 ms median/p95 and 511.3 KiB written
-because following physical records move. Stable-indirect reduces that publication to 452 B and measures 9.372/9.583 ms.
-The earlier 51.067 ms figure was the maximum selected as p95 from only 11 samples and did not reproduce. This establishes
-the storage-policy tradeoff without changing the default: stable planning remains optimization/correctness work, and
-chunk-local text storage cannot be claimed as the dominant splice fix while the physical plan has this cost.
-
-Three now consumes stable-indirect plans through one shared record-addressing abstraction rather than raster-format-specific
-branches. A Rust/Three integration regression proves lifecycle reorder mutates only the order table and preserves physical
-glyph bytes and draw objects. A two-record GPU oracle makes slot zero green and slot one red, then renders logical slot zero
-through `order[0] = 1`: forced WebGL2 and hardware WebGPU both return 16/16 exact red pixels and the same readback hash.
-The complete ordered Bitmap/MSDF/Slug/custom-material matrix remains green on both backends. A strict 31-sample stable
-run exposed a quadratic dependency scan: each changed physical range rescanned every slot write. Binary-partitioning the
-sorted writes to the requested range reduces stable font-size from 350.136 to 7.982 ms median and column resize from
-49.636 to 3.767 ms; localized edit is 2.172/6.628 ms and splice is 9.372/9.583 ms median/p95. Stable no-op remains
-1.083 ms versus ordered-direct's 0.001 ms, so stable remains an explicit allocation strategy rather than the first-party default. The
-sequential benchmark high-water marks are 107.56 MiB ordered and 114.25 MiB stable; retained-memory right-sizing remains
-open and neither figure is presented as ordinary application demand.
-
-The first-party Codec declares one allocation strategy for every registered raster format. Rust now resolves that uniform
-strategy once per update instead of looking up a program for every glyph before the selected planner performs its own
-validated compilation. Mixed-strategy Codecs retain the per-glyph discovery path and stop once both strategies are
-observed. A five-warmup/11-sample ordered run measures 6.005 ms font-size, 2.813 ms column-resize, 1.212 ms localized-edit,
-and 8.281 ms middle-splice medians. The adjacent prior medians were 6.178, 2.817, 1.353, and 8.452 ms; these short runs
-show no regression and suggest a small scan reduction, but do not establish a latency win. The same change preserves
-whole-buffer update alignment after dirty-range promotion and costs 182 raw / 42 gzip / 233 Brotli bytes.
 
 Three retains pending attribute upload ranges until its renderer consumes them. Consecutive Rust publications and
 presentation-origin restoration before rendering coalesce overlapping or adjacent ranges instead of clearing earlier

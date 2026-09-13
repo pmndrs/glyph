@@ -4,9 +4,6 @@ title: Session handoff
 description: The decisions, corrections, and open questions from the API hardening session, recorded so the reasoning survives the context that produced it.
 tags: [handoff, api, measurement, benchmarks, contract]
 sources:
-  - id: audit
-    resource: api-surface-audit.md
-    title: API surface audit
   - id: contract
     resource: ../../../.agents/skills/engine-call-contract/SKILL.md
     title: Engine call contract
@@ -20,7 +17,8 @@ generated:
 
 # Session handoff
 
-Written because the reasoning below cost a long session to reach and is worth more than the diffs it produced. The plan of record is the [API surface audit](api-surface-audit.md); this page holds what that document assumes.
+Written because the reasoning below cost a long session to reach and is worth more than the diffs it produced. This page
+retains the still-relevant assumptions directly; completed audit history remains available in Git.
 
 ## The contract every engine call follows
 

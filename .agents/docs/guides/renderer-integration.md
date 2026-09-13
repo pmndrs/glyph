@@ -30,7 +30,7 @@ sources:
     title: TypeGPU shader realization
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-09-04T02:01:49Z'
+  at: '2026-09-13T15:38:33Z'
 ---
 
 # Integrate a renderer with Glyph
@@ -323,7 +323,6 @@ function descriptor(ids: CodecIdFactory): CodecDescriptor {
         system,
         capabilitySet: capabilities,
         transformMode: 'direct',
-        allocationMode: 'ordered',
         ids,
       }),
     ],

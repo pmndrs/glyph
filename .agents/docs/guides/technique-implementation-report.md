@@ -34,7 +34,7 @@ sources:
     title: End-to-end renderer acceptance
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-09-04T00:13:53Z'
+  at: '2026-09-13T15:38:33Z'
 ---
 
 # Portable raster-format implementation report
@@ -275,7 +275,6 @@ export function exampleCodecDescriptor(ids?: CodecIdFactory): CodecDescriptor {
         system,
         capabilitySet,
         transformMode: 'direct',
-        allocationMode: 'ordered',
         ...(ids === undefined ? {} : { ids }),
       }),
     ],

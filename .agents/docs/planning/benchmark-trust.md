@@ -18,9 +18,6 @@ sources:
   - id: labs-compare
     resource: 'https://github.com/pmndrs/labs/blob/main/src/compare.ts'
     title: 'labs comparison gating'
-  - id: api-surface-audit
-    resource: api-surface-audit.md
-    title: 'Public API surface audit and cleanup plan'
   - id: benchmark-plan
     resource: benchmark-plan.md
     title: 'Benchmark plan'
@@ -58,7 +55,9 @@ generated:
 Status: draft; supersedes nothing until the retirement table below is executed
 Purpose: make a performance number in this repository mean "this change did that", and make the absence of a number mean "we could not tell".
 
-This plan is the deliverable named by the [API surface audit](api-surface-audit.md#final-phase-benchmarks-we-can-trust). It owns the **core API measurement lane in Node**. The [benchmark plan](benchmark-plan.md) keeps ownership of the browser lab, conformance, GPU timing, and payload; nothing here replaces it, and the reasons are in [What this cannot tell us](#what-this-cannot-tell-us).
+This plan owns the **core API measurement lane in Node**. The [benchmark plan](benchmark-plan.md) keeps ownership of the
+browser lab, conformance, GPU timing, and payload; nothing here replaces it, and the reasons are in
+[What this cannot tell us](#what-this-cannot-tell-us).
 
 ## The diagnosis
 

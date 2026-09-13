@@ -9,15 +9,10 @@ okf_version: '0.2'
 - [Project README](../../README.md) — product overview, API preview, implementation order, and local setup.
 - [Project brief](planning/project-brief.md) — product outcome, scope, non-goals, and success criteria.
 - [Canonical roadmap](roadmap/roadmap.md) — implementation sequence, issue-sized milestones, dependencies, and exit gates.
-- [Merged v0 runtime and bake API](planning/api-shapes.md) — superseded migration fixture; it describes the merged v0 surface that the Rust render-plan cutover deleted.
 - [TypeGPU hello world](../../apps/typegpu-hello-world/README.md) — high-level TypeGPU setup and caller-owned render passes.
 - [Three.js text API](planning/three-api.md) — authoritative Three-native loader, explicit `TextGroup` batching, reusable text across group disposal, retained non-throwing errors, ordering, and lifecycle contract.
 - [React font loading](guides/react.md) — direct FontFace, lifecycle-owning hooks, provider aliases, Suspense cache, retry, and cleanup.
 - [Glyph integration API](planning/core-api.md) — current root application vocabulary and renderer-neutral GlyphConfig contract.
-- [Font and engine ownership plan](planning/font-runtime-ownership.md) — historical ownership analysis that led to immutable fonts and config-owned handle roots.
-- [Rust layout engine design](planning/rust-layout-engine.md) — superseded historical proposal; current engine and renderer contracts live in the Glyph integration API and renderer integration guide.
-- [Engine integration contract](planning/engine-integration-contract.md) — superseded historical record; the Rust command buffer replaced this storage and batching contract.
-- [Raster technique and engine resource API](planning/raster-technique-api.md) — superseded historical record; the Rust render-plan cutover replaced these TypeScript binding and packing interfaces.
 - [TypeGPU-first shader authority](planning/typegpu-first-shader-authority.md) — exploratory TypeGPU-first shader/program architecture, Three and gpucat bridge limits, fallback authority models, and proof gates.
 - [Renderer integration guide](guides/renderer-integration.md) — the config-only path for a custom engine: define its
   schema, Codec, resource resolver, renderer decoder, and root recipe through the same public API used by Three.
@@ -29,7 +24,6 @@ okf_version: '0.2'
 ## Architecture and data contracts
 
 - [Architecture](planning/architecture.md) — ownership, loading, shaping, paragraph, and raster boundaries.
-- [Renderer-neutral core and engine plan](planning/engine-integration-boundary.md) — historical extraction plan superseded by the GlyphConfig and CommandBufferView implementation.
 - [Shaping data contract V0](planning/shaping-data-contract.md) — retained SFNT profile, Wasm ABI, validation, and conformance.
 - [Raster data contract V0](planning/raster-data-contract.md) — bitmap, MSDF, and Slug records and resources.
 - [glTF extension drafts](planning/extensions/index.md) — `PMNDRS_font` and raster companion schemas.
