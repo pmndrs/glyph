@@ -1076,7 +1076,7 @@ Merge targets:
 
 Record active/reserved run and slice counts, placement/order/decor bytes, static glyph bytes, Wasm retained bytes, CPU
 staging, GPU static and dynamic capacity, per-update publication, and patch count separately. Initial budgets: no
-static-glyph growth above 4 bytes/glyph for the run slot; core placement at most 16 bytes/active slice, with the required
+static-glyph growth above 4 bytes/glyph for the placement slot; core placement at most 16 bytes/active slice, with the required
 GPU row at 8 bytes; and no pool or total high-water increase above 3% without an identified, measured tradeoff accepted
 before merge.
 

@@ -2,6 +2,13 @@
 
 ## 2026-09-12
 
+- **Specialized retained slot ownership to placement** — The only shipping user of the former generic run-slot core was
+  the dynamic placement occurrence allocator, always with a unit canonical value. The unreachable canonical-update
+  branch, run assignment/change vocabulary, forwarding placement facade, and run-only tests were removed. The retained
+  implementation still preserves allocation-free same-order reconciliation, structural reorder, renderer-acknowledged
+  quarantine, nonwrapping generation on reuse, and deterministic abort/retry. This is a reduction of one active
+  placement authority, not a replacement allocator or a second code path.
+
 - **Removed the superseded planner run-handle proof** — The accepted indexed-placement design retains dynamic occurrence
   identity in the acknowledgement-quarantined placement-slot arena; static LayoutRun geometry is already guarded by its
   canonical revision and stable source anchor. The test/kernel-lab-only second allocator, run handles, transactional

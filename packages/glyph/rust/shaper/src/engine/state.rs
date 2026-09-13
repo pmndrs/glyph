@@ -22,12 +22,13 @@ use super::{
         PreparedUpdate, RootRevision, UpdateRequest,
     },
     identity_index::IdentityIndex,
-    placement_slot::{DesiredPlacement, PlacementHandle, PlacementSlotArena},
+    placement_slot_arena::{
+        DesiredPlacement, PlacementHandle, PlacementSlotArena, PlacementSlotError,
+    },
     placement_state::{GlyphSource, LayoutRunOwner, PlacementIdentity, PlacementSegment},
     positioning::{PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT},
     render_plan::RenderPlanView,
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
-    run_slot::RunSlotError,
     semantic_wire::RecordSpan,
     session_placement::{SessionPlacementInput, SessionPlacementRow},
     shaping_state::{BoundaryShape, BoundaryShapeArena, ShapeArena, ShapingRun, ShapingRunArena},
@@ -225,8 +226,8 @@ struct PlannerState {
     pending_next_content_revision: u32,
     next_paragraph_incarnation: u32,
     pending_next_paragraph_incarnation: u32,
-    placement_slots: PlacementSlotArena<PlacementLogicalKey, ()>,
-    desired_placements: Vec<DesiredPlacement<PlacementLogicalKey, ()>>,
+    placement_slots: PlacementSlotArena<PlacementLogicalKey>,
+    desired_placements: Vec<DesiredPlacement<PlacementLogicalKey>>,
     desired_placement_handles: Vec<PlacementHandle>,
     session_placement_rows: Vec<SessionPlacementRow>,
     placement_slot_count: u32,
@@ -1343,7 +1344,7 @@ impl TextEngine {
         planner
             .placement_slots
             .acknowledge(request.acknowledged_publication_generation)
-            .map_err(run_slot_error)?;
+            .map_err(placement_slot_error)?;
         planner.acknowledged_publication_generation = request.acknowledged_publication_generation;
         // Candidate adoption: a retained speculative transaction whose committed
         // revision and lifecycle input match this frame hands its pending state and
@@ -1499,7 +1500,7 @@ impl TextEngine {
                 planner
                     .placement_slots
                     .prepare_reuse(publication_generation)
-                    .map_err(run_slot_error)?;
+                    .map_err(placement_slot_error)?;
                 planner.pending_placement_slot_count = planner.placement_slot_count;
                 planner.session_placement_rows.clear();
             }
@@ -2549,34 +2550,29 @@ impl PlannerState {
                     }
                     .map(|run| run.source_kind)
                     .ok_or(EngineError::InvalidRequest)?;
-                    desired.push(DesiredPlacement::new(
-                        placement_logical_key(paragraph.incarnation, *segment, run_source),
-                        (),
-                    ));
+                    desired.push(DesiredPlacement::new(placement_logical_key(
+                        paragraph.incarnation,
+                        *segment,
+                        run_source,
+                    )));
                 }
             }
             self.placement_slots
                 .prepare(&desired, publication_generation)
-                .map_err(run_slot_error)?;
-            let assignment_count = self
+                .map_err(placement_slot_error)?;
+            let assignments = self
                 .placement_slots
-                .assignment_count()
-                .map_err(run_slot_error)?;
+                .assignments()
+                .map_err(placement_slot_error)?;
+            let assignment_count = assignments.len();
             if assignment_count != desired.len() {
                 return Err(EngineError::InvalidRequest);
             }
+            handles.extend_from_slice(assignments);
             self.pending_placement_slot_count = self
                 .placement_slots
                 .required_slots()
-                .map_err(run_slot_error)?;
-            for index in 0..assignment_count {
-                handles.push(
-                    self.placement_slots
-                        .assignment(index)
-                        .map_err(run_slot_error)?
-                        .handle(),
-                );
-            }
+                .map_err(placement_slot_error)?;
             let mut assignment_start = 0usize;
             for order_index in 0..self.active_order().len() {
                 let paragraph_id = self.active_order()[order_index].id;
@@ -5114,20 +5110,19 @@ fn plan_error(error: RenderPlanCompilerError) -> EngineError {
     }
 }
 
-fn run_slot_error(error: RunSlotError) -> EngineError {
+fn placement_slot_error(error: PlacementSlotError) -> EngineError {
     match error {
-        RunSlotError::GenerationExhausted | RunSlotError::SlotExhausted => {
+        PlacementSlotError::GenerationExhausted | PlacementSlotError::SlotExhausted => {
             EngineError::RevisionExhausted
         }
-        RunSlotError::AllocationFailed | RunSlotError::ArithmeticOverflow => {
+        PlacementSlotError::AllocationFailed | PlacementSlotError::ArithmeticOverflow => {
             EngineError::ResultTooLarge
         }
-        RunSlotError::InvalidPublicationGeneration | RunSlotError::AcknowledgementRegressed => {
-            EngineError::RevisionConflict
-        }
-        RunSlotError::AlreadyPrepared
-        | RunSlotError::NotPrepared
-        | RunSlotError::DuplicateLogicalKey => EngineError::InvalidRequest,
+        PlacementSlotError::InvalidPublicationGeneration
+        | PlacementSlotError::AcknowledgementRegressed => EngineError::RevisionConflict,
+        PlacementSlotError::AlreadyPrepared
+        | PlacementSlotError::NotPrepared
+        | PlacementSlotError::DuplicateLogicalKey => EngineError::InvalidRequest,
     }
 }
 
