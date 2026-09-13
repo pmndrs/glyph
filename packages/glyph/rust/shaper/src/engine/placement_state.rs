@@ -346,24 +346,6 @@ impl PlacementState {
         if retained_instance_count != retained.instance_count {
             return Err(EngineError::InvalidRequest);
         }
-        for index in slice_start..slice_end {
-            let slice = previous
-                .segments
-                .get(index)
-                .ok_or(EngineError::InvalidRequest)?;
-            if previous.translations.get(index).is_none() {
-                return Err(EngineError::InvalidRequest);
-            }
-            let fragment_offset = slice
-                .fragment_index
-                .checked_sub(retained.old_fragment_start)
-                .ok_or(EngineError::InvalidRequest)?;
-            retained
-                .new_fragment_start
-                .checked_add(fragment_offset)
-                .ok_or(EngineError::ResultTooLarge)?;
-            self.resolve_run(*slice, layout_runs, replacement_runs)?;
-        }
         self.segments
             .try_reserve(slice_count)
             .map_err(|_| EngineError::ResultTooLarge)?;
@@ -377,8 +359,14 @@ impl PlacementState {
 
         for relative in 0..slice_count {
             let mut slice = previous.segments[slice_start + relative];
-            slice.fragment_index =
-                retained.new_fragment_start + (slice.fragment_index - retained.old_fragment_start);
+            let fragment_offset = slice
+                .fragment_index
+                .checked_sub(retained.old_fragment_start)
+                .ok_or(EngineError::InvalidRequest)?;
+            slice.fragment_index = retained
+                .new_fragment_start
+                .checked_add(fragment_offset)
+                .ok_or(EngineError::ResultTooLarge)?;
             slice.layout_run_index = self.resolve_run(slice, layout_runs, replacement_runs)?.0;
             slice.placement_handle = None;
             let placement = previous.translations[slice_start + relative];

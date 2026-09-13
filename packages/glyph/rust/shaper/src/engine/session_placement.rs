@@ -18,6 +18,7 @@ use super::{
 const MIN_CAPACITY: u32 = 16;
 const PLACEMENT_STRIDE: u32 = 8;
 const PLACEMENT_STRIDE_BYTES: usize = 8;
+const PLACEMENT_VECTOR_WIDTH: u8 = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct SessionPlacementRow {
@@ -42,9 +43,7 @@ pub(crate) enum SessionPlacementError {
 }
 
 struct SessionBuffer {
-    id: u32,
     generation: u32,
-    vector_width: u8,
     capacity: u32,
     live_records: u32,
     bytes: Vec<u8>,
@@ -140,10 +139,7 @@ impl SessionPlacementCompiler {
     }
 
     pub(crate) fn buffer_bytes(&self, id: u32) -> Option<&[u8]> {
-        self.placement
-            .as_ref()
-            .filter(|buffer| buffer.id == id)
-            .map(|buffer| buffer.bytes.as_slice())
+        (id == SESSION_PLACEMENT_BUFFER_ID).then_some(self.placement.as_ref()?.bytes.as_slice())
     }
 
     fn prepare_placement(
@@ -166,7 +162,7 @@ impl SessionPlacementCompiler {
             .placement
             .as_ref()
             .is_none_or(|buffer| buffer.capacity < live_records);
-        let (id, generation) = if replaced {
+        let generation = if replaced {
             let record_alignment =
                 record_alignment_for_stride(PLACEMENT_STRIDE, capability.update_alignment);
             let capacity = grown_capacity(
@@ -177,42 +173,24 @@ impl SessionPlacementCompiler {
             )
             .map_err(packing_error)?;
             let generation = next_generation(self.placement.as_ref())?;
-            let allocation = allocate_buffer(
-                SESSION_PLACEMENT_BUFFER_ID,
-                generation,
-                2,
-                capacity,
-                live_records,
-            )?;
-            push_binding_and_allocation(
-                &mut self.buffers,
-                &mut self.patches,
-                &allocation,
-                CODEC_BUFFER_PLACEMENT,
-                ScalarType::F32,
-            )?;
+            let allocation = allocate_buffer(generation, capacity, live_records)?;
+            push_binding_and_allocation(&mut self.buffers, &mut self.patches, &allocation)?;
             push_retirement(
                 &self.placement,
                 &mut self.retirements,
                 self.publication_generation,
             )?;
             self.placement_allocation = Some(allocation);
-            (SESSION_PLACEMENT_BUFFER_ID, generation)
+            generation
         } else {
             let buffer = self
                 .placement
                 .as_ref()
                 .ok_or(SessionPlacementError::InvalidInput)?;
             if checkpoint {
-                push_binding_and_allocation(
-                    &mut self.buffers,
-                    &mut self.patches,
-                    buffer,
-                    CODEC_BUFFER_PLACEMENT,
-                    ScalarType::F32,
-                )?;
+                push_binding_and_allocation(&mut self.buffers, &mut self.patches, buffer)?;
             }
-            (buffer.id, buffer.generation)
+            buffer.generation
         };
         write_placement_ranges(
             if replaced || checkpoint {
@@ -221,7 +199,6 @@ impl SessionPlacementCompiler {
                 self.placement.as_ref()
             },
             rows,
-            id,
             generation,
             &mut PlacementWriteOutput {
                 capability,
@@ -281,15 +258,13 @@ fn next_generation(buffer: Option<&SessionBuffer>) -> Result<u32, SessionPlaceme
 }
 
 fn allocate_buffer(
-    id: u32,
     generation: u32,
-    vector_width: u8,
     capacity: u32,
     live_records: u32,
 ) -> Result<SessionBuffer, SessionPlacementError> {
     let length = usize::try_from(capacity)
         .ok()
-        .and_then(|capacity| capacity.checked_mul(usize::from(vector_width) * 4))
+        .and_then(|capacity| capacity.checked_mul(PLACEMENT_STRIDE_BYTES))
         .ok_or(SessionPlacementError::ArithmeticOverflow)?;
     let mut bytes = Vec::new();
     bytes
@@ -297,9 +272,7 @@ fn allocate_buffer(
         .map_err(|_| SessionPlacementError::AllocationFailed)?;
     bytes.resize(length, 0);
     Ok(SessionBuffer {
-        id,
         generation,
-        vector_width,
         capacity,
         live_records,
         bytes,
@@ -310,19 +283,17 @@ fn push_binding_and_allocation(
     buffers: &mut Vec<BufferRecord>,
     patches: &mut Vec<PatchRecord>,
     buffer: &SessionBuffer,
-    codec_buffer_id: u16,
-    scalar_type: ScalarType,
 ) -> Result<(), SessionPlacementError> {
     reserve(buffers, 1)?;
     reserve(patches, 1)?;
     let length = byte_length(buffer)?;
     buffers.push(BufferRecord {
-        id: buffer.id,
+        id: SESSION_PLACEMENT_BUFFER_ID,
         generation: buffer.generation,
         program_id: 0,
-        codec_buffer_id,
-        scalar_type: scalar_type as u8,
-        vector_width: buffer.vector_width,
+        codec_buffer_id: CODEC_BUFFER_PLACEMENT,
+        scalar_type: ScalarType::F32 as u8,
+        vector_width: PLACEMENT_VECTOR_WIDTH,
         strategy: BUFFER_SESSION_SHARED,
         flags: (BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST) as u16,
         live_records: buffer.live_records,
@@ -332,7 +303,7 @@ fn push_binding_and_allocation(
     });
     patches.push(PatchRecord {
         opcode: PATCH_ALLOCATE_OR_RESIZE,
-        buffer_id: buffer.id,
+        buffer_id: SESSION_PLACEMENT_BUFFER_ID,
         buffer_generation: buffer.generation,
         byte_length: length,
         ..PatchRecord::default()
@@ -364,7 +335,7 @@ fn push_retirement(
     reserve(retirements, 1)?;
     retirements.push(RetirementRecord {
         kind: RETIRE_BUFFER,
-        id: buffer.id,
+        id: SESSION_PLACEMENT_BUFFER_ID,
         generation: buffer.generation,
         after_publication_generation: publication_generation,
         byte_length: byte_length(buffer)?,
@@ -384,7 +355,6 @@ struct PlacementWriteOutput<'a> {
 fn write_placement_ranges(
     previous: Option<&SessionBuffer>,
     rows: &[SessionPlacementRow],
-    id: u32,
     generation: u32,
     output: &mut PlacementWriteOutput<'_>,
 ) -> Result<(), SessionPlacementError> {
@@ -473,7 +443,6 @@ fn write_placement_ranges(
             }
         }
         push_write(
-            id,
             generation,
             usize::try_from(range.start).map_err(|_| SessionPlacementError::ArithmeticOverflow)?,
             count,
@@ -498,7 +467,6 @@ fn packing_error(error: PackingError) -> SessionPlacementError {
 }
 
 fn push_write(
-    buffer_id: u32,
     buffer_generation: u32,
     record_start: usize,
     record_count: usize,
@@ -509,7 +477,7 @@ fn push_write(
     reserve(patches, 1)?;
     patches.push(PatchRecord {
         opcode: PATCH_WRITE,
-        buffer_id,
+        buffer_id: SESSION_PLACEMENT_BUFFER_ID,
         buffer_generation,
         destination_offset: u32::try_from(
             record_start
@@ -573,7 +541,7 @@ fn commit_buffer(
     };
     for patch in patches.iter().filter(|patch| {
         patch.opcode == PATCH_WRITE
-            && patch.buffer_id == target.id
+            && patch.buffer_id == SESSION_PLACEMENT_BUFFER_ID
             && patch.buffer_generation == target.generation
     }) {
         let source_start = patch.payload_start as usize;

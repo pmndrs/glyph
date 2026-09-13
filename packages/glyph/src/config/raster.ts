@@ -24,12 +24,13 @@ import {
   type PortableTextureArrayPayload,
   type PortableTexturePayload,
 } from './resources.js';
+import { type CompiledCodecProgramBody, type CodecProgramSystemBuffers } from './codec-program.js';
 import {
+  assertTechniqueCodecBody,
   attachHostCodecProgramSystemBuffers,
-  type CompiledCodecProgramBody,
-  type CodecProgramSystemBuffers,
-} from './codec-program.js';
-import { assertTechniqueCodecBody, normalizeCodecProgramSystemBuffers } from '../internal/codec-program-contract.js';
+  type CodecProgramU32StoreTarget,
+  normalizeCodecProgramSystemBuffers,
+} from '../internal/codec-program-contract.js';
 import {
   schemaCodecBuffers,
   type TechniqueBindingDeclaration,
@@ -41,7 +42,6 @@ import {
   normalizeCodecCapabilitySet,
   type CodecAllocationMode,
   type CodecBuffer,
-  type CodecBufferId,
   type CodecCapabilitySet,
   type CodecProgram,
   type CodecTransformMode,
@@ -160,11 +160,6 @@ export interface RasterCodecProgramOptions {
   readonly transformMode: CodecTransformMode;
   readonly allocationMode: CodecAllocationMode;
   readonly ids?: CodecIdFactory;
-}
-
-interface CodecProgramU32StoreTarget {
-  readonly buffer: CodecBufferId;
-  readonly lane: number;
 }
 
 interface RasterCodecHostOptions {

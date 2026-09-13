@@ -231,53 +231,6 @@ export interface CodecProgramSystemBuffers {
   readonly placementSlot?: CodecBufferDeclaration<'u32', readonly ['placementSlot']>;
 }
 
-interface CodecProgramU32StoreTarget {
-  readonly buffer: CodecBufferId;
-  readonly lane: number;
-}
-
-/** @internal Attach engine-owned stores after a technique body has been authored and authenticated. */
-export function attachHostCodecProgramSystemBuffers<Schema extends TechniqueSchemaMetadata>(
-  body: CompiledCodecProgramBody<Schema>,
-  schema: Schema,
-  system: CodecProgramSystemBuffers,
-  placementSlotTarget?: CodecProgramU32StoreTarget,
-): CompiledCodecProgramBody<Schema> {
-  const opcodes = textShaperAbi.codec.opcodes;
-  const placementTarget =
-    system.placementSlot === undefined
-      ? undefined
-      : (placementSlotTarget ?? { buffer: system.placementSlot.id, lane: 0 });
-  const operations =
-    placementSlotTarget === undefined
-      ? [...body.operations]
-      : body.operations.filter(
-          (operation) =>
-            !(
-              operation.opcode === opcodes.storeU32 &&
-              operation.immediate0 === placementSlotTarget.buffer &&
-              (operation.operand1 ?? 0) === placementSlotTarget.lane
-            ),
-        );
-  const storeU32 = (input: number, buffer: CodecBufferId, lane = 0): void => {
-    operations.push(
-      { opcode: opcodes.loadU32, target: 0, operand0: input },
-      { opcode: opcodes.storeU32, operand0: 0, operand1: lane, immediate0: buffer },
-    );
-  };
-  storeU32(1, system.stableGlyphId.id);
-  if (system.transformIndex !== undefined) storeU32(0, system.transformIndex.id);
-  if (placementTarget !== undefined) storeU32(2, placementTarget.buffer, placementTarget.lane);
-  const attached = { ...body, operations };
-  recordTechniqueCodecBody(attached, {
-    schema,
-    stableGlyphId: system.stableGlyphId.id,
-    transformIndex: system.transformIndex?.id,
-    placementSlot: placementTarget,
-  });
-  return attached;
-}
-
 type CodecBufferLaneValues<Buffer extends CodecBufferDeclaration> = CodecLaneTuple<Buffer['scalar'], Buffer['lanes']>;
 
 type CodecLaneTuple<

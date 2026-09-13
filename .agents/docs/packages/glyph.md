@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:500268fbe927fb35e8163018e18bc7c34971d992404eae7083c9d3a5bbb0529f'
+source_digest: 'sha256:c36bb4ddd4a1f28449a79af1144277b88be7a9208d24aace66290be990d7f55f'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1419,14 +1419,29 @@ abort/retry, and stale-slot reuse directly; there is no parallel run allocator, 
 draw identity. The standalone M1 visual-span and multi-fragment shadow planners were retired after the complete 12.1–12.5
 core, renderer, browser, size, and performance matrix closed; focused production-path regressions remain authoritative.
 
-The final reduction layer removes 3,984 net lines relative to the accepted placement-publication checkpoint without
-changing batches, primitives, draws, stable identity, or the x/y placement contract. Instrumented Rust production
-coverage is unchanged after consolidating six overlapping tests; built-package Node coverage slightly increases while
-241 overlapping cases are removed. On the same 22k alternating-width harness, the cleaned head measures `1.483 ms`
-ordinary Latin, `2.097 ms` justified Latin, `3.360 ms` mixed bidi, and `2.328 ms` dense CJK median, publishing
-`30.6/30.6/35.1/96.3 KiB` respectively. Against PR #175, the shaper is 7,132 raw / 2,929 gzip / 2,213 Brotli bytes
-smaller. Three is 8,652 raw / 8,426 minified / 2,196 gzip / 1,815 Brotli bytes smaller; Three+TypeGPU is 8,609 /
-8,431 / 2,120 / 1,601 bytes smaller. Direct TypeGPU remains −5 raw / −5 minified / +4 gzip / +29 Brotli bytes.
+The final reduction layer removes 4,785 net non-documentation lines relative to the accepted placement-publication
+checkpoint without changing batches, primitives, draws, stable identity, or the x/y placement contract. Instrumented
+Rust production coverage is unchanged after consolidating six overlapping tests; built-package Node coverage slightly
+increases while 241 overlapping cases are removed. A final ownership audit keeps four large Rust modules because they
+own different stages: paragraph-local f64 segments, fixed run-local geometry, root occurrence-slot identity and
+acknowledgement-gated reuse, and the root f32x2 renderer buffer. The bounded follow-up removes a repeated retained
+segment-resolution pass, a duplicate glyph-advance field, fixed per-instance placement-buffer metadata, and the last
+wildcard-exported host Codec assembler.
+
+On the rebuilt 20-warmup/101-sample 22k alternating-width harness, the cleaned head measures `1.626 ms` ordinary Latin,
+`2.248 ms` justified Latin, `3.565 ms` mixed bidi, and `2.462 ms` dense CJK median, publishing
+`30.6/30.6/35.1/96.3 KiB` respectively. The same-host main medians are `3.725/3.281/3.953/2.995 ms`, so all four current
+paths remain faster. Against PR #175, the shaper is 7,738 raw / 2,989 gzip / 2,679 Brotli bytes smaller. Three is
+8,652 raw / 8,426 minified / 2,203 gzip / 1,728 Brotli bytes smaller; Three+TypeGPU is 8,609 / 8,431 / 2,124 / 1,538
+bytes smaller. Direct TypeGPU is +1 raw / −5 minified / +3 gzip / +45 Brotli bytes. Against exact main, the completed
+feature costs 161,147 raw / 59,828 gzip / 42,769 Brotli shaper bytes, 27,021 / 6,899 / 5,409 Three bytes, and
+7,394 / 1,466 / 1,175 direct-TypeGPU bytes; those are retained feature costs rather than duplicate live-deformation
+storage, which is absent.
+
+A ten-window hardware WebGPU dynamic-layout rerun keeps one draw and 387 glyphs in every 120-frame window. The median
+window is `0.573 ms` CPU and `0.858 ms` GPU, versus main's same-machine `0.655/0.853 ms`; the CPU path is 12.6% faster,
+while the `0.005 ms` GPU difference is noise-level parity. Direct TypeGPU's project-Chromium live gate passes Bitmap,
+MTSDF, and Slug with its callback bind groups, placement updates, and disposal lifecycle.
 
 The indexed direction keeps the existing batches, physical instances, order indirection, primitive spans, and draws.
 Stable-indirect rendering resolves logical to physical instance first; ordered-direct rendering already has the physical
