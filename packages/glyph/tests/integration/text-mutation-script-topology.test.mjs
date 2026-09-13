@@ -281,10 +281,8 @@ for (const shaping of CASES) {
       });
     }
 
-    // Every authored edit keeps its script-specific shaping assertion. The seeded sequences below
-    // own styled multi-node lane preservation, and one round-trip per fixture owns the generic
-    // clipped-slot restoration path; multiplying those renderer invariants by every edit shape
-    // exercises the same production branches without adding a distinct failure mode.
+    // Authored edits keep script-specific shaping checks; seeded sequences own styled multi-node lanes.
+    // One round-trip per fixture covers generic clipped-slot restoration.
     for (const [editIndex, [label, from, to]] of shaping.edits.entries()) {
       test(`${where}: ${label}`, { timeout }, async () => {
         const font = await fonts.load(fixture);
@@ -301,9 +299,7 @@ for (const shaping of CASES) {
 
       if (editIndex === 0) {
         test(`${where}: clipped edits restore returning slots`, { timeout }, async () => {
-          // Round-tripping is the cheapest way to reach a slot whose occupant left and came back, and
-          // a clipped single line drops the glyphs past the box, so the record run also grows and
-          // shrinks under the edit rather than only shifting.
+          // Round-tripping reuses a vacated slot; clipping also grows and shrinks the record run.
           const font = await fonts.load(fixture);
           const authored = (text) => [paragraph(shaping, text, { flow: clippedFlow })];
           const mounted = mount(font, authored(from));

@@ -1,8 +1,5 @@
-//! Planner-scoped stable identity for retained placement occurrences.
-//!
-//! An occurrence's logical key reconciles it with the preceding committed publication. The dense
-//! slot is only physical storage, and its generation prevents a stale handle from naming reused
-//! storage. Removed slots remain quarantined until the renderer acknowledges their retirement.
+//! Planner-scoped identity reconciles retained placement occurrences by logical key.
+//! Dense slots use generations and remain quarantined until renderer acknowledgement.
 
 use alloc::vec::Vec;
 use core::num::NonZeroU32;
@@ -88,9 +85,8 @@ struct PendingWrite<Key> {
     logical_key: Key,
 }
 
-/// Transactional dense placement storage owned by exactly one retained planner/root.
-///
-/// `Key` must contain every logical-incarnation component needed to prevent cross-paragraph reuse.
+/// Transactional dense placement storage owned by one retained planner/root.
+/// `Key` contains the logical incarnation needed to prevent cross-paragraph reuse.
 pub(crate) struct PlacementSlotArena<Key> {
     slots: Vec<PlacementSlotState<Key>>,
     /// Sorted exact index of committed logical keys.
@@ -152,10 +148,8 @@ impl<Key> PlacementSlotArena<Key>
 where
     Key: Copy + Ord,
 {
-    /// Releases physical slots whose renderer retirement fence has completed.
-    ///
-    /// Acknowledgement is external monotonic state: once accepted, a later prepare/abort does not
-    /// roll it back.
+    /// Releases slots whose renderer fence completed. Acknowledgement is monotonic external state
+    /// and a later prepare or abort does not roll it back.
     pub(crate) fn acknowledge(
         &mut self,
         through_generation: u32,
@@ -192,10 +186,8 @@ where
         Ok(())
     }
 
-    /// Reconciles a complete desired live set against the preceding committed set.
-    ///
-    /// Assignments have the same order as `desired`. All allocation, generation, and exact-value
-    /// checks complete before the transaction becomes observable as prepared.
+    /// Reconciles a complete desired set; assignments retain `desired` order.
+    /// Allocation, generation, and value checks finish before the transaction is prepared.
     pub(crate) fn prepare(
         &mut self,
         desired: &[Key],

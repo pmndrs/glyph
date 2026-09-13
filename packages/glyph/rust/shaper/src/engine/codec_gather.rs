@@ -668,16 +668,8 @@ impl CodecGatherWorkspace {
         Ok(())
     }
 
-    /// Appends resource-free decoration records around glyph gather. Rows carry the
-    /// decoration program's technique, a dedicated identity namespace (top bit set), and
-    /// a fixed lane convention mirroring the first-party u32 prefix: f32 lanes 0-3 hold
-    /// the decoration rectangle; u32 lanes follow the selected decoration program's declared
-    /// the record's physical transform index, stable identity, color, then flags with the
-    /// line style in bits 8-15. `pass` selects CSS paint order:
-    /// underline and overline records append before the paragraph's glyphs and
-    /// line-through records after, so draw order tokens place them under and over the
-    /// text respectively. Returns false when the codec declares no decoration program,
-    /// leaving the gather output untouched.
+    /// Appends resource-free decorations around glyph gather in CSS paint order.
+    /// Rows use the decoration program's declared lanes; false means no decoration program.
     pub fn append_decorations(
         &mut self,
         codec: &ValidatedCodec,

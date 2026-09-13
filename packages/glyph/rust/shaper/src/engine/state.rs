@@ -1335,9 +1335,8 @@ impl TextEngine {
         {
             return Err(EngineError::RevisionConflict);
         }
-        // A completed renderer fence is external monotonic state. Validate and accept it
-        // before taking an adoptable speculative transaction; later preparation aborts do
-        // not roll the fence back.
+        // Accept the renderer's monotonic fence before speculation; a later abort does not
+        // roll external acknowledgement back.
         planner
             .placement_slots
             .acknowledge(request.acknowledged_publication_generation)

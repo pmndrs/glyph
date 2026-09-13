@@ -52,10 +52,7 @@ interface WorldPolygon {
   readonly preserveOutline: boolean;
 }
 
-/**
- * Projects a conservative Three object bound onto a text plane. The result describes camera-to-plane occlusion only;
- * it does not inspect depth, material coverage, or GPU pixels. `undefined` means the clipped bound cannot occlude flow.
- */
+/** Projects a conservative object bound onto the text plane; `undefined` means it cannot occlude flow. */
 export function projectTextFlowBounds(options: ProjectTextFlowBoundsOptions): TextFlowExclusion | undefined {
   assertFiniteBox(options.bounds);
   return projectTextFlow(options, ({ objectToWorld, textPlane, frustum }) => ({
@@ -64,10 +61,7 @@ export function projectTextFlowBounds(options: ProjectTextFlowBoundsOptions): Te
   }));
 }
 
-/**
- * Projects an ordered object-local silhouette onto a text plane. The projected ring may stay concave; `undefined` means
- * clipping removed the silhouette, while malformed or self-intersecting projected rings are rejected.
- */
+/** Projects an ordered silhouette onto the text plane, preserving valid concavity after clipping. */
 export function projectTextFlowSilhouette(options: ProjectTextFlowSilhouetteOptions): TextFlowExclusion | undefined {
   const silhouette = validatedSilhouette(options.silhouette);
   return projectTextFlow(options, ({ objectToWorld, textPlane, frustum }) => ({

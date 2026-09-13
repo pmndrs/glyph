@@ -1086,12 +1086,8 @@ impl ClusterArena {
         Ok(())
     }
 
-    /// Assigns compact canonical tokens after every cluster-producing path has completed.
-    ///
-    /// The token is not a digest. A preceding token is retained only after comparing the
-    /// normalized, unbounded run contents exactly; otherwise a fresh nonzero revision is minted.
-    /// Absolute text/glyph offsets and temporary shaping-run ordinals are traversal cursors,
-    /// never equality inputs.
+    /// Assigns canonical tokens after exact normalized run comparison; changed runs mint revisions.
+    /// Absolute offsets and temporary shaping-run ordinals are traversal cursors, not identity.
     pub(crate) fn finalize_layout_run_revisions(
         &mut self,
         previous: &Self,
