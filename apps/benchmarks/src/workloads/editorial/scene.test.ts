@@ -70,17 +70,19 @@ describe('editorial layout', () => {
     ]);
   });
 
-  it('moves the projected object across the text plane deterministically', () => {
+  it('keeps the projected object centered while rotating its silhouette deterministically', () => {
     const obstacle = new THREE.Object3D();
     const animationSpeed = 30;
     const rate = 0.25 + animationSpeed * 0.0175;
 
     positionEditorialObstacle(obstacle, 500, 700, animationSpeed, 0);
-    const cameraSideZ = obstacle.position.z;
+    const initialPosition = obstacle.position.clone();
+    const initialRotation = obstacle.rotation.clone();
     positionEditorialObstacle(obstacle, 500, 700, animationSpeed, Math.PI / (0.00042 * rate));
 
-    expect(cameraSideZ).toBeGreaterThan(0);
-    expect(obstacle.position.z).toBeLessThan(0);
+    expect(initialPosition.toArray()).toEqual([250, -329, 50]);
+    expect(obstacle.position.equals(initialPosition)).toBe(true);
+    expect(obstacle.rotation.equals(initialRotation)).toBe(false);
     expect(obstacle.position.toArray().every(Number.isFinite)).toBe(true);
     expect([obstacle.rotation.x, obstacle.rotation.y, obstacle.rotation.z].every(Number.isFinite)).toBe(true);
   });

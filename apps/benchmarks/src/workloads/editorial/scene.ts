@@ -36,6 +36,8 @@ const EDITORIAL_BOUNDED_JUSTIFY = {
 } as const;
 
 const EDITORIAL_DROP_CAP_COLOR = '#e87938';
+const EDITORIAL_BODY_LINE_HEIGHT = 1.15;
+const EDITORIAL_DROP_CAP_SCALE = 2.75;
 const EDITORIAL_DROP_CAP_CONTOUR = [
   [0, 0],
   [1, 0],
@@ -44,7 +46,10 @@ const EDITORIAL_DROP_CAP_CONTOUR = [
   [0.58, 1],
   [0, 1],
 ] as const;
-const EDITORIAL_OBSTACLE_COLOR = 0x2dd4bf;
+const EDITORIAL_OBSTACLE_COLOR = 0xe87938;
+const EDITORIAL_OBSTACLE_SCALE = 4.8;
+const EDITORIAL_OBSTACLE_INLINE_MARGIN = 0.45;
+const EDITORIAL_OBSTACLE_BLOCK_MARGIN = 0.35;
 const EDITORIAL_FLOW_REGION_KEYS = ['editorial-left', 'editorial-right'] as const;
 const EDITORIAL_OBSTACLE_KEY = 'editorial-projected-object';
 
@@ -108,7 +113,7 @@ export function editorialColumnWidth(
 
 /** The columned body keeps a fixed page height; reflow refills it as the measure breathes. */
 export function editorialBodyHeight(fontSize: number): number {
-  return Math.ceil(fontSize * LIVE_TEXT_LINE_HEIGHT * 11);
+  return Math.ceil(fontSize * EDITORIAL_BODY_LINE_HEIGHT * 11);
 }
 
 export function createEditorialEntries(
@@ -127,7 +132,7 @@ export function createEditorialEntries(
     EDITORIAL_TEXT.slice(cycle === 0 ? 1 : 0).join(' '),
   ).join(' ');
   if (!bodyText.startsWith('Typography')) throw new Error('editorial body must retain its drop-cap source');
-  const dropCap = span({ color: EDITORIAL_DROP_CAP_COLOR, fontSize: context.fontSize * 3.2 });
+  const dropCap = span({ color: EDITORIAL_DROP_CAP_COLOR, fontSize: context.fontSize * EDITORIAL_DROP_CAP_SCALE });
   const bodyLiteral = txt`${dropCap`T`}${bodyText.slice(1)}`;
   const lede = context.root.createText({
     font: context.font,
@@ -148,7 +153,7 @@ export function createEditorialEntries(
     text: bodyLiteral,
     style: {
       fontSize: context.fontSize,
-      lineHeight: LIVE_TEXT_LINE_HEIGHT,
+      lineHeight: EDITORIAL_BODY_LINE_HEIGHT,
       wordSpacing: context.fontSize * 0.05,
       color: paintColor(LIVE_TEXT_COLOR),
     },
@@ -170,13 +175,26 @@ export function createEditorialEntries(
     },
     flow: editorialFlow(width, editorialBodyHeight(context.fontSize), context.fontSize),
   });
-  const obstacleSize = context.fontSize * 2.8;
-  const obstacleGeometry = new THREE.BoxGeometry(obstacleSize, obstacleSize, obstacleSize * 0.7);
-  const obstacleMaterial = new THREE.MeshBasicNodeMaterial({ color: EDITORIAL_OBSTACLE_COLOR });
+  const obstacleSize = context.fontSize * EDITORIAL_OBSTACLE_SCALE;
+  const obstacleGeometry = new THREE.BoxGeometry(obstacleSize, obstacleSize, obstacleSize);
+  const obstacleMaterial = new THREE.MeshStandardNodeMaterial({
+    color: EDITORIAL_OBSTACLE_COLOR,
+    flatShading: true,
+    metalness: 0.08,
+    roughness: 0.48,
+  });
   const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
   obstacle.rotation.set(0.4, 0.65, 0.18);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+  const environmentLight = new THREE.HemisphereLight(0xdff8ff, 0x25445c, 2.1);
+  const keyLight = new THREE.DirectionalLight(0xffffff, 4.2);
+  keyLight.position.set(-180, 140, 260);
+  keyLight.target = obstacle;
+  const rimLight = new THREE.DirectionalLight(0x67e8f9, 1.6);
+  rimLight.position.set(180, -80, 120);
+  rimLight.target = obstacle;
   const bodyNode = new THREE.Group();
-  bodyNode.add(body, obstacle);
+  bodyNode.add(body, obstacle, ambientLight, environmentLight, keyLight, rimLight);
   return [
     { node: lede, role: 'primary', sourceText: EDITORIAL_TEXT[0], text: lede, lastWidth: width },
     {
@@ -187,8 +205,8 @@ export function createEditorialEntries(
       lastWidth: width,
       editorialObstacle: obstacle,
       editorialObstacleBounds: new THREE.Box3(
-        new THREE.Vector3(-obstacleSize / 2, -obstacleSize / 2, -(obstacleSize * 0.7) / 2),
-        new THREE.Vector3(obstacleSize / 2, obstacleSize / 2, (obstacleSize * 0.7) / 2),
+        new THREE.Vector3(-obstacleSize / 2, -obstacleSize / 2, -obstacleSize / 2),
+        new THREE.Vector3(obstacleSize / 2, obstacleSize / 2, obstacleSize / 2),
       ),
     },
   ];
@@ -281,11 +299,7 @@ export function positionEditorialObstacle(
   timestamp: number,
 ): void {
   const phase = timestamp * 0.00042 * animationRate(animationSpeed);
-  obstacle.position.set(
-    width * (0.5 + Math.sin(phase * 0.73) * 0.28),
-    -height * (0.42 + Math.sin(phase * 0.39) * 0.18),
-    Math.cos(phase) * Math.max(24, width * 0.16),
-  );
+  obstacle.position.set(width * 0.5, -height * 0.47, Math.max(24, width * 0.1));
   obstacle.rotation.set(0.4 + phase * 0.17, 0.65 + phase * 0.31, 0.18 + phase * 0.11);
 }
 
@@ -311,8 +325,8 @@ function projectedEditorialFlow(
       flowBounds: region.shape.bounds,
       projectionError: 0.5,
       wrapSide: 'largest',
-      marginInline: gap * 0.2,
-      marginBlock: gap * 0.15,
+      marginInline: gap * EDITORIAL_OBSTACLE_INLINE_MARGIN,
+      marginBlock: gap * EDITORIAL_OBSTACLE_BLOCK_MARGIN,
     });
   });
   return editorialFlow(width, height, gap, exclusions);
