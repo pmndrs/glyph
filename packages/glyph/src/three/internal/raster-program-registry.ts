@@ -1,4 +1,5 @@
-import { createRasterCodecProgram, type RasterCodec } from '../../config/raster.js';
+import type { RasterCodec } from '../../config/raster.js';
+import { createHostRasterCodecProgram } from '../../config/raster-host.js';
 import type { CodecIdFactory, CodecProgram } from '../../config/codec.js';
 import type { TechniqueSchemaMetadata } from '../../config/schema.js';
 import type { RasterFormatMetadata } from '../../config/raster-format.js';
@@ -127,7 +128,7 @@ function compileProgram<Format extends RasterFormatMetadata, Schema extends Tech
     ...options,
     placementSlotTarget: { buffer: slugSchema.buffers.bandCounts.id, lane: 2 },
   } as const;
-  const codec = createRasterCodecProgram(
+  const codec = createHostRasterCodecProgram(
     portable,
     (portable.schema as TechniqueSchemaMetadata) === slugSchema ? slugOptions : options,
   );

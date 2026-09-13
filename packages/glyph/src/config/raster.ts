@@ -25,30 +25,13 @@ import {
   type PortableTexturePayload,
 } from './resources.js';
 import { type CompiledCodecProgramBody, type CodecProgramSystemBuffers } from './codec-program.js';
+import { createHostRasterCodecProgram } from './raster-host.js';
 import {
-  assertTechniqueCodecBody,
-  attachHostCodecProgramSystemBuffers,
-  type CodecProgramU32StoreTarget,
-  normalizeCodecProgramSystemBuffers,
-} from '../internal/codec-program-contract.js';
-
-/** @internal Host adapter assembly; portable raster Codec bodies never receive system buffers. */
-export { attachHostCodecProgramSystemBuffers } from '../internal/codec-program-contract.js';
-import {
-  schemaCodecBuffers,
   type TechniqueBindingDeclaration,
   type TechniqueResourceDeclaration,
   type TechniqueSchemaMetadata,
 } from './schema.js';
-import {
-  createCodecProgram,
-  normalizeCodecCapabilitySet,
-  type CodecBuffer,
-  type CodecCapabilitySet,
-  type CodecProgram,
-  type CodecTransformMode,
-  type CodecIdFactory,
-} from './codec.js';
+import { type CodecCapabilitySet, type CodecProgram, type CodecTransformMode, type CodecIdFactory } from './codec.js';
 import { assertCodecIdFactory, CodecIdScope } from '../internal/render-id.js';
 /** System buffers are owned by the engine and are deliberately absent from a Codec technique schema. */
 export type RasterCodecSystem = CodecProgramSystemBuffers & {
@@ -163,66 +146,15 @@ export interface RasterCodecProgramOptions {
   readonly ids?: CodecIdFactory;
 }
 
-interface RasterCodecHostOptions {
-  readonly placementSlotTarget?: CodecProgramU32StoreTarget;
-}
-
 /** Assemble one engine CodecProgram from a registered renderer-neutral raster Codec. */
 export function createRasterCodecProgram<Format extends RasterFormatMetadata, Schema extends TechniqueSchemaMetadata>(
   codec: RasterCodec<Format, Schema>,
   options: RasterCodecProgramOptions,
 ): CodecProgram {
-  if (!isRegisteredRasterCodec(codec)) {
-    throw new TypeError('raster codec assembly needs a registered RasterCodec');
+  if (isRecord(options) && 'placementSlotTarget' in options) {
+    throw new TypeError('placementSlotTarget is package-private renderer packing');
   }
-  if (!isRecord(options)) throw new TypeError('raster codec assembly options need an object');
-  if ('identityRegistry' in options) {
-    throw new TypeError('raster codec identityRegistry was renamed to ids');
-  }
-  if (typeof options.namespace !== 'string' || options.namespace.length === 0) {
-    throw new TypeError('raster codec namespace must be a nonempty string');
-  }
-  if (
-    options.programName !== undefined &&
-    (typeof options.programName !== 'string' || options.programName.length === 0)
-  ) {
-    throw new TypeError('raster codec programName must be a nonempty string');
-  }
-  if (options.transformMode !== 'direct' && options.transformMode !== 'indexed') {
-    throw new TypeError('raster codec transform mode must be "direct" or "indexed"');
-  }
-  if (options.ids !== undefined) {
-    assertCodecIdFactory(options.ids, 'raster codec ids');
-  }
-  const normalizedSystem = normalizeCodecProgramSystemBuffers(codec.schema.buffers, options.system);
-  const placementSlot = normalizedSystem.placementSlot;
-  if (placementSlot === undefined) {
-    throw new TypeError('raster codec system needs a host-owned placementSlot buffer');
-  }
-  const system: RasterCodecSystem = Object.freeze({ ...normalizedSystem, placementSlot });
-  const placementSlotTarget = normalizePlacementSlotTarget(
-    codec.schema,
-    (options as RasterCodecProgramOptions & RasterCodecHostOptions).placementSlotTarget,
-  );
-  const capabilitySet = normalizeCodecCapabilitySet(options.capabilitySet, 'raster codec capability set');
-  const ids = options.ids ?? new CodecIdScope();
-  const compiledTechniqueId = ids.technique(codec.raster);
-  const compiledProgramId = ids.program(codec.raster, options.namespace, options.programName);
-  const authoredBody = codec.codecBody(capabilitySet);
-  assertTechniqueCodecBody(authoredBody, codec.schema);
-  const body = attachHostCodecProgramSystemBuffers(authoredBody, codec.schema, system, placementSlotTarget);
-  assertTechniqueCodecBody(body, codec.schema, system, placementSlotTarget);
-  return Object.freeze({
-    ...createCodecProgram(
-      compiledTechniqueId,
-      compiledProgramId,
-      body,
-      [...schemaCodecBuffers(codec.schema), ...systemCodecBuffers(system, placementSlotTarget)],
-      options.transformMode,
-    ),
-    capabilitySet,
-    variant: codec.programVariant ?? 0,
-  });
+  return createHostRasterCodecProgram(codec, options);
 }
 
 const compiledRasterFonts = new WeakSet<object>();
@@ -657,41 +589,6 @@ function checkedProduct(left: number, right: number, label: string): number {
 
 function isThenable(value: unknown): value is PromiseLike<unknown> {
   return isRecord(value) && typeof value.then === 'function';
-}
-
-function systemCodecBuffers(
-  system: RasterCodecSystem,
-  placementSlotTarget: CodecProgramU32StoreTarget | undefined,
-): CodecBuffer[] {
-  return [
-    { id: system.stableGlyphId.id, scalar: 'u32', vectorWidth: 1 },
-    ...(placementSlotTarget === undefined
-      ? [{ id: system.placementSlot.id, scalar: 'u32' as const, vectorWidth: 1 }]
-      : []),
-    ...(system.transformIndex === undefined
-      ? []
-      : [{ id: system.transformIndex.id, scalar: 'u32' as const, vectorWidth: 1 }]),
-  ];
-}
-
-function normalizePlacementSlotTarget(
-  schema: TechniqueSchemaMetadata,
-  value: CodecProgramU32StoreTarget | undefined,
-): CodecProgramU32StoreTarget | undefined {
-  if (value === undefined) return undefined;
-  if (!isRecord(value) || !Number.isSafeInteger(value.buffer) || !Number.isSafeInteger(value.lane)) {
-    throw new TypeError('placementSlotTarget needs an existing u32 technique buffer and lane');
-  }
-  const declaration = Object.values(schema.buffers).find((buffer) => buffer.id === value.buffer);
-  if (
-    declaration?.scalar !== 'u32' ||
-    value.lane < 0 ||
-    value.lane >= declaration.lanes.length ||
-    !declaration.lanes[value.lane]?.startsWith('unused')
-  ) {
-    throw new TypeError('placementSlotTarget needs an unused lane in an existing u32 technique buffer');
-  }
-  return Object.freeze({ buffer: declaration.id, lane: value.lane });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

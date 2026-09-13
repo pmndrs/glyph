@@ -37,6 +37,11 @@ test('application types stay at root while integration construction lives on con
     null,
     'configured-controller snapshot ownership must remain package-private',
   );
+  assert.equal(
+    manifest.exports['./config/raster-host'],
+    null,
+    'renderer-specific Codec packing must remain package-private',
+  );
   assert.ok(manifest.exports['./config/*'], 'renderer-neutral integration leaves must be public');
 
   for (const name of ['GlyphConfig', 'Codec', 'TechniqueSchema', 'RasterFormat']) {
@@ -108,6 +113,12 @@ test('application types stay at root while integration construction lives on con
     await declaration('config/raster.d.ts'),
     /placementSlotTarget|CodecProgramU32StoreTarget/,
     'adapter buffer/lane packing must stay outside the public raster codec contract',
+  );
+  const rasterRuntime = await import('../../dist/config/raster.js');
+  assert.equal(
+    'attachHostCodecProgramSystemBuffers' in rasterRuntime,
+    false,
+    'config/raster.js must not expose package-owned assembly at runtime',
   );
 });
 

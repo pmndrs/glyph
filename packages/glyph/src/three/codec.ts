@@ -13,11 +13,8 @@ import {
   type CodecTechniqueId,
 } from '../config/codec.js';
 import { hostAbsoluteTechniqueProgram, type CodecProgramSystemBuffers } from '../config/codec-program.js';
-import {
-  attachHostCodecProgramSystemBuffers,
-  createRasterCodecProgram,
-  type RasterCodecSystem,
-} from '../config/raster.js';
+import type { RasterCodecSystem } from '../config/raster.js';
+import { attachHostCodecProgramSystemBuffers, createHostRasterCodecProgram } from '../config/raster-host.js';
 import {
   defineCodecBuffers,
   defineTechniqueSchema,
@@ -134,21 +131,21 @@ export function threeCodecDescriptor(
   } as const;
   // The portable assembler validates the handle-supplied factory before Three invokes it directly.
   const rasterPrograms: CodecProgram[] = [
-    createRasterCodecProgram(bitmapCodec, {
+    createHostRasterCodecProgram(bitmapCodec, {
       namespace: THREE_PROGRAM_NAMESPACE,
       system: codecSystemBuffers(modes.bitmap),
       capabilitySet,
       transformMode: modes.bitmap,
       ids,
     }),
-    createRasterCodecProgram(msdfCodec, {
+    createHostRasterCodecProgram(msdfCodec, {
       namespace: THREE_PROGRAM_NAMESPACE,
       system: codecSystemBuffers(modes.msdf),
       capabilitySet,
       transformMode: modes.msdf,
       ids,
     }),
-    createRasterCodecProgram(slugCodec, slugOptions),
+    createHostRasterCodecProgram(slugCodec, slugOptions),
   ];
   const DECORATION_TECHNIQUE_ID = ids.technique(decorationSchema.technique);
   const DECORATION_PROGRAM_ID = ids.program(decorationSchema.technique, THREE_PROGRAM_NAMESPACE);

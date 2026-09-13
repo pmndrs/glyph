@@ -99,6 +99,7 @@ test('portable codec assembly rejects host inputs before invoking technique code
     [{ ...valid, capabilitySet: { ...capabilitySet, capabilities: [] } }, /does not support ordered storage/],
     [{ ...valid, ids: {} }, /ids/],
     [{ ...valid, identityRegistry: id }, /renamed to ids/],
+    [{ ...valid, placementSlotTarget: { buffer: 1, lane: 0 } }, /package-private/],
   ];
   for (const [options, message] of invalid) {
     assert.throws(() => createRasterCodecProgram(portable, options), message);

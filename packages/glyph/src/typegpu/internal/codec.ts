@@ -1,7 +1,7 @@
 import type { CodecBufferId, CodecCapabilitySet, CodecDescriptor, CodecIdFactory } from '../../index.js';
 import { id } from '../../config/codec.js';
 import { defineCodecBuffers } from '../../config/schema.js';
-import { createRasterCodecProgram } from '../../config/raster.js';
+import { createHostRasterCodecProgram } from '../../config/raster-host.js';
 import { bitmapCodec } from '../../raster/bitmap.js';
 import { msdfCodec } from '../../raster/msdf.js';
 import { slugCodec, slugSchema } from '../../raster/slug.js';
@@ -38,9 +38,9 @@ export function codecDescriptor(ids: CodecIdFactory): CodecDescriptor {
   return {
     capabilitySets: [capabilitySet],
     programs: [
-      createRasterCodecProgram(bitmapCodec, options),
-      createRasterCodecProgram(msdfCodec, options),
-      createRasterCodecProgram(slugCodec, slugOptions),
+      createHostRasterCodecProgram(bitmapCodec, options),
+      createHostRasterCodecProgram(msdfCodec, options),
+      createHostRasterCodecProgram(slugCodec, slugOptions),
     ],
   };
 }

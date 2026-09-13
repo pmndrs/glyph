@@ -1750,12 +1750,16 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.ok(displayedGlyphs?.[0].localAdvanceBounds.getSize(new THREE.Vector3()).x > 0);
 
   group.renderOrder = 20;
+  scene.updateMatrixWorld(true);
+  assert.equal(firstDraws[0].renderOrder, 20, 'scene traversal must update grouped draw proxies');
+
+  group.renderOrder = 21;
   group.updateMatrixWorld(true);
-  assert.equal(firstDraws[0].renderOrder, 20, 'group render order must update existing draw proxies');
+  assert.equal(firstDraws[0].renderOrder, 21, 'direct group traversal must update existing draw proxies');
 
   label.renderOrder = 7;
   scene.updateMatrixWorld();
-  assert.equal(rootDraws(scene)[0].renderOrder, 20);
+  assert.equal(rootDraws(scene)[0].renderOrder, 21);
   assert.equal(firstDraws[0].geometry.instanceCount, 10, 'render-order-only updates must preserve the Rust plan');
 
   label.text = 'Only the final desired value';
