@@ -306,8 +306,7 @@ export class Glyphs extends THREE.Object3D {
       storage.pivots.set([x, y], record * 2);
       this.#composed.makeTranslation(x, y, 0);
       this.#composed.toArray(storage.matrices, record * 16);
-      this.#inversePivot.makeTranslation(-x, -y, 0);
-      this.#composed.multiply(this.#inversePivot).toArray(transforms, record * 16);
+      this.#composed.identity().toArray(transforms, record * 16);
     }
     for (const storage of this.#storages.values()) {
       storage.transforms.needsUpdate = true;
