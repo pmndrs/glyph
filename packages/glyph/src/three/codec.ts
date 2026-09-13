@@ -14,8 +14,11 @@ import {
   type CodecTechniqueId,
 } from '../config/codec.js';
 import { hostAbsoluteTechniqueProgram, type CodecProgramSystemBuffers } from '../config/codec-program.js';
-import { attachHostCodecProgramSystemBuffers } from '../internal/codec-program-contract.js';
-import { createRasterCodecProgram, type RasterCodecSystem } from '../config/raster.js';
+import {
+  attachHostCodecProgramSystemBuffers,
+  createRasterCodecProgram,
+  type RasterCodecSystem,
+} from '../config/raster.js';
 import {
   defineCodecBuffers,
   defineTechniqueSchema,

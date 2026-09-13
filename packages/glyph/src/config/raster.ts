@@ -31,6 +31,9 @@ import {
   type CodecProgramU32StoreTarget,
   normalizeCodecProgramSystemBuffers,
 } from '../internal/codec-program-contract.js';
+
+/** @internal Host adapter assembly; portable raster Codec bodies never receive system buffers. */
+export { attachHostCodecProgramSystemBuffers } from '../internal/codec-program-contract.js';
 import {
   schemaCodecBuffers,
   type TechniqueBindingDeclaration,

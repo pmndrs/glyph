@@ -2,6 +2,10 @@
 
 ## 2026-09-13
 
+- **Restored the Codec host-assembly boundary** — Three now reaches the host-only system-buffer attachment helper through
+  the existing `config/raster` assembly module rather than importing a package-internal contract directly. This changes
+  no Codec bytes or runtime behavior and closes the top cleanup PR's restricted-import lint failure.
+
 - **Finished the placement-slot vocabulary fold** — Classified the retained allocator against D-358 and removed its
   two remaining one-field generic wrappers. The planner now passes its already domain-specific `PlacementLogicalKey`
   values directly, and slot state retains `Option<Key>` rather than wrapping the same key again. Allocation,
