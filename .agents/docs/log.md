@@ -2,6 +2,18 @@
 
 ## 2026-09-12
 
+- **Removed the duplicate placement-handle mirror** — Changed publications now bind positioned segments and build the
+  root x/y table directly from the placement allocator's prepared assignment slice. The planner no longer reserves,
+  copies, clears, or retains a second `Vec<PlacementHandle>` containing identical rows; commit and abort still own the
+  allocator transaction and the session rows independently.
+
+- **Retired the completed M1 shadow oracles** — The full 12.1–12.5 core, renderer, browser, size, and performance matrix
+  is accepted, so the standalone visual-span mapper and multi-fragment shadow planner no longer gate an unresolved
+  cutover. Their production counterparts and focused integration regressions remain. The associated shadow geometry
+  walker and proof-only visual-span ledger were removed with them; production retains the single compact
+  `segment_instance_counts` authority used by publication. This drops more than 3,000 lines without changing batching,
+  renderer output, or shipping positioning arithmetic.
+
 - **Specialized retained slot ownership to placement** — The only shipping user of the former generic run-slot core was
   the dynamic placement occurrence allocator, always with a unit canonical value. The unreachable canonical-update
   branch, run assignment/change vocabulary, forwarding placement facade, and run-only tests were removed. The retained

@@ -22,9 +22,7 @@ use super::{
         PreparedUpdate, RootRevision, UpdateRequest,
     },
     identity_index::IdentityIndex,
-    placement_slot_arena::{
-        DesiredPlacement, PlacementHandle, PlacementSlotArena, PlacementSlotError,
-    },
+    placement_slot_arena::{DesiredPlacement, PlacementSlotArena, PlacementSlotError},
     placement_state::{GlyphSource, LayoutRunOwner, PlacementIdentity, PlacementSegment},
     positioning::{PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT},
     render_plan::RenderPlanView,
@@ -228,7 +226,6 @@ struct PlannerState {
     pending_next_paragraph_incarnation: u32,
     placement_slots: PlacementSlotArena<PlacementLogicalKey>,
     desired_placements: Vec<DesiredPlacement<PlacementLogicalKey>>,
-    desired_placement_handles: Vec<PlacementHandle>,
     session_placement_rows: Vec<SessionPlacementRow>,
     placement_slot_count: u32,
     pending_placement_slot_count: u32,
@@ -1753,7 +1750,6 @@ impl TextEngine {
         planner.plan.commit().map_err(plan_error)?;
         planner.placement_slots.commit();
         planner.desired_placements.clear();
-        planner.desired_placement_handles.clear();
         planner.session_placement_rows.clear();
         planner.placement_slot_count = planner.pending_placement_slot_count;
         planner.pending_placement_slot_count = 0;
@@ -2499,10 +2495,8 @@ impl PlannerState {
         next_content_revision: &mut u32,
     ) -> Result<(), EngineError> {
         let mut desired = core::mem::take(&mut self.desired_placements);
-        let mut handles = core::mem::take(&mut self.desired_placement_handles);
         let mut rows = core::mem::take(&mut self.session_placement_rows);
         desired.clear();
-        handles.clear();
         rows.clear();
         let result = (|| {
             let required = self
@@ -2524,9 +2518,6 @@ impl PlannerState {
                         .ok_or(EngineError::ResultTooLarge)
                 })?;
             desired
-                .try_reserve(required)
-                .map_err(|_| EngineError::ResultTooLarge)?;
-            handles
                 .try_reserve(required)
                 .map_err(|_| EngineError::ResultTooLarge)?;
             rows.try_reserve(required)
@@ -2568,17 +2559,23 @@ impl PlannerState {
             if assignment_count != desired.len() {
                 return Err(EngineError::InvalidRequest);
             }
-            handles.extend_from_slice(assignments);
             self.pending_placement_slot_count = self
                 .placement_slots
                 .required_slots()
                 .map_err(placement_slot_error)?;
+            let active_order = if self.lifecycle_prepared {
+                &self.pending_ordered_paragraphs
+            } else {
+                &self.ordered_paragraphs
+            };
+            let paragraphs = &mut self.paragraphs;
             let mut assignment_start = 0usize;
-            for order_index in 0..self.active_order().len() {
-                let paragraph_id = self.active_order()[order_index].id;
-                let segment_count = self
-                    .paragraph(paragraph_id)
-                    .ok_or(EngineError::InvalidRequest)?
+            for order in active_order {
+                let paragraph_index = paragraphs
+                    .binary_search_by_key(&order.id, |paragraph| paragraph.id)
+                    .map_err(|_| EngineError::InvalidRequest)?;
+                let paragraph = &mut paragraphs[paragraph_index];
+                let segment_count = paragraph
                     .state
                     .positioned
                     .active()
@@ -2588,31 +2585,24 @@ impl PlannerState {
                     .checked_add(segment_count)
                     .ok_or(EngineError::ResultTooLarge)?;
                 for relative in 0..segment_count {
-                    let translation = self
-                        .paragraph(paragraph_id)
-                        .and_then(|paragraph| {
-                            paragraph
-                                .state
-                                .positioned
-                                .active()
-                                .placement_translations()
-                                .get(relative)
-                        })
+                    let translation = paragraph
+                        .state
+                        .positioned
+                        .active()
+                        .placement_translations()
+                        .get(relative)
                         .copied()
                         .ok_or(EngineError::InvalidRequest)?;
                     rows.push(SessionPlacementRow {
-                        slot: handles[assignment_start + relative].slot().get(),
+                        slot: assignments[assignment_start + relative].slot().get(),
                         inline: translation.translation_inline as f32,
                         block: translation.translation_block as f32,
                     });
                 }
-                let paragraph = self
-                    .paragraph_mut(paragraph_id)
-                    .ok_or(EngineError::InvalidRequest)?;
                 if paragraph.state.positioned.is_prepared() {
                     let (pending, committed) = paragraph.state.positioned.derive_mut();
                     pending.bind_placement_handles(
-                        &handles[assignment_start..assignment_end],
+                        &assignments[assignment_start..assignment_end],
                         Some(committed),
                         next_content_revision,
                     )?;
@@ -2620,7 +2610,7 @@ impl PlannerState {
                     let positioned = paragraph.state.positioned.committed();
                     for relative in 0..segment_count {
                         if positioned.placement_handle(relative)
-                            != Some(handles[assignment_start + relative])
+                            != Some(assignments[assignment_start + relative])
                         {
                             return Err(EngineError::InvalidRequest);
                         }
@@ -2640,7 +2630,6 @@ impl PlannerState {
             Ok(())
         })();
         self.desired_placements = desired;
-        self.desired_placement_handles = handles;
         self.session_placement_rows = rows;
         result
     }
@@ -2650,7 +2639,6 @@ impl PlannerState {
         self.plan.abort();
         self.placement_slots.abort();
         self.desired_placements.clear();
-        self.desired_placement_handles.clear();
         self.session_placement_rows.clear();
         self.pending_placement_slot_count = self.placement_slot_count;
         self.semantic_records.clear();
