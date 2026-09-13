@@ -698,35 +698,19 @@ impl PositionedGlyphArena {
             let mut inline_end = f64::NEG_INFINITY;
             if let Some(cap) = drop_cap {
                 self.placement_fragment_index = line.fragment_start;
-                let cap_advance = if self.text_effects {
-                    self.position_drop_cap::<true>(
-                        cap,
-                        text,
-                        clusters,
-                        runs,
-                        boundary_shape,
-                        styles,
-                        bidi,
-                        visually_ltr,
-                        metrics_for,
-                        extents_for,
-                        retained_instances.as_mut(),
-                    )?
-                } else {
-                    self.position_drop_cap::<false>(
-                        cap,
-                        text,
-                        clusters,
-                        runs,
-                        boundary_shape,
-                        styles,
-                        bidi,
-                        visually_ltr,
-                        metrics_for,
-                        extents_for,
-                        retained_instances.as_mut(),
-                    )?
-                };
+                let cap_advance = self.position_drop_cap(
+                    cap,
+                    text,
+                    clusters,
+                    runs,
+                    boundary_shape,
+                    styles,
+                    bidi,
+                    visually_ltr,
+                    metrics_for,
+                    extents_for,
+                    retained_instances.as_mut(),
+                )?;
                 inline_start = inline_start.min(cap.fragment.slot_start);
                 inline_end = inline_end.max(cap.fragment.slot_start + cap_advance);
             }
@@ -750,81 +734,23 @@ impl PositionedGlyphArena {
                 } else {
                     0.0
                 };
-                let fragment_advance = if let Some(cursor) = retained_instances.as_mut() {
-                    if self.text_effects {
-                        self.position_fragment::<true>(
-                            line,
-                            fragment,
-                            final_line,
-                            text,
-                            clusters,
-                            runs,
-                            boundary_shape,
-                            styles,
-                            bidi,
-                            visually_ltr,
-                            indent,
-                            typography.justify,
-                            metrics_for,
-                            extents_for,
-                            Some(cursor),
-                        )?
-                    } else {
-                        self.position_fragment::<false>(
-                            line,
-                            fragment,
-                            final_line,
-                            text,
-                            clusters,
-                            runs,
-                            boundary_shape,
-                            styles,
-                            bidi,
-                            visually_ltr,
-                            indent,
-                            typography.justify,
-                            metrics_for,
-                            extents_for,
-                            Some(cursor),
-                        )?
-                    }
-                } else if self.text_effects {
-                    self.position_fragment::<true>(
-                        line,
-                        fragment,
-                        final_line,
-                        text,
-                        clusters,
-                        runs,
-                        boundary_shape,
-                        styles,
-                        bidi,
-                        visually_ltr,
-                        indent,
-                        typography.justify,
-                        metrics_for,
-                        extents_for,
-                        None,
-                    )?
-                } else {
-                    self.position_fragment::<false>(
-                        line,
-                        fragment,
-                        final_line,
-                        text,
-                        clusters,
-                        runs,
-                        boundary_shape,
-                        styles,
-                        bidi,
-                        visually_ltr,
-                        indent,
-                        typography.justify,
-                        metrics_for,
-                        extents_for,
-                        None,
-                    )?
-                };
+                let fragment_advance = self.position_fragment(
+                    line,
+                    fragment,
+                    final_line,
+                    text,
+                    clusters,
+                    runs,
+                    boundary_shape,
+                    styles,
+                    bidi,
+                    visually_ltr,
+                    indent,
+                    typography.justify,
+                    metrics_for,
+                    extents_for,
+                    retained_instances.as_mut(),
+                )?;
                 inline_end = inline_end.max(fragment.slot_start + fragment_advance);
                 self.placement_fragment_index = self
                     .placement_fragment_index
@@ -1477,7 +1403,7 @@ impl PositionedGlyphArena {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn position_drop_cap<const TEXT_EFFECTS: bool>(
+    fn position_drop_cap(
         &mut self,
         cap: FlowDropCap,
         text: &[u16],
@@ -1499,7 +1425,7 @@ impl PositionedGlyphArena {
                 cap.fragment.line.text_end,
             )?;
         }
-        self.position_fragment::<TEXT_EFFECTS>(
+        self.position_fragment(
             cap.line,
             cap.fragment,
             false,
@@ -1519,7 +1445,7 @@ impl PositionedGlyphArena {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn position_fragment<const TEXT_EFFECTS: bool>(
+    fn position_fragment(
         &mut self,
         line: FlowLine,
         fragment: FlowFragment,
@@ -1645,41 +1571,23 @@ impl PositionedGlyphArena {
         };
         let layout_run_order = visually_ltr && paragraph_level & 1 == 0;
         if layout_run_order {
-            if justify.is_zero() {
-                self.position_layout_run_fragment::<TEXT_EFFECTS, false>(
-                    line,
-                    fragment,
-                    cluster_start,
-                    retained_cluster_end,
-                    hanging_start,
-                    clusters,
-                    runs,
-                    styles,
-                    &streams,
-                    justify,
-                    &mut state,
-                    metrics_for,
-                    extents_for,
-                    retained.as_deref_mut(),
-                )?;
-            } else {
-                self.position_layout_run_fragment::<TEXT_EFFECTS, true>(
-                    line,
-                    fragment,
-                    cluster_start,
-                    retained_cluster_end,
-                    hanging_start,
-                    clusters,
-                    runs,
-                    styles,
-                    &streams,
-                    justify,
-                    &mut state,
-                    metrics_for,
-                    extents_for,
-                    retained.as_deref_mut(),
-                )?;
-            }
+            self.position_layout_run_fragment(
+                line,
+                fragment,
+                cluster_start,
+                retained_cluster_end,
+                hanging_start,
+                clusters,
+                runs,
+                styles,
+                &streams,
+                justify,
+                !justify.is_zero(),
+                &mut state,
+                metrics_for,
+                extents_for,
+                retained.as_deref_mut(),
+            )?;
         } else {
             let visual_count = if visually_ltr {
                 retained_cluster_end.saturating_sub(cluster_start)
@@ -1779,7 +1687,7 @@ impl PositionedGlyphArena {
                         geometry
                     }
                 };
-                let positioned = self.position_cluster::<TEXT_EFFECTS>(
+                let positioned = self.position_cluster(
                     line,
                     cluster,
                     if visually_ltr {
@@ -1802,12 +1710,13 @@ impl PositionedGlyphArena {
                     retained.as_deref_mut(),
                     extents_for,
                 )?;
-                self.finish_positioned_cluster::<true>(
+                self.finish_positioned_cluster(
                     line,
                     cluster,
                     clusters,
                     positioned,
                     justify,
+                    true,
                     &mut state,
                     metrics_for,
                     retained.is_none(),
@@ -1842,7 +1751,7 @@ impl PositionedGlyphArena {
             self.flush_decorated_run(&mut state.decorated_run, line, metrics_for)?;
         }
         if let Some(boundary) = boundary {
-            let _ = self.position_boundary::<TEXT_EFFECTS>(
+            let _ = self.position_boundary(
                 line,
                 fragment.boundary_index,
                 boundary,
@@ -1868,7 +1777,7 @@ impl PositionedGlyphArena {
         any(test, feature = "kernel-lab"),
         allow(clippy::explicit_counter_loop)
     )]
-    fn position_layout_run_fragment<const TEXT_EFFECTS: bool, const ADJUST: bool>(
+    fn position_layout_run_fragment(
         &mut self,
         line: FlowLine,
         fragment: FlowFragment,
@@ -1880,6 +1789,7 @@ impl PositionedGlyphArena {
         styles: &[StyleSegment],
         streams: &GlyphStreams<'_>,
         justify: JustifyDistribution,
+        adjust: bool,
         state: &mut FragmentPositionState,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
@@ -1936,7 +1846,7 @@ impl PositionedGlyphArena {
             let mut cluster = overlap_start;
             while cluster < overlap_end {
                 let segment_start = cluster;
-                let (placement_cluster, stable_segment_end) = if ADJUST {
+                let (placement_cluster, stable_segment_end) = if adjust {
                     (
                         clusters.placement_cluster(*layout_run, direction, segment_start)?,
                         segment_start + 1,
@@ -1945,7 +1855,7 @@ impl PositionedGlyphArena {
                     clusters.placement_segment_monotone(*layout_run, direction, segment_start)?
                 };
                 let mut segment_end = segment_start + 1;
-                if !ADJUST
+                if !adjust
                     && direction & 1 == 0
                     && clusters.flags[segment_start] & CLUSTER_HARD_BREAK == 0
                 {
@@ -1984,7 +1894,7 @@ impl PositionedGlyphArena {
                             style.baseline_shift.to_bits(),
                             geometry.baseline_shift.to_bits()
                         );
-                        let positioned = self.position_cluster::<TEXT_EFFECTS>(
+                        let positioned = self.position_cluster(
                             line,
                             cluster,
                             cluster_level(
@@ -2003,12 +1913,13 @@ impl PositionedGlyphArena {
                             retained.as_deref_mut(),
                             extents_for,
                         )?;
-                        self.finish_positioned_cluster::<ADJUST>(
+                        self.finish_positioned_cluster(
                             line,
                             cluster,
                             clusters,
                             positioned,
                             justify,
+                            adjust,
                             state,
                             metrics_for,
                             retained.is_none(),
@@ -2115,7 +2026,7 @@ impl PositionedGlyphArena {
 
     #[allow(clippy::too_many_arguments)]
     #[inline(always)]
-    fn position_cluster<const TEXT_EFFECTS: bool>(
+    fn position_cluster(
         &mut self,
         line: FlowLine,
         cluster: usize,
@@ -2187,7 +2098,7 @@ impl PositionedGlyphArena {
                         .push_segment_instances(occurrence.segment_index, 1)?;
                     let semantic_glyph_index = u32::try_from(self.semantic_glyphs.len() - 1)
                         .map_err(|_| EngineError::ResultTooLarge)?;
-                    self.push_glyph::<TEXT_EFFECTS>(
+                    self.push_glyph(
                         LayoutGlyph {
                             stable_id,
                             content_revision: 0,
@@ -2229,18 +2140,19 @@ impl PositionedGlyphArena {
 
     #[allow(clippy::too_many_arguments)]
     #[inline(always)]
-    fn finish_positioned_cluster<const ADJUST: bool>(
+    fn finish_positioned_cluster(
         &mut self,
         line: FlowLine,
         cluster: usize,
         clusters: &ClusterArena,
         positioned: PositionedCluster,
         justify: JustifyDistribution,
+        adjust: bool,
         state: &mut FragmentPositionState,
         metrics_for: impl Fn(u32) -> Option<FontMetrics>,
         materialize_output: bool,
     ) -> Result<(), EngineError> {
-        if ADJUST {
+        if adjust {
             apply_justification(
                 cluster,
                 clusters,
@@ -2363,7 +2275,7 @@ impl PositionedGlyphArena {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn position_boundary<const TEXT_EFFECTS: bool>(
+    fn position_boundary(
         &mut self,
         line: FlowLine,
         _boundary_index: u32,
@@ -2405,7 +2317,7 @@ impl PositionedGlyphArena {
                 )
             })
             .transpose()?;
-        cursor = self.position_boundary_span::<TEXT_EFFECTS>(
+        cursor = self.position_boundary_span(
             line,
             cursor,
             baseline,
@@ -2440,7 +2352,7 @@ impl PositionedGlyphArena {
                 )
             })
             .transpose()?;
-        self.position_boundary_span::<TEXT_EFFECTS>(
+        self.position_boundary_span(
             line,
             cursor,
             baseline,
@@ -2633,7 +2545,7 @@ impl PositionedGlyphArena {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn position_boundary_span<const TEXT_EFFECTS: bool>(
+    fn position_boundary_span(
         &mut self,
         line: FlowLine,
         mut cursor: f64,
@@ -2750,7 +2662,7 @@ impl PositionedGlyphArena {
                         .push_segment_instances(occurrence.segment_index, 1)?;
                     let semantic_glyph_index = u32::try_from(self.semantic_glyphs.len() - 1)
                         .map_err(|_| EngineError::ResultTooLarge)?;
-                    self.push_glyph::<TEXT_EFFECTS>(
+                    self.push_glyph(
                         LayoutGlyph {
                             stable_id,
                             content_revision: 0,
@@ -2806,7 +2718,7 @@ impl PositionedGlyphArena {
         Ok(cursor)
     }
 
-    fn push_glyph<const TEXT_EFFECTS: bool>(
+    fn push_glyph(
         &mut self,
         glyph: LayoutGlyph,
         ink_inline_start: f32,
@@ -2842,7 +2754,7 @@ impl PositionedGlyphArena {
         {
             field.push(value);
         }
-        if TEXT_EFFECTS {
+        if self.text_effects {
             let inverse_font_size = 1.0 / publication.style.font_size;
             self.semantic_f32[6].push(publication.style.outline_width * inverse_font_size);
             self.semantic_f32[7].push(publication.style.shadow_offset_x * inverse_font_size);
@@ -4723,7 +4635,7 @@ mod tests {
         let mut production = PositionedGlyphArena::default();
         production.placement.clear();
         production
-            .position_fragment::<false>(
+            .position_fragment(
                 line,
                 fragment,
                 true,
@@ -4884,7 +4796,7 @@ mod tests {
         let mut positioned = PositionedGlyphArena::default();
         positioned.placement.clear();
         positioned
-            .position_fragment::<false>(
+            .position_fragment(
                 line,
                 fragment,
                 true,
@@ -5786,6 +5698,9 @@ mod tests {
             .unwrap();
 
         assert_layout_plan_producer_invariants(&active);
+        assert_eq!(active.semantic_f32[6], [0.1, 0.1]);
+        assert_eq!(active.semantic_f32[7], [0.05, 0.05]);
+        assert_eq!(active.semantic_f32[8], [0.0, 0.0]);
         assert_eq!(active.decorations.len(), 2);
         let underline = active.decorations[0];
         // Centered 12.0 advance in the 20.0 slot: run spans 4.0..16.0.
@@ -5866,6 +5781,11 @@ mod tests {
                 extents,
             )
             .unwrap();
+        assert!(
+            plain.semantic_f32[SEMANTIC_F32_BASE_FIELD_COUNT..]
+                .iter()
+                .all(Vec::is_empty)
+        );
         assert_eq!(plain.decorations.len(), 0);
     }
 

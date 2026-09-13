@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:c36bb4ddd4a1f28449a79af1144277b88be7a9208d24aace66290be990d7f55f'
+source_digest: 'sha256:3effaf525a7e643713519933c020aae55fda837537bde31488e79439e21a07f2'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1478,6 +1478,20 @@ and format checks. The subsequent browser gauntlet passes all 120 Presentation c
 `0.990–1.710 ms` median reflow across those full runs. Direct TypeGPU's dedicated Chromium WebGPU gate also passes all
 three rasters. The reviewed size check accepts a 554-byte raw shaper increase (0.04%); adapter and font sizes are
 unchanged. There is no remaining known CPU, publication, renderer, or size regression in this cutover.
+
+Final reduction removes the compile-time justification and text-effect specialization axes from the positioning
+traversal. Both conditions are invariant for a fragment or build, and the specialized forms duplicated most of the same
+machine code to avoid only a small adjustment tail or optional effect-lane append. One runtime traversal removes 80 Rust
+source lines and 26,486 raw / 3,200 gzip optimized-Wasm bytes. A 22k A/B/B/A keeps ordinary, bidi, and dense-CJK width
+medians within 0.3%; the longer 501-sample justified comparison is within 0.34%, with identical patches and write bytes.
+This is accepted as prediction-friendly parity rather than preserving duplicated code for an unmeasured theoretical win.
+
+Final reduction removes the compile-time justification and text-effect specialization axes from the positioning
+traversal. Both conditions are invariant for a fragment or build, and the specialized forms duplicated most of the same
+machine code to avoid only a small adjustment tail or optional effect-lane append. One runtime traversal removes 80 Rust
+source lines and 26,486 raw / 3,200 gzip optimized-Wasm bytes. A 22k A/B/B/A keeps ordinary, bidi, and dense-CJK width
+medians within 0.3%; the longer 501-sample justified comparison is within 0.34%, with identical patches and write bytes.
+This is accepted as prediction-friendly parity rather than preserving duplicated code for an unmeasured theoretical win.
 
 The benchmark also owns a `position-query` case that runs the same break-changing flow and positioning tail through the
 borrowed-layout mask while excluding gather, plan compilation, publication, and inspection copies. On the pinned M4 host,
