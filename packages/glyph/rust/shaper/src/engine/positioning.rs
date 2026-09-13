@@ -2784,7 +2784,26 @@ impl PositionedGlyphArena {
         geometry_only: bool,
     ) -> Result<(), EngineError> {
         self.semantic_change_masks.resize(self.glyphs.len(), 0);
-        if let Some(range) = self.recomposed_glyphs {
+        let recomposed = self
+            .recomposed_glyphs
+            .map(|range| {
+                let prefix = self
+                    .glyphs
+                    .get(..range.next_start)
+                    .ok_or(EngineError::InvalidRequest)?;
+                let suffix = self
+                    .glyphs
+                    .get(range.next_end..)
+                    .ok_or(EngineError::InvalidRequest)?;
+                Ok(prefix
+                    .iter()
+                    .chain(suffix)
+                    .all(|glyph| glyph.content_revision != 0)
+                    .then_some(range))
+            })
+            .transpose()?
+            .flatten();
+        if let Some(range) = recomposed {
             *next_revision = (*next_revision).max(1);
             let previous_glyphs = previous
                 .glyphs
@@ -6588,6 +6607,37 @@ mod tests {
         );
         assert_eq!(next.semantic_change_masks, [0, 1, 0]);
         assert_eq!(next_revision, 41);
+
+        // A retained-line fallback outside the nominal range rematerializes revision-zero glyphs.
+        // It must force a full identity scan before commit.
+        let mut fallback = make_arena();
+        fallback.glyphs[0].content_revision = 0;
+        fallback.semantic_f32[0][1] = 4.0;
+        fallback.recomposed_glyphs = Some(RecomposedGlyphRange {
+            previous_start: 1,
+            previous_end: 2,
+            next_start: 1,
+            next_end: 2,
+        });
+        let mut fallback_revision = 50;
+        fallback
+            .assign_content_revisions(
+                &previous,
+                &mut IdentityIndex::default(),
+                &mut fallback_revision,
+                false,
+            )
+            .unwrap();
+        assert_eq!(
+            fallback
+                .glyphs
+                .iter()
+                .map(|glyph| glyph.content_revision)
+                .collect::<Vec<_>>(),
+            [10, 50, 30]
+        );
+        assert_eq!(fallback.semantic_change_masks, [0, 1, 0]);
+        assert_eq!(fallback_revision, 51);
     }
 
     #[test]

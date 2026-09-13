@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import test from 'node:test';
 
 import {
@@ -8,6 +11,9 @@ import {
   rustLayoutBenchmarkGeometry,
   rustLayoutBenchmarkInitialGeometry,
 } from '../../scripts/support/rust-layout-benchmark-cases.mjs';
+
+const execFileAsync = promisify(execFile);
+const benchmark = fileURLToPath(new URL('../../scripts/benchmark-rust-layout-engine.mjs', import.meta.url));
 
 test('the maintained benchmark case registry keeps specialized corpus requirements explicit', () => {
   assert.equal(rustLayoutBenchmarkCases('latin').includes('justify'), true);
@@ -150,4 +156,20 @@ test('active reflow and adopted query cases require every measured update to pub
       new RegExp(`${name} did not publish a changed layout at generation 8`, 'u'),
     );
   }
+});
+
+test('retained edit churn keeps valid revisions after arenas warm', { timeout: 20_000 }, async () => {
+  const run = async (name, glyphs) => {
+    const { stdout } = await execFileAsync(
+      process.execPath,
+      [benchmark, '--glyphs', glyphs, '--warmup', '64', '--reps', '4', '--case', name, '--corpus', 'cjk'],
+      { maxBuffer: 256 * 1024 },
+    );
+    assert.match(stdout, new RegExp(`complete Rust text_update \\+ bitmap render plan`, 'u'));
+    assert.match(stdout, new RegExp(`${name}\\s+\\d+\\s+`, 'u'));
+    assert.match(stdout, /Wasm linear-memory high-water \(not live heap\):/u);
+  };
+
+  await run('localized-edit', '1000');
+  await run('localized-splice', '1000');
 });

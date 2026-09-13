@@ -767,4 +767,31 @@ mod tests {
         arena.prepare(&[placement(30)], 3).unwrap();
         assert_eq!(handles(&arena)[0].slot(), original.slot());
     }
+
+    #[test]
+    fn acknowledged_churn_reuses_two_slots_and_plateaus_scratch_capacity() {
+        let mut arena = PlacementSlotArena::default();
+        arena.prepare(&[placement(10)], 1).unwrap();
+        arena.commit();
+
+        for publication in 2..=8 {
+            arena.acknowledge(publication - 1).unwrap();
+            arena
+                .prepare(&[placement(publication as u64)], publication)
+                .unwrap();
+            arena.commit();
+        }
+        let warmed_capacities = arena.scratch_capacities();
+
+        for publication in 9..=1_024 {
+            arena.acknowledge(publication - 1).unwrap();
+            arena
+                .prepare(&[placement(publication as u64)], publication)
+                .unwrap();
+            arena.commit();
+        }
+        assert_eq!(arena.scratch_capacities(), warmed_capacities);
+        assert_eq!(arena.slots.len(), 2);
+        assert_eq!(arena.quarantine.len(), 1);
+    }
 }
