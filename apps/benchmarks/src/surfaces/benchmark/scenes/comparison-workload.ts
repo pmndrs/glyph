@@ -334,6 +334,7 @@ async function createComparisonWorkloadRuntime(
   }
   let width = positive(viewportWidth, 'comparison workload width');
   let height = positive(viewportHeight, 'comparison workload height');
+  const iconGridViewport = { height, width };
   let configuration = validateConfiguration(options);
   const startupStarted = performance.now();
   const renderer = persistentContext.renderer as THREE.WebGPURenderer;
@@ -596,7 +597,7 @@ async function createComparisonWorkloadRuntime(
       const iconGridInstanceChanged = nextIconGridInstance !== iconGridInstance;
       const initialIconWindow =
         next.workload === 'icon-grid' && nextIconGridInstance !== undefined
-          ? nextIconGridInstance.activate(next, { height, width })
+          ? nextIconGridInstance.activate(next, iconGridViewport)
           : undefined;
       const previous = entries;
       const previousRoot = batchRoot;
@@ -616,8 +617,8 @@ async function createComparisonWorkloadRuntime(
           workloadChanged ? 0 : performance.now() - animationEpoch,
           options.textLadderSpecimen,
           nextCompanionFonts.map(({ loaded }) => loaded),
-          initialIconWindow?.scrollX ?? (workloadChanged ? 0 : (iconGridInstance?.view().scrollX ?? 0)),
-          initialIconWindow?.scrollY ?? (workloadChanged ? 0 : (iconGridInstance?.view().scrollY ?? 0)),
+          initialIconWindow?.scrollX ?? (workloadChanged ? 0 : (iconGridInstance?.scrollX ?? 0)),
+          initialIconWindow?.scrollY ?? (workloadChanged ? 0 : (iconGridInstance?.scrollY ?? 0)),
         );
         nextRoot = reuseBatchRoot ? previousRoot : createBatchRoot(glyphRoot, next.workload);
       } catch (error) {
@@ -655,7 +656,7 @@ async function createComparisonWorkloadRuntime(
           scene.position.set(0, 0, 0);
           camera = nextCamera;
           if (next.workload === 'icon-grid' && nextIconGridInstance !== undefined) {
-            applyIconGridCamera(camera, nextIconGridInstance.view());
+            applyIconGridCamera(camera, nextIconGridInstance);
           }
           animationEpoch = performance.now();
           zoomAnimationState.phraseIndex = 0;
@@ -679,8 +680,8 @@ async function createComparisonWorkloadRuntime(
           finishedAt - readyStarted,
         );
         if (next.workload === 'icon-grid') {
-          iconGridInstance?.settle(next, { height, width }, scene);
-          if (iconGridInstance !== undefined) applyIconGridCamera(camera, iconGridInstance.view());
+          iconGridInstance?.settle(next, iconGridViewport, scene);
+          if (iconGridInstance !== undefined) applyIconGridCamera(camera, iconGridInstance);
         }
       } catch (error) {
         if (reuseBatchRoot) {
@@ -736,8 +737,8 @@ async function createComparisonWorkloadRuntime(
           next.iconGridView !== configuration.iconGridView)
       ) {
         if (iconGridInstance === undefined) throw new Error('icon grid retained update lost its workload instance');
-        await iconGridInstance.reconfigure(configuration, next, { height, width }, scene);
-        applyIconGridCamera(camera, iconGridInstance.view());
+        await iconGridInstance.reconfigure(configuration, next, iconGridViewport, scene);
+        applyIconGridCamera(camera, iconGridInstance);
         configuration = next;
         committedContentWidth = undefined;
         revision += 1;
@@ -822,7 +823,7 @@ async function createComparisonWorkloadRuntime(
           startUpdateDrain();
           return;
         }
-        iconGridInstance?.resume(configuration, { height, width }, scene, onError);
+        iconGridInstance?.resume(configuration, iconGridViewport, scene, onError);
       });
     }
 
@@ -858,13 +859,13 @@ async function createComparisonWorkloadRuntime(
         if (renderScene && configuration.workload === 'icon-grid') {
           iconGridInstance?.frame(
             configuration,
-            { height, width },
+            iconGridViewport,
             scene,
             timestamp,
             animationRate(configuration),
             onError,
           );
-          if (iconGridInstance !== undefined) applyIconGridCamera(camera, iconGridInstance.view());
+          if (iconGridInstance !== undefined) applyIconGridCamera(camera, iconGridInstance);
         }
         if (
           renderScene &&
@@ -1011,7 +1012,7 @@ async function createComparisonWorkloadRuntime(
               : 0,
           zoomScale: configuration.workload === 'zoom-text' ? zoomScale : 0,
           zoomMaximumScale: configuration.workload === 'zoom-text' ? (activeZoomEntry?.zoomMaximumScale ?? 1) : 0,
-          ...iconGridStats(configuration, iconGridInstance, { height, width }, scene),
+          ...iconGridStats(configuration, iconGridInstance, iconGridViewport, scene),
         };
         if (technique === 'bitmap') {
           const strikePpem = selectBitmapStrikePpem(
@@ -1076,6 +1077,8 @@ async function createComparisonWorkloadRuntime(
         if (validatedWidth === width && validatedHeight === height) return;
         width = validatedWidth;
         height = validatedHeight;
+        iconGridViewport.width = width;
+        iconGridViewport.height = height;
         canvasSurface.resize(width, height);
         resizeWorkloadCamera(camera, width, height);
         void enqueueUpdate(requestedConfiguration, true).catch(onError);
@@ -1084,8 +1087,8 @@ async function createComparisonWorkloadRuntime(
         if (closing || disposed) return;
         if (configuration.workload === 'icon-grid') {
           if (iconGridInstance === undefined) return;
-          const applied = iconGridInstance.panBy(configuration, { height, width }, scene, deltaX, deltaY, onError);
-          applyIconGridCamera(camera, iconGridInstance.view());
+          const applied = iconGridInstance.panBy(configuration, iconGridViewport, scene, deltaX, deltaY, onError);
+          applyIconGridCamera(camera, iconGridInstance);
           return applied;
         }
         const horizontal = finite(deltaX, 'workload horizontal pan');
@@ -1095,8 +1098,8 @@ async function createComparisonWorkloadRuntime(
       },
       resetView() {
         if (configuration.workload === 'icon-grid') {
-          iconGridInstance?.resetView(configuration, { height, width }, scene, onError);
-          if (iconGridInstance !== undefined) applyIconGridCamera(camera, iconGridInstance.view());
+          iconGridInstance?.resetView(configuration, iconGridViewport, scene, onError);
+          if (iconGridInstance !== undefined) applyIconGridCamera(camera, iconGridInstance);
         } else {
           scene.position.set(0, 0, 0);
         }

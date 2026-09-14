@@ -41,6 +41,10 @@ export interface PersistentRenderFrameContext extends PersistentRenderSceneConte
   readonly timestamp: number;
 }
 
+type MutablePersistentRenderFrameContext = {
+  -readonly [Key in keyof PersistentRenderFrameContext]: PersistentRenderFrameContext[Key];
+};
+
 export type PersistentRenderJob<T> = (context: PersistentRenderSceneContext) => T;
 
 export type PersistentRenderSceneDeactivation = 'disposed' | 'failed' | 'released' | 'replaced' | 'superseded';
@@ -154,6 +158,15 @@ export async function createPersistentRenderHost(options: PersistentRenderHostOp
       telemetry.reset();
       latestTelemetry = undefined;
     };
+    const frameContext: MutablePersistentRenderFrameContext = {
+      frameId: 0,
+      renderer: borrowedRenderer,
+      rendererInitMs,
+      resetTelemetry,
+      signal: AbortSignal.abort(),
+      timestamp: 0,
+      viewport,
+    };
 
     const deactivate = async (record: ActiveScene, reason: PersistentRenderSceneDeactivation): Promise<void> => {
       record.controller.abort();
@@ -174,15 +187,11 @@ export async function createPersistentRenderHost(options: PersistentRenderHostOp
         const startedAt = dependencies.now();
         if (telemetry.gpuTimingSupported) activeFrameTimer.beginFrame(frameId);
         try {
-          current.scene.frame({
-            frameId,
-            renderer: borrowedRenderer,
-            rendererInitMs,
-            resetTelemetry,
-            signal: current.controller.signal,
-            timestamp,
-            viewport,
-          });
+          frameContext.frameId = frameId;
+          frameContext.signal = current.controller.signal;
+          frameContext.timestamp = timestamp;
+          frameContext.viewport = viewport;
+          current.scene.frame(frameContext);
         } finally {
           if (telemetry.gpuTimingSupported) activeFrameTimer.endFrame();
         }

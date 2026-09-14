@@ -2,6 +2,11 @@
 
 ## 2026-09-14
 
+- **Removed the remaining harness-owned per-frame objects** — The persistent renderer now reuses one mutable frame
+  context for synchronous scene dispatch. Icon Grid likewise retains its viewport and exposes scalar scroll state
+  directly, while its finite-input validation no longer constructs an array on every animation frame. Public immutable
+  `Text.set(...)` inputs remain inside the workloads because their cost is part of the API behavior under measurement.
+
 - **Removed benchmark telemetry from the measured hot path** — Text-update and reflow recording now writes scalar
   durations into fixed 64-sample rings without allocating sample objects, sorting copied arrays, or rebuilding summaries
   on every update. Summaries refresh lazily at the existing bounded reporting boundary with one retained quantile scratch
