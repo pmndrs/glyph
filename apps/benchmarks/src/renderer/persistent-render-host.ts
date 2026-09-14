@@ -36,6 +36,7 @@ export interface PersistentRenderSceneContext {
   readonly viewport: PersistentRenderViewport;
 }
 
+/** Borrowed only for the synchronous scene frame call. */
 export interface PersistentRenderFrameContext extends PersistentRenderSceneContext {
   readonly frameId: number;
   readonly timestamp: number;

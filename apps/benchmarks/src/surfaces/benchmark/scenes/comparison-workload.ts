@@ -737,7 +737,7 @@ async function createComparisonWorkloadRuntime(
           next.iconGridView !== configuration.iconGridView)
       ) {
         if (iconGridInstance === undefined) throw new Error('icon grid retained update lost its workload instance');
-        await iconGridInstance.reconfigure(configuration, next, iconGridViewport, scene);
+        await iconGridInstance.reconfigure(configuration, next, { height, width }, scene);
         applyIconGridCamera(camera, iconGridInstance);
         configuration = next;
         committedContentWidth = undefined;
