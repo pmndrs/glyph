@@ -2,6 +2,11 @@
 
 ## 2026-09-14
 
+- **Removed profiler self-interference from CPU-submit timing** — The persistent host now starts its CPU interval after
+  GPU timestamp-query setup and closes it before query resolution begins. The measured value remains the synchronous
+  scene frame, including `renderer.render()`, while asynchronous GPU timing retains its separate history. A deterministic
+  host regression proves 18 ms of synthetic timer bookkeeping cannot inflate a 2 ms scene submission.
+
 - **Verified the allocation-clean frame loop against merged main** — Two complete 36-cell WebGPU sweeps per revision
   covered 8,640 measured frames each across all twelve workloads and Bitmap, MTSDF, and Slug. Against exact main
   `25136f81`, candidate `22b117c0` changed aggregate CPU mean by +0.3%, average per-cell CPU p50 by -0.7%, RAF mean by

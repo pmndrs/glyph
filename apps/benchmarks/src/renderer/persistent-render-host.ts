@@ -185,8 +185,9 @@ export async function createPersistentRenderHost(options: PersistentRenderHostOp
         const current = activeScene;
         if (current === undefined || current.controller.signal.aborted) return;
         const frameId = telemetry.beginFrame(timestamp);
-        const startedAt = dependencies.now();
         if (telemetry.gpuTimingSupported) activeFrameTimer.beginFrame(frameId);
+        const startedAt = dependencies.now();
+        let durationMs = 0;
         try {
           frameContext.frameId = frameId;
           frameContext.signal = current.controller.signal;
@@ -194,9 +195,10 @@ export async function createPersistentRenderHost(options: PersistentRenderHostOp
           frameContext.viewport = viewport;
           current.scene.frame(frameContext);
         } finally {
+          durationMs = Math.max(0, dependencies.now() - startedAt);
           if (telemetry.gpuTimingSupported) activeFrameTimer.endFrame();
         }
-        const snapshot = telemetry.endFrame(frameId, Math.max(0, dependencies.now() - startedAt));
+        const snapshot = telemetry.endFrame(frameId, durationMs);
         if (snapshot !== undefined) {
           publishTelemetry(snapshot);
           current.scene.telemetry?.(snapshot, viewport);
