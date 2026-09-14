@@ -8,6 +8,8 @@
   directly through Koota, and Paragraph Stress mutates its retained `Text` when volume changes instead of rebuilding its
   scene after a debounce. The responsive browser gate retains one canvas across the Bitmap-to-MSDF transition, and the
   performance sweep now samples explicit 120-frame CPU/GPU windows instead of reading a phase-dependent rolling label.
+  A same-host B/A/B/A across all 36 cells found unchanged 1.136 ms aggregate CPU p50, with CPU p95 +1.1%, GPU p50
+  -0.6%, and GPU p95 +1.7%; cell-level phase variance was larger, so the cleanup is classified as performance-neutral.
 
 ## 2026-09-13
 
