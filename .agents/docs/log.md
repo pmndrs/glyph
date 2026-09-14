@@ -2,6 +2,13 @@
 
 ## 2026-09-14
 
+- **Verified the allocation-clean frame loop against merged main** — Two complete 36-cell WebGPU sweeps per revision
+  covered 8,640 measured frames each across all twelve workloads and Bitmap, MTSDF, and Slug. Against exact main
+  `25136f81`, candidate `22b117c0` changed aggregate CPU mean by +0.3%, average per-cell CPU p50 by -0.7%, RAF mean by
+  -0.5%, and average per-cell RAF p50 by -0.5%; the two-pass ranges overlap, so this is performance-neutral rather than
+  a claimed speedup. Final `90947b40` only restores snapshot semantics for an infrequent asynchronous Icon Grid
+  reconfiguration and does not change the measured steady-state loop.
+
 - **Removed the remaining harness-owned per-frame objects** — The persistent renderer now reuses one mutable frame
   context for synchronous scene dispatch. Icon Grid likewise retains its viewport and exposes scalar scroll state
   directly, while its finite-input validation no longer constructs an array on every animation frame. Public immutable
