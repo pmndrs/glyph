@@ -1,3 +1,5 @@
+import { selectNearestRank } from './retained-quantile';
+
 const SAMPLE_CAPACITY = 64;
 
 export interface TextUpdateTimingSummary {
@@ -70,40 +72,13 @@ function summarize(
 ): TextUpdateTimingSummary {
   return {
     sampleCount: length,
-    medianScheduleMs: percentile(schedule, scratch, length, 0.5),
-    medianReadyMs: percentile(ready, scratch, length, 0.5),
-    medianSceneMs: percentile(scene, scratch, length, 0.5),
-    medianTotalMs: percentile(total, scratch, length, 0.5),
-    p95ScheduleMs: percentile(schedule, scratch, length, 0.95),
-    p95ReadyMs: percentile(ready, scratch, length, 0.95),
-    p95SceneMs: percentile(scene, scratch, length, 0.95),
-    p95TotalMs: percentile(total, scratch, length, 0.95),
+    medianScheduleMs: selectNearestRank(schedule, scratch, length, 0.5),
+    medianReadyMs: selectNearestRank(ready, scratch, length, 0.5),
+    medianSceneMs: selectNearestRank(scene, scratch, length, 0.5),
+    medianTotalMs: selectNearestRank(total, scratch, length, 0.5),
+    p95ScheduleMs: selectNearestRank(schedule, scratch, length, 0.95),
+    p95ReadyMs: selectNearestRank(ready, scratch, length, 0.95),
+    p95SceneMs: selectNearestRank(scene, scratch, length, 0.95),
+    p95TotalMs: selectNearestRank(total, scratch, length, 0.95),
   };
-}
-
-function percentile(values: Float32Array, scratch: Float32Array, length: number, quantile: number): number {
-  if (length === 0) return 0;
-  for (let index = 0; index < length; index += 1) scratch[index] = values[index] ?? 0;
-  const selectedIndex = Math.min(length - 1, Math.ceil(length * quantile) - 1);
-  let left = 0;
-  let right = length - 1;
-  while (left < right) {
-    const pivot = scratch[(left + right) >>> 1] ?? 0;
-    let lower = left;
-    let upper = right;
-    while (lower <= upper) {
-      while ((scratch[lower] ?? 0) < pivot) lower += 1;
-      while ((scratch[upper] ?? 0) > pivot) upper -= 1;
-      if (lower > upper) break;
-      const value = scratch[lower] ?? 0;
-      scratch[lower] = scratch[upper] ?? 0;
-      scratch[upper] = value;
-      lower += 1;
-      upper -= 1;
-    }
-    if (selectedIndex <= upper) right = upper;
-    else if (selectedIndex >= lower) left = lower;
-    else break;
-  }
-  return scratch[selectedIndex] ?? 0;
 }
