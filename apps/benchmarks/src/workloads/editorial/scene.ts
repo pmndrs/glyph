@@ -2,11 +2,7 @@ import { span, txt, type TextFlow, type TextFlowExclusion } from '@pmndrs/glyph'
 import { projectTextFlowBounds } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
-import type {
-  ComparisonWorkloadConfiguration,
-  ComparisonWorkloadDefinition,
-  ComparisonWorkloadReflowPhases,
-} from '../comparison/contracts';
+import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
 import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
   committedTextMetrics,
@@ -248,7 +244,7 @@ export function animateEditorialEntries(
   viewportHeight: number,
   scene: THREE.Scene,
   onError: (error: unknown) => void,
-  onReflow: (duration: number, phases?: ComparisonWorkloadReflowPhases) => void,
+  onReflow: (duration: number, stageMs?: number, publishMs?: number, layoutMs?: number) => void,
   camera?: THREE.OrthographicCamera | THREE.PerspectiveCamera,
 ): void {
   const reflowStarted = performance.now();
@@ -292,7 +288,7 @@ export function animateEditorialEntries(
     layoutEditorialEntries(entries, viewportWidth, viewportHeight);
     const layoutMs = performance.now() - layoutStarted;
     body.editorialProjectionInitialized = true;
-    onReflow(performance.now() - reflowStarted, { stageMs, publishMs, layoutMs });
+    onReflow(performance.now() - reflowStarted, stageMs, publishMs, layoutMs);
   } catch (error) {
     onError(error);
   }

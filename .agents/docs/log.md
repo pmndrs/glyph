@@ -2,6 +2,12 @@
 
 ## 2026-09-14
 
+- **Removed benchmark telemetry from the measured hot path** — Text-update and reflow recording now writes scalar
+  durations into fixed 64-sample rings without allocating sample objects, sorting copied arrays, or rebuilding summaries
+  on every update. Summaries refresh lazily at the existing bounded reporting boundary with one retained quantile scratch
+  buffer. Dynamic Layout also writes its retained bounds attribute directly instead of allocating a temporary vertex
+  array, while the workload's public immutable `Text` updates remain part of the measurement.
+
 - **Standardized live benchmark frame time** — Replaced update-count-driven and fresh-scene timing with one game-loop
   definition: 30 warmup animation-frame intervals followed by 120 consecutive RAF timestamp deltas. The ordinary
   persistent demo reports mean, p50, p95, max, and mean-derived FPS; a separately labeled stats.js-style CPU summary

@@ -31,7 +31,6 @@ import type {
   ComparisonWorkloadAnimationScratch,
   ComparisonWorkloadConfiguration,
   ComparisonWorkloadId,
-  ComparisonWorkloadReflowPhases,
 } from '../../../workloads/comparison/contracts';
 import {
   committedTextMetrics,
@@ -574,12 +573,12 @@ async function createComparisonWorkloadRuntime(
       }
       const finishedAt = performance.now();
       textReadyMs = finishedAt - updateStartedAt;
-      textUpdateTelemetry.record({
-        scheduleMs: scheduledAt - updateStartedAt,
-        readyMs: finishedAt - scheduledAt,
-        sceneMs: 0,
-        totalMs: finishedAt - updateStartedAt,
-      });
+      textUpdateTelemetry.record(
+        scheduledAt - updateStartedAt,
+        finishedAt - scheduledAt,
+        0,
+        finishedAt - updateStartedAt,
+      );
     }
 
     async function commit(next: ComparisonWorkloadConfiguration): Promise<void> {
@@ -673,12 +672,12 @@ async function createComparisonWorkloadRuntime(
         }
         const finishedAt = performance.now();
         textReadyMs = finishedAt - readyStarted;
-        textUpdateTelemetry.record({
-          scheduleMs: scheduledAt - readyStarted,
-          readyMs: readyAt - scheduledAt,
-          sceneMs: finishedAt - sceneStartedAt,
-          totalMs: finishedAt - readyStarted,
-        });
+        textUpdateTelemetry.record(
+          scheduledAt - readyStarted,
+          readyAt - scheduledAt,
+          finishedAt - sceneStartedAt,
+          finishedAt - readyStarted,
+        );
         if (next.workload === 'icon-grid') {
           iconGridInstance?.settle(next, { height, width }, scene);
           if (iconGridInstance !== undefined) applyIconGridCamera(camera, iconGridInstance.view());
@@ -786,12 +785,12 @@ async function createComparisonWorkloadRuntime(
         timingEnd('text.publish-clean', publishStarted);
         const finishedAt = performance.now();
         textReadyMs = finishedAt - readyStarted;
-        textUpdateTelemetry.record({
-          scheduleMs: scheduledAt - readyStarted,
-          readyMs: readyAt - scheduledAt,
-          sceneMs: finishedAt - sceneStartedAt,
-          totalMs: finishedAt - readyStarted,
-        });
+        textUpdateTelemetry.record(
+          scheduledAt - readyStarted,
+          readyAt - scheduledAt,
+          finishedAt - sceneStartedAt,
+          finishedAt - readyStarted,
+        );
         recordReflow(finishedAt - readyStarted);
         timingEnd('text.retained-update', retainedUpdateStarted);
       } else if (viewportChanged) {
@@ -847,15 +846,10 @@ async function createComparisonWorkloadRuntime(
       });
     }
     const startupMs = performance.now() - startupStarted;
-    const recordReflow = (duration: number, phases?: ComparisonWorkloadReflowPhases): void => {
+    const recordReflow = (duration: number, stageMs = 0, publishMs = 0, layoutMs = 0): void => {
       reflowCount += 1;
       lastReflowMs = duration;
-      reflowTelemetry.record({
-        scheduleMs: phases?.stageMs ?? 0,
-        readyMs: phases?.publishMs ?? 0,
-        sceneMs: phases?.layoutMs ?? 0,
-        totalMs: duration,
-      });
+      reflowTelemetry.record(stageMs, publishMs, layoutMs, duration);
     };
 
     const renderFrame = (timestamp: number, renderScene = true): void => {
@@ -1232,7 +1226,7 @@ function animateEntries(
   scene: THREE.Scene,
   scratch: ComparisonWorkloadAnimationScratch,
   onError: (error: unknown) => void,
-  onReflow: (duration: number, phases?: ComparisonWorkloadReflowPhases) => void,
+  onReflow: (duration: number, stageMs?: number, publishMs?: number, layoutMs?: number) => void,
   camera?: THREE.OrthographicCamera | THREE.PerspectiveCamera,
 ): void {
   comparisonWorkloadDefinition(configuration.workload).animate(

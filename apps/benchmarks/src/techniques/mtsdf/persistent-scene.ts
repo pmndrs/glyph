@@ -246,12 +246,12 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
       const sceneStartedAt = performance.now();
       presentReflow(resources);
       const finishedAt = performance.now();
-      textUpdateTelemetry.record({
-        scheduleMs: 0,
-        readyMs: sceneStartedAt - updateStartedAt,
-        sceneMs: finishedAt - sceneStartedAt,
-        totalMs: finishedAt - updateStartedAt,
-      });
+      textUpdateTelemetry.record(
+        0,
+        sceneStartedAt - updateStartedAt,
+        finishedAt - sceneStartedAt,
+        finishedAt - updateStartedAt,
+      );
     } catch (error) {
       if (!disposed && activation === resources) options.onError(error);
     }
@@ -334,12 +334,12 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
         const sceneStartedAt = performance.now();
         positionLiveLine(activeLine, context.viewport.width, context.viewport.height, anchor, layoutWidthRatio);
         const sceneFinishedAt = performance.now();
-        textUpdateTelemetry.record({
-          scheduleMs: scheduledAt - textStartedAt,
-          readyMs: readyAt - scheduledAt,
-          sceneMs: sceneFinishedAt - sceneStartedAt,
-          totalMs: sceneFinishedAt - textStartedAt,
-        });
+        textUpdateTelemetry.record(
+          scheduledAt - textStartedAt,
+          readyAt - scheduledAt,
+          sceneFinishedAt - sceneStartedAt,
+          sceneFinishedAt - textStartedAt,
+        );
         const camera = new THREE.OrthographicCamera(0, context.viewport.width, 0, -context.viewport.height, 0.1, 1_000);
         camera.position.z = 500;
         camera.updateProjectionMatrix();
@@ -496,12 +496,12 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
       const sceneStartedAt = performance.now();
       const presented = presentReflow(resources);
       const finishedAt = performance.now();
-      textUpdateTelemetry.record({
-        scheduleMs: 0,
-        readyMs: sceneStartedAt - updateStartedAt,
-        sceneMs: finishedAt - sceneStartedAt,
-        totalMs: finishedAt - updateStartedAt,
-      });
+      textUpdateTelemetry.record(
+        0,
+        sceneStartedAt - updateStartedAt,
+        finishedAt - sceneStartedAt,
+        finishedAt - updateStartedAt,
+      );
       return presented;
     },
     deactivate() {

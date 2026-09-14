@@ -7,7 +7,6 @@ import type {
   ComparisonWorkloadAnimationScratch,
   ComparisonWorkloadConfiguration,
   ComparisonWorkloadDefinition,
-  ComparisonWorkloadReflowPhases,
 } from '../comparison/contracts';
 import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
@@ -127,7 +126,7 @@ export function animateParagraphStressScene(
   viewportHeight: number,
   frame: ComparisonWorkloadAnimationScratch['paragraphStress'],
   onError: (error: unknown) => void,
-  onReflow: (duration: number, phases?: ComparisonWorkloadReflowPhases) => void,
+  onReflow: (duration: number, stageMs?: number, publishMs?: number, layoutMs?: number) => void,
 ): void {
   const entry = entries[0];
   if (entry === undefined) return;
@@ -158,7 +157,7 @@ export function animateParagraphStressScene(
       const layoutStarted = performance.now();
       layout = layoutParagraphStressEntries(entries, viewportWidth, viewportHeight);
       const layoutMs = performance.now() - layoutStarted;
-      onReflow(performance.now() - started, { stageMs, publishMs, layoutMs });
+      onReflow(performance.now() - started, stageMs, publishMs, layoutMs);
     } catch (error) {
       onError(error);
       return;
