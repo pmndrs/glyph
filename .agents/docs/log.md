@@ -6,7 +6,8 @@
   export navigation while retaining headless conformance targets and workflows. Split presentation playback, workload
   controls, render configuration, and payload inspection out of the route controller. Runtime sliders now stream
   directly through Koota, and Paragraph Stress mutates its retained `Text` when volume changes instead of rebuilding its
-  scene after a debounce. The responsive browser gate retains one canvas across the Bitmap-to-MSDF transition.
+  scene after a debounce. The responsive browser gate retains one canvas across the Bitmap-to-MSDF transition, and the
+  performance sweep now samples explicit 120-frame CPU/GPU windows instead of reading a phase-dependent rolling label.
 
 ## 2026-09-13
 

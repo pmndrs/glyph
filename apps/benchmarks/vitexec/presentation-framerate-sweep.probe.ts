@@ -3,6 +3,10 @@ export {};
 const catalogPath = '/src/workloads/catalog.ts';
 const workloadCatalog: typeof import('../src/workloads/catalog') = await import(/* @vite-ignore */ catalogPath);
 const { BENCHMARK_WORKLOADS } = workloadCatalog;
+const telemetryModulePath = '/src/renderer/live-frame-telemetry.ts';
+const { requestLiveFrameTelemetryCapture }: typeof import('../src/renderer/live-frame-telemetry') = await import(
+  /* @vite-ignore */ telemetryModulePath
+);
 type BenchmarkWorkloadId = keyof typeof BENCHMARK_WORKLOADS;
 
 const rasterFormats = [
@@ -185,6 +189,15 @@ for (const format of rasterFormats) {
     if (workload.id === 'advanced-shaping') await completeAdvancedShaping();
     const viewport = await readyViewport(format.id, workload.id);
     await waitFrames(30);
+    const canvas = viewport.parentElement?.querySelector('canvas');
+    if (canvas === null || canvas === undefined) throw new Error('Live workload lost its persistent renderer canvas');
+    const capture = await requestLiveFrameTelemetryCapture(canvas, {
+      cpuSampleCount: 120,
+      gpuSampleCount: 120,
+      signal: AbortSignal.timeout(60_000),
+    });
+    const cpu = timingSummary(capture.cpuMs);
+    const gpu = timingSummary(capture.gpuMs);
     const raf = await sampleRaf(1_500);
     const record = {
       technique: format.id,
@@ -194,8 +207,10 @@ for (const format of rasterFormats) {
       maxFrameMs: Number(raf.maxFrameMs.toFixed(2)),
       slowFrames: raf.slow,
       reportedFps: Number(viewport.getAttribute('data-frames-per-second')),
-      cpuSubmitMs: Number(viewport.getAttribute('data-median-submit-ms')),
-      gpuMs: Number(viewport.getAttribute('data-median-gpu-ms')),
+      cpuSubmitMs: cpu.p50Ms,
+      cpuP95Ms: cpu.p95Ms,
+      gpuMs: gpu.p50Ms,
+      gpuP95Ms: gpu.p95Ms,
       glyphs: Number(viewport.getAttribute('data-glyph-count')),
       draws: Number(viewport.getAttribute('data-draw-count')),
     };
@@ -204,4 +219,13 @@ for (const format of rasterFormats) {
   }
 }
 console.log('presentation-fps-sweep-ready', JSON.stringify(results));
+
+function timingSummary(values: Float64Array): { readonly p50Ms: number; readonly p95Ms: number } {
+  if (values.length === 0) throw new RangeError('Presentation performance capture requires samples');
+  const sorted = values.slice().sort();
+  return {
+    p50Ms: sorted[Math.ceil(sorted.length * 0.5) - 1]!,
+    p95Ms: sorted[Math.ceil(sorted.length * 0.95) - 1]!,
+  };
+}
 /* @workflow { "name": "benchmark:presentation-performance", "summary": "Measure the complete Presentation workload cadence on hardware WebGPU.", "requirements": "GPU-enabled Chromium and Vitexec.", "writes": "Standard output only.", "args": ["--gpu", "--path", "/presentation?mode=benchmark&technique=bitmap&backend=webgpu&delivery=baked&dpr=2&font=inter&workload=benchmark-ipsum"] } */
