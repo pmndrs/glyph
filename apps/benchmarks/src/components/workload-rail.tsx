@@ -10,12 +10,8 @@ import {
   type SelectableFontFixture,
 } from '../benchmark/font-fixtures';
 import type { HarnessLocation, RasterFormatName } from '../benchmark/url-state';
-import {
-  workloadScrollEdges,
-  workloadsFor,
-  type WorkloadOption,
-  type WorkloadScrollEdges,
-} from '../benchmark/workloads';
+import { workloadScrollEdges, type WorkloadScrollEdges } from '../benchmark/workloads';
+import { BENCHMARK_WORKLOAD_IDS, BENCHMARK_WORKLOADS, type BenchmarkWorkloadDefinition } from '../workloads/catalog';
 import mtsdfFixtures from '../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json';
 import slugFixtures from '../../fixtures/rendering/showcase-slug-fixtures-v0.json';
 import { FontFixtureButtons, type FontFixtureButtonOption } from './font-fixture-buttons';
@@ -68,9 +64,8 @@ function formatBytes(value: number | undefined): string {
   return `${(value / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-function workloadRailDescription(workload: WorkloadOption, technique: RasterFormatName): string {
-  const status = workload.formats[technique];
-  return status.kind === 'ready' ? workload.description : `M${status.milestone} · ${workload.description}`;
+function workloadRailDescription(workload: BenchmarkWorkloadDefinition): string {
+  return workload.description;
 }
 
 function synchronizeScrollEdges(
@@ -102,7 +97,7 @@ export function WorkloadRail({
   readonly onLocation: (value: Partial<HarnessLocation>) => void;
   readonly onFormat: (technique: RasterFormatName) => void;
 }) {
-  const workloads = workloadsFor(location.mode);
+  const workloads = BENCHMARK_WORKLOAD_IDS.map((id) => BENCHMARK_WORKLOADS[id]);
   const displayedFontFixture =
     location.workload === 'icon-grid'
       ? ICON_GRID_FONT_FIXTURE
@@ -130,7 +125,7 @@ export function WorkloadRail({
     if (content !== null) observer.observe(content);
     synchronizeScrollEdges(element, setScrollEdges);
     return () => observer.disconnect();
-  }, [location.mode]);
+  }, []);
 
   useEffect(() => {
     const element = fixtureScrollRef.current;
@@ -180,9 +175,7 @@ export function WorkloadRail({
         </div>
       )}
       <div className="flex min-h-0 flex-1 flex-col" data-testid="workload-fixture-region">
-        <p className={`eyebrow shrink-0 px-3 pb-2 ${showFormat ? 'pt-5' : 'pt-3'}`}>
-          {location.mode === 'benchmark' ? 'Live workloads' : 'Conformance checks'}
-        </p>
+        <p className={`eyebrow shrink-0 px-3 pb-2 ${showFormat ? 'pt-5' : 'pt-3'}`}>Live workloads</p>
         <div className="relative min-h-0 flex-1">
           <div
             aria-hidden="true"
@@ -217,7 +210,7 @@ export function WorkloadRail({
                   />
                   <span className="block text-xs">{workload.label}</span>
                   <span className="mt-1 block font-mono text-[8px] leading-relaxed text-muted">
-                    {workloadRailDescription(workload, location.technique)}
+                    {workloadRailDescription(workload)}
                   </span>
                 </button>
               ))}

@@ -38,19 +38,14 @@ try {
   page.on('pageerror', (error) => errors.push(`${step}: ${error.message}`));
 
   step = 'scene navigation';
-  await page.goto(
-    `http://127.0.0.1:${mobilePort}/?mode=benchmark&technique=bitmap&backend=webgpu&workload=benchmark-ipsum`,
-    { waitUntil: 'domcontentloaded' },
-  );
+  await page.goto(`http://127.0.0.1:${mobilePort}/?technique=bitmap&backend=webgpu&workload=benchmark-ipsum`, {
+    waitUntil: 'domcontentloaded',
+  });
   await page.locator('[data-testid="scene"]:visible').waitFor();
   await assertResponsiveSurface(page, '390 px scene');
-  const captureWindow = page.getByRole('button', { name: 'Capture report', exact: true });
-  await captureWindow.waitFor();
-  await captureWindow.click();
-  await page.waitForURL((url) => url.searchParams.get('view') === 'report');
-  await page.getByRole('button', { name: 'Return to live benchmark', exact: true }).click();
-  await page.waitForURL((url) => url.searchParams.has('view') === false);
-  const liveCanvasCount = await page.locator('canvas[aria-label^="Live bitmap benchmark"]:visible').count();
+  const liveCanvas = page.locator('canvas[aria-label^="Live bitmap benchmark"]:visible');
+  await liveCanvas.waitFor();
+  const liveCanvasCount = await liveCanvas.count();
   if (liveCanvasCount !== 1) {
     throw new Error(`Mobile live surface mounted ${String(liveCanvasCount)} canvases instead of one`);
   }

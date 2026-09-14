@@ -5,15 +5,14 @@ import { readHarnessLocation, writeHarnessLocation, writeHarnessUrl } from './ur
 describe('harness URL state', () => {
   it('round-trips a reproducible selection', () => {
     const value = {
-      mode: 'conformance',
       layout: 'presentation',
       technique: 'bitmap',
       backend: 'webgl2',
       delivery: 'runtime',
       dpr: 2,
       fontFixture: 'source-serif-4',
-      workload: 'text-accuracy',
-      view: 'report',
+      workload: 'editorial',
+      view: 'controls',
     } as const;
     expect(readHarnessLocation(writeHarnessLocation(value), 1, 'presentation')).toEqual(value);
     expect(writeHarnessUrl(value)).toMatch(/^\/presentation\?/);
@@ -29,11 +28,8 @@ describe('harness URL state', () => {
 
   it('rejects unknown axes without losing the human-facing workload', () => {
     expect(
-      readHarnessLocation(
-        '?mode=unknown&technique=unknown&backend=unknown&font=unknown&workload=text-ladder&view=unknown',
-      ),
+      readHarnessLocation('?technique=unknown&backend=unknown&font=unknown&workload=text-ladder&view=unknown'),
     ).toEqual({
-      mode: 'benchmark',
       layout: 'main',
       technique: 'bitmap',
       backend: 'webgpu',
@@ -45,23 +41,8 @@ describe('harness URL state', () => {
     });
   });
 
-  it('normalizes an unknown workload inside the selected mode', () => {
-    expect(readHarnessLocation('?mode=benchmark&workload=unknown').workload).toBe('benchmark-ipsum');
-    expect(readHarnessLocation('?mode=conformance&workload=unknown').workload).toBe('mtsdf-slug-compare');
-  });
-
-  it('maps old bitmap target and scenario links into conformance', () => {
-    expect(readHarnessLocation('?target=bitmap-text-webgl2&scenario=bitmap-text-frame')).toEqual({
-      mode: 'conformance',
-      layout: 'main',
-      technique: 'bitmap',
-      backend: 'webgl2',
-      delivery: 'baked',
-      dpr: 1,
-      fontFixture: 'inter',
-      workload: 'text-accuracy',
-      view: 'scene',
-    });
+  it('normalizes an unknown workload to the live default', () => {
+    expect(readHarnessLocation('?workload=unknown').workload).toBe('benchmark-ipsum');
   });
 
   it('uses the device default only when a link does not select a DPR', () => {

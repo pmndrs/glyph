@@ -1,5 +1,13 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-14
+
+- **Reduced the benchmark app to its continuous live-workload role** — Removed human conformance, capture, report, and
+  export navigation while retaining headless conformance targets and workflows. Split presentation playback, workload
+  controls, render configuration, and payload inspection out of the route controller. Runtime sliders now stream
+  directly through Koota, and Paragraph Stress mutates its retained `Text` when volume changes instead of rebuilding its
+  scene after a debounce. The responsive browser gate retains one canvas across the Bitmap-to-MSDF transition.
+
 ## 2026-09-13
 
 - **Closed ordered-only planner verification on the final cleanup head** — The ten-PR remote stack is linear and needs no
