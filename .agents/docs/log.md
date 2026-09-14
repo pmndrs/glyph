@@ -2,6 +2,14 @@
 
 ## 2026-09-14
 
+- **Standardized live benchmark frame time** — Replaced update-count-driven and fresh-scene timing with one game-loop
+  definition: 30 warmup animation-frame intervals followed by 120 consecutive RAF timestamp deltas. The ordinary
+  persistent demo reports mean, p50, p95, max, and mean-derived FPS; a separately labeled stats.js-style CPU summary
+  measures the same number of render-loop bodies. Paragraph Stress no longer enables timing instrumentation or
+  width-only motion, and the iframe-per-cell fresh-scene workflow is retired so initialization cost cannot be mistaken
+  for steady frame cadence. D-366 supersedes only the measurement clauses of D-365; startup, input latency, GPU queries,
+  and Rust/Wasm timings remain explicitly separate measurements.
+
 - **Reduced the benchmark app to its continuous live-workload role** — Removed human conformance, capture, report, and
   export navigation while retaining headless conformance targets and workflows. Split presentation playback, workload
   controls, render configuration, and payload inspection out of the route controller. Runtime sliders now stream

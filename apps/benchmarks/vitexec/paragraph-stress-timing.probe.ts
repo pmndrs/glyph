@@ -1,63 +1,37 @@
 export {};
 
-const viewport = await waitForViewport();
-performance.clearMeasures();
-const initialReflows = integerAttribute(viewport, 'data-reflow-count');
-const measuredReflows = 64;
-const targetReflows = initialReflows + measuredReflows;
-const frameDeltas: number[] = [];
-let previousFrame = performance.now();
-
-await new Promise<void>((resolve, reject) => {
-  const timeout = setTimeout(() => reject(new Error(`timed out at reflow ${viewport.dataset.reflowCount}`)), 30_000);
-  const frame = (timestamp: number): void => {
-    frameDeltas.push(timestamp - previousFrame);
-    previousFrame = timestamp;
-    const currentReflows = integerAttribute(viewport, 'data-reflow-count');
-    if (currentReflows >= targetReflows) {
-      clearTimeout(timeout);
-      resolve();
-    } else {
-      requestAnimationFrame(frame);
-    }
-  };
-  requestAnimationFrame(frame);
-});
-
-const measures = performance.getEntriesByType('measure') as PerformanceMeasure[];
-const summaries: Record<string, Record<string, number>> = Object.fromEntries(
-  [...new Set(measures.map(({ name }) => name))]
-    .sort()
-    .map((name) => [name, summarize(measures.filter((entry) => entry.name === name).map(({ duration }) => duration))]),
+const frameTimeModulePath = '/src/benchmark/frame-time.ts';
+const { sampleAnimationPerformance }: typeof import('../src/benchmark/frame-time') = await import(
+  /* @vite-ignore */ frameTimeModulePath
 );
-const reflowSampleCount = integerAttribute(viewport, 'data-reflow-sample-count');
-if (reflowSampleCount !== measuredReflows) {
-  throw new Error(`expected ${measuredReflows} retained reflow samples, observed ${reflowSampleCount}`);
-}
-summaries['@pmndrs/benchmark text.animation-reflow'] = {
-  count: reflowSampleCount,
-  layoutMedianMs: nonnegativeNumberAttribute(viewport, 'data-reflow-median-layout-ms'),
-  layoutP95Ms: nonnegativeNumberAttribute(viewport, 'data-reflow-p95-layout-ms'),
-  medianMs: nonnegativeNumberAttribute(viewport, 'data-reflow-median-ms'),
-  publishMedianMs: nonnegativeNumberAttribute(viewport, 'data-reflow-median-publish-ms'),
-  publishP95Ms: nonnegativeNumberAttribute(viewport, 'data-reflow-p95-publish-ms'),
-  p95Ms: nonnegativeNumberAttribute(viewport, 'data-reflow-p95-ms'),
-  stageMedianMs: nonnegativeNumberAttribute(viewport, 'data-reflow-median-stage-ms'),
-  stageP95Ms: nonnegativeNumberAttribute(viewport, 'data-reflow-p95-stage-ms'),
-};
-const elapsed = frameDeltas.reduce((sum, duration) => sum + duration, 0);
+const telemetryModulePath = '/src/renderer/live-frame-telemetry.ts';
+const { requestLiveFrameTelemetryCapture }: typeof import('../src/renderer/live-frame-telemetry') = await import(
+  /* @vite-ignore */ telemetryModulePath
+);
+const viewport = await waitForViewport();
+const initialReflows = integerAttribute(viewport, 'data-reflow-count');
+const canvas = document.querySelector<HTMLCanvasElement>('canvas[data-configured-renderer-active="true"]');
+if (canvas === null) throw new Error('Paragraph Stress sample lost its renderer canvas');
+const { cpuTime, summary: frameTime } = await sampleAnimationPerformance(window, async (sampleFrames) => {
+  const capture = await requestLiveFrameTelemetryCapture(canvas, {
+    cpuSampleCount: sampleFrames,
+    gpuSampleCount: 0,
+    signal: AbortSignal.timeout(60_000),
+  });
+  return capture.cpuMs;
+});
+const finalReflows = integerAttribute(viewport, 'data-reflow-count');
+const measuredReflows = finalReflows - initialReflows;
+
 console.log(
   'paragraph-stress-timing-ready',
   JSON.stringify({
     draws: integerAttribute(viewport, 'data-draw-count'),
-    engineUpdates: measuredReflows,
-    finalReflows: integerAttribute(viewport, 'data-reflow-count'),
+    cpuTime,
+    finalReflows,
+    frameTime,
     glyphs: integerAttribute(viewport, 'data-glyph-count'),
     measuredReflows,
-    rafFps: Number(((frameDeltas.length * 1_000) / elapsed).toFixed(1)),
-    rafMaxMs: Number(Math.max(...frameDeltas).toFixed(3)),
-    rafP95Ms: Number(percentile(frameDeltas, 0.95).toFixed(3)),
-    summaries,
   }),
 );
 
@@ -96,26 +70,4 @@ function integerAttribute(element: HTMLElement, name: string): number {
   return value;
 }
 
-function nonnegativeNumberAttribute(element: HTMLElement, name: string): number {
-  const value = Number(element.getAttribute(name));
-  if (!Number.isFinite(value) || value < 0) throw new Error(`${name} is not a nonnegative finite number`);
-  return value;
-}
-
-function summarize(values: readonly number[]): Record<string, number> {
-  return {
-    count: values.length,
-    maxMs: Number(Math.max(...values).toFixed(3)),
-    medianMs: Number(percentile(values, 0.5).toFixed(3)),
-    p95Ms: Number(percentile(values, 0.95).toFixed(3)),
-    totalMs: Number(values.reduce((sum, value) => sum + value, 0).toFixed(3)),
-  };
-}
-
-function percentile(values: readonly number[], ratio: number): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((left, right) => left - right);
-  return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * ratio) - 1)]!;
-}
-
-/* @workflow { "name": "benchmark:paragraph-stress-timing", "summary": "Attribute width-only Paragraph Stress reflow and frame time.", "requirements": "GPU-enabled Chromium and Vitexec.", "writes": "Standard output; optional caller-owned CPU and performance traces.", "args": ["--gpu", "--path", "/presentation?mode=benchmark&technique=mtsdf&backend=webgpu&delivery=baked&dpr=2&font=inter&workload=paragraph-stress&textTimings=1&paragraphStressWidthOnly=1"] } */
+/* @workflow { "name": "benchmark:paragraph-stress-timing", "summary": "Measure the ordinary Paragraph Stress demo with the shared frame-time sampler.", "requirements": "GPU-enabled Chromium and Vitexec.", "writes": "Standard output only.", "args": ["--gpu", "--path", "/presentation?technique=mtsdf&backend=webgpu&delivery=baked&dpr=2&font=inter&workload=paragraph-stress"] } */
