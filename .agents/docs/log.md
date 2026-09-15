@@ -1,5 +1,15 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-15
+
+- **Verified the corrected Presentation timing boundary** — Two complete 36-cell Apple WebGPU passes measured 8,640
+  frames across all twelve workloads and Bitmap, MTSDF, and Slug with zero missing glyphs and the expected draw counts.
+  Average per-cell CPU p50/p95 were 1.020/1.807 ms; RAF p50 averaged 10.236 ms. Against the prior same-branch two-pass
+  record, excluding GPU-query bookkeeping changed CPU p50 by -2.0%, CPU p95 by -1.4%, and RAF p50 by -0.4%, confirming
+  a neutral observer correction rather than a product speedup. A focused 120-frame Paragraph Stress probe recorded 35
+  actual reflows and 0.595/3.045/5.210 ms CPU p50/p95/max, demonstrating that its tail selects periodic retained reflow
+  work while ordinary frames remain below one millisecond at the median.
+
 ## 2026-09-14
 
 - **Removed profiler self-interference from CPU-submit timing** — The persistent host now starts its CPU interval after
