@@ -2,6 +2,12 @@
 
 ## 2026-09-15
 
+- **Reproduced MTSDF pinch artifacts from issue #145** — Current main matches the reported Inter and Dancing Script
+  coverage-error counts. A package-owned inspection workflow emits native correction/coloring comparisons and browser-viewable
+  reconstruction images. Native CLI default reaches 32 samples on Inter `8` without geometric distance checks; explicitly
+  enabling those checks without scanline reaches 20 but exposes severe sign failures elsewhere. The package concept records
+  the evidence and unresolved cause. Production rendering and accepted baselines remain unchanged.
+
 - **Update** — Moved the benchmark workspace to root-level `benches/`, updated consumers and workspace validation, and migrated repository fixtures and assets to Git LFS with historical coverage and LFS-aware CI checkout. Re-pinned size evidence after reproducing the JavaScript differences with the old benchmark root and proving that all five Wasm binaries are byte-identical before and after relocation; three previously stale Wasm hashes now reflect the pinned build. Size ceilings are unchanged.
 
 ## 2026-09-13
