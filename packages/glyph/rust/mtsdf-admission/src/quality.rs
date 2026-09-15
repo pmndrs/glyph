@@ -403,14 +403,16 @@ fn push_error(bytes: &mut Vec<u8>, error: f64) {
 /// experiment: identical geometry, identical framing, only the kernel differs.
 pub struct ShapePen {
     text: String,
-    open: bool,
+    contour_start: Option<[f32; 2]>,
+    current: [f32; 2],
 }
 
 impl ShapePen {
     pub fn new() -> Self {
         Self {
             text: String::new(),
-            open: false,
+            contour_start: None,
+            current: [0.0, 0.0],
         }
     }
 
@@ -420,9 +422,12 @@ impl ShapePen {
     }
 
     fn close_contour(&mut self) {
-        if self.open {
-            self.text.push_str("# } ");
-            self.open = false;
+        if let Some(start) = self.contour_start.take() {
+            // In msdfgen syntax `#` adds a straight edge to the starting point. Fontations
+            // can already end there, including with a curve; another edge has zero length
+            // and changes corner detection and coloring despite not changing the silhouette.
+            self.text
+                .push_str(if self.current == start { "} " } else { "# } " });
         }
     }
 }
@@ -437,16 +442,19 @@ impl skrifa::outline::OutlinePen for ShapePen {
     fn move_to(&mut self, x: f32, y: f32) {
         self.close_contour();
         self.text.push_str(&format!("{{ {x}, {y}; "));
-        self.open = true;
+        self.contour_start = Some([x, y]);
+        self.current = [x, y];
     }
 
     fn line_to(&mut self, x: f32, y: f32) {
         self.text.push_str(&format!("{x}, {y}; "));
+        self.current = [x, y];
     }
 
     fn quad_to(&mut self, control_x: f32, control_y: f32, x: f32, y: f32) {
         self.text
             .push_str(&format!("({control_x}, {control_y}); {x}, {y}; "));
+        self.current = [x, y];
     }
 
     fn curve_to(
@@ -461,9 +469,41 @@ impl skrifa::outline::OutlinePen for ShapePen {
         self.text.push_str(&format!(
             "({first_control_x}, {first_control_y}; {second_control_x}, {second_control_y}); {x}, {y}; "
         ));
+        self.current = [x, y];
     }
 
     fn close(&mut self) {
         self.close_contour();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ShapePen;
+    use skrifa::outline::OutlinePen;
+
+    #[test]
+    fn shape_pen_does_not_add_an_edge_after_an_explicit_curve_closure() {
+        let mut pen = ShapePen::new();
+        pen.move_to(0.0, 0.0);
+        pen.quad_to(4.0, 0.0, 4.0, 4.0);
+        pen.curve_to(2.0, 4.0, 0.0, 2.0, 0.0, 0.0);
+        pen.close();
+        assert_eq!(pen.finish(), "{ 0, 0; (4, 0); 4, 4; (2, 4; 0, 2); 0, 0; } ");
+    }
+
+    #[test]
+    fn shape_pen_adds_only_missing_closing_edges_across_contours() {
+        let mut pen = ShapePen::new();
+        pen.move_to(0.0, 0.0);
+        pen.line_to(4.0, 0.0);
+        pen.line_to(4.0, 4.0);
+        pen.move_to(8.0, 0.0);
+        pen.line_to(12.0, 0.0);
+        pen.line_to(8.0, 0.0);
+        assert_eq!(
+            pen.finish(),
+            "{ 0, 0; 4, 0; 4, 4; # } { 8, 0; 12, 0; 8, 0; } "
+        );
     }
 }

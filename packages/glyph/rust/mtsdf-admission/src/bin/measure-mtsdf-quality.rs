@@ -87,8 +87,10 @@ fn run() -> Result<(), String> {
             // shape units and applied first. Our texel x center sits at font
             // `inverse_scale * (plane_left + x + 0.5)`, which reproduces as scale
             // `em_size / units_per_em` and translate `-plane_left * inverse_scale`.
+            // The final column carries the same CFF contour reversal as OutlineSource::emit;
+            // native consumers must apply it before coloring, not merely correct signs later.
             println!(
-                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                 u32::from(*character),
                 framing.total_width(),
                 framing.total_height(),
@@ -99,6 +101,7 @@ fn run() -> Result<(), String> {
                     / f64::from(options.em_size),
                 framing.transform.full_distance_range_font_units(),
                 shape.finish().trim(),
+                u8::from(source.reversed()),
             );
             continue;
         }

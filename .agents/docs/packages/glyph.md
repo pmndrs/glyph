@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:dab44fa9ec80d5523cb969eb933c8fba2bbbcd134742e777a3747a432b867bf4'
+source_digest: 'sha256:29b7662701f4d393d63d0d6c5215420c3513f7e6a4519d626e021c8760cdc876'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -101,12 +101,15 @@ sources:
   - id: mtsdf-quality-inspection
     resource: ../../../packages/glyph/scripts/inspect-mtsdf-quality.mjs
     title: Reproducible MTSDF coverage and native variant inspection
+  - id: mtsdf-reference-shape
+    resource: ../../../packages/glyph/rust/mtsdf-admission/src/quality.rs
+    title: Outline serialization and independent reconstruction reference
   - id: msdfgen-cli
     resource: https://github.com/Chlumsky/msdfgen/blob/v1.13/main.cpp
     title: Pinned msdfgen CLI scanline and error-correction configuration
 generated:
   by: openai-codex/gpt-6
-  at: '2026-09-15T19:11:33Z'
+  at: '2026-09-15T19:57:14Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -870,43 +873,55 @@ publication. The retained engine deliberately receives that style scalar as f32,
 narrows published values once. An independent calculation from the f32 line box reproduces the corrected final baseline,
 centered glyph row, content height, and complete layout hash exactly; no runtime precision or tolerance changed.
 
-### Remaining MTSDF pinch artifacts (issue #145)
+### MTSDF reference correction and remaining pinch artifacts (issue #145)
 
-At `fa491ed1fc2a`, `glyph:mtsdf-quality:check` reproduces the reported 64 px/em, range 8, 8× reconstruction
-counts exactly: Inter `8` has 63 samples with absolute coverage error above 0.25, `4` has 25, `n` has 0,
-and `&` has 3; Dancing Script `g` has 201 and `w` has 193. The gate passes because its accepted baseline
-already contains these errors; it is a regression ceiling, not an artifact-free requirement.
+The original 63-versus-32 Inter `8` comparison was not a comparison of equivalent edge lists. `ShapePen` always
+emitted `#` at contour closure, which tells msdfgen to add a straight closing edge even when Fontations had already
+returned to the start. That gave native 44 edges versus Glyph's 41. The three zero-length edges changed corner
+detection and coloring. The non-shipping serializer now adds only missing closing edges, with focused tests for
+explicit curve/line closure and implicit closure across contours. The native request also carries the CFF contour
+reversal applied by `OutlineSource::emit`; omitting it caused the earlier Dancing Script sign failures in
+no-scanline experiments. These corrections supersede the earlier native counts and coloring conclusions.[^mtsdf-reference-shape]
 
-`mise exec cmake@4.4.3 -- pnpm scripts run glyph:mtsdf-quality:inspect` builds the authenticated msdfgen 1.13
-oracle and compares identical outlines and atlas framing. It writes `measurements.json`, PPM comparisons, and a
-self-contained `index.html` under ignored `packages/glyph/.cache/mtsdf-quality-inspect`. Once the native oracle
-is provisioned, ordinary `mise exec -- pnpm scripts run glyph:mtsdf-quality:inspect` also works. Optional
-`--font <fixture-relative path> --chars <text>` selects another sample. Chrome inspection of the CPU reconstruction
-shows the error concentrated at both sides of Inter `8`'s waist; this is not GPU-renderer verification.[^mtsdf-quality-inspection]
+With corrected input, both Simple-coloring implementations reconstruct Inter `8` with 63 samples whose absolute
+coverage error exceeds 0.25, at 64 px/em, range 8, and 8× magnification. Their reconstruction images are byte-identical.
+Its waist artifact is shared by native Simple coloring. The corrected comparison gives:[^mtsdf-quality-inspection]
 
-| Sample             | Glyph | Native CLI default | Native without scanline, auto-fast | Native without scanline, auto-mixed |
-| ------------------ | ----: | -----------------: | ---------------------------------: | ----------------------------------: |
-| Inter `8`          |    63 |                 32 |                                 32 |                                  20 |
-| Inter `n`          |     0 |                 13 |                                 13 |                                   0 |
-| Inter `&`          |     3 |                 25 |                                279 |                                 279 |
-| Dancing Script `w` |   193 |                204 |                            105,223 |                             105,227 |
-| Dancing Script `g` |   201 |                199 |                            115,546 |                             115,546 |
+| Sample             | Glyph | Native Simple | Native Distance | Native InkTrap |
+| ------------------ | ----: | ------------: | --------------: | -------------: |
+| Inter `8`          |    63 |            63 |              20 |             20 |
+| Inter `4`          |    25 |            25 |              25 |             25 |
+| Inter `&`          |     3 |             3 |               3 |              3 |
+| Source Serif `g`   |    32 |            23 |              20 |             23 |
+| Dancing Script `w` |   193 |           193 |             197 |            197 |
+| Dancing Script `g` |   201 |           199 |             199 |            194 |
 
-The issue's proposed explanation needs correction: the core-only CLI enables its scanline sign pass by default,
-disables generator error correction, then applies correction with `DO_NOT_CHECK_DISTANCE`. Therefore its 32-sample
-Inter `8` result does not depend on the geometric distance pass. Disabling scanline permits a controlled fast/mixed
-comparison and improves `8` from 32 to 20 with distance checks, but also exposes large sign failures in Dancing Script.
-That experiment does not establish a safe production change.[^msdfgen-cli]
+The corrected 26-case corpus totals are 956 for Glyph, 1,032 for native Simple, 988 for native Distance, and 989
+for native InkTrap. The 63-to-20 improvement is a measured coloring opportunity, with tradeoffs: both alternatives
+regress Dancing Script `w` by four samples and `M` by one. These are native experiments, not a production coloring
+change. The CLI's default scanline path disables geometric distance checks; correctly oriented Inter, Source Serif,
+and Dancing Script samples have equal auto-fast and auto-mixed counts in this corpus.[^msdfgen-cli]
 
-Native distance and inktrap coloring both retain 32 on Inter `8`; they worsen `&` from 25 to 37. Inktrap changes
-Dancing Script `w` from 204 to 200; distance leaves it unchanged. These are bounded native experiments, not evidence
-for changing Glyph's coloring. A separate temporary experiment allowing protected texels through Glyph's existing
-inversion-only scan left Inter `8` at 63, while improving Source Serif `g` from 32 to 28 and Dancing Script `g`
-from 201 to 199. The experiment was reverted. The precise cause of the 63-to-32 gap remains unproven; correction
-classification, pre-correction quantization, and distance-field generation still need isolation. No production kernel,
-shader, golden, or baked asset changed in this investigation.
+Separate diagnostic experiments identified two remaining baker differences. Increasing curve-winding subdivision
+from 16/24 to 1,024 removed a one-texel inside/outside classification error in Source Serif `g`, changing 32 error
+samples to 27. Allowing inversion correction on protected texels changed Dancing Script `g` from 201 to 199;
+combined with denser winding, Source Serif `g` reached 23. These outputs matched native reconstruction.
+These are investigation findings for future fixes; the temporary instrumentation is not retained, and 1,024
+subdivisions are not an accepted production implementation.
+
+Run `mise exec cmake@4.4.3 -- pnpm scripts run glyph:mtsdf-quality:inspect -- --all` for the complete corpus,
+or omit `--all` for the reported Inter/Dancing Script samples. Optional `--font <fixture-relative path> --chars <text>`
+selects another sample. The workflow writes measurements, PPM comparisons, and a self-contained HTML report under
+ignored `packages/glyph/.cache/mtsdf-quality-inspect`. Chrome screenshots display CPU reconstructions, not GPU-renderer
+verification. Once the native oracle is provisioned, ordinary `mise exec -- pnpm scripts run ...` suffices.
+
+`mise exec -- pnpm scripts run glyph:mtsdf-quality:check` runs the closure regression tests and existing production
+quality checks. This change fixes the reference comparison; production kernels, shaders, goldens, and baked assets
+are unchanged.
 
 [^mtsdf-quality-inspection]: Package-owned native variant inspection workflow and generated measurements.
+
+[^mtsdf-reference-shape]: The reference outline serializer, its closure regressions, and the independent CPU reconstruction.
 
 [^msdfgen-cli]: msdfgen 1.13 `main.cpp`, scanline defaults and post-generation error-correction configuration.
 

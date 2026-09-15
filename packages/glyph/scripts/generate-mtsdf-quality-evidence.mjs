@@ -19,6 +19,17 @@ const manifestPath = resolve(packageDirectory, 'rust/mtsdf-admission/evidence/re
 const cargoManifest = resolve(packageDirectory, 'rust/mtsdf-admission/Cargo.toml');
 const checkOnly = process.argv.includes('--check');
 
+if (checkOnly) {
+  execFileSync(
+    'cargo',
+    ['test', '--manifest-path', cargoManifest, '--features', 'full-font-evidence', '--lib', '--locked', 'shape_pen'],
+    {
+      cwd: workspaceDirectory,
+      stdio: 'inherit',
+    },
+  );
+}
+
 const EM_SIZE = 64;
 const PIXEL_RANGE = 8;
 const ZOOM = 8;

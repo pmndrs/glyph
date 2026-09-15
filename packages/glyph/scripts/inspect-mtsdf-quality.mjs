@@ -1,4 +1,4 @@
-/* @workflow { "name": "glyph:mtsdf-quality:inspect", "summary": "Compare production MTSDF reconstruction with native correction and coloring variants; emit measurements and a visual report. Options: --font <fixture path> --chars <text>.", "requirements": "Stable Rust, authenticated font fixtures, CMake, a C++ compiler, tar, and network access for the pinned msdfgen oracle.", "writes": "Ignored packages/glyph/.cache/mtsdf-quality-inspect reports and pinned-tool cache.", "args": [] } */
+/* @workflow { "name": "glyph:mtsdf-quality:inspect", "summary": "Compare production MTSDF reconstruction with native correction and coloring variants; emit measurements and a visual report. Options: --font <fixture path> --chars <text>, or --all for the quality corpus.", "requirements": "Stable Rust, authenticated font fixtures, CMake, a C++ compiler, tar, and network access for the pinned msdfgen oracle.", "writes": "Ignored packages/glyph/.cache/mtsdf-quality-inspect reports and pinned-tool cache.", "args": [] } */
 
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -10,16 +10,22 @@ import { gzipSync } from 'node:zlib';
 
 const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
 const workspaceDirectory = resolve(packageDirectory, '../..');
-const { values } = parseArgs({ options: { font: { type: 'string' }, chars: { type: 'string' } } });
+const { values } = parseArgs({
+  options: { font: { type: 'string' }, chars: { type: 'string' }, all: { type: 'boolean' } },
+});
 const baseline = JSON.parse(
   await readFile(resolve(packageDirectory, 'rust/mtsdf-admission/evidence/reconstruction-quality-v0.json'), 'utf8'),
 );
-const corpus = values.font
-  ? [{ font: values.font, characters: values.chars ?? 'IHnoMA48&' }]
-  : [
-      { font: 'inter-v4.1/Inter-Regular.ttf', characters: values.chars ?? 'IHnoMA48&' },
-      { font: 'dancing-script-3.000/DancingScript-Regular.otf', characters: values.chars ?? 'wg' },
-    ];
+const fullCorpus = new Map();
+for (const entry of baseline.cases) fullCorpus.set(entry.font, (fullCorpus.get(entry.font) ?? '') + entry.character);
+const corpus = values.all
+  ? [...fullCorpus].map(([font, characters]) => ({ font, characters }))
+  : values.font
+    ? [{ font: values.font, characters: values.chars ?? 'IHnoMA48&' }]
+    : [
+        { font: 'inter-v4.1/Inter-Regular.ttf', characters: values.chars ?? 'IHnoMA48&' },
+        { font: 'dancing-script-3.000/DancingScript-Regular.otf', characters: values.chars ?? 'wg' },
+      ];
 const outputDirectory = resolve(packageDirectory, '.cache/mtsdf-quality-inspect');
 await mkdir(outputDirectory, { recursive: true });
 // The provisioner prints the executable after any first-build CMake output.
@@ -70,7 +76,7 @@ for (const { font, characters } of corpus) {
     const directory = resolve(fontDirectory, id);
     await mkdir(directory, { recursive: true });
     for (const row of shapes) {
-      const [codePoint, width, height, scale, translateX, translateY, range, shape] = row.split('\t');
+      const [codePoint, width, height, scale, translateX, translateY, range, shape, reversed] = row.split('\t');
       capture(executable, [
         'mtsdf',
         '-defineshape',
@@ -88,6 +94,7 @@ for (const { font, characters } of corpus) {
         '-format',
         'bin',
         '-yflip',
+        ...(reversed === '1' ? ['-reversewinding'] : []),
         '-o',
         resolve(directory, `${glyphName(Number(codePoint))}.rgba`),
         ...flags,
@@ -105,7 +112,7 @@ for (const { font, characters } of corpus) {
         .join(', ')}\n`,
     );
     const figures = [];
-    for (const id of ['glyph', 'native-default', 'native-mixed', 'native-fast']) {
+    for (const id of ['glyph', ...variants.map((variant) => variant.id)]) {
       const ppm = await readFile(resolve(fontDirectory, id, `${glyphName(character.codePointAt(0))}.ppm`));
       figures.push(`<figure><figcaption>${id}: ${results[id].samplesOverQuarter} samples with error &gt; 0.25</figcaption>
         <canvas data-ppm="${gzipSync(ppm).toString('base64')}"></canvas></figure>`);

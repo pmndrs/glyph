@@ -2,6 +2,14 @@
 
 ## 2026-09-15
 
+- **Corrected the MTSDF reference and isolated remaining generator differences** — The reference serializer inserted
+  zero-length closing edges and omitted CFF contour reversal. After correcting those inputs, Inter `8` reconstructs
+  identically in Glyph and native Simple coloring at 63 error samples; native Distance and InkTrap each reach 20.
+  Isolated stage comparisons identify coarse winding classification and skipped protected-texel inversion corrections
+  as separate causes of smaller Source Serif/Dancing Script differences. The change retains the reference fixes,
+  regression tests, reproduction script, and findings; temporary stage tooling is omitted. This supersedes the native
+  counts and hypotheses in the initial investigation below.
+
 - **Reproduced MTSDF pinch artifacts from issue #145** — Current main matches the reported Inter and Dancing Script
   coverage-error counts. A package-owned inspection workflow emits native correction/coloring comparisons and browser-viewable
   reconstruction images. Native CLI default reaches 32 samples on Inter `8` without geometric distance checks; explicitly
