@@ -5,7 +5,7 @@ description: Proves the portable raster boundary and ships matching TypeGPU and 
 resource: ../../../packages/glyph-example-raster
 workspace_package: '@pmndrs/glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:e523a5b3b39c2889577677c3824ec669f6123cb1929c5ed7e55090d3f5f40aac'
+source_digest: 'sha256:c2c08a14992daf1598bfb975e22249c0b179537b70a2905b73958243549597bd'
 tags: [package, raster, extension-proof, typegpu, tsl]
 sources:
   - id: manifest
@@ -64,6 +64,10 @@ paragraph/local-run render-order
 inheritance, abort behavior, and disposal. Rust owns retained instance storage, dirty-range publication, and overflow handling.
 A source boundary test rejects imports from core internals or the Three first-party raster and baker subpaths.
 Renderer-neutral format, schema, and Codec construction uses the public `/core` entry.
+
+Its optional renderer peers follow Glyph's supported floors: Three.js >=0.185.0 <0.186 and TypeGPU >=0.12.5 <0.13.
+Development pins remain independent of those consumer ranges.
+Glyph's `glyph:peer-check` workflow type-checks this package in the same isolated minimum-peer consumer.
 
 The raster format makes the proof observable by assigning each source-local glyph ID a deterministic color and drawing a framed
 em-relative diagnostic cell at the position produced by core shaping and paragraph layout. Its visual output is deliberately

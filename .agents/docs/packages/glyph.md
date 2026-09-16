@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:ddd7914ad4b08fbca5cd5cd0fbc90b55c0e7f35ce9d90c9634978ef298fa0375'
+source_digest: 'sha256:976bce59eb881e2ea269834a867c050bfafa64a97a9300e0b94e7ed988f6cdd4'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -237,6 +237,27 @@ both bounded band loops and terminators, and cross-backend builtin compatibility
 `typegpu`, `@typegpu/three`, and `@typegpu/gl` are optional peers because their runtime identities must be shared with the
 consumer, like Three.js and React. Stable `/three` and `/shaders/tsl` consumers do not load these bridge runtimes, and
 package-size measurements externalize those peer graphs while retaining the package's emitted shader metadata.
+
+The supported peer floors are Three.js 0.185.0, React 19.0.0, R3F 10.0.0-alpha.4, TypeGPU 0.12.5,
+`@typegpu/gl` 0.12.4, and `@typegpu/three` 0.12.1. Development dependencies remain pinned independently.
+Shared renderer development versions come from the `renderer` catalog in `pnpm-workspace.yaml`; public peer ranges remain
+explicit compatibility contracts. `@types/three` remains an independent exact pin because DefinitelyTyped patch releases
+do not move in lockstep with the Three.js runtime package.
+React's `use` establishes the React 19 floor; benchmark and example applications additionally use React 19.2
+`Activity` and effect events. R3F 9 has no `/webgpu` entry, alpha.0–alpha.2 lose the adapter's typed ref and prop
+constraints, and alpha.3 eagerly imports Three's browser-only Inspector, throwing on a Node import.
+Alpha.4 supports the package's Node lifecycle tests and requires Three >=0.185.0. The TypeGPU bridge's texture
+overload first appears in `@typegpu/three` 0.12.1; the GLSL derivative operations require TypeGPU 0.12.5 and
+`@typegpu/gl` 0.12.4.
+
+`mise exec -- pnpm scripts run glyph:peer-check` first rebuilds Glyph, then copies that distribution, source, and focused
+tests into a temporary isolated consumer. It installs the declared minimum peers (including React 19.0 declarations),
+checks the example-raster package at the same Three and TypeGPU floors, and verifies the TSL regression, public
+source/declaration fixtures, shader generation, and React lifecycles. The temporary consumer is removed on exit. Exact `--three`,
+`--fiber`, `--react` and `--typegpu` overrides allow checking a candidate without changing workspace installs.
+The 2026-09-17 floor check passed all three type projects and 45 runtime tests. Three 0.185.0 also passed the
+native TSL and TypeGPU-backed browser proofs for Bitmap, MTSDF, Slug, decorations, retained updates and custom material
+composition on both WebGPU and WebGL2 through `benchmark:v1-bitmap` and its `--typegpu` variant.
 
 The package-owned `glyph` executable is available through `pnpm exec`; its `bake` command supports both project discovery
 and a direct known-font mode. Its stable packaged shim delegates to the built Node CLI, so workspace installs can link the

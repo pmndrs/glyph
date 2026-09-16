@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@pmndrs/glyph": "workspace:*",
-    "typegpu": "0.12.5"
+    "typegpu": "catalog:renderer"
   },
   "devDependencies": {
     "@types/node": "24.13.3",

@@ -4,6 +4,33 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  renderer:
+    '@react-three/fiber':
+      specifier: 10.0.0-alpha.4
+      version: 10.0.0-alpha.4
+    '@react-three/test-renderer':
+      specifier: 10.0.0-alpha.4
+      version: 10.0.0-alpha.4
+    '@typegpu/gl':
+      specifier: 0.12.4
+      version: 0.12.4
+    '@typegpu/three':
+      specifier: 0.12.1
+      version: 0.12.1
+    react:
+      specifier: 19.2.8
+      version: 19.2.8
+    react-dom:
+      specifier: 19.2.8
+      version: 19.2.8
+    three:
+      specifier: 0.185.1
+      version: 0.185.1
+    typegpu:
+      specifier: 0.12.5
+      version: 0.12.5
+
 importers:
 
   .:
@@ -30,16 +57,16 @@ importers:
         specifier: workspace:*
         version: link:../../packages/glyph
       '@react-three/fiber':
-        specifier: 10.0.0-alpha.4
+        specifier: catalog:renderer
         version: 10.0.0-alpha.4(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
       react:
-        specifier: 19.2.8
+        specifier: catalog:renderer
         version: 19.2.8
       react-dom:
-        specifier: 19.2.8
+        specifier: catalog:renderer
         version: 19.2.8(react@19.2.8)
       three:
-        specifier: 0.185.1
+        specifier: catalog:renderer
         version: 0.185.1
     devDependencies:
       '@babel/core':
@@ -88,7 +115,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/glyph
       typegpu:
-        specifier: 0.12.5
+        specifier: catalog:renderer
         version: 0.12.5
     devDependencies:
       '@types/node':
@@ -131,13 +158,13 @@ importers:
         specifier: workspace:*
         version: link:../packages/glyph-example-renderer
       '@react-three/fiber':
-        specifier: 10.0.0-alpha.4
+        specifier: catalog:renderer
         version: 10.0.0-alpha.4(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
       '@typegpu/gl':
-        specifier: 0.12.4
+        specifier: catalog:renderer
         version: 0.12.4(typegpu@0.12.5)
       '@typegpu/three':
-        specifier: ^0.12.1
+        specifier: catalog:renderer
         version: 0.12.1(@typegpu/gl@0.12.4(typegpu@0.12.5))(three@0.185.1)(typegpu@0.12.5)
       class-variance-authority:
         specifier: 0.7.1
@@ -152,10 +179,10 @@ importers:
         specifier: 1.27.0
         version: 1.27.0(react@19.2.8)
       react:
-        specifier: 19.2.8
+        specifier: catalog:renderer
         version: 19.2.8
       react-dom:
-        specifier: 19.2.8
+        specifier: catalog:renderer
         version: 19.2.8(react@19.2.8)
       shadcn:
         specifier: 4.16.0
@@ -164,13 +191,13 @@ importers:
         specifier: 3.6.0
         version: 3.6.0
       three:
-        specifier: 0.185.1
+        specifier: catalog:renderer
         version: 0.185.1
       tw-animate-css:
         specifier: 1.4.0
         version: 1.4.0
       typegpu:
-        specifier: 0.12.5
+        specifier: catalog:renderer
         version: 0.12.5
       unicode-segmenter:
         specifier: 0.15.0
@@ -268,16 +295,16 @@ importers:
         specifier: 4.0.3
         version: 4.0.3
       '@react-three/fiber':
-        specifier: 10.0.0-alpha.4
+        specifier: catalog:renderer
         version: 10.0.0-alpha.4(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
       '@react-three/test-renderer':
-        specifier: 10.0.0-alpha.4
+        specifier: catalog:renderer
         version: 10.0.0-alpha.4(@react-three/fiber@10.0.0-alpha.4(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1)
       '@typegpu/gl':
-        specifier: 0.12.4
+        specifier: catalog:renderer
         version: 0.12.4(typegpu@0.12.5)
       '@typegpu/three':
-        specifier: ^0.12.1
+        specifier: catalog:renderer
         version: 0.12.1(@typegpu/gl@0.12.4(typegpu@0.12.5))(three@0.185.1)(typegpu@0.12.5)
       '@types/node':
         specifier: 24.13.3
@@ -307,16 +334,16 @@ importers:
         specifier: 1.75.0
         version: 1.75.0
       react:
-        specifier: 19.2.8
+        specifier: catalog:renderer
         version: 19.2.8
       three:
-        specifier: 0.185.1
+        specifier: catalog:renderer
         version: 0.185.1
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(oxc-resolver@11.24.2)(typescript@7.0.2)
       typegpu:
-        specifier: 0.12.5
+        specifier: catalog:renderer
         version: 0.12.5
       typescript:
         specifier: 7.0.2
@@ -350,10 +377,10 @@ importers:
         specifier: 1.75.0
         version: 1.75.0
       three:
-        specifier: 0.185.1
+        specifier: catalog:renderer
         version: 0.185.1
       typegpu:
-        specifier: 0.12.5
+        specifier: catalog:renderer
         version: 0.12.5
       unplugin-typegpu:
         specifier: 0.12.2
@@ -374,7 +401,7 @@ importers:
         specifier: 0.1.71
         version: 0.1.71
       typegpu:
-        specifier: 0.12.5
+        specifier: catalog:renderer
         version: 0.12.5
     devDependencies:
       '@types/node':

@@ -3,6 +3,17 @@ packages:
   - benches
   - packages/*
 
+catalogs:
+  renderer:
+    '@react-three/fiber': 10.0.0-alpha.4
+    '@react-three/test-renderer': 10.0.0-alpha.4
+    '@typegpu/gl': 0.12.4
+    '@typegpu/three': 0.12.1
+    react: 19.2.8
+    react-dom: 19.2.8
+    three: 0.185.1
+    typegpu: 0.12.5
+
 minimumReleaseAgeExclude:
   - '@typegpu/gl@0.12.4'
   - '@typegpu/three@0.12.1'
