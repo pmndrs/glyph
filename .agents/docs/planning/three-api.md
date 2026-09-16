@@ -27,6 +27,9 @@ sources:
   - id: current-material
     resource: ../../../packages/glyph/src/three/material.ts
     title: Current Three.js material factory
+  - id: msdf-shader
+    resource: ../../../packages/glyph/src/shaders/tsl/msdf-shader.ts
+    title: MSDF material shader output
   - id: three-object3d
     resource: https://threejs.org/docs/pages/Object3D.html
     title: Three.js Object3D
@@ -357,6 +360,36 @@ material.
 A material on a span overrides the text material; a text material overrides the group material. Equal material objects
 share identity. Different materials may still share instance buffers—the command buffer determines draw segmentation, while
 the Three executor decides which GPU resources can be shared safely.
+
+### MSDF distance fields
+
+When `context.kind === 'glyph'` and `context.format === 'pmndrs.msdf'`, both `/three` and `/three/typegpu` expose
+these `Node<'float'>` fields on `context.shader`:
+
+| Field | Meaning |
+| --- | --- |
+| `fillDistance` | Corner-preserving signed distance from the median of the sampled RGB channels, minus 0.5. |
+| `trueDistance` | Smooth signed distance from the sampled alpha channel, minus 0.5; suitable for glows and bevels. |
+| `pixelRange` | Render-target pixels per normalized distance unit, using the canonical derivative-based conversion with a minimum of 1. |
+
+Both distances are negative outside, zero on the edge, and positive inside. They use normalized atlas distance units
+in `[-0.5, 0.5]`; multiply by `pixelRange` for the screen-space distance used by antialiasing. The values come from the
+half-texel-clamped base sample, before the coverage clamp and atlas-cell mask. `pixelRange` is computed per fragment;
+it differs from the baker's constant range in atlas texels.
+
+For example, the MSDF branch of a material factory can add a soft glow:
+
+```ts
+const pixels = context.shader.trueDistance.mul(context.shader.pixelRange);
+const glow = smoothstep(-3, 0, pixels);
+material.colorNode = mix(vec3(0, 0.5, 1), context.shader.color, context.shader.fillCoverage);
+material.opacityNode = max(context.shader.opacity, glow.mul(0.35));
+```
+
+Here `max`, `mix`, `smoothstep`, and `vec3` come from `three/tsl`. The radius is in render-target pixels; choose the
+corresponding physical radius when authoring in CSS pixels. Effects remain limited by the baked distance range and
+glyph quad. Publishing the field does not enlarge either, so a wide glow can require a larger baked range.
+Raw TypeGPU `msdfFragment()` and `msdfRenderDetailed()` expose the same three fields on `TypeGpuMsdfFragmentOutput`.
 
 ## Mix fallback raster formats
 

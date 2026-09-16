@@ -41,6 +41,12 @@ export interface TslMsdfShaderOutput {
   readonly position: Node<'vec3'>;
   /** Unclamped atlas coordinate the glyph cell is sampled at. */
   readonly atlasUv: Node<'vec2'>;
+  /** Corner-preserving RGB-median distance in normalized atlas units; negative outside, zero on the edge. */
+  readonly fillDistance: Node<'float'>;
+  /** Smooth alpha-channel distance in the same units, for glows and bevels; limited by the baked field range. */
+  readonly trueDistance: Node<'float'>;
+  /** Screen pixels per normalized distance unit. Multiply either distance by this value for signed screen pixels. */
+  readonly pixelRange: Node<'float'>;
   readonly fillCoverage: Node<'float'>;
   /** Outline ring coverage with the fill already subtracted, so the two never double-count a fragment. */
   readonly outlineCoverage: Node<'float'>;
@@ -98,6 +104,9 @@ export function msdfShader(instance: TslMsdfInstanceNodes, resources: TslMsdfSha
       0,
     ),
     atlasUv: TSL.vec2(atlasU, atlasV),
+    fillDistance,
+    trueDistance,
+    pixelRange,
     fillCoverage,
     outlineCoverage: outlineOnly,
     shadowCoverage,

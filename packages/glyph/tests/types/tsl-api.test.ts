@@ -37,7 +37,12 @@ void bitmapColor;
 declare const msdfInstance: TslMsdfInstanceNodes;
 declare const msdfResources: TslMsdfShaderResources;
 const msdfOut: TslMsdfShaderOutput = msdfShader(msdfInstance, msdfResources);
-void msdfOut;
+const fillDistance: Node<'float'> = msdfOut.fillDistance;
+const trueDistance: Node<'float'> = msdfOut.trueDistance;
+const pixelRange: Node<'float'> = msdfOut.pixelRange;
+void fillDistance;
+void trueDistance;
+void pixelRange;
 
 declare const slugInstance: TslSlugInstanceNodes;
 declare const slugPages: readonly TslSlugPageResources[];

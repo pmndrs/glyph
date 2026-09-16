@@ -29,6 +29,12 @@ interface ComposeProofResult {
   readonly canonicalGreenPixels: number;
 }
 
+interface MsdfProofResult extends RasterProofResult {
+  readonly distanceSamples: number;
+  readonly distanceCoverageMatches: boolean;
+  readonly glowPixelsOutsideCoverage: number;
+}
+
 const shaderQuery = process.argv.includes('--typegpu') ? '&shaders=typegpu' : '';
 process.stdout.write(`Three shaders: ${shaderQuery === '' ? 'stable TSL' : 'experimental TypeGPU'}\n`);
 
@@ -104,11 +110,10 @@ try {
     });
     await page.waitForFunction(
       () =>
-        (window as typeof window & { targetV1MtsdfReady?: Promise<RasterProofResult> }).targetV1MtsdfReady !==
-        undefined,
+        (window as typeof window & { targetV1MtsdfReady?: Promise<MsdfProofResult> }).targetV1MtsdfReady !== undefined,
     );
     const result = await page.evaluate(
-      () => (window as typeof window & { targetV1MtsdfReady: Promise<RasterProofResult> }).targetV1MtsdfReady,
+      () => (window as typeof window & { targetV1MtsdfReady: Promise<MsdfProofResult> }).targetV1MtsdfReady,
     );
     if (errors.length !== 0) throw new Error(`${expected} MTSDF browser errors: ${errors.join(' | ')}`);
     if (result.backend !== expected) throw new Error(`expected ${expected}, received ${result.backend}`);
@@ -117,6 +122,9 @@ try {
       result.decorationPixels < 1 ||
       result.decorationRecords !== 2 ||
       result.glyphCount !== 15 ||
+      result.distanceSamples !== 4 ||
+      !result.distanceCoverageMatches ||
+      result.glowPixelsOutsideCoverage === 0 ||
       result.litPixels < 32 ||
       !result.retainedDraw ||
       !result.retainedStorage ||

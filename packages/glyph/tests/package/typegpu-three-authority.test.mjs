@@ -69,7 +69,10 @@ test('the MTSDF Three adapter compiles the canonical TypeGPU functions on both b
     { atlas, atlasWidth: 4, atlasHeight: 4, pixelRange: 4 },
   );
   withMaterial(output, (mesh) => {
-    for (const [backend, source] of Object.entries(compileNodeMaterialBackends(mesh))) {
+    const canonical = compileNodeMaterialBackends(mesh);
+    mesh.material.colorNode = TSL.vec3(output.fillDistance, output.trueDistance, output.pixelRange);
+    const composed = compileNodeMaterialBackends(mesh);
+    for (const [backend, source] of Object.entries(composed)) {
       assert.match(source.fragment, backend === 'webgpu' ? /dpdx\s*\(/ : /dFdx\s*\(/);
       assert.match(source.fragment, backend === 'webgpu' ? /dpdy\s*\(/ : /dFdy\s*\(/);
       assert.match(source.fragment, backend === 'webgpu' ? /inverseSqrt\s*\(/ : /inversesqrt\s*\(/);
@@ -79,11 +82,20 @@ test('the MTSDF Three adapter compiles the canonical TypeGPU functions on both b
         'msdfPosition',
         'msdfAtlasCoordinate',
         'msdfClampedCoordinates',
-        'msdfCoverage',
+        'msdfDistances',
+        'msdfCoverageFromDistances',
         'msdfComposite',
       ]) {
         assert.equal(declarationCount(`${source.vertex}\n${source.fragment}`, name, backend), 1);
       }
+      assert.equal((source.fragment.match(/\bmsdfDistances\(/g) ?? []).length, 2, 'reconstruct distances once');
+      const textureCall =
+        backend === 'webgpu'
+          ? /\b(?:textureSample\w*|textureLoad)\s*\(/g
+          : /\b(?:texture|textureLod|textureGrad|texelFetch)\s*\(/g;
+      const canonicalSamples = (canonical[backend].fragment.match(textureCall) ?? []).length;
+      assert.ok(canonicalSamples > 0);
+      assert.equal((source.fragment.match(textureCall) ?? []).length, canonicalSamples, 'reuse atlas samples');
     }
   });
   atlas.dispose();

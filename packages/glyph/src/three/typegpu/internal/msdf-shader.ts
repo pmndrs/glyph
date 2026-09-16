@@ -9,10 +9,13 @@ import {
   msdfAtlasCoordinate,
   msdfClampedCoordinates,
   msdfComposite,
-  msdfCoverage,
   msdfPosition,
 } from '../../../shaders/typegpu/msdf-shader.js';
+import { msdfCoverageFromDistances, msdfDistances } from '../../../shaders/typegpu/msdf/distance.js';
+import type { TslMsdfShaderOutput } from '../../../shaders/tsl/msdf-shader.js';
 import { decorationPaint } from '../../../shaders/typegpu/decoration-shader.js';
+
+export type { TslMsdfShaderOutput } from '../../../shaders/tsl/msdf-shader.js';
 
 export interface TslMsdfInstanceNodes {
   readonly origin: Node<'vec2'>;
@@ -33,16 +36,6 @@ export interface TslMsdfShaderResources {
   readonly atlasWidth: number;
   readonly atlasHeight: number;
   readonly pixelRange: number;
-}
-
-export interface TslMsdfShaderOutput {
-  readonly position: Node<'vec3'>;
-  readonly atlasUv: Node<'vec2'>;
-  readonly fillCoverage: Node<'float'>;
-  readonly outlineCoverage: Node<'float'>;
-  readonly shadowCoverage: Node<'float'>;
-  readonly color: Node<'vec3'>;
-  readonly opacity: Node<'float'>;
 }
 
 /** Adapt Three texture sampling and nodes to the canonical TypeGPU MTSDF algorithm. */
@@ -85,9 +78,20 @@ export function msdfShader(instance: TslMsdfInstanceNodes, resources: TslMsdfSha
   const layer = TSL.int(instance.pageIndex);
   const baseSample = TSL.texture(resources.atlas, clamped.xy).depth(layer);
   const shadowSample = TSL.texture(resources.atlas, clamped.zw).depth(layer);
+  const distances = (
+    t3.toTSL(() => {
+      'use gpu';
+      return msdfDistances(
+        t3.fromTSL(baseSample, d.vec4f).$,
+        t3.fromTSL(atlasUv, d.vec2f).$,
+        t3.fromTSL(atlasSize, d.vec2f).$,
+        resources.pixelRange,
+      );
+    }) as Node<'vec3'>
+  ).toVar();
   const coverage = t3.toTSL(() => {
     'use gpu';
-    return msdfCoverage(
+    return msdfCoverageFromDistances(
       MsdfCoverageInput({
         atlasCoordinate: t3.fromTSL(atlasUv, d.vec2f).$,
         shadowCoordinate: t3.fromTSL(shadowUv, d.vec2f).$,
@@ -98,6 +102,7 @@ export function msdfShader(instance: TslMsdfInstanceNodes, resources: TslMsdfSha
         shadowSample: t3.fromTSL(shadowSample, d.vec4f).$,
         outlineWidth: t3.fromTSL(instance.outlineWidth, d.f32).$,
       }),
+      t3.fromTSL(distances, d.vec3f).$,
     );
   }) as Node<'vec3'>;
   const composite = t3.toTSL(() => {
@@ -114,6 +119,9 @@ export function msdfShader(instance: TslMsdfInstanceNodes, resources: TslMsdfSha
   return {
     position,
     atlasUv,
+    fillDistance: distances.x,
+    trueDistance: distances.y,
+    pixelRange: distances.z,
     fillCoverage: coverage.x,
     outlineCoverage: coverage.y,
     shadowCoverage: coverage.z,

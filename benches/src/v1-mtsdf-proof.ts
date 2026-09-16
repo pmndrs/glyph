@@ -7,6 +7,7 @@ import { proveDetachedRasterParity } from './v1-detached-proof';
 import { countV1DecorationRecords, countV1RasterPixels, V1_DECORATION_COLOR, v1GlyphDraw } from './v1-decoration-proof';
 import { fetchAuthenticatedGzipAsset } from './workloads/font-assets/authenticated-gzip';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from './three-root';
+import { proveMsdfDistanceMaterial, type MsdfDistanceProof } from './v1-msdf-distance-proof';
 
 declare global {
   interface Window {
@@ -14,7 +15,7 @@ declare global {
   }
 }
 
-interface TargetV1MtsdfResult {
+interface TargetV1MtsdfResult extends MsdfDistanceProof {
   readonly backend: 'webgpu' | 'webgl2';
   readonly decorationPixels: number;
   readonly decorationRecords: number;
@@ -88,7 +89,9 @@ async function render(): Promise<TargetV1MtsdfResult> {
     const retainedDraw = v1GlyphDraw(rootDraws(scene));
     const pixels = await renderer.readRenderTargetPixelsAsync(target, 0, 0, 256, 128);
     const { decorationPixels, litPixels } = countV1RasterPixels(pixels);
+    const distanceProof = await proveMsdfDistanceMaterial(renderer, scene, camera, target, text);
     return {
+      ...distanceProof,
       backend: renderer.backend instanceof THREE.WebGLBackend ? 'webgl2' : 'webgpu',
       decorationPixels,
       decorationRecords: countV1DecorationRecords(rootDraws(scene)),

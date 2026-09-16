@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.types.json",
+  "compilerOptions": {
+    "composite": false
+  },
+  "include": ["tests/types/tsl-scalar-operations.test.ts", "tests/types/msdf-material.test.ts"]
+}

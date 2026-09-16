@@ -1,4 +1,5 @@
 import tgpu, { d, std, type TgpuAccessor, type TgpuFn, type TgpuSlot } from 'typegpu';
+import { msdfCoverageFromDistances, msdfDistances } from './msdf/distance.js';
 
 export const TypeGpuMsdfInstance: d.WgslStruct<{
   origin: d.Vec2f;
@@ -69,12 +70,21 @@ export const TypeGpuMsdfFragmentOutput: d.WgslStruct<{
   shadowCoverage: d.F32;
   color: d.Vec3f;
   opacity: d.F32;
+  /** Corner-preserving RGB-median distance in normalized atlas units; negative outside, zero on the edge. */
+  fillDistance: d.F32;
+  /** Smooth alpha-channel distance in the same units, for glows and bevels; limited by the baked field range. */
+  trueDistance: d.F32;
+  /** Screen pixels per normalized distance unit. Multiply either distance by this value for signed screen pixels. */
+  pixelRange: d.F32;
 }> = /* @__PURE__ */ d.struct({
   fillCoverage: d.f32,
   outlineCoverage: d.f32,
   shadowCoverage: d.f32,
   color: d.vec3f,
   opacity: d.f32,
+  fillDistance: d.f32,
+  trueDistance: d.f32,
+  pixelRange: d.f32,
 });
 export type TypeGpuMsdfFragmentOutput = d.InferGPU<typeof TypeGpuMsdfFragmentOutput>;
 
@@ -224,18 +234,18 @@ export const msdfFragment: TgpuFn<(input: typeof TypeGpuMsdfFragmentInput) => ty
 /** Detailed MTSDF reconstruction for hosts whose own texture system supplies the two filtered samples. */
 export function msdfRenderDetailed(input: MsdfRenderInput): TypeGpuMsdfFragmentOutput {
   'use gpu';
-  const coverage = msdfCoverage(
-    MsdfCoverageInput({
-      atlasCoordinate: input.atlasCoordinate,
-      shadowCoordinate: input.shadowCoordinate,
-      uvBounds: input.uvBounds,
-      atlasSize: input.atlasSize,
-      pixelRange: input.pixelRange,
-      baseSample: input.baseSample,
-      shadowSample: input.shadowSample,
-      outlineWidth: input.outlineWidth,
-    }),
-  );
+  const coverageInput = MsdfCoverageInput({
+    atlasCoordinate: input.atlasCoordinate,
+    shadowCoordinate: input.shadowCoordinate,
+    uvBounds: input.uvBounds,
+    atlasSize: input.atlasSize,
+    pixelRange: input.pixelRange,
+    baseSample: input.baseSample,
+    shadowSample: input.shadowSample,
+    outlineWidth: input.outlineWidth,
+  });
+  const distances = msdfDistances(input.baseSample, input.atlasCoordinate, input.atlasSize, input.pixelRange);
+  const coverage = msdfCoverageFromDistances(coverageInput, distances);
   const composite = msdfComposite(
     MsdfCompositeInput({
       coverage,
@@ -245,6 +255,9 @@ export function msdfRenderDetailed(input: MsdfRenderInput): TypeGpuMsdfFragmentO
     }),
   );
   return TypeGpuMsdfFragmentOutput({
+    fillDistance: distances.x,
+    trueDistance: distances.y,
+    pixelRange: distances.z,
     fillCoverage: coverage.x,
     outlineCoverage: coverage.y,
     shadowCoverage: coverage.z,
@@ -263,17 +276,8 @@ export function msdfRender(input: MsdfRenderInput): d.v4f {
 /** Fill, outline-only, and shadow coverages packed for node-system adapters. */
 export function msdfCoverage(input: MsdfCoverageInput): d.v3f {
   'use gpu';
-  const fillDistance = median3(input.baseSample.rgb) - 0.5;
-  const trueDistance = input.baseSample.a - 0.5;
-  const pixelsPerDistanceUnit = screenPixelRange(input.atlasCoordinate, input.atlasSize, input.pixelRange);
-  const baseInside = insideRectangle(input.atlasCoordinate, input.uvBounds);
-  const fillCoverage = distanceCoverage(fillDistance, pixelsPerDistanceUnit) * baseInside;
-  const outlineCoverage = distanceCoverage(trueDistance + input.outlineWidth, pixelsPerDistanceUnit) * baseInside;
-  const outlineOnly = std.max(outlineCoverage - fillCoverage, 0);
-  const shadowCoverage =
-    distanceCoverage(input.shadowSample.a - 0.5, pixelsPerDistanceUnit) *
-    insideRectangle(input.shadowCoordinate, input.uvBounds);
-  return d.vec3f(fillCoverage, outlineOnly, shadowCoverage);
+  const distances = msdfDistances(input.baseSample, input.atlasCoordinate, input.atlasSize, input.pixelRange);
+  return msdfCoverageFromDistances(input, distances);
 }
 
 /** Composite canonical coverages into unpremultiplied RGB and opacity. */
@@ -289,29 +293,4 @@ export function msdfComposite(input: MsdfCompositeInput): d.v4f {
     .add(input.outlineColor.rgb.mul(outlineAlpha))
     .add(input.shadowColor.rgb.mul(shadowAlpha));
   return d.vec4f(outputPremultiplied.div(std.max(outputAlpha, 1e-6)), outputAlpha);
-}
-
-function median3(value: d.v3f): number {
-  'use gpu';
-  return std.max(std.min(value.r, value.g), std.min(std.max(value.r, value.g), value.b));
-}
-
-function screenPixelRange(atlasCoordinate: d.v2f, atlasSize: d.v2f, pixelRange: number): number {
-  'use gpu';
-  // Euclidean derivative lengths keep the AA footprint unchanged under screen rotation.
-  const dx = std.dpdx(atlasCoordinate);
-  const dy = std.dpdy(atlasCoordinate);
-  const screenTexels = std.inverseSqrt(std.max(dx.mul(dx).add(dy.mul(dy)), d.vec2f(1e-12)));
-  return std.max(0.5 * std.dot(d.vec2f(pixelRange).div(atlasSize), screenTexels), 1);
-}
-
-function distanceCoverage(distance: number, pixelsPerDistanceUnit: number): number {
-  'use gpu';
-  return std.clamp(distance * pixelsPerDistanceUnit + 0.5, 0, 1);
-}
-
-function insideRectangle(point: d.v2f, bounds: d.v4f): number {
-  'use gpu';
-  const inside = std.step(bounds.xy, point).mul(std.step(point, bounds.zw));
-  return inside.x * inside.y;
 }

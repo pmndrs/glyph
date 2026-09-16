@@ -4,7 +4,10 @@
   "requirements": "Workspace dependencies and built Glyph distribution.",
   "writes": "TypeScript build metadata"
 } */
-import { runNode, runNodeTests } from './support/command.mts';
+import { runNode, runNodeTests, runPnpm } from './support/command.mts';
+await runPnpm(['exec', 'oxlint', '--deny-warnings', '.']);
+await runPnpm(['exec', 'oxfmt', '--check', '.']);
+await runNode('node_modules/typescript/bin/tsc', ['-p', 'tsconfig.shader-types.json']);
 await runNode('node_modules/typescript/bin/tsc', ['-p', 'tsconfig.json', '--noEmit']);
 await runNodeTests([
   'tests/package/typegpu-*.test.mjs',
