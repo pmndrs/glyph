@@ -306,6 +306,8 @@ async function verifyIsolatedPackedConsumers(archive, availableVersions, context
     });
     await buildInstalledConsumer(entry);
 
+    if (consumer.name === 'core') await verifyProjectBakingWithoutCompiler(consumerDirectory);
+
     for (const peer of consumer.runtimePeers ?? []) {
       await assertRuntimeImportRequiresPeer(consumerDirectory, '@pmndrs/glyph/three/typegpu', peer);
     }
@@ -314,6 +316,38 @@ async function verifyIsolatedPackedConsumers(archive, availableVersions, context
       assertRuntimeImportRejects(consumerDirectory, rejected.specifier, rejected.peer);
     }
   }
+}
+
+async function verifyProjectBakingWithoutCompiler(consumerDirectory) {
+  for (const dependency of ['typescript', '@babel/parser', '@babel/traverse', '@babel/types']) {
+    await assert.rejects(stat(join(consumerDirectory, 'node_modules', dependency)), { code: 'ENOENT' });
+  }
+  await mkdir(join(consumerDirectory, 'src'));
+  await mkdir(join(consumerDirectory, 'public/fonts'), { recursive: true });
+  await copyFile(
+    new URL('../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url),
+    join(consumerDirectory, 'public/fonts/Inter.ttf'),
+  );
+  await writeFile(
+    join(consumerDirectory, 'src/fonts.ts'),
+    [
+      "import { glyph, bitmap } from '@pmndrs/glyph';",
+      'const strikes = [16] as const;',
+      "export const font = glyph.fontFace('/fonts/Inter.ttf', { format: bitmap({ strikes }) });",
+      "throw new Error('Discovery must not execute application modules');",
+    ].join('\n'),
+  );
+  const result = spawnSync(
+    process.execPath,
+    ['node_modules/@pmndrs/glyph/bin/glyph.js', 'bake', '--output-root', 'generated', '--json'],
+    { cwd: consumerDirectory, encoding: 'utf8' },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.deepEqual(report.diagnostics, []);
+  assert.equal(report.fonts.length, 1);
+  assert.equal(report.mappings.length, 1);
+  assert.ok((await stat(join(consumerDirectory, 'generated/fonts/Inter.font.glb'))).size > 0);
 }
 
 async function assertRuntimeImportRequiresPeer(consumerDirectory, specifier, peer) {

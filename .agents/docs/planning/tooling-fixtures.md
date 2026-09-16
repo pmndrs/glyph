@@ -4,6 +4,9 @@ title: Tooling and fixtures for the first pipeline
 description: Defines the pinned font, text corpus, fixture manifest, oracle tooling, golden updates, and multi-font contract fixtures.
 tags: [tooling, fixtures, testing]
 sources:
+  - id: discovery-sources
+    resource: ../../../packages/glyph/src/discovery-source.ts
+    title: Compiler-free static source graph
   - id: 'citation-1'
     resource: 'https://github.com/rsms/inter'
     title: 'Inter'
@@ -30,8 +33,8 @@ sources:
     title: 'Vitexec'
 
 generated:
-  by: 'openai-codex/gpt-5'
-  at: '2026-08-15T15:53:27Z'
+  by: openai-codex/gpt-6
+  at: '2026-09-16T22:19:41Z'
 ---
 
 # Tooling and fixtures for the first pipeline
@@ -182,16 +185,23 @@ The full executable manifest lives beside the font. No fixture may silently foll
 
 Status: ✅ roadmap item 2.1 is implemented, verified, and exposed only through the completed Node host boundary
 
-The Node baker analyzes TypeScript, TSX, JavaScript, and JSX module graphs with the exact-pinned TypeScript 7 parser and a symbol-aware constant evaluator. It never uses regular expressions as the source of truth and never executes application modules. Its target is a `defineFont(fontInput, rasterInput)` call imported from `@pmndrs/glyph` (including aliased imports), plus the equivalent one-off raw-font/raster form when that form is statically visible. Every unstable compiler import and snapshot/symbol-handle operation is isolated in one internal adapter; tests assert the exact compiler version, reject unstable imports elsewhere in the package, and run the same discovery semantics over typed and plain-JavaScript fixtures.
+The Node baker analyzes TypeScript, TSX, JavaScript, and JSX module graphs with Oxc Parser, Oxc Walker lexical scopes, and
+Oxc Resolver module resolution. Its target is `glyph.fontFace(source, { format })` imported from `@pmndrs/glyph`, including
+aliased and namespace imports. Discovery starts from `src` or explicit entries and follows local ESM imports and
+re-exports, respecting tsconfig path aliases and source extension substitution. It evaluates immutable literal
+expressions without executing application modules or depending on the consumer's TypeScript compiler. Tests cover
+scope shadowing and hoisting, separate type/value namespaces, reassigned constants, imported constants, re-export cycles, ambiguous and namespace exports, syntax errors, and identical typed/plain-JavaScript behavior.
 
-Oxlint remains the fast repository enforcement layer, not a second manifest producer. Its custom JavaScript plugin surface does not provide the type-aware custom rule contract needed to reproduce this analyzer, and duplicating the constant evaluator over a second AST would create two authorities. An Oxlint diagnostic may be added only by consuming the canonical discovery result or a future shared stable semantic API; it must never independently decide what enters the bake manifest.
+Oxlint remains the fast repository enforcement layer, not a second manifest producer. Duplicating the constant evaluator
+over another AST would create two authorities. An Oxlint diagnostic may consume the canonical discovery result; it must
+never independently decide what enters the bake manifest.
 
-The analyzer extracts the selected raster package and a JSON-literal options value. It resolves the package's exported baker through the flat `package.json#pmndrs.glyph` map, then asks that package to canonicalize the descriptor and `rasterKey`. Bitmap `strikes` must be a statically known tuple; aliases to `const` literal tuples are allowed, while broad numbers, environment values, function results, mutation, and other runtime-only values are rejected by TypeScript when typed and diagnosed by the analyzer otherwise.
+The analyzer extracts the selected raster package and a JSON-literal options value. It resolves the package's exported baker through the flat `package.json#pmndrs.glyph` map, then asks that package to canonicalize the descriptor and `rasterKey`. Bitmap `strikes` must be statically visible; aliases to `const` literal tuples are allowed, while environment values, function results, mutable bindings, and other unresolved values receive dynamic-option diagnostics. Application type checking remains separate from discovery.
 
 Font-source discovery uses this ordered, conservative procedure:
 
 1. Evaluate string literals, `const` aliases, string concatenations, template literals with statically known substitutions, and `new URL(relativeLiteral, import.meta.url)`.
-2. Resolve module-relative URLs from the importing module. Resolve root-relative application paths against configured asset roots; the default root is the project's `public` directory when it exists.
+2. Resolve module-relative URLs from the module declaring the URL, including when it is imported elsewhere. Resolve root-relative application paths against configured asset roots; the default root is the project's `public` directory when it exists.
 3. For an absolute web URL, remove its origin, query, and fragment and try its decoded pathname against each asset root.
 4. For a dynamic origin or prefix with a statically known path suffix—such as a template combining `cdnOrigin` with `/fonts/Inter.ttf`—try that suffix against each asset root.
 5. Accept a source only when the result is an existing regular file and exactly one candidate matches. Record the source expression, resolved file, asset root, and derived public pathname in the bake report.
@@ -203,7 +213,11 @@ Dynamic URLs remain legal API values. Static discovery is an optimization that c
 
 Fixtures cover TypeScript and JavaScript entries, literal strings, `URL` objects, module constants, aliased imports, concatenation, templates, stripped absolute domains, dynamic origins with static suffixes, query/fragment removal, percent-encoded filenames, configured roots, ambiguous matches, traversal attempts, missing files, dynamic bitmap strikes, and third-party raster packages.
 
-The executable package-integration suite additionally covers statically visible core/React raw forms, source overrides, baked-only exclusion, immutable shorthand options, CommonJS rejection, and package-escape rejection. Focused analyzer tests import the internal boundary directly, while Node API/CLI integration fixtures exercise the same report through the public `@pmndrs/glyph/bake` subpath.
+The executable package-integration suite additionally covers baked-only exclusion, immutable shorthand options,
+CommonJS rejection, and package-escape rejection. Focused analyzer tests import the internal boundary directly, while
+Node API/CLI integration fixtures exercise the same report through the public `@pmndrs/glyph/bake` subpath. The packed
+consumer verifies that the installed CLI bakes a real font without TypeScript, Babel, or renderer peers installed and never
+executes the discovered application module. These tests run through `pnpm --filter @pmndrs/glyph test`.
 
 ### Oracle capture
 

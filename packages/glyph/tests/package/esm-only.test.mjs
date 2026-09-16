@@ -186,7 +186,7 @@ test('the public FontFace graph hides loader and mutable registration machinery'
   );
   assert.doesNotMatch(
     `${runtimeGraph.source}\n${runtimeWorker}`,
-    /(?:node:|font-baker\/validate|compose-bake|compiler-adapter|discovery|gltf-validator|ktx-parse|ajv)/,
+    /(?:node:|font-baker\/validate|compose-bake|discovery|@babel\/|oxc-(?:parser|walker|resolver)|gltf-validator|ktx-parse|ajv)/,
   );
   assert.ok((await readFile(new URL('../../dist/font-baker.wasm', import.meta.url))).byteLength > 0);
 });

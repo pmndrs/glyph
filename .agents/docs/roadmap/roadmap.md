@@ -31,7 +31,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-6
-  at: '2026-09-15T19:11:33Z'
+  at: '2026-09-16T21:27:08Z'
 ---
 
 # Canonical implementation roadmap
@@ -327,7 +327,8 @@ Item 2.3 is closed. Exact goldens bind split, combined-embedded, combined-extern
 
 - [x] `@pmndrs/glyph/bake` exports the filesystem-oriented `bakeFont` and discovery-oriented `bakeProject` Node APIs without adding Node built-ins to browser-safe entry points.
 - [x] The generic `bakeFont` tuple preserves each selected raster package's exact option and packaging types; compile-only fixtures reject an empty bitmap strike tuple and unsupported packaging.
-- [x] `bakeProject` consumes the canonical TypeScript discovery report, groups and deduplicates one source deterministically, and dynamically imports only each already-verified ESM baker entry.
+- [x] `bakeProject` consumes the canonical static discovery report, groups and deduplicates one source deterministically, and dynamically imports only each already-verified ESM baker entry.
+- [x] Project discovery uses Oxc parsing, scopes, and resolution without a consumer TypeScript compiler; isolated tarball installation proves actual CLI baking and application-module non-execution.
 - [x] The thin native-ESM `glyph bake` command covers conventional project defaults, repeatable entry/asset-root options, mirrored output roots, human output, JSON output, command-specific help, malformed arguments, and diagnostic exit status.
 - [x] `glyph glyphs` exposes Unicode mappings and retained `post`/CFF names through pinned `hb-info`, filters exact names, and emits either JSON or a compressed set accepted by `glyph bake --unicodes`; synthetic `gidN` labels are never promoted to semantic names.
 - [x] Exact Inter embedded/external goldens, mixed embedded/external raster composition, and repeated project runs prove authoritative byte and output-report determinism.
@@ -341,7 +342,7 @@ Item 2.4 and Milestone 2 are closed. Items 3.1 and 3.2 are closed; item 3.3 is a
 Deliver:
 
 - host-independent font bake request/result library;
-- TypeScript-AST project discovery for composed font tokens and statically declared raster options;
+- syntax-based JS/JSX/TS/TSX project discovery for font declarations and statically declared raster options;
 - reported, unambiguous mapping from module-relative and application URL paths into configured local asset roots;
 - source validation and face selection;
 - deterministic reduced shaping SFNT, dense extents, and one-bit-per-glyph extents availability;

@@ -49,7 +49,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-6
-  at: '2026-09-16T13:27:39Z'
+  at: '2026-09-16T21:27:08Z'
 ---
 
 # Decision register
@@ -491,6 +491,8 @@ Randomized input alone does not establish correctness. Mutation fuzzing asserts 
 | D-366 | Built-in `bitmap`, `msdf`, and `slug` format selection is ordinary application vocabulary and lives at the root, together with its public options and decoded-data types. Rename the renderer-neutral `/config` construction entry to `/extend` and move built-in schemas, codecs, and format interpretation helpers there. Remove `/raster`; each runtime name has one public home. This refines D-365 to 14 exact JavaScript entries while preserving the existing bake entry points. Direct named-import consumer bundles must retain the same implementation modules and assets as before this move. | Accepted; implemented with direct consumer bundle and packed-package verification |
 
 | D-367 | Name the renderer-neutral integration building blocks `/core` instead of the unmerged `/extend`. Retain the exact exports and static ESM re-export structure; root application values, built-in format selection, framework integration entries, and baking paths remain unchanged. This reuses the conventional core name without restoring the retired engine-driving, planner, wire, or host-internal API. | Accepted; implemented with direct bundle, packed-consumer, and declaration verification |
+
+| D-368 | Keep automatic Node font discovery while removing the consumer TypeScript compiler requirement. Oxc Parser and Oxc Walker own JS/JSX/TS/TSX syntax and lexical binding identity; Oxc Resolver owns module resolution and tsconfig aliases. The Node parser does not expose its Rust semantic model; the maintained Walker scope tracker owns hoisting, shadowing, and type/value namespaces, while Glyph rejects reassigned constants. Glyph evaluates only the existing literal/constant subset and never executes application source. Local ESM imports and re-exports retain constant identity, cycles terminate as dynamic diagnostics, and module-relative font URLs belong to their declaring file. TypeScript remains development-only. A packed CLI consumer with neither TypeScript nor Babel installed must bake a real font successfully. | Accepted; implemented |
 
 ## Decisions required before implementation
 

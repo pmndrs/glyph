@@ -1,19 +1,15 @@
+import type * as ast from 'oxc-parser';
 import { createRequire } from 'node:module';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { readdir, readFile, realpath, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 import {
-  ast as ts,
-  constantInitializer,
-  importedBinding,
-  openCompilerProjectSnapshot,
-  shorthandInitializer,
+  DiscoverySources,
   unwrapExpression as unwrap,
-  type CompilerChecker as Checker,
-  type CompilerProject as Project,
+  type DiscoverySource,
   type ImportedBinding,
-} from './compiler-adapter.js';
+} from './discovery-source.js';
 
 export interface DiscoveryOptions {
   readonly entries?: readonly (string | URL)[];
@@ -61,6 +57,7 @@ interface StaticString {
   readonly exact?: string;
   readonly suffix?: string;
   readonly moduleRelative?: string;
+  readonly declaringFile?: string;
 }
 
 interface ResolveResult {
@@ -89,43 +86,30 @@ export async function discoverProjectFonts(options: DiscoveryOptions = {}): Prom
   const fonts: OrderedFontDefinition[] = [];
   const diagnostics: OrderedDiagnostic[] = [];
   const analyses: Promise<void>[] = [];
-  const snapshot = openCompilerProjectSnapshot(projectRoot, entries);
-  try {
-    for (const project of snapshot.projects) {
-      const checker = project.checker;
-      for (const fileName of project.program.getSourceFileNames()) {
-        const sourceFile = project.program.getSourceFile(fileName);
-        if (sourceFile === undefined || sourceFile.isDeclarationFile || !within(projectRoot, fileName)) continue;
-        options.signal?.throwIfAborted();
-        const visit = (node: ts.Node): void => {
-          if (ts.isCallExpression(node) && isGlyphFontFaceCall(node.expression, checker, project)) {
-            const sourceOffset = node.getStart(sourceFile);
-            analyses.push(
-              analyzeDefinition(
-                node.arguments[0],
-                node.arguments[1],
-                node.getText(sourceFile),
-                sourceFile,
-                checker,
-                project,
-                assetRoots,
-              ).then((result) => {
-                if (result === undefined) return;
-                if ('fonts' in result) {
-                  for (const font of result.fonts) fonts.push({ value: font, sourceOffset });
-                } else diagnostics.push({ value: result.diagnostic, sourceOffset });
-              }),
-            );
-          }
-          node.forEachChild(visit);
-        };
-        visit(sourceFile);
-      }
+  const sources = new DiscoverySources(projectRoot, entries, options.signal);
+  for (const sourceFile of sources.files.values()) {
+    options.signal?.throwIfAborted();
+    for (const node of sourceFile.calls) {
+      if (!isGlyphFontFaceCall(node.callee, sources)) continue;
+      const sourceOffset = node.start;
+      analyses.push(
+        analyzeDefinition(
+          node.arguments[0],
+          node.arguments[1],
+          sources.text(node),
+          sourceFile,
+          sources,
+          assetRoots,
+        ).then((result) => {
+          if (result === undefined) return;
+          if ('fonts' in result) {
+            for (const font of result.fonts) fonts.push({ value: font, sourceOffset });
+          } else diagnostics.push({ value: result.diagnostic, sourceOffset });
+        }),
+      );
     }
-    await Promise.all(analyses);
-  } finally {
-    snapshot.close();
   }
+  await Promise.all(analyses);
   fonts.sort(compareSourcePosition);
   diagnostics.sort(compareSourcePosition);
   return {
@@ -135,18 +119,17 @@ export async function discoverProjectFonts(options: DiscoveryOptions = {}): Prom
 }
 
 async function analyzeDefinition(
-  sourceExpression: ts.Expression | undefined,
-  configExpression: ts.Expression | undefined,
+  sourceExpression: ast.Node | undefined,
+  configExpression: ast.Node | undefined,
   expression: string,
-  sourceFile: ts.SourceFile,
-  checker: Checker,
-  project: Project,
+  sourceFile: DiscoverySource,
+  sources: DiscoverySources,
   assetRoots: readonly string[],
 ): Promise<{ fonts: readonly DiscoveredFontDefinition[] } | { diagnostic: DiscoveryDiagnostic } | undefined> {
   if (sourceExpression === undefined) {
     return failure('dynamic-font-source', 'glyph.fontFace() has no source input', sourceFile, expression);
   }
-  const source = staticString(sourceExpression, checker, project);
+  const source = staticString(sourceExpression, sources);
   if (source === undefined) {
     return failure(
       'dynamic-font-source',
@@ -167,7 +150,7 @@ async function analyzeDefinition(
     );
   }
   const resolvedFile = resolved.resolvedFile;
-  const rasters = await resolveFontFaceRasters(configExpression, checker, project, sourceFile);
+  const rasters = await resolveFontFaceRasters(configExpression, sources, sourceFile);
   if ('diagnostic' in rasters) return rasters;
   return {
     fonts: rasters.rasters.map((raster) => ({
@@ -181,52 +164,57 @@ async function analyzeDefinition(
   };
 }
 
-function isGlyphFontFaceCall(expression: ts.Expression, checker: Checker, project: Project): boolean {
+function isGlyphFontFaceCall(expression: ast.Node, sources: DiscoverySources): boolean {
   const value = unwrap(expression);
-  if (!ts.isPropertyAccessExpression(value) || value.name.text !== 'fontFace') return false;
-  const binding = importedBinding(value.expression, checker, project);
+  if (
+    value.type !== 'MemberExpression' ||
+    value.computed ||
+    value.property.type !== 'Identifier' ||
+    value.property.name !== 'fontFace'
+  )
+    return false;
+  const binding = sources.importedBinding(value.object);
   return binding?.module === '@pmndrs/glyph' && binding.exported === 'glyph';
 }
 
 async function resolveFontFaceRasters(
-  configExpression: ts.Expression | undefined,
-  checker: Checker,
-  project: Project,
-  sourceFile: ts.SourceFile,
+  configExpression: ast.Node | undefined,
+  sources: DiscoverySources,
+  sourceFile: DiscoverySource,
 ): Promise<{ rasters: readonly ResolvedRasterBaker[] } | { diagnostic: DiscoveryDiagnostic }> {
   if (configExpression === undefined) return { rasters: await defaultRasterBakers(sourceFile.fileName) };
-  const config = constantExpression(configExpression, checker, project);
-  if (!ts.isObjectLiteralExpression(config)) {
+  const config = constantExpression(configExpression, sources);
+  if (config.type !== 'ObjectExpression') {
     return failure(
       'invalid-raster-options',
       'FontFace config must be a statically visible object',
       sourceFile,
-      configExpression.getText(sourceFile),
+      sources.text(configExpression),
     );
   }
   const format = objectPropertyExpression(config, 'format');
   if (format === undefined) return { rasters: await defaultRasterBakers(sourceFile.fileName) };
-  const selected = constantExpression(format, checker, project);
-  const expressions = ts.isArrayLiteralExpression(selected) ? [...selected.elements] : [selected];
+  const selected = constantExpression(format, sources);
+  const expressions = selected.type === 'ArrayExpression' ? [...selected.elements] : [selected];
   if (expressions.length === 0) {
     return failure(
       'invalid-raster-options',
       'FontFace format array must not be empty',
       sourceFile,
-      format.getText(sourceFile),
+      sources.text(format),
     );
   }
   const rasters: ResolvedRasterBaker[] = [];
   for (const expression of expressions) {
-    if (ts.isSpreadElement(expression)) {
+    if (expression === null || expression.type === 'SpreadElement') {
       return failure(
         'invalid-raster-options',
         'FontFace formats must be statically visible',
         sourceFile,
-        format.getText(sourceFile),
+        sources.text(format),
       );
     }
-    const raster = await resolveRaster(expression, checker, project, sourceFile);
+    const raster = await resolveRaster(expression, sources, sourceFile);
     if ('diagnostic' in raster) return raster;
     rasters.push(raster.raster);
   }
@@ -234,19 +222,24 @@ async function resolveFontFaceRasters(
 }
 
 async function resolveRaster(
-  expression: ts.Expression | undefined,
-  checker: Checker,
-  project: Project,
-  sourceFile: ts.SourceFile,
+  expression: ast.Node | undefined,
+  sources: DiscoverySources,
+  sourceFile: DiscoverySource,
 ): Promise<{ raster: ResolvedRasterBaker } | { diagnostic: DiscoveryDiagnostic }> {
-  const text = expression?.getText(sourceFile) ?? '<missing raster>';
-  const value = expression === undefined ? undefined : constantExpression(expression, checker, project);
+  const text = expression === undefined ? '<missing raster>' : sources.text(expression);
+  const value = expression === undefined ? undefined : constantExpression(expression, sources);
   if (value === undefined) {
     return failure('invalid-raster-options', 'raster must be a statically visible factory call', sourceFile, text);
   }
-  if (ts.isStringLiteralLikeNode(value)) {
+  const formatKey =
+    value.type === 'Literal' && typeof value.value === 'string'
+      ? value.value
+      : value.type === 'TemplateLiteral' && value.expressions.length === 0
+        ? value.quasis[0]!.value.cooked
+        : undefined;
+  if (formatKey !== undefined && formatKey !== null) {
     try {
-      return { raster: await builtInRasterBaker(value.text, sourceFile.fileName) };
+      return { raster: await builtInRasterBaker(formatKey, sourceFile.fileName) };
     } catch (error) {
       return failure(
         'invalid-raster-manifest',
@@ -256,26 +249,28 @@ async function resolveRaster(
       );
     }
   }
-  const moduleExpression = ts.isCallExpression(value)
-    ? value.expression
-    : ts.isObjectLiteralExpression(value)
-      ? objectPropertyExpression(value, 'raster')
-      : value;
-  const optionsExpression = ts.isCallExpression(value)
-    ? value.arguments[0]
-    : ts.isObjectLiteralExpression(value)
-      ? objectPropertyExpression(value, 'options')
-      : undefined;
-  const binding = moduleExpression === undefined ? undefined : importedBinding(moduleExpression, checker, project);
+  const moduleExpression =
+    value.type === 'CallExpression'
+      ? value.callee
+      : value.type === 'ObjectExpression'
+        ? objectPropertyExpression(value, 'raster')
+        : value;
+  const optionsExpression =
+    value.type === 'CallExpression'
+      ? value.arguments[0]
+      : value.type === 'ObjectExpression'
+        ? objectPropertyExpression(value, 'options')
+        : undefined;
+  const binding = moduleExpression === undefined ? undefined : sources.importedBinding(moduleExpression);
   if (binding === undefined) {
     return failure('invalid-raster-options', 'raster factory is not an imported ESM binding', sourceFile, text);
   }
-  const options = optionsExpression === undefined ? {} : staticJson(optionsExpression, checker, project);
+  const options = optionsExpression === undefined ? {} : staticJson(optionsExpression, sources);
   if (options === undefined) {
     return failure('invalid-raster-options', 'raster options are not immutable JSON literals', sourceFile, text);
   }
   try {
-    const manifest = await rasterManifest(binding, sourceFile.fileName);
+    const manifest = await rasterManifest(binding, binding.sourceFile);
     return { raster: { ...manifest, options } };
   } catch (error) {
     return failure('invalid-raster-manifest', error instanceof Error ? error.message : String(error), sourceFile, text);
@@ -298,7 +293,7 @@ async function builtInRasterBaker(
   if (kind !== 'bitmap' && kind !== 'msdf' && kind !== 'slug') {
     throw new Error(`FontFace format key ${JSON.stringify(kind)} has no statically imported raster baker`);
   }
-  const manifest = await rasterManifest({ module: '@pmndrs/glyph', exported: kind }, sourceFile);
+  const manifest = await rasterManifest({ module: '@pmndrs/glyph', exported: kind, sourceFile }, sourceFile);
   return { ...manifest, options };
 }
 
@@ -348,20 +343,19 @@ function esmExportTarget(value: unknown, packageType: unknown): string | undefin
 }
 
 function staticString(
-  expression: ts.Expression,
-  checker: Checker,
-  project: Project,
-  seen = new Set<number>(),
+  expression: ast.Node,
+  sources: DiscoverySources,
+  seen = new Set<ast.Node>(),
 ): StaticString | undefined {
   const value = unwrap(expression);
-  if (ts.isStringLiteralLikeNode(value)) return { exact: value.text, suffix: value.text };
-  if (ts.isIdentifier(value)) {
-    const initializer = constantInitializer(value, checker, project, seen);
-    return initializer === undefined ? undefined : staticString(initializer, checker, project, seen);
+  if (value.type === 'Literal' && typeof value.value === 'string') return { exact: value.value, suffix: value.value };
+  if (value.type === 'Identifier') {
+    const initializer = sources.constantInitializer(value, seen);
+    return initializer === undefined ? undefined : staticString(initializer, sources, seen);
   }
-  if (ts.isBinaryExpression(value) && value.operatorToken.kind === ts.SyntaxKind.PlusToken) {
-    const left = staticString(value.left, checker, project, new Set(seen));
-    const right = staticString(value.right, checker, project, new Set(seen));
+  if (value.type === 'BinaryExpression' && value.operator === '+') {
+    const left = staticString(value.left, sources, new Set(seen));
+    const right = staticString(value.right, sources, new Set(seen));
     if (left?.exact !== undefined && right?.exact !== undefined) {
       const exact = left.exact + right.exact;
       return { exact, suffix: exact };
@@ -372,26 +366,23 @@ function staticString(
     }
     return right?.suffix === undefined || right.suffix === '' ? undefined : { suffix: right.suffix };
   }
-  if (ts.isTemplateExpression(value)) {
-    let exact: string | undefined = value.head.text;
-    let suffix = value.head.text;
-    for (const span of value.templateSpans) {
-      const part = staticString(span.expression, checker, project, new Set(seen));
-      exact = exact === undefined || part?.exact === undefined ? undefined : exact + part.exact + span.literal.text;
-      suffix = part?.exact === undefined ? span.literal.text : suffix + part.exact + span.literal.text;
+  if (value.type === 'TemplateLiteral') {
+    let exact: string | undefined = value.quasis[0]!.value.cooked ?? undefined;
+    let suffix = exact ?? '';
+    for (let index = 0; index < value.expressions.length; index++) {
+      const part = staticString(value.expressions[index]!, sources, new Set(seen));
+      const tail = value.quasis[index + 1]!.value.cooked;
+      if (tail === null || tail === undefined) return undefined;
+      exact = exact === undefined || part?.exact === undefined ? undefined : exact + part.exact + tail;
+      suffix = part?.exact === undefined ? tail : suffix + part.exact + tail;
     }
     return exact === undefined ? (suffix === '' ? undefined : { suffix }) : { exact, suffix: exact };
   }
-  if (
-    ts.isNewExpression(value) &&
-    ts.isIdentifier(value.expression) &&
-    value.expression.text === 'URL' &&
-    value.arguments !== undefined
-  ) {
+  if (value.type === 'NewExpression' && value.callee.type === 'Identifier' && value.callee.name === 'URL') {
     const first =
-      value.arguments[0] === undefined ? undefined : staticString(value.arguments[0], checker, project, new Set(seen));
+      value.arguments[0] === undefined ? undefined : staticString(value.arguments[0], sources, new Set(seen));
     if (first?.exact !== undefined && value.arguments.length === 2 && isImportMetaUrl(value.arguments[1]!)) {
-      return { moduleRelative: first.exact };
+      return { moduleRelative: first.exact, declaringFile: sources.source(value).fileName };
     }
     if (first?.exact !== undefined && value.arguments.length === 1) {
       try {
@@ -405,70 +396,54 @@ function staticString(
   return undefined;
 }
 
-function staticJson(
-  expression: ts.Expression,
-  checker: Checker,
-  project: Project,
-  seen = new Set<number>(),
-): unknown | undefined {
+function staticJson(expression: ast.Node, sources: DiscoverySources, seen = new Set<ast.Node>()): unknown | undefined {
   const value = unwrap(expression);
-  if (ts.isStringLiteralLikeNode(value)) return value.text;
-  if (ts.isNumericLiteral(value)) return Number(value.text);
-  if (value.kind === ts.SyntaxKind.TrueKeyword) return true;
-  if (value.kind === ts.SyntaxKind.FalseKeyword) return false;
-  if (value.kind === ts.SyntaxKind.NullKeyword) return null;
   if (
-    ts.isPrefixUnaryExpression(value) &&
-    value.operator === ts.SyntaxKind.MinusToken &&
-    ts.isNumericLiteral(value.operand)
+    value.type === 'Literal' &&
+    !('regex' in value) &&
+    (typeof value.value === 'string' ||
+      typeof value.value === 'number' ||
+      typeof value.value === 'boolean' ||
+      value.value === null)
+  )
+    return value.value;
+  if (
+    value.type === 'UnaryExpression' &&
+    value.operator === '-' &&
+    value.argument.type === 'Literal' &&
+    typeof value.argument.value === 'number'
   ) {
-    return -Number(value.operand.text);
+    return -value.argument.value;
   }
-  if (ts.isIdentifier(value)) {
-    const initializer = constantInitializer(value, checker, project, seen);
-    return initializer === undefined ? undefined : staticJson(initializer, checker, project, seen);
+  if (value.type === 'TemplateLiteral' && value.expressions.length === 0)
+    return value.quasis[0]!.value.cooked ?? undefined;
+  if (value.type === 'Identifier') {
+    const initializer = sources.constantInitializer(value, seen);
+    return initializer === undefined ? undefined : staticJson(initializer, sources, seen);
   }
-  if (ts.isArrayLiteralExpression(value)) {
+  if (value.type === 'ArrayExpression') {
     const result: unknown[] = [];
     for (const element of value.elements) {
-      if (ts.isSpreadElement(element)) return undefined;
-      const item = staticJson(element, checker, project, new Set(seen));
+      if (element === null || element.type === 'SpreadElement') return undefined;
+      const item = staticJson(element, sources, new Set(seen));
       if (item === undefined) return undefined;
       result.push(item);
     }
     return result;
   }
-  if (ts.isObjectLiteralExpression(value)) {
+  if (value.type === 'ObjectExpression') {
     const result: Record<string, unknown> = {};
     for (const property of value.properties) {
-      if (ts.isSpreadAssignment(property)) return undefined;
-      const name = propertyName(property.name);
-      const propertySeen = new Set(seen);
-      const item = ts.isPropertyAssignment(property)
-        ? staticJson(property.initializer, checker, project, propertySeen)
-        : ts.isShorthandPropertyAssignment(property)
-          ? staticJsonInitializer(
-              shorthandInitializer(property, checker, project, propertySeen),
-              checker,
-              project,
-              propertySeen,
-            )
-          : undefined;
+      if (property.type !== 'Property' || property.computed || property.method || property.kind !== 'init')
+        return undefined;
+      const name = propertyName(property.key);
+      const item = staticJson(property.value, sources, new Set(seen));
       if (name === undefined || item === undefined) return undefined;
-      result[name] = item;
+      Object.defineProperty(result, name, { value: item, enumerable: true, configurable: true, writable: true });
     }
     return result;
   }
   return undefined;
-}
-
-function staticJsonInitializer(
-  initializer: ts.Expression | undefined,
-  checker: Checker,
-  project: Project,
-  seen: Set<number>,
-): unknown | undefined {
-  return initializer === undefined ? undefined : staticJson(initializer, checker, project, seen);
 }
 
 async function resolveFontSource(
@@ -480,7 +455,10 @@ async function resolveFontSource(
   try {
     if (source.moduleRelative !== undefined) {
       const pathname = safePathname(source.moduleRelative);
-      const file = resolve(dirname(sourceFile), `.${pathname.startsWith('/') ? pathname : `/${pathname}`}`);
+      const file = resolve(
+        dirname(source.declaringFile ?? sourceFile),
+        `.${pathname.startsWith('/') ? pathname : `/${pathname}`}`,
+      );
       for (const root of assetRoots)
         if (within(root, file)) candidates.push({ file, root, pathname: publicPath(root, file) });
     } else {
@@ -547,38 +525,44 @@ function safePathname(input: string): string {
   return segments.map(({ decoded }) => decoded).join('/');
 }
 
-function isImportMetaUrl(expression: ts.Expression): boolean {
+function isImportMetaUrl(expression: ast.Node): boolean {
   return (
-    ts.isPropertyAccessExpression(expression) &&
-    expression.name.text === 'url' &&
-    ts.isMetaProperty(expression.expression) &&
-    expression.expression.keywordToken === ts.SyntaxKind.ImportKeyword
+    expression.type === 'MemberExpression' &&
+    !expression.computed &&
+    expression.property.type === 'Identifier' &&
+    expression.property.name === 'url' &&
+    expression.object.type === 'MetaProperty' &&
+    expression.object.meta.name === 'import' &&
+    expression.object.property.name === 'meta'
   );
 }
 
-function constantExpression(
-  expression: ts.Expression,
-  checker: Checker,
-  project: Project,
-  seen = new Set<number>(),
-): ts.Expression {
+function constantExpression(expression: ast.Node, sources: DiscoverySources, seen = new Set<ast.Node>()): ast.Node {
   const value = unwrap(expression);
-  if (!ts.isIdentifier(value)) return value;
-  const initializer = constantInitializer(value, checker, project, seen);
-  return initializer === undefined ? value : constantExpression(initializer, checker, project, seen);
+  if (value.type !== 'Identifier') return value;
+  const initializer = sources.constantInitializer(value, seen);
+  return initializer === undefined ? value : constantExpression(initializer, sources, seen);
 }
 
-function objectPropertyExpression(object: ts.ObjectLiteralExpression, name: string): ts.Expression | undefined {
+function objectPropertyExpression(object: ast.ObjectExpression, name: string): ast.Node | undefined {
   for (const property of object.properties) {
-    if (ts.isPropertyAssignment(property) && propertyName(property.name) === name) return property.initializer;
-    if (ts.isShorthandPropertyAssignment(property) && ts.isIdentifier(property.name) && property.name.text === name)
-      return property.name;
+    if (
+      property.type === 'Property' &&
+      !property.computed &&
+      !property.method &&
+      property.kind === 'init' &&
+      propertyName(property.key) === name
+    )
+      return property.value;
   }
   return undefined;
 }
 
-function propertyName(name: ts.PropertyName): string | undefined {
-  return ts.isIdentifier(name) || ts.isStringLiteralLikeNode(name) || ts.isNumericLiteral(name) ? name.text : undefined;
+function propertyName(name: ast.Node): string | undefined {
+  if (name.type === 'Identifier') return name.name;
+  return name.type === 'Literal' && (typeof name.value === 'string' || typeof name.value === 'number')
+    ? String(name.value)
+    : undefined;
 }
 
 function packageNameFromSpecifier(specifier: string): string {
@@ -615,7 +599,7 @@ function isNonArrayObject(value: unknown): value is Record<string, unknown> {
 function failure(
   code: DiscoveryDiagnostic['code'],
   message: string,
-  sourceFile: ts.SourceFile,
+  sourceFile: DiscoverySource,
   expression: string,
 ): { diagnostic: DiscoveryDiagnostic } {
   return { diagnostic: { code, message, sourceFile: sourceFile.fileName, expression } };

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -104,7 +104,7 @@ test('an omitted format discovers the default Bitmap, MSDF, and Slug bake set', 
   );
 });
 
-test('discovers glyph.fontFace and immutable raster options through TypeScript symbols', async (t) => {
+test('discovers glyph.fontFace and immutable raster options through lexical bindings', async (t) => {
   const root = await project();
   t.after(() => rm(root, { recursive: true, force: true }));
   const fontPath = join(root, 'public', 'fonts', 'Inter Regular.ttf');
@@ -239,6 +239,183 @@ test('follows imported constants and resolves literal, concatenated, and absolut
   ]);
 });
 
+test('follows tsconfig aliases and re-exports without executing source, preserving declaration-relative URLs', async (t) => {
+  const root = await project();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, 'shared/fonts'), { recursive: true });
+  await writeFile(join(root, 'shared/fonts/Local.ttf'), 'font');
+  await writeFile(
+    join(root, 'tsconfig.json'),
+    JSON.stringify({
+      compilerOptions: { paths: { '#fonts/*': ['./shared/*'] } },
+    }),
+  );
+  await writeFile(
+    join(root, 'shared/options.tsx'),
+    `
+    export const source = new URL('./fonts/Local.ttf', import.meta.url);
+    export const options = { strikes: [16] } as const satisfies { strikes: readonly number[] };
+    throw new Error('Do not execute source');
+  `,
+  );
+  await writeFile(
+    join(root, 'shared/index.ts'),
+    `
+    export { source as fontSource, options } from './options.jsx';
+  `,
+  );
+  await writeFile(
+    join(root, 'src/main.tsx'),
+    `
+    import { glyph as text } from '@pmndrs/glyph';
+    import { bitmap } from '@fixture/raster';
+    import { fontSource, options } from '#fonts/index.js';
+    export const face = text.fontFace(fontSource, { format: bitmap(options) });
+    export const View = () => <div />;
+  `,
+  );
+  const report = await discoverProjectFonts({ projectRoot: root, assetRoots: [join(root, 'shared')] });
+  assert.deepEqual(report.diagnostics, []);
+  assert.equal(report.fonts.length, 1);
+  assert.equal(report.fonts[0].publicPathname, '/fonts/Local.ttf');
+  assert.deepEqual(report.fonts[0].raster.options, { strikes: [16] });
+});
+
+test('ignores shadowed glyph bindings and reports shadowed options and cyclic constants as dynamic', async (t) => {
+  const root = await project();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, 'public/fonts/Local.ttf'), 'font');
+  await writeFile(
+    join(root, 'src/main.ts'),
+    `
+    import { glyph } from '@pmndrs/glyph';
+    import { bitmap } from '@fixture/raster';
+    const strikes = [16];
+    function unrelated(glyph: { fontFace(source: string): unknown }) {
+      glyph.fontFace('/fonts/must-not-discover.ttf');
+    }
+    function dynamic(strikes: number[]) {
+      glyph.fontFace('/fonts/Local.ttf', { format: bitmap({ strikes }) });
+    }
+    const first = second;
+    const second = first;
+    glyph.fontFace(first, { format: bitmap({ strikes }) });
+    glyph.fontFace('/fonts/Local.ttf', { format: bitmap({ strikes }) });
+  `,
+  );
+  const report = await discoverProjectFonts({ projectRoot: root });
+  assert.deepEqual(
+    report.diagnostics.map(({ code }) => code),
+    ['invalid-raster-options', 'dynamic-font-source'],
+  );
+  assert.equal(report.fonts.length, 1);
+  assert.deepEqual(report.fonts[0].raster.options, { strikes: [16] });
+});
+
+test('cyclic re-exports terminate and explicit entries discover imported source once', async (t) => {
+  const root = await project();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, 'public/fonts/Local.ttf'), 'font');
+  await writeFile(join(root, 'src/first.ts'), "export { missing } from './second.js'; export * from './second.js';");
+  await writeFile(join(root, 'src/second.ts'), "export { missing } from './first.js'; export * from './first.js';");
+  await writeFile(
+    join(root, 'src/fonts.ts'),
+    `
+    import { glyph, bitmap } from '@pmndrs/glyph';
+    import { missing } from './first.js';
+    glyph.fontFace(missing, { format: bitmap({ strikes: [16] }) });
+    glyph.fontFace('/fonts/Local.ttf', { format: bitmap({ strikes: [16] }) });
+  `,
+  );
+  await writeFile(join(root, 'src/main.ts'), "import './fonts.js'; import './first.js';");
+  const report = await discoverProjectFonts({ projectRoot: root, entries: ['src/main.ts'] });
+  assert.deepEqual(
+    report.diagnostics.map(({ code }) => code),
+    ['dynamic-font-source'],
+  );
+  assert.equal(report.fonts.length, 1);
+});
+
+test('resolves default and diamond exports while rejecting ambiguous and namespace values', async (t) => {
+  const root = await project();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, 'public/fonts/Local.ttf'), 'font');
+  await writeFile(
+    join(root, 'src/source.ts'),
+    `
+    const local = '/fonts/Local.ttf';
+    export { local as source };
+    export default local;
+  `,
+  );
+  await writeFile(join(root, 'src/left.ts'), "export * from './source.js';");
+  await writeFile(join(root, 'src/right.ts'), "export * from './source.js';");
+  await writeFile(join(root, 'src/diamond.ts'), "export * from './left.js'; export * from './right.js';");
+  await writeFile(join(root, 'src/conflict.ts'), "export const source = '/fonts/Other.ttf';");
+  await writeFile(join(root, 'src/ambiguous.ts'), "export * from './source.js'; export * from './conflict.js';");
+  await writeFile(join(root, 'src/namespace.ts'), "export * as source from './source.js';");
+  await writeFile(
+    join(root, 'src/main.ts'),
+    `
+    import { glyph, bitmap } from '@pmndrs/glyph';
+    import direct from './source.js';
+    import { source } from './diamond.js';
+    import { source as ambiguous } from './ambiguous.js';
+    import { source as namespace } from './namespace.js';
+    glyph.fontFace(direct, { format: bitmap({ strikes: [16] }) });
+    glyph.fontFace(source, { format: bitmap({ strikes: [16] }) });
+    glyph.fontFace(ambiguous, { format: bitmap({ strikes: [16] }) });
+    glyph.fontFace(namespace, { format: bitmap({ strikes: [16] }) });
+  `,
+  );
+  const report = await discoverProjectFonts({ projectRoot: root });
+  assert.deepEqual(
+    report.diagnostics.map(({ code }) => code),
+    ['dynamic-font-source', 'dynamic-font-source'],
+  );
+  assert.deepEqual(
+    report.fonts.map(({ publicPathname }) => publicPathname),
+    ['/fonts/Local.ttf', '/fonts/Local.ttf'],
+  );
+});
+
+test('workspace-linked packages preserve authored import identity and are not scanned as application source', async (t) => {
+  const root = await project();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const linkedPackage = join(root, 'packages/glyph');
+  await mkdir(linkedPackage, { recursive: true });
+  await writeFile(
+    join(linkedPackage, 'package.json'),
+    JSON.stringify({
+      name: '@pmndrs/glyph',
+      type: 'module',
+      exports: { '.': './index.js' },
+    }),
+  );
+  await writeFile(
+    join(linkedPackage, 'index.js'),
+    `
+    export const glyph = { fontFace() {} };
+    import { glyph as actual } from '@pmndrs/glyph';
+    actual.fontFace('/fonts/dependency-only.ttf');
+  `,
+  );
+  await rm(join(root, 'node_modules/@pmndrs/glyph'), { recursive: true });
+  await symlink(linkedPackage, join(root, 'node_modules/@pmndrs/glyph'), 'dir');
+  await writeFile(join(root, 'public/fonts/Local.ttf'), 'font');
+  await writeFile(
+    join(root, 'src/main.ts'),
+    `
+    import { glyph } from '@pmndrs/glyph';
+    import { bitmap } from '@fixture/raster';
+    glyph.fontFace('/fonts/Local.ttf', { format: bitmap({ strikes: [16] }) });
+  `,
+  );
+  const report = await discoverProjectFonts({ projectRoot: root });
+  assert.deepEqual(report.diagnostics, []);
+  assert.equal(report.fonts.length, 1);
+});
+
 test('discovers single and array format requests and skips baked GLB inputs', async (t) => {
   const root = await project();
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -338,6 +515,124 @@ test('reports ambiguity, unsafe paths, missing files, dynamic options, and dynam
     'missing-font-source',
   ]);
   assert.equal(report.fonts.length, 0);
+});
+
+test('discovery respects hoisted, block, catch, pattern, class, and TypeScript value scopes', async (t) => {
+  const root = await project();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, 'public', 'fonts', 'Scoped.ttf'), 'font');
+  await writeFile(
+    join(root, 'src', 'scopes.ts'),
+    `
+    import { glyph } from '@pmndrs/glyph';
+    import { bitmap } from '@fixture/raster';
+    function hoisted() {
+      glyph.fontFace('/fonts/Wrong.ttf');
+      if (false) { var glyph; }
+    }
+    {
+      glyph.fontFace('/fonts/Wrong.ttf');
+      const glyph = local();
+    }
+    switch (0) {
+      case 0:
+        const glyph = local();
+        glyph.fontFace('/fonts/Wrong.ttf');
+    }
+    try {} catch (glyph) { glyph.fontFace('/fonts/Wrong.ttf'); }
+    function pattern({ glyph }) { glyph.fontFace('/fonts/Wrong.ttf'); }
+    const Example = class glyph {
+      static run() { glyph.fontFace('/fonts/Wrong.ttf'); }
+    };
+    namespace Private { const glyph = local(); glyph.fontFace('/fonts/Wrong.ttf'); }
+    function typeOnly() {
+      type glyph = { unused: true };
+      glyph.fontFace('/fonts/Scoped.ttf', { format: bitmap({ strikes: [16] }) });
+    }
+    glyph.fontFace('/fonts/Scoped.ttf', { format: bitmap({ strikes: [32] }) });
+  `,
+  );
+  const report = await discoverProjectFonts({ projectRoot: root });
+  assert.deepEqual(report.diagnostics, []);
+  assert.deepEqual(
+    report.fonts.map(({ raster }) => raster.options),
+    [{ strikes: [16] }, { strikes: [32] }],
+  );
+});
+
+test('reassigned constants remain dynamic across direct, pattern, update, and loop writes', async (t) => {
+  const root = await project();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, 'public', 'fonts', 'Mutable.ttf'), 'font');
+  await writeFile(
+    join(root, 'src', 'writes.ts'),
+    `
+    import { glyph } from '@pmndrs/glyph';
+    import { bitmap } from '@fixture/raster';
+    const direct = [16], pattern = [16], rest = [16], update = 16, loop = [16];
+    direct = unknown();
+    ({ strikes: pattern } = unknown());
+    [...rest] = unknown();
+    update++;
+    for (loop of unknown()) {}
+    glyph.fontFace('/fonts/Mutable.ttf', { format: bitmap({ strikes: direct }) });
+    glyph.fontFace('/fonts/Mutable.ttf', { format: bitmap({ strikes: pattern }) });
+    glyph.fontFace('/fonts/Mutable.ttf', { format: bitmap({ strikes: rest }) });
+    glyph.fontFace('/fonts/Mutable.ttf', { format: bitmap({ strikes: [update] }) });
+    glyph.fontFace('/fonts/Mutable.ttf', { format: bitmap({ strikes: loop }) });
+    const preserved = [32];
+    function shadow(preserved) { preserved = unknown(); }
+    glyph.fontFace('/fonts/Mutable.ttf', { format: bitmap({ strikes: preserved }) });
+  `,
+  );
+  const report = await discoverProjectFonts({ projectRoot: root });
+  assert.deepEqual(
+    report.fonts.map(({ raster }) => raster.options),
+    [{ strikes: [32] }],
+  );
+  assert.deepEqual(
+    report.diagnostics.map(({ code }) => code),
+    Array(5).fill('invalid-raster-options'),
+  );
+});
+
+test('raster options accept JSON primitives and reject regex, bigint, and accessor values', async (t) => {
+  const root = await project();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, 'public', 'fonts', 'Options.ttf'), 'font');
+  await writeFile(
+    join(root, 'src', 'options.ts'),
+    `
+    import { glyph } from '@pmndrs/glyph';
+    import { bitmap } from '@fixture/raster';
+    glyph.fontFace('/fonts/Options.ttf', { format: bitmap({ strikes: [16], note: null, enabled: true, shift: -2, label: 'x' }) });
+    glyph.fontFace('/fonts/Options.ttf', { format: bitmap({ strikes: [16], note: /pattern/ }) });
+    glyph.fontFace('/fonts/Options.ttf', { format: bitmap({ strikes: [16], note: 1n }) });
+    glyph.fontFace('/fonts/Options.ttf', { format: bitmap({ strikes: [16], get note() { throw new Error('do not execute'); } }) });
+  `,
+  );
+  const report = await discoverProjectFonts({ projectRoot: root });
+  assert.deepEqual(
+    report.fonts.map(({ raster }) => raster.options),
+    [{ strikes: [16], note: null, enabled: true, shift: -2, label: 'x' }],
+  );
+  assert.deepEqual(
+    report.diagnostics.map(({ code }) => code),
+    Array(3).fill('invalid-raster-options'),
+  );
+});
+
+test('invalid syntax rejects discovery instead of baking a recovered partial AST', async (t) => {
+  const root = await project();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(
+    join(root, 'src', 'broken.ts'),
+    `
+    import { glyph } from '@pmndrs/glyph';
+    glyph.fontFace('/fonts/Incomplete.ttf', { format: );
+  `,
+  );
+  await assert.rejects(discoverProjectFonts({ projectRoot: root }), SyntaxError);
 });
 
 test('rejects CommonJS and package-escaping raster baker manifests', async (t) => {

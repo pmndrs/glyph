@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:e7a13023632f508b6ac85e6c9c953c28a7a18d964e6ed246b91dac2c24230caf'
+source_digest: 'sha256:ddd7914ad4b08fbca5cd5cd0fbc90b55c0e7f35ce9d90c9634978ef298fa0375'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -32,6 +32,9 @@ sources:
   - id: node-cli
     resource: ../../../packages/glyph/src/node/cli.ts
     title: Project-discovery and direct font-bake CLI
+  - id: discovery-sources
+    resource: ../../../packages/glyph/src/discovery-source.ts
+    title: Compiler-free static source graph
   - id: font-baker
     resource: ../../../packages/glyph/rust/font-baker
     title: Optional portable font-baker Wasm
@@ -109,7 +112,7 @@ sources:
     title: Pinned msdfgen CLI scanline and error-correction configuration
 generated:
   by: openai-codex/gpt-6
-  at: '2026-09-16T13:27:39Z'
+  at: '2026-09-16T22:19:41Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -243,6 +246,18 @@ MSDF, and Slug rasters. The prepared source bytes feed the core shaping bake and
 CLI nor the programmatic `@pmndrs/glyph/bake` path invokes a platform font tool. `--check`
 publishes only to temporary storage and compares the complete GLB byte-for-byte with the requested output. It calls the
 same `bakeFont` host as programmatic consumers rather than maintaining an example-only composition path.
+
+Project discovery uses Oxc Parser 0.150.0 for JS/JSX/TS/TSX syntax, Oxc Walker 1.1.1 for lexical scopes, and Oxc Resolver 11.24.2 for
+module resolution, including tsconfig paths and TypeScript source extension aliases. It scans `src` by default or the
+explicit entry files, then follows project-local ESM imports and re-exports. It resolves literal options and imported
+constants without executing application modules or starting a TypeScript compiler. Shadowed names do not inherit an
+import's meaning; cyclic constants and ambiguous exports remain dynamic diagnostics. Module-relative font URLs resolve
+from their declaring file. TypeScript remains a repository development dependency only. The isolated packed consumer
+bakes an actual font through the CLI with neither TypeScript nor Babel installed. These regressions run through the
+existing `pnpm --filter @pmndrs/glyph test` command.
+Oxc Parser declares Node `^20.19.0 || >=22.12.0`; this change is verified on the pinned Node 24.18.0, not a broader Node
+support matrix. Browser entry points do not load these Node tools. Oxc Walker collects declarations before resolving
+references, so hoisted and shadowed names retain their lexical identity. Reassigned constants remain dynamic.
 
 Direct baking may add `--glyph-map <path>` to publish a deterministic JSON object mapping authored glyph names to code
 points from the same `--unicodes` selection and collection face as the font artifact. The font and lookup publish as one
