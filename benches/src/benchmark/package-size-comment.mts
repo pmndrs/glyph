@@ -1,28 +1,11 @@
 import { appendFile, readFile } from 'node:fs/promises';
 
-import { formatCompactSizeLimitMarkdown, type SizeLimitRow } from './package-size-summary.ts';
+import { parsePackageSizeReport } from './package-size-report.ts';
+import { formatCompactSizeLimitMarkdown, sizeLimitRows } from './package-size-summary.ts';
 
 const heading = '## size-limit report 📦 ';
-const trace = process.env.SIZE_REPORT_TRACE_PATH;
-if (trace === undefined) throw new Error('SIZE_REPORT_TRACE_PATH is required');
-
-const records = (await readFile(trace, 'utf8'))
-  .split('\n')
-  .filter((line) => line.length > 0)
-  .map((line) => JSON.parse(line) as SizeLimitRow[]);
-
-// The pinned action measures the checked-out PR first and its base second. If it failed
-// before completing both measurements, retain its original failure/comment as the evidence.
-if (records.length !== 2) {
-  console.warn(`Compact package-size report needs two measurements; received ${records.length}`);
-  process.exit(0);
-}
-
-const current = records[0];
-const base = records[1];
-if (current === undefined || base === undefined) {
-  throw new Error('Compact package-size report lost a completed measurement');
-}
+const current = sizeLimitRows(await readReport('SIZE_REPORT_CURRENT_PATH'));
+const base = sizeLimitRows(await readReport('SIZE_REPORT_BASE_PATH'), { allowMissing: true });
 const body = `${heading}\n${formatCompactSizeLimitMarkdown(base, current)}`;
 const stepSummary = process.env.GITHUB_STEP_SUMMARY;
 if (stepSummary !== undefined) await appendFile(stepSummary, `${body}\n`);
@@ -47,6 +30,11 @@ if (!response.ok) {
     process.exit(0);
   }
   throw new Error(`GitHub package-size comment failed: ${response.status} ${responseBody}`);
+}
+
+async function readReport(environmentName: string) {
+  const path = requiredEnvironment(environmentName);
+  return parsePackageSizeReport(JSON.parse(await readFile(path, 'utf8')) as unknown);
 }
 
 interface Comment {

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { brotliCompress, brotliCompressSync, constants, gunzipSync, gzip, gzipSync } from 'node:zlib';
@@ -9,7 +10,11 @@ import {
   externalizeGlyphWasmPlugin,
   type JavaScriptBundle,
 } from '../src/benchmark/vite-size-bundle.ts';
-import { assertPackageSizeReportFresh, type PackageSizeReport } from '../src/benchmark/package-size-report.ts';
+import {
+  assertPackageSizeBudgets,
+  assertPackageSizeReportFresh,
+  type PackageSizeReport,
+} from '../src/benchmark/package-size-report.ts';
 import {
   measureR3fHelloWorldProductionBundle,
   measureTresPlaygroundProductionBundle,
@@ -543,15 +548,20 @@ const report = {
   },
   entries,
 };
-const output = new URL('../src/generated/package-sizes.json', import.meta.url);
+assertPackageSizeBudgets(report);
+const outputArgument = process.argv.find((argument) => argument.startsWith('--output='));
+const output =
+  outputArgument === undefined
+    ? fileURLToPath(new URL('../src/generated/package-sizes.json', import.meta.url))
+    : resolve(outputArgument.slice('--output='.length));
 const serialized = `${JSON.stringify(report, null, 2)}\n`;
 if (process.argv.includes('--check')) {
   const committed = await readFile(output, 'utf8');
   assertPackageSizeReportFresh(JSON.parse(committed) as PackageSizeReport, report);
 } else {
-  await mkdir(new URL('../src/generated/', import.meta.url), { recursive: true });
+  await mkdir(dirname(output), { recursive: true });
   await writeFile(output, serialized);
   process.stdout.write(serialized);
 }
-/* @workflow { "name": "release:size:generate", "summary": "Regenerate reviewed package-size evidence.", "requirements": "Built runtime packages, the R3F hello-world production application, and Binaryen.", "writes": "Checked-in package-size evidence." } */
-/* @workflow { "name": "release:size:check", "summary": "Verify package-size identity and reviewed ceilings.", "requirements": "Built runtime packages, the R3F hello-world production application, and Binaryen.", "writes": "Nothing.", "args": ["--check"] } */
+/* @workflow { "name": "release:size:generate", "summary": "Regenerate reviewed package-size evidence.", "requirements": "Built Glyph runtime, R3F hello-world, and Tres playground production outputs plus Binaryen.", "writes": "The requested --output path, or checked-in package-size evidence by default." } */
+/* @workflow { "name": "release:size:check", "summary": "Verify package-size identity and reviewed ceilings.", "requirements": "Built Glyph runtime, R3F hello-world, and Tres playground production outputs plus Binaryen.", "writes": "Nothing.", "args": ["--check"] } */

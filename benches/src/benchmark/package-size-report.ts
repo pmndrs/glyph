@@ -22,7 +22,54 @@ export interface PackageSizeReport {
   readonly entries: readonly SizeEntry[];
 }
 
+export function parsePackageSizeReport(value: unknown): PackageSizeReport {
+  if (!isObject(value) || value.schemaVersion !== 1) throw new Error('package-size report has an unknown schema');
+  const { measurementHost, entries } = value;
+  if (
+    !isObject(measurementHost) ||
+    typeof measurementHost.platform !== 'string' ||
+    typeof measurementHost.architecture !== 'string' ||
+    !Array.isArray(entries)
+  ) {
+    throw new Error('package-size report is malformed');
+  }
+  for (const entry of entries) {
+    if (!isObject(entry) || typeof entry.id !== 'string' || typeof entry.status !== 'string') {
+      throw new Error('package-size report contains a malformed entry');
+    }
+  }
+  return value as unknown as PackageSizeReport;
+}
+
+export function assertPackageSizeBudgets(report: PackageSizeReport): void {
+  const entries = new Map(report.entries.map((entry) => [entry.id, entry]));
+  for (const [id, budget] of Object.entries(packageSizeBudgets)) {
+    const entry = entries.get(id);
+    if (
+      entry?.status !== 'measured' ||
+      entry.rawBytes === undefined ||
+      entry.minifiedBytes === undefined ||
+      entry.gzipBytes === undefined ||
+      entry.brotliBytes === undefined
+    ) {
+      throw new Error(`package-size measurement is incomplete for ${id}`);
+    }
+    const exceeded = {
+      rawBytes: entry.rawBytes > budget.rawBytes,
+      minifiedBytes: entry.minifiedBytes > budget.minifiedBytes,
+      gzipBytes: entry.gzipBytes > budget.gzipBytes,
+      brotliBytes: entry.brotliBytes > budget.brotliBytes,
+    };
+    if (Object.values(exceeded).some(Boolean)) {
+      throw new Error(
+        `package-size measurement exceeds the reviewed ${id} budget\n${JSON.stringify({ measured: entry, budget, exceeded })}`,
+      );
+    }
+  }
+}
+
 export function assertPackageSizeReportFresh(committed: PackageSizeReport, current: PackageSizeReport): void {
+  assertPackageSizeBudgets(current);
   const sameHost =
     committed.measurementHost.platform === current.measurementHost.platform &&
     committed.measurementHost.architecture === current.measurementHost.architecture;
@@ -79,4 +126,8 @@ export function assertPackageSizeReportFresh(committed: PackageSizeReport, curre
       );
     }
   }
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
