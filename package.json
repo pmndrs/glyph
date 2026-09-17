@@ -9,11 +9,12 @@
     "dev": "pnpm --filter @pmndrs/glyph-benchmarks dev",
     "build": "pnpm --filter './packages/*' build && pnpm --filter './apps/*' build && pnpm --filter @pmndrs/glyph-benchmarks build",
     "test": "pnpm --filter './packages/*' --if-present test && pnpm --filter './apps/*' --if-present test && pnpm --filter @pmndrs/glyph-benchmarks test --runtime-packages-ready",
-    "check": "tsc -p .claude/tsconfig.json && node --test .claude/hooks/sync-agent-config.test.ts && pnpm --filter './packages/*' check && pnpm --workspace-concurrency=1 --filter './apps/*' check && pnpm --filter @pmndrs/glyph-benchmarks check --runtime-packages-ready && oxfmt --check .claude/hooks .claude/settings.json .claude/tsconfig.json package.json .agents/docs/log.md && ruby .agents/skills/open-knowledge-format/scripts/validate_okf.rb .agents/docs --workspace-root .",
+    "check": "tsc -p .claude/tsconfig.json && node --test .claude/hooks/sync-agent-config.test.ts .agents/skills/open-knowledge-format/scripts/okf-tools.test.mjs && pnpm --filter './packages/*' check && pnpm --workspace-concurrency=1 --filter './apps/*' check && pnpm --filter @pmndrs/glyph-benchmarks check --runtime-packages-ready && oxfmt --check .claude/hooks .claude/settings.json .claude/tsconfig.json package.json .agents/docs/log.md .agents/skills/open-knowledge-format/scripts && node .agents/skills/open-knowledge-format/scripts/validate-okf.mjs .agents/docs --workspace-root .",
     "scripts": "node benches/scripts/workflows.mts"
   },
   "devDependencies": {
     "@types/node": "24.13.3",
+    "js-yaml": "4.3.2",
     "oxfmt": "0.35.0",
     "ts-morph": "26.0.0",
     "typescript": "7.0.2"

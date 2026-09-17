@@ -62,6 +62,9 @@ describe.sequential('static repository gates', () => {
   gate('repository tooling synchronization', () =>
     run(process.execPath, ['../.claude/hooks/sync-agent-config.test.ts']),
   );
+  gate('OKF tooling', () =>
+    run(process.execPath, ['--test', '../.agents/skills/open-knowledge-format/scripts/okf-tools.test.mjs']),
+  );
   gate('knowledge base', () => runKnowledgeBaseCheck());
 });
 

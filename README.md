@@ -176,6 +176,6 @@ The benchmark application lives in [`benches/`](benches/). `pnpm dev` opens its 
 building or testing. Asset paths remain ordinary local files after `git lfs pull`.
 
 Mise is optional. With matching Node, pnpm, and Rust tools already on `PATH`, use `pnpm install` and `pnpm dev`
-directly. The full `pnpm check` additionally requires Ruby 3.1 or newer; development does not.
+directly. Repository checks and commit-time documentation digest maintenance use the same pinned Node.js runtime.
 
 `@pmndrs/glyph` is ESM-only and MIT licensed.

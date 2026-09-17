@@ -2,6 +2,11 @@
 
 ## 2026-09-17
 
+- **Moved OKF maintenance onto the pinned Node.js toolchain** — Replaced the repository-shipped Ruby validator,
+  migration helper, package digester, and commit hook with tested Node modules. Digest output remains byte-for-byte
+  compatible for unchanged package trees, while the hook now hashes staged package content without staging unrelated
+  working-tree edits. Contributors no longer need a separately installed Ruby runtime.
+
 - **Removed the repository-local external-agent router and cleared dependency advisories** — Removed the pinned
   `ai-cli-mcp` dependency, project MCP registrations, router skill, operations guide, and its dedicated trace reader.
   `pnpm audit --fix update` upgraded compatible vulnerable dependencies; pnpm's generated `brace-expansion` override

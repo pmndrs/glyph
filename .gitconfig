@@ -5,4 +5,4 @@
 # Verify with: git hook list --show-scope pre-commit
 [hook "okf-digests"]
 	event = pre-commit
-	command = .githooks/okf-digests
+	command = node .githooks/okf-digests.mjs
