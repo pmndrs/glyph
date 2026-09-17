@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "harfBuzzVersion": "13.0.0",
+  "target": {
+    "platform": "linux",
+    "arch": "x64"
+  },
+  "source": {
+    "url": "https://github.com/harfbuzz/harfbuzz/releases/download/13.0.0/harfbuzz-13.0.0.tar.xz",
+    "archiveSha256": "1626ebc763d28f4bcca1531fef42e92ca995d45f8ad90ad2ae0b5d1a567fe67a",
+    "commit": "a0fc099681a69ae40665fbea74982a2e9d7a5260"
+  },
+  "build": {
+    "recipe": "benches/scripts/build-vendored-harfbuzz.mts",
+    "baseImage": "ubuntu@sha256:829f6df217bcbae2b371026e81711d1a787c61b2967ad09d015063663ebafbf7",
+    "compiler": "cc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0",
+    "meson": "1.11.1",
+    "glib": "2.72.4",
+    "buildType": "release",
+    "defaultLibrary": "static",
+    "preferStatic": true,
+    "lto": true,
+    "stripped": true,
+    "options": [
+      "-Dtests=disabled",
+      "-Ddocs=disabled",
+      "-Dutilities=enabled",
+      "-Dglib=enabled",
+      "-Dgobject=disabled",
+      "-Dfreetype=disabled",
+      "-Dcairo=disabled",
+      "-Dchafa=disabled",
+      "-Dicu=disabled",
+      "-Dgraphite2=disabled",
+      "-Ddirectwrite=disabled",
+      "-Dcoretext=disabled",
+      "-Dwasm=disabled",
+      "-Draster=disabled",
+      "-Dvector=disabled",
+      "-Dintrospection=disabled"
+    ]
+  },
+  "dependencies": {
+    "hb-shape": [
+      "libm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007fffff51b000)",
+      "\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007fffff2f2000)",
+      "\t/lib64/ld-linux-x86-64.so.2 (0x00007ffffffc4000)"
+    ],
+    "hb-subset": [
+      "libm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007fffff496000)",
+      "\tlibgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007fffff476000)",
+      "\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007fffff24d000)",
+      "\t/lib64/ld-linux-x86-64.so.2 (0x00007ffffffc4000)"
+    ],
+    "hb-info": [
+      "libm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007fffff58f000)",
+      "\tlibgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007fffff56f000)",
+      "\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007fffff346000)",
+      "\t/lib64/ld-linux-x86-64.so.2 (0x00007ffffffc4000)"
+    ]
+  },
+  "files": [
+    {
+      "executable": true,
+      "path": "bin/hb-shape",
+      "sha256": "602e73c90c4ab1d30476b20bba1b8595f9f0100fbbb5812c62ec6a676a9dfa1e",
+      "size": 1811656
+    },
+    {
+      "executable": true,
+      "path": "bin/hb-subset",
+      "sha256": "494dc9c12d9b960b35fcd93e54df49c9de089e90bb4351669c51aa7b8e7e3c62",
+      "size": 2356328
+    },
+    {
+      "executable": true,
+      "path": "bin/hb-info",
+      "sha256": "56bd752a4ad315989424e8ac58005bd152fdcdc6a69e575e3591d08673e751ff",
+      "size": 1335960
+    },
+    {
+      "executable": false,
+      "path": "licenses/HarfBuzz-COPYING.txt",
+      "sha256": "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64",
+      "size": 1971
+    },
+    {
+      "executable": false,
+      "path": "licenses/THIRD-PARTY-NOTICES.md",
+      "sha256": "1c9845cf508983530b0b53f4911280de93ffe59228efed6670dfea1929315e7b",
+      "size": 322
+    }
+  ]
+}

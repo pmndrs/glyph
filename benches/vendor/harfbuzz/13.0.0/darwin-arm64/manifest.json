@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "harfBuzzVersion": "13.0.0",
+  "target": {
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "source": {
+    "url": "https://github.com/harfbuzz/harfbuzz/releases/download/13.0.0/harfbuzz-13.0.0.tar.xz",
+    "archiveSha256": "1626ebc763d28f4bcca1531fef42e92ca995d45f8ad90ad2ae0b5d1a567fe67a",
+    "commit": "a0fc099681a69ae40665fbea74982a2e9d7a5260"
+  },
+  "build": {
+    "recipe": "benches/scripts/build-vendored-harfbuzz.mts",
+    "compiler": "Apple clang version 21.0.0 (clang-2100.3.20.102)",
+    "meson": "1.11.1",
+    "glib": "2.88.0",
+    "buildType": "release",
+    "defaultLibrary": "static",
+    "preferStatic": true,
+    "lto": true,
+    "stripped": true,
+    "options": [
+      "-Dtests=disabled",
+      "-Ddocs=disabled",
+      "-Dutilities=enabled",
+      "-Dglib=enabled",
+      "-Dgobject=disabled",
+      "-Dfreetype=disabled",
+      "-Dcairo=disabled",
+      "-Dchafa=disabled",
+      "-Dicu=disabled",
+      "-Dgraphite2=disabled",
+      "-Ddirectwrite=disabled",
+      "-Dcoretext=disabled",
+      "-Dwasm=disabled",
+      "-Draster=disabled",
+      "-Dvector=disabled",
+      "-Dintrospection=disabled"
+    ]
+  },
+  "dependencies": {
+    "hb-shape": [
+      "hb-shape:",
+      "\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)",
+      "\t/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 5027.0.51)",
+      "\t/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 5027.0.51)",
+      "\t/usr/lib/libiconv.2.dylib (compatibility version 7.0.0, current version 7.0.0)",
+      "\t/usr/lib/libobjc.A.dylib (compatibility version 1.0.0, current version 228.0.0)"
+    ],
+    "hb-subset": [
+      "hb-subset:",
+      "\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)",
+      "\t/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 5027.0.51)",
+      "\t/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 5027.0.51)",
+      "\t/usr/lib/libiconv.2.dylib (compatibility version 7.0.0, current version 7.0.0)",
+      "\t/usr/lib/libobjc.A.dylib (compatibility version 1.0.0, current version 228.0.0)"
+    ],
+    "hb-info": [
+      "hb-info:",
+      "\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)",
+      "\t/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 5027.0.51)",
+      "\t/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 5027.0.51)",
+      "\t/usr/lib/libiconv.2.dylib (compatibility version 7.0.0, current version 7.0.0)",
+      "\t/usr/lib/libobjc.A.dylib (compatibility version 1.0.0, current version 228.0.0)"
+    ]
+  },
+  "files": [
+    {
+      "executable": true,
+      "path": "bin/hb-shape",
+      "sha256": "3c8f65a39e8335f9cd7cc633b31012ad04920570133011fbf83b75034cb60873",
+      "size": 1196776
+    },
+    {
+      "executable": true,
+      "path": "bin/hb-subset",
+      "sha256": "2fccb67c5b698c9df4358f17d60f6b8f84588954d415a02be69dc78148e09716",
+      "size": 1802472
+    },
+    {
+      "executable": true,
+      "path": "bin/hb-info",
+      "sha256": "da88ecd257e33c593ca51ac00e3a9f38a2e2c22522a61b3f6398adef7825ae26",
+      "size": 693608
+    },
+    {
+      "executable": false,
+      "path": "licenses/HarfBuzz-COPYING.txt",
+      "sha256": "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64",
+      "size": 1971
+    },
+    {
+      "executable": false,
+      "path": "licenses/THIRD-PARTY-NOTICES.md",
+      "sha256": "1c9845cf508983530b0b53f4911280de93ffe59228efed6670dfea1929315e7b",
+      "size": 322
+    }
+  ]
+}

@@ -1,122 +1,46 @@
-import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const archiveSha256ByVersion = {
-  '13.0.0': '1626ebc763d28f4bcca1531fef42e92ca995d45f8ad90ad2ae0b5d1a567fe67a',
-  '14.2.0': '94017020f96d025bb66ae91574e4cf334bcad23e8175a8a40565b3721bc2eaff',
-} as const;
+import {
+  harfBuzzReleases,
+  installHarfBuzzBundle,
+  isPinnedHarfBuzzExecutable,
+  type HarfBuzzUtility,
+  type HarfBuzzVersion,
+} from '../src/tooling/harfbuzz-bundle.ts';
+
 const versionArgument = process.argv.find((argument) => argument.startsWith('--version='));
 const requestedVersion = versionArgument?.slice('--version='.length) ?? '13.0.0';
-if (!(requestedVersion in archiveSha256ByVersion)) {
+if (!(requestedVersion in harfBuzzReleases)) {
   throw new Error(`unsupported HarfBuzz utility version ${requestedVersion}`);
 }
-const version = requestedVersion as keyof typeof archiveSha256ByVersion;
-const archiveSha256 = archiveSha256ByVersion[version];
+const version = requestedVersion as HarfBuzzVersion;
 const cacheDirectory = resolve('.cache/harfbuzz', version);
-const executable = resolve(cacheDirectory, 'build/util/hb-shape');
-const subsetExecutable = resolve(cacheDirectory, 'build/util/hb-subset');
-const infoExecutable = resolve(cacheDirectory, 'build/util/hb-info');
+const utilityDirectory = resolve(cacheDirectory, 'build/util');
+const executable = resolve(utilityDirectory, 'hb-shape');
 
-if (
-  (await isPinnedExecutable(executable, 'hb-shape')) &&
-  (await isPinnedExecutable(subsetExecutable, 'hb-subset')) &&
-  (await isPinnedExecutable(infoExecutable, 'hb-info'))
-) {
+if (await hasPinnedUtilities(utilityDirectory, version)) {
   process.stdout.write(`${executable}\n`);
   process.exit(0);
 }
 if (process.argv.includes('--check')) {
   throw new Error(`pinned HarfBuzz ${version} utilities are not provisioned under ${cacheDirectory}`);
 }
-
-await mkdir(dirname(cacheDirectory), { recursive: true });
-const stagingDirectory = await mkdtemp(resolve(dirname(cacheDirectory), `${version}-staging-`));
-try {
-  const archive = resolve(stagingDirectory, `harfbuzz-${version}.tar.xz`);
-  const response = await fetch(
-    `https://github.com/harfbuzz/harfbuzz/releases/download/${version}/harfbuzz-${version}.tar.xz`,
-  );
-  if (!response.ok) throw new Error(`HarfBuzz source request failed with HTTP ${response.status}`);
-  await writeFile(archive, Buffer.from(await response.arrayBuffer()));
-  const actualSha256 = createHash('sha256')
-    .update(await readFile(archive))
-    .digest('hex');
-  if (actualSha256 !== archiveSha256) {
-    throw new Error(`HarfBuzz source SHA-256 mismatch: expected ${archiveSha256}, received ${actualSha256}`);
-  }
-
-  const sourceDirectory = resolve(stagingDirectory, 'source');
-  const buildDirectory = resolve(stagingDirectory, 'build');
-  await mkdir(sourceDirectory);
-  await run('tar', ['-xf', archive, '-C', sourceDirectory, '--strip-components=1']);
-  await run('meson', [
-    'setup',
-    buildDirectory,
-    sourceDirectory,
-    '-Dtests=disabled',
-    '-Ddocs=disabled',
-    '-Dutilities=enabled',
-    '-Dglib=enabled',
-    '-Dgobject=disabled',
-    '-Dfreetype=disabled',
-    '-Dcairo=disabled',
-    '-Dchafa=disabled',
-    '-Dicu=disabled',
-    '-Dgraphite2=disabled',
-    '-Ddirectwrite=disabled',
-    '-Dcoretext=disabled',
-    '-Dwasm=disabled',
-    '-Draster=disabled',
-    '-Dvector=disabled',
-    '-Dintrospection=disabled',
-  ]);
-  await run('meson', ['compile', '-C', buildDirectory, 'hb-shape', 'hb-subset', 'hb-info']);
-  for (const utility of ['hb-shape', 'hb-subset', 'hb-info'] as const) {
-    if (!(await isPinnedExecutable(resolve(buildDirectory, `util/${utility}`), utility))) {
-      throw new Error(`built ${utility} did not identify itself as HarfBuzz ${version}`);
-    }
-  }
-  await rm(cacheDirectory, { recursive: true, force: true });
-  await rename(stagingDirectory, cacheDirectory);
-} finally {
-  await rm(stagingDirectory, { recursive: true, force: true });
-}
+await installHarfBuzzBundle({
+  bundleRoot: fileURLToPath(new URL('../vendor/harfbuzz', import.meta.url)),
+  cacheDirectory,
+  version,
+});
 process.stdout.write(`${executable}\n`);
 
-async function isPinnedExecutable(path: string, utility: 'hb-shape' | 'hb-subset' | 'hb-info'): Promise<boolean> {
-  try {
-    return (await capture(path, ['--version'])).trim() === `${utility} (HarfBuzz) ${version}`;
-  } catch {
-    return false;
-  }
+async function hasPinnedUtilities(directory: string, expectedVersion: HarfBuzzVersion): Promise<boolean> {
+  return (
+    await Promise.all(
+      (['hb-shape', 'hb-subset', 'hb-info'] as const satisfies readonly HarfBuzzUtility[]).map((utility) =>
+        isPinnedHarfBuzzExecutable(resolve(directory, utility), utility, expectedVersion),
+      ),
+    )
+  ).every(Boolean);
 }
-
-async function capture(command: string, arguments_: readonly string[]): Promise<string> {
-  return new Promise((resolveOutput, reject) => {
-    const child = spawn(command, arguments_, { stdio: ['ignore', 'pipe', 'pipe'] });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()));
-    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()));
-    child.once('error', reject);
-    child.once('close', (code) => {
-      if (code === 0) resolveOutput(stdout);
-      else reject(new Error(`${command} exited with ${String(code)}: ${stderr}`));
-    });
-  });
-}
-
-async function run(command: string, arguments_: readonly string[]): Promise<void> {
-  await new Promise<void>((resolveRun, reject) => {
-    const child = spawn(command, arguments_, { stdio: 'inherit' });
-    child.once('error', reject);
-    child.once('close', (code) => {
-      if (code === 0) resolveRun();
-      else reject(new Error(`${command} exited with ${String(code)}`));
-    });
-  });
-}
-/* @workflow { "name": "fixture:harfbuzz:provision", "summary": "Provision authenticated HarfBuzz command-line tools.", "requirements": "Scoped benchmark mise tools, Meson, Ninja, GLib, and network access.", "writes": "Ignored HarfBuzz tool cache.", "args": ["--version=13.0.0", "--version=14.2.0"] } */
+/* @workflow { "name": "fixture:harfbuzz:provision", "summary": "Provision authenticated vendored HarfBuzz command-line tools.", "requirements": "A supported Linux or macOS platform and Git LFS assets.", "writes": "Ignored HarfBuzz tool cache.", "args": ["--version=13.0.0", "--version=14.2.0"] } */
 /* @workflow { "name": "fixture:harfbuzz:check", "summary": "Verify the provisioned HarfBuzz command-line tools.", "requirements": "Previously provisioned HarfBuzz tools.", "writes": "Nothing.", "args": ["--check"] } */

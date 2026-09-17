@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "harfBuzzVersion": "14.2.0",
+  "target": {
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "source": {
+    "url": "https://github.com/harfbuzz/harfbuzz/releases/download/14.2.0/harfbuzz-14.2.0.tar.xz",
+    "archiveSha256": "94017020f96d025bb66ae91574e4cf334bcad23e8175a8a40565b3721bc2eaff",
+    "commit": "b0ffab42d473eb380ad0fcf42730e0f1868cbc97"
+  },
+  "build": {
+    "recipe": "benches/scripts/build-vendored-harfbuzz.mts",
+    "compiler": "Apple clang version 21.0.0 (clang-2100.3.20.102)",
+    "meson": "1.11.1",
+    "glib": "2.88.0",
+    "buildType": "release",
+    "defaultLibrary": "static",
+    "preferStatic": true,
+    "lto": true,
+    "stripped": true,
+    "options": [
+      "-Dtests=disabled",
+      "-Ddocs=disabled",
+      "-Dutilities=enabled",
+      "-Dglib=enabled",
+      "-Dgobject=disabled",
+      "-Dfreetype=disabled",
+      "-Dcairo=disabled",
+      "-Dchafa=disabled",
+      "-Dicu=disabled",
+      "-Dgraphite2=disabled",
+      "-Ddirectwrite=disabled",
+      "-Dcoretext=disabled",
+      "-Dwasm=disabled",
+      "-Draster=disabled",
+      "-Dvector=disabled",
+      "-Dintrospection=disabled",
+      "-Dgpu=disabled"
+    ]
+  },
+  "dependencies": {
+    "hb-shape": [
+      "hb-shape:",
+      "\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)",
+      "\t/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 5027.0.51)",
+      "\t/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 5027.0.51)",
+      "\t/usr/lib/libiconv.2.dylib (compatibility version 7.0.0, current version 7.0.0)",
+      "\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.22.0)",
+      "\t/usr/lib/libobjc.A.dylib (compatibility version 1.0.0, current version 228.0.0)"
+    ],
+    "hb-subset": [
+      "hb-subset:",
+      "\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)",
+      "\t/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 5027.0.51)",
+      "\t/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 5027.0.51)",
+      "\t/usr/lib/libiconv.2.dylib (compatibility version 7.0.0, current version 7.0.0)",
+      "\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.22.0)",
+      "\t/usr/lib/libobjc.A.dylib (compatibility version 1.0.0, current version 228.0.0)"
+    ],
+    "hb-info": [
+      "hb-info:",
+      "\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)",
+      "\t/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 5027.0.51)",
+      "\t/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 5027.0.51)",
+      "\t/usr/lib/libiconv.2.dylib (compatibility version 7.0.0, current version 7.0.0)",
+      "\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.22.0)",
+      "\t/usr/lib/libobjc.A.dylib (compatibility version 1.0.0, current version 228.0.0)"
+    ]
+  },
+  "files": [
+    {
+      "executable": true,
+      "path": "bin/hb-shape",
+      "sha256": "4de7971a5e6c8c5de18d3397d8fa46bbd1dfbf840ceedcd76d4f501d5e747b4f",
+      "size": 1223096
+    },
+    {
+      "executable": true,
+      "path": "bin/hb-subset",
+      "sha256": "5df842a3bc79e3b9381e619fe4a76064b92a041aca6a7871fb66dc244b4b701e",
+      "size": 1813096
+    },
+    {
+      "executable": true,
+      "path": "bin/hb-info",
+      "sha256": "22edcb5747e4ae46b0a190286f6bfb3fbcb5d1792bd29a94e1dded47b4814c37",
+      "size": 696904
+    },
+    {
+      "executable": false,
+      "path": "licenses/HarfBuzz-COPYING.txt",
+      "sha256": "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64",
+      "size": 1971
+    },
+    {
+      "executable": false,
+      "path": "licenses/THIRD-PARTY-NOTICES.md",
+      "sha256": "534f4e241bfe1cf9056fa58367527b36e1e0efb5cb586aa61c20161416215e76",
+      "size": 322
+    }
+  ]
+}
