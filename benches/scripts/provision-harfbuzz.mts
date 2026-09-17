@@ -42,5 +42,5 @@ async function hasPinnedUtilities(directory: string, expectedVersion: HarfBuzzVe
     )
   ).every(Boolean);
 }
-/* @workflow { "name": "fixture:harfbuzz:provision", "summary": "Provision authenticated vendored HarfBuzz command-line tools.", "requirements": "A supported Linux or macOS platform and Git LFS assets.", "writes": "Ignored HarfBuzz tool cache.", "args": ["--version=13.0.0", "--version=14.2.0"] } */
+/* @workflow { "name": "fixture:harfbuzz:provision", "summary": "Provision authenticated vendored HarfBuzz command-line tools. Pass --version=<13.0.0|14.2.0>; the default is 13.0.0.", "requirements": "A supported Linux or macOS platform and Git LFS assets.", "writes": "Ignored HarfBuzz tool cache." } */
 /* @workflow { "name": "fixture:harfbuzz:check", "summary": "Verify the provisioned HarfBuzz command-line tools.", "requirements": "Previously provisioned HarfBuzz tools.", "writes": "Nothing.", "args": ["--check"] } */

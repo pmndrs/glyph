@@ -1,6 +1,6 @@
-import { spawn } from 'node:child_process';
 /* @workflow { "name": "benchmark:v1-bitmap", "summary": "Render the Rust command-buffer path for Three Bitmap/MTSDF/Slug and a custom material on WebGPU and WebGL2.", "requirements": "Playwright Chromium, WebGPU, WebGL2, and baked Inter fixtures. Pass --typegpu to exercise /three/typegpu.", "writes": "No repository files." } */
 import { fileURLToPath } from 'node:url';
+import { createServer, type ViteDevServer } from 'vite';
 
 import { launchProjectChromium } from './support/project-chromium.mts';
 
@@ -38,46 +38,80 @@ interface MsdfProofResult extends RasterProofResult {
 const shaderQuery = process.argv.includes('--typegpu') ? '&shaders=typegpu' : '';
 process.stdout.write(`Three shaders: ${shaderQuery === '' ? 'stable TSL' : 'experimental TypeGPU'}\n`);
 
-const root = fileURLToPath(new URL('..', import.meta.url));
-const vite = fileURLToPath(new URL('../node_modules/.bin/vite', import.meta.url));
-const server = spawn(vite, ['--force', '--host', '127.0.0.1', '--port', '5177', '--strictPort'], {
-  cwd: root,
-  stdio: ['ignore', 'pipe', 'pipe'],
-});
-let output = '';
-await new Promise<void>((resolve, reject) => {
-  server.once('error', reject);
-  server.once('exit', (code) => reject(new Error(`Vite exited before readiness (${String(code)})\n${output.trim()}`)));
-  for (const stream of [server.stdout, server.stderr]) {
-    stream.on('data', (chunk: Buffer) => {
-      output += chunk.toString();
-      if (output.includes('Local:')) resolve();
-    });
-  }
-});
+const stageTimeoutMs = 3 * 60 * 1_000;
 
-const browser = await launchProjectChromium({
-  headless: true,
-  args: ['--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu'],
-});
+function reportStage(message: string): void {
+  process.stdout.write(`[three-proof] ${message}\n`);
+}
+
+async function withinDeadline<T>(label: string, task: Promise<T>): Promise<T> {
+  let timeout: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => reject(new Error(`${label} exceeded ${stageTimeoutMs} ms`)), stageTimeoutMs);
+  });
+  try {
+    return await Promise.race([task, deadline]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
+}
+
+const root = fileURLToPath(new URL('..', import.meta.url));
+let browser: Awaited<ReturnType<typeof launchProjectChromium>> | undefined;
+let server: ViteDevServer | undefined;
 try {
+  reportStage('starting Vite');
+  server = await withinDeadline(
+    'Vite creation',
+    createServer({
+      root,
+      logLevel: 'info',
+      optimizeDeps: { force: true },
+      server: { host: '127.0.0.1' },
+    }),
+  );
+  await withinDeadline('Vite readiness', server.listen());
+  const address = server.httpServer?.address();
+  if (address === null || address === undefined || typeof address === 'string') {
+    throw new Error('Vite did not publish its loopback TCP address');
+  }
+  const origin = `http://127.0.0.1:${String(address.port)}`;
+  reportStage(`Vite ready at ${origin}`);
+  reportStage('launching Chromium');
+  browser = await withinDeadline(
+    'Chromium launch',
+    launchProjectChromium({
+      headless: true,
+      args: ['--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu'],
+    }),
+  );
   for (const expected of ['webgpu', 'webgl2'] as const) {
+    reportStage(`${expected} Bitmap`);
     const page = await browser.newPage({ viewport: { width: 256, height: 128 }, deviceScaleFactor: 1 });
     const errors: string[] = [];
     page.on('console', (message) => {
       if (message.type() === 'error') errors.push(message.text());
     });
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.goto(`http://127.0.0.1:5177/v1-bitmap.html?backend=${expected}${shaderQuery}`, {
-      waitUntil: 'domcontentloaded',
-    });
-    await page.waitForFunction(
-      () =>
-        (window as typeof window & { targetV1BitmapReady?: Promise<RasterProofResult> }).targetV1BitmapReady !==
-        undefined,
+    await withinDeadline(
+      `${expected} Bitmap navigation`,
+      page.goto(`${origin}/v1-bitmap.html?backend=${expected}${shaderQuery}`, {
+        waitUntil: 'domcontentloaded',
+      }),
     );
-    const result = await page.evaluate(
-      () => (window as typeof window & { targetV1BitmapReady: Promise<RasterProofResult> }).targetV1BitmapReady,
+    await withinDeadline(
+      `${expected} Bitmap publication`,
+      page.waitForFunction(
+        () =>
+          (window as typeof window & { targetV1BitmapReady?: Promise<RasterProofResult> }).targetV1BitmapReady !==
+          undefined,
+      ),
+    );
+    const result = await withinDeadline(
+      `${expected} Bitmap result`,
+      page.evaluate(
+        () => (window as typeof window & { targetV1BitmapReady: Promise<RasterProofResult> }).targetV1BitmapReady,
+      ),
     );
     if (errors.length !== 0) throw new Error(`${expected} browser errors: ${errors.join(' | ')}`);
     if (result.backend !== expected) throw new Error(`expected ${expected}, received ${result.backend}`);
@@ -99,21 +133,32 @@ try {
     await page.close();
   }
   for (const expected of ['webgpu', 'webgl2'] as const) {
+    reportStage(`${expected} MTSDF`);
     const page = await browser.newPage({ viewport: { width: 256, height: 128 }, deviceScaleFactor: 1 });
     const errors: string[] = [];
     page.on('console', (message) => {
       if (message.type() === 'error') errors.push(message.text());
     });
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.goto(`http://127.0.0.1:5177/v1-mtsdf.html?backend=${expected}${shaderQuery}`, {
-      waitUntil: 'domcontentloaded',
-    });
-    await page.waitForFunction(
-      () =>
-        (window as typeof window & { targetV1MtsdfReady?: Promise<MsdfProofResult> }).targetV1MtsdfReady !== undefined,
+    await withinDeadline(
+      `${expected} MTSDF navigation`,
+      page.goto(`${origin}/v1-mtsdf.html?backend=${expected}${shaderQuery}`, {
+        waitUntil: 'domcontentloaded',
+      }),
     );
-    const result = await page.evaluate(
-      () => (window as typeof window & { targetV1MtsdfReady: Promise<MsdfProofResult> }).targetV1MtsdfReady,
+    await withinDeadline(
+      `${expected} MTSDF publication`,
+      page.waitForFunction(
+        () =>
+          (window as typeof window & { targetV1MtsdfReady?: Promise<MsdfProofResult> }).targetV1MtsdfReady !==
+          undefined,
+      ),
+    );
+    const result = await withinDeadline(
+      `${expected} MTSDF result`,
+      page.evaluate(
+        () => (window as typeof window & { targetV1MtsdfReady: Promise<MsdfProofResult> }).targetV1MtsdfReady,
+      ),
     );
     if (errors.length !== 0) throw new Error(`${expected} MTSDF browser errors: ${errors.join(' | ')}`);
     if (result.backend !== expected) throw new Error(`expected ${expected}, received ${result.backend}`);
@@ -137,21 +182,32 @@ try {
     await page.close();
   }
   for (const expected of ['webgpu', 'webgl2'] as const) {
+    reportStage(`${expected} Slug`);
     const page = await browser.newPage({ viewport: { width: 256, height: 128 }, deviceScaleFactor: 1 });
     const errors: string[] = [];
     page.on('console', (message) => {
       if (message.type() === 'error') errors.push(message.text());
     });
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.goto(`http://127.0.0.1:5177/v1-slug.html?backend=${expected}${shaderQuery}`, {
-      waitUntil: 'domcontentloaded',
-    });
-    await page.waitForFunction(
-      () =>
-        (window as typeof window & { targetV1SlugReady?: Promise<RasterProofResult> }).targetV1SlugReady !== undefined,
+    await withinDeadline(
+      `${expected} Slug navigation`,
+      page.goto(`${origin}/v1-slug.html?backend=${expected}${shaderQuery}`, {
+        waitUntil: 'domcontentloaded',
+      }),
     );
-    const result = await page.evaluate(
-      () => (window as typeof window & { targetV1SlugReady: Promise<RasterProofResult> }).targetV1SlugReady,
+    await withinDeadline(
+      `${expected} Slug publication`,
+      page.waitForFunction(
+        () =>
+          (window as typeof window & { targetV1SlugReady?: Promise<RasterProofResult> }).targetV1SlugReady !==
+          undefined,
+      ),
+    );
+    const result = await withinDeadline(
+      `${expected} Slug result`,
+      page.evaluate(
+        () => (window as typeof window & { targetV1SlugReady: Promise<RasterProofResult> }).targetV1SlugReady,
+      ),
     );
     if (errors.length !== 0) throw new Error(`${expected} Slug browser errors: ${errors.join(' | ')}`);
     if (result.backend !== expected) throw new Error(`expected ${expected}, received ${result.backend}`);
@@ -172,22 +228,32 @@ try {
     await page.close();
   }
   for (const expected of ['webgpu', 'webgl2'] as const) {
+    reportStage(`${expected} composed material`);
     const page = await browser.newPage({ viewport: { width: 256, height: 128 }, deviceScaleFactor: 1 });
     const errors: string[] = [];
     page.on('console', (message) => {
       if (message.type() === 'error') errors.push(message.text());
     });
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.goto(`http://127.0.0.1:5177/v1-compose.html?backend=${expected}${shaderQuery}`, {
-      waitUntil: 'domcontentloaded',
-    });
-    await page.waitForFunction(
-      () =>
-        (window as typeof window & { targetV1ComposeReady?: Promise<ComposeProofResult> }).targetV1ComposeReady !==
-        undefined,
+    await withinDeadline(
+      `${expected} compose navigation`,
+      page.goto(`${origin}/v1-compose.html?backend=${expected}${shaderQuery}`, {
+        waitUntil: 'domcontentloaded',
+      }),
     );
-    const result = await page.evaluate(
-      () => (window as typeof window & { targetV1ComposeReady: Promise<ComposeProofResult> }).targetV1ComposeReady,
+    await withinDeadline(
+      `${expected} compose publication`,
+      page.waitForFunction(
+        () =>
+          (window as typeof window & { targetV1ComposeReady?: Promise<ComposeProofResult> }).targetV1ComposeReady !==
+          undefined,
+      ),
+    );
+    const result = await withinDeadline(
+      `${expected} compose result`,
+      page.evaluate(
+        () => (window as typeof window & { targetV1ComposeReady: Promise<ComposeProofResult> }).targetV1ComposeReady,
+      ),
     );
     if (errors.length !== 0) throw new Error(`${expected} compose browser errors: ${errors.join(' | ')}`);
     if (result.backend !== expected) throw new Error(`expected ${expected}, received ${result.backend}`);
@@ -203,6 +269,9 @@ try {
     await page.close();
   }
 } finally {
-  await browser.close();
-  server.kill('SIGTERM');
+  try {
+    if (browser !== undefined) await withinDeadline('Chromium shutdown', browser.close());
+  } finally {
+    if (server !== undefined) await withinDeadline('Vite shutdown', server.close());
+  }
 }

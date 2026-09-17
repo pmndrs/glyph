@@ -157,19 +157,10 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install HarfBuzz workload toolchain
-        run: mise -C benches install
-
-      - name: Install HarfBuzz native prerequisite
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends libglib2.0-dev
-          pkg-config --modversion glib-2.0
-
-      - name: Provision authenticated HarfBuzz utilities
+      - name: Provision authenticated vendored HarfBuzz utilities
         run: |
           pnpm scripts run fixture:harfbuzz:provision
-          mise -C benches exec -- node ./scripts/provision-harfbuzz.mts --version=14.2.0
+          pnpm scripts run fixture:harfbuzz:provision -- --version=14.2.0
           printf '%s\n' "$GITHUB_WORKSPACE/benches/.cache/harfbuzz/14.2.0/build/util" >> "$GITHUB_PATH"
 
       - name: Select rolling runner Chromium

@@ -287,4 +287,4 @@ function execute(command: string, arguments_: readonly string[], stdio: 'inherit
   });
 }
 
-/* @workflow { "name": "fixture:harfbuzz:vendor", "summary": "Build an authenticated platform HarfBuzz utility bundle for Git LFS.", "requirements": "Network access, Git LFS, and either macOS native build tools or Docker for Linux x64.", "writes": "benches/vendor/harfbuzz and ignored build caches.", "args": ["--version <13.0.0|14.2.0> --target <darwin-arm64|darwin-x64|linux-x64> [--package-only]"] } */
+/* @workflow { "name": "fixture:harfbuzz:vendor", "summary": "Build an authenticated platform HarfBuzz utility bundle for Git LFS. Pass --version <13.0.0|14.2.0> and --target <darwin-arm64|darwin-x64|linux-x64>; --package-only skips compilation.", "requirements": "Network access, Git LFS, and either macOS native build tools or Docker for Linux x64.", "writes": "benches/vendor/harfbuzz and ignored build caches." } */

@@ -2,6 +2,10 @@
 
 ## 2026-09-17
 
+- **Removed HarfBuzz compilation from ordinary CI** — Replaced benchmark-local Meson/Ninja setup and Ubuntu GLib
+  installation with authenticated Git LFS bundles for HarfBuzz 13.0.0 and 14.2.0. CI now provisions both versions
+  through the indexed root pnpm workflow, verifies their manifests and executables, and exposes only 14.2.0 on `PATH`.
+
 - **Moved OKF maintenance onto the pinned Node.js toolchain** — Replaced the repository-shipped Ruby validator,
   migration helper, package digester, and commit hook with tested Node modules. Digest output remains byte-for-byte
   compatible for unchanged package trees, while the hook now hashes staged package content without staging unrelated
