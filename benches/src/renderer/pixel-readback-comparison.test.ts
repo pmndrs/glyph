@@ -19,6 +19,19 @@ describe('comparePixelReadbacks', () => {
     });
   });
 
+  test('accepts a bounded number of sparse raster-edge differences', () => {
+    expect(comparePixelReadbacks([0, 64, 128, 255], [0, 64, 0, 255], 1, 1)).toEqual({
+      changedChannels: 1,
+      matches: true,
+      maxChannelDelta: 128,
+    });
+    expect(comparePixelReadbacks([0, 64, 128, 255], [1, 63, 0, 255], 1, 2)).toEqual({
+      changedChannels: 3,
+      matches: false,
+      maxChannelDelta: 128,
+    });
+  });
+
   test('rejects mismatched readback dimensions', () => {
     expect(() => comparePixelReadbacks([0], [0, 1], 1)).toThrow(/length/);
   });

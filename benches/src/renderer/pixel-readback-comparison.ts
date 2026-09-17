@@ -9,12 +9,16 @@ export function comparePixelReadbacks(
   expected: ArrayLike<number>,
   actual: ArrayLike<number>,
   channelTolerance: number,
+  sparseChangedChannelLimit = 0,
 ): PixelReadbackComparison {
   if (actual.length !== expected.length) {
     throw new Error(`pixel readback length ${String(actual.length)} did not match ${String(expected.length)}`);
   }
   if (!Number.isFinite(channelTolerance) || channelTolerance < 0) {
     throw new Error('pixel readback channel tolerance must be finite and non-negative');
+  }
+  if (!Number.isSafeInteger(sparseChangedChannelLimit) || sparseChangedChannelLimit < 0) {
+    throw new Error('pixel readback sparse-channel limit must be a non-negative safe integer');
   }
 
   let changedChannels = 0;
@@ -26,7 +30,7 @@ export function comparePixelReadbacks(
   }
   return {
     changedChannels,
-    matches: maxChannelDelta <= channelTolerance,
+    matches: maxChannelDelta <= channelTolerance || changedChannels <= sparseChangedChannelLimit,
     maxChannelDelta,
   };
 }
