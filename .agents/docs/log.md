@@ -1,5 +1,18 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-17
+
+- **Removed the repository-local external-agent router and cleared dependency advisories** — Removed the pinned
+  `ai-cli-mcp` dependency, project MCP registrations, router skill, operations guide, and its dedicated trace reader.
+  `pnpm audit --fix update` upgraded compatible vulnerable dependencies; pnpm's generated `brace-expansion` override
+  closes the remaining transitive advisory. `pnpm audit --audit-level=low` now reports no known vulnerabilities.
+
+- **Moved searched Unicode properties onto generated code-point tries** — Bidi class, line break, and script now share one
+  two-stage trie generator. Focused kernels improve those lookups by 5.6–14.1×; the current-main shaper comparison adds
+  67,279 raw bytes while removing 7,534 gzip and 4,505 Brotli bytes. Generators round-trip every Unicode code point and
+  Rust tests exhaustively compare the emitted tables with independent range oracles. See [the package evidence](packages/glyph.md)
+  and D-370 in [the decision register](planning/decision-register.md).
+
 ## 2026-09-16
 
 - **Removed the project baker's consumer TypeScript requirement** — Replaced the exact-version compiler adapter with Oxc parsing, lexical scopes, and module resolution while preserving automatic JS/JSX/TS/TSX discovery. Existing test files cover bindings, imports, re-exports, literal evaluation, and isolated CLI baking with neither TypeScript nor Babel installed. The existing package test command owns verification; no new workflow scripts are needed. TypeScript remains development-only; public baking signatures are unchanged. See [the package contract](packages/glyph.md), [tooling fixtures](planning/tooling-fixtures.md), and D-368 in [the decision register](planning/decision-register.md).

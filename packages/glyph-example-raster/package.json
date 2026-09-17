@@ -63,7 +63,7 @@
     "three": "catalog:renderer",
     "typegpu": "catalog:renderer",
     "unplugin-typegpu": "0.12.2",
-    "vitest": "4.1.0"
+    "vitest": "4.1.11"
   },
   "peerDependencies": {
     "three": ">=0.185.0 <0.186",

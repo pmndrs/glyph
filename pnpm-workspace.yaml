@@ -21,5 +21,17 @@ minimumReleaseAgeExclude:
   - typegpu@0.12.5
   - unplugin-typegpu@0.12.2
   - tinyest@0.3.3
+  - postcss@8.5.23
+  - fast-uri@3.1.5 || 3.1.6
+  - hono@4.12.34 || 4.13.5
+  - brace-expansion@5.0.9
+  - js-yaml@4.3.1 || 4.3.2
+  - nanoid@3.3.18
+  - qs@6.15.4 || 6.16.0
+  - vitest@4.1.11
+  - '@vitest/mocker@4.1.11'
 
 onlyBuiltDependencies: []
+
+overrides:
+  brace-expansion@>=4.0.0 <5.0.9: ^5.0.9
