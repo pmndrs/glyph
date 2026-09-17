@@ -2,8 +2,12 @@ import { max, mix, smoothstep, vec3 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { defineTextMaterial } from '@pmndrs/glyph/three';
 import { defineTextMaterial as defineExperimentalTextMaterial } from '@pmndrs/glyph/three/typegpu';
-import type { TslMsdfShaderOutput } from '@pmndrs/glyph/shaders/tsl/msdf';
-import type { TypeGpuMsdfFragmentOutput } from '@pmndrs/glyph/shaders/typegpu/msdf';
+import type { TslMsdfShaderOutput } from '@pmndrs/glyph/shaders/tsl';
+import {
+  msdfRenderDetailed,
+  type TypeGpuMsdfFragmentOutput,
+  type TypeGpuMsdfRenderInput,
+} from '@pmndrs/glyph/shaders/typegpu';
 
 for (const defineMaterial of [defineTextMaterial, defineExperimentalTextMaterial]) {
   defineMaterial((context) => {
@@ -22,7 +26,10 @@ for (const defineMaterial of [defineTextMaterial, defineExperimentalTextMaterial
 }
 
 declare const output: TypeGpuMsdfFragmentOutput;
+declare const input: TypeGpuMsdfRenderInput;
+const detailedOutput: TypeGpuMsdfFragmentOutput = msdfRenderDetailed(input);
 const fillPixels: number = output.fillDistance * output.pixelRange;
 const truePixels: number = output.trueDistance * output.pixelRange;
+void detailedOutput;
 void fillPixels;
 void truePixels;

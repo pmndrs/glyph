@@ -1,13 +1,12 @@
-import { msdf } from '@pmndrs/glyph/raster/msdf';
-import { msdfShader as nativeMsdfShader } from '@pmndrs/glyph/shaders/tsl/msdf';
+import { msdf } from '@pmndrs/glyph';
+import { msdfShader as stableMsdfShader } from '@pmndrs/glyph/shaders/tsl';
 import { defineTextMaterial, type Text } from '@pmndrs/glyph/three';
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
+import { msdfShader as typeGpuMsdfShader } from '../../packages/glyph/src/three/typegpu/internal/msdf-shader.js';
 
 const msdfShader =
-  new URLSearchParams(location.search).get('shaders') === 'typegpu'
-    ? (await import('@pmndrs/glyph/three/typegpu')).msdfShader
-    : nativeMsdfShader;
+  new URLSearchParams(location.search).get('shaders') === 'typegpu' ? typeGpuMsdfShader : stableMsdfShader;
 
 /** Independent constant atlas samples prove channel choice, sign, layer selection, and screen-space units. */
 async function proveDistanceSamples(renderer: THREE.WebGPURenderer): Promise<number> {

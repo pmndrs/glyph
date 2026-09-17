@@ -26,6 +26,7 @@ export {
   msdfCoverage,
   msdfFragment,
   msdfPixelRangeAccessor,
+  msdfRenderDetailed,
   msdfSampleSlot,
   msdfVertex,
   TypeGpuMsdfFragmentInput,
