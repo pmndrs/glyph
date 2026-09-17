@@ -97,7 +97,7 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
 
   await verifyIsolatedPackedConsumers(
     join(archiveDirectory, `pmndrs-glyph-${sourceManifest.version}.tgz`),
-    sourceManifest.devDependencies,
+    manifest.devDependencies,
     context,
   );
 
