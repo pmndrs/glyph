@@ -38,9 +38,9 @@
   `pixelRange` through both Three shader paths and raw TypeGPU detailed output. WebGPU and WebGL2 verify channel/sign
   semantics, scale and rotation, exact fill reconstruction, and a glow outside coverage. A substituted coverage field
   fails the numeric oracle. The shared TypeGPU reconstruction retains the existing coverage API.
-  Refreshed renderer size evidence and four baker entries whose recorded hashes also disagree with a fresh build of
-  unmodified `679daa4b`. Some baker artifacts differ between worktrees; that cause remains unresolved. The size record
-  pins this checkout's repeatable build output, with unchanged ceilings.
+  Refreshed the three affected JavaScript renderer size entries; their gzip deltas are +68 bytes for direct TypeGPU,
+  +22 bytes for Three, and +68 bytes for Three plus TypeGPU. Unrelated Wasm evidence remains pinned to `main`, and all
+  existing size ceilings remain unchanged.
 
 - **Update** — Moved the benchmark workspace to root-level `benches/`, updated consumers and workspace validation, and migrated repository fixtures and assets to Git LFS with historical coverage and LFS-aware CI checkout. Re-pinned size evidence after reproducing the JavaScript differences with the old benchmark root and proving that all five Wasm binaries are byte-identical before and after relocation; three previously stale Wasm hashes now reflect the pinned build. Size ceilings are unchanged.
 

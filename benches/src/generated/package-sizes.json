@@ -21,11 +21,11 @@
       "label": "TypeGPU direct renderer JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "6948b978ab52a63302b3de97f8dd58d5ea0ecffad779cf7a8a51a5f85bb97d8d",
-      "rawBytes": 216860,
-      "minifiedBytes": 211817,
-      "gzipBytes": 42011,
-      "brotliBytes": 35654
+      "sha256": "0b3938648561cef41ea58ab621e874cb092de089d4951a2bd82e7c12075feba9",
+      "rawBytes": 217573,
+      "minifiedBytes": 212385,
+      "gzipBytes": 42079,
+      "brotliBytes": 35739
     },
     {
       "id": "browser-core",
@@ -54,22 +54,22 @@
       "label": "Three.js adapter JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "4d8e66e86d0649daa75554c013b3a5c94b121ed2281e05bee82f0a899e253af6",
-      "rawBytes": 542474,
-      "minifiedBytes": 530357,
-      "gzipBytes": 133711,
-      "brotliBytes": 109596
+      "sha256": "a0f1ad02e1ae245eeb1cdffb635e9b39791b57df7276406641b2e20d05940495",
+      "rawBytes": 542529,
+      "minifiedBytes": 530412,
+      "gzipBytes": 133733,
+      "brotliBytes": 109685
     },
     {
       "id": "three-typegpu-runtime-js",
       "label": "Three.js + TypeGPU adapter JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "e5ba71895cd944925792fe9d0f0752953dd1070ac4255e9080026ead81d6ffd7",
-      "rawBytes": 630455,
-      "minifiedBytes": 615190,
-      "gzipBytes": 143885,
-      "brotliBytes": 117590
+      "sha256": "6e17b683e8808fd4d5cbaf26a025d2e35323b9eb0268c91a3cf756903b79078b",
+      "rawBytes": 631557,
+      "minifiedBytes": 616211,
+      "gzipBytes": 143953,
+      "brotliBytes": 117642
     },
     {
       "id": "font-inter-bitmap-16-32",
