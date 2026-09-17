@@ -38,6 +38,12 @@ Exercise repository workflows through named `pnpm` scripts from the workspace ro
 
 Before searching for or inventing a specialized maintenance command, run `mise exec -- pnpm scripts list`. Use `mise exec -- pnpm scripts show <name>` to inspect its prerequisites and writes, then `mise exec -- pnpm scripts run <name> -- [arguments]` to execute it. Contributor-facing root commands are limited to `bake`, `dev`, `build`, `test`, `check`, and this `scripts` index; specialized workflows describe themselves in their source metadata instead of expanding package manifests.
 
+Run `mise exec -- pnpm scripts run repo:hooks:install` once per clone. It installs the repository's native pre-commit
+dispatcher in `git rev-parse --git-common-dir/hooks`, so every worktree shares it without `core.hooksPath` or a hook
+manager. The installer preserves every existing Git LFS hook. The pre-commit hook auto-formats and applies safe lint fixes
+to fully staged source files, then runs the staged OKF digest and validation gate; it refuses partially staged source files
+instead of accidentally staging unrelated edits.
+
 TypeScript checks use the repository-pinned compiler and the patched `@types/three` declaration graph. For TSL typing changes, begin with the focused regression fixture before running a package or application project.
 
 Use the repository-local `codemod` skill for TypeScript or TSX migrations only after the changed API has reached the
