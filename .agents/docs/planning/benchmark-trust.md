@@ -69,13 +69,13 @@ So `rsdPercent` reads low, the median looks precise to four decimals, and the nu
 
 The rest of the surface is weaker still:
 
-| Path                                                           | Samples                   | Dispersion reported        | Gate                                                |
-| -------------------------------------------------------------- | ------------------------- | -------------------------- | --------------------------------------------------- |
-| [`runner.ts`](../../../benches/src/benchmark/runner.ts) via CI | 3, warmup 1               | median, p95                | none                                                |
-| `runtime-fallback-parity`, `source-outline-fidelity` probes    | 1, warmup 0               | none possible              | none                                                |
-| `benchmark:presentation-performance`                           | 1.5 s rAF window per cell | p95, max, slow-frame count | none — the 20 ms counter is printed, never asserted |
-| `glyph:layout-benchmark`                                       | 31, warmup 8              | median, p95, RSD           | none                                                |
-| `glyph:kernel-lab*`                                            | 101, warmup 40            | median                     | none                                                |
+| Path                                                           | Samples                                         | Dispersion reported      | Gate |
+| -------------------------------------------------------------- | ----------------------------------------------- | ------------------------ | ---- |
+| [`runner.ts`](../../../benches/src/benchmark/runner.ts) via CI | 3, warmup 1                                     | median, p95              | none |
+| `runtime-fallback-parity`, `source-outline-fidelity` probes    | 1, warmup 0                                     | none possible            | none |
+| `benchmark:presentation-performance`                           | 30 warmup + 120 measured rAF intervals per cell | mean, p50, p95, max, FPS | none |
+| `glyph:layout-benchmark`                                       | 31, warmup 8                                    | median, p95, RSD         | none |
+| `glyph:kernel-lab*`                                            | 101, warmup 40                                  | median                   | none |
 
 Three facts follow, and all three are load-bearing:
 

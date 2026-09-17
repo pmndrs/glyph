@@ -7,7 +7,6 @@ import type {
   ComparisonWorkloadAnimationScratch,
   ComparisonWorkloadConfiguration,
   ComparisonWorkloadDefinition,
-  ComparisonWorkloadReflowPhases,
 } from '../comparison/contracts';
 import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
@@ -36,7 +35,15 @@ export const paragraphStressWorkload = {
       onReflow,
     );
   },
-  applyRetainedConfiguration() {},
+  applyRetainedConfiguration(entries, configuration) {
+    const entry = entries[0];
+    if (entry === undefined) return;
+    const sourceText = paragraphStressText(configuration.amount);
+    if (sourceText === entry.sourceText) return;
+    entry.sourceText = sourceText;
+    delete entry.lastWidth;
+    entry.text.set({ text: sourceText });
+  },
   // One Text holding a large repeated-ipsum body is already a batch of one, so a shared group would prove nothing
   // here. Staying standalone also keeps this lane's draw and glyph telemetry directly comparable to merged v0.
   batching: 'standalone',
@@ -56,8 +63,7 @@ export const paragraphStressWorkload = {
     layoutParagraphStressEntries(entries, context.viewportWidth, context.viewportHeight);
   },
   suspendsIconWindow: false,
-  updateKind: (previous: ComparisonWorkloadConfiguration, next: ComparisonWorkloadConfiguration) =>
-    previous.amount === next.amount ? 'retained' : 'rebuild',
+  updateKind: () => 'retained',
 } satisfies ComparisonWorkloadDefinition;
 
 export function createParagraphStressEntries(
@@ -68,9 +74,7 @@ export function createParagraphStressEntries(
     readonly viewportWidth: number;
   },
 ): readonly ComparisonWorkloadEntry[] {
-  const sourceText = Array.from({ length: Math.max(2, Math.round(context.amount / 10)) }, () =>
-    benchmarkIpsumText(),
-  ).join('\n');
+  const sourceText = paragraphStressText(context.amount);
   const text = context.root.createText({
     font: context.font,
     rasterPixelRatio: context.dpr,
@@ -88,6 +92,10 @@ export function createParagraphStressEntries(
       lastWidth: benchmarkContentWidth(context.viewportWidth, context.layoutWidthRatio),
     },
   ];
+}
+
+function paragraphStressText(amount: number): string {
+  return Array.from({ length: Math.max(2, Math.round(amount / 10)) }, () => benchmarkIpsumText()).join('\n');
 }
 
 export function layoutParagraphStressEntries(
@@ -118,7 +126,7 @@ export function animateParagraphStressScene(
   viewportHeight: number,
   frame: ComparisonWorkloadAnimationScratch['paragraphStress'],
   onError: (error: unknown) => void,
-  onReflow: (duration: number, phases?: ComparisonWorkloadReflowPhases) => void,
+  onReflow: (duration: number, stageMs?: number, publishMs?: number, layoutMs?: number) => void,
 ): void {
   const entry = entries[0];
   if (entry === undefined) return;
@@ -149,7 +157,7 @@ export function animateParagraphStressScene(
       const layoutStarted = performance.now();
       layout = layoutParagraphStressEntries(entries, viewportWidth, viewportHeight);
       const layoutMs = performance.now() - layoutStarted;
-      onReflow(performance.now() - started, { stageMs, publishMs, layoutMs });
+      onReflow(performance.now() - started, stageMs, publishMs, layoutMs);
     } catch (error) {
       onError(error);
       return;

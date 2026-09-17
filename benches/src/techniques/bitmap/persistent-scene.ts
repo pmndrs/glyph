@@ -402,12 +402,12 @@ async function activateBitmapTextPersistentScene(
     );
     const activeFontFixture = fontFixtureController;
     context.signal.throwIfAborted();
-    textUpdateTelemetry.record({
-      scheduleMs: scheduledAt - textStarted,
-      readyMs: readyAt - scheduledAt,
-      sceneMs: performance.now() - readyAt,
-      totalMs: performance.now() - textStarted,
-    });
+    textUpdateTelemetry.record(
+      scheduledAt - textStarted,
+      readyAt - scheduledAt,
+      performance.now() - readyAt,
+      performance.now() - textStarted,
+    );
     const camera = new THREE.OrthographicCamera(0, width, 0, -viewportHeight, 0.1, 10);
     camera.position.z = 1;
     camera.updateProjectionMatrix();
@@ -527,12 +527,12 @@ async function activateBitmapTextPersistentScene(
       const reflowSceneStartedAt = performance.now();
       presentation = { revision, presented: retainedGlyphPresentation(activeText) };
       const finishedAt = performance.now();
-      textUpdateTelemetry.record({
-        scheduleMs: 0,
-        readyMs: readyUpdateAt - updateStartedAt,
-        sceneMs: finishedAt - reflowSceneStartedAt,
-        totalMs: finishedAt - updateStartedAt,
-      });
+      textUpdateTelemetry.record(
+        0,
+        readyUpdateAt - updateStartedAt,
+        finishedAt - reflowSceneStartedAt,
+        finishedAt - updateStartedAt,
+      );
       return presentationSnapshot();
     };
     const resize = (viewport: PersistentRenderViewport): void => {

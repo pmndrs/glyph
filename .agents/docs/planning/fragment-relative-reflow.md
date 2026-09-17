@@ -1093,7 +1093,7 @@ The extra indexed placement read is not free. Run identical scenes for every ras
 ### Browser and soak
 
 Use `probe:live-update-latency` for maintained live-style/active-resize coverage plus
-`benchmark:paragraph-stress-timing`, `benchmark:presentation-fresh-scene-performance`, `benchmark:presentation`, and
+`benchmark:paragraph-stress-timing`, `benchmark:presentation-performance`, `benchmark:presentation`, and
 `benchmark:icon-grid-soak`. Run one browser instance at a time. Required results:
 
 - Active Resize complete CPU update below `4 ms` p95, with core Rust-plus-plan work below `2 ms` p95;

@@ -36,10 +36,15 @@ export interface PersistentRenderSceneContext {
   readonly viewport: PersistentRenderViewport;
 }
 
+/** Borrowed only for the synchronous scene frame call. */
 export interface PersistentRenderFrameContext extends PersistentRenderSceneContext {
   readonly frameId: number;
   readonly timestamp: number;
 }
+
+type MutablePersistentRenderFrameContext = {
+  -readonly [Key in keyof PersistentRenderFrameContext]: PersistentRenderFrameContext[Key];
+};
 
 export type PersistentRenderJob<T> = (context: PersistentRenderSceneContext) => T;
 
@@ -154,6 +159,15 @@ export async function createPersistentRenderHost(options: PersistentRenderHostOp
       telemetry.reset();
       latestTelemetry = undefined;
     };
+    const frameContext: MutablePersistentRenderFrameContext = {
+      frameId: 0,
+      renderer: borrowedRenderer,
+      rendererInitMs,
+      resetTelemetry,
+      signal: AbortSignal.abort(),
+      timestamp: 0,
+      viewport,
+    };
 
     const deactivate = async (record: ActiveScene, reason: PersistentRenderSceneDeactivation): Promise<void> => {
       record.controller.abort();
@@ -171,22 +185,20 @@ export async function createPersistentRenderHost(options: PersistentRenderHostOp
         const current = activeScene;
         if (current === undefined || current.controller.signal.aborted) return;
         const frameId = telemetry.beginFrame(timestamp);
-        const startedAt = dependencies.now();
         if (telemetry.gpuTimingSupported) activeFrameTimer.beginFrame(frameId);
+        const startedAt = dependencies.now();
+        let durationMs = 0;
         try {
-          current.scene.frame({
-            frameId,
-            renderer: borrowedRenderer,
-            rendererInitMs,
-            resetTelemetry,
-            signal: current.controller.signal,
-            timestamp,
-            viewport,
-          });
+          frameContext.frameId = frameId;
+          frameContext.signal = current.controller.signal;
+          frameContext.timestamp = timestamp;
+          frameContext.viewport = viewport;
+          current.scene.frame(frameContext);
         } finally {
+          durationMs = Math.max(0, dependencies.now() - startedAt);
           if (telemetry.gpuTimingSupported) activeFrameTimer.endFrame();
         }
-        const snapshot = telemetry.endFrame(frameId, Math.max(0, dependencies.now() - startedAt));
+        const snapshot = telemetry.endFrame(frameId, durationMs);
         if (snapshot !== undefined) {
           publishTelemetry(snapshot);
           current.scene.telemetry?.(snapshot, viewport);

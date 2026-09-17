@@ -1,27 +1,23 @@
 import { SELECTABLE_FONT_FIXTURE_IDS, type SelectableFontFixture } from './font-fixtures';
-import { isConformanceWorkloadId, type ConformanceWorkloadId } from './workloads';
 import { isBenchmarkWorkloadId, type BenchmarkWorkloadId } from '../workloads/catalog';
 
-export type HarnessMode = 'benchmark' | 'conformance';
 export type HarnessLayout = 'main' | 'presentation';
 export type RasterFormatName = 'bitmap' | 'mtsdf' | 'slug';
 export type GraphicsBackend = 'webgpu' | 'webgl2';
 export type FontDelivery = 'baked' | 'runtime';
 
 export interface HarnessLocation {
-  readonly mode: HarnessMode;
   readonly layout: HarnessLayout;
   readonly technique: RasterFormatName;
   readonly backend: GraphicsBackend;
   readonly delivery: FontDelivery;
   readonly dpr: 1 | 2;
   readonly fontFixture: SelectableFontFixture;
-  readonly workload: BenchmarkWorkloadId | ConformanceWorkloadId;
-  readonly view: 'scene' | 'controls' | 'report' | 'export';
+  readonly workload: BenchmarkWorkloadId;
+  readonly view: 'scene' | 'controls';
 }
 
 export const defaultLocation: HarnessLocation = {
-  mode: 'benchmark',
   layout: 'main',
   technique: 'bitmap',
   backend: 'webgpu',
@@ -39,36 +35,21 @@ export function readHarnessLocation(
 ): HarnessLocation {
   const values = new URLSearchParams(search);
   const view = values.get('view');
-  const legacyTarget = values.get('target');
-  const legacyScenario = values.get('scenario');
-  const hasLegacySelection = legacyTarget !== null || legacyScenario !== null;
-  const mode = enumValue(
-    values.get('mode'),
-    ['benchmark', 'conformance'],
-    hasLegacySelection ? 'conformance' : defaultLocation.mode,
-  );
-  const requestedWorkload =
-    values.get('workload') ?? (hasLegacySelection ? legacyWorkload(legacyScenario) : defaultLocation.workload);
+  const requestedWorkload = values.get('workload') ?? defaultLocation.workload;
   return {
-    mode,
     layout,
     technique: enumValue(values.get('technique'), ['bitmap', 'mtsdf', 'slug'], 'bitmap'),
-    backend: enumValue(
-      values.get('backend'),
-      ['webgpu', 'webgl2'],
-      legacyTarget?.endsWith('webgl2') === true ? 'webgl2' : defaultLocation.backend,
-    ),
+    backend: enumValue(values.get('backend'), ['webgpu', 'webgl2'], defaultLocation.backend),
     delivery: enumValue(values.get('delivery'), ['baked', 'runtime'], defaultLocation.delivery),
     dpr: numericEnumValue(values.get('dpr'), [1, 2], defaultDpr),
     fontFixture: enumValue(values.get('font'), SELECTABLE_FONT_FIXTURE_IDS, defaultLocation.fontFixture),
-    workload: normalizedWorkload(mode, requestedWorkload),
-    view: enumValue(view, ['scene', 'controls', 'report', 'export'], defaultLocation.view),
+    workload: isBenchmarkWorkloadId(requestedWorkload) ? requestedWorkload : defaultLocation.workload,
+    view: enumValue(view, ['scene', 'controls'], defaultLocation.view),
   };
 }
 
 export function writeHarnessLocation(value: HarnessLocation): string {
   const values = new URLSearchParams();
-  values.set('mode', value.mode);
   values.set('technique', value.technique);
   values.set('backend', value.backend);
   values.set('delivery', value.delivery);
@@ -91,15 +72,6 @@ function numericEnumValue<const Value extends number>(
 ): Value {
   const numericValue = value === null ? Number.NaN : Number(value);
   return allowed.find((candidate) => candidate === numericValue) ?? fallback;
-}
-
-function legacyWorkload(scenario: string | null): string {
-  return scenario === 'bitmap-text-frame' ? 'text-accuracy' : (scenario ?? 'runner-contract');
-}
-
-function normalizedWorkload(mode: HarnessMode, workload: string): BenchmarkWorkloadId | ConformanceWorkloadId {
-  if (mode === 'benchmark') return isBenchmarkWorkloadId(workload) ? workload : defaultLocation.workload;
-  return isConformanceWorkloadId(workload) ? workload : 'mtsdf-slug-compare';
 }
 
 function enumValue<const Value extends string>(

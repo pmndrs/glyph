@@ -2,6 +2,18 @@
 
 ## 2026-09-17
 
+- **Reduced the benchmark app to its continuous live-workload role** — Removed human conformance, capture, report, and
+  export navigation while retaining headless conformance targets and workflows. Split presentation playback, workload
+  controls, render configuration, and payload inspection out of the route controller. Runtime sliders stream directly
+  through Koota, and Paragraph Stress mutates its retained `Text` when volume changes instead of rebuilding its scene.
+  D-371 records the persistent one-renderer application boundary.
+
+- **Standardized live benchmark frame time** — Replaced update-count-driven and fresh-scene timing with one game-loop
+  definition: 30 warmup animation-frame intervals followed by 120 consecutive RAF timestamp deltas. The ordinary
+  persistent demo reports mean, p50, p95, max, and mean-derived FPS; a separately labeled CPU summary measures the same
+  render-loop bodies while excluding GPU-query setup and asynchronous resolution. D-372 keeps startup, input latency,
+  GPU duration, and Rust/Wasm timings as separately named measurements.
+
 - **Removed HarfBuzz compilation from ordinary CI** — Replaced benchmark-local Meson/Ninja setup and Ubuntu GLib
   installation with authenticated Git LFS bundles for HarfBuzz 13.0.0 and 14.2.0. CI now provisions both versions
   through the indexed root pnpm workflow, verifies their manifests and executables, and exposes only 14.2.0 on `PATH`.

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ComparisonWorkloadAnimationScratch } from '../comparison/contracts';
 import type { ComparisonWorkloadEntry } from '../shared/scene-entry';
-import { animateParagraphStressScene } from './scene';
+import { animateParagraphStressScene, paragraphStressWorkload } from './scene';
 
 function paragraphStressEntry(): {
   readonly entry: ComparisonWorkloadEntry;
@@ -13,12 +13,12 @@ function paragraphStressEntry(): {
     constraints: { width: { mode: 'exact' as const, size: 700 } },
     style: { fontSize: 48 },
   };
-  const set = vi.fn<(update: { constraints?: typeof state.constraints; style?: typeof state.style }) => void>(
-    (update) => {
-      if (update.constraints !== undefined) state.constraints = update.constraints;
-      if (update.style !== undefined) state.style = update.style;
-    },
-  );
+  const set = vi.fn<
+    (update: { constraints?: typeof state.constraints; style?: typeof state.style; text?: string }) => void
+  >((update) => {
+    if (update.constraints !== undefined) state.constraints = update.constraints;
+    if (update.style !== undefined) state.style = update.style;
+  });
   const text = {
     get constraints() {
       return state.constraints;
@@ -41,6 +41,20 @@ function paragraphStressEntry(): {
 }
 
 describe('paragraph stress animation', () => {
+  it('updates text volume through the retained Text instead of rebuilding the scene', () => {
+    const { entry, set } = paragraphStressEntry();
+    const entries = [entry];
+
+    expect(paragraphStressWorkload.updateKind()).toBe('retained');
+    paragraphStressWorkload.applyRetainedConfiguration(entries, { amount: 80 } as never);
+
+    expect(entries[0]).toBe(entry);
+    expect(set).toHaveBeenCalledOnce();
+    expect(set.mock.calls[0]?.[0].text).toBe(entry.sourceText);
+    expect(entry.sourceText.length).toBeGreaterThan(0);
+    expect(entry.lastWidth).toBeUndefined();
+  });
+
   it('applies automated width changes inside the scene without restaging an unchanged frame', () => {
     const scene = new THREE.Scene();
     const updateMatrixWorld = vi.spyOn(scene, 'updateMatrixWorld');

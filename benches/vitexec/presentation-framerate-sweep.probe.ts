@@ -3,7 +3,17 @@ export {};
 const catalogPath = '/src/workloads/catalog.ts';
 const workloadCatalog: typeof import('../src/workloads/catalog') = await import(/* @vite-ignore */ catalogPath);
 const { BENCHMARK_WORKLOADS } = workloadCatalog;
+const frameTimeModulePath = '/src/benchmark/frame-time.ts';
+const { sampleAnimationPerformance }: typeof import('../src/benchmark/frame-time') = await import(
+  /* @vite-ignore */ frameTimeModulePath
+);
+const telemetryModulePath = '/src/renderer/live-frame-telemetry.ts';
+const { requestLiveFrameTelemetryCapture }: typeof import('../src/renderer/live-frame-telemetry') = await import(
+  /* @vite-ignore */ telemetryModulePath
+);
 type BenchmarkWorkloadId = keyof typeof BENCHMARK_WORKLOADS;
+type DurationSummary = import('../src/benchmark/frame-time').DurationSummary;
+type FrameTimeSummary = import('../src/benchmark/frame-time').FrameTimeSummary;
 
 const rasterFormats = [
   { id: 'bitmap', label: 'Bitmap' },
@@ -57,17 +67,6 @@ function waitFor<T>(find: () => T | undefined, timeoutMs = 20_000): Promise<T> {
   });
 }
 
-function waitFrames(count: number): Promise<void> {
-  return new Promise((resolve) => {
-    const next = (): void => {
-      count -= 1;
-      if (count === 0) resolve();
-      else requestAnimationFrame(next);
-    };
-    requestAnimationFrame(next);
-  });
-}
-
 async function selectFormat(id: RasterFormatName, label: string): Promise<void> {
   if (new URLSearchParams(location.search).get('technique') === id) return;
   const button = visible(
@@ -94,37 +93,6 @@ async function selectWorkload(id: BenchmarkWorkloadId, label: string): Promise<v
   await waitFor(() => (new URLSearchParams(location.search).get('workload') === id ? true : undefined));
 }
 
-async function completeAdvancedShaping(): Promise<void> {
-  const trigger = await waitFor(() =>
-    [...document.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
-      button.getAttribute('aria-label')?.startsWith('Shaping timeline:'),
-    ),
-  );
-  console.log('presentation-advanced-timeline-trigger-ready', trigger.getAttribute('aria-label'));
-  trigger.click();
-  const timelineAction = await waitFor(() =>
-    visible(
-      [...document.querySelectorAll<HTMLButtonElement>('button')].filter((button) =>
-        ['Pause', 'Play'].includes(button.textContent?.trim() ?? ''),
-      ),
-    ),
-  );
-  console.log('presentation-advanced-timeline-action-ready', timelineAction.textContent?.trim());
-  if (timelineAction.textContent?.trim() === 'Pause') timelineAction.click();
-  const sliderRoot = await waitFor(() => {
-    const candidate = document.querySelector<HTMLElement>('[data-slot="slider"][aria-label="Shaping timeline"]');
-    return candidate ?? undefined;
-  });
-  const slider = sliderRoot.querySelector<HTMLInputElement>('input[type="range"]');
-  if (slider === null) throw new Error('Advanced shaping timeline is missing its range input');
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-  if (setter === undefined) throw new Error('Native range value setter is unavailable');
-  setter.call(slider, slider.max);
-  slider.dispatchEvent(new Event('input', { bubbles: true }));
-  slider.dispatchEvent(new Event('change', { bubbles: true }));
-  console.log('presentation-advanced-timeline-completed', slider.max);
-}
-
 async function readyViewport(format: RasterFormatName, workload: BenchmarkWorkloadId): Promise<HTMLElement> {
   const selector = comparisonWorkloads.has(workload)
     ? `[data-testid="comparison-live-viewport"][data-technique="${format}"][data-workload="${workload}"]`
@@ -148,54 +116,34 @@ async function readyViewport(format: RasterFormatName, workload: BenchmarkWorklo
   }, 60_000);
 }
 
-function percentile(values: readonly number[], ratio: number): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * ratio))] ?? Number.NaN;
-}
-
-async function sampleRaf(
-  durationMs: number,
-): Promise<{ fps: number; p95FrameMs: number; maxFrameMs: number; slow: number }> {
-  const deltas: number[] = [];
-  const start = performance.now();
-  let previous = start;
-  await new Promise<void>((resolve) => {
-    const frame = (now: number): void => {
-      deltas.push(now - previous);
-      previous = now;
-      if (now - start >= durationMs) resolve();
-      else requestAnimationFrame(frame);
-    };
-    requestAnimationFrame(frame);
-  });
-  const elapsed = deltas.reduce((sum, value) => sum + value, 0);
-  return {
-    fps: (deltas.length * 1_000) / elapsed,
-    p95FrameMs: percentile(deltas, 0.95),
-    maxFrameMs: Math.max(...deltas),
-    slow: deltas.filter((value) => value > 20).length,
-  };
-}
-
-const results: Array<Record<string, number | string>> = [];
+const results: Array<{
+  readonly draws: number;
+  readonly cpuTime: DurationSummary;
+  readonly frameTime: FrameTimeSummary;
+  readonly glyphs: number;
+  readonly technique: RasterFormatName;
+  readonly workload: BenchmarkWorkloadId;
+}> = [];
 for (const format of rasterFormats) {
   await selectFormat(format.id, format.label);
   for (const workload of workloads) {
     await selectWorkload(workload.id, workload.label);
-    if (workload.id === 'advanced-shaping') await completeAdvancedShaping();
     const viewport = await readyViewport(format.id, workload.id);
-    await waitFrames(30);
-    const raf = await sampleRaf(1_500);
+    const canvas = document.querySelector<HTMLCanvasElement>('canvas[data-configured-renderer-active="true"]');
+    if (canvas === null) throw new Error('Presentation performance sample lost its renderer canvas');
+    const { cpuTime, summary: frameTime } = await sampleAnimationPerformance(window, async (sampleFrames) => {
+      const capture = await requestLiveFrameTelemetryCapture(canvas, {
+        cpuSampleCount: sampleFrames,
+        gpuSampleCount: 0,
+        signal: AbortSignal.timeout(60_000),
+      });
+      return capture.cpuMs;
+    });
     const record = {
       technique: format.id,
       workload: workload.id,
-      rafFps: Number(raf.fps.toFixed(1)),
-      p95FrameMs: Number(raf.p95FrameMs.toFixed(2)),
-      maxFrameMs: Number(raf.maxFrameMs.toFixed(2)),
-      slowFrames: raf.slow,
-      reportedFps: Number(viewport.getAttribute('data-frames-per-second')),
-      cpuSubmitMs: Number(viewport.getAttribute('data-median-submit-ms')),
-      gpuMs: Number(viewport.getAttribute('data-median-gpu-ms')),
+      cpuTime,
+      frameTime,
       glyphs: Number(viewport.getAttribute('data-glyph-count')),
       draws: Number(viewport.getAttribute('data-draw-count')),
     };
@@ -204,4 +152,4 @@ for (const format of rasterFormats) {
   }
 }
 console.log('presentation-fps-sweep-ready', JSON.stringify(results));
-/* @workflow { "name": "benchmark:presentation-performance", "summary": "Measure the complete Presentation workload cadence on hardware WebGPU.", "requirements": "GPU-enabled Chromium and Vitexec.", "writes": "Standard output only.", "args": ["--gpu", "--path", "/presentation?mode=benchmark&technique=bitmap&backend=webgpu&delivery=baked&dpr=2&font=inter&workload=benchmark-ipsum"] } */
+/* @workflow { "name": "benchmark:presentation-performance", "summary": "Measure fixed-window Presentation frame times on hardware WebGPU.", "requirements": "GPU-enabled Chromium and Vitexec.", "writes": "Standard output only.", "args": ["--gpu", "--path", "/presentation?technique=bitmap&backend=webgpu&delivery=baked&dpr=2&font=inter&workload=benchmark-ipsum"] } */

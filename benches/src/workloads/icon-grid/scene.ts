@@ -299,6 +299,8 @@ export interface IconGridWorkloadMetrics {
 }
 
 export interface IconGridWorkloadInstance {
+  readonly scrollX: number;
+  readonly scrollY: number;
   activate(configuration: ComparisonWorkloadConfiguration, viewport: IconGridViewport): IconGridVirtualWindow;
   dispose(): void;
   frame(
@@ -344,7 +346,6 @@ export interface IconGridWorkloadInstance {
   ): void;
   settle(configuration: ComparisonWorkloadConfiguration, viewport: IconGridViewport, scene: THREE.Scene): void;
   suspend(): void;
-  view(): { readonly scrollX: number; readonly scrollY: number };
 }
 
 export function createIconGridWorkloadInstance(
@@ -382,6 +383,14 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
   constructor(pool: IconGridEntryPool, isCurrent: () => boolean) {
     this.#pool = pool;
     this.#isCurrent = isCurrent;
+  }
+
+  get scrollX(): number {
+    return this.#autoPan.scrollX;
+  }
+
+  get scrollY(): number {
+    return this.#autoPan.scrollY;
   }
 
   activate(configuration: ComparisonWorkloadConfiguration, viewport: IconGridViewport): IconGridVirtualWindow {
@@ -642,10 +651,6 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
     this.#refreshDeferred = true;
   }
 
-  view(): { readonly scrollX: number; readonly scrollY: number } {
-    return { scrollX: this.#autoPan.scrollX, scrollY: this.#autoPan.scrollY };
-  }
-
   settle(configuration: ComparisonWorkloadConfiguration, viewport: IconGridViewport, scene: THREE.Scene): void {
     this.#iconSize = configuration.fontSize;
     this.#settleWindow(
@@ -830,7 +835,14 @@ export function advanceIconGridAutoPan(
   elapsedMs: number,
   speedPxPerSecond: number,
 ): void {
-  if (![scrollX, scrollY, maximumScrollX, maximumScrollY, elapsedMs, speedPxPerSecond].every(Number.isFinite)) {
+  if (
+    !Number.isFinite(scrollX) ||
+    !Number.isFinite(scrollY) ||
+    !Number.isFinite(maximumScrollX) ||
+    !Number.isFinite(maximumScrollY) ||
+    !Number.isFinite(elapsedMs) ||
+    !Number.isFinite(speedPxPerSecond)
+  ) {
     throw new TypeError('icon grid auto-pan inputs must be finite');
   }
   if (maximumScrollX < 0 || maximumScrollY < 0) {
