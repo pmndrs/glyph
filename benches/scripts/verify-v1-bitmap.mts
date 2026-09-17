@@ -67,7 +67,7 @@ try {
       root,
       logLevel: 'info',
       optimizeDeps: { force: true },
-      server: { host: '127.0.0.1' },
+      server: { host: '127.0.0.1', port: 0, strictPort: false },
     }),
   );
   await withinDeadline('Vite readiness', server.listen());

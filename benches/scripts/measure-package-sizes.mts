@@ -34,6 +34,7 @@ interface BundleResult {
 }
 
 const root = fileURLToPath(new URL('..', import.meta.url));
+const bundleTimeoutMs = 3 * 60 * 1_000;
 const diagnosticModuleFragments = ['/packages/glyph/dist/internal/raster-baker-profile'];
 const diagnosticCodeFragments = [
   'createProfiledDirectRasterBakerFromInstance',
@@ -46,6 +47,22 @@ const diagnosticCodeFragments = [
   'teardown continued after',
   'process.env.NODE_ENV',
 ];
+
+function reportMeasurement(message: string): void {
+  process.stderr.write(`[package-size] ${message}\n`);
+}
+
+async function withinBundleDeadline<T>(label: string, task: Promise<T>): Promise<T> {
+  let timeout: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => reject(new Error(`${label} exceeded ${bundleTimeoutMs} ms`)), bundleTimeoutMs);
+  });
+  try {
+    return await Promise.race([task, deadline]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
+}
 
 function isTextPeerDependency(id: string): boolean {
   return (
@@ -73,63 +90,67 @@ async function bundle(
   externalizeWasmAsset: boolean,
   externalizePeerDependencies: boolean,
 ): Promise<BundleResult> {
-  const result = await build({
-    configFile: false,
-    logLevel: 'silent',
-    // Measure what a consumer actually ships. A library build deliberately leaves
-    // `process.env.NODE_ENV` for the consuming bundler to replace, so measuring without
-    // this define would price development-only diagnostics into every recorded ceiling.
-    define: { 'process.env.NODE_ENV': JSON.stringify('production') },
-    plugins: externalizeWasmAsset
-      ? [
-          {
-            name: 'externalize-package-wasm-for-size-measurement',
-            transform(code, id) {
-              const wasmAssets = [
-                'bitmap-baker.wasm',
-                'font-baker.wasm',
-                'text-shaper.wasm',
-                'mtsdf-baker.wasm',
-                'slug-baker.wasm',
-              ];
-              let transformed = code;
-              let changed = false;
-              for (const asset of wasmAssets) {
-                const expression = new RegExp(
-                  `new URL\\((["'\x60])\\.{1,2}\\/(?:\\.{1,2}\\/)*(?:dist\\/)?${asset}\\1,\\s*import\\.meta\\.url\\)`,
-                  'g',
-                );
-                transformed = transformed.replace(expression, (_match, quote: string) => {
-                  changed = true;
-                  return `new URL(${quote}${asset}${quote}, ${quote}https://size.invalid/${quote})`;
-                });
-              }
-              if (!changed || !id.includes('/packages/glyph/')) return;
-              return transformed;
+  const mode = minify === false ? 'raw' : 'minified';
+  const result = await withinBundleDeadline(
+    `${entry} ${mode} bundle`,
+    build({
+      configFile: false,
+      logLevel: 'silent',
+      // Measure what a consumer actually ships. A library build deliberately leaves
+      // `process.env.NODE_ENV` for the consuming bundler to replace, so measuring without
+      // this define would price development-only diagnostics into every recorded ceiling.
+      define: { 'process.env.NODE_ENV': JSON.stringify('production') },
+      plugins: externalizeWasmAsset
+        ? [
+            {
+              name: 'externalize-package-wasm-for-size-measurement',
+              transform(code, id) {
+                const wasmAssets = [
+                  'bitmap-baker.wasm',
+                  'font-baker.wasm',
+                  'text-shaper.wasm',
+                  'mtsdf-baker.wasm',
+                  'slug-baker.wasm',
+                ];
+                let transformed = code;
+                let changed = false;
+                for (const asset of wasmAssets) {
+                  const expression = new RegExp(
+                    `new URL\\((["'\x60])\\.{1,2}\\/(?:\\.{1,2}\\/)*(?:dist\\/)?${asset}\\1,\\s*import\\.meta\\.url\\)`,
+                    'g',
+                  );
+                  transformed = transformed.replace(expression, (_match, quote: string) => {
+                    changed = true;
+                    return `new URL(${quote}${asset}${quote}, ${quote}https://size.invalid/${quote})`;
+                  });
+                }
+                if (!changed || !id.includes('/packages/glyph/')) return;
+                return transformed;
+              },
             },
-          },
-        ]
-      : [],
-    root,
-    build: {
-      lib: {
-        entry,
-        formats: ['es'],
-        fileName: 'entry',
+          ]
+        : [],
+      root,
+      build: {
+        lib: {
+          entry,
+          formats: ['es'],
+          fileName: 'entry',
+        },
+        minify,
+        target: 'es2022',
+        write: false,
+        rollupOptions: {
+          preserveEntrySignatures: 'strict',
+          ...(externalizePeerDependencies
+            ? {
+                external: isTextPeerDependency,
+              }
+            : {}),
+        },
       },
-      minify,
-      target: 'es2022',
-      write: false,
-      rollupOptions: {
-        preserveEntrySignatures: 'strict',
-        ...(externalizePeerDependencies
-          ? {
-              external: isTextPeerDependency,
-            }
-          : {}),
-      },
-    },
-  });
+    }),
+  );
   const builds = Array.isArray(result) ? result : [result];
   const chunks = builds.flatMap((output) => {
     if (!('output' in output)) throw new Error('Package-size build unexpectedly entered watch mode');
@@ -235,6 +256,7 @@ async function measureJavaScript(
   },
   excludedCode: readonly string[] = [],
 ): Promise<MeasuredEntry> {
+  reportMeasurement(`measuring ${label}`);
   const [raw, minified] = await Promise.all([
     bundle(fileURLToPath(entry), false, includeDynamic, externalizeWasmAsset, externalizePeerDependencies),
     bundle(fileURLToPath(entry), 'oxc', includeDynamic, externalizeWasmAsset, externalizePeerDependencies),
@@ -245,6 +267,7 @@ async function measureJavaScript(
   }
   assertThinJavaScriptGraph(label, raw, excludedCode);
   assertThinJavaScriptGraph(label, minified, excludedCode);
+  reportMeasurement(`measured ${label}`);
   return {
     id,
     label,
