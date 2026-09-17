@@ -61,6 +61,21 @@ export const packageSizeBudgets = {
     gzipBytes: 138_000,
     brotliBytes: 113_000,
   },
+  // The React adapter includes Glyph's root and Three integration while React, R3F, and Three remain consumer peers.
+  'react-runtime-js': {
+    rawBytes: 548_000,
+    minifiedBytes: 535_000,
+    gzipBytes: 136_000,
+    brotliBytes: 112_000,
+  },
+  // The existing production hello-world application intentionally includes its complete consumer graph. The R3F v9
+  // compatibility change measures 2,621,866 emitted / 739,256 gzip / 561,836 Brotli bytes across its JavaScript chunks.
+  'r3f-hello-world-production-js': {
+    rawBytes: 2_650_000,
+    minifiedBytes: 2_650_000,
+    gzipBytes: 750_000,
+    brotliBytes: 570_000,
+  },
   // `/three/typegpu` prices the complete optional integration with peers external.
   'three-typegpu-runtime-js': {
     rawBytes: 667_000,

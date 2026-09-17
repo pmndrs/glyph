@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:3b3351c39c492c409116d4c7d0f7f65d74419c907e53338ba5e7e60608acca78'
+source_digest: 'sha256:f779f89a5e85b8d8f30482d4ddec0719032e2466dc4454c99852a292c916c18b'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -253,7 +253,8 @@ stable v9 baseline. The adapter imports the common R3F entry. R3F v9 application
 Glyph registers named host constructors because v10's root and `/webgpu` entries share a catalogue but have
 separate factory-extension counters. Factory registration from both entries can otherwise replace Glyph's constructors.
 Until R3F shares its runtime across entries, mixing them adds about 41 kB gzip in the example application
-(verified with alpha.4 and canary.d91831d). Package-size checks externalize peers and do not capture this cost.
+(verified with alpha.4 and canary.d91831d). Adapter-only package-size checks externalize peers; the production
+R3F hello-world measurement includes the complete consumer graph so pull-request comparisons expose this cost.
 The v10 alpha.4 baseline supports the package's Node lifecycle tests and requires Three >=0.185.0. The TypeGPU bridge's texture
 overload first appears in `@typegpu/three` 0.12.1; the GLSL derivative operations require TypeGPU 0.12.5 and
 `@typegpu/gl` 0.12.4.
@@ -1070,7 +1071,7 @@ Both implementations compiled into one binary and run over identical inputs, bes
 | --- | --- | --- | --- |
 | latin | 6.59 ns | 1.18 ns | 5.6x |
 | cjk | 6.78 ns | 1.17 ns | 5.8x |
-| mixed script | 7.32 ns | 1.22 ns | 6.0x |
+| mixed script | 7.32 ns       | 1.22 ns | 6.0x |
 
 Artifact effect, same-session A/B on `main` with identical source, flags, and `wasm-opt` pipeline:
 1,191,281 -> 1,209,532 raw (+18,251), 460,939 -> 459,414 gzip (-1,526), 363,430 -> 362,789 Brotli

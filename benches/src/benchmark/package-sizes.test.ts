@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import report from '../generated/package-sizes.json' with { type: 'json' };
 import { packageSizeBudgets } from './package-size-budgets';
 import { assertPackageSizeReportFresh } from './package-size-report';
-import { sizeLimitRows, summarizePackageSizes } from './package-size-summary';
+import { formatCompactSizeLimitMarkdown, sizeLimitRows, summarizePackageSizes } from './package-size-summary';
 
 describe('independent package-size report', () => {
   it('identifies every measured payload by SHA-256', () => {
@@ -29,6 +29,8 @@ describe('independent package-size report', () => {
       'runtime-baker-worker-js',
       'text-shaper-wasm',
       'three-runtime-js',
+      'react-runtime-js',
+      'r3f-hello-world-production-js',
       'three-typegpu-runtime-js',
       'typegpu-direct-renderer-js',
       'bitmap-runtime-js',
@@ -73,6 +75,8 @@ describe('independent package-size report', () => {
       'Core JS',
       'Shaper Wasm',
       'Three.js adapter JS',
+      'React adapter JS',
+      'R3F hello-world app JS',
       'Inter font · Bitmap',
       'Inter font · MTSDF',
       'Inter font · Slug',
@@ -100,6 +104,17 @@ describe('independent package-size report', () => {
     const incomplete = structuredClone(report);
     incomplete.entries = incomplete.entries.filter(({ id }) => id !== 'text-shaper-wasm');
     expect(() => summarizePackageSizes(incomplete)).toThrow(/text-shaper-wasm/);
+  });
+
+  it('presents every measured surface once in balanced compact columns', () => {
+    const current = sizeLimitRows(report);
+    const base = current.map((row) => ({ ...row, size: row.size - 1 }));
+    const markdown = formatCompactSizeLimitMarkdown(base, current);
+    expect(markdown.split('\n')[0]).toBe('| Surface | gzip | Surface | gzip |');
+    expect(markdown.split('\n')).toHaveLength(13);
+    for (const { label } of summarizePackageSizes(report)) {
+      expect(markdown.split(label)).toHaveLength(2);
+    }
   });
 
   it('keeps foreign-host native-tool variance inside complete reviewed budgets', () => {

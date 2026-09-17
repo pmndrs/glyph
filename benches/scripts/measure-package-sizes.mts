@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'vite';
 
 import { assertPackageSizeReportFresh, type PackageSizeReport } from '../src/benchmark/package-size-report.ts';
+import { measureR3fHelloWorldProductionBundle } from '../src/benchmark/production-app-size.ts';
+import { measurePeerExternalizedReactAdapter } from '../src/benchmark/react-adapter-size.ts';
 
 interface MeasuredEntry {
   readonly id: string;
@@ -441,6 +443,7 @@ const threeRuntime = await measureJavaScript(
     ],
   },
 );
+const reactRuntime = await measurePeerExternalizedReactAdapter(fileURLToPath(new URL('../../', import.meta.url)));
 const threeTypeGpuRuntime = await measureJavaScript(
   'three-typegpu-runtime-js',
   'Three.js + TypeGPU adapter JS',
@@ -503,7 +506,9 @@ const entries: SizeEntry[] = [
   coreJavaScript,
   textShaperWasm,
   threeRuntime,
+  reactRuntime,
   threeTypeGpuRuntime,
+  await measureR3fHelloWorldProductionBundle(fileURLToPath(new URL('../../', import.meta.url))),
   interBitmap,
   interMsdf,
   interSlug,
@@ -646,5 +651,5 @@ if (process.argv.includes('--check')) {
   await writeFile(output, serialized);
   process.stdout.write(serialized);
 }
-/* @workflow { "name": "release:size:generate", "summary": "Regenerate reviewed package-size evidence.", "requirements": "Built runtime packages and Binaryen.", "writes": "Checked-in package-size evidence." } */
-/* @workflow { "name": "release:size:check", "summary": "Verify package-size identity and reviewed ceilings.", "requirements": "Built runtime packages and Binaryen.", "writes": "Nothing.", "args": ["--check"] } */
+/* @workflow { "name": "release:size:generate", "summary": "Regenerate reviewed package-size evidence.", "requirements": "Built runtime packages, the R3F hello-world production application, and Binaryen.", "writes": "Checked-in package-size evidence." } */
+/* @workflow { "name": "release:size:check", "summary": "Verify package-size identity and reviewed ceilings.", "requirements": "Built runtime packages, the R3F hello-world production application, and Binaryen.", "writes": "Nothing.", "args": ["--check"] } */

@@ -118,10 +118,16 @@ jobs:
       - name: Stage package-size presentation
         run: |
           cp benches/src/benchmark/package-size-summary.ts "$RUNNER_TEMP/package-size-summary.ts"
+          cp benches/src/benchmark/production-app-size.ts "$RUNNER_TEMP/production-app-size.ts"
+          cp benches/src/benchmark/react-adapter-size.ts "$RUNNER_TEMP/react-adapter-size.ts"
+          cp benches/size-entries/react-runtime.ts "$RUNNER_TEMP/react-runtime.ts"
           cp benches/src/benchmark/size-limit-report.mts "$RUNNER_TEMP/size-limit-report.mts"
+          cp benches/src/benchmark/package-size-comment.mts "$RUNNER_TEMP/package-size-comment.mts"
 
       - name: Compare package delivery sizes with the PR base
         uses: andresz1/size-limit-action@94bc357df29c36c8f8d50ea497c3e225c3c95d1d # v1.8.0
+        env:
+          SIZE_REPORT_TRACE_PATH: ${{ runner.temp }}/glyph-size-limit-results.jsonl
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           build_script: build
@@ -132,6 +138,15 @@ jobs:
           script: >-
             sh -c "node benches/scripts/measure-package-sizes.mts |
             node \"$RUNNER_TEMP/size-limit-report.mts\""
+
+      - name: Publish compact package-size report
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIZE_REPORT_TRACE_PATH: ${{ runner.temp }}/glyph-size-limit-results.jsonl
+          SIZE_REPORT_PR: ${{ github.event.pull_request.number }}
+          SIZE_REPORT_REPOSITORY: ${{ github.repository }}
+        run: node "$RUNNER_TEMP/package-size-comment.mts"
 
   check:
     name: Check
