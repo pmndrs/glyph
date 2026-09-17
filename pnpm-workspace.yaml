@@ -31,8 +31,8 @@ minimumReleaseAgeExclude:
   - vitest@4.1.11
   - '@vitest/mocker@4.1.11'
 
-onlyBuiltDependencies:
-  - esbuild
+allowBuilds:
+  esbuild: true
 
 overrides:
   brace-expansion@>=4.0.0 <5.0.9: ^5.0.9
