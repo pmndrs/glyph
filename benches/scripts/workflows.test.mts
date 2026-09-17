@@ -17,6 +17,7 @@ test('indexes current specialized workflows from source metadata', async () => {
   const { stdout } = await execute(process.execPath, [workflowScript, 'list']);
 
   assert.match(stdout, /benchmark:presentation\n/);
+  assert.match(stdout, /benchmark:labs-package\n/);
   assert.match(stdout, /fixture:harfbuzz:provision\n/);
   assert.match(stdout, /release:size:check\n/);
   assert.doesNotMatch(stdout, /advanced-shaping-performance/);

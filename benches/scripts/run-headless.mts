@@ -1,3 +1,9 @@
+/* @workflow {
+  "name": "benchmark:conformance",
+  "summary": "Run the browser conformance suite and optionally write its measured results to JSON.",
+  "requirements": "Built runtime packages plus GPU-enabled Playwright Chromium and authenticated benchmark fixtures.",
+  "writes": "The path supplied with --output, or stdout when omitted."
+} */
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import type { Browser } from 'playwright';
@@ -62,12 +68,13 @@ function parseArguments(values: readonly string[]): Arguments {
   const samples = Number(result.samples ?? 32);
   const warmup = Number(result.warmup ?? 4);
   const dpr = Number(result.dpr ?? 1);
-  const port = Number(result.port ?? 5173);
+  const port = Number(result.port ?? process.env.PORT ?? 0);
   if (!Number.isSafeInteger(samples) || samples < 1) throw new Error('samples must be positive');
   if (!Number.isSafeInteger(warmup) || warmup < 0) throw new Error('warmup must be non-negative');
   if (!Number.isFinite(dpr) || dpr <= 0 || dpr > 4)
     throw new Error('dpr must be greater than zero but no greater than four');
-  if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) throw new Error('port must be a valid TCP port');
+  if (!Number.isSafeInteger(port) || port < 0 || port > 65_535)
+    throw new Error('port must be zero or a valid TCP port');
   const suite = result.suite;
   if (suite !== undefined && suite !== 'conformance') {
     throw new Error(`Unknown headless suite: ${suite}`);
@@ -116,9 +123,15 @@ try {
   reportStage('waiting for Vite');
   server = await createServer({
     root,
-    server: { host: '127.0.0.1', port: options.port, strictPort: true },
+    server: { host: process.env.HOST ?? '127.0.0.1', port: options.port, strictPort: options.port !== 0 },
   });
   await withinDeadline('Vite readiness', readinessTimeoutMs, server.listen());
+  const address = server.httpServer?.address();
+  if (address === null || address === undefined || typeof address === 'string') {
+    throw new Error('Vite did not publish its loopback TCP address');
+  }
+  const origin = process.env.PORTLESS_URL ?? `http://127.0.0.1:${String(address.port)}`;
+  reportStage(`Vite ready at ${origin}`);
   reportStage('launching Chromium');
   browser = await withinDeadline('Chromium launch', browserLaunchTimeoutMs, launchProjectChromium({ headless: true }));
 
@@ -136,7 +149,7 @@ try {
       await withinDeadline(
         `${caseLabel} navigation`,
         navigationTimeoutMs,
-        page.goto(`http://127.0.0.1:${options.port}/?runner=headless`, {
+        page.goto(`${origin}/?runner=headless`, {
           waitUntil: 'domcontentloaded',
         }),
       );

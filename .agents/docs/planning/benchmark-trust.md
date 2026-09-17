@@ -10,8 +10,8 @@ sources:
     resource: 'https://github.com/pmndrs/labs/tree/0d7785f'
     title: 'pmndrs/labs at the reviewed revision'
   - id: labs-npm
-    resource: 'https://www.npmjs.com/package/@pmndrs/labs/v/0.8.0'
-    title: '@pmndrs/labs 0.8.0'
+    resource: 'https://www.npmjs.com/package/@pmndrs/labs/v/0.9.0'
+    title: '@pmndrs/labs 0.9.0'
   - id: labs-stats
     resource: 'https://github.com/pmndrs/labs/blob/main/src/stats.ts'
     title: 'labs statistical classifier'
@@ -69,18 +69,18 @@ So `rsdPercent` reads low, the median looks precise to four decimals, and the nu
 
 The rest of the surface is weaker still:
 
-| Path                                                                | Samples                   | Dispersion reported        | Gate                                                |
-| ------------------------------------------------------------------- | ------------------------- | -------------------------- | --------------------------------------------------- |
+| Path                                                           | Samples                   | Dispersion reported        | Gate                                                |
+| -------------------------------------------------------------- | ------------------------- | -------------------------- | --------------------------------------------------- |
 | [`runner.ts`](../../../benches/src/benchmark/runner.ts) via CI | 3, warmup 1               | median, p95                | none                                                |
-| `runtime-fallback-parity`, `source-outline-fidelity` probes         | 1, warmup 0               | none possible              | none                                                |
-| `benchmark:presentation-performance`                                | 1.5 s rAF window per cell | p95, max, slow-frame count | none — the 20 ms counter is printed, never asserted |
-| `glyph:layout-benchmark`                                            | 31, warmup 8              | median, p95, RSD           | none                                                |
-| `glyph:kernel-lab*`                                                 | 101, warmup 40            | median                     | none                                                |
+| `runtime-fallback-parity`, `source-outline-fidelity` probes    | 1, warmup 0               | none possible              | none                                                |
+| `benchmark:presentation-performance`                           | 1.5 s rAF window per cell | p95, max, slow-frame count | none — the 20 ms counter is printed, never asserted |
+| `glyph:layout-benchmark`                                       | 31, warmup 8              | median, p95, RSD           | none                                                |
+| `glyph:kernel-lab*`                                            | 101, warmup 40            | median                     | none                                                |
 
 Three facts follow, and all three are load-bearing:
 
 1. **No timing threshold is asserted anywhere.** No probe, scenario, or test fails on a duration.
-2. **No performance workflow runs in CI.** [`ci.yml`](../../../.github/workflows/ci.yml) runs static checks, the package-size lane, and the conformance suite. Every performance number in this repository was produced by a human running a command locally.
+2. **Before the packaged Labs lane, no performance workflow ran in CI.** [`ci.yml`](../../../.github/workflows/ci.yml) now retains the package built by the `check` job and measures it in a separate report-only job. Browser and GPU observations remain manual or conformance-oriented.
 3. **The one test that looks like a regression gate is not one.** [`fixture-contracts.test.ts`](../../../benches/src/benchmark/fixture-contracts.test.ts) asserts `rustReport.medianMs < baselineReport.medianMs` between two _checked-in JSON files_. It measures nothing at test time and passes forever regardless of the current code.
 
 [`statistics.ts`](../../../benches/src/benchmark/statistics.ts) is fourteen lines exporting `median` and `percentile`. There is no code in this repository that answers "is this difference real?"
@@ -89,7 +89,7 @@ The infrastructure is not the problem. The ring-buffer telemetry, the GPU timest
 
 ## What pmndrs/labs provides
 
-[pmndrs/labs](https://github.com/pmndrs/labs) is a Node benchmark runner whose stated purpose is exactly this problem. Every claim below was verified against the source at revision `0d7785f` and against a working install of `@pmndrs/labs@0.8.0`, not taken from its README.
+[pmndrs/labs](https://github.com/pmndrs/labs) is a Node benchmark runner whose stated purpose is exactly this problem. The statistical design below was reviewed against source at revision `0d7785f`; the implemented package lane is pinned to and smoke-tested with `@pmndrs/labs@0.9.0`.
 
 ### The mechanism that fixes drift
 
@@ -271,13 +271,13 @@ This kills the obvious design — commit a blessed baseline JSON, compare every 
 
 ### Two baselines, for two different jobs
 
-|                 | CI gate                                                            | Reviewed record                                                                    |
-| --------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| **What**        | the merge-base commit, measured in the same job on the same runner | the numbers quoted in `.agents/docs/` and the decision register                    |
-| **Where**       | nowhere — built and discarded within the job                       | `benches/fixtures/results/`, and the decision-register entry that cites it |
-| **Compared by** | the two-gate classifier over both runs' block medians              | human review                                                                       |
-| **Updated**     | never; it is recomputed every run                                  | by the rules below                                                                 |
-| **Storage**     | `.labs/` is gitignored                                             | committed, one record per subject, named `<subject>-<sha>-<platform>-<arch>.json`  |
+|                 | CI gate                                                            | Reviewed record                                                                   |
+| --------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| **What**        | the merge-base commit, measured in the same job on the same runner | the numbers quoted in `.agents/docs/` and the decision register                   |
+| **Where**       | nowhere — built and discarded within the job                       | `benches/fixtures/results/`, and the decision-register entry that cites it        |
+| **Compared by** | the two-gate classifier over both runs' block medians              | human review                                                                      |
+| **Updated**     | never; it is recomputed every run                                  | by the rules below                                                                |
+| **Storage**     | `.labs/` is gitignored                                             | committed, one record per subject, named `<subject>-<sha>-<platform>-<arch>.json` |
 
 Local development uses a third, ephemeral baseline: `.labs/baseline` is a pointer file naming one result in `.labs/results/`, managed by `bench --baseline` and `bench compare`. It is a working tool, gitignored, and never authoritative.
 
@@ -325,15 +325,15 @@ That is roughly **7 s fixed plus 11 s per bench** at 8 blocks. The ~14 benches a
 
 ### The failure condition
 
-**A bench fails when its verdict is `slower`: p ≤ 0.05 on the exact Mann-Whitney U over block medians _and_ Hodges-Lehmann relative effect ≥ +5 %.** Neutral passes. Faster passes. A bench skipped as clock-confounded or for insufficient block replication passes, and is reported as skipped — an unmeasurable bench must not be silently green, but it also must not fail a pull request for a property of the runner.
+The initial CI lane is deliberately **report-only**. Its intended future failure condition is a `slower` verdict: p ≤ 0.05 on the exact Mann-Whitney U over block medians _and_ Hodges-Lehmann relative effect ≥ +5 %. Neutral and faster verdicts pass. A bench skipped as clock-confounded or for insufficient block replication is reported as skipped; it must not be silently presented as proof that performance was unchanged.
 
 The exact-equality assertions carried in bench teardown — wire byte length, patch count, break count, `layoutRevision` — fail independently and unconditionally. They are not subject to any threshold.
 
-One implementation fact must be planned around: **`labs compare` always exits 0.** This was verified directly; both a `slower` and a `neutral` comparison returned exit status 0, and the published package exports only `bench`, `group`, `defineConfig`, and `getBenchRegistry` — the classifier and the store are not part of the public API. The gate is therefore a small repository-owned workflow that reads `blocks.medians` out of each saved result JSON and applies the two-gate rule. The saved schema supports this directly; a verified 8-block run stores its medians at `files[*].benchmarks[*].runs[*].stats.blocks.medians`. Upstreaming a `--json` output mode and a nonzero exit is the better long-term fix and is worth opening against pmndrs/labs, but this plan does not depend on it.
+A slower comparison is not itself a process failure in Labs 0.9.0. The initial workflow therefore preserves native result JSON and human-readable comparison output without interpreting the verdict. Before this becomes a required gate, repository-owned policy must read the saved block medians, apply the two-gate rule, and distinguish performance regressions from correctness or snapshot failures.
 
 ### Version pinning
 
-`@pmndrs/labs` is at **0.8.0, published the same week this plan was written, pre-1.0, with eight releases to date.** The comparison semantics are still moving — effect-size gating on Cliff's delta was already removed in an earlier revision. Pin the exact version, treat a labs upgrade as a change that invalidates stored records, and re-establish records after upgrading rather than comparing across versions.
+`@pmndrs/labs` is pinned at **0.9.0**. It remains pre-1.0 and its comparison semantics are still moving. Treat a Labs upgrade as a change that invalidates stored records, and re-establish records after upgrading rather than comparing across versions.
 
 ## What is replaced, kept, and deleted
 
@@ -385,7 +385,7 @@ Stated plainly, because a benchmark suite that is trusted beyond its evidence is
 
 ## Sequencing
 
-1. Add `@pmndrs/labs` pinned, a `labs.config.ts`, and the bench directory under `packages/glyph`. Add the root workflow and its `pnpm scripts` metadata before running anything by hand.
+1. Add `@pmndrs/labs` pinned, a `labs.config.ts`, and a package-artifact bench directory under `benches/`. Add the root workflow and its `pnpm scripts` metadata before running anything by hand. **Implemented for the initial six public package workloads.**
 2. Land benches 1–3 and 7 against the existing fixture; confirm between-block spread is under 3.6 % on a maintainer machine, and raise `blocks` for any bench that is not.
 3. Land benches 4a/4b, 5, 6, and 8, including the exact-equality teardown assertions.
 4. Build the CI gate over `blocks.medians` and run it non-blocking on pull requests for long enough to measure its false-positive rate on no-op changes. Do not make it required before that number is known.

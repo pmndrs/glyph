@@ -1,3 +1,9 @@
+/* @workflow {
+  "name": "benchmark:packed-consumer",
+  "summary": "Pack Glyph and prove runtime font baking from an isolated installed browser consumer.",
+  "requirements": "Built Glyph package, pnpm offline cache, and Playwright Chromium.",
+  "writes": "Ignored temporary files under benches/.cache, removed before exit."
+} */
 import { execFile as execFileCallback } from 'node:child_process';
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -18,6 +24,8 @@ const execFile = promisify(execFileCallback);
 const appDirectory = fileURLToPath(new URL('..', import.meta.url));
 const workspaceDirectory = fileURLToPath(new URL('../..', import.meta.url));
 const cacheDirectory = join(appDirectory, '.cache');
+const port = process.env.PORT === undefined ? 0 : Number(process.env.PORT);
+if (!Number.isSafeInteger(port) || port < 0 || port > 65_535) throw new Error('PORT must be a valid TCP port');
 await mkdir(cacheDirectory, { recursive: true });
 const consumerDirectory = await mkdtemp(join(cacheDirectory, 'packed-consumer-'));
 const archiveDirectory = join(consumerDirectory, 'archives');
@@ -68,7 +76,7 @@ try {
     logLevel: 'silent',
     optimizeDeps: { include: ['ajv', 'gltf-validator'] },
     resolve: { preserveSymlinks: true },
-    server: { host: '127.0.0.1', port: 5183, strictPort: true },
+    server: { host: process.env.HOST ?? '127.0.0.1', port, strictPort: port !== 0 },
   });
   await server.listen();
   const address = server.httpServer?.address();
@@ -99,7 +107,8 @@ try {
   await page.exposeFunction('__reportPackedResult', (value: PackedResult) => {
     completion.resolve(value);
   });
-  await page.goto(`http://127.0.0.1:${address.port}/`, { waitUntil: 'domcontentloaded' });
+  const origin = process.env.PORTLESS_URL ?? `http://127.0.0.1:${address.port}`;
+  await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' });
   const result = await completion.promise;
   if (result.error !== undefined) {
     throw new Error(`${result.error}${errors.length === 0 ? '' : `\nBrowser errors:\n${errors.join('\n')}`}`);

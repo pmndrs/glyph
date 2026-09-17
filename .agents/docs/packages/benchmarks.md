@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:f59790fe45662d648ea5be09498f8c9d0d4384838948d3665b28351b4afd7deb'
+source_digest: 'sha256:7eed401dbe15bd2604e813cf6ff59f848f294faa0ad00eac5992a78854c354a1'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -209,6 +209,15 @@ sources:
   - id: workflow-output
     resource: ../../../benches/scripts/workflow-output.mts
     title: Vitexec failure-output classifier
+  - id: labs-config
+    resource: ../../../benches/labs.config.ts
+    title: Packaged public API benchmark configuration
+  - id: labs-package-suite
+    resource: ../../../benches/labs/glyph-package.bench.ts
+    title: Packaged public API benchmark suite
+  - id: labs-package-workflow
+    resource: ../../../benches/scripts/run-package-labs.mts
+    title: Installed package artifact benchmark workflow
   - id: raster-technique-compare-probe
     resource: ../../../benches/vitexec/raster-technique-compare.probe.ts
     title: Realtime comparison product probe
@@ -231,6 +240,19 @@ at their normal paths, and package digests are computed from those file contents
 The Vite and TypeScript configurations opt into the workspace packages' custom `source` export condition. Development,
 build, and typecheck therefore consume current TypeScript sources without requiring a package rebuild; release-oriented
 Node workflows continue to exercise built package exports.
+
+Package performance is measured from installable artifacts rather than workspace source. The pull-request `check` job
+builds `@pmndrs/glyph` once, creates one package tarball with `pnpm pack`, and retains that tarball for the separate
+non-blocking performance job. `benchmark:labs-package` installs the candidate tarball and an exact version resolved from
+the current npm canary into isolated temporary consumers, then runs both through `@pmndrs/labs`. It never rebuilds either
+artifact. The retained report includes native Labs JSON, comparison output, exact package manifests and lockfiles, and the
+candidate tarball SHA-256.
+
+The first package suite measures six public-system workloads: `measure()` and `glyphs()` after equal-size edits, Three
+publication after an edit, column reflow, font-size relayout, and one publication of 128 retained `Text` instances. Each
+case deliberately invalidates the retained state it names instead of timing a cache hit. Eight fresh-process blocks and a
+five-percent minimum effect produce the comparison report. This lane is initially report-only while runner noise and
+false-positive rates are established; browser, GPU, and frame-pacing evidence remains owned by the browser workflows.
 
 Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentation are complete
 

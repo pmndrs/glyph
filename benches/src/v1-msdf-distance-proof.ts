@@ -4,6 +4,7 @@ import { defineTextMaterial, type Text } from '@pmndrs/glyph/three';
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { msdfShader as typeGpuMsdfShader } from '../../packages/glyph/src/three/typegpu/internal/msdf-shader.js';
+import { comparePixelReadbacks } from './renderer/pixel-readback-comparison.ts';
 
 const msdfShader =
   new URLSearchParams(location.search).get('shaders') === 'typegpu' ? typeGpuMsdfShader : stableMsdfShader;
@@ -87,8 +88,10 @@ async function proveDistanceSamples(renderer: THREE.WebGPURenderer): Promise<num
 }
 
 export interface MsdfDistanceProof {
+  readonly distanceCoverageChangedChannels: number;
   readonly distanceSamples: number;
   readonly distanceCoverageMatches: boolean;
+  readonly distanceCoverageMaxDelta: number;
   readonly glowPixelsOutsideCoverage: number;
 }
 
@@ -114,8 +117,15 @@ export async function proveMsdfDistanceMaterial(
     await renderer.renderAsync(scene, camera);
     if (text.error !== undefined) throw text.error;
     const reconstructed = await renderer.readRenderTargetPixelsAsync(target, 0, 0, 256, 128);
-    const distanceCoverageMatches = reconstructed.every((value, index) => value === baseline[index]);
-    if (!distanceCoverageMatches) throw new Error('MSDF distance reconstruction changed canonical fill pixels');
+    // Both paths produce an 8-bit render-target readback. WebGPU implementations are allowed to
+    // quantize a mathematically identical edge to either adjacent byte, so a one-byte channel
+    // delta is equivalent coverage; larger differences remain a material failure.
+    const coverage = comparePixelReadbacks(baseline, reconstructed, 1);
+    if (!coverage.matches) {
+      throw new Error(
+        `MSDF distance reconstruction changed canonical fill pixels: ${String(coverage.changedChannels)} channels, max delta ${String(coverage.maxChannelDelta)}`,
+      );
+    }
 
     text.material = defineTextMaterial((context) => {
       const material = context.createDefaultMaterial();
@@ -136,7 +146,13 @@ export async function proveMsdfDistanceMaterial(
       }
     }
     if (glowPixelsOutsideCoverage === 0) throw new Error('MSDF glow did not extend beyond canonical coverage');
-    return { distanceSamples, distanceCoverageMatches, glowPixelsOutsideCoverage };
+    return {
+      distanceCoverageChangedChannels: coverage.changedChannels,
+      distanceSamples,
+      distanceCoverageMatches: coverage.matches,
+      distanceCoverageMaxDelta: coverage.maxChannelDelta,
+      glowPixelsOutsideCoverage,
+    };
   } finally {
     text.material = previousMaterial;
   }

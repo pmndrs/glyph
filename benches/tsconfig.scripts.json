@@ -10,5 +10,5 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["scripts/**/*.mts"]
+  "include": ["labs.config.ts", "labs/**/*.ts", "scripts/**/*.mts"]
 }

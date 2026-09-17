@@ -30,8 +30,10 @@ interface ComposeProofResult {
 }
 
 interface MsdfProofResult extends RasterProofResult {
+  readonly distanceCoverageChangedChannels: number;
   readonly distanceSamples: number;
   readonly distanceCoverageMatches: boolean;
+  readonly distanceCoverageMaxDelta: number;
   readonly glowPixelsOutsideCoverage: number;
 }
 
@@ -57,6 +59,9 @@ async function withinDeadline<T>(label: string, task: Promise<T>): Promise<T> {
 }
 
 const root = fileURLToPath(new URL('..', import.meta.url));
+const port = process.env.PORT === undefined ? 0 : Number(process.env.PORT);
+if (!Number.isSafeInteger(port) || port < 0 || port > 65_535) throw new Error('PORT must be a valid TCP port');
+const host = process.env.HOST ?? '127.0.0.1';
 let browser: Awaited<ReturnType<typeof launchProjectChromium>> | undefined;
 let server: ViteDevServer | undefined;
 try {
@@ -67,7 +72,7 @@ try {
       root,
       logLevel: 'info',
       optimizeDeps: { force: true },
-      server: { host: '127.0.0.1', port: 0, strictPort: false },
+      server: { host, port, strictPort: port !== 0 },
     }),
   );
   await withinDeadline('Vite readiness', server.listen());
@@ -75,7 +80,7 @@ try {
   if (address === null || address === undefined || typeof address === 'string') {
     throw new Error('Vite did not publish its loopback TCP address');
   }
-  const origin = `http://127.0.0.1:${String(address.port)}`;
+  const origin = process.env.PORTLESS_URL ?? `http://127.0.0.1:${String(address.port)}`;
   reportStage(`Vite ready at ${origin}`);
   reportStage('launching Chromium');
   browser = await withinDeadline(
