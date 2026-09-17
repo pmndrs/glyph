@@ -82,8 +82,7 @@ test('pre-commit digest updates hash staged content without staging unrelated wo
   await writeFile(sourcePath, 'unstaged\n');
   await writeFile(conceptPath, (await readFile(conceptPath, 'utf8')).replace('title: Glyph', 'title: Unstaged Glyph'));
 
-  const hook = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../.githooks/okf-digests.mjs');
-  const hookResult = await execFileAsync(process.execPath, [hook], { cwd: root });
+  const hookResult = await execFileAsync(process.execPath, [hookPath()], { cwd: root });
   assert.doesNotMatch(hookResult.stderr, /digest pins left to CI/u);
 
   const indexConcept = await git(root, ['show', ':.agents/docs/packages/glyph.md']);
@@ -103,6 +102,61 @@ test('pre-commit digest updates hash staged content without staging unrelated wo
   );
 });
 
+test('pre-commit digest hashes checkout-filtered bytes rather than Git object bytes', async () => {
+  const root = await temporaryDirectory('okf-hook-filter-');
+  await git(root, ['init', '-q']);
+  const uppercaseFilter = path.join(root, 'uppercase-filter.mjs');
+  const passthroughFilter = path.join(root, 'passthrough-filter.mjs');
+  await writeFile(
+    uppercaseFilter,
+    "let input = ''; process.stdin.setEncoding('utf8'); process.stdin.on('data', (chunk) => (input += chunk)); process.stdin.on('end', () => process.stdout.write(input.toUpperCase()));\n",
+  );
+  await writeFile(passthroughFilter, 'process.stdin.pipe(process.stdout);\n');
+  await git(root, ['config', 'filter.test-smudge.smudge', filterCommand(process.execPath, uppercaseFilter)]);
+  await git(root, ['config', 'filter.test-smudge.clean', filterCommand(process.execPath, passthroughFilter)]);
+  await mkdir(path.join(root, 'packages/glyph/src'), { recursive: true });
+  await mkdir(path.join(root, '.agents/docs/packages'), { recursive: true });
+  await writeFile(path.join(root, '.gitattributes'), 'packages/glyph/src/filtered.asset filter=test-smudge\n');
+  await writeFile(path.join(root, 'packages/glyph/package.json'), '{"name":"@pmndrs/glyph"}\n');
+  await writeFile(path.join(root, 'packages/glyph/src/filtered.asset'), 'lowercase asset\n');
+  await writeFile(
+    path.join(root, '.agents/docs/packages/glyph.md'),
+    "---\ntype: Workspace Package\ntitle: Glyph\ndescription: Test package.\ndocumentation_type: reference\nworkspace_package: '@pmndrs/glyph'\nresource: ../../../packages/glyph\nsource_digest: 'sha256:0000000000000000000000000000000000000000000000000000000000000000'\ngenerated:\n  by: process:test\n  at: '2026-09-17T00:00:00Z'\n---\n\n# Glyph\n",
+  );
+  await writeFile(path.join(root, '.agents/docs/index.md'), '---\nokf_version: "0.2"\n---\n\n# Index\n');
+  await git(root, ['add', '.gitattributes', '.agents', 'packages']);
+
+  await execFileAsync(process.execPath, [hookPath()], { cwd: root });
+
+  const expectedRoot = await temporaryDirectory('okf-filter-expected-');
+  await mkdir(path.join(expectedRoot, 'src'), { recursive: true });
+  await writeFile(path.join(expectedRoot, 'package.json'), '{"name":"@pmndrs/glyph"}\n');
+  await writeFile(path.join(expectedRoot, 'src/filtered.asset'), 'LOWERCASE ASSET\n');
+  assert.match(
+    await git(root, ['show', ':.agents/docs/packages/glyph.md']),
+    new RegExp(`source_digest: '${await packageDigest(expectedRoot)}'`, 'u'),
+  );
+});
+
+test('pre-commit validation failure blocks the commit', async () => {
+  const root = await temporaryDirectory('okf-hook-invalid-');
+  await git(root, ['init', '-q']);
+  await mkdir(path.join(root, '.agents/docs'), { recursive: true });
+  await writeFile(path.join(root, '.agents/docs/index.md'), '---\nokf_version: "0.2"\n---\n\n# Index\n');
+  await writeFile(
+    path.join(root, '.agents/docs/invalid.md'),
+    "---\ntitle: Missing type\ndescription: Must fail.\ngenerated:\n  by: process:test\n  at: '2026-09-17T00:00:00Z'\n---\n\n# Invalid\n",
+  );
+  await git(root, ['add', '.agents/docs']);
+
+  await assert.rejects(execFileAsync(process.execPath, [hookPath()], { cwd: root }), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(error.stdout, /Conformance errors: 1/u);
+    assert.match(error.stderr, /staged OKF validation failed/u);
+    return true;
+  });
+});
+
 async function temporaryDirectory(prefix) {
   const directory = await mkdtemp(path.join(tmpdir(), prefix));
   temporaryDirectories.push(directory);
@@ -112,4 +166,12 @@ async function temporaryDirectory(prefix) {
 async function git(directory, arguments_) {
   const { stdout } = await execFileAsync('git', arguments_, { cwd: directory });
   return stdout;
+}
+
+function hookPath() {
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../.githooks/okf-digests.mjs');
+}
+
+function filterCommand(executable, script) {
+  return `${JSON.stringify(executable)} ${JSON.stringify(script)}`;
 }

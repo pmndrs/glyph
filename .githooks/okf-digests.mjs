@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -25,41 +25,38 @@ async function runHook() {
   const affected = [...packageConcepts.keys()].filter((root) =>
     staged.some((filePath) => filePath.startsWith(`${root}/`)),
   );
-  if (affected.length === 0) {
-    if (staged.some((filePath) => filePath.startsWith('.agents/docs/'))) await reportValidation(repositoryRoot);
-    return;
-  }
+  const docsChanged = staged.some((filePath) => filePath.startsWith('.agents/docs/'));
+  if (affected.length === 0 && !docsChanged) return;
 
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'glyph-okf-index-'));
   try {
-    for (const packageRoot of affected) await materializeIndex(packageRoot, temporaryRoot);
-    for (const packageRoot of affected) {
-      const conceptPath = packageConcepts.get(packageRoot);
-      const digest = await packageDigest(path.join(temporaryRoot, packageRoot));
-      await updateDigestPin(conceptPath, digest);
-      process.stdout.write(`okf-digests: re-pinned ${conceptPath}\n`);
+    if (affected.length > 0) {
+      await materializeIndex(affected, temporaryRoot);
+      for (const packageRoot of affected) {
+        const conceptPath = packageConcepts.get(packageRoot);
+        const digest = await packageDigest(path.join(temporaryRoot, packageRoot));
+        if (await updateDigestPin(conceptPath, digest)) {
+          process.stdout.write(`okf-digests: re-pinned ${conceptPath}\n`);
+        }
+      }
     }
+    await rm(temporaryRoot, { recursive: true, force: true });
+    await materializeIndex(['.agents', '.github', 'README.md', 'RESEARCH.md', 'apps', 'benches', 'packages'], temporaryRoot);
+    await validateStagedSnapshot(temporaryRoot);
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });
   }
-
-  await reportValidation(repositoryRoot);
 }
 
-async function materializeIndex(root, destinationRoot) {
-  const files = gitBuffer(['ls-files', '-z', '--', root]).toString('utf8').split('\0').filter(Boolean);
-  for (const filePath of files) {
-    const contents = gitBuffer(['show', `:${filePath}`]);
-    const destination = path.join(destinationRoot, filePath);
-    await mkdir(path.dirname(destination), { recursive: true });
-    await writeFile(destination, contents);
-  }
+async function materializeIndex(roots, destinationRoot) {
+  const files = gitBuffer(['ls-files', '-z', '--', ...roots]);
+  gitBuffer(['checkout-index', `--prefix=${destinationRoot}${path.sep}`, '-z', '--stdin'], files);
 }
 
 async function updateDigestPin(conceptPath, digest) {
   const indexSource = gitBuffer(['show', `:${conceptPath}`]).toString('utf8');
   const indexUpdated = replaceDigest(indexSource, digest, conceptPath);
-  if (indexUpdated === indexSource) return;
+  if (indexUpdated === indexSource) return false;
 
   const indexEntry = git(['ls-files', '-s', '--', conceptPath]).trim();
   const mode = /^(\d+) /u.exec(indexEntry)?.[1];
@@ -70,6 +67,7 @@ async function updateDigestPin(conceptPath, digest) {
   const workingSource = await readFile(conceptPath, 'utf8');
   const workingUpdated = replaceDigest(workingSource, digest, conceptPath);
   if (workingUpdated !== workingSource) await writeFile(conceptPath, workingUpdated);
+  return true;
 }
 
 function replaceDigest(source, digest, conceptPath) {
@@ -80,11 +78,13 @@ function replaceDigest(source, digest, conceptPath) {
   return updated;
 }
 
-async function reportValidation(repositoryRoot) {
-  const result = await validateOkf(path.join(repositoryRoot, '.agents/docs'), { workspaceRoot: repositoryRoot });
-  if (result.conformance.length === 0 && result.profile.length === 0) return;
-  process.stderr.write(formatValidation(path.join(repositoryRoot, '.agents/docs'), result));
-  process.stderr.write('okf-digests: validation reported issues above (commit not blocked; CI enforces).\n');
+async function validateStagedSnapshot(snapshotRoot) {
+  const bundleRoot = path.join(snapshotRoot, '.agents/docs');
+  const result = await validateOkf(bundleRoot, { workspaceRoot: snapshotRoot });
+  process.stdout.write(formatValidation(bundleRoot, result));
+  if (result.conformance.length > 0 || result.profile.length > 0) {
+    throw new Error('staged OKF validation failed');
+  }
 }
 
 function git(arguments_, input) {
@@ -101,8 +101,6 @@ function gitBuffer(arguments_, input) {
 }
 
 runHook().catch((error) => {
-  process.stderr.write(
-    `okf-digests: ${error instanceof Error ? error.message : String(error)}; digest pins left to CI.\n`,
-  );
-  process.exitCode = 0;
+  process.stderr.write(`okf-digests: ${error instanceof Error ? error.message : String(error)}.\n`);
+  process.exitCode = 1;
 });
