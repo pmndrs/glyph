@@ -2,6 +2,7 @@ packages:
   - apps/*
   - benches
   - packages/*
+  - site
 
 minimumReleaseAgeExclude:
   - '@typegpu/gl@0.12.4'
