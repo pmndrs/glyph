@@ -902,3 +902,10 @@ tree-shakes, preserves optional peer isolation, and cannot expose private deep i
 
 The shared package Labs fixture adapts an older installed canary's `breakApart` to `split` once before timing.
 The package publishes only the renamed method; the adapter belongs to the comparison harness.
+
+Package-size CI retains a measured main artifact named for its exact commit SHA. Pull requests reuse only matching,
+unexpired artifacts from the repository's main branch; the envelope and measured gzip values are checked before
+comparison. A missing or unavailable artifact falls back to building and measuring the exact base checkout. Invalid
+artifact contents fail visibly. `benchmark:package-size -- --output=<path>` prints measurements and can save an external
+report; it does not refresh the release display snapshot. `release:size:generate` remains the deliberate snapshot writer.
+This is a reporting cache, with no restored size ceilings or snapshot freshness gate.
