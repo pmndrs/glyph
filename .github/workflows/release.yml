@@ -48,12 +48,12 @@ jobs:
           base_version="$(node -p "require('./package.json').version.split('-')[0]")"
           release_date="$(date -u +%Y%m%d)"
           canary_version="${base_version}-canary-${GITHUB_SHA::8}-${release_date}"
-          npm version "${canary_version}" --no-git-tag-version
+          pnpm version "${canary_version}" --no-git-tag-version
           echo "version=${canary_version}" >> "${GITHUB_OUTPUT}"
 
       - name: Publish canary
         working-directory: packages/glyph
-        run: npm publish --tag canary --access public
+        run: pnpm publish --tag canary --access public --no-git-checks
 
       - name: Add release summary
         run: echo "Published @pmndrs/glyph@${{ steps.version.outputs.version }} with the canary tag." >> "${GITHUB_STEP_SUMMARY}"
