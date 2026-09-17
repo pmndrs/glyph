@@ -159,8 +159,8 @@ async function normalizeSpec(requested: string): Promise<{ readonly spec: string
 async function resolveRegistryVersion(requested: string): Promise<string> {
   const pnpm = process.env.npm_execpath;
   if (pnpm === undefined) throw new Error('Run this workflow through pnpm so it uses the repository-pinned pnpm');
-  const output = await run(pnpm, ['view', requested, 'version', '--json'], workspaceRoot, true);
-  const version: unknown = JSON.parse(output);
+  const registryOutput = await run(pnpm, ['view', requested, 'version', '--json'], workspaceRoot, true);
+  const version: unknown = JSON.parse(registryOutput);
   if (typeof version !== 'string' || version.length === 0) {
     throw new Error(`npm did not resolve ${requested} to one exact version`);
   }
@@ -205,18 +205,18 @@ async function run(
       env: { ...process.env, ...environment },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    let output = '';
+    let commandOutput = '';
     child.stdout.on('data', (chunk: Buffer) => {
-      output += chunk.toString();
+      commandOutput += chunk.toString();
       process.stdout.write(chunk);
     });
     child.stderr.on('data', (chunk: Buffer) => {
-      output += chunk.toString();
+      commandOutput += chunk.toString();
       process.stderr.write(chunk);
     });
     child.once('error', reject);
     child.once('close', (code) => {
-      if (code === 0) resolveRun(capture ? output : '');
+      if (code === 0) resolveRun(capture ? commandOutput : '');
       else reject(new Error(`${basename(command)} exited with ${String(code)}`));
     });
   });
