@@ -1,0 +1,397 @@
+---
+title: Text in 3D
+description: Text is geometry in your scene — depth and occlusion, render order, labels that follow and face, steep angles, fog, and post-processing.
+nav: 27
+sourcecode: packages/glyph/src/three/internal/material-realizer.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
+{/*
+reader
+- Has text in a scene and is surprised by something: a label shows through a wall, two words fight over order, a
+  paragraph goes soft when it turns away. Knows three.js depth, render order, fog, and post-processing. Arrives
+  asking "why does it draw over everything?", should leave knowing the two defaults, how to flip each, which format
+  survives an angle, and how to send text through a render target or a bloom pass.
+
+write · intro
+- Question: what is text, to the renderer?
+- Say: a `Text` is an `Object3D` whose draws are meshes under the root, so the camera, the depth buffer, fog,
+  lights, and post-processing already apply. Two defaults are chosen for you — text draws over geometry, and it
+  never writes depth — and each is one line to change. This page is the set of choices around them.
+- Anchor: "meshes like any other, with two opinions".
+- Shape: three sentences.
+
+write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
+- The default material has `depthTest: false`: a label is never lost behind what it annotates.
+- `depthTest: true` through `defineTextMaterial` makes text a surface in the scene; keep `depthWrite: false`.
+- Slug is the format for steep angles; Bitmap is screen-space and belongs on the near plane.
+- Bloom, fog, lights, render targets: text is pixels in the scene pass and a node material in the scene, nothing more.
+
+notes · internals for the page
+- draws are `THREE.Mesh` under the root's draw root — `three/internal/draw-realizer.ts:179–190`; `Text extends THREE.Object3D` — `three/text.ts:594`
+- the default material — `three/internal/material-realizer.ts#baseTextMaterial` (`:639–647`)
+- scenes: depth, labels, off-axis, kinetic, bloom — `site/examples/src/scenes/<slug>/scene.tsx`
+*/}
+
+## Depth and occlusion
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+
+const inScene = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  material.depthTest = true; // hidden by geometry in front of it
+  return material;
+});
+
+three.createText({ font: Inter, text: 'occluded', material: inScene });
+three.createText({ font: Inter, text: 'overlaid' }); // the default draws over everything
+```
+
+<glyph-proxy fit="cover" root="scenes" data-scene="depth" aria-label="A sphere sliding across two words: hidden by one, under the other" aspect="16 / 9" />
+
+<glyph-proxy fit="cover" root="scenes" data-scene="orbit" aria-label="Rings of live type orbit a sphere and cast their letters onto it" aspect="16 / 9" />
+
+{/*
+notes · internals
+- the orbit scene — `site/examples/src/scenes/orbit/scene.tsx`: the ring is bent on the CPU, not in the shader. Each
+  ring is one Slug paragraph, shaped once, copied out with `breakApart()` and placed by matrix on a circle with
+  `placeOnPath` (`lib/paths.ts`). Slug is the point: `maskShadowNode = shader.coverage.greaterThan(0.5)` masks three's
+  shadow pass with the glyph's analytic coverage (`Renderer.js#_getShadowNodes`, three 0.185), so the shadow is the
+  letter and its edge stays sharp at any size. This is why the ring is not bent in the vertex shader: Slug's
+  `position` and `coverage` are two halves of one `Fn` — the vertex half writes the `renderCoordinate` varying the
+  fragment half integrates — so replacing `positionNode` leaves the coverage reading a coordinate nothing wrote and
+  the glyphs come out blank (outline finding). MSDF tolerates the warp but its shadow edge is a threshold, not a
+  contour
+- fitting the text to the arc — `config.ts#ringFit`: a glyph's arc position is its shaped advance, 1:1, so the
+  shaper's kerning survives the transfer; rescaling advances to make the text meet was what distorted it. Instead the
+  line is justified: `ringFit` picks the repeat count whose leftover is smallest, and that leftover is divided among
+  the word spaces only (`ringSpacing` prefix-counts spaces per glyph), never letter spacing. The pitch is measured
+  **once** into a ref — `maxContentWidth` trims trailing spaces like a line end, so re-measuring per commit shifts it
+  with the repeat count and the fit oscillates between two counts forever
+- the lighting is load-bearing — `config.ts#LIGHTS`: glyph quads face outward from the ring, so an overhead key grazes
+  them edge-on and casts nothing. One low, lateral, shadow-casting light is what puts letters on the sphere; a second
+  caster relights what the first darkened. The sphere's pattern is albedo-only (`materials.ts#markings`) for the same
+  reason — a perturbed `normalNode` broke the shadows up into noise
+*/}
+
+| Setting | Default | Change it when |
+| --- | --- | --- |
+| `depthTest` | `false` | the text is a surface in the world — signage, a label on a body, a paragraph on a wall |
+| `depthWrite` | `false` | never for glyphs: the quad is transparent outside its ink and would write a rectangle |
+| `transparent` | `true` | never: coverage is blended, not cut |
+| `side` | `DoubleSide` | `FrontSide` when the back of a sign should be blank |
+
+{/*
+write
+- Question: why does the label show through the sphere, and how do I stop it?
+- Paragraph 1: the base material is a `MeshBasicNodeMaterial` with normal blending, no depth test, no depth write,
+  double-sided, transparent. No depth test is the HUD default: a label is never lost behind the thing it annotates.
+  One line turns the test on and the text becomes a surface: geometry in front hides it, geometry behind does not
+  (point at the proxy).
+- Paragraph 2: `depthWrite` stays off either way. A glyph quad is transparent outside its ink; writing depth would
+  punch its rectangle into whatever it covers. Because no glyph writes depth, glyphs in one batch never z-fight
+  whatever `depthTest` is; the test only compares against what opaque geometry wrote.
+- Avoid: repeating the base-contract callout from Materials; link it.
+- Shape: two paragraphs; the table carries the four settings.
+
+notes · internals
+- `baseTextMaterial` — `three/internal/material-realizer.ts:639–647`; `createDefaultMaterial()` returns it with
+  `positionNode`, `colorNode`, `opacityNode` set — `:628–637`
+- the depth scene: one word depth-tested, one default, a sphere on an ellipse through both — `site/examples/src/scenes/depth/scene.tsx:11–23`, `:29–33`
+- [verify] "glyphs in one batch never z-fight": follows from `depthWrite: false`; confirm with two overlapping
+  depth-tested texts at the same z before stating it
+*/}
+
+## Render order
+
+```ts
+text.renderOrder = 10;                     // a standalone Text: its draws take its order
+three.createTextGroup({ renderOrder: 5 }); // a group states one order for every descendant
+```
+
+{/*
+write
+- Question: which text draws on top?
+- Paragraph 1: every planned draw is a mesh whose `renderOrder` is the owning `Text`'s, or the nearest enclosing
+  `TextGroup`'s when the group stated one, plus the draw's index in the plan; so decorations under the glyphs,
+  the glyphs, then line-through come out in paint order without you ordering them.
+- Paragraph 2: three.js sorts transparent objects by render order first and by depth second, so two overlapping
+  default-material texts resolve by `renderOrder` first and distance second; give the one on top a higher number.
+- Shape: two paragraphs.
+
+notes · internals
+- a text's order is its own `renderOrder` unless an ancestor group stated one — `three/text.ts#resolveTextPresentation`
+  (`:1629–1663`), `#statedTextGroupRenderOrder` (`:1665–1674`); the group option — `:85–91`, `:975–983`
+- the order rides the material binding into the plan — `three/text.ts#ThreeMaterialBindingCache` (`:1408–1426`)
+- draws: `mesh.renderOrder = renderOrderBase + drawIndex`, base from the binding — `three/internal/draw-realizer.ts:108`, `:186`
+- paint order under → glyphs → over by `depthKey` 0 / 2 — `three/decorations.ts:54–64`; the detached layout keeps it — `three/text.ts:812–826`
+- three's transparent sort: `reversePainterSortStable` orders by `groupOrder`, then `renderOrder`, then `z`
+  far to near (`b.z - a.z`), then `id` — `node_modules/three/src/renderers/common/RenderList.js:49–61` (three
+  0.185.1); opaque uses `painterSortStable`, near to far — `:18–30`. "Distance second" is right, after render order
+*/}
+
+## Labels that follow and face
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+import { useFrame } from '@react-three/fiber/webgpu';
+import { useRef, type ReactNode } from 'react';
+import type { Group } from 'three/webgpu';
+
+const inScene = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  material.depthTest = true;
+  return material;
+});
+
+function Billboard({ children }: { readonly children: ReactNode }) {
+  const group = useRef<Group>(null);
+  useFrame(({ camera }) => {
+    group.current?.quaternion.copy(camera.quaternion);
+  });
+  return <group ref={group}>{children}</group>;
+}
+
+<mesh>
+  <sphereGeometry args={[0.3, 32, 24]} />
+  <meshStandardNodeMaterial color="#f4d68a" />
+  <Billboard>
+    <Text font={Inter} material={inScene} position={[-1.5, 0.55, 0]}>
+      Io
+    </Text>
+  </Billboard>
+</mesh>;
+```
+
+<glyph-proxy fit="cover" root="scenes" data-scene="labels" aria-label="Moons with depth-tested labels in fog" aspect="16 / 9" />
+
+{/*
+write
+- Question: how do I pin a label to a moving thing and keep it readable?
+- Paragraph 1: make the label a child of the body, so it moves for free; wrap it in a group that copies the camera's
+  quaternion every frame, so it faces the viewer; give it the depth-tested material, so a nearer body hides it.
+  Nothing text-specific is involved in any of the three.
+- Paragraph 2: `scene.fog` reaches the label because a text material is a `NodeMaterial` with fog on by default,
+  the same as every other material in the scene; the labels scene keeps the fog band where the bodies are.
+- Shape: two paragraphs.
+
+notes · internals
+- the labels scene: `Billboard` copies `camera.quaternion`, labels are children of orbiting groups, `inScene` is
+  depth-tested, `<fog>` on the scene — `site/examples/src/scenes/labels/scene.tsx:19–23`, `:39–44`, `:64–75`, `:83–96`,
+  `site/examples/src/components/text/Billboard.tsx`
+- fog on a node material defaults on — `node_modules/three/src/materials/nodes/NodeMaterial.js:77` (`this.fog =
+  true`, three 0.185.1); nothing in the package sets it (grep `fog` in `packages/glyph/src` finds no assignment)
+*/}
+
+## Steep angles
+
+<glyph-proxy fit="cover" root="scenes" data-scene="off-axis" aria-label="A paragraph turning away from the camera" aspect="16 / 9" />
+
+| Format | Off-axis | Why |
+| --- | --- | --- |
+| Slug | crisp at any angle | the outline is evaluated per pixel with a footprint measured per axis; nothing is sampled |
+| MSDF | good until the atlas is stretched | a texture sample of a distance field; the antialiasing range is derived per axis and floored at one pixel |
+| Bitmap | screen-space only | pre-rasterised at a size; `pixelSnapping` assumes a plane facing the camera |
+
+{/*
+write
+- Question: why does the paragraph go soft when it turns?
+- Paragraph 1: text is geometry, so perspective applies to it like anything else; what differs per format is what
+  happens to the pixels. Slug solves the outline under every pixel and measures its footprint per axis, so a grazing
+  angle costs nothing in edge quality. MSDF samples a texture; anisotropy stretches the sample and softens the far
+  edge. Bitmap is a raster at one size and snaps in clip space, which assumes a plane facing the camera.
+- Paragraph 2: `rasterPixelRatio` is how a `Text` asks MSDF or Bitmap for a larger raster when it will be seen
+  larger than authored, without changing its layout.
+- Close by pointing at Raster formats for the full comparison.
+- Shape: two paragraphs, one pointer.
+
+notes · internals
+- Slug per-axis footprint from the derivative of the render coordinate — `tsl/slug-shader.ts:82–84`, `:141`; MSDF
+  per-axis range floored — `tsl/msdf-shader.ts:133–135`; Bitmap snaps in clip space — `tsl/bitmap-shader.ts:91–105`
+- `rasterPixelRatio` is a Text property — `three/text.ts:106`, `:780`
+- the off-axis scene: a Slug paragraph on a turning panel — `site/examples/src/scenes/off-axis/scene.tsx`
+*/}
+
+## Warping text onto surfaces
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+import { cos, sin, uniform, vec3 } from 'three/tsl';
+
+const spin = uniform(0);
+const RADIUS = 5.2;
+
+const carousel = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  if (context.kind !== 'glyph') return material;
+  const p = context.position;                     // paragraph-local, after the engine's transform
+  const angle = p.x.div(RADIUS).add(spin);        // advance along the line → angle around Y
+  material.positionNode = vec3(sin(angle).mul(RADIUS), p.y, cos(angle).mul(RADIUS).sub(RADIUS));
+  material.colorNode = context.shader.color.mul(cos(angle).mul(0.5).add(0.5).mul(0.88).add(0.12)); // the far side dims
+  material.opacityNode = context.shader.opacity;
+  return material;
+});
+
+three.createText({ font: Inter, text: 'around and around', material: carousel });
+```
+
+<glyph-proxy fit="cover" root="scenes" data-scene="kinetic" aria-label="The passage as it is typed, wrapped live around a knot, after Codrops' Kinetic Typography by Mario Carrillo" aspect="16 / 9" />
+
+{/*
+write
+- Question: can I bend a line of text around something without breaking it apart?
+- Paragraph 1: text is geometry, so a material may move its vertices: `context.position` in, somewhere else out,
+  with a uniform per frame for the motion and no re-shape. Wrap a line around a cylinder, ripple a paragraph like a
+  flag, hang words on a curve. The text underneath stays live and reflows on the warped surface.
+- Then an `> [!IMPORTANT]` callout, two sentences: warp MSDF or Bitmap text. Slug's vertex stage returns an
+  analytically dilated quad tied to its render coordinate, and a Slug draw whose `positionNode` is replaced did not
+  draw; keep Slug for the flat, razor-sharp word and put the warped surfaces in MSDF.
+- Close by contrasting with Break apart: a warp moves vertices in the shader and keeps the text live; `breakApart`
+  gives one matrix per glyph and freezes the layout.
+- Shape: one paragraph, callout, one sentence.
+
+notes · internals
+- `context.position` is the final renderer-local position — `three/material.ts:32`; setting `positionNode` from it
+  is the contract — `three/internal/material-realizer.ts:632–634`
+- Slug returns `vec3(dilated.position.x, dilated.position.y, 0)` and pairs it with `renderCoordinate` —
+  `tsl/slug-shader.ts:141–142`; `position` and `coverage` are one graph — `:100–101`
+- the finding "Slug ignores a replaced positionNode" — `.agents/docs/planning/docs-site-outline.md:501` (findings table, from the kinetic build)
+- the carousel and flag warps are not in `site/examples/src/scenes/kinetic` (grep finds no `positionNode`; the
+  scene renders to a target and places glyphs by matrix); the finding above was
+  recorded from an earlier build. Re-run the warp on Slug and on MSDF before the callout ships, and restore the
+  warp to the scene or repoint the proxy
+*/}
+
+## Text as a texture: render targets
+
+```tsx
+import { GlyphProvider, Text } from '@pmndrs/glyph/react';
+import { createPortal, useFrame } from '@react-three/fiber/webgpu';
+import { Renderer, RenderTarget, Scene } from 'three/webgpu';
+
+const surface = new Scene();            // a root spans at most one Scene: the tile gets its own named root
+const target = new RenderTarget(2048, 128);
+
+useFrame(({ renderer }) => {
+  if (!(renderer instanceof Renderer)) return; // the WebGPU entry always is; the state's type is a union
+  renderer.setRenderTarget(target);
+  renderer.render(surface, camera);      // shapes the surface root, draws one line of text
+  renderer.setRenderTarget(null);        // the main scene draws after this callback
+});
+
+createPortal(
+  <GlyphProvider handle={handle('surface')}>
+    <Text font={Inter.slug} style={{ fontSize: 2.6, color: '#ffffff' }}>
+      live
+    </Text>
+  </GlyphProvider>,
+  surface,
+);
+```
+
+```ts
+import { color, mix, texture, uniform, uv, vec2 } from 'three/tsl';
+import { MeshBasicNodeMaterial, RenderTarget } from 'three/webgpu';
+
+const target = new RenderTarget(2048, 128);
+const repeat = vec2(8, 3);
+const scroll = uniform(0);
+
+// the tube's material: the Codrops fract-repeat-and-scroll over the live texture
+const material = new MeshBasicNodeMaterial();
+const scrolled = uv().mul(repeat).add(vec2(scroll.negate(), 0)).fract();
+material.colorNode = mix(color('#141a26'), color('#e7ecf6'), texture(target.texture, scrolled).r);
+```
+
+{/*
+write
+- Question: what if the surface is the point and the text should follow every fold of it?
+- Paragraph 1: render the text to a render target and let a material sample it. The texture is a live scene, so it
+  can type, reflow, and recolour every frame, and the surface can be any geometry with a UV map; the Codrops
+  `fract(uv * repeat - scroll)` tiles and scrolls it.
+- Paragraph 2: the second scene needs its own root, because a root spans at most one `Scene`; `handle('surface')`
+  is a named root on the same handle, one `GlyphProvider` away in React and one `createText` call away in
+  three.js. Render the tile before the main scene; `glyph.shape()` shapes every dirty root, both scenes, in one call.
+- Point at: the kinetic scene does exactly this for the knot's skin; the ribbon and arc scenes are the real-glyphs-on-a-path counterpart.
+- Shape: two paragraphs.
+
+notes · internals
+- a root spans one `Scene` or throws `… spans more than one Scene; select a different handle root for each Scene` —
+  `three/text.ts#ThreeRoot.#bindScene` (`:543–562`)
+- named roots: `handle(name)` returns the idempotent named root — `config/glyph.ts#GlyphHandle` (`:581–589`),
+  `#GlyphNamedRoot` (`:575–578`); `GlyphProvider` accepts a handle or a root — `react.ts:193–199`
+- one `glyph.shape()` for every dirty root — `glyph-engine.ts#_shape` (`:387–433`)
+- the kinetic scene: `handle('tile')`, an orthographic tile camera, `RenderTarget`, the tile rendered before the
+  main scene, the knot's `surfaceMaterial` — `site/examples/src/scenes/kinetic/three.ts:41–56`, `:121–123`,
+  `site/examples/src/scenes/kinetic/materials.ts:31–42`; the React form — `site/examples/src/scenes/kinetic/scene.tsx:48`
+*/}
+
+## Post-processing
+
+```tsx
+import { useRenderPipeline } from '@react-three/fiber/webgpu';
+import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
+
+useRenderPipeline(({ passes, renderPipeline }) => {
+  if (renderPipeline === null) return; // the callback also runs for the teardown pass
+  const scene = passes.scenePass.getTextureNode();
+  const glow = bloom(scene, 0.9, 0.4, 0.55);
+  renderPipeline.outputNode = scene.add(glow);
+  glow.strength.value = 1.2; // a uniform: animate it without rebuilding the pipeline
+});
+```
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
+import { pass } from 'three/tsl';
+import { PostProcessing } from 'three/webgpu';
+
+const scenePass = pass(scene, camera);
+const post = new PostProcessing(renderer);
+post.outputNode = scenePass.getTextureNode().add(bloom(scenePass.getTextureNode(), 0.9, 0.4, 0.55));
+
+function frame(): void {
+  glyph.shape(); // once per frame, before the host renders
+  post.render();
+}
+```
+
+<glyph-proxy fit="cover" root="scenes" data-scene="bloom" aria-label="One bright word through bloom" aspect="16 / 9" />
+
+{/*
+write
+- Question: does post-processing know about text?
+- Two sentences: no, and that is the point; text is pixels in the scene pass, so bloom thresholds on brightness
+  and colour is the control: dim words stay put, the bright one blooms. `bloom().strength` is a uniform, so
+  breathe it per frame without rebuilding the pipeline; `glyph.shape()` still runs once per frame before the
+  post-processing render.
+- Shape: two sentences.
+
+notes · internals
+- the bloom scene's `Glow`: `useRenderPipeline`, `bloom(scene, 0.9, 0.4, 0.55)`, `strength` kept as a uniform and
+  animated in `useFrame` — `site/examples/src/scenes/bloom/components/Glow.tsx`
+- `shape()` once per frame before the host renders — `glyph.ts#GlyphRuntime.shape` (`:94–98`)
+- the landing pipeline composes bloom, lens flare, and chromatic aberration — `site/landing/src/effects.tsx:23–49`
+- `BloomNode.strength` is `UniformNode<"float", number>` — `node_modules/@types/three/examples/jsm/tsl/display/BloomNode.d.ts:5`
+  (the constructor also accepts a plain number, `:21`); the Glow component reads it through that type
+*/}
+
+## Lighting
+
+{/*
+write
+- Question: can text be lit?
+- Two sentences: yes, a lit material is the Materials page's subject — a `MeshPhysicalNodeMaterial` over the
+  format's coverage nodes with a normal derived from paragraph-local position; link to /docs/text/materials#lit-text
+  and do not repeat it here.
+- Shape: two sentences, or fold this heading into Depth and occlusion's closing line.
+
+notes · internals
+- the lit factory — `site/examples/src/scenes/materials/scene.tsx:22–41`; the context nodes it composes over — `tsl/msdf-shader.ts:49–60`
+*/}

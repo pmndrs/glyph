@@ -1,0 +1,15 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "isolatedDeclarations": false,
+    "allowImportingTsExtensions": true,
+    "jsx": "react-jsx",
+    "lib": ["DOM", "DOM.Iterable", "ES2025"],
+    "types": ["vite/client"],
+    "customConditions": ["source"]
+  },
+  "include": ["docs/components", "landing/src", "scripts", "vite.config.ts", "vitest.config.ts"]
+}
