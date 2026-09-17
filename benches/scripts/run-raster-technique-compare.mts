@@ -1,11 +1,21 @@
-/* @workflow { "name": "benchmark:raster-comparison", "summary": "Verify retained MSDF/Slug comparison and exclusive finite-capture recovery on both backends.", "requirements": "GPU-enabled Chromium and Vitexec.", "writes": "Ignored browser caches only." } */
-import { runVitexec } from './support/command-cli.mts';
+/* @workflow { "name": "benchmark:raster-comparison", "summary": "Run the finite MSDF and Slug sampling conformance targets on both renderer backends.", "requirements": "Built runtime packages plus GPU-enabled Playwright Chromium and authenticated benchmark fixtures.", "writes": "Standard output only." } */
+import { runNodeScript } from './support/command-cli.mts';
 
-const paths = [
-  '/?mode=conformance&technique=msdf&backend=webgpu&delivery=baked&dpr=1&font=inter&workload=mtsdf-slug-compare',
-  '/?mode=conformance&technique=msdf&backend=webgl2&delivery=baked&dpr=1&font=inter&workload=mtsdf-slug-compare',
+const cases = [
+  ['mtsdf-conformance-webgpu', 'mtsdf-sampling-conformance'],
+  ['mtsdf-conformance-webgl2', 'mtsdf-sampling-conformance'],
+  ['slug-conformance-webgpu', 'slug-sampling-conformance'],
+  ['slug-conformance-webgl2', 'slug-sampling-conformance'],
 ] as const;
 
-for (const path of paths) {
-  await runVitexec(['--gpu', '--path', path, './vitexec/raster-technique-compare.probe.ts', ...process.argv.slice(2)]);
+for (const [target, scenario] of cases) {
+  await runNodeScript('scripts/run-headless.mts', [
+    '--target',
+    target,
+    '--scenario',
+    scenario,
+    '--gpu',
+    'true',
+    ...process.argv.slice(2),
+  ]);
 }

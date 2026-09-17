@@ -4,6 +4,8 @@ import { createPayloadSummary } from '../benchmark/payload-summary';
 import { useRuntimeTelemetry } from '../benchmark/runtime-world';
 import type { AdvancedShapingFrame } from '../workloads/advanced-shaping/scene';
 import {
+  BENCHMARK_WORKLOAD_IDS,
+  BENCHMARK_WORKLOADS,
   benchmarkWorkloadDefinition,
   isBenchmarkWorkloadId,
   type BenchmarkWorkloadDefinition,
@@ -242,4 +244,3 @@ function presentationFontValue(
   if (policy.kind === 'fixed') return policy.defaultFixture;
   return activeFontFixture;
 }
-import { BENCHMARK_WORKLOAD_IDS, BENCHMARK_WORKLOADS } from '../workloads/catalog';

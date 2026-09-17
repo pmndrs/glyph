@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:011a61b1d7434d45762a6668a1169b1efa48d15470188ce9373db8973e4c5298'
+source_digest: 'sha256:1f22535a6d643302ad6cbe546003751b06f5db458f947f57cdd8d377a5a19434'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -59,9 +59,6 @@ sources:
   - id: icon-grid-evidence
     resource: ../../../benches/fixtures/results/icon-grid-retained-evidence-chromium149.json
     title: Retained complete icon-grid traversal evidence
-  - id: raster-format-compare
-    resource: ../../../benches/src/surfaces/conformance/scenes/raster-format-comparison.ts
-    title: Surface-owned realtime MSDF and Slug GPU comparison
   - id: low-level-raster-reference
     resource: ../../../benches/src/benchmark/low-level/raster/source-outline-reference.ts
     title: Shared low-level source-outline oracle
@@ -200,9 +197,6 @@ sources:
   - id: live-text-update-probe
     resource: ../../../benches/scripts/run-live-update-latency-probe.mts
     title: Input-to-visible-frame latency and glyph-transition probe
-  - id: conformance-surface
-    resource: ../../../benches/src/surfaces/conformance/conformance-surface.tsx
-    title: Host-borrowing conformance surface hierarchy
   - id: presentation-framerate-sweep
     resource: ../../../benches/vitexec/presentation-framerate-sweep.probe.ts
     title: Complete Presentation workload performance sweep
@@ -224,9 +218,9 @@ sources:
   - id: labs-package-workflow
     resource: ../../../benches/scripts/run-package-labs.mts
     title: Installed package artifact benchmark workflow
-  - id: raster-technique-compare-probe
-    resource: ../../../benches/vitexec/raster-technique-compare.probe.ts
-    title: Realtime comparison product probe
+  - id: raster-technique-compare-workflow
+    resource: ../../../benches/scripts/run-raster-technique-compare.mts
+    title: Headless MSDF and Slug sampling workflow
 generated:
   by: openai-codex/gpt-6
   at: '2026-09-16T13:27:39Z'
@@ -388,7 +382,7 @@ headless conformance suite and its stored frame hashes.
 
 The primary product surface is a continuously rendered live-workload browser organized by technique, backend, and workload. Finite conformance, capture, and comparison remain automated workflows and explicit target modules rather than competing human screens inside the performance application. Main exposes only Scene and Controls on compact layouts; Presentation keeps its focused scene chrome.
 
-The MSDF / Slug comparison workload owns one renderer, two equal RGBA8 render targets, and one fullscreen composition graph. Three.js samples both candidate textures, then a plain-value TypeGPU `heatmapColor` function computes the signed coverage heatmap through `@typegpu/three`; the benchmark Vite pipeline applies `unplugin-typegpu/vite`, while the synthetic TSL baseline remains native TSL. Both candidates share authored text, layout dimensions, camera, physical target size, zoom, and pan. The heatmap requires no readback or CPU composition: black agrees, red marks extra MSDF coverage, cyan marks extra Slug coverage, and intensity is amplified eight times. A deterministic delayed-peer probe proved that independently prepared retained `Text` objects could otherwise expose one new candidate beside one old candidate. The scene now keeps sampling the last complete target pair while both updates prepare, publishes both retained objects in one JavaScript task, and refreshes or resizes both targets together only after the pair succeeds. Failure rolls both objects back; abort disposes only after the queued update settles. This remains private comparison coordination rather than a renderer-wide grouped-publication API. Explicit conformance runs and their follow-up visual captures execute as serialized jobs borrowing the route renderer; the retained scene pauses during each job and resumes after success, failure, or abort without replacing its canvas or leaking finite renderer state into the next frame. The permanent hardware-browser probe proves custom text, 4× zoom, responsive tab switching, zero automatic finite capture, abort and successful-capture recovery, a peak renderer concurrency of one, exact WebGPU backend initialization, and a live canvas; forced WebGL2 proves the same lifecycle without shader or validation errors. Run both backend lanes with `pnpm scripts run benchmark:raster-comparison`.[^raster-technique-compare-probe]
+MSDF and Slug sampling conformance stays outside the live playground. `benchmark:raster-comparison` runs each technique's finite target through WebGPU and forced WebGL2, using the same target registry and isolated headless runner as the complete conformance suite.[^raster-technique-compare-workflow]
 
 The external-raster target is the product gate for the private `glyphExample` extension package. It starts from the public
 source-font fallback so source bytes are legitimately available, runs the package runtime baker and generic artifact
@@ -403,7 +397,7 @@ glyphs or paints.
 
 Font delivery is an explicit benchmark axis. **Baked asset** exercises the normal sibling asset, while **Runtime bake** passes `{ source, runtimeBake }`, downloads the source font, builds the core font in the serial core-baker Worker, then builds the selected Bitmap or MSDF raster in its serial lazy Worker. The inspector distinguishes the always-loaded runtime/shaper graph from the conditional core and raster baker host, Worker, and Wasm graphs; it reports source download bytes, generated core/raster CPU bytes, bake durations, and atlas GPU memory. The runtime-fallback conformance workload renders both delivery paths through the same public pipeline and requires an exact RGBA frame match. The headless conformance suite always runs baked delivery, so `benchmark:runtime-fallback` is the lane that exercises runtime delivery: canonical Inter matched exactly for Bitmap, MTSDF, and Slug on hardware WebGPU, each reporting `1/1 exact` with zero mismatched bytes, zero changed pixels, and zero maximum error. The observed cold MSDF raster bake was roughly 114 seconds on this host and remains an observation, not a portability threshold.
 
-The benchmark manifest exposes only `build`, `dev`, `test`, `check`, and the package-owned `size` producer. Specialized maintenance files declare their own names, requirements, write behavior, arguments, and runner; the root `pnpm scripts` command validates and indexes that metadata. The runner removes pnpm's one conventional `--` delimiter and places forwarded Vitexec options before its injected module, while ordinary Node workflows retain script-first argv order.[^workflow-arguments] Vitexec can exit zero after an injected module or page failure, so the runner forwards and inspects its captured output and rejects `[error]` or `[page error]` records; focused negative controls prove both markers while ordinary logs remain accepted.[^workflow-runner][^workflow-output] An ordinary build consumes the checked-in canonical package-size record without rewriting it for the current host. `release:size:generate` is the sole reviewed repository writer, while the package `size` command refreshes the benchmark-owned record during scoped development; the test gate measures the current host read-only and enforces the reviewed absolute and cumulative ceilings. `benchmark:presentation` runs every sequential workload through Bitmap, MTSDF, and Slug on WebGPU and forced WebGL2 using stable `/three`; `--workload`, `--technique`, and `--backend` select one maintained cell, while `--typegpu` exercises experimental `/three/typegpu`. `benchmark:demo` runs the timed sequence; `benchmark:raster-comparison` owns finite-job recovery; and `benchmark:presentation-performance` records frame-start deltas for 120 consecutive animation frames after a 30-frame warmup while one persistent renderer runs the ordinary demo. Its separately labeled CPU summary wraps the ordinary render-loop body over the same 120-frame count, matching stats.js rather than redefining frame time. The focused Paragraph Stress workflow uses the same sampler and unmodified workload. Startup, input latency, GPU query time, and Rust/Wasm microbenchmarks retain separate names and units. Authenticated HarfBuzz bundles are checked into Git LFS for Linux x64 and macOS arm64, so ordinary verification only runs `pnpm scripts run fixture:harfbuzz:provision` before `pnpm scripts run fixture:japanese-showcase:check`; Meson, Ninja, and GLib remain regeneration-only dependencies. React Doctor remains a manual review tool rather than a package or CI script; when requested, run `mise exec -- pnpm --dir benches dlx react-doctor@0.7.2 . --scope full --blocking warning --verbose --no-supply-chain --no-color`.[^presentation-framerate-sweep]
+The benchmark manifest exposes only `build`, `dev`, `test`, `check`, and the package-owned `size` producer. Specialized maintenance files declare their own names, requirements, write behavior, arguments, and runner; the root `pnpm scripts` command validates and indexes that metadata. The runner removes pnpm's one conventional `--` delimiter and places forwarded Vitexec options before its injected module, while ordinary Node workflows retain script-first argv order.[^workflow-arguments] Vitexec can exit zero after an injected module or page failure, so the runner forwards and inspects its captured output and rejects `[error]` or `[page error]` records; focused negative controls prove both markers while ordinary logs remain accepted.[^workflow-runner][^workflow-output] An ordinary build consumes the checked-in canonical package-size record without rewriting it for the current host. `release:size:generate` is the sole reviewed repository writer, while the package `size` command refreshes the benchmark-owned record during scoped development; the test gate measures the current host read-only and enforces the reviewed absolute and cumulative ceilings. `benchmark:presentation` runs every sequential workload through Bitmap, MTSDF, and Slug on WebGPU and forced WebGL2 using stable `/three`; `--workload`, `--technique`, and `--backend` select one maintained cell, while `--typegpu` exercises experimental `/three/typegpu`. `benchmark:demo` runs the timed sequence; `benchmark:raster-comparison` runs the four finite MSDF/Slug sampling targets; and `benchmark:presentation-performance` records frame-start deltas for 120 consecutive animation frames after a 30-frame warmup while one persistent renderer runs the ordinary demo. Its separately labeled CPU summary wraps the ordinary render-loop body over the same 120-frame count, matching stats.js rather than redefining frame time. The focused Paragraph Stress workflow uses the same sampler and unmodified workload. Startup, input latency, GPU query time, and Rust/Wasm microbenchmarks retain separate names and units. Authenticated HarfBuzz bundles are checked into Git LFS for Linux x64 and macOS arm64, so ordinary verification only runs `pnpm scripts run fixture:harfbuzz:provision` before `pnpm scripts run fixture:japanese-showcase:check`; Meson, Ninja, and GLib remain regeneration-only dependencies. React Doctor remains a manual review tool rather than a package or CI script; when requested, run `mise exec -- pnpm --dir benches dlx react-doctor@0.7.2 . --scope full --blocking warning --verbose --no-supply-chain --no-color`.[^presentation-framerate-sweep]
 
 `glyph:rust-layout-benchmark` keeps measurement, positioning, and publication attribution reproducible. `position-query`
 adds the positioning tail to measurement without gathering or publishing. `adopt-position-query` first prepares that
@@ -734,7 +728,7 @@ The [benchmark plan](../planning/benchmark-plan.md) owns target admission, corre
 
 [^slug-external-render-parity-evidence]: The retained Chromium 149 record authenticates all five generated files, exact source kinds and request counts, equal embedded/external work, and equal framebuffer identities on both renderer backends.
 
-[^raster-technique-compare-probe]: The local hardware lane asserts the WebGPU backend through renderer initialization, renderer/canvas identity across aborted and successful finite jobs, and peak renderer concurrency of one while treating browser console, shader, and GPU validation errors as failures; the same lifecycle receives a separate forced-WebGL2 check.
+[^raster-technique-compare-workflow]: The focused workflow serially launches the ordinary headless runner for the MTSDF and Slug sampling targets on both renderer backends.
 
 [^slug-outline-research]: The planning concept keeps rejected outline evidence separate from the current benchmark capability contract.
 

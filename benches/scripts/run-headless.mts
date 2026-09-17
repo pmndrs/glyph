@@ -14,6 +14,7 @@ import { launchProjectChromium } from './support/project-chromium.mts';
 interface Arguments {
   readonly cases: readonly BenchmarkCase[];
   readonly dpr: number;
+  readonly gpu: boolean;
   readonly samples: number;
   readonly warmup: number;
   readonly port: number;
@@ -69,12 +70,16 @@ function parseArguments(values: readonly string[]): Arguments {
   const warmup = Number(result.warmup ?? 4);
   const dpr = Number(result.dpr ?? 1);
   const port = Number(result.port ?? process.env.PORT ?? 0);
+  const gpu = result.gpu === 'true';
   if (!Number.isSafeInteger(samples) || samples < 1) throw new Error('samples must be positive');
   if (!Number.isSafeInteger(warmup) || warmup < 0) throw new Error('warmup must be non-negative');
   if (!Number.isFinite(dpr) || dpr <= 0 || dpr > 4)
     throw new Error('dpr must be greater than zero but no greater than four');
   if (!Number.isSafeInteger(port) || port < 0 || port > 65_535)
     throw new Error('port must be zero or a valid TCP port');
+  if (result.gpu !== undefined && result.gpu !== 'true' && result.gpu !== 'false') {
+    throw new Error('gpu must be true or false');
+  }
   const suite = result.suite;
   if (suite !== undefined && suite !== 'conformance') {
     throw new Error(`Unknown headless suite: ${suite}`);
@@ -92,6 +97,7 @@ function parseArguments(values: readonly string[]): Arguments {
     samples,
     warmup,
     dpr,
+    gpu,
     port,
     ...(result.output === undefined ? {} : { output: result.output }),
   };
@@ -133,7 +139,14 @@ try {
   const origin = process.env.PORTLESS_URL ?? `http://127.0.0.1:${String(address.port)}`;
   reportStage(`Vite ready at ${origin}`);
   reportStage('launching Chromium');
-  browser = await withinDeadline('Chromium launch', browserLaunchTimeoutMs, launchProjectChromium({ headless: true }));
+  browser = await withinDeadline(
+    'Chromium launch',
+    browserLaunchTimeoutMs,
+    launchProjectChromium({
+      headless: true,
+      ...(options.gpu ? { args: ['--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu'] } : {}),
+    }),
+  );
 
   const summaries = [];
   for (const benchmarkCase of options.cases) {
