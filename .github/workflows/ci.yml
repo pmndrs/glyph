@@ -63,6 +63,30 @@ jobs:
           version: 2026.7.13
           cache: true
 
+      - name: Restore Rust dependency cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: glyph-rust
+          key: build-scripts-${{ hashFiles('packages/glyph/scripts/build.mjs', 'packages/glyph/scripts/support/reproducible-rust-env.mjs') }}
+          add-job-id-key: false
+          env-vars: CARGO CC CFLAGS CXX CMAKE RUST PMNDRS_GLYPH
+          workspaces: |
+            packages/glyph/rust/bitmap-baker -> target
+            packages/glyph/rust/font-baker -> target
+            packages/glyph/rust/mtsdf-admission -> target
+            packages/glyph/rust/mtsdf-baker -> target
+            packages/glyph/rust/mtsdf-core -> target
+            packages/glyph/rust/mtsdf-fontations -> target
+            packages/glyph/rust/raster-artifact -> target
+            packages/glyph/rust/shaper -> target
+            packages/glyph/rust/slug-baker -> target
+            packages/glyph/rust/slug-core -> target
+            packages/glyph/rust/slug-fontations -> target
+          cache-bin: false
+          cache-workspace-crates: false
+          cache-on-failure: false
+          save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
@@ -105,6 +129,30 @@ jobs:
         with:
           version: 2026.7.13
           cache: true
+
+      - name: Restore Rust dependency cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: glyph-rust
+          key: build-scripts-${{ hashFiles('packages/glyph/scripts/build.mjs', 'packages/glyph/scripts/support/reproducible-rust-env.mjs') }}
+          add-job-id-key: false
+          env-vars: CARGO CC CFLAGS CXX CMAKE RUST PMNDRS_GLYPH
+          workspaces: |
+            packages/glyph/rust/bitmap-baker -> target
+            packages/glyph/rust/font-baker -> target
+            packages/glyph/rust/mtsdf-admission -> target
+            packages/glyph/rust/mtsdf-baker -> target
+            packages/glyph/rust/mtsdf-core -> target
+            packages/glyph/rust/mtsdf-fontations -> target
+            packages/glyph/rust/raster-artifact -> target
+            packages/glyph/rust/shaper -> target
+            packages/glyph/rust/slug-baker -> target
+            packages/glyph/rust/slug-core -> target
+            packages/glyph/rust/slug-fontations -> target
+          cache-bin: false
+          cache-workspace-crates: false
+          cache-on-failure: false
+          save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
