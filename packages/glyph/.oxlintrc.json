@@ -75,12 +75,12 @@
       }
     },
     {
-      "files": ["src/react.ts"],
+      "files": ["src/react.ts", "tests/types/r3f-renderer-setup.test.tsx"],
       "rules": {
         "eslint/no-restricted-imports": [
           "error",
           {
-            "paths": ["three", "@react-three/fiber"],
+            "paths": ["three"],
             "patterns": [
               "three/src/*",
               "three/addons/*",

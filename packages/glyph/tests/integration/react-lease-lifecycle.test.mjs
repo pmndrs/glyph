@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
 import { Fragment, StrictMode, Suspense, createElement, useLayoutEffect } from 'react';
 import { bitmap, msdf, glyph, GlyphFontError } from '@pmndrs/glyph';
-import { ThreeConfig, defineTextMaterial } from '@pmndrs/glyph/three';
+import { ThreeConfig, defineTextMaterial, Text as ThreeText, TextGroup as ThreeTextGroup } from '@pmndrs/glyph/three';
 
 import { GlyphProvider, Text, TextGroup, useFont, useBitmap } from '@pmndrs/glyph/react';
 import * as THREE from 'three/webgpu';
@@ -38,25 +38,30 @@ async function loadFixture() {
   };
 }
 
-test('Text and TextGroup share the built-in Three handle without a provider', async () => {
-  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+test('Text and TextGroup retain their hosts after an application factory extension without a provider', async () => {
+  const { create, extend } = await import('../support/r3f-test-renderer.mjs');
+  const ApplicationGroup = extend(THREE.Group);
   const fixture = await loadFixture();
   const mountedText = [];
   const mountedGroup = [];
   try {
     const renderer = await create(
       createElement(
-        TextGroup,
-        { ref: (object) => void (object != null && mountedGroup.push(object)) },
+        ApplicationGroup,
+        null,
         createElement(
-          Text,
-          { font: fixture.font, ref: (object) => void (object != null && mountedText.push(object)) },
-          'default',
+          TextGroup,
+          { ref: (object) => void (object != null && mountedGroup.push(object)) },
+          createElement(
+            Text,
+            { font: fixture.font, ref: (object) => void (object != null && mountedText.push(object)) },
+            'default',
+          ),
         ),
       ),
     );
-    assert.equal(mountedGroup.length > 0, true, 'the default handle must construct the retained Three group');
-    assert.equal(mountedText.length > 0, true, 'the default handle must construct the retained Three text');
+    assert.ok(mountedGroup.at(-1) instanceof ThreeTextGroup);
+    assert.ok(mountedText.at(-1) instanceof ThreeText);
     await renderer.unmount();
 
     fixture.dispose();
@@ -68,7 +73,7 @@ test('Text and TextGroup share the built-in Three handle without a provider', as
 });
 
 test('R3F TextGroup material props update the retained Three material property', async () => {
-  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const { create } = await import('../support/r3f-test-renderer.mjs');
   const fixture = await loadFixture();
   const first = defineTextMaterial((context) => context.createDefaultMaterial());
   const second = defineTextMaterial((context) => context.createDefaultMaterial());
@@ -91,7 +96,7 @@ test('R3F TextGroup material props update the retained Three material property',
 });
 
 test('provider-free R3F roots isolate independent Canvas stores', async () => {
-  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const { create } = await import('../support/r3f-test-renderer.mjs');
   const fixture = await loadFixture();
   let firstText;
   let secondText;
@@ -126,7 +131,7 @@ test('provider-free R3F roots isolate independent Canvas stores', async () => {
 });
 
 test('GlyphProvider resolves a scoped string through its lazy fontFaces table', async () => {
-  const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
+  const { create, waitFor } = await import('../support/r3f-test-renderer.mjs');
   const input = new Blob([await readFile(multiFormatFontUrl)], { type: 'model/gltf-binary' });
   const face = glyph.fontFace(input, { format: msdf });
   let mounted = false;
@@ -161,7 +166,7 @@ test('GlyphProvider resolves a scoped string through its lazy fontFaces table', 
 });
 
 test('GlyphProvider reuses equal inline source tables and releases its declarations after StrictMode unmount', async () => {
-  const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
+  const { create, waitFor } = await import('../support/r3f-test-renderer.mjs');
   const input = new Blob([await readFile(multiFormatFontUrl)], { type: 'model/gltf-binary' });
   const createdFaces = captureCreatedFontFaces();
   let mountedFont;
@@ -196,7 +201,7 @@ test('GlyphProvider reuses equal inline source tables and releases its declarati
 });
 
 test('Text suspends on an existing unloaded FontFace selection', async () => {
-  const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
+  const { create, waitFor } = await import('../support/r3f-test-renderer.mjs');
   const input = new Blob([await readFile(fontUrl)], { type: 'model/gltf-binary' });
   const face = glyph.fontFace(input, { format: bitmap({ strikes: [16] }) });
   assert.equal(face.bitmap.isLoaded(), false);
@@ -223,7 +228,7 @@ test('Text suspends on an existing unloaded FontFace selection', async () => {
 });
 
 test('nested Text suspends on a provider FontFace alias before publishing the paragraph', async () => {
-  const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
+  const { create, waitFor } = await import('../support/r3f-test-renderer.mjs');
   const fixture = await loadFixture();
   const input = new Blob([await readFile(fontUrl)], { type: 'model/gltf-binary' });
   const nestedFace = glyph.fontFace(input, { format: bitmap({ strikes: [16] }) });
@@ -252,7 +257,7 @@ test('nested Text suspends on a provider FontFace alias before publishing the pa
 });
 
 test('nested font prefetch observes rejection while an earlier font suspends', async () => {
-  const { create } = await import('@react-three/test-renderer/webgpu');
+  const { create } = await import('../support/r3f-test-renderer.mjs');
   const outerRead = Promise.withResolvers();
   const invalidRead = Promise.withResolvers();
   class DeferredBlob extends Blob {
@@ -299,7 +304,7 @@ test('nested font prefetch observes rejection while an earlier font suspends', a
 });
 
 test('Text and TextGroup reject untyped object-level handle selection', async () => {
-  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const { create } = await import('../support/r3f-test-renderer.mjs');
   const fixture = await loadFixture();
   try {
     await assert.rejects(
@@ -317,7 +322,7 @@ test('Text and TextGroup reject untyped object-level handle selection', async ()
 });
 
 test('GlyphProvider rejects a handle change instead of rebinding mounted objects', async () => {
-  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const { create } = await import('../support/r3f-test-renderer.mjs');
   const replacement = glyph.handle('three:react-provider-replacement-test', ThreeConfig);
   const fixture = await loadFixture();
   const child = createElement(Text, { font: fixture.font }, 'stable provider');
@@ -336,7 +341,7 @@ test('GlyphProvider rejects a handle change instead of rebinding mounted objects
 });
 
 test('GlyphProvider string shorthand selects a named root on the built-in default handle', async () => {
-  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const { create } = await import('../support/r3f-test-renderer.mjs');
   const fixture = await loadFixture();
   const renderer = await create(
     createElement(
@@ -356,8 +361,7 @@ test('GlyphProvider string shorthand selects a named root on the built-in defaul
 });
 
 test('an R3F portal selects a distinct terminal root for its target Scene', async () => {
-  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
-  const { createPortal } = await import('@react-three/fiber/webgpu');
+  const { create, createPortal } = await import('../support/r3f-test-renderer.mjs');
   const fixture = await loadFixture();
   const world = r3fHandle('portal-world');
   const hud = r3fHandle('portal-hud');
@@ -411,7 +415,7 @@ test('an R3F portal selects a distinct terminal root for its target Scene', asyn
 });
 
 test('StrictMode mount and replay balance every paragraph lease', async () => {
-  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const { create } = await import('../support/r3f-test-renderer.mjs');
   const fixture = await loadFixture();
   const { font } = fixture;
   try {
@@ -445,7 +449,7 @@ test('StrictMode mount and replay balance every paragraph lease', async () => {
 });
 
 test('a FontFace may dispose before React releases its mounted Text lease', async () => {
-  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const { create } = await import('../support/r3f-test-renderer.mjs');
   const fixture = await loadFixture();
   const { font } = fixture;
   const renderer = await create(
@@ -474,7 +478,7 @@ test('a FontFace may dispose before React releases its mounted Text lease', asyn
 });
 
 test('preload, StrictMode consumers, clear, and remount share one font resource lifecycle', async () => {
-  const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
+  const { create, waitFor } = await import('../support/r3f-test-renderer.mjs');
   const input = new Blob([await readFile(fontUrl)], { type: 'model/gltf-binary' });
   const options = { strikes: [16] };
   const observed = new Map();
@@ -536,7 +540,7 @@ test('preload, StrictMode consumers, clear, and remount share one font resource 
 });
 
 test('a rejected hook resource stays stable for the error boundary and a later preload can retry', async () => {
-  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const { create } = await import('../support/r3f-test-renderer.mjs');
   const input = new Blob([new Uint8Array([0])], { type: 'model/gltf-binary' });
   const config = { format: bitmap({ strikes: [16] }) };
   const createdFaces = captureCreatedFontFaces();
@@ -578,7 +582,7 @@ test('a rejected hook resource stays stable for the error boundary and a later p
 });
 
 test('a GlyphProvider error fallback retries children only when its caller dismisses it', async () => {
-  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const { create } = await import('../support/r3f-test-renderer.mjs');
   let broken = true;
   let rendered = false;
   let dismiss;

@@ -65,7 +65,7 @@ test('nested structural spans preserve hierarchy after a joining boundary moves'
 });
 
 test('nested React Text crossing a joining boundary mounts and publishes', { timeout }, async () => {
-  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const { create } = await import('../support/r3f-test-renderer.mjs');
   const font = await fonts.load('inter');
   const nodes = [];
   const errors = [];
@@ -96,7 +96,7 @@ test('nested React Text crossing a joining boundary mounts and publishes', { tim
 });
 
 test('nested React Text rejects box-only props before constructing a paragraph', { timeout }, async () => {
-  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const { create } = await import('../support/r3f-test-renderer.mjs');
   const font = await fonts.load('inter');
   await assert.rejects(
     async () =>

@@ -1,7 +1,7 @@
 /* @workflow {
   "name": "glyph:peer-check",
   "summary": "Check published declarations, shaders and React lifecycles against minimum peers in an isolated install.",
-  "requirements": "Workspace dependencies and network access. Optional --three, --fiber, --react and --typegpu exact versions override the declared floors.",
+  "requirements": "Workspace dependencies and network access. Optional --three, --fiber, --react and --typegpu exact versions override the declared floors. --browser also requires Playwright Chromium and verifies custom WebGPURenderer rendering.",
   "writes": "Temporarily builds Glyph and creates an ignored .cache/peer-versions consumer, which is removed on exit; never changes workspace dependencies or lockfile."
 } */
 import { spawn } from 'node:child_process';
@@ -9,6 +9,7 @@ import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/pr
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { checkReactBrowser } from './support/react-browser-check.mts';
 
 const workspace = fileURLToPath(new URL('../../../', import.meta.url));
 const source = join(workspace, 'packages/glyph');
@@ -21,6 +22,7 @@ const { values } = parseArgs({
     fiber: { type: 'string' },
     react: { type: 'string' },
     typegpu: { type: 'string' },
+    browser: { type: 'boolean', default: false },
   },
 });
 const versions = Object.fromEntries(
@@ -35,12 +37,13 @@ for (const [option, name] of Object.entries({
   react: 'react',
   typegpu: 'typegpu',
 })) {
-  if (values[option as keyof typeof values] !== undefined) versions[name] = values[option as keyof typeof values];
+  const override = values[option as 'three' | 'fiber' | 'react' | 'typegpu'];
+  if (override !== undefined) versions[name] = override;
 }
 
-async function run(command: string, args: string[], cwd: string): Promise<void> {
+async function run(command: string, args: string[], cwd: string, env = process.env): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(command, args, { cwd, stdio: 'inherit' });
+    const child = spawn(command, args, { cwd, stdio: 'inherit', env });
     child.once('error', reject);
     child.once('exit', (code) => (code === 0 ? resolve() : reject(new Error(`${command} exited with ${code}`))));
   });
@@ -84,7 +87,10 @@ try {
           ...versions,
           'react-dom': versions.react,
           '@types/react': `${versions.react?.split('.').slice(0, 2).join('.')}.0`,
-          '@react-three/test-renderer': versions['@react-three/fiber'],
+          // v9's test renderer has an independent release sequence from Fiber.
+          '@react-three/test-renderer': versions['@react-three/fiber']?.startsWith('9.')
+            ? '9.1.1'
+            : versions['@react-three/fiber'],
         },
       },
       null,
@@ -125,7 +131,22 @@ try {
       'tests/integration/text-mutation-span-alignment.test.mjs',
     ],
     glyph,
+    { ...process.env, PMNDRS_GLYPH_R3F_ENTRY: 'root' },
   );
+  const entries = versions['@react-three/fiber']?.startsWith('10.') ? ['root', 'webgpu'] : ['root'];
+  if (entries.includes('webgpu')) {
+    await run(
+      process.execPath,
+      [
+        '--test',
+        'tests/integration/react-lease-lifecycle.test.mjs',
+        'tests/integration/text-mutation-span-alignment.test.mjs',
+      ],
+      glyph,
+      { ...process.env, PMNDRS_GLYPH_R3F_ENTRY: 'webgpu' },
+    );
+  }
+  if (values.browser) await checkReactBrowser(glyph, entries);
 } finally {
   await rm(consumer, { recursive: true, force: true });
 }

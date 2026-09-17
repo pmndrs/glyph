@@ -1,4 +1,4 @@
-import { extend, useStore, useThree, type ThreeElement, type ThreeElements } from '@react-three/fiber/webgpu';
+import { extend, useStore, useThree, type ThreeElement, type ThreeElements } from '@react-three/fiber';
 import {
   Component,
   Suspense,
@@ -183,8 +183,8 @@ export interface UseFont {
   clear<const Format>(input: FontFaceSource, config: SelectedHookFontConfig<Format>): void;
 }
 
-const ThreeTextElement = extend(ThreeText);
-const ThreeTextGroupElement = extend(ThreeTextGroup);
+// Named hosts avoid collisions between R3F entry points' factory counters.
+extend({ PmndrsGlyphText: ThreeText, PmndrsGlyphTextGroup: ThreeTextGroup });
 interface GlyphReactContext {
   readonly handle: ThreeHandle;
   readonly root: ThreeRoot;
@@ -687,7 +687,7 @@ function TextObject({
     invalidate();
   }, [desired, invalidate, object]);
 
-  return createElement(ThreeTextElement, {
+  return createElement<ThreeElement<typeof ThreeText>>('pmndrsGlyphText', {
     ...objectProps,
     args: constructorArguments,
     onError,
@@ -741,8 +741,8 @@ function TextGroupObject({
     [publishCommittedObject],
   );
 
-  return createElement(
-    ThreeTextGroupElement,
+  return createElement<ThreeElement<typeof ThreeTextGroup>>(
+    'pmndrsGlyphTextGroup',
     {
       ...objectProps,
       args: constructorArguments,

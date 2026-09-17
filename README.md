@@ -59,6 +59,8 @@ const [x, y] = [glyphInkX[0], glyphInkY[0]];
 
 Use `@pmndrs/glyph/react` for @react-three/fiber integration.
 
+R3F 9.7+ and v10 are supported. For v9, pass an initialized `WebGPURenderer` through Canvas's async `gl` factory. See the [R3F WebGPU setup guide](https://r3f.docs.pmnd.rs/api/canvas#webgpu).
+
 ```tsx
 import { GlyphProvider, Text, TextGroup, useSlug } from '@pmndrs/glyph/react';
 
