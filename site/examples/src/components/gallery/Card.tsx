@@ -1,3 +1,4 @@
+/* oxlint-disable jsx-a11y/prefer-tag-over-role -- glyph-proxy is an interactive custom element, not a valid button child. */
 import { useRef } from 'react';
 
 import type { ExampleEntry, ExampleSlug } from '../../catalog';
@@ -23,8 +24,15 @@ export function Card({ slug, entry }: { readonly slug: ExampleSlug; readonly ent
           aria-hidden="true"
         />
         {/* A custom element cannot be a <button>; the proxy handles Enter, Space, focus, and touch itself. */}
-        {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role */}
-        <glyph-proxy fit="cover" root="gallery" data-scene={slug} role="button" tabIndex={0} aria-label={entry.title} />
+        <glyph-proxy
+          fit="cover"
+          fade="220"
+          root="gallery"
+          data-scene={slug}
+          role="button"
+          tabIndex={0}
+          aria-label={entry.title}
+        />
         <FullscreenButton onClick={toggleFullscreen} />
       </div>
       <footer>

@@ -26,7 +26,7 @@ declare module 'react' {
       >;
       'glyph-proxy': Attributes<
         GlyphProxyElement,
-        { root: string; 'data-scene': string; aspect?: string; fit?: 'cover'; poster?: string }
+        { root: string; 'data-scene': string; aspect?: string; fade?: string; fit?: 'cover'; poster?: string }
       >;
       'glyph-scene-control': Attributes<
         GlyphSceneControlElement,

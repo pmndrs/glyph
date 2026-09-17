@@ -872,6 +872,7 @@ export class GlyphProxyElement extends HTMLElement {
   static observedAttributes = ['root', 'data-scene', 'aspect', 'width', 'height'];
 
   #canvas: HTMLCanvasElement | undefined;
+  #fadeInRaf = 0;
   #presenter: GlyphPresenter | undefined;
   #root: GlyphOffscreenRootElement | undefined;
   #instanceId = `glyph-proxy-${++proxyInstanceId}`;
@@ -901,7 +902,7 @@ export class GlyphProxyElement extends HTMLElement {
     this.style.position = 'relative';
     this.style.overflow = 'hidden';
     this.style.opacity = '0';
-    this.style.transition = `opacity ${this.getAttribute('fade') ?? '180'}ms ease`;
+    this.style.transition = `opacity ${this.getAttribute('fade') ?? '180'}ms linear`;
     this.style.contain = 'layout paint';
     this.#applySize();
 
@@ -927,6 +928,8 @@ export class GlyphProxyElement extends HTMLElement {
   }
 
   disconnectedCallback() {
+    cancelAnimationFrame(this.#fadeInRaf);
+    this.#fadeInRaf = 0;
     this.#root?.unregister(this);
     this.#root = undefined;
     this.removeEventListener('pointerenter', this.#sendPointerEnter);
@@ -955,9 +958,23 @@ export class GlyphProxyElement extends HTMLElement {
   }
 
   setActive(active: boolean) {
-    if (active) this.removeEventListener('transitionend', this.#onFadeOut);
-    this.setAttribute('data-glyph-state', active ? 'live' : 'idle');
-    this.style.opacity = active ? '1' : '0';
+    if (!active) {
+      cancelAnimationFrame(this.#fadeInRaf);
+      this.#fadeInRaf = 0;
+      this.setAttribute('data-glyph-state', 'idle');
+      this.style.opacity = '0';
+      return;
+    }
+    if (this.getAttribute('data-glyph-state') !== 'idle') return;
+    this.removeEventListener('transitionend', this.#onFadeOut);
+    this.setAttribute('data-glyph-state', 'entering');
+    this.style.opacity = '0';
+    this.#fadeInRaf = requestAnimationFrame(() => {
+      this.#fadeInRaf = 0;
+      if (!this.isConnected || this.getAttribute('data-glyph-state') !== 'entering') return;
+      this.setAttribute('data-glyph-state', 'live');
+      this.style.opacity = '1';
+    });
   }
 
   releaseFrame() {

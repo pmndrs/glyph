@@ -121,6 +121,8 @@ html[data-mode='gallery'] #root {
 }
 
 .card-stage {
+  --glyph-crossfade-duration: 220ms;
+
   position: relative;
   width: 100%;
   overflow: hidden;
@@ -139,6 +141,14 @@ html[data-mode='gallery'] #root {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  opacity: 1;
+  pointer-events: none;
+  transition: opacity var(--glyph-crossfade-duration) linear;
+  will-change: opacity;
+}
+
+.card-stage:has(glyph-proxy[data-glyph-state='live']) .card-poster {
+  opacity: 0;
 }
 
 .card:has(glyph-proxy[data-glyph-state='live']) {
