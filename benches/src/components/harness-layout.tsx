@@ -1,9 +1,7 @@
 import { lazy, Suspense, type ReactNode } from 'react';
 
-import type { BenchmarkSummary } from '../benchmark/contracts';
 import { createPayloadSummary } from '../benchmark/payload-summary';
 import { useRuntimeTelemetry } from '../benchmark/runtime-world';
-import type { LiveBenchmarkCapture } from '../benchmark/product-result';
 import type { AdvancedShapingFrame } from '../workloads/advanced-shaping/scene';
 import {
   benchmarkWorkloadDefinition,
@@ -17,17 +15,14 @@ import {
   type BenchmarkFontFixture,
   selectableFontFixture,
 } from '../benchmark/font-fixtures';
-import { workloadsFor } from '../benchmark/workloads';
-import type { HarnessLocation, HarnessMode, RasterFormatName } from '../benchmark/url-state';
+import type { HarnessLocation, RasterFormatName } from '../benchmark/url-state';
 import bitmapFixtures from '../../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json';
 import mtsdfFixtures from '../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json';
 import slugFixtures from '../../fixtures/rendering/showcase-slug-fixtures-v0.json';
 import packageSizes from '../generated/package-sizes.json';
 import { CompactSheet, CompactWorkloadPanel, MobileNavigation } from './responsive-shell';
-import { ExportPanel } from './export-panel';
 import { PresentationLayout } from './presentation-layout';
 import { PresentationPayloadPills } from './presentation-payload-pills';
-import { Report } from './report';
 import { RasterFormatSwitcher } from './raster-format-switcher';
 import { TelemetryCharts } from './telemetry-charts';
 import { TopBar } from './top-bar';
@@ -36,59 +31,44 @@ import { WorkloadRail } from './workload-rail';
 const FontNoticesDialog = lazy(() => import('./font-notices-dialog'));
 
 export interface HarnessLayoutProps {
-  readonly actionEligible: boolean;
   readonly activeFontFixture: BenchmarkFontFixture;
   readonly controls: ReactNode;
   readonly desktop: boolean;
   readonly fontNoticesOpen: boolean;
-  readonly isPending: boolean;
-  readonly liveCapture: LiveBenchmarkCapture | undefined;
-  readonly liveFormatComparison: boolean;
   readonly location: HarnessLocation;
   readonly phone: boolean;
   readonly presentationPlaying: boolean;
   readonly scene: ReactNode;
   readonly showcaseFrame: AdvancedShapingFrame;
-  readonly summary: BenchmarkSummary | undefined;
   readonly webgpu: boolean;
   readonly workloadPanelOpen: boolean;
-  readonly onAction: () => void;
   readonly onAdvancedFontFixture: (value: BenchmarkFontFixture) => void;
   readonly onCloseFontNotices: () => void;
   readonly onLocation: (value: Partial<HarnessLocation>) => void;
-  readonly onMode: (mode: HarnessMode) => void;
   readonly onFormat: (technique: RasterFormatName) => void;
   readonly onWorkloadPanelOpen: (open: boolean | ((current: boolean) => boolean)) => void;
 }
 
 export function HarnessLayout({
-  actionEligible,
   activeFontFixture,
   controls,
   desktop,
   fontNoticesOpen,
-  isPending,
-  liveCapture,
-  liveFormatComparison,
   location,
   phone,
   presentationPlaying,
   scene,
   showcaseFrame,
-  summary,
   webgpu,
   workloadPanelOpen,
-  onAction,
   onAdvancedFontFixture,
   onCloseFontNotices,
   onLocation,
-  onMode,
   onFormat,
   onWorkloadPanelOpen,
 }: HarnessLayoutProps) {
   const { stats: liveStats } = useRuntimeTelemetry();
-  const actionReady = actionEligible && (location.mode === 'conformance' || liveStats !== undefined);
-  const presentationMode = location.layout === 'presentation' && location.mode === 'benchmark';
+  const presentationMode = location.layout === 'presentation';
   if (presentationMode) {
     const presentationWorkload = isBenchmarkWorkloadId(location.workload) ? location.workload : 'benchmark-ipsum';
     const presentationDefinition = benchmarkWorkloadDefinition(presentationWorkload);
@@ -119,7 +99,7 @@ export function HarnessLayout({
             />
           }
           telemetry={<TelemetryCharts presentation="presentation" stats={liveStats} />}
-          workloadOptions={workloadsFor('benchmark').map((option) => ({
+          workloadOptions={BENCHMARK_WORKLOAD_IDS.map((id) => BENCHMARK_WORKLOADS[id]).map((option) => ({
             disabled: option.formats[location.technique].kind !== 'ready',
             label: option.label,
             value: option.id,
@@ -152,18 +132,7 @@ export function HarnessLayout({
         compact={!desktop}
         phone={phone}
         location={location}
-        mode={location.mode}
-        liveFormatComparison={liveFormatComparison}
-        pending={isPending}
-        ready={Boolean(actionReady)}
         webgpu={webgpu}
-        onAction={
-          location.mode === 'benchmark'
-            ? location.view === 'report'
-              ? () => onLocation({ view: 'scene' })
-              : onAction
-            : onAction
-        }
         onControls={() => {
           onWorkloadPanelOpen(false);
           onLocation({ view: location.view === 'controls' ? 'scene' : 'controls' });
@@ -172,9 +141,8 @@ export function HarnessLayout({
           if (!workloadPanelOpen && location.view === 'controls') onLocation({ view: 'scene' });
           onWorkloadPanelOpen((open) => !open);
         }}
-        onMode={onMode}
         onFormat={onFormat}
-        onPresentationMode={() => onLocation({ layout: 'presentation', mode: 'benchmark', view: 'scene' })}
+        onPresentationMode={() => onLocation({ layout: 'presentation', view: 'scene' })}
         workloadPanelOpen={workloadPanelOpen}
       />
       <div
@@ -214,21 +182,11 @@ export function HarnessLayout({
               : 'h-full min-h-0 overflow-hidden p-3'
           }
         >
-          <div className={location.view !== 'report' && location.view !== 'export' ? 'h-full' : 'hidden'}>{scene}</div>
+          <div className="h-full">{scene}</div>
           {!desktop && location.view === 'controls' && (
             <CompactSheet phone={phone} title="Controls" onClose={() => onLocation({ view: 'scene' })}>
               {controls}
             </CompactSheet>
-          )}
-          {location.view === 'report' && (
-            <div className="h-full overflow-y-auto overscroll-contain">
-              <Report liveCapture={liveCapture} summary={summary} />
-            </div>
-          )}
-          {location.view === 'export' && (
-            <div className="h-full overflow-y-auto overscroll-contain">
-              <ExportPanel liveCapture={liveCapture} summary={summary} />
-            </div>
           )}
         </main>
         <aside className={desktop ? 'overflow-auto overscroll-contain bg-chrome p-4' : 'hidden'}>{controls}</aside>
@@ -284,3 +242,4 @@ function presentationFontValue(
   if (policy.kind === 'fixed') return policy.defaultFixture;
   return activeFontFixture;
 }
+import { BENCHMARK_WORKLOAD_IDS, BENCHMARK_WORKLOADS } from '../workloads/catalog';

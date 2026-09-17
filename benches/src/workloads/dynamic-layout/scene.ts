@@ -134,15 +134,21 @@ export function animateDynamicLayoutEntries(
 ): void {
   if (!configuration.animationEnabled) return;
   const nextWidths = dynamicLayoutWidths(configuration, viewportWidth, timestamp, widthsScratch);
-  if (
-    entries.length === nextWidths.length &&
-    entries.every((entry, index) => entry.lastWidth !== undefined && Math.abs(nextWidths[index]! - entry.lastWidth) < 1)
-  ) {
-    return;
+  if (entries.length === nextWidths.length) {
+    let unchanged = true;
+    for (let index = 0; index < entries.length; index += 1) {
+      const previousWidth = entries[index]!.lastWidth;
+      if (previousWidth === undefined || Math.abs(nextWidths[index]! - previousWidth) >= 1) {
+        unchanged = false;
+        break;
+      }
+    }
+    if (unchanged) return;
   }
   const reflowStarted = performance.now();
   try {
-    for (const [index, entry] of entries.entries()) {
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index]!;
       entry.lastWidth = nextWidths[index]!;
       setDynamicLayoutWidth(entry, nextWidths[index]!);
     }
@@ -166,7 +172,8 @@ export function layoutDynamicLayoutEntries(
 ): void {
   const inset = 20;
   const laneHeight = viewportHeight / Math.max(1, entries.length);
-  for (const [index, entry] of entries.entries()) {
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
     const layout = committedTextMetrics(entry.text);
     const x =
       entry.alignment === 'end'
@@ -204,36 +211,26 @@ function updateLayoutBounds(
   const right = x + width;
   const bottom = -(y + height);
   const top = -y;
-  const vertices = [
-    x,
-    top,
-    0,
-    right,
-    top,
-    0,
-    right,
-    top,
-    0,
-    right,
-    bottom,
-    0,
-    right,
-    bottom,
-    0,
-    x,
-    bottom,
-    0,
-    x,
-    bottom,
-    0,
-    x,
-    top,
-    0,
-  ];
   if (!(positions.array instanceof Float32Array)) {
     throw new TypeError('dynamic layout bounds require a Float32 position buffer');
   }
-  positions.array.set(vertices);
+  const target = positions.array;
+  target[0] = x;
+  target[1] = top;
+  target[3] = right;
+  target[4] = top;
+  target[6] = right;
+  target[7] = top;
+  target[9] = right;
+  target[10] = bottom;
+  target[12] = right;
+  target[13] = bottom;
+  target[15] = x;
+  target[16] = bottom;
+  target[18] = x;
+  target[19] = bottom;
+  target[21] = x;
+  target[22] = top;
   positions.needsUpdate = true;
   bounds.geometry.computeBoundingSphere();
 }

@@ -294,12 +294,12 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       const resizeSceneStartedAt = performance.now();
       presentReflow(activeLine);
       const finishedAt = performance.now();
-      textUpdateTelemetry.record({
-        scheduleMs: 0,
-        readyMs: resizeSceneStartedAt - updateStartedAt,
-        sceneMs: finishedAt - resizeSceneStartedAt,
-        totalMs: finishedAt - updateStartedAt,
-      });
+      textUpdateTelemetry.record(
+        0,
+        resizeSceneStartedAt - updateStartedAt,
+        finishedAt - resizeSceneStartedAt,
+        finishedAt - updateStartedAt,
+      );
     } catch (error) {
       if (!closing && !disposed) onError(error);
     }
@@ -375,12 +375,12 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         const sceneStartedAt = performance.now();
         positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
         const sceneFinishedAt = performance.now();
-        textUpdateTelemetry.record({
-          scheduleMs: scheduledAt - textStarted,
-          readyMs: readyAt - scheduledAt,
-          sceneMs: sceneFinishedAt - sceneStartedAt,
-          totalMs: sceneFinishedAt - textStarted,
-        });
+        textUpdateTelemetry.record(
+          scheduledAt - textStarted,
+          readyAt - scheduledAt,
+          sceneFinishedAt - sceneStartedAt,
+          sceneFinishedAt - textStarted,
+        );
         startupMs = performance.now() - startupStarted;
         activationGate.resolve();
       } catch (error) {
@@ -532,12 +532,12 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       const updateSceneStartedAt = performance.now();
       const presented = presentReflow(activeLine);
       const finishedAt = performance.now();
-      textUpdateTelemetry.record({
-        scheduleMs: 0,
-        readyMs: updateSceneStartedAt - updateStartedAt,
-        sceneMs: finishedAt - updateSceneStartedAt,
-        totalMs: finishedAt - updateStartedAt,
-      });
+      textUpdateTelemetry.record(
+        0,
+        updateSceneStartedAt - updateStartedAt,
+        finishedAt - updateSceneStartedAt,
+        finishedAt - updateStartedAt,
+      );
       return presented;
     },
     deactivate() {

@@ -76,7 +76,7 @@ export function MobileNavigation({
 }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 grid h-[58px] grid-cols-4 border-t border-border bg-chrome p-2 min-[700px]:hidden">
-      {(['scene', 'controls', 'report', 'export'] as const).map((view) => (
+      {(['scene', 'controls'] as const).map((view) => (
         <button
           aria-pressed={location.view === view}
           className={`rounded-md font-mono text-[10px] capitalize ${location.view === view ? 'bg-surface-active text-foreground ring-1 ring-inset ring-accent' : 'text-muted hover:bg-surface hover:text-foreground'}`}

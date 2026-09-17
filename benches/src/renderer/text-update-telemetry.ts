@@ -1,11 +1,6 @@
-const SAMPLE_CAPACITY = 64;
+import { selectNearestRank } from './retained-quantile';
 
-export interface TextUpdateSample {
-  readonly scheduleMs: number;
-  readonly readyMs: number;
-  readonly sceneMs: number;
-  readonly totalMs: number;
-}
+const SAMPLE_CAPACITY = 64;
 
 export interface TextUpdateTimingSummary {
   readonly sampleCount: number;
@@ -20,7 +15,7 @@ export interface TextUpdateTimingSummary {
 }
 
 export interface TextUpdateTelemetry {
-  record(sample: TextUpdateSample): void;
+  record(scheduleMs: number, readyMs: number, sceneMs: number, totalMs: number): void;
   summary(): TextUpdateTimingSummary;
 }
 
@@ -41,21 +36,27 @@ export function createTextUpdateTelemetry(): TextUpdateTelemetry {
   const ready = new Float32Array(SAMPLE_CAPACITY);
   const scene = new Float32Array(SAMPLE_CAPACITY);
   const total = new Float32Array(SAMPLE_CAPACITY);
+  const scratch = new Float32Array(SAMPLE_CAPACITY);
   let length = 0;
   let nextIndex = 0;
   let current = EMPTY_SUMMARY;
+  let dirty = false;
 
   return {
-    record(sample) {
-      schedule[nextIndex] = sample.scheduleMs;
-      ready[nextIndex] = sample.readyMs;
-      scene[nextIndex] = sample.sceneMs;
-      total[nextIndex] = sample.totalMs;
+    record(scheduleMs, readyMs, sceneMs, totalMs) {
+      schedule[nextIndex] = scheduleMs;
+      ready[nextIndex] = readyMs;
+      scene[nextIndex] = sceneMs;
+      total[nextIndex] = totalMs;
       nextIndex = (nextIndex + 1) % SAMPLE_CAPACITY;
       length = Math.min(length + 1, SAMPLE_CAPACITY);
-      current = summarize(schedule, ready, scene, total, length);
+      dirty = true;
     },
     summary() {
+      if (dirty) {
+        current = summarize(schedule, ready, scene, total, scratch, length);
+        dirty = false;
+      }
       return current;
     },
   };
@@ -66,23 +67,18 @@ function summarize(
   ready: Float32Array,
   scene: Float32Array,
   total: Float32Array,
+  scratch: Float32Array,
   length: number,
 ): TextUpdateTimingSummary {
   return {
     sampleCount: length,
-    medianScheduleMs: percentile(schedule, length, 0.5),
-    medianReadyMs: percentile(ready, length, 0.5),
-    medianSceneMs: percentile(scene, length, 0.5),
-    medianTotalMs: percentile(total, length, 0.5),
-    p95ScheduleMs: percentile(schedule, length, 0.95),
-    p95ReadyMs: percentile(ready, length, 0.95),
-    p95SceneMs: percentile(scene, length, 0.95),
-    p95TotalMs: percentile(total, length, 0.95),
+    medianScheduleMs: selectNearestRank(schedule, scratch, length, 0.5),
+    medianReadyMs: selectNearestRank(ready, scratch, length, 0.5),
+    medianSceneMs: selectNearestRank(scene, scratch, length, 0.5),
+    medianTotalMs: selectNearestRank(total, scratch, length, 0.5),
+    p95ScheduleMs: selectNearestRank(schedule, scratch, length, 0.95),
+    p95ReadyMs: selectNearestRank(ready, scratch, length, 0.95),
+    p95SceneMs: selectNearestRank(scene, scratch, length, 0.95),
+    p95TotalMs: selectNearestRank(total, scratch, length, 0.95),
   };
-}
-
-function percentile(values: Float32Array, length: number, quantile: number): number {
-  if (length === 0) return 0;
-  const sorted = Array.from(values.subarray(0, length)).sort((left, right) => left - right);
-  return sorted[Math.min(length - 1, Math.ceil(length * quantile) - 1)] ?? 0;
 }

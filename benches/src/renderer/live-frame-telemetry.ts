@@ -1,3 +1,5 @@
+import { selectNearestRank } from './retained-quantile';
+
 const DEFAULT_CAPACITY = 1_024;
 const DEFAULT_REPORT_INTERVAL_MS = 250;
 const FPS_SMOOTHING_TIME_CONSTANT_MS = 250;
@@ -364,7 +366,7 @@ function estimateRefreshRateHz(
 ): number {
   const sampleCount = copyFiniteHistory(frameDurations, scratch, length, nextIndex);
   if (sampleCount < MINIMUM_REFRESH_ESTIMATE_SAMPLES) return 60;
-  const refreshPeriodMs = quantile(scratch, sampleCount, REFRESH_PERIOD_QUANTILE);
+  const refreshPeriodMs = selectNearestRank(scratch, scratch, sampleCount, REFRESH_PERIOD_QUANTILE);
   return refreshPeriodMs > 0 ? 1_000 / refreshPeriodMs : 60;
 }
 
@@ -407,15 +409,16 @@ function snapshot(options: {
     framesPerSecond,
     refreshRateHz: normalizedRefreshRate,
     frameBudgetMs: 1_000 / normalizedRefreshRate,
-    medianSubmitMs: quantile(submitQuantileScratch, submitLength, 0.5),
-    p95SubmitMs: quantile(submitQuantileScratch, submitLength, 0.95),
+    medianSubmitMs: selectNearestRank(submitQuantileScratch, submitQuantileScratch, submitLength, 0.5),
+    p95SubmitMs: selectNearestRank(submitQuantileScratch, submitQuantileScratch, submitLength, 0.95),
     minimumSubmitMs: historyMinimum(submitHistory, length, cursor.nextIndex),
     maximumSubmitMs: historyMaximum(submitHistory, length, cursor.nextIndex),
     minimumFramesPerSecond: historyMinimum(fpsHistory, length, cursor.nextIndex),
     maximumFramesPerSecond: historyMaximum(fpsHistory, length, cursor.nextIndex),
     gpuFrameMs: gpuTimingSupported ? latestGpuMs : undefined,
-    medianGpuMs: gpuLength === 0 ? undefined : quantile(gpuQuantileScratch, gpuLength, 0.5),
-    p95GpuMs: gpuLength === 0 ? undefined : quantile(gpuQuantileScratch, gpuLength, 0.95),
+    medianGpuMs:
+      gpuLength === 0 ? undefined : selectNearestRank(gpuQuantileScratch, gpuQuantileScratch, gpuLength, 0.5),
+    p95GpuMs: gpuLength === 0 ? undefined : selectNearestRank(gpuQuantileScratch, gpuQuantileScratch, gpuLength, 0.95),
     minimumGpuMs: gpuLength === 0 ? undefined : historyMinimum(gpuHistory, length, cursor.nextIndex),
     maximumGpuMs: gpuLength === 0 ? undefined : historyMaximum(gpuHistory, length, cursor.nextIndex),
     frameTimestampHistory,
@@ -468,33 +471,6 @@ function copyFiniteHistory(source: Float32Array, target: Float32Array, length: n
 
 function historyStart(length: number, nextIndex: number, capacity: number): number {
   return (nextIndex - length + capacity) % capacity;
-}
-
-/** Selects the nearest-rank quantile in place without sorting or allocating a prefix view. */
-function quantile(values: Float32Array, length: number, fraction: number): number {
-  if (length === 0) return 0;
-  const selectedIndex = Math.min(length - 1, Math.ceil(length * fraction) - 1);
-  let left = 0;
-  let right = length - 1;
-  while (left < right) {
-    const pivot = values[(left + right) >>> 1] ?? 0;
-    let lower = left;
-    let upper = right;
-    while (lower <= upper) {
-      while ((values[lower] ?? 0) < pivot) lower += 1;
-      while ((values[upper] ?? 0) > pivot) upper -= 1;
-      if (lower > upper) break;
-      const value = values[lower] ?? 0;
-      values[lower] = values[upper] ?? 0;
-      values[upper] = value;
-      lower += 1;
-      upper -= 1;
-    }
-    if (selectedIndex <= upper) right = upper;
-    else if (selectedIndex >= lower) left = lower;
-    else break;
-  }
-  return values[selectedIndex] ?? 0;
 }
 
 function optionalPositive(value: number | undefined, label: string): number | undefined {
