@@ -13,7 +13,7 @@ sources:
     title: Package manifest
   - id: release-workflow
     resource: ../../../.github/workflows/release.yml
-    title: npm canary release workflow
+    title: npm stable and canary release workflow
   - id: public-api
     resource: ../../../packages/glyph/src/index.ts
     title: Renderer-neutral public exports
@@ -123,7 +123,12 @@ generated:
 
 # Package reference: `@pmndrs/glyph`
 
-Status: foundation merged; canary publishing configured while publishing-feature stacks continue
+Status: foundation merged; stable and canary publishing configured while publishing-feature stacks continue
+
+The release workflow publishes main-branch pushes under npm's `canary` tag. A pushed `vMAJOR.MINOR.PATCH` Git tag
+publishes under `latest` only when it matches the package manifest version exactly. Both paths build and check the
+package before publishing through the existing npm trusted publisher. Prepare each release's version separately,
+then cut its stable tag from the reviewed commit after CI passes.
 
 ## Ownership
 

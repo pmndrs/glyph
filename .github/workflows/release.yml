@@ -4,18 +4,20 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: release-canary-${{ github.ref }}
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   publish:
-    name: Publish canary to npm
+    name: Publish to npm
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -40,20 +42,36 @@ jobs:
       - name: Build and test package
         run: pnpm --filter @pmndrs/glyph check
 
-      - name: Set canary version
+      - name: Select release version and npm tag
         id: version
         working-directory: packages/glyph
         shell: bash
         run: |
-          base_version="$(node -p "require('./package.json').version.split('-')[0]")"
-          release_date="$(date -u +%Y%m%d)"
-          canary_version="${base_version}-canary-${GITHUB_SHA::8}-${release_date}"
-          pnpm version "${canary_version}" --no-git-tag-version
-          echo "version=${canary_version}" >> "${GITHUB_OUTPUT}"
+          base_version="$(node -p "require('./package.json').version")"
+          if [[ "${GITHUB_REF_TYPE}" == 'tag' ]]; then
+            if [[ ! "${GITHUB_REF_NAME}" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || [[ "${GITHUB_REF_NAME}" != "v${base_version}" ]]; then
+              echo 'Stable release tags must match the package version exactly (vMAJOR.MINOR.PATCH).' >&2
+              exit 1
+            fi
+            release_version="${base_version}"
+            npm_tag='latest'
+          else
+            release_date="$(date -u +%Y%m%d)"
+            release_version="${base_version%%-*}-canary-${GITHUB_SHA::8}-${release_date}"
+            pnpm version "${release_version}" --no-git-tag-version
+            npm_tag='canary'
+          fi
+          echo "version=${release_version}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${npm_tag}" >> "${GITHUB_OUTPUT}"
 
-      - name: Publish canary
+      - name: Publish package
         working-directory: packages/glyph
-        run: pnpm publish --tag canary --access public --no-git-checks
+        env:
+          NPM_DIST_TAG: ${{ steps.version.outputs.tag }}
+        run: pnpm publish --tag "${NPM_DIST_TAG}" --access public --no-git-checks
 
       - name: Add release summary
-        run: echo "Published @pmndrs/glyph@${{ steps.version.outputs.version }} with the canary tag." >> "${GITHUB_STEP_SUMMARY}"
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          NPM_DIST_TAG: ${{ steps.version.outputs.tag }}
+        run: echo "Published @pmndrs/glyph@${RELEASE_VERSION} with the ${NPM_DIST_TAG} tag." >> "${GITHUB_STEP_SUMMARY}"

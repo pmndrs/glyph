@@ -1,5 +1,12 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-18
+
+- **Added tagged stable publishing alongside canaries** — Extended the existing npm publishing workflow so matching
+  `vMAJOR.MINOR.PATCH` tags publish to `latest`, while main-branch pushes continue publishing canaries. Both paths run
+  the package check before publication. Version bumps and release preparation remain separate changes.
+  See [the package reference](packages/glyph.md).
+
 ## 2026-09-17
 
 - **Removed HarfBuzz compilation from ordinary CI** — Replaced benchmark-local Meson/Ninja setup and Ubuntu GLib
