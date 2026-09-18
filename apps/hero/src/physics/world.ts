@@ -1,11 +1,28 @@
 import { deltaAngle, lerp, quat, vec3, type Vec3 } from 'math';
 
-import type Box3D from 'box3d.js/inline';
-export type Box3DModule = Awaited<ReturnType<typeof Box3D>>;
-/** px, py, pz, qx, qy, qz, qw at the Box3D boundary. */
-export const POSE_STRIDE = 7;
+import {
+  addBroadphaseLayer,
+  addObjectLayer,
+  box,
+  convexHull,
+  createWorld,
+  createWorldSettings,
+  dof,
+  enableCollision,
+  MaterialCombineMode,
+  MotionType,
+  registerShapes,
+  rigidBody,
+  staticCompound,
+  updateWorld,
+  type Listener,
+  type RigidBody,
+} from 'crashcat';
 
-type Body = ReturnType<Box3DModule['b3CreateBody']>;
+registerShapes([box.def, convexHull.def, staticCompound.def]);
+
+/** px, py, pz, qx, qy, qz, qw in the retained pose stream. */
+export const POSE_STRIDE = 7;
 
 export interface LetterSpec {
   readonly position: Vec3;
@@ -35,82 +52,90 @@ const LETTER_FRICTION = 0.9;
 const FLOOR_THICKNESS = 1;
 const ROBOT_ROUNDING_SIDES = 10;
 
-/** Fixed-capacity application state. Box3D owns the physical world and its reusable event views. */
+/** Retain bodies, collision storage, and render poses for the lifetime of the scene. */
 export function createTitleWorld(
-  b3: Box3DModule,
   letters: readonly LetterSpec[],
   floorTop: number,
   robotHalfExtents: readonly [number, number, number],
 ) {
+  const settings = createWorldSettings();
+  settings.gravity = [0, 0, -80];
+  settings.solver.minVelocityForRestitution = 25;
+  const movingLayer = addObjectLayer(settings, addBroadphaseLayer(settings));
+  const floorLayer = addObjectLayer(settings, addBroadphaseLayer(settings));
+  const parkedLayer = addObjectLayer(settings, addBroadphaseLayer(settings));
+  enableCollision(settings, movingLayer, movingLayer);
+  enableCollision(settings, movingLayer, floorLayer);
+  const world = createWorld(settings);
   const poses = new Float32Array(letters.length * POSE_STRIDE);
   const letterByBody = new Map<number, number>();
-  const letterByShape = new Map<number, number>();
-  const worldDef = b3.b3DefaultWorldDef();
-  worldDef.gravity = [0, 0, -80];
-  worldDef.restitutionThreshold = 25;
-  const world = b3.b3CreateWorld(worldDef);
-  const events = b3.createEventsBuffer();
-  const move = b3.createBodyMoveEvent();
-  const touch = b3.createContactTouchEvent();
 
-  const bodies: Body[] = [];
-
-  for (const [index, letter] of letters.entries()) {
-    const bodyDef = b3.b3DefaultBodyDef();
-    bodyDef.type = b3.b3BodyType.b3_dynamicBody;
-    bodyDef.position = letter.position;
-    // Flat on the floor for good: it slides and turns in the plane, and rises and falls, but never tips.
-    bodyDef.motionLocks = {
-      linearX: false,
-      linearY: false,
-      linearZ: false,
-      angularX: true,
-      angularY: true,
-      angularZ: false,
-    };
-    const body = b3.b3CreateBody(world, bodyDef);
-    const shapeDef = b3.b3DefaultShapeDef();
-    shapeDef.density = 8;
-    shapeDef.enableContactEvents = true;
-    shapeDef.baseMaterial.restitution = 0.3;
-    shapeDef.baseMaterial.friction = LETTER_FRICTION;
-
-    for (const prism of letter.prisms) {
-      const hull = b3.b3CreateHull(prism);
-
-      if (hull === null) continue;
-
-      const shape = b3.b3CreateHullShape(body, shapeDef, hull);
-      letterByShape.set(shape.index1, index);
-      // The world keeps its own copy of the hull.
-      b3.b3DestroyHull(hull);
-    }
-
-    bodies.push(body);
-    letterByBody.set(body.index1, index);
+  const bodies = letters.map((letter, index) => {
+    const shape = staticCompound.create({
+      children: letter.prisms.map((prism) => ({
+        position: vec3.create(),
+        quaternion: quat.create(),
+        shape: convexHull.create({ positions: [...prism], density: 8, convexRadius: 0, hullTolerance: 1e-6 }),
+      })),
+    });
+    const body = rigidBody.create(world, {
+      motionType: MotionType.DYNAMIC,
+      objectLayer: movingLayer,
+      shape,
+      position: letter.position,
+      // Letters slide, rise, and turn around the floor normal without tipping.
+      allowedDegreesOfFreedom: dof(true, true, true, false, false, true),
+      linearDamping: 0,
+      angularDamping: 0,
+      friction: LETTER_FRICTION,
+      restitution: 0.3,
+      frictionCombineMode: MaterialCombineMode.GEOMETRIC_MEAN,
+      restitutionCombineMode: MaterialCombineMode.MAX,
+    });
+    letterByBody.set(body.id, index);
     vec3.toBuffer(poses, letter.position, index * POSE_STRIDE);
     poses[index * POSE_STRIDE + 6] = 1;
-  }
 
-  const floorDef = b3.b3DefaultBodyDef();
-  floorDef.type = b3.b3BodyType.b3_staticBody;
-  floorDef.position = [0, 0, floorTop - FLOOR_THICKNESS / 2];
-  const floor = b3.b3CreateBody(world, floorDef);
-  const floorShapeDef = b3.b3DefaultShapeDef();
-  floorShapeDef.enableContactEvents = true;
-  floorShapeDef.baseMaterial.friction = LETTER_FRICTION;
-  const floorShape = b3.b3CreateBoxShape(floor, floorShapeDef, 80, 80, FLOOR_THICKNESS / 2).index1;
+    return body;
+  });
 
-  return {
-    b3,
+  const floor = rigidBody.create(world, {
+    motionType: MotionType.STATIC,
+    objectLayer: floorLayer,
+    position: [0, 0, floorTop - FLOOR_THICKNESS / 2],
+    shape: box.create({ halfExtents: [80, 80, FLOOR_THICKNESS / 2], convexRadius: 0 }),
+    friction: LETTER_FRICTION,
+    restitution: 0,
+    frictionCombineMode: MaterialCombineMode.GEOMETRIC_MEAN,
+    restitutionCombineMode: MaterialCombineMode.MAX,
+  });
+  const robot = rigidBody.create(world, {
+    motionType: MotionType.STATIC,
+    objectLayer: parkedLayer,
+    shape: convexHull.create({ positions: stadium(robotHalfExtents), convexRadius: 0 }),
+    friction: 0.1,
+    frictionCombineMode: MaterialCombineMode.GEOMETRIC_MEAN,
+    allowSleeping: false,
+  });
+
+  const listener: Listener = {
+    onContactAdded(a, b) {
+      const letter = a === floor ? letterByBody.get(b.id) : b === floor ? letterByBody.get(a.id) : undefined;
+
+      if (letter === undefined || state.airborne[letter] === 0) return;
+
+      state.airborne[letter] = 0;
+      state.landed[state.landedCount++] = letter;
+    },
+  };
+
+  const state = {
     world,
-    events,
-    move,
-    touch,
+    listener,
+    movingLayer,
+    parkedLayer,
+    floor,
     letters: bodies,
-    letterByBody,
-    letterByShape,
-    floorShape,
     poses,
     held: new Uint8Array(letters.length),
     airborne: new Uint8Array(letters.length),
@@ -120,13 +145,15 @@ export function createTitleWorld(
     landed: new Uint32Array(letters.length),
     landedCount: 0,
     accumulator: 0,
-    robot: createRobotBody(b3, world, robotHalfExtents),
+    robot,
     robotActive: false,
     robotFrom: { x: 0, y: 0, z: 0, heading: 0 },
     transform: { position: vec3.create(), quaternion: quat.create() },
     velocity: vec3.create(),
     angular: vec3.create(),
   };
+
+  return state;
 }
 
 export type TitleWorld = ReturnType<typeof createTitleWorld>;
@@ -146,7 +173,7 @@ export function readTitlePose(out: ReturnType<typeof createHeldPose>, world: Tit
 
 export function holdLetter(state: TitleWorld, index: number, pose: HeldPose): void {
   if (state.held[index] === 0) {
-    state.b3.b3Body_SetType(state.letters[index]!, state.b3.b3BodyType.b3_kinematicBody);
+    rigidBody.setMotionType(state.world, state.letters[index]!, MotionType.KINEMATIC, true);
     state.airborne[index] = 0;
     readTitlePose(state.from[index]!, state, index);
     state.held[index] = 1;
@@ -163,39 +190,37 @@ function setTransform(state: TitleWorld, x: number, y: number, z: number, yaw: n
 export function swallowLetter(state: TitleWorld, index: number): void {
   state.held[index] = 0;
   state.airborne[index] = 0;
-  state.b3.b3Body_Disable(state.letters[index]!);
+  parkBody(state, state.letters[index]!);
 }
 
 export function reviveLetter(state: TitleWorld, index: number, pose: HeldPose): void {
-  const { b3 } = state;
   const body = state.letters[index]!;
   setTransform(state, pose.x, pose.y, pose.z, pose.yaw);
-  b3.b3Body_SetTransform(body, state.transform.position, state.transform.quaternion);
-  b3.b3Body_SetLinearVelocity(body, vec3.zero(state.velocity));
-  b3.b3Body_SetAngularVelocity(body, vec3.zero(state.angular));
-  b3.b3Body_Enable(body);
+  rigidBody.setTransform(state.world, body, state.transform.position, state.transform.quaternion, true);
+  rigidBody.setLinearVelocity(state.world, body, vec3.zero(state.velocity));
+  rigidBody.setAngularVelocity(state.world, body, vec3.zero(state.angular));
+  rigidBody.setObjectLayer(state.world, body, state.movingLayer);
+  rigidBody.setMotionType(state.world, body, MotionType.KINEMATIC, true);
   writePose(state, index, state.transform.position, state.transform.quaternion);
 }
 
 export function releaseLetter(state: TitleWorld, index: number, velocity: Vec3, spin: number): void {
   if (state.held[index] === 0) return;
 
-  const { b3 } = state;
   const body = state.letters[index]!;
   const to = state.to[index]!;
   setTransform(state, to.x, to.y, to.z, to.yaw);
-  b3.b3Body_SetTransform(body, state.transform.position, state.transform.quaternion);
+  rigidBody.setTransform(state.world, body, state.transform.position, state.transform.quaternion, true);
   state.held[index] = 0;
-  b3.b3Body_SetType(body, b3.b3BodyType.b3_dynamicBody);
-  b3.b3Body_SetLinearVelocity(body, velocity);
-  b3.b3Body_SetAngularVelocity(body, vec3.set(state.angular, 0, 0, spin));
-  b3.b3Body_SetAwake(body, true);
+  rigidBody.setMotionType(state.world, body, MotionType.DYNAMIC, true);
+  rigidBody.setLinearVelocity(state.world, body, velocity);
+  rigidBody.setAngularVelocity(state.world, body, vec3.set(state.angular, 0, 0, spin));
   state.airborne[index] = 1;
 }
 
 /** Fixed 60 Hz integration. Event arrays belong to state and expire at the next step. */
 export function stepTitleWorld(state: TitleWorld, delta: number, target: RobotTarget | undefined): void {
-  const { b3, transform, robotFrom } = state;
+  const { transform, robotFrom } = state;
   arrive(state, target);
   state.accumulator = Math.min(state.accumulator + delta, STEP * 4);
   const substeps = Math.floor(state.accumulator / STEP);
@@ -214,7 +239,7 @@ export function stepTitleWorld(state: TitleWorld, delta: number, target: RobotTa
         target.z,
         robotFrom.heading + deltaAngle(robotFrom.heading, target.heading) * t,
       );
-      b3.b3Body_SetTargetTransform(state.robot, transform, STEP, true);
+      rigidBody.moveKinematic(state.robot, transform.position, transform.quaternion, STEP);
     }
 
     for (let index = 0; index < state.letters.length; index++) {
@@ -229,37 +254,20 @@ export function stepTitleWorld(state: TitleWorld, delta: number, target: RobotTa
         lerp(from.z, to.z, t),
         from.yaw + deltaAngle(from.yaw, to.yaw) * t,
       );
-      b3.b3Body_SetTargetTransform(state.letters[index]!, transform, STEP, true);
+      rigidBody.wake(state.world, state.letters[index]!);
+      rigidBody.moveKinematic(state.letters[index]!, transform.position, transform.quaternion, STEP);
     }
 
-    b3.b3World_Step(state.world, STEP, 4);
-    b3.getEvents(state.events, state.world);
+    // Four collision steps keep the fast smash from crossing thin letter and floor solids.
+    for (let step = 0; step < 4; step++) updateWorld(state.world, state.listener, STEP / 4);
 
-    for (let index = 0; index < b3.getNumBodyMoveEvents(state.events); index++) {
-      const event = b3.getBodyMoveEventAt(state.move, state.events, index);
-      const letter = state.letterByBody.get(event.bodyId.index1);
+    for (let index = 0; index < state.letters.length; index++) {
+      const body = state.letters[index]!;
 
-      if (letter === undefined) continue;
+      if (body.objectLayer === state.parkedLayer) continue;
 
-      writePose(state, letter, event.position, event.rotation);
-      state.moved[letter] = 1;
-    }
-
-    for (let index = 0; index < b3.getNumContactBeginEvents(state.events); index++) {
-      const touch = b3.getContactBeginEventAt(state.touch, state.events, index);
-      const a = touch.shapeIdA.index1;
-      const b = touch.shapeIdB.index1;
-      const letter =
-        a === state.floorShape
-          ? state.letterByShape.get(b)
-          : b === state.floorShape
-            ? state.letterByShape.get(a)
-            : undefined;
-
-      if (letter === undefined || state.airborne[letter] === 0) continue;
-
-      state.airborne[letter] = 0;
-      state.landed[state.landedCount++] = letter;
+      writePose(state, index, body.position, body.quaternion);
+      state.moved[index] = 1;
     }
   }
 
@@ -281,37 +289,23 @@ export function stepTitleWorld(state: TitleWorld, delta: number, target: RobotTa
 }
 
 export function destroyTitleWorld(state: TitleWorld): void {
-  state.b3.destroyEventsBuffer(state.events);
-  state.b3.b3DestroyWorld(state.world);
+  for (const body of state.letters) rigidBody.remove(state.world, body);
+
+  rigidBody.remove(state.world, state.robot);
+  rigidBody.remove(state.world, state.floor);
 }
 
-/** Allocate the robot collider during preparation, before its first visible drive. */
-function createRobotBody(
-  b3: Box3DModule,
-  world: ReturnType<Box3DModule['b3CreateWorld']>,
-  halfExtents: readonly [number, number, number],
-): Body {
-  const def = b3.b3DefaultBodyDef();
-  def.type = b3.b3BodyType.b3_kinematicBody;
-  def.isEnabled = false;
-  const body = b3.b3CreateBody(world, def);
-  const shape = b3.b3DefaultShapeDef();
-  shape.baseMaterial.friction = 0.1;
-  const hull = b3.b3CreateHull(stadium(halfExtents));
-
-  if (hull !== null) {
-    b3.b3CreateHullShape(body, shape, hull);
-    b3.b3DestroyHull(hull);
-  }
-
-  return body;
+/** Park hidden bodies without rebuilding their shapes when playback reuses them. */
+function parkBody(state: TitleWorld, body: RigidBody): void {
+  rigidBody.setObjectLayer(state.world, body, state.parkedLayer);
+  rigidBody.setMotionType(state.world, body, MotionType.STATIC, false);
 }
 
 function arrive(state: TitleWorld, target: RobotTarget | undefined): void {
-  const { b3, robotFrom } = state;
+  const { robotFrom } = state;
 
   if (target === undefined) {
-    if (state.robotActive) b3.b3Body_Disable(state.robot);
+    if (state.robotActive) parkBody(state, state.robot);
 
     state.robotActive = false;
 
@@ -323,11 +317,14 @@ function arrive(state: TitleWorld, target: RobotTarget | undefined): void {
 
   if (!state.robotActive || dx * dx + dy * dy > 2.5 * 2.5) {
     setTransform(state, target.x, target.y, target.z, target.heading);
-    b3.b3Body_SetTransform(state.robot, state.transform.position, state.transform.quaternion);
-    b3.b3Body_SetLinearVelocity(state.robot, vec3.zero(state.velocity));
-    b3.b3Body_SetAngularVelocity(state.robot, vec3.zero(state.angular));
+    rigidBody.setTransform(state.world, state.robot, state.transform.position, state.transform.quaternion, true);
+    rigidBody.setLinearVelocity(state.world, state.robot, vec3.zero(state.velocity));
+    rigidBody.setAngularVelocity(state.world, state.robot, vec3.zero(state.angular));
 
-    if (!state.robotActive) b3.b3Body_Enable(state.robot);
+    if (!state.robotActive) {
+      rigidBody.setObjectLayer(state.world, state.robot, state.movingLayer);
+      rigidBody.setMotionType(state.world, state.robot, MotionType.KINEMATIC, true);
+    }
 
     robotFrom.x = target.x;
     robotFrom.y = target.y;

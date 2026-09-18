@@ -2,6 +2,14 @@
 
 ## 2026-09-19
 
+- **Moved hero physics to Crashcat** — Replaced Box3D with pinned Crashcat 0.0.5 and created the compact `physics`
+  domain. It owns retained bodies, outline compound colliders, fixed stepping, landing events, and replay reuse.
+  Typography keeps glyph geometry, animation, and rendering. Lift/drop and robot-push behavior checks passed on
+  both engines, with the Crashcat checks also covering robot departure. Five numerical tests, static checks, build,
+  and WebGPU lift/settle and finale/replay checks pass. Two 1080p replays averaged 59.99 fps with no late resources
+  or long tasks, and three render intervals over 25 ms. The existing stale Geist Medium bake still blocks the full
+  package check. See [the hero reference](packages/hero.md).
+
 - **Separated hero code blocks for readability** — Added blank lines around hook callbacks, loops, branches,
   and other blocks, and before returns. Comments stay attached to their blocks and related control-flow clauses
   stay together. Source changes contain only blank-line additions. Typecheck, lint, and formatting pass.

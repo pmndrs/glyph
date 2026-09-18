@@ -68,9 +68,9 @@ importers:
       '@react-three/fiber':
         specifier: catalog:renderer
         version: 10.0.0-alpha.4(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
-      box3d.js:
-        specifier: 0.1.1
-        version: 0.1.1
+      crashcat:
+        specifier: 0.0.5
+        version: 0.0.5(three@0.185.1)
       koota:
         specifier: 0.6.6-canary.63c1187
         version: 0.6.6-canary.63c1187(@types/react@19.2.14)(react@19.2.8)
@@ -2916,9 +2916,6 @@ packages:
     resolution: {integrity: sha512-2cGmJupaNgg+QUwVLAucDuWuoMZ6EX9iHDRswZ5lsNYEmwPaRknMPCLZz07yTzVq/83p4o/wzbDZbBrTvGGTIw==}
     engines: {node: '>=18'}
 
-  box3d.js@0.1.1:
-    resolution: {integrity: sha512-N3jkFuCpj5WxW3gmJDj/ai9Ticq6bIMMRk/tIJBkeOw4VZviHv6pAQEDFQczRwQQEtIo32Iy6OyhyxPxhzdF6w==}
-
   brace-expansion@5.0.12:
     resolution: {integrity: sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==}
     engines: {node: 20 || >=22}
@@ -3047,6 +3044,14 @@ packages:
       typescript: '>=4.9.5'
     peerDependenciesMeta:
       typescript:
+        optional: true
+
+  crashcat@0.0.5:
+    resolution: {integrity: sha512-8BcoWz5sfUxUTCzFlBImHNsWei4Wso18MOHkjeZjgEGCq+SPlbYr65USCCeVsEOTq1GM6Aai/HHvmgfpKw61dQ==}
+    peerDependencies:
+      three: '>=0.182.0'
+    peerDependenciesMeta:
+      three:
         optional: true
 
   cross-env@7.0.3:
@@ -3938,6 +3943,9 @@ packages:
 
   math@0.1.0:
     resolution: {integrity: sha512-hq5KkLblFiR8OO8ZYqPK02mBqrXuxJ6hwvhL3ZM9OFkAR82/20n4H768SWl4yVVrufh8VijEm42D4V9N8hDa2g==}
+
+  mathcat@0.0.13:
+    resolution: {integrity: sha512-d5KhlEP3p6/ACSGpgwSBPCiiubdVXYb95mkK/rfQd5DirqHjMTYpvX5AP3vZXiQGO4y9DomRgSjOYwXW3dhA+w==}
 
   media-typer@1.1.1:
     resolution: {integrity: sha512-yz3xRaG20c6/BOzvYoDaGtPmGscs7YivItZEEqe6GbwNfHuxu9YNmvnEkMzKldAGY4/80pRcQRZSEnhquk9XuQ==}
@@ -6923,8 +6931,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  box3d.js@0.1.1: {}
-
   brace-expansion@5.0.12:
     dependencies:
       balanced-match: 4.0.4
@@ -7044,6 +7050,12 @@ snapshots:
       parse-json: 5.2.0
     optionalDependencies:
       typescript: 7.0.2
+
+  crashcat@0.0.5(three@0.185.1):
+    dependencies:
+      mathcat: 0.0.13
+    optionalDependencies:
+      three: 0.185.1
 
   cross-env@7.0.3:
     dependencies:
@@ -7828,6 +7840,8 @@ snapshots:
   math-intrinsics@1.1.0: {}
 
   math@0.1.0: {}
+
+  mathcat@0.0.13: {}
 
   media-typer@1.1.1: {}
 

@@ -5,7 +5,7 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:e9caa28299a660450795041a881c3e472eb69179b3dea20ced66903160ec08e9'
+source_digest: 'sha256:fdc7a9b98a0d99914531a5aa387dc43da28e4df3da0e324f7b4579fd5d2c3a50'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -51,8 +51,8 @@ sources:
     resource: ../../../apps/hero/scripts/robot-dust.probe.ts
     title: WebGPU glyph dust and fade controls
   - id: title-world
-    resource: ../../../apps/hero/src/typography/physics.ts
-    title: Box3D world for the letters and the robot
+    resource: ../../../apps/hero/src/physics/world.ts
+    title: Crashcat world for the letters and the robot
   - id: outline
     resource: ../../../apps/hero/src/typography/outline.ts
     title: Letter outlines cut into invisible colliders
@@ -93,8 +93,8 @@ sources:
     resource: ../../../apps/hero/src/field/lattice.test.ts
     title: Matrix equivalence, bounded simulation, and edge-on morph checks
   - id: physics-check
-    resource: ../../../apps/hero/src/typography/physics.test.ts
-    title: Held targets and one landing notification per release
+    resource: ../../../apps/hero/src/physics/world.test.ts
+    title: Lift, bounce, landing, revival, and robot collision checks
   - id: world
     resource: ../../../apps/hero/src/world.ts
     title: Koota world and retained domain entities
@@ -104,9 +104,6 @@ sources:
   - id: frameloop
     resource: ../../../apps/hero/src/frameloop.tsx
     title: R3F clock, input, and development controls
-  - id: world-check
-    resource: ../../../apps/hero/src/world.test.ts
-    title: Isolated worlds, preparation, and complete headless replay cycles
 generated:
   by: anthropic/claude-opus-5
   at: '2026-09-18T09:20:00Z'
@@ -124,14 +121,15 @@ and reusable materials keep named storage. Comments describe the current algorit
 
 Koota is pinned to `0.6.6-canary.63c1187` for the default scene's domain state. The organization follows the local
 `threejs-conf-talk` and `minecraft-like` examples: domains own traits and systems, actions own discrete transitions,
-and renderers read simulation state and own mounted resources. Four domains cover the default scene:
+and renderers read simulation state and own mounted resources. Five domains cover the default scene:
 
-| Domain       | Ownership                                                                                     |
-| ------------ | --------------------------------------------------------------------------------------------- |
-| `sequence`   | Shared clock/input, replay, retained impact ring, collapse timeline, and finale drawing       |
-| `typography` | Title colliders and matrix stream, feature typing, retained glyph views, and glass projection |
-| `field`      | Two icon sheets, layout, spring simulation, morphs, and glyph rendering                       |
-| `robot`      | Run scheduling, path/footprint, distance-driven dust, rig animation, and face display         |
+| Domain       | Ownership                                                                                          |
+| ------------ | -------------------------------------------------------------------------------------------------- |
+| `sequence`   | Shared clock/input, replay, retained impact ring, collapse timeline, and finale drawing            |
+| `typography` | Glyph outlines, title animation and matrices, feature typing, retained views, and glass projection |
+| `physics`    | Crashcat world, rigid bodies, fixed stepping, collision events, and retained poses                 |
+| `field`      | Two icon sheets, layout, spring simulation, morphs, and glyph rendering                            |
+| `robot`      | Run scheduling, path/footprint, distance-driven dust, rig animation, and face display              |
 
 `world.ts` creates independent worlds with five entities: one robot, title, and typing record, plus two fields.
 Koota AoS traits retain the existing math arrays and pools; high-frequency values never pass through React state.
@@ -143,8 +141,8 @@ actions. Replay closes held finales, clears inspection poses, and waits for a fr
 or restarting the robot.
 
 Related views share each domain's `renderer.tsx`; numerical kernels and the large shadow pass stay separate where
-they have independent responsibilities. The source root contains only six application-wide files: `main.tsx`,
-`hero.tsx`, `world.ts`, `systems.ts`, `frameloop.tsx`, and the cross-domain `world.test.ts`. Typography owns fonts, copy,
+they have independent responsibilities. The source root contains five application-wide files: `main.tsx`,
+`hero.tsx`, `world.ts`, `systems.ts`, and `frameloop.tsx`. Typography owns fonts, copy,
 glass materials, and brand accents; field owns its icon catalog, palette, and flat material; robot owns its face
 material; sequence owns finale uniforms, warp, stars, and post-processing. The `view` domain owns preparation,
 page styles, lighting, and paper; `origin` owns its composition, copy, and materials. Domain tests live
@@ -153,16 +151,28 @@ beside their implementations.
 The old, unmounted break/rewind presentation and its exclusive director and compressed recording code/tests were
 removed during the Koota migration. The root cleanup also removed retired ink, glass, and silhouette variants and
 their unused uniforms. Materials and post-processing now live in their domains. Browser checks own common playback stories: title lift and landing, robot dust, typed text, collapse, blackness,
-and Space replay. Four numerical tests retain precise evidence for glyph transforms, edge-on motif changes,
-bounded pointer response, and one collision notification per released letter. These checks catch errors that
+and Space replay. Five numerical tests retain precise evidence for glyph transforms, edge-on motif changes,
+bounded pointer response, lift/drop/revival with one landing notification, and robot pushes without tipping or
+leaving an invisible collider behind. These checks catch errors that
 pixel comparisons cannot isolate reliably. Buffer identity and duplicate timeline/path tests are omitted.
 
 The application pins Poimandres' `math` package at `0.1.0` for the default scene's CPU simulation and transforms. Its upstream
 skill is installed at `.agents/skills/math/SKILL.md` from `pmndrs/math` commit
 `c6713e38dd86de6e3e5bf98b94e22c2a29e4a709`, matching the published package's `gitHead`.
 The title physics adapter, title motion, and retained typing lines expose creation, update, and disposal functions
-over caller-owned records. Math tuples hold transform scratch; the physics pose stream stays in a `Float32Array`
-at the Wasm boundary. Three matrices and scene objects remain at the rendering boundary.
+over caller-owned records. Math tuples hold transform scratch. Physics publishes a retained `Float32Array` pose
+stream for the title matrix updates. Three matrices and scene objects remain at the rendering boundary.
+
+The `physics` domain pins `crashcat@0.0.5` and owns its adapter in `src/physics/world.ts`, with behavior checks
+beside it. Typography supplies outline prisms and animation targets. Crashcat combines each letter's prisms into
+an immutable compound collider with a BVH, preserving counters and concave outlines. Only box, convex-hull,
+and static-compound shape implementations are registered. World and shape creation are synchronous and happen
+during preparation, without a physics Wasm download. The adapter keeps 60 Hz updates with four collision substeps,
+gravity along negative z, free translation and yaw, and locked pitch/roll. Material mixing preserves the configured
+friction and bounce threshold. Hidden letters and the absent robot remain allocated on a noncolliding layer as
+static bodies, then return to kinematic or dynamic motion when playback needs them. No colliders are rebuilt on replay.
+Different solvers can produce different resting positions and contact timing. The migration preserves the interaction
+and animation contracts rather than identical trajectories.
 
 The icon field composes glyph transforms directly, replacing 1,108 temporary Three groups. Its neighbour graph,
 motif candidates, swap flags, selected records, and twelve wave slots are allocated once. Motif changes use a seeded
@@ -181,13 +191,13 @@ library internals are outside that claim. Scene-authored dimensions and flight d
 used as coordinate frames are invertible, and frame deltas are nonnegative.
 
 The field tests compare direct transforms with Three's matrix composition, bound pointer disturbances, and check
-edge-on motif substitution. The physics test uses real Box3D contacts to distinguish one landing event from repeated
-contact notifications. WebGPU checks cover visible robot emission and fade, finale timing, and replay.
+edge-on motif substitution. The physics tests use real Crashcat contacts to verify bounce, one landing per release, revival, and robot pushes
+without tipping or leaving collisions after departure. WebGPU checks cover visible robot emission and fade, finale timing, and replay.
 
 The default scene builds two interleaved lattices of eleven icons on mass-spring grids at different depths, scaled
 so they interleave on screen and stay in phase. The Slug-glass `Glyph` and feature line start at rest. Press Space
 to lift the title towards the camera and smash it back down. The lift is carried, 35 ms per letter, to just short
-of the camera; the fall is simulated. Each letter is a rigid body in a Box3D world with a static floor: it is thrown
+of the camera; the fall is simulated. Each letter is a rigid body in a Crashcat world with a static floor: it is thrown
 down with a little sideways drift and spin, rebounds once, and comes to rest wherever friction stops it, a touch off
 its mark and off square, differently on every replay. The floor's first contact with each letter is what strikes
 the lattices, so the impacts land where the letters actually do. The feature line retypes after the final landing.
@@ -290,6 +300,14 @@ p95. Both runs used the Apple Metal adapter and Chromium 149. This comparison do
 cadence regression, but cannot verify 60 fps recording readiness under those conditions. The cap remains 60 fps;
 the migration does not claim a fresh 60 fps measurement. A CPU profile placed most sampled wall time in idle and
 rendering work; it does not establish the cause of the slowdown shared by both versions.
+
+The Crashcat migration passes five numerical tests and the WebGPU lift/settle and finale/replay checks. Two complete
+1920×1080 replays on Apple Metal with Chromium 149 averaged 59.99 fps across 1,702 frames after 3.10 seconds of
+preparation. No late shader programs, pipelines, meshes, assets, or long tasks were observed. Render intervals were
+17.6 ms at p95 and 27.8 ms worst, with three intervals over 25 ms. CPU submission time was 3.8 ms at p95 and browser
+GPU queue completion was 8.9 ms at p95. This verifies current playback cadence and resource preparation, not perfectly
+hitch-free recording or a performance comparison with Box3D. Typecheck, lint, formatting, tests, and build pass.
+The full check still stops at the existing stale Geist Medium bake.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/typography/materials.ts`: red G, orange l,

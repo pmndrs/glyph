@@ -7,7 +7,6 @@ import { Title, Typing } from './traits';
 import { Text } from '@pmndrs/glyph/react';
 import type { Glyphs, Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
-import Box3D from 'box3d.js/inline';
 import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { Box3, Vector3, Matrix4 } from 'three/webgpu';
 
@@ -19,7 +18,6 @@ import { stainedGlassLetters, titleOrigin } from './materials';
 import { loadFont, solidOf } from './outline';
 import { type Letter, type TitleBodies, createTitleBodies, disposeTitle } from './bodies';
 
-const box3d = Box3D();
 /** The outlines the letters' solids are cut from: the same source the title face was baked from. */
 const titleOutlines = loadFont(titleFace);
 
@@ -40,7 +38,6 @@ const inkCenter = new Vector3();
 export function GlassTitle({ faces }: { readonly faces: Faces }) {
   const world = useWorld();
   const draw = useRef(new Matrix4());
-  const b3 = use(box3d);
   const font = use(titleOutlines);
   const camera = useThree((state) => state.camera);
   const word = useRef<ThreeText<never> | null>(null);
@@ -133,7 +130,6 @@ export function GlassTitle({ faces }: { readonly faces: Faces }) {
 
       glyphs.current = copies;
       bodies.current = createTitleBodies(
-        b3,
         mat4.copy(mat4.create(), copies.matrixWorld.elements),
         letters,
         camera.position.z,

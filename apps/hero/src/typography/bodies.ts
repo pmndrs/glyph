@@ -1,7 +1,7 @@
 import { mat4, quat, vec3, lerp, type Mat4 } from 'math';
 import { easing } from 'math/time';
-import { POSE_STRIDE, type Box3DModule } from './physics';
 import {
+  POSE_STRIDE,
   createTitleWorld,
   createHeldPose,
   readTitlePose,
@@ -11,7 +11,7 @@ import {
   swallowLetter,
   stepTitleWorld,
   destroyTitleWorld,
-} from './physics';
+} from '../physics/world';
 import { createFlight, departureAt, flight } from '../sequence/departure';
 import { ROBOT_HALF_EXTENTS, type Footprint } from '../robot/traits';
 import type { HoleState } from '../sequence/motion';
@@ -37,7 +37,6 @@ export interface Landing {
 
 /** Allocate all lift, departure, event, and matrix storage before playback. */
 export function createTitleBodies(
-  b3: Box3DModule,
   worldMatrix: Mat4,
   letters: readonly Letter[],
   cameraHeight: number,
@@ -61,7 +60,6 @@ export function createTitleBodies(
   });
 
   const world = createTitleWorld(
-    b3,
     letters.map(({ home, solid }) => ({
       position: vec3.fromValues(home[0], home[1], home[2]),
       prisms: solid.prisms,
