@@ -12,14 +12,12 @@ import { OriginPost } from './OriginPost';
 import { StoryColumn } from './StoryColumn';
 import { Studio } from './Studio';
 import { VideoWord } from './VideoWord';
-import { useInspector } from '../view/useInspector';
 
 /**
  * The second hero: the word off axis over a reflector in a dark room, the letters a window onto a looping NASA clip,
  * and that same clip lighting them from the environment. The story column sits to the right, justified.
  */
 export function Origin() {
-  useInspector();
   const faces = useFaces();
   const video = useVideoTexture(clip, { loop: true, muted: true, playbackRate: 2.2, start: true });
   const scene = useThree((state) => state.scene);

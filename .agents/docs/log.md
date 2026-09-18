@@ -2,6 +2,9 @@
 
 ## 2026-09-19
 
+- **Removed the Three inspector from hero** — Deleted the inspector hook and its registration in both scenes,
+  including the D shortcut, dynamic inspector import, and profiling lifecycle. See [the hero reference](packages/hero.md).
+
 - **Matched the hero loader to the conference slides** — Reused the lime background, black Poimandres SVG,
   shake animation, reduced-motion styles, and readiness fade from `threejs-conf-talk`. Hero’s existing geometry,
   shader, and GPU-upload gate still controls readiness, and preparation failures remain visible.

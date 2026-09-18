@@ -13,7 +13,6 @@ import { FieldRenderer } from './field/renderer';
 import { Lighting } from './view/Lighting';
 import { Paper } from './view/Paper';
 import { RobotRenderer } from './robot/renderer';
-import { useInspector } from './view/useInspector';
 import { PrepareHero } from './view/startup';
 
 /** `?post=0` renders the plain scene: a clean capture pass, and a way to isolate post-processing. */
@@ -31,11 +30,11 @@ export function Hero() {
 }
 
 function HeroScene() {
-  useInspector();
   const faces = useFaces();
   const featureField = useFeatureField();
   const scene = useThree((state) => state.scene);
   const renderer = useThree((state) => state.renderer);
+
   useEffect(() => {
     // Development-only handle for inspecting the scene from DevTools.
     if (!import.meta.env.DEV) return;

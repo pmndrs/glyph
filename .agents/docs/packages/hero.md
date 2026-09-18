@@ -5,7 +5,7 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:cdb1224c60cddbe38c336a96bf224c7fd2dbc9b7fc5658beab986b4065ced89e'
+source_digest: 'sha256:5e15f0766cfd07e60c91d0d2d2d40d00187045c6f2349bb190124b6dd266584e'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: manifest
@@ -139,7 +139,7 @@ they have independent responsibilities. The source root contains only six applic
 `hero.tsx`, `world.ts`, `systems.ts`, `frameloop.tsx`, and the cross-domain `world.test.ts`. Typography owns fonts, copy,
 glass materials, and brand accents; field owns its icon catalog, palette, and flat material; robot owns its face
 material; sequence owns finale uniforms, warp, stars, and post-processing. The `view` domain owns preparation,
-inspection, page styles, lighting, and paper; `origin` owns its composition, copy, and materials. Domain tests live
+page styles, lighting, and paper; `origin` owns its composition, copy, and materials. Domain tests live
 beside their implementations.
 
 The old, unmounted break/rewind presentation and its exclusive director and compressed recording code/tests were
@@ -241,8 +241,6 @@ into the single `assets/robot.glb` the app imports: the model's own floor disc i
 
 Both scenes cap their main render job at 60 fps through R3F v10's native scheduler. The default scene's
 offscreen glass-shadow job is capped separately: Canvas's limit does not throttle update jobs.
-The development inspector loads on the first D press. Hiding it drains pending timestamp reads, restores
-the renderer's original inspector and timestamp setting, and stops collecting profiling data.
 
 The default scene uses the conference slides’ lime loading screen and centered black Poimandres mark, including
 the subtle shake, reduced-motion support, and 400 ms fade when GPU preparation finishes. Preparation failures
