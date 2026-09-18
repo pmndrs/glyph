@@ -10,8 +10,8 @@ import { Text } from '@pmndrs/glyph/three';
 import { Matrix4, WebGPUBackend, WebGPURenderer } from 'three/webgpu';
 
 const { createRetainedLine, showLine, resetLine, disposeLine } = (await import(
-  new URL('/src/scene/retained-line.ts', location.origin).href
-)) as typeof import('../src/scene/retained-line');
+  new URL('/src/typography/retained-line.ts', location.origin).href
+)) as typeof import('../src/typography/retained-line');
 while (document.documentElement.dataset.heroState !== 'ready')
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 const state = _roots.values().next().value!.store.getState();

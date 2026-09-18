@@ -1,3 +1,4 @@
+import { BURST_SECONDS } from '../sequence/motion';
 import { useRenderPipeline } from '@react-three/fiber/webgpu';
 import type { Node } from 'three/webgpu';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
@@ -17,7 +18,7 @@ import {
   vec4,
 } from 'three/tsl';
 
-import { BURST_SECONDS, uHoleBloom, uHoleBlackout, uHoleBurst, uHoleCollapse, uHoleShake } from '../scene/hole';
+import { uHoleBloom, uHoleBlackout, uHoleBurst, uHoleCollapse, uHoleShake } from '../uniforms';
 
 /** The rendered sheet itself corkscrews into the hole. The explosion is composed afterward, over true black. */
 export function Post() {

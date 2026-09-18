@@ -2,6 +2,12 @@
 
 ## 2026-09-18
 
+- **Moved hero into compact Koota domains** — Pinned Koota canary `0.6.6-canary.63c1187`, replaced scene globals and
+  component simulation with world-owned traits, actions, and ordered systems, and retained math/physics buffers.
+  Combined related renderers and removed the unmounted break/rewind implementation, reducing `src` from 65 files to 60. Fifteen focused tests include two complete headless replay cycles. WebGPU replays found no late resources;
+  the migrated and unchanged scenes both measured roughly 10 fps under the current host conditions, so this pass
+  does not re-establish the earlier 60 fps result. See [the hero reference](packages/hero.md).
+
 - **Rebuilt the hero's CPU animation around retained math state** — Replaced title and typing classes with
   caller-owned data and update functions, composed icon transforms without temporary Three groups, and preallocated
   motion, particle, impact, and physics-event storage. All 56 unit tests and the typing, shadow, dust, lift, and finale

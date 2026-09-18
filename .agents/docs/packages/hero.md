@@ -5,8 +5,8 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:a757efc971e3d47ab02474a96be4f2102c331cb81b26c42e079aa3a3ba9dcada'
-tags: [package, example, react-three-fiber, webgpu, slug, vite]
+source_digest: 'sha256:698ef521bf584047f06283364cbcf17b572013c1f3ee47c6a6b9700097f791eb'
+tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: manifest
     resource: ../../../apps/hero/package.json
@@ -27,7 +27,7 @@ sources:
     resource: ../../../apps/hero/scripts/refraction.probe.ts
     title: WebGPU stained-glass verification
   - id: glass-shadows
-    resource: ../../../apps/hero/src/scene/GlassShadows.tsx
+    resource: ../../../apps/hero/src/typography/shadows.tsx
     title: Light-space glass projection
   - id: glass-shadows-check
     resource: ../../../apps/hero/scripts/glass-shadows.probe.ts
@@ -42,26 +42,23 @@ sources:
     resource: ../../../apps/hero/scripts/bake.mts
     title: Face baking and staleness check
   - id: robot
-    resource: ../../../apps/hero/src/scene/Robot.tsx
+    resource: ../../../apps/hero/src/robot/renderer.tsx
     title: Robot drive, look-up, and floor footprint
-  - id: robot-dust
-    resource: ../../../apps/hero/src/scene/RobotDust.tsx
-    title: Movement-driven glyph particle trail
   - id: robot-dust-check
     resource: ../../../apps/hero/scripts/robot-dust.probe.ts
     title: WebGPU glyph dust and fade controls
   - id: title-world
-    resource: ../../../apps/hero/src/physics/title-world.ts
+    resource: ../../../apps/hero/src/typography/physics.ts
     title: Box3D world for the letters and the robot
   - id: outline
-    resource: ../../../apps/hero/src/scene/outline.ts
+    resource: ../../../apps/hero/src/typography/outline.ts
     title: Letter outlines cut into invisible colliders
   - id: robot-pack
     resource: ../../../apps/hero/scripts/robot.mts
     title: Robot glTF packing and staleness check
   - id: hole
-    resource: ../../../apps/hero/src/scene/hole.ts
-    title: Black hole beat timeline and shared uniforms
+    resource: ../../../apps/hero/src/sequence/motion.ts
+    title: Pure black-hole beat timeline
   - id: hole-warp
     resource: ../../../apps/hero/src/materials/hole-warp.ts
     title: Outline-exact glyph warp around the hole
@@ -72,7 +69,7 @@ sources:
     resource: ../../../apps/hero/src/startup.tsx
     title: Scene preparation and GPU completion gate
   - id: retained-line
-    resource: ../../../apps/hero/src/scene/retained-line.ts
+    resource: ../../../apps/hero/src/typography/retained-line.ts
     title: Prepared glyph records for typing and replay
   - id: performance-check
     resource: ../../../apps/hero/scripts/performance.probe.ts
@@ -81,17 +78,29 @@ sources:
     resource: ../../../apps/hero/scripts/retained-lines.probe.ts
     title: Retained typing compared with independently shaped prefixes
   - id: lattice-simulation
-    resource: ../../../apps/hero/src/scene/icon-lattice.ts
+    resource: ../../../apps/hero/src/field/lattice.ts
     title: Fixed-capacity lattice simulation and direct glyph transforms
   - id: robot-motion
-    resource: ../../../apps/hero/src/scene/robot-motion.ts
+    resource: ../../../apps/hero/src/robot/motion.ts
     title: Caller-owned robot path and pose output
   - id: dust-simulation
-    resource: ../../../apps/hero/src/scene/robot-dust.ts
+    resource: ../../../apps/hero/src/robot/dust.ts
     title: Fixed particle storage and distance-based emission
   - id: simulation-check
-    resource: ../../../apps/hero/src/scene/simulation.test.ts
+    resource: ../../../apps/hero/src/simulation.test.ts
     title: Matrix equivalence, motion, storage reuse, and physical landing checks
+  - id: world
+    resource: ../../../apps/hero/src/world.ts
+    title: Koota world and retained domain entities
+  - id: systems
+    resource: ../../../apps/hero/src/systems.ts
+    title: Headless application system order
+  - id: frameloop
+    resource: ../../../apps/hero/src/frameloop.tsx
+    title: R3F clock, input, and development controls
+  - id: world-check
+    resource: ../../../apps/hero/src/world.test.ts
+    title: Isolated worlds, preparation, and complete headless replay cycles
 generated:
   by: anthropic/claude-opus-5
   at: '2026-09-18T09:20:00Z'
@@ -103,7 +112,30 @@ This Vite application is a showcase rather than an API demonstration: each scene
 technique visible. Both run on `WebGPURenderer` through React Three Fiber v10 and drei v11, and both draw their
 text with the Slug raster, whose analytic coverage is what the techniques depend on.
 
-Koota is pinned to `0.6.6-canary.63c1187` for the default scene’s domain state.
+Koota is pinned to `0.6.6-canary.63c1187` for the default scene's domain state. The organization follows the local
+`threejs-conf-talk` and `minecraft-like` examples: domains own traits and systems, actions own discrete transitions,
+and renderers read simulation state and own mounted resources. Four domains cover the default scene:
+
+| Domain       | Ownership                                                                                     |
+| ------------ | --------------------------------------------------------------------------------------------- |
+| `sequence`   | Shared clock/input, replay, retained impact ring, collapse timeline, and finale drawing       |
+| `typography` | Title colliders and matrix stream, feature typing, retained glyph views, and glass projection |
+| `field`      | Two icon sheets, layout, spring simulation, morphs, and glyph rendering                       |
+| `robot`      | Run scheduling, path/footprint, distance-driven dust, rig animation, and face display         |
+
+`world.ts` creates independent worlds with five entities: one robot, title, and typing record, plus two fields.
+Koota AoS traits retain the existing math arrays and pools; high-frequency values never pass through React state.
+`systems.ts` orders robot motion, collapse, title physics/impacts, feature typing, fields, and dust. The R3F adapter
+samples the viewport and pointer and calls that headless update at 60 Hz. Views publish transforms and uniforms
+after simulation; title physics no longer writes Three objects. Keyboard and inspection controls use world-bound
+actions. Replay closes held finales, clears inspection poses, and waits for a fresh title landing before typing
+or restarting the robot.
+
+Related views share each domain's `renderer.tsx`; numerical kernels and the large shadow pass stay separate where
+they have independent responsibilities. The old, unmounted break/rewind presentation and its exclusive director and
+compressed recording code/tests were removed. The source inventory is 60 files, down from 65 before this migration;
+the alternate origin scene remains separate. New headless tests exercise preparation, world isolation, stale cue
+rejection, and two complete replay cycles using real Box3D landings and the same retained buffers.
 
 The application pins Poimandres' `math` package at `0.1.0` for the default scene's CPU simulation and transforms. Its upstream
 skill is installed at `.agents/skills/math/SKILL.md` from `pmndrs/math` commit
@@ -229,6 +261,16 @@ completion was 9.1 ms at p95 with at most two pending observations. The precedin
 cadence, not a statistically established speedup. These are submission and queue measurements,
 not GPU timestamp durations or proof of frame delivery through a screen recorder. The full application check
 currently stops at the existing stale `geist-medium.font.glb` bake; typecheck, lint, unit tests, and build pass.
+
+The Koota migration passes 15 focused tests, including two complete headless cycles with real title contacts,
+and preserves the startup/resource gate. Its 1920×1080 WebGPU replay check found no late shader programs, pipelines,
+meshes, or assets. Current host conditions did not reproduce the earlier 60 fps result: the migrated scene averaged
+9.91 fps, with 112.5 ms interval p95 and 29.6 ms CPU p95; the unchanged pre-migration commit `b0059f58`, run separately
+at the same resolution with the same installed renderer, averaged 9.95 fps, with 113.5 ms interval p95 and 30.2 ms CPU
+p95. Both runs used the Apple Metal adapter and Chromium 149. This comparison does not establish a meaningful
+cadence regression, but cannot verify 60 fps recording readiness under those conditions. The cap remains 60 fps;
+the migration does not claim a fresh 60 fps measurement. A CPU profile placed most sampled wall time in idle and
+rendering work; it does not establish the cause of the slowdown shared by both versions.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents, copied into `src/theme.ts`: red G, orange l,

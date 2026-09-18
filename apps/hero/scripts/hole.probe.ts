@@ -19,25 +19,28 @@ import {
   WebGPURenderer,
 } from 'three/webgpu';
 
-import type { TitleBodies } from '../src/scene/title-bodies';
-const { replayTitle } = (await import(
-  new URL('/src/scene/title-bodies.ts', location.origin).href
-)) as typeof import('../src/scene/title-bodies');
-
-const { COLLAPSE_SECONDS, dismissCollapse, holdCollapse, POP_AT, uHoleCollapse, uHoleBloom, hole } = (await import(
-  new URL('/src/scene/hole.ts', location.origin).href
-)) as typeof import('../src/scene/hole');
+import type { TitleBodies } from '../src/typography/bodies';
+const { COLLAPSE_SECONDS, POP_AT } = (await import(
+  new URL('/src/sequence/motion.ts', location.origin).href
+)) as typeof import('../src/sequence/motion');
+const { uHoleCollapse, uHoleBloom } = (await import(
+  new URL('/src/uniforms.ts', location.origin).href
+)) as typeof import('../src/uniforms');
+const { sequenceActions } = (await import(
+  new URL('/src/sequence/actions.ts', location.origin).href
+)) as typeof import('../src/sequence/actions');
 const { uEmberFire } = (await import(
   new URL('/src/materials/embers.ts', location.origin).href
 )) as typeof import('../src/materials/embers');
 const { STAR_SYMBOLS } = (await import(
   new URL('/src/star-symbols.ts', location.origin).href
 )) as typeof import('../src/star-symbols');
-const { requestReplay } = (await import(
-  new URL('/src/scene/replay.ts', location.origin).href
-)) as typeof import('../src/scene/replay');
-
-const handles = globalThis as { heroTitle?: TitleBodies; heroRobot?: { hold(at: number): void } };
+const handles = globalThis as {
+  heroWorld?: import('koota').World;
+  heroHole?: { state(): import('../src/sequence/motion').HoleState };
+  heroTitle?: TitleBodies;
+  heroRobot?: { hold(at: number): void };
+};
 function ready() {
   const state = _roots.values().next().value?.store.getState();
   let feature = false;
@@ -62,6 +65,8 @@ function ready() {
 while (document.documentElement.dataset.heroState !== 'ready')
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 while (!ready()) await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+const { dismissCollapse, holdCollapse, replay: requestReplay } = sequenceActions(handles.heroWorld!);
+const hole = handles.heroHole!.state;
 const state = _roots.values().next().value!.store.getState();
 state.setFrameloop('never');
 const { renderer, renderPipeline } = state;
@@ -226,7 +231,6 @@ for (let offset = 0; offset < embers.length; offset += 4) {
     emberGlowPixels++;
 }
 if (emberGlowPixels < 100) throw new Error(`The fading embers lost their glow: ${emberGlowPixels}`);
-replayTitle(handles.heroTitle!);
 requestReplay();
 scheduler.step(clock + 66.668);
 const replay = litPixels(await capture(control));

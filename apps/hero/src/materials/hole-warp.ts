@@ -2,7 +2,7 @@ import type { ThreeTextMaterialContext } from '@pmndrs/glyph/three';
 import { atan, cos, dFdx, dFdy, float, modelWorldMatrix, sin, smoothstep, uv, varying, vec2, vec4 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 
-import { uHoleBend, uHoleCamera, uHoleCenter, uHoleHorizon } from '../scene/hole';
+import { uHoleBend, uHoleCamera, uHoleCenter, uHoleHorizon } from '../uniforms';
 
 type SlugContext = Extract<ThreeTextMaterialContext, { format: 'pmndrs.slug' }>;
 

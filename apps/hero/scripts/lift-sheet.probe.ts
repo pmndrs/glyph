@@ -19,28 +19,16 @@ import {
   WebGPURenderer,
 } from 'three/webgpu';
 
-import type { HoleState } from '../src/scene/hole';
-import type { TitleBodies } from '../src/scene/title-bodies';
-const { replayTitle, updateTitle } = (await import(
-  new URL('/src/scene/title-bodies.ts', location.origin).href
-)) as typeof import('../src/scene/title-bodies');
-
+import type { TitleBodies } from '../src/typography/bodies';
+const { advanceHero } = (await import(
+  new URL('/src/systems.ts', location.origin).href
+)) as typeof import('../src/systems');
+const { sequenceActions } = (await import(
+  new URL('/src/sequence/actions.ts', location.origin).href
+)) as typeof import('../src/sequence/actions');
 /** Seconds into the replay for each tile: carried up, at the top, falling, and landed. */
 const MOMENTS = [0.3, 0.6, 0.85, 1.6] as const;
 const STEP = 1 / 120;
-/** The black hole stays closed for the whole sheet: only the lift and smash are on it. */
-const CLOSED: HoleState = {
-  beat: 'closed',
-  time: -1,
-  x: 0,
-  y: 0,
-  horizon: 0,
-  pull: 0,
-  presence: 0,
-  sincePop: undefined,
-  blackout: 0,
-};
-
 function ready() {
   const scene = _roots.values().next().value?.store.getState().scene;
   let feature = false;
@@ -67,16 +55,31 @@ if (title === undefined) throw new Error('Missing the title development handle')
 await renderer.compileAsync(scene, camera);
 
 const tiles = MOMENTS.map(() => new RenderTarget(960, 540, { samples: 4 }));
-replayTitle(title);
+const world = (globalThis as { heroWorld?: import('koota').World }).heroWorld;
+if (world === undefined) throw new Error('Missing the hero world');
+// Sample the adapter once after the readiness gate before taking over the deterministic clock.
+getScheduler().stepJob('hero-simulation');
+sequenceActions(world).replay();
+const base = performance.now();
 let elapsed = 0;
+const heights: number[] = [];
 for (const [index, moment] of MOMENTS.entries()) {
   while (elapsed < moment) {
-    updateTitle(title, STEP, undefined, CLOSED);
+    advanceHero(world, STEP, base + (elapsed + STEP) * 1000);
     elapsed += STEP;
   }
+  let height = 0;
+  for (let offset = 2; offset < title.world.poses.length; offset += 7)
+    height = Math.max(height, title.world.poses[offset]!);
+  heights.push(height);
+  getScheduler().stepJob('hero-title-motion');
   getScheduler().stepJob('hero-glass-shadows');
   renderer.setRenderTarget(tiles[index] ?? null);
   renderer.render(scene, camera);
+}
+
+if (heights[0]! < 8 || heights[heights.length - 1]! > 1) {
+  throw new Error(`The title did not lift and settle: ${JSON.stringify(heights)}`);
 }
 
 const sheet = new Scene();
@@ -96,7 +99,7 @@ renderer.setRenderTarget(null);
 renderer.render(sheet, sheetCamera);
 console.log(
   'hero-lift-sheet-ready',
-  JSON.stringify({ backend: 'webgpu', moments: MOMENTS, poses: Array.from(title.world.poses) }),
+  JSON.stringify({ backend: 'webgpu', moments: MOMENTS, heights, poses: Array.from(title.world.poses) }),
 );
 
 quad.dispose();
