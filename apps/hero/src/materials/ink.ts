@@ -1,0 +1,182 @@
+import { defineTextMaterial, type ThreeTextMaterialContext } from '@pmndrs/glyph/three';
+import {
+  abs,
+  color,
+  cross,
+  dFdx,
+  dFdy,
+  dot,
+  float,
+  fract,
+  mix,
+  mx_noise_float,
+  normalize,
+  positionView,
+  positionWorld,
+  pow,
+  sin,
+  smoothstep,
+  step,
+  uv,
+  vec3,
+} from 'three/tsl';
+import {
+  Color,
+  DoubleSide,
+  MeshBasicNodeMaterial,
+  MeshPhysicalNodeMaterial,
+  MeshStandardNodeMaterial,
+  type Node,
+} from 'three/webgpu';
+
+import { uCut, uFloat, uTime } from '../uniforms';
+
+type SlugContext = Extract<ThreeTextMaterialContext, { format: 'pmndrs.slug' }>;
+
+/** How strongly each glyph quad bulges as a lens. */
+const LENS_CURVATURE = 0.45;
+const SHADOW_INK = color('#2d323b');
+const RIM = color('#7cc8ff');
+const SWEEP = color('#ff5ad2');
+const GLITCH_A = color('#00f0ff');
+const GLITCH_B = color('#ff2e6e');
+
+/** Lit Slug ink for every word: a standard material, since there are many words and only one glass title. */
+export const ink = defineTextMaterial((context) => {
+  if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
+  const material = new MeshStandardNodeMaterial({ side: DoubleSide, roughness: 0.32, metalness: 0.2 });
+  const normal = shapeSlug(material, context);
+  const band = smoothstep(0.08, 0, abs(fract(positionWorld.x.mul(0.06).sub(uTime.mul(0.18))).sub(0.5)));
+  material.colorNode = context.shader.color;
+  material.emissiveNode = RIM.mul(rim(normal).mul(0.8))
+    .add(SWEEP.mul(band.mul(0.25)))
+    .add(glitch());
+  return material;
+});
+
+/**
+ * Glass Slug letters: physical transmission refracts the scene behind them, with dispersion splitting the light.
+ * Animated noise tilts the normals so what is seen through the letters visibly bends.
+ */
+export const glass = defineTextMaterial((context) => {
+  if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
+  const material = new MeshPhysicalNodeMaterial({
+    side: DoubleSide,
+    // A very faint smoky tint: the pattern reads through the letters, bent rather than dimmed.
+    color: new Color('#f1f3f6'),
+    metalness: 0,
+    roughness: 0.03,
+    transmission: 1,
+    thickness: 2.6,
+    ior: 1.6,
+    dispersion: 3,
+    attenuationColor: new Color('#b9c0c9'),
+    attenuationDistance: 14,
+    clearcoat: 1,
+    clearcoatRoughness: 0.03,
+    iridescence: 0.15,
+    iridescenceIOR: 1.3,
+    specularIntensity: 1,
+  });
+  // Each Slug glyph is drawn on a unit quad, so its uv is a per-letter lens: tilting the normal outward from the
+  // centre curves the refraction, and the icons behind magnify and bend as they cross each letterform.
+  const face = shapeSlug(material, context, { drift: false });
+  const lens = uv().sub(0.5).mul(2);
+  // Falls to zero at the quad border, so neighbouring glyph quads do not show their seams.
+  const falloff = float(1).sub(lens.length().mul(lens.length())).max(0).mul(LENS_CURVATURE);
+  const normal = normalize(face.add(vec3(lens.x.mul(falloff), lens.y.negate().mul(falloff), 0)));
+  material.normalNode = normal;
+  material.emissiveNode = RIM.mul(rim(normal).mul(0.35));
+  return material;
+});
+
+/**
+ * The title's shadow, from the MSDF companion's `style.shadow`. Only the shadow coverage is drawn — never the fill —
+ * so the visible letterform stays the Slug word in front. The style's shadow is a hard offset of the field, so a few
+ * of these at different offsets and low alpha are stacked to soften the edge.
+ */
+export const sdfShadow = defineTextMaterial((context) => {
+  if (context.kind !== 'glyph' || context.format !== 'pmndrs.msdf') return context.createDefaultMaterial();
+  const { shader, position } = context;
+  const material = new MeshBasicNodeMaterial({ side: DoubleSide, transparent: true, depthWrite: false });
+  material.positionNode = position;
+  material.colorNode = SHADOW_INK;
+  material.opacityNode = shader.shadowCoverage.mul(shader.opacity);
+  return material;
+});
+
+/** Flat, unlit ink for the background pattern: crisp coverage, no lighting cost across hundreds of icons. */
+export const pattern = defineTextMaterial((context) => {
+  if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
+  // Opaque, with alpha-to-coverage edges: the icons must write depth, or the glass has nothing behind it to refract.
+  // Depth in the field is carried by colour, not by fading them out.
+  const material = new MeshBasicNodeMaterial({ side: DoubleSide });
+  material.positionNode = context.position;
+  material.colorNode = context.shader.color;
+  material.opacityNode = context.shader.coverage;
+  material.alphaToCoverage = true;
+  return material;
+});
+
+/** Marks the rim twin's meshes; post-processing moves them onto the rim layer, out of the main camera's view. */
+export const RIM_SILHOUETTE = 'glyph-hero-rim-silhouette';
+
+/**
+ * A flat stand-in for the glass title on the rim layer. Rendering the glass itself there would make three redraw the
+ * whole opaque scene into a transmission buffer for that pass; this is five coverage-cut quads instead.
+ */
+export const silhouette = defineTextMaterial((context) => {
+  if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
+  const material = new MeshBasicNodeMaterial({ side: DoubleSide });
+  material.name = RIM_SILHOUETTE;
+  material.positionNode = context.position.add(drift(context.position).mul(uFloat));
+  material.colorNode = color('#000000');
+  material.opacityNode = context.shader.coverage;
+  material.alphaToCoverage = true;
+  return material;
+});
+
+/** Idle drift, shared so the rim twin moves exactly with the glass it stands in for. */
+function drift(position: Node<'vec3'>): Node<'vec3'> {
+  return vec3(
+    sin(uTime.mul(0.9).add(position.y.mul(0.8))).mul(0.05),
+    sin(uTime.mul(1.3).add(position.x.mul(1.1))).mul(0.07),
+    sin(uTime.mul(0.7).add(position.x.mul(0.5)).add(position.y.mul(0.9))).mul(0.12),
+  );
+}
+
+/**
+ * Shared Slug plumbing: drives position from the glyph graph (Slug coverage requires it), adds the idle drift,
+ * cuts the letterform out with alpha-to-coverage so depth stays exact, and casts letter-shaped shadows. Returns the
+ * face normal from screen-space derivatives, which follows a glyph's real orientation even while physics tumbles
+ * it (its rotation lives in the glyph transform, not the object's normal matrix).
+ */
+function shapeSlug(
+  material: MeshStandardNodeMaterial,
+  { shader, position }: SlugContext,
+  options: { readonly drift: boolean } = { drift: true },
+) {
+  material.positionNode = options.drift ? position.add(drift(position).mul(uFloat)) : position;
+  material.opacityNode = shader.coverage.mul(shader.opacity);
+  material.alphaToCoverage = true;
+  material.maskShadowNode = shader.coverage.greaterThan(0.5);
+
+  const face = normalize(cross(dFdx(positionView), dFdy(positionView)));
+  const normal = face.mul(dot(face, toCamera()).sign());
+  material.normalNode = normal;
+  return normal;
+}
+
+function toCamera() {
+  return normalize(positionView.negate());
+}
+
+function rim(normal: Node<'vec3'>) {
+  return pow(float(1).sub(abs(dot(normal, toCamera()))), 2.5);
+}
+
+function glitch() {
+  const noise = mx_noise_float(positionWorld.mul(vec3(0.5, 9, 0.5)).add(vec3(0, uTime.mul(14), 0)));
+  const mask = step(float(1).sub(uCut.mul(0.9)), noise.mul(0.5).add(0.5)).mul(uCut);
+  return mix(GLITCH_A, GLITCH_B, noise.mul(0.5).add(0.5)).mul(mask.mul(2.5));
+}
