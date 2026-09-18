@@ -21,8 +21,7 @@ export function moveFields(world: World): void {
   const step = Math.min(frame.delta, 0.05);
   frame.pointer.strength *= Math.exp(-step / POINTER_FADE);
   if (frame.pointer.strength < 0.01) frame.pointer.strength = 0;
-  for (const entity of world.query(Field)) {
-    const field = entity.get(Field)!;
+  world.query(Field).updateEach(([field]) => {
     const { options, layout, lattice } = field;
     field.offset += step * options.speed * (1 - 0.7 * collapse.pull);
     if (collapse.beat === 'closed') field.offset %= layout.loop;
@@ -38,7 +37,7 @@ export function moveFields(world: World): void {
     trackHole(sequence.replays, frame.cameraZ, collapse, lattice, layout);
     simulate(lattice, layout, step, options, frame.now);
     advanceMorph(lattice, layout, frame.now);
-  }
+  });
 }
 
 /**

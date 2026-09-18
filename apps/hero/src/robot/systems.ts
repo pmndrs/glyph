@@ -9,8 +9,8 @@ export function moveRobots(world: World): void {
   const frame = world.get(Frame)!;
   const sequence = world.get(Sequence)!;
   const shock = sequence.impacts[sequence.latestImpact];
-  for (const entity of world.query(Robot)) {
-    const robot = entity.get(Robot)!;
+
+  world.query(Robot).updateEach(([robot]) => {
     if (shock !== undefined && shock.id !== robot.wave) {
       robot.wave = shock.id;
       robot.runAt = shock.at + REPLAY_DELAY * 1000;
@@ -18,7 +18,7 @@ export function moveRobots(world: World): void {
     if (robot.time === undefined) {
       robot.runAt ??= frame.now + FIRST_RUN_DELAY * 1000;
       robot.active = false;
-      if (frame.now < robot.runAt) continue;
+      if (frame.now < robot.runAt) return;
       robot.time = 0;
       robot.runAt = Number.POSITIVE_INFINITY;
       layPath(robot.motion.path, frame.width, frame.height, robot.runs++);
@@ -29,7 +29,7 @@ export function moveRobots(world: World): void {
       robot.time = undefined;
       robot.active = false;
       sequenceActions(world).openCollapse();
-      continue;
+      return;
     }
     const pose = poseAt(robot.motion.pose, robot.time, robot.motion.path);
     robot.active = true;
@@ -44,13 +44,12 @@ export function moveRobots(world: World): void {
       robot.gone = true;
       sequenceActions(world).openCollapse();
     }
-  }
+  });
 }
 
 export function emitDust(world: World): void {
   const frame = world.get(Frame)!;
-  for (const entity of world.query(Robot)) {
-    const robot = entity.get(Robot)!;
+  world.query(Robot).updateEach(([robot]) => {
     stepDust(robot.dust, frame.delta, robot.active ? robot.footprint : undefined);
-  }
+  });
 }

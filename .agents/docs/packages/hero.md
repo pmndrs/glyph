@@ -5,7 +5,7 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:5e15f0766cfd07e60c91d0d2d2d40d00187045c6f2349bb190124b6dd266584e'
+source_digest: 'sha256:795d4cc623afd94a7aaf35c2e7179567ce0500a187afaffa155da068485a4885'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: manifest
@@ -128,6 +128,7 @@ and renderers read simulation state and own mounted resources. Four domains cove
 
 `world.ts` creates independent worlds with five entities: one robot, title, and typing record, plus two fields.
 Koota AoS traits retain the existing math arrays and pools; high-frequency values never pass through React state.
+Systems and actions mutate queried traits through `world.query(...).updateEach`, receiving trait state directly.
 `systems.ts` orders robot motion, collapse, title physics/impacts, feature typing, fields, and dust. The R3F adapter
 samples the viewport and pointer and calls that headless update at 60 Hz. Views publish transforms and uniforms
 after simulation; title physics no longer writes Three objects. Keyboard and inspection controls use world-bound

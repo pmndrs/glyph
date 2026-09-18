@@ -37,24 +37,21 @@ export const sequenceActions = createActions((world) => ({
     sequence.openedAt = undefined;
     sequence.held = undefined;
     collapseAt(sequence.hole, -1);
-    for (const entity of world.query(Title)) {
-      const title = entity.get(Title)!;
+    world.query(Title).updateEach(([title]) => {
       if (title.bodies !== undefined) replayTitle(title.bodies);
-    }
-    for (const entity of world.query(Typing)) {
-      const typing = entity.get(Typing)!;
+    });
+    world.query(Typing).updateEach(([typing]) => {
       typing.start = Number.POSITIVE_INFINITY;
       typing.beat = 0;
       typing.count = 0;
       typing.wave = sequence.nextImpact - 1;
-    }
-    for (const entity of world.query(Robot)) {
-      const robot = entity.get(Robot)!;
+    });
+    world.query(Robot).updateEach(([robot]) => {
       robot.time = undefined;
       robot.runAt = Number.POSITIVE_INFINITY;
       robot.held = undefined;
       robot.active = false;
       robot.wave = sequence.nextImpact - 1;
-    }
+    });
   },
 }));

@@ -2,6 +2,10 @@
 
 ## 2026-09-19
 
+- **Used Koota query updates in hero** — Converted query mutation loops in robot, field, typography, and replay
+  actions to `updateEach`, preserving per-entity early exits and retained simulation storage.
+  See [the hero reference](packages/hero.md).
+
 - **Removed the Three inspector from hero** — Deleted the inspector hook and its registration in both scenes,
   including the D shortcut, dynamic inspector import, and profiling lifecycle. See [the hero reference](packages/hero.md).
 
