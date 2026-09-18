@@ -15,16 +15,17 @@ const FONT_SIZE = 4.4;
 /** Wide exact box so `align: 'center'` centres the word on the origin. */
 const LAYOUT_WIDTH = 60;
 /**
- * The reveal, as explicit keyframes: very large, down to resting size, past it, and back. Overshoot is a fraction of
+ * The slam, as explicit keyframes: lift towards the camera, down to resting size, past it, and back. Overshoot is a fraction of
  * the final size, not of the arrival distance — springing straight from 34x to 1x makes the undershoot enormous and
  * the word all but vanishes before it recovers.
  */
-const START_SCALE = 34;
+const LIFT_SCALE = 34;
+const LIFT_SECONDS = 0.45;
 /** Resting size is reached here; this is the moment the lattice is struck. */
-const ARRIVE_AT = 0.2;
-const OVERSHOOT_AT = 0.28;
+const ARRIVE_AT = LIFT_SECONDS + 0.2;
+const OVERSHOOT_AT = LIFT_SECONDS + 0.28;
 const OVERSHOOT_SCALE = 0.86;
-const SETTLED_SECONDS = 0.45;
+const SETTLED_SECONDS = LIFT_SECONDS + 0.45;
 
 function easeOutQuart(t: number): number {
   return 1 - (1 - t) ** 4;
@@ -34,12 +35,15 @@ function easeInOutSine(t: number): number {
   return 0.5 - Math.cos(Math.PI * t) / 2;
 }
 
-/** Scale at `time` seconds into the reveal. */
+/** Scale at `time` seconds into the lift and slam. */
 function revealScale(time: number): number {
   if (time >= SETTLED_SECONDS) return 1;
+  if (time <= LIFT_SECONDS) {
+    return LIFT_SCALE ** easeInOutSine(time / LIFT_SECONDS);
+  }
   if (time <= ARRIVE_AT) {
     // Logarithmic: equal steps read as equal size changes, so the approach does not stall while it is huge.
-    return START_SCALE ** (1 - easeOutQuart(time / ARRIVE_AT));
+    return LIFT_SCALE ** (1 - easeOutQuart((time - LIFT_SECONDS) / (ARRIVE_AT - LIFT_SECONDS)));
   }
   if (time <= OVERSHOOT_AT) {
     return 1 + (OVERSHOOT_SCALE - 1) * easeInOutSine((time - ARRIVE_AT) / (OVERSHOOT_AT - ARRIVE_AT));
@@ -61,18 +65,23 @@ const SHADOW_OPACITY = 0.38;
 
 export function GlassTitle({ faces, field }: { readonly faces: Faces; readonly field: MsdfFont }) {
   const group = useRef<Group>(null);
-  const elapsed = useRef(0);
-  const landed = useRef(false);
+  const elapsed = useRef(SETTLED_SECONDS);
+  const landed = useRef(true);
   const word = useRef<ThreeText<never> | null>(null);
   /** Published once: the box is in the Text's own space, so the reveal's scale never enters into it. */
   const reported = useRef(false);
 
   useEffect(() => {
     const restart = (event: KeyboardEvent) => {
-      // Space only. Click used to replay too, which made it impossible to touch the page — or the inspector — without
-      // restarting the scene.
       if (event.key !== ' ') return;
+      if (
+        event.target instanceof HTMLElement &&
+        (event.target.isContentEditable || event.target.closest('input, textarea, select, button') !== null)
+      ) {
+        return;
+      }
       event.preventDefault();
+      if (event.repeat) return;
       elapsed.current = 0;
       landed.current = false;
       // Announced before the word has moved, so everything keyed to the reveal clears on the input, not on impact.
@@ -123,8 +132,7 @@ export function GlassTitle({ faces, field }: { readonly faces: Faces; readonly f
   });
 
   return (
-    // Created at the arrival scale: otherwise the first frames draw it at rest and the entrance is missed.
-    <group ref={group} scale={START_SCALE}>
+    <group ref={group}>
       <Text
         constraints={{ width: { mode: 'exact', size: LAYOUT_WIDTH } }}
         font={field}

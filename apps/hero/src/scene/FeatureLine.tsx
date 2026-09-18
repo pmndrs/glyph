@@ -51,7 +51,7 @@ const FRAMES_PER_CHARACTER = 3;
 
 export function FeatureLine({ field }: { readonly field: MsdfFont }) {
   const text = useRef<ThreeText<never> | null>(null);
-  const [typed, setTyped] = useState(0);
+  const [typed, setTyped] = useState(FEATURE_LINE.text.length);
   const wave = useRef(0);
   const replay = useRef(replayCount());
   const start = useRef(Number.POSITIVE_INFINITY);

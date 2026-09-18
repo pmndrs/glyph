@@ -2,6 +2,10 @@
 
 ## 2026-09-18
 
+- **Made the hero slam interactive** — The title and feature line start at rest; Space triggers a lift towards the
+  camera, slam, and retyping once per keypress. Both scenes hide the development inspector by default, with D available to toggle it.
+  See [the hero package reference](packages/hero.md).
+
 - **Added tagged stable publishing alongside canaries** — Extended the existing npm publishing workflow so matching
   `vMAJOR.MINOR.PATCH` tags publish to `latest`, while main-branch pushes continue publishing canaries. Both paths run
   the package check before publication. Version bumps and release preparation remain separate changes.

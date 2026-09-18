@@ -30,7 +30,7 @@ export function Hero() {
     // inspector it holds while it is starting up, which is before this can assign one, so it is called here instead;
     // and the inspector builds its own DOM but leaves attaching it to the host. D hides and shows it.
     let panel: HTMLElement | undefined;
-    let shown = true;
+    let shown = false;
     // StrictMode mounts effects twice, and this import resolves after the first cleanup. Without the guard that run
     // still appends a panel — an orphan whose key listener is already gone — and D then toggles the wrong one.
     let cancelled = false;
@@ -49,6 +49,7 @@ export function Hero() {
       renderer.inspector = created;
       created.init();
       panel = created.domElement;
+      panel.style.display = 'none';
       document.body.append(panel);
     });
     return () => {

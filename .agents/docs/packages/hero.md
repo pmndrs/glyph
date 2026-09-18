@@ -5,7 +5,7 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:cc2370b558ee918e991e27f46ece24be8180d20ab8ea971abe6a50c37cc4d2ea'
+source_digest: 'sha256:14261b9d53722f51c350cd84d7654c1ef83ad8eee87be4c5ceb52ea9c5c3353e'
 tags: [package, example, react-three-fiber, webgpu, slug, vite]
 sources:
   - id: manifest
@@ -38,9 +38,13 @@ technique visible. Both run on `WebGPURenderer` through React Three Fiber v10 an
 text with the Slug raster, whose analytic coverage is what the techniques depend on.
 
 The default scene builds two interleaved lattices of occult icons on mass-spring grids at different depths, scaled
-so they interleave on screen and stay in phase. A Slug-glass `GLYPH` springs in and sends a shockwave through both
-lattices, then a feature line types in, each letter applying its own force so the icons reflow around the
-letterforms rather than around a bounding box.
+so they interleave on screen and stay in phase. The Slug-glass `GLYPH` and feature line start at rest. Press Space
+to lift the title towards the camera and slam it back into place, sending a shockwave through both lattices, then
+retype the feature line. Each letter applies its own force so the icons reflow around the letterforms rather than
+around a bounding box. Holding Space
+does not restart the animation, and focused form controls retain their normal keyboard behavior.
+
+The development inspector starts hidden in both scenes; D toggles it.
 
 `?scene=origin` sets a word off axis over a black reflector in a dark room. A NASA SDO clip is masked into the
 letterforms, and the same clip lights the scene through `Lightformer`s inside an `Environment`, so the word and the

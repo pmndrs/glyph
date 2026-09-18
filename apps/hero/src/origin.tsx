@@ -34,7 +34,7 @@ export function Origin() {
       heroUv: { uWordOrigin, uWordSize, uWordUvScale, uDebugUv },
     });
     let panel: HTMLElement | undefined;
-    let shown = true;
+    let shown = false;
     // StrictMode mounts effects twice, and this import resolves after the first cleanup. Without the guard that run
     // still appends a panel — an orphan whose key listener is already gone — and D then toggles the wrong one.
     let cancelled = false;
@@ -51,6 +51,7 @@ export function Origin() {
       renderer.inspector = inspector;
       inspector.init();
       panel = inspector.domElement;
+      panel.style.display = 'none';
       document.body.append(panel);
     });
     return () => {
