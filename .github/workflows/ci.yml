@@ -349,12 +349,13 @@ jobs:
           name: glyph-candidate-package
           path: benches/.cache/labs-candidate
 
-      - name: Compare packaged public API performance
+      - name: Compare common-use package performance
         run: >-
           pnpm scripts run benchmark:labs-package --
           --baseline @pmndrs/glyph@canary
           --candidate .cache/labs-candidate
-          --blocks 8
+          --suite smoke
+          --blocks 4
           --output .cache/labs-package
 
       - name: Retain Labs performance report

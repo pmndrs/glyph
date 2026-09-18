@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:f9e79c1fe6223dc7a1b0926c068e9f6fb2578b820e19f5b2bb7a57443123d947'
+source_digest: 'sha256:27edc65bb2d1d188089d738fba60c7dec7b51130262c279a7419d7acea5324eb'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -248,11 +248,13 @@ the current npm canary into isolated temporary consumers, then runs both through
 artifact. The retained report includes native Labs JSON, comparison output, exact package manifests and lockfiles, and the
 candidate tarball SHA-256.
 
-The first package suite measures six public-system workloads: `measure()` and `glyphs()` after equal-size edits, Three
-publication after an edit, column reflow, font-size relayout, and one publication of 128 retained `Text` instances. Each
-case deliberately invalidates the retained state it names instead of timing a cache hit. Eight fresh-process blocks and a
-five-percent minimum effect produce the comparison report. This lane is initially report-only while runner noise and
-false-positive rates are established; browser, GPU, and frame-pacing evidence remains owned by the browser workflows.
+The default package suite is a common-use smoke comparison: cached `measure()`, measurement and publication after a text
+change, exact-width reflow, paint-only style publication, and font-size relayout. It deliberately excludes per-glyph
+inspection and high-scale stress work. Four fresh-process blocks are the smallest Labs comparison that can reach the
+configured five-percent significance threshold, keeping the pull-request signal concise. Maintainers select focused
+`layout`, `measure`, `glyphs`, `publication`, or `stress` tags when a change touches those concerns, or select `full` for
+the complete package matrix. Browser, GPU, frame-pacing, kernel, baker, and payload evidence remain separately owned by
+their explicit workflows rather than entering the default pull-request timing lane.
 
 Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentation are complete
 

@@ -109,8 +109,8 @@ function editedText(iteration: number): string {
   return `${leading}${paragraphText.slice(1)}`;
 }
 
-group('packaged public API @core', () => {
-  bench('measure after equal-size text edit @layout', function* () {
+group('common text operations @core', () => {
+  bench('measure after text change @layout @measure @smoke', function* () {
     const created = createParagraph();
     let iteration = 0;
     const glyphCount = yield () => {
@@ -121,7 +121,7 @@ group('packaged public API @core', () => {
     disposeParagraph(created);
   });
 
-  bench('glyphs after equal-size text edit @layout', function* () {
+  bench('copy per-glyph metrics after text change @layout @glyphs @api', function* () {
     const created = createParagraph();
     let iteration = 0;
     const glyphCount = yield () => {
@@ -132,7 +132,7 @@ group('packaged public API @core', () => {
     disposeParagraph(created);
   });
 
-  bench('Three publication after equal-size text edit @publication', function* () {
+  bench('publish after text change @layout @publication @smoke', function* () {
     const created = createParagraph();
     let iteration = 0;
     const textCount = yield () => {
@@ -145,7 +145,7 @@ group('packaged public API @core', () => {
     disposeParagraph(created);
   });
 
-  bench('column reflow and Three publication @layout', function* () {
+  bench('reflow after width change @layout @reflow @publication @smoke', function* () {
     const created = createParagraph();
     let iteration = 0;
     const textCount = yield () => {
@@ -159,7 +159,21 @@ group('packaged public API @core', () => {
     disposeParagraph(created);
   });
 
-  bench('font-size relayout and Three publication @layout', function* () {
+  bench('publish after color change @style @publication @smoke', function* () {
+    const created = createParagraph();
+    let alternate = false;
+    const textCount = yield () => {
+      alternate = !alternate;
+      created.paragraph.style = { color: alternate ? '#f97316' : '#38bdf8', fontSize: 24 };
+      created.textGroup.updateMatrixWorld(true);
+      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      return created.textGroup.textCount;
+    };
+    assert.equal(textCount, 1);
+    disposeParagraph(created);
+  });
+
+  bench('relayout after font-size change @layout @style @publication @smoke', function* () {
     const created = createParagraph();
     let iteration = 0;
     const textCount = yield () => {
@@ -174,8 +188,8 @@ group('packaged public API @core', () => {
   });
 });
 
-group('retained batching @publication', () => {
-  bench('measure 100 unchanged retained labels @cached', function* () {
+group('batched text operations @publication', () => {
+  bench('measure 100 unchanged labels @cached @measure @smoke', function* () {
     const created = createLabels();
     const expectedGlyphs = created.labels.reduce((total, label) => total + label.measure().glyphCount, 0);
     const glyphCount = yield () => created.labels.reduce((total, label) => total + label.measure().glyphCount, 0);
@@ -183,7 +197,7 @@ group('retained batching @publication', () => {
     disposeLabels(created);
   });
 
-  bench('copy glyphs from 100 unchanged retained labels @cached', function* () {
+  bench('copy per-glyph metrics from 100 unchanged labels @cached @glyphs @api', function* () {
     const created = createLabels();
     const expectedGlyphs = created.labels.reduce((total, label) => total + label.glyphs().glyphCount, 0);
     const glyphCount = yield () => created.labels.reduce((total, label) => total + label.glyphs().glyphCount, 0);
@@ -191,7 +205,7 @@ group('retained batching @publication', () => {
     disposeLabels(created);
   });
 
-  bench('borrow glyphs from 100 steadily promoted retained labels @cached', function* () {
+  bench('borrow per-glyph metrics from 100 promoted labels @cached @glyphs @api', function* () {
     const created = createLabels();
     created.labels.forEach((label) => label.withGlyphs((glyphs) => glyphs.glyphCount));
     const readGlyphs = () => borrowedGlyphChecksum(created.labels);
@@ -214,7 +228,7 @@ group('retained batching @publication', () => {
     disposeLabels(created);
   });
 
-  bench('publish 128 retained Text instances', function* () {
+  bench('publish changes to 128 Text instances @batch', function* () {
     const count = 128;
     const root = glyph.handle(
       `labs:package:${String(nextHandle++)}`,
@@ -248,7 +262,7 @@ group('retained batching @publication', () => {
   });
 });
 
-group('retained batching at 1,000 labels @publication', () => {
+group('1,000-label stress @publication @stress', () => {
   bench('reorder 1000 unchanged retained labels @publication', function* () {
     const created = createLabels(1_000);
     for (const [index, label] of created.labels.entries()) label.renderOrder = index;
@@ -293,14 +307,6 @@ group('retained batching at 1,000 labels @publication', () => {
     const created = createLabels(1_000);
     const expectedGlyphs = created.labels.reduce((total, label) => total + label.measure().glyphCount, 0);
     const glyphCount = yield () => created.labels.reduce((total, label) => total + label.measure().glyphCount, 0);
-    assert.equal(glyphCount, expectedGlyphs);
-    disposeLabels(created);
-  });
-
-  bench('copy glyphs from 1000 unchanged retained labels @cached', function* () {
-    const created = createLabels(1_000);
-    const expectedGlyphs = created.labels.reduce((total, label) => total + label.glyphs().glyphCount, 0);
-    const glyphCount = yield () => created.labels.reduce((total, label) => total + label.glyphs().glyphCount, 0);
     assert.equal(glyphCount, expectedGlyphs);
     disposeLabels(created);
   });
