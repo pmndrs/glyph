@@ -218,6 +218,18 @@ sources:
   - id: labs-package-workflow
     resource: ../../../benches/scripts/run-package-labs.mts
     title: Installed package artifact benchmark workflow
+  - id: labs-internal-config
+    resource: ../../../benches/labs-internal/labs.config.ts
+    title: Workspace-only Labs benchmark configuration
+  - id: labs-internal-suite
+    resource: ../../../benches/labs-internal
+    title: Workspace-only engine, kernel, and generator benchmark suites
+  - id: labs-internal-workflow
+    resource: ../../../benches/scripts/run-internal-labs.mts
+    title: Workspace-only Labs benchmark workflow
+  - id: labs-result-validator
+    resource: ../../../benches/scripts/support/labs-result.mts
+    title: Saved Labs result failure validator
   - id: raster-technique-compare-probe
     resource: ../../../benches/vitexec/raster-technique-compare.probe.ts
     title: Realtime comparison product probe
@@ -700,6 +712,21 @@ no-warm-memory-growth checks outside the timed region. Its `mtsdf-generator` sui
 host initialization, initialized-plus-corpus work, and retained-generator corpus work while preserving every oracle hash.
 Browser frame, GPU, and input-latency observations remain Vitexec or Playwright workflows, while package size and
 conformance remain deterministic gates rather than timing benchmarks.
+
+| Need                                  | Command                                                                                   |
+| ------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Common installed-package signal       | `pnpm scripts run benchmark:labs-package -- --candidate <package-or-tgz>`                 |
+| Focused/full installed-package signal | add `--suite layout`, `measure`, `glyphs`, `publication`, `batch`, `stress`, or `full`    |
+| Raw retained-engine signal            | `pnpm scripts run benchmark:labs-internal -- --suite <engine-case>`                       |
+| Kernel signal                         | build with `glyph:kernel-lab-build`, then select `kernel`, `pack`, `break`, or `bidi`     |
+| Generator signal                      | `pnpm scripts run benchmark:labs-internal -- --suite mtsdf-generator`                     |
+| Browser/GPU/frame signal              | select the maintained `benchmark:*` or `glyph:kernel-lab-browser` workflow from the index |
+
+Both Labs runners inspect the saved result and fail on an empty selection or any recorded benchmark-body error; Labs
+0.9.0 can otherwise print such an error and still exit zero. Generator fixture scripts may print elapsed progress while
+writing authenticated fixtures, but those wall-clock messages are not comparison benchmarks. The MTSDF baker profiler
+remains separate because it compares native, direct Wasm, Worker transfer, and peak-memory phases that an in-process Labs
+callback cannot represent faithfully.
 
 The 0.1.0 export cleanup removes raw ABI re-exports from the baker size entries. The regenerated package-size report
 records the supported consumer surface, including the root format move. Relative to the original pre-cleanup build,
