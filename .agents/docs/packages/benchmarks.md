@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:d13528d28253dcfd50e0b3b647630044f03bdf218d87ee782cfdb5cb3ce8eeaf'
+source_digest: 'sha256:e00dc3faabc0f2b9f4fe4e88a8140e1f8e18a7889e286fdd090cdffc3d97a0d8'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -688,6 +688,14 @@ A successful baked Presentation preload retains one application-lifetime `Font` 
 | `dev`   | Build the baker dependency and start the Vite application.                                                       |
 
 Run `pnpm scripts list benchmark` from the workspace root to discover current benchmark maintenance workflows.
+
+CPU comparisons use two fresh-process `@pmndrs/labs` lanes. `benchmark:labs-package` installs packed or registry
+artifacts and measures the public API; its default smoke suite covers common layout, measurement, style, and retained
+publication work. `benchmark:labs-internal` is reserved for workspace-only implementation experiments that cannot ship in
+the package artifact. Its `kernel` suite measures the scalar, compiler-vectorized, and explicit-SIMD artifacts at 22k and
+86k target scales, preserving exact output-hash and no-warm-memory-growth checks outside the timed region. Browser frame,
+GPU, and input-latency observations remain Vitexec or Playwright workflows, while package size and conformance remain
+deterministic gates rather than timing benchmarks.
 
 The 0.1.0 export cleanup removes raw ABI re-exports from the baker size entries. The regenerated package-size report
 records the supported consumer surface, including the root format move. Relative to the original pre-cleanup build,
