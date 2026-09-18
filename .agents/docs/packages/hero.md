@@ -1,28 +1,22 @@
 ---
 type: Workspace Package
 title: '@pmndrs/glyph-hero'
-description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under glass type, and a video-masked word cycling ten scripts.'
+description: 'Glass letters, a robot, and a black-hole finale over a Slug icon lattice.'
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:a31e4a42b80cbd6f32c92ef020d43cb3e296ba79cf613700b0a6314256847429'
+source_digest: 'sha256:48d1370d3ccef409a456f3d21f02114680387d051a1d6b20f03114f2f82d0ce4'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
     resource: ../../../apps/hero/AGENTS.md
     title: Hero testing, comments, tuning, and readability policies
-  - id: origin-check
-    resource: ../../../apps/hero/scripts/origin.probe.ts
-    title: Origin video and text rendering check
   - id: manifest
     resource: ../../../apps/hero/package.json
     title: Application manifest
   - id: hero-scene
     resource: ../../../apps/hero/src/hero.tsx
-    title: Default scene composition
-  - id: origin-scene
-    resource: ../../../apps/hero/src/origin/renderer.tsx
-    title: Origin scene composition
+    title: Hero sequence composition
   - id: glass-material
     resource: ../../../apps/hero/src/typography/materials.ts
     title: Glass title materials and smooth lens normals
@@ -35,12 +29,6 @@ sources:
   - id: glass-shadows-check
     resource: ../../../apps/hero/scripts/glass-shadows.probe.ts
     title: WebGPU projection controls
-  - id: screen-material
-    resource: ../../../apps/hero/src/origin/materials.ts
-    title: Video mask and metal story materials
-  - id: word-cycle
-    resource: ../../../apps/hero/src/origin/wordCycle.ts
-    title: Typing schedule across scripts
   - id: bake
     resource: ../../../apps/hero/scripts/bake.mts
     title: Face baking and staleness check
@@ -117,17 +105,17 @@ generated:
 
 # Package reference: `@pmndrs/glyph-hero`
 
-This Vite application is a showcase rather than an API demonstration: each scene exists to make one rendering
-technique visible. Both run on `WebGPURenderer` through React Three Fiber v10 and drei v11, and both draw their
-text with the Slug raster, whose analytic coverage is what the techniques depend on.
+This Vite application presents glass letters, a robot, and a black-hole finale over an animated icon lattice.
+It runs on `WebGPURenderer` through React Three Fiber v10 and drei v11. The title, icons, robot display, and finale
+stars use Slug analytic coverage. The feature tagline uses MSDF for its outline.
 
 Local tuning values live at their use sites. Shared timing and geometry contracts, retained buffers, uniforms,
 and reusable materials keep named storage. Comments describe the current algorithm or feature. The app-specific
 [code policies](../../../apps/hero/AGENTS.md) govern future changes.
 
-Koota is pinned to `0.6.6-canary.63c1187` for the default scene's domain state. The organization follows the local
+Koota is pinned to `0.6.6-canary.63c1187` for the sequence's domain state. The organization follows the local
 `threejs-conf-talk` and `minecraft-like` examples: domains own traits and systems, actions own discrete transitions,
-and renderers read simulation state and own mounted resources. Five domains cover the default scene:
+and renderers read simulation state and own mounted resources. Five domains cover the sequence:
 
 | Domain       | Ownership                                                                                          |
 | ------------ | -------------------------------------------------------------------------------------------------- |
@@ -137,6 +125,7 @@ and renderers read simulation state and own mounted resources. Five domains cove
 | `field`      | Two icon sheets, layout, spring simulation, morphs, and glyph rendering                            |
 | `robot`      | Run scheduling, path/footprint, distance-driven dust, rig animation, and face display              |
 
+`main.tsx` mounts React once and provides the world to the canvas. `Hero` composes the scene directly.
 `world.ts` creates the application's one Koota world with the clock, sequence, and physics resource. It initially
 spawns the robot, title, typing record, and two fields. Preparation adds the floor and five letter entities to that
 same world. The robot's existing entity also carries its physics body.
@@ -154,7 +143,7 @@ they have independent responsibilities. The source root contains five applicatio
 `hero.tsx`, `world.ts`, `systems.ts`, and `frameloop.tsx`. Typography owns fonts, copy,
 glass materials, and brand accents; field owns its icon catalog, palette, and flat material; robot owns its face
 material; sequence owns finale uniforms, warp, stars, and post-processing. The `view` domain owns preparation,
-page styles, lighting, and paper; `origin` owns its composition, copy, and materials. Domain tests live
+page styles, lighting, and paper. Domain tests live
 beside their implementations.
 
 The old, unmounted break/rewind presentation and its exclusive director and compressed recording code/tests were
@@ -165,7 +154,7 @@ bounded pointer response, lift/drop/revival with one landing notification, and r
 leaving an invisible collider behind. These checks catch errors that
 pixel comparisons cannot isolate reliably. Buffer identity and duplicate timeline/path tests are omitted.
 
-The application pins Poimandres' `math` package at `0.1.0` for the default scene's CPU simulation and transforms. Its upstream
+The application pins Poimandres' `math` package at `0.1.0` for the sequence's CPU simulation and transforms. Its upstream
 skill is installed at `.agents/skills/math/SKILL.md` from `pmndrs/math` commit
 `c6713e38dd86de6e3e5bf98b94e22c2a29e4a709`, matching the published package's `gitHead`.
 Title motion and retained typing lines expose creation, update, and disposal functions over caller-owned records.
@@ -207,7 +196,7 @@ The field tests compare direct transforms with Three's matrix composition, bound
 edge-on motif substitution. The physics tests use real Crashcat contacts to verify bounce, one landing per release, revival, and robot pushes
 without tipping or leaving collisions after departure. WebGPU checks cover visible robot emission and fade, finale timing, and replay.
 
-The default scene builds two interleaved lattices of eleven icons on mass-spring grids at different depths, scaled
+The scene builds two interleaved lattices of eleven icons on mass-spring grids at different depths, scaled
 so they interleave on screen and stay in phase. The Slug-glass `Glyph` and feature line start at rest. Press Space
 to lift the title towards the camera and smash it back down. The lift is carried, 35 ms per letter, to just short
 of the camera; the fall is simulated. Each letter is a rigid body in a Crashcat world with a static floor: it is thrown
@@ -272,16 +261,16 @@ paper. It also checks the bloom against a disabled control and confirms stars an
 into the single `assets/robot.glb` the app imports: the model's own floor disc is dropped, textures are reduced to
 1024² WebP, and the animation is resampled. `--check` verifies the committed file is what the source still packs to.
 
-Both scenes cap their main render job at 60 fps through R3F v10's native scheduler. The default scene's
-offscreen glass-shadow job is capped separately: Canvas's limit does not throttle update jobs.
+The main render job is capped at 60 fps through R3F v10's native scheduler. The offscreen glass-shadow job is
+capped separately because Canvas's limit does not throttle update jobs.
 
-The default scene uses the conference slides’ lime loading screen and centered black Poimandres mark, including
+The scene uses the conference slides’ lime loading screen and centered black Poimandres mark, including
 the subtle shake, reduced-motion support, and 400 ms fade when GPU preparation finishes. Preparation failures
 remain visible in the overlay. It holds animation until all text, detached glyphs, physics bodies,
 the robot, environment, dust, and burst are ready. Preparation renders hidden and offscreen objects through the
 actual shadow, transmission, and post passes, compiles the scene, and waits for submitted GPU work before revealing
 the normal visibility set. Browser checks wait for `data-hero-state="ready"`; readiness follows completed work,
-not a fixed delay. The origin scene does not use this preparation gate.
+not a fixed delay.
 
 Both typing lines retain their complete glyph records and precompute every prefix's centering with Glyph's own
 layout during preparation. Playback changes matrices only, including the feature line's departure and replay.
@@ -296,34 +285,15 @@ raw render intervals, CPU submission work, asynchronous GPU queue completion, an
 adapter, viewport, and drawing-buffer dimensions. The default 1280×720 viewport with `dpr=1.5` draws at 1920×1080;
 explicit DPR choices are 1, 1.5, 2, and 3.
 
-After the math rewrite, the local Apple Metal adapter with Chromium 149 prepared the 1920×1080 check in 3.23 seconds
-and recorded 1,702 frames across two replays at 59.96 fps. Render intervals were 17.3 ms at p95 and 25.0 ms worst,
-with no interval over 25 ms, long tasks, or late resources. CPU work was 3.0 ms at p95; browser-observed GPU queue
-completion was 9.1 ms at p95 with at most two pending observations. The preceding implementation measured 59.92 fps,
-17.6 ms render-interval p95, and 3.2 ms CPU p95 on the same adapter and resolution; these single runs support stable
-cadence, not a statistically established speedup. These are submission and queue measurements,
-not GPU timestamp durations or proof of frame delivery through a screen recorder. The full application check
-currently stops at the existing stale `geist-medium.font.glb` bake; typecheck, lint, unit tests, and build pass.
+Two complete 1920×1080 replays on Apple Metal with Chromium 149 averaged 60.01 fps across 1,700 frames after
+3.04 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long tasks were observed.
+Render intervals were 17.8 ms at p95 and 25.7 ms worst, with one interval over 25 ms. CPU submission time was 4.2 ms
+at p95 and browser GPU queue completion was 8.9 ms at p95. This verifies resource preparation and near-60 fps
+playback on this host. It does not measure delivery through a screen recorder or guarantee every frame meets budget.
 
-The Koota migration passes 15 focused tests, including two complete headless cycles with real title contacts,
-and preserves the startup/resource gate. Its 1920×1080 WebGPU replay check found no late shader programs, pipelines,
-meshes, or assets. Current host conditions did not reproduce the earlier 60 fps result: the migrated scene averaged
-9.91 fps, with 112.5 ms interval p95 and 29.6 ms CPU p95; the unchanged pre-migration commit `b0059f58`, run separately
-at the same resolution with the same installed renderer, averaged 9.95 fps, with 113.5 ms interval p95 and 30.2 ms CPU
-p95. Both runs used the Apple Metal adapter and Chromium 149. This comparison does not establish a meaningful
-cadence regression, but cannot verify 60 fps recording readiness under those conditions. The cap remains 60 fps;
-the migration does not claim a fresh 60 fps measurement. A CPU profile placed most sampled wall time in idle and
-rendering work; it does not establish the cause of the slowdown shared by both versions.
-
-The shared-world physics and Glyph-curve colliders pass six numerical tests and the WebGPU lift/settle and finale/replay
-checks. Two complete 1920×1080 replays on Apple Metal with Chromium 149 averaged 59.78 fps across 1,695 frames after
-3.39 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long tasks were observed. Render
-intervals were 17.7 ms at p95 and 25.7 ms worst, with four intervals over 25 ms. CPU submission time was 3.9 ms at p95
-and browser GPU queue completion was 9.9 ms at p95. The 1280×720 run averaged 60.01 fps. These measurements verify
-resource preparation and near-60 fps playback, not perfectly hitch-free recording. Removing OpenType reduced the
-main production JavaScript bundle from 676.40 kB to 609.11 kB gzip and removed the separate 130.50 kB Geist Black TTF.
-Glyph's full package check passes. Hero typecheck, lint, formatting, tests, and build pass, while its full check still
-stops at the existing stale Geist Medium bake.
+The full hero package check passes, including six numerical tests, all five font bake checks, and the production
+build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
+The production entry bundle is 598.06 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/typography/materials.ts`: red G, orange l,
@@ -359,26 +329,10 @@ controls, lifts the actual draw surfaces while keeping visible glass fixed for t
 exact return to the original pixels after lowering them. Both run through Vitexec, fail on browser errors,
 and save scene readbacks under `apps/hero/.cache/`.
 
-`hero:origin-check` loads the alternate scene, observes decoded video frames advancing, and compares its word
-and story pixels against hidden controls on WebGPU.
-
-`?scene=origin` sets a word off axis over a black reflector in a dark room. A NASA SDO clip is masked into the
-letterforms, and the same clip lights the scene through `Lightformer`s inside an `Environment`, so the word and the
-justified origin column beside it are lit by the footage showing through the word. The mask samples the clip in the
-word's own space through an inverse model matrix rather than from the material's `position`: Slug dilates each glyph
-quad to cover its antialiasing footprint, and that dilation is view dependent, so a coordinate derived from it moves
-with the camera. Both text materials set `depthWrite: false`, because glyph quads overlap wherever letters kern
-tightly and coplanar quads otherwise fight over depth.
-
-The word cycles ten languages, each the native word for a letter or written form rather than a transliteration.
-Typing and deleting advance by grapheme cluster through `Intl.Segmenter`, so Devanagari conjuncts and Arabic joining
-forms assemble the way those scripts actually write them. The schedule runs on wall-clock seconds and advances only
-once the layout it last asked for has committed, so a cluster's share of time is time it was visible for.
-
-Letter-shaped shadows come from Three's own `maskShadowNode`, fed the format's coverage; `alphaTest` does nothing in
-the WebGPU shadow pass.
-
-`pnpm --filter @pmndrs/glyph-hero dev` starts the development server. `bake` and `bake:check` drive the faces through
-the Glyph CLI, and `check` runs typecheck, lint, format, unit tests, the bake staleness check, and the build. Faces
-are baked per script because no single face covers Latin, CJK, Arabic, Devanagari, and Greek at display weight; the
-CJK, Arabic, and Devanagari cuts are vendored under `fonts/word-faces` with their licenses and regeneration commands.
+`pnpm --filter @pmndrs/glyph-hero dev` starts the development server. `bake` and `bake:check` drive the five font
+assets through the Glyph CLI, and `check` runs typecheck, lint, format, unit tests, the bake staleness check, and the
+build. `hero:bake -- --only=<asset-name>` limits a bake to one face. Geist Black, Geist Mono Bold, and Geist Pixel
+Grid include Basic Latin. The tagline adds its punctuation to Mono Bold. Icons and stars include only the symbols
+used by their domains. `useFonts` preloads four Slug fonts and the tagline's MSDF font before rendering the scene,
+and each renderer receives only the fonts it draws. The origin scene, video, multilingual faces, unused copy, and
+alternate scene switch are removed.

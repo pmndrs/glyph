@@ -48,6 +48,6 @@ export function typeFeature(world: World): void {
 
     // Three captured frames per character at the shared 60 Hz update cadence.
     typing.beat++;
-    typing.count = Math.min(Math.floor(typing.beat / 3), FEATURE_LINE.text.length);
+    typing.count = Math.min(Math.floor(typing.beat / 3), FEATURE_LINE.length);
   });
 }

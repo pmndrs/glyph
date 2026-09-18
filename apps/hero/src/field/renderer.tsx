@@ -3,7 +3,7 @@ import { defineTextMaterial, type Glyphs, type Text as ThreeText } from '@pmndrs
 import { useFrame } from '@react-three/fiber/webgpu';
 import { useEffect, useMemo, useRef } from 'react';
 import { DoubleSide, MeshBasicNodeMaterial, Matrix4, type Group } from 'three/webgpu';
-import type { Faces } from '../typography/fonts';
+import type { SlugFont } from '../typography/fonts';
 import { holeWarp } from '../sequence/warp';
 import { usePreparation } from '../view/startup';
 import { PATTERN_ANGLE, GLYPHS, cellMatrix } from './lattice';
@@ -29,15 +29,15 @@ const pattern = defineTextMaterial((context) => {
   return material;
 });
 
-export function FieldRenderer({ faces }: { readonly faces: Faces }) {
-  return useQuery(Field).map((entity) => <IconPattern key={entity} entity={entity} faces={faces} />);
+export function FieldRenderer({ font }: { readonly font: SlugFont }) {
+  return useQuery(Field).map((entity) => <IconPattern key={entity} entity={entity} font={font} />);
 }
 
 /**
  * Scrolling icon lattice with spring responses to impacts and the pointer. Each motif swaps glyphs while
  * edge-on.
  */
-function IconPattern({ entity, faces }: { readonly entity: Entity; readonly faces: Faces }) {
+function IconPattern({ entity, font }: { readonly entity: Entity; readonly font: SlugFont }) {
   const world = useWorld();
   const field = entity.get(Field)!;
   const {
@@ -119,7 +119,7 @@ function IconPattern({ entity, faces }: { readonly entity: Entity; readonly face
       <group ref={sheet}>
         <Text
           ref={source}
-          font={faces.icons}
+          font={font}
           layout={{ wrap: 'none' }}
           material={pattern}
           style={{ fontSize: iconSize, lineHeight: 1, opacity }}

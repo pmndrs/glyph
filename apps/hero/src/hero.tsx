@@ -1,10 +1,8 @@
-import { WorldProvider } from 'koota/react';
-import { createHeroWorld } from './world';
 import { FrameLoop } from './frameloop';
 import { useThree } from '@react-three/fiber/webgpu';
 import { useEffect } from 'react';
 
-import { useFaces, useFeatureField } from './typography/fonts';
+import { useFonts } from './typography/fonts';
 import { Post } from './sequence/post';
 import { BlackHole, GlyphBurst } from './sequence/renderer';
 import { GlassShadows } from './typography/shadows';
@@ -18,21 +16,8 @@ import { PrepareHero } from './view/startup';
 /** `?post=0` renders the plain scene: a clean capture pass, and a way to isolate post-processing. */
 const POST_ENABLED = new URLSearchParams(location.search).get('post') !== '0';
 
-const world = createHeroWorld();
-
-if (import.meta.hot) import.meta.hot.dispose(() => world.destroy());
-
 export function Hero() {
-  return (
-    <WorldProvider world={world}>
-      <HeroScene />
-    </WorldProvider>
-  );
-}
-
-function HeroScene() {
-  const faces = useFaces();
-  const featureField = useFeatureField();
+  const fonts = useFonts();
   const scene = useThree((state) => state.scene);
   const renderer = useThree((state) => state.renderer);
 
@@ -49,13 +34,13 @@ function HeroScene() {
       <FrameLoop />
       <Lighting />
       <Paper />
-      <FieldRenderer faces={faces} />
-      <GlassTitle faces={faces} />
+      <FieldRenderer font={fonts.icons} />
+      <GlassTitle font={fonts.title} />
       <GlassShadows />
-      <FeatureLine field={featureField} />
-      <RobotRenderer faces={faces} />
+      <FeatureLine field={fonts.feature} />
+      <RobotRenderer font={fonts.robot} icons={fonts.icons} />
       <BlackHole />
-      <GlyphBurst faces={faces} />
+      <GlyphBurst font={fonts.stars} />
       {POST_ENABLED ? <Post /> : null}
     </>
   );

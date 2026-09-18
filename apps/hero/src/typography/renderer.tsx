@@ -10,9 +10,9 @@ import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Box3, Vector3, Matrix4 } from 'three/webgpu';
 
-import { TITLE, FEATURE_LINE } from './content';
+import { FEATURE_LINE } from './content';
 import { heroReady, usePreparation } from '../view/startup';
-import type { Faces, MsdfFont } from './fonts';
+import type { SlugFont, MsdfFont } from './fonts';
 import { stainedGlassLetters, titleOrigin } from './materials';
 import { solidOf } from './outline';
 import { type Letter, type TitleBodies, createTitleBodies, disposeTitle } from './bodies';
@@ -31,7 +31,7 @@ const inkCenter = new Vector3();
  * Each glass glyph follows a rigid body after the title commits. Space lifts and drops the letters, and the
  * robot pushes them along the floor.
  */
-export function GlassTitle({ faces }: { readonly faces: Faces }) {
+export function GlassTitle({ font }: { readonly font: SlugFont }) {
   const world = useWorld();
   const draw = useRef(new Matrix4());
   const camera = useThree((state) => state.camera);
@@ -107,7 +107,7 @@ export function GlassTitle({ faces }: { readonly faces: Faces }) {
         if (measurement.localInkBounds.isEmpty()) continue;
 
         const solid = solidOf(
-          faces[TITLE.face],
+          font,
           layout.glyphIds[measurement.index]!,
           layout.glyphFontSizes[measurement.index]!,
           SOLID_THICKNESS,
@@ -148,7 +148,7 @@ export function GlassTitle({ faces }: { readonly faces: Faces }) {
     <group>
       <Text
         constraints={{ width: { mode: 'exact', size: LAYOUT_WIDTH } }}
-        font={faces[TITLE.face]}
+        font={font}
         layout={{ align: 'center', wrap: 'none' }}
         position={[-LAYOUT_WIDTH / 2, FONT_SIZE / 2, 0]}
         ref={word}
@@ -289,7 +289,7 @@ export function FeatureLine({ field }: { readonly field: MsdfFont }) {
         if (object === null || object.commitState().status !== 'committed') return;
 
         line.current = createRetainedLine(object);
-        showLine(line.current, FEATURE_LINE.text.length);
+        showLine(line.current, FEATURE_LINE.length);
       }
 
       if (!heroReady()) return;
@@ -318,7 +318,7 @@ export function FeatureLine({ field }: { readonly field: MsdfFont }) {
           outline: { color: '#ffffff', width: 0.12 * (fit?.fontSize ?? FEATURE_FONT_SIZE) },
         }}
       >
-        {FEATURE_LINE.text}
+        {FEATURE_LINE}
       </Text>
     </group>
   );

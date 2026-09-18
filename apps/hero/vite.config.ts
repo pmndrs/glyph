@@ -8,12 +8,6 @@ import { defaultClientConditions, defineConfig } from 'vite';
 const NOTICES = [
   { name: 'Noto Sans Symbols 2', url: new URL('./fonts/star-symbols/OFL.txt', import.meta.url) },
   { name: 'Geist 1.7.2', url: new URL('./fonts/geist-1.7.2/OFL.txt', import.meta.url) },
-  { name: 'Source Serif 4', url: new URL('../../benches/fixtures/fonts/source-serif-4.005/OFL.md', import.meta.url) },
-  {
-    name: 'Dancing Script',
-    url: new URL('../../benches/fixtures/fonts/dancing-script-3.000/OFL.txt', import.meta.url),
-  },
-  { name: 'DotGothic16', url: new URL('../../benches/fixtures/fonts/dot-gothic-16/OFL.txt', import.meta.url) },
   {
     name: 'Font Awesome Free 6.7.2',
     url: new URL('../../benches/fixtures/fonts/font-awesome-free-6.7.2/LICENSE.txt', import.meta.url),

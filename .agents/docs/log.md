@@ -2,6 +2,14 @@
 
 ## 2026-09-19
 
+- **Kept only the main hero sequence** — Removed the origin scene, video, ten unused baked fonts, and their
+  exclusive font sources and browser check. Simplified the entry point, scene composition, font loading, and bake
+  workflow around the letters, robot, and black-hole sequence with its existing backdrop and tagline. React mounts
+  once and the scene uses one Koota world. The full hero check now passes, including all five retained font bakes,
+  six numerical tests, and the production build. WebGPU lift, typing, finale, and replay checks pass. Two 1080p
+  replays averaged 60.01 fps with no late resources or long tasks and one render interval over 25 ms. See
+  [the hero reference](packages/hero.md).
+
 - **Unified hero physics and reused Glyph curves** — Added the root `getSlugGlyphCurves` API and removed hero's
   OpenType parser, declaration shim, and runtime TTF fetch. Physics now uses traits, actions, and systems on the
   application's one Koota world. Letter and robot entities own their body state, and entity removal releases solver

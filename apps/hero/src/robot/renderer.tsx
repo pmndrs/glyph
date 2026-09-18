@@ -37,7 +37,7 @@ import {
 } from 'three/webgpu';
 
 import robotUrl from '../../assets/robot.glb?url';
-import type { Faces } from '../typography/fonts';
+import type { SlugFont } from '../typography/fonts';
 import { screenInk } from './material';
 import { LOOK_UP_AT, LOOK_DOWN_AT } from './motion';
 import { mat4, quat, vec3 as vector3 } from 'math';
@@ -160,16 +160,16 @@ function tiltJoint(
   joint.quaternion.fromArray(scratch.local);
 }
 
-export function RobotRenderer({ faces }: { readonly faces: Faces }) {
+export function RobotRenderer({ font, icons }: { readonly font: SlugFont; readonly icons: SlugFont }) {
   return useQuery(RobotTrait).map((entity) => (
     <group key={entity}>
-      <Robot entity={entity} faces={faces} />
-      <RobotDust entity={entity} faces={faces} />
+      <Robot entity={entity} font={font} />
+      <RobotDust entity={entity} font={icons} />
     </group>
   ));
 }
 
-function Robot({ entity, faces }: { readonly entity: Entity; readonly faces: Faces }) {
+function Robot({ entity, font }: { readonly entity: Entity; readonly font: SlugFont }) {
   const world = useWorld();
   const robot = entity.get(RobotTrait)!;
   const model = useGLTF(robotUrl);
@@ -307,7 +307,7 @@ function Robot({ entity, faces }: { readonly entity: Entity; readonly faces: Fac
         <group matrixAutoUpdate={false} ref={face} visible={false}>
           <Text
             constraints={{ width: { mode: 'exact', size: FACE_WIDTH } }}
-            font={faces['geist-pixel-grid']}
+            font={font}
             layout={{ align: 'center', wrap: 'none' }}
             material={display}
             ref={text}
@@ -352,7 +352,7 @@ const dust = defineTextMaterial((context) => {
 });
 
 /** A bounded trail in world space, fed by distance travelled rather than time spent on screen. */
-function RobotDust({ entity, faces }: { readonly entity: Entity; readonly faces: Faces }) {
+function RobotDust({ entity, font }: { readonly entity: Entity; readonly font: SlugFont }) {
   const groups = useRef<(Group | null)[]>([]);
   usePreparation('dust', () => groups.current.length === COUNT && groups.current.every(textPrepared));
   const robot = entity.get(RobotTrait)!;
@@ -391,7 +391,7 @@ function RobotDust({ entity, faces }: { readonly entity: Entity; readonly faces:
         >
           <Text
             constraints={{ width: { mode: 'exact', size: 2 } }}
-            font={faces.icons}
+            font={font}
             layout={{ align: 'center', wrap: 'none' }}
             material={dust}
             position={[-1, 0.5, 0]}

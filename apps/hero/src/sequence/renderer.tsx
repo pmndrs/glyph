@@ -1,7 +1,7 @@
 import { Text, TextGroup } from '@pmndrs/glyph/react';
 import { emberMaterial } from './embers';
 import { STAR_SYMBOLS } from './symbols';
-import type { Faces } from '../typography/fonts';
+import type { SlugFont } from '../typography/fonts';
 import { jitter } from './departure';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useMemo, useRef } from 'react';
@@ -152,7 +152,7 @@ const PARTICLES = Array.from({ length: 16 }, (_, index) => ({
 }));
 
 /** Pastel Unicode stars flare over the black sheet, then linger as softly glowing embers. */
-export function GlyphBurst({ faces }: { readonly faces: Faces }) {
+export function GlyphBurst({ font }: { readonly font: SlugFont }) {
   const world = useWorld();
   const groups = useRef<(Group | null)[]>([]);
   usePreparation('burst', () => groups.current.length === PARTICLES.length && groups.current.every(textPrepared));
@@ -196,7 +196,7 @@ export function GlyphBurst({ faces }: { readonly faces: Faces }) {
           >
             <Text
               constraints={{ width: { mode: 'exact', size: 2 } }}
-              font={faces.stars}
+              font={font}
               layout={{ align: 'center', wrap: 'none' }}
               material={emberMaterial}
               position={[-1, 0.5, 0]}

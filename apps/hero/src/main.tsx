@@ -4,38 +4,34 @@ import { Canvas } from '@react-three/fiber/webgpu';
 import { StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { NeutralToneMapping } from 'three/webgpu';
+import { WorldProvider } from 'koota/react';
 
 import { Hero } from './hero';
-import { Origin } from './origin/renderer';
+import { createHeroWorld } from './world';
 import { HeroLoading } from './view/startup';
 
-/** `?scene=origin` loads the second hero. Anything else keeps the first. */
-const ORIGIN = new URLSearchParams(location.search).get('scene') === 'origin';
 /** Fixed DPR for repeatable capture workloads. Normal viewing retains the adaptive 1-1.5 range. */
-const CAPTURE_DPR = new URLSearchParams(location.search).get('dpr');
-const DPR =
-  CAPTURE_DPR === '1' ? 1 : CAPTURE_DPR === '1.5' ? 1.5 : CAPTURE_DPR === '2' ? 2 : CAPTURE_DPR === '3' ? 3 : undefined;
+const dpr = Number(new URLSearchParams(location.search).get('dpr'));
+const world = createHeroWorld();
 
-const root = document.querySelector<HTMLElement>('#root');
+if (import.meta.hot) import.meta.hot.dispose(() => world.destroy());
 
-if (root === null) throw new Error('Glyph Hero needs a #root element');
-
-createRoot(root).render(
+createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {!ORIGIN && <HeroLoading />}
-    <Canvas
-      camera={
-        ORIGIN
-          ? { far: 120, fov: 34, near: 0.5, position: [0.4, 0.25, 15.2] }
-          : { far: 90, fov: 35, near: 0.5, position: [0, 0, 16] }
-      }
-      dpr={DPR ?? [1, 1.5]}
-      fallback={<div>WebGPU or WebGL2 is required.</div>}
-      // Neutral, not AgX: paper white should stay paper white.
-      renderer={{ scheduler: { fps: 60 }, toneMapping: NeutralToneMapping, toneMappingExposure: 1 }}
-    >
-      {!ORIGIN && <color args={['#f2efe8']} attach="background" />}
-      <Suspense fallback={null}>{ORIGIN ? <Origin /> : <Hero />}</Suspense>
-    </Canvas>
+    <HeroLoading />
+    <WorldProvider world={world}>
+      <Canvas
+        camera={{ far: 90, fov: 35, near: 0.5, position: [0, 0, 16] }}
+        dpr={[1, 1.5, 2, 3].includes(dpr) ? dpr : [1, 1.5]}
+        fallback={<div>WebGPU or WebGL2 is required.</div>}
+        // Preserve paper white under the scene lighting.
+        renderer={{ scheduler: { fps: 60 }, toneMapping: NeutralToneMapping, toneMappingExposure: 1 }}
+      >
+        <color args={['#f2efe8']} attach="background" />
+        <Suspense fallback={null}>
+          <Hero />
+        </Suspense>
+      </Canvas>
+    </WorldProvider>
   </StrictMode>,
 );

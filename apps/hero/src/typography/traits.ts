@@ -8,7 +8,7 @@ export const Title = trait(() => ({
   reach: 0,
 }));
 export const Typing = trait(() => ({
-  count: FEATURE_LINE.text.length,
+  count: FEATURE_LINE.length,
   beat: 0,
   wave: 0,
   start: Number.POSITIVE_INFINITY,
