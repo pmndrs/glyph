@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:27edc65bb2d1d188089d738fba60c7dec7b51130262c279a7419d7acea5324eb'
+source_digest: 'sha256:e4bc78eb979366449bbfc63bf8d16d0769bd557a56ba793bb74c367e13e76508'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -213,8 +213,8 @@ sources:
     resource: ../../../benches/labs.config.ts
     title: Packaged public API benchmark configuration
   - id: labs-package-suite
-    resource: ../../../benches/labs/glyph-package.bench.ts
-    title: Packaged public API benchmark suite
+    resource: ../../../benches/labs/package
+    title: Packaged public API benchmark suites
   - id: labs-package-workflow
     resource: ../../../benches/scripts/run-package-labs.mts
     title: Installed package artifact benchmark workflow
@@ -241,6 +241,19 @@ The Vite and TypeScript configurations opt into the workspace packages' custom `
 build, and typecheck therefore consume current TypeScript sources without requiring a package rebuild; release-oriented
 Node workflows continue to exercise built package exports.
 
+## Approved performance lanes
+
+| Lane                  | Runner                         | Owns                                                                                            | Selection                                                                                                                   |
+| --------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| CPU comparison        | `@pmndrs/labs`                 | Deterministic in-process Node work, including public package, retained engine, and Wasm kernels | Bench files plus shared `@smoke`, `@layout`, `@measure`, `@glyphs`, `@publication`, `@batch`, `@kernel`, and `@stress` tags |
+| Browser observation   | Vitexec or Playwright Chromium | Browser V8, DOM, RAF/frame pacing, WebGPU/WebGL2, GPU timestamps, and input-to-visible latency  | The maintained browser workload and probe selectors                                                                         |
+| Native/Worker profile | Dedicated profilers            | External-process builds, native-versus-Wasm phases, Worker startup, peak memory, and long bakes | Explicit profile case flags; never part of the default pull-request timing run                                              |
+
+Correctness, deterministic artifact authentication, package size, and conformance are gates, not performance lanes. They
+remain under their focused checks because a byte mismatch, pixel mismatch, or size ceiling is an exact fact rather than a
+timing distribution. The CPU migration retires hand-rolled Node timers only after their Labs replacement has produced a
+valid record; browser and native/Worker workflows are not renamed into Labs benchmarks they cannot faithfully become.
+
 Package performance is measured from installable artifacts rather than workspace source. The pull-request `check` job
 builds `@pmndrs/glyph` once, creates one package tarball with `pnpm pack`, and retains that tarball for the separate
 non-blocking performance job. `benchmark:labs-package` installs the candidate tarball and an exact version resolved from
@@ -252,9 +265,9 @@ The default package suite is a common-use smoke comparison: cached `measure()`, 
 change, exact-width reflow, paint-only style publication, and font-size relayout. It deliberately excludes per-glyph
 inspection and high-scale stress work. Four fresh-process blocks are the smallest Labs comparison that can reach the
 configured five-percent significance threshold, keeping the pull-request signal concise. Maintainers select focused
-`layout`, `measure`, `glyphs`, `publication`, or `stress` tags when a change touches those concerns, or select `full` for
-the complete package matrix. Browser, GPU, frame-pacing, kernel, baker, and payload evidence remain separately owned by
-their explicit workflows rather than entering the default pull-request timing lane.
+`layout`, `measure`, `glyphs`, `publication`, `batch`, or `stress` tags when a change touches those concerns, or select
+`full` for the complete installed-package matrix. `full` does not run browser observations, native/Worker profiles, or
+correctness and release gates.
 
 Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentation are complete
 
