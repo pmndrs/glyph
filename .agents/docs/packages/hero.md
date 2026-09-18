@@ -5,7 +5,7 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:765a85c3bf9f8038c698a8ff8f31cb9fe60f3ea21aab87f9f3e48233e469fa02'
+source_digest: 'sha256:5b53b398500b9ed8656b82415fe5a3b1a2136ae7263a630f55d8dbce3577571c'
 tags: [package, example, react-three-fiber, webgpu, slug, vite]
 sources:
   - id: manifest
@@ -26,6 +26,12 @@ sources:
   - id: refraction-check
     resource: ../../../apps/hero/scripts/refraction.probe.ts
     title: WebGPU stained-glass verification
+  - id: glass-shadows
+    resource: ../../../apps/hero/src/scene/GlassShadows.tsx
+    title: Light-space glass projection
+  - id: glass-shadows-check
+    resource: ../../../apps/hero/scripts/glass-shadows.probe.ts
+    title: WebGPU projection controls
   - id: screen-material
     resource: ../../../apps/hero/src/materials/screen.ts
     title: Video mask and metal story materials
@@ -58,20 +64,26 @@ The development inspector starts hidden in both scenes; D toggles it.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents, copied into `src/theme.ts`: red G, orange l,
-teal y, blue p, and purple h. The same accents tint their contact shadows. The feature line sits below the lowercase descenders.
+teal y, blue p, and purple h. The same attenuation colors tint their projected light. The feature line sits below the lowercase descenders.
 Each has its own attenuation tint, thickness, roughness, and refractive index, with smooth lens normals and modest
 physical dispersion. The paper and icon background stay unchanged; there are no added crystal lights, internal
 rainbow beams, or hidden studio images.
 
-Each pane casts a colored contact shadow from the MSDF companion's `trueDistance` and `pixelRange`. A smooth
-falloff replaces the former hard offset shadow. The shadows remain on the surface as the letters rise: height
-increases their offset and softness while reducing opacity, then restores a tight contact on landing. The falloff
-stays within the baked distance range to avoid rectangular atlas-cell edges.
+A subtle colored fringe is projected around all sides of the flat Slug letters without changing the scene
+lighting. The 2048 × 1280 capture preserves analytic fractional coverage, the original deformation, and Three's
+material attenuation values. Narrow bands derived from the silhouette separate RGB using the material IOR and
+dispersion, producing a restrained spectral spill. A second attachment records `positionWorld.z` above a nearby receiving plane at
+z = -0.06. A virtual perspective projector makes the footprint expand with height; coverage-weighted distance
+blends between two Gaussian scales and fades the fringe as a letter lifts. It tightens again on landing. The
+narrow edge redistribution suggests slight caustics without bright pools or directional shadow tails; it is an
+art-directed projection, not multi-bounce light transport. The old offset MSDF shadow copies are removed.
 
-`mise exec -- pnpm scripts run hero:refraction-check` verifies the real scene on WebGPU through Vitexec. It requires
-five stained-glass materials, compares them with an untinted control, checks that changes stay inside the title,
-drives the real Space handler in fixed simulation steps to check five staggered impacts and ignored key repeats,
-compares against a shadow-free control, checks repeatable captures and resizing, and saves `apps/hero/.cache/refraction.png`. Browser errors fail the workflow.
+`mise exec -- pnpm scripts run hero:refraction-check` verifies the five visible stained-glass finishes against an
+untinted control on WebGPU and checks repeated captures and resizing.
+`mise exec -- pnpm scripts run hero:glass-shadow-check` compares the projection with disabled and untinted
+controls, lifts the actual draw surfaces while keeping visible glass fixed for the readback, and verifies an
+exact return to the original pixels after lowering them. Both run through Vitexec, fail on browser errors,
+and save scene readbacks under `apps/hero/.cache/`.
 
 `?scene=origin` sets a word off axis over a black reflector in a dark room. A NASA SDO clip is masked into the
 letterforms, and the same clip lights the scene through `Lightformer`s inside an `Environment`, so the word and the

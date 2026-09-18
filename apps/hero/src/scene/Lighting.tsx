@@ -31,7 +31,7 @@ export function Lighting() {
         />
         <Lightformer form="ring" intensity={2} color="#dfe8ff" position={[0, 0, -10]} scale={14} />
       </Environment>
-      <directionalLight color="#ffffff" intensity={1.6} position={[4, 6, 10]} />
+      <directionalLight name="glass-key" color="#ffffff" intensity={1.6} position={[4, 6, 10]} />
       <ambientLight intensity={0.35} />
     </>
   );

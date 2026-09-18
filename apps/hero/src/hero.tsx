@@ -1,9 +1,10 @@
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useEffect } from 'react';
 
-import { useFaces, useFeatureField, useTitleField } from './fonts';
+import { useFaces, useFeatureField } from './fonts';
 import { Post } from './post/Post';
 import { FeatureLine } from './scene/FeatureLine';
+import { GlassShadows } from './scene/GlassShadows';
 import { GlassTitle } from './scene/GlassTitle';
 import { IconPattern, PATTERN_ANGLE } from './scene/IconPattern';
 import { Lighting } from './scene/Lighting';
@@ -18,7 +19,6 @@ const POST_ENABLED = new URLSearchParams(location.search).get('post') !== '0';
 
 export function Hero() {
   const faces = useFaces();
-  const titleField = useTitleField();
   const featureField = useFeatureField();
   const scene = useThree((state) => state.scene);
   const renderer = useThree((state) => state.renderer);
@@ -118,7 +118,8 @@ export function Hero() {
         waveImpulse={146}
         waveSpeed={15}
       />
-      <GlassTitle faces={faces} field={titleField} />
+      <GlassTitle faces={faces} />
+      <GlassShadows />
       <FeatureLine field={featureField} />
       {POST_ENABLED ? <Post /> : null}
     </>

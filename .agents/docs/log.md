@@ -2,6 +2,11 @@
 
 ## 2026-09-18
 
+- **Added a soft colored fringe around the flat glass title** — A high-resolution shader projection follows the
+  real Slug coverage and depth. The footprint spreads and fades during the lift and tightens on landing, without
+  changing the studio lighting. WebGPU controls verify tint, depth response, exact return to rest, and resizing.
+  See [the hero reference](packages/hero.md).
+
 - **Changed the hero title to title case** — `Glyph` retains Geist Black and the five brand-colored glass materials.
   Moved the feature line below the lowercase descenders. See [the hero reference](packages/hero.md).
 

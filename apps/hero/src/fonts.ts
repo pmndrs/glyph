@@ -43,15 +43,8 @@ const URLS = {
 
 // Start every load before React first asks for a face.
 for (const url of Object.values(URLS)) useSlug.preload(url);
-// The title is baked with both rasters: Slug draws it, MSDF's distance field casts its soft shadow.
-useMsdf.preload(URLS['geist-black']);
 // The feature line is MSDF outright: over the icon field it needs a stroke, which only the distance field carries.
 useMsdf.preload(URLS['geist-mono-bold'], FEATURE_FIELD);
-
-/** The title's MSDF raster: the distance field behind its soft per-letter shadow. */
-export function useTitleField(): MsdfFont {
-  return useMsdf(URLS['geist-black']);
-}
 
 /** The feature line's MSDF raster: the distance field behind its white outline. */
 export function useFeatureField(): MsdfFont {

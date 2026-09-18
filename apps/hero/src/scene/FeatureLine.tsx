@@ -71,8 +71,9 @@ export function FeatureLine({ field }: { readonly field: MsdfFont }) {
 
     // Fit first: the line renders its whole text, unseen, until it knows what size and tracking match the title.
     if (fit === undefined) {
-      const target = (titleWidth() ?? 0) - 0.1;
-      if (object === null || target === undefined) return;
+      const width = titleWidth();
+      if (object === null || width === undefined) return;
+      const target = width - 0.1;
       const state = object.commitState();
       if (state.status !== 'committed' || state.revision === fitRevision.current) return;
       fitRevision.current = state.revision;

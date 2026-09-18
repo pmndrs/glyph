@@ -162,35 +162,10 @@ export const stainedGlassLetters = [
       },
       motion,
     ),
-    shadow: createSoftShadow(letter, tint, motion),
   };
 });
 
 export type StainedGlassLetter = (typeof stainedGlassLetters)[number];
-
-/** The true SDF supplies continuous falloff, independent of the shader's already-clamped fill opacity. */
-function createSoftShadow(letter: string, tint: string, motion: PaneMotion) {
-  const { height } = motion;
-  return defineTextMaterial((context) => {
-    if (context.kind !== 'glyph' || context.format !== 'pmndrs.msdf') return context.createDefaultMaterial();
-    const { shader, position } = context;
-    const material = new MeshBasicNodeMaterial({
-      name: `glass-shadow-${letter}`,
-      side: DoubleSide,
-      transparent: true,
-      depthWrite: false,
-    });
-    material.positionNode = jostle(position, motion).add(
-      vec3(height.mul(0.14).add(0.06), height.mul(-0.18).sub(0.09), 0),
-    );
-    material.colorNode = color(new Color(tint).multiplyScalar(0.45));
-    // Fade to zero inside the baked field's range, avoiding a rectangular cutoff at the atlas-cell border.
-    const radius = height.mul(4).add(2.5).min(shader.pixelRange.mul(0.35));
-    const falloff = smoothstep(radius.negate(), radius, shader.trueDistance.mul(shader.pixelRange));
-    material.opacityNode = falloff.mul(float(1).sub(height.mul(0.75))).mul(0.25);
-    return material;
-  });
-}
 
 /** Flat, unlit ink for the background pattern: crisp coverage, no lighting cost across hundreds of icons. */
 export const pattern = defineTextMaterial((context) => {

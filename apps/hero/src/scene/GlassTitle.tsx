@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react';
 import { Box3 } from 'three/webgpu';
 
 import { TITLE } from '../content';
-import type { Faces, MsdfFont } from '../fonts';
+import type { Faces } from '../fonts';
 import { stainedGlassLetters, titleOrigin } from '../materials/ink';
 import { setTitleWidth } from './metrics';
 import { requestReplay } from './replay';
@@ -39,7 +39,7 @@ function revealScale(time: number): number {
   return 1 - Math.sin(settle * Math.PI) * (1 - settle) ** 2 * 0.1;
 }
 
-export function GlassTitle({ faces, field }: { readonly faces: Faces; readonly field: MsdfFont }) {
+export function GlassTitle({ faces }: { readonly faces: Faces }) {
   const elapsed = useRef(ALL_SETTLED);
   const landed = useRef(stainedGlassLetters.length);
   const word = useRef<ThreeText<never> | null>(null);
@@ -121,19 +121,6 @@ export function GlassTitle({ faces, field }: { readonly faces: Faces; readonly f
 
   return (
     <group>
-      <Text
-        constraints={{ width: { mode: 'exact', size: LAYOUT_WIDTH } }}
-        font={field}
-        layout={{ align: 'center', wrap: 'none' }}
-        position={[-LAYOUT_WIDTH / 2, FONT_SIZE / 2, -0.05]}
-        style={{ fontSize: FONT_SIZE, lineHeight: 1 }}
-      >
-        {stainedGlassLetters.map(({ letter, shadow }) => (
-          <Text key={letter} material={shadow}>
-            {letter}
-          </Text>
-        ))}
-      </Text>
       <Text
         constraints={{ width: { mode: 'exact', size: LAYOUT_WIDTH } }}
         font={faces[TITLE.face]}
