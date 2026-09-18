@@ -20,6 +20,9 @@ import {
 } from 'three/webgpu';
 
 import type { TitleBodies } from '../src/scene/title-bodies';
+const { replayTitle } = (await import(
+  new URL('/src/scene/title-bodies.ts', location.origin).href
+)) as typeof import('../src/scene/title-bodies');
 
 const { COLLAPSE_SECONDS, dismissCollapse, holdCollapse, POP_AT, uHoleCollapse, uHoleBloom, hole } = (await import(
   new URL('/src/scene/hole.ts', location.origin).href
@@ -223,7 +226,7 @@ for (let offset = 0; offset < embers.length; offset += 4) {
     emberGlowPixels++;
 }
 if (emberGlowPixels < 100) throw new Error(`The fading embers lost their glow: ${emberGlowPixels}`);
-handles.heroTitle!.replay();
+replayTitle(handles.heroTitle!);
 requestReplay();
 scheduler.step(clock + 66.668);
 const replay = litPixels(await capture(control));

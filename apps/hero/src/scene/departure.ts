@@ -1,3 +1,5 @@
+import { clamp } from 'math';
+
 /**
  * How the black hole takes the scene apart: piece by piece. Every glyph is given its own moment to leave, nearer
  * ones first with a little jitter so the edge of the collapse is ragged rather than a ring. At its moment a
@@ -18,7 +20,7 @@ export function jitter(index: number): number {
 
 /** When a piece `fraction` (0 = nearest, 1 = furthest) of the way out leaves, on the hole's clock. */
 export function departureAt(fraction: number, index: number): number {
-  return FIRST_DEPARTURE + DEPARTURE_SPREAD * Math.min(1, Math.max(0, fraction)) * (0.75 + 0.5 * jitter(index));
+  return FIRST_DEPARTURE + DEPARTURE_SPREAD * clamp(fraction, 0, 1) * (0.75 + 0.5 * jitter(index));
 }
 
 /**
@@ -26,7 +28,7 @@ export function departureAt(fraction: number, index: number): number {
  * none at the horizon, so nothing can settle into an orbit just outside it.
  */
 export function swirl(near: number, full: number): number {
-  return full * Math.min(1, Math.max(0, (near - 1) / 1.5));
+  return full * clamp((near - 1) / 1.5, 0, 1);
 }
 
 /** 0..1 release: how far a piece's pull has grown since its departure; 0 before it. */
@@ -37,14 +39,18 @@ export function release(time: number, departure: number): number {
   return t * t * t;
 }
 
-/** A letter's flight: distance closes with cubic acceleration while its path curls around the centre. */
-export function flight(time: number, departure: number, duration: number) {
-  const progress = Math.min(1, Math.max(0, (time - departure) / duration));
+export function createFlight() {
+  return { radius: 1, turn: 0, stretch: 1, size: 1 };
+}
+export type Flight = ReturnType<typeof createFlight>;
+
+/** A letter's accelerating arc, written into caller-owned output. Duration is positive. */
+export function flight(out: Flight, time: number, departure: number, duration: number): Flight {
+  const progress = clamp((time - departure) / duration, 0, 1);
   const travel = progress ** 3;
-  return {
-    radius: 1 - travel,
-    turn: progress ** 2 * 2.4,
-    stretch: 1 + Math.sin(Math.PI * travel) * 1.8,
-    size: 1 - travel,
-  };
+  out.radius = 1 - travel;
+  out.turn = progress ** 2 * 2.4;
+  out.stretch = 1 + Math.sin(Math.PI * travel) * 1.8;
+  out.size = 1 - travel;
+  return out;
 }

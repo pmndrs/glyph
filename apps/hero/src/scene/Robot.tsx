@@ -22,12 +22,25 @@ import {
 import robotUrl from '../../assets/robot.glb?url';
 import type { Faces } from '../fonts';
 import { screenInk } from '../materials/screen-ink';
-import { setFootprint } from './floor';
+import { ROBOT_HALF_EXTENTS, setFootprint } from './floor';
+import {
+  createRobotMotion,
+  layPath,
+  poseAt,
+  FIRST_RUN_DELAY,
+  REPLAY_DELAY,
+  RUN_SECONDS,
+  LEAVE_AT,
+  LOOK_UP_AT,
+  LOOK_DOWN_AT,
+  BODY_REACH,
+} from './robot-motion';
+import { mat4, quat, vec3 as vector3 } from 'math';
 import { requestCollapse } from './hole';
 import { replayCount } from './replay';
 import { latestShockwave } from './shockwave';
 import { heroReady, usePreparation } from '../startup';
-import { RetainedLine } from './retained-line';
+import { type RetainedLine, createRetainedLine, disposeLine, showLine } from './retained-line';
 
 /**
  * A small robot that treats the screen as its floor: it drives in from the bottom left with the camera straight
@@ -45,37 +58,7 @@ const RIG_UNIT = 0.05737;
 const FLOOR_Z = 0.04;
 /** Its solid on the floor: along the direction of travel, across it, and up. The body is shallow and wide, about
  * 1.35 by 2.14 at ROBOT_HEIGHT, measured from the model; the floor's physics rounds the wide sides off. */
-const PUSH_HALF_EXTENTS: readonly [number, number, number] = [0.68, 1.07, ROBOT_HEIGHT / 2];
-/** Where it stops to look up: on top of the title, over the Y. The path is laid through this point. */
-const STOP: readonly [x: number, y: number] = [-0.4, 0.3];
-/** Direction of travel, from the x axis: up and to the right, steeper than the icon drift so the two read apart. */
-const HEADING = 0.62;
-/** How far past the visible edge it starts and ends, so it never pops into view; covers the meander too. */
-const EDGE_MARGIN = 2.6;
-/**
- * The meander: two sine waves across the line of travel, so the drive curves instead of ruling a straight line,
- * and the heading turns with it. Phase advances every run, so no two crossings take the same path.
- */
-const MEANDER = [
-  { amplitude: 0.7, wavelength: 9.5 },
-  { amplitude: 0.22, wavelength: 3.1 },
-] as const;
-const PHASE_STEP = 2.4;
 
-/** Seconds after the page loads before the first run, and after the title lands before a replay's run. */
-const FIRST_RUN_DELAY = 1.6;
-const REPLAY_DELAY = 1.4;
-/** Timeline, in seconds from the start of a run. */
-const ARRIVE_AT = 2.6;
-const LOOK_UP_AT = 2.9;
-const LOOK_UP_SECONDS = 0.55;
-const LOOK_DOWN_AT = 5.3;
-const LOOK_DOWN_SECONDS = 0.4;
-const LEAVE_AT = 5.75;
-const RUN_SECONDS = 7.6;
-/** Where on its way out the robot counts as gone: this far inside the visible edge, its body just starting to
- * cross it, so the hole is already open by the time it has left. */
-const BODY_REACH = -0.8;
 /** How far the whole body rocks back on its wheels, and how far the head tilts on top of that. */
 const LEAN = 0.34;
 const HEAD_TILT = 0.62;
@@ -117,12 +100,19 @@ const TYPE_RATE = 9;
 const TYPE_UNTIL = LOOK_DOWN_AT + 0.25;
 
 /** The eyes' glitch: whether they are shown, and how hard the screen is tearing, `now` seconds into a run. */
-function eyesAt(now: number): { readonly shown: number; readonly tear: number } {
-  const out = (now - (TYPE_FROM - GLITCH_SECONDS)) / GLITCH_SECONDS;
+function eyesAt(out: { shown: number; tear: number }, now: number): void {
+  const away = (now - (TYPE_FROM - GLITCH_SECONDS)) / GLITCH_SECONDS;
   const back = (now - TYPE_UNTIL) / GLITCH_SECONDS;
-  if (out >= 0 && out < 1) return { shown: out < 0.5 ? 1 : 0, tear: 1 - Math.abs(out * 2 - 1) };
-  if (back >= 0 && back < 1) return { shown: back < 0.5 ? 0 : 1, tear: 1 - Math.abs(back * 2 - 1) };
-  return { shown: now >= TYPE_FROM && now < TYPE_UNTIL ? 0 : 1, tear: 0 };
+  if (away >= 0 && away < 1) {
+    out.shown = away < 0.5 ? 1 : 0;
+    out.tear = 1 - Math.abs(away * 2 - 1);
+  } else if (back >= 0 && back < 1) {
+    out.shown = back < 0.5 ? 0 : 1;
+    out.tear = 1 - Math.abs(back * 2 - 1);
+  } else {
+    out.shown = now >= TYPE_FROM && now < TYPE_UNTIL ? 0 : 1;
+    out.tear = 0;
+  }
 }
 
 /** Driven each frame: the eyes shown or not, the tear's strength, and a seed that reshuffles the bands. */
@@ -168,97 +158,38 @@ shadowMaterial.opacityNode = exp(uv().sub(0.5).length().mul(3.2).pow(2).negate()
 
 useGLTF.preload(robotUrl);
 
-function easeOutCubic(t: number): number {
-  return 1 - (1 - t) ** 3;
+function createRobotTransforms() {
+  return {
+    axis: vector3.create(),
+    parent: quat.create(),
+    tilt: quat.create(),
+    rotation: quat.create(),
+    local: quat.create(),
+    parentWorld: new Quaternion(),
+    world: mat4.create(),
+    head: mat4.create(),
+    face: mat4.create(),
+    eyes: { shown: 1, tear: 0 },
+    footprint: { x: 0, y: 0, z: FLOOR_Z, heading: 0, halfExtents: ROBOT_HALF_EXTENTS },
+  };
 }
-
-function easeInCubic(t: number): number {
-  return t ** 3;
-}
-
-function easeInOutSine(t: number): number {
-  return 0.5 - Math.cos(Math.PI * t) / 2;
-}
-
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value));
-}
-
-interface Path {
-  /** Arc length from the start to the stop, and from the stop to the exit. */
-  readonly inward: number;
-  readonly outward: number;
-  readonly phase: number;
-}
-
-interface Pose {
-  readonly x: number;
-  readonly y: number;
-  /** Direction of travel at this point, from the x axis. */
-  readonly heading: number;
-  /** 0 = looking ahead along the path, 1 = face turned up to the camera. */
-  readonly look: number;
-}
-
-/** Lays the run through STOP so it starts and ends past the visible edge of a `width` by `height` floor. */
-function layPath(width: number, height: number, run: number): Path {
-  const [stopX, stopY] = STOP;
-  const cos = Math.cos(HEADING);
-  const sin = Math.sin(HEADING);
-  // In from beyond both the left and the bottom edge; out once beyond the right or the top edge.
-  const inward = Math.max((stopX + width / 2 + EDGE_MARGIN) / cos, (stopY + height / 2 + EDGE_MARGIN) / sin);
-  const outward = Math.min((width / 2 + EDGE_MARGIN - stopX) / cos, (height / 2 + EDGE_MARGIN - stopY) / sin);
-  return { inward, outward, phase: run * PHASE_STEP };
-}
-
-/** Sideways offset from the line of travel at arc length `s` from the stop, and its slope. Zero at the stop. */
-function meander(s: number, phase: number): { readonly offset: number; readonly slope: number } {
-  let offset = 0;
-  let slope = 0;
-  MEANDER.forEach(({ amplitude, wavelength }, index) => {
-    const k = (2 * Math.PI) / wavelength;
-    const shift = phase * (index + 1);
-    offset += amplitude * (Math.sin(k * s + shift) - Math.sin(shift));
-    slope += amplitude * k * Math.cos(k * s + shift);
-  });
-  return { offset, slope };
-}
-
-/** Where the robot is `time` seconds into a run along `path`. */
-function poseAt(time: number, path: Path): Pose {
-  // Arc length along the line of travel, measured from the stop.
-  let s: number;
-  if (time < ARRIVE_AT) s = -path.inward * (1 - easeOutCubic(time / ARRIVE_AT));
-  else if (time < LEAVE_AT) s = 0;
-  else s = path.outward * easeInCubic(clamp01((time - LEAVE_AT) / (RUN_SECONDS - LEAVE_AT)));
-
-  const { offset, slope } = meander(s, path.phase);
-  const cos = Math.cos(HEADING);
-  const sin = Math.sin(HEADING);
-  const x = STOP[0] + cos * s - sin * offset;
-  const y = STOP[1] + sin * s + cos * offset;
-
-  let look: number;
-  if (time < LOOK_UP_AT) look = 0;
-  else if (time < LOOK_DOWN_AT) look = easeInOutSine(clamp01((time - LOOK_UP_AT) / LOOK_UP_SECONDS));
-  else look = 1 - easeInOutSine(clamp01((time - LOOK_DOWN_AT) / LOOK_DOWN_SECONDS));
-  return { x, y, heading: HEADING + Math.atan(slope), look };
-}
-
-/** The wheel axle in world space: across the line of travel, in the floor plane. */
-const axle = new Vector3();
-const parentWorld = new Quaternion();
-const tilt = new Quaternion();
-const jointRotation = new Quaternion();
-
-/** Rotates `joint` about a world-space axis through its own origin, on top of whatever the clip posed. */
-function tiltJoint(joint: Object3D, worldAxis: Vector3, angle: number): void {
-  const parent = joint.parent;
-  if (parent === null) return;
-  parent.getWorldQuaternion(parentWorld);
-  tilt.setFromAxisAngle(worldAxis, angle);
-  // parent⁻¹ · tilt · parent: the world rotation expressed in the parent's frame, applied before the joint's own.
-  joint.quaternion.premultiply(jointRotation.copy(parentWorld).invert().multiply(tilt).multiply(parentWorld));
+/** Marshal the animated bone once at each boundary; composition stays in math scratch. */
+function tiltJoint(
+  joint: Object3D,
+  scratch: ReturnType<typeof createRobotTransforms>,
+  heading: number,
+  angle: number,
+): void {
+  if (joint.parent === null) return;
+  vector3.set(scratch.axis, -Math.sin(heading), Math.cos(heading), 0);
+  joint.parent.getWorldQuaternion(scratch.parentWorld).toArray(scratch.parent);
+  quat.setAxisAngle(scratch.tilt, scratch.axis, angle);
+  quat.invert(scratch.rotation, scratch.parent);
+  quat.multiply(scratch.rotation, scratch.rotation, scratch.tilt);
+  quat.multiply(scratch.rotation, scratch.rotation, scratch.parent);
+  joint.quaternion.toArray(scratch.local);
+  quat.multiply(scratch.local, scratch.rotation, scratch.local);
+  joint.quaternion.fromArray(scratch.local);
 }
 
 export function Robot({ faces }: { readonly faces: Faces }) {
@@ -281,7 +212,7 @@ export function Robot({ faces }: { readonly faces: Faces }) {
   usePreparation('robot', () => line.current !== undefined);
   useEffect(
     () => () => {
-      line.current?.dispose();
+      if (line.current !== undefined) disposeLine(line.current);
       line.current = undefined;
       screenMaterial.dispose();
     },
@@ -293,7 +224,8 @@ export function Robot({ faces }: { readonly faces: Faces }) {
   const gone = useRef(false);
   /** Seconds into the current run, or undefined while parked off screen. */
   const time = useRef<number | undefined>(undefined);
-  const path = useRef<Path | undefined>(undefined);
+  const motionRef = useRef(useMemo(() => createRobotMotion(), []));
+  const transformsRef = useRef(useMemo(() => createRobotTransforms(), []));
   const runs = useRef(0);
   /** `performance.now()` at which the next run starts; undefined until the first frame schedules the first run. */
   const runAt = useRef<number | undefined>(undefined);
@@ -330,14 +262,16 @@ export function Robot({ faces }: { readonly faces: Faces }) {
 
   useFrame(
     ({ viewport }, delta) => {
+      const motion = motionRef.current;
+      const transforms = transformsRef.current;
       const root = mover.current;
       const lean = body.current;
       if (root === null || lean === null) return;
 
       if (line.current === undefined) {
         if (text.current === null || text.current.commitState().status !== 'committed') return;
-        line.current = new RetainedLine(text.current);
-        line.current.show(FACE_TEXT.length);
+        line.current = createRetainedLine(text.current);
+        showLine(line.current, FACE_TEXT.length);
       }
       if (!heroReady()) return;
 
@@ -354,7 +288,7 @@ export function Robot({ faces }: { readonly faces: Faces }) {
         runAt.current = shock.at + REPLAY_DELAY * 1000;
       }
 
-      if (time.current === undefined || path.current === undefined) {
+      if (time.current === undefined) {
         runAt.current ??= performance.now() + FIRST_RUN_DELAY * 1000;
         if (performance.now() < runAt.current) {
           root.visible = false;
@@ -363,7 +297,7 @@ export function Robot({ faces }: { readonly faces: Faces }) {
         }
         time.current = 0;
         runAt.current = Number.POSITIVE_INFINITY;
-        path.current = layPath(viewport.width, viewport.height, runs.current);
+        layPath(motion.path, viewport.width, viewport.height, runs.current);
         runs.current += 1;
         gone.current = false;
       }
@@ -373,18 +307,21 @@ export function Robot({ faces }: { readonly faces: Faces }) {
       if (time.current >= RUN_SECONDS) {
         time.current = undefined;
         root.visible = false;
-        line.current.show(0);
+        showLine(line.current, 0);
         setFootprint(undefined);
         // Off the far end of its path, if the edge was somehow never crossed: what follows is the black hole.
         requestCollapse();
         return;
       }
 
-      const { x, y, heading, look } = poseAt(time.current, path.current);
+      const { x, y, heading, look } = poseAt(motion.pose, time.current, motion.path);
       root.visible = true;
       root.position.set(x, y, FLOOR_Z);
       root.rotation.z = heading;
-      setFootprint({ x, y, z: FLOOR_Z, heading, halfExtents: PUSH_HALF_EXTENTS });
+      transforms.footprint.x = x;
+      transforms.footprint.y = y;
+      transforms.footprint.heading = heading;
+      setFootprint(transforms.footprint);
       // As its body starts to leave the screen, the black hole opens; the pull lands a beat after it has gone.
       if (
         !gone.current &&
@@ -402,9 +339,10 @@ export function Robot({ faces }: { readonly faces: Faces }) {
         now >= TYPE_FROM && now < TYPE_UNTIL
           ? Math.min(FACE_TEXT.length, Math.floor((now - TYPE_FROM) * TYPE_RATE))
           : 0;
-      line.current.show(count);
+      showLine(line.current, count);
       if (face.current !== null) face.current.visible = count > 0;
-      const eyes = eyesAt(now);
+      eyesAt(transforms.eyes, now);
+      const eyes = transforms.eyes;
       uEyes.value = eyes.shown;
       uTear.value = eyes.tear;
       uSeed.value = Math.floor(now * 48);
@@ -412,14 +350,19 @@ export function Robot({ faces }: { readonly faces: Faces }) {
       mixer.update(step);
       if (head !== undefined && look > 0) {
         root.updateWorldMatrix(true, true);
-        axle.set(0, 1, 0).applyQuaternion(root.quaternion);
-        tiltJoint(head, axle, -HEAD_TILT * look);
+        tiltJoint(head, transforms, heading, -HEAD_TILT * look);
       }
       // The display rides on the head joint: its matrix is the joint's, brought into the mover's frame.
       const screen = face.current;
       if (head !== undefined && screen !== null && count > 0) {
         root.updateWorldMatrix(true, true);
-        screen.matrix.copy(root.matrixWorld).invert().multiply(head.matrixWorld).multiply(FACE_LOCAL);
+        root.matrixWorld.toArray(transforms.world);
+        head.matrixWorld.toArray(transforms.head);
+        mat4.invert(transforms.world, transforms.world);
+        mat4.multiply(transforms.world, transforms.world, transforms.head);
+        FACE_LOCAL.toArray(transforms.face);
+        mat4.multiply(transforms.world, transforms.world, transforms.face);
+        screen.matrix.fromArray(transforms.world);
       }
       // Before the physics phase: the title reads the footprint this frame publishes.
     },

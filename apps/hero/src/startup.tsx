@@ -78,6 +78,11 @@ export function PrepareHero({ postProcessing }: { readonly postProcessing: boole
     () => {
       if (phase === 'compiling' || phase === 'failed') return;
       const { renderer, scene, camera, renderPipeline } = state;
+      if (phase === 'ready') {
+        if (renderPipeline === null) renderer.render(scene, camera);
+        else renderPipeline.render();
+        return;
+      }
       const render = () => {
         if (renderPipeline === null) renderer.render(scene, camera);
         else renderPipeline.render();
@@ -88,10 +93,6 @@ export function PrepareHero({ postProcessing }: { readonly postProcessing: boole
         publish('failed');
         console.error(error);
       };
-      if (phase === 'ready') {
-        render();
-        return;
-      }
       if (phase === 'settling') {
         // Compile/upload the normal visibility set too, before revealing the canvas or starting any clock.
         publish('compiling');

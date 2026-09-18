@@ -1,62 +1,77 @@
 import { type Glyphs, type Text } from '@pmndrs/glyph/three';
+import { mat4, vec3 } from 'math';
 import { Matrix4 } from 'three/webgpu';
 
-const hidden = new Matrix4().makeScale(0, 0, 0);
+/** Full glyph records plus prefix centering, owned for the lifetime of the mounted line. */
+export function createRetainedLine(source: Pick<Text<never>, 'text' | 'glyphs' | 'breakApart' | 'parent' | 'visible'>) {
+  const layout = source.glyphs();
+  const full = source.text;
+  const prefixOffsets = new Float32Array(full.length + 1);
+  const [glyphs, decorations] = source.breakApart();
+  decorations?.dispose();
+  source.parent?.add(glyphs);
+  source.visible = false;
+  try {
+    for (let count = 1; count < full.length; count++) {
+      source.text = full.slice(0, count);
+      prefixOffsets[count] = source.glyphs().x[0]! - layout.x[0]!;
+    }
+  } catch (error) {
+    glyphs.dispose();
+    throw error;
+  } finally {
+    source.text = full;
+  }
+  const records = glyphs.measurements.map((glyph) => {
+    const original = mat4.create();
+    glyph.originalMatrix.toArray(original);
+    const bounds = glyph.localInkBounds;
+    return {
+      index: glyph.index,
+      cluster: glyphs.glyphAt(glyph.index)!.cluster,
+      original,
+      center: vec3.fromValues(
+        (bounds.min.x + bounds.max.x) / 2,
+        (bounds.min.y + bounds.max.y) / 2,
+        (bounds.min.z + bounds.max.z) / 2,
+      ),
+      empty: bounds.isEmpty(),
+    };
+  });
+  return {
+    glyphs,
+    records,
+    prefixOffsets,
+    count: -1,
+    transform: mat4.create(),
+    draw: new Matrix4(),
+    hidden: new Matrix4().makeScale(0, 0, 0),
+  };
+}
+export type RetainedLine = ReturnType<typeof createRetainedLine>;
 
-/** The hero's centred monospace lines, whose typing and finale reuse the same draw records every replay. */
-export class RetainedLine {
-  readonly glyphs: Glyphs;
-  readonly #prefixOffsets: Float32Array;
-  readonly #transform = new Matrix4();
-  #count = -1;
-
-  constructor(source: Pick<Text<never>, 'text' | 'glyphs' | 'breakApart' | 'parent' | 'visible'>) {
-    const layout = source.glyphs();
-    const full = source.text;
-    this.#prefixOffsets = new Float32Array(full.length + 1);
-    const [glyphs, decorations] = source.breakApart();
-    decorations?.dispose();
-    this.glyphs = glyphs;
-    source.parent?.add(glyphs);
-    source.visible = false;
-    // Centre each prefix with Glyph's own spacing/trailing-space rules, once during preparation.
-    // Summing advances loses the layout engine's line-end spacing and f32 rounding.
-    try {
-      for (let count = 1; count < full.length; count++) {
-        source.text = full.slice(0, count);
-        this.#prefixOffsets[count] = source.glyphs().x[0]! - layout.x[0]!;
-      }
-    } catch (error) {
-      glyphs.dispose();
-      throw error;
-    } finally {
-      source.text = full;
+/** Show a centred prefix without shaping, React updates, or allocation. */
+export function showLine(line: RetainedLine, count: number): void {
+  if (count === line.count) return;
+  line.count = count;
+  const shift = line.prefixOffsets[count]!;
+  for (let index = 0; index < line.records.length; index++) {
+    const glyph = line.records[index]!;
+    if (glyph.cluster >= count) line.glyphs.setMatrixAt(glyph.index, line.hidden);
+    else {
+      mat4.copy(line.transform, glyph.original);
+      line.transform[12] += shift;
+      line.glyphs.setMatrixAt(glyph.index, line.draw.fromArray(line.transform));
     }
   }
+}
 
-  /** Shows a centred prefix using matrices only, with no React update, shaping, or material allocation. */
-  show(count: number): void {
-    if (count === this.#count) return;
-    this.#count = count;
-    const shift = this.#prefixOffsets[count]!;
-    for (const glyph of this.glyphs.measurements) {
-      if (this.glyphs.glyphAt(glyph.index)!.cluster >= count) this.glyphs.setMatrixAt(glyph.index, hidden);
-      else {
-        this.#transform.copy(glyph.originalMatrix);
-        this.#transform.elements[12]! += shift;
-        this.glyphs.setMatrixAt(glyph.index, this.#transform);
-      }
-    }
-  }
+export function resetLine(line: RetainedLine, count: number): void {
+  line.count = -1;
+  line.glyphs.visible = true;
+  showLine(line, count);
+}
 
-  /** Restore transforms after the finale, even if the visible prefix length did not change. */
-  reset(count: number): void {
-    this.#count = -1;
-    this.glyphs.visible = true;
-    this.show(count);
-  }
-
-  dispose(): void {
-    this.glyphs.dispose();
-  }
+export function disposeLine(line: { glyphs: Glyphs }): void {
+  line.glyphs.dispose();
 }

@@ -16,7 +16,14 @@ import { setTitleWidth } from './metrics';
 import { loadFont, solidOf } from './outline';
 import { requestReplay } from './replay';
 import { triggerShockwave } from './shockwave';
-import { type Letter, TitleBodies } from './title-bodies';
+import {
+  type Letter,
+  type TitleBodies,
+  createTitleBodies,
+  disposeTitle,
+  replayTitle,
+  updateTitle,
+} from './title-bodies';
 
 const box3d = Box3D();
 /** The outlines the letters' solids are cut from: the same source the title face was baked from. */
@@ -64,7 +71,7 @@ export function GlassTitle({ faces }: { readonly faces: Faces }) {
       }
       event.preventDefault();
       if (event.repeat) return;
-      bodies.current?.replay();
+      if (bodies.current !== undefined) replayTitle(bodies.current);
       // Announced before the word has moved, so everything keyed to the reveal clears on the input, not on impact.
       requestReplay();
     };
@@ -76,7 +83,7 @@ export function GlassTitle({ faces }: { readonly faces: Faces }) {
 
   useEffect(
     () => () => {
-      bodies.current?.dispose();
+      if (bodies.current !== undefined) disposeTitle(bodies.current);
       bodies.current = undefined;
       glyphs.current?.removeFromParent();
       glyphs.current?.dispose();
@@ -89,9 +96,14 @@ export function GlassTitle({ faces }: { readonly faces: Faces }) {
   useFrame(
     (_, delta) => {
       if (!heroReady()) return;
-      const landings = bodies.current?.update(Math.min(delta, 0.1), footprint(), hole());
+      const state = bodies.current;
+      if (state === undefined) return;
+      updateTitle(state, Math.min(delta, 0.1), footprint(), hole());
       // Each letter strikes the lattices where it actually came down, the moment the floor reports it.
-      for (const { x, y } of landings ?? []) triggerShockwave([x, y, 0]);
+      for (let slot = 0; slot < state.landingCount; slot++) {
+        const landing = state.landings[slot]!;
+        triggerShockwave(landing.x, landing.y, 0);
+      }
     },
     { phase: 'physics' },
   );
@@ -129,7 +141,7 @@ export function GlassTitle({ faces }: { readonly faces: Faces }) {
         });
       }
       glyphs.current = copies;
-      bodies.current = new TitleBodies(b3, copies, letters, camera.position.z, SOLID_THICKNESS);
+      bodies.current = createTitleBodies(b3, copies, letters, camera.position.z, SOLID_THICKNESS);
       // Development-only handle for inspecting the smash from DevTools.
       if (import.meta.env.DEV) Object.assign(globalThis, { heroTitle: bodies.current });
       reported.current = true;

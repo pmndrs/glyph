@@ -17,7 +17,8 @@ const PARTICLES = Array.from({ length: 16 }, (_, index) => ({
   symbol: STAR_SYMBOLS[index % STAR_SYMBOLS.length]!,
   color: COLORS[index % COLORS.length]!,
   angle: index * 2.39996 + jitter(index) * 0.4,
-  radius: 0.75 + jitter(index + 43) * 1.15,
+  reachX: Math.cos(index * 2.39996 + jitter(index) * 0.4) * (0.75 + jitter(index + 43) * 1.15),
+  reachY: Math.sin(index * 2.39996 + jitter(index) * 0.4) * (0.75 + jitter(index + 43) * 1.15),
   size: 0.18 + jitter(index + 71) * 0.14,
   delay: jitter(index + 91) * 0.045,
   spin: (jitter(index + 121) - 0.5) * 5,
@@ -41,11 +42,7 @@ export function GlyphBurst({ faces }: { readonly faces: Faces }) {
       }
       const travel = 1 - Math.exp(-age * 9);
       const size = particle.size * Math.min(1, age / 0.035) * (1 - (age / BURST_SECONDS) ** 1.4 * 0.8);
-      group.position.set(
-        Math.cos(particle.angle) * particle.radius * travel,
-        Math.sin(particle.angle) * particle.radius * travel - age * age * 0.25,
-        8,
-      );
+      group.position.set(particle.reachX * travel, particle.reachY * travel - age * age * 0.25, 8);
       group.rotation.z = particle.angle * 0.3 + age * particle.spin;
       group.scale.setScalar(size);
     }

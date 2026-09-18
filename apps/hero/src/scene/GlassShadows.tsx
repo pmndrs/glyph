@@ -53,6 +53,7 @@ import {
   type WebGPURenderer,
 } from 'three/webgpu';
 
+import { heroReady } from '../startup';
 import { uTime } from '../uniforms';
 import { titleReach } from './metrics';
 
@@ -313,106 +314,130 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     Object.assign(globalThis, { heroGlassShadows: { source, caustic, causticScene, lightCamera, receiver, spread } });
   }
 
-  const captures = new Map<Mesh, Mesh>();
-  const clear = new Color();
-  function update() {
-    scene.updateMatrixWorld(true);
-    uLamp.value.copy(LAMP);
-    const current = new Set<Mesh>();
-    let reach = GLASS_DEPTH;
-    scene.traverseVisible((object) => {
-      if (
-        !(object instanceof Mesh) ||
-        !(object.material instanceof MeshPhysicalNodeMaterial) ||
-        !object.material.name.startsWith('stained-glass-')
-      )
-        return;
-      current.add(object);
-      let capture = captures.get(object);
-      if (capture === undefined) {
-        const material = object.material.clone();
-        material.name = 'glass-shadow-capture';
-        material.transmission = 0;
-        // Retain the Slug shader's fractional analytic coverage instead of forcing opaque alpha to one.
-        material.transparent = true;
-        material.blending = NoBlending;
-        material.depthWrite = true;
-        material.alphaToCoverage = false;
-        material.alphaTest = 0;
-        // Preserve the original deformation and coverage. Three supplies the existing glass attenuation values.
-        const transmission = materialAttenuationColor.pow(vec3(materialThickness.div(materialAttenuationDistance)));
-        const height = positionWorld.z.sub(RECEIVER_Z).max(0);
-        // Every attachment is coverage-weighted, so blurring keeps it valid across the soft edge.
-        material.mrtNode = mrt({
-          output: vec4(transmission.mul(diffuseColor.a), diffuseColor.a),
-          distance: vec4(height, materialIOR, materialDispersion, 1).mul(diffuseColor.a),
-          normal: vec4(normalWorld.xy, 0, 1).mul(diffuseColor.a),
-        });
-        capture = new Mesh(object.geometry, material);
-        capture.matrixAutoUpdate = false;
-        capture.frustumCulled = false;
-        sourceScene.add(capture);
-        captures.set(object, capture);
-      }
-      if (capture.material instanceof MeshPhysicalNodeMaterial) {
-        capture.material.ior = object.material.ior;
-        capture.material.dispersion = object.material.dispersion;
-        capture.material.thickness = object.material.thickness;
-        capture.material.attenuationColor.copy(object.material.attenuationColor);
-        capture.material.attenuationDistance = object.material.attenuationDistance;
-      }
-      // Glyph uses this metadata to select the retained run; ordinary extruded meshes have no such metadata.
-      capture.userData = object.userData;
-      capture.matrix.copy(object.matrixWorld);
-      // The highest this letter can reach: its centre, plus however far its tilt lifts a corner.
-      const { elements } = object.matrixWorld;
-      const tilt = (Math.abs(elements[2] ?? 0) + Math.abs(elements[6] ?? 0)) * LETTER_REACH;
-      reach = Math.max(reach, (elements[14] ?? 0) + tilt - RECEIVER_Z + GLASS_DEPTH / 2);
-    });
-    // The letters' poses live in the glyph instance buffer, so the title publishes how high they reach.
-    uReach.value = Math.max(reach, titleReach() - RECEIVER_Z + GLASS_DEPTH / 2);
-    for (const [original, capture] of captures) {
-      if (!current.has(original)) {
-        sourceScene.remove(capture);
-        if (!Array.isArray(capture.material)) capture.material.dispose();
-        captures.delete(original);
-      }
-    }
-    const previousTarget = renderer.getRenderTarget();
-    const previousMRT = renderer.getMRT();
-    const previousAlpha = renderer.getClearAlpha();
-    const previousAutoClear = renderer.autoClear;
-    renderer.getClearColor(clear);
-    try {
-      renderer.autoClear = true;
-      renderer.setClearColor(0, 0);
-      renderer.setMRT(null);
-      renderer.setRenderTarget(source);
-      renderer.render(sourceScene, lightCamera);
-      renderer.setRenderTarget(caustic);
-      renderer.render(causticScene, lightCamera);
-    } finally {
-      renderer.setRenderTarget(previousTarget);
-      renderer.setMRT(previousMRT);
-      renderer.setClearColor(clear, previousAlpha);
-      renderer.autoClear = previousAutoClear;
-    }
-  }
   return {
-    update,
-    dispose() {
-      scene.remove(receiver);
-      for (const capture of captures.values()) if (!Array.isArray(capture.material)) capture.material.dispose();
-      captures.clear();
-      source.dispose();
-      caustic.dispose();
-      for (const node of blurs) node.dispose();
-      for (const material of causticMaterials) material.dispose();
-      gridGeometry.dispose();
-      receiverGeometry.dispose();
-      projectionMaterial.dispose();
-    },
+    renderer,
+    scene,
+    sourceScene,
+    causticScene,
+    lightCamera,
+    source,
+    caustic,
+    uLamp,
+    uReach,
+    receiver,
+    receiverGeometry,
+    projectionMaterial,
+    causticMaterials,
+    gridGeometry,
+    blurs,
+    captures: [] as { original: Mesh; capture: Mesh }[],
+    known: new Set<Mesh>(),
+    clear: new Color(),
   };
+}
+type Projection = ReturnType<typeof createProjection>;
+
+/** Discover the retained title draws during warm-up. Playback uses the prepared list directly. */
+function discoverCaptures(state: Projection): void {
+  const { sourceScene } = state;
+  state.scene.traverseVisible((object) => {
+    if (
+      !(object instanceof Mesh) ||
+      !(object.material instanceof MeshPhysicalNodeMaterial) ||
+      !object.material.name.startsWith('stained-glass-') ||
+      state.known.has(object)
+    )
+      return;
+    const material = object.material.clone();
+    material.name = 'glass-shadow-capture';
+    material.transmission = 0;
+    // Retain the Slug shader's fractional analytic coverage instead of forcing opaque alpha to one.
+    material.transparent = true;
+    material.blending = NoBlending;
+    material.depthWrite = true;
+    material.alphaToCoverage = false;
+    material.alphaTest = 0;
+    // Preserve the original deformation and coverage. Three supplies the existing glass attenuation values.
+    const transmission = materialAttenuationColor.pow(vec3(materialThickness.div(materialAttenuationDistance)));
+    const height = positionWorld.z.sub(RECEIVER_Z).max(0);
+    // Every attachment is coverage-weighted, so blurring keeps it valid across the soft edge.
+    material.mrtNode = mrt({
+      output: vec4(transmission.mul(diffuseColor.a), diffuseColor.a),
+      distance: vec4(height, materialIOR, materialDispersion, 1).mul(diffuseColor.a),
+      normal: vec4(normalWorld.xy, 0, 1).mul(diffuseColor.a),
+    });
+    const capture = new Mesh(object.geometry, material);
+    capture.matrixAutoUpdate = false;
+    capture.frustumCulled = false;
+    sourceScene.add(capture);
+    state.captures.push({ original: object, capture });
+    state.known.add(object);
+  });
+}
+
+function updateProjection(state: Projection): void {
+  const { scene, renderer, uLamp, uReach, source, sourceScene, caustic, causticScene, lightCamera, clear } = state;
+  scene.updateMatrixWorld(true);
+  uLamp.value.copy(LAMP);
+  if (!heroReady()) discoverCaptures(state);
+  let reach = GLASS_DEPTH;
+  for (let index = 0; index < state.captures.length; index++) {
+    const { original: object, capture } = state.captures[index]!;
+    let visible = object.visible;
+    let parent = object.parent;
+    while (parent !== null && visible) {
+      visible = parent.visible;
+      parent = parent.parent;
+    }
+    capture.visible = visible && object.parent !== null;
+    if (!capture.visible || !(object.material instanceof MeshPhysicalNodeMaterial)) continue;
+    if (capture.material instanceof MeshPhysicalNodeMaterial) {
+      capture.material.ior = object.material.ior;
+      capture.material.dispersion = object.material.dispersion;
+      capture.material.thickness = object.material.thickness;
+      capture.material.attenuationColor.copy(object.material.attenuationColor);
+      capture.material.attenuationDistance = object.material.attenuationDistance;
+    }
+    // Glyph uses this metadata to select the retained run; ordinary extruded meshes have no such metadata.
+    capture.userData = object.userData;
+    capture.matrix.copy(object.matrixWorld);
+    // The highest this letter can reach: its centre, plus however far its tilt lifts a corner.
+    const { elements } = object.matrixWorld;
+    const tilt = (Math.abs(elements[2] ?? 0) + Math.abs(elements[6] ?? 0)) * LETTER_REACH;
+    reach = Math.max(reach, (elements[14] ?? 0) + tilt - RECEIVER_Z + GLASS_DEPTH / 2);
+  }
+  uReach.value = Math.max(reach, titleReach() - RECEIVER_Z + GLASS_DEPTH / 2);
+  const previousTarget = renderer.getRenderTarget();
+  const previousMRT = renderer.getMRT();
+  const previousAlpha = renderer.getClearAlpha();
+  const previousAutoClear = renderer.autoClear;
+  renderer.getClearColor(clear);
+  try {
+    renderer.autoClear = true;
+    renderer.setClearColor(0, 0);
+    renderer.setMRT(null);
+    renderer.setRenderTarget(source);
+    renderer.render(sourceScene, lightCamera);
+    renderer.setRenderTarget(caustic);
+    renderer.render(causticScene, lightCamera);
+  } finally {
+    renderer.setRenderTarget(previousTarget);
+    renderer.setMRT(previousMRT);
+    renderer.setClearColor(clear, previousAlpha);
+    renderer.autoClear = previousAutoClear;
+  }
+}
+
+function disposeProjection(state: Projection): void {
+  state.scene.remove(state.receiver);
+  for (const { capture } of state.captures) if (!Array.isArray(capture.material)) capture.material.dispose();
+  state.source.dispose();
+  state.caustic.dispose();
+  for (const node of state.blurs) node.dispose();
+  for (const material of state.causticMaterials) material.dispose();
+  state.gridGeometry.dispose();
+  state.receiverGeometry.dispose();
+  state.projectionMaterial.dispose();
 }
 
 export function GlassShadows() {
@@ -424,15 +449,20 @@ export function GlassShadows() {
     projection.current = owned;
     return () => {
       projection.current = null;
-      owned.dispose();
+      disposeProjection(owned);
     };
   }, [renderer, scene]);
-  useFrame(() => projection.current?.update(), {
-    id: 'hero-glass-shadows',
-    phase: 'update',
-    after: ['hero-title-motion'],
-    // Canvas's FPS limit applies only to its default render job, not this offscreen pass.
-    fps: 60,
-  });
+  useFrame(
+    () => {
+      if (projection.current !== null) updateProjection(projection.current);
+    },
+    {
+      id: 'hero-glass-shadows',
+      phase: 'update',
+      after: ['hero-title-motion'],
+      // Canvas's FPS limit applies only to its default render job, not this offscreen pass.
+      fps: 60,
+    },
+  );
   return null;
 }

@@ -9,7 +9,7 @@ import { _roots } from '@react-three/fiber/webgpu';
 import { Text } from '@pmndrs/glyph/three';
 import { Matrix4, WebGPUBackend, WebGPURenderer } from 'three/webgpu';
 
-const { RetainedLine } = (await import(
+const { createRetainedLine, showLine, resetLine, disposeLine } = (await import(
   new URL('/src/scene/retained-line.ts', location.origin).href
 )) as typeof import('../src/scene/retained-line');
 while (document.documentElement.dataset.heroState !== 'ready')
@@ -18,7 +18,7 @@ const state = _roots.values().next().value!.store.getState();
 state.setFrameloop('never');
 if (!(state.renderer instanceof WebGPURenderer) || !(state.renderer.backend instanceof WebGPUBackend))
   throw new Error('Retained line proof requires WebGPU');
-const sources: ConstructorParameters<typeof RetainedLine>[0][] = [];
+const sources: Parameters<typeof createRetainedLine>[0][] = [];
 state.scene.traverse((object) => {
   if (object instanceof Text && (object.text.startsWith('SHAPING') || object.text === 'PMNDRS')) sources.push(object);
 });
@@ -28,10 +28,10 @@ let maxError = 0;
 const matrix = new Matrix4();
 for (const source of sources) {
   const full = source.text;
-  const line = new RetainedLine(source);
+  const line = createRetainedLine(source);
   try {
     for (let count = 0; count <= full.length; count++) {
-      line.show(count);
+      showLine(line, count);
       source.text = full.slice(0, count);
       const oracle = source.glyphs();
       for (const glyph of line.glyphs.measurements) {
@@ -56,13 +56,13 @@ for (const source of sources) {
       }
     }
     line.glyphs.setMatrixAt(0, new Matrix4().makeTranslation(500, 500, 0));
-    line.reset(full.length);
+    resetLine(line, full.length);
     line.glyphs.getMatrixAt(0, matrix);
     if (!matrix.equals(line.glyphs.measurements[0]!.originalMatrix))
       throw new Error('Replay did not restore the original glyph transform');
   } finally {
     source.text = full;
-    line.dispose();
+    disposeLine(line);
   }
 }
 console.log('hero-retained-lines-ready', JSON.stringify({ compared, maxError }));

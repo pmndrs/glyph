@@ -1,3 +1,6 @@
+/** Along the heading, across it, and up; shared by the visual rig and its prepared collider. */
+export const ROBOT_HALF_EXTENTS: readonly [number, number, number] = [0.68, 1.07, 1.5];
+
 /**
  * What is driving on the floor, published by the robot and read by whatever it can push. The floor is the screen
  * plane; a footprint is an upright box on it. Module state: there is a single scene.

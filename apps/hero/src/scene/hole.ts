@@ -1,3 +1,5 @@
+import { clamp } from 'math';
+import { easing } from 'math/time';
 import { uniform } from 'three/tsl';
 import { Vector2 } from 'three/webgpu';
 
@@ -45,75 +47,73 @@ export const uHoleShake = uniform(new Vector2());
 
 /** What the rest of the scene reads each frame. */
 export interface HoleState {
-  readonly beat: 'closed' | 'open' | 'black';
+  beat: 'closed' | 'open' | 'black';
   /** Seconds since the hole opened; negative while closed. Each piece of the scene leaves at its own moment on
    * this clock. */
-  readonly time: number;
-  readonly x: number;
-  readonly y: number;
+  time: number;
+  x: number;
+  y: number;
   /** The horizon: anything inside is swallowed. */
-  readonly horizon: number;
+  horizon: number;
   /** 0..1: strength of the pull on everything, and of the bend in the shaders. */
-  readonly pull: number;
+  pull: number;
   /** The hole's drawn presence, including an overshoot above one before the pop. */
-  readonly presence: number;
+  presence: number;
   /** Seconds since the pop, or undefined before it. */
-  readonly sincePop: number | undefined;
+  sincePop: number | undefined;
   /** 0..1: how black the frame is. */
-  readonly blackout: number;
+  blackout: number;
 }
 
-const CLOSED: HoleState = Object.freeze({
-  beat: 'closed',
-  time: -1,
-  x: HOLE_CENTER[0],
-  y: HOLE_CENTER[1],
-  horizon: HORIZON,
-  pull: 0,
-  presence: 0,
-  sincePop: undefined,
-  blackout: 0,
-});
-
-/** Fraction of the way from `from` to `to`, clamped. */
-function ramp(t: number, from: number, to: number): number {
-  return Math.min(1, Math.max(0, (t - from) / (to - from)));
-}
-
-function easeOutCubic(t: number): number {
-  return 1 - (1 - t) ** 3;
-}
-
-function easeInCubic(t: number): number {
-  return t ** 3;
-}
-
-function easeInOutSine(t: number): number {
-  return 0.5 - Math.cos(Math.PI * t) / 2;
-}
-
-/** The beat `t` seconds after the hole opened. Pure, so the timing can be tested without a scene. */
-export function collapseAt(t: number): HoleState {
-  if (t < 0) return CLOSED;
-  const open = easeOutCubic(ramp(t, 0, OPEN_SECONDS));
-  const swell = 1 + 0.6 * easeInOutSine(ramp(t, SWELL_FROM, POP_AT - 0.1));
-  const pinch = easeInCubic(ramp(t, POP_AT - 0.1, POP_AT));
-  const popped = t >= POP_AT;
+export function createHoleState(): HoleState {
   return {
-    beat: popped ? 'black' : 'open',
-    time: t,
+    beat: 'closed',
+    time: -1,
     x: HOLE_CENTER[0],
     y: HOLE_CENTER[1],
-    horizon: HORIZON * open * swell,
-    pull: popped ? 0 : easeInCubic(ramp(t, PULL_FROM, PULL_UNTIL)),
-    presence: popped ? 0 : open * swell * (1 - pinch),
-    sincePop: popped ? t - POP_AT : undefined,
-    blackout: popped ? 1 : 0,
+    horizon: HORIZON,
+    pull: 0,
+    presence: 0,
+    sincePop: undefined,
+    blackout: 0,
   };
 }
 
+/** Fraction of the way from `from` to `to`, clamped. */
+function ramp(t: number, from: number, to: number): number {
+  return clamp((t - from) / (to - from), 0, 1);
+}
+
+/** The beat `t` seconds after the hole opened. Pure, so the timing can be tested without a scene. */
+export function collapseAt(out: HoleState, t: number): HoleState {
+  out.time = t;
+  out.x = HOLE_CENTER[0];
+  out.y = HOLE_CENTER[1];
+  if (t < 0) {
+    out.beat = 'closed';
+    out.time = -1;
+    out.horizon = HORIZON;
+    out.pull = 0;
+    out.presence = 0;
+    out.sincePop = undefined;
+    out.blackout = 0;
+    return out;
+  }
+  const open = easing.cubicOut(ramp(t, 0, OPEN_SECONDS));
+  const swell = 1 + 0.6 * easing.sineInOut(ramp(t, SWELL_FROM, POP_AT - 0.1));
+  const pinch = easing.cubicIn(ramp(t, POP_AT - 0.1, POP_AT));
+  const popped = t >= POP_AT;
+  out.beat = popped ? 'black' : 'open';
+  out.horizon = HORIZON * open * swell;
+  out.pull = popped ? 0 : easing.cubicIn(ramp(t, PULL_FROM, PULL_UNTIL));
+  out.presence = popped ? 0 : open * swell * (1 - pinch);
+  out.sincePop = popped ? t - POP_AT : undefined;
+  out.blackout = popped ? 1 : 0;
+  return out;
+}
+
 let openedAt: number | undefined;
-let current: HoleState = CLOSED;
+const current = createHoleState();
 /** Development only: a moment on the beat's clock to freeze at, so one phase can be inspected. */
 let held: number | undefined;
 
@@ -126,7 +126,7 @@ export function requestCollapse(): void {
 export function dismissCollapse(): void {
   openedAt = undefined;
   held = undefined;
-  current = CLOSED;
+  collapseAt(current, -1);
 }
 
 /** Development only: freezes the beat at `at` seconds, or lets it run again when undefined. */
@@ -137,13 +137,12 @@ export function holdCollapse(at: number | undefined): void {
 
 /** Advances the beat to `now` (milliseconds, from `performance.now()`) and publishes it to the shaders. */
 export function tickCollapse(now: number): HoleState {
-  if (held !== undefined) current = collapseAt(held);
-  else current = openedAt === undefined ? CLOSED : collapseAt((now - openedAt) / 1000);
+  collapseAt(current, held ?? (openedAt === undefined ? -1 : (now - openedAt) / 1000));
   uHoleCenter.value.set(current.x, current.y);
   uHoleHorizon.value = Math.max(current.horizon, 0.001);
   uHoleBend.value = current.pull;
   uHoleBlackout.value = current.blackout;
-  uHoleCollapse.value = easeInCubic(ramp(current.time, PAPER_FROM, PAPER_UNTIL));
+  uHoleCollapse.value = easing.cubicIn(ramp(current.time, PAPER_FROM, PAPER_UNTIL));
   uHoleBurst.value = current.sincePop ?? -1;
   uHoleBloom.value = current.sincePop === undefined ? 0.18 : 0.75;
   // Clock-derived motion stays identical when a moment is held for inspection.

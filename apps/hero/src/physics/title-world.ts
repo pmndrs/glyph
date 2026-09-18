@@ -1,8 +1,8 @@
+import { deltaAngle, lerp, quat, vec3, type Vec3 } from 'math';
+
 import { POSE_STRIDE } from './stream';
 import type { Box3DModule } from './world';
 
-type Vec3 = [x: number, y: number, z: number];
-type Quat = [x: number, y: number, z: number, w: number];
 type Body = ReturnType<Box3DModule['b3CreateBody']>;
 
 export interface LetterSpec {
@@ -18,8 +18,6 @@ export interface RobotTarget {
   /** The floor under it. */
   readonly z: number;
   readonly heading: number;
-  /** Along the heading, across it, and up. Read when the robot first arrives; it keeps that shape. */
-  readonly halfExtents: readonly [number, number, number];
 }
 
 /** A held letter's pose: where it is being carried, and its turn about the floor normal. */
@@ -28,20 +26,6 @@ export interface HeldPose {
   readonly y: number;
   readonly z: number;
   readonly yaw: number;
-}
-
-/** What a letter is let go with. */
-export interface Release {
-  readonly velocity: Vec3;
-  /** Angular speed about the floor normal. */
-  readonly spin: number;
-}
-
-export interface StepResult {
-  /** Letters whose pose changed. */
-  readonly moved: readonly number[];
-  /** Letters that met the floor for the first time since they were released. */
-  readonly landed: readonly number[];
 }
 
 const STEP = 1 / 60;
@@ -64,304 +48,287 @@ const ROBOT_ROUNDING_SIDES = 10;
 /** A target further than this from the last one is a jump, not driving: the robot is placed there. */
 const MAX_DRIVE = 2.5;
 
-/**
- * The title's letters as stone slabs on the floor, and a robot driving among them. Letters fall under gravity on
- * to a static floor and rest there; they slide and turn on it but never tip. A letter can be carried out of the
- * simulation's hands (kinematic) and let go again. The robot is kinematic too: nothing on the floor can stop it,
- * and it is driven to its pose each frame so it shoves with the momentum of its actual motion. It leaves the world
- * while nothing is driving.
- */
-export class TitleWorld {
-  readonly letterCount: number;
-  /** Letter poses, `letterCount × POSE_STRIDE` (px, py, pz, qx, qy, qz, qw). */
-  readonly poses: Float32Array;
-  readonly #b3: Box3DModule;
-  readonly #world: ReturnType<Box3DModule['b3CreateWorld']>;
-  readonly #events: ReturnType<Box3DModule['createEventsBuffer']>;
-  readonly #move: ReturnType<Box3DModule['createBodyMoveEvent']>;
-  readonly #touch: ReturnType<Box3DModule['createContactTouchEvent']>;
-  readonly #letters: readonly Body[];
-  readonly #letterByBody = new Map<number, number>();
-  readonly #letterByShape = new Map<number, number>();
-  readonly #floorShape: number;
-  /** Made the first time the robot drives on to the floor. */
-  #robot: Body | undefined;
-  /** Where the robot was last driven to, while it is on the floor. */
-  #robotTarget: RobotTarget | undefined;
-  /** Letters being carried, with where they are carried from and to over the current frame. */
-  readonly #held = new Map<number, { from: HeldPose; to: HeldPose }>();
-  /** Letters let go and not yet down. */
-  readonly #airborne = new Set<number>();
-  #accumulator = 0;
+/** Fixed-capacity application state; Box3D owns the physical world and its reusable event views. */
+export function createTitleWorld(
+  b3: Box3DModule,
+  letters: readonly LetterSpec[],
+  floorTop: number,
+  robotHalfExtents: readonly [number, number, number],
+) {
+  const poses = new Float32Array(letters.length * POSE_STRIDE);
+  const letterByBody = new Map<number, number>();
+  const letterByShape = new Map<number, number>();
+  const worldDef = b3.b3DefaultWorldDef();
+  worldDef.gravity = [0, 0, -GRAVITY];
+  worldDef.restitutionThreshold = RESTITUTION_THRESHOLD;
+  const world = b3.b3CreateWorld(worldDef);
+  const events = b3.createEventsBuffer();
+  const move = b3.createBodyMoveEvent();
+  const touch = b3.createContactTouchEvent();
 
-  constructor(b3: Box3DModule, letters: readonly LetterSpec[], floorTop: number) {
-    this.#b3 = b3;
-    this.letterCount = letters.length;
-    this.poses = new Float32Array(letters.length * POSE_STRIDE);
-
-    const worldDef = b3.b3DefaultWorldDef();
-    worldDef.gravity = [0, 0, -GRAVITY];
-    worldDef.restitutionThreshold = RESTITUTION_THRESHOLD;
-    this.#world = b3.b3CreateWorld(worldDef);
-    this.#events = b3.createEventsBuffer();
-    this.#move = b3.createBodyMoveEvent();
-    this.#touch = b3.createContactTouchEvent();
-
-    const bodies: Body[] = [];
-    for (const [index, letter] of letters.entries()) {
-      const bodyDef = b3.b3DefaultBodyDef();
-      bodyDef.type = b3.b3BodyType.b3_dynamicBody;
-      bodyDef.position = letter.position;
-      // Flat on the floor for good: it slides and turns in the plane, and rises and falls, but never tips.
-      bodyDef.motionLocks = {
-        linearX: false,
-        linearY: false,
-        linearZ: false,
-        angularX: true,
-        angularY: true,
-        angularZ: false,
-      };
-      const body = b3.b3CreateBody(this.#world, bodyDef);
-      const shapeDef = b3.b3DefaultShapeDef();
-      shapeDef.density = LETTER_DENSITY;
-      shapeDef.enableContactEvents = true;
-      shapeDef.baseMaterial.restitution = LETTER_RESTITUTION;
-      shapeDef.baseMaterial.friction = LETTER_FRICTION;
-      for (const prism of letter.prisms) {
-        const hull = b3.b3CreateHull(prism);
-        if (hull === null) continue;
-        const shape = b3.b3CreateHullShape(body, shapeDef, hull);
-        this.#letterByShape.set(shape.index1, index);
-        // The world keeps its own copy of the hull.
-        b3.b3DestroyHull(hull);
-      }
-      bodies.push(body);
-      this.#letterByBody.set(body.index1, index);
-      this.#writePose(index, letter.position, [0, 0, 0, 1]);
-    }
-    this.#letters = bodies;
-
-    const floorDef = b3.b3DefaultBodyDef();
-    floorDef.type = b3.b3BodyType.b3_staticBody;
-    floorDef.position = [0, 0, floorTop - FLOOR_THICKNESS / 2];
-    const floor = b3.b3CreateBody(this.#world, floorDef);
-    const floorShapeDef = b3.b3DefaultShapeDef();
-    floorShapeDef.enableContactEvents = true;
-    floorShapeDef.baseMaterial.friction = LETTER_FRICTION;
-    this.#floorShape = b3.b3CreateBoxShape(
-      floor,
-      floorShapeDef,
-      FLOOR_HALF_WIDTH,
-      FLOOR_HALF_WIDTH,
-      FLOOR_THICKNESS / 2,
-    ).index1;
-  }
-
-  /** Carries letter `index` to `pose` over the next step, out of the simulation's hands until `release`. */
-  hold(index: number, pose: HeldPose): void {
-    const body = this.#letters[index];
-    if (body === undefined) return;
-    const held = this.#held.get(index);
-    if (held === undefined) {
-      this.#b3.b3Body_SetType(body, this.#b3.b3BodyType.b3_kinematicBody);
-      this.#airborne.delete(index);
-      this.#held.set(index, { from: this.#heldPoseOf(index), to: pose });
-    } else {
-      this.#held.set(index, { from: held.to, to: pose });
-    }
-  }
-
-  /** Pushes letter `index` with `[x, y]`, as an acceleration: the force scales with its mass. */
-  shove(index: number, accelerationX: number, accelerationY: number): void {
-    const body = this.#letters[index];
-    if (body === undefined || this.#held.has(index)) return;
-    const mass = this.#b3.b3Body_GetMass(body);
-    this.#b3.b3Body_ApplyForceToCenter(body, [accelerationX * mass, accelerationY * mass, 0], true);
-  }
-
-  /** Sets how much a letter's motion is drained each second, for a fall into the hole rather than an orbit. */
-  drag(index: number, damping: number): void {
-    const body = this.#letters[index];
-    if (body !== undefined) this.#b3.b3Body_SetLinearDamping(body, damping);
-  }
-
-  /** Lifts letter `index` off the floor with an upward speed of `speed`: a pluck, and the floor's friction is gone
-   * until it lands again. */
-  pluck(index: number, speed: number): void {
-    const body = this.#letters[index];
-    if (body === undefined || this.#held.has(index)) return;
-    const velocity = this.#b3.b3Body_GetLinearVelocity([0, 0, 0], body);
-    this.#b3.b3Body_SetLinearVelocity(body, [velocity[0], velocity[1], speed]);
-    this.#b3.b3Body_SetAwake(body, true);
-  }
-
-  /** Takes letter `index` out of the world; `revive` puts it back. */
-  swallow(index: number): void {
-    const body = this.#letters[index];
-    if (body === undefined) return;
-    this.#held.delete(index);
-    this.#airborne.delete(index);
-    this.#b3.b3Body_Disable(body);
-  }
-
-  /** Puts a swallowed letter back in the world, at rest at `pose`. */
-  revive(index: number, pose: HeldPose): void {
-    const body = this.#letters[index];
-    if (body === undefined) return;
-    this.#b3.b3Body_SetTransform(body, [pose.x, pose.y, pose.z], yawQuaternion(pose.yaw));
-    this.#b3.b3Body_SetLinearVelocity(body, [0, 0, 0]);
-    this.#b3.b3Body_SetAngularVelocity(body, [0, 0, 0]);
-    this.#b3.b3Body_Enable(body);
-    this.#writePose(index, [pose.x, pose.y, pose.z], yawQuaternion(pose.yaw));
-  }
-
-  /** Lets a held letter go with a throw and a spin; it lands when the floor says so. */
-  release(index: number, release: Release): void {
-    const body = this.#letters[index];
-    const held = this.#held.get(index);
-    if (body === undefined || held === undefined) return;
-    this.#b3.b3Body_SetTransform(body, [held.to.x, held.to.y, held.to.z], yawQuaternion(held.to.yaw));
-    this.#held.delete(index);
-    this.#b3.b3Body_SetType(body, this.#b3.b3BodyType.b3_dynamicBody);
-    this.#b3.b3Body_SetLinearVelocity(body, release.velocity);
-    this.#b3.b3Body_SetAngularVelocity(body, [0, 0, release.spin]);
-    this.#b3.b3Body_SetAwake(body, true);
-    this.#airborne.add(index);
-  }
-
-  /** Advances by `delta` seconds, driving the robot to `target` over that time, or with it gone when undefined. */
-  step(delta: number, target: RobotTarget | undefined): StepResult {
-    const b3 = this.#b3;
-    const robot = this.#arrive(target);
-    const robotFrom = this.#robotTarget;
-    this.#robotTarget = target;
-
-    this.#accumulator = Math.min(this.#accumulator + delta, STEP * MAX_SUBSTEPS);
-    const substeps = Math.floor(this.#accumulator / STEP);
-    this.#accumulator -= substeps * STEP;
-    const moved = new Set<number>();
-    const landed: number[] = [];
-    for (let substep = 1; substep <= substeps; substep += 1) {
-      // The robot and carried letters reach their targets in even parts across the substeps, so a shove is spread
-      // over the whole frame.
-      const t = substep / substeps;
-      if (robot !== undefined && target !== undefined && robotFrom !== undefined) {
-        b3.b3Body_SetTargetTransform(
-          robot,
-          {
-            position: [lerp(robotFrom.x, target.x, t), lerp(robotFrom.y, target.y, t), target.z],
-            quaternion: yawQuaternion(robotFrom.heading + shortestTurn(robotFrom.heading, target.heading) * t),
-          },
-          STEP,
-          true,
-        );
-      }
-      for (const [index, { from, to }] of this.#held) {
-        const body = this.#letters[index];
-        if (body === undefined) continue;
-        b3.b3Body_SetTargetTransform(
-          body,
-          {
-            position: [lerp(from.x, to.x, t), lerp(from.y, to.y, t), lerp(from.z, to.z, t)],
-            quaternion: yawQuaternion(from.yaw + shortestTurn(from.yaw, to.yaw) * t),
-          },
-          STEP,
-          true,
-        );
-      }
-      b3.b3World_Step(this.#world, STEP, SOLVER_SUBSTEPS);
-      b3.getEvents(this.#events, this.#world);
-      for (let index = 0; index < b3.getNumBodyMoveEvents(this.#events); index += 1) {
-        const event = b3.getBodyMoveEventAt(this.#move, this.#events, index);
-        const letter = this.#letterByBody.get(event.bodyId.index1);
-        if (letter === undefined) continue;
-        this.#writePose(letter, event.position, event.rotation);
-        moved.add(letter);
-      }
-      if (this.#airborne.size === 0) continue;
-      for (let index = 0; index < b3.getNumContactBeginEvents(this.#events); index += 1) {
-        const touch = b3.getContactBeginEventAt(this.#touch, this.#events, index);
-        const a = touch.shapeIdA.index1;
-        const b = touch.shapeIdB.index1;
-        let letter: number | undefined;
-        if (a === this.#floorShape) letter = this.#letterByShape.get(b);
-        else if (b === this.#floorShape) letter = this.#letterByShape.get(a);
-        if (letter === undefined || !this.#airborne.has(letter)) continue;
-        this.#airborne.delete(letter);
-        landed.push(letter);
-      }
-    }
-    // A carried letter's pose comes from where it is carried, not from a move event it may not raise.
-    for (const [index, { to }] of this.#held) {
-      this.#writePose(index, [to.x, to.y, to.z], yawQuaternion(to.yaw));
-      moved.add(index);
-    }
-    return { moved: [...moved], landed };
-  }
-
-  destroy(): void {
-    this.#b3.destroyEventsBuffer(this.#events);
-    this.#b3.b3DestroyWorld(this.#world);
-  }
-
-  /** Puts the robot on the floor at its target, or takes it off; returns it while it is on. */
-  #arrive(target: RobotTarget | undefined): Body | undefined {
-    const b3 = this.#b3;
-    const last = this.#robotTarget;
-    if (target === undefined) {
-      if (last !== undefined && this.#robot !== undefined) b3.b3Body_Disable(this.#robot);
-      return undefined;
-    }
-    const robot = (this.#robot ??= this.#makeRobot(target));
-    if (last === undefined || Math.hypot(target.x - last.x, target.y - last.y) > MAX_DRIVE) {
-      // Arriving, or asked to be somewhere it could not have driven to in a frame: placed there, at rest. Driving
-      // across a jump would give it a velocity of hundreds of units a second and launch every letter it met.
-      b3.b3Body_SetTransform(robot, [target.x, target.y, target.z], yawQuaternion(target.heading));
-      b3.b3Body_SetLinearVelocity(robot, [0, 0, 0]);
-      b3.b3Body_SetAngularVelocity(robot, [0, 0, 0]);
-      if (last === undefined) b3.b3Body_Enable(robot);
-      // Placed, so this frame drives from here rather than from wherever it was.
-      this.#robotTarget = target;
-    }
-    return robot;
-  }
-
-  #makeRobot(target: RobotTarget): Body {
-    const b3 = this.#b3;
+  const bodies: Body[] = [];
+  for (const [index, letter] of letters.entries()) {
     const bodyDef = b3.b3DefaultBodyDef();
-    bodyDef.type = b3.b3BodyType.b3_kinematicBody;
-    bodyDef.position = [target.x, target.y, target.z];
-    bodyDef.rotation = yawQuaternion(target.heading);
-    bodyDef.isEnabled = false;
-    const body = b3.b3CreateBody(this.#world, bodyDef);
+    bodyDef.type = b3.b3BodyType.b3_dynamicBody;
+    bodyDef.position = letter.position;
+    // Flat on the floor for good: it slides and turns in the plane, and rises and falls, but never tips.
+    bodyDef.motionLocks = {
+      linearX: false,
+      linearY: false,
+      linearZ: false,
+      angularX: true,
+      angularY: true,
+      angularZ: false,
+    };
+    const body = b3.b3CreateBody(world, bodyDef);
     const shapeDef = b3.b3DefaultShapeDef();
-    shapeDef.baseMaterial.friction = ROBOT_FRICTION;
-    const hull = b3.b3CreateHull(stadium(target.halfExtents));
-    if (hull !== null) {
-      b3.b3CreateHullShape(body, shapeDef, hull);
+    shapeDef.density = LETTER_DENSITY;
+    shapeDef.enableContactEvents = true;
+    shapeDef.baseMaterial.restitution = LETTER_RESTITUTION;
+    shapeDef.baseMaterial.friction = LETTER_FRICTION;
+    for (const prism of letter.prisms) {
+      const hull = b3.b3CreateHull(prism);
+      if (hull === null) continue;
+      const shape = b3.b3CreateHullShape(body, shapeDef, hull);
+      letterByShape.set(shape.index1, index);
+      // The world keeps its own copy of the hull.
       b3.b3DestroyHull(hull);
     }
-    this.#robot = body;
-    return body;
+    bodies.push(body);
+    letterByBody.set(body.index1, index);
+    vec3.toBuffer(poses, letter.position, index * POSE_STRIDE);
+    poses[index * POSE_STRIDE + 6] = 1;
   }
 
-  #heldPoseOf(index: number): HeldPose {
-    const offset = index * POSE_STRIDE;
-    return {
-      x: this.poses[offset] ?? 0,
-      y: this.poses[offset + 1] ?? 0,
-      z: this.poses[offset + 2] ?? 0,
-      yaw: 2 * Math.atan2(this.poses[offset + 5] ?? 0, this.poses[offset + 6] ?? 1),
-    };
-  }
+  const floorDef = b3.b3DefaultBodyDef();
+  floorDef.type = b3.b3BodyType.b3_staticBody;
+  floorDef.position = [0, 0, floorTop - FLOOR_THICKNESS / 2];
+  const floor = b3.b3CreateBody(world, floorDef);
+  const floorShapeDef = b3.b3DefaultShapeDef();
+  floorShapeDef.enableContactEvents = true;
+  floorShapeDef.baseMaterial.friction = LETTER_FRICTION;
+  const floorShape = b3.b3CreateBoxShape(
+    floor,
+    floorShapeDef,
+    FLOOR_HALF_WIDTH,
+    FLOOR_HALF_WIDTH,
+    FLOOR_THICKNESS / 2,
+  ).index1;
+  return {
+    b3,
+    world,
+    events,
+    move,
+    touch,
+    letters: bodies,
+    letterByBody,
+    letterByShape,
+    floorShape,
+    poses,
+    held: new Uint8Array(letters.length),
+    airborne: new Uint8Array(letters.length),
+    from: Array.from({ length: letters.length }, createHeldPose),
+    to: Array.from({ length: letters.length }, createHeldPose),
+    moved: new Uint8Array(letters.length),
+    landed: new Uint32Array(letters.length),
+    landedCount: 0,
+    accumulator: 0,
+    robot: createRobotBody(b3, world, robotHalfExtents),
+    robotActive: false,
+    robotFrom: { x: 0, y: 0, z: 0, heading: 0 },
+    transform: { position: vec3.create(), quaternion: quat.create() },
+    velocity: vec3.create(),
+    angular: vec3.create(),
+  };
+}
+export type TitleWorld = ReturnType<typeof createTitleWorld>;
 
-  #writePose(index: number, position: readonly number[], rotation: readonly number[]): void {
-    const offset = index * POSE_STRIDE;
-    this.poses.set(position, offset);
-    this.poses.set(rotation, offset + 3);
+export function createHeldPose() {
+  return { x: 0, y: 0, z: 0, yaw: 0 };
+}
+
+/** Snapshot a retained pose into caller-owned storage. */
+export function readTitlePose(out: ReturnType<typeof createHeldPose>, world: TitleWorld, index: number): void {
+  const offset = index * POSE_STRIDE;
+  out.x = world.poses[offset]!;
+  out.y = world.poses[offset + 1]!;
+  out.z = world.poses[offset + 2]!;
+  out.yaw = 2 * Math.atan2(world.poses[offset + 5]!, world.poses[offset + 6]!);
+}
+
+export function holdLetter(state: TitleWorld, index: number, pose: HeldPose): void {
+  if (state.held[index] === 0) {
+    state.b3.b3Body_SetType(state.letters[index]!, state.b3.b3BodyType.b3_kinematicBody);
+    state.airborne[index] = 0;
+    readTitlePose(state.from[index]!, state, index);
+    state.held[index] = 1;
+  } else Object.assign(state.from[index]!, state.to[index]!);
+  Object.assign(state.to[index]!, pose);
+}
+
+function setTransform(state: TitleWorld, x: number, y: number, z: number, yaw: number): void {
+  vec3.set(state.transform.position, x, y, z);
+  quat.set(state.transform.quaternion, 0, 0, Math.sin(yaw / 2), Math.cos(yaw / 2));
+}
+
+export function swallowLetter(state: TitleWorld, index: number): void {
+  state.held[index] = 0;
+  state.airborne[index] = 0;
+  state.b3.b3Body_Disable(state.letters[index]!);
+}
+
+export function reviveLetter(state: TitleWorld, index: number, pose: HeldPose): void {
+  const { b3 } = state;
+  const body = state.letters[index]!;
+  setTransform(state, pose.x, pose.y, pose.z, pose.yaw);
+  b3.b3Body_SetTransform(body, state.transform.position, state.transform.quaternion);
+  b3.b3Body_SetLinearVelocity(body, vec3.zero(state.velocity));
+  b3.b3Body_SetAngularVelocity(body, vec3.zero(state.angular));
+  b3.b3Body_Enable(body);
+  writePose(state, index, state.transform.position, state.transform.quaternion);
+}
+
+export function releaseLetter(state: TitleWorld, index: number, velocity: Vec3, spin: number): void {
+  if (state.held[index] === 0) return;
+  const { b3 } = state;
+  const body = state.letters[index]!;
+  const to = state.to[index]!;
+  setTransform(state, to.x, to.y, to.z, to.yaw);
+  b3.b3Body_SetTransform(body, state.transform.position, state.transform.quaternion);
+  state.held[index] = 0;
+  b3.b3Body_SetType(body, b3.b3BodyType.b3_dynamicBody);
+  b3.b3Body_SetLinearVelocity(body, velocity);
+  b3.b3Body_SetAngularVelocity(body, vec3.set(state.angular, 0, 0, spin));
+  b3.b3Body_SetAwake(body, true);
+  state.airborne[index] = 1;
+}
+
+/** Fixed 60 Hz integration. Event arrays belong to state and expire at the next step. */
+export function stepTitleWorld(state: TitleWorld, delta: number, target: RobotTarget | undefined): void {
+  const { b3, transform, robotFrom } = state;
+  arrive(state, target);
+  state.accumulator = Math.min(state.accumulator + delta, STEP * MAX_SUBSTEPS);
+  const substeps = Math.floor(state.accumulator / STEP);
+  state.accumulator -= substeps * STEP;
+  state.moved.fill(0);
+  state.landedCount = 0;
+  for (let substep = 1; substep <= substeps; substep++) {
+    const t = substep / substeps;
+    if (state.robotActive && target !== undefined) {
+      setTransform(
+        state,
+        lerp(robotFrom.x, target.x, t),
+        lerp(robotFrom.y, target.y, t),
+        target.z,
+        robotFrom.heading + deltaAngle(robotFrom.heading, target.heading) * t,
+      );
+      b3.b3Body_SetTargetTransform(state.robot, transform, STEP, true);
+    }
+    for (let index = 0; index < state.letters.length; index++) {
+      if (state.held[index] === 0) continue;
+      const from = state.from[index]!;
+      const to = state.to[index]!;
+      setTransform(
+        state,
+        lerp(from.x, to.x, t),
+        lerp(from.y, to.y, t),
+        lerp(from.z, to.z, t),
+        from.yaw + deltaAngle(from.yaw, to.yaw) * t,
+      );
+      b3.b3Body_SetTargetTransform(state.letters[index]!, transform, STEP, true);
+    }
+    b3.b3World_Step(state.world, STEP, SOLVER_SUBSTEPS);
+    b3.getEvents(state.events, state.world);
+    for (let index = 0; index < b3.getNumBodyMoveEvents(state.events); index++) {
+      const event = b3.getBodyMoveEventAt(state.move, state.events, index);
+      const letter = state.letterByBody.get(event.bodyId.index1);
+      if (letter === undefined) continue;
+      writePose(state, letter, event.position, event.rotation);
+      state.moved[letter] = 1;
+    }
+    for (let index = 0; index < b3.getNumContactBeginEvents(state.events); index++) {
+      const touch = b3.getContactBeginEventAt(state.touch, state.events, index);
+      const a = touch.shapeIdA.index1;
+      const b = touch.shapeIdB.index1;
+      const letter =
+        a === state.floorShape
+          ? state.letterByShape.get(b)
+          : b === state.floorShape
+            ? state.letterByShape.get(a)
+            : undefined;
+      if (letter === undefined || state.airborne[letter] === 0) continue;
+      state.airborne[letter] = 0;
+      state.landed[state.landedCount++] = letter;
+    }
+  }
+  for (let index = 0; index < state.letters.length; index++) {
+    if (state.held[index] === 0) continue;
+    const to = state.to[index]!;
+    setTransform(state, to.x, to.y, to.z, to.yaw);
+    writePose(state, index, transform.position, transform.quaternion);
+    state.moved[index] = 1;
+  }
+  if (target !== undefined) {
+    robotFrom.x = target.x;
+    robotFrom.y = target.y;
+    robotFrom.z = target.z;
+    robotFrom.heading = target.heading;
   }
 }
 
+export function destroyTitleWorld(state: TitleWorld): void {
+  state.b3.destroyEventsBuffer(state.events);
+  state.b3.b3DestroyWorld(state.world);
+}
+
+/** Allocate the robot collider during preparation, before its first visible drive. */
+function createRobotBody(
+  b3: Box3DModule,
+  world: ReturnType<Box3DModule['b3CreateWorld']>,
+  halfExtents: readonly [number, number, number],
+): Body {
+  const def = b3.b3DefaultBodyDef();
+  def.type = b3.b3BodyType.b3_kinematicBody;
+  def.isEnabled = false;
+  const body = b3.b3CreateBody(world, def);
+  const shape = b3.b3DefaultShapeDef();
+  shape.baseMaterial.friction = ROBOT_FRICTION;
+  const hull = b3.b3CreateHull(stadium(halfExtents));
+  if (hull !== null) {
+    b3.b3CreateHullShape(body, shape, hull);
+    b3.b3DestroyHull(hull);
+  }
+  return body;
+}
+
+function arrive(state: TitleWorld, target: RobotTarget | undefined): void {
+  const { b3, robotFrom } = state;
+  if (target === undefined) {
+    if (state.robotActive) b3.b3Body_Disable(state.robot);
+    state.robotActive = false;
+    return;
+  }
+  const dx = target.x - robotFrom.x;
+  const dy = target.y - robotFrom.y;
+  if (!state.robotActive || dx * dx + dy * dy > MAX_DRIVE * MAX_DRIVE) {
+    setTransform(state, target.x, target.y, target.z, target.heading);
+    b3.b3Body_SetTransform(state.robot, state.transform.position, state.transform.quaternion);
+    b3.b3Body_SetLinearVelocity(state.robot, vec3.zero(state.velocity));
+    b3.b3Body_SetAngularVelocity(state.robot, vec3.zero(state.angular));
+    if (!state.robotActive) b3.b3Body_Enable(state.robot);
+    robotFrom.x = target.x;
+    robotFrom.y = target.y;
+    robotFrom.z = target.z;
+    robotFrom.heading = target.heading;
+  }
+  state.robotActive = true;
+}
+
+function writePose(state: TitleWorld, index: number, position: readonly number[], rotation: readonly number[]): void {
+  const offset = index * POSE_STRIDE;
+  state.poses.set(position, offset);
+  state.poses.set(rotation, offset + 3);
+}
 /**
  * The robot's solid: a box with its two sides rounded off, standing on the floor (z from 0 to its full height).
  * The rounding is along the wide axis, so a letter met off centre is nudged aside rather than carried.
@@ -379,20 +346,4 @@ function stadium([along, across, up]: readonly [number, number, number]): number
     }
   }
   return points;
-}
-
-function yawQuaternion(yaw: number): Quat {
-  return [0, 0, Math.sin(yaw / 2), Math.cos(yaw / 2)];
-}
-
-function lerp(from: number, to: number, t: number): number {
-  return from + (to - from) * t;
-}
-
-/** The signed turn from one heading to another, the short way round. */
-function shortestTurn(from: number, to: number): number {
-  const turn = (to - from) % (2 * Math.PI);
-  if (turn > Math.PI) return turn - 2 * Math.PI;
-  if (turn < -Math.PI) return turn + 2 * Math.PI;
-  return turn;
 }

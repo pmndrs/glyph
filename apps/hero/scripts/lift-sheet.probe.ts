@@ -21,6 +21,9 @@ import {
 
 import type { HoleState } from '../src/scene/hole';
 import type { TitleBodies } from '../src/scene/title-bodies';
+const { replayTitle, updateTitle } = (await import(
+  new URL('/src/scene/title-bodies.ts', location.origin).href
+)) as typeof import('../src/scene/title-bodies');
 
 /** Seconds into the replay for each tile: carried up, at the top, falling, and landed. */
 const MOMENTS = [0.3, 0.6, 0.85, 1.6] as const;
@@ -64,11 +67,11 @@ if (title === undefined) throw new Error('Missing the title development handle')
 await renderer.compileAsync(scene, camera);
 
 const tiles = MOMENTS.map(() => new RenderTarget(960, 540, { samples: 4 }));
-title.replay();
+replayTitle(title);
 let elapsed = 0;
 for (const [index, moment] of MOMENTS.entries()) {
   while (elapsed < moment) {
-    title.update(STEP, undefined, CLOSED);
+    updateTitle(title, STEP, undefined, CLOSED);
     elapsed += STEP;
   }
   getScheduler().stepJob('hero-glass-shadows');
@@ -91,7 +94,10 @@ const sheetCamera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
 sheetCamera.position.z = 1;
 renderer.setRenderTarget(null);
 renderer.render(sheet, sheetCamera);
-console.log('hero-lift-sheet-ready', JSON.stringify({ backend: 'webgpu', moments: MOMENTS, poses: title.poses }));
+console.log(
+  'hero-lift-sheet-ready',
+  JSON.stringify({ backend: 'webgpu', moments: MOMENTS, poses: Array.from(title.world.poses) }),
+);
 
 quad.dispose();
 for (const material of materials) material.dispose();

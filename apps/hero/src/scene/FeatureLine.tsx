@@ -1,18 +1,18 @@
 import { Text } from '@pmndrs/glyph/react';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame } from '@react-three/fiber/webgpu';
-import { useEffect, useRef, useState } from 'react';
-import { Matrix4, Vector3 } from 'three/webgpu';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { mat4, vec3 } from 'math';
 
 import { FEATURE_LINE } from '../content';
 import type { MsdfFont } from '../fonts';
-import { departureAt, flight } from './departure';
+import { createFlight, departureAt, flight } from './departure';
 import { hole } from './hole';
 import { latestShockwave } from './shockwave';
 import { titleWidth } from './metrics';
 import { replayCount } from './replay';
 import { heroReady, usePreparation } from '../startup';
-import { RetainedLine } from './retained-line';
+import { type RetainedLine, createRetainedLine, disposeLine, showLine, resetLine } from './retained-line';
 
 /** Starting size, only ever reduced: the line is fitted to the title's width, never stretched past it. */
 const FONT_SIZE = 0.42;
@@ -55,15 +55,25 @@ export function FeatureLine({ field }: { readonly field: MsdfFont }) {
   const line = useRef<RetainedLine | undefined>(undefined);
   const collapsed = useRef(false);
   usePreparation('feature', () => line.current !== undefined);
-  const transform = useRef(new Matrix4());
-  const center = useRef(new Vector3());
-  const rotation = useRef(new Matrix4());
-  const pivot = useRef(new Matrix4());
-  const stretch = useRef(new Vector3());
+  const scratch = useRef(
+    useMemo(
+      () => ({
+        transform: mat4.create(),
+        rotation: mat4.create(),
+        pivot: mat4.create(),
+        world: mat4.create(),
+        inverse: mat4.create(),
+        center: vec3.create(),
+        scale: vec3.create(),
+        flight: createFlight(),
+      }),
+      [],
+    ),
+  );
 
   useEffect(
     () => () => {
-      line.current?.dispose();
+      if (line.current !== undefined) disposeLine(line.current);
       line.current = undefined;
     },
     [],
@@ -75,7 +85,7 @@ export function FeatureLine({ field }: { readonly field: MsdfFont }) {
       const collapse = hole();
       if (collapse.beat === 'closed' && collapsed.current) {
         collapsed.current = false;
-        line.current?.reset(typed.current);
+        if (line.current !== undefined) resetLine(line.current, typed.current);
       }
       if (collapse.beat !== 'closed' && line.current !== undefined) {
         collapsed.current = true;
@@ -83,30 +93,32 @@ export function FeatureLine({ field }: { readonly field: MsdfFont }) {
         if (copies !== undefined) {
           copies.visible = collapse.beat === 'open';
           copies.updateWorldMatrix(true, false);
-          for (const glyph of copies.measurements) {
-            if (glyph.localInkBounds.isEmpty()) continue;
-            glyph.localInkBounds.getCenter(center.current);
-            const localX = center.current.x;
-            const localY = center.current.y;
-            center.current.applyMatrix4(copies.matrixWorld);
-            const x = center.current.x - collapse.x;
-            const y = center.current.y - collapse.y;
-            const pose = flight(collapse.time, departureAt(Math.abs(x) / 12, glyph.index), 0.8);
+          const work = scratch.current;
+          copies.matrixWorld.toArray(work.world);
+          mat4.invert(work.inverse, work.world);
+          const records = line.current.records;
+          for (let index = 0; index < records.length; index++) {
+            const glyph = records[index]!;
+            if (glyph.empty) continue;
+            vec3.transformMat4(work.center, glyph.center, work.world);
+            const x = work.center[0] - collapse.x;
+            const y = work.center[1] - collapse.y;
+            const pose = flight(work.flight, collapse.time, departureAt(Math.abs(x) / 12, glyph.index), 0.8);
             const cosine = Math.cos(pose.turn);
             const sine = Math.sin(pose.turn);
-            center.current.set(
-              collapse.x + (x * cosine - y * sine) * pose.radius,
-              collapse.y + (x * sine + y * cosine) * pose.radius,
-              center.current.z,
-            );
-            copies.worldToLocal(center.current);
-            transform.current
-              .makeTranslation(center.current.x, center.current.y, center.current.z)
-              .multiply(rotation.current.makeRotationZ(pose.turn))
-              .scale(stretch.current.set(pose.size * pose.stretch, pose.size / pose.stretch, 1))
-              .multiply(pivot.current.makeTranslation(-localX, -localY, 0))
-              .multiply(glyph.originalMatrix);
-            copies.setMatrixAt(glyph.index, transform.current);
+            work.center[0] = collapse.x + (x * cosine - y * sine) * pose.radius;
+            work.center[1] = collapse.y + (x * sine + y * cosine) * pose.radius;
+            vec3.transformMat4(work.center, work.center, work.inverse);
+            mat4.fromTranslation(work.transform, work.center);
+            mat4.fromZRotation(work.rotation, pose.turn);
+            mat4.multiply(work.transform, work.transform, work.rotation);
+            vec3.set(work.scale, pose.size * pose.stretch, pose.size / pose.stretch, 1);
+            mat4.scale(work.transform, work.transform, work.scale);
+            vec3.set(work.center, -glyph.center[0], -glyph.center[1], 0);
+            mat4.fromTranslation(work.pivot, work.center);
+            mat4.multiply(work.transform, work.transform, work.pivot);
+            mat4.multiply(work.transform, work.transform, glyph.original);
+            copies.setMatrixAt(glyph.index, line.current.draw.fromArray(work.transform));
           }
         }
         return;
@@ -133,8 +145,8 @@ export function FeatureLine({ field }: { readonly field: MsdfFont }) {
 
       if (line.current === undefined) {
         if (object === null || object.commitState().status !== 'committed') return;
-        line.current = new RetainedLine(object);
-        line.current.show(FEATURE_LINE.text.length);
+        line.current = createRetainedLine(object);
+        showLine(line.current, FEATURE_LINE.text.length);
       }
       if (!heroReady()) return;
 
@@ -145,7 +157,7 @@ export function FeatureLine({ field }: { readonly field: MsdfFont }) {
         start.current = Number.POSITIVE_INFINITY;
         beat.current = 0;
         typed.current = 0;
-        line.current.show(0);
+        showLine(line.current, 0);
       }
 
       const shock = latestShockwave();
@@ -155,14 +167,14 @@ export function FeatureLine({ field }: { readonly field: MsdfFont }) {
         start.current = shock.at + START_DELAY * 1000;
         beat.current = 0;
         typed.current = 0;
-        line.current.show(0);
+        showLine(line.current, 0);
       }
 
       if (performance.now() < start.current) return;
       beat.current += 1;
       const count = Math.min(Math.floor(beat.current / FRAMES_PER_CHARACTER), FEATURE_LINE.text.length);
       typed.current = count;
-      line.current.show(count);
+      showLine(line.current, count);
     },
     { fps: 60 },
   );

@@ -2,6 +2,12 @@
 
 ## 2026-09-18
 
+- **Rebuilt the hero's CPU animation around retained math state** — Replaced title and typing classes with
+  caller-owned data and update functions, composed icon transforms without temporary Three groups, and preallocated
+  motion, particle, impact, and physics-event storage. All 56 unit tests and the typing, shadow, dust, lift, and finale
+  WebGPU checks pass. Two 1080p replays averaged 59.96 fps with no late compilation or resources; retained the recording
+  preparation gate and 60 fps render cap. See [the hero reference](packages/hero.md).
+
 - **Installed Poimandres math for the hero** — Pinned `math@0.1.0` and installed its upstream repository-local
   skill from the matching release commit. See [the hero reference](packages/hero.md).
 

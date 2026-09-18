@@ -5,7 +5,7 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:7549a3d81c99804a36482e4542e9dc852c939f4c57b6c74486af1afa0c9897ee'
+source_digest: 'sha256:a20d9bbf56b42c70e9849e58c2f0e703d4d8e35993980fcaaa5b6eb914f33066'
 tags: [package, example, react-three-fiber, webgpu, slug, vite]
 sources:
   - id: manifest
@@ -80,6 +80,18 @@ sources:
   - id: retained-lines-check
     resource: ../../../apps/hero/scripts/retained-lines.probe.ts
     title: Retained typing compared with independently shaped prefixes
+  - id: lattice-simulation
+    resource: ../../../apps/hero/src/scene/icon-lattice.ts
+    title: Fixed-capacity lattice simulation and direct glyph transforms
+  - id: robot-motion
+    resource: ../../../apps/hero/src/scene/robot-motion.ts
+    title: Caller-owned robot path and pose output
+  - id: dust-simulation
+    resource: ../../../apps/hero/src/scene/robot-dust.ts
+    title: Fixed particle storage and distance-based emission
+  - id: simulation-check
+    resource: ../../../apps/hero/src/scene/simulation.test.ts
+    title: Matrix equivalence, motion, storage reuse, and physical landing checks
 generated:
   by: anthropic/claude-opus-5
   at: '2026-09-18T09:20:00Z'
@@ -91,10 +103,33 @@ This Vite application is a showcase rather than an API demonstration: each scene
 technique visible. Both run on `WebGPURenderer` through React Three Fiber v10 and drei v11, and both draw their
 text with the Slug raster, whose analytic coverage is what the techniques depend on.
 
-The application pins Poimandres' `math` package at `0.1.0` for upcoming geometry and simulation work. Its upstream
+The application pins Poimandres' `math` package at `0.1.0` for the default scene's CPU simulation and transforms. Its upstream
 skill is installed at `.agents/skills/math/SKILL.md` from `pmndrs/math` commit
 `c6713e38dd86de6e3e5bf98b94e22c2a29e4a709`, matching the published package's `gitHead`.
-The package is available to the hero; existing animation calculations have not yet been migrated to it.
+The title physics adapter, title motion, and retained typing lines expose creation, update, and disposal functions
+over caller-owned records. Math tuples hold transform scratch; the physics pose stream stays in a `Float32Array`
+at the Wasm boundary. Three matrices and scene objects remain at the rendering boundary.
+
+The icon field composes glyph transforms directly, replacing 1,108 temporary Three groups. Its neighbour graph,
+motif candidates, swap flags, selected records, and twelve wave slots are allocated once. Motif changes use a seeded
+`math/random` generator on the frame clock; the next change waits 1.1 seconds from its last start. Each update visits
+each cell and its four neighbours, plus active waves, at a bounded eight substeps: O(cells × (4 + active waves)) time
+and O(cells) retained storage. Expired waves are excluded before the inner loop. A long frame discards excess
+simulation backlog instead of accumulating work indefinitely.
+
+Robot path sampling, eye transitions, and floor footprints overwrite retained outputs. Consumers copy a footprint
+when they need its previous-frame position. Dust uses 128 reusable particle records; saturation replaces the oldest
+slot, movement above four units is treated as a teleport, and absent robots emit nothing. Title landings use a
+fixed buffer and count; each released body reports its first floor contact once. Lift, departure, replay, and typing
+reuse their original records. The robot collider and shadow capture list are prepared before playback. These
+application-owned update kernels create no temporary arrays, collections, or pose objects; renderer and physics
+library internals are outside that claim. Scene-authored dimensions and flight durations are positive, transforms
+used as coordinate frames are invertible, and frame deltas are nonnegative.
+
+The simulation tests compare direct matrix composition with Three's independent transform implementation, exercise
+robot endpoints and look-up timing, verify motif changes at edge-on, check borrowed-position handling and dust fade,
+and use real Box3D contact events to verify landing notification and buffer reuse. The alternate origin scene's
+multilingual shaping schedule remains a separate implementation.
 
 The default scene builds two interleaved lattices of eleven icons on mass-spring grids at different depths, scaled
 so they interleave on screen and stay in phase. The Slug-glass `Glyph` and feature line start at rest. Press Space
@@ -184,10 +219,12 @@ raw render intervals, CPU submission work, asynchronous GPU queue completion, an
 adapter, viewport, and drawing-buffer dimensions. The default 1280×720 viewport with `dpr=1.5` draws at 1920×1080;
 explicit DPR choices are 1, 1.5, 2, and 3.
 
-On the local Apple Metal adapter with Chromium 149, the 1920×1080 check prepared in 3.30 seconds and recorded
-1,702 frames across two replays at 59.92 fps. Render intervals were 17.6 ms at p95 and 24.8 ms worst, with no
-interval over 25 ms, long tasks, or late resources. CPU work was 3.2 ms at p95; browser-observed GPU queue
-completion was 9.0 ms at p95 with at most three pending observations. These are submission and queue measurements,
+After the math rewrite, the local Apple Metal adapter with Chromium 149 prepared the 1920×1080 check in 3.23 seconds
+and recorded 1,702 frames across two replays at 59.96 fps. Render intervals were 17.3 ms at p95 and 25.0 ms worst,
+with no interval over 25 ms, long tasks, or late resources. CPU work was 3.0 ms at p95; browser-observed GPU queue
+completion was 9.1 ms at p95 with at most two pending observations. The preceding implementation measured 59.92 fps,
+17.6 ms render-interval p95, and 3.2 ms CPU p95 on the same adapter and resolution; these single runs support stable
+cadence, not a statistically established speedup. These are submission and queue measurements,
 not GPU timestamp durations or proof of frame delivery through a screen recorder. The full application check
 currently stops at the existing stale `geist-medium.font.glb` bake; typecheck, lint, unit tests, and build pass.
 
