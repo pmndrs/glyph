@@ -5,7 +5,7 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:3fac6ab5372f27f7a8e0220062520652a6aff612db82a7e65b985425e60d1021'
+source_digest: 'sha256:67b8ed939693a5514acc1ded338e27c40c5f5562c94194cfb3ce819a7456700e'
 tags: [package, example, react-three-fiber, webgpu, slug, vite]
 sources:
   - id: manifest
@@ -45,9 +45,9 @@ text with the Slug raster, whose analytic coverage is what the techniques depend
 
 The default scene builds two interleaved lattices of occult icons on mass-spring grids at different depths, scaled
 so they interleave on screen and stay in phase. The Slug-glass `GLYPH` and feature line start at rest. Press Space
-to lift the title towards the camera and slam it back into place. Each pane travels straight along the camera's
-depth axis, 35 ms after its neighbour, with a separate impact through both lattices on landing. A short damped
-rotation and sideways jostle around each measured letter centre settles within 380 ms of contact. The feature line retypes after
+to lift the title towards the camera and slam it back into place. Each pane follows the original eased approach,
+35 ms after its neighbour, with a separate impact through both lattices on landing. A slight tilt (at most 1.5°)
+and drift make the approach less rigid; a gentle settle returns it home within 380 ms of contact. The feature line retypes after
 the final landing. Holding Space does not restart the animation, and focused form controls retain their normal
 keyboard behavior.
 

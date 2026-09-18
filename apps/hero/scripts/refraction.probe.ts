@@ -95,14 +95,14 @@ for (let milliseconds = 10; milliseconds <= 1250; milliseconds += 10) {
     arrivals.push(milliseconds);
     lastWave = wave.id;
   }
-  if (milliseconds === 450 && stainedGlassLetters[0]!.depth.value < 13) {
+  if (milliseconds === 450 && stainedGlassLetters[0]!.scale.value < 30) {
     throw new Error('Space did not lift the title');
   }
   if (milliseconds === 680 && Math.abs(stainedGlassLetters[0]!.angle.value) < 0.01) {
     throw new Error('Landing did not produce a settling jostle');
   }
-  if (milliseconds < 650 && stainedGlassLetters.some((pane) => pane.angle.value !== 0 || pane.sway.value !== 0)) {
-    throw new Error('Letters moved sideways before impact');
+  if (stainedGlassLetters.some((pane) => Math.abs(pane.angle.value) > 0.026 || Math.abs(pane.sway.value) > 0.061)) {
+    throw new Error('Letter tilt or drift exceeded the gentle landing limits');
   }
   if (milliseconds === 300) {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', repeat: true, bubbles: true }));
@@ -113,7 +113,7 @@ if (arrivals.length !== 5 || arrivals.some((time, index) => Math.abs(time - (650
 }
 if (
   stainedGlassLetters.some(
-    (pane) => pane.depth.value !== 0 || pane.height.value !== 0 || pane.angle.value !== 0 || pane.sway.value !== 0,
+    (pane) => pane.scale.value !== 1 || pane.height.value !== 0 || pane.angle.value !== 0 || pane.sway.value !== 0,
   )
 ) {
   throw new Error('Title did not settle back to rest');

@@ -29,6 +29,7 @@ import {
   MeshPhysicalNodeMaterial,
   MeshStandardNodeMaterial,
   type MeshPhysicalNodeMaterialParameters,
+  Vector2,
   Vector3,
   type Node,
 } from 'three/webgpu';
@@ -87,7 +88,7 @@ function createGlass(properties: MeshPhysicalNodeMaterialParameters = {}, motion
     // centre curves the refraction, and the icons behind magnify and bend as they cross each letterform.
     const face = shapeSlug(material, context, { drift: false });
     if (motion !== undefined) {
-      material.positionNode = jostle(context.position, motion).add(vec3(0, 0, motion.depth));
+      material.positionNode = jostle(context.position, motion).sub(titleOrigin).mul(motion.scale).add(titleOrigin);
     }
     const lens = uv().sub(0.5).mul(2);
     // Falls to zero at the quad border, so neighbouring glyph quads do not show their seams.
@@ -101,22 +102,29 @@ function createGlass(properties: MeshPhysicalNodeMaterialParameters = {}, motion
 
 export const glass = createGlass();
 
+/** Origin of the centred paragraph in its local layout coordinates. */
+export const titleOrigin = uniform(new Vector3());
+
 interface PaneMotion {
-  readonly depth: Node<'float'>;
+  readonly scale: Node<'float'>;
   readonly height: Node<'float'>;
   readonly angle: Node<'float'>;
   readonly sway: Node<'float'>;
   readonly pivot: Node<'vec3'>;
+  /** Where the floor's physics has pushed the pane from its rest place, and how far it has turned about its centre. */
+  readonly shove: Node<'vec2'>;
+  readonly turn: Node<'float'>;
 }
 
-/** Rotate each pane around its measured ink centre, then slide it a little as it settles. */
+/** Rotate each pane around its measured ink centre, then slide it: a little as it settles, further when shoved. */
 function jostle(position: Node<'vec3'>, motion: PaneMotion): Node<'vec3'> {
   const local = position.sub(motion.pivot);
-  const c = cos(motion.angle);
-  const s = sin(motion.angle);
+  const angle = motion.angle.add(motion.turn);
+  const c = cos(angle);
+  const s = sin(angle);
   return vec3(local.x.mul(c).sub(local.y.mul(s)), local.x.mul(s).add(local.y.mul(c)), local.z)
     .add(motion.pivot)
-    .add(vec3(motion.sway, 0, 0));
+    .add(vec3(motion.sway.add(motion.shove.x), motion.shove.y, 0));
 }
 
 /** Separate inline materials preserve one shaped word while giving each pane its own tint and finish. */
@@ -128,11 +136,13 @@ export const stainedGlassLetters = [
   { letter: 'H', tint: '#b18add', thickness: 2.9, roughness: 0.05, ior: 1.53 },
 ].map(({ letter, tint, thickness, roughness, ior }) => {
   const motion = {
-    depth: uniform(0),
+    scale: uniform(1),
     height: uniform(0),
     angle: uniform(0),
     sway: uniform(0),
     pivot: uniform(new Vector3()),
+    shove: uniform(new Vector2()),
+    turn: uniform(0),
   };
   return {
     letter,
@@ -154,6 +164,8 @@ export const stainedGlassLetters = [
     shadow: createSoftShadow(letter, tint, motion),
   };
 });
+
+export type StainedGlassLetter = (typeof stainedGlassLetters)[number];
 
 /** The true SDF supplies continuous falloff, independent of the shader's already-clamped fill opacity. */
 function createSoftShadow(letter: string, tint: string, motion: PaneMotion) {

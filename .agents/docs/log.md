@@ -3,7 +3,7 @@
 ## 2026-09-18
 
 - **Staggered the stained-glass landings and softened their shadows** — Each pane lands 35 ms after its neighbour
-  and triggers its own ripple. Camera-depth travel ends in a brief damped jostle. MSDF signed distances drive
+  and triggers its own ripple. The eased approach carries a small tilt and drift, followed by a gentle settle. MSDF signed distances drive
   colored contact shadows that soften and fade during the
   lift, then tighten at contact. The WebGPU workflow checks timing and shadow pixels. See [the hero reference](packages/hero.md).
 
