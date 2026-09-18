@@ -1,9 +1,10 @@
 import type { World } from 'koota';
 import { Frame } from './sequence/traits';
 import { advanceSequence } from './sequence/systems';
-import { moveRobots, emitDust } from './robot/systems';
-import { moveTitle, typeFeature } from './typography/systems';
+import { moveRobots, moveRobotBodies, emitDust } from './robot/systems';
+import { moveTitle, syncTitle, typeFeature } from './typography/systems';
 import { moveFields } from './field/systems';
+import { stepPhysics } from './physics/systems';
 
 /** Application order is explicit and usable without React, a DOM, or a renderer. */
 export function advanceHero(world: World, delta: number, now: number): void {
@@ -17,6 +18,9 @@ export function advanceHero(world: World, delta: number, now: number): void {
   moveRobots(world);
   advanceSequence(world);
   moveTitle(world);
+  moveRobotBodies(world);
+  stepPhysics(world);
+  syncTitle(world);
   typeFeature(world);
   moveFields(world);
   emitDust(world);

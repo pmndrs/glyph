@@ -40,7 +40,7 @@ export const sequenceActions = createActions((world) => ({
     collapseAt(sequence.hole, -1);
 
     world.query(Title).updateEach(([title]) => {
-      if (title.bodies !== undefined) replayTitle(title.bodies);
+      if (title.bodies !== undefined) replayTitle(world, title.bodies);
     });
 
     world.query(Typing).updateEach(([typing]) => {

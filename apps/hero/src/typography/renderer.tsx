@@ -126,6 +126,7 @@ export function GlassTitle({ faces }: { readonly faces: Faces }) {
 
       glyphs.current = copies;
       bodies.current = createTitleBodies(
+        world,
         mat4.copy(mat4.create(), copies.matrixWorld.elements),
         letters,
         camera.position.z,

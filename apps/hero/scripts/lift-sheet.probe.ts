@@ -25,6 +25,9 @@ const { advanceHero } = (await import(
 const { sequenceActions } = (await import(
   new URL('/src/sequence/actions.ts', location.origin).href
 )) as typeof import('../src/sequence/actions');
+const { Body } = (await import(
+  new URL('/src/physics/traits.ts', location.origin).href
+)) as typeof import('../src/physics/traits');
 /** Seconds into the replay for each tile: carried up, at the top, falling, and landed. */
 const MOMENTS = [0.3, 0.6, 0.85, 1.6] as const;
 const STEP = 1 / 120;
@@ -69,8 +72,7 @@ for (const [index, moment] of MOMENTS.entries()) {
 
   let height = 0;
 
-  for (let offset = 2; offset < title.world.poses.length; offset += 7)
-    height = Math.max(height, title.world.poses[offset]!);
+  for (const piece of title.pieces) height = Math.max(height, piece.entity.get(Body)!.position[2]);
 
   heights.push(height);
   getScheduler().stepJob('hero-title-motion');
@@ -103,7 +105,12 @@ renderer.setRenderTarget(null);
 renderer.render(sheet, sheetCamera);
 console.log(
   'hero-lift-sheet-ready',
-  JSON.stringify({ backend: 'webgpu', moments: MOMENTS, heights, poses: Array.from(title.world.poses) }),
+  JSON.stringify({
+    backend: 'webgpu',
+    moments: MOMENTS,
+    heights,
+    poses: title.pieces.map(({ entity }) => entity.get(Body)!.position),
+  }),
 );
 
 quad.dispose();

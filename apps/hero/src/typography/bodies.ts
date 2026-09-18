@@ -1,19 +1,9 @@
-import { mat4, quat, vec3, lerp, type Mat4 } from 'math';
+import { mat4, vec3, lerp, type Mat4 } from 'math';
+import type { World } from 'koota';
 import { easing } from 'math/time';
-import {
-  POSE_STRIDE,
-  createTitleWorld,
-  createHeldPose,
-  readTitlePose,
-  holdLetter,
-  releaseLetter,
-  reviveLetter,
-  swallowLetter,
-  stepTitleWorld,
-  destroyTitleWorld,
-} from '../physics/world';
+import { Body, createHeldPose, readBodyPose } from '../physics/traits';
+import { physicsActions } from '../physics/actions';
 import { createFlight, departureAt, flight } from '../sequence/departure';
-import { ROBOT_HALF_EXTENTS, type Footprint } from '../robot/traits';
 import type { HoleState } from '../sequence/motion';
 import type { Solid } from './outline';
 
@@ -37,6 +27,7 @@ export interface Landing {
 
 /** Allocate all lift, departure, event, and matrix storage before playback. */
 export function createTitleBodies(
+  world: World,
   worldMatrix: Mat4,
   letters: readonly Letter[],
   cameraHeight: number,
@@ -45,33 +36,31 @@ export function createTitleBodies(
   const inverse = mat4.create();
   mat4.copy(inverse, worldMatrix);
   mat4.invert(inverse, inverse);
+  const physics = physicsActions(world);
+  physics.setFloor(Math.min(...letters.map(({ home }) => home[2])) - thickness / 2);
 
   const pieces = letters.map((letter) => {
     const offset = mat4.create();
     const original = mat4.create();
-    const world = mat4.create();
+    const transform = mat4.create();
     mat4.copy(original, letter.original);
-    mat4.copy(world, worldMatrix);
+    mat4.copy(transform, worldMatrix);
     mat4.fromTranslation(offset, vec3.fromValues(-letter.home[0], -letter.home[1], -letter.home[2]));
-    mat4.multiply(offset, offset, world);
+    mat4.multiply(offset, offset, transform);
     mat4.multiply(offset, offset, original);
 
-    return { letter, offset };
+    const entity = physics.spawnSolid(
+      vec3.fromValues(letter.home[0], letter.home[1], letter.home[2]),
+      letter.solid.prisms,
+    );
+
+    return { letter, offset, entity };
   });
 
-  const world = createTitleWorld(
-    letters.map(({ home, solid }) => ({
-      position: vec3.fromValues(home[0], home[1], home[2]),
-      prisms: solid.prisms,
-    })),
-    Math.min(...letters.map(({ home }) => home[2])) - thickness / 2,
-    ROBOT_HALF_EXTENTS,
-  );
   const state = {
     matrices: new Float64Array(letters.length * 16),
     inverse,
     pieces,
-    world,
     liftHeight: cameraHeight - 1.6,
     lifting: false,
     elapsed: 0,
@@ -87,8 +76,6 @@ export function createTitleBodies(
     pose: createHeldPose(),
     flight: createFlight(),
     velocity: vec3.create(),
-    position: vec3.create(),
-    rotation: quat.create(),
     scale: vec3.create(),
     body: mat4.create(),
     matrix: mat4.create(),
@@ -102,7 +89,7 @@ export function createTitleBodies(
 export type TitleBodies = ReturnType<typeof createTitleBodies>;
 
 /** Reuse the same body and glyph records on every replay. */
-export function replayTitle(state: TitleBodies): void {
+export function replayTitle(world: World, state: TitleBodies): void {
   state.replays++;
 
   for (let index = 0; index < state.pieces.length; index++) {
@@ -112,12 +99,12 @@ export function replayTitle(state: TitleBodies): void {
       state.pose.y = home[1];
       state.pose.z = home[2];
       state.pose.yaw = 0;
-      reviveLetter(state.world, index, state.pose);
+      physicsActions(world).revive(state.pieces[index]!.entity, state.pose);
       state.grow[index] = 1;
       writeLetter(state, index);
     }
 
-    readTitlePose(state.from[index]!, state.world, index);
+    readBodyPose(state.from[index]!, state.pieces[index]!.entity);
   }
 
   state.swallowed.fill(0);
@@ -127,47 +114,50 @@ export function replayTitle(state: TitleBodies): void {
   state.elapsed = 0;
 }
 
-/** Landings are a fixed buffer. Consume only landingCount entries before the next update. */
-export function updateTitle(state: TitleBodies, delta: number, robot: Footprint | undefined, hole: HoleState): void {
-  carryTitle(state, delta);
-  attractTitle(state, hole);
-  stepTitleWorld(state.world, delta, robot);
+export function prepareTitle(world: World, state: TitleBodies, delta: number, hole: HoleState): void {
+  carryTitle(world, state, delta);
+  attractTitle(world, state, hole);
+}
+
+/** Project entity poses after physics and collect this frame's landings. */
+export function updateTitle(state: TitleBodies): void {
+  state.landingCount = 0;
 
   for (let index = 0; index < state.pieces.length; index++) {
-    if (state.world.moved[index] === 1) writeLetter(state, index);
-  }
+    const body = state.pieces[index]!.entity.get(Body)!;
 
-  state.landingCount = state.world.landedCount;
+    if (body.moved) writeLetter(state, index);
 
-  for (let slot = 0; slot < state.landingCount; slot++) {
-    const index = state.world.landed[slot]!;
-    const landing = state.landings[slot]!;
+    if (!body.landed) continue;
+
+    const landing = state.landings[state.landingCount++]!;
     landing.index = index;
-    landing.x = state.world.poses[index * POSE_STRIDE]!;
-    landing.y = state.world.poses[index * POSE_STRIDE + 1]!;
+    landing.x = body.position[0];
+    landing.y = body.position[1];
   }
 }
 
 export function disposeTitle(state: TitleBodies): void {
-  destroyTitleWorld(state.world);
+  for (const piece of state.pieces) {
+    if (piece.entity.isAlive()) piece.entity.destroy();
+  }
 }
 
 export function titleReach(state: TitleBodies): number {
-  const poses = state.world.poses;
   let reach = 0;
 
   for (let index = 0; index < state.pieces.length; index++) {
-    const offset = index * POSE_STRIDE;
-    const qx = poses[offset + 3]!;
-    const qy = poses[offset + 4]!;
+    const body = state.pieces[index]!.entity.get(Body)!;
+    const qx = body.rotation[0];
+    const qy = body.rotation[1];
     const upright = 1 - 2 * (qx * qx + qy * qy);
-    reach = Math.max(reach, poses[offset + 2]! + Math.sqrt(Math.max(0, 1 - upright * upright)) * 3.2);
+    reach = Math.max(reach, body.position[2] + Math.sqrt(Math.max(0, 1 - upright * upright)) * 3.2);
   }
 
   return reach;
 }
 
-function carryTitle(state: TitleBodies, delta: number): void {
+function carryTitle(world: World, state: TitleBodies, delta: number): void {
   if (!state.lifting) return;
 
   state.elapsed += delta;
@@ -193,17 +183,21 @@ function carryTitle(state: TitleBodies, delta: number): void {
       pose.y = lerp(from.y, home[1], rise);
       pose.z = home[2] + state.liftHeight * rise;
       pose.yaw = from.yaw * (1 - rise);
-      holdLetter(state.world, index, pose);
+      physicsActions(world).hold(state.pieces[index]!.entity, pose);
       pending = true;
     } else {
       pose.x = home[0];
       pose.y = home[1];
       pose.z = home[2] + state.liftHeight;
       pose.yaw = 0;
-      holdLetter(state.world, index, pose);
+      physicsActions(world).hold(state.pieces[index]!.entity, pose);
       const way = (index + state.replays) * 2.4;
       vec3.set(state.velocity, Math.cos(way) * 0.9, Math.sin(way) * 0.9, -35);
-      releaseLetter(state.world, index, state.velocity, (index + state.replays) % 2 === 0 ? 0.35 : -0.35);
+      physicsActions(world).release(
+        state.pieces[index]!.entity,
+        state.velocity,
+        (index + state.replays) % 2 === 0 ? 0.35 : -0.35,
+      );
       state.released[index] = 1;
     }
   }
@@ -211,7 +205,7 @@ function carryTitle(state: TitleBodies, delta: number): void {
   state.lifting = pending;
 }
 
-function attractTitle(state: TitleBodies, hole: HoleState): void {
+function attractTitle(world: World, state: TitleBodies, hole: HoleState): void {
   if (hole.beat === 'closed') {
     for (let index = 0; index < state.pieces.length; index++) {
       if (state.grow[index] !== 1) {
@@ -224,7 +218,8 @@ function attractTitle(state: TitleBodies, hole: HoleState): void {
   }
 
   if (!state.departing) {
-    for (let index = 0; index < state.pieces.length; index++) readTitlePose(state.origins[index]!, state.world, index);
+    for (let index = 0; index < state.pieces.length; index++)
+      readBodyPose(state.origins[index]!, state.pieces[index]!.entity);
 
     state.departing = true;
   }
@@ -239,7 +234,7 @@ function attractTitle(state: TitleBodies, hole: HoleState): void {
 
     if (flightPose.size === 0 || hole.beat === 'black') {
       state.swallowed[index] = 1;
-      swallowLetter(state.world, index);
+      physicsActions(world).park(state.pieces[index]!.entity);
       state.grow[index] = 0;
       writeLetter(state, index);
       continue;
@@ -252,7 +247,7 @@ function attractTitle(state: TitleBodies, hole: HoleState): void {
     pose.y = hole.y + (x * sine + y * cosine) * flightPose.radius;
     pose.z = from.z + Math.sin(Math.PI * (1 - flightPose.size)) * 1.8;
     pose.yaw = from.yaw + flightPose.turn;
-    holdLetter(state.world, index, pose);
+    physicsActions(world).hold(state.pieces[index]!.entity, pose);
     state.grow[index] = flightPose.size * (1 + 0.35 * Math.sin(Math.PI * (1 - flightPose.size)));
   }
 }
@@ -260,11 +255,10 @@ function attractTitle(state: TitleBodies, hole: HoleState): void {
 /** Publish each simulated pose into the retained matrix stream consumed by the view. */
 function writeLetter(state: TitleBodies, index: number): void {
   const piece = state.pieces[index]!;
-  vec3.fromBuffer(state.position, state.world.poses, index * POSE_STRIDE);
-  quat.fromBuffer(state.rotation, state.world.poses, index * POSE_STRIDE + 3);
+  const body = piece.entity.get(Body)!;
   const grow = state.grow[index]!;
   vec3.set(state.scale, grow, grow, 1);
-  mat4.fromRotationTranslationScale(state.body, state.rotation, state.position, state.scale);
+  mat4.fromRotationTranslationScale(state.body, body.rotation, body.position, state.scale);
   mat4.multiply(state.matrix, state.inverse, state.body);
   mat4.multiply(state.matrix, state.matrix, piece.offset);
   state.matrices.set(state.matrix, index * 16);

@@ -4,6 +4,8 @@ import { sequenceActions } from '../sequence/actions';
 import { Robot } from './traits';
 import { layPath, poseAt, FIRST_RUN_DELAY, REPLAY_DELAY, RUN_SECONDS, LEAVE_AT, BODY_REACH } from './motion';
 import { stepDust } from './dust';
+import { Body } from '../physics/traits';
+import { physicsActions } from '../physics/actions';
 
 export function moveRobots(world: World): void {
   const frame = world.get(Frame)!;
@@ -60,5 +62,30 @@ export function emitDust(world: World): void {
 
   world.query(Robot).updateEach(([robot]) => {
     stepDust(robot.dust, frame.delta, robot.active ? robot.footprint : undefined);
+  });
+}
+
+export function moveRobotBodies(world: World): void {
+  const physics = physicsActions(world);
+
+  world.query(Robot, Body).updateEach(([robot, body], entity) => {
+    if (!robot.active) {
+      if (body.mode !== 'parked') physics.park(entity);
+
+      return;
+    }
+
+    const target = robot.footprint;
+    const pose = robot.physicsPose;
+    pose.x = target.x;
+    pose.y = target.y;
+    pose.z = target.z;
+    pose.yaw = target.heading;
+    const dx = target.x - body.to.x;
+    const dy = target.y - body.to.y;
+
+    if (body.mode === 'parked' || dx * dx + dy * dy > 2.5 * 2.5) physics.revive(entity, pose);
+
+    physics.hold(entity, pose);
   });
 }

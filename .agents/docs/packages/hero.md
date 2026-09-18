@@ -5,7 +5,7 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:d04c962f57fbd5fe41c59e99c4d2a190f35d45352c96da8ecbfc0eea9ec8da56'
+source_digest: 'sha256:a31e4a42b80cbd6f32c92ef020d43cb3e296ba79cf613700b0a6314256847429'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -50,9 +50,15 @@ sources:
   - id: robot-dust-check
     resource: ../../../apps/hero/scripts/robot-dust.probe.ts
     title: WebGPU glyph dust and fade controls
-  - id: title-world
-    resource: ../../../apps/hero/src/physics/world.ts
-    title: Crashcat world for the letters and the robot
+  - id: physics-traits
+    resource: ../../../apps/hero/src/physics/traits.ts
+    title: Shared solver resource and entity body state
+  - id: physics-actions
+    resource: ../../../apps/hero/src/physics/actions.ts
+    title: Body creation and motion transitions
+  - id: physics-systems
+    resource: ../../../apps/hero/src/physics/systems.ts
+    title: Fixed stepping and entity lifecycle cleanup
   - id: outline
     resource: ../../../apps/hero/src/typography/outline.ts
     title: Letter outlines cut into invisible colliders
@@ -93,7 +99,7 @@ sources:
     resource: ../../../apps/hero/src/field/lattice.test.ts
     title: Matrix equivalence, bounded simulation, and edge-on morph checks
   - id: physics-check
-    resource: ../../../apps/hero/src/physics/world.test.ts
+    resource: ../../../apps/hero/src/physics/systems.test.ts
     title: Lift, bounce, landing, revival, and robot collision checks
   - id: world
     resource: ../../../apps/hero/src/world.ts
@@ -127,14 +133,17 @@ and renderers read simulation state and own mounted resources. Five domains cove
 | ------------ | -------------------------------------------------------------------------------------------------- |
 | `sequence`   | Shared clock/input, replay, retained impact ring, collapse timeline, and finale drawing            |
 | `typography` | Glyph outlines, title animation and matrices, feature typing, retained views, and glass projection |
-| `physics`    | Crashcat world, rigid bodies, fixed stepping, collision events, and retained poses                 |
+| `physics`    | Shared Crashcat solver resource, entity body traits, actions, fixed stepping, and collision events |
 | `field`      | Two icon sheets, layout, spring simulation, morphs, and glyph rendering                            |
 | `robot`      | Run scheduling, path/footprint, distance-driven dust, rig animation, and face display              |
 
-`world.ts` creates independent worlds with five entities: one robot, title, and typing record, plus two fields.
+`world.ts` creates the application's one Koota world with the clock, sequence, and physics resource. It initially
+spawns the robot, title, typing record, and two fields. Preparation adds the floor and five letter entities to that
+same world. The robot's existing entity also carries its physics body.
 Koota AoS traits retain the existing math arrays and pools; high-frequency values never pass through React state.
 Systems and actions mutate queried traits through `world.query(...).updateEach`, receiving trait state directly.
-`systems.ts` orders robot motion, collapse, title physics/impacts, feature typing, fields, and dust. The R3F adapter
+`systems.ts` orders robot motion, collapse, title and robot motion targets, shared physics stepping, title pose and
+impact publication, feature typing, fields, and dust. The R3F adapter
 samples the viewport and pointer and calls that headless update at 60 Hz. Views publish transforms and uniforms
 after simulation; title physics no longer writes Three objects. Keyboard and inspection controls use world-bound
 actions. Replay closes held finales, clears inspection poses, and waits for a fresh title landing before typing
@@ -151,7 +160,7 @@ beside their implementations.
 The old, unmounted break/rewind presentation and its exclusive director and compressed recording code/tests were
 removed during the Koota migration. The root cleanup also removed retired ink, glass, and silhouette variants and
 their unused uniforms. Materials and post-processing now live in their domains. Browser checks own common playback stories: title lift and landing, robot dust, typed text, collapse, blackness,
-and Space replay. Five numerical tests retain precise evidence for glyph transforms, edge-on motif changes,
+and Space replay. Six numerical tests retain precise evidence for baked title colliders and their counters, glyph transforms, edge-on motif changes,
 bounded pointer response, lift/drop/revival with one landing notification, and robot pushes without tipping or
 leaving an invisible collider behind. These checks catch errors that
 pixel comparisons cannot isolate reliably. Buffer identity and duplicate timeline/path tests are omitted.
@@ -159,15 +168,19 @@ pixel comparisons cannot isolate reliably. Buffer identity and duplicate timelin
 The application pins Poimandres' `math` package at `0.1.0` for the default scene's CPU simulation and transforms. Its upstream
 skill is installed at `.agents/skills/math/SKILL.md` from `pmndrs/math` commit
 `c6713e38dd86de6e3e5bf98b94e22c2a29e4a709`, matching the published package's `gitHead`.
-The title physics adapter, title motion, and retained typing lines expose creation, update, and disposal functions
-over caller-owned records. Math tuples hold transform scratch. Physics publishes a retained `Float32Array` pose
-stream for the title matrix updates. Three matrices and scene objects remain at the rendering boundary.
+Title motion and retained typing lines expose creation, update, and disposal functions over caller-owned records.
+Math tuples hold transform scratch. Physics publishes retained position and rotation tuples on each `Body` trait,
+which typography projects into its matrix stream. Three matrices and scene objects remain at the rendering boundary.
 
-The `physics` domain pins `crashcat@0.0.5` and owns its adapter in `src/physics/world.ts`, with behavior checks
-beside it. Typography supplies outline prisms and animation targets. Crashcat combines each letter's prisms into
+The `physics` domain pins `crashcat@0.0.5` and splits into `traits.ts`, `actions.ts`, and `systems.ts`, with behavior
+checks beside the systems. `Physics` holds the solver resource on the Koota world, while `Body` owns each entity's
+solver ID, motion targets, published pose, and landing state. There is no typography-owned simulation world or parallel
+letter body array. World-bound actions create, hold, release, park, and revive bodies. Removing `Body` or destroying
+its entity removes the solver body through one lifecycle subscription. Typography supplies outline prisms and
+animation targets. Crashcat combines each letter's prisms into
 an immutable compound collider with a BVH, preserving counters and concave outlines. Only box, convex-hull,
 and static-compound shape implementations are registered. World and shape creation are synchronous and happen
-during preparation, without a physics Wasm download. The adapter keeps 60 Hz updates with four collision substeps,
+during preparation, without a physics Wasm download. `stepPhysics(world)` keeps 60 Hz updates with four collision substeps,
 gravity along negative z, free translation and yaw, and locked pitch/roll. Material mixing preserves the configured
 friction and bounce threshold. Hidden letters and the absent robot remain allocated on a noncolliding layer as
 static bodies, then return to kinematic or dynamic motion when playback needs them. No colliders are rebuilt on replay.
@@ -302,13 +315,15 @@ cadence regression, but cannot verify 60 fps recording readiness under those con
 the migration does not claim a fresh 60 fps measurement. A CPU profile placed most sampled wall time in idle and
 rendering work; it does not establish the cause of the slowdown shared by both versions.
 
-The Crashcat migration passes five numerical tests and the WebGPU lift/settle and finale/replay checks. Two complete
-1920×1080 replays on Apple Metal with Chromium 149 averaged 59.99 fps across 1,702 frames after 3.10 seconds of
-preparation. No late shader programs, pipelines, meshes, assets, or long tasks were observed. Render intervals were
-17.6 ms at p95 and 27.8 ms worst, with three intervals over 25 ms. CPU submission time was 3.8 ms at p95 and browser
-GPU queue completion was 8.9 ms at p95. This verifies current playback cadence and resource preparation, not perfectly
-hitch-free recording or a performance comparison with Box3D. Typecheck, lint, formatting, tests, and build pass.
-The full check still stops at the existing stale Geist Medium bake.
+The shared-world physics and Glyph-curve colliders pass six numerical tests and the WebGPU lift/settle and finale/replay
+checks. Two complete 1920×1080 replays on Apple Metal with Chromium 149 averaged 59.78 fps across 1,695 frames after
+3.39 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long tasks were observed. Render
+intervals were 17.7 ms at p95 and 25.7 ms worst, with four intervals over 25 ms. CPU submission time was 3.9 ms at p95
+and browser GPU queue completion was 9.9 ms at p95. The 1280×720 run averaged 60.01 fps. These measurements verify
+resource preparation and near-60 fps playback, not perfectly hitch-free recording. Removing OpenType reduced the
+main production JavaScript bundle from 676.40 kB to 609.11 kB gzip and removed the separate 130.50 kB Geist Black TTF.
+Glyph's full package check passes. Hero typecheck, lint, formatting, tests, and build pass, while its full check still
+stops at the existing stale Geist Medium bake.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/typography/materials.ts`: red G, orange l,

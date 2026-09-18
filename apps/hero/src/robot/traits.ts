@@ -1,6 +1,7 @@
 import { trait } from 'koota';
 import { createRobotMotion } from './motion';
 import { createDust } from './dust';
+import { createHeldPose } from '../physics/traits';
 
 /** Along the heading, across it, and up. Shared by the visual rig and its prepared collider. */
 export const ROBOT_HALF_EXTENTS: readonly [number, number, number] = [0.68, 1.07, 1.5];
@@ -21,6 +22,7 @@ export const Robot = trait(() => ({
   motion: createRobotMotion(),
   dust: createDust(),
   footprint: { x: 0, y: 0, z: 0.04, heading: 0, halfExtents: ROBOT_HALF_EXTENTS },
+  physicsPose: createHeldPose(),
   active: false,
   time: undefined as number | undefined,
   runAt: undefined as number | undefined,

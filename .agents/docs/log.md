@@ -2,6 +2,14 @@
 
 ## 2026-09-19
 
+- **Unified hero physics and reused Glyph curves** — Added the root `getSlugGlyphCurves` API and removed hero's
+  OpenType parser, declaration shim, and runtime TTF fetch. Physics now uses traits, actions, and systems on the
+  application's one Koota world. Letter and robot entities own their body state, and entity removal releases solver
+  bodies. Six hero tests, WebGPU lift/finale checks, production builds, and Glyph's full package check pass. Two 1080p
+  replays averaged 59.78 fps with no late resources or long tasks and four render intervals over 25 ms. Hero's full
+  check remains blocked by its existing stale Geist Medium bake. See [Glyph](packages/glyph.md) and
+  [the hero reference](packages/hero.md).
+
 - **Moved hero physics to Crashcat** — Replaced Box3D with pinned Crashcat 0.0.5 and created the compact `physics`
   domain. It owns retained bodies, outline compound colliders, fixed stepping, landing events, and replay reuse.
   Typography keeps glyph geometry, animation, and rendering. Lift/drop and robot-push behavior checks passed on

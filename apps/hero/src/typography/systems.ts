@@ -2,20 +2,23 @@ import type { World } from 'koota';
 import { FEATURE_LINE } from './content';
 import { Frame, Sequence } from '../sequence/traits';
 import { sequenceActions } from '../sequence/actions';
-import { Robot } from '../robot/traits';
 import { Title, Typing } from './traits';
-import { titleReach, updateTitle } from './bodies';
+import { prepareTitle, titleReach, updateTitle } from './bodies';
 
 export function moveTitle(world: World): void {
   const frame = world.get(Frame)!;
-  const robot = world.queryFirst(Robot)?.get(Robot);
-  const footprint = robot?.active ? robot.footprint : undefined;
   const hole = world.get(Sequence)!.hole;
 
   world.query(Title).updateEach(([title]) => {
+    if (title.bodies !== undefined) prepareTitle(world, title.bodies, frame.delta, hole);
+  });
+}
+
+export function syncTitle(world: World): void {
+  world.query(Title).updateEach(([title]) => {
     if (title.bodies === undefined) return;
 
-    updateTitle(title.bodies, frame.delta, footprint, hole);
+    updateTitle(title.bodies);
     title.reach = titleReach(title.bodies);
 
     for (let slot = 0; slot < title.bodies.landingCount; slot++) {
