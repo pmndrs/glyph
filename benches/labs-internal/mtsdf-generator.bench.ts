@@ -8,6 +8,8 @@ import { mtsdfOracleCases } from '../../packages/glyph/tests/fixtures/mtsdf-orac
 
 const wasm = await readFile(new URL('../../packages/glyph/dist/mtsdf-baker.wasm', import.meta.url));
 const module = await WebAssembly.compile(wasm);
+const verifiedGenerator = await createMtsdfGenerator(module);
+verifyCorpus(verifiedGenerator);
 
 group('MTSDF generator @mtsdf-generator @exhaustive', () => {
   bench('compile module @compile', async function* () {
@@ -36,6 +38,7 @@ group('MTSDF generator @mtsdf-generator @exhaustive', () => {
     assert.equal(generateCorpus(generator), expectedOutputBytes());
     const outputBytes = yield () => generateCorpus(generator);
     assert.equal(outputBytes, expectedOutputBytes());
+    verifyCorpus(generator);
   });
 });
 
@@ -43,11 +46,17 @@ function generateCorpus(generator: Awaited<ReturnType<typeof createMtsdfGenerato
   let outputBytes = 0;
   for (const testCase of mtsdfOracleCases) {
     const glyph = generator.generate(testCase.request);
-    const hash = createHash('sha256').update(glyph.rgba).digest('hex');
-    if (hash !== testCase.candidateSha256) throw new Error(`${testCase.id} changed during MTSDF generation`);
     outputBytes += glyph.rgba.byteLength;
   }
   return outputBytes;
+}
+
+function verifyCorpus(generator: Awaited<ReturnType<typeof createMtsdfGenerator>>): void {
+  for (const testCase of mtsdfOracleCases) {
+    const glyph = generator.generate(testCase.request);
+    const hash = createHash('sha256').update(glyph.rgba).digest('hex');
+    if (hash !== testCase.candidateSha256) throw new Error(`${testCase.id} changed during MTSDF generation`);
+  }
 }
 
 function expectedOutputBytes(): number {
