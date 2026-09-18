@@ -2,6 +2,9 @@
 
 ## 2026-09-18
 
+- **Changed the hero title to title case** — `Glyph` retains Geist Black and the five brand-colored glass materials.
+  Moved the feature line below the lowercase descenders. See [the hero reference](packages/hero.md).
+
 - **Aligned the title palette with the conference talk** — Reused the talk's red, orange, teal, blue, and purple
   accents for the five glass panes and their shadows. Confirmed the existing title uses the same Geist Black
   family, weight, and font version. See [the hero reference](packages/hero.md).

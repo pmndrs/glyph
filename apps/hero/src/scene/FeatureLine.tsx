@@ -29,7 +29,7 @@ const BAND_OPACITY = 0;
 /** Tightens the gaps either side of the separators, as a fraction of the fitted size. Applied during the measuring
  * pass too, so the width the tracking is fitted against already accounts for it. */
 const WORD_SPACING_EM = -0.08;
-const LINE_Y = -2;
+const LINE_Y = -2.65;
 
 /** One unit quad, scaled each commit to the typed ink: a selection band that grows with the line. */
 const BAND_GEOMETRY = new PlaneGeometry(1, 1);

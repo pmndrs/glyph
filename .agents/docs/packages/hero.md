@@ -5,7 +5,7 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:86ef6fd7a505f630d85879a8747af4b5db47c574afc3b91cc9eb3d838135ce96'
+source_digest: 'sha256:765a85c3bf9f8038c698a8ff8f31cb9fe60f3ea21aab87f9f3e48233e469fa02'
 tags: [package, example, react-three-fiber, webgpu, slug, vite]
 sources:
   - id: manifest
@@ -47,7 +47,7 @@ technique visible. Both run on `WebGPURenderer` through React Three Fiber v10 an
 text with the Slug raster, whose analytic coverage is what the techniques depend on.
 
 The default scene builds two interleaved lattices of occult icons on mass-spring grids at different depths, scaled
-so they interleave on screen and stay in phase. The Slug-glass `GLYPH` and feature line start at rest. Press Space
+so they interleave on screen and stay in phase. The Slug-glass `Glyph` and feature line start at rest. Press Space
 to lift the title towards the camera and slam it back into place. Each pane follows the original eased approach,
 35 ms after its neighbour, with a separate impact through both lattices on landing. A slight tilt (at most 1.5°)
 and drift make the approach less rigid; a gentle settle returns it home within 380 ms of contact. The feature line retypes after
@@ -56,9 +56,9 @@ keyboard behavior.
 
 The development inspector starts hidden in both scenes; D toggles it.
 
-The title uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
-Its five inline glass materials use that talk's brand accents, copied into `src/theme.ts`: red G, orange L,
-teal Y, blue P, and purple H. The same accents tint their contact shadows.
+The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
+Its five inline glass materials use that talk's brand accents, copied into `src/theme.ts`: red G, orange l,
+teal y, blue p, and purple h. The same accents tint their contact shadows. The feature line sits below the lowercase descenders.
 Each has its own attenuation tint, thickness, roughness, and refractive index, with smooth lens normals and modest
 physical dispersion. The paper and icon background stay unchanged; there are no added crystal lights, internal
 rainbow beams, or hidden studio images.

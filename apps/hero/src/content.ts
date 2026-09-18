@@ -47,7 +47,7 @@ export const ICON_CODE_POINTS: Readonly<Record<IconName, number>> = {
 
 export type Vec3 = readonly [x: number, y: number, z: number];
 
-export const TITLE = { text: 'GLYPH', face: 'geist-black', fontSize: 2.6, position: [0, 0.55, 0] } as const;
+export const TITLE = { text: 'Glyph', face: 'geist-black', fontSize: 2.6, position: [0, 0.55, 0] } as const;
 
 /**
  * The closing beat: one line of features, typed out, separated by a middle dot (U+00B7). The dot sits outside Basic

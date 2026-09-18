@@ -131,10 +131,10 @@ function jostle(position: Node<'vec3'>, motion: PaneMotion): Node<'vec3'> {
 /** Separate inline materials preserve one shaped word while giving each pane its own tint and finish. */
 export const stainedGlassLetters = [
   { letter: 'G', tint: brand.red, thickness: 2.8, roughness: 0.035, ior: 1.52 },
-  { letter: 'L', tint: brand.orange, thickness: 2.4, roughness: 0.06, ior: 1.5 },
-  { letter: 'Y', tint: brand.teal, thickness: 3, roughness: 0.045, ior: 1.54 },
-  { letter: 'P', tint: brand.blue, thickness: 2.6, roughness: 0.025, ior: 1.56 },
-  { letter: 'H', tint: brand.purple, thickness: 2.9, roughness: 0.05, ior: 1.53 },
+  { letter: 'l', tint: brand.orange, thickness: 2.4, roughness: 0.06, ior: 1.5 },
+  { letter: 'y', tint: brand.teal, thickness: 3, roughness: 0.045, ior: 1.54 },
+  { letter: 'p', tint: brand.blue, thickness: 2.6, roughness: 0.025, ior: 1.56 },
+  { letter: 'h', tint: brand.purple, thickness: 2.9, roughness: 0.05, ior: 1.53 },
 ].map(({ letter, tint, thickness, roughness, ior }) => {
   const motion = {
     scale: uniform(1),
