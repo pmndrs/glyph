@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:d9164fd86facded30047e344a43bd5bc8ce5f967e48e304da579f1d2bbe61bec'
+source_digest: 'sha256:cb5eadf937567c1ab91e5e5d8a1328e5eb0d9d9336577532edc164259905d700'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -17,6 +17,9 @@ sources:
   - id: public-api
     resource: ../../../packages/glyph/src/index.ts
     title: Renderer-neutral public exports
+  - id: slug-curves
+    resource: ../../../packages/glyph/src/slug-curves.ts
+    title: Application access to quantized Slug glyph curves
   - id: glyph-runtime
     resource: ../../../packages/glyph/src/glyph.ts
     title: Root Glyph runtime and named handle registry
@@ -225,6 +228,13 @@ Three configs select a private typed shader set carried by each handle's rendere
 Every TypeScript subpath also publishes a custom `source` condition. Workspace Vite applications opt into that condition
 for direct TS/TSX hot reload, while ordinary Node and package consumers continue to resolve built declarations and ESM.
 Wasm and `package.json` exports remain distribution artifacts because they have no TypeScript source equivalent.
+
+`getSlugGlyphCurves(font, glyphId)` and `SlugCurve` live at the root for CPU geometry consumers. The synchronous call
+copies unique referenced quadratics from a live Slug font in packing order, as `[x0, y0, x1, y1, x2, y2]` in em units
+with y up. Blank glyphs return no curves. Invalid IDs, disposed fonts, and other formats throw at the call. Returned
+coordinates remain owned by the caller after disposal. This API reads the rendered half-float curves, not source
+outlines or explicit contour topology. In particular, it preserves the current baker's row-padding behavior rather
+than repairing geometry differently from the renderer. Hero's closed title contours are covered by real-font tests.
 
 The font-baker Rust source, direct-memory wrapper, schemas, tests, build pipeline, optimized Wasm, and generated ABI are
 owned by this package. There is no separately published font-baker package. The root entry has no static edge to the

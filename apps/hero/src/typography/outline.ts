@@ -1,5 +1,6 @@
-import { type Font, parse } from 'opentype.js';
+import { getSlugGlyphCurves } from '@pmndrs/glyph';
 import { ShapePath, ShapeUtils, type Vector2 } from 'three/webgpu';
+import type { SlugFont } from './fonts';
 
 /** Invisible convex prisms extruded from a glyph outline and centered on its ink box. */
 export interface Solid {
@@ -7,42 +8,31 @@ export interface Solid {
   readonly prisms: readonly (readonly number[])[];
 }
 
-/** Fetches and parses a font file. The outlines come straight from the source the title face was baked from. */
-export async function loadFont(url: string): Promise<Font> {
-  const response = await fetch(url);
-
-  if (!response.ok) throw new Error(`could not load ${url}: ${response.status} ${response.statusText}`);
-
-  return parse(await response.arrayBuffer());
-}
-
 /**
- * Triangulates one character of `font` at `fontSize` per em and extrudes each triangle through `thickness`, so
- * the physics meets the letter exactly where glyph draws it.
+ * Triangulates the rendered glyph at `fontSize` per em and extrudes each triangle through `thickness`.
  */
-export function solidOf(font: Font, character: string, fontSize: number, thickness: number): Solid {
+export function solidOf(font: SlugFont, glyphId: number, fontSize: number, thickness: number): Solid {
   const outline = new ShapePath();
+  let endX = NaN;
+  let endY = NaN;
+  let startX = NaN;
+  let startY = NaN;
 
-  // opentype.js hands back canvas coordinates, y downwards. The scene's y is up.
-  for (const command of font.charToGlyph(character).getPath(0, 0, fontSize).commands) {
-    const x = command.x ?? 0;
-    const y = -(command.y ?? 0);
+  for (const [x0, y0, x1, y1, x2, y2] of getSlugGlyphCurves(font, glyphId)) {
+    if (x0 !== endX || y0 !== endY) {
+      outline.moveTo(x0 * fontSize, y0 * fontSize);
+      startX = x0;
+      startY = y0;
+    }
 
-    switch (command.type) {
-      case 'M':
-        outline.moveTo(x, y);
-        break;
-      case 'L':
-        outline.lineTo(x, y);
-        break;
-      case 'Q':
-        outline.quadraticCurveTo(command.x1 ?? 0, -(command.y1 ?? 0), x, y);
-        break;
-      case 'C':
-        outline.bezierCurveTo(command.x1 ?? 0, -(command.y1 ?? 0), command.x2 ?? 0, -(command.y2 ?? 0), x, y);
-        break;
-      case 'Z':
-        break;
+    outline.quadraticCurveTo(x1 * fontSize, y1 * fontSize, x2 * fontSize, y2 * fontSize);
+    endX = x2;
+    endY = y2;
+
+    if (startX === x2 && startY === y2) {
+      outline.currentPath!.closePath();
+      endX = NaN;
+      endY = NaN;
     }
   }
 
@@ -64,7 +54,7 @@ export function solidOf(font: Font, character: string, fontSize: number, thickne
     }
   }
 
-  if (!Number.isFinite(minX)) throw new Error(`no outline for ${JSON.stringify(character)}`);
+  if (!Number.isFinite(minX)) throw new Error(`no outline for glyph ${glyphId}`);
 
   const centerX = (minX + maxX) / 2;
   const centerY = (minY + maxY) / 2;

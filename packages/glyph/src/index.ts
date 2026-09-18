@@ -306,3 +306,4 @@ export {
   type MsdfPageData,
 } from './raster/msdf.js';
 export { slug, type SlugData, type SlugDescriptor, type SlugOptions, type SlugPageData } from './raster/slug.js';
+export { getSlugGlyphCurves, type SlugCurve } from './slug-curves.js';

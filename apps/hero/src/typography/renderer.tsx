@@ -7,19 +7,15 @@ import { Title, Typing } from './traits';
 import { Text } from '@pmndrs/glyph/react';
 import type { Glyphs, Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
-import { use, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Box3, Vector3, Matrix4 } from 'three/webgpu';
 
-import titleFace from '../../fonts/geist-1.7.2/Geist-Black.ttf?url';
 import { TITLE, FEATURE_LINE } from './content';
 import { heroReady, usePreparation } from '../view/startup';
 import type { Faces, MsdfFont } from './fonts';
 import { stainedGlassLetters, titleOrigin } from './materials';
-import { loadFont, solidOf } from './outline';
+import { solidOf } from './outline';
 import { type Letter, type TitleBodies, createTitleBodies, disposeTitle } from './bodies';
-
-/** The outlines the letters' solids are cut from: the same source the title face was baked from. */
-const titleOutlines = loadFont(titleFace);
 
 /**
  * How deep each letter's invisible solid reaches: enough that the robot meets it squarely, never drives over it.
@@ -38,14 +34,8 @@ const inkCenter = new Vector3();
 export function GlassTitle({ faces }: { readonly faces: Faces }) {
   const world = useWorld();
   const draw = useRef(new Matrix4());
-  const font = use(titleOutlines);
   const camera = useThree((state) => state.camera);
   const word = useRef<ThreeText<never> | null>(null);
-  /** Each pane's solid for the physics, centred on its ink box. */
-  const solids = useMemo(
-    () => stainedGlassLetters.map(({ letter }) => solidOf(font, letter, FONT_SIZE, SOLID_THICKNESS)),
-    [font],
-  );
   /** Published once: the box is in the Text's own space, so the reveal's scale never enters into it. */
   const reported = useRef(false);
   /** The broken-apart paragraph and the bodies its glyphs follow, built once the layout has been measured. */
@@ -111,11 +101,17 @@ export function GlassTitle({ faces }: { readonly faces: Faces }) {
       object.visible = false;
       copies.updateWorldMatrix(true, false);
       const letters: Letter[] = [];
+      const layout = object.glyphs();
 
       for (const measurement of copies.measurements) {
-        const solid = solids[measurement.index];
+        if (measurement.localInkBounds.isEmpty()) continue;
 
-        if (solid === undefined || measurement.localInkBounds.isEmpty()) continue;
+        const solid = solidOf(
+          faces[TITLE.face],
+          layout.glyphIds[measurement.index]!,
+          layout.glyphFontSizes[measurement.index]!,
+          SOLID_THICKNESS,
+        );
 
         // The body sits where the paragraph placed the letter's ink, in world space.
         titleInk.copy(measurement.localInkBounds).applyMatrix4(copies.matrixWorld);

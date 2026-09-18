@@ -5,7 +5,7 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:fdc7a9b98a0d99914531a5aa387dc43da28e4df3da0e324f7b4579fd5d2c3a50'
+source_digest: 'sha256:d04c962f57fbd5fe41c59e99c4d2a190f35d45352c96da8ecbfc0eea9ec8da56'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -214,9 +214,10 @@ is a kinematic body in the same world, a rounded box the size of its body driven
 nothing stops it: the letters slide and turn where it shoves them and stay wherever they end up. The letters stay
 glyph's: once the paragraph has committed it is broken apart with `Text.breakApart()`, and each pane's glyph copy
 follows its body through `Glyphs.setMatrixAt()`, so a lift is real depth and a shove is a real move while shaping
-and the stained-glass materials remain the paragraph's own. Only the colliders come from outside glyph: the same
-Geist Black outlines, read at run time with opentype.js, triangulated and extruded into invisible prisms, so
-contact happens exactly where a letter is drawn.
+and the stained-glass materials remain the paragraph's own. Colliders use `getSlugGlyphCurves` on the loaded
+Geist Black font, indexed by the paragraph's shaped glyph IDs. Preparation joins the quantized curves into paths,
+triangulates their filled regions with counters intact, and extrudes invisible prisms. There is no second font
+parser or runtime TTF request. A real-font test covers all five title solids and the open counter in `p`.
 
 While driving, the robot kicks up small, randomly varied Slug icon glyphs behind both wheels. A fixed pool of 128
 particles emits by distance travelled, so the trail thins as it slows and stops emitting while it looks up. The
