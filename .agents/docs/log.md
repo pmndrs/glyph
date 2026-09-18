@@ -2,6 +2,10 @@
 
 ## 2026-09-18
 
+- **Aligned the title palette with the conference talk** — Reused the talk's red, orange, teal, blue, and purple
+  accents for the five glass panes and their shadows. Confirmed the existing title uses the same Geist Black
+  family, weight, and font version. See [the hero reference](packages/hero.md).
+
 - **Staggered the stained-glass landings and softened their shadows** — Each pane lands 35 ms after its neighbour
   and triggers its own ripple. The eased approach carries a small tilt and drift, followed by a gentle settle. MSDF signed distances drive
   colored contact shadows that soften and fade during the

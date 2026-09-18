@@ -5,7 +5,7 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:67b8ed939693a5514acc1ded338e27c40c5f5562c94194cfb3ce819a7456700e'
+source_digest: 'sha256:86ef6fd7a505f630d85879a8747af4b5db47c574afc3b91cc9eb3d838135ce96'
 tags: [package, example, react-three-fiber, webgpu, slug, vite]
 sources:
   - id: manifest
@@ -20,6 +20,9 @@ sources:
   - id: glass-material
     resource: ../../../apps/hero/src/materials/ink.ts
     title: Glass title materials and smooth lens normals
+  - id: theme
+    resource: ../../../apps/hero/src/theme.ts
+    title: Conference talk brand accents
   - id: refraction-check
     resource: ../../../apps/hero/scripts/refraction.probe.ts
     title: WebGPU stained-glass verification
@@ -53,7 +56,9 @@ keyboard behavior.
 
 The development inspector starts hidden in both scenes; D toggles it.
 
-The title uses five inline glass materials in one shaped word: rose G, amber L, jade Y, blue P, and violet H.
+The title uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
+Its five inline glass materials use that talk's brand accents, copied into `src/theme.ts`: red G, orange L,
+teal Y, blue P, and purple H. The same accents tint their contact shadows.
 Each has its own attenuation tint, thickness, roughness, and refractive index, with smooth lens normals and modest
 physical dispersion. The paper and icon background stay unchanged; there are no added crystal lights, internal
 rainbow beams, or hidden studio images.
