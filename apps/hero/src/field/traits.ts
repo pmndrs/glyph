@@ -1,4 +1,5 @@
 import { trait } from 'koota';
+import { vec3 } from 'math';
 import { buildLayout, createLattice, type IconLayoutOptions } from './lattice';
 
 /** Pitch and speed scale together with depth, preserving the two sheets' interleave. */
@@ -49,3 +50,9 @@ export function createField(options: IconLayoutOptions) {
 }
 
 export const Field = trait(() => createField(LAYERS[0]!));
+
+export const Impacts = trait(() => ({
+  entries: Array.from({ length: 16 }, () => ({ id: 0, at: 0, world: vec3.create() })),
+  next: 1,
+  latest: -1,
+}));

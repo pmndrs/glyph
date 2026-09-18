@@ -74,7 +74,7 @@ export const physicsActions = createActions((world) => {
       });
       attach(world.spawn(Floor), handle, 'static');
     },
-    attachRobot(entity: Entity, halfExtents: readonly [number, number, number]) {
+    attachKinematic(entity: Entity, halfExtents: readonly [number, number, number]) {
       const handle = rigidBody.create(physics.engine, {
         motionType: MotionType.STATIC,
         objectLayer: physics.parkedLayer,

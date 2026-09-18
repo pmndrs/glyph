@@ -2,8 +2,6 @@ import { HOLE_CENTER, HORIZON } from './motion';
 import { uniform } from 'three/tsl';
 import { Vector2 } from 'three/webgpu';
 
-/** Playback seconds from the scene world, held at zero until preparation completes. */
-export const uTime = uniform(0);
 /** Shared with the glyph shaders: where the hole is, how far it reaches, how hard it bends, and how it spins. */
 export const uHoleCenter = uniform(new Vector2(HOLE_CENTER[0], HOLE_CENTER[1]));
 export const uHoleHorizon = uniform(HORIZON);

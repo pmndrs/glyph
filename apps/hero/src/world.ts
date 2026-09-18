@@ -1,21 +1,18 @@
 import { createWorld } from 'koota';
-import { Frame, Sequence } from './sequence/traits';
-import { Field, LAYERS, createField } from './field/traits';
-import { Robot, ROBOT_HALF_EXTENTS } from './robot/traits';
-import { Title, Typing } from './typography/traits';
+import { Playback, heroActions } from './actions';
+import { Collapse } from './black-hole/traits';
+import { Impacts } from './field/traits';
+import { Pointer } from './input/traits';
 import { Physics } from './physics/traits';
-import { physicsActions } from './physics/actions';
 import { subscribePhysics } from './physics/systems';
+import { Time } from './time/traits';
+import { Preparation, Viewport } from './view/traits';
 
-/** Each scene owns its state. Retained pools are created before any playback. */
+/** Compose domains on one world before playback. */
 export function createHeroWorld() {
-  const world = createWorld(Frame, Sequence, Physics);
+  const world = createWorld(Time, Pointer, Viewport, Preparation, Playback, Collapse, Impacts, Physics);
   subscribePhysics(world);
-  physicsActions(world).attachRobot(world.spawn(Robot), ROBOT_HALF_EXTENTS);
-  world.spawn(Title);
-  world.spawn(Typing);
-
-  for (const options of LAYERS) world.spawn(Field(createField(options)));
+  heroActions(world).spawn();
 
   return world;
 }

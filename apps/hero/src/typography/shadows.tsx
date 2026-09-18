@@ -54,7 +54,7 @@ import {
 } from 'three/webgpu';
 
 import { heroReady } from '../view/startup';
-import { uTime } from '../sequence/uniforms';
+import { uTime } from '../view/uniforms';
 import { useWorld } from 'koota/react';
 import { Title } from './traits';
 

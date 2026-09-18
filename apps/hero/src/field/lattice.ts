@@ -1,7 +1,7 @@
 import { clamp, euler, mat4, quat, vec3, type Mat4 } from 'math';
 import { mulberry32 } from 'math/random';
 import { ICON_CODE_POINTS, GEM_TONES, type IconName } from './content';
-import { release, swirl } from '../sequence/departure';
+import { release, swirl } from '../black-hole/departure';
 
 /** Scroll direction, as an angle from the x axis. Both layers share it, so the field moves as one. */
 export const PATTERN_ANGLE = -0.32;
@@ -10,8 +10,6 @@ const MORPH_SECONDS = 0.32;
 const STAGGER_SECONDS = 0.5;
 /** Quantized start times spread each motif flip across the sheet. */
 const STAGGER_STEPS = 5;
-
-export const POINTER_FADE = 0.16;
 
 /** Physics runs on fixed substeps: the coupling is stiff enough to blow up on a long frame. */
 const SUBSTEP = 1 / 120;
@@ -177,7 +175,6 @@ export function createLattice(layout: Layout, motifs: number, seed: number) {
     hole: { x: 0, y: 0, horizon: 1, pull: 0, time: -1 },
     departAt: new Float32Array(count).fill(NaN),
     swallowed: new Uint8Array(count),
-    replays: 0,
     selected: Int32Array.from(layout.cells, (cell) => cell.motif % GLYPHS.length),
     previous: Int32Array.from(layout.cells, (cell) => cell.motif % GLYPHS.length),
     motifGlyphs: Int32Array.from({ length: motifs }, (_, index) => index),

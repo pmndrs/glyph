@@ -1,27 +1,18 @@
 import type { World } from 'koota';
 import { mat4, vec3 } from 'math';
-import { Frame, Sequence } from '../sequence/traits';
-import { departureAt } from '../sequence/departure';
-import { HORIZON, type HoleState } from '../sequence/motion';
-import { Field } from './traits';
-import {
-  PATTERN_ANGLE,
-  POINTER_FADE,
-  FIELD_OF_VIEW,
-  simulate,
-  advanceMorph,
-  type LatticeState,
-  type Layout,
-} from './lattice';
+import { Time } from '../time/traits';
+import { Pointer } from '../input/traits';
+import { Viewport } from '../view/traits';
+import { departureAt } from '../black-hole/departure';
+import { HORIZON, type HoleState } from '../black-hole/motion';
+import { Field, Impacts } from './traits';
+import { PATTERN_ANGLE, FIELD_OF_VIEW, simulate, advanceMorph, type LatticeState, type Layout } from './lattice';
 
-export function moveFields(world: World): void {
-  const frame = world.get(Frame)!;
-  const sequence = world.get(Sequence)!;
-  const collapse = sequence.hole;
-  const step = Math.min(frame.delta, 0.05);
-  frame.pointer.strength *= Math.exp(-step / POINTER_FADE);
-
-  if (frame.pointer.strength < 0.01) frame.pointer.strength = 0;
+export function moveFields(world: World, collapse: HoleState): void {
+  const time = world.get(Time)!;
+  const viewport = world.get(Viewport)!;
+  const pointer = world.get(Pointer)!;
+  const step = Math.min(time.delta, 0.05);
 
   world.query(Field).updateEach(([field]) => {
     const { options, layout, lattice } = field;
@@ -36,11 +27,11 @@ export function moveFields(world: World): void {
     lattice.world[14] = options.depth;
     mat4.invert(lattice.inverse, lattice.world);
     collectWaves(world, lattice, options.waveDelay);
-    lattice.pointer.strength = frame.pointer.strength * options.response;
-    trackPointer(frame.aspect, frame.cameraZ, frame.pointer, lattice, options.response);
-    trackHole(sequence.replays, frame.cameraZ, collapse, lattice, layout);
-    simulate(lattice, layout, step, options, frame.now);
-    advanceMorph(lattice, layout, frame.now);
+    lattice.pointer.strength = pointer.strength * options.response;
+    trackPointer(viewport.aspect, viewport.cameraZ, pointer, lattice, options.response);
+    trackHole(viewport.cameraZ, collapse, lattice, layout);
+    simulate(lattice, layout, step, options, time.now);
+    advanceMorph(lattice, layout, time.now);
   });
 }
 
@@ -49,7 +40,7 @@ export function moveFields(world: World): void {
  * a title landing from overpowering the field.
  */
 function collectWaves(world: World, state: LatticeState, delay: number): void {
-  const pending = world.get(Sequence)!.impacts;
+  const pending = world.get(Impacts)!.entries;
   let batch = 0;
 
   for (let index = 0; index < pending.length; index += 1) if ((pending[index]?.id ?? 0) > state.seenWave) batch += 1;
@@ -103,20 +94,8 @@ function trackPointer(
   target.active = true;
 }
 
-/**
- * Project the hole into sheet space and scale its horizon with depth. Replay returns swallowed cells to their
- * resting positions.
- */
-function trackHole(replays: number, cameraZ: number, state: HoleState, lattice: LatticeState, layout: Layout): void {
-  if (replays !== lattice.replays) {
-    lattice.replays = replays;
-    lattice.swallowed.fill(0);
-    lattice.x.fill(0);
-    lattice.y.fill(0);
-    lattice.vx.fill(0);
-    lattice.vy.fill(0);
-  }
-
+/** Project the hole into sheet space and scale its horizon with depth. */
+function trackHole(cameraZ: number, state: HoleState, lattice: LatticeState, layout: Layout): void {
   lattice.hole.pull = state.pull;
   lattice.hole.time = state.time;
 

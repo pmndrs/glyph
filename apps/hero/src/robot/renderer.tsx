@@ -1,5 +1,5 @@
 import { COUNT, BASE_Z, RISE } from './dust';
-import { jitter } from '../sequence/departure';
+import { jitter } from '../random';
 import { ICON_CODE_POINTS } from '../field/content';
 import { Text, TextGroup } from '@pmndrs/glyph/react';
 import { defineTextMaterial, type Text as ThreeText } from '@pmndrs/glyph/three';
@@ -37,16 +37,16 @@ import {
 } from 'three/webgpu';
 
 import robotUrl from '../../assets/robot.glb?url';
-import type { SlugFont } from '../typography/fonts';
+import type { SlugFont } from '../view/fonts';
 import { screenInk } from './material';
 import { LOOK_UP_AT, LOOK_DOWN_AT } from './motion';
 import { mat4, quat, vec3 as vector3 } from 'math';
 import { Robot as RobotTrait } from './traits';
-import { Frame } from '../sequence/traits';
+import { Time } from '../time/traits';
 import { useWorld, useQuery } from 'koota/react';
 import type { Entity } from 'koota';
 import { heroReady, textPrepared, usePreparation } from '../view/startup';
-import { type RetainedLine, createRetainedLine, disposeLine, showLine } from '../typography/retained-line';
+import { type RetainedLine, createRetainedLine, disposeLine, showLine } from '../view/retained-line';
 
 const SCALE = 3 / 2.85;
 /** Display coordinates in the head joint. Text up follows +x, text right follows +z, and its normal follows +y. */
@@ -265,7 +265,7 @@ function Robot({ entity, font }: { readonly entity: Entity; readonly font: SlugF
       uTear.value = eyes.tear;
       uSeed.value = Math.floor(now * 48);
 
-      mixer.update(world.get(Frame)!.delta);
+      mixer.update(world.get(Time)!.delta);
 
       if (head !== undefined && look > 0) {
         root.updateWorldMatrix(true, true);

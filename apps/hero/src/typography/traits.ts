@@ -10,6 +10,5 @@ export const Title = trait(() => ({
 export const Typing = trait(() => ({
   count: FEATURE_LINE.length,
   beat: 0,
-  wave: 0,
   start: Number.POSITIVE_INFINITY,
 }));

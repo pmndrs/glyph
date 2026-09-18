@@ -1,8 +1,8 @@
 import { Text, TextGroup } from '@pmndrs/glyph/react';
 import { emberMaterial } from './embers';
 import { STAR_SYMBOLS } from './symbols';
-import type { SlugFont } from '../typography/fonts';
-import { jitter } from './departure';
+import type { SlugFont } from '../view/fonts';
+import { jitter } from '../random';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useMemo, useRef } from 'react';
 import { atan, color, float, mix, smoothstep, uniform, uv, vec2 } from 'three/tsl';
@@ -22,7 +22,7 @@ import {
   uHoleCamera,
 } from './uniforms';
 import { useWorld } from 'koota/react';
-import { Sequence } from './traits';
+import { Collapse } from './traits';
 import { clamp } from 'math';
 import { easing } from 'math/time';
 import { heroReady, textPrepared, usePreparation } from '../view/startup';
@@ -91,7 +91,7 @@ export function BlackHole() {
       if (!heroReady()) return;
 
       uHoleCamera.value = camera.position.z;
-      const state = world.get(Sequence)!.hole;
+      const state = world.get(Collapse)!.hole;
       syncHoleUniforms(state);
       const group = hole.current;
 
@@ -160,7 +160,7 @@ export function GlyphBurst({ font }: { readonly font: SlugFont }) {
   useFrame(() => {
     if (!heroReady()) return;
 
-    const since = world.get(Sequence)!.hole.sincePop;
+    const since = world.get(Collapse)!.hole.sincePop;
 
     for (const particle of PARTICLES) {
       const group = groups.current[particle.index];

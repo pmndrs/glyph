@@ -1,10 +1,12 @@
 import { FrameLoop } from './frameloop';
+import { useWorld } from 'koota/react';
+import { Collapse } from './black-hole/traits';
 import { useThree } from '@react-three/fiber/webgpu';
 import { useEffect } from 'react';
 
-import { useFonts } from './typography/fonts';
-import { Post } from './sequence/post';
-import { BlackHole, GlyphBurst } from './sequence/renderer';
+import { useFonts } from './view/fonts';
+import { Post } from './black-hole/post';
+import { BlackHole, GlyphBurst } from './black-hole/renderer';
 import { GlassShadows } from './typography/shadows';
 import { GlassTitle, FeatureLine } from './typography/renderer';
 import { FieldRenderer } from './field/renderer';
@@ -18,6 +20,7 @@ const POST_ENABLED = new URLSearchParams(location.search).get('post') !== '0';
 
 export function Hero() {
   const fonts = useFonts();
+  const collapse = useWorld().get(Collapse)!.hole;
   const scene = useThree((state) => state.scene);
   const renderer = useThree((state) => state.renderer);
 
@@ -30,14 +33,18 @@ export function Hero() {
 
   return (
     <>
-      <PrepareHero postProcessing={POST_ENABLED} />
+      <PrepareHero
+        postProcessing={POST_ENABLED}
+        required={['title', 'feature', 'icons:-6', 'icons:-9.5', 'robot', 'dust', 'burst']}
+        sceneReady={() => scene.environment !== null && scene.getObjectByName('glass-shadows') !== undefined}
+      />
       <FrameLoop />
       <Lighting />
       <Paper />
       <FieldRenderer font={fonts.icons} />
       <GlassTitle font={fonts.title} />
       <GlassShadows />
-      <FeatureLine field={fonts.feature} />
+      <FeatureLine field={fonts.feature} collapse={collapse} />
       <RobotRenderer font={fonts.robot} icons={fonts.icons} />
       <BlackHole />
       <GlyphBurst font={fonts.stars} />

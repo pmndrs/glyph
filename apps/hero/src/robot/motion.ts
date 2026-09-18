@@ -13,9 +13,6 @@ const MEANDER = [
   { amplitude: 0.22, frequency: (2 * Math.PI) / 3.1 },
 ] as const;
 
-/** Seconds after the page loads before the first run, and after the title lands before a replay's run. */
-export const FIRST_RUN_DELAY = 1.6;
-export const REPLAY_DELAY = 1.4;
 /** Timeline, in seconds from the start of a run. */
 const ARRIVE_AT = 2.6;
 export const LOOK_UP_AT = 2.9;

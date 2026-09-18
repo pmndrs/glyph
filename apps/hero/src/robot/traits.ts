@@ -25,9 +25,9 @@ export const Robot = trait(() => ({
   physicsPose: createHeldPose(),
   active: false,
   time: undefined as number | undefined,
-  runAt: undefined as number | undefined,
+  runAt: Number.POSITIVE_INFINITY,
   held: undefined as number | undefined,
   runs: 0,
-  wave: 0,
+  departed: false,
   gone: false,
 }));

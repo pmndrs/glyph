@@ -25,7 +25,7 @@ import {
   type Node,
 } from 'three/webgpu';
 
-import { holeWarp } from '../sequence/warp';
+import { holeWarp } from '../black-hole/warp';
 type SlugContext = Extract<ThreeTextMaterialContext, { format: 'pmndrs.slug' }>;
 
 /** Physical transmission and smooth lens normals refract the background through each letter. */

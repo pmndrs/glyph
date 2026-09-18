@@ -2,6 +2,15 @@
 
 ## 2026-09-19
 
+- **Composed hero from domain modules** — Moved clock and input into their own domains and viewport/readiness into
+  the view domain. Renamed the effect domain to `black-hole` and moved experience choreography into application
+  actions and systems. Domains own spawning and reset actions, typography publishes landings, and the robot publishes
+  departure. The application connects those outputs without implementing another domain's transitions. Physics tests
+  now compose clock and physics resources directly. Kept shared text views and font loading in `view`, preserved
+  the automatic opening and GPU preparation, and documented boundaries in hero's instructions. The full hero check
+  and WebGPU opening, finale/replay, robot dust, and retained typing checks pass. Two 1080p replays averaged 59.88 fps
+  with no late resources or long tasks and three render intervals over 25 ms. See [the hero reference](packages/hero.md).
+
 - **Started the hero with an automatic lift** — The title lifts and falls one second after preparation opens the
   sequence clock. The opening runs once, and Space still replays the sequence. The existing lift browser check
   now verifies the opening delay and automatic lift before capturing its fall and landing. The full hero package

@@ -1,11 +1,6 @@
 import { clamp } from 'math';
 
-/** Deterministic jitter in [0, 1) from an index. */
-export function jitter(index: number): number {
-  const value = Math.sin(index * 12.9898 + 78.233) * 43_758.545_3;
-
-  return value - Math.floor(value);
-}
+import { jitter } from '../random';
 
 /** When a piece `fraction` (0 = nearest, 1 = furthest) of the way out leaves, on the hole's clock. */
 export function departureAt(fraction: number, index: number): number {

@@ -1,14 +1,12 @@
 import { color, dFdx, dFdy, float, mix, mx_noise_float, normalize, positionLocal, uniform, vec3 } from 'three/tsl';
 import { MeshStandardNodeMaterial, Vector2 } from 'three/webgpu';
 
-import { PATTERN_ANGLE } from '../field/lattice';
-
 /** Paper grain follows the icon field in the paper's own plane units. */
 const uPaperDrift = uniform(new Vector2());
 
-export function updatePaper(elapsed: number): void {
+export function updatePaper(elapsed: number, angle: number): void {
   const drift = 3.2 * (30 / 22) * elapsed;
-  uPaperDrift.value.set(Math.cos(PATTERN_ANGLE) * drift, Math.sin(PATTERN_ANGLE) * drift);
+  uPaperDrift.value.set(Math.cos(angle) * drift, Math.sin(angle) * drift);
 }
 
 /** Procedural paper grain. Screen derivatives of the height field tilt the surface normal. */

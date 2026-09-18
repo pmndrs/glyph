@@ -8,7 +8,6 @@ const checks = new Map<string, () => boolean>();
 const listeners = new Set<() => void>();
 let phase: Phase = 'preparing';
 let failure = '';
-const required = ['title', 'feature', 'icons:-6', 'icons:-9.5', 'robot', 'dust', 'burst'];
 
 /** Animation starts only after retained geometry, every draw variant, and GPU uploads are ready. */
 export function heroReady(): boolean {
@@ -67,9 +66,18 @@ async function uploadsComplete(renderer: WebGPURenderer): Promise<void> {
 }
 
 /** Owns the render job so warm-up uses the same targets, transmission, shadows, and post passes as playback. */
-export function PrepareHero({ postProcessing }: { readonly postProcessing: boolean }) {
+export function PrepareHero({
+  postProcessing,
+  required,
+  sceneReady,
+}: {
+  readonly postProcessing: boolean;
+  readonly required: readonly string[];
+  readonly sceneReady: () => boolean;
+}) {
   const state = useThree();
   const alive = useRef(false);
+  const pending = useEffectEvent(() => required.filter((name) => checks.get(name)?.() !== true));
 
   useEffect(() => {
     alive.current = true;
@@ -77,7 +85,7 @@ export function PrepareHero({ postProcessing }: { readonly postProcessing: boole
 
     if (import.meta.env.DEV)
       Object.assign(globalThis, {
-        heroStartup: { phase: () => phase, pending: () => required.filter((name) => checks.get(name)?.() !== true) },
+        heroStartup: { phase: () => phase, pending: () => pending() },
       });
 
     return () => {
@@ -140,8 +148,7 @@ export function PrepareHero({ postProcessing }: { readonly postProcessing: boole
         render();
 
         if (
-          scene.environment !== null &&
-          scene.getObjectByName('glass-shadows') !== undefined &&
+          sceneReady() &&
           (!postProcessing || renderPipeline !== null) &&
           required.every((name) => checks.get(name)?.() === true)
         ) {

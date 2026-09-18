@@ -22,9 +22,9 @@ import type { TitleBodies } from '../src/typography/bodies';
 const { advanceHero } = (await import(
   new URL('/src/systems.ts', location.origin).href
 )) as typeof import('../src/systems');
-const { Frame } = (await import(
-  new URL('/src/sequence/traits.ts', location.origin).href
-)) as typeof import('../src/sequence/traits');
+const { Time } = (await import(
+  new URL('/src/time/traits.ts', location.origin).href
+)) as typeof import('../src/time/traits');
 const { Body } = (await import(
   new URL('/src/physics/traits.ts', location.origin).href
 )) as typeof import('../src/physics/traits');
@@ -59,7 +59,7 @@ if (world === undefined) throw new Error('Missing the hero world');
 
 // Sample the adapter once after the readiness gate before taking over the deterministic clock.
 getScheduler().stepJob('hero-simulation');
-const frame = world.get(Frame)!;
+const frame = world.get(Time)!;
 let clock = frame.now;
 
 while (frame.elapsed < 1) {

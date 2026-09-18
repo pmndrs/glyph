@@ -1,14 +1,15 @@
 import { expect, it } from 'vitest';
 import { rigidBody } from 'crashcat';
 import { mat4 } from 'math';
-import { createHeroWorld } from '../world';
-import { Frame } from '../sequence/traits';
+import { createWorld } from 'koota';
+import { robotActions } from '../robot/actions';
+import { Time } from '../time/traits';
 import { Robot } from '../robot/traits';
 import { moveRobotBodies } from '../robot/systems';
 import { createTitleBodies, disposeTitle } from '../typography/bodies';
 import { Body, Physics } from './traits';
 import { physicsActions } from './actions';
-import { stepPhysics } from './systems';
+import { stepPhysics, subscribePhysics } from './systems';
 
 function prism(): number[][] {
   return [
@@ -20,7 +21,8 @@ function prism(): number[][] {
 }
 
 it('lifts, lands once, and repeats after being swallowed and revived on the shared world', () => {
-  const world = createHeroWorld();
+  const world = createWorld(Time, Physics);
+  subscribePhysics(world);
   const resource = world.get(Physics)!;
   const physics = physicsActions(world);
   const title = createTitleBodies(
@@ -32,7 +34,7 @@ it('lifts, lands once, and repeats after being swallowed and revived on the shar
   );
   const letter = title.pieces[0]!.entity;
   const body = letter.get(Body)!;
-  world.get(Frame)!.delta = 1 / 60;
+  world.get(Time)!.delta = 1 / 60;
 
   try {
     for (let replay = 0; replay < 2; replay++) {
@@ -80,18 +82,19 @@ it('lifts, lands once, and repeats after being swallowed and revived on the shar
 });
 
 it('lets the robot push a flat letter and removes its collision when it leaves', () => {
-  const world = createHeroWorld();
+  const world = createWorld(Time, Physics);
+  subscribePhysics(world);
   const physics = physicsActions(world);
   physics.setFloor(0);
-  const robotEntity = world.queryFirst(Robot)!;
+  const robotEntity = robotActions(world).spawn();
   robotEntity.remove(Body);
-  physics.attachRobot(robotEntity, [0.3, 0.3, 0.5]);
+  physics.attachKinematic(robotEntity, [0.3, 0.3, 0.5]);
   const robot = robotEntity.get(Robot)!;
   robot.active = true;
   Object.assign(robot.footprint, { x: -2, y: 0.55, z: 0, heading: 0 });
   const letter = physics.spawnSolid([0, 0, 0.5], prism());
   const body = letter.get(Body)!;
-  world.get(Frame)!.delta = 1 / 60;
+  world.get(Time)!.delta = 1 / 60;
 
   try {
     for (let frame = 0; frame < 120; frame++) {

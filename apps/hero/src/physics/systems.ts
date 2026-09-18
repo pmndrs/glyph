@@ -1,7 +1,7 @@
 import { Not, type World } from 'koota';
 import { deltaAngle, lerp, quat, vec3, type Vec3, type Quat } from 'math';
 import { rigidBody, updateWorld } from 'crashcat';
-import { Frame } from '../sequence/traits';
+import { Time } from '../time/traits';
 import { Body, Floor, Physics, type HeldPose } from './traits';
 
 /** Body removal and entity destruction release the same solver handle. */
@@ -19,7 +19,7 @@ export function subscribePhysics(world: World): void {
 export function stepPhysics(world: World): void {
   const physics = world.get(Physics)!;
   const bodies = world.query(Body, Not(Floor));
-  physics.accumulator = Math.min(physics.accumulator + world.get(Frame)!.delta, 4 / 60);
+  physics.accumulator = Math.min(physics.accumulator + world.get(Time)!.delta, 4 / 60);
   const steps = Math.floor(physics.accumulator * 60);
   physics.accumulator -= steps / 60;
 

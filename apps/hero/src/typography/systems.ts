@@ -1,50 +1,33 @@
 import type { World } from 'koota';
+import { Time } from '../time/traits';
+import type { HoleState } from '../black-hole/motion';
 import { FEATURE_LINE } from './content';
-import { Frame, Sequence } from '../sequence/traits';
-import { sequenceActions } from '../sequence/actions';
 import { Title, Typing } from './traits';
 import { prepareTitle, titleReach, updateTitle } from './bodies';
 
-export function moveTitle(world: World): void {
-  const frame = world.get(Frame)!;
-  const hole = world.get(Sequence)!.hole;
+export function moveTitle(world: World, hole: HoleState): void {
+  const time = world.get(Time)!;
 
   world.query(Title).updateEach(([title]) => {
-    if (title.bodies !== undefined) prepareTitle(world, title.bodies, frame.delta, hole);
+    if (title.bodies !== undefined) prepareTitle(world, title.bodies, time.delta, hole);
   });
 }
 
+/** Publish poses and this frame's landings for the application to compose. */
 export function syncTitle(world: World): void {
   world.query(Title).updateEach(([title]) => {
     if (title.bodies === undefined) return;
 
     updateTitle(title.bodies);
     title.reach = titleReach(title.bodies);
-
-    for (let slot = 0; slot < title.bodies.landingCount; slot++) {
-      const landing = title.bodies.landings[slot]!;
-      sequenceActions(world).impact(landing.x, landing.y, 0);
-    }
   });
 }
 
 export function typeFeature(world: World): void {
-  const sequence = world.get(Sequence)!;
-
-  if (sequence.hole.beat !== 'closed') return;
-
-  const shock = sequence.impacts[sequence.latestImpact];
-  const frame = world.get(Frame)!;
+  const time = world.get(Time)!;
 
   world.query(Typing).updateEach(([typing]) => {
-    if (shock !== undefined && shock.id !== typing.wave) {
-      typing.wave = shock.id;
-      typing.start = shock.at + 550;
-      typing.beat = 0;
-      typing.count = 0;
-    }
-
-    if (frame.now < typing.start) return;
+    if (time.now < typing.start) return;
 
     // Three captured frames per character at the shared 60 Hz update cadence.
     typing.beat++;

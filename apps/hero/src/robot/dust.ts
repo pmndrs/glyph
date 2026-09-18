@@ -1,6 +1,6 @@
 import { lerp, vec2, vec3 } from 'math';
 import type { Footprint } from './traits';
-import { jitter } from '../sequence/departure';
+import { jitter } from '../random';
 
 export const COUNT = 128;
 export const BASE_Z = 0.12;

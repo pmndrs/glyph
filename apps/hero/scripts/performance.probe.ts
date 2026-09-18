@@ -8,11 +8,11 @@
 import { _roots, getScheduler } from '@react-three/fiber/webgpu';
 import { vec4 } from 'three/tsl';
 import { Mesh, MeshBasicNodeMaterial, PlaneGeometry, Scene, WebGPUBackend, WebGPURenderer } from 'three/webgpu';
-import type { HoleState } from '../src/sequence/motion';
+import type { HoleState } from '../src/black-hole/motion';
 
 const { BURST_SECONDS } = (await import(
-  new URL('/src/sequence/motion.ts', location.origin).href
-)) as typeof import('../src/sequence/motion');
+  new URL('/src/black-hole/motion.ts', location.origin).href
+)) as typeof import('../src/black-hole/motion');
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 while (document.documentElement.dataset.heroState !== 'ready') {

@@ -5,7 +5,7 @@ import feature from '../../assets/geist-mono-bold.font.glb?url';
 import robot from '../../assets/geist-pixel-grid.font.glb?url';
 import icons from '../../assets/icons.font.glb?url';
 import stars from '../../assets/stars.font.glb?url';
-import { FEATURE_FIELD } from './content';
+import { FEATURE_FIELD } from '../typography/content';
 
 export type SlugFont = Font<typeof slug>;
 export type MsdfFont = Font<typeof msdf>;

@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:1cba58b3faa9215baf568bb7748e934a9e275ae86acdcd9b60c11d1b9d5a3624'
+source_digest: 'sha256:b684f2770c2c8549c86c7d670baad560ef44ab50cd00a0f04836ebc8938a59fe'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -54,10 +54,10 @@ sources:
     resource: ../../../apps/hero/scripts/robot.mts
     title: Robot glTF packing and staleness check
   - id: hole
-    resource: ../../../apps/hero/src/sequence/motion.ts
+    resource: ../../../apps/hero/src/black-hole/motion.ts
     title: Pure black-hole beat timeline
   - id: hole-warp
-    resource: ../../../apps/hero/src/sequence/warp.ts
+    resource: ../../../apps/hero/src/black-hole/warp.ts
     title: Outline-exact glyph warp around the hole
   - id: screen-ink
     resource: ../../../apps/hero/src/robot/material.ts
@@ -66,7 +66,7 @@ sources:
     resource: ../../../apps/hero/src/view/startup.tsx
     title: Scene preparation and GPU completion gate
   - id: retained-line
-    resource: ../../../apps/hero/src/typography/retained-line.ts
+    resource: ../../../apps/hero/src/view/retained-line.ts
     title: Prepared glyph records for typing and replay
   - id: performance-check
     resource: ../../../apps/hero/scripts/performance.probe.ts
@@ -92,6 +92,18 @@ sources:
   - id: world
     resource: ../../../apps/hero/src/world.ts
     title: Koota world and retained domain entities
+  - id: actions
+    resource: ../../../apps/hero/src/actions.ts
+    title: Application composition of domain creation and replay
+  - id: typography-actions
+    resource: ../../../apps/hero/src/typography/actions.ts
+    title: Title construction, disposal, and typing transitions
+  - id: input
+    resource: ../../../apps/hero/src/input/hooks.ts
+    title: DOM input adapter with application commands
+  - id: time
+    resource: ../../../apps/hero/src/time/systems.ts
+    title: Headless playback clock
   - id: systems
     resource: ../../../apps/hero/src/systems.ts
     title: Headless application system order
@@ -113,38 +125,42 @@ Local tuning values live at their use sites. Shared timing and geometry contract
 and reusable materials keep named storage. Comments describe the current algorithm or feature. The app-specific
 [code policies](../../../apps/hero/AGENTS.md) govern future changes.
 
-Koota is pinned to `0.6.6-canary.63c1187` for the sequence's domain state. The organization follows the local
-`threejs-conf-talk` and `minecraft-like` examples: domains own traits and systems, actions own discrete transitions,
-and renderers read simulation state and own mounted resources. Five domains cover the sequence:
+Koota is pinned to `0.6.6-canary.63c1187`. The organization follows the local `minecraft-like` example. Each
+domain is a module with explicit ownership. Traits hold its state, actions create entities and perform discrete
+transitions, systems advance its state, and renderers own mounted resources. Only the files a domain needs exist.
+Dependencies use domain actions, published state, or explicit inputs rather than reaching into another domain to
+implement its transitions.
 
-| Domain       | Ownership                                                                                          |
-| ------------ | -------------------------------------------------------------------------------------------------- |
-| `sequence`   | Shared clock/input, replay, retained impact ring, collapse timeline, and finale drawing            |
-| `typography` | Glyph outlines, title animation and matrices, feature typing, retained views, and glass projection |
-| `physics`    | Shared Crashcat solver resource, entity body traits, actions, fixed stepping, and collision events |
-| `field`      | Two icon sheets, layout, spring simulation, morphs, and glyph rendering                            |
-| `robot`      | Run scheduling, path/footprint, distance-driven dust, rig animation, and face display              |
+| Domain       | Ownership                                                                                               |
+| ------------ | ------------------------------------------------------------------------------------------------------- |
+| `time`       | Playback clock and bounded frame delta                                                                  |
+| `input`      | Pointer state, DOM listeners, and pointer decay                                                         |
+| `view`       | Viewport and readiness state, preparation, fonts, retained text views, shader time, lighting, and paper |
+| `physics`    | Crashcat resource, body traits, actions, fixed stepping, and collision events                           |
+| `typography` | Title construction and motion, published landings, feature typing, glass, and projection                |
+| `field`      | Icon sheets, bounded impact queue, spring simulation, morphs, and rendering                             |
+| `robot`      | Spawn/reset/run actions, path, published departure, physics target, dust, rig, and display              |
+| `black-hole` | Collapse state and controls, attraction functions, warp, stars, and post-processing                     |
 
-`main.tsx` mounts React once and provides the world to the canvas. `Hero` composes the scene directly.
-`world.ts` creates the application's one Koota world with the clock, sequence, and physics resource. It initially
-spawns the robot, title, typing record, and two fields. Preparation adds the floor and five letter entities to that
-same world. The robot's existing entity also carries its physics body.
-Koota AoS traits retain the existing math arrays and pools; high-frequency values never pass through React state.
-Systems and actions mutate queried traits through `world.query(...).updateEach`, receiving trait state directly.
-`systems.ts` orders robot motion, collapse, title and robot motion targets, shared physics stepping, title pose and
-impact publication, feature typing, fields, and dust. The R3F adapter
-samples the viewport and pointer and calls that headless update at 60 Hz. Views publish transforms and uniforms
-after simulation; title physics no longer writes Three objects. Keyboard and inspection controls use world-bound
-actions. Replay closes held finales, clears inspection poses, and waits for a fresh title landing before typing
-or restarting the robot.
+The root owns composition. `world.ts` assembles resources on one Koota world and installs physics subscriptions.
+`actions.ts` creates the scene through domain spawn actions and composes replay from their reset actions.
+`systems.ts` orders updates and connects title landings to field waves, typing, and the robot's next run. It connects
+robot departure to the black hole. These relationships belong to the experience, so the robot never opens the
+black hole itself and typography never edits the robot or field. Black-hole state is passed explicitly into the
+field and title systems and the feature-line view. The physics solver depends on the clock and its own state.
 
-Related views share each domain's `renderer.tsx`; numerical kernels and the large shadow pass stay separate where
-they have independent responsibilities. The source root contains five application-wide files: `main.tsx`,
-`hero.tsx`, `world.ts`, `systems.ts`, and `frameloop.tsx`. Typography owns fonts, copy,
-glass materials, and brand accents; field owns its icon catalog, palette, and flat material; robot owns its face
-material; sequence owns finale uniforms, warp, stars, and post-processing. The `view` domain owns preparation,
-page styles, lighting, and paper. Domain tests live
-beside their implementations.
+`main.tsx` mounts React once and provides the world to the canvas. `hero.tsx` composes the visual modules and supplies their preparation requirements to the view gate.
+`frameloop.tsx` samples renderer inputs, delegates DOM input to its domain, and runs the headless application tick
+at 60 Hz. `random.ts` contains the deterministic jitter function shared by independent effects. These seven files
+are application-wide. Domain helpers stay beside their owners, while shared font loading, typing views, and shader
+time belong to `view`. Numerical kernels and the large shadow pass remain separate where they have independent
+responsibilities. Domain tests live beside their implementations.
+
+Koota AoS traits retain math arrays and pools, and high-frequency values never pass through React state. Query
+mutations use `updateEach`, while composition reads published landings and departures with `readEach`. Preparation
+passes measured letter geometry into typography actions before playback. Those actions create bodies on the same
+world and dispose them with the mounted title. Renderers publish matrices and uniforms after simulation. Replay
+closes the finale, restores the field, lifts the title, and resets typing and robot scheduling through their owners.
 
 The old, unmounted break/rewind presentation and its exclusive director and compressed recording code/tests were
 removed during the Koota migration. The root cleanup also removed retired ink, glass, and silhouette variants and
@@ -193,7 +209,7 @@ library internals are outside that claim. Scene-authored dimensions and flight d
 used as coordinate frames are invertible, and frame deltas are nonnegative.
 
 The field tests compare direct transforms with Three's matrix composition, bound pointer disturbances, and check
-edge-on motif substitution. The physics tests use real Crashcat contacts to verify bounce, one landing per release, revival, and robot pushes
+edge-on motif substitution. The physics tests compose only clock and physics resources with the actors under test. They use real Crashcat contacts to verify bounce, one landing per release, revival, and robot pushes
 without tipping or leaving collisions after departure. WebGPU checks cover visible robot emission and fade, finale timing, and replay.
 
 The scene builds two interleaved lattices of eleven icons on mass-spring grids at different depths, scaled
@@ -244,13 +260,13 @@ its edges. After a brief empty hold, sixteen pastel Unicode stars (★ ☆ ✦ �
 light sparks. The stars shrink like embers, with enhanced bloom and a 1.25-second fade applied after composition so their halos dim along with their cores; the output is exactly black by 4.6 seconds and stays there until Space replays. `?post=0` remains a plain
 scene capture control and omits the paper warp, bloom, composed ember fade, and screen-space light sparks.
 
-The ember material in `src/sequence/embers.ts` keeps the exact Slug star silhouettes and shades each glyph's
+The ember material in `src/black-hole/embers.ts` keeps the exact Slug star silhouettes and shades each glyph's
 own quad with a creamy hot core, an amber rim, moving fire noise, and gentle asynchronous flicker. As the stars
 shrink, the surface cools toward orange; the composed stars and bloom still fade together. The WebGPU capture
 compares this surface against a flat pastel control.
 
 The six star shapes are baked from the vendored OFL Noto Sans Symbols 2 face, with the symbols shared between the
-bake and the burst in `src/sequence/symbols.ts`. `hero:star-font` restores the pinned source and license, and
+bake and the burst in `src/black-hole/symbols.ts`. `hero:star-font` restores the pinned source and license, and
 `hero:bake -- --only=stars` regenerates the tiny Slug subset. Both accept `--check`.
 
 The timeline and feature-glyph paths are pure functions. The WebGPU finale check covers collapse, completion,
@@ -287,15 +303,15 @@ raw render intervals, CPU submission work, asynchronous GPU queue completion, an
 adapter, viewport, and drawing-buffer dimensions. The default 1280×720 viewport with `dpr=1.5` draws at 1920×1080;
 explicit DPR choices are 1, 1.5, 2, and 3.
 
-Two complete 1920×1080 replays on Apple Metal with Chromium 149 averaged 60.01 fps across 1,700 frames after
-3.04 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long tasks were observed.
-Render intervals were 17.8 ms at p95 and 25.7 ms worst, with one interval over 25 ms. CPU submission time was 4.2 ms
-at p95 and browser GPU queue completion was 8.9 ms at p95. This verifies resource preparation and near-60 fps
+Two complete 1920×1080 replays on Apple Metal with Chromium 149 averaged 59.88 fps across 1,698 frames after
+3.09 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long tasks were observed.
+Render intervals were 17.9 ms at p95 and 26.0 ms worst, with three intervals over 25 ms. CPU submission time was 4.0 ms
+at p95 and browser GPU queue completion was 9.1 ms at p95. This verifies resource preparation and near-60 fps
 playback on this host. It does not measure delivery through a screen recorder or guarantee every frame meets budget.
 
 The full hero package check passes, including six numerical tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
-The production entry bundle is 598.06 kB gzip, down from 609.11 kB before removing the alternate scene.
+The production entry bundle is 598.62 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/typography/materials.ts`: red G, orange l,

@@ -1,9 +1,10 @@
-import { Sequence } from '../sequence/traits';
-import { createFlight, departureAt, flight } from '../sequence/departure';
-import { type RetainedLine, createRetainedLine, disposeLine, showLine, resetLine } from './retained-line';
+import type { HoleState } from '../black-hole/motion';
+import { createFlight, departureAt, flight } from '../black-hole/departure';
+import { type RetainedLine, createRetainedLine, disposeLine, showLine, resetLine } from '../view/retained-line';
 import { mat4, vec3 } from 'math';
 import { useWorld } from 'koota/react';
 import { Title, Typing } from './traits';
+import { typographyActions } from './actions';
 import { Text } from '@pmndrs/glyph/react';
 import type { Glyphs, Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
@@ -12,10 +13,10 @@ import { Box3, Vector3, Matrix4 } from 'three/webgpu';
 
 import { FEATURE_LINE } from './content';
 import { heroReady, usePreparation } from '../view/startup';
-import type { SlugFont, MsdfFont } from './fonts';
+import type { SlugFont, MsdfFont } from '../view/fonts';
 import { stainedGlassLetters, titleOrigin } from './materials';
 import { solidOf } from './outline';
-import { type Letter, type TitleBodies, createTitleBodies, disposeTitle } from './bodies';
+import { type Letter, type TitleBodies } from './bodies';
 
 /**
  * How deep each letter's invisible solid reaches: enough that the robot meets it squarely, never drives over it.
@@ -48,16 +49,13 @@ export function GlassTitle({ font }: { readonly font: SlugFont }) {
   }, []);
 
   useEffect(() => {
-    const title = world.queryFirst(Title)!.get(Title)!;
+    const title = world.queryFirst(Title)!;
     const object = word.current;
 
     return () => {
-      if (bodies.current !== undefined) disposeTitle(bodies.current);
+      typographyActions(world).dispose(title);
 
       bodies.current = undefined;
-      title.bodies = undefined;
-      title.width = undefined;
-      title.reach = 0;
       reported.current = false;
       glyphs.current?.removeFromParent();
       glyphs.current?.dispose();
@@ -125,21 +123,18 @@ export function GlassTitle({ font }: { readonly font: SlugFont }) {
       }
 
       glyphs.current = copies;
-      bodies.current = createTitleBodies(
-        world,
+      bodies.current = typographyActions(world).prepare(
         mat4.copy(mat4.create(), copies.matrixWorld.elements),
         letters,
         camera.position.z,
         SOLID_THICKNESS,
+        ink.max.x - ink.min.x,
       );
 
       // Development-only handle for inspecting the smash from DevTools.
       if (import.meta.env.DEV) Object.assign(globalThis, { heroTitle: bodies.current });
 
       reported.current = true;
-      const title = world.queryFirst(Title)!.get(Title)!;
-      title.bodies = bodies.current;
-      title.width = ink.max.x - ink.min.x;
     },
     { id: 'hero-title-motion' },
   );
@@ -171,7 +166,7 @@ const SIZE_STEP = 0.005;
 /** Wide exact box so `align: 'center'` centres the line on the origin, as the title does. */
 const FEATURE_LAYOUT_WIDTH = 60;
 
-export function FeatureLine({ field }: { readonly field: MsdfFont }) {
+export function FeatureLine({ field, collapse }: { readonly field: MsdfFont; readonly collapse: HoleState }) {
   const text = useRef<ThreeText<never> | null>(null);
   const world = useWorld();
   const typing = world.queryFirst(Typing)!.get(Typing)!;
@@ -209,7 +204,6 @@ export function FeatureLine({ field }: { readonly field: MsdfFont }) {
   useFrame(
     () => {
       const object = text.current;
-      const collapse = world.get(Sequence)!.hole;
 
       if (collapse.beat === 'closed' && collapsed.current) {
         collapsed.current = false;

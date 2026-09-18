@@ -21,23 +21,23 @@ import {
 
 import type { TitleBodies } from '../src/typography/bodies';
 const { COLLAPSE_SECONDS, POP_AT } = (await import(
-  new URL('/src/sequence/motion.ts', location.origin).href
-)) as typeof import('../src/sequence/motion');
+  new URL('/src/black-hole/motion.ts', location.origin).href
+)) as typeof import('../src/black-hole/motion');
 const { uHoleCollapse, uHoleBloom } = (await import(
-  new URL('/src/sequence/uniforms.ts', location.origin).href
-)) as typeof import('../src/sequence/uniforms');
-const { sequenceActions } = (await import(
-  new URL('/src/sequence/actions.ts', location.origin).href
-)) as typeof import('../src/sequence/actions');
+  new URL('/src/black-hole/uniforms.ts', location.origin).href
+)) as typeof import('../src/black-hole/uniforms');
+const { blackHoleActions } = (await import(
+  new URL('/src/black-hole/actions.ts', location.origin).href
+)) as typeof import('../src/black-hole/actions');
 const { uEmberFire } = (await import(
-  new URL('/src/sequence/embers.ts', location.origin).href
-)) as typeof import('../src/sequence/embers');
+  new URL('/src/black-hole/embers.ts', location.origin).href
+)) as typeof import('../src/black-hole/embers');
 const { STAR_SYMBOLS } = (await import(
-  new URL('/src/sequence/symbols.ts', location.origin).href
-)) as typeof import('../src/sequence/symbols');
+  new URL('/src/black-hole/symbols.ts', location.origin).href
+)) as typeof import('../src/black-hole/symbols');
 const handles = globalThis as {
   heroWorld?: import('koota').World;
-  heroHole?: { state(): import('../src/sequence/motion').HoleState };
+  heroHole?: { state(): import('../src/black-hole/motion').HoleState };
   heroTitle?: TitleBodies;
   heroRobot?: { hold(at: number): void };
 };
@@ -45,7 +45,11 @@ const handles = globalThis as {
 while (document.documentElement.dataset.heroState !== 'ready')
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
-const { dismissCollapse, holdCollapse, replay: requestReplay } = sequenceActions(handles.heroWorld!);
+const { dismiss: dismissCollapse, hold: holdCollapse } = blackHoleActions(handles.heroWorld!);
+const { heroActions } = (await import(
+  new URL('/src/actions.ts', location.origin).href
+)) as typeof import('../src/actions');
+const { replay: requestReplay } = heroActions(handles.heroWorld!);
 const hole = handles.heroHole!.state;
 const state = _roots.values().next().value!.store.getState();
 state.setFrameloop('never');
