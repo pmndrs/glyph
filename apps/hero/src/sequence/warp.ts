@@ -44,11 +44,14 @@ export function holeWarp(context: SlugContext): HoleWarp {
   const near = centerReach.div(horizon);
   const fragmentOffset = here.sub(uHoleCenter);
   const fragmentReach = fragmentOffset.length().max(0.0001);
+
   // Drag and stretch fall off with the square of the distance, in horizons, so far glyphs are untouched.
   const dragAt = (reach: Node<'float'>) => {
     const at = reach.div(horizon);
+
     return uHoleBend.mul(2.6).div(at.mul(at).add(0.35));
   };
+
   const stretch = uHoleBend.mul(1.4).div(near.mul(near).add(0.35));
   // Invert angular drag and radial stretch to locate the source ink.
   const angle = atan(fragmentOffset.y, fragmentOffset.x).sub(dragAt(fragmentReach).sub(dragAt(centerReach)));

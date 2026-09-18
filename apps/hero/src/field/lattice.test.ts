@@ -47,6 +47,7 @@ describe('icon field motion', () => {
     expected.updateMatrix();
     expected.matrix.multiply(baseline);
     cellMatrix(out, state, layout, index, -0.3, 0.8, now);
+
     for (let lane = 0; lane < 16; lane++) expect(out[lane]).toBeCloseTo(expected.matrix.elements[lane]!, 12);
   });
 
@@ -56,8 +57,11 @@ describe('icon field motion', () => {
     simulate(state, layout, 1 / 60, layer, 100);
     expect([...state.x, ...state.y]).toEqual(Array(layout.cells.length * 2).fill(0));
     Object.assign(state.pointer, { active: true, strength: 1, x: -1, y: 0 });
+
     for (let frame = 0; frame < 240; frame++) simulate(state, layout, 1 / 60, layer, (frame * 1000) / 60);
+
     expect(state.x.some((value) => Math.abs(value) > 0.01)).toBe(true);
+
     for (const value of [...state.x, ...state.y]) expect(Math.abs(value)).toBeLessThanOrEqual(2.4);
   });
 
@@ -65,6 +69,7 @@ describe('icon field motion', () => {
     const layout = buildLayout(layer);
     const state = createLattice(layout, layer.motifs, layer.seed);
     advanceMorph(state, layout, 100);
+
     for (let cycle = 0; cycle < 12; cycle++) {
       const now = state.nextSwap;
       const before = [...state.selected];
@@ -73,9 +78,11 @@ describe('icon field motion', () => {
       const to = state.morph.to;
       expect([...state.selected]).toEqual(before);
       advanceMorph(state, layout, now + 820.01);
+
       for (let index = 0; index < layout.cells.length; index++) {
         expect(state.selected[index]).toBe(layout.motifOfCell[index] === motif ? to : before[index]);
       }
+
       expect(new Set(state.motifGlyphs).size).toBe(layer.motifs);
     }
   });

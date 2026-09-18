@@ -21,6 +21,7 @@ export const sequenceActions = createActions((world) => ({
   holdCollapse(at: number | undefined) {
     const sequence = world.get(Sequence)!;
     sequence.held = at;
+
     if (at !== undefined) sequence.openedAt ??= world.get(Frame)!.now;
   },
   impact(x: number, y: number, z: number) {
@@ -37,15 +38,18 @@ export const sequenceActions = createActions((world) => ({
     sequence.openedAt = undefined;
     sequence.held = undefined;
     collapseAt(sequence.hole, -1);
+
     world.query(Title).updateEach(([title]) => {
       if (title.bodies !== undefined) replayTitle(title.bodies);
     });
+
     world.query(Typing).updateEach(([typing]) => {
       typing.start = Number.POSITIVE_INFINITY;
       typing.beat = 0;
       typing.count = 0;
       typing.wave = sequence.nextImpact - 1;
     });
+
     world.query(Robot).updateEach(([robot]) => {
       robot.time = undefined;
       robot.runAt = Number.POSITIVE_INFINITY;

@@ -3,6 +3,7 @@ import { clamp } from 'math';
 /** Deterministic jitter in [0, 1) from an index. */
 export function jitter(index: number): number {
   const value = Math.sin(index * 12.9898 + 78.233) * 43_758.545_3;
+
   return value - Math.floor(value);
 }
 
@@ -22,14 +23,18 @@ export function swirl(near: number, full: number): number {
 /** 0..1 release: how far a piece's pull has grown since its departure. 0 before it. */
 export function release(time: number, departure: number): number {
   const since = time - departure;
+
   if (since <= 0) return 0;
+
   const t = Math.min(1, since / 0.6);
+
   return t * t * t;
 }
 
 export function createFlight() {
   return { radius: 1, turn: 0, stretch: 1, size: 1 };
 }
+
 export type Flight = ReturnType<typeof createFlight>;
 
 /** A letter's accelerating arc, written into caller-owned output. Duration is positive. */
@@ -40,5 +45,6 @@ export function flight(out: Flight, time: number, departure: number, duration: n
   out.turn = progress ** 2 * 2.4;
   out.stretch = 1 + Math.sin(Math.PI * travel) * 1.8;
   out.size = 1 - travel;
+
   return out;
 }

@@ -52,6 +52,7 @@ export function layPath(out: Path, width: number, height: number, run: number): 
   out.inward = inward;
   out.outward = outward;
   out.phase = run * 2.4;
+
   return out;
 }
 
@@ -59,12 +60,14 @@ export function layPath(out: Path, width: number, height: number, run: number): 
 export function poseAt(out: Pose, time: number, path: Path): Pose {
   // Arc length along the line of travel, measured from the stop.
   let s: number;
+
   if (time < ARRIVE_AT) s = -path.inward * (1 - easing.cubicOut(time / ARRIVE_AT));
   else if (time < LEAVE_AT) s = 0;
   else s = path.outward * easing.cubicIn(saturate((time - LEAVE_AT) / (RUN_SECONDS - LEAVE_AT)));
 
   let offset = 0;
   let slope = 0;
+
   for (let index = 0; index < MEANDER.length; index++) {
     const wave = MEANDER[index]!;
     const k = wave.frequency;
@@ -72,25 +75,30 @@ export function poseAt(out: Pose, time: number, path: Path): Pose {
     offset += wave.amplitude * (Math.sin(k * s + shift) - Math.sin(shift));
     slope += wave.amplitude * k * Math.cos(k * s + shift);
   }
+
   const cos = HEADING_COS;
   const sin = HEADING_SIN;
   const x = STOP[0] + cos * s - sin * offset;
   const y = STOP[1] + sin * s + cos * offset;
 
   let look: number;
+
   if (time < LOOK_UP_AT) look = 0;
   else if (time < LOOK_DOWN_AT) look = easing.sineInOut(saturate((time - LOOK_UP_AT) / 0.55));
   else look = 1 - easing.sineInOut(saturate((time - LOOK_DOWN_AT) / 0.4));
+
   out.x = x;
   out.y = y;
   out.heading = HEADING + Math.atan(slope);
   out.look = look;
+
   return out;
 }
 
 export function createRobotMotion() {
   return { path: { inward: 0, outward: 0, phase: 0 }, pose: { x: 0, y: 0, heading: 0, look: 0 } };
 }
+
 function saturate(value: number): number {
   return clamp(value, 0, 1);
 }

@@ -10,6 +10,8 @@ export function createHeroWorld() {
   world.spawn(Robot);
   world.spawn(Title);
   world.spawn(Typing);
+
   for (const options of LAYERS) world.spawn(Field(createField(options)));
+
   return world;
 }

@@ -19,6 +19,7 @@ import { PrepareHero } from './view/startup';
 const POST_ENABLED = new URLSearchParams(location.search).get('post') !== '0';
 
 const world = createHeroWorld();
+
 if (import.meta.hot) import.meta.hot.dispose(() => world.destroy());
 
 export function Hero() {
@@ -38,6 +39,7 @@ function HeroScene() {
   useEffect(() => {
     // Development-only handle for inspecting the scene from DevTools.
     if (!import.meta.env.DEV) return;
+
     Object.assign(globalThis, { heroScene: scene, heroRenderer: renderer });
   }, [renderer, scene]);
 

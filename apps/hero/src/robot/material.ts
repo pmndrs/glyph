@@ -15,6 +15,7 @@ export interface ScreenFinish {
 export function screenInk(screen: MeshStandardMaterial, finish: ScreenFinish): ThreeTextMaterial {
   return defineTextMaterial((context) => {
     if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
+
     const { shader, position } = context;
     const material = new MeshStandardNodeMaterial({
       side: DoubleSide,
@@ -30,6 +31,7 @@ export function screenInk(screen: MeshStandardMaterial, finish: ScreenFinish): T
     // The quad's true facing from screen derivatives, towards the camera, whatever transform it is under.
     const face = normalize(cross(dFdx(positionView), dFdy(positionView)));
     material.normalNode = face.mul(dot(face, normalize(positionView.negate())).sign());
+
     return material;
   });
 }

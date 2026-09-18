@@ -15,6 +15,7 @@ import type { Entity } from 'koota';
 /** Flat, unlit ink for the background pattern: crisp coverage, no lighting cost across hundreds of icons. */
 const pattern = defineTextMaterial((context) => {
   if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
+
   // Opaque, with alpha-to-coverage edges: the icons must write depth, or the glass has nothing behind it to refract.
   // Depth in the field is carried by colour, not by fading them out.
   const material = new MeshBasicNodeMaterial({ side: DoubleSide });
@@ -24,6 +25,7 @@ const pattern = defineTextMaterial((context) => {
   const warp = holeWarp(context);
   material.opacityNode = warp.coverage.mul(warp.survive);
   material.alphaToCoverage = true;
+
   return material;
 });
 
@@ -52,6 +54,7 @@ function IconPattern({ entity, faces }: { readonly entity: Entity; readonly face
   const hidden = useRef(new Matrix4().makeScale(0, 0, 0));
   const matrix = useRef(new Matrix4());
   usePreparation(`icons:${depth}`, () => pool.current !== undefined);
+
   useEffect(
     () => () => {
       pool.current?.removeFromParent();
@@ -60,37 +63,49 @@ function IconPattern({ entity, faces }: { readonly entity: Entity; readonly face
     },
     [],
   );
+
   const sheet = useRef<Group>(null);
+
   useFrame(() => {
     const current = entity.get(Field)!;
     const state = current.lattice;
     const group = sheet.current;
+
     if (group === null) return;
+
     if (pool.current === undefined) {
       const text = source.current;
+
       if (text === null || text.commitState().status !== 'committed') return;
+
       const [copies, decorations] = text.breakApart();
       decorations?.dispose();
       text.parent?.add(copies);
       text.visible = false;
       copies.name = `icon-pattern-${depth}`;
       pool.current = copies;
+
       for (let index = 0; index < copies.count; index++) {
         copies.setMatrixAt(index, hidden.current);
         baselines.current[index] = -copies.glyphAt(index)!.advance / 2;
       }
     }
+
     const copies = pool.current;
     group.position.x = -current.offset;
     const now = world.get(Frame)!.now;
+
     for (let index = 0; index < count; index++) {
       const selected = state.selected[index]!;
       const previous = state.previous[index]!;
+
       if (selected !== previous) {
         copies.setMatrixAt(index * GLYPHS.length + previous, hidden.current);
         state.previous[index] = selected;
       }
+
       const record = index * GLYPHS.length + selected;
+
       if (state.swallowed[index] === 1) copies.setMatrixAt(record, hidden.current);
       else {
         cellMatrix(state.matrix, state, layout, index, baselines.current[record]!, iconSize, now);

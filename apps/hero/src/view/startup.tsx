@@ -18,14 +18,17 @@ export function heroReady(): boolean {
 function publish(next: Phase): void {
   phase = next;
   document.documentElement.dataset.heroState = next;
+
   for (const listener of listeners) listener();
 }
 
 /** Registers a component's concrete preparation condition, including work completed after text commits. */
 export function usePreparation(name: string, check: () => boolean): void {
   const read = useEffectEvent(check);
+
   useEffect(() => {
     checks.set(name, () => read());
+
     return () => {
       checks.delete(name);
     };
@@ -35,16 +38,21 @@ export function usePreparation(name: string, check: () => boolean): void {
 /** Tests the mounted text producers, including texts hidden until a later beat. */
 export function textPrepared(root: Object3D | null): boolean {
   if (root === null) return false;
+
   let count = 0;
   let prepared = true;
+
   root.traverse((object) => {
     if (object instanceof ThreeText && !(object.parent instanceof ThreeText)) {
       count++;
       const state = object.commitState();
+
       if (state.status === 'failed') throw state.error;
+
       if (state.status !== 'committed') prepared = false;
     }
   });
+
   return count > 0 && prepared;
 }
 
@@ -62,13 +70,16 @@ async function uploadsComplete(renderer: WebGPURenderer): Promise<void> {
 export function PrepareHero({ postProcessing }: { readonly postProcessing: boolean }) {
   const state = useThree();
   const alive = useRef(false);
+
   useEffect(() => {
     alive.current = true;
     publish('preparing');
+
     if (import.meta.env.DEV)
       Object.assign(globalThis, {
         heroStartup: { phase: () => phase, pending: () => required.filter((name) => checks.get(name)?.() !== true) },
       });
+
     return () => {
       alive.current = false;
     };
@@ -77,44 +88,57 @@ export function PrepareHero({ postProcessing }: { readonly postProcessing: boole
   useFrame(
     () => {
       if (phase === 'compiling' || phase === 'failed') return;
+
       const { renderer, scene, camera, renderPipeline } = state;
+
       if (phase === 'ready') {
         if (renderPipeline === null) renderer.render(scene, camera);
         else renderPipeline.render();
+
         return;
       }
+
       const render = () => {
         if (renderPipeline === null) renderer.render(scene, camera);
         else renderPipeline.render();
       };
+
       const fail = (error: unknown) => {
         if (!alive.current) return;
+
         failure = error instanceof Error ? error.message : String(error);
         publish('failed');
         console.error(error);
       };
+
       if (phase === 'settling') {
         // Compile/upload the normal visibility set too, before revealing the canvas or starting any clock.
         publish('compiling');
+
         try {
           render();
+
           void uploadsComplete(renderer).then(() => {
             if (alive.current) publish('ready');
           }, fail);
         } catch (error) {
           fail(error);
         }
+
         return;
       }
 
       const visibility: [Object3D, boolean, boolean][] = [];
+
       scene.traverse((object) => {
         visibility.push([object, object.visible, object.frustumCulled]);
         object.visible = true;
         object.frustumCulled = false;
       });
+
       try {
         render();
+
         if (
           scene.environment !== null &&
           scene.getObjectByName('glass-shadows') !== undefined &&
@@ -122,6 +146,7 @@ export function PrepareHero({ postProcessing }: { readonly postProcessing: boole
           required.every((name) => checks.get(name)?.() === true)
         ) {
           publish('compiling');
+
           void renderer
             .compileAsync(scene, camera)
             .then(() => uploadsComplete(renderer))
@@ -140,6 +165,7 @@ export function PrepareHero({ postProcessing }: { readonly postProcessing: boole
     },
     { id: 'hero-render', phase: 'render', fps: 60 },
   );
+
   return null;
 }
 
@@ -148,12 +174,14 @@ export function HeroLoading() {
   const current = useSyncExternalStore(
     (listener) => {
       listeners.add(listener);
+
       return () => {
         listeners.delete(listener);
       };
     },
     () => phase,
   );
+
   return (
     <output
       className="hero-loading"

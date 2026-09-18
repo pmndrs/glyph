@@ -57,6 +57,7 @@ export function Post() {
     const expansion = float(1).sub(age.mul(-14).exp());
     const sparkPoint = point.mul(aspect);
     let sparks: Node<'vec3'> = vec3(0);
+
     for (let index = 0; index < 7; index += 1) {
       const angle = index * 2.39996;
       const reach = 0.025 + (index % 3) * 0.021;
@@ -72,9 +73,11 @@ export function Post() {
           .mul(0.65),
       );
     }
+
     const ember = radius.mul(-95).exp().mul(age.mul(-24).exp());
     const finished = sceneColor.add(sparks.add(color('#dfccb0').mul(ember)).mul(alive));
     renderPipeline.outputNode = vec4(finished.mul(uHoleBurst.greaterThanEqual(BURST_SECONDS).select(0, 1)), 1);
   });
+
   return null;
 }

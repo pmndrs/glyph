@@ -20,6 +20,7 @@ export const uWordInverse = uniform(new Matrix4());
 export function screenMaterial(video: Texture): ThreeTextMaterial {
   return defineTextMaterial((context) => {
     if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
+
     const { shader, position } = context;
     const material = new MeshStandardNodeMaterial({
       // Disable depth writes because overlapping coplanar glyph quads would otherwise fight for depth.
@@ -43,6 +44,7 @@ export function screenMaterial(video: Texture): ThreeTextMaterial {
     material.opacityNode = shader.coverage;
     // Coverage is what the shadow pass has to read. AlphaTest does nothing there.
     material.maskShadowNode = shader.coverage;
+
     return material;
   });
 }
@@ -50,6 +52,7 @@ export function screenMaterial(video: Texture): ThreeTextMaterial {
 /** Metallic text reflects the video-lit environment. Analytic coverage masks the letterforms. */
 export const storyMaterial = defineTextMaterial((context) => {
   if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
+
   const { shader, position } = context;
   const material = new MeshStandardNodeMaterial({
     color: '#aab4c8',
@@ -64,5 +67,6 @@ export const storyMaterial = defineTextMaterial((context) => {
   material.opacityNode = shader.coverage;
   // A floor under the lighting: metal in a dark room goes almost black, and copy has to stay readable.
   material.emissiveNode = vec3(0.1, 0.115, 0.14);
+
   return material;
 });

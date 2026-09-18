@@ -24,22 +24,27 @@ export function createDust() {
     emitted: 0,
   };
 }
+
 export type DustState = ReturnType<typeof createDust>;
 
 /** Emits by distance, excluding teleports above four units. Copies the borrowed footprint before returning. */
 export function stepDust(state: DustState, step: number, current: Footprint | undefined): void {
   for (let index = 0; index < COUNT; index++) state.particles[index]!.age += step;
+
   const before = state.previous;
+
   if (current !== undefined && state.hasPrevious) {
     const dx = current.x - before[0];
     const dy = current.y - before[1];
     const distance = Math.hypot(dx, dy);
+
     if (distance > 4) state.carry = 0;
     else if (distance > 0) {
       const cos = Math.cos(current.heading);
       const sin = Math.sin(current.heading);
       const speed = distance / Math.max(step, 0.001);
       const kick = 0.25 + Math.min(speed, 15) * 0.035;
+
       for (let along = 0.09 - state.carry; along <= distance; along += 0.09) {
         const serial = state.emitted++;
         const particle = state.particles[serial % COUNT]!;
@@ -61,15 +66,22 @@ export function stepDust(state: DustState, step: number, current: Footprint | un
         particle.spin = (jitter(serial + 137) - 0.5) * 3;
         particle.size = 0.16 + jitter(serial + 151) * 0.19;
       }
+
       state.carry = (state.carry + distance) % 0.09;
     }
   } else state.carry = 0;
+
   state.hasPrevious = current !== undefined;
+
   if (current !== undefined) vec2.set(before, current.x, current.y);
+
   const drag = Math.exp(-step * 1.8);
+
   for (let index = 0; index < COUNT; index++) {
     const particle = state.particles[index]!;
+
     if (particle.age >= particle.life) continue;
+
     vec3.scaleAndAdd(particle.position, particle.position, particle.velocity, step);
     vec3.scale(particle.velocity, particle.velocity, drag);
     particle.position[2] = BASE_Z + (RISE * particle.age) / particle.life;

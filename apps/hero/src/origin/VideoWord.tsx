@@ -35,6 +35,7 @@ export function VideoWord({ faces, video }: { readonly faces: Faces; readonly vi
     // World back into the word's own space, every frame: the group is what the uv is anchored to, and an orbiting
     // camera changes nothing about it.
     const group = word.current;
+
     if (group !== null) {
       group.updateWorldMatrix(true, false);
       uWordInverse.value.copy(group.matrixWorld).invert();
@@ -43,9 +44,11 @@ export function VideoWord({ faces, video }: { readonly faces: Faces; readonly vi
     // The schedule runs on the clock, and only moves once what it last asked for is actually on screen.
     const spend = settling.current ? 0 : delta;
     settling.current = false;
+
     if (onScreen.current) {
       beat.current = advance(beat.current, spend);
       const next = textOf(beat.current);
+
       if (next.text !== shown.text || next.word !== shown.word) {
         setShown(next);
         // An empty line lays out nothing, so there is no commit to wait for.
@@ -55,34 +58,49 @@ export function VideoWord({ faces, video }: { readonly faces: Faces; readonly vi
 
     // Apply the average word height between words to keep typing vertically stable.
     const rig = word.current;
+
     if (rig !== null && shown.text === '' && settled.current !== undefined) {
       rig.position.y = FLOOR_Y + 0.06 - (settled.current + FONT_SIZE / 2);
     }
 
     const object = text.current;
+
     if (object === null) return;
+
     // Measure ink only after layout commits to avoid a second layout build.
     const state = object.commitState();
+
     if (state.status !== 'committed') return;
+
     if (!onScreen.current) settling.current = true;
+
     onScreen.current = true;
+
     if (state.revision === measured.current) return;
+
     const ink = object.computeBoundingBox();
+
     if (ink.max.x <= ink.min.x) return;
+
     // Center the video window in word space. Its fixed width and line-box height keep framing stable while
     // scripts and prefixes change.
     uWordOrigin.value.set(-WINDOW_WIDTH / 2, -FONT_SIZE / 2);
     uWordSize.value.set(WINDOW_WIDTH, FONT_SIZE);
+
     // Record this word's resting extents once it is whole, and average across every word seen so far.
     if (shown.text === shown.word.text) extents.current.set(shown.index, ink.min.y);
+
     const seen = [...extents.current.values()];
+
     if (seen.length > 0) {
       settled.current = seen.reduce((sum, low) => sum + low, 0) / seen.length;
     }
+
     // Cover: take the largest centred region of the clip whose shape matches the word's box.
     const frame = video.image as { videoWidth?: number; videoHeight?: number } | undefined;
     const clipWidth = frame?.videoWidth ?? 0;
     const clipHeight = frame?.videoHeight ?? 0;
+
     if (clipWidth > 0 && clipHeight > 0) {
       const ratio = clipWidth / clipHeight / (WINDOW_WIDTH / FONT_SIZE);
       uWordUvScale.value.set(ratio > 1 ? 1 / ratio : 1, ratio > 1 ? 1 : ratio);

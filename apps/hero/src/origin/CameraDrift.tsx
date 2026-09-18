@@ -14,19 +14,23 @@ export function CameraDrift() {
     const begin = () => {
       held.current = true;
     };
+
     // Re-sample on release: the framing you just chose becomes the new centre.
     const release = () => {
       held.current = false;
       base.current = undefined;
     };
+
     const zoomed = () => {
       held.current = true;
       window.clearTimeout(settle.current);
       settle.current = window.setTimeout(release, 220);
     };
+
     window.addEventListener('pointerdown', begin);
     window.addEventListener('pointerup', release);
     window.addEventListener('wheel', zoomed, { passive: true });
+
     return () => {
       window.clearTimeout(settle.current);
       window.removeEventListener('pointerdown', begin);
@@ -37,6 +41,7 @@ export function CameraDrift() {
 
   useFrame((state) => {
     if (held.current) return;
+
     const camera = state.camera;
     const anchor = (base.current ??= camera.position.clone());
     const turn = (state.elapsed / 23) * Math.PI * 2;

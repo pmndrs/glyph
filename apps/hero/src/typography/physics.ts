@@ -54,6 +54,7 @@ export function createTitleWorld(
   const touch = b3.createContactTouchEvent();
 
   const bodies: Body[] = [];
+
   for (const [index, letter] of letters.entries()) {
     const bodyDef = b3.b3DefaultBodyDef();
     bodyDef.type = b3.b3BodyType.b3_dynamicBody;
@@ -73,14 +74,18 @@ export function createTitleWorld(
     shapeDef.enableContactEvents = true;
     shapeDef.baseMaterial.restitution = 0.3;
     shapeDef.baseMaterial.friction = LETTER_FRICTION;
+
     for (const prism of letter.prisms) {
       const hull = b3.b3CreateHull(prism);
+
       if (hull === null) continue;
+
       const shape = b3.b3CreateHullShape(body, shapeDef, hull);
       letterByShape.set(shape.index1, index);
       // The world keeps its own copy of the hull.
       b3.b3DestroyHull(hull);
     }
+
     bodies.push(body);
     letterByBody.set(body.index1, index);
     vec3.toBuffer(poses, letter.position, index * POSE_STRIDE);
@@ -95,6 +100,7 @@ export function createTitleWorld(
   floorShapeDef.enableContactEvents = true;
   floorShapeDef.baseMaterial.friction = LETTER_FRICTION;
   const floorShape = b3.b3CreateBoxShape(floor, floorShapeDef, 80, 80, FLOOR_THICKNESS / 2).index1;
+
   return {
     b3,
     world,
@@ -122,6 +128,7 @@ export function createTitleWorld(
     angular: vec3.create(),
   };
 }
+
 export type TitleWorld = ReturnType<typeof createTitleWorld>;
 
 export function createHeldPose() {
@@ -144,6 +151,7 @@ export function holdLetter(state: TitleWorld, index: number, pose: HeldPose): vo
     readTitlePose(state.from[index]!, state, index);
     state.held[index] = 1;
   } else Object.assign(state.from[index]!, state.to[index]!);
+
   Object.assign(state.to[index]!, pose);
 }
 
@@ -171,6 +179,7 @@ export function reviveLetter(state: TitleWorld, index: number, pose: HeldPose): 
 
 export function releaseLetter(state: TitleWorld, index: number, velocity: Vec3, spin: number): void {
   if (state.held[index] === 0) return;
+
   const { b3 } = state;
   const body = state.letters[index]!;
   const to = state.to[index]!;
@@ -193,8 +202,10 @@ export function stepTitleWorld(state: TitleWorld, delta: number, target: RobotTa
   state.accumulator -= substeps * STEP;
   state.moved.fill(0);
   state.landedCount = 0;
+
   for (let substep = 1; substep <= substeps; substep++) {
     const t = substep / substeps;
+
     if (state.robotActive && target !== undefined) {
       setTransform(
         state,
@@ -205,8 +216,10 @@ export function stepTitleWorld(state: TitleWorld, delta: number, target: RobotTa
       );
       b3.b3Body_SetTargetTransform(state.robot, transform, STEP, true);
     }
+
     for (let index = 0; index < state.letters.length; index++) {
       if (state.held[index] === 0) continue;
+
       const from = state.from[index]!;
       const to = state.to[index]!;
       setTransform(
@@ -218,15 +231,20 @@ export function stepTitleWorld(state: TitleWorld, delta: number, target: RobotTa
       );
       b3.b3Body_SetTargetTransform(state.letters[index]!, transform, STEP, true);
     }
+
     b3.b3World_Step(state.world, STEP, 4);
     b3.getEvents(state.events, state.world);
+
     for (let index = 0; index < b3.getNumBodyMoveEvents(state.events); index++) {
       const event = b3.getBodyMoveEventAt(state.move, state.events, index);
       const letter = state.letterByBody.get(event.bodyId.index1);
+
       if (letter === undefined) continue;
+
       writePose(state, letter, event.position, event.rotation);
       state.moved[letter] = 1;
     }
+
     for (let index = 0; index < b3.getNumContactBeginEvents(state.events); index++) {
       const touch = b3.getContactBeginEventAt(state.touch, state.events, index);
       const a = touch.shapeIdA.index1;
@@ -237,18 +255,23 @@ export function stepTitleWorld(state: TitleWorld, delta: number, target: RobotTa
           : b === state.floorShape
             ? state.letterByShape.get(a)
             : undefined;
+
       if (letter === undefined || state.airborne[letter] === 0) continue;
+
       state.airborne[letter] = 0;
       state.landed[state.landedCount++] = letter;
     }
   }
+
   for (let index = 0; index < state.letters.length; index++) {
     if (state.held[index] === 0) continue;
+
     const to = state.to[index]!;
     setTransform(state, to.x, to.y, to.z, to.yaw);
     writePose(state, index, transform.position, transform.quaternion);
     state.moved[index] = 1;
   }
+
   if (target !== undefined) {
     robotFrom.x = target.x;
     robotFrom.y = target.y;
@@ -275,33 +298,43 @@ function createRobotBody(
   const shape = b3.b3DefaultShapeDef();
   shape.baseMaterial.friction = 0.1;
   const hull = b3.b3CreateHull(stadium(halfExtents));
+
   if (hull !== null) {
     b3.b3CreateHullShape(body, shape, hull);
     b3.b3DestroyHull(hull);
   }
+
   return body;
 }
 
 function arrive(state: TitleWorld, target: RobotTarget | undefined): void {
   const { b3, robotFrom } = state;
+
   if (target === undefined) {
     if (state.robotActive) b3.b3Body_Disable(state.robot);
+
     state.robotActive = false;
+
     return;
   }
+
   const dx = target.x - robotFrom.x;
   const dy = target.y - robotFrom.y;
+
   if (!state.robotActive || dx * dx + dy * dy > 2.5 * 2.5) {
     setTransform(state, target.x, target.y, target.z, target.heading);
     b3.b3Body_SetTransform(state.robot, state.transform.position, state.transform.quaternion);
     b3.b3Body_SetLinearVelocity(state.robot, vec3.zero(state.velocity));
     b3.b3Body_SetAngularVelocity(state.robot, vec3.zero(state.angular));
+
     if (!state.robotActive) b3.b3Body_Enable(state.robot);
+
     robotFrom.x = target.x;
     robotFrom.y = target.y;
     robotFrom.z = target.z;
     robotFrom.heading = target.heading;
   }
+
   state.robotActive = true;
 }
 
@@ -310,11 +343,13 @@ function writePose(state: TitleWorld, index: number, position: readonly number[]
   state.poses.set(position, offset);
   state.poses.set(rotation, offset + 3);
 }
+
 /** An upright collider with rounded sides. Off-center contacts nudge letters aside. */
 function stadium([along, across, up]: readonly [number, number, number]): number[] {
   const points: number[] = [];
   const radius = Math.min(along, across);
   const reach = Math.max(across - radius, 0);
+
   for (const z of [0, up * 2]) {
     for (let side = 0; side < ROBOT_ROUNDING_SIDES; side += 1) {
       const angle = (side / ROBOT_ROUNDING_SIDES) * Math.PI * 2;
@@ -323,5 +358,6 @@ function stadium([along, across, up]: readonly [number, number, number]): number
       points.push(x, y + reach, z, x, y - reach, z);
     }
   }
+
   return points;
 }

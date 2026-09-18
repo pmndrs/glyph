@@ -45,6 +45,7 @@ const URLS = {
 
 // Start every load before React first asks for a face.
 for (const url of Object.values(URLS)) useSlug.preload(url);
+
 // The feature line is MSDF outright: over the icon field it needs a stroke, which only the distance field carries.
 useMsdf.preload(URLS['geist-mono-bold'], FEATURE_FIELD);
 

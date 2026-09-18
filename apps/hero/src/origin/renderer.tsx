@@ -26,6 +26,7 @@ export function Origin() {
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
+
     Object.assign(globalThis, {
       heroScene: scene,
       heroRenderer: renderer,

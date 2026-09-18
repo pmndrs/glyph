@@ -103,9 +103,11 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
   const source = new RenderTarget(CAPTURE_WIDTH, CAPTURE_HEIGHT, { type: HalfFloatType, count: 3 });
   source.texture.name = 'output';
   const [, distanceTexture, normalTexture] = source.textures;
+
   if (distanceTexture === undefined || normalTexture === undefined) {
     throw new Error('Missing glass projection attachments');
   }
+
   distanceTexture.name = 'distance';
   normalTexture.name = 'normal';
   const caustic = new RenderTarget(CAPTURE_WIDTH, CAPTURE_HEIGHT, { type: HalfFloatType });
@@ -117,17 +119,23 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     const heights = gaussianBlur(texture(distanceTexture), direction, sigma);
     coverage.resolutionScale = scale;
     heights.resolutionScale = scale;
+
     return { coverage, heights };
   });
+
   const penumbra = gaussianBlur(texture(source.texture), 1, 4);
   const normalBlur = gaussianBlur(texture(normalTexture), 2, 3);
   const causticBlur = gaussianBlur(texture(caustic.texture), 2, 2);
   penumbra.resolutionScale = 0.5;
   const blurs = [...spread.flatMap(({ coverage, heights }) => [coverage, heights]), penumbra, normalBlur, causticBlur];
+
   // Captures may change between renders within one animation frame, including deterministic readbacks.
   for (const node of blurs) node.updateBeforeType = NodeUpdateType.RENDER;
+
   const [finest] = spread;
+
   if (finest === undefined) throw new Error('Missing glass shadow pyramid');
+
   const coverage = finest.coverage.getTextureNode();
   const wide = penumbra.getTextureNode();
   const heights = finest.heights.getTextureNode();
@@ -141,6 +149,7 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
   // The light grid, warped per channel to where the refracted rays land.
   const causticScene = new Scene();
   const gridGeometry = new PlaneGeometry(2, 2, 512, 320);
+
   const causticMaterials = [0, 1, 2].map((channel) => {
     const material = new MeshBasicNodeMaterial({
       name: `glass-caustic-${channel}`,
@@ -172,6 +181,7 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     const chamfer = smoothstep(0.98, 0.5, wide.sample(uv).a);
     // Texture rows run top-down, so the gradient's y points the other way in world space.
     const outward = vec2(inward.x.negate(), inward.y).mul(chamfer.mul(0.6));
+
     const facets = FACET_CELLS.map(({ size, angle, seed }) => {
       const c = Math.cos(angle);
       const s = Math.sin(angle);
@@ -179,8 +189,10 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
       const spin = mx_cell_noise_float(vec3(lattice, seed));
       const rate = mx_cell_noise_float(vec3(lattice, seed + 11));
       const heading = spin.mul(Math.PI * 2).add(uTime.mul(rate.sub(0.5).mul(0.35)));
+
       return vec2(cos(heading), sin(heading)).mul(rate.mul(0.6).add(0.4));
     }).reduce((sum, tilt) => sum.add(tilt));
+
     const normal = vec3(lens.mul(2).add(outward).add(facets.mul(0.3)), 1).normalize();
     const channelIOR = ior.add(dispersion.mul(0.09 * (channel - 1)));
     const base = height.sub(GLASS_DEPTH / 2).max(0);
@@ -209,6 +221,7 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     const grid = new Mesh(gridGeometry, material);
     grid.frustumCulled = false;
     causticScene.add(grid);
+
     return material;
   });
 
@@ -222,10 +235,12 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     toneMapped: false,
   });
   const point = positionWorld.xy;
+
   // Marched inside an Fn: TSL control flow only exists on a stack, and there is none at graph-build top level.
   const shadow = Fn(() => {
     const cover = float(0).toVar();
     const through = vec3(1).toVar();
+
     Loop(MARCH_STEPS, ({ i }) => {
       const fraction = float(i).add(0.5).div(MARCH_STEPS);
       const t = fraction.mul(fraction).mul(uReach);
@@ -235,15 +250,20 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
       const level = t.mul(0.22).clamp(0, PYRAMID.length - 1);
       const sample = vec4(0).toVar();
       const field = float(0).toVar();
+
       const blend = (lower: number) => () => {
         const amount = level.sub(lower);
         const from = spread[lower];
         const to = spread[lower + 1];
+
         if (from === undefined || to === undefined) throw new Error('Missing glass shadow pyramid level');
+
         sample.assign(mix(from.coverage.getTextureNode().sample(uv), to.coverage.getTextureNode().sample(uv), amount));
         field.assign(mix(from.heights.getTextureNode().sample(uv).r, to.heights.getTextureNode().sample(uv).r, amount));
       };
+
       If(level.lessThan(1), blend(0)).ElseIf(level.lessThan(2), blend(1)).Else(blend(2));
+
       const weight = sample.a.max(0.0001);
       const base = field
         .div(weight)
@@ -254,13 +274,16 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
         .mul(step(t, base.add(GLASS_DEPTH)))
         .mul(bounds)
         .div(t.mul(0.03).add(1));
+
       If(inside.greaterThan(cover), () => {
         cover.assign(inside);
         through.assign(sample.rgb.div(weight));
       });
     });
+
     return mix(vec3(1), through.mul(1 - 0.3), cover);
   })();
+
   const pooled = causticBlur.getTextureNode().sample(captureUV(point)).rgb;
   projectionMaterial.fragmentNode = vec4(shadow.add(pooled.mul(0.45)), 1);
   const receiverGeometry = new PlaneGeometry(WIDTH, HEIGHT);
@@ -269,6 +292,7 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
   receiver.position.z = RECEIVER_Z;
   receiver.renderOrder = 1;
   scene.add(receiver);
+
   // Development-only handle for reading the intermediate buffers from DevTools and the buffer probe.
   if (import.meta.env.DEV) {
     Object.assign(globalThis, { heroGlassShadows: { source, caustic, causticScene, lightCamera, receiver, spread } });
@@ -295,11 +319,13 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     clear: new Color(),
   };
 }
+
 type Projection = ReturnType<typeof createProjection>;
 
 /** Discover the retained title draws during warm-up. Playback uses the prepared list directly. */
 function discoverCaptures(state: Projection): void {
   const { sourceScene } = state;
+
   state.scene.traverseVisible((object) => {
     if (
       !(object instanceof Mesh) ||
@@ -308,6 +334,7 @@ function discoverCaptures(state: Projection): void {
       state.known.has(object)
     )
       return;
+
     const material = object.material.clone();
     material.name = 'glass-shadow-capture';
     material.transmission = 0;
@@ -339,18 +366,25 @@ function updateProjection(state: Projection, titleReach: number): void {
   const { scene, renderer, uLamp, uReach, source, sourceScene, caustic, causticScene, lightCamera, clear } = state;
   scene.updateMatrixWorld(true);
   uLamp.value.copy(LAMP);
+
   if (!heroReady()) discoverCaptures(state);
+
   let reach = GLASS_DEPTH;
+
   for (let index = 0; index < state.captures.length; index++) {
     const { original: object, capture } = state.captures[index]!;
     let visible = object.visible;
     let parent = object.parent;
+
     while (parent !== null && visible) {
       visible = parent.visible;
       parent = parent.parent;
     }
+
     capture.visible = visible && object.parent !== null;
+
     if (!capture.visible || !(object.material instanceof MeshPhysicalNodeMaterial)) continue;
+
     if (capture.material instanceof MeshPhysicalNodeMaterial) {
       capture.material.ior = object.material.ior;
       capture.material.dispersion = object.material.dispersion;
@@ -358,6 +392,7 @@ function updateProjection(state: Projection, titleReach: number): void {
       capture.material.attenuationColor.copy(object.material.attenuationColor);
       capture.material.attenuationDistance = object.material.attenuationDistance;
     }
+
     // Glyph uses this metadata to select the retained run. Ordinary extruded meshes have no such metadata.
     capture.userData = object.userData;
     capture.matrix.copy(object.matrixWorld);
@@ -366,12 +401,14 @@ function updateProjection(state: Projection, titleReach: number): void {
     const tilt = (Math.abs(elements[2] ?? 0) + Math.abs(elements[6] ?? 0)) * 2.4;
     reach = Math.max(reach, (elements[14] ?? 0) + tilt - RECEIVER_Z + GLASS_DEPTH / 2);
   }
+
   uReach.value = Math.max(reach, titleReach - RECEIVER_Z + GLASS_DEPTH / 2);
   const previousTarget = renderer.getRenderTarget();
   const previousMRT = renderer.getMRT();
   const previousAlpha = renderer.getClearAlpha();
   const previousAutoClear = renderer.autoClear;
   renderer.getClearColor(clear);
+
   try {
     renderer.autoClear = true;
     renderer.setClearColor(0, 0);
@@ -390,11 +427,16 @@ function updateProjection(state: Projection, titleReach: number): void {
 
 function disposeProjection(state: Projection): void {
   state.scene.remove(state.receiver);
+
   for (const { capture } of state.captures) if (!Array.isArray(capture.material)) capture.material.dispose();
+
   state.source.dispose();
   state.caustic.dispose();
+
   for (const node of state.blurs) node.dispose();
+
   for (const material of state.causticMaterials) material.dispose();
+
   state.gridGeometry.dispose();
   state.receiverGeometry.dispose();
   state.projectionMaterial.dispose();
@@ -405,14 +447,17 @@ export function GlassShadows() {
   const renderer = useThree((state) => state.renderer);
   const scene = useThree((state) => state.scene);
   const projection = useRef<ReturnType<typeof createProjection> | null>(null);
+
   useEffect(() => {
     const owned = createProjection(renderer, scene);
     projection.current = owned;
+
     return () => {
       projection.current = null;
       disposeProjection(owned);
     };
   }, [renderer, scene]);
+
   useFrame(
     () => {
       if (projection.current !== null) updateProjection(projection.current, world.queryFirst(Title)!.get(Title)!.reach);
@@ -425,5 +470,6 @@ export function GlassShadows() {
       fps: 60,
     },
   );
+
   return null;
 }

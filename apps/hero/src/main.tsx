@@ -17,6 +17,7 @@ const DPR =
   CAPTURE_DPR === '1' ? 1 : CAPTURE_DPR === '1.5' ? 1.5 : CAPTURE_DPR === '2' ? 2 : CAPTURE_DPR === '3' ? 3 : undefined;
 
 const root = document.querySelector<HTMLElement>('#root');
+
 if (root === null) throw new Error('Glyph Hero needs a #root element');
 
 createRoot(root).render(

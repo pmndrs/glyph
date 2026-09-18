@@ -13,27 +13,36 @@ export function FrameLoop() {
   const world = useWorld();
   const actions = useActions(sequenceActions);
   const robots = useActions(robotActions);
+
   useEffect(() => {
     const pointer = world.get(Frame)!.pointer;
+
     const moved = () => {
       pointer.strength = 1;
     };
+
     const left = () => {
       pointer.strength = 0;
     };
+
     const restart = (event: KeyboardEvent) => {
       if (event.key !== ' ' || !heroReady()) return;
+
       if (
         event.target instanceof HTMLElement &&
         (event.target.isContentEditable || event.target.closest('input, textarea, select, button') !== null)
       )
         return;
+
       event.preventDefault();
+
       if (!event.repeat) actions.replay();
     };
+
     window.addEventListener('keydown', restart);
     window.addEventListener('pointermove', moved, { passive: true });
     window.addEventListener('pointerleave', left, { passive: true });
+
     if (import.meta.env.DEV) {
       Object.assign(globalThis, {
         heroWorld: world,
@@ -46,6 +55,7 @@ export function FrameLoop() {
         heroRobot: robots,
       });
     }
+
     return () => {
       window.removeEventListener('keydown', restart);
       window.removeEventListener('pointermove', moved);
@@ -69,5 +79,6 @@ export function FrameLoop() {
     },
     { id: 'hero-simulation', phase: 'physics', fps: 60 },
   );
+
   return null;
 }

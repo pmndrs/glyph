@@ -52,6 +52,7 @@ function oklch(lightness: number, chroma: number, hueDegrees: number): string {
         .padStart(2, '0'),
     )
     .join('');
+
   return `#${hex}`;
 }
 

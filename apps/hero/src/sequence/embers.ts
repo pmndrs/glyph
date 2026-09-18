@@ -11,6 +11,7 @@ export const uEmberFire = uniform(1);
 /** Analytic star silhouettes filled with a moving hot core, glowing amber tips, and cooling pastel light. */
 export const emberMaterial = defineTextMaterial((context) => {
   if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
+
   const material = new MeshBasicNodeMaterial({
     transparent: true,
     depthWrite: false,
@@ -45,5 +46,6 @@ export const emberMaterial = defineTextMaterial((context) => {
   // Fade after bloom in Post: hot details and their halo cool together without losing the star's outline.
   material.opacityNode = context.shader.coverage.mul(uHoleBurst.greaterThanEqual(0).select(0.8, 0));
   material.toneMapped = false;
+
   return material;
 });

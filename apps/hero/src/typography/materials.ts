@@ -32,6 +32,7 @@ type SlugContext = Extract<ThreeTextMaterialContext, { format: 'pmndrs.slug' }>;
 function createGlass(properties: MeshPhysicalNodeMaterialParameters = {}, motion?: PaneMotion) {
   return defineTextMaterial((context) => {
     if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
+
     const material = new MeshPhysicalNodeMaterial({
       side: DoubleSide,
       // A very faint smoky tint: the pattern reads through the letters, bent rather than dimmed.
@@ -53,15 +54,18 @@ function createGlass(properties: MeshPhysicalNodeMaterialParameters = {}, motion
     });
     // Per-glyph UVs curve the face normal outward to form a lens.
     const face = shapeSlug(material, context);
+
     if (motion !== undefined) {
       material.positionNode = jostle(context.position, motion).sub(titleOrigin).mul(motion.scale).add(titleOrigin);
     }
+
     const lens = uv().sub(0.5).mul(2);
     // Falls to zero at the quad border, so neighbouring glyph quads do not show their seams.
     const falloff = float(1).sub(lens.length().mul(lens.length())).max(0).mul(0.45);
     const normal = normalize(face.add(vec3(lens.x.mul(falloff), lens.y.negate().mul(falloff), 0)));
     material.normalNode = normal;
     material.emissiveNode = color('#7cc8ff').mul(rim(normal).mul(0.35));
+
     return material;
   });
 }
@@ -82,6 +86,7 @@ function jostle(position: Node<'vec3'>, motion: PaneMotion): Node<'vec3'> {
   const local = position.sub(motion.pivot);
   const c = cos(motion.angle);
   const s = sin(motion.angle);
+
   return vec3(local.x.mul(c).sub(local.y.mul(s)), local.x.mul(s).add(local.y.mul(c)), local.z)
     .add(motion.pivot)
     .add(vec3(motion.sway, 0, 0));
@@ -113,6 +118,7 @@ export const stainedGlassLetters = [
     dispersion: 0.7,
     iridescence: 0,
   };
+
   return {
     letter,
     ...motion,
@@ -133,6 +139,7 @@ function shapeSlug(material: MeshPhysicalNodeMaterial, context: SlugContext) {
   const face = normalize(cross(dFdx(positionView), dFdy(positionView)));
   const normal = face.mul(dot(face, toCamera()).sign());
   material.normalNode = normal;
+
   return normal;
 }
 

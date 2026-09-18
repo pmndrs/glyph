@@ -10,7 +10,9 @@ export function advanceHero(world: World, delta: number, now: number): void {
   const frame = world.get(Frame)!;
   frame.now = now;
   frame.delta = frame.ready ? Math.min(delta, 0.1) : 0;
+
   if (!frame.ready) return;
+
   frame.elapsed += frame.delta;
   moveRobots(world);
   advanceSequence(world);

@@ -63,6 +63,7 @@ export function collapseAt(out: HoleState, t: number): HoleState {
   out.time = t;
   out.x = HOLE_CENTER[0];
   out.y = HOLE_CENTER[1];
+
   if (t < 0) {
     out.beat = 'closed';
     out.time = -1;
@@ -71,8 +72,10 @@ export function collapseAt(out: HoleState, t: number): HoleState {
     out.presence = 0;
     out.sincePop = undefined;
     out.blackout = 0;
+
     return out;
   }
+
   const open = easing.cubicOut(ramp(t, 0, 0.4));
   const swell = 1 + 0.6 * easing.sineInOut(ramp(t, 2.65, POP_AT - 0.1));
   const pinch = easing.cubicIn(ramp(t, POP_AT - 0.1, POP_AT));
@@ -83,5 +86,6 @@ export function collapseAt(out: HoleState, t: number): HoleState {
   out.presence = popped ? 0 : open * swell * (1 - pinch);
   out.sincePop = popped ? t - POP_AT : undefined;
   out.blackout = popped ? 1 : 0;
+
   return out;
 }

@@ -5,12 +5,12 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:4d9f3a7a8f0c35ad1ae61760bf49a769cd73324b51df26ed924a56bf827f7da6'
+source_digest: 'sha256:e9caa28299a660450795041a881c3e472eb69179b3dea20ced66903160ec08e9'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
     resource: ../../../apps/hero/AGENTS.md
-    title: Hero testing, comments, and tuning policies
+    title: Hero testing, comments, tuning, and readability policies
   - id: origin-check
     resource: ../../../apps/hero/scripts/origin.probe.ts
     title: Origin video and text rendering check

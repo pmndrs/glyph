@@ -72,6 +72,7 @@ const TYPE_UNTIL = LOOK_DOWN_AT + 0.25;
 function eyesAt(out: { shown: number; tear: number }, now: number): void {
   const away = (now - (TYPE_FROM - GLITCH_SECONDS)) / GLITCH_SECONDS;
   const back = (now - TYPE_UNTIL) / GLITCH_SECONDS;
+
   if (away >= 0 && away < 1) {
     out.shown = away < 0.5 ? 1 : 0;
     out.tear = 1 - Math.abs(away * 2 - 1);
@@ -102,7 +103,9 @@ function glitchingScreen(screen: MeshStandardMaterial): MeshStandardNodeMaterial
     envMapIntensity: screen.envMapIntensity,
     side: screen.side,
   });
+
   if (screen.map === null) return material;
+
   const at = uv();
   const band = hash(at.y.mul(36).floor().add(uSeed));
   const torn = vec2(at.x.add(band.sub(0.5).mul(uTear).mul(0.06)), at.y);
@@ -113,6 +116,7 @@ function glitchingScreen(screen: MeshStandardMaterial): MeshStandardNodeMaterial
   const flipped = threshold(band, uTear);
   const eyes = mix(uEyes, float(1).sub(uEyes), flipped);
   material.colorNode = mix(dark, picture, eyes);
+
   return material;
 }
 
@@ -135,6 +139,7 @@ function createRobotTransforms() {
     eyes: { shown: 1, tear: 0 },
   };
 }
+
 /** Marshal the animated bone once at each boundary. Composition stays in math scratch. */
 function tiltJoint(
   joint: Object3D,
@@ -143,6 +148,7 @@ function tiltJoint(
   angle: number,
 ): void {
   if (joint.parent === null) return;
+
   vector3.set(scratch.axis, -Math.sin(heading), Math.cos(heading), 0);
   joint.parent.getWorldQuaternion(scratch.parentWorld).toArray(scratch.parent);
   quat.setAxisAngle(scratch.tilt, scratch.axis, angle);
@@ -170,36 +176,45 @@ function Robot({ entity, faces }: { readonly entity: Entity; readonly faces: Fac
   const { animations } = model;
   const mover = useRef<Group>(null);
   const body = useRef<Group>(null);
+
   const { scene, display, screenMaterial } = useMemo(() => {
     const owned = clone(model.scene);
     const screenMesh = owned.getObjectByName('Object_9') as Mesh;
     const original = screenMesh.material as MeshStandardMaterial;
     const material = glitchingScreen(original);
     screenMesh.material = material;
+
     return { scene: owned, display: screenInk(original, FACE_FINISH), screenMaterial: material };
   }, [model.scene]);
+
   const mixer = useMemo(() => new AnimationMixer(scene), [scene]);
   const head = useMemo(() => scene.getObjectByName('Bip001_Spine1_03') as Bone | undefined, [scene]);
   const text = useRef<ThreeText<never> | null>(null);
   const line = useRef<RetainedLine | undefined>(undefined);
   usePreparation('robot', () => line.current !== undefined);
+
   useEffect(
     () => () => {
       if (line.current !== undefined) disposeLine(line.current);
+
       line.current = undefined;
       screenMaterial.dispose();
     },
     [screenMaterial],
   );
+
   /** The display's group: kept in the robot's tree and moved to the head joint each frame. */
   const face = useRef<Group>(null);
   const transformsRef = useRef(useMemo(() => createRobotTransforms(), []));
 
   useEffect(() => {
     const clip = animations.find((candidate) => candidate.name === 'Take 001');
+
     if (clip === undefined) return;
+
     const action = mixer.clipAction(clip);
     action.play();
+
     return () => {
       action.stop();
       mixer.uncacheClip(clip);
@@ -211,20 +226,26 @@ function Robot({ entity, faces }: { readonly entity: Entity; readonly faces: Fac
       const transforms = transformsRef.current;
       const root = mover.current;
       const lean = body.current;
+
       if (root === null || lean === null) return;
 
       if (line.current === undefined) {
         if (text.current === null || text.current.commitState().status !== 'committed') return;
+
         line.current = createRetainedLine(text.current);
         showLine(line.current, FACE_TEXT.length);
       }
+
       if (!heroReady()) return;
 
       root.visible = robot.active;
+
       if (!robot.active || robot.time === undefined) {
         showLine(line.current, 0);
+
         return;
       }
+
       const { x, y, heading, look } = robot.motion.pose;
       root.position.set(x, y, 0.04);
       root.rotation.z = heading;
@@ -235,7 +256,9 @@ function Robot({ entity, faces }: { readonly entity: Entity; readonly faces: Fac
       const count =
         now >= TYPE_FROM && now < TYPE_UNTIL ? Math.min(FACE_TEXT.length, Math.floor((now - TYPE_FROM) * 9)) : 0;
       showLine(line.current, count);
+
       if (face.current !== null) face.current.visible = count > 0;
+
       eyesAt(transforms.eyes, now);
       const eyes = transforms.eyes;
       uEyes.value = eyes.shown;
@@ -243,12 +266,15 @@ function Robot({ entity, faces }: { readonly entity: Entity; readonly faces: Fac
       uSeed.value = Math.floor(now * 48);
 
       mixer.update(world.get(Frame)!.delta);
+
       if (head !== undefined && look > 0) {
         root.updateWorldMatrix(true, true);
         tiltJoint(head, transforms, heading, -0.62 * look);
       }
+
       // The display rides on the head joint: its matrix is the joint's, brought into the mover's frame.
       const screen = face.current;
+
       if (head !== undefined && screen !== null && count > 0) {
         root.updateWorldMatrix(true, true);
         root.matrixWorld.toArray(transforms.world);
@@ -311,6 +337,7 @@ const SLOTS = Array.from({ length: COUNT }, (_, index) => ({
 // Height encodes lifetime, so all particles share one material and fade without re-shaping their text.
 const dust = defineTextMaterial((context) => {
   if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
+
   const material = new MeshBasicNodeMaterial({ side: DoubleSide, transparent: true, depthWrite: false });
   material.name = 'robot-glyph-dust';
   material.positionNode = context.position;
@@ -320,6 +347,7 @@ const dust = defineTextMaterial((context) => {
       .oneMinus()
       .mul(0.65),
   );
+
   return material;
 });
 
@@ -328,15 +356,22 @@ function RobotDust({ entity, faces }: { readonly entity: Entity; readonly faces:
   const groups = useRef<(Group | null)[]>([]);
   usePreparation('dust', () => groups.current.length === COUNT && groups.current.every(textPrepared));
   const robot = entity.get(RobotTrait)!;
+
   useFrame(() => {
     if (!heroReady()) return;
+
     const state = robot.dust;
+
     for (let index = 0; index < COUNT; index++) {
       const group = groups.current[index];
+
       if (group == null) continue;
+
       const particle = state.particles[index]!;
       group.visible = particle.age < particle.life;
+
       if (!group.visible) continue;
+
       group.position.fromArray(particle.position);
       group.rotation.z = particle.roll;
       group.scale.setScalar(particle.size * (1 - (particle.age / particle.life) * 0.55));

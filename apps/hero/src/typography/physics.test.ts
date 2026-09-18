@@ -21,6 +21,7 @@ it('holds a letter at its target and reports one landing after release', async (
     0,
     ROBOT_HALF_EXTENTS,
   );
+
   try {
     const pose = { x: 0, y: 0, z: 4, yaw: 0.2 };
     holdLetter(state, 0, pose);
@@ -29,10 +30,12 @@ it('holds a letter at its target and reports one landing after release', async (
     expect(state.poses[2]).toBe(4);
     releaseLetter(state, 0, [0, 0, -10], 0);
     let landings = 0;
+
     for (let frame = 0; frame < 240; frame++) {
       stepTitleWorld(state, 1 / 60, undefined);
       landings += state.landedCount;
     }
+
     expect(landings).toBe(1);
     expect(state.poses[2]).toBeCloseTo(0.5, 1);
   } finally {

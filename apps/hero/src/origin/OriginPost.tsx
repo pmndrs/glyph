@@ -12,5 +12,6 @@ export function OriginPost() {
     const falloff = offset.dot(offset).mul(0.55).oneMinus().clamp(0, 1);
     renderPipeline.outputNode = lit.mul(vec3(falloff, falloff, falloff));
   });
+
   return null;
 }

@@ -9,6 +9,7 @@ export interface CycleWord extends TitleWord {
 
 function split(text: string): string[] {
   const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
   return [...segmenter.segment(text)].map((entry) => entry.segment);
 }
 
@@ -20,7 +21,9 @@ const CHOSEN = ONLY === undefined ? TITLE_WORDS : [ONLY];
 export const CYCLE: readonly CycleWord[] = CHOSEN.map((word) => {
   const clusters = split(word.text);
   const prefixes: string[] = [''];
+
   for (const cluster of clusters) prefixes.push((prefixes.at(-1) ?? '') + cluster);
+
   return { ...word, clusters, prefixes };
 });
 
@@ -78,6 +81,7 @@ function next(state: CycleState, stage: CycleStage, index = state.index): CycleS
 export function advance(state: CycleState, delta: number): CycleState {
   const word = wordAt(state.index);
   const seconds = state.seconds + Math.min(delta, step(state.stage));
+
   switch (state.stage) {
     case 'typing':
       return seconds >= word.clusters.length * TYPE_SECONDS ? next(state, 'holding') : { ...state, seconds };
@@ -94,9 +98,11 @@ export function advance(state: CycleState, delta: number): CycleState {
 export function textOf(state: CycleState): CycleFrame {
   const word = wordAt(state.index);
   const index = state.index;
+
   switch (state.stage) {
     case 'typing': {
       const shown = Math.floor(state.seconds / TYPE_SECONDS) + 1;
+
       return { word, index, text: word.prefixes[shown] ?? word.text };
     }
     case 'holding':
@@ -105,6 +111,7 @@ export function textOf(state: CycleState): CycleFrame {
       // Backspace: the word comes apart cluster by cluster, so the script unwinds the way it was written.
       const gone = Math.floor(state.seconds / DELETE_SECONDS) + 1;
       const left = Math.max(word.clusters.length - gone, 0);
+
       return { word, index, text: word.prefixes[left] ?? '' };
     }
     case 'clear':

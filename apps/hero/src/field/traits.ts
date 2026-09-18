@@ -41,8 +41,11 @@ export const LAYERS: readonly IconLayoutOptions[] = [
     waveSpeed: 15,
   },
 ];
+
 export function createField(options: IconLayoutOptions) {
   const layout = buildLayout(options);
+
   return { options, layout, lattice: createLattice(layout, options.motifs, options.seed), offset: 0 };
 }
+
 export const Field = trait(() => createField(LAYERS[0]!));

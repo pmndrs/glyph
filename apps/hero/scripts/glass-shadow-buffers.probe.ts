@@ -31,25 +31,36 @@ interface Buffers {
 function ready() {
   const scene = _roots.values().next().value?.store.getState().scene;
   let feature = false;
+
   scene?.traverse((object) => {
     if (object instanceof Text && object.text.startsWith('SHAPING') && object.style.opacity === 1) {
       feature = object.commitState().status === 'committed';
     }
   });
+
   return feature && scene?.environment && scene.getObjectByName('glass-shadows');
 }
+
 while (document.documentElement.dataset.heroState !== 'ready')
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
 while (!ready()) await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
 const state = _roots.values().next().value?.store.getState();
+
 if (state === undefined) throw new Error('Hero did not mount');
+
 state.setFrameloop('never');
 const { renderer, scene, camera } = state;
+
 if (!(renderer instanceof WebGPURenderer) || !(renderer.backend instanceof WebGPUBackend)) {
   throw new Error('Glass shadow buffers must execute on WebGPU');
 }
+
 const buffers = (globalThis as { heroGlassShadows?: Buffers }).heroGlassShadows;
+
 if (buffers === undefined) throw new Error('Missing the glass shadow development handle');
+
 await renderer.compileAsync(scene, camera);
 getScheduler().stepJob('hero-glass-shadows');
 renderer.render(scene, camera);
@@ -57,7 +68,9 @@ renderer.render(scene, camera);
 // One quadrant each: the capture's transmitted tint, its lens normals, the capture four mip levels down, and the
 // caustics.
 const [output, distance, normal] = buffers.source.textures;
+
 if (output === undefined || distance === undefined || normal === undefined) throw new Error('Missing attachments');
+
 const tiles = [
   { at: [-0.5, 0.5], node: vec4(texture(output).rgb, 1) },
   { at: [0.5, 0.5], node: vec4(texture(normal).xy.div(texture(output).a.max(0.0001)).mul(2).add(0.5), 0, 1) },
@@ -66,23 +79,30 @@ const tiles = [
 ];
 const debugScene = new Scene();
 const quad = new PlaneGeometry(1, 1);
+
 const materials = tiles.map(({ at, node }) => {
   const material = new MeshBasicNodeMaterial({ toneMapped: false });
   material.fragmentNode = node;
   const mesh = new Mesh(quad, material);
   mesh.position.set(at[0] ?? 0, at[1] ?? 0, 0);
   debugScene.add(mesh);
+
   return material;
 });
+
 const debugCamera = new DebugCamera(-1, 1, 1, -1, 0.1, 10);
 debugCamera.position.z = 1;
 renderer.setRenderTarget(null);
 renderer.render(debugScene, debugCamera);
 
 const grid = buffers.causticScene.children[0];
+
 if (!(grid instanceof Mesh)) throw new Error('Missing caustic grid');
+
 const shader = await renderer.debug.getShaderAsync(buffers.causticScene, buffers.lightCamera, grid);
+
 if (shader.vertexShader === null || shader.fragmentShader === null) throw new Error('Caustic grid did not compile');
+
 const vertexSamples = (shader.vertexShader.match(/textureSampleLevel/g) ?? []).length;
 const fragmentDerivatives = (shader.fragmentShader.match(/dpd[xy]/g) ?? []).length;
 console.log(
@@ -92,4 +112,5 @@ console.log(
 console.log(shader.vertexShader.slice(0, 6000));
 
 quad.dispose();
+
 for (const material of materials) material.dispose();

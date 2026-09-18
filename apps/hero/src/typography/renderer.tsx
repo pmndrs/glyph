@@ -63,8 +63,10 @@ export function GlassTitle({ faces }: { readonly faces: Faces }) {
   useEffect(() => {
     const title = world.queryFirst(Title)!.get(Title)!;
     const object = word.current;
+
     return () => {
       if (bodies.current !== undefined) disposeTitle(bodies.current);
+
       bodies.current = undefined;
       title.bodies = undefined;
       title.width = undefined;
@@ -73,6 +75,7 @@ export function GlassTitle({ faces }: { readonly faces: Faces }) {
       glyphs.current?.removeFromParent();
       glyphs.current?.dispose();
       glyphs.current = undefined;
+
       if (object !== null) object.visible = true;
     };
   }, [world]);
@@ -82,19 +85,27 @@ export function GlassTitle({ faces }: { readonly faces: Faces }) {
       if (reported.current) {
         const state = bodies.current!;
         const copies = glyphs.current!;
+
         for (let index = 0; index < state.pieces.length; index++) {
           copies.setMatrixAt(state.pieces[index]!.letter.index, draw.current.fromArray(state.matrices, index * 16));
         }
+
         return;
       }
+
       const object = word.current;
+
       // Measure ink only after layout commits to avoid a second layout build.
       if (object === null || object.commitState().status !== 'committed') return;
+
       const ink = object.computeBoundingBox();
+
       if (ink.max.x <= ink.min.x) return;
+
       for (const [index, pane] of stainedGlassLetters.entries()) {
         object.measureGlyphs()?.[index]?.localInkBounds.getCenter(pane.pivot.value);
       }
+
       // The paragraph is copied glyph by glyph and hidden: from here on the copies are what is drawn, and each
       // follows its body. Shaping and materials are the paragraph's own.
       const [copies, decorations] = object.breakApart();
@@ -103,9 +114,12 @@ export function GlassTitle({ faces }: { readonly faces: Faces }) {
       object.visible = false;
       copies.updateWorldMatrix(true, false);
       const letters: Letter[] = [];
+
       for (const measurement of copies.measurements) {
         const solid = solids[measurement.index];
+
         if (solid === undefined || measurement.localInkBounds.isEmpty()) continue;
+
         // The body sits where the paragraph placed the letter's ink, in world space.
         titleInk.copy(measurement.localInkBounds).applyMatrix4(copies.matrixWorld);
         titleInk.getCenter(inkCenter);
@@ -116,6 +130,7 @@ export function GlassTitle({ faces }: { readonly faces: Faces }) {
           original: mat4.copy(mat4.create(), measurement.originalMatrix.elements),
         });
       }
+
       glyphs.current = copies;
       bodies.current = createTitleBodies(
         b3,
@@ -124,8 +139,10 @@ export function GlassTitle({ faces }: { readonly faces: Faces }) {
         camera.position.z,
         SOLID_THICKNESS,
       );
+
       // Development-only handle for inspecting the smash from DevTools.
       if (import.meta.env.DEV) Object.assign(globalThis, { heroTitle: bodies.current });
+
       reported.current = true;
       const title = world.queryFirst(Title)!.get(Title)!;
       title.bodies = bodies.current;
@@ -190,6 +207,7 @@ export function FeatureLine({ field }: { readonly field: MsdfFont }) {
   useEffect(
     () => () => {
       if (line.current !== undefined) disposeLine(line.current);
+
       line.current = undefined;
     },
     [],
@@ -199,13 +217,17 @@ export function FeatureLine({ field }: { readonly field: MsdfFont }) {
     () => {
       const object = text.current;
       const collapse = world.get(Sequence)!.hole;
+
       if (collapse.beat === 'closed' && collapsed.current) {
         collapsed.current = false;
+
         if (line.current !== undefined) resetLine(line.current, typing.count);
       }
+
       if (collapse.beat !== 'closed' && line.current !== undefined) {
         collapsed.current = true;
         const copies = line.current.glyphs;
+
         if (copies !== undefined) {
           copies.visible = collapse.beat === 'open';
           copies.updateWorldMatrix(true, false);
@@ -213,9 +235,12 @@ export function FeatureLine({ field }: { readonly field: MsdfFont }) {
           copies.matrixWorld.toArray(work.world);
           mat4.invert(work.inverse, work.world);
           const records = line.current.records;
+
           for (let index = 0; index < records.length; index++) {
             const glyph = records[index]!;
+
             if (glyph.empty) continue;
+
             vec3.transformMat4(work.center, glyph.center, work.world);
             const x = work.center[0] - collapse.x;
             const y = work.center[1] - collapse.y;
@@ -237,33 +262,43 @@ export function FeatureLine({ field }: { readonly field: MsdfFont }) {
             copies.setMatrixAt(glyph.index, line.current.draw.fromArray(work.transform));
           }
         }
+
         return;
       }
 
       // Fit first: the line renders its whole text, unseen, until it knows what size and tracking match the title.
       if (fit === undefined) {
         const width = world.queryFirst(Title)!.get(Title)!.width;
+
         if (object === null || width === undefined) return;
+
         const target = width - 0.1;
         const state = object.commitState();
+
         if (state.status !== 'committed' || state.revision === fitRevision.current) return;
+
         fitRevision.current = state.revision;
         const ink = object.computeBoundingBox();
         const natural = ink.max.x - ink.min.x;
         const glyphs = object.measureGlyphs()?.length ?? 0;
+
         if (natural <= 0 || glyphs < 2) return;
+
         // Step down to the nearest size that still fits, then open the tracking to take up the slack exactly.
         const fontSize = Math.floor((FEATURE_FONT_SIZE * target) / natural / SIZE_STEP) * SIZE_STEP;
         const fitted = (natural * fontSize) / FEATURE_FONT_SIZE;
         setFit({ fontSize, letterSpacing: (target - fitted) / (glyphs - 1) });
+
         return;
       }
 
       if (line.current === undefined) {
         if (object === null || object.commitState().status !== 'committed') return;
+
         line.current = createRetainedLine(object);
         showLine(line.current, FEATURE_LINE.text.length);
       }
+
       if (!heroReady()) return;
 
       showLine(line.current, typing.count);

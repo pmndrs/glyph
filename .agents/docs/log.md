@@ -2,6 +2,11 @@
 
 ## 2026-09-19
 
+- **Separated hero code blocks for readability** — Added blank lines around hook callbacks, loops, branches,
+  and other blocks, and before returns. Comments stay attached to their blocks and related control-flow clauses
+  stay together. Source changes contain only blank-line additions. Typecheck, lint, and formatting pass.
+  The spacing convention lives in [hero's code policies](../../apps/hero/AGENTS.md).
+
 - **Inlined hero tuning and shortened comments** — Reduced production top-level `const` declarations from 275 to 159. Local timing, material, lighting, and motion values now sit at their use sites. Shared timing and geometry
   contracts and retained resources remain named. Comments explain current behavior with simple punctuation.
   Typecheck, lint, formatting, build, four focused numerical tests, and origin, shadow, finale, dust, and typing

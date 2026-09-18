@@ -21,6 +21,7 @@ const PLACED = ORIGIN_STORY.reduce<{ text: string; top: number }[]>((placed, tex
       ? 2.5
       : previous.top - Math.ceil(previous.text.length / 50) * FONT_SIZE * LINE_HEIGHT - FONT_SIZE * 0.62;
   placed.push({ text, top });
+
   return placed;
 }, []);
 
@@ -31,6 +32,7 @@ export function StoryColumn({ faces }: { readonly faces: Faces }) {
   /** Copy camera orientation to keep the column parallel to the image plane. */
   useFrame(() => {
     const group = plate.current;
+
     if (group !== null) group.quaternion.copy(camera.quaternion);
   });
 

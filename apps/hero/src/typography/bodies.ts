@@ -46,6 +46,7 @@ export function createTitleBodies(
   const inverse = mat4.create();
   mat4.copy(inverse, worldMatrix);
   mat4.invert(inverse, inverse);
+
   const pieces = letters.map((letter) => {
     const offset = mat4.create();
     const original = mat4.create();
@@ -55,8 +56,10 @@ export function createTitleBodies(
     mat4.fromTranslation(offset, vec3.fromValues(-letter.home[0], -letter.home[1], -letter.home[2]));
     mat4.multiply(offset, offset, world);
     mat4.multiply(offset, offset, original);
+
     return { letter, offset };
   });
+
   const world = createTitleWorld(
     b3,
     letters.map(({ home, solid }) => ({
@@ -92,14 +95,18 @@ export function createTitleBodies(
     body: mat4.create(),
     matrix: mat4.create(),
   };
+
   for (let index = 0; index < pieces.length; index++) writeLetter(state, index);
+
   return state;
 }
+
 export type TitleBodies = ReturnType<typeof createTitleBodies>;
 
 /** Reuse the same body and glyph records on every replay. */
 export function replayTitle(state: TitleBodies): void {
   state.replays++;
+
   for (let index = 0; index < state.pieces.length; index++) {
     if (state.swallowed[index] === 1) {
       const home = state.pieces[index]!.letter.home;
@@ -111,8 +118,10 @@ export function replayTitle(state: TitleBodies): void {
       state.grow[index] = 1;
       writeLetter(state, index);
     }
+
     readTitlePose(state.from[index]!, state.world, index);
   }
+
   state.swallowed.fill(0);
   state.released.fill(0);
   state.departing = false;
@@ -125,10 +134,13 @@ export function updateTitle(state: TitleBodies, delta: number, robot: Footprint 
   carryTitle(state, delta);
   attractTitle(state, hole);
   stepTitleWorld(state.world, delta, robot);
+
   for (let index = 0; index < state.pieces.length; index++) {
     if (state.world.moved[index] === 1) writeLetter(state, index);
   }
+
   state.landingCount = state.world.landedCount;
+
   for (let slot = 0; slot < state.landingCount; slot++) {
     const index = state.world.landed[slot]!;
     const landing = state.landings[slot]!;
@@ -145,6 +157,7 @@ export function disposeTitle(state: TitleBodies): void {
 export function titleReach(state: TitleBodies): number {
   const poses = state.world.poses;
   let reach = 0;
+
   for (let index = 0; index < state.pieces.length; index++) {
     const offset = index * POSE_STRIDE;
     const qx = poses[offset + 3]!;
@@ -152,23 +165,30 @@ export function titleReach(state: TitleBodies): number {
     const upright = 1 - 2 * (qx * qx + qy * qy);
     reach = Math.max(reach, poses[offset + 2]! + Math.sqrt(Math.max(0, 1 - upright * upright)) * 3.2);
   }
+
   return reach;
 }
 
 function carryTitle(state: TitleBodies, delta: number): void {
   if (!state.lifting) return;
+
   state.elapsed += delta;
   let pending = false;
   const pose = state.pose;
+
   for (let index = 0; index < state.pieces.length; index++) {
     if (state.released[index] === 1) continue;
+
     const time = state.elapsed - index * 0.035;
+
     if (time < 0) {
       pending = true;
       continue;
     }
+
     const home = state.pieces[index]!.letter.home;
     const from = state.from[index]!;
+
     if (time < LIFT_SECONDS) {
       const rise = easing.sineInOut(time / LIFT_SECONDS);
       pose.x = lerp(from.x, home[0], rise);
@@ -189,6 +209,7 @@ function carryTitle(state: TitleBodies, delta: number): void {
       state.released[index] = 1;
     }
   }
+
   state.lifting = pending;
 }
 
@@ -200,18 +221,24 @@ function attractTitle(state: TitleBodies, hole: HoleState): void {
         writeLetter(state, index);
       }
     }
+
     return;
   }
+
   if (!state.departing) {
     for (let index = 0; index < state.pieces.length; index++) readTitlePose(state.origins[index]!, state.world, index);
+
     state.departing = true;
   }
+
   for (let index = 0; index < state.pieces.length; index++) {
     if (state.swallowed[index] === 1) continue;
+
     const from = state.origins[index]!;
     const x = from.x - hole.x;
     const y = from.y - hole.y;
     const flightPose = flight(state.flight, hole.time, departureAt(Math.hypot(x, y) / 9, index), 0.85);
+
     if (flightPose.size === 0 || hole.beat === 'black') {
       state.swallowed[index] = 1;
       swallowLetter(state.world, index);
@@ -219,6 +246,7 @@ function attractTitle(state: TitleBodies, hole: HoleState): void {
       writeLetter(state, index);
       continue;
     }
+
     const cosine = Math.cos(flightPose.turn);
     const sine = Math.sin(flightPose.turn);
     const pose = state.pose;

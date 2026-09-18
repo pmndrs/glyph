@@ -76,10 +76,14 @@ const only = process.argv.find((argument) => argument.startsWith('--only='))?.sl
 
 for (const [face, bake] of Object.entries(FACES) as [FaceId, FaceBake][]) {
   if (only !== undefined && only !== face) continue;
+
   const source = ['--input', bake.input];
+
   if (bake.subset !== false) source.push('--unicodes', unicodeSet(codePointsFor(face, bake.basicLatin)));
+
   run(face, source, bake.rasters);
 }
+
 if (only === undefined || only === 'icons') {
   run('icons', [
     '--input',
@@ -102,20 +106,27 @@ if (only === undefined || only === 'stars') {
 
 function run(name: string, source: readonly string[], extra: readonly string[] = []): void {
   const argumentsList = ['bake', ...source, '--output', `assets/${name}.font.glb`, '--slug', ...extra, '--yes'];
+
   if (check) argumentsList.push('--check');
+
   console.log(`glyph ${argumentsList.join(' ')}`);
   execFileSync(glyph, argumentsList, { cwd: appRoot, stdio: 'inherit' });
 }
 
 function codePointsFor(face: FaceId, basicLatin: boolean): Set<number> {
   const codePoints = new Set<number>();
+
   if (basicLatin) for (let point = BASIC_LATIN.from; point <= BASIC_LATIN.to; point += 1) codePoints.add(point);
+
   const story = ORIGIN_STORY.map((text) => ({ text, face: ORIGIN_STORY_FACE }));
   const texts = [TITLE, HEADLINE, FEATURE_LINE, ORIGIN_TITLE, ...story, ...TITLE_WORDS, ...BACKGROUND_WORDS].filter(
     (entry) => entry.face === face,
   );
+
   for (const { text } of texts) for (const character of text ?? '') codePoints.add(character.codePointAt(0) ?? 0);
+
   codePoints.add(0x20);
+
   return codePoints;
 }
 
@@ -123,13 +134,17 @@ function codePointsFor(face: FaceId, basicLatin: boolean): Set<number> {
 function unicodeSet(codePoints: ReadonlySet<number>): string {
   const sorted = [...codePoints].sort((left, right) => left - right);
   const ranges: string[] = [];
+
   for (let start = 0; start < sorted.length; ) {
     let end = start;
+
     while (end + 1 < sorted.length && sorted[end + 1] === (sorted[end] ?? 0) + 1) end += 1;
+
     const first = hex(sorted[start] ?? 0);
     ranges.push(end === start ? first : `${first}-${hex(sorted[end] ?? 0).slice(2)}`);
     start = end + 1;
   }
+
   return ranges.join(',');
 }
 

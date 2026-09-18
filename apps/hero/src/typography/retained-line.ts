@@ -11,6 +11,7 @@ export function createRetainedLine(source: Pick<Text<never>, 'text' | 'glyphs' |
   decorations?.dispose();
   source.parent?.add(glyphs);
   source.visible = false;
+
   try {
     for (let count = 1; count < full.length; count++) {
       source.text = full.slice(0, count);
@@ -22,10 +23,12 @@ export function createRetainedLine(source: Pick<Text<never>, 'text' | 'glyphs' |
   } finally {
     source.text = full;
   }
+
   const records = glyphs.measurements.map((glyph) => {
     const original = mat4.create();
     glyph.originalMatrix.toArray(original);
     const bounds = glyph.localInkBounds;
+
     return {
       index: glyph.index,
       cluster: glyphs.glyphAt(glyph.index)!.cluster,
@@ -38,6 +41,7 @@ export function createRetainedLine(source: Pick<Text<never>, 'text' | 'glyphs' |
       empty: bounds.isEmpty(),
     };
   });
+
   return {
     glyphs,
     records,
@@ -48,15 +52,19 @@ export function createRetainedLine(source: Pick<Text<never>, 'text' | 'glyphs' |
     hidden: new Matrix4().makeScale(0, 0, 0),
   };
 }
+
 export type RetainedLine = ReturnType<typeof createRetainedLine>;
 
 /** Show a centred prefix without shaping, React updates, or allocation. */
 export function showLine(line: RetainedLine, count: number): void {
   if (count === line.count) return;
+
   line.count = count;
   const shift = line.prefixOffsets[count]!;
+
   for (let index = 0; index < line.records.length; index++) {
     const glyph = line.records[index]!;
+
     if (glyph.cluster >= count) line.glyphs.setMatrixAt(glyph.index, line.hidden);
     else {
       mat4.copy(line.transform, glyph.original);

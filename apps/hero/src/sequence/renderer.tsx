@@ -85,14 +85,18 @@ export function BlackHole() {
   const materials = useMemo(() => buildMaterials(), []);
   const camera = useThree((state) => state.camera);
   const hole = useRef<Group>(null);
+
   useFrame(
     () => {
       if (!heroReady()) return;
+
       uHoleCamera.value = camera.position.z;
       const state = world.get(Sequence)!.hole;
       syncHoleUniforms(state);
       const group = hole.current;
+
       if (group === null) return;
+
       group.visible = state.beat === 'open';
       uPresence.value = state.presence;
       uHeat.value = state.pull;
@@ -152,18 +156,25 @@ export function GlyphBurst({ faces }: { readonly faces: Faces }) {
   const world = useWorld();
   const groups = useRef<(Group | null)[]>([]);
   usePreparation('burst', () => groups.current.length === PARTICLES.length && groups.current.every(textPrepared));
+
   useFrame(() => {
     if (!heroReady()) return;
+
     const since = world.get(Sequence)!.hole.sincePop;
+
     for (const particle of PARTICLES) {
       const group = groups.current[particle.index];
+
       if (group === null || group === undefined) continue;
+
       const age = (since ?? -1) - particle.delay;
+
       // Keep the text mounted and shaped before emission. A near-zero transform hides its prewarmed draw.
       if (age < 0 || age >= BURST_SECONDS) {
         group.scale.setScalar(0.0001);
         continue;
       }
+
       const travel = 1 - Math.exp(-age * 9);
       const size = particle.size * Math.min(1, age / 0.035) * (1 - (age / BURST_SECONDS) ** 1.4 * 0.8);
       group.position.set(particle.reachX * travel, particle.reachY * travel - age * age * 0.25, 8);

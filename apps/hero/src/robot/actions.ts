@@ -10,6 +10,7 @@ export const robotActions = createActions((world) => ({
   hold(at: number | undefined) {
     world.query(Robot).updateEach(([robot]) => {
       robot.held = at;
+
       if (at !== undefined) robot.runAt = 0;
     });
   },

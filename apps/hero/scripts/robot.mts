@@ -32,7 +32,9 @@ const floor = document
   .getRoot()
   .listNodes()
   .find((node) => node.getName() === FLOOR_NODE);
+
 if (floor === undefined) throw new Error(`${FLOOR_NODE} is missing from ${SOURCE.pathname}`);
+
 floor.dispose();
 await document.transform(
   prune(),
@@ -49,10 +51,12 @@ const packed = await io.writeBinary(document);
 
 if (check) {
   const committed = await readFile(OUTPUT).catch(() => undefined);
+
   if (committed === undefined || Buffer.compare(committed, packed) !== 0) {
     console.error(`${OUTPUT.pathname} is stale; run \`pnpm scripts run hero:robot\` to repack it.`);
     process.exit(1);
   }
+
   console.log(`${OUTPUT.pathname} is up to date (${packed.byteLength} bytes).`);
 } else {
   await writeFile(OUTPUT, packed);
