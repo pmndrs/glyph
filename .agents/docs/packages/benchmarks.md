@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:daed2f96bef0d4b8782fe386af2139725f470ea72a2a3875a1b8eb7304492ead'
+source_digest: 'sha256:48712fe4db0e4e81b39c9164f7683859062d0bc93f3fc03f3559ca6415359608'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -696,8 +696,10 @@ publication work. `benchmark:labs-internal` is reserved for workspace-only imple
 the package artifact. Its `engine` suite preserves the raw retained-engine invalidation classes across selectable Bitmap,
 MTSDF, and Slug artifacts and Latin, bidi, and CJK corpora. Its `kernel` suite measures the scalar,
 compiler-vectorized, and explicit-SIMD artifacts at 22k and 86k target scales, preserving exact output-hash and
-no-warm-memory-growth checks outside the timed region. Browser frame, GPU, and input-latency observations remain Vitexec
-or Playwright workflows, while package size and conformance remain deterministic gates rather than timing benchmarks.
+no-warm-memory-growth checks outside the timed region. Its `mtsdf-generator` suite separately measures Wasm compilation,
+host initialization, initialized-plus-corpus work, and retained-generator corpus work while preserving every oracle hash.
+Browser frame, GPU, and input-latency observations remain Vitexec or Playwright workflows, while package size and
+conformance remain deterministic gates rather than timing benchmarks.
 
 The 0.1.0 export cleanup removes raw ABI re-exports from the baker size entries. The regenerated package-size report
 records the supported consumer surface, including the root format move. Relative to the original pre-cleanup build,
