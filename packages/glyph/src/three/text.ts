@@ -984,6 +984,10 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return this.#glyphPlacements()?.caretAt(x, y);
   }
 
+  caretForOffset(offset: number): GlyphCaret | undefined {
+    return this.#glyphPlacements()?.caretForOffset(offset);
+  }
+
   selectionRects(start: number, end: number): readonly LayoutBox[] | undefined {
     return this.#glyphPlacements()?.selectionRects(start, end);
   }
