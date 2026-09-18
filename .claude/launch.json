@@ -4,14 +4,44 @@
     {
       "name": "dev",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@pmndrs/glyph-benchmarks", "run", "dev", "--port", "5273", "--strictPort"],
+      "runtimeArgs": [
+        "--filter",
+        "@pmndrs/glyph-benchmarks",
+        "run",
+        "dev",
+        "--port",
+        "5273",
+        "--strictPort"
+      ],
       "port": 5273
     },
     {
       "name": "r3f",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@pmndrs/glyph-r3f-hello-world", "run", "dev", "--port", "5274", "--strictPort"],
+      "runtimeArgs": [
+        "--filter",
+        "@pmndrs/glyph-r3f-hello-world",
+        "run",
+        "dev",
+        "--port",
+        "5274",
+        "--strictPort"
+      ],
       "port": 5274
+    },
+    {
+      "name": "hero",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@pmndrs/glyph-hero",
+        "run",
+        "dev",
+        "--port",
+        "5275",
+        "--strictPort"
+      ],
+      "port": 5275
     }
   ]
 }
