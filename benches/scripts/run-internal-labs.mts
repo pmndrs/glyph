@@ -1,7 +1,7 @@
 /* @workflow {
   "name": "benchmark:labs-internal",
   "summary": "Run fresh-process Labs comparisons for workspace-only engine and kernel internals.",
-  "requirements": "Built @pmndrs/glyph. Kernel cases additionally require glyph:kernel-lab-build artifacts. Accepts --suite, --blocks, and --name.",
+  "requirements": "Built @pmndrs/glyph. Kernel cases additionally require glyph:kernel-lab-build artifacts. Accepts --suite, --blocks, --name, --technique, --corpus, --glyphs, and --wasm.",
   "writes": "Ignored Labs records under benches/.cache/labs-internal."
 } */
 import { spawn } from 'node:child_process';
@@ -20,7 +20,9 @@ await new Promise<void>((resolveRun, reject) => {
     env: {
       ...process.env,
       GLYPH_LABS_CORPUS: options.corpus,
+      GLYPH_LABS_GLYPHS: String(options.glyphs),
       GLYPH_LABS_TECHNIQUE: options.technique,
+      ...(options.wasm === undefined ? {} : { GLYPH_LABS_WASM: options.wasm }),
     },
     stdio: 'inherit',
   });
@@ -47,9 +49,19 @@ function parseArguments(argv: readonly string[]) {
   if (!Number.isSafeInteger(blocks) || blocks < 2) throw new RangeError('--blocks must be an integer of at least 2');
   const technique = values.get('technique') ?? 'bitmap';
   const corpus = values.get('corpus') ?? 'latin';
+  const glyphs = Number(values.get('glyphs') ?? '22000');
   if (!['bitmap', 'mtsdf', 'slug'].includes(technique)) {
     throw new RangeError('--technique must be bitmap, mtsdf, or slug');
   }
   if (!['latin', 'bidi', 'cjk'].includes(corpus)) throw new RangeError('--corpus must be latin, bidi, or cjk');
-  return { blocks, corpus, name: values.get('name') ?? `internal-${suite}-${technique}-${corpus}`, suite, technique };
+  if (!Number.isSafeInteger(glyphs) || glyphs <= 0) throw new RangeError('--glyphs must be a positive integer');
+  return {
+    blocks,
+    corpus,
+    glyphs,
+    name: values.get('name') ?? `internal-${suite}-${technique}-${corpus}`,
+    suite,
+    technique,
+    wasm: values.get('wasm'),
+  };
 }

@@ -67,7 +67,7 @@ browser lab, conformance, GPU timing, and payload; nothing here replaces it, and
 
 The complaint is drift, and drift has a specific cause here. Every timing number in the repository is a **median of correlated samples from one process**.
 
-[`glyph:rust-layout-benchmark`](../../../packages/glyph/scripts/benchmark-rust-layout-engine.mjs) defaults to `--warmup 8 --reps 31`: thirty-one repetitions inside a single Node process, sorted into a median, p95, and a relative standard deviation. Those thirty-one samples share one JIT state, one heap layout, and one GC history. Their spread measures how much the _loop_ varies once warm. It does not measure how much the _number_ varies when you run the command again — which is the only variance a reader actually cares about, because that is the variance a code change has to beat.
+The retired `glyph:rust-layout-benchmark` defaulted to `--warmup 8 --reps 31`: thirty-one repetitions inside a single Node process, sorted into a median, p95, and a relative standard deviation. Those thirty-one samples shared one JIT state, one heap layout, and one GC history. Their spread measured how much the _loop_ varied once warm. It did not measure how much the _number_ varied when the command ran again — which is the variance a code change has to beat.
 
 So `rsdPercent` reads low, the median looks precise to four decimals, and the number still moves between runs. The statistic is answering a different question than the one being asked of it.
 
@@ -225,7 +225,7 @@ Scope is the root Glyph API in Node against `@pmndrs/glyph`, the built-in `@pmnd
 
 Every measurement bench binds through the public Glyph/Three handle and retained paragraph surface. The fixture initializes `glyph`, creates one configured handle and named roots, loads an immutable font, and uses `measure()` and `glyphs()` for the pre-render query split. Renderer-integration measurements publish through `glyph.shape()` and synchronize the public Three objects; they do not construct internal engine, planner, or wire values. This prices the real ownership seam rather than a raw shaper shortcut.
 
-All eight paths run in plain Node against the packaged Wasm with no browser, canvas, or GPU. That is established, not assumed: `glyph:rust-layout-benchmark` drives the raw ABI in Node today, while the Labs public-layout and retained-batch files drive the full path including render-plan application. The one Node-specific wrinkle is that the shaper defaults to `fetch`-ing its Wasm relative to the module URL, so the benches pass the Wasm path explicitly, as the existing fixture helper already does.
+All eight paths run in plain Node against the packaged Wasm with no browser, canvas, or GPU. The internal Labs engine suite drives the raw ABI, while the Labs public-layout and retained-batch files drive the full path including render-plan application. The one Node-specific wrinkle is that the shaper defaults to `fetch`-ing its Wasm relative to the module URL, so the internal workflow accepts an explicit `--wasm` path for candidate comparisons.
 
 Every bench states its unit of work. The fixture is the existing `paragraphTextForGlyphs` corpus at a pinned glyph count so the numbers stay comparable to the records being replaced, and the invalidation classes are kept apart rather than averaged — a principle preserved by [`layout.bench.ts`](../../../benches/labs/package/layout.bench.ts): they invalidate different caches, so averaging them hides whichever one is slow.
 
@@ -243,7 +243,7 @@ Every bench states its unit of work. The fixture is the existing `paragraphTextF
 
 Four of these are not merely being re-implemented — **they are unmeasured today at any level**, and finding that out is part of what this exercise bought:
 
-- **4b, materialized measurement.** No existing benchmark requests the layout-inspection semantic view. `glyph:rust-layout-benchmark`'s `measure-query` case runs at the measurement mask only, so the metrics-versus-materialization split that commit `ffe65e11` created has never been measured.
+- **4b, materialized measurement.** The raw engine `measure-query` case runs at the measurement mask only; materialized public inspection is measured separately by the package Labs `glyphs` cases.
 - **5, the frame wire compile.** It is pure, synchronous, and touches no Wasm, so it is trivially isolatable — and it has only ever been timed inside a window that also contained a Wasm call.
 - **7, the cost of `copyPublication()`.** Nothing prices the contiguous copy against borrowing and decoding in place, and nothing varies acknowledgement lag.
 - **2 on CJK.** Line breaking is only swept per corpus by the Rust script; the break-heavy CJK path is where a quadratic scan once hid, and it deserves a standing bench.
@@ -343,12 +343,12 @@ A slower comparison is not itself a process failure in Labs 0.9.0. The initial w
 
 ### Replaced by labs benches
 
-| Today                            | Why it moves                                                                                                                                                            |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `glyph:rust-layout-benchmark`    | 31 in-process reps → block medians; its eight invalidation cases map directly onto benches 1–7                                                                          |
-| `glyph:layout-benchmark`         | **retired** after `layout.bench.ts` reproduced its 22k-glyph public invalidation classes and produced Labs records                                                      |
-| `glyph:retained-batch-benchmark` | **retired** after `batching.bench.ts` reproduced its 64/128/256/512 nested `Text` publication sweep, including exact one-draw and stable-glyph-count assertions         |
-| `glyph:kernel-lab` (Node)        | **retired** after the internal Labs kernel suite reproduced every scalar/auto/explicit operation at 22k and 86k target scales with output-hash and memory-growth checks |
+| Today                            | Why it moves                                                                                                                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `glyph:rust-layout-benchmark`    | **retired** after the internal Labs engine suite reproduced its retained-engine invalidation classes with selectable raster technique, corpus, glyph target, and Wasm artifact |
+| `glyph:layout-benchmark`         | **retired** after `layout.bench.ts` reproduced its 22k-glyph public invalidation classes and produced Labs records                                                             |
+| `glyph:retained-batch-benchmark` | **retired** after `batching.bench.ts` reproduced its 64/128/256/512 nested `Text` publication sweep, including exact one-draw and stable-glyph-count assertions                |
+| `glyph:kernel-lab` (Node)        | **retired** after the internal Labs kernel suite reproduced every scalar/auto/explicit operation at 22k and 86k target scales with output-hash and memory-growth checks        |
 
 The fixture and corpus helpers are reused where their ownership still fits. Workflows are retired only after their replacements produce records; replacement and deletion land in separate commits.
 
@@ -394,7 +394,7 @@ Stated plainly, because a benchmark suite that is trusted beyond its evidence is
 2. Land benches 1–3 and 7 against the existing fixture; confirm between-block spread is under 3.6 % on a maintainer machine, and raise `blocks` for any bench that is not.
 3. Land benches 4a/4b, 5, 6, and 8, including the exact-equality teardown assertions.
 4. Build the CI gate over `blocks.medians` and run it non-blocking on pull requests for long enough to measure its false-positive rate on no-op changes. Do not make it required before that number is known.
-5. Execute the retirement table; record each replacement in the decision register. The public layout and retained-batch scripts are retired; the raw Rust and Node kernel scripts remain open.
+5. Execute the retirement table; record each replacement in the decision register. The public layout, retained-batch, raw Rust, and Node kernel timers are retired.
 6. Re-pin the affected package concepts and run `docs:update` / `docs:check`.
 
 Step 4 is not optional. A gate whose false-positive rate is unknown will be disabled by the first person it blocks unfairly, and the repository will be back where it started — with benchmarks nobody trusts.
