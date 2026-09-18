@@ -1,4 +1,4 @@
-import type { FaceId } from './content';
+import type { FaceId } from '../typography/content';
 
 /** The second scene's copy. Kept apart from the first hero's content so neither can quietly reshape the other's bake. */
 

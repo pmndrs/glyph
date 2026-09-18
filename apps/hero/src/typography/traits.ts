@@ -1,5 +1,5 @@
 import { trait } from 'koota';
-import { FEATURE_LINE } from '../content';
+import { FEATURE_LINE } from './content';
 import type { TitleBodies } from './bodies';
 
 export const Title = trait(() => ({

@@ -1,16 +1,31 @@
 import { Text } from '@pmndrs/glyph/react';
-import type { Glyphs, Text as ThreeText } from '@pmndrs/glyph/three';
+import { defineTextMaterial, type Glyphs, type Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame } from '@react-three/fiber/webgpu';
 import { useEffect, useMemo, useRef } from 'react';
-import { Matrix4, type Group } from 'three/webgpu';
-import type { Faces } from '../fonts';
-import { pattern } from '../materials/ink';
-import { usePreparation } from '../startup';
+import { DoubleSide, MeshBasicNodeMaterial, Matrix4, type Group } from 'three/webgpu';
+import type { Faces } from '../typography/fonts';
+import { holeWarp } from '../sequence/warp';
+import { usePreparation } from '../view/startup';
 import { PATTERN_ANGLE, GLYPHS, cellMatrix } from './lattice';
 import { Field } from './traits';
 import { Frame } from '../sequence/traits';
 import { useQuery, useWorld } from 'koota/react';
 import type { Entity } from 'koota';
+
+/** Flat, unlit ink for the background pattern: crisp coverage, no lighting cost across hundreds of icons. */
+const pattern = defineTextMaterial((context) => {
+  if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
+  // Opaque, with alpha-to-coverage edges: the icons must write depth, or the glass has nothing behind it to refract.
+  // Depth in the field is carried by colour, not by fading them out.
+  const material = new MeshBasicNodeMaterial({ side: DoubleSide });
+  material.positionNode = context.position;
+  material.colorNode = context.shader.color;
+  // Bent round the black hole: each icon curls into the spiral as the outline is integrated where its ink came from.
+  const warp = holeWarp(context);
+  material.opacityNode = warp.coverage.mul(warp.survive);
+  material.alphaToCoverage = true;
+  return material;
+});
 
 export function FieldRenderer({ faces }: { readonly faces: Faces }) {
   return useQuery(Field).map((entity) => <IconPattern key={entity} entity={entity} faces={faces} />);

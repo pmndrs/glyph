@@ -1,9 +1,9 @@
-import { BURST_SECONDS } from '../sequence/motion';
+import { BURST_SECONDS } from './motion';
 import { defineTextMaterial } from '@pmndrs/glyph/three';
 import { color, float, mix, mx_noise_float, smoothstep, uniform, uv, vec3 } from 'three/tsl';
 import { AdditiveBlending, DoubleSide, MeshBasicNodeMaterial } from 'three/webgpu';
 
-import { uHoleBurst } from '../uniforms';
+import { uHoleBurst } from './uniforms';
 
 /** Burning surface strength; zero is the flat pastel control used by the WebGPU capture. */
 export const uEmberFire = uniform(1);

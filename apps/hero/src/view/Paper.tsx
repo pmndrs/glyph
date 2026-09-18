@@ -1,7 +1,15 @@
-import { color, dFdx, dFdy, float, mix, mx_noise_float, normalize, positionLocal, vec3 } from 'three/tsl';
-import { MeshStandardNodeMaterial } from 'three/webgpu';
+import { color, dFdx, dFdy, float, mix, mx_noise_float, normalize, positionLocal, uniform, vec3 } from 'three/tsl';
+import { MeshStandardNodeMaterial, Vector2 } from 'three/webgpu';
 
-import { uPaperDrift } from '../uniforms';
+import { PATTERN_ANGLE } from '../field/lattice';
+
+/** Paper grain follows the icon field in the paper's own plane units. */
+const uPaperDrift = uniform(new Vector2());
+
+export function updatePaper(elapsed: number): void {
+  const drift = 3.2 * (30 / 22) * elapsed;
+  uPaperDrift.value.set(Math.cos(PATTERN_ANGLE) * drift, Math.sin(PATTERN_ANGLE) * drift);
+}
 
 const WIDTH = 160;
 const HEIGHT = 90;

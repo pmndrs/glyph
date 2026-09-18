@@ -2,17 +2,17 @@ import { OrbitControls, useVideoTexture } from '@react-three/drei/webgpu';
 import { useThree } from '@react-three/fiber/webgpu';
 import { useEffect } from 'react';
 
-import clip from '../assets/sun-loop.mp4?url';
-import { useFaces } from './fonts';
-import { uDebugUv, uWordOrigin, uWordSize, uWordUvScale } from './materials/screen';
-import { CameraDrift } from './origin/CameraDrift';
-import { Floor } from './origin/Floor';
-import { FloorGlow } from './origin/FloorGlow';
-import { OriginPost } from './origin/OriginPost';
-import { StoryColumn } from './origin/StoryColumn';
-import { Studio } from './origin/Studio';
-import { VideoWord } from './origin/VideoWord';
-import { useInspector } from './useInspector';
+import clip from '../../assets/sun-loop.mp4?url';
+import { useFaces } from '../typography/fonts';
+import { uDebugUv, uWordOrigin, uWordSize, uWordUvScale } from './materials';
+import { CameraDrift } from './CameraDrift';
+import { Floor } from './Floor';
+import { FloorGlow } from './FloorGlow';
+import { OriginPost } from './OriginPost';
+import { StoryColumn } from './StoryColumn';
+import { Studio } from './Studio';
+import { VideoWord } from './VideoWord';
+import { useInspector } from '../view/useInspector';
 
 /**
  * The second hero: the word off axis over a reflector in a dark room, the letters a window onto a looping NASA clip,

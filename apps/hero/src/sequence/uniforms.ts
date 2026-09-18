@@ -1,18 +1,9 @@
-import { HOLE_CENTER, HORIZON } from './sequence/motion';
+import { HOLE_CENTER, HORIZON } from './motion';
 import { uniform } from 'three/tsl';
 import { Vector2 } from 'three/webgpu';
 
 /** Playback seconds from the scene world, held at zero until preparation completes. */
 export const uTime = uniform(0);
-/** 1 = idle float; eased toward 0 while physics owns the glyphs so shader drift cannot fight the colliders. */
-export const uFloat = uniform(1);
-/** Optional ink glitch intensity. */
-export const uCut = uniform(0);
-
-/** How far the paper grain has drifted, in its own plane units. The ground moves with the icon field: a static
- * texture under a scrolling pattern reads as a mistake. */
-export const uPaperDrift = uniform(new Vector2(0, 0));
-
 /** Shared with the glyph shaders: where the hole is, how far it reaches, how hard it bends, and how it spins. */
 export const uHoleCenter = uniform(new Vector2(HOLE_CENTER[0], HOLE_CENTER[1]));
 export const uHoleHorizon = uniform(HORIZON);

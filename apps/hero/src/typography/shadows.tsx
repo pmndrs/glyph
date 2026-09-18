@@ -53,8 +53,8 @@ import {
   type WebGPURenderer,
 } from 'three/webgpu';
 
-import { heroReady } from '../startup';
-import { uTime } from '../uniforms';
+import { heroReady } from '../view/startup';
+import { uTime } from '../sequence/uniforms';
 import { useWorld } from 'koota/react';
 import { Title } from './traits';
 

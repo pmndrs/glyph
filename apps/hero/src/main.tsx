@@ -1,4 +1,4 @@
-import './styles.css';
+import './view/styles.css';
 
 import { Canvas } from '@react-three/fiber/webgpu';
 import { StrictMode, Suspense } from 'react';
@@ -6,8 +6,8 @@ import { createRoot } from 'react-dom/client';
 import { NeutralToneMapping } from 'three/webgpu';
 
 import { Hero } from './hero';
-import { Origin } from './origin';
-import { HeroLoading } from './startup';
+import { Origin } from './origin/renderer';
+import { HeroLoading } from './view/startup';
 
 /** `?scene=origin` loads the second hero; anything else keeps the first. */
 const ORIGIN = new URLSearchParams(location.search).get('scene') === 'origin';

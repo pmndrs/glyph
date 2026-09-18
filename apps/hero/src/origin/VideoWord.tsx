@@ -4,8 +4,8 @@ import { useFrame } from '@react-three/fiber/webgpu';
 import { useMemo, useRef, useState } from 'react';
 import type { Group, Texture } from 'three/webgpu';
 
-import type { Faces } from '../fonts';
-import { screenMaterial, uWordInverse, uWordOrigin, uWordSize, uWordUvScale } from '../materials/screen';
+import type { Faces } from '../typography/fonts';
+import { screenMaterial, uWordInverse, uWordOrigin, uWordSize, uWordUvScale } from './materials';
 import { FLOOR_Y } from './Floor';
 import { advance, START, textOf } from './wordCycle';
 

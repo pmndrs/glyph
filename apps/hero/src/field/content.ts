@@ -1,3 +1,31 @@
+export type IconName =
+  | 'ankh'
+  | 'yin-yang'
+  | 'bahai'
+  | 'dharmachakra'
+  | 'om'
+  | 'hamsa'
+  | 'khanda'
+  | 'atom'
+  | 'skull'
+  | 'eye'
+  | 'crow';
+
+/** Font Awesome Free Solid 6.7.2 code points, from `benches/fixtures/fonts/font-awesome-free-6.7.2/icons.json`. */
+export const ICON_CODE_POINTS: Readonly<Record<IconName, number>> = {
+  ankh: 0xf644,
+  'yin-yang': 0xf6ad,
+  bahai: 0xf666,
+  dharmachakra: 0xf655,
+  om: 0xf679,
+  hamsa: 0xf665,
+  khanda: 0xf66d,
+  atom: 0xf5d2,
+  skull: 0xf54c,
+  eye: 0xf06e,
+  crow: 0xf520,
+};
+
 /**
  * Gem tones for the deep icon sheet, generated in OKLab so they are hue rotations of one another at a fixed
  * lightness and chroma. Picking them by eye in sRGB would make some read heavier than others; holding L constant is

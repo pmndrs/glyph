@@ -12,12 +12,12 @@ import {
   FEATURE_FIELD,
   FEATURE_LINE,
   HEADLINE,
-  ICON_CODE_POINTS,
   TITLE,
   type FaceId,
-} from '../src/content.ts';
-import { STAR_SYMBOLS } from '../src/star-symbols.ts';
-import { ORIGIN_STORY, ORIGIN_TITLE, TITLE_WORDS } from '../src/origin-content.ts';
+} from '../src/typography/content.ts';
+import { ICON_CODE_POINTS } from '../src/field/content.ts';
+import { STAR_SYMBOLS } from '../src/sequence/symbols.ts';
+import { ORIGIN_STORY, ORIGIN_TITLE, TITLE_WORDS } from '../src/origin/content.ts';
 
 const appRoot = fileURLToPath(new URL('..', import.meta.url));
 const glyph = fileURLToPath(new URL('../node_modules/.bin/glyph', import.meta.url));

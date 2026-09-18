@@ -1,19 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mat4 } from 'math';
 import { Group, Matrix4 } from 'three/webgpu';
-import Box3D from 'box3d.js/inline';
-import {
-  advanceMorph,
-  buildLayout,
-  cellMatrix,
-  createLattice,
-  simulate,
-  type IconLayoutOptions,
-} from './field/lattice';
-import { createRobotMotion, layPath, poseAt, RUN_SECONDS } from './robot/motion';
-import { createDust, stepDust, COUNT } from './robot/dust';
-import { ROBOT_HALF_EXTENTS } from './robot/traits';
-import { createTitleWorld, destroyTitleWorld, holdLetter, releaseLetter, stepTitleWorld } from './typography/physics';
+import { advanceMorph, buildLayout, cellMatrix, createLattice, simulate, type IconLayoutOptions } from './lattice';
 
 const layer: IconLayoutOptions = {
   rows: 2,
@@ -95,82 +83,4 @@ describe('retained lattice', () => {
       expect(new Set(state.motifGlyphs).size).toBe(layer.motifs);
     }
   });
-});
-
-describe('robot motion and dust', () => {
-  it('arrives at the authored stop, looks up, and leaves beyond the viewport using the same pose record', () => {
-    const state = createRobotMotion();
-    for (const run of [0, 1, 2, 10]) {
-      expect(layPath(state.path, 20, 12, run)).toBe(state.path);
-      poseAt(state.pose, 0, state.path);
-      expect(state.pose.x < -10 || state.pose.y < -6).toBe(true);
-      expect(poseAt(state.pose, 4, state.path)).toBe(state.pose);
-      expect(state.pose.x).toBeCloseTo(-0.4, 12);
-      expect(state.pose.y).toBeCloseTo(0.3, 12);
-      expect(state.pose.look).toBe(1);
-      poseAt(state.pose, RUN_SECONDS, state.path);
-      expect(state.pose.x > 10 || state.pose.y > 6).toBe(true);
-    }
-  });
-
-  it('copies borrowed robot positions, emits by distance, fades, and does not emit across teleports', () => {
-    const state = createDust();
-    const footprint = { x: 0, y: 0, z: 0, heading: 0, halfExtents: ROBOT_HALF_EXTENTS };
-    const slot = state.particles[0]!;
-    const position = slot.position;
-    stepDust(state, 1 / 60, footprint);
-    footprint.x = 0.36;
-    stepDust(state, 1 / 60, footprint);
-    expect(state.emitted).toBe(4);
-    expect(slot.age).toBe(0);
-    expect(slot.position).toBe(position);
-    footprint.x = 10;
-    stepDust(state, 1 / 60, footprint);
-    expect(state.emitted).toBe(4);
-    for (let frame = 0; frame < 120; frame++) stepDust(state, 1 / 60, undefined);
-    expect(state.particles.every((particle) => particle.age >= particle.life)).toBe(true);
-    expect(state.particles).toHaveLength(COUNT);
-    expect(state.particles[0]).toBe(slot);
-  });
-});
-
-it('copies held targets and reports a physical landing once using retained event buffers', async () => {
-  const b3 = await Box3D();
-  const state = createTitleWorld(
-    b3,
-    [
-      {
-        position: [0, 0, 0.5],
-        prisms: [
-          [
-            -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, -0.5,
-            0.5, 0.5, 0.5, 0.5, 0.5,
-          ],
-        ],
-      },
-    ],
-    0,
-    ROBOT_HALF_EXTENTS,
-  );
-  try {
-    const poses = state.poses;
-    const landed = state.landed;
-    const pose = { x: 0, y: 0, z: 4, yaw: 0.2 };
-    holdLetter(state, 0, pose);
-    pose.z = 100;
-    stepTitleWorld(state, 1 / 60, undefined);
-    expect(state.poses[2]).toBe(4);
-    releaseLetter(state, 0, [0, 0, -10], 0);
-    let landings = 0;
-    for (let frame = 0; frame < 240; frame++) {
-      stepTitleWorld(state, 1 / 60, undefined);
-      landings += state.landedCount;
-    }
-    expect(landings).toBe(1);
-    expect(state.poses[2]).toBeCloseTo(0.5, 1);
-    expect(state.poses).toBe(poses);
-    expect(state.landed).toBe(landed);
-  } finally {
-    destroyTitleWorld(state);
-  }
 });

@@ -1,7 +1,6 @@
 import { clamp, euler, mat4, quat, vec3, type Mat4 } from 'math';
 import { mulberry32 } from 'math/random';
-import { ICON_CODE_POINTS, type IconName, type Vec3 } from '../content';
-import { GEM_TONES } from '../materials/gems';
+import { ICON_CODE_POINTS, GEM_TONES, type IconName } from './content';
 import { release, swirl } from '../sequence/departure';
 
 /** Scroll direction, as an angle from the x axis. Both layers share it, so the field moves as one. */
@@ -90,7 +89,7 @@ interface CellSpec {
   readonly key: string;
   readonly motif: number;
   readonly colour: string;
-  readonly position: Vec3;
+  readonly position: readonly [x: number, y: number, z: number];
   /** Seconds after a motif change before this cell starts its flip. */
   readonly delay: number;
 }

@@ -1,7 +1,7 @@
 import { Text, TextGroup } from '@pmndrs/glyph/react';
-import { emberMaterial } from '../materials/embers';
-import { STAR_SYMBOLS } from '../star-symbols';
-import type { Faces } from '../fonts';
+import { emberMaterial } from './embers';
+import { STAR_SYMBOLS } from './symbols';
+import type { Faces } from '../typography/fonts';
 import { jitter } from './departure';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useMemo, useRef } from 'react';
@@ -20,12 +20,12 @@ import {
   uHoleSpin,
   uHoleShake,
   uHoleCamera,
-} from '../uniforms';
+} from './uniforms';
 import { useWorld } from 'koota/react';
 import { Sequence } from './traits';
 import { clamp } from 'math';
 import { easing } from 'math/time';
-import { heroReady, textPrepared, usePreparation } from '../startup';
+import { heroReady, textPrepared, usePreparation } from '../view/startup';
 
 /** The hole sits in front of the title; the black sheet covers everything at the end. The lens over the whole
  * frame is the post-processing pass's. */

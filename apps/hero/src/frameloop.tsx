@@ -5,9 +5,9 @@ import { Frame, Sequence } from './sequence/traits';
 import { sequenceActions } from './sequence/actions';
 import { robotActions } from './robot/actions';
 import { advanceHero } from './systems';
-import { heroReady } from './startup';
-import { PATTERN_ANGLE } from './field/lattice';
-import { uPaperDrift, uTime } from './uniforms';
+import { heroReady } from './view/startup';
+import { updatePaper } from './view/Paper';
+import { uTime } from './sequence/uniforms';
 
 export function FrameLoop() {
   const world = useWorld();
@@ -65,8 +65,7 @@ export function FrameLoop() {
       frame.pointer.y = pointer.y;
       advanceHero(world, delta, performance.now());
       uTime.value = frame.elapsed;
-      const drift = 3.2 * (30 / 22) * frame.elapsed;
-      uPaperDrift.value.set(Math.cos(PATTERN_ANGLE) * drift, Math.sin(PATTERN_ANGLE) * drift);
+      updatePaper(frame.elapsed);
     },
     { id: 'hero-simulation', phase: 'physics', fps: 60 },
   );

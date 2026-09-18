@@ -10,4 +10,4 @@ The license is also included in the application's built `notices.txt`.
 `mise exec -- pnpm scripts run hero:star-font` restores these source files from the pinned revision;
 add `-- --check` to compare without writing.
 `mise exec -- pnpm scripts run hero:bake -- --only=stars` bakes only the six Unicode stars declared in
-`src/star-symbols.ts` into `assets/stars.font.glb`; add `--check` to verify the bake.
+`src/sequence/symbols.ts` into `assets/stars.font.glb`; add `--check` to verify the bake.

@@ -12,10 +12,10 @@ import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { Box3, Vector3, Matrix4 } from 'three/webgpu';
 
 import titleFace from '../../fonts/geist-1.7.2/Geist-Black.ttf?url';
-import { TITLE, FEATURE_LINE } from '../content';
-import { heroReady, usePreparation } from '../startup';
-import type { Faces, MsdfFont } from '../fonts';
-import { stainedGlassLetters, titleOrigin } from '../materials/ink';
+import { TITLE, FEATURE_LINE } from './content';
+import { heroReady, usePreparation } from '../view/startup';
+import type { Faces, MsdfFont } from './fonts';
+import { stainedGlassLetters, titleOrigin } from './materials';
 import { loadFont, solidOf } from './outline';
 import { type Letter, type TitleBodies, createTitleBodies, disposeTitle } from './bodies';
 

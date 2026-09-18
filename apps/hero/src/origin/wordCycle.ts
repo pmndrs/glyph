@@ -1,4 +1,4 @@
-import { TITLE_WORDS, type TitleWord } from '../origin-content';
+import { TITLE_WORDS, type TitleWord } from './content';
 
 /**
  * The cycle, precomputed. Words advance by grapheme cluster rather than by code unit: Hindi carries combining marks

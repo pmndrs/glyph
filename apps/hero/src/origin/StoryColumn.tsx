@@ -4,9 +4,9 @@ import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useRef } from 'react';
 import type { Group } from 'three/webgpu';
 
-import type { Faces } from '../fonts';
-import { storyMaterial } from '../materials/screen';
-import { ORIGIN_STORY } from '../origin-content';
+import type { Faces } from '../typography/fonts';
+import { storyMaterial } from './materials';
+import { ORIGIN_STORY } from './content';
 
 /**
  * The origin story, justified into one column on the right. It has to finish above the floor plane: the reflector is

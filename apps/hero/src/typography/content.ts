@@ -1,3 +1,5 @@
+import type { IconName } from '../field/content';
+
 /** Every word on screen, its face, and where it floats. The bake script derives font subsets from this file. */
 
 export type FaceId =
@@ -15,35 +17,7 @@ export type FaceId =
   | 'devanagari'
   | 'cjk';
 
-export type IconName =
-  | 'ankh'
-  | 'yin-yang'
-  | 'bahai'
-  | 'dharmachakra'
-  | 'om'
-  | 'hamsa'
-  | 'khanda'
-  | 'atom'
-  | 'skull'
-  | 'eye'
-  | 'crow';
-
-/** Font Awesome Free Solid 6.7.2 code points, from `benches/fixtures/fonts/font-awesome-free-6.7.2/icons.json`. */
-export const ICON_CODE_POINTS: Readonly<Record<IconName, number>> = {
-  ankh: 0xf644,
-  'yin-yang': 0xf6ad,
-  bahai: 0xf666,
-  dharmachakra: 0xf655,
-  om: 0xf679,
-  hamsa: 0xf665,
-  khanda: 0xf66d,
-  atom: 0xf5d2,
-  skull: 0xf54c,
-  eye: 0xf06e,
-  crow: 0xf520,
-};
-
-export type Vec3 = readonly [x: number, y: number, z: number];
+type Position = readonly [x: number, y: number, z: number];
 
 export const TITLE = { text: 'Glyph', face: 'geist-black', fontSize: 2.6, position: [0, 0.55, 0] } as const;
 
@@ -69,14 +43,14 @@ export const HEADLINE = {
   face: 'geist-medium',
   fontSize: 0.36,
   position: [0, -0.95, 0],
-} as const satisfies { text: string; face: FaceId; fontSize: number; position: Vec3 };
+} as const satisfies { text: string; face: FaceId; fontSize: number; position: Position };
 
 export interface BackgroundWord {
   readonly text?: string;
   readonly face?: FaceId;
   readonly icon?: IconName;
   readonly fontSize: number;
-  readonly position: Vec3;
+  readonly position: Position;
   /** Rotation about Z in radians. */
   readonly roll: number;
 }

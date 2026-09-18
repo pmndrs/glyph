@@ -5,7 +5,7 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:698ef521bf584047f06283364cbcf17b572013c1f3ee47c6a6b9700097f791eb'
+source_digest: 'sha256:a05a7c489e7d99a83b1a127882394dd80cb01ec02a30160a30c424f2f952eaa9'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: manifest
@@ -15,14 +15,11 @@ sources:
     resource: ../../../apps/hero/src/hero.tsx
     title: Default scene composition
   - id: origin-scene
-    resource: ../../../apps/hero/src/origin.tsx
+    resource: ../../../apps/hero/src/origin/renderer.tsx
     title: Origin scene composition
   - id: glass-material
-    resource: ../../../apps/hero/src/materials/ink.ts
+    resource: ../../../apps/hero/src/typography/materials.ts
     title: Glass title materials and smooth lens normals
-  - id: theme
-    resource: ../../../apps/hero/src/theme.ts
-    title: Conference talk brand accents
   - id: refraction-check
     resource: ../../../apps/hero/scripts/refraction.probe.ts
     title: WebGPU stained-glass verification
@@ -33,7 +30,7 @@ sources:
     resource: ../../../apps/hero/scripts/glass-shadows.probe.ts
     title: WebGPU projection controls
   - id: screen-material
-    resource: ../../../apps/hero/src/materials/screen.ts
+    resource: ../../../apps/hero/src/origin/materials.ts
     title: Video mask and metal story materials
   - id: word-cycle
     resource: ../../../apps/hero/src/origin/wordCycle.ts
@@ -60,13 +57,13 @@ sources:
     resource: ../../../apps/hero/src/sequence/motion.ts
     title: Pure black-hole beat timeline
   - id: hole-warp
-    resource: ../../../apps/hero/src/materials/hole-warp.ts
+    resource: ../../../apps/hero/src/sequence/warp.ts
     title: Outline-exact glyph warp around the hole
   - id: screen-ink
-    resource: ../../../apps/hero/src/materials/screen-ink.ts
+    resource: ../../../apps/hero/src/robot/material.ts
     title: Pixels lit on the robot's face screen
   - id: startup
-    resource: ../../../apps/hero/src/startup.tsx
+    resource: ../../../apps/hero/src/view/startup.tsx
     title: Scene preparation and GPU completion gate
   - id: retained-line
     resource: ../../../apps/hero/src/typography/retained-line.ts
@@ -86,9 +83,15 @@ sources:
   - id: dust-simulation
     resource: ../../../apps/hero/src/robot/dust.ts
     title: Fixed particle storage and distance-based emission
-  - id: simulation-check
-    resource: ../../../apps/hero/src/simulation.test.ts
-    title: Matrix equivalence, motion, storage reuse, and physical landing checks
+  - id: lattice-check
+    resource: ../../../apps/hero/src/field/lattice.test.ts
+    title: Matrix equivalence, bounded simulation, and edge-on morph checks
+  - id: robot-motion-check
+    resource: ../../../apps/hero/src/robot/motion.test.ts
+    title: Motion endpoints, borrowed footprints, and retained dust checks
+  - id: physics-check
+    resource: ../../../apps/hero/src/typography/physics.test.ts
+    title: Physical landing and retained event buffer checks
   - id: world
     resource: ../../../apps/hero/src/world.ts
     title: Koota world and retained domain entities
@@ -132,10 +135,17 @@ actions. Replay closes held finales, clears inspection poses, and waits for a fr
 or restarting the robot.
 
 Related views share each domain's `renderer.tsx`; numerical kernels and the large shadow pass stay separate where
-they have independent responsibilities. The old, unmounted break/rewind presentation and its exclusive director and
-compressed recording code/tests were removed. The source inventory is 60 files, down from 65 before this migration;
-the alternate origin scene remains separate. New headless tests exercise preparation, world isolation, stale cue
-rejection, and two complete replay cycles using real Box3D landings and the same retained buffers.
+they have independent responsibilities. The source root contains only six application-wide files: `main.tsx`,
+`hero.tsx`, `world.ts`, `systems.ts`, `frameloop.tsx`, and the cross-domain `world.test.ts`. Typography owns fonts, copy,
+glass materials, and brand accents; field owns its icon catalog, palette, and flat material; robot owns its face
+material; sequence owns finale uniforms, warp, stars, and post-processing. The `view` domain owns preparation,
+inspection, page styles, lighting, and paper; `origin` owns its composition, copy, and materials. Domain tests live
+beside their implementations.
+
+The old, unmounted break/rewind presentation and its exclusive director and compressed recording code/tests were
+removed during the Koota migration. The root cleanup also removed retired ink, glass, and silhouette variants and
+their unused uniforms. Materials and post-processing now live in their domains. The 15 tests include preparation,
+world isolation, stale cue rejection, and two complete replay cycles using real Box3D landings and retained buffers.
 
 The application pins Poimandres' `math` package at `0.1.0` for the default scene's CPU simulation and transforms. Its upstream
 skill is installed at `.agents/skills/math/SKILL.md` from `pmndrs/math` commit
@@ -210,13 +220,13 @@ its edges. After a brief empty hold, sixteen pastel Unicode stars (★ ☆ ✦ �
 light sparks. The stars shrink like embers, with enhanced bloom and a 1.25-second fade applied after composition so their halos dim along with their cores; the output is exactly black by 4.6 seconds and stays there until Space replays. `?post=0` remains a plain
 scene capture control and omits the paper warp, bloom, composed ember fade, and screen-space light sparks.
 
-The ember material in `src/materials/embers.ts` keeps the exact Slug star silhouettes and shades each glyph's
+The ember material in `src/sequence/embers.ts` keeps the exact Slug star silhouettes and shades each glyph's
 own quad with a creamy hot core, an amber rim, moving fire noise, and gentle asynchronous flicker. As the stars
 shrink, the surface cools toward orange; the composed stars and bloom still fade together. The WebGPU capture
 compares this surface against a flat pastel control.
 
 The six star shapes are baked from the vendored OFL Noto Sans Symbols 2 face, with the symbols shared between the
-bake and the burst in `src/star-symbols.ts`. `hero:star-font` restores the pinned source and license, and
+bake and the burst in `src/sequence/symbols.ts`. `hero:star-font` restores the pinned source and license, and
 `hero:bake -- --only=stars` regenerates the tiny Slug subset. Both accept `--check`.
 
 The timeline and feature-glyph paths are pure functions, with tests for release continuity, acceleration, completion,
@@ -273,7 +283,7 @@ the migration does not claim a fresh 60 fps measurement. A CPU profile placed mo
 rendering work; it does not establish the cause of the slowdown shared by both versions.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
-Its five inline glass materials use that talk's brand accents, copied into `src/theme.ts`: red G, orange l,
+Its five inline glass materials use that talk's brand accents, copied into `src/typography/materials.ts`: red G, orange l,
 teal y, blue p, and purple h. The same attenuation colors tint their projected light. The feature line sits below the lowercase descenders.
 Each has its own attenuation tint, thickness, roughness, and refractive index, with smooth lens normals and modest
 physical dispersion. The paper and icon background stay unchanged; there are no added crystal lights, internal

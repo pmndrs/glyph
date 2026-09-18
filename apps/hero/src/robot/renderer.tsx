@@ -1,6 +1,6 @@
 import { COUNT, BASE_Z, RISE } from './dust';
 import { jitter } from '../sequence/departure';
-import { ICON_CODE_POINTS } from '../content';
+import { ICON_CODE_POINTS } from '../field/content';
 import { Text, TextGroup } from '@pmndrs/glyph/react';
 import { defineTextMaterial, type Text as ThreeText } from '@pmndrs/glyph/three';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
@@ -37,15 +37,15 @@ import {
 } from 'three/webgpu';
 
 import robotUrl from '../../assets/robot.glb?url';
-import type { Faces } from '../fonts';
-import { screenInk } from '../materials/screen-ink';
+import type { Faces } from '../typography/fonts';
+import { screenInk } from './material';
 import { LOOK_UP_AT, LOOK_DOWN_AT } from './motion';
 import { mat4, quat, vec3 as vector3 } from 'math';
 import { Robot as RobotTrait } from './traits';
 import { Frame } from '../sequence/traits';
 import { useWorld, useQuery } from 'koota/react';
 import type { Entity } from 'koota';
-import { heroReady, textPrepared, usePreparation } from '../startup';
+import { heroReady, textPrepared, usePreparation } from '../view/startup';
 import { type RetainedLine, createRetainedLine, disposeLine, showLine } from '../typography/retained-line';
 
 /**

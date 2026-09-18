@@ -1,5 +1,5 @@
 import type { World } from 'koota';
-import { FEATURE_LINE } from '../content';
+import { FEATURE_LINE } from './content';
 import { Frame, Sequence } from '../sequence/traits';
 import { sequenceActions } from '../sequence/actions';
 import { Robot } from '../robot/traits';

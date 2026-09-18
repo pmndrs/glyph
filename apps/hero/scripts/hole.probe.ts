@@ -24,17 +24,17 @@ const { COLLAPSE_SECONDS, POP_AT } = (await import(
   new URL('/src/sequence/motion.ts', location.origin).href
 )) as typeof import('../src/sequence/motion');
 const { uHoleCollapse, uHoleBloom } = (await import(
-  new URL('/src/uniforms.ts', location.origin).href
-)) as typeof import('../src/uniforms');
+  new URL('/src/sequence/uniforms.ts', location.origin).href
+)) as typeof import('../src/sequence/uniforms');
 const { sequenceActions } = (await import(
   new URL('/src/sequence/actions.ts', location.origin).href
 )) as typeof import('../src/sequence/actions');
 const { uEmberFire } = (await import(
-  new URL('/src/materials/embers.ts', location.origin).href
-)) as typeof import('../src/materials/embers');
+  new URL('/src/sequence/embers.ts', location.origin).href
+)) as typeof import('../src/sequence/embers');
 const { STAR_SYMBOLS } = (await import(
-  new URL('/src/star-symbols.ts', location.origin).href
-)) as typeof import('../src/star-symbols');
+  new URL('/src/sequence/symbols.ts', location.origin).href
+)) as typeof import('../src/sequence/symbols');
 const handles = globalThis as {
   heroWorld?: import('koota').World;
   heroHole?: { state(): import('../src/sequence/motion').HoleState };

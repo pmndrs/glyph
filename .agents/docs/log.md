@@ -2,6 +2,12 @@
 
 ## 2026-09-18
 
+- **Kept hero's root application-wide** — Reduced `apps/hero/src` root from 17 files to six by placing fonts,
+  content, uniforms, materials, preparation, inspection, and origin composition in their owning domains. Colocated
+  the existing simulation tests and removed unused material variants and their uniforms. Bake inputs and runtime
+  preparation remain intact. Typecheck, lint, formatting, build, all 15 tests, and the finale and glass-shadow
+  WebGPU checks pass. See [the hero reference](packages/hero.md).
+
 - **Moved hero into compact Koota domains** — Pinned Koota canary `0.6.6-canary.63c1187`, replaced scene globals and
   component simulation with world-owned traits, actions, and ordered systems, and retained math/physics buffers.
   Combined related renderers and removed the unmounted break/rewind implementation, reducing `src` from 65 files to 60. Fifteen focused tests include two complete headless replay cycles. WebGPU replays found no late resources;
