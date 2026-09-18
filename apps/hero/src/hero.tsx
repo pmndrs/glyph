@@ -3,13 +3,19 @@ import { useEffect } from 'react';
 
 import { useFaces, useFeatureField } from './fonts';
 import { Post } from './post/Post';
+import { BlackHole } from './scene/BlackHole';
 import { FeatureLine } from './scene/FeatureLine';
 import { GlassShadows } from './scene/GlassShadows';
 import { GlassTitle } from './scene/GlassTitle';
+import { GlyphBurst } from './scene/GlyphBurst';
 import { IconPattern, PATTERN_ANGLE } from './scene/IconPattern';
 import { Lighting } from './scene/Lighting';
 import { Paper } from './scene/Paper';
+import { Robot } from './scene/Robot';
+import { RobotDust } from './scene/RobotDust';
 import { uPaperDrift, uTime } from './uniforms';
+import { useInspector } from './useInspector';
+import { heroReady, PrepareHero } from './startup';
 
 /** The paper sits deeper than the front sheet, so it drifts faster in world units to match it on screen. */
 const PAPER_DRIFT = 3.2 * (30 / 22);
@@ -18,6 +24,7 @@ const PAPER_DRIFT = 3.2 * (30 / 22);
 const POST_ENABLED = new URLSearchParams(location.search).get('post') !== '0';
 
 export function Hero() {
+  useInspector();
   const faces = useFaces();
   const featureField = useFeatureField();
   const scene = useThree((state) => state.scene);
@@ -26,41 +33,12 @@ export function Hero() {
     // Development-only handle for inspecting the scene from DevTools.
     if (!import.meta.env.DEV) return;
     Object.assign(globalThis, { heroScene: scene, heroRenderer: renderer });
-    // Three's own WebGPU inspector, the panel the threejs.org examples carry. The renderer calls `init` on whatever
-    // inspector it holds while it is starting up, which is before this can assign one, so it is called here instead;
-    // and the inspector builds its own DOM but leaves attaching it to the host. D hides and shows it.
-    let panel: HTMLElement | undefined;
-    let shown = false;
-    // StrictMode mounts effects twice, and this import resolves after the first cleanup. Without the guard that run
-    // still appends a panel — an orphan whose key listener is already gone — and D then toggles the wrong one.
-    let cancelled = false;
-    const toggle = (event: KeyboardEvent) => {
-      if (panel === undefined || (event.key !== 'd' && event.key !== 'D')) return;
-      event.preventDefault();
-      shown = !shown;
-      // Not the inspector's own `hide`, which only collapses the readout inside the panel. Recording needs the whole
-      // thing gone from the frame.
-      panel.style.display = shown ? '' : 'none';
-    };
-    window.addEventListener('keydown', toggle);
-    void import('three/addons/inspector/Inspector.js').then((module) => {
-      if (cancelled) return;
-      const created = new module.Inspector();
-      renderer.inspector = created;
-      created.init();
-      panel = created.domElement;
-      panel.style.display = 'none';
-      document.body.append(panel);
-    });
-    return () => {
-      cancelled = true;
-      window.removeEventListener('keydown', toggle);
-      panel?.remove();
-    };
   }, [renderer, scene]);
 
   useFrame(
-    ({ elapsed }) => {
+    (_, delta) => {
+      if (!heroReady()) return;
+      const elapsed = uTime.value + delta;
       uTime.value = elapsed;
       uPaperDrift.value.set(
         Math.cos(PATTERN_ANGLE) * PAPER_DRIFT * elapsed,
@@ -72,6 +50,7 @@ export function Hero() {
 
   return (
     <>
+      <PrepareHero postProcessing={POST_ENABLED} />
       <Lighting />
       <Paper />
       {/* Deeper sheet: pitch AND scroll speed scaled by the depth ratio (25.5 / 22), so it matches the front on
@@ -121,6 +100,10 @@ export function Hero() {
       <GlassTitle faces={faces} />
       <GlassShadows />
       <FeatureLine field={featureField} />
+      <Robot faces={faces} />
+      <RobotDust faces={faces} />
+      <BlackHole />
+      <GlyphBurst faces={faces} />
       {POST_ENABLED ? <Post /> : null}
     </>
   );

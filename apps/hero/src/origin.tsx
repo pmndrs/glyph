@@ -12,12 +12,14 @@ import { OriginPost } from './origin/OriginPost';
 import { StoryColumn } from './origin/StoryColumn';
 import { Studio } from './origin/Studio';
 import { VideoWord } from './origin/VideoWord';
+import { useInspector } from './useInspector';
 
 /**
  * The second hero: the word off axis over a reflector in a dark room, the letters a window onto a looping NASA clip,
  * and that same clip lighting them from the environment. The story column sits to the right, justified.
  */
 export function Origin() {
+  useInspector();
   const faces = useFaces();
   const video = useVideoTexture(clip, { loop: true, muted: true, playbackRate: 2.2, start: true });
   const scene = useThree((state) => state.scene);
@@ -33,32 +35,6 @@ export function Origin() {
       heroCamera: camera,
       heroUv: { uWordOrigin, uWordSize, uWordUvScale, uDebugUv },
     });
-    let panel: HTMLElement | undefined;
-    let shown = false;
-    // StrictMode mounts effects twice, and this import resolves after the first cleanup. Without the guard that run
-    // still appends a panel — an orphan whose key listener is already gone — and D then toggles the wrong one.
-    let cancelled = false;
-    const toggle = (event: KeyboardEvent) => {
-      if (panel === undefined || (event.key !== 'd' && event.key !== 'D')) return;
-      event.preventDefault();
-      shown = !shown;
-      panel.style.display = shown ? '' : 'none';
-    };
-    window.addEventListener('keydown', toggle);
-    void import('three/addons/inspector/Inspector.js').then((module) => {
-      if (cancelled) return;
-      const inspector = new module.Inspector();
-      renderer.inspector = inspector;
-      inspector.init();
-      panel = inspector.domElement;
-      panel.style.display = 'none';
-      document.body.append(panel);
-    });
-    return () => {
-      cancelled = true;
-      window.removeEventListener('keydown', toggle);
-      panel?.remove();
-    };
   }, [camera, renderer, scene, video]);
 
   return (

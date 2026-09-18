@@ -19,6 +19,8 @@ function ready() {
   });
   return feature && scene?.environment && scene.getObjectByName('glass-shadows');
 }
+while (document.documentElement.dataset.heroState !== 'ready')
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 while (!ready()) await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 const state = _roots.values().next().value?.store.getState();
 if (state === undefined) throw new Error('Hero did not mount');

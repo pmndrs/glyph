@@ -6,16 +6,17 @@
   "ignorePatterns": [
     "**/.cache/**",
     "**/target/**",
+    ".agents/docs/planning/extensions/**/*.json",
+    "apps/hero/assets/**",
     "benches/dist/**",
     "benches/fixtures/**",
     "benches/vitexec/admission.probe.ts",
-    ".agents/docs/planning/extensions/**/*.json",
+    "packages/**/src/**/generated/**",
+    "packages/**/tests/fixtures/**",
     "packages/font-baker/src/schemas/**",
     "packages/glyph/dist/**",
     "packages/glyph/rust/mtsdf-admission/evidence/**",
     "packages/glyph/src/bakers/schemas/**",
-    "packages/glyph/src/font-baker/schemas/**",
-    "packages/**/src/**/generated/**",
-    "packages/**/tests/fixtures/**"
+    "packages/glyph/src/font-baker/schemas/**"
   ]
 }

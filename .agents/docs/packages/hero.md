@@ -5,7 +5,7 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:5b53b398500b9ed8656b82415fe5a3b1a2136ae7263a630f55d8dbce3577571c'
+source_digest: 'sha256:c19393ad34a9085ba617e41d76ee755764d21e7c46ef22b487d5534705c21b8d'
 tags: [package, example, react-three-fiber, webgpu, slug, vite]
 sources:
   - id: manifest
@@ -41,6 +41,45 @@ sources:
   - id: bake
     resource: ../../../apps/hero/scripts/bake.mts
     title: Face baking and staleness check
+  - id: robot
+    resource: ../../../apps/hero/src/scene/Robot.tsx
+    title: Robot drive, look-up, and floor footprint
+  - id: robot-dust
+    resource: ../../../apps/hero/src/scene/RobotDust.tsx
+    title: Movement-driven glyph particle trail
+  - id: robot-dust-check
+    resource: ../../../apps/hero/scripts/robot-dust.probe.ts
+    title: WebGPU glyph dust and fade controls
+  - id: title-world
+    resource: ../../../apps/hero/src/physics/title-world.ts
+    title: Box3D world for the letters and the robot
+  - id: outline
+    resource: ../../../apps/hero/src/scene/outline.ts
+    title: Letter outlines cut into invisible colliders
+  - id: robot-pack
+    resource: ../../../apps/hero/scripts/robot.mts
+    title: Robot glTF packing and staleness check
+  - id: hole
+    resource: ../../../apps/hero/src/scene/hole.ts
+    title: Black hole beat timeline and shared uniforms
+  - id: hole-warp
+    resource: ../../../apps/hero/src/materials/hole-warp.ts
+    title: Outline-exact glyph warp around the hole
+  - id: screen-ink
+    resource: ../../../apps/hero/src/materials/screen-ink.ts
+    title: Pixels lit on the robot's face screen
+  - id: startup
+    resource: ../../../apps/hero/src/startup.tsx
+    title: Scene preparation and GPU completion gate
+  - id: retained-line
+    resource: ../../../apps/hero/src/scene/retained-line.ts
+    title: Prepared glyph records for typing and replay
+  - id: performance-check
+    resource: ../../../apps/hero/scripts/performance.probe.ts
+    title: Two-cycle WebGPU performance and late-resource check
+  - id: retained-lines-check
+    resource: ../../../apps/hero/scripts/retained-lines.probe.ts
+    title: Retained typing compared with independently shaped prefixes
 generated:
   by: anthropic/claude-opus-5
   at: '2026-09-18T09:20:00Z'
@@ -52,15 +91,100 @@ This Vite application is a showcase rather than an API demonstration: each scene
 technique visible. Both run on `WebGPURenderer` through React Three Fiber v10 and drei v11, and both draw their
 text with the Slug raster, whose analytic coverage is what the techniques depend on.
 
-The default scene builds two interleaved lattices of occult icons on mass-spring grids at different depths, scaled
+The default scene builds two interleaved lattices of eleven icons on mass-spring grids at different depths, scaled
 so they interleave on screen and stay in phase. The Slug-glass `Glyph` and feature line start at rest. Press Space
-to lift the title towards the camera and slam it back into place. Each pane follows the original eased approach,
-35 ms after its neighbour, with a separate impact through both lattices on landing. A slight tilt (at most 1.5°)
-and drift make the approach less rigid; a gentle settle returns it home within 380 ms of contact. The feature line retypes after
-the final landing. Holding Space does not restart the animation, and focused form controls retain their normal
-keyboard behavior.
+to lift the title towards the camera and smash it back down. The lift is carried, 35 ms per letter, to just short
+of the camera; the fall is simulated. Each letter is a rigid body in a Box3D world with a static floor: it is thrown
+down with a little sideways drift and spin, rebounds once, and comes to rest wherever friction stops it, a touch off
+its mark and off square, differently on every replay. The floor's first contact with each letter is what strikes
+the lattices, so the impacts land where the letters actually do. The feature line retypes after the final landing.
+Holding Space does not restart the animation, and focused form controls retain their normal keyboard behavior.
 
-The development inspector starts hidden in both scenes; D toggles it.
+A small robot treats the screen as its floor: Sketchfab's _Cute Home Robot_ by Yandrack (CC-BY-4.0; the credit
+ships in the build's `notices.txt`). It drives in from the bottom left along a meandering diagonal whose phase
+changes every run, stops over the title, rocks back on its wheels and turns its face up to the camera, then drives
+off the top right. While it looks up, its face screen glitches its eyes out in torn bands and prints `PMNDRS` a letter at a time
+in the pixel face, lit like the display it sits on, then glitches the eyes back as it looks down; the text rides
+the head joint, placed from the screen's measured extent in that joint's frame. It runs once after the page loads
+and again 1.4 s after every replay's landing. On the floor it
+is a kinematic body in the same world, a rounded box the size of its body driven to its path each frame, so
+nothing stops it: the letters slide and turn where it shoves them and stay wherever they end up. The letters stay
+glyph's: once the paragraph has committed it is broken apart with `Text.breakApart()`, and each pane's glyph copy
+follows its body through `Glyphs.setMatrixAt()`, so a lift is real depth and a shove is a real move while shaping
+and the stained-glass materials remain the paragraph's own. Only the colliders come from outside glyph: the same
+Geist Black outlines, read at run time with opentype.js, triangulated and extruded into invisible prisms, so
+contact happens exactly where a letter is drawn.
+
+While driving, the robot kicks up small, randomly varied Slug icon glyphs behind both wheels. A fixed pool of 128
+particles emits by distance travelled, so the trail thins as it slows and stops emitting while it looks up. The
+glyphs drift outward in world space, tumble, shrink, and fade as they rise; existing particles finish fading after
+the robot leaves. The pool reuses the baked icon face and one transparent material without reshaping text per frame.
+`mise exec -- pnpm scripts run hero:robot-dust-check` observes the real drive-in on WebGPU and compares the trail
+with hidden and fully faded controls, saving a capture under `apps/hero/.cache/robot-dust.png`.
+
+The moment the robot's body is off the screen, a black hole opens at the centre, so the pull lands a beat after it has gone. Each glyph accelerates directly into a tightening spiral as the field reaches it:
+the icon sheets keep scrolling and changing motifs, slowing under a strengthening field that releases nearby
+glyphs before distant ones and stretches them along their velocity;
+the title's letters follow cubic spiral paths from their actual robot-shoved positions; and the feature line is
+broken apart into independently animated glyphs. Title motion is carried by the existing kinematic bodies during
+the finale, then restored to the lift-and-smash sequence on Space. The Slug materials still bend each outline
+through `coverageAt`, anchored at the glyph's own centre.
+
+The final pull takes the whole rendered frame, including the paper, shadows, and remaining particles. A post-process
+inverse mapping twists and shrinks that sheet into the centre between 2.15 and 3.12 seconds, exposing black behind
+its edges. After a brief empty hold, sixteen pastel Unicode stars (★ ☆ ✦ ✧ ✩ ✶) spit outward at 3.35 seconds with a few small
+light sparks. The stars shrink like embers, with enhanced bloom and a 1.25-second fade applied after composition so their halos dim along with their cores; the output is exactly black by 4.6 seconds and stays there until Space replays. `?post=0` remains a plain
+scene capture control and omits the paper warp, bloom, composed ember fade, and screen-space light sparks.
+
+The ember material in `src/materials/embers.ts` keeps the exact Slug star silhouettes and shades each glyph's
+own quad with a creamy hot core, an amber rim, moving fire noise, and gentle asynchronous flicker. As the stars
+shrink, the surface cools toward orange; the composed stars and bloom still fade together. The WebGPU capture
+compares this surface against a flat pastel control.
+
+The six star shapes are baked from the vendored OFL Noto Sans Symbols 2 face, with the symbols shared between the
+bake and the burst in `src/star-symbols.ts`. `hero:star-font` restores the pinned source and license, and
+`hero:bake -- --only=stars` regenerates the tiny Slug subset. Both accept `--check`.
+
+The timeline and feature-glyph paths are pure functions, with tests for release continuity, acceleration, completion,
+and clearing a held beat on replay. The development handle `heroHole` opens, freezes, or dismisses the beat.
+`mise exec -- pnpm scripts run hero:hole-check` steps the actual WebGPU scene through six moments, compares collapsed
+paper against an uncollapsed control, checks the luminous glyphs against a hidden control and the exact black frame, and verifies replay restores the
+paper. It also checks the bloom against a disabled control and confirms stars and their bloom still linger at 0.8 seconds. Its filmstrip is saved at `apps/hero/.cache/hole.png`.
+
+`mise exec -- pnpm scripts run hero:robot` packs the Sketchfab download (a multi-file glTF with 2048² textures)
+into the single `assets/robot.glb` the app imports: the model's own floor disc is dropped, textures are reduced to
+1024² WebP, and the animation is resampled. `--check` verifies the committed file is what the source still packs to.
+
+Both scenes cap their main render job at 60 fps through R3F v10's native scheduler. The default scene's
+offscreen glass-shadow job is capped separately: Canvas's limit does not throttle update jobs.
+The development inspector loads on the first D press. Hiding it drains pending timestamp reads, restores
+the renderer's original inspector and timestamp setting, and stops collecting profiling data.
+
+The default scene holds animation behind a preparation overlay until all text, detached glyphs, physics bodies,
+the robot, environment, dust, and burst are ready. Preparation renders hidden and offscreen objects through the
+actual shadow, transmission, and post passes, compiles the scene, and waits for submitted GPU work before revealing
+the normal visibility set. Browser checks wait for `data-hero-state="ready"`; readiness follows completed work,
+not a fixed delay. The origin scene does not use this preparation gate.
+
+Both typing lines retain their complete glyph records and precompute every prefix's centering with Glyph's own
+layout during preparation. Playback changes matrices only, including the feature line's departure and replay.
+The icon field retains all eleven choices for each cell (12,188 glyph records across both layers); motif changes
+swap visible records without reshaping text or creating draw meshes. This trades retained storage for stable playback.
+`hero:retained-lines-check` compares all prefixes with independently shaped layouts and verifies transform reset.
+
+`mise exec -- pnpm scripts run hero:performance -- --path '/?dpr=1.5'` runs two complete lift, typing, robot,
+collapse, and burst replays on WebGPU after preparation. It rejects new shader programs, render pipelines, scene
+meshes, or asset loads, with a deliberate new-material control proving the compilation counters work. It reports
+raw render intervals, CPU submission work, asynchronous GPU queue completion, and long tasks, along with the
+adapter, viewport, and drawing-buffer dimensions. The default 1280×720 viewport with `dpr=1.5` draws at 1920×1080;
+explicit DPR choices are 1, 1.5, 2, and 3.
+
+On the local Apple Metal adapter with Chromium 149, the 1920×1080 check prepared in 3.30 seconds and recorded
+1,702 frames across two replays at 59.92 fps. Render intervals were 17.6 ms at p95 and 24.8 ms worst, with no
+interval over 25 ms, long tasks, or late resources. CPU work was 3.2 ms at p95; browser-observed GPU queue
+completion was 9.0 ms at p95 with at most three pending observations. These are submission and queue measurements,
+not GPU timestamp durations or proof of frame delivery through a screen recorder. The full application check
+currently stops at the existing stale `geist-medium.font.glb` bake; typecheck, lint, unit tests, and build pass.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents, copied into `src/theme.ts`: red G, orange l,
@@ -69,17 +193,28 @@ Each has its own attenuation tint, thickness, roughness, and refractive index, w
 physical dispersion. The paper and icon background stay unchanged; there are no added crystal lights, internal
 rainbow beams, or hidden studio images.
 
-A subtle colored fringe is projected around all sides of the flat Slug letters without changing the scene
-lighting. The 2048 × 1280 capture preserves analytic fractional coverage, the original deformation, and Three's
-material attenuation values. Narrow bands derived from the silhouette separate RGB using the material IOR and
-dispersion, producing a restrained spectral spill. A second attachment records `positionWorld.z` above a nearby receiving plane at
-z = -0.06. A virtual perspective projector makes the footprint expand with height; coverage-weighted distance
-blends between two Gaussian scales and fades the fringe as a letter lifts. It tightens again on landing. The
-narrow edge redistribution suggests slight caustics without bright pools or directional shadow tails; it is an
-art-directed projection, not multi-bounce light transport. The old offset MSDF shadow copies are removed.
+The title's shadow and caustics are one projection under a lamp of their own, a point above the top of the lift and
+a little to the upper right; the studio lights are untouched, so the glass keeps its highlights. Each frame the five
+glass panes are captured straight down into a 1024 × 640 height field: analytic coverage, transmitted tint from
+Three's attenuation values, height above a receiving plane at z = -0.06, refractive index, dispersion, and the
+pane's lens normal. A multiply-blended receiver marches each pixel toward the light through that field, treating
+every flat letter as a slab 1.2 units deep, so the glyphs throw a soft, extruded, tinted shadow that leans slightly
+down and to the left. The march's samples are spaced quadratically and its range follows the highest letter, which
+the title's bodies publish each physics step because the poses live in the glyph instance buffer. Under the lamp's
+perspective a lifted letter's shadow grows and spreads beneath it as the letter grows on screen, softening and
+thinning through a four-level Gaussian pyramid of the capture blended by height, and settles back to the same pixels
+on landing. The light the glass turns aside returns as caustics: a 512 × 320 grid over the plane is carried in its
+vertex shader to where each ray lands after refracting through the lens normal, an edge chamfer, and two slowly
+turning lattices of facets, once per colour channel with a small index spread, and its brightness is the source area
+gathering in each pixel, so the light pools into faint, spectrally fringed glints inside the shadow. It is an art-
+directed projection, not multi-bounce light transport.
 
 `mise exec -- pnpm scripts run hero:refraction-check` verifies the five visible stained-glass finishes against an
 untinted control on WebGPU and checks repeated captures and resizing.
+`mise exec -- pnpm scripts run hero:glass-shadow-buffers` tiles the capture, lens normals, heights, and caustic map
+into `apps/hero/.cache/glass-shadow-buffers.png` and logs the caustic grid's vertex sample count.
+`mise exec -- pnpm scripts run hero:lift-sheet` steps a replay's physics deterministically and tiles four moments of
+the lift and smash into `apps/hero/.cache/lift-sheet.png`.
 `mise exec -- pnpm scripts run hero:glass-shadow-check` compares the projection with disabled and untinted
 controls, lifts the actual draw surfaces while keeping visible glass fixed for the readback, and verifies an
 exact return to the original pixels after lowering them. Both run through Vitexec, fail on browser errors,

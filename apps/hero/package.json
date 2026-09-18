@@ -19,12 +19,16 @@
     "@react-three/drei": "11.0.0-alpha.7",
     "@react-three/fiber": "catalog:renderer",
     "box3d.js": "0.1.1",
+    "opentype.js": "2.0.0",
     "react": "catalog:renderer",
     "react-dom": "catalog:renderer",
     "three": "catalog:renderer"
   },
   "devDependencies": {
     "@babel/core": "8.0.1",
+    "@gltf-transform/core": "4.5.0",
+    "@gltf-transform/extensions": "4.5.0",
+    "@gltf-transform/functions": "4.5.0",
     "@rolldown/plugin-babel": "0.2.3",
     "@types/node": "24.13.3",
     "@types/react": "19.2.14",
@@ -34,6 +38,7 @@
     "babel-plugin-react-compiler": "1.0.0",
     "oxfmt": "0.35.0",
     "oxlint": "1.75.0",
+    "sharp": "0.35.4",
     "typescript": "7.0.2",
     "vite": "8.1.5",
     "vitest": "4.1.0"

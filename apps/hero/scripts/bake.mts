@@ -16,6 +16,7 @@ import {
   TITLE,
   type FaceId,
 } from '../src/content.ts';
+import { STAR_SYMBOLS } from '../src/star-symbols.ts';
 import { ORIGIN_STORY, ORIGIN_TITLE, TITLE_WORDS } from '../src/origin-content.ts';
 
 const appRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -87,6 +88,15 @@ if (only === undefined || only === 'icons') {
     unicodeSet(new Set(Object.values(ICON_CODE_POINTS))),
     '--glyph-map',
     'assets/icons.map.json',
+  ]);
+}
+
+if (only === undefined || only === 'stars') {
+  run('stars', [
+    '--input',
+    'fonts/star-symbols/NotoSansSymbols2-Regular.ttf',
+    '--unicodes',
+    unicodeSet(new Set(STAR_SYMBOLS.map((symbol) => symbol.codePointAt(0)!))),
   ]);
 }
 

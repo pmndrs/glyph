@@ -29,12 +29,12 @@ import {
   MeshPhysicalNodeMaterial,
   MeshStandardNodeMaterial,
   type MeshPhysicalNodeMaterialParameters,
-  Vector2,
   Vector3,
   type Node,
 } from 'three/webgpu';
 
 import { uCut, uFloat, uTime } from '../uniforms';
+import { holeWarp } from './hole-warp';
 import { brand } from '../theme';
 
 type SlugContext = Extract<ThreeTextMaterialContext, { format: 'pmndrs.slug' }>;
@@ -112,20 +112,16 @@ interface PaneMotion {
   readonly angle: Node<'float'>;
   readonly sway: Node<'float'>;
   readonly pivot: Node<'vec3'>;
-  /** Where the floor's physics has pushed the pane from its rest place, and how far it has turned about its centre. */
-  readonly shove: Node<'vec2'>;
-  readonly turn: Node<'float'>;
 }
 
-/** Rotate each pane around its measured ink centre, then slide it: a little as it settles, further when shoved. */
+/** Rotate each pane around its measured ink centre, then slide it a little as it settles. */
 function jostle(position: Node<'vec3'>, motion: PaneMotion): Node<'vec3'> {
   const local = position.sub(motion.pivot);
-  const angle = motion.angle.add(motion.turn);
-  const c = cos(angle);
-  const s = sin(angle);
+  const c = cos(motion.angle);
+  const s = sin(motion.angle);
   return vec3(local.x.mul(c).sub(local.y.mul(s)), local.x.mul(s).add(local.y.mul(c)), local.z)
     .add(motion.pivot)
-    .add(vec3(motion.sway.add(motion.shove.x), motion.shove.y, 0));
+    .add(vec3(motion.sway, 0, 0));
 }
 
 /** Separate inline materials preserve one shaped word while giving each pane its own tint and finish. */
@@ -142,30 +138,24 @@ export const stainedGlassLetters = [
     angle: uniform(0),
     sway: uniform(0),
     pivot: uniform(new Vector3()),
-    shove: uniform(new Vector2()),
-    turn: uniform(0),
+  };
+  const properties = {
+    name: `stained-glass-${letter}`,
+    color: new Color(tint).lerp(new Color('#ffffff'), 0.38),
+    attenuationColor: new Color(tint),
+    attenuationDistance: 4,
+    thickness,
+    roughness,
+    ior,
+    dispersion: 0.7,
+    iridescence: 0,
   };
   return {
     letter,
     ...motion,
-    material: createGlass(
-      {
-        name: `stained-glass-${letter}`,
-        color: new Color(tint).lerp(new Color('#ffffff'), 0.38),
-        attenuationColor: new Color(tint),
-        attenuationDistance: 4,
-        thickness,
-        roughness,
-        ior,
-        dispersion: 0.7,
-        iridescence: 0,
-      },
-      motion,
-    ),
+    material: createGlass(properties, motion),
   };
 });
-
-export type StainedGlassLetter = (typeof stainedGlassLetters)[number];
 
 /** Flat, unlit ink for the background pattern: crisp coverage, no lighting cost across hundreds of icons. */
 export const pattern = defineTextMaterial((context) => {
@@ -175,7 +165,9 @@ export const pattern = defineTextMaterial((context) => {
   const material = new MeshBasicNodeMaterial({ side: DoubleSide });
   material.positionNode = context.position;
   material.colorNode = context.shader.color;
-  material.opacityNode = context.shader.coverage;
+  // Bent round the black hole: each icon curls into the spiral as the outline is integrated where its ink came from.
+  const warp = holeWarp(context);
+  material.opacityNode = warp.coverage.mul(warp.survive);
   material.alphaToCoverage = true;
   return material;
 });
@@ -193,7 +185,8 @@ export const silhouette = defineTextMaterial((context) => {
   material.name = RIM_SILHOUETTE;
   material.positionNode = context.position.add(drift(context.position).mul(uFloat));
   material.colorNode = color('#000000');
-  material.opacityNode = context.shader.coverage;
+  const warp = holeWarp(context);
+  material.opacityNode = warp.coverage.mul(warp.survive);
   material.alphaToCoverage = true;
   return material;
 });
@@ -215,13 +208,17 @@ function drift(position: Node<'vec3'>): Node<'vec3'> {
  */
 function shapeSlug(
   material: MeshStandardNodeMaterial,
-  { shader, position }: SlugContext,
+  context: SlugContext,
   options: { readonly drift: boolean } = { drift: true },
 ) {
+  const { position } = context;
   material.positionNode = options.drift ? position.add(drift(position).mul(uFloat)) : position;
-  material.opacityNode = shader.coverage.mul(shader.opacity);
+  // The black hole bends the letterform itself: coverage is integrated where each fragment's ink came from.
+  // Not `shader.opacity`: that carries its own integral, and the hero's Slug paint is opaque anyway.
+  const warp = holeWarp(context);
+  material.opacityNode = warp.coverage.mul(warp.survive);
   material.alphaToCoverage = true;
-  material.maskShadowNode = shader.coverage.greaterThan(0.5);
+  material.maskShadowNode = warp.coverage.greaterThan(0.5);
 
   const face = normalize(cross(dFdx(positionView), dFdy(positionView)));
   const normal = face.mul(dot(face, toCamera()).sign());

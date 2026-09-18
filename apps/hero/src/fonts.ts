@@ -17,12 +17,13 @@ import geistMedium from '../assets/geist-medium.font.glb?url';
 import geistMonoBold from '../assets/geist-mono-bold.font.glb?url';
 import geistPixelGrid from '../assets/geist-pixel-grid.font.glb?url';
 import icons from '../assets/icons.font.glb?url';
+import stars from '../assets/stars.font.glb?url';
 import sourceSerif from '../assets/source-serif.font.glb?url';
 import { FEATURE_FIELD, type FaceId } from './content';
 
 export type SlugFont = Font<typeof slug>;
 export type MsdfFont = Font<typeof msdf>;
-export type Faces = Readonly<Record<FaceId | 'icons', SlugFont>>;
+export type Faces = Readonly<Record<FaceId | 'icons' | 'stars', SlugFont>>;
 
 const URLS = {
   'geist-black': geistBlack,
@@ -39,7 +40,8 @@ const URLS = {
   devanagari,
   cjk,
   icons,
-} as const satisfies Record<FaceId | 'icons', string>;
+  stars,
+} as const satisfies Record<FaceId | 'icons' | 'stars', string>;
 
 // Start every load before React first asks for a face.
 for (const url of Object.values(URLS)) useSlug.preload(url);
@@ -68,5 +70,6 @@ export function useFaces(): Faces {
     devanagari: useSlug(URLS.devanagari),
     cjk: useSlug(URLS.cjk),
     icons: useSlug(URLS.icons),
+    stars: useSlug(URLS.stars),
   };
 }

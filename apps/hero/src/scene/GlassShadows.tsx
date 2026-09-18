@@ -1,85 +1,257 @@
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useEffect, useRef } from 'react';
 import {
+  abs,
+  cos,
+  dFdx,
+  dFdy,
   diffuseColor,
+  float,
+  Fn,
+  If,
+  Loop,
   materialAttenuationColor,
   materialAttenuationDistance,
-  materialThickness,
-  materialIOR,
   materialDispersion,
+  materialIOR,
+  materialThickness,
   mix,
   mrt,
+  mx_cell_noise_float,
+  normalWorld,
+  positionGeometry,
   positionWorld,
+  refract,
+  sin,
+  smoothstep,
+  step,
   texture,
   uniform,
+  varying,
   vec2,
   vec3,
   vec4,
 } from 'three/tsl';
 import { gaussianBlur } from 'three/addons/tsl/display/GaussianBlurNode.js';
 import {
+  AdditiveBlending,
   Color,
+  DoubleSide,
   HalfFloatType,
-  Matrix4,
   Mesh,
   MeshBasicNodeMaterial,
   MeshPhysicalNodeMaterial,
   MultiplyBlending,
   NoBlending,
+  type Node,
   NodeUpdateType,
-  PerspectiveCamera,
+  OrthographicCamera,
   PlaneGeometry,
   RenderTarget,
   Scene,
+  Vector3,
   type WebGPURenderer,
 } from 'three/webgpu';
 
+import { uTime } from '../uniforms';
+import { titleReach } from './metrics';
+
+/** Where the shadow's light stands, in world units: a lamp above the top of the lift, a little to the upper right,
+ * so a resting letter's shadow sits under it with a slight lean down and to the left, and a lifted letter's shadow
+ * grows and spreads beneath it the way the letter grows on screen. The camera never moves, so the lamp can sit on
+ * its axis without ever looking wrong. Its own light, not the studio's: the glass keeps its highlights. */
+const LAMP = new Vector3(4, 6, 24);
+/** The receiving plane, in world units, centred on the title. */
 const WIDTH = 32;
 const HEIGHT = 20;
-/** One apparent receiving surface, in front of the individual patterned parallax layers. */
+/** One apparent receiving surface, just behind the flat letters and in front of the patterned parallax layers. */
 const RECEIVER_Z = -0.06;
+/** The slab of glass each flat letter is taken to be: how far its shadow is thrown, and how far the light travels
+ * inside it before it reaches the floor. */
+const GLASS_DEPTH = 1.2;
+/** Half a letter's extent, for how high a tumbling letter can reach above its centre. */
+const LETTER_REACH = 2.4;
+/** Height samples the receiver takes toward the light, spaced quadratically: dense at the floor where the resting
+ * shadow's edge lives, and still within a slab's depth of each other at the top of a lift. */
+const MARCH_STEPS = 32;
+/** Fraction of the key light the glass turns aside: the darkness of the shadow before the caustics refill it. */
+const SHADE = 0.3;
+/** The capture blurred at four widths, in capture texels at full resolution: the resting shadow's edge, then
+ * ever wider penumbras taken at falling resolution. The march blends between neighbouring levels by height. */
+const PYRAMID = [
+  { scale: 1, direction: 2, sigma: 2 },
+  { scale: 0.5, direction: 2, sigma: 4 },
+  { scale: 0.25, direction: 2, sigma: 4 },
+  { scale: 0.125, direction: 3, sigma: 4 },
+] as const;
+/** Pyramid levels per unit of height: the lamp has a width, so a lifted letter's shadow softens and thins as it
+ * spreads, reaching the widest level near the top of the lift. */
+const LIFT_SPREAD = 0.22;
+/** How much sky the floor still sees under a lifted letter: the shadow fades by this much per unit of height. */
+const FADE = 0.03;
+/** The pane's own lens tilt is subtle on screen; the light bending through it is exaggerated so it focuses. */
+const LENS_GAIN = 2;
+/** An edge chamfer: the top surface slopes off toward the silhouette, so rays near the edge bend inward and pile
+ * up into a bright rim inside the shadow, the way a cut edge of glass throws a line of light. */
+const BEVEL = 0.6;
+/** Facets: the top surface is cut into cells of two overlaid lattices, each with its own tilt, so the light lands
+ * as sharp-edged shards that overlap and part, the way a crystal throws it. Each facet turns slowly so they glint. */
+const FACET = 0.3;
+const FACET_CELLS = [
+  { size: 0.55, angle: 0.2, seed: 3 },
+  { size: 0.95, angle: 1.1, seed: 17 },
+] as const;
+const SHIMMER = 0.35;
+/** Spread of refractive index across the red, green, and blue channels per unit of material dispersion. */
+const DISPERSION = 0.09;
+/** How bright the refracted light is against the paper. */
+const CAUSTIC_GAIN = 0.45;
+/** Folds in the refraction map converge to a line; this keeps the line bright without blowing out. */
+const CAUSTIC_CEILING = 5;
+const CAPTURE_WIDTH = 1024;
+const CAPTURE_HEIGHT = 640;
+/** Vertices of the warped light grid across the receiving plane: about sixteen per world unit. */
+const GRID_COLUMNS = 512;
+const GRID_ROWS = 320;
 
-/** Project the flat glyph shaders onto the pattern and soften only the colored fringe outside their silhouettes. */
+/** The capture is a straight-down orthographic view over the receiving plane, so its texels are world x and y. */
+function captureUV(world: Node<'vec2'>) {
+  // Camera clip space is bottom-up; WebGPU render textures are top-down.
+  return vec2(world.x.div(WIDTH).add(0.5), world.y.div(HEIGHT).add(0.5)).flipY();
+}
+
+/**
+ * The glass title's shadow and caustics on the paper behind it, under an overhead light of its own.
+ *
+ * The letters are captured once per frame straight down as a height field: analytic coverage, transmitted tint,
+ * height above the receiver, refractive index, dispersion, and the pane's lens normal. From that field the receiver
+ * marches each of its pixels toward the light through the slab of glass every letter is taken to be, so the flat
+ * glyphs throw an extruded shadow off to one side, tinted by the glass it passes through. The light the glass
+ * turns aside is put back as caustics: a fine grid over the plane is carried in the vertex shader to where each
+ * ray lands after refracting through the lens normal and the edge chamfer, once per colour channel, and its
+ * brightness is how much source area gathers in each pixel, so the light pools where the rays converge and its
+ * colours split where the index differs.
+ */
 function createProjection(renderer: WebGPURenderer, scene: Scene) {
   const sourceScene = new Scene();
-  // A virtual projector provides depth-dependent footprints without adding or moving a scene light.
-  const lightCamera = new PerspectiveCamera((2 * Math.atan(HEIGHT / 50) * 180) / Math.PI, WIDTH / HEIGHT, 0.1, 80);
-  const source = new RenderTarget(2048, 1280, { type: HalfFloatType, count: 2 });
+  const lightCamera = new OrthographicCamera(-WIDTH / 2, WIDTH / 2, HEIGHT / 2, -HEIGHT / 2, 0.1, 80);
+  lightCamera.position.set(0, 0, 25);
+  lightCamera.lookAt(0, 0, 0);
+  lightCamera.updateMatrixWorld();
+  const source = new RenderTarget(CAPTURE_WIDTH, CAPTURE_HEIGHT, { type: HalfFloatType, count: 3 });
   source.texture.name = 'output';
-  const distanceTexture = source.textures[1];
-  if (distanceTexture === undefined) throw new Error('Missing glass projection distance attachment');
+  const [, distanceTexture, normalTexture] = source.textures;
+  if (distanceTexture === undefined || normalTexture === undefined) {
+    throw new Error('Missing glass projection attachments');
+  }
   distanceTexture.name = 'distance';
-  const lightMatrix = uniform(new Matrix4());
-  const blur = gaussianBlur(texture(source.texture), 1.4, 2);
-  const penumbra = gaussianBlur(texture(source.texture), 5, 3);
-  const distanceBlur = gaussianBlur(texture(distanceTexture), 5, 3);
+  normalTexture.name = 'normal';
+  const caustic = new RenderTarget(CAPTURE_WIDTH, CAPTURE_HEIGHT, { type: HalfFloatType });
+  caustic.texture.name = 'caustic';
+
+  // Kernel widths in capture texels, thirty-two to the world unit: a chamfer a quarter unit wide, lens normals
+  // smooth enough that the grid warp stays continuous, and the pyramid the march reads by height.
+  const spread = PYRAMID.map(({ scale, direction, sigma }) => {
+    const coverage = gaussianBlur(texture(source.texture), direction, sigma);
+    const heights = gaussianBlur(texture(distanceTexture), direction, sigma);
+    coverage.resolutionScale = scale;
+    heights.resolutionScale = scale;
+    return { coverage, heights };
+  });
+  const penumbra = gaussianBlur(texture(source.texture), 1, 4);
+  const normalBlur = gaussianBlur(texture(normalTexture), 2, 3);
+  const causticBlur = gaussianBlur(texture(caustic.texture), 2, 2);
   penumbra.resolutionScale = 0.5;
-  distanceBlur.resolutionScale = 0.5;
+  const blurs = [...spread.flatMap(({ coverage, heights }) => [coverage, heights]), penumbra, normalBlur, causticBlur];
   // Captures may change between renders within one animation frame, including deterministic readbacks.
-  blur.updateBeforeType = NodeUpdateType.RENDER;
-  penumbra.updateBeforeType = NodeUpdateType.RENDER;
-  distanceBlur.updateBeforeType = NodeUpdateType.RENDER;
-  const lightPosition = lightMatrix.mul(vec4(positionWorld, 1));
-  // Light clip space is bottom-up; WebGPU render textures are top-down.
-  const shadowUV = lightPosition.xy.div(lightPosition.w).mul(0.5).add(0.5).flipY();
-  const shadow = blur.getTextureNode().sample(shadowUV);
-  const distant = penumbra.getTextureNode().sample(shadowUV);
-  const distance = distanceBlur.getTextureNode().sample(shadowUV);
-  // Coverage-weighted distance remains valid across the soft edge, including outside the source silhouette.
-  const height = distance.r.div(distance.a.max(0.0001));
-  const spread = height.mul(0.16).add(0.12).clamp(0, 1);
-  const soft = mix(shadow, distant, spread);
-  const sharp = texture(source.texture, shadowUV);
-  const inside = shadowUV.x
-    .greaterThanEqual(0)
-    .and(shadowUV.x.lessThanEqual(1))
-    .and(shadowUV.y.greaterThanEqual(0))
-    .and(shadowUV.y.lessThanEqual(1));
-  const bounds = inside.select(1, 0);
-  // Two Gaussian scales give a defined contact edge followed by a gentle falloff, without a distant tail.
-  const transmitted = soft.rgb.div(soft.a.max(0.0001));
-  // A small redistribution of transmitted color at the outer edge suggests thin glass under a broad overhead light.
-  const rim = soft.a.sub(sharp.a).max(0).mul(bounds).div(height.mul(0.12).add(1));
+  for (const node of blurs) node.updateBeforeType = NodeUpdateType.RENDER;
+  const [finest] = spread;
+  if (finest === undefined) throw new Error('Missing glass shadow pyramid');
+  const coverage = finest.coverage.getTextureNode();
+  const wide = penumbra.getTextureNode();
+  const heights = finest.heights.getTextureNode();
+  const normals = normalBlur.getTextureNode();
+
+  const uLamp = uniform(new Vector3());
+  /** How far above the receiver the highest glass reaches this frame. */
+  const uReach = uniform(GLASS_DEPTH);
+  const halfPlane = vec2(WIDTH / 2, HEIGHT / 2);
+
+  // The light grid, warped per channel to where the refracted rays land.
+  const causticScene = new Scene();
+  const gridGeometry = new PlaneGeometry(2, 2, GRID_COLUMNS, GRID_ROWS);
+  const causticMaterials = [0, 1, 2].map((channel) => {
+    const material = new MeshBasicNodeMaterial({
+      name: `glass-caustic-${channel}`,
+      transparent: true,
+      blending: AdditiveBlending,
+      depthTest: false,
+      depthWrite: false,
+      side: DoubleSide,
+      toneMapped: false,
+    });
+    const world = positionGeometry.xy.mul(halfPlane);
+    const uv = captureUV(world);
+    const sample = coverage.sample(uv);
+    const weight = sample.a.max(0.0001);
+    const tint = sample.rgb.div(weight);
+    const field = heights.sample(uv);
+    const height = field.r.div(weight);
+    const ior = field.g.div(weight).max(1);
+    const dispersion = field.b.div(weight);
+    const lens = normals.sample(uv).xy.div(weight);
+    // The chamfer follows the silhouette's outward direction, from the wide blur's gradient.
+    const texel = vec2(1 / CAPTURE_WIDTH, 1 / CAPTURE_HEIGHT).mul(2);
+    const gradient = vec2(
+      wide.sample(uv.add(vec2(texel.x, 0))).a.sub(wide.sample(uv.sub(vec2(texel.x, 0))).a),
+      wide.sample(uv.add(vec2(0, texel.y))).a.sub(wide.sample(uv.sub(vec2(0, texel.y))).a),
+    );
+    const inward = gradient.div(gradient.length().max(0.00001));
+    // The wide blur passes one half at the true edge and reaches one well inside.
+    const chamfer = smoothstep(0.98, 0.5, wide.sample(uv).a);
+    // Texture rows run top-down, so the gradient's y points the other way in world space.
+    const outward = vec2(inward.x.negate(), inward.y).mul(chamfer.mul(BEVEL));
+    const facets = FACET_CELLS.map(({ size, angle, seed }) => {
+      const c = Math.cos(angle);
+      const s = Math.sin(angle);
+      const lattice = vec2(world.x.mul(c).sub(world.y.mul(s)), world.x.mul(s).add(world.y.mul(c))).div(size);
+      const spin = mx_cell_noise_float(vec3(lattice, seed));
+      const rate = mx_cell_noise_float(vec3(lattice, seed + 11));
+      const heading = spin.mul(Math.PI * 2).add(uTime.mul(rate.sub(0.5).mul(SHIMMER)));
+      return vec2(cos(heading), sin(heading)).mul(rate.mul(0.6).add(0.4));
+    }).reduce((sum, tilt) => sum.add(tilt));
+    const normal = vec3(lens.mul(LENS_GAIN).add(outward).add(facets.mul(FACET)), 1).normalize();
+    const channelIOR = ior.add(dispersion.mul(DISPERSION * (channel - 1)));
+    const base = height.sub(GLASS_DEPTH / 2).max(0);
+    const incident = vec3(world, base.add(GLASS_DEPTH)).sub(uLamp).normalize();
+    const inside = refract(incident, normal, float(1).div(channelIOR));
+    // Through the slab along the refracted ray, out of its flat underside into air, then down to the receiver: a
+    // lifted letter's glints spread with its height, and the gathered area dims them to match.
+    const exit = refract(inside, vec3(0, 0, 1), channelIOR);
+    const landing = world
+      .add(inside.xy.mul(GLASS_DEPTH).div(inside.z.negate().max(0.05)))
+      .add(exit.xy.mul(base).div(exit.z.negate().max(0.05)));
+    material.vertexNode = vec4(landing.div(halfPlane), 0, 1);
+    const origin = varying(world);
+    const vCoverage = varying(sample.a);
+    const vTint = varying(tint);
+    // Source area gathered per receiver pixel, against the unwarped grid's own area per pixel.
+    const gathered = abs(
+      dFdx(origin)
+        .x.mul(dFdy(origin).y)
+        .sub(dFdx(origin).y.mul(dFdy(origin).x)),
+    );
+    const pixelArea = (WIDTH / CAPTURE_WIDTH) * (HEIGHT / CAPTURE_HEIGHT);
+    const intensity = gathered.div(pixelArea).min(CAUSTIC_CEILING).mul(vCoverage);
+    const mask = vec3(channel === 0 ? 1 : 0, channel === 1 ? 1 : 0, channel === 2 ? 1 : 0);
+    material.fragmentNode = vec4(mask.mul(vTint).mul(intensity), 1);
+    const grid = new Mesh(gridGeometry, material);
+    grid.frustumCulled = false;
+    causticScene.add(grid);
+    return material;
+  });
+
+  // The receiver: the shadow marched toward the light, and the caustics laid back over it.
   const projectionMaterial = new MeshBasicNodeMaterial({
     name: 'glass-shadows',
     transparent: true,
@@ -88,49 +260,66 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     premultipliedAlpha: true,
     toneMapped: false,
   });
-  const texel = vec2(1 / source.width, 1 / source.height);
-  const wide = penumbra.getTextureNode();
-  // The captured silhouette supplies an outward-facing optical edge for flat, unextruded letterforms.
-  const gradient = vec2(
-    wide.sample(shadowUV.add(vec2(texel.x, 0))).a.sub(wide.sample(shadowUV.sub(vec2(texel.x, 0))).a),
-    wide.sample(shadowUV.add(vec2(0, texel.y))).a.sub(wide.sample(shadowUV.sub(vec2(0, texel.y))).a),
-  );
-  const inward = gradient.div(gradient.length().max(0.00001));
-  const ior = distance.g.div(distance.a.max(0.0001)).max(1);
-  const dispersion = distance.b.div(distance.a.max(0.0001));
-  const reach = ior.sub(1).mul(12).add(height.mul(5)).mul(texel);
-  const spectralSplit = dispersion.mul(0.35).clamp(0, 0.5);
-  const band = (split: number) => {
-    const sampleUV = shadowUV.add(inward.mul(reach).mul(spectralSplit.mul(split).add(1)));
-    const near = blur.getTextureNode().sample(sampleUV).a;
-    const far = blur.getTextureNode().sample(sampleUV.add(inward.mul(texel).mul(2))).a;
-    return far.sub(near).max(0).mul(3);
-  };
-  const spectrum = vec3(band(1), band(0), band(-1));
-  const energy = spectrum
-    .mul(transmitted.mul(0.7).add(0.3))
-    .mul(sharp.a.oneMinus())
-    .mul(bounds)
-    .div(height.mul(0.18).add(1));
-  const fringe = mix(vec3(1), transmitted, rim.mul(0.35));
-  projectionMaterial.fragmentNode = vec4(fringe.add(energy.mul(0.65)), 1);
+  const point = positionWorld.xy;
+  // Marched inside an Fn: TSL control flow only exists on a stack, and there is none at graph-build top level.
+  const shadow = Fn(() => {
+    const cover = float(0).toVar();
+    const through = vec3(1).toVar();
+    Loop(MARCH_STEPS, ({ i }) => {
+      const fraction = float(i).add(0.5).div(MARCH_STEPS);
+      const t = fraction.mul(fraction).mul(uReach);
+      const uv = captureUV(point.add(uLamp.xy.sub(point).mul(t.div(uLamp.z))));
+      const bounds = step(0, uv.x).mul(step(uv.x, 1)).mul(step(0, uv.y)).mul(step(uv.y, 1));
+      // Blend the two pyramid levels either side of this height.
+      const level = t.mul(LIFT_SPREAD).clamp(0, PYRAMID.length - 1);
+      const sample = vec4(0).toVar();
+      const field = float(0).toVar();
+      const blend = (lower: number) => () => {
+        const amount = level.sub(lower);
+        const from = spread[lower];
+        const to = spread[lower + 1];
+        if (from === undefined || to === undefined) throw new Error('Missing glass shadow pyramid level');
+        sample.assign(mix(from.coverage.getTextureNode().sample(uv), to.coverage.getTextureNode().sample(uv), amount));
+        field.assign(mix(from.heights.getTextureNode().sample(uv).r, to.heights.getTextureNode().sample(uv).r, amount));
+      };
+      If(level.lessThan(1), blend(0)).ElseIf(level.lessThan(2), blend(1)).Else(blend(2));
+      const weight = sample.a.max(0.0001);
+      const base = field
+        .div(weight)
+        .sub(GLASS_DEPTH / 2)
+        .max(0);
+      const inside = sample.a
+        .mul(step(base, t))
+        .mul(step(t, base.add(GLASS_DEPTH)))
+        .mul(bounds)
+        .div(t.mul(FADE).add(1));
+      If(inside.greaterThan(cover), () => {
+        cover.assign(inside);
+        through.assign(sample.rgb.div(weight));
+      });
+    });
+    return mix(vec3(1), through.mul(1 - SHADE), cover);
+  })();
+  const pooled = causticBlur.getTextureNode().sample(captureUV(point)).rgb;
+  projectionMaterial.fragmentNode = vec4(shadow.add(pooled.mul(CAUSTIC_GAIN)), 1);
   const receiverGeometry = new PlaneGeometry(WIDTH, HEIGHT);
   const receiver = new Mesh(receiverGeometry, projectionMaterial);
   receiver.name = 'glass-shadows';
   receiver.position.z = RECEIVER_Z;
   receiver.renderOrder = 1;
   scene.add(receiver);
+  // Development-only handle for reading the intermediate buffers from DevTools and the buffer probe.
+  if (import.meta.env.DEV) {
+    Object.assign(globalThis, { heroGlassShadows: { source, caustic, causticScene, lightCamera, receiver, spread } });
+  }
 
   const captures = new Map<Mesh, Mesh>();
   const clear = new Color();
   function update() {
     scene.updateMatrixWorld(true);
-    // This is a face-on shader projection of a thin sheet, independent of the scene's studio lighting.
-    lightCamera.position.set(0, 0, 25);
-    lightCamera.lookAt(0, 0, 0);
-    lightCamera.updateMatrixWorld();
-    lightMatrix.value.multiplyMatrices(lightCamera.projectionMatrix, lightCamera.matrixWorldInverse);
+    uLamp.value.copy(LAMP);
     const current = new Set<Mesh>();
+    let reach = GLASS_DEPTH;
     scene.traverseVisible((object) => {
       if (
         !(object instanceof Mesh) ||
@@ -152,10 +341,12 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
         material.alphaTest = 0;
         // Preserve the original deformation and coverage. Three supplies the existing glass attenuation values.
         const transmission = materialAttenuationColor.pow(vec3(materialThickness.div(materialAttenuationDistance)));
-        const surfaceHeight = positionWorld.z.sub(RECEIVER_Z).max(0);
+        const height = positionWorld.z.sub(RECEIVER_Z).max(0);
+        // Every attachment is coverage-weighted, so blurring keeps it valid across the soft edge.
         material.mrtNode = mrt({
           output: vec4(transmission.mul(diffuseColor.a), diffuseColor.a),
-          distance: vec4(surfaceHeight, materialIOR, materialDispersion, 1).mul(diffuseColor.a),
+          distance: vec4(height, materialIOR, materialDispersion, 1).mul(diffuseColor.a),
+          normal: vec4(normalWorld.xy, 0, 1).mul(diffuseColor.a),
         });
         capture = new Mesh(object.geometry, material);
         capture.matrixAutoUpdate = false;
@@ -173,7 +364,13 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
       // Glyph uses this metadata to select the retained run; ordinary extruded meshes have no such metadata.
       capture.userData = object.userData;
       capture.matrix.copy(object.matrixWorld);
+      // The highest this letter can reach: its centre, plus however far its tilt lifts a corner.
+      const { elements } = object.matrixWorld;
+      const tilt = (Math.abs(elements[2] ?? 0) + Math.abs(elements[6] ?? 0)) * LETTER_REACH;
+      reach = Math.max(reach, (elements[14] ?? 0) + tilt - RECEIVER_Z + GLASS_DEPTH / 2);
     });
+    // The letters' poses live in the glyph instance buffer, so the title publishes how high they reach.
+    uReach.value = Math.max(reach, titleReach() - RECEIVER_Z + GLASS_DEPTH / 2);
     for (const [original, capture] of captures) {
       if (!current.has(original)) {
         sourceScene.remove(capture);
@@ -192,6 +389,8 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
       renderer.setMRT(null);
       renderer.setRenderTarget(source);
       renderer.render(sourceScene, lightCamera);
+      renderer.setRenderTarget(caustic);
+      renderer.render(causticScene, lightCamera);
     } finally {
       renderer.setRenderTarget(previousTarget);
       renderer.setMRT(previousMRT);
@@ -206,9 +405,10 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
       for (const capture of captures.values()) if (!Array.isArray(capture.material)) capture.material.dispose();
       captures.clear();
       source.dispose();
-      blur.dispose();
-      penumbra.dispose();
-      distanceBlur.dispose();
+      caustic.dispose();
+      for (const node of blurs) node.dispose();
+      for (const material of causticMaterials) material.dispose();
+      gridGeometry.dispose();
       receiverGeometry.dispose();
       projectionMaterial.dispose();
     },
@@ -231,6 +431,8 @@ export function GlassShadows() {
     id: 'hero-glass-shadows',
     phase: 'update',
     after: ['hero-title-motion'],
+    // Canvas's FPS limit applies only to its default render job, not this offscreen pass.
+    fps: 60,
   });
   return null;
 }

@@ -12,3 +12,16 @@ canvas {
   display: block;
   cursor: crosshair;
 }
+
+.hero-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  background: #f2efe8;
+  color: #4e535b;
+  font:
+    16px system-ui,
+    sans-serif;
+}

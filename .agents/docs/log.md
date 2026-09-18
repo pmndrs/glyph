@@ -2,13 +2,65 @@
 
 ## 2026-09-18
 
+- **Prepared the hero before playback and retained its changing glyphs** — Added a scene/GPU readiness gate,
+  precompiled hidden effects, and retained both typing lines and every icon choice. Two full WebGPU replays at a
+  1920×1080 drawing buffer averaged 59.92 fps with no late shader programs, pipelines, meshes, or asset loads.
+  Added independent typing-layout and replay checks. See [the hero reference](packages/hero.md) for measurements
+  and the recording-delivery limitation.
+
+- **Gave the hero robot a face display** — Looking up, the robot's screen glitches its eyes away in torn bands
+  and types `PMNDRS` in the pixel face with a material lit like the display, then glitches the eyes back.
+  See [the hero reference](packages/hero.md).
+
+- **Gave the finale stars a burning ember surface** — Added hot cores, amber rims, moving fire texture,
+  and gentle flicker that follows each star as it shrinks and cools. Verified the material against a flat
+  control on WebGPU. See [the hero reference](packages/hero.md).
+
+- **Turned the finale sparks into glowing Unicode stars** — Baked six star shapes from Noto Sans Symbols 2,
+  added pastel bloom, and extended the fade to 1.25 seconds. Stars shrink like embers while their cores and halos dim together. The WebGPU check covers star emission, bloom,
+  lingering light, blackness, and replay. See [the hero reference](packages/hero.md).
+
+- **Strengthened the hero's black-hole finale** — Added a growing gravity field, accelerating title arcs, stretched
+  icon motion, and individual feature-letter flights. The paper now twists into the hole before a small spray of illuminated glyphs
+  and light sparks fades to black. Added a WebGPU capture and replay check. See
+  [the hero reference](packages/hero.md).
+
+- **Started the hero's 60 fps recording pass** — Capped the main and offscreen shadow render jobs at 60 fps,
+  made the development inspector load on demand and detach when hidden, and added `hero:performance` for
+  repeatable render-cadence measurements. See [the hero reference](packages/hero.md).
+
 - **Let Slug materials integrate coverage at a chosen coordinate** — `TslSlugShaderOutput.coverageAt(coordinate)`
   evaluates the analytic integral wherever a fragment asks, in both Three configurations, so a material can bend
   the letterform itself by integrating at the inverse of a warp. See [the glyph reference](packages/glyph.md).
+
+- **Ended the hero with a black hole that takes the scene apart** — After the robot leaves, a hole opens at the
+  centre; the lattices, the title's bodies and the feature line leave piece by piece into a spiral, every glyph
+  bent by its own outline through `coverageAt`, and a pop leaves the frame black until Space replays.
+  See [the hero reference](packages/hero.md).
+
+- **Gave the glass title a marched shadow and crystal caustics** — The flat panes are captured top-down as a height
+  field, and the receiver marches each pixel toward a lamp of its own through the slab every letter is taken to
+  be, so the glyphs throw a soft, tinted shadow with a slight lean that grows, spreads, and softens through the
+  capture's mip levels as a letter is lifted. A vertex-warped light grid refracts through the
+  lens normals, an edge chamfer, and slowly turning facets, once per colour channel, and its gathered area lights
+  faint spectral glints inside the shadow. New `hero:glass-shadow-buffers` and `hero:lift-sheet` workflows tile the
+  intermediate buffers and four moments of the lift.
+  See [the hero reference](packages/hero.md).
+
+- **Drove a robot across the hero floor and made the title physical** — A CC-BY Sketchfab robot, packed to one
+  GLB by a new `hero:robot` workflow, drives a meandering diagonal over the screen, looks up at the camera from the
+  title, and drives off. The title's Slug panes are broken apart with glyph's own API and follow rigid bodies in a
+  Box3D world, with invisible colliders cut from the font's outlines: Space carries them to the camera and throws
+  them down to bounce once and settle off square, and the robot shoves them aside as it passes.
+  See [the hero reference](packages/hero.md).
+
 - **Added a soft colored fringe around the flat glass title** — A high-resolution shader projection follows the
   real Slug coverage and depth. The footprint spreads and fades during the lift and tightens on landing, without
   changing the studio lighting. WebGPU controls verify tint, depth response, exact return to rest, and resizing.
   See [the hero reference](packages/hero.md).
+
+- **Removed the star-and-crescent from the hero icon set** — The lattice and word annotations now use eleven symbols,
+  with the baked icon font and glyph map updated to match. See [the hero reference](packages/hero.md).
 
 - **Changed the hero title to title case** — `Glyph` retains Geist Black and the five brand-colored glass materials.
   Moved the feature line below the lowercase descenders. See [the hero reference](packages/hero.md).

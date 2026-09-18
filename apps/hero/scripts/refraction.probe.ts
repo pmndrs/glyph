@@ -35,6 +35,8 @@ function featureReady(): boolean {
 }
 
 // Fonts, fitted feature text, and the environment become ready independently.
+while (document.documentElement.dataset.heroState !== 'ready')
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 while (
   glassMesh() === undefined ||
   !featureReady() ||

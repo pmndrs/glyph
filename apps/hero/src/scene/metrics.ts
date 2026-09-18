@@ -11,3 +11,15 @@ export function setTitleWidth(value: number): void {
 export function titleWidth(): number | undefined {
   return width;
 }
+
+/** The highest point of any letter above the floor, in world units: zero while the word rests. Published by the
+ * title's bodies each physics step, because only they know how high a lifted or tumbling letter reaches. */
+let reach = 0;
+
+export function setTitleReach(value: number): void {
+  reach = value;
+}
+
+export function titleReach(): number {
+  return reach;
+}

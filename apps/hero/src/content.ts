@@ -18,7 +18,6 @@ export type FaceId =
 export type IconName =
   | 'ankh'
   | 'yin-yang'
-  | 'star-and-crescent'
   | 'bahai'
   | 'dharmachakra'
   | 'om'
@@ -33,7 +32,6 @@ export type IconName =
 export const ICON_CODE_POINTS: Readonly<Record<IconName, number>> = {
   ankh: 0xf644,
   'yin-yang': 0xf6ad,
-  'star-and-crescent': 0xf699,
   bahai: 0xf666,
   dharmachakra: 0xf655,
   om: 0xf679,
@@ -123,7 +121,6 @@ export const BACKGROUND_WORDS: readonly BackgroundWord[] = [
   {
     text: 'Zero DOM',
     face: 'dancing-script',
-    icon: 'star-and-crescent',
     fontSize: 1.3,
     position: [-9.5, 1.4, -16],
     roll: -0.1,

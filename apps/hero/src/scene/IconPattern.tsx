@@ -1,13 +1,18 @@
-import { Text, TextGroup } from '@pmndrs/glyph/react';
+import { Text } from '@pmndrs/glyph/react';
+import type { Glyphs, Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Vector3, type Group } from 'three/webgpu';
+import { useEffect, useMemo, useRef } from 'react';
+import { Vector3, Matrix4, Group } from 'three/webgpu';
 
 import { ICON_CODE_POINTS, type IconName, type Vec3 } from '../content';
-import type { Faces, SlugFont } from '../fonts';
+import type { Faces } from '../fonts';
 import { GEM_TONES } from '../materials/gems';
 import { pattern } from '../materials/ink';
+import { departureAt, release, swirl } from './departure';
+import { HORIZON, hole, type HoleState } from './hole';
+import { replayCount } from './replay';
 import { shockwaves } from './shockwave';
+import { heroReady, usePreparation } from '../startup';
 
 /** Scroll direction, as an angle from the x axis. Both layers share it, so the field moves as one. */
 export const PATTERN_ANGLE = -0.32;
@@ -16,10 +21,8 @@ const ANGLE = PATTERN_ANGLE;
 const MORPH_SECONDS = 0.32;
 const STAGGER_SECONDS = 0.5;
 /**
- * Start times are quantised to this many steps across the stagger window. Each distinct start time costs one React
- * re-render of the whole layer, and a continuous spread cost one on nearly every frame of the window — tens of
- * thousands of elements per motif change, which is enough garbage to show as collection pauses. Steps this far apart
- * still overlap heavily inside a 0.32s flip, so the sweep reads the same.
+ * Start times are quantised across the stagger window. The overlapping 0.32s flips retain the original sweep;
+ * exchanging their glyph records now happens entirely in the retained instance buffer.
  */
 const STAGGER_STEPS = 5;
 /** Seconds between motif changes. */
@@ -44,6 +47,14 @@ const POINTER_FADE = 0.16;
 /** Bounds: a cell never leaves its own neighbourhood, whatever the wave does. */
 const MAX_OFFSET = 2.4;
 const MAX_SPEED = 26;
+/** The black hole: how hard it pulls at one horizon, how much of that goes round rather than in, how far a cell may
+ * travel to it, and how much a cell grows on the way so its bent glyph has room. */
+const HOLE_PULL = 240;
+const HOLE_SWIRL = 1.05;
+const HOLE_REACH = 60;
+const HOLE_GROW = 1.6;
+/** Drag on a released cell: heavy, so the spiral is a fall, not an orbit. */
+const HOLE_DRAG = 5;
 /** Physics runs on fixed substeps: the coupling is stiff enough to blow up on a long frame. */
 const SUBSTEP = 1 / 120;
 /** The canvas camera's vertical field of view, for projecting the pointer onto a layer. */
@@ -195,6 +206,13 @@ interface LatticeState {
   /** Highest impact id already taken into `waves`. */
   seenWave: number;
   pointer: { x: number; y: number; active: boolean; strength: number };
+  /** The black hole in sheet space, while it is open. */
+  hole: { x: number; y: number; horizon: number; pull: number; time: number };
+  /** When each cell leaves, on the hole's clock; set when the hole opens. NaN while it is closed. */
+  departAt: Float32Array;
+  /** Cells the hole has taken; they stay gone until a replay. */
+  swallowed: Uint8Array;
+  replays: number;
 }
 
 /**
@@ -203,18 +221,37 @@ interface LatticeState {
  * of that type, each taking its new glyph as it turns edge-on.
  */
 export function IconPattern(layer: IconLayer) {
-  const { faces, cell, iconSize, depth, speed, opacity, motifs, response } = layer;
+  const { faces, iconSize, depth, speed, opacity, motifs, response } = layer;
   const layout = useMemo(() => buildLayout(layer), [layer]);
   const count = layout.cells.length;
 
-  const [glyphs, setGlyphs] = useState<readonly string[]>(() =>
-    layout.cells.map((entry) => GLYPHS[entry.motif % GLYPHS.length] ?? ''),
+  const source = useRef<ThreeText<never> | null>(null);
+  // Eleven immutable glyph choices per cell. Only the selected record has a nonzero transform, so swaps never
+  // reshape text, rebuild a batch, or create a draw mesh while the film is running.
+  const pool = useRef<Glyphs | undefined>(undefined);
+  const selected = useRef(layout.cells.map((entry) => entry.motif % GLYPHS.length));
+  const hidden = useRef(new Matrix4().makeScale(0, 0, 0));
+  const matrix = useRef(new Matrix4());
+  const baseline = useRef(new Matrix4());
+  usePreparation(`icons:${depth}`, () => pool.current !== undefined);
+  useEffect(
+    () => () => {
+      pool.current?.dispose();
+      pool.current = undefined;
+    },
+    [],
   );
   const sheet = useRef<Group>(null);
   const offset = useRef(0);
   const morph = useRef<Morph | undefined>(undefined);
   const motifGlyphs = useRef<string[]>(GLYPHS.slice(0, motifs));
-  const cellGroups = useRef<(Group | undefined)[]>([]);
+  const cellGroups = useRef(
+    layout.cells.map((entry) => {
+      const group = new Group();
+      group.position.set(...entry.position);
+      return group;
+    }),
+  );
   const scratch = useRef(new Vector3());
   // The frame pointer defaults to screen centre, so without this the lattice is stirred before the mouse is touched.
   const pointerStrength = useRef(0);
@@ -227,6 +264,10 @@ export function IconPattern(layer: IconLayer) {
     waves: [],
     seenWave: 0,
     pointer: { x: 0, y: 0, active: false, strength: 0 },
+    hole: { x: 0, y: 0, horizon: 1, pull: 0, time: -1 },
+    departAt: new Float32Array(count).fill(Number.NaN),
+    swallowed: new Uint8Array(count),
+    replays: replayCount(),
   });
   const camera = useThree((three) => three.camera);
 
@@ -245,13 +286,9 @@ export function IconPattern(layer: IconLayer) {
     };
   }, []);
 
-  const register = useCallback((index: number, group: Group | null) => {
-    cellGroups.current[index] = group ?? undefined;
-  }, []);
-
   useEffect(() => {
     const timer = setInterval(() => {
-      if (morph.current !== undefined) return;
+      if (!heroReady() || morph.current !== undefined) return;
       const current = motifGlyphs.current;
       const motif = Math.floor(Math.random() * motifs);
       const spare = GLYPHS.filter((glyph) => !current.includes(glyph));
@@ -268,9 +305,24 @@ export function IconPattern(layer: IconLayer) {
   useFrame(({ pointer }, delta) => {
     const group = sheet.current;
     if (group === null) return;
-    const step = Math.min(delta, 0.05);
+    if (pool.current === undefined) {
+      const text = source.current;
+      if (text === null || text.commitState().status !== 'committed') return;
+      const [copies, decorations] = text.breakApart();
+      decorations?.dispose();
+      text.parent?.add(copies);
+      text.visible = false;
+      copies.name = `icon-pattern-${depth}`;
+      pool.current = copies;
+      for (let index = 0; index < copies.count; index++) copies.setMatrixAt(index, hidden.current);
+    }
+    const copies = pool.current;
+    const step = heroReady() ? Math.min(delta, 0.05) : 0;
 
-    offset.current = (offset.current + step * speed) % layout.loop;
+    // The conveyor keeps trying to carry the sheet; growing gravity gradually wins over that motion.
+    const collapse = hole();
+    offset.current += step * speed * (1 - 0.7 * collapse.pull);
+    if (collapse.beat === 'closed') offset.current %= layout.loop;
     group.position.x = -offset.current;
 
     collectWaves(group, state.current, layer.waveDelay);
@@ -279,30 +331,46 @@ export function IconPattern(layer: IconLayer) {
     if (pointerStrength.current < 0.01) pointerStrength.current = 0;
     state.current.pointer.strength = pointerStrength.current * response;
     trackPointer(group, camera.position.z, pointer, scratch.current, state.current.pointer, response);
+    trackHole(group, camera.position.z, hole(), scratch.current, state.current, layout);
     simulate(state.current, layout, step, layer);
-    applyStagger(morph, layout, setGlyphs);
+    applyStagger(morph, layout, (indices, symbol) => {
+      const next = GLYPHS.indexOf(symbol);
+      for (const index of indices) {
+        copies.setMatrixAt(index * GLYPHS.length + selected.current[index]!, hidden.current);
+        selected.current[index] = next;
+      }
+    });
     writeCells(cellGroups.current, layout, state.current, morph.current);
+    for (let index = 0; index < count; index++) {
+      const cellGroup = cellGroups.current[index]!;
+      const record = index * GLYPHS.length + selected.current[index]!;
+      if (!cellGroup.visible) copies.setMatrixAt(record, hidden.current);
+      else {
+        cellGroup.updateMatrix();
+        const glyph = copies.glyphAt(record)!;
+        baseline.current.makeTranslation(-glyph.advance / 2, iconSize / 2, 0);
+        matrix.current.copy(cellGroup.matrix).multiply(baseline.current);
+        copies.setMatrixAt(record, matrix.current);
+      }
+    }
   });
 
   return (
     <group position={[0, 0, depth]} rotation-z={ANGLE}>
       <group ref={sheet}>
-        <TextGroup name={`icon-pattern-${String(depth)}`}>
-          {layout.cells.map((entry, index) => (
-            <Cell
-              cell={cell}
-              colour={entry.colour}
-              font={faces.icons}
-              icon={glyphs[index] ?? ''}
-              iconSize={iconSize}
-              index={index}
-              key={entry.key}
-              opacity={opacity}
-              position={entry.position}
-              register={register}
-            />
+        <Text
+          ref={source}
+          font={faces.icons}
+          layout={{ wrap: 'none' }}
+          material={pattern}
+          style={{ fontSize: iconSize, lineHeight: 1, opacity }}
+        >
+          {layout.cells.map((entry) => (
+            <Text key={entry.key} style={{ color: entry.colour }}>
+              {GLYPHS.join('')}
+            </Text>
           ))}
-        </TextGroup>
+        </Text>
       </group>
     </group>
   );
@@ -358,9 +426,64 @@ function trackPointer(
   target.active = true;
 }
 
+/**
+ * Brings the black hole into sheet space. It sits on the camera's axis, so on this sheet it is where the sheet
+ * crosses that axis, with a horizon widened by the sheet's distance from the camera. A replay gives the hole's
+ * catch back and puts every cell home.
+ */
+function trackHole(
+  sheet: Group,
+  cameraZ: number,
+  state: HoleState,
+  scratch: Vector3,
+  lattice: LatticeState,
+  layout: Layout,
+): void {
+  const replays = replayCount();
+  if (replays !== lattice.replays) {
+    lattice.replays = replays;
+    lattice.swallowed.fill(0);
+    lattice.x.fill(0);
+    lattice.y.fill(0);
+    lattice.vx.fill(0);
+    lattice.vy.fill(0);
+  }
+  lattice.hole.pull = state.pull;
+  lattice.hole.time = state.time;
+  if (state.beat === 'closed') {
+    lattice.departAt.fill(Number.NaN);
+    return;
+  }
+  // The pop takes whatever is left.
+  if (state.beat === 'black') lattice.swallowed.fill(1);
+  sheet.updateWorldMatrix(true, false);
+  const depth = sheet.getWorldPosition(scratch).z;
+  scratch.set(state.x, state.y, depth);
+  sheet.worldToLocal(scratch);
+  lattice.hole.x = scratch.x;
+  lattice.hole.y = scratch.y;
+  lattice.hole.horizon = (state.horizon * (cameraZ - depth)) / cameraZ;
+  // The moment the hole opens, every cell is given its turn: nearer ones first, with some jitter.
+  if (Number.isNaN(lattice.departAt[0] ?? Number.NaN)) {
+    const reach = (index: number) =>
+      Math.hypot(
+        lattice.hole.x - ((layout.restX[index] ?? 0) + (lattice.x[index] ?? 0)),
+        lattice.hole.y - ((layout.restY[index] ?? 0) + (lattice.y[index] ?? 0)),
+      );
+    // Use visible world distance, not the repeated offscreen lattice's extent. The field reaches a new
+    // band of the viewport as gravity builds, consistently at both sheet depths.
+    const reachOnSheet = (HORIZON * 9 * (cameraZ - depth)) / cameraZ;
+    for (let index = 0; index < lattice.departAt.length; index += 1) {
+      lattice.departAt[index] = departureAt(reach(index) / reachOnSheet, index);
+    }
+  }
+}
+
 /** Fixed-step integration: spring home, damping, neighbour coupling, the travelling ring, and the pointer. */
 function simulate(state: LatticeState, layout: Layout, delta: number, layer: IconLayer): void {
   const count = layout.cells.length;
+  const open = state.hole.time >= 0;
+  const limit = open ? HOLE_REACH : MAX_OFFSET;
   state.accumulator += delta;
   let guard = 0;
   while (state.accumulator >= SUBSTEP && guard < 8) {
@@ -374,21 +497,48 @@ function simulate(state: LatticeState, layout: Layout, delta: number, layer: Ico
 
     const waveCount = state.waves.length;
     for (let index = 0; index < count; index += 1) {
+      if (state.swallowed[index] === 1) continue;
       const px = state.x[index] ?? 0;
       const py = state.y[index] ?? 0;
-      let ax = -STIFFNESS * px - DAMPING * (state.vx[index] ?? 0);
-      let ay = -STIFFNESS * py - DAMPING * (state.vy[index] ?? 0);
+      // A cell's turn: it holds its place until its moment, then gradually lets go of
+      // its springs entirely and is pulled in.
+      const departure = open ? (state.departAt[index] ?? Number.NaN) : Number.NaN;
+      const loose = open && !Number.isNaN(departure) ? release(state.hole.time, departure) : 0;
+      const hold = 1 - loose;
+      const damping = DAMPING + (HOLE_DRAG - DAMPING) * loose;
+      let ax = -STIFFNESS * hold * px - damping * (state.vx[index] ?? 0);
+      let ay = -STIFFNESS * hold * py - damping * (state.vy[index] ?? 0);
 
       const base = index * 4;
       for (let link = 0; link < 4; link += 1) {
         const other = layout.neighbours[base + link] ?? -1;
-        if (other < 0) continue;
-        ax += COUPLING * ((state.x[other] ?? 0) - px);
-        ay += COUPLING * ((state.y[other] ?? 0) - py);
+        if (other < 0 || state.swallowed[other] === 1) continue;
+        ax += COUPLING * hold * ((state.x[other] ?? 0) - px);
+        ay += COUPLING * hold * ((state.y[other] ?? 0) - py);
       }
 
       const restX = layout.restX[index] ?? 0;
       const restY = layout.restY[index] ?? 0;
+
+      if (open && !Number.isNaN(departure)) {
+        const dx = state.hole.x - (restX + px);
+        const dy = state.hole.y - (restY + py);
+        const distance = Math.hypot(dx, dy);
+        if (loose > 0 && distance < state.hole.horizon) {
+          state.swallowed[index] = 1;
+          continue;
+        }
+        if (loose > 0) {
+          // Into the hole, and round it: the pull grows as the inverse square of the distance in horizons, and part
+          // of it runs across the line to the centre, which is what winds the sheet into a spiral.
+          const near = distance / state.hole.horizon;
+          const gravity = 0.12 + state.hole.pull * 3;
+          const force = (HOLE_PULL / (near * near + 0.35) + 70) * loose * gravity;
+          const round = swirl(near, HOLE_SWIRL);
+          ax += (dx / distance) * force - (dy / distance) * force * round;
+          ay += (dy / distance) * force + (dx / distance) * force * round;
+        }
+      }
 
       // Indexed, not `for...of`: this is inside the cell loop inside the substep loop, so an iterator here is ten
       // thousand short-lived objects a frame — and the list is empty except in the two seconds after an impact.
@@ -421,12 +571,13 @@ function simulate(state: LatticeState, layout: Layout, delta: number, layer: Ico
         }
       }
 
-      const vx = clamp((state.vx[index] ?? 0) + ax * SUBSTEP, MAX_SPEED);
-      const vy = clamp((state.vy[index] ?? 0) + ay * SUBSTEP, MAX_SPEED);
+      const speed = open ? MAX_SPEED * 3 : MAX_SPEED;
+      const vx = clamp((state.vx[index] ?? 0) + ax * SUBSTEP, speed);
+      const vy = clamp((state.vy[index] ?? 0) + ay * SUBSTEP, speed);
       state.vx[index] = vx;
       state.vy[index] = vy;
-      state.x[index] = clamp(px + vx * SUBSTEP, MAX_OFFSET);
-      state.y[index] = clamp(py + vy * SUBSTEP, MAX_OFFSET);
+      state.x[index] = clamp(px + vx * SUBSTEP, limit);
+      state.y[index] = clamp(py + vy * SUBSTEP, limit);
     }
   }
 }
@@ -442,7 +593,7 @@ const ready: number[] = [];
 function applyStagger(
   morph: { current: Morph | undefined },
   layout: Layout,
-  setGlyphs: (update: (glyphs: readonly string[]) => readonly string[]) => void,
+  select: (indices: readonly number[], symbol: string) => void,
 ): void {
   const current = morph.current;
   if (current === undefined) return;
@@ -459,13 +610,7 @@ function applyStagger(
     current.applied.add(index);
     ready.push(index);
   }
-  if (ready.length > 0) {
-    setGlyphs((glyphs) => {
-      const next = [...glyphs];
-      for (const index of ready) next[index] = current.to;
-      return next;
-    });
-  }
+  if (ready.length > 0) select(ready, current.to);
   if (elapsed > STAGGER_SECONDS + MORPH_SECONDS) morph.current = undefined;
 }
 
@@ -477,12 +622,30 @@ function writeCells(
   morph: Morph | undefined,
 ): void {
   const elapsed = morph === undefined ? 0 : (performance.now() - morph.start) / 1000;
+  const { horizon, time } = state.hole;
   for (let index = 0; index < layout.cells.length; index += 1) {
     const group = groups[index];
     if (group === undefined) continue;
-    group.position.x = (layout.restX[index] ?? 0) + (state.x[index] ?? 0);
-    group.position.y = (layout.restY[index] ?? 0) + (state.y[index] ?? 0);
+    group.visible = state.swallowed[index] !== 1;
+    const x = (layout.restX[index] ?? 0) + (state.x[index] ?? 0);
+    const y = (layout.restY[index] ?? 0) + (state.y[index] ?? 0);
+    group.position.x = x;
+    group.position.y = y;
     group.rotation.y = flipAngle(layout, index, morph, elapsed);
+    // Room for the bend: a released cell's quad grows as it nears the hole, and the shader bends the glyph inside.
+    let grow = 1;
+    const departure = state.departAt[index] ?? Number.NaN;
+    if (time >= 0 && !Number.isNaN(departure)) {
+      const loose = release(time, departure);
+      const near = Math.hypot(state.hole.x - x, state.hole.y - y) / horizon;
+      grow = 1 + (HOLE_GROW * loose) / (near * near + 0.35);
+    }
+    const loose = time >= 0 && !Number.isNaN(departure) ? release(time, departure) : 0;
+    const vx = state.vx[index] ?? 0;
+    const vy = state.vy[index] ?? 0;
+    const stretch = 1 + Math.min(1.8, Math.hypot(vx, vy) * 0.045) * loose;
+    group.rotation.z = loose > 0 ? Math.atan2(vy, vx) * loose : 0;
+    group.scale.set(grow * stretch, grow / Math.sqrt(stretch), 1);
   }
 }
 
@@ -496,42 +659,3 @@ function flipAngle(layout: Layout, index: number, morph: Morph | undefined, elap
   const half = progress < 0.5 ? progress / 0.5 : (progress - 0.5) / 0.5;
   return progress < 0.5 ? (Math.PI / 2) * half : -(Math.PI / 2) * (1 - half);
 }
-
-/** Memoised so a motif change re-renders only the cells that have just taken their new glyph. */
-const Cell = memo(function Cell({
-  cell,
-  colour,
-  font,
-  icon,
-  iconSize,
-  index,
-  opacity,
-  position,
-  register,
-}: {
-  readonly cell: number;
-  readonly colour: string;
-  readonly font: SlugFont;
-  readonly icon: string;
-  readonly iconSize: number;
-  readonly index: number;
-  readonly opacity: number;
-  readonly position: Vec3;
-  readonly register: (index: number, group: Group | null) => void;
-}) {
-  return (
-    <group position={position} ref={(group) => register(index, group)}>
-      <Text
-        constraints={{ width: { mode: 'exact', size: cell } }}
-        font={font}
-        layout={{ align: 'center', wrap: 'none' }}
-        material={pattern}
-        // Centred on the group origin, so the flip turns about the icon rather than its paragraph's left edge.
-        position={[-cell / 2, iconSize / 2, 0]}
-        style={{ color: colour, fontSize: iconSize, lineHeight: 1, opacity }}
-      >
-        {icon}
-      </Text>
-    </group>
-  );
-});
