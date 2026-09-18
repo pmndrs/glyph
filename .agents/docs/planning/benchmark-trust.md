@@ -343,12 +343,12 @@ A slower comparison is not itself a process failure in Labs 0.9.0. The initial w
 
 ### Replaced by labs benches
 
-| Today                            | Why it moves                                                                                                                                                    |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `glyph:rust-layout-benchmark`    | 31 in-process reps → block medians; its eight invalidation cases map directly onto benches 1–7                                                                  |
-| `glyph:layout-benchmark`         | **retired** after `layout.bench.ts` reproduced its 22k-glyph public invalidation classes and produced Labs records                                              |
-| `glyph:retained-batch-benchmark` | **retired** after `batching.bench.ts` reproduced its 64/128/256/512 nested `Text` publication sweep, including exact one-draw and stable-glyph-count assertions |
-| `glyph:kernel-lab` (Node)        | 101 in-process samples with no significance test; scalar/auto/explicit SIMD variants become three benches compared pairwise                                     |
+| Today                            | Why it moves                                                                                                                                                            |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `glyph:rust-layout-benchmark`    | 31 in-process reps → block medians; its eight invalidation cases map directly onto benches 1–7                                                                          |
+| `glyph:layout-benchmark`         | **retired** after `layout.bench.ts` reproduced its 22k-glyph public invalidation classes and produced Labs records                                                      |
+| `glyph:retained-batch-benchmark` | **retired** after `batching.bench.ts` reproduced its 64/128/256/512 nested `Text` publication sweep, including exact one-draw and stable-glyph-count assertions         |
+| `glyph:kernel-lab` (Node)        | **retired** after the internal Labs kernel suite reproduced every scalar/auto/explicit operation at 22k and 86k target scales with output-hash and memory-growth checks |
 
 The fixture and corpus helpers are reused where their ownership still fits. Workflows are retired only after their replacements produce records; replacement and deletion land in separate commits.
 

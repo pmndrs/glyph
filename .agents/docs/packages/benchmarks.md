@@ -718,8 +718,8 @@ ms versus 0.0625 ms scalar for chunk summaries, 0.009375 versus 0.053125 ms for 
 ms for bidi masks. The same run executes the production validated-policy interpreter over a representative 17-operation
 program and includes its F32×4, U32, and U16 buffers in the scalar/auto/SIMD byte-identity gate. At 25,515 glyphs,
 explicit SIMD measures 0.438 ms p95 versus 1.113 ms scalar; at 100,602 it measures 1.750 versus 4.350 ms. Browser timer
-quantization is visible in those figures, so Node retains the finer candidate ranking while Chromium supplies the
-independent engine-admission check.
+quantization is visible in those figures, so the internal Labs kernel suite supplies finer fresh-process candidate
+ranking while Chromium supplies the independent engine-admission check.
 
 The bidi transition-scan lane records three named inputs. `transitionScanX*` uses the captured resolved levels, but the
 current captured corpus is pure LTR Latin and therefore resolves to the same all-zero levels as the explicit
