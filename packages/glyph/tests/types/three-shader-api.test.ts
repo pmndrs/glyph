@@ -40,6 +40,10 @@ const customMaterial = defineTextMaterial((context) => {
 const bitmapCoverage: Node<'float'> = bitmapOutput.coverage;
 const mtsdfOutlineCoverage: Node<'float'> = mtsdfOutput.outlineCoverage;
 const slugCoverage: Node<'float'> = slugOutput.coverage;
+// Slug can integrate at a coordinate the fragment chooses, so a warp of the letterform is the caller's inverse map.
+const slugWarpedCoverage: Node<'float'> = slugOutput.coverageAt(slugOutput.renderCoordinate.mul(0.5));
+// @ts-expect-error The coordinate is em space, a vec2; a float cannot address the integral.
+slugOutput.coverageAt(slugOutput.coverage);
 
 const material = new THREE.MeshBasicNodeMaterial();
 material.positionNode = slugOutput.position;
@@ -68,6 +72,7 @@ slugShader({ ...slugInstance, curveBaseTexel: slugOutput.coverage }, slugResourc
 defineTextMaterial(() => ({}));
 
 void bitmapCoverage;
+void slugWarpedCoverage;
 void threeBitmapOutput;
 void mtsdfOutlineCoverage;
 void slugCoverage;

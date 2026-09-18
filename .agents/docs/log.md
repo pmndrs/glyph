@@ -2,6 +2,9 @@
 
 ## 2026-09-18
 
+- **Let Slug materials integrate coverage at a chosen coordinate** — `TslSlugShaderOutput.coverageAt(coordinate)`
+  evaluates the analytic integral wherever a fragment asks, in both Three configurations, so a material can bend
+  the letterform itself by integrating at the inverse of a warp. See [the glyph reference](packages/glyph.md).
 - **Added a soft colored fringe around the flat glass title** — A high-resolution shader projection follows the
   real Slug coverage and depth. The footprint spreads and fades during the lift and tightens on landing, without
   changing the studio lighting. WebGPU controls verify tint, depth response, exact return to rest, and resizing.

@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:48d7c834b3535286bbe36038c945134846c0cb3771f7380160f298746d669c54'
+source_digest: 'sha256:d9164fd86facded30047e344a43bd5bc8ce5f967e48e304da579f1d2bbe61bec'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -728,6 +728,11 @@ Both Three configurations use the same `TslMsdfShaderOutput` type; raw TypeGPU `
 `msdfRenderDetailed()` return the corresponding numeric fields. The private TypeGPU reconstruction supplies one set of
 distances to coverage and custom effects. `msdfCoverage()` retains its coverage-vector return contract. The
 [material reference](../planning/three-api.md#msdf-distance-fields) defines units, sign, and effect limits.
+
+Slug material shaders publish `coverageAt(coordinate)` beside `coverage`: the same analytic integral at an em-space
+coordinate the fragment chooses, so a material can bend the letterform itself by integrating at the inverse of a warp,
+with antialiasing taken from that coordinate's own screen footprint. `coverage` is `coverageAt(renderCoordinate)`; both
+Three configurations publish the same `TslSlugShaderOutput` type.
 
 Bitmap atlas pages within one strike are renderer layers, not independent draw resources. The font binding exposes one
 strike resource, the Rust Codec program writes the selected page as one u32 instance lane, and Three uploads the strike as one
