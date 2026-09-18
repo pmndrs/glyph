@@ -2,6 +2,11 @@
 
 ## 2026-09-18
 
+- **Staggered the stained-glass landings and softened their shadows** — Each pane lands 35 ms after its neighbour
+  and triggers its own ripple. Camera-depth travel ends in a brief damped jostle. MSDF signed distances drive
+  colored contact shadows that soften and fade during the
+  lift, then tighten at contact. The WebGPU workflow checks timing and shadow pixels. See [the hero reference](packages/hero.md).
+
 - **Colored the hero title as stained glass** — G, L, Y, P, and H each have a separate tint and physical finish,
   while retaining smooth faces and the existing background. A WebGPU check compares the five materials against
   an untinted control and saves a review screenshot. See [the hero package reference](packages/hero.md).

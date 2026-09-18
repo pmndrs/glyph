@@ -1,6 +1,6 @@
 /**
  * Impacts, published by whatever lands and read by whatever reacts. The title fires one per letter, so the sheets are
- * struck in five places at once rather than pushed from a single point at the origin — a word-shaped disturbance
+ * struck at each pane’s landing rather than pushed from a single point at the origin — a word-shaped disturbance
  * instead of a circular one. Module state: there is a single scene.
  */
 export interface Shockwave {

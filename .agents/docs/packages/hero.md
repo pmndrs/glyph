@@ -5,7 +5,7 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:41993181300dd833fea998729aff804571001fc5424eb07e57c0acbc5f265542'
+source_digest: 'sha256:3fac6ab5372f27f7a8e0220062520652a6aff612db82a7e65b985425e60d1021'
 tags: [package, example, react-three-fiber, webgpu, slug, vite]
 sources:
   - id: manifest
@@ -45,10 +45,11 @@ text with the Slug raster, whose analytic coverage is what the techniques depend
 
 The default scene builds two interleaved lattices of occult icons on mass-spring grids at different depths, scaled
 so they interleave on screen and stay in phase. The Slug-glass `GLYPH` and feature line start at rest. Press Space
-to lift the title towards the camera and slam it back into place, sending a shockwave through both lattices, then
-retype the feature line. Each letter applies its own force so the icons reflow around the letterforms rather than
-around a bounding box. Holding Space
-does not restart the animation, and focused form controls retain their normal keyboard behavior.
+to lift the title towards the camera and slam it back into place. Each pane travels straight along the camera's
+depth axis, 35 ms after its neighbour, with a separate impact through both lattices on landing. A short damped
+rotation and sideways jostle around each measured letter centre settles within 380 ms of contact. The feature line retypes after
+the final landing. Holding Space does not restart the animation, and focused form controls retain their normal
+keyboard behavior.
 
 The development inspector starts hidden in both scenes; D toggles it.
 
@@ -57,9 +58,15 @@ Each has its own attenuation tint, thickness, roughness, and refractive index, w
 physical dispersion. The paper and icon background stay unchanged; there are no added crystal lights, internal
 rainbow beams, or hidden studio images.
 
+Each pane casts a colored contact shadow from the MSDF companion's `trueDistance` and `pixelRange`. A smooth
+falloff replaces the former hard offset shadow. The shadows remain on the surface as the letters rise: height
+increases their offset and softness while reducing opacity, then restores a tight contact on landing. The falloff
+stays within the baked distance range to avoid rectangular atlas-cell edges.
+
 `mise exec -- pnpm scripts run hero:refraction-check` verifies the real scene on WebGPU through Vitexec. It requires
 five stained-glass materials, compares them with an untinted control, checks that changes stay inside the title,
-checks repeatable captures and resizing, and saves `apps/hero/.cache/refraction.png`. Browser errors fail the workflow.
+drives the real Space handler in fixed simulation steps to check five staggered impacts and ignored key repeats,
+compares against a shadow-free control, checks repeatable captures and resizing, and saves `apps/hero/.cache/refraction.png`. Browser errors fail the workflow.
 
 `?scene=origin` sets a word off axis over a black reflector in a dark room. A NASA SDO clip is masked into the
 letterforms, and the same clip lights the scene through `Lightformer`s inside an `Environment`, so the word and the

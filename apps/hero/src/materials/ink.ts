@@ -2,6 +2,7 @@ import { defineTextMaterial, type ThreeTextMaterialContext } from '@pmndrs/glyph
 import {
   abs,
   color,
+  cos,
   cross,
   dFdx,
   dFdy,
@@ -17,6 +18,7 @@ import {
   sin,
   smoothstep,
   step,
+  uniform,
   uv,
   vec3,
 } from 'three/tsl';
@@ -27,6 +29,7 @@ import {
   MeshPhysicalNodeMaterial,
   MeshStandardNodeMaterial,
   type MeshPhysicalNodeMaterialParameters,
+  Vector3,
   type Node,
 } from 'three/webgpu';
 
@@ -36,7 +39,6 @@ type SlugContext = Extract<ThreeTextMaterialContext, { format: 'pmndrs.slug' }>;
 
 /** How strongly each glyph quad bulges as a lens. */
 const LENS_CURVATURE = 0.45;
-const SHADOW_INK = color('#2d323b');
 const RIM = color('#7cc8ff');
 const SWEEP = color('#ff5ad2');
 const GLITCH_A = color('#00f0ff');
@@ -59,7 +61,7 @@ export const ink = defineTextMaterial((context) => {
  * Glass Slug letters: physical transmission refracts the scene behind them, with dispersion splitting the light.
  * Smooth lens normals keep the faces continuous while bending the background icons.
  */
-function createGlass(properties: MeshPhysicalNodeMaterialParameters = {}) {
+function createGlass(properties: MeshPhysicalNodeMaterialParameters = {}, motion?: PaneMotion) {
   return defineTextMaterial((context) => {
     if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
     const material = new MeshPhysicalNodeMaterial({
@@ -84,6 +86,9 @@ function createGlass(properties: MeshPhysicalNodeMaterialParameters = {}) {
     // Each Slug glyph is drawn on a unit quad, so its uv is a per-letter lens: tilting the normal outward from the
     // centre curves the refraction, and the icons behind magnify and bend as they cross each letterform.
     const face = shapeSlug(material, context, { drift: false });
+    if (motion !== undefined) {
+      material.positionNode = jostle(context.position, motion).add(vec3(0, 0, motion.depth));
+    }
     const lens = uv().sub(0.5).mul(2);
     // Falls to zero at the quad border, so neighbouring glyph quads do not show their seams.
     const falloff = float(1).sub(lens.length().mul(lens.length())).max(0).mul(LENS_CURVATURE);
@@ -96,6 +101,24 @@ function createGlass(properties: MeshPhysicalNodeMaterialParameters = {}) {
 
 export const glass = createGlass();
 
+interface PaneMotion {
+  readonly depth: Node<'float'>;
+  readonly height: Node<'float'>;
+  readonly angle: Node<'float'>;
+  readonly sway: Node<'float'>;
+  readonly pivot: Node<'vec3'>;
+}
+
+/** Rotate each pane around its measured ink centre, then slide it a little as it settles. */
+function jostle(position: Node<'vec3'>, motion: PaneMotion): Node<'vec3'> {
+  const local = position.sub(motion.pivot);
+  const c = cos(motion.angle);
+  const s = sin(motion.angle);
+  return vec3(local.x.mul(c).sub(local.y.mul(s)), local.x.mul(s).add(local.y.mul(c)), local.z)
+    .add(motion.pivot)
+    .add(vec3(motion.sway, 0, 0));
+}
+
 /** Separate inline materials preserve one shaped word while giving each pane its own tint and finish. */
 export const stainedGlassLetters = [
   { letter: 'G', tint: '#f06a86', thickness: 2.8, roughness: 0.035, ior: 1.52 },
@@ -103,35 +126,58 @@ export const stainedGlassLetters = [
   { letter: 'Y', tint: '#55bd91', thickness: 3, roughness: 0.045, ior: 1.54 },
   { letter: 'P', tint: '#63a1e6', thickness: 2.6, roughness: 0.025, ior: 1.56 },
   { letter: 'H', tint: '#b18add', thickness: 2.9, roughness: 0.05, ior: 1.53 },
-].map(({ letter, tint, thickness, roughness, ior }) => ({
-  letter,
-  material: createGlass({
-    name: `stained-glass-${letter}`,
-    color: new Color(tint).lerp(new Color('#ffffff'), 0.38),
-    attenuationColor: new Color(tint),
-    attenuationDistance: 4,
-    thickness,
-    roughness,
-    ior,
-    dispersion: 0.7,
-    iridescence: 0,
-  }),
-}));
-
-/**
- * The title's shadow, from the MSDF companion's `style.shadow`. Only the shadow coverage is drawn — never the fill —
- * so the visible letterform stays the Slug word in front. The style's shadow is a hard offset of the field, so a few
- * of these at different offsets and low alpha are stacked to soften the edge.
- */
-export const sdfShadow = defineTextMaterial((context) => {
-  if (context.kind !== 'glyph' || context.format !== 'pmndrs.msdf') return context.createDefaultMaterial();
-  const { shader, position } = context;
-  const material = new MeshBasicNodeMaterial({ side: DoubleSide, transparent: true, depthWrite: false });
-  material.positionNode = position;
-  material.colorNode = SHADOW_INK;
-  material.opacityNode = shader.shadowCoverage.mul(shader.opacity);
-  return material;
+].map(({ letter, tint, thickness, roughness, ior }) => {
+  const motion = {
+    depth: uniform(0),
+    height: uniform(0),
+    angle: uniform(0),
+    sway: uniform(0),
+    pivot: uniform(new Vector3()),
+  };
+  return {
+    letter,
+    ...motion,
+    material: createGlass(
+      {
+        name: `stained-glass-${letter}`,
+        color: new Color(tint).lerp(new Color('#ffffff'), 0.38),
+        attenuationColor: new Color(tint),
+        attenuationDistance: 4,
+        thickness,
+        roughness,
+        ior,
+        dispersion: 0.7,
+        iridescence: 0,
+      },
+      motion,
+    ),
+    shadow: createSoftShadow(letter, tint, motion),
+  };
 });
+
+/** The true SDF supplies continuous falloff, independent of the shader's already-clamped fill opacity. */
+function createSoftShadow(letter: string, tint: string, motion: PaneMotion) {
+  const { height } = motion;
+  return defineTextMaterial((context) => {
+    if (context.kind !== 'glyph' || context.format !== 'pmndrs.msdf') return context.createDefaultMaterial();
+    const { shader, position } = context;
+    const material = new MeshBasicNodeMaterial({
+      name: `glass-shadow-${letter}`,
+      side: DoubleSide,
+      transparent: true,
+      depthWrite: false,
+    });
+    material.positionNode = jostle(position, motion).add(
+      vec3(height.mul(0.14).add(0.06), height.mul(-0.18).sub(0.09), 0),
+    );
+    material.colorNode = color(new Color(tint).multiplyScalar(0.45));
+    // Fade to zero inside the baked field's range, avoiding a rectangular cutoff at the atlas-cell border.
+    const radius = height.mul(4).add(2.5).min(shader.pixelRange.mul(0.35));
+    const falloff = smoothstep(radius.negate(), radius, shader.trueDistance.mul(shader.pixelRange));
+    material.opacityNode = falloff.mul(float(1).sub(height.mul(0.75))).mul(0.25);
+    return material;
+  });
+}
 
 /** Flat, unlit ink for the background pattern: crisp coverage, no lighting cost across hundreds of icons. */
 export const pattern = defineTextMaterial((context) => {
