@@ -1,5 +1,116 @@
 const CHUNK_SIZES = [32, 64, 128];
 
+export const kernelLabOperations = [
+  'pack',
+  'breakMasksX1',
+  'breakMasksX2',
+  'breakMasksX4',
+  'breakMasksX8',
+  'bidiMasksX1',
+  'bidiMasksX2',
+  'bidiMasksX4',
+  'bidiMasksX8',
+  'flaggedScanX1',
+  'flaggedScanX2',
+  'flaggedScanX4',
+  'flaggedScanX8',
+  'transitionScanX1',
+  'transitionScanX2',
+  'transitionScanX4',
+  'transitionScanX8',
+  'transitionUniformX1',
+  'transitionUniformX2',
+  'transitionUniformX4',
+  'transitionUniformX8',
+  'transitionMixedX1',
+  'transitionMixedX2',
+  'transitionMixedX4',
+  'transitionMixedX8',
+  'codec',
+  'chunk32',
+  'chunk64',
+  'chunk128',
+  'i64Chunk64x1',
+  'i64Chunk64x2',
+  'i64Chunk64x4',
+  'i64Chunk64x8',
+];
+
+export async function createKernelLabSession(wasm, name, input) {
+  const module = await WebAssembly.compile(wasm);
+  const instance = await WebAssembly.instantiate(module, {});
+  const exports = instance.exports;
+  const expectedBackend = name === 'explicit' ? 1 : 0;
+  if (exports.pmndrs_glyph_kernel_lab_backend() !== expectedBackend) {
+    throw new Error(`${name} artifact selected the wrong compile-time kernel backend`);
+  }
+  registerCodec(exports, input.codec);
+  const aligned = createMemoryFixture(exports, input, 0);
+  const uniform = createMemoryFixture(exports, { ...input, levels: new Uint8Array(input.glyphs) }, 0);
+  const mixed = createMemoryFixture(exports, { ...input, levels: input.mixedLevels }, 0);
+  const memoryBefore = exports.memory.buffer;
+  const expectedHash = await executeAndHash(exports, aligned, false);
+  validateTransitionScan(exports, uniform);
+  validateTransitionScan(exports, mixed);
+
+  const operations = {
+    pack: () => callPack(exports, aligned, false),
+    breakMasksX1: () => callBreakMasks(exports, aligned, 1),
+    breakMasksX2: () => callBreakMasks(exports, aligned, 2),
+    breakMasksX4: () => callBreakMasks(exports, aligned, 4),
+    breakMasksX8: () => callBreakMasks(exports, aligned, 8),
+    bidiMasksX1: () => callBidiMasks(exports, aligned, 1),
+    bidiMasksX2: () => callBidiMasks(exports, aligned, 2),
+    bidiMasksX4: () => callBidiMasks(exports, aligned, 4),
+    bidiMasksX8: () => callBidiMasks(exports, aligned, 8),
+    flaggedScanX1: () => callFlaggedScan(exports, aligned, 1),
+    flaggedScanX2: () => callFlaggedScan(exports, aligned, 2),
+    flaggedScanX4: () => callFlaggedScan(exports, aligned, 4),
+    flaggedScanX8: () => callFlaggedScan(exports, aligned, 8),
+    transitionScanX1: () => callTransitionScan(exports, aligned, 1),
+    transitionScanX2: () => callTransitionScan(exports, aligned, 2),
+    transitionScanX4: () => callTransitionScan(exports, aligned, 4),
+    transitionScanX8: () => callTransitionScan(exports, aligned, 8),
+    transitionUniformX1: () => callTransitionScan(exports, uniform, 1),
+    transitionUniformX2: () => callTransitionScan(exports, uniform, 2),
+    transitionUniformX4: () => callTransitionScan(exports, uniform, 4),
+    transitionUniformX8: () => callTransitionScan(exports, uniform, 8),
+    transitionMixedX1: () => callTransitionScan(exports, mixed, 1),
+    transitionMixedX2: () => callTransitionScan(exports, mixed, 2),
+    transitionMixedX4: () => callTransitionScan(exports, mixed, 4),
+    transitionMixedX8: () => callTransitionScan(exports, mixed, 8),
+    codec: () => callCodec(exports, aligned, false),
+    chunk32: () => callSummaries(exports, aligned, 32),
+    chunk64: () => callSummaries(exports, aligned, 64),
+    chunk128: () => callSummaries(exports, aligned, 128),
+    i64Chunk64x1: () => callI64Summaries(exports, aligned, 64, 1),
+    i64Chunk64x2: () => callI64Summaries(exports, aligned, 64, 2),
+    i64Chunk64x4: () => callI64Summaries(exports, aligned, 64, 4),
+    i64Chunk64x8: () => callI64Summaries(exports, aligned, 64, 8),
+  };
+
+  return {
+    run(operation) {
+      const call = operations[operation];
+      if (call === undefined) throw new RangeError(`unknown kernel lab operation: ${operation}`);
+      const status = call();
+      if (status !== 0) throw new Error(`kernel-lab call failed with status ${status}`);
+      return status;
+    },
+    async verify() {
+      if (exports.memory.buffer !== memoryBefore) throw new Error(`${name} grew memory during a warm kernel`);
+      const hash = await executeAndHash(exports, aligned, false);
+      if (hash !== expectedHash) throw new Error(`${name} warm kernel changed the validated output`);
+      return hash;
+    },
+    dispose() {
+      exports.pmndrs_glyph_shaper_dealloc(aligned.allocationPointer, aligned.allocationLength);
+      exports.pmndrs_glyph_shaper_dealloc(uniform.allocationPointer, uniform.allocationLength);
+      exports.pmndrs_glyph_shaper_dealloc(mixed.allocationPointer, mixed.allocationLength);
+    },
+  };
+}
+
 export async function benchmarkKernelArtifact(wasm, name, input, options) {
   const module = await WebAssembly.compile(wasm);
   const instance = await WebAssembly.instantiate(module, {});

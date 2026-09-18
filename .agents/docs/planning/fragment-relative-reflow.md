@@ -1039,8 +1039,8 @@ not an acceptance mechanism.
 
 ### Rust and publication
 
-Run the pinned `glyph:rust-layout-benchmark` at 22k glyphs with `column-resize`, 40 warmups, 101 repetitions, and raw
-samples for Bitmap, MTSDF, and Slug. Interleave baseline/candidate order over at least three rounds on the same machine.
+Run `benchmark:labs-internal` at 22k glyphs with the `column-resize` suite and eight fresh-process blocks for Bitmap,
+MTSDF, and Slug. Save and compare baseline/candidate records on the same machine.
 Also run measurement query, cold layout, font-size changes, localized edits/splices, equivalent-width no-ops, mixed bidi,
 dense CJK character wrap, justification, polygon exclusions, a moving obstacle, and the stylized drop-cap Editorial
 scene. Attribute projection, slot resolution, composition, positioning, publication, and renderer submit separately.
