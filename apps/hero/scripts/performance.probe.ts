@@ -31,7 +31,7 @@ renderer.onDeviceLost = (info) => {
 const hole = (globalThis as { heroHole?: { state(): HoleState } }).heroHole;
 if (hole === undefined) throw new Error('Missing hero timeline');
 
-// Three 0.185.1 implements these backend methods; @types/three 0.185.4 omits them.
+// Three 0.185.1 implements these backend methods. @types/three 0.185.4 omits them.
 const backend = renderer.backend as WebGPUBackend & {
   createProgram(...args: unknown[]): void;
   createRenderPipeline(...args: unknown[]): void;

@@ -1,11 +1,6 @@
 import { TITLE_WORDS, type TitleWord } from './content';
 
-/**
- * The cycle, precomputed. Words advance by grapheme cluster rather than by code unit: Hindi carries combining marks
- * and Arabic reshapes as letters join, so slicing the raw string mid-cluster produces states the script never has.
- * Segmenting first means every intermediate frame is a word the language could actually write — and in Arabic you
- * get to watch the letters change form as the word assembles, which is the engine doing its job in public.
- */
+/** Precompute grapheme prefixes so combining marks and joined scripts remain intact during typing. */
 export interface CycleWord extends TitleWord {
   readonly clusters: readonly string[];
   /** Cumulative prefixes, so a frame is a lookup rather than a join. */
@@ -17,10 +12,7 @@ function split(text: string): string[] {
   return [...segmenter.segment(text)].map((entry) => entry.segment);
 }
 
-/**
- * `?word=<n>` pins the cycle to one language and loops it, so a single word's typing can be watched on its own
- * instead of waited for. Development only, and it falls back to the whole set if the index names nothing.
- */
+/** Development control `?word=<n>` repeats one language. An absent or invalid index uses the whole cycle. */
 const PINNED = import.meta.env.DEV ? new URLSearchParams(location.search).get('word') : null;
 const ONLY = PINNED === null ? undefined : TITLE_WORDS[Number(PINNED)];
 const CHOSEN = ONLY === undefined ? TITLE_WORDS : [ONLY];
@@ -32,23 +24,13 @@ export const CYCLE: readonly CycleWord[] = CHOSEN.map((word) => {
   return { ...word, clusters, prefixes };
 });
 
-/**
- * The schedule, in seconds.
- *
- * This was counted in frames, on the theory that a seconds-per-cluster rate lands between two and three frame
- * intervals and beats. The real cause of that beat was the size of the budget, not its unit: at three frames a
- * cluster, one frame of jitter is a third of the step. What counting frames actually bought was a beat whose speed
- * rides on the hardware — on a 108Hz machine a two-frame delete step is nine milliseconds, so a word does not come
- * apart letter by letter, it disappears. Seconds make every machine agree, and steps this long quantise to within a
- * few percent of a frame.
- */
 /** Seconds a cluster waits before the next one is typed. */
 export const TYPE_SECONDS = 0.075;
-/** Seconds a cluster waits before the next one is deleted. Quicker than typing: backspacing is not a performance. */
+/** Seconds between deleted grapheme clusters. */
 export const DELETE_SECONDS = 0.045;
 /** Seconds the finished word stands whole before it comes apart. */
 export const HOLD_SECONDS = 1;
-/** Seconds of empty line between words — the beat that makes the retype read as a retype. */
+/** Seconds of empty line between words. */
 export const CLEAR_SECONDS = 0.12;
 
 export type CycleStage = 'typing' | 'holding' | 'deleting' | 'clear';
@@ -69,11 +51,7 @@ export interface CycleFrame {
 
 export const START: CycleState = { index: 0, stage: 'typing', seconds: 0 };
 
-/**
- * The word at a cycle position. Wrapped rather than indexed: a hot reload that changes the word list leaves the
- * running scene holding a position the new list is too short for, and a raw index there is `undefined` reaching the
- * renderer as a crash rather than as the next frame of a demo.
- */
+/** Wrap the cycle index when hot reload changes the word list. */
 function wordAt(index: number): CycleWord {
   return CYCLE[index % CYCLE.length] ?? (CYCLE[0] as CycleWord);
 }
@@ -96,12 +74,7 @@ function next(state: CycleState, stage: CycleStage, index = state.index): CycleS
   return { index, stage, seconds: 0 };
 }
 
-/**
- * One frame on, `delta` seconds long.
- *
- * The clock is clamped to a single step, so a frame that took longer than one — a slow machine, or a tab coming back
- * from the background — advances the word by one cluster rather than skipping the ones it was too slow to show.
- */
+/** Advance at most one grapheme per frame so slow frames cannot skip visible typing steps. */
 export function advance(state: CycleState, delta: number): CycleState {
   const word = wordAt(state.index);
   const seconds = state.seconds + Math.min(delta, step(state.stage));

@@ -2,6 +2,12 @@
 
 ## 2026-09-19
 
+- **Inlined hero tuning and shortened comments** — Reduced production top-level `const` declarations from 275 to 159. Local timing, material, lighting, and motion values now sit at their use sites. Shared timing and geometry
+  contracts and retained resources remain named. Comments explain current behavior with simple punctuation.
+  Typecheck, lint, formatting, build, four focused numerical tests, and origin, shadow, finale, dust, and typing
+  WebGPU checks pass. The full check still reports the existing stale Geist Medium bake.
+  See [the hero reference](packages/hero.md).
+
 - **Focused hero tests on playback stories** — Removed eight duplicate timeline and robot unit checks and
   buffer-identity assertions. Retained precise transform, motif, pointer-bound, and collision-notification checks.
   Added `hero:origin-check` for decoded video progress and visible word/story pixels. Browser preparation checks

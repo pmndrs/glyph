@@ -17,22 +17,7 @@ import { ROBOT_HALF_EXTENTS, type Footprint } from '../robot/traits';
 import type { HoleState } from '../sequence/motion';
 import type { Solid } from './outline';
 
-/** The lift: each letter is carried up to this short of the camera and thrown back down, 35 ms after its
- * neighbour. Where it lands is the floor's business. */
-const LIFT_CLEARANCE = 1.6;
 const LIFT_SECONDS = 0.45;
-const STAGGER = 0.035;
-/** Thrown down, not dropped: the fall should read as a smash, not a float. */
-const THROW = 35;
-/** A little sideways and a little spin on the way down, so each letter settles off its mark and off square. */
-const DRIFT = 0.9;
-const SPIN = 0.35;
-/** Successive replays throw each letter a different way, so the word never settles the same twice. */
-const REPLAY_TURN = 2.4;
-/** Half a letter's diagonal: how far a corner can reach above a tilted letter's centre. */
-const HALF_DIAGONAL = 3.2;
-/** The heavy title follows a wider, slower arc than the small glyphs. */
-const FLIGHT_SECONDS = 0.85;
 
 /** One letter of the title: its rest place in world units, its solid for the physics, and its glyph. */
 export interface Letter {
@@ -86,7 +71,7 @@ export function createTitleBodies(
     inverse,
     pieces,
     world,
-    liftHeight: cameraHeight - LIFT_CLEARANCE,
+    liftHeight: cameraHeight - 1.6,
     lifting: false,
     elapsed: 0,
     replays: 0,
@@ -135,7 +120,7 @@ export function replayTitle(state: TitleBodies): void {
   state.elapsed = 0;
 }
 
-/** Landings are a fixed buffer; consume only landingCount entries before the next update. */
+/** Landings are a fixed buffer. Consume only landingCount entries before the next update. */
 export function updateTitle(state: TitleBodies, delta: number, robot: Footprint | undefined, hole: HoleState): void {
   carryTitle(state, delta);
   attractTitle(state, hole);
@@ -165,7 +150,7 @@ export function titleReach(state: TitleBodies): number {
     const qx = poses[offset + 3]!;
     const qy = poses[offset + 4]!;
     const upright = 1 - 2 * (qx * qx + qy * qy);
-    reach = Math.max(reach, poses[offset + 2]! + Math.sqrt(Math.max(0, 1 - upright * upright)) * HALF_DIAGONAL);
+    reach = Math.max(reach, poses[offset + 2]! + Math.sqrt(Math.max(0, 1 - upright * upright)) * 3.2);
   }
   return reach;
 }
@@ -177,7 +162,7 @@ function carryTitle(state: TitleBodies, delta: number): void {
   const pose = state.pose;
   for (let index = 0; index < state.pieces.length; index++) {
     if (state.released[index] === 1) continue;
-    const time = state.elapsed - index * STAGGER;
+    const time = state.elapsed - index * 0.035;
     if (time < 0) {
       pending = true;
       continue;
@@ -198,9 +183,9 @@ function carryTitle(state: TitleBodies, delta: number): void {
       pose.z = home[2] + state.liftHeight;
       pose.yaw = 0;
       holdLetter(state.world, index, pose);
-      const way = (index + state.replays) * REPLAY_TURN;
-      vec3.set(state.velocity, Math.cos(way) * DRIFT, Math.sin(way) * DRIFT, -THROW);
-      releaseLetter(state.world, index, state.velocity, (index + state.replays) % 2 === 0 ? SPIN : -SPIN);
+      const way = (index + state.replays) * 2.4;
+      vec3.set(state.velocity, Math.cos(way) * 0.9, Math.sin(way) * 0.9, -35);
+      releaseLetter(state.world, index, state.velocity, (index + state.replays) % 2 === 0 ? 0.35 : -0.35);
       state.released[index] = 1;
     }
   }
@@ -226,7 +211,7 @@ function attractTitle(state: TitleBodies, hole: HoleState): void {
     const from = state.origins[index]!;
     const x = from.x - hole.x;
     const y = from.y - hole.y;
-    const flightPose = flight(state.flight, hole.time, departureAt(Math.hypot(x, y) / 9, index), FLIGHT_SECONDS);
+    const flightPose = flight(state.flight, hole.time, departureAt(Math.hypot(x, y) / 9, index), 0.85);
     if (flightPose.size === 0 || hole.beat === 'black') {
       state.swallowed[index] = 1;
       swallowLetter(state.world, index);

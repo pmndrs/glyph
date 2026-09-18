@@ -9,9 +9,9 @@ import { Hero } from './hero';
 import { Origin } from './origin/renderer';
 import { HeroLoading } from './view/startup';
 
-/** `?scene=origin` loads the second hero; anything else keeps the first. */
+/** `?scene=origin` loads the second hero. Anything else keeps the first. */
 const ORIGIN = new URLSearchParams(location.search).get('scene') === 'origin';
-/** Fixed DPR for repeatable capture workloads; normal viewing retains the adaptive 1–1.5 range. */
+/** Fixed DPR for repeatable capture workloads. Normal viewing retains the adaptive 1-1.5 range. */
 const CAPTURE_DPR = new URLSearchParams(location.search).get('dpr');
 const DPR =
   CAPTURE_DPR === '1' ? 1 : CAPTURE_DPR === '1.5' ? 1.5 : CAPTURE_DPR === '2' ? 2 : CAPTURE_DPR === '3' ? 3 : undefined;

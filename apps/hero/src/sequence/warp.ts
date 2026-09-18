@@ -6,14 +6,6 @@ import { uHoleBend, uHoleCamera, uHoleCenter, uHoleHorizon } from './uniforms';
 
 type SlugContext = Extract<ThreeTextMaterialContext, { format: 'pmndrs.slug' }>;
 
-/** How far a fragment's source is dragged round the hole at the horizon, in radians at full bend. */
-const DRAG = 2.6;
-/** How much a letterform is stretched towards the hole at the horizon, at full bend. */
-const STRETCH = 1.4;
-/** Where the fade to nothing begins and ends, in horizons. */
-const FADE_FROM = 1.7;
-const FADE_TO = 0.9;
-
 /** Coverage bent around the black hole, and how much of the glyph survives that close to it. */
 export interface HoleWarp {
   readonly coverage: Node<'float'>;
@@ -23,20 +15,11 @@ export interface HoleWarp {
 }
 
 /**
- * Bends a Slug letterform around the black hole. The quad is left alone; instead each fragment asks where its ink
- * came from, and the outline is integrated there, so the letter curls into the spiral with exact curves and
- * antialiasing from that source's own screen footprint: the analytic coverage is what makes a non-affine warp a
- * lookup rather than a resample.
- *
- * The warp is anchored at the glyph's own centre: a fragment is dragged round the hole only by the difference
- * between the drag at its radius and at the centre's, and stretched towards the hole about the centre, so the
- * letter deforms in place and never samples outside its own quad. World space, the quad and the glyph's em space
- * are all related affinely across a quad, so the maps between them come from their screen derivatives, whatever
- * transform the glyph's object carries.
+ * Inverse-warp analytic glyph coverage around the hole. Anchor deformation at the glyph center and use screen
+ * derivatives to map between world and glyph coordinates.
  */
 export function holeWarp(context: SlugContext): HoleWarp {
-  // The glyph's own world position, from the position the renderer hands the material: `positionWorld` is built
-  // from the raw quad before the renderer's per-glyph placement is applied, so it cannot be used here.
+  // Use per-glyph placement from the text material context when deriving world position.
   const world = varying(modelWorldMatrix.mul(vec4(context.position, 1)).xyz, 'pmndrsHoleWorld');
   const here = world.xy;
   const worldX = dFdx(here);
@@ -64,11 +47,10 @@ export function holeWarp(context: SlugContext): HoleWarp {
   // Drag and stretch fall off with the square of the distance, in horizons, so far glyphs are untouched.
   const dragAt = (reach: Node<'float'>) => {
     const at = reach.div(horizon);
-    return uHoleBend.mul(DRAG).div(at.mul(at).add(0.35));
+    return uHoleBend.mul(2.6).div(at.mul(at).add(0.35));
   };
-  const stretch = uHoleBend.mul(STRETCH).div(near.mul(near).add(0.35));
-  // Where this fragment's ink was: turned about the hole by how much more it is dragged than the centre is, and
-  // nearer the centre along the radius, so the visible letter is drawn out towards the hole.
+  const stretch = uHoleBend.mul(1.4).div(near.mul(near).add(0.35));
+  // Invert angular drag and radial stretch to locate the source ink.
   const angle = atan(fragmentOffset.y, fragmentOffset.x).sub(dragAt(fragmentReach).sub(dragAt(centerReach)));
   const radius = centerReach.add(fragmentReach.sub(centerReach).div(stretch.add(1)));
   const source = uHoleCenter.add(vec2(cos(angle), sin(angle)).mul(radius));
@@ -90,6 +72,6 @@ export function holeWarp(context: SlugContext): HoleWarp {
   return {
     near,
     coverage: context.shader.coverageAt(warped),
-    survive: smoothstep(float(FADE_TO), float(FADE_FROM), near).mul(uHoleBend).add(float(1).sub(uHoleBend)),
+    survive: smoothstep(float(0.9), float(1.7), near).mul(uHoleBend).add(float(1).sub(uHoleBend)),
   };
 }

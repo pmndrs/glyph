@@ -5,7 +5,7 @@ import { AdditiveBlending, DoubleSide, MeshBasicNodeMaterial } from 'three/webgp
 
 import { uHoleBurst } from './uniforms';
 
-/** Burning surface strength; zero is the flat pastel control used by the WebGPU capture. */
+/** Burning surface strength. Zero is the flat pastel control used by the WebGPU capture. */
 export const uEmberFire = uniform(1);
 
 /** Analytic star silhouettes filled with a moving hot core, glowing amber tips, and cooling pastel light. */

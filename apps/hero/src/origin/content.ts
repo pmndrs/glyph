@@ -1,21 +1,15 @@
 import type { FaceId } from '../typography/content';
 
-/** The second scene's copy. Kept apart from the first hero's content so neither can quietly reshape the other's bake. */
+/**
+ * The second scene's copy. Kept apart from the first hero's content so neither can quietly reshape the other's
+ * bake.
+ */
 
 export const ORIGIN_TITLE = { text: 'GLYPH', face: 'geist-black' } as const;
 
 /**
- * "Glyph", around the world — each language's own word for a letter, a character, a written form, rather than the
- * English word in a different alphabet. Transliterations (グリフ, глиф, ग्लिफ़) were the first cut and read as the same
- * word ten times over; these are native. 字形 is literally "character-form", γράμμα is the Greek for letter, حرف the
- * Arabic. English keeps GLYPH as the anchor the rest are answering.
- *
- * Order is fixed, not shuffled — a recording should be repeatable take to take. English leads, and the rest are
- * interleaved by script so the ideographic words never sit back to back and the Latin ones are spread through
- * rather than clumped. Reordering is safe; nothing keys off position.
- *
- * Faces are per word because no single one covers these scripts: the Noto CJK cut carries Japanese, Chinese, Korean,
- * Greek and Russian, Geist keeps the Latin at display weight, and Arabic and Devanagari come from their own faces.
+ * Native words for a letter or written form, in a fixed order with scripts interleaved. Each word selects a font
+ * that covers its script.
  */
 export interface TitleWord {
   readonly text: string;
@@ -37,11 +31,7 @@ export const TITLE_WORDS: readonly TitleWord[] = [
   { text: 'γράμμα', face: 'noto-cjk-words', language: 'Greek' },
 ];
 
-/**
- * The origin story, as one justified column. Written from what the repository actually is — a shaper, a baker, a
- * layout engine and a set of raster techniques — rather than from anything invented. Edit freely, but keep it about
- * this long: the column has to finish above the floor plane or the reflector occludes the last lines.
- */
+/** Origin copy for the justified column. Keep the final line above the floor to avoid reflector occlusion. */
 export const ORIGIN_STORY: readonly string[] = [
   'Glyph is rooted in the long history of typography and typesetting, carrying ' +
     'forward the principles of careful design and precise layout. It brings that same ' +

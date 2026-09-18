@@ -26,18 +26,7 @@ export const ICON_CODE_POINTS: Readonly<Record<IconName, number>> = {
   crow: 0xf520,
 };
 
-/**
- * Gem tones for the deep icon sheet, generated in OKLab so they are hue rotations of one another at a fixed
- * lightness and chroma. Picking them by eye in sRGB would make some read heavier than others; holding L constant is
- * what keeps the sheet an even tonal wash that the foreground can still sit on top of.
- */
-
-/** The lightness the sheet already had as a neutral grey (#a8adb6), so the change is hue only, not value. */
-const LIGHTNESS = 0.7464;
-/** Enough chroma to read as a gem rather than a tint, low enough not to compete with the foreground. */
-const CHROMA = 0.105;
-/** Ruby, citrine, peridot, aquamarine, sapphire, amethyst — around the wheel, so the bands cycle obviously. */
-const HUES = [25, 75, 145, 195, 255, 310];
+/** Hue rotations in OKLab hold lightness and chroma constant across the deep icon sheet. */
 
 function linearToSrgb(channel: number): number {
   return channel <= 0.003_130_8 ? 12.92 * channel : 1.055 * channel ** (1 / 2.4) - 0.055;
@@ -66,4 +55,4 @@ function oklch(lightness: number, chroma: number, hueDegrees: number): string {
   return `#${hex}`;
 }
 
-export const GEM_TONES: readonly string[] = HUES.map((hue) => oklch(LIGHTNESS, CHROMA, hue));
+export const GEM_TONES: readonly string[] = [25, 75, 145, 195, 255, 310].map((hue) => oklch(0.7464, 0.105, hue));

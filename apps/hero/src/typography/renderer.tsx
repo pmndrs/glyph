@@ -23,7 +23,9 @@ const box3d = Box3D();
 /** The outlines the letters' solids are cut from: the same source the title face was baked from. */
 const titleOutlines = loadFont(titleFace);
 
-/** How deep each letter's invisible solid reaches: enough that the robot meets it squarely, never drives over it. */
+/**
+ * How deep each letter's invisible solid reaches: enough that the robot meets it squarely, never drives over it.
+ */
 const SOLID_THICKNESS = 0.8;
 const FONT_SIZE = 4.4;
 /** Wide exact box so `align: 'center'` centres the word on the origin. */
@@ -32,9 +34,8 @@ const titleInk = new Box3();
 const inkCenter = new Vector3();
 
 /**
- * The glass title, drawn by glyph's Slug raster with one stained-glass material per pane. Once the paragraph has
- * committed it is broken apart, and each pane's glyph copy follows a rigid body on the floor: the lift and smash
- * on Space, and every push from the robot, happen there.
+ * Each glass glyph follows a rigid body after the title commits. Space lifts and drops the letters, and the
+ * robot pushes them along the floor.
  */
 export function GlassTitle({ faces }: { readonly faces: Faces }) {
   const world = useWorld();
@@ -87,7 +88,7 @@ export function GlassTitle({ faces }: { readonly faces: Faces }) {
         return;
       }
       const object = word.current;
-      // Ink only after a layout has committed; measuring a pending one forces it to be built again.
+      // Measure ink only after layout commits to avoid a second layout build.
       if (object === null || object.commitState().status !== 'committed') return;
       const ink = object.computeBoundingBox();
       if (ink.max.x <= ink.min.x) return;
@@ -159,16 +160,6 @@ const FEATURE_FONT_SIZE = 0.42;
 const SIZE_STEP = 0.005;
 /** Wide exact box so `align: 'center'` centres the line on the origin, as the title does. */
 const FEATURE_LAYOUT_WIDTH = 60;
-/**
- * White stroke over the icon field, without which the letters break up. Weight is a fraction of the em, so it holds
- * when the fit changes the size. The baked field encodes +/-0.1875em (FEATURE_FIELD.pixelRange 24 over emSize 64);
- * past that the distance saturates and the outline floods the whole glyph cell, so this stays well inside it.
- */
-const OUTLINE_EM = 0.12;
-/** Tightens the gaps either side of the separators, as a fraction of the fitted size. Applied during the measuring
- * pass too, so the width the tracking is fitted against already accounts for it. */
-const WORD_SPACING_EM = -0.08;
-const LINE_Y = -2.65;
 
 export function FeatureLine({ field }: { readonly field: MsdfFont }) {
   const text = useRef<ThreeText<never> | null>(null);
@@ -286,17 +277,17 @@ export function FeatureLine({ field }: { readonly field: MsdfFont }) {
         constraints={{ width: { mode: 'exact', size: FEATURE_LAYOUT_WIDTH } }}
         font={field}
         layout={{ align: 'center', wrap: 'none' }}
-        position={[-FEATURE_LAYOUT_WIDTH / 2, LINE_Y, 0]}
+        position={[-FEATURE_LAYOUT_WIDTH / 2, -2.65, 0]}
         ref={text}
         style={{
           color: '#1c1f25',
           fontSize: fit?.fontSize ?? FEATURE_FONT_SIZE,
           letterSpacing: fit?.letterSpacing ?? 0,
-          wordSpacing: WORD_SPACING_EM * (fit?.fontSize ?? FEATURE_FONT_SIZE),
+          wordSpacing: -0.08 * (fit?.fontSize ?? FEATURE_FONT_SIZE),
           lineHeight: 1,
           // Hidden for the measuring pass only: the whole line is laid out to be sized, before a letter is shown.
           opacity: fit === undefined ? 0 : 1,
-          outline: { color: '#ffffff', width: OUTLINE_EM * (fit?.fontSize ?? FEATURE_FONT_SIZE) },
+          outline: { color: '#ffffff', width: 0.12 * (fit?.fontSize ?? FEATURE_FONT_SIZE) },
         }}
       >
         {FEATURE_LINE.text}

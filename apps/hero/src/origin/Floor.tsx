@@ -1,10 +1,5 @@
 import { MeshReflectorMaterial } from '@react-three/drei/webgpu';
 
-/**
- * The reflector the word stands on. Dead level: tipping it a few degrees put the whole ground out of true, and with
- * a level horizon to compare against, everything in the scene read as skewed. Blur and roughness keep it a wet-floor
- * suggestion rather than a second copy of the word.
- */
 /** Sits just under the word's lowest ink, so the reflection comes straight off the letters with no gap beneath. */
 export const FLOOR_Y = -0.95;
 

@@ -8,41 +8,11 @@ export const PATTERN_ANGLE = -0.32;
 /** How long one flip takes, and the window over which a motif's cells start theirs. */
 const MORPH_SECONDS = 0.32;
 const STAGGER_SECONDS = 0.5;
-/**
- * Start times are quantised across the stagger window. The overlapping 0.32s flips retain the original sweep;
- * exchanging their glyph records now happens entirely in the retained instance buffer.
- */
+/** Quantized start times spread each motif flip across the sheet. */
 const STAGGER_STEPS = 5;
-/** Seconds between motif changes. */
-const SWAP_INTERVAL = 1.1;
 
-/** Mass–spring lattice: each cell is pulled home, damped, and coupled to its neighbours, which carries the wave. */
-const STIFFNESS = 26;
-const DAMPING = 3.4;
-/** Coupling stays well under the pull-home stiffness, or the sheet drifts instead of settling. */
-const COUPLING = 16;
-/** Impact ring: how wide the front is and when it is spent. Speed, strength and delay are per layer. */
-const WAVE_WIDTH = 2.2;
-const WAVE_SECONDS = 2;
-/** The title strikes once per letter, so several rings run at once; more than this and the sheet just boils. */
-const MAX_WAVES = 12;
-/** Pointer: a soft push around the cursor, so moving the mouse stirs the field. The push follows movement and fades
- * once the cursor is still, so a parked mouse leaves the lattice alone. */
-const POINTER_RADIUS = 4.5;
-const POINTER_FORCE = 26;
 export const POINTER_FADE = 0.16;
 
-/** Bounds: a cell never leaves its own neighbourhood, whatever the wave does. */
-const MAX_OFFSET = 2.4;
-const MAX_SPEED = 26;
-/** The black hole: how hard it pulls at one horizon, how much of that goes round rather than in, how far a cell may
- * travel to it, and how much a cell grows on the way so its bent glyph has room. */
-const HOLE_PULL = 240;
-const HOLE_SWIRL = 1.05;
-const HOLE_REACH = 60;
-const HOLE_GROW = 1.6;
-/** Drag on a released cell: heavy, so the spiral is a fall, not an orbit. */
-const HOLE_DRAG = 5;
 /** Physics runs on fixed substeps: the coupling is stiff enough to blow up on a long frame. */
 const SUBSTEP = 1 / 120;
 /** The canvas camera's vertical field of view, for projecting the pointer onto a layer. */
@@ -67,11 +37,10 @@ export interface IconLayoutOptions {
   readonly depth: number;
   readonly speed: number;
   readonly colour: string;
-  /** Colours cells from the gem palette instead of the flat `colour`, cycling on row + column so the bands run
-   * diagonally — across the scroll direction, where they read as a moving pattern rather than as noise. */
+  /** Cycle gem colors diagonally across the scroll direction. */
   readonly gems?: boolean;
   readonly opacity: number;
-  /** Distinct motifs; fewer than the available glyphs, so a motif always has a spare glyph to become. */
+  /** Distinct motifs. Fewer than the available glyphs, so a motif always has a spare glyph to become. */
   readonly motifs: number;
   /** Shifts this layer's lattice into the gaps of the other one, across and down. */
   readonly offset: number;
@@ -129,13 +98,12 @@ export function buildLayout(layer: IconLayoutOptions): Layout {
           motif,
           colour: gems === true ? (GEM_TONES[(row + column) % GEM_TONES.length] ?? colour) : colour,
           position: [
-            // No brick stagger: with alternating rows offset there is no consistent gap for the other sheet to sit in.
+            // Aligned rows leave consistent gaps for the second sheet.
             -loop / 2 + repeat * loop + column * cell + offset - cell / 2,
             ((rows - 1) * cell) / 2 - row * cell + rowOffset,
             0,
           ],
-          // Each cell starts its flip at its own moment, so a motif change sweeps across rather than blinking at
-          // once. Every choice is already present in the retained draw records.
+          // Stagger motif flips across the sheet using retained glyph records.
           delay:
             (Math.floor(seeded(seed + 977 + row * columns + column) * STAGGER_STEPS) / STAGGER_STEPS) * STAGGER_SECONDS,
         });
@@ -174,17 +142,18 @@ export function buildLayout(layer: IconLayoutOptions): Layout {
   };
 }
 
-/** Storage is sized once from the immutable lattice; only matrices cross into Glyph. */
+/** Storage is sized once from the immutable lattice. Only matrices cross into Glyph. */
 export function createLattice(layout: Layout, motifs: number, seed: number) {
   const count = layout.cells.length;
+  const waves = Array.from({ length: 12 }, () => ({ start: -Infinity, x: 0, y: 0, scale: 0, radius: 0 }));
   return {
     x: new Float32Array(count),
     y: new Float32Array(count),
     vx: new Float32Array(count),
     vy: new Float32Array(count),
     accumulator: 0,
-    waves: Array.from({ length: MAX_WAVES }, () => ({ start: -Infinity, x: 0, y: 0, scale: 0, radius: 0 })),
-    activeWaves: new Int32Array(MAX_WAVES),
+    waves,
+    activeWaves: new Int32Array(waves.length),
     world: mat4.create(),
     inverse: mat4.create(),
     projected: vec3.create(),
@@ -212,10 +181,10 @@ export function createLattice(layout: Layout, motifs: number, seed: number) {
 }
 export type LatticeState = ReturnType<typeof createLattice>;
 
-/** Motifs change on the render clock; no timers, sets, callbacks, or temporary candidate arrays. */
+/** Motifs change on the render clock. No timers, sets, callbacks, or temporary candidate arrays. */
 export function advanceMorph(state: LatticeState, layout: Layout, now: number): void {
   const morph = state.morph;
-  if (state.nextSwap === 0) state.nextSwap = now + SWAP_INTERVAL * 1000;
+  if (state.nextSwap === 0) state.nextSwap = now + 1.1 * 1000;
   if (morph.motif < 0 && now >= state.nextSwap) {
     let count = 0;
     for (let glyph = 0; glyph < GLYPHS.length; glyph++) {
@@ -228,7 +197,7 @@ export function advanceMorph(state: LatticeState, layout: Layout, now: number): 
       state.motifGlyphs[morph.motif] = morph.to;
       state.applied.fill(0);
     }
-    state.nextSwap = now + SWAP_INTERVAL * 1000;
+    state.nextSwap = now + 1.1 * 1000;
   }
   if (morph.motif < 0) return;
   const elapsed = (now - morph.start) / 1000;
@@ -242,7 +211,7 @@ export function advanceMorph(state: LatticeState, layout: Layout, now: number): 
   if (elapsed > STAGGER_SECONDS + MORPH_SECONDS) morph.motif = -1;
 }
 
-/** Compose one cell directly; baseline is the precomputed glyph centering offset. */
+/** Compose one cell directly. Baseline is the precomputed glyph centering offset. */
 export function cellMatrix(
   out: Mat4,
   state: LatticeState,
@@ -261,7 +230,7 @@ export function cellMatrix(
     const dx = state.hole.x - x;
     const dy = state.hole.y - y;
     const nearSquared = (dx * dx + dy * dy) / (state.hole.horizon * state.hole.horizon);
-    grow += (HOLE_GROW * loose) / (nearSquared + 0.35);
+    grow += (1.6 * loose) / (nearSquared + 0.35);
   }
   const vx = state.vx[index]!;
   const vy = state.vy[index]!;
@@ -290,12 +259,12 @@ export function simulate(
 ): void {
   const count = layout.cells.length;
   const open = state.hole.time >= 0;
-  const limit = open ? HOLE_REACH : MAX_OFFSET;
+  const limit = open ? 60 : 2.4;
   let waveCount = 0;
   for (let index = 0; index < state.waves.length; index++) {
     const wave = state.waves[index]!;
     const seconds = (now - wave.start) / 1000;
-    if (seconds <= 0 || seconds > WAVE_SECONDS) continue;
+    if (seconds <= 0 || seconds > 2) continue;
     wave.radius = layer.waveSpeed * seconds;
     state.activeWaves[waveCount++] = index;
   }
@@ -313,16 +282,16 @@ export function simulate(
       const departure = open ? (state.departAt[index] ?? Number.NaN) : Number.NaN;
       const loose = open && !Number.isNaN(departure) ? release(state.hole.time, departure) : 0;
       const hold = 1 - loose;
-      const damping = DAMPING + (HOLE_DRAG - DAMPING) * loose;
-      let ax = -STIFFNESS * hold * px - damping * (state.vx[index] ?? 0);
-      let ay = -STIFFNESS * hold * py - damping * (state.vy[index] ?? 0);
+      const damping = 3.4 + (5 - 3.4) * loose;
+      let ax = -26 * hold * px - damping * (state.vx[index] ?? 0);
+      let ay = -26 * hold * py - damping * (state.vy[index] ?? 0);
 
       const base = index * 4;
       for (let link = 0; link < 4; link += 1) {
         const other = layout.neighbours[base + link] ?? -1;
         if (other < 0 || state.swallowed[other] === 1) continue;
-        ax += COUPLING * hold * ((state.x[other] ?? 0) - px);
-        ay += COUPLING * hold * ((state.y[other] ?? 0) - py);
+        ax += 16 * hold * ((state.x[other] ?? 0) - px);
+        ay += 16 * hold * ((state.y[other] ?? 0) - py);
       }
 
       const restX = layout.restX[index] ?? 0;
@@ -341,15 +310,14 @@ export function simulate(
           // of it runs across the line to the centre, which is what winds the sheet into a spiral.
           const near = distance / state.hole.horizon;
           const gravity = 0.12 + state.hole.pull * 3;
-          const force = (HOLE_PULL / (near * near + 0.35) + 70) * loose * gravity;
-          const round = swirl(near, HOLE_SWIRL);
+          const force = (240 / (near * near + 0.35) + 70) * loose * gravity;
+          const round = swirl(near, 1.05);
           ax += (dx / distance) * force - (dy / distance) * force * round;
           ay += (dy / distance) * force + (dx / distance) * force * round;
         }
       }
 
-      // Indexed, not `for...of`: this is inside the cell loop inside the substep loop, so an iterator here is ten
-      // thousand short-lived objects a frame — and the list is empty except in the two seconds after an impact.
+      // Visit active wave slots directly inside the cell substeps.
       for (let wave = 0; wave < waveCount; wave += 1) {
         const entry = state.waves[state.activeWaves[wave]!];
         if (entry === undefined) continue;
@@ -357,7 +325,7 @@ export function simulate(
         const dy = restY - entry.y;
         const distance = Math.hypot(dx, dy);
         const front = distance - entry.radius;
-        const band = Math.exp(-(front * front) / (2 * WAVE_WIDTH * WAVE_WIDTH));
+        const band = Math.exp(-(front * front) / (2 * 2.2 * 2.2));
         if (band <= 0.002 || distance <= 0.0001) continue;
         const push = (layer.waveImpulse * entry.scale * band) / (1 + distance * 0.35);
         ax += (dx / distance) * push;
@@ -368,15 +336,15 @@ export function simulate(
         const dx = restX + px - state.pointer.x;
         const dy = restY + py - state.pointer.y;
         const distance = Math.hypot(dx, dy);
-        if (distance < POINTER_RADIUS && distance > 0.0001) {
-          const falloff = 1 - distance / POINTER_RADIUS;
-          const push = POINTER_FORCE * state.pointer.strength * falloff * falloff;
+        if (distance < 4.5 && distance > 0.0001) {
+          const falloff = 1 - distance / 4.5;
+          const push = 26 * state.pointer.strength * falloff * falloff;
           ax += (dx / distance) * push;
           ay += (dy / distance) * push;
         }
       }
 
-      const speed = open ? MAX_SPEED * 3 : MAX_SPEED;
+      const speed = open ? 26 * 3 : 26;
       const vx = clamp((state.vx[index] ?? 0) + ax * SUBSTEP, -speed, speed);
       const vy = clamp((state.vy[index] ?? 0) + ay * SUBSTEP, -speed, speed);
       state.vx[index] = vx;

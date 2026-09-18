@@ -12,32 +12,8 @@ import { advance, START, textOf } from './wordCycle';
 const FONT_SIZE = 3.0;
 /** Wide exact box so `align: 'center'` centres the word on the paragraph origin. */
 const LAYOUT_WIDTH = 60;
-/**
- * How far the set of words floats above the floor, measured from the average of their ink.
- *
- * Every word sits at the same height. Seating each one on its own ink instead looks correct in a still frame and is
- * wrong in motion: these scripts disagree about their vertical extents, so the word jumps between languages — and
- * worse, a word's ink box changes *while it types*, the moment a descender or a headline appears, so it re-seats
- * mid-word. One height for all of them, averaged so the set as a whole sits where a single word would, is steadier
- * than anything per-word can be.
- */
-const FLOAT_ABOVE_FLOOR = 0.06;
 
-/**
- * One rotation, about Y, and nothing else. Positive swings the near edge toward the camera: rotating about Y by a
- * positive angle sends the -x side (the G) to +z, which is where the viewer is. Pitch and roll were doing nothing
- * but tipping the word off the floor and skewing its baseline.
- */
-const YAW = 0.62;
-
-/**
- * The window the clip is shown through, fixed in the word's own space and centred on its origin.
- *
- * Stretching the clip across the live ink box — which is what this did — re-frames the video on every keystroke,
- * because every added cluster changes the box it is being fitted to. The picture jumps while the word grows. A fixed
- * window makes the letters a mask over a still-running video instead: the clip holds its framing and the letterforms
- * travel across it. Wide enough for the longest word, so no letter samples past the edge and clamps into a band.
- */
+/** Fixed video window in word space. Letterforms reveal the video without changing its framing. */
 const WINDOW_WIDTH = 18;
 
 export function VideoWord({ faces, video }: { readonly faces: Faces; readonly video: Texture }) {
@@ -46,20 +22,9 @@ export function VideoWord({ faces, video }: { readonly faces: Faces; readonly vi
   const beat = useRef(START);
   const [shown, setShown] = useState(() => textOf(START));
   const measured = useRef(-1);
-  /**
-   * Whether the text the schedule last asked for is actually on screen.
-   *
-   * Changing the text queues a layout, and the layout commits on the *following* frame. Without this gate a step
-   * spends its first frame still showing the previous word, and a step short enough can be over before its own text
-   * has ever been drawn. Holding the clock until the commit lands means every cluster is seen, whatever the layout
-   * costs that frame.
-   */
+  /** Advance typing only after the requested text has committed, so each cluster is visible. */
   const onScreen = useRef(true);
-  /**
-   * Set on the frame a layout commits, so the next frame's delta — which is mostly the cost of that layout — is not
-   * charged to the beat. The first time a script appears its glyphs have to be rastered, and that one frame is long
-   * enough to spend a whole cluster's budget, so the word types unevenly until the atlas is warm.
-   */
+  /** Exclude the layout commit cost from the next typing interval. */
   const settling = useRef(false);
   /** Lowest ink per word, keyed by cycle position, so the shared height is an average and not a running guess. */
   const extents = useRef(new Map<number, number>());
@@ -88,16 +53,15 @@ export function VideoWord({ faces, video }: { readonly faces: Faces; readonly vi
       }
     }
 
-    // Re-seat only in the gap between words. The average moves as new languages are measured during the first
-    // pass; applying it mid-word would be the jitter this is meant to remove.
+    // Apply the average word height between words to keep typing vertically stable.
     const rig = word.current;
     if (rig !== null && shown.text === '' && settled.current !== undefined) {
-      rig.position.y = FLOOR_Y + FLOAT_ABOVE_FLOOR - (settled.current + FONT_SIZE / 2);
+      rig.position.y = FLOOR_Y + 0.06 - (settled.current + FONT_SIZE / 2);
     }
 
     const object = text.current;
     if (object === null) return;
-    // Ink only after a layout has committed; measuring a pending one forces it to be built again.
+    // Measure ink only after layout commits to avoid a second layout build.
     const state = object.commitState();
     if (state.status !== 'committed') return;
     if (!onScreen.current) settling.current = true;
@@ -105,10 +69,8 @@ export function VideoWord({ faces, video }: { readonly faces: Faces; readonly vi
     if (state.revision === measured.current) return;
     const ink = object.computeBoundingBox();
     if (ink.max.x <= ink.min.x) return;
-    // `align: 'center'` puts the ink around x = LAYOUT_WIDTH / 2 and the Text's own translation takes that back off
-    // again, so in the group's space every word is centred on the origin and the window is a rectangle around zero.
-    // Its height is the line box rather than the ink, which is what keeps it the same window for scripts that sit
-    // differently in the line.
+    // Center the video window in word space. Its fixed width and line-box height keep framing stable while
+    // scripts and prefixes change.
     uWordOrigin.value.set(-WINDOW_WIDTH / 2, -FONT_SIZE / 2);
     uWordSize.value.set(WINDOW_WIDTH, FONT_SIZE);
     // Record this word's resting extents once it is whole, and average across every word seen so far.
@@ -129,7 +91,7 @@ export function VideoWord({ faces, video }: { readonly faces: Faces; readonly vi
   });
 
   return (
-    <group position={[-2.15, 0.175, 1.2]} ref={word} rotation-y={YAW}>
+    <group position={[-2.15, 0.175, 1.2]} ref={word} rotation-y={0.62}>
       <Text
         castShadow
         constraints={{ width: { mode: 'exact', size: LAYOUT_WIDTH } }}

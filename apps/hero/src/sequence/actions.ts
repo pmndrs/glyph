@@ -6,7 +6,7 @@ import { Robot } from '../robot/traits';
 import { Title, Typing } from '../typography/traits';
 import { replayTitle } from '../typography/bodies';
 
-/** Discrete transitions live here; callers supply the world rather than reaching into module globals. */
+/** World-bound playback transitions. */
 export const sequenceActions = createActions((world) => ({
   openCollapse() {
     const sequence = world.get(Sequence)!;

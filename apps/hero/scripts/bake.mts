@@ -23,14 +23,14 @@ const appRoot = fileURLToPath(new URL('..', import.meta.url));
 const glyph = fileURLToPath(new URL('../node_modules/.bin/glyph', import.meta.url));
 const fixtures = '../../benches/fixtures/fonts';
 const BASIC_LATIN = { from: 0x20, to: 0x7e };
-/** The origin column is set in this face; its copy is scanned so punctuation outside Basic Latin gets baked too. */
+/** The origin column is set in this face. Its copy is scanned so punctuation outside Basic Latin gets baked too. */
 const ORIGIN_STORY_FACE = 'geist-medium' as const;
 
 interface FaceBake {
   readonly input: string;
   /** Extra rasters baked into the same asset, beyond Slug. */
   readonly rasters?: readonly string[];
-  /** Faces people may type into or edit get all of Basic Latin; the rest bake only what content uses. */
+  /** Faces people may type into or edit get all of Basic Latin. The rest bake only what content uses. */
   readonly basicLatin: boolean;
   /**
    * CFF sources bake whole: `--unicodes` subsetting in glyph's CLI currently drops the CFF outline table

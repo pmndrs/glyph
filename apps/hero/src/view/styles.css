@@ -13,7 +13,7 @@ canvas {
   cursor: crosshair;
 }
 
-/* Loading mark, timing, and color match threejs-conf-talk/src/index.css. */
+/* Centered Poimandres loading mark with a short shake and readiness fade. */
 .hero-loading {
   position: fixed;
   inset: 0;

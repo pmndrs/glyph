@@ -5,9 +5,8 @@ import { jitter } from '../sequence/departure';
 export const COUNT = 128;
 export const BASE_Z = 0.12;
 export const RISE = 0.8;
-const SPACING = 0.09;
 
-/** Bounded particle pool; the oldest slot is overwritten on saturation. */
+/** Bounded particle pool. The oldest slot is overwritten on saturation. */
 export function createDust() {
   return {
     particles: Array.from({ length: COUNT }, () => ({
@@ -41,7 +40,7 @@ export function stepDust(state: DustState, step: number, current: Footprint | un
       const sin = Math.sin(current.heading);
       const speed = distance / Math.max(step, 0.001);
       const kick = 0.25 + Math.min(speed, 15) * 0.035;
-      for (let along = SPACING - state.carry; along <= distance; along += SPACING) {
+      for (let along = 0.09 - state.carry; along <= distance; along += 0.09) {
         const serial = state.emitted++;
         const particle = state.particles[serial % COUNT]!;
         const side = serial % 2 === 0 ? -1 : 1;
@@ -62,7 +61,7 @@ export function stepDust(state: DustState, step: number, current: Footprint | un
         particle.spin = (jitter(serial + 137) - 0.5) * 3;
         particle.size = 0.16 + jitter(serial + 151) * 0.19;
       }
-      state.carry = (state.carry + distance) % SPACING;
+      state.carry = (state.carry + distance) % 0.09;
     }
   } else state.carry = 0;
   state.hasPrevious = current !== undefined;

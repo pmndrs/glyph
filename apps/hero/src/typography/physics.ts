@@ -31,26 +31,11 @@ export interface HeldPose {
 }
 
 const STEP = 1 / 60;
-/** Substeps per frame before the simulation falls behind rather than freezing the page. */
-const MAX_SUBSTEPS = 4;
-const SOLVER_SUBSTEPS = 4;
-/** Down is into the paper. Strong, so a fall from the camera is over in a blink rather than a float. */
-const GRAVITY = 80;
-/** Impacts slower than this stop dead: a smash from the camera rebounds once, and its second landing stays down. */
-const RESTITUTION_THRESHOLD = 25;
-const LETTER_RESTITUTION = 0.3;
-/** Stone on paper: heavy, and it grips. A shove moves a letter exactly as far as it was pushed. */
-const LETTER_DENSITY = 8;
 const LETTER_FRICTION = 0.9;
 const FLOOR_THICKNESS = 1;
-const FLOOR_HALF_WIDTH = 80;
-/** The robot: a rounded box on wheels that rolls rather than grips. */
-const ROBOT_FRICTION = 0.1;
 const ROBOT_ROUNDING_SIDES = 10;
-/** A target further than this from the last one is a jump, not driving: the robot is placed there. */
-const MAX_DRIVE = 2.5;
 
-/** Fixed-capacity application state; Box3D owns the physical world and its reusable event views. */
+/** Fixed-capacity application state. Box3D owns the physical world and its reusable event views. */
 export function createTitleWorld(
   b3: Box3DModule,
   letters: readonly LetterSpec[],
@@ -61,8 +46,8 @@ export function createTitleWorld(
   const letterByBody = new Map<number, number>();
   const letterByShape = new Map<number, number>();
   const worldDef = b3.b3DefaultWorldDef();
-  worldDef.gravity = [0, 0, -GRAVITY];
-  worldDef.restitutionThreshold = RESTITUTION_THRESHOLD;
+  worldDef.gravity = [0, 0, -80];
+  worldDef.restitutionThreshold = 25;
   const world = b3.b3CreateWorld(worldDef);
   const events = b3.createEventsBuffer();
   const move = b3.createBodyMoveEvent();
@@ -84,9 +69,9 @@ export function createTitleWorld(
     };
     const body = b3.b3CreateBody(world, bodyDef);
     const shapeDef = b3.b3DefaultShapeDef();
-    shapeDef.density = LETTER_DENSITY;
+    shapeDef.density = 8;
     shapeDef.enableContactEvents = true;
-    shapeDef.baseMaterial.restitution = LETTER_RESTITUTION;
+    shapeDef.baseMaterial.restitution = 0.3;
     shapeDef.baseMaterial.friction = LETTER_FRICTION;
     for (const prism of letter.prisms) {
       const hull = b3.b3CreateHull(prism);
@@ -109,13 +94,7 @@ export function createTitleWorld(
   const floorShapeDef = b3.b3DefaultShapeDef();
   floorShapeDef.enableContactEvents = true;
   floorShapeDef.baseMaterial.friction = LETTER_FRICTION;
-  const floorShape = b3.b3CreateBoxShape(
-    floor,
-    floorShapeDef,
-    FLOOR_HALF_WIDTH,
-    FLOOR_HALF_WIDTH,
-    FLOOR_THICKNESS / 2,
-  ).index1;
+  const floorShape = b3.b3CreateBoxShape(floor, floorShapeDef, 80, 80, FLOOR_THICKNESS / 2).index1;
   return {
     b3,
     world,
@@ -209,7 +188,7 @@ export function releaseLetter(state: TitleWorld, index: number, velocity: Vec3, 
 export function stepTitleWorld(state: TitleWorld, delta: number, target: RobotTarget | undefined): void {
   const { b3, transform, robotFrom } = state;
   arrive(state, target);
-  state.accumulator = Math.min(state.accumulator + delta, STEP * MAX_SUBSTEPS);
+  state.accumulator = Math.min(state.accumulator + delta, STEP * 4);
   const substeps = Math.floor(state.accumulator / STEP);
   state.accumulator -= substeps * STEP;
   state.moved.fill(0);
@@ -239,7 +218,7 @@ export function stepTitleWorld(state: TitleWorld, delta: number, target: RobotTa
       );
       b3.b3Body_SetTargetTransform(state.letters[index]!, transform, STEP, true);
     }
-    b3.b3World_Step(state.world, STEP, SOLVER_SUBSTEPS);
+    b3.b3World_Step(state.world, STEP, 4);
     b3.getEvents(state.events, state.world);
     for (let index = 0; index < b3.getNumBodyMoveEvents(state.events); index++) {
       const event = b3.getBodyMoveEventAt(state.move, state.events, index);
@@ -294,7 +273,7 @@ function createRobotBody(
   def.isEnabled = false;
   const body = b3.b3CreateBody(world, def);
   const shape = b3.b3DefaultShapeDef();
-  shape.baseMaterial.friction = ROBOT_FRICTION;
+  shape.baseMaterial.friction = 0.1;
   const hull = b3.b3CreateHull(stadium(halfExtents));
   if (hull !== null) {
     b3.b3CreateHullShape(body, shape, hull);
@@ -312,7 +291,7 @@ function arrive(state: TitleWorld, target: RobotTarget | undefined): void {
   }
   const dx = target.x - robotFrom.x;
   const dy = target.y - robotFrom.y;
-  if (!state.robotActive || dx * dx + dy * dy > MAX_DRIVE * MAX_DRIVE) {
+  if (!state.robotActive || dx * dx + dy * dy > 2.5 * 2.5) {
     setTransform(state, target.x, target.y, target.z, target.heading);
     b3.b3Body_SetTransform(state.robot, state.transform.position, state.transform.quaternion);
     b3.b3Body_SetLinearVelocity(state.robot, vec3.zero(state.velocity));
@@ -331,10 +310,7 @@ function writePose(state: TitleWorld, index: number, position: readonly number[]
   state.poses.set(position, offset);
   state.poses.set(rotation, offset + 3);
 }
-/**
- * The robot's solid: a box with its two sides rounded off, standing on the floor (z from 0 to its full height).
- * The rounding is along the wide axis, so a letter met off centre is nudged aside rather than carried.
- */
+/** An upright collider with rounded sides. Off-center contacts nudge letters aside. */
 function stadium([along, across, up]: readonly [number, number, number]): number[] {
   const points: number[] = [];
   const radius = Math.min(along, across);

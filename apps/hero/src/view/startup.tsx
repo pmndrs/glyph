@@ -50,7 +50,7 @@ export function textPrepared(root: Object3D | null): boolean {
 
 async function uploadsComplete(renderer: WebGPURenderer): Promise<void> {
   if (renderer.backend instanceof WebGPUBackend) {
-    // Three 0.185.1 owns this initialized device; @types/three 0.185.4 omits WebGPUBackend.device.
+    // Three 0.185.1 owns this initialized device. @types/three 0.185.4 omits WebGPUBackend.device.
     const backend = renderer.backend as WebGPUBackend & {
       device: { queue: { onSubmittedWorkDone(): Promise<void> } };
     };
@@ -143,7 +143,7 @@ export function PrepareHero({ postProcessing }: { readonly postProcessing: boole
   return null;
 }
 
-/** Covers preparation frames; failures stay visible instead of starting a partially prepared recording. */
+/** Covers preparation frames. Failures stay visible instead of starting a partially prepared recording. */
 export function HeroLoading() {
   const current = useSyncExternalStore(
     (listener) => {

@@ -37,8 +37,7 @@ export function Origin() {
 
   return (
     <>
-      {/* Orbit is on so the composition can be found by hand. The story column lives in world space, so it swings
-          with the scene rather than staying pinned to the right of the screen — say if it should be locked instead. */}
+      {/* Orbit controls compose the word and story together in world space. */}
       <OrbitControls enablePan enableZoom makeDefault maxPolarAngle={Math.PI * 0.52} target={[0, 0.1, 0]} />
       <CameraDrift />
       <Studio video={video} />

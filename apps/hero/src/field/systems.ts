@@ -41,9 +41,8 @@ export function moveFields(world: World): void {
 }
 
 /**
- * Takes every impact published since the last frame into the sheet's own space, where the lattice lives. A batch that
- * arrives together — the title's letters — has its strength divided across the batch, so a five-letter word disturbs
- * the sheet about as hard as one impact did, but in the shape of the word.
+ * Transform new impacts into sheet space. Divide simultaneous impacts by the square root of their count to keep
+ * a title landing from overpowering the field.
  */
 function collectWaves(world: World, state: LatticeState, delay: number): void {
   const pending = world.get(Sequence)!.impacts;
@@ -92,9 +91,8 @@ function trackPointer(
 }
 
 /**
- * Brings the black hole into sheet space. It sits on the camera's axis, so on this sheet it is where the sheet
- * crosses that axis, with a horizon widened by the sheet's distance from the camera. A replay gives the hole's
- * catch back and puts every cell home.
+ * Project the hole into sheet space and scale its horizon with depth. Replay returns swallowed cells to their
+ * resting positions.
  */
 function trackHole(replays: number, cameraZ: number, state: HoleState, lattice: LatticeState, layout: Layout): void {
   if (replays !== lattice.replays) {

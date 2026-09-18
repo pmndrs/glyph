@@ -22,14 +22,8 @@ type Position = readonly [x: number, y: number, z: number];
 export const TITLE = { text: 'Glyph', face: 'geist-black', fontSize: 2.6, position: [0, 0.55, 0] } as const;
 
 /**
- * The closing beat: one line of features, typed out, separated by a middle dot (U+00B7). The dot sits outside Basic
- * Latin, so the bake script scans this line to pick it up — changing the copy changes the subset.
- */
-/**
- * The feature line's MSDF field, baked and declared from this one place. The raster's identity includes these two
- * numbers: bake at one pair and load at another and the face does not match its own baked raster, so the runtime
- * tries to bake the font itself instead of using the asset. The default is 64/8, which encodes only +/-0.0625em —
- * too little for the outline the line needs.
+ * Shared bake and load settings for the feature outline. A 24-pixel range at 64 pixels per em provides 0.1875 em
+ * on either side of the edge.
  */
 export const FEATURE_FIELD = { emSize: 64, pixelRange: 24 } as const;
 

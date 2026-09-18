@@ -1,7 +1,4 @@
-/**
- * The slice of opentype.js 2.0 the hero uses. The package ships no declarations; only what is called is declared,
- * so a wrong assumption about the library fails to compile here rather than at run time.
- */
+/** Declarations for the opentype.js 2.0 APIs used to build title colliders. */
 declare module 'opentype.js' {
   export interface PathCommand {
     readonly type: 'M' | 'L' | 'C' | 'Q' | 'Z';

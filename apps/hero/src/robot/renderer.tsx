@@ -48,61 +48,24 @@ import type { Entity } from 'koota';
 import { heroReady, textPrepared, usePreparation } from '../view/startup';
 import { type RetainedLine, createRetainedLine, disposeLine, showLine } from '../typography/retained-line';
 
-/**
- * A small robot that treats the screen as its floor: it drives in from the bottom left with the camera straight
- * overhead, stops, leans back and turns its face up to the viewer, then drives on and off the top right. It runs once after
- * the page loads and again after every replay of the title, cued from the landing like the feature line is.
- */
-
-/** How tall it stands in world units. The packed model's own root scales its 49.7-unit rig to 2.85. */
-const ROBOT_HEIGHT = 3;
-const MODEL_HEIGHT = 2.85;
-const SCALE = ROBOT_HEIGHT / MODEL_HEIGHT;
-/** The packed model's root scale: one rig unit in model units. The face is placed in rig units under its bone. */
-const RIG_UNIT = 0.05737;
-/** The floor is just in front of the title's glass. */
-const FLOOR_Z = 0.04;
-/** Its solid on the floor: along the direction of travel, across it, and up. The body is shallow and wide, about
- * 1.35 by 2.14 at ROBOT_HEIGHT, measured from the model; the floor's physics rounds the wide sides off. */
-
-/** How far the whole body rocks back on its wheels, and how far the head tilts on top of that. */
-const LEAN = 0.34;
-const HEAD_TILT = 0.62;
-/** The face screen is skinned to this joint, so tilting it is what turns the face up. */
-const HEAD_JOINT = 'Bip001_Spine1_03';
-const CLIP = 'Take 001';
-/** The face screen's mesh, whose surface the display text borrows. */
-const FACE_MESH = 'Object_9';
-/**
- * The display, in the head joint's own frame, measured from the model: the screen spans x 2..19.9 (up the face),
- * z -13.6..14.6 (across it) and faces +y. The text is laid on the screen's own axes, as on a television, and
- * tilts with the head: the text's up is the screen's +x (up the face) and its right the screen's +z, with its
- * normal +y, a touch in front of the glass.
- */
+const SCALE = 3 / 2.85;
+/** Display coordinates in the head joint. Text up follows +x, text right follows +z, and its normal follows +y. */
 const FACE_CENTER = new Vector3(10.96, 8.6, 0.49);
 const FACE_BASIS = new Quaternion().setFromRotationMatrix(
   new Matrix4().makeBasis(new Vector3(0, 0, 1), new Vector3(1, 0, 0), new Vector3(0, 1, 0)),
 );
 /** The display frame in the head joint, in rig units. */
-const FACE_LOCAL = new Matrix4().compose(FACE_CENTER, FACE_BASIS, new Vector3().setScalar(1 / (RIG_UNIT * SCALE)));
+const FACE_LOCAL = new Matrix4().compose(FACE_CENTER, FACE_BASIS, new Vector3().setScalar(1 / (0.05737 * SCALE)));
 /** The display's finish under the printed pixels. */
 const FACE_FINISH = { roughness: 0.35, metalness: 0.6 };
 /** The eyes glitch out over this long before the text starts, and back in over it after the text clears. */
 const GLITCH_SECONDS = 0.3;
-const GLITCH_BANDS = 36;
-const GLITCH_TEAR = 0.06;
-/** Anything on the screen brighter than this is the eyes; the panel itself is darker, and this dark. */
-const EYE_LEVEL = 0.06;
-const PANEL_COLOUR = 0.03;
 /** What it prints while it looks up, and how: pixels in the eyes' violet, typed a few a second. */
 const FACE_TEXT = 'PMNDRS';
 const FACE_FONT_SIZE = 0.26;
-const FACE_LETTER_SPACING = 0.09;
 const FACE_WIDTH = 1.7;
-const FACE_COLOUR = '#a99cff';
 /** The happy face holds a moment once it is looking up before the letters take over. */
 const TYPE_FROM = LOOK_UP_AT + 1.1;
-const TYPE_RATE = 9;
 const TYPE_UNTIL = LOOK_DOWN_AT + 0.25;
 
 /** The eyes' glitch: whether they are shown, and how hard the screen is tearing, `now` seconds into a run. */
@@ -126,10 +89,7 @@ const uEyes = uniform(1);
 const uTear = uniform(0);
 const uSeed = uniform(0);
 
-/**
- * The face screen's own material, rebuilt as a node material so its picture can glitch: while the text prints,
- * the eyes are dropped in horizontal bands that tear sideways and flicker, then come back the same way.
- */
+/** Glitch the eyes out in horizontal bands while the face text appears, then restore them as it clears. */
 function glitchingScreen(screen: MeshStandardMaterial): MeshStandardNodeMaterial {
   const material = new MeshStandardNodeMaterial({
     map: screen.map,
@@ -144,21 +104,18 @@ function glitchingScreen(screen: MeshStandardMaterial): MeshStandardNodeMaterial
   });
   if (screen.map === null) return material;
   const at = uv();
-  const band = hash(at.y.mul(GLITCH_BANDS).floor().add(uSeed));
-  const torn = vec2(at.x.add(band.sub(0.5).mul(uTear).mul(GLITCH_TEAR)), at.y);
+  const band = hash(at.y.mul(36).floor().add(uSeed));
+  const torn = vec2(at.x.add(band.sub(0.5).mul(uTear).mul(0.06)), at.y);
   const picture = texture(screen.map, torn).rgb;
   // The eyes are the only thing on the panel brighter than the panel: painting them its colour puts them out.
-  const lit = threshold(EYE_LEVEL, picture.r.max(picture.g).max(picture.b));
-  const dark = mix(picture, vec3(PANEL_COLOUR), lit);
+  const lit = threshold(0.06, picture.r.max(picture.g).max(picture.b));
+  const dark = mix(picture, vec3(0.03), lit);
   const flipped = threshold(band, uTear);
   const eyes = mix(uEyes, float(1).sub(uEyes), flipped);
   material.colorNode = mix(dark, picture, eyes);
   return material;
 }
 
-/** Soft contact shadow under the wheels, along and across the line of travel; without it the robot floats. */
-const SHADOW_LENGTH = 3.2;
-const SHADOW_WIDTH = 2.6;
 const shadowMaterial = new MeshBasicNodeMaterial({ color: '#000000', depthWrite: false, transparent: true });
 shadowMaterial.opacityNode = exp(uv().sub(0.5).length().mul(3.2).pow(2).negate()).mul(0.32);
 
@@ -178,7 +135,7 @@ function createRobotTransforms() {
     eyes: { shown: 1, tear: 0 },
   };
 }
-/** Marshal the animated bone once at each boundary; composition stays in math scratch. */
+/** Marshal the animated bone once at each boundary. Composition stays in math scratch. */
 function tiltJoint(
   joint: Object3D,
   scratch: ReturnType<typeof createRobotTransforms>,
@@ -215,14 +172,14 @@ function Robot({ entity, faces }: { readonly entity: Entity; readonly faces: Fac
   const body = useRef<Group>(null);
   const { scene, display, screenMaterial } = useMemo(() => {
     const owned = clone(model.scene);
-    const screenMesh = owned.getObjectByName(FACE_MESH) as Mesh;
+    const screenMesh = owned.getObjectByName('Object_9') as Mesh;
     const original = screenMesh.material as MeshStandardMaterial;
     const material = glitchingScreen(original);
     screenMesh.material = material;
     return { scene: owned, display: screenInk(original, FACE_FINISH), screenMaterial: material };
   }, [model.scene]);
   const mixer = useMemo(() => new AnimationMixer(scene), [scene]);
-  const head = useMemo(() => scene.getObjectByName(HEAD_JOINT) as Bone | undefined, [scene]);
+  const head = useMemo(() => scene.getObjectByName('Bip001_Spine1_03') as Bone | undefined, [scene]);
   const text = useRef<ThreeText<never> | null>(null);
   const line = useRef<RetainedLine | undefined>(undefined);
   usePreparation('robot', () => line.current !== undefined);
@@ -239,7 +196,7 @@ function Robot({ entity, faces }: { readonly entity: Entity; readonly faces: Fac
   const transformsRef = useRef(useMemo(() => createRobotTransforms(), []));
 
   useEffect(() => {
-    const clip = animations.find((candidate) => candidate.name === CLIP);
+    const clip = animations.find((candidate) => candidate.name === 'Take 001');
     if (clip === undefined) return;
     const action = mixer.clipAction(clip);
     action.play();
@@ -269,16 +226,14 @@ function Robot({ entity, faces }: { readonly entity: Entity; readonly faces: Fac
         return;
       }
       const { x, y, heading, look } = robot.motion.pose;
-      root.position.set(x, y, FLOOR_Z);
+      root.position.set(x, y, 0.04);
       root.rotation.z = heading;
       // Rocks back on its wheels. The axle is the mover's y, and a negative turn about it tips the top backwards.
-      lean.rotation.y = -LEAN * look;
+      lean.rotation.y = -0.34 * look;
       // Looking up, the face prints its message a letter at a time, and clears it as it looks back down.
       const now = robot.time;
       const count =
-        now >= TYPE_FROM && now < TYPE_UNTIL
-          ? Math.min(FACE_TEXT.length, Math.floor((now - TYPE_FROM) * TYPE_RATE))
-          : 0;
+        now >= TYPE_FROM && now < TYPE_UNTIL ? Math.min(FACE_TEXT.length, Math.floor((now - TYPE_FROM) * 9)) : 0;
       showLine(line.current, count);
       if (face.current !== null) face.current.visible = count > 0;
       eyesAt(transforms.eyes, now);
@@ -290,7 +245,7 @@ function Robot({ entity, faces }: { readonly entity: Entity; readonly faces: Fac
       mixer.update(world.get(Frame)!.delta);
       if (head !== undefined && look > 0) {
         root.updateWorldMatrix(true, true);
-        tiltJoint(head, transforms, heading, -HEAD_TILT * look);
+        tiltJoint(head, transforms, heading, -0.62 * look);
       }
       // The display rides on the head joint: its matrix is the joint's, brought into the mover's frame.
       const screen = face.current;
@@ -320,7 +275,7 @@ function Robot({ entity, faces }: { readonly entity: Entity; readonly faces: Fac
         </group>
       </group>
       <mesh material={shadowMaterial} position={[0, 0, 0.01]}>
-        <planeGeometry args={[SHADOW_LENGTH, SHADOW_WIDTH]} />
+        <planeGeometry args={[3.2, 2.6]} />
       </mesh>
       {display !== undefined ? (
         <group matrixAutoUpdate={false} ref={face} visible={false}>
@@ -332,9 +287,9 @@ function Robot({ entity, faces }: { readonly entity: Entity; readonly faces: Fac
             ref={text}
             position={[-FACE_WIDTH / 2, FACE_FONT_SIZE / 2, 0]}
             style={{
-              color: FACE_COLOUR,
+              color: '#a99cff',
               fontSize: FACE_FONT_SIZE,
-              letterSpacing: FACE_LETTER_SPACING,
+              letterSpacing: 0.09,
               lineHeight: 1,
             }}
           >

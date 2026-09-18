@@ -5,7 +5,7 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:e94027fbb8fb5f4217587aa31c6abf31632ba2c692d168417e1c966d9e1ff03c'
+source_digest: 'sha256:4d9f3a7a8f0c35ad1ae61760bf49a769cd73324b51df26ed924a56bf827f7da6'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -117,6 +117,10 @@ generated:
 This Vite application is a showcase rather than an API demonstration: each scene exists to make one rendering
 technique visible. Both run on `WebGPURenderer` through React Three Fiber v10 and drei v11, and both draw their
 text with the Slug raster, whose analytic coverage is what the techniques depend on.
+
+Local tuning values live at their use sites. Shared timing and geometry contracts, retained buffers, uniforms,
+and reusable materials keep named storage. Comments describe the current algorithm or feature. The app-specific
+[code policies](../../../apps/hero/AGENTS.md) govern future changes.
 
 Koota is pinned to `0.6.6-canary.63c1187` for the default scene's domain state. The organization follows the local
 `threejs-conf-talk` and `minecraft-like` examples: domains own traits and systems, actions own discrete transitions,

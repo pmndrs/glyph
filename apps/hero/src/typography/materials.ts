@@ -26,24 +26,9 @@ import {
 } from 'three/webgpu';
 
 import { holeWarp } from '../sequence/warp';
-/** Letter accents from threejs-conf-talk/src/theme.ts. Keep these literal values aligned with the talk's brand. */
-const brand = {
-  red: '#ff4980',
-  orange: '#ffc043',
-  teal: '#00f7a3',
-  blue: '#2bdcf6',
-  purple: '#d855f9',
-} as const;
-
 type SlugContext = Extract<ThreeTextMaterialContext, { format: 'pmndrs.slug' }>;
 
-/** How strongly each glyph quad bulges as a lens. */
-const LENS_CURVATURE = 0.45;
-const RIM = color('#7cc8ff');
-/**
- * Glass Slug letters: physical transmission refracts the scene behind them, with dispersion splitting the light.
- * Smooth lens normals keep the faces continuous while bending the background icons.
- */
+/** Physical transmission and smooth lens normals refract the background through each letter. */
 function createGlass(properties: MeshPhysicalNodeMaterialParameters = {}, motion?: PaneMotion) {
   return defineTextMaterial((context) => {
     if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
@@ -66,18 +51,17 @@ function createGlass(properties: MeshPhysicalNodeMaterialParameters = {}, motion
       specularIntensity: 1,
       ...properties,
     });
-    // Each Slug glyph is drawn on a unit quad, so its uv is a per-letter lens: tilting the normal outward from the
-    // centre curves the refraction, and the icons behind magnify and bend as they cross each letterform.
+    // Per-glyph UVs curve the face normal outward to form a lens.
     const face = shapeSlug(material, context);
     if (motion !== undefined) {
       material.positionNode = jostle(context.position, motion).sub(titleOrigin).mul(motion.scale).add(titleOrigin);
     }
     const lens = uv().sub(0.5).mul(2);
     // Falls to zero at the quad border, so neighbouring glyph quads do not show their seams.
-    const falloff = float(1).sub(lens.length().mul(lens.length())).max(0).mul(LENS_CURVATURE);
+    const falloff = float(1).sub(lens.length().mul(lens.length())).max(0).mul(0.45);
     const normal = normalize(face.add(vec3(lens.x.mul(falloff), lens.y.negate().mul(falloff), 0)));
     material.normalNode = normal;
-    material.emissiveNode = RIM.mul(rim(normal).mul(0.35));
+    material.emissiveNode = color('#7cc8ff').mul(rim(normal).mul(0.35));
     return material;
   });
 }
@@ -105,11 +89,11 @@ function jostle(position: Node<'vec3'>, motion: PaneMotion): Node<'vec3'> {
 
 /** Separate inline materials preserve one shaped word while giving each pane its own tint and finish. */
 export const stainedGlassLetters = [
-  { letter: 'G', tint: brand.red, thickness: 2.8, roughness: 0.035, ior: 1.52 },
-  { letter: 'l', tint: brand.orange, thickness: 2.4, roughness: 0.06, ior: 1.5 },
-  { letter: 'y', tint: brand.teal, thickness: 3, roughness: 0.045, ior: 1.54 },
-  { letter: 'p', tint: brand.blue, thickness: 2.6, roughness: 0.025, ior: 1.56 },
-  { letter: 'h', tint: brand.purple, thickness: 2.9, roughness: 0.05, ior: 1.53 },
+  { letter: 'G', tint: '#ff4980', thickness: 2.8, roughness: 0.035, ior: 1.52 },
+  { letter: 'l', tint: '#ffc043', thickness: 2.4, roughness: 0.06, ior: 1.5 },
+  { letter: 'y', tint: '#00f7a3', thickness: 3, roughness: 0.045, ior: 1.54 },
+  { letter: 'p', tint: '#2bdcf6', thickness: 2.6, roughness: 0.025, ior: 1.56 },
+  { letter: 'h', tint: '#d855f9', thickness: 2.9, roughness: 0.05, ior: 1.53 },
 ].map(({ letter, tint, thickness, roughness, ior }) => {
   const motion = {
     scale: uniform(1),
@@ -136,12 +120,7 @@ export const stainedGlassLetters = [
   };
 });
 
-/**
- * Shared Slug plumbing: drives position from the glyph graph (Slug coverage requires it),
- * cuts the letterform out with alpha-to-coverage so depth stays exact, and casts letter-shaped shadows. Returns the
- * face normal from screen-space derivatives, which follows a glyph's real orientation even while physics tumbles
- * it (its rotation lives in the glyph transform, not the object's normal matrix).
- */
+/** Use analytic coverage for edges and shadows. Screen derivatives recover each transformed glyph face normal. */
 function shapeSlug(material: MeshPhysicalNodeMaterial, context: SlugContext) {
   material.positionNode = context.position;
   // The black hole bends the letterform itself: coverage is integrated where each fragment's ink came from.

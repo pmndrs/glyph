@@ -32,9 +32,8 @@ export function FieldRenderer({ faces }: { readonly faces: Faces }) {
 }
 
 /**
- * One monogram layer: icons on a lattice, the sheet rotated and scrolled so it runs forever, and the lattice itself a
- * mass–spring net that an impact — or the pointer — pushes around. Cells carry a motif, so a change sweeps every icon
- * of that type, each taking its new glyph as it turns edge-on.
+ * Scrolling icon lattice with spring responses to impacts and the pointer. Each motif swaps glyphs while
+ * edge-on.
  */
 function IconPattern({ entity, faces }: { readonly entity: Entity; readonly faces: Faces }) {
   const world = useWorld();

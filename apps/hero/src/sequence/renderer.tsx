@@ -27,14 +27,8 @@ import { clamp } from 'math';
 import { easing } from 'math/time';
 import { heroReady, textPrepared, usePreparation } from '../view/startup';
 
-/** The hole sits in front of the title; the black sheet covers everything at the end. The lens over the whole
- * frame is the post-processing pass's. */
-const HOLE_Z = 5;
-const BLACK_Z = 7;
 /** The horizon's radius on the hole's own plane, as a fraction of the plane's half size. */
 const HORIZON_ON_PLANE = 0.42;
-/** Planes big enough to cover the view at their depth. */
-const COVER = 60;
 
 /** The hole's own drawing, driven from the beat once a frame. */
 const uPresence = uniform(0);
@@ -85,10 +79,7 @@ function buildMaterials() {
   return { core, light, black };
 }
 
-/**
- * The black hole that ends the piece: opens once the robot has left, pulls every glyph in through the lattices'
- * springs, the title's bodies and the shaders' warp, then pops and leaves the frame black until Space replays.
- */
+/** After the robot leaves, the hole pulls in the scene and fades to black. Space replays the sequence. */
 export function BlackHole() {
   const world = useWorld();
   const materials = useMemo(() => buildMaterials(), []);
@@ -113,7 +104,7 @@ export function BlackHole() {
 
   return (
     <>
-      <group position={[HOLE_CENTER[0], HOLE_CENTER[1], HOLE_Z]} ref={hole} visible={false}>
+      <group position={[HOLE_CENTER[0], HOLE_CENTER[1], 5]} ref={hole} visible={false}>
         <mesh material={materials.core} renderOrder={40}>
           <planeGeometry args={[2, 2]} />
         </mesh>
@@ -121,14 +112,14 @@ export function BlackHole() {
           <planeGeometry args={[2, 2]} />
         </mesh>
       </group>
-      <mesh frustumCulled={false} material={materials.black} position={[0, 0, BLACK_Z]} renderOrder={60}>
-        <planeGeometry args={[COVER, COVER]} />
+      <mesh frustumCulled={false} material={materials.black} position={[0, 0, 7]} renderOrder={60}>
+        <planeGeometry args={[60, 60]} />
       </mesh>
     </>
   );
 }
 
-/** GPU publication is a view concern; simulation only changes the sequence trait. */
+/** GPU publication is a view concern. Simulation only changes the sequence trait. */
 export function syncHoleUniforms(current: HoleState): void {
   uHoleCenter.value.set(current.x, current.y);
   uHoleHorizon.value = Math.max(current.horizon, 0.001);
@@ -168,7 +159,7 @@ export function GlyphBurst({ faces }: { readonly faces: Faces }) {
       const group = groups.current[particle.index];
       if (group === null || group === undefined) continue;
       const age = (since ?? -1) - particle.delay;
-      // Keep the text mounted and shaped before emission; a near-zero transform hides its prewarmed draw.
+      // Keep the text mounted and shaped before emission. A near-zero transform hides its prewarmed draw.
       if (age < 0 || age >= BURST_SECONDS) {
         group.scale.setScalar(0.0001);
         continue;
