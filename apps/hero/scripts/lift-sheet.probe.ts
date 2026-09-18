@@ -1,6 +1,6 @@
 /* @workflow {
   "name": "hero:lift-sheet",
-  "summary": "Tile four moments of the title's lift and smash on WebGPU, stepping the physics deterministically.",
+  "summary": "Verify the automatic opening lift and tile four moments of its smash on WebGPU with deterministic physics.",
   "requirements": "Workspace dependencies, baked hero assets, and GPU-enabled Chromium through Vitexec.",
   "writes": "apps/hero/.cache/lift-sheet.png and stdout",
   "args": ["--gpu", "--timeout", "180", "--screenshot", ".cache/lift-sheet.png"]
@@ -22,9 +22,9 @@ import type { TitleBodies } from '../src/typography/bodies';
 const { advanceHero } = (await import(
   new URL('/src/systems.ts', location.origin).href
 )) as typeof import('../src/systems');
-const { sequenceActions } = (await import(
-  new URL('/src/sequence/actions.ts', location.origin).href
-)) as typeof import('../src/sequence/actions');
+const { Frame } = (await import(
+  new URL('/src/sequence/traits.ts', location.origin).href
+)) as typeof import('../src/sequence/traits');
 const { Body } = (await import(
   new URL('/src/physics/traits.ts', location.origin).href
 )) as typeof import('../src/physics/traits');
@@ -59,8 +59,20 @@ if (world === undefined) throw new Error('Missing the hero world');
 
 // Sample the adapter once after the readiness gate before taking over the deterministic clock.
 getScheduler().stepJob('hero-simulation');
-sequenceActions(world).replay();
-const base = performance.now();
+const frame = world.get(Frame)!;
+let clock = frame.now;
+
+while (frame.elapsed < 1) {
+  if (title.lifting) throw new Error('The title lifted before its opening beat');
+
+  const delta = Math.min(STEP, 1 - frame.elapsed);
+  clock += delta * 1000;
+  advanceHero(world, delta, clock);
+}
+
+if (!title.lifting) throw new Error('The title did not lift automatically after its opening beat');
+
+const base = clock;
 let elapsed = 0;
 const heights: number[] = [];
 

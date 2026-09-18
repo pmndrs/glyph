@@ -59,6 +59,7 @@ renderer.onDeviceLost = (info) => {
   throw new Error(`WebGPU device lost: ${info.message}`);
 };
 
+requestReplay();
 handles.heroRobot!.hold(9);
 const scheduler = getScheduler();
 const base = performance.now();

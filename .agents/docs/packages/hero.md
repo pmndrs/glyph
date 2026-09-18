@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:48d1370d3ccef409a456f3d21f02114680387d051a1d6b20f03114f2f82d0ce4'
+source_digest: 'sha256:1cba58b3faa9215baf568bb7748e934a9e275ae86acdcd9b60c11d1b9d5a3624'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -197,8 +197,10 @@ edge-on motif substitution. The physics tests use real Crashcat contacts to veri
 without tipping or leaving collisions after departure. WebGPU checks cover visible robot emission and fade, finale timing, and replay.
 
 The scene builds two interleaved lattices of eleven icons on mass-spring grids at different depths, scaled
-so they interleave on screen and stay in phase. The Slug-glass `Glyph` and feature line start at rest. Press Space
-to lift the title towards the camera and smash it back down. The lift is carried, 35 ms per letter, to just short
+so they interleave on screen and stay in phase. The Slug-glass `Glyph` and feature line start at rest. One second
+after preparation finishes, the title automatically lifts towards the camera and smashes back down. This opening
+beat uses the ready-gated sequence clock and runs once. Space replays the sequence, including if pressed before
+the automatic lift. The lift is carried, 35 ms per letter, to just short
 of the camera; the fall is simulated. Each letter is a rigid body in a Crashcat world with a static floor: it is thrown
 down with a little sideways drift and spin, rebounds once, and comes to rest wherever friction stops it, a touch off
 its mark and off square, differently on every replay. The floor's first contact with each letter is what strikes
@@ -210,8 +212,8 @@ ships in the build's `notices.txt`). It drives in from the bottom left along a m
 changes every run, stops over the title, rocks back on its wheels and turns its face up to the camera, then drives
 off the top right. While it looks up, its face screen glitches its eyes out in torn bands and prints `PMNDRS` a letter at a time
 in the pixel face, lit like the display it sits on, then glitches the eyes back as it looks down; the text rides
-the head joint, placed from the screen's measured extent in that joint's frame. It runs once after the page loads
-and again 1.4 s after every replay's landing. On the floor it
+the head joint, placed from the screen's measured extent in that joint's frame. It runs 1.4 s after the opening
+landing and after every replay's landing. On the floor it
 is a kinematic body in the same world, a rounded box the size of its body driven to its path each frame, so
 nothing stops it: the letters slide and turn where it shoves them and stay wherever they end up. The letters stay
 glyph's: once the paragraph has committed it is broken apart with `Text.breakApart()`, and each pane's glyph copy
@@ -322,8 +324,8 @@ directed projection, not multi-bounce light transport.
 untinted control on WebGPU and checks repeated captures and resizing.
 `mise exec -- pnpm scripts run hero:glass-shadow-buffers` tiles the capture, lens normals, heights, and caustic map
 into `apps/hero/.cache/glass-shadow-buffers.png` and logs the caustic grid's vertex sample count.
-`mise exec -- pnpm scripts run hero:lift-sheet` steps a replay's physics deterministically and tiles four moments of
-the lift and smash into `apps/hero/.cache/lift-sheet.png`.
+`mise exec -- pnpm scripts run hero:lift-sheet` verifies the automatic opening beat, steps its physics deterministically,
+and tiles four moments of the lift and smash into `apps/hero/.cache/lift-sheet.png`.
 `mise exec -- pnpm scripts run hero:glass-shadow-check` compares the projection with disabled and untinted
 controls, lifts the actual draw surfaces while keeping visible glass fixed for the readback, and verifies an
 exact return to the original pixels after lowering them. Both run through Vitexec, fail on browser errors,

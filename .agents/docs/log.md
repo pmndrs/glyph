@@ -2,6 +2,11 @@
 
 ## 2026-09-19
 
+- **Started the hero with an automatic lift** — The title lifts and falls one second after preparation opens the
+  sequence clock. The opening runs once, and Space still replays the sequence. The existing lift browser check
+  now verifies the opening delay and automatic lift before capturing its fall and landing. The full hero package
+  check and WebGPU automatic lift check pass. See [the hero reference](packages/hero.md).
+
 - **Kept only the main hero sequence** — Removed the origin scene, video, ten unused baked fonts, and their
   exclusive font sources and browser check. Simplified the entry point, scene composition, font loading, and bake
   workflow around the letters, robot, and black-hole sequence with its existing backdrop and tagline. React mounts
