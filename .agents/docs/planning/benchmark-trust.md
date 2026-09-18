@@ -52,7 +52,8 @@ generated:
 
 # Benchmarks we can trust
 
-Status: draft; supersedes nothing until the retirement table below is executed
+Status: implementation in progress; the installed-package smoke lane is active, while the retirement table below remains
+open until every hand-rolled Node timing script has a verified Labs replacement
 Purpose: make a performance number in this repository mean "this change did that", and make the absence of a number mean "we could not tell".
 
 This plan owns the **core API measurement lane in Node**. The [benchmark plan](benchmark-plan.md) keeps ownership of the
