@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import test, { before } from 'node:test';
 
-import { createFontBaker } from '../../../dist/font-baker/index.js';
+import { createFontBaker, fontBakerAbi } from '../../../dist/font-baker/index.js';
 import { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from '../../../dist/font-baker/contract.js';
 import { FontArtifactValidationError, validateFontArtifact } from '../../../dist/font-baker/validator.js';
 import { fontBakerWasmUrl } from '../../../dist/font-baker/wasm-url.js';
@@ -131,7 +131,7 @@ test('keeps the packaged extension schema byte-identical to the canonical schema
     source: './src/node/bake.ts',
     import: './dist/node/bake.js',
   });
-  assert.equal(FONT_BAKER_VERSION, manifest.version);
+  assert.equal(FONT_BAKER_VERSION, fontBakerAbi.versions.baker);
   assert.equal(FONT_FORMAT_VERSION, 0);
   assert.equal(fontBakerWasmUrl, new URL('../../../dist/font-baker.wasm', import.meta.url).href);
   assert.doesNotMatch(coreSource, /(?:ajv|gltf-validator|validator\.js)/);
