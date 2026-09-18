@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import { forwardedWorkflowArguments, workflowCommandArguments } from './workflow-arguments.mts';
 import { hasVitexecFailure } from './workflow-output.mts';
+import { assertLabsResultHasNoErrors } from './support/labs-result.mts';
 import { LOOPBACK_HOST, selectLoopbackPort } from './support/loopback-port.mts';
 import { packedArchiveDependency } from './support/packed-archive.mts';
 
@@ -37,6 +38,27 @@ test('treats Vitexec browser and injected-module errors as workflow failures', (
   assert.equal(hasVitexecFailure('logs:\n[log] presentation-ready'), false);
   assert.equal(hasVitexecFailure('logs:\n[error] injected probe failed'), true);
   assert.equal(hasVitexecFailure('logs:\n[page error] renderer failed'), true);
+});
+
+test('rejects benchmark-body errors even when Labs exits successfully', () => {
+  assert.doesNotThrow(() =>
+    assertLabsResultHasNoErrors({
+      files: [{ file: 'healthy.bench.ts', benchmarks: [{ runs: [{ name: 'healthy' }] }] }],
+    }),
+  );
+  assert.throws(
+    () =>
+      assertLabsResultHasNoErrors({
+        files: [
+          {
+            file: 'broken.bench.ts',
+            benchmarks: [{ alias: 'layout', runs: [{ name: 'suffix-edit', error: { message: 'memory grew' } }] }],
+          },
+        ],
+      }),
+    /broken\.bench\.ts \/ layout \/ suffix-edit: memory grew/u,
+  );
+  assert.throws(() => assertLabsResultHasNoErrors({ files: [] }), /did not contain any benchmark runs/u);
 });
 
 test('forwards runner options in the position each runner parses', () => {
