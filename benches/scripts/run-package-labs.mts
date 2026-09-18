@@ -11,6 +11,8 @@ import { tmpdir } from 'node:os';
 import { basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { assertLabsResultSucceeded } from './support/labs-result.mts';
+
 interface Options {
   readonly baseline?: string;
   readonly blocks: number;
@@ -186,6 +188,7 @@ async function runLabs(name: string, packageRoot: string, blocks: number, suite:
   await run(labsExecutable, [...selection, '--name', name, '--force', '--blocks', String(blocks)], benchesRoot, false, {
     GLYPH_LABS_PACKAGE_ROOT: packageRoot,
   });
+  await assertLabsResultSucceeded(resolve(labsResults, `${name}.json`));
 }
 
 async function preserveInstall(artifact: InstalledArtifact, name: string, destination: string): Promise<void> {

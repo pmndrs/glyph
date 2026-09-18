@@ -8,9 +8,12 @@ import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { assertLabsResultSucceeded } from './support/labs-result.mts';
+
 const benchesRoot = fileURLToPath(new URL('..', import.meta.url));
 const labsRoot = resolve(benchesRoot, 'labs-internal');
 const labsExecutable = resolve(benchesRoot, 'node_modules/.bin/labs');
+const labsResults = resolve(benchesRoot, '.cache/labs-internal/results');
 const options = parseArguments(process.argv.slice(2));
 const commandArguments = [`@${options.suite}`, '--name', options.name, '--force', '--blocks', String(options.blocks)];
 
@@ -32,6 +35,7 @@ await new Promise<void>((resolveRun, reject) => {
     else reject(new Error(`labs exited with ${String(code)}`));
   });
 });
+await assertLabsResultSucceeded(resolve(labsResults, `${options.name}.json`));
 
 function parseArguments(argv: readonly string[]) {
   const values = new Map<string, string>();
