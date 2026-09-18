@@ -2,6 +2,10 @@
 
 ## 2026-09-18
 
+- **Colored the hero title as stained glass** — G, L, Y, P, and H each have a separate tint and physical finish,
+  while retaining smooth faces and the existing background. A WebGPU check compares the five materials against
+  an untinted control and saves a review screenshot. See [the hero package reference](packages/hero.md).
+
 - **Made the hero slam interactive** — The title and feature line start at rest; Space triggers a lift towards the
   camera, slam, and retyping once per keypress. Both scenes hide the development inspector by default, with D available to toggle it.
   See [the hero package reference](packages/hero.md).

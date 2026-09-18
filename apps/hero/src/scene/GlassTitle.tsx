@@ -6,7 +6,7 @@ import { Box3, type Group } from 'three/webgpu';
 
 import { TITLE } from '../content';
 import type { Faces, MsdfFont } from '../fonts';
-import { glass, sdfShadow } from '../materials/ink';
+import { sdfShadow, stainedGlassLetters } from '../materials/ink';
 import { setTitleWidth } from './metrics';
 import { requestReplay } from './replay';
 import { triggerShockwave } from './shockwave';
@@ -153,12 +153,15 @@ export function GlassTitle({ faces, field }: { readonly faces: Faces; readonly f
         constraints={{ width: { mode: 'exact', size: LAYOUT_WIDTH } }}
         font={faces[TITLE.face]}
         layout={{ align: 'center', wrap: 'none' }}
-        material={glass}
         position={[-LAYOUT_WIDTH / 2, FONT_SIZE / 2, 0]}
         ref={word}
         style={{ color: '#ffffff', fontSize: FONT_SIZE, lineHeight: 1 }}
       >
-        {TITLE.text}
+        {stainedGlassLetters.map(({ letter, material }) => (
+          <Text key={letter} material={material}>
+            {letter}
+          </Text>
+        ))}
       </Text>
     </group>
   );

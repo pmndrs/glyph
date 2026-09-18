@@ -26,6 +26,7 @@ import {
   MeshBasicNodeMaterial,
   MeshPhysicalNodeMaterial,
   MeshStandardNodeMaterial,
+  type MeshPhysicalNodeMaterialParameters,
   type Node,
 } from 'three/webgpu';
 
@@ -56,39 +57,66 @@ export const ink = defineTextMaterial((context) => {
 
 /**
  * Glass Slug letters: physical transmission refracts the scene behind them, with dispersion splitting the light.
- * Animated noise tilts the normals so what is seen through the letters visibly bends.
+ * Smooth lens normals keep the faces continuous while bending the background icons.
  */
-export const glass = defineTextMaterial((context) => {
-  if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
-  const material = new MeshPhysicalNodeMaterial({
-    side: DoubleSide,
-    // A very faint smoky tint: the pattern reads through the letters, bent rather than dimmed.
-    color: new Color('#f1f3f6'),
-    metalness: 0,
-    roughness: 0.03,
-    transmission: 1,
-    thickness: 2.6,
-    ior: 1.6,
-    dispersion: 3,
-    attenuationColor: new Color('#b9c0c9'),
-    attenuationDistance: 14,
-    clearcoat: 1,
-    clearcoatRoughness: 0.03,
-    iridescence: 0.15,
-    iridescenceIOR: 1.3,
-    specularIntensity: 1,
+function createGlass(properties: MeshPhysicalNodeMaterialParameters = {}) {
+  return defineTextMaterial((context) => {
+    if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
+    const material = new MeshPhysicalNodeMaterial({
+      side: DoubleSide,
+      // A very faint smoky tint: the pattern reads through the letters, bent rather than dimmed.
+      color: new Color('#f1f3f6'),
+      metalness: 0,
+      roughness: 0.03,
+      transmission: 1,
+      thickness: 2.6,
+      ior: 1.6,
+      dispersion: 3,
+      attenuationColor: new Color('#b9c0c9'),
+      attenuationDistance: 14,
+      clearcoat: 1,
+      clearcoatRoughness: 0.03,
+      iridescence: 0.15,
+      iridescenceIOR: 1.3,
+      specularIntensity: 1,
+      ...properties,
+    });
+    // Each Slug glyph is drawn on a unit quad, so its uv is a per-letter lens: tilting the normal outward from the
+    // centre curves the refraction, and the icons behind magnify and bend as they cross each letterform.
+    const face = shapeSlug(material, context, { drift: false });
+    const lens = uv().sub(0.5).mul(2);
+    // Falls to zero at the quad border, so neighbouring glyph quads do not show their seams.
+    const falloff = float(1).sub(lens.length().mul(lens.length())).max(0).mul(LENS_CURVATURE);
+    const normal = normalize(face.add(vec3(lens.x.mul(falloff), lens.y.negate().mul(falloff), 0)));
+    material.normalNode = normal;
+    material.emissiveNode = RIM.mul(rim(normal).mul(0.35));
+    return material;
   });
-  // Each Slug glyph is drawn on a unit quad, so its uv is a per-letter lens: tilting the normal outward from the
-  // centre curves the refraction, and the icons behind magnify and bend as they cross each letterform.
-  const face = shapeSlug(material, context, { drift: false });
-  const lens = uv().sub(0.5).mul(2);
-  // Falls to zero at the quad border, so neighbouring glyph quads do not show their seams.
-  const falloff = float(1).sub(lens.length().mul(lens.length())).max(0).mul(LENS_CURVATURE);
-  const normal = normalize(face.add(vec3(lens.x.mul(falloff), lens.y.negate().mul(falloff), 0)));
-  material.normalNode = normal;
-  material.emissiveNode = RIM.mul(rim(normal).mul(0.35));
-  return material;
-});
+}
+
+export const glass = createGlass();
+
+/** Separate inline materials preserve one shaped word while giving each pane its own tint and finish. */
+export const stainedGlassLetters = [
+  { letter: 'G', tint: '#f06a86', thickness: 2.8, roughness: 0.035, ior: 1.52 },
+  { letter: 'L', tint: '#efb84b', thickness: 2.4, roughness: 0.06, ior: 1.5 },
+  { letter: 'Y', tint: '#55bd91', thickness: 3, roughness: 0.045, ior: 1.54 },
+  { letter: 'P', tint: '#63a1e6', thickness: 2.6, roughness: 0.025, ior: 1.56 },
+  { letter: 'H', tint: '#b18add', thickness: 2.9, roughness: 0.05, ior: 1.53 },
+].map(({ letter, tint, thickness, roughness, ior }) => ({
+  letter,
+  material: createGlass({
+    name: `stained-glass-${letter}`,
+    color: new Color(tint).lerp(new Color('#ffffff'), 0.38),
+    attenuationColor: new Color(tint),
+    attenuationDistance: 4,
+    thickness,
+    roughness,
+    ior,
+    dispersion: 0.7,
+    iridescence: 0,
+  }),
+}));
 
 /**
  * The title's shadow, from the MSDF companion's `style.shadow`. Only the shadow coverage is drawn — never the fill —

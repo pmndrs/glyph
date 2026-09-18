@@ -5,7 +5,7 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:14261b9d53722f51c350cd84d7654c1ef83ad8eee87be4c5ceb52ea9c5c3353e'
+source_digest: 'sha256:41993181300dd833fea998729aff804571001fc5424eb07e57c0acbc5f265542'
 tags: [package, example, react-three-fiber, webgpu, slug, vite]
 sources:
   - id: manifest
@@ -17,6 +17,12 @@ sources:
   - id: origin-scene
     resource: ../../../apps/hero/src/origin.tsx
     title: Origin scene composition
+  - id: glass-material
+    resource: ../../../apps/hero/src/materials/ink.ts
+    title: Glass title materials and smooth lens normals
+  - id: refraction-check
+    resource: ../../../apps/hero/scripts/refraction.probe.ts
+    title: WebGPU stained-glass verification
   - id: screen-material
     resource: ../../../apps/hero/src/materials/screen.ts
     title: Video mask and metal story materials
@@ -45,6 +51,15 @@ around a bounding box. Holding Space
 does not restart the animation, and focused form controls retain their normal keyboard behavior.
 
 The development inspector starts hidden in both scenes; D toggles it.
+
+The title uses five inline glass materials in one shaped word: rose G, amber L, jade Y, blue P, and violet H.
+Each has its own attenuation tint, thickness, roughness, and refractive index, with smooth lens normals and modest
+physical dispersion. The paper and icon background stay unchanged; there are no added crystal lights, internal
+rainbow beams, or hidden studio images.
+
+`mise exec -- pnpm scripts run hero:refraction-check` verifies the real scene on WebGPU through Vitexec. It requires
+five stained-glass materials, compares them with an untinted control, checks that changes stay inside the title,
+checks repeatable captures and resizing, and saves `apps/hero/.cache/refraction.png`. Browser errors fail the workflow.
 
 `?scene=origin` sets a word off axis over a black reflector in a dark room. A NASA SDO clip is masked into the
 letterforms, and the same clip lights the scene through `Lightformer`s inside an `Environment`, so the word and the
