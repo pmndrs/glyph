@@ -29,9 +29,14 @@ export function rawEngineCases(corpus) {
   return rustLayoutBenchmarkCases(corpus);
 }
 
-export async function createRawEngineSession({ techniqueName = 'bitmap', corpus = 'latin', glyphs = 22_000 } = {}) {
+export async function createRawEngineSession({
+  techniqueName = 'bitmap',
+  corpus = 'latin',
+  glyphs = 22_000,
+  wasmPath,
+} = {}) {
   const [wasm, artifact] = await Promise.all([
-    readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
+    readFile(wasmPath ?? new URL('../../dist/text-shaper.wasm', import.meta.url)),
     loadArtifact(techniqueName, corpus),
   ]);
   const validated = await validateFontArtifact(artifact);
