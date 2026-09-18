@@ -6,7 +6,6 @@
   "args": ["--gpu", "--timeout", "180", "--screenshot", ".cache/lift-sheet.png"]
 } */
 import { _roots, getScheduler } from '@react-three/fiber/webgpu';
-import { Text } from '@pmndrs/glyph/three';
 import { texture, uv, vec4 } from 'three/tsl';
 import {
   Mesh,
@@ -29,20 +28,8 @@ const { sequenceActions } = (await import(
 /** Seconds into the replay for each tile: carried up, at the top, falling, and landed. */
 const MOMENTS = [0.3, 0.6, 0.85, 1.6] as const;
 const STEP = 1 / 120;
-function ready() {
-  const scene = _roots.values().next().value?.store.getState().scene;
-  let feature = false;
-  scene?.traverse((object) => {
-    if (object instanceof Text && object.text.startsWith('SHAPING') && object.style.opacity === 1) {
-      feature = object.commitState().status === 'committed';
-    }
-  });
-  const title = (globalThis as { heroTitle?: TitleBodies }).heroTitle;
-  return feature && scene?.environment && scene.getObjectByName('glass-shadows') && title !== undefined;
-}
 while (document.documentElement.dataset.heroState !== 'ready')
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-while (!ready()) await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 const state = _roots.values().next().value?.store.getState();
 if (state === undefined) throw new Error('Hero did not mount');
 state.setFrameloop('never');
@@ -86,7 +73,7 @@ const sheet = new Scene();
 const quad = new PlaneGeometry(1, 1);
 const materials = tiles.map((tile, index) => {
   const material = new MeshBasicNodeMaterial({ toneMapped: false });
-  // Render textures are top-down; the sheet reads them upright.
+  // Render textures are top-down. The sheet reads them upright.
   material.fragmentNode = vec4(texture(tile.texture, uv().flipY()).rgb, 1);
   const mesh = new Mesh(quad, material);
   mesh.position.set(index % 2 === 0 ? -0.5 : 0.5, index < 2 ? 0.5 : -0.5, 0);

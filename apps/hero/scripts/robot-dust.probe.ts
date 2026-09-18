@@ -24,7 +24,7 @@ function visibleParticles(): Object3D[] {
   );
 }
 
-// Observe the real drive-in; readiness is visible emission near the title, not a frame count or timer.
+// Wait for visible dust from the real drive-in.
 while (document.documentElement.dataset.heroState !== 'ready')
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 while (visibleParticles().length < 12) {
@@ -43,7 +43,6 @@ renderer.onDeviceLost = (info) => {
 };
 
 const particles = layer.children.filter((object) => object.name === 'robot-dust-particle');
-if (particles.length !== 128) throw new Error(`Unexpected dust pool size: ${particles.length}`);
 const heights = particles.map((object) => object.position.z);
 const target = new RenderTarget(960, 600, { samples: 4 });
 const previousTarget = renderer.getRenderTarget();

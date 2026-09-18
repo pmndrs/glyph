@@ -5,8 +5,8 @@
   "writes": "apps/hero/.cache/hole.png and stdout",
   "args": ["--gpu", "--timeout", "180", "--screenshot", ".cache/hole.png"]
 } */
-import { _roots, getScheduler } from '@react-three/fiber/webgpu';
 import { Text } from '@pmndrs/glyph/three';
+import { _roots, getScheduler } from '@react-three/fiber/webgpu';
 import { texture, uv, vec4 } from 'three/tsl';
 import {
   Mesh,
@@ -41,30 +41,8 @@ const handles = globalThis as {
   heroTitle?: TitleBodies;
   heroRobot?: { hold(at: number): void };
 };
-function ready() {
-  const state = _roots.values().next().value?.store.getState();
-  let feature = false;
-  state?.scene?.traverse((object) => {
-    if (object instanceof Text && object.text.startsWith('SHAPING') && object.style.opacity === 1) {
-      feature = object.commitState().status === 'committed';
-    }
-  });
-  let readyBurst = 0;
-  state?.scene?.getObjectByName('hole-glyph-burst')?.traverse((object) => {
-    if (object instanceof Text && object.commitState().status === 'committed') readyBurst++;
-  });
-  return (
-    readyBurst === 16 &&
-    feature &&
-    state?.scene?.environment &&
-    state.renderPipeline &&
-    handles.heroTitle &&
-    handles.heroRobot
-  );
-}
 while (document.documentElement.dataset.heroState !== 'ready')
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-while (!ready()) await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 const { dismissCollapse, holdCollapse, replay: requestReplay } = sequenceActions(handles.heroWorld!);
 const hole = handles.heroHole!.state;
 const state = _roots.values().next().value!.store.getState();

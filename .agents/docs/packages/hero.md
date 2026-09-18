@@ -5,9 +5,15 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:795d4cc623afd94a7aaf35c2e7179567ce0500a187afaffa155da068485a4885'
+source_digest: 'sha256:e94027fbb8fb5f4217587aa31c6abf31632ba2c692d168417e1c966d9e1ff03c'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
+  - id: hero-policy
+    resource: ../../../apps/hero/AGENTS.md
+    title: Hero testing, comments, and tuning policies
+  - id: origin-check
+    resource: ../../../apps/hero/scripts/origin.probe.ts
+    title: Origin video and text rendering check
   - id: manifest
     resource: ../../../apps/hero/package.json
     title: Application manifest
@@ -86,12 +92,9 @@ sources:
   - id: lattice-check
     resource: ../../../apps/hero/src/field/lattice.test.ts
     title: Matrix equivalence, bounded simulation, and edge-on morph checks
-  - id: robot-motion-check
-    resource: ../../../apps/hero/src/robot/motion.test.ts
-    title: Motion endpoints, borrowed footprints, and retained dust checks
   - id: physics-check
     resource: ../../../apps/hero/src/typography/physics.test.ts
-    title: Physical landing and retained event buffer checks
+    title: Held targets and one landing notification per release
   - id: world
     resource: ../../../apps/hero/src/world.ts
     title: Koota world and retained domain entities
@@ -145,8 +148,10 @@ beside their implementations.
 
 The old, unmounted break/rewind presentation and its exclusive director and compressed recording code/tests were
 removed during the Koota migration. The root cleanup also removed retired ink, glass, and silhouette variants and
-their unused uniforms. Materials and post-processing now live in their domains. The 15 tests include preparation,
-world isolation, stale cue rejection, and two complete replay cycles using real Box3D landings and retained buffers.
+their unused uniforms. Materials and post-processing now live in their domains. Browser checks own common playback stories: title lift and landing, robot dust, typed text, collapse, blackness,
+and Space replay. Four numerical tests retain precise evidence for glyph transforms, edge-on motif changes,
+bounded pointer response, and one collision notification per released letter. These checks catch errors that
+pixel comparisons cannot isolate reliably. Buffer identity and duplicate timeline/path tests are omitted.
 
 The application pins Poimandres' `math` package at `0.1.0` for the default scene's CPU simulation and transforms. Its upstream
 skill is installed at `.agents/skills/math/SKILL.md` from `pmndrs/math` commit
@@ -171,10 +176,9 @@ application-owned update kernels create no temporary arrays, collections, or pos
 library internals are outside that claim. Scene-authored dimensions and flight durations are positive, transforms
 used as coordinate frames are invertible, and frame deltas are nonnegative.
 
-The simulation tests compare direct matrix composition with Three's independent transform implementation, exercise
-robot endpoints and look-up timing, verify motif changes at edge-on, check borrowed-position handling and dust fade,
-and use real Box3D contact events to verify landing notification and buffer reuse. The alternate origin scene's
-multilingual shaping schedule remains a separate implementation.
+The field tests compare direct transforms with Three's matrix composition, bound pointer disturbances, and check
+edge-on motif substitution. The physics test uses real Box3D contacts to distinguish one landing event from repeated
+contact notifications. WebGPU checks cover visible robot emission and fade, finale timing, and replay.
 
 The default scene builds two interleaved lattices of eleven icons on mass-spring grids at different depths, scaled
 so they interleave on screen and stay in phase. The Slug-glass `Glyph` and feature line start at rest. Press Space
@@ -230,8 +234,8 @@ The six star shapes are baked from the vendored OFL Noto Sans Symbols 2 face, wi
 bake and the burst in `src/sequence/symbols.ts`. `hero:star-font` restores the pinned source and license, and
 `hero:bake -- --only=stars` regenerates the tiny Slug subset. Both accept `--check`.
 
-The timeline and feature-glyph paths are pure functions, with tests for release continuity, acceleration, completion,
-and clearing a held beat on replay. The development handle `heroHole` opens, freezes, or dismisses the beat.
+The timeline and feature-glyph paths are pure functions. The WebGPU finale check covers collapse, completion,
+and replay from black. The development handle `heroHole` opens, freezes, or dismisses the beat.
 `mise exec -- pnpm scripts run hero:hole-check` steps the actual WebGPU scene through six moments, compares collapsed
 paper against an uncollapsed control, checks the luminous glyphs against a hidden control and the exact black frame, and verifies replay restores the
 paper. It also checks the bloom against a disabled control and confirms stars and their bloom still linger at 0.8 seconds. Its filmstrip is saved at `apps/hero/.cache/hole.png`.
@@ -284,7 +288,7 @@ the migration does not claim a fresh 60 fps measurement. A CPU profile placed mo
 rendering work; it does not establish the cause of the slowdown shared by both versions.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
-Its five inline glass materials use that talk's brand accents, copied into `src/typography/materials.ts`: red G, orange l,
+Its five inline glass materials use that talk's brand accents in `src/typography/materials.ts`: red G, orange l,
 teal y, blue p, and purple h. The same attenuation colors tint their projected light. The feature line sits below the lowercase descenders.
 Each has its own attenuation tint, thickness, roughness, and refractive index, with smooth lens normals and modest
 physical dispersion. The paper and icon background stay unchanged; there are no added crystal lights, internal
@@ -316,6 +320,9 @@ the lift and smash into `apps/hero/.cache/lift-sheet.png`.
 controls, lifts the actual draw surfaces while keeping visible glass fixed for the readback, and verifies an
 exact return to the original pixels after lowering them. Both run through Vitexec, fail on browser errors,
 and save scene readbacks under `apps/hero/.cache/`.
+
+`hero:origin-check` loads the alternate scene, observes decoded video frames advancing, and compares its word
+and story pixels against hidden controls on WebGPU.
 
 `?scene=origin` sets a word off axis over a black reflector in a dark room. A NASA SDO clip is masked into the
 letterforms, and the same clip lights the scene through `Lightformer`s inside an `Environment`, so the word and the

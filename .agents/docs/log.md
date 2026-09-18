@@ -2,6 +2,11 @@
 
 ## 2026-09-19
 
+- **Focused hero tests on playback stories** — Removed eight duplicate timeline and robot unit checks and
+  buffer-identity assertions. Retained precise transform, motif, pointer-bound, and collision-notification checks.
+  Added `hero:origin-check` for decoded video progress and visible word/story pixels. Browser preparation checks
+  use the application readiness gate instead of duplicating private pool sizes. See [the hero reference](packages/hero.md).
+
 - **Used Koota query updates in hero** — Converted query mutation loops in robot, field, typography, and replay
   actions to `updateEach`, preserving per-entity early exits and retained simulation storage.
   See [the hero reference](packages/hero.md).

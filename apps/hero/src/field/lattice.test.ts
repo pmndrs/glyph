@@ -22,7 +22,7 @@ const layer: IconLayoutOptions = {
   waveImpulse: 146,
 };
 
-describe('retained lattice', () => {
+describe('icon field motion', () => {
   it('composes the same XYZ transforms as Three, including glyph centering during a flip and collapse', () => {
     const layout = buildLayout(layer);
     const state = createLattice(layout, layer.motifs, layer.seed);
@@ -46,19 +46,17 @@ describe('retained lattice', () => {
     expected.scale.set(grow * stretch, grow / Math.sqrt(stretch), 1);
     expected.updateMatrix();
     expected.matrix.multiply(baseline);
-    expect(cellMatrix(out, state, layout, index, -0.3, 0.8, now)).toBe(out);
+    cellMatrix(out, state, layout, index, -0.3, 0.8, now);
     for (let lane = 0; lane < 16; lane++) expect(out[lane]).toBeCloseTo(expected.matrix.elements[lane]!, 12);
   });
 
-  it('keeps resting cells still and confines a pointer disturbance with fixed storage', () => {
+  it('keeps resting cells still and confines a pointer disturbance', () => {
     const layout = buildLayout(layer);
     const state = createLattice(layout, layer.motifs, layer.seed);
-    const positions = state.x;
     simulate(state, layout, 1 / 60, layer, 100);
     expect([...state.x, ...state.y]).toEqual(Array(layout.cells.length * 2).fill(0));
     Object.assign(state.pointer, { active: true, strength: 1, x: -1, y: 0 });
     for (let frame = 0; frame < 240; frame++) simulate(state, layout, 1 / 60, layer, (frame * 1000) / 60);
-    expect(state.x).toBe(positions);
     expect(state.x.some((value) => Math.abs(value) > 0.01)).toBe(true);
     for (const value of [...state.x, ...state.y]) expect(Math.abs(value)).toBeLessThanOrEqual(2.4);
   });
@@ -67,7 +65,6 @@ describe('retained lattice', () => {
     const layout = buildLayout(layer);
     const state = createLattice(layout, layer.motifs, layer.seed);
     advanceMorph(state, layout, 100);
-    const selected = state.selected;
     for (let cycle = 0; cycle < 12; cycle++) {
       const now = state.nextSwap;
       const before = [...state.selected];
@@ -76,7 +73,6 @@ describe('retained lattice', () => {
       const to = state.morph.to;
       expect([...state.selected]).toEqual(before);
       advanceMorph(state, layout, now + 820.01);
-      expect(state.selected).toBe(selected);
       for (let index = 0; index < layout.cells.length; index++) {
         expect(state.selected[index]).toBe(layout.motifOfCell[index] === motif ? to : before[index]);
       }
