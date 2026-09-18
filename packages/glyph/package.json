@@ -1,6 +1,14 @@
 {
   "name": "@pmndrs/glyph",
   "version": "0.0.0",
+  "description": "A typography engine for web graphics.",
+  "keywords": [
+    "text-rendering",
+    "threejs",
+    "typegpu",
+    "typography",
+    "webgpu"
+  ],
   "license": "MIT",
   "author": "Justin Walsh (https://github.com/thejustinwalsh)",
   "repository": {
