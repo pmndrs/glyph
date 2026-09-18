@@ -55,8 +55,8 @@ generated:
 
 # Benchmarks we can trust
 
-Status: implementation in progress; the installed-package smoke lane is active, while the retirement table below remains
-open until every hand-rolled Node timing script has a verified Labs replacement
+Status: implemented for Node CPU timing retirement; the public-package smoke lane and workspace-only exhaustive lane are
+active, while browser observations, native/Worker profiles, payload gates, and conformance retain their separate owners
 Purpose: make a performance number in this repository mean "this change did that", and make the absence of a number mean "we could not tell".
 
 This plan owns the **core API measurement lane in Node**. The [benchmark plan](benchmark-plan.md) keeps ownership of the
@@ -349,6 +349,7 @@ A slower comparison is not itself a process failure in Labs 0.9.0. The initial w
 | `glyph:layout-benchmark`         | **retired** after `layout.bench.ts` reproduced its 22k-glyph public invalidation classes and produced Labs records                                                             |
 | `glyph:retained-batch-benchmark` | **retired** after `batching.bench.ts` reproduced its 64/128/256/512 nested `Text` publication sweep, including exact one-draw and stable-glyph-count assertions                |
 | `glyph:kernel-lab` (Node)        | **retired** after the internal Labs kernel suite reproduced every scalar/auto/explicit operation at 22k and 86k target scales with output-hash and memory-growth checks        |
+| `glyph:mtsdf-generator-profile`  | **retired** after the internal Labs suite separated compile, initialization, initialized-plus-corpus, and retained-generator work while enforcing every oracle hash            |
 
 The fixture and corpus helpers are reused where their ownership still fits. Workflows are retired only after their replacements produce records; replacement and deletion land in separate commits.
 
