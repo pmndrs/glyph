@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:48d7c834b3535286bbe36038c945134846c0cb3771f7380160f298746d669c54'
+source_digest: 'sha256:59b6272d5e6fd30e9c336531f508d13c73ab59d725b53826f0d35189de2ee157'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -201,24 +201,24 @@ config helpers.
 
 ## Public package surfaces
 
-| Subpath                         | Purpose                                                                                                          |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `@pmndrs/glyph`                 | Root runtime, built-in format selection, font/raster types, fallback stacks, text authoring, and layout results. |
-| `@pmndrs/glyph/core`            | Renderer-neutral construction helpers, built-in schemas/codecs, and format interpretation helpers.               |
-| `@pmndrs/glyph/three`           | Three configuration, retained text objects, materials, and renderer registration using native TSL shaders.       |
-| `@pmndrs/glyph/react`           | React provider, text components, and font-loading hooks.                                                         |
-| `@pmndrs/glyph/vue`             | Vue provider, text components, and reactive font-loading composables for TresJS.                                 |
-| `@pmndrs/glyph/vue/*`           | Typed Bitmap, MSDF, and Slug Vue composables.                                                                    |
-| `@pmndrs/glyph/typegpu`         | Direct TypeGPU configuration, retained text, and drawing into caller-owned passes.                               |
-| `@pmndrs/glyph/three/typegpu`   | Experimental Three integration using TypeGPU-backed shader adapters.                                             |
-| `@pmndrs/glyph/shaders/tsl`     | Standalone native TSL raster shaders.                                                                            |
-| `@pmndrs/glyph/shaders/typegpu` | Standalone TypeGPU stages, schemas, slots, accessors, and composition helpers.                                   |
-| `@pmndrs/glyph/bake`            | Node file/project baking, inspection, and freshness operations used by the CLI.                                  |
-| `@pmndrs/glyph/baker`           | Portable raster-baker definition and bake-plan construction.                                                     |
-| `@pmndrs/glyph/runtime-bake`    | Explicit browser Worker host for runtime font baking.                                                            |
-| `@pmndrs/glyph/bakers/bitmap`   | Portable Bitmap baker and Wasm construction.                                                                     |
-| `@pmndrs/glyph/bakers/msdf`     | Portable MSDF baker and Wasm construction.                                                                       |
-| `@pmndrs/glyph/bakers/slug`     | Portable Slug baker and Wasm construction.                                                                       |
+| Subpath                         | Purpose                                                                                                                                                                                                  |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@pmndrs/glyph`                 | Root runtime, built-in format selection, font/raster types, fallback stacks, text authoring, and layout results.                                                                                         |
+| `@pmndrs/glyph/core`            | Renderer-neutral construction helpers, built-in schemas/codecs, format interpretation helpers, and the placement snapshot (`createGlyphPlacements`) a custom renderer builds carets and selections from. |
+| `@pmndrs/glyph/three`           | Three configuration, retained text objects, materials, and renderer registration using native TSL shaders.                                                                                               |
+| `@pmndrs/glyph/react`           | React provider, text components, and font-loading hooks.                                                                                                                                                 |
+| `@pmndrs/glyph/vue`             | Vue provider, text components, and reactive font-loading composables for TresJS.                                                                                                                         |
+| `@pmndrs/glyph/vue/*`           | Typed Bitmap, MSDF, and Slug Vue composables.                                                                                                                                                            |
+| `@pmndrs/glyph/typegpu`         | Direct TypeGPU configuration, retained text, and drawing into caller-owned passes.                                                                                                                       |
+| `@pmndrs/glyph/three/typegpu`   | Experimental Three integration using TypeGPU-backed shader adapters.                                                                                                                                     |
+| `@pmndrs/glyph/shaders/tsl`     | Standalone native TSL raster shaders.                                                                                                                                                                    |
+| `@pmndrs/glyph/shaders/typegpu` | Standalone TypeGPU stages, schemas, slots, accessors, and composition helpers.                                                                                                                           |
+| `@pmndrs/glyph/bake`            | Node file/project baking, inspection, and freshness operations used by the CLI.                                                                                                                          |
+| `@pmndrs/glyph/baker`           | Portable raster-baker definition and bake-plan construction.                                                                                                                                             |
+| `@pmndrs/glyph/runtime-bake`    | Explicit browser Worker host for runtime font baking.                                                                                                                                                    |
+| `@pmndrs/glyph/bakers/bitmap`   | Portable Bitmap baker and Wasm construction.                                                                                                                                                             |
+| `@pmndrs/glyph/bakers/msdf`     | Portable MSDF baker and Wasm construction.                                                                                                                                                               |
+| `@pmndrs/glyph/bakers/slug`     | Portable Slug baker and Wasm construction.                                                                                                                                                               |
 
 The three renderer-neutral raster implementations retain portable Codec-registration side effects when selected from the root. Built-in
 Three configs select a private typed shader set carried by each handle's renderer resources, with no module-global switch. `/three` and `/shaders/tsl` preserve the native TSL implementation from `main`; `/three/typegpu` selects the migrated adapters over `/shaders/typegpu`. Both handle variants can coexist. Applications import portable formats from the root and shader builders from the shared backend entry, `/shaders/tsl` or `/shaders/typegpu`.
