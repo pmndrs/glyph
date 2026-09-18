@@ -25,8 +25,8 @@ sources:
     resource: decision-register.md
     title: 'Decision register'
   - id: rust-layout-benchmark
-    resource: '../../../packages/glyph/scripts/benchmark-rust-layout-engine.mjs'
-    title: 'Workflow glyph:rust-layout-benchmark'
+    resource: '../../../benches/labs-internal/engine.bench.ts'
+    title: 'Labs raw retained-engine benchmarks'
   - id: layout-benchmark
     resource: '../../../benches/labs/package/layout.bench.ts'
     title: 'Labs public layout benchmarks'

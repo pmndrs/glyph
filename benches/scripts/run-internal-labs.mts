@@ -15,7 +15,15 @@ const options = parseArguments(process.argv.slice(2));
 const commandArguments = [`@${options.suite}`, '--name', options.name, '--force', '--blocks', String(options.blocks)];
 
 await new Promise<void>((resolveRun, reject) => {
-  const child = spawn(labsExecutable, commandArguments, { cwd: labsRoot, stdio: 'inherit' });
+  const child = spawn(labsExecutable, commandArguments, {
+    cwd: labsRoot,
+    env: {
+      ...process.env,
+      GLYPH_LABS_CORPUS: options.corpus,
+      GLYPH_LABS_TECHNIQUE: options.technique,
+    },
+    stdio: 'inherit',
+  });
   child.once('error', reject);
   child.once('close', (code) => {
     if (code === 0) resolveRun();
@@ -37,5 +45,11 @@ function parseArguments(argv: readonly string[]) {
   const blocks = Number(values.get('blocks') ?? '8');
   if (!/^[a-z][a-z0-9-]*$/u.test(suite)) throw new RangeError('--suite must be a tag name');
   if (!Number.isSafeInteger(blocks) || blocks < 2) throw new RangeError('--blocks must be an integer of at least 2');
-  return { blocks, name: values.get('name') ?? `internal-${suite}`, suite };
+  const technique = values.get('technique') ?? 'bitmap';
+  const corpus = values.get('corpus') ?? 'latin';
+  if (!['bitmap', 'mtsdf', 'slug'].includes(technique)) {
+    throw new RangeError('--technique must be bitmap, mtsdf, or slug');
+  }
+  if (!['latin', 'bidi', 'cjk'].includes(corpus)) throw new RangeError('--corpus must be latin, bidi, or cjk');
+  return { blocks, corpus, name: values.get('name') ?? `internal-${suite}-${technique}-${corpus}`, suite, technique };
 }
