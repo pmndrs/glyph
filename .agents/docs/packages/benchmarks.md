@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:e00dc3faabc0f2b9f4fe4e88a8140e1f8e18a7889e286fdd090cdffc3d97a0d8'
+source_digest: 'sha256:48dd9826d4242fba6e905e7f65e60c2756429f89742fffed42467bf13cbbe584'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -692,10 +692,11 @@ Run `pnpm scripts list benchmark` from the workspace root to discover current be
 CPU comparisons use two fresh-process `@pmndrs/labs` lanes. `benchmark:labs-package` installs packed or registry
 artifacts and measures the public API; its default smoke suite covers common layout, measurement, style, and retained
 publication work. `benchmark:labs-internal` is reserved for workspace-only implementation experiments that cannot ship in
-the package artifact. Its `kernel` suite measures the scalar, compiler-vectorized, and explicit-SIMD artifacts at 22k and
-86k target scales, preserving exact output-hash and no-warm-memory-growth checks outside the timed region. Browser frame,
-GPU, and input-latency observations remain Vitexec or Playwright workflows, while package size and conformance remain
-deterministic gates rather than timing benchmarks.
+the package artifact. Its `engine` suite preserves the raw retained-engine invalidation classes across selectable Bitmap,
+MTSDF, and Slug artifacts and Latin, bidi, and CJK corpora. Its `kernel` suite measures the scalar,
+compiler-vectorized, and explicit-SIMD artifacts at 22k and 86k target scales, preserving exact output-hash and
+no-warm-memory-growth checks outside the timed region. Browser frame, GPU, and input-latency observations remain Vitexec
+or Playwright workflows, while package size and conformance remain deterministic gates rather than timing benchmarks.
 
 The 0.1.0 export cleanup removes raw ABI re-exports from the baker size entries. The regenerated package-size report
 records the supported consumer surface, including the root format move. Relative to the original pre-cleanup build,

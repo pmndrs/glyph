@@ -8,7 +8,12 @@ import {
   kernelLabOperations,
 } from '../../packages/glyph/scripts/support/engine-kernel-runner.mjs';
 
-// Discoverable Labs selectors: @kernel @exhaustive @scalar @auto @explicit @pack
+// Discoverable selectors: @kernel @exhaustive @scalar @auto @explicit @pack @breakMasksX1 @breakMasksX2
+// @breakMasksX4 @breakMasksX8 @bidiMasksX1 @bidiMasksX2 @bidiMasksX4 @bidiMasksX8 @flaggedScanX1
+// @flaggedScanX2 @flaggedScanX4 @flaggedScanX8 @transitionScanX1 @transitionScanX2 @transitionScanX4
+// @transitionScanX8 @transitionUniformX1 @transitionUniformX2 @transitionUniformX4 @transitionUniformX8
+// @transitionMixedX1 @transitionMixedX2 @transitionMixedX4 @transitionMixedX8 @codec @chunk32 @chunk64
+// @chunk128 @i64Chunk64x1 @i64Chunk64x2 @i64Chunk64x4 @i64Chunk64x8
 
 const artifactRoot = new URL('../../packages/glyph/rust/shaper/target/kernel-lab/', import.meta.url);
 const variants = ['scalar', 'auto', 'explicit'] as const;
