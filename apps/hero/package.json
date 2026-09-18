@@ -19,6 +19,7 @@
     "@react-three/drei": "11.0.0-alpha.7",
     "@react-three/fiber": "catalog:renderer",
     "box3d.js": "0.1.1",
+    "koota": "0.6.6-canary.63c1187",
     "math": "0.1.0",
     "opentype.js": "2.0.0",
     "react": "catalog:renderer",

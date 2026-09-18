@@ -5,7 +5,7 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:a20d9bbf56b42c70e9849e58c2f0e703d4d8e35993980fcaaa5b6eb914f33066'
+source_digest: 'sha256:a757efc971e3d47ab02474a96be4f2102c331cb81b26c42e079aa3a3ba9dcada'
 tags: [package, example, react-three-fiber, webgpu, slug, vite]
 sources:
   - id: manifest
@@ -102,6 +102,8 @@ generated:
 This Vite application is a showcase rather than an API demonstration: each scene exists to make one rendering
 technique visible. Both run on `WebGPURenderer` through React Three Fiber v10 and drei v11, and both draw their
 text with the Slug raster, whose analytic coverage is what the techniques depend on.
+
+Koota is pinned to `0.6.6-canary.63c1187` for the default scene’s domain state.
 
 The application pins Poimandres' `math` package at `0.1.0` for the default scene's CPU simulation and transforms. Its upstream
 skill is installed at `.agents/skills/math/SKILL.md` from `pmndrs/math` commit

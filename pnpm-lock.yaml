@@ -71,6 +71,9 @@ importers:
       box3d.js:
         specifier: 0.1.1
         version: 0.1.1
+      koota:
+        specifier: 0.6.6-canary.63c1187
+        version: 0.6.6-canary.63c1187(@types/react@19.2.14)(react@19.2.8)
       math:
         specifier: 0.1.0
         version: 0.1.0
@@ -3716,6 +3719,20 @@ packages:
       '@types/react':
         optional: true
       react:
+        optional: true
+
+  koota@0.6.6-canary.63c1187:
+    resolution: {integrity: sha512-WF12D28TTefLlzIvwGBtAhUAe+SqR/V0BbFFslr9zTg/JL4LTLdwc1qTNQWIsSvkc2ZmV+ozYcoqyp9VI3AnuA==}
+    peerDependencies:
+      '@types/react': '>=18.0.0'
+      react: '>=18.0.0'
+      svelte: '>=5.0.0'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      react:
+        optional: true
+      svelte:
         optional: true
 
   ktx-parse@1.1.0:
@@ -7653,6 +7670,11 @@ snapshots:
   kleur@4.1.5: {}
 
   koota@0.6.6(@types/react@19.2.14)(react@19.2.8):
+    optionalDependencies:
+      '@types/react': 19.2.14
+      react: 19.2.8
+
+  koota@0.6.6-canary.63c1187(@types/react@19.2.14)(react@19.2.8):
     optionalDependencies:
       '@types/react': 19.2.14
       react: 19.2.8
