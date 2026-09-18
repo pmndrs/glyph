@@ -2,6 +2,9 @@
 
 ## 2026-09-18
 
+- **Installed Poimandres math for the hero** — Pinned `math@0.1.0` and installed its upstream repository-local
+  skill from the matching release commit. See [the hero reference](packages/hero.md).
+
 - **Prepared the hero before playback and retained its changing glyphs** — Added a scene/GPU readiness gate,
   precompiled hidden effects, and retained both typing lines and every icon choice. Two full WebGPU replays at a
   1920×1080 drawing buffer averaged 59.92 fps with no late shader programs, pipelines, meshes, or asset loads.

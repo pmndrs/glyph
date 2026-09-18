@@ -5,7 +5,7 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:c19393ad34a9085ba617e41d76ee755764d21e7c46ef22b487d5534705c21b8d'
+source_digest: 'sha256:7549a3d81c99804a36482e4542e9dc852c939f4c57b6c74486af1afa0c9897ee'
 tags: [package, example, react-three-fiber, webgpu, slug, vite]
 sources:
   - id: manifest
@@ -90,6 +90,11 @@ generated:
 This Vite application is a showcase rather than an API demonstration: each scene exists to make one rendering
 technique visible. Both run on `WebGPURenderer` through React Three Fiber v10 and drei v11, and both draw their
 text with the Slug raster, whose analytic coverage is what the techniques depend on.
+
+The application pins Poimandres' `math` package at `0.1.0` for upcoming geometry and simulation work. Its upstream
+skill is installed at `.agents/skills/math/SKILL.md` from `pmndrs/math` commit
+`c6713e38dd86de6e3e5bf98b94e22c2a29e4a709`, matching the published package's `gitHead`.
+The package is available to the hero; existing animation calculations have not yet been migrated to it.
 
 The default scene builds two interleaved lattices of eleven icons on mass-spring grids at different depths, scaled
 so they interleave on screen and stay in phase. The Slug-glass `Glyph` and feature line start at rest. Press Space
