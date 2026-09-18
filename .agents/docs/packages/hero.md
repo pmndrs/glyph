@@ -5,7 +5,7 @@ description: 'Two Slug-rendered hero scenes — a mass-spring icon lattice under
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:a05a7c489e7d99a83b1a127882394dd80cb01ec02a30160a30c424f2f952eaa9'
+source_digest: 'sha256:cdb1224c60cddbe38c336a96bf224c7fd2dbc9b7fc5658beab986b4065ced89e'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: manifest
@@ -244,7 +244,9 @@ offscreen glass-shadow job is capped separately: Canvas's limit does not throttl
 The development inspector loads on the first D press. Hiding it drains pending timestamp reads, restores
 the renderer's original inspector and timestamp setting, and stops collecting profiling data.
 
-The default scene holds animation behind a preparation overlay until all text, detached glyphs, physics bodies,
+The default scene uses the conference slides’ lime loading screen and centered black Poimandres mark, including
+the subtle shake, reduced-motion support, and 400 ms fade when GPU preparation finishes. Preparation failures
+remain visible in the overlay. It holds animation until all text, detached glyphs, physics bodies,
 the robot, environment, dust, and burst are ready. Preparation renders hidden and offscreen objects through the
 actual shadow, transmission, and post passes, compiles the scene, and waits for submitted GPU work before revealing
 the normal visibility set. Browser checks wait for `data-hero-state="ready"`; readiness follows completed work,

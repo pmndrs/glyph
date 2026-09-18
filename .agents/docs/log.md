@@ -1,5 +1,12 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-19
+
+- **Matched the hero loader to the conference slides** — Reused the lime background, black Poimandres SVG,
+  shake animation, reduced-motion styles, and readiness fade from `threejs-conf-talk`. Hero’s existing geometry,
+  shader, and GPU-upload gate still controls readiness, and preparation failures remain visible.
+  See [the hero reference](packages/hero.md).
+
 ## 2026-09-18
 
 - **Kept hero's root application-wide** — Reduced `apps/hero/src` root from 17 files to six by placing fonts,
