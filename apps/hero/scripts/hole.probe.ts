@@ -19,7 +19,7 @@ import {
   WebGPURenderer,
 } from 'three/webgpu';
 
-import type { TitleBodies } from '../src/typography/traits';
+import type { TitleBodies } from '../src/letters/traits';
 const { POP_AT } = (await import(
   new URL('/src/black-hole/utils.ts', location.origin).href
 )) as typeof import('../src/black-hole/utils');

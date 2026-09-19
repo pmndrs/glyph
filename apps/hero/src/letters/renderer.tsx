@@ -4,7 +4,7 @@ import { type RetainedLine, createRetainedLine, disposeLine, showLine, resetLine
 import { mat4, vec3 } from 'math';
 import { useWorld } from 'koota/react';
 import { Title, Typing } from './traits';
-import { typographyActions } from './actions';
+import { letterActions } from './actions';
 import { Text } from '@pmndrs/glyph/react';
 import type { Glyphs, Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
@@ -52,7 +52,7 @@ export function GlassTitle({ font }: { readonly font: SlugFont }) {
     const object = word.current;
 
     return () => {
-      typographyActions(world).disposeTitle(title);
+      letterActions(world).disposeTitle(title);
 
       bodies.current = undefined;
       reported.current = false;
@@ -122,7 +122,7 @@ export function GlassTitle({ font }: { readonly font: SlugFont }) {
       }
 
       glyphs.current = copies;
-      bodies.current = typographyActions(world).prepareTitle(
+      bodies.current = letterActions(world).prepareTitle(
         mat4.copy(mat4.create(), copies.matrixWorld.elements),
         letters,
         camera.position.z,

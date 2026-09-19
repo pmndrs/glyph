@@ -7,8 +7,8 @@ import { Time } from '../time/traits';
 import { writeLetter } from './utils/bodies';
 import { Title, Typing, type Letter, type TitleBodies } from './traits';
 
-export const typographyActions = createActions((world) => ({
-  spawnTypography() {
+export const letterActions = createActions((world) => ({
+  spawnLetters() {
     world.spawn(Title);
     world.spawn(Typing);
   },

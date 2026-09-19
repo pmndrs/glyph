@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:1c607e81431bf114d9cdfdfc2af9e38cff1360263fb16336c528ab1b69a3776f'
+source_digest: 'sha256:9b9f530fabd5f25cfbfce70963732b27e43229f83a08716ab0b7b46bc38556c7'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -18,13 +18,13 @@ sources:
     resource: ../../../apps/hero/src/hero.tsx
     title: Hero sequence composition
   - id: glass-material
-    resource: ../../../apps/hero/src/typography/materials.ts
+    resource: ../../../apps/hero/src/letters/materials.ts
     title: Glass title materials and smooth lens normals
   - id: refraction-check
     resource: ../../../apps/hero/scripts/refraction.probe.ts
     title: WebGPU stained-glass verification
   - id: glass-shadows
-    resource: ../../../apps/hero/src/typography/utils/shadows.tsx
+    resource: ../../../apps/hero/src/letters/utils/shadows.tsx
     title: Light-space glass projection
   - id: glass-shadows-check
     resource: ../../../apps/hero/scripts/glass-shadows.probe.ts
@@ -48,7 +48,7 @@ sources:
     resource: ../../../apps/hero/src/physics/systems.ts
     title: Fixed stepping and entity lifecycle cleanup
   - id: outline
-    resource: ../../../apps/hero/src/typography/utils/outline.ts
+    resource: ../../../apps/hero/src/letters/utils/outline.ts
     title: Letter outlines cut into invisible colliders
   - id: robot-pack
     resource: ../../../apps/hero/scripts/robot.mts
@@ -95,8 +95,8 @@ sources:
   - id: actions
     resource: ../../../apps/hero/src/actions.ts
     title: Application composition of domain creation and replay
-  - id: typography-actions
-    resource: ../../../apps/hero/src/typography/actions.ts
+  - id: letter-actions
+    resource: ../../../apps/hero/src/letters/actions.ts
     title: Title construction, disposal, and typing transitions
   - id: input
     resource: ../../../apps/hero/src/input/hooks.ts
@@ -155,7 +155,7 @@ implement its transitions.
 | `input`       | Pointer state, DOM listeners, and pointer decay                                                         |
 | `view`        | Viewport and readiness state, preparation, fonts, retained text views, shader time, lighting, and paper |
 | `physics`     | Crashcat resource, body traits, actions, fixed stepping, and collision events                           |
-| `typography`  | Title construction and motion, published landings, feature typing, glass, and projection                |
+| `letters`     | Title construction and motion, published landings, feature typing, glass, and projection                |
 | `icon-field`  | Icon sheets, bounded impact queue, spring simulation, morphs, and rendering                             |
 | `robot`       | Spawn/reset/run actions, path, published departure, physics target, dust, rig, and display              |
 | `black-hole`  | Collapse state and controls, attraction functions, glyph warp, and rendered sheet collapse              |
@@ -165,12 +165,12 @@ The root owns composition. `world.ts` creates one Koota world and invokes the ap
 Root `actions.ts` spreads the domain action sets into one set for application code, then adds world initialization
 and disposal commands. Sequence actions own actor spawning and replay. Domain actions remain directly importable, including when command names collide.
 Physics actions configure the solver and install contact/removal handlers before actors spawn. Field actions
-build each configured lattice before attaching its trait. Typography actions create, replay, and dispose the title's
+build each configured lattice before attaching its trait. Letter actions create, replay, and dispose the title's
 bodies, while its systems own continuous lift and attraction updates. Input hooks and the frame loop publish
 pointer, viewport, and readiness changes through their domain actions.
 `sequence/systems.ts` orders updates and connects title landings to field waves, typing, and the robot's next run. It connects
 robot departure to the black hole and publishes the time since its pop to the star embers. These relationships belong to the experience, so the robot never opens the
-black hole itself and typography never edits the robot or field. Black-hole state is passed explicitly into the
+black hole itself and the letters domain never edits the robot or field. Black-hole state is passed explicitly into the
 field and title systems and the feature-line view. The physics solver depends on the clock and its own state.
 
 `main.tsx` only mounts `<Hero />`. `hero.tsx` owns the application shell, styles, world instance and hot-reload
@@ -192,7 +192,7 @@ and scratch, stays AoS. High-frequency values never pass through React state. So
 so actions and singleton updates publish scalar changes with `set`, and render callbacks sample current scalar
 state. Query mutations use `updateEach`, while composition reads published landings and departures with `readEach`.
 The robot body query selects only `Robot` for writeback, preserving the physics actions' writes to `Body`. Preparation
-passes measured letter geometry into typography actions before playback. Those actions create bodies on the same
+passes measured letter geometry into letter actions before playback. Those actions create bodies on the same
 world and dispose them with the mounted title. Renderers publish matrices and uniforms after simulation. Replay
 closes the finale, restores the field, lifts the title, and resets typing and robot scheduling through their owners.
 
@@ -207,15 +207,15 @@ pixel comparisons cannot isolate reliably. Buffer identity and duplicate timelin
 The application pins Poimandres' `math` package at `0.1.0` for the sequence's CPU simulation and transforms. Its upstream
 skill is installed at `.agents/skills/math/SKILL.md` from `pmndrs/math` commit
 `c6713e38dd86de6e3e5bf98b94e22c2a29e4a709`, matching the published package's `gitHead`.
-Typography actions own title creation and disposal, its systems advance title motion, and retained typing helpers operate on caller-owned records.
+Letter actions own title creation and disposal, letter systems advance title motion, and retained typing helpers operate on caller-owned records.
 Math tuples hold transform scratch. Physics publishes retained position and rotation tuples on each `Body` trait,
-which typography projects into its matrix stream. Three matrices and scene objects remain at the rendering boundary.
+which the letters domain projects into its matrix stream. Three matrices and scene objects remain at the rendering boundary.
 
 The `physics` domain pins `crashcat@0.0.5` and splits into `traits.ts`, `actions.ts`, and `systems.ts`, with a small
 `utils.ts` for pose data and behavior checks beside the systems. `Physics` holds the solver resource on the Koota world, while `Body` owns each entity's
-solver ID, motion targets, published pose, and landing state. There is no typography-owned simulation world or parallel
+solver ID, motion targets, published pose, and landing state. There is no separate simulation world or parallel
 letter body array. World-bound actions create, hold, release, park, and revive bodies. Removing `Body` or destroying
-its entity removes the solver body through one lifecycle subscription. Typography supplies outline prisms and
+its entity removes the solver body through one lifecycle subscription. The letters domain supplies outline prisms and
 animation targets. Crashcat combines each letter's prisms into
 an immutable compound collider with a BVH, preserving counters and concave outlines. Only box, convex-hull,
 and static-compound shape implementations are registered. World and shape creation are synchronous and happen
@@ -353,7 +353,7 @@ build. WebGPU checks cover title lift and landing, both retained typing lines, t
 The production entry bundle is 598.50 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
-Its five inline glass materials use that talk's brand accents in `src/typography/materials.ts`: red G, orange l,
+Its five inline glass materials use that talk's brand accents in `src/letters/materials.ts`: red G, orange l,
 teal y, blue p, and purple h. The same attenuation colors tint their projected light. The feature line sits below the lowercase descenders.
 Each has its own attenuation tint, thickness, roughness, and refractive index, with smooth lens normals and modest
 physical dispersion. The paper and icon background stay unchanged; there are no added crystal lights, internal

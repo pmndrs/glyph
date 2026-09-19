@@ -4,7 +4,7 @@ import { iconFieldActions } from './icon-field/actions';
 import { inputActions } from './input/actions';
 import { physicsActions } from './physics/actions';
 import { robotActions } from './robot/actions';
-import { typographyActions } from './typography/actions';
+import { letterActions } from './letters/actions';
 import { viewActions } from './view/actions';
 import { sequenceActions } from './sequence/actions';
 import { starEmberActions } from './star-embers/actions';
@@ -18,7 +18,7 @@ export const actions = createActions((world) => ({
   ...robotActions(world),
   ...sequenceActions(world),
   ...starEmberActions(world),
-  ...typographyActions(world),
+  ...letterActions(world),
   ...viewActions(world),
   initializeHero() {
     physicsActions(world).initializePhysics();

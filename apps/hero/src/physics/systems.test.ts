@@ -6,8 +6,8 @@ import { robotActions } from '../robot/actions';
 import { Time } from '../time/traits';
 import { Robot } from '../robot/traits';
 import { moveRobotBodies } from '../robot/systems';
-import { typographyActions } from '../typography/actions';
-import { Title } from '../typography/traits';
+import { letterActions } from '../letters/actions';
+import { Title } from '../letters/traits';
 import { Body, Physics } from './traits';
 import { physicsActions } from './actions';
 import { stepPhysics } from './systems';
@@ -26,10 +26,10 @@ it('lifts, lands once, and repeats after being swallowed and revived on the shar
   physicsActions(world).initializePhysics();
   const resource = world.get(Physics)!;
   const physics = physicsActions(world);
-  const typography = typographyActions(world);
-  typography.spawnTypography();
+  const letters = letterActions(world);
+  letters.spawnLetters();
   const titleEntity = world.queryFirst(Title)!;
-  const title = typography.prepareTitle(
+  const title = letters.prepareTitle(
     mat4.create(),
     [{ home: [0, 0, 0.5], solid: { prisms: prism() }, index: 0, original: mat4.create() }],
     10,
@@ -75,7 +75,7 @@ it('lifts, lands once, and repeats after being swallowed and revived on the shar
 
     const engine = world.get(Physics)!.engine;
     const id = body.id;
-    typography.disposeTitle(titleEntity);
+    letters.disposeTitle(titleEntity);
     expect(rigidBody.get(engine, id)).toBeUndefined();
     expect(titleEntity.get(Title)!.bodies).toBeUndefined();
   } finally {
@@ -83,7 +83,7 @@ it('lifts, lands once, and repeats after being swallowed and revived on the shar
   }
 
   expect(resource.entities.size).toBe(0);
-  expect(() => typography.disposeTitle(titleEntity)).not.toThrow();
+  expect(() => letters.disposeTitle(titleEntity)).not.toThrow();
 });
 
 it('lets the robot push a flat letter and removes its collision when it leaves', () => {

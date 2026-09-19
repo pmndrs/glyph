@@ -18,7 +18,7 @@ import {
   WebGPURenderer,
 } from 'three/webgpu';
 
-import type { TitleBodies } from '../src/typography/traits';
+import type { TitleBodies } from '../src/letters/traits';
 const { advanceSequence } = (await import(
   new URL('/src/sequence/systems.ts', location.origin).href
 )) as typeof import('../src/sequence/systems');

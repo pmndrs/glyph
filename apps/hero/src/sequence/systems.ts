@@ -3,7 +3,7 @@ import { sequenceActions } from './actions';
 import { blackHoleActions } from '../black-hole/actions';
 import { iconFieldActions } from '../icon-field/actions';
 import { robotActions } from '../robot/actions';
-import { typographyActions } from '../typography/actions';
+import { letterActions } from '../letters/actions';
 import { starEmberActions } from '../star-embers/actions';
 import { Playback } from './traits';
 import { advanceCollapse } from '../black-hole/systems';
@@ -15,8 +15,8 @@ import { moveRobots, moveRobotBodies, emitDust } from '../robot/systems';
 import { Robot } from '../robot/traits';
 import { updateTime } from '../time/systems';
 import { Time } from '../time/traits';
-import { moveTitle, syncTitle, typeFeature } from '../typography/systems';
-import { Title } from '../typography/traits';
+import { moveTitle, syncTitle, typeFeature } from '../letters/systems';
+import { Title } from '../letters/traits';
 import { Preparation } from '../view/traits';
 
 /** Advance the sequence and connect each domain's published events to the next beat. */
@@ -53,7 +53,7 @@ export function advanceSequence(world: World, delta: number, now: number): void 
       iconFieldActions(world).impactIconFields(landing.x, landing.y, 0);
     }
 
-    typographyActions(world).typeFeatureAfter(0.55);
+    letterActions(world).typeFeatureAfter(0.55);
     robotActions(world).runRobot(1.4);
   });
 

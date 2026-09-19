@@ -2,6 +2,10 @@
 
 ## 2026-09-19
 
+- **Renamed hero typography to letters** — The `letters` domain owns title construction, motion, feature typing,
+  glass materials, and shadows. Updated imports, action names, probes, and the package reference to match.
+  The full hero check and WebGPU automatic opening check pass.
+
 - **Excluded generated agent shims from package digests** — Git-ignored `CLAUDE.md` files now leave package source
   digests unchanged, matching the staged snapshot. The focused regression fails before the correction, and all six
   OKF tool tests pass with it. The generated local files remain intact.

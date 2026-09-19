@@ -7,7 +7,7 @@
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-import { FEATURE_FIELD, FEATURE_LINE } from '../src/typography/utils/content.ts';
+import { FEATURE_FIELD, FEATURE_LINE } from '../src/letters/utils/content.ts';
 import { ICON_CODE_POINTS } from '../src/icon-field/utils/content.ts';
 import { STAR_SYMBOLS } from '../src/star-embers/traits.ts';
 
