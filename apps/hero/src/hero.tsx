@@ -9,7 +9,9 @@ import { NeutralToneMapping } from 'three/webgpu';
 import { actions } from './actions';
 import { createHeroWorld } from './world';
 import { useFonts } from './view/hooks';
-import { Post, BlackHole, GlyphBurst } from './black-hole/renderer';
+import { BlackHole } from './black-hole/renderer';
+import { StarEmbersRenderer } from './star-embers/renderer';
+import { Post } from './sequence/renderer';
 import { GlassShadows } from './typography/utils/shadows';
 import { GlassTitle, FeatureLine } from './typography/renderer';
 import { IconFieldRenderer } from './icon-field/renderer';
@@ -58,7 +60,7 @@ function Scene() {
   return (
     <>
       <PrepareHero
-        required={['title', 'feature', 'icons:-6', 'icons:-9.5', 'robot', 'dust', 'burst']}
+        required={['title', 'feature', 'icons:-6', 'icons:-9.5', 'robot', 'dust', 'star-embers']}
         sceneReady={() => scene.environment !== null && scene.getObjectByName('glass-shadows') !== undefined}
       />
       <FrameLoop />
@@ -70,7 +72,7 @@ function Scene() {
       <FeatureLine field={fonts.feature} collapse={collapse} />
       <RobotRenderer font={fonts.robot} icons={fonts.icons} />
       <BlackHole />
-      <GlyphBurst font={fonts.stars} />
+      <StarEmbersRenderer font={fonts.stars} />
       <Post />
     </>
   );

@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:94c08503dac83a3f9a170955138b0202aa356bd6a20150ddf66c8ae21fcfb542'
+source_digest: 'sha256:1c607e81431bf114d9cdfdfc2af9e38cff1360263fb16336c528ab1b69a3776f'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -113,6 +113,15 @@ sources:
   - id: sequence-traits
     resource: ../../../apps/hero/src/sequence/traits.ts
     title: Sequence playback state
+  - id: sequence-renderer
+    resource: ../../../apps/hero/src/sequence/renderer.tsx
+    title: Composition of collapse and star ember post-processing
+  - id: star-embers
+    resource: ../../../apps/hero/src/star-embers/renderer.tsx
+    title: Prepared Unicode star particles and emission motion
+  - id: ember-materials
+    resource: ../../../apps/hero/src/star-embers/materials.ts
+    title: Star fire, bloom, fading, and screen-space sparks
   - id: frameloop
     resource: ../../../apps/hero/src/frameloop.tsx
     title: R3F clock, input, and development controls
@@ -139,17 +148,18 @@ actions. Only the files a domain needs exist.
 Dependencies use domain actions, published state, or explicit inputs rather than reaching into another domain to
 implement its transitions.
 
-| Domain       | Ownership                                                                                               |
-| ------------ | ------------------------------------------------------------------------------------------------------- |
-| `sequence`   | Actor spawning, replay, opening beat, and cross-domain choreography                                     |
-| `time`       | Playback clock and bounded frame delta                                                                  |
-| `input`      | Pointer state, DOM listeners, and pointer decay                                                         |
-| `view`       | Viewport and readiness state, preparation, fonts, retained text views, shader time, lighting, and paper |
-| `physics`    | Crashcat resource, body traits, actions, fixed stepping, and collision events                           |
-| `typography` | Title construction and motion, published landings, feature typing, glass, and projection                |
-| `icon-field` | Icon sheets, bounded impact queue, spring simulation, morphs, and rendering                             |
-| `robot`      | Spawn/reset/run actions, path, published departure, physics target, dust, rig, and display              |
-| `black-hole` | Collapse state and controls, attraction functions, warp, stars, and post-processing                     |
+| Domain        | Ownership                                                                                               |
+| ------------- | ------------------------------------------------------------------------------------------------------- |
+| `sequence`    | Actor spawning, replay, opening beat, cross-domain choreography, and post-processing composition        |
+| `time`        | Playback clock and bounded frame delta                                                                  |
+| `input`       | Pointer state, DOM listeners, and pointer decay                                                         |
+| `view`        | Viewport and readiness state, preparation, fonts, retained text views, shader time, lighting, and paper |
+| `physics`     | Crashcat resource, body traits, actions, fixed stepping, and collision events                           |
+| `typography`  | Title construction and motion, published landings, feature typing, glass, and projection                |
+| `icon-field`  | Icon sheets, bounded impact queue, spring simulation, morphs, and rendering                             |
+| `robot`       | Spawn/reset/run actions, path, published departure, physics target, dust, rig, and display              |
+| `black-hole`  | Collapse state and controls, attraction functions, glyph warp, and rendered sheet collapse              |
+| `star-embers` | Emission age, prepared star particles, fire material, bloom, fading, and screen-space sparks            |
 
 The root owns composition. `world.ts` creates one Koota world and invokes the application initialization action.
 Root `actions.ts` spreads the domain action sets into one set for application code, then adds world initialization
@@ -159,7 +169,7 @@ build each configured lattice before attaching its trait. Typography actions cre
 bodies, while its systems own continuous lift and attraction updates. Input hooks and the frame loop publish
 pointer, viewport, and readiness changes through their domain actions.
 `sequence/systems.ts` orders updates and connects title landings to field waves, typing, and the robot's next run. It connects
-robot departure to the black hole. These relationships belong to the experience, so the robot never opens the
+robot departure to the black hole and publishes the time since its pop to the star embers. These relationships belong to the experience, so the robot never opens the
 black hole itself and typography never edits the robot or field. Black-hole state is passed explicitly into the
 field and title systems and the feature-line view. The physics solver depends on the clock and its own state.
 
@@ -176,7 +186,7 @@ The view domain keeps preparation in `startup.tsx`, font loading in `hooks.ts`, 
 and retained typing helpers in `utils.ts`. Simulation helpers do not import React or shader construction.
 Domain tests remain beside their implementations.
 
-Twelve scalar-bearing traits use Koota SoA schemas. Per-field factories retain each entity's math tuples,
+Thirteen scalar-bearing traits use Koota SoA schemas. Per-field factories retain each entity's math tuples,
 buffers, motion records, and pools. Only `Physics`, the opaque solver resource with its entity map, callbacks,
 and scratch, stays AoS. High-frequency values never pass through React state. SoA `get()` returns a snapshot,
 so actions and singleton updates publish scalar changes with `set`, and render callbacks sample current scalar
@@ -284,13 +294,17 @@ its edges. After a brief empty hold, sixteen pastel Unicode stars (★ ☆ ✦ �
 light sparks. The stars shrink like embers, with enhanced bloom and a 1.25-second fade applied after composition so their halos dim along with their cores; the output is exactly black by 4.6 seconds and stays there until Space replays.
 Post-processing is always enabled, and preparation waits for its render pipeline.
 
-The ember material in `src/black-hole/materials.ts` keeps the exact Slug star silhouettes and shades each glyph's
+The `star-embers` domain owns its SoA emission age, actions, renderer, and materials. Its actions initialize and
+sample the age, and replay clears it before the next opening. It has no dependency on the black-hole domain.
+`sequence/renderer.tsx` composes the black-hole sheet warp with the ember bloom, fade, and sparks.
+
+The ember material in `src/star-embers/materials.ts` keeps the exact Slug star silhouettes and shades each glyph's
 own quad with a creamy hot core, an amber rim, moving fire noise, and gentle asynchronous flicker. As the stars
 shrink, the surface cools toward orange; the composed stars and bloom still fade together. The WebGPU capture
 compares this surface against a flat pastel control.
 
 The six star shapes are baked from the vendored OFL Noto Sans Symbols 2 face, with the symbols shared between the
-bake and the burst in `src/black-hole/utils.ts`. `hero:star-font` restores the pinned source and license, and
+bake and the burst in `src/star-embers/traits.ts`. `hero:star-font` restores the pinned source and license, and
 `hero:bake -- --only=stars` regenerates the tiny Slug subset. Both accept `--check`.
 
 The timeline and feature-glyph paths are pure functions. The WebGPU finale check covers collapse, completion,
@@ -326,18 +340,17 @@ meshes, or asset loads, with a deliberate new-material control proving the compi
 raw render intervals, CPU submission work, asynchronous GPU queue completion, and long tasks, along with the
 adapter, viewport, and drawing-buffer dimensions. The canvas uses adaptive DPR between 1 and 2, and the report records the actual drawing-buffer size for each run.
 
-Two runs of the two-replay check at 1280×720 on Apple Metal with Chromium 149 averaged 58.38 and 58.46 fps
-after 2.91 and 2.96 seconds of preparation. Neither run observed late shader programs, pipelines, meshes, assets,
-or long tasks. Render intervals were 24.1 and 23.4 ms at p95, with 52 and 50 intervals over 25 ms. CPU submission
-time was 3.9 and 4.1 ms at p95, and browser GPU queue completion was 9.2 and 9.4 ms at p95. These runs verify
-resource preparation but fall short of steady 60 fps. They do not measure delivery through a screen recorder.
-The preceding AoS commit (`64fcb3bd`) was then measured in an isolated checkout on the same host. It averaged
-58.00 fps with a 24.7 ms p95 render interval and 55 intervals over 25 ms. This comparison does not identify
-the SoA conversion as the cause of the pacing shortfall or establish a material speedup.
+After extracting star embers, two complete 1280×720 replays on Apple Metal with Chromium 149 averaged 59.98 fps
+across 1,702 frames after 3.08 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long
+tasks were observed. Render intervals were 17.5 ms at p95 and 24.2 ms worst, with no intervals over 25 ms.
+CPU submission time was 3.9 ms at p95, and browser GPU queue completion was 9.0 ms at p95.
+Earlier SoA runs on this host averaged 58.38 and 58.46 fps, while the preceding AoS commit (`64fcb3bd`) averaged
+58.00 fps. These separate runs show variable pacing and do not establish a speedup from the domain extraction.
+They verify resource preparation but do not measure delivery through a screen recorder or guarantee steady 60 fps.
 
 The full hero package check passes, including six numerical tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
-The production entry bundle is 598.41 kB gzip, down from 609.11 kB before removing the alternate scene.
+The production entry bundle is 598.50 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/typography/materials.ts`: red G, orange l,

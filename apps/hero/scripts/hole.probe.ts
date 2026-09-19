@@ -20,15 +20,21 @@ import {
 } from 'three/webgpu';
 
 import type { TitleBodies } from '../src/typography/traits';
-const { COLLAPSE_SECONDS, POP_AT, STAR_SYMBOLS } = (await import(
+const { POP_AT } = (await import(
   new URL('/src/black-hole/utils.ts', location.origin).href
 )) as typeof import('../src/black-hole/utils');
-const { uHoleCollapse, uHoleBloom, uEmberFire } = (await import(
+const { uHoleCollapse } = (await import(
   new URL('/src/black-hole/materials.ts', location.origin).href
 )) as typeof import('../src/black-hole/materials');
 const { blackHoleActions } = (await import(
   new URL('/src/black-hole/actions.ts', location.origin).href
 )) as typeof import('../src/black-hole/actions');
+const { STAR_SYMBOLS, EMBER_SECONDS } = (await import(
+  new URL('/src/star-embers/traits.ts', location.origin).href
+)) as typeof import('../src/star-embers/traits');
+const { uEmberBloom, uEmberFire } = (await import(
+  new URL('/src/star-embers/materials.ts', location.origin).href
+)) as typeof import('../src/star-embers/materials');
 const handles = globalThis as {
   heroWorld?: import('koota').World;
   heroHole?: { state(): import('../src/black-hole/traits').HoleState };
@@ -66,7 +72,7 @@ const movingSheet = state.scene.getObjectByName('icon-pattern--6')?.parent;
 if (movingSheet === null || movingSheet === undefined) throw new Error('Missing the foreground icon sheet');
 
 const initialScroll = movingSheet.position.x;
-const moments = [0.65, 1.4, 2, 2.95, POP_AT + 0.12, COLLAPSE_SECONDS] as const;
+const moments = [0.65, 1.4, 2, 2.95, POP_AT + 0.12, POP_AT + EMBER_SECONDS] as const;
 const tiles = moments.map(() => new RenderTarget(640, 360));
 let elapsed = 0;
 let clock = base;
@@ -147,7 +153,7 @@ if (
 )
   throw new Error(`Explosion/black frame failed: ${JSON.stringify(stats)}`);
 
-const burst = state.scene.getObjectByName('hole-glyph-burst');
+const burst = state.scene.getObjectByName('star-embers');
 
 if (burst === undefined) throw new Error('Missing the ejected glyphs');
 
@@ -199,9 +205,9 @@ if (glyphPixels < 100)
     `The pop did not emit visible glyphs: ${JSON.stringify({ glyphPixels, stats, emitted: litPixels(emitted), sparksOnly: litPixels(sparksOnly) })}`,
   );
 
-uHoleBloom.value = 0;
+uEmberBloom.value = 0;
 const withoutBloom = await capture(control);
-uHoleBloom.value = 0.75;
+uEmberBloom.value = 0.75;
 let bloomPixels = 0;
 
 for (let offset = 0; offset < emitted.length; offset += 4) {
@@ -226,9 +232,9 @@ if (lingeringStars < 100 || lingeringStars >= litPixels(emitted)) {
   throw new Error(`The stars did not linger and fade: ${lingeringStars}`);
 }
 
-uHoleBloom.value = 0;
+uEmberBloom.value = 0;
 const embersWithoutBloom = await capture(control);
-uHoleBloom.value = 0.75;
+uEmberBloom.value = 0.75;
 let emberGlowPixels = 0;
 
 for (let offset = 0; offset < embers.length; offset += 4) {

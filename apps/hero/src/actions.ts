@@ -7,6 +7,7 @@ import { robotActions } from './robot/actions';
 import { typographyActions } from './typography/actions';
 import { viewActions } from './view/actions';
 import { sequenceActions } from './sequence/actions';
+import { starEmberActions } from './star-embers/actions';
 
 /** Domain commands share one action set for application composition and input. */
 export const actions = createActions((world) => ({
@@ -16,6 +17,7 @@ export const actions = createActions((world) => ({
   ...physicsActions(world),
   ...robotActions(world),
   ...sequenceActions(world),
+  ...starEmberActions(world),
   ...typographyActions(world),
   ...viewActions(world),
   initializeHero() {

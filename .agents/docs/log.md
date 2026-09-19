@@ -2,6 +2,17 @@
 
 ## 2026-09-19
 
+- **Excluded generated agent shims from package digests** — Git-ignored `CLAUDE.md` files now leave package source
+  digests unchanged, matching the staged snapshot. The focused regression fails before the correction, and all six
+  OKF tool tests pass with it. The generated local files remain intact.
+
+- **Separated hero star embers from the black hole** — Added a compact `star-embers` domain for emission state,
+  actions, prepared glyph particles, fire materials, bloom, fade, and screen-space sparks. Sequence systems publish
+  the pop time and reset the embers on replay. Sequence rendering composes the two domains' post-processing.
+  The black hole no longer owns star symbols, ember timing, or ember uniforms. The full hero check and the WebGPU
+  finale/replay pixel checks pass. Two 720p replays averaged 59.98 fps with no late resources, long tasks, or
+  intervals over 25 ms. See [the hero reference](packages/hero.md).
+
 - **Extracted the hero sequence domain** — Moved playback state, actor spawning, replay, and cross-domain
   choreography into `sequence`. Root actions compose the domain commands and retain world initialization and
   disposal. Renamed `field` to `icon-field`, including its trait, actions, renderer, and system names.

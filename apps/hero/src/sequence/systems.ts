@@ -4,6 +4,7 @@ import { blackHoleActions } from '../black-hole/actions';
 import { iconFieldActions } from '../icon-field/actions';
 import { robotActions } from '../robot/actions';
 import { typographyActions } from '../typography/actions';
+import { starEmberActions } from '../star-embers/actions';
 import { Playback } from './traits';
 import { advanceCollapse } from '../black-hole/systems';
 import { Collapse } from '../black-hole/traits';
@@ -36,6 +37,7 @@ export function advanceSequence(world: World, delta: number, now: number): void 
 
   advanceCollapse(world);
   const hole = world.get(Collapse)!.hole;
+  starEmberActions(world).sampleStarEmbers(hole.sincePop);
   moveTitle(world, hole);
   moveRobotBodies(world);
   stepPhysics(world);

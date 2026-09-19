@@ -15,9 +15,6 @@ export const HORIZON = 1.1;
 export const POP_AT = 3.35;
 export const PAPER_FROM = 2.15;
 export const PAPER_UNTIL = 3.12;
-export const BURST_SECONDS = 1.25;
-/** Seconds the beat runs for. After this everything is black and still. */
-export const COLLAPSE_SECONDS = POP_AT + BURST_SECONDS;
 
 /** Fraction of the way from `from` to `to`, clamped. */
 function ramp(t: number, from: number, to: number): number {
@@ -97,6 +94,3 @@ export function flight(out: Flight, time: number, departure: number, duration: n
 
   return out;
 }
-
-/** Unicode star shapes shared by the finale and its exact baked font subset. */
-export const STAR_SYMBOLS = ['★', '☆', '✦', '✧', '✩', '✶'] as const;

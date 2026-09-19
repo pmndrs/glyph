@@ -10,9 +10,9 @@ import { vec4 } from 'three/tsl';
 import { Mesh, MeshBasicNodeMaterial, PlaneGeometry, Scene, WebGPUBackend, WebGPURenderer } from 'three/webgpu';
 import type { HoleState } from '../src/black-hole/traits';
 
-const { BURST_SECONDS } = (await import(
-  new URL('/src/black-hole/utils.ts', location.origin).href
-)) as typeof import('../src/black-hole/utils');
+const { EMBER_SECONDS } = (await import(
+  new URL('/src/star-embers/traits.ts', location.origin).href
+)) as typeof import('../src/star-embers/traits');
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 while (document.documentElement.dataset.heroState !== 'ready') {
@@ -129,7 +129,7 @@ try {
       await nextFrame();
 
       for (const id of meshIds()) if (!preparedMeshes.has(id)) newMeshes.add(id);
-    } while ((hole.state().sincePop ?? -1) < BURST_SECONDS);
+    } while ((hole.state().sincePop ?? -1) < EMBER_SECONDS);
   }
 } finally {
   stopBefore();

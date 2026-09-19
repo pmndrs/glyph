@@ -1,5 +1,5 @@
 import type { HoleState } from './traits';
-import { HOLE_CENTER, HORIZON, BURST_SECONDS, PAPER_FROM, PAPER_UNTIL } from './utils';
+import { HOLE_CENTER, HORIZON, PAPER_FROM, PAPER_UNTIL } from './utils';
 import {
   uniform,
   atan,
@@ -16,11 +16,10 @@ import {
   vec4,
   color,
   mix,
-  mx_noise_float,
-  vec3,
+  screenSize,
 } from 'three/tsl';
-import { Vector2, type Node, AdditiveBlending, DoubleSide, MeshBasicNodeMaterial } from 'three/webgpu';
-import { type ThreeTextMaterialContext, defineTextMaterial } from '@pmndrs/glyph/three';
+import { Vector2, type Node, type TextureNode, AdditiveBlending, MeshBasicNodeMaterial } from 'three/webgpu';
+import type { ThreeTextMaterialContext } from '@pmndrs/glyph/three';
 import { clamp } from 'math';
 import { easing } from 'math/time';
 
@@ -37,10 +36,6 @@ export const uHoleBlackout = uniform(0);
 export const uHoleCamera = uniform(16);
 /** The whole rendered sheet winds into the centre, exposing black behind its edges. */
 export const uHoleCollapse = uniform(0);
-/** Seconds since the explosion. Negative before it. */
-export const uHoleBurst = uniform(-1);
-/** Extra soft bloom while the star sparks are the only visible objects. */
-export const uHoleBloom = uniform(0.18);
 export const uHoleShake = uniform(new Vector2());
 
 type SlugContext = Extract<ThreeTextMaterialContext, { format: 'pmndrs.slug' }>;
@@ -118,51 +113,6 @@ export function holeWarp(context: SlugContext): HoleWarp {
   };
 }
 
-/** Burning surface strength. Zero is the flat pastel control used by the WebGPU capture. */
-export const uEmberFire = uniform(1);
-
-/** Analytic star silhouettes filled with a moving hot core, glowing amber tips, and cooling pastel light. */
-export const emberMaterial = defineTextMaterial((context) => {
-  if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
-
-  const material = new MeshBasicNodeMaterial({
-    transparent: true,
-    depthWrite: false,
-    depthTest: false,
-    blending: AdditiveBlending,
-    side: DoubleSide,
-  });
-  material.name = 'hole-star-ember';
-  material.positionNode = context.position;
-
-  // UVs belong to each glyph's quad, so the fire rotates and shrinks with the star rather than sliding over it.
-  const point = uv().sub(0.5).mul(2);
-  const age = uHoleBurst.max(0);
-  const phase = context.shader.color.dot(vec3(13, 23, 37));
-  const turbulence = mx_noise_float(vec3(point.mul(3.5), age.mul(3).add(phase)))
-    .mul(0.5)
-    .add(0.5);
-  const core = float(1).sub(smoothstep(0.12, 1.05, point.length()));
-  const heat = core.mul(0.7).add(turbulence.mul(0.3));
-  const cooling = smoothstep(0.12, BURST_SECONDS, age);
-  const rim = mix(context.shader.color, color('#ff792e'), cooling.mul(0.7).add(0.15));
-  const temperature = mix(rim, color('#fff5d6'), smoothstep(0.3, 0.82, heat));
-  const flicker = age
-    .mul(23)
-    .add(phase)
-    .sin()
-    .mul(0.1)
-    .add(age.mul(41).add(phase.mul(1.3)).sin().mul(0.06))
-    .add(0.94);
-  const radiance = core.mul(3.2).add(turbulence.mul(0.6)).add(0.8).mul(flicker);
-  material.colorNode = mix(context.shader.color.mul(4), temperature.mul(radiance), uEmberFire);
-  // Fade after bloom in Post: hot details and their halo cool together without losing the star's outline.
-  material.opacityNode = context.shader.coverage.mul(uHoleBurst.greaterThanEqual(0).select(0.8, 0));
-  material.toneMapped = false;
-
-  return material;
-});
-
 /** The horizon's radius on the hole's own plane, as a fraction of the plane's half size. */
 export const HORIZON_ON_PLANE = 0.42;
 
@@ -222,10 +172,32 @@ export function syncHoleUniforms(current: HoleState): void {
   uHoleBend.value = current.pull;
   uHoleBlackout.value = current.blackout;
   uHoleCollapse.value = easing.cubicIn(clamp((current.time - PAPER_FROM) / (PAPER_UNTIL - PAPER_FROM), 0, 1));
-  uHoleBurst.value = current.sincePop ?? -1;
-  uHoleBloom.value = current.sincePop === undefined ? 0.18 : 0.75;
   const t = Math.max(0, current.time);
   uHoleSpin.value = t * 1.2 + 3 * t ** 3;
   const shake = current.beat === 'open' ? 0.003 * current.pull * (1 - uHoleCollapse.value) : 0;
   uHoleShake.value.set(Math.sin(t * 71) * shake, Math.cos(t * 93) * shake);
+}
+
+/** Wind the rendered sheet into the centre and expose black behind its edges. */
+export function collapseSheet(lit: TextureNode, point: Node<'vec2'>) {
+  const aspect = vec2(screenSize.x.div(screenSize.y), 1);
+  const radius = point.mul(aspect).length();
+  const collapse = uHoleCollapse;
+  const scale = float(1).sub(collapse).max(0.002);
+  // Inverse mapping keeps every pixel attached to the paper as its edges curl away from the viewport.
+  const turn = collapse.mul(5).mul(float(1).sub(radius).max(0));
+  const source = vec2(
+    point.x.mul(cos(turn)).sub(point.y.mul(sin(turn))),
+    point.x.mul(sin(turn)).add(point.y.mul(cos(turn))),
+  )
+    .div(scale)
+    .add(0.5);
+  const edge = source.sub(0.5).abs().max(source.sub(0.5).abs().yx).x;
+  const paper = float(1)
+    .sub(smoothstep(0.48, 0.5, edge))
+    .mul(float(1).sub(smoothstep(0.995, 1, collapse)))
+    .mul(float(1).sub(uHoleBlackout));
+  const warped = lit.sample(source.clamp()).rgb;
+
+  return mix(lit.rgb, warped.mul(paper), smoothstep(0, 0.025, collapse));
 }
