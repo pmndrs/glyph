@@ -2,6 +2,14 @@
 
 ## 2026-09-19
 
+- **Made hero actions the command boundary** — Moved field construction, solver setup and lifecycle handlers,
+  title creation/replay/disposal, and input/view sampling into domain actions. Root actions combine the domain sets
+  while direct domain imports remain available. Trait files now contain only data models and defaults, and title
+  systems own continuous lift and attraction. The existing physics story now verifies the title disposal action
+  removes its solver body. The full hero check and WebGPU opening, finale/replay, and robot dust checks pass.
+  With the canvas using adaptive DPR, two 720p replays averaged 60.01 fps with no late resources or long tasks.
+  See [the hero reference](packages/hero.md).
+
 - **Consolidated hero domain files** — Grouped uniforms, material builders, and shader helpers in each domain's
   `materials.ts`. Combined compact motion helpers in `utils.ts`, nested larger lattice and typography helpers under
   `utils/`, and kept tests beside their implementations. Combined the black-hole post renderer and the view's paper

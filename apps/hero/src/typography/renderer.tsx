@@ -1,4 +1,5 @@
-import { type HoleState, createFlight, departureAt, flight } from '../black-hole/utils';
+import type { HoleState } from '../black-hole/traits';
+import { createFlight, departureAt, flight } from '../black-hole/utils';
 import { type RetainedLine, createRetainedLine, disposeLine, showLine, resetLine } from '../view/utils';
 import { mat4, vec3 } from 'math';
 import { useWorld } from 'koota/react';
@@ -14,7 +15,7 @@ import { heroReady, usePreparation } from '../view/startup';
 import type { SlugFont, MsdfFont } from '../view/hooks';
 import { stainedGlassLetters, titleOrigin } from './materials';
 import { solidOf } from './utils/outline';
-import type { Letter, TitleBodies } from './utils/bodies';
+import type { Letter, TitleBodies } from './traits';
 
 /**
  * How deep each letter's invisible solid reaches: enough that the robot meets it squarely, never drives over it.
@@ -51,7 +52,7 @@ export function GlassTitle({ font }: { readonly font: SlugFont }) {
     const object = word.current;
 
     return () => {
-      typographyActions(world).dispose(title);
+      typographyActions(world).disposeTitle(title);
 
       bodies.current = undefined;
       reported.current = false;
@@ -121,7 +122,7 @@ export function GlassTitle({ font }: { readonly font: SlugFont }) {
       }
 
       glyphs.current = copies;
-      bodies.current = typographyActions(world).prepare(
+      bodies.current = typographyActions(world).prepareTitle(
         mat4.copy(mat4.create(), copies.matrixWorld.elements),
         letters,
         camera.position.z,

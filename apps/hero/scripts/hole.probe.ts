@@ -19,7 +19,7 @@ import {
   WebGPURenderer,
 } from 'three/webgpu';
 
-import type { TitleBodies } from '../src/typography/utils/bodies';
+import type { TitleBodies } from '../src/typography/traits';
 const { COLLAPSE_SECONDS, POP_AT, STAR_SYMBOLS } = (await import(
   new URL('/src/black-hole/utils.ts', location.origin).href
 )) as typeof import('../src/black-hole/utils');
@@ -31,7 +31,7 @@ const { blackHoleActions } = (await import(
 )) as typeof import('../src/black-hole/actions');
 const handles = globalThis as {
   heroWorld?: import('koota').World;
-  heroHole?: { state(): import('../src/black-hole/utils').HoleState };
+  heroHole?: { state(): import('../src/black-hole/traits').HoleState };
   heroTitle?: TitleBodies;
   heroRobot?: { hold(at: number): void };
 };
@@ -39,11 +39,9 @@ const handles = globalThis as {
 while (document.documentElement.dataset.heroState !== 'ready')
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
-const { dismiss: dismissCollapse, hold: holdCollapse } = blackHoleActions(handles.heroWorld!);
-const { heroActions } = (await import(
-  new URL('/src/actions.ts', location.origin).href
-)) as typeof import('../src/actions');
-const { replay: requestReplay } = heroActions(handles.heroWorld!);
+const { dismissBlackHole: dismissCollapse, holdBlackHole: holdCollapse } = blackHoleActions(handles.heroWorld!);
+const { actions } = (await import(new URL('/src/actions.ts', location.origin).href)) as typeof import('../src/actions');
+const { replayHero: requestReplay } = actions(handles.heroWorld!);
 const hole = handles.heroHole!.state;
 const state = _roots.values().next().value!.store.getState();
 state.setFrameloop('never');

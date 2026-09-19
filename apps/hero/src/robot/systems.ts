@@ -64,7 +64,7 @@ export function moveRobotBodies(world: World): void {
 
   world.query(Robot, Body).updateEach(([robot, body], entity) => {
     if (!robot.active) {
-      if (body.mode !== 'parked') physics.park(entity);
+      if (body.mode !== 'parked') physics.parkBody(entity);
 
       return;
     }
@@ -78,8 +78,8 @@ export function moveRobotBodies(world: World): void {
     const dx = target.x - body.to.x;
     const dy = target.y - body.to.y;
 
-    if (body.mode === 'parked' || dx * dx + dy * dy > 2.5 * 2.5) physics.revive(entity, pose);
+    if (body.mode === 'parked' || dx * dx + dy * dy > 2.5 * 2.5) physics.reviveBody(entity, pose);
 
-    physics.hold(entity, pose);
+    physics.holdBody(entity, pose);
   });
 }

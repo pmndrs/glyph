@@ -1,3 +1,4 @@
+import type { HoleState } from './traits';
 import { clamp } from 'math';
 import { easing } from 'math/time';
 import { jitter } from '../random.ts';
@@ -17,42 +18,6 @@ export const PAPER_UNTIL = 3.12;
 export const BURST_SECONDS = 1.25;
 /** Seconds the beat runs for. After this everything is black and still. */
 export const COLLAPSE_SECONDS = POP_AT + BURST_SECONDS;
-
-/** What the rest of the scene reads each frame. */
-export interface HoleState {
-  beat: 'closed' | 'open' | 'black';
-  /**
-   * Seconds since the hole opened. Negative while closed. Each piece of the scene leaves at its own moment on
-   * this clock.
-   */
-  time: number;
-  x: number;
-  y: number;
-  /** The horizon: anything inside is swallowed. */
-  horizon: number;
-  /** 0..1: strength of the pull on everything, and of the bend in the shaders. */
-  pull: number;
-  /** The hole's drawn presence, including an overshoot above one before the pop. */
-  presence: number;
-  /** Seconds since the pop, or undefined before it. */
-  sincePop: number | undefined;
-  /** 0..1: how black the frame is. */
-  blackout: number;
-}
-
-export function createHoleState(): HoleState {
-  return {
-    beat: 'closed',
-    time: -1,
-    x: HOLE_CENTER[0],
-    y: HOLE_CENTER[1],
-    horizon: HORIZON,
-    pull: 0,
-    presence: 0,
-    sincePop: undefined,
-    blackout: 0,
-  };
-}
 
 /** Fraction of the way from `from` to `to`, clamped. */
 function ramp(t: number, from: number, to: number): number {

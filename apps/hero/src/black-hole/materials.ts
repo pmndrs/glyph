@@ -1,4 +1,5 @@
-import { HOLE_CENTER, HORIZON, BURST_SECONDS, PAPER_FROM, PAPER_UNTIL, type HoleState } from './utils';
+import type { HoleState } from './traits';
+import { HOLE_CENTER, HORIZON, BURST_SECONDS, PAPER_FROM, PAPER_UNTIL } from './utils';
 import {
   uniform,
   atan,

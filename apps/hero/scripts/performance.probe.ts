@@ -8,7 +8,7 @@
 import { _roots, getScheduler } from '@react-three/fiber/webgpu';
 import { vec4 } from 'three/tsl';
 import { Mesh, MeshBasicNodeMaterial, PlaneGeometry, Scene, WebGPUBackend, WebGPURenderer } from 'three/webgpu';
-import type { HoleState } from '../src/black-hole/utils';
+import type { HoleState } from '../src/black-hole/traits';
 
 const { BURST_SECONDS } = (await import(
   new URL('/src/black-hole/utils.ts', location.origin).href

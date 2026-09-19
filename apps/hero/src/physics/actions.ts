@@ -1,6 +1,13 @@
 import { createActions, type Entity } from 'koota';
 import { quat, vec3, type Vec3 } from 'math';
 import {
+  addBroadphaseLayer,
+  addObjectLayer,
+  createWorld as createSimulation,
+  createWorldSettings,
+  enableCollision,
+  registerShapes,
+  type Listener,
   box,
   convexHull,
   dof,
@@ -10,12 +17,12 @@ import {
   staticCompound,
   type RigidBody,
 } from 'crashcat';
-import { Body, Floor, Physics, readBodyPose, type HeldPose } from './traits';
+import { Body, Floor, Physics, type HeldPose } from './traits';
+import { readBodyPose } from './utils';
 
 export const physicsActions = createActions((world) => {
-  const physics = world.get(Physics)!;
-
   function attach(entity: Entity, handle: RigidBody, mode: 'static' | 'dynamic' | 'parked' = 'dynamic'): Entity {
+    const physics = world.get(Physics)!;
     entity.add(Body);
     const body = entity.get(Body)!;
     body.id = handle.id;
@@ -28,12 +35,64 @@ export const physicsActions = createActions((world) => {
   }
 
   function transform(pose: HeldPose): void {
+    const physics = world.get(Physics)!;
     vec3.set(physics.position, pose.x, pose.y, pose.z);
     quat.set(physics.rotation, 0, 0, Math.sin(pose.yaw / 2), Math.cos(pose.yaw / 2));
   }
 
   return {
-    spawnSolid(position: Vec3, prisms: readonly (readonly number[])[]) {
+    initializePhysics() {
+      registerShapes([box.def, convexHull.def, staticCompound.def]);
+      const settings = createWorldSettings();
+      settings.gravity = [0, 0, -80];
+      settings.solver.minVelocityForRestitution = 25;
+      const movingLayer = addObjectLayer(settings, addBroadphaseLayer(settings));
+      const floorLayer = addObjectLayer(settings, addBroadphaseLayer(settings));
+      const parkedLayer = addObjectLayer(settings, addBroadphaseLayer(settings));
+      enableCollision(settings, movingLayer, movingLayer);
+      enableCollision(settings, movingLayer, floorLayer);
+      const entities = new Map<number, Entity>();
+      const listener: Listener = {
+        onContactAdded(a, b) {
+          const first = entities.get(a.id)!;
+          const second = entities.get(b.id)!;
+          const entity = first.has(Floor) ? second : second.has(Floor) ? first : undefined;
+          const body = entity?.get(Body);
+
+          if (body === undefined || !body.airborne) return;
+
+          body.airborne = false;
+          body.landed = true;
+        },
+      };
+
+      world.add(
+        Physics({
+          engine: createSimulation(settings),
+          entities,
+          listener,
+          movingLayer,
+          floorLayer,
+          parkedLayer,
+          accumulator: 0,
+          position: vec3.create(),
+          rotation: quat.create(),
+          velocity: vec3.create(),
+        }),
+      );
+      const physics = world.get(Physics)!;
+
+      world.onRemove(Body, (entity) => {
+        const id = entity.get(Body)!.id;
+        rigidBody.remove(physics.engine, rigidBody.get(physics.engine, id)!);
+        physics.entities.delete(id);
+      });
+    },
+    destroyBody(entity: Entity) {
+      if (entity.isAlive()) entity.destroy();
+    },
+    spawnSolidBody(position: Vec3, prisms: readonly (readonly number[])[]) {
+      const physics = world.get(Physics)!;
       const handle = rigidBody.create(physics.engine, {
         motionType: MotionType.DYNAMIC,
         objectLayer: physics.movingLayer,
@@ -57,7 +116,8 @@ export const physicsActions = createActions((world) => {
 
       return attach(world.spawn(), handle);
     },
-    setFloor(top: number) {
+    setPhysicsFloor(top: number) {
+      const physics = world.get(Physics)!;
       const existing = world.queryFirst(Floor, Body);
 
       if (existing !== undefined) existing.destroy();
@@ -74,7 +134,8 @@ export const physicsActions = createActions((world) => {
       });
       attach(world.spawn(Floor), handle, 'static');
     },
-    attachKinematic(entity: Entity, halfExtents: readonly [number, number, number]) {
+    attachKinematicBody(entity: Entity, halfExtents: readonly [number, number, number]) {
+      const physics = world.get(Physics)!;
       const handle = rigidBody.create(physics.engine, {
         motionType: MotionType.STATIC,
         objectLayer: physics.parkedLayer,
@@ -85,7 +146,8 @@ export const physicsActions = createActions((world) => {
       });
       attach(entity, handle, 'parked');
     },
-    hold(entity: Entity, pose: HeldPose) {
+    holdBody(entity: Entity, pose: HeldPose) {
+      const physics = world.get(Physics)!;
       const body = entity.get(Body)!;
 
       if (body.mode !== 'held') {
@@ -97,7 +159,8 @@ export const physicsActions = createActions((world) => {
 
       Object.assign(body.to, pose);
     },
-    park(entity: Entity) {
+    parkBody(entity: Entity) {
+      const physics = world.get(Physics)!;
       const body = entity.get(Body)!;
       const handle = rigidBody.get(physics.engine, body.id)!;
       body.mode = 'parked';
@@ -105,7 +168,8 @@ export const physicsActions = createActions((world) => {
       rigidBody.setObjectLayer(physics.engine, handle, physics.parkedLayer);
       rigidBody.setMotionType(physics.engine, handle, MotionType.STATIC, false);
     },
-    revive(entity: Entity, pose: HeldPose) {
+    reviveBody(entity: Entity, pose: HeldPose) {
+      const physics = world.get(Physics)!;
       const body = entity.get(Body)!;
       const handle = rigidBody.get(physics.engine, body.id)!;
       transform(pose);
@@ -122,7 +186,8 @@ export const physicsActions = createActions((world) => {
       body.airborne = false;
       body.moved = true;
     },
-    release(entity: Entity, velocity: Vec3, spin: number) {
+    releaseBody(entity: Entity, velocity: Vec3, spin: number) {
+      const physics = world.get(Physics)!;
       const body = entity.get(Body)!;
 
       if (body.mode !== 'held') return;

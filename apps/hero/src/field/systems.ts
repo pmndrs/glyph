@@ -1,9 +1,10 @@
+import type { HoleState } from '../black-hole/traits';
 import type { World } from 'koota';
 import { mat4, vec3 } from 'math';
 import { Time } from '../time/traits';
 import { Pointer } from '../input/traits';
 import { Viewport } from '../view/traits';
-import { departureAt, HORIZON, type HoleState } from '../black-hole/utils';
+import { departureAt, HORIZON } from '../black-hole/utils';
 import { Field, Impacts } from './traits';
 import { PATTERN_ANGLE, FIELD_OF_VIEW, simulate, advanceMorph, type LatticeState, type Layout } from './utils/lattice';
 
@@ -13,7 +14,8 @@ export function moveFields(world: World, collapse: HoleState): void {
   const pointer = world.get(Pointer)!;
   const step = Math.min(time.delta, 0.05);
 
-  world.query(Field).updateEach(([field]) => {
+  world.query(Field).updateEach(([state]) => {
+    const field = state!;
     const { options, layout, lattice } = field;
     field.offset += step * options.speed * (1 - 0.7 * collapse.pull);
 

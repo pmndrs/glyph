@@ -6,10 +6,11 @@ import { robotActions } from '../robot/actions';
 import { Time } from '../time/traits';
 import { Robot } from '../robot/traits';
 import { moveRobotBodies } from '../robot/systems';
-import { createTitleBodies, disposeTitle } from '../typography/utils/bodies';
+import { typographyActions } from '../typography/actions';
+import { Title } from '../typography/traits';
 import { Body, Physics } from './traits';
 import { physicsActions } from './actions';
-import { stepPhysics, subscribePhysics } from './systems';
+import { stepPhysics } from './systems';
 
 function prism(): number[][] {
   return [
@@ -21,15 +22,18 @@ function prism(): number[][] {
 }
 
 it('lifts, lands once, and repeats after being swallowed and revived on the shared world', () => {
-  const world = createWorld(Time, Physics);
-  subscribePhysics(world);
+  const world = createWorld(Time);
+  physicsActions(world).initializePhysics();
   const resource = world.get(Physics)!;
   const physics = physicsActions(world);
-  const title = createTitleBodies(
-    world,
+  const typography = typographyActions(world);
+  typography.spawnTypography();
+  const titleEntity = world.queryFirst(Title)!;
+  const title = typography.prepareTitle(
     mat4.create(),
     [{ home: [0, 0, 0.5], solid: { prisms: prism() }, index: 0, original: mat4.create() }],
     10,
+    1,
     1,
   );
   const letter = title.pieces[0]!.entity;
@@ -39,11 +43,11 @@ it('lifts, lands once, and repeats after being swallowed and revived on the shar
   try {
     for (let replay = 0; replay < 2; replay++) {
       const pose = { x: 0, y: 0, z: 4, yaw: 0.2 };
-      physics.hold(letter, pose);
+      physics.holdBody(letter, pose);
       pose.z = 100;
       stepPhysics(world);
       expect(body.position[2]).toBe(4);
-      physics.release(letter, [0, 0, -35], 0.35);
+      physics.releaseBody(letter, [0, 0, -35], 0.35);
       let landings = 0;
       let bounced = false;
       let lastHeight = body.position[2];
@@ -63,36 +67,37 @@ it('lifts, lands once, and repeats after being swallowed and revived on the shar
       expect(body.position[2]).toBeCloseTo(0.5, 1);
       expect(body.rotation[0]).toBeCloseTo(0);
       expect(body.rotation[1]).toBeCloseTo(0);
-      physics.park(letter);
+      physics.parkBody(letter);
       stepPhysics(world);
       expect(body.landed).toBe(false);
-      physics.revive(letter, { x: 0, y: 0, z: 0.5, yaw: 0 });
+      physics.reviveBody(letter, { x: 0, y: 0, z: 0.5, yaw: 0 });
     }
 
     const engine = world.get(Physics)!.engine;
     const id = body.id;
-    letter.destroy();
+    typography.disposeTitle(titleEntity);
     expect(rigidBody.get(engine, id)).toBeUndefined();
+    expect(titleEntity.get(Title)!.bodies).toBeUndefined();
   } finally {
     world.destroy();
   }
 
   expect(resource.entities.size).toBe(0);
-  expect(() => disposeTitle(title)).not.toThrow();
+  expect(() => typography.disposeTitle(titleEntity)).not.toThrow();
 });
 
 it('lets the robot push a flat letter and removes its collision when it leaves', () => {
-  const world = createWorld(Time, Physics);
-  subscribePhysics(world);
+  const world = createWorld(Time);
+  physicsActions(world).initializePhysics();
   const physics = physicsActions(world);
-  physics.setFloor(0);
-  const robotEntity = robotActions(world).spawn();
+  physics.setPhysicsFloor(0);
+  const robotEntity = robotActions(world).spawnRobot();
   robotEntity.remove(Body);
-  physics.attachKinematic(robotEntity, [0.3, 0.3, 0.5]);
+  physics.attachKinematicBody(robotEntity, [0.3, 0.3, 0.5]);
   const robot = robotEntity.get(Robot)!;
   robot.active = true;
   Object.assign(robot.footprint, { x: -2, y: 0.55, z: 0, heading: 0 });
-  const letter = physics.spawnSolid([0, 0, 0.5], prism());
+  const letter = physics.spawnSolidBody([0, 0, 0.5], prism());
   const body = letter.get(Body)!;
   world.get(Time)!.delta = 1 / 60;
 
@@ -108,8 +113,8 @@ it('lets the robot push a flat letter and removes its collision when it leaves',
     expect(body.rotation[0]).toBeCloseTo(0);
     expect(body.rotation[1]).toBeCloseTo(0);
     expect(body.landed).toBe(false);
-    physics.hold(letter, { x: robot.footprint.x, y: robot.footprint.y, z: 4, yaw: 0 });
-    physics.release(letter, [0, 0, -35], 0);
+    physics.holdBody(letter, { x: robot.footprint.x, y: robot.footprint.y, z: 4, yaw: 0 });
+    physics.releaseBody(letter, [0, 0, -35], 0);
     robot.active = false;
     moveRobotBodies(world);
 

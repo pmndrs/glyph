@@ -4,17 +4,6 @@ import { rigidBody, updateWorld } from 'crashcat';
 import { Time } from '../time/traits';
 import { Body, Floor, Physics, type HeldPose } from './traits';
 
-/** Body removal and entity destruction release the same solver handle. */
-export function subscribePhysics(world: World): void {
-  const physics = world.get(Physics)!;
-
-  world.onRemove(Body, (entity) => {
-    const id = entity.get(Body)!.id;
-    rigidBody.remove(physics.engine, rigidBody.get(physics.engine, id)!);
-    physics.entities.delete(id);
-  });
-}
-
 /** Fixed 60 Hz integration publishes entity poses and one-frame landing events. */
 export function stepPhysics(world: World): void {
   const physics = world.get(Physics)!;

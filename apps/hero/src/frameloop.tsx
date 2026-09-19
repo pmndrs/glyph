@@ -1,14 +1,10 @@
 import { useFrame } from '@react-three/fiber/webgpu';
 import { useEffect } from 'react';
 import { useWorld, useActions } from 'koota/react';
-import { heroActions } from './actions';
-import { blackHoleActions } from './black-hole/actions';
+import { actions } from './actions';
 import { Collapse } from './black-hole/traits';
-import { robotActions } from './robot/actions';
 import { useInput } from './input/hooks';
-import { Pointer } from './input/traits';
 import { Time } from './time/traits';
-import { Preparation, Viewport } from './view/traits';
 import { advanceHero } from './systems';
 import { heroReady } from './view/startup';
 import { updatePaper, uTime } from './view/materials';
@@ -16,12 +12,10 @@ import { PATTERN_ANGLE } from './field/utils/lattice';
 
 export function FrameLoop() {
   const world = useWorld();
-  const actions = useActions(heroActions);
-  const hole = useActions(blackHoleActions);
-  const robots = useActions(robotActions);
+  const commands = useActions(actions);
 
   useInput(world, () => {
-    if (heroReady()) actions.replay();
+    if (heroReady()) commands.replayHero();
   });
 
   useEffect(() => {
@@ -30,26 +24,24 @@ export function FrameLoop() {
     Object.assign(globalThis, {
       heroWorld: world,
       heroHole: {
-        open: hole.open,
-        dismiss: hole.dismiss,
-        hold: hole.hold,
+        open: commands.openBlackHole,
+        dismiss: commands.dismissBlackHole,
+        hold: commands.holdBlackHole,
         state: () => world.get(Collapse)!.hole,
       },
-      heroRobot: robots,
+      heroRobot: {
+        spawn: commands.spawnRobot,
+        reset: commands.resetRobot,
+        run: commands.runRobot,
+        hold: commands.holdRobot,
+      },
     });
-  }, [world, hole, robots]);
+  }, [world, commands]);
 
   useFrame(
     ({ viewport, camera, pointer, size }, delta) => {
-      world.get(Preparation)!.ready = heroReady();
-      const view = world.get(Viewport)!;
-      view.width = viewport.width;
-      view.height = viewport.height;
-      view.cameraZ = camera.position.z;
-      view.aspect = size.width / size.height;
-      const input = world.get(Pointer)!;
-      input.x = pointer.x;
-      input.y = pointer.y;
+      commands.sampleView(viewport.width, viewport.height, camera.position.z, size.width / size.height, heroReady());
+      commands.samplePointer(pointer.x, pointer.y);
       advanceHero(world, delta, performance.now());
       const time = world.get(Time)!;
       uTime.value = time.elapsed;

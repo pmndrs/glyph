@@ -1,6 +1,6 @@
 import { clamp, lerp, vec2, vec3 } from 'math';
 import { easing } from 'math/time';
-import type { Footprint } from './traits';
+import type { Footprint, DustState } from './traits';
 import { jitter } from '../random';
 
 /** Where it stops to look up: on top of the title, over the Y. The path is laid through this point. */
@@ -94,10 +94,6 @@ export function poseAt(out: Pose, time: number, path: Path): Pose {
   return out;
 }
 
-export function createRobotMotion() {
-  return { path: { inward: 0, outward: 0, phase: 0 }, pose: { x: 0, y: 0, heading: 0, look: 0 } };
-}
-
 function saturate(value: number): number {
   return clamp(value, 0, 1);
 }
@@ -105,27 +101,6 @@ function saturate(value: number): number {
 export const COUNT = 128;
 export const BASE_Z = 0.12;
 export const RISE = 0.8;
-
-/** Bounded particle pool. The oldest slot is overwritten on saturation. */
-export function createDust() {
-  return {
-    particles: Array.from({ length: COUNT }, () => ({
-      age: 1,
-      life: 1,
-      position: vec3.create(),
-      velocity: vec3.create(),
-      roll: 0,
-      spin: 0,
-      size: 1,
-    })),
-    previous: vec2.create(),
-    hasPrevious: false,
-    carry: 0,
-    emitted: 0,
-  };
-}
-
-export type DustState = ReturnType<typeof createDust>;
 
 /** Emits by distance, excluding teleports above four units. Copies the borrowed footprint before returning. */
 export function stepDust(state: DustState, step: number, current: Footprint | undefined): void {
