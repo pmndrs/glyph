@@ -19,9 +19,9 @@ import {
 } from 'three/webgpu';
 
 import type { TitleBodies } from '../src/typography/traits';
-const { advanceHero } = (await import(
-  new URL('/src/systems.ts', location.origin).href
-)) as typeof import('../src/systems');
+const { advanceSequence } = (await import(
+  new URL('/src/sequence/systems.ts', location.origin).href
+)) as typeof import('../src/sequence/systems');
 const { Time } = (await import(
   new URL('/src/time/traits.ts', location.origin).href
 )) as typeof import('../src/time/traits');
@@ -66,7 +66,7 @@ while (world.get(Time)!.elapsed < 1) {
 
   const delta = Math.min(STEP, 1 - world.get(Time)!.elapsed);
   clock += delta * 1000;
-  advanceHero(world, delta, clock);
+  advanceSequence(world, delta, clock);
 }
 
 if (!title.lifting) throw new Error('The title did not lift automatically after its opening beat');
@@ -77,7 +77,7 @@ const heights: number[] = [];
 
 for (const [index, moment] of MOMENTS.entries()) {
   while (elapsed < moment) {
-    advanceHero(world, STEP, base + (elapsed + STEP) * 1000);
+    advanceSequence(world, STEP, base + (elapsed + STEP) * 1000);
     elapsed += STEP;
   }
 

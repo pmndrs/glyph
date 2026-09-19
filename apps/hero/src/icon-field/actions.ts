@@ -1,11 +1,11 @@
 import { createActions } from 'koota';
 import { vec3 } from 'math';
 import { Time } from '../time/traits';
-import { Field, Impacts } from './traits';
+import { IconField, Impacts } from './traits';
 import { buildLayout, createLattice, type IconLayoutOptions } from './utils/lattice';
 
-export const fieldActions = createActions((world) => ({
-  spawnFields() {
+export const iconFieldActions = createActions((world) => ({
+  spawnIconFields() {
     // Pitch and speed scale together with depth, preserving the sheets' interleave.
     const layers: readonly IconLayoutOptions[] = [
       {
@@ -49,10 +49,12 @@ export const fieldActions = createActions((world) => ({
 
     for (const options of layers) {
       const layout = buildLayout(options);
-      world.spawn(Field({ options, layout, lattice: createLattice(layout, options.motifs, options.seed), offset: 0 }));
+      world.spawn(
+        IconField({ options, layout, lattice: createLattice(layout, options.motifs, options.seed), offset: 0 }),
+      );
     }
   },
-  impactFields(x: number, y: number, z: number) {
+  impactIconFields(x: number, y: number, z: number) {
     const impacts = world.get(Impacts)!;
     impacts.latest = (impacts.latest + 1) % impacts.entries.length;
     const impact = impacts.entries[impacts.latest]!;
@@ -61,8 +63,8 @@ export const fieldActions = createActions((world) => ({
     vec3.set(impact.world, x, y, z);
     world.set(Impacts, { latest: impacts.latest, next: impacts.next });
   },
-  resetFields() {
-    world.query(Field).updateEach(([field]) => {
+  resetIconFields() {
+    world.query(IconField).updateEach(([field]) => {
       const lattice = field.lattice!;
       lattice.swallowed.fill(0);
       lattice.x.fill(0);

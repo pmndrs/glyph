@@ -12,7 +12,7 @@ import { useFonts } from './view/hooks';
 import { Post, BlackHole, GlyphBurst } from './black-hole/renderer';
 import { GlassShadows } from './typography/utils/shadows';
 import { GlassTitle, FeatureLine } from './typography/renderer';
-import { FieldRenderer } from './field/renderer';
+import { IconFieldRenderer } from './icon-field/renderer';
 import { Lighting, Paper } from './view/renderer';
 import { RobotRenderer } from './robot/renderer';
 import { HeroLoading, PrepareHero } from './view/startup';
@@ -64,7 +64,7 @@ function Scene() {
       <FrameLoop />
       <Lighting />
       <Paper />
-      <FieldRenderer font={fonts.icons} />
+      <IconFieldRenderer font={fonts.icons} />
       <GlassTitle font={fonts.title} />
       <GlassShadows />
       <FeatureLine field={fonts.feature} collapse={collapse} />

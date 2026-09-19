@@ -1,8 +1,8 @@
 import { createWorld } from 'koota';
 import { actions } from './actions';
-import { Playback } from './traits';
+import { Playback } from './sequence/traits';
 import { Collapse } from './black-hole/traits';
-import { Impacts } from './field/traits';
+import { Impacts } from './icon-field/traits';
 import { Pointer } from './input/traits';
 import { Time } from './time/traits';
 import { Preparation, Viewport } from './view/traits';

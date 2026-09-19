@@ -1,6 +1,6 @@
 import { COUNT, LOOK_UP_AT, LOOK_DOWN_AT } from './utils';
 import { jitter } from '../random';
-import { ICON_CODE_POINTS } from '../field/utils/content';
+import { ICON_CODE_POINTS } from '../icon-field/utils/content';
 import { Text, TextGroup } from '@pmndrs/glyph/react';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';

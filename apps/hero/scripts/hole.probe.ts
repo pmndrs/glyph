@@ -41,7 +41,7 @@ while (document.documentElement.dataset.heroState !== 'ready')
 
 const { dismissBlackHole: dismissCollapse, holdBlackHole: holdCollapse } = blackHoleActions(handles.heroWorld!);
 const { actions } = (await import(new URL('/src/actions.ts', location.origin).href)) as typeof import('../src/actions');
-const { replayHero: requestReplay } = actions(handles.heroWorld!);
+const { replaySequence: requestReplay } = actions(handles.heroWorld!);
 const hole = handles.heroHole!.state;
 const state = _roots.values().next().value!.store.getState();
 state.setFrameloop('never');

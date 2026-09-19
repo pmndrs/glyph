@@ -2,7 +2,7 @@ import { trait } from 'koota';
 import { vec3 } from 'math';
 import type { IconLayoutOptions, Layout, LatticeState } from './utils/lattice';
 
-export const Field = trait({
+export const IconField = trait({
   options: (): IconLayoutOptions | undefined => undefined,
   layout: (): Layout | undefined => undefined,
   lattice: (): LatticeState | undefined => undefined,

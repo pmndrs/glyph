@@ -5,16 +5,16 @@ import { Time } from '../time/traits';
 import { Pointer } from '../input/traits';
 import { Viewport } from '../view/traits';
 import { departureAt, HORIZON } from '../black-hole/utils';
-import { Field, Impacts } from './traits';
+import { IconField, Impacts } from './traits';
 import { PATTERN_ANGLE, FIELD_OF_VIEW, simulate, advanceMorph, type LatticeState, type Layout } from './utils/lattice';
 
-export function moveFields(world: World, collapse: HoleState): void {
+export function moveIconFields(world: World, collapse: HoleState): void {
   const time = world.get(Time)!;
   const viewport = world.get(Viewport)!;
   const pointer = world.get(Pointer)!;
   const step = Math.min(time.delta, 0.05);
 
-  world.query(Field).updateEach(([field]) => {
+  world.query(IconField).updateEach(([field]) => {
     const options = field.options!;
     const layout = field.layout!;
     const lattice = field.lattice!;

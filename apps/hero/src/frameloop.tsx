@@ -5,17 +5,17 @@ import { actions } from './actions';
 import { Collapse } from './black-hole/traits';
 import { useInput } from './input/hooks';
 import { Time } from './time/traits';
-import { advanceHero } from './systems';
+import { advanceSequence } from './sequence/systems';
 import { heroReady } from './view/startup';
 import { updatePaper, uTime } from './view/materials';
-import { PATTERN_ANGLE } from './field/utils/lattice';
+import { PATTERN_ANGLE } from './icon-field/utils/lattice';
 
 export function FrameLoop() {
   const world = useWorld();
   const commands = useActions(actions);
 
   useInput(world, () => {
-    if (heroReady()) commands.replayHero();
+    if (heroReady()) commands.replaySequence();
   });
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export function FrameLoop() {
     ({ viewport, camera, pointer, size }, delta) => {
       commands.sampleView(viewport.width, viewport.height, camera.position.z, size.width / size.height, heroReady());
       commands.samplePointer(pointer.x, pointer.y);
-      advanceHero(world, delta, performance.now());
+      advanceSequence(world, delta, performance.now());
       const time = world.get(Time)!;
       uTime.value = time.elapsed;
       updatePaper(time.elapsed, PATTERN_ANGLE);

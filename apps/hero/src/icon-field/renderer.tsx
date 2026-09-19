@@ -7,7 +7,7 @@ import type { SlugFont } from '../view/hooks';
 import { holeWarp } from '../black-hole/materials';
 import { usePreparation } from '../view/startup';
 import { PATTERN_ANGLE, GLYPHS, cellMatrix } from './utils/lattice';
-import { Field } from './traits';
+import { IconField } from './traits';
 import { Time } from '../time/traits';
 import { useQuery, useWorld } from 'koota/react';
 import type { Entity } from 'koota';
@@ -29,8 +29,8 @@ const pattern = defineTextMaterial((context) => {
   return material;
 });
 
-export function FieldRenderer({ font }: { readonly font: SlugFont }) {
-  return useQuery(Field).map((entity) => <IconPattern key={entity} entity={entity} font={font} />);
+export function IconFieldRenderer({ font }: { readonly font: SlugFont }) {
+  return useQuery(IconField).map((entity) => <IconPattern key={entity} entity={entity} font={font} />);
 }
 
 /**
@@ -39,7 +39,7 @@ export function FieldRenderer({ font }: { readonly font: SlugFont }) {
  */
 function IconPattern({ entity, font }: { readonly entity: Entity; readonly font: SlugFont }) {
   const world = useWorld();
-  const field = entity.get(Field)!;
+  const field = entity.get(IconField)!;
   const { iconSize, depth, opacity } = field.options!;
   const layout = field.layout!;
   const count = layout.cells.length;
@@ -65,7 +65,7 @@ function IconPattern({ entity, font }: { readonly entity: Entity; readonly font:
   const sheet = useRef<Group>(null);
 
   useFrame(() => {
-    const current = entity.get(Field)!;
+    const current = entity.get(IconField)!;
     const state = current.lattice!;
     const group = sheet.current;
 

@@ -2,6 +2,12 @@
 
 ## 2026-09-19
 
+- **Extracted the hero sequence domain** — Moved playback state, actor spawning, replay, and cross-domain
+  choreography into `sequence`. Root actions compose the domain commands and retain world initialization and
+  disposal. Renamed `field` to `icon-field`, including its trait, actions, renderer, and system names.
+  The full hero check and WebGPU opening and finale/replay checks pass.
+  See [the hero reference](packages/hero.md).
+
 - **Made hero post-processing unconditional** — Removed the URL toggle and preparation option. The scene always
   mounts its post-processing passes, and readiness requires the render pipeline. See [the hero reference](packages/hero.md).
 

@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:3e58c316165e3da63f1ca9f879935f2883e11865aede5b21f014a225d31c8354'
+source_digest: 'sha256:94c08503dac83a3f9a170955138b0202aa356bd6a20150ddf66c8ae21fcfb542'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -75,7 +75,7 @@ sources:
     resource: ../../../apps/hero/scripts/retained-lines.probe.ts
     title: Retained typing compared with independently shaped prefixes
   - id: lattice-simulation
-    resource: ../../../apps/hero/src/field/utils/lattice.ts
+    resource: ../../../apps/hero/src/icon-field/utils/lattice.ts
     title: Fixed-capacity lattice simulation and direct glyph transforms
   - id: robot-motion
     resource: ../../../apps/hero/src/robot/utils.ts
@@ -84,7 +84,7 @@ sources:
     resource: ../../../apps/hero/src/robot/utils.ts
     title: Fixed particle storage and distance-based emission
   - id: lattice-check
-    resource: ../../../apps/hero/src/field/utils/lattice.test.ts
+    resource: ../../../apps/hero/src/icon-field/utils/lattice.test.ts
     title: Matrix equivalence, bounded simulation, and edge-on morph checks
   - id: physics-check
     resource: ../../../apps/hero/src/physics/systems.test.ts
@@ -105,8 +105,14 @@ sources:
     resource: ../../../apps/hero/src/time/systems.ts
     title: Headless playback clock
   - id: systems
-    resource: ../../../apps/hero/src/systems.ts
-    title: Headless application system order
+    resource: ../../../apps/hero/src/sequence/systems.ts
+    title: Headless sequence order and cross-domain choreography
+  - id: sequence-actions
+    resource: ../../../apps/hero/src/sequence/actions.ts
+    title: Sequence actor spawning and replay
+  - id: sequence-traits
+    resource: ../../../apps/hero/src/sequence/traits.ts
+    title: Sequence playback state
   - id: frameloop
     resource: ../../../apps/hero/src/frameloop.tsx
     title: R3F clock, input, and development controls
@@ -135,23 +141,24 @@ implement its transitions.
 
 | Domain       | Ownership                                                                                               |
 | ------------ | ------------------------------------------------------------------------------------------------------- |
+| `sequence`   | Actor spawning, replay, opening beat, and cross-domain choreography                                     |
 | `time`       | Playback clock and bounded frame delta                                                                  |
 | `input`      | Pointer state, DOM listeners, and pointer decay                                                         |
 | `view`       | Viewport and readiness state, preparation, fonts, retained text views, shader time, lighting, and paper |
 | `physics`    | Crashcat resource, body traits, actions, fixed stepping, and collision events                           |
 | `typography` | Title construction and motion, published landings, feature typing, glass, and projection                |
-| `field`      | Icon sheets, bounded impact queue, spring simulation, morphs, and rendering                             |
+| `icon-field` | Icon sheets, bounded impact queue, spring simulation, morphs, and rendering                             |
 | `robot`      | Spawn/reset/run actions, path, published departure, physics target, dust, rig, and display              |
 | `black-hole` | Collapse state and controls, attraction functions, warp, stars, and post-processing                     |
 
 The root owns composition. `world.ts` creates one Koota world and invokes the application initialization action.
-Root `actions.ts` spreads the domain action sets into one set for application code, then adds initialization,
-replay, and disposal commands. Domain actions remain directly importable, including when command names collide.
+Root `actions.ts` spreads the domain action sets into one set for application code, then adds world initialization
+and disposal commands. Sequence actions own actor spawning and replay. Domain actions remain directly importable, including when command names collide.
 Physics actions configure the solver and install contact/removal handlers before actors spawn. Field actions
 build each configured lattice before attaching its trait. Typography actions create, replay, and dispose the title's
 bodies, while its systems own continuous lift and attraction updates. Input hooks and the frame loop publish
 pointer, viewport, and readiness changes through their domain actions.
-`systems.ts` orders updates and connects title landings to field waves, typing, and the robot's next run. It connects
+`sequence/systems.ts` orders updates and connects title landings to field waves, typing, and the robot's next run. It connects
 robot departure to the black hole. These relationships belong to the experience, so the robot never opens the
 black hole itself and typography never edits the robot or field. Black-hole state is passed explicitly into the
 field and title systems and the feature-line view. The physics solver depends on the clock and its own state.
@@ -160,8 +167,8 @@ field and title systems and the feature-line view. The physics solver depends on
 disposal, loading screen, canvas configuration, and Suspense boundary. Its private scene component composes the
 visual modules and supplies their preparation requirements to the view gate.
 `frameloop.tsx` samples renderer inputs, delegates DOM input to its domain, and runs the headless application tick
-at 60 Hz. `random.ts` contains the deterministic jitter function shared by independent effects. Root `traits.ts` holds the application playback model. These eight files
-are application-wide. Domain roots expose traits, actions, systems, renderers, and materials where needed.
+at 60 Hz. `random.ts` contains the deterministic jitter function shared by independent effects. These six files
+are application-wide. `sequence/traits.ts` holds playback state, alongside its actions and systems. Domain roots expose traits, actions, systems, renderers, and materials where needed.
 `materials.ts` groups each domain's uniforms with the shader graphs and material builders that use them.
 Black-hole timing and departure helpers share `utils.ts`, as do robot motion and dust simulation. The larger
 lattice, outline, and shadow implementations live in their owning domains' nested `utils/` directories.
