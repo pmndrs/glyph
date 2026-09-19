@@ -1,4 +1,4 @@
 import { createRoot } from 'react-dom/client';
-import { Hero } from './hero/renderer';
+import { App } from './app';
 
-createRoot(document.getElementById('root')!).render(<Hero />);
+createRoot(document.getElementById('root')!).render(<App />);

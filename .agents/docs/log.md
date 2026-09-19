@@ -2,6 +2,10 @@
 
 ## 2026-09-19
 
+- **Separated the hero app shell from its scene** — Root `app.tsx` owns Canvas, providers, loading, and the
+  world lifetime. It mounts the root frame loop and `<Hero />`, which now contains only the scene composition
+  and post-processing. `main.tsx` mounts `<App />`. The full hero check and WebGPU opening check pass.
+
 - **Separated hero preparation and loading UI** — `hero/prepare.ts` owns readiness checks, GPU warm-up, and
   status subscriptions. `hero/loading.tsx` renders the loading and failure overlay from that status.
   The full hero check and WebGPU opening check pass.

@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:5fbe9b85ff4f3f16d22e2082485c8a0321e54d324e20ffb5ecad91dfda1742fb'
+source_digest: 'sha256:f621fe36b8fd5724e8b4648a9f80d9aa3c3229e6a260b861524a793c4896bc2d'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -14,6 +14,9 @@ sources:
   - id: manifest
     resource: ../../../apps/hero/package.json
     title: Application manifest
+  - id: app
+    resource: ../../../apps/hero/src/app.tsx
+    title: Canvas, providers, and application shell
   - id: hero-scene
     resource: ../../../apps/hero/src/hero/renderer.tsx
     title: Hero sequence composition
@@ -135,7 +138,7 @@ sources:
     resource: ../../../apps/hero/src/star-embers/materials.ts
     title: Star fire, bloom, fading, and screen-space sparks
   - id: frameloop
-    resource: ../../../apps/hero/src/hero/renderer.tsx
+    resource: ../../../apps/hero/src/frameloop.ts
     title: R3F clock, input, and development controls
 generated:
   by: anthropic/claude-opus-5
@@ -193,12 +196,13 @@ Two focused tests cover ordering, event delays, retriggering, and cancellation d
 to field waves, and samples black-hole pop age for star embers. Black-hole state is passed explicitly into the
 field and title systems and the feature-line view. The physics solver depends on the clock and its own state.
 
-`main.tsx` only mounts `<Hero />` from `hero/renderer.tsx`. That renderer owns the application shell, world instance
-and hot-reload disposal, loading screen, canvas, Suspense boundary, scene composition, and post-processing.
-Its private frame loop samples renderer inputs, delegates DOM input, and runs the headless hero tick at 60 Hz.
+`main.tsx` only mounts `<App />`. Root `app.tsx` owns the application shell, world instance and hot-reload
+disposal, loading screen, Canvas, and Suspense boundary. It mounts `<Hero />` from `hero/renderer.tsx` as the
+scene, alongside `<FrameLoop />` from root `frameloop.ts`. Hero owns scene composition and post-processing.
+The frame loop samples renderer inputs, delegates DOM input, and runs the headless hero tick at 60 Hz.
 `hero/prepare.ts` owns preparation requirements and status subscriptions. `hero/loading.tsx` renders the loading overlay. `hero/fonts.ts` loads the fonts, `hero/lighting.tsx` defines the
 lighting and paper, and hero traits and actions own viewport and readiness state. There is no separate view domain.
-Only `main.tsx`, `world.ts`, `actions.ts`, and the shared deterministic `random.ts` remain at the source root.
+The source root contains `main.tsx`, `app.tsx`, `frameloop.ts`, `world.ts`, `actions.ts`, and the shared deterministic `random.ts`.
 Domain roots expose traits, actions, systems, renderers, and materials where needed.
 `materials.ts` groups each domain's uniforms with the shader graphs and material builders that use them.
 Domain behavior stays with its owner: black-hole beats, robot motion and dust, letter synchronization, and
@@ -372,7 +376,7 @@ They verify resource preparation but do not measure delivery through a screen re
 
 The full hero package check passes, including six numerical tests, two timeline tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
-The production entry bundle is 599.52 kB gzip, down from 609.11 kB before removing the alternate scene.
+The production entry bundle is 599.36 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/letters/materials.ts`: red G, orange l,
