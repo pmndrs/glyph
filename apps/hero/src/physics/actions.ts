@@ -42,7 +42,7 @@ export const physicsActions = createActions((world) => {
   }
 
   return {
-    initializePhysics() {
+    initializePhysics: () => {
       registerShapes([box.def, convexHull.def, staticCompound.def]);
       const settings = createWorldSettings();
       settings.gravity = [0, 0, -80];
@@ -88,10 +88,10 @@ export const physicsActions = createActions((world) => {
         physics.entities.delete(id);
       });
     },
-    destroyBody(entity: Entity) {
+    destroyBody: (entity: Entity) => {
       if (entity.isAlive()) entity.destroy();
     },
-    spawnSolidBody(position: Vec3, prisms: readonly (readonly number[])[]) {
+    spawnSolidBody: (position: Vec3, prisms: readonly (readonly number[])[]) => {
       const physics = world.get(Physics)!;
       const handle = rigidBody.create(physics.engine, {
         motionType: MotionType.DYNAMIC,
@@ -116,7 +116,7 @@ export const physicsActions = createActions((world) => {
 
       return attach(world.spawn(), handle);
     },
-    setPhysicsFloor(top: number) {
+    setPhysicsFloor: (top: number) => {
       const physics = world.get(Physics)!;
       const existing = world.queryFirst(Floor, Body);
 
@@ -134,7 +134,7 @@ export const physicsActions = createActions((world) => {
       });
       attach(world.spawn(Floor), handle, 'static');
     },
-    attachKinematicBody(entity: Entity, halfExtents: readonly [number, number, number]) {
+    attachKinematicBody: (entity: Entity, halfExtents: readonly [number, number, number]) => {
       const physics = world.get(Physics)!;
       const handle = rigidBody.create(physics.engine, {
         motionType: MotionType.STATIC,
@@ -146,7 +146,7 @@ export const physicsActions = createActions((world) => {
       });
       attach(entity, handle, 'parked');
     },
-    holdBody(entity: Entity, pose: HeldPose) {
+    holdBody: (entity: Entity, pose: HeldPose) => {
       const physics = world.get(Physics)!;
       const body = entity.get(Body)!;
 
@@ -160,7 +160,7 @@ export const physicsActions = createActions((world) => {
       Object.assign(body.to, pose);
       entity.set(Body, body);
     },
-    parkBody(entity: Entity) {
+    parkBody: (entity: Entity) => {
       const physics = world.get(Physics)!;
       const body = entity.get(Body)!;
       const handle = rigidBody.get(physics.engine, body.id)!;
@@ -170,7 +170,7 @@ export const physicsActions = createActions((world) => {
       rigidBody.setMotionType(physics.engine, handle, MotionType.STATIC, false);
       entity.set(Body, body);
     },
-    reviveBody(entity: Entity, pose: HeldPose) {
+    reviveBody: (entity: Entity, pose: HeldPose) => {
       const physics = world.get(Physics)!;
       const body = entity.get(Body)!;
       const handle = rigidBody.get(physics.engine, body.id)!;
@@ -189,7 +189,7 @@ export const physicsActions = createActions((world) => {
       body.moved = true;
       entity.set(Body, body);
     },
-    releaseBody(entity: Entity, velocity: Vec3, spin: number) {
+    releaseBody: (entity: Entity, velocity: Vec3, spin: number) => {
       const physics = world.get(Physics)!;
       const body = entity.get(Body)!;
 

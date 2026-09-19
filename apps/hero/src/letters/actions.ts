@@ -7,11 +7,17 @@ import { writeLetter } from './systems';
 import { Title, Typing, type Letter, type TitleBodies } from './traits';
 
 export const letterActions = createActions((world) => ({
-  spawnLetters() {
+  spawnLetters: () => {
     world.spawn(Title);
     world.spawn(Typing);
   },
-  prepareTitle(worldMatrix: Mat4, letters: readonly Letter[], cameraHeight: number, thickness: number, width: number) {
+  prepareTitle: (
+    worldMatrix: Mat4,
+    letters: readonly Letter[],
+    cameraHeight: number,
+    thickness: number,
+    width: number,
+  ) => {
     const titleEntity = world.queryFirst(Title)!;
     const inverse = mat4.create();
     mat4.copy(inverse, worldMatrix);
@@ -67,7 +73,7 @@ export const letterActions = createActions((world) => ({
 
     return state;
   },
-  disposeTitle(entity: Entity) {
+  disposeTitle: (entity: Entity) => {
     if (!entity.isAlive()) return;
 
     const title = entity.get(Title)!;
@@ -78,7 +84,7 @@ export const letterActions = createActions((world) => ({
 
     entity.set(Title, { bodies: undefined, width: undefined, reach: 0 });
   },
-  replayTitle() {
+  replayTitle: () => {
     world.query(Title).updateEach(([title]) => {
       const state = title.bodies;
 
@@ -114,7 +120,7 @@ export const letterActions = createActions((world) => ({
       typing.count = 0;
     });
   },
-  typeFeatureAfter(delay: number) {
+  typeFeatureAfter: (delay: number) => {
     world.query(Typing).updateEach(([typing]) => {
       typing.start = world.get(Time)!.now + delay * 1000;
       typing.beat = 0;

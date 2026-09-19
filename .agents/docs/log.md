@@ -2,6 +2,9 @@
 
 ## 2026-09-19
 
+- **Standardized hero action syntax** — Root and domain action sets use arrow-function properties, with their
+  command bodies and signatures unchanged. The full hero check passes, including all six tests and the build.
+
 - **Localized hero preparation requirements** — `PrepareHero` now owns its fixed readiness checks for the
   mounted producers, environment, and glass shadows. Scene composition mounts it without configuration props.
   The full hero check and WebGPU startup with retained typing checks pass.

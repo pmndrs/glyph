@@ -4,17 +4,17 @@ import { Collapse } from './traits';
 import { collapseAt } from './systems';
 
 export const blackHoleActions = createActions((world) => ({
-  openBlackHole() {
+  openBlackHole: () => {
     const collapse = world.get(Collapse)!;
 
     if (collapse.openedAt === undefined) world.set(Collapse, { openedAt: world.get(Time)!.now });
   },
-  dismissBlackHole() {
+  dismissBlackHole: () => {
     const collapse = world.get(Collapse)!;
     world.set(Collapse, { openedAt: undefined, held: undefined });
     collapseAt(collapse.hole, -1);
   },
-  holdBlackHole(at: number | undefined) {
+  holdBlackHole: (at: number | undefined) => {
     const collapse = world.get(Collapse)!;
     collapse.held = at;
 

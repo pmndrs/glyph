@@ -9,7 +9,7 @@ import { GLYPHS, GEM_TONES, STAGGER_STEPS, STAGGER_SECONDS } from './content';
 const REPEATS = [0, 1];
 
 export const iconFieldActions = createActions((world) => ({
-  spawnIconFields() {
+  spawnIconFields: () => {
     // Pitch and speed scale together with depth, preserving the sheets' interleave.
     const layers: readonly IconLayoutOptions[] = [
       {
@@ -58,7 +58,7 @@ export const iconFieldActions = createActions((world) => ({
       );
     }
   },
-  impactIconFields(x: number, y: number, z: number) {
+  impactIconFields: (x: number, y: number, z: number) => {
     const impacts = world.get(Impacts)!;
     impacts.latest = (impacts.latest + 1) % impacts.entries.length;
     const impact = impacts.entries[impacts.latest]!;
@@ -67,7 +67,7 @@ export const iconFieldActions = createActions((world) => ({
     vec3.set(impact.world, x, y, z);
     world.set(Impacts, { latest: impacts.latest, next: impacts.next });
   },
-  resetIconFields() {
+  resetIconFields: () => {
     world.query(IconField).updateEach(([field]) => {
       const lattice = field.lattice!;
       lattice.swallowed.fill(0);

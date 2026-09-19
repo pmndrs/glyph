@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:578a6a4bede3edd3d98404f310f82f098b21987107526878b0d51877badfc961'
+source_digest: 'sha256:e296a7e95329aecf38853f4cc5dfe1366c799b7325a3e01a7c17d02bb117a1b5'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -162,7 +162,7 @@ implement its transitions.
 | `star-embers` | Emission age, prepared star particles, fire material, bloom, fading, and screen-space sparks            |
 
 The root owns composition. `world.ts` creates one Koota world and invokes the application initialization action.
-Root `actions.ts` spreads the domain action sets into one set for application code, then adds world initialization
+Action sets define commands as arrow-function properties. Root `actions.ts` spreads the domain action sets into one set for application code, then adds world initialization
 and disposal commands. Sequence actions own actor spawning and replay. Domain actions remain directly importable, including when command names collide.
 Physics actions configure the solver and install contact/removal handlers before actors spawn. Field actions
 build each configured lattice before attaching its trait. Letter actions create, replay, and dispose the title's

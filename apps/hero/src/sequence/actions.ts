@@ -7,13 +7,13 @@ import { starEmberActions } from '../star-embers/actions';
 import { Playback } from './traits';
 
 export const sequenceActions = createActions((world) => ({
-  spawnSequence() {
+  spawnSequence: () => {
     starEmberActions(world).initializeStarEmbers();
     robotActions(world).spawnRobot();
     letterActions(world).spawnLetters();
     iconFieldActions(world).spawnIconFields();
   },
-  replaySequence() {
+  replaySequence: () => {
     world.set(Playback, { started: true });
     blackHoleActions(world).dismissBlackHole();
     starEmberActions(world).sampleStarEmbers(undefined);

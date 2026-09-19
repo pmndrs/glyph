@@ -20,11 +20,11 @@ export const actions = createActions((world) => ({
   ...starEmberActions(world),
   ...letterActions(world),
   ...viewActions(world),
-  initializeHero() {
+  initializeHero: () => {
     physicsActions(world).initializePhysics();
     sequenceActions(world).spawnSequence();
   },
-  disposeHero() {
+  disposeHero: () => {
     world.destroy();
   },
 }));
