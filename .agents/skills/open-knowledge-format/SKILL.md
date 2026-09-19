@@ -87,7 +87,7 @@ node scripts/validate-okf.mjs /path/to/bundle --workspace-root /path/to/reposito
 node scripts/generate-package-digests.mjs /path/to/repository
 ```
 
-The validator discovers `apps/*/package.json`, `benches/package.json`, and `packages/*/package.json`. Each manifest requires exactly one `type: Workspace Package` concept whose `workspace_package`, `resource`, and deterministic `source_digest` match. Digests include source and configuration while excluding `.cache`, `node_modules`, `dist`, `target`, `coverage`, `.DS_Store`, and TypeScript build-info files. A digest mismatch forces package documentation review in the same change as source edits.
+The validator discovers `apps/*/package.json`, `benches/package.json`, and `packages/*/package.json`. Each manifest requires exactly one `type: Workspace Package` concept whose `workspace_package`, `resource`, and deterministic `source_digest` match. Digests include source and configuration while excluding `.cache`, `node_modules`, `dist`, `target`, `coverage`, `.DS_Store`, generated `CLAUDE.md` agent shims, and TypeScript build-info files. A digest mismatch forces package documentation review in the same change as source edits.
 
 Report:
 

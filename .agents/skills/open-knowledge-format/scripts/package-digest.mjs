@@ -56,6 +56,7 @@ async function visit(directory, files) {
       await visit(absolutePath, files);
     } else if (
       entry.name !== '.DS_Store' &&
+      entry.name !== 'CLAUDE.md' &&
       path.extname(entry.name) !== '.tsbuildinfo' &&
       (entry.isFile() || (entry.isSymbolicLink() && (await stat(absolutePath)).isFile()))
     ) {

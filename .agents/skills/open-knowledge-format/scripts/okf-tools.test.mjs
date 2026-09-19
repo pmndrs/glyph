@@ -18,7 +18,7 @@ afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
-test('package digests are deterministic and ignore build output', async () => {
+test('package digests ignore build output and generated agent shims but track source changes', async () => {
   const root = await temporaryDirectory('okf-digest-');
   await mkdir(path.join(root, 'src'), { recursive: true });
   await mkdir(path.join(root, 'dist'), { recursive: true });
@@ -26,6 +26,7 @@ test('package digests are deterministic and ignore build output', async () => {
   await writeFile(path.join(root, 'dist', 'index.js'), 'ignored\n');
   const before = await packageDigest(root);
   await writeFile(path.join(root, 'dist', 'index.js'), 'still ignored\n');
+  await writeFile(path.join(root, 'CLAUDE.md'), '@AGENTS.md\n');
   assert.equal(await packageDigest(root), before);
   await writeFile(path.join(root, 'src', 'index.ts'), 'export const value = 2;\n');
   assert.notEqual(await packageDigest(root), before);
