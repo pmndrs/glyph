@@ -2,6 +2,9 @@
 
 ## 2026-09-19
 
+- **Made hero post-processing unconditional** — Removed the URL toggle and preparation option. The scene always
+  mounts its post-processing passes, and readiness requires the render pipeline. See [the hero reference](packages/hero.md).
+
 - **Minimized the hero entry point** — Moved the application shell, styles, world lifetime, loading screen,
   canvas configuration, and Suspense boundary into `hero.tsx`. The scene remains a private component under the
   canvas, and `main.tsx` only mounts `<Hero />`. See [the hero reference](packages/hero.md).

@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:0b16e3a851c1ab393d3af374582ffc9dbd87631d928a0107542fa5c1d5e42bc4'
+source_digest: 'sha256:3e58c316165e3da63f1ca9f879935f2883e11865aede5b21f014a225d31c8354'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -274,8 +274,8 @@ through `coverageAt`, anchored at the glyph's own centre.
 The final pull takes the whole rendered frame, including the paper, shadows, and remaining particles. A post-process
 inverse mapping twists and shrinks that sheet into the centre between 2.15 and 3.12 seconds, exposing black behind
 its edges. After a brief empty hold, sixteen pastel Unicode stars (★ ☆ ✦ ✧ ✩ ✶) spit outward at 3.35 seconds with a few small
-light sparks. The stars shrink like embers, with enhanced bloom and a 1.25-second fade applied after composition so their halos dim along with their cores; the output is exactly black by 4.6 seconds and stays there until Space replays. `?post=0` remains a plain
-scene capture control and omits the paper warp, bloom, composed ember fade, and screen-space light sparks.
+light sparks. The stars shrink like embers, with enhanced bloom and a 1.25-second fade applied after composition so their halos dim along with their cores; the output is exactly black by 4.6 seconds and stays there until Space replays.
+Post-processing is always enabled, and preparation waits for its render pipeline.
 
 The ember material in `src/black-hole/materials.ts` keeps the exact Slug star silhouettes and shades each glyph's
 own quad with a creamy hot core, an amber rim, moving fire noise, and gentle asynchronous flicker. As the stars
@@ -330,7 +330,7 @@ the SoA conversion as the cause of the pacing shortfall or establish a material 
 
 The full hero package check passes, including six numerical tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
-The production entry bundle is 598.47 kB gzip, down from 609.11 kB before removing the alternate scene.
+The production entry bundle is 598.41 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/typography/materials.ts`: red G, orange l,

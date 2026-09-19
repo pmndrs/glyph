@@ -67,11 +67,9 @@ async function uploadsComplete(renderer: WebGPURenderer): Promise<void> {
 
 /** Owns the render job so warm-up uses the same targets, transmission, shadows, and post passes as playback. */
 export function PrepareHero({
-  postProcessing,
   required,
   sceneReady,
 }: {
-  readonly postProcessing: boolean;
   readonly required: readonly string[];
   readonly sceneReady: () => boolean;
 }) {
@@ -147,11 +145,7 @@ export function PrepareHero({
       try {
         render();
 
-        if (
-          sceneReady() &&
-          (!postProcessing || renderPipeline !== null) &&
-          required.every((name) => checks.get(name)?.() === true)
-        ) {
+        if (sceneReady() && renderPipeline !== null && required.every((name) => checks.get(name)?.() === true)) {
           publish('compiling');
 
           void renderer

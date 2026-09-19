@@ -21,9 +21,6 @@ const world = createHeroWorld();
 
 if (import.meta.hot) import.meta.hot.dispose(() => actions(world).disposeHero());
 
-/** `?post=0` renders the plain scene: a clean capture pass, and a way to isolate post-processing. */
-const POST_ENABLED = new URLSearchParams(location.search).get('post') !== '0';
-
 export function Hero() {
   return (
     <StrictMode>
@@ -61,7 +58,6 @@ function Scene() {
   return (
     <>
       <PrepareHero
-        postProcessing={POST_ENABLED}
         required={['title', 'feature', 'icons:-6', 'icons:-9.5', 'robot', 'dust', 'burst']}
         sceneReady={() => scene.environment !== null && scene.getObjectByName('glass-shadows') !== undefined}
       />
@@ -75,7 +71,7 @@ function Scene() {
       <RobotRenderer font={fonts.robot} icons={fonts.icons} />
       <BlackHole />
       <GlyphBurst font={fonts.stars} />
-      {POST_ENABLED ? <Post /> : null}
+      <Post />
     </>
   );
 }
