@@ -25,7 +25,7 @@ import { Robot as RobotTrait } from './traits';
 import { Time } from '../time/traits';
 import { useWorld, useQuery } from 'koota/react';
 import type { Entity } from 'koota';
-import { heroReady, textPrepared, usePreparation } from '../hero/startup';
+import { heroReady, textPrepared, usePreparation } from '../hero/prepare';
 import { type RetainedLine, createRetainedLine, disposeLine, showLine } from '../letters/text';
 import robotUrl from '../../assets/robot.glb?url';
 

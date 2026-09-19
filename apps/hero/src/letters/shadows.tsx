@@ -52,7 +52,7 @@ import {
   Vector3,
   type WebGPURenderer,
 } from 'three/webgpu';
-import { heroReady } from '../hero/startup';
+import { heroReady } from '../hero/prepare';
 import { uTime } from '../hero/materials';
 import { useWorld } from 'koota/react';
 import { Title } from './traits';

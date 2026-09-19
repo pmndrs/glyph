@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:63c88733e339eda08a258c084175a06b5f49c0e955af9e8718e4180c43243501'
+source_digest: 'sha256:5fbe9b85ff4f3f16d22e2082485c8a0321e54d324e20ffb5ecad91dfda1742fb'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -63,8 +63,11 @@ sources:
     resource: ../../../apps/hero/src/robot/materials.ts
     title: Pixels lit on the robot's face screen
   - id: startup
-    resource: ../../../apps/hero/src/hero/startup.tsx
+    resource: ../../../apps/hero/src/hero/prepare.ts
     title: Scene preparation and GPU completion gate
+  - id: loading
+    resource: ../../../apps/hero/src/hero/loading.tsx
+    title: Preparation overlay and failure display
   - id: retained-line
     resource: ../../../apps/hero/src/letters/text.ts
     title: Prepared glyph records for typing and replay
@@ -193,7 +196,7 @@ field and title systems and the feature-line view. The physics solver depends on
 `main.tsx` only mounts `<Hero />` from `hero/renderer.tsx`. That renderer owns the application shell, world instance
 and hot-reload disposal, loading screen, canvas, Suspense boundary, scene composition, and post-processing.
 Its private frame loop samples renderer inputs, delegates DOM input, and runs the headless hero tick at 60 Hz.
-`hero/startup.tsx` owns preparation requirements. `hero/fonts.ts` loads the fonts, `hero/lighting.tsx` defines the
+`hero/prepare.ts` owns preparation requirements and status subscriptions. `hero/loading.tsx` renders the loading overlay. `hero/fonts.ts` loads the fonts, `hero/lighting.tsx` defines the
 lighting and paper, and hero traits and actions own viewport and readiness state. There is no separate view domain.
 Only `main.tsx`, `world.ts`, `actions.ts`, and the shared deterministic `random.ts` remain at the source root.
 Domain roots expose traits, actions, systems, renderers, and materials where needed.
@@ -369,7 +372,7 @@ They verify resource preparation but do not measure delivery through a screen re
 
 The full hero package check passes, including six numerical tests, two timeline tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
-The production entry bundle is 599.42 kB gzip, down from 609.11 kB before removing the alternate scene.
+The production entry bundle is 599.52 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/letters/materials.ts`: red G, orange l,

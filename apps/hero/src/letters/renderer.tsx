@@ -11,7 +11,7 @@ import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Box3, Vector3, Matrix4 } from 'three/webgpu';
 import { FEATURE_LINE } from './content';
-import { heroReady, usePreparation } from '../hero/startup';
+import { heroReady, usePreparation } from '../hero/prepare';
 import type { SlugFont, MsdfFont } from '../hero/fonts';
 import { stainedGlassLetters, titleOrigin } from './materials';
 import { solidOf } from './utils';

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { DoubleSide, MeshBasicNodeMaterial, Matrix4, type Group } from 'three/webgpu';
 import type { SlugFont } from '../hero/fonts';
 import { holeWarp } from '../black-hole/materials';
-import { usePreparation } from '../hero/startup';
+import { usePreparation } from '../hero/prepare';
 import { PATTERN_ANGLE, GLYPHS } from './content';
 import { cellMatrix } from './utils';
 import { IconField } from './traits';

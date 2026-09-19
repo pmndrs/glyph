@@ -2,6 +2,10 @@
 
 ## 2026-09-19
 
+- **Separated hero preparation and loading UI** — `hero/prepare.ts` owns readiness checks, GPU warm-up, and
+  status subscriptions. `hero/loading.tsx` renders the loading and failure overlay from that status.
+  The full hero check and WebGPU opening check pass.
+
 - **Separated hero composition from the timeline runner** — The `hero` domain owns its scene, post-processing,
   frame order, actor lifecycle, and former view files for loading, fonts, lighting, paper, and viewport state.
   Hero actions declare the opening and event-driven beats with `at`, `on`, `after`, and command callbacks.

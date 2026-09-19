@@ -15,7 +15,8 @@ import { GlassTitle, FeatureLine } from '../letters/renderer';
 import { IconFieldRenderer } from '../icon-field/renderer';
 import { Lighting, Paper } from './lighting';
 import { RobotRenderer } from '../robot/renderer';
-import { HeroLoading, PrepareHero, heroReady } from './startup';
+import { PrepareHero, heroReady } from './prepare';
+import { HeroLoading } from './loading';
 
 import { Time } from '../time/traits';
 import { useInput } from '../input/hooks';

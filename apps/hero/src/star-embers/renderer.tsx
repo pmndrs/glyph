@@ -5,7 +5,7 @@ import { useRef } from 'react';
 import type { Group } from 'three/webgpu';
 import { jitter } from '../random';
 import type { SlugFont } from '../hero/fonts';
-import { heroReady, textPrepared, usePreparation } from '../hero/startup';
+import { heroReady, textPrepared, usePreparation } from '../hero/prepare';
 import { emberMaterial, uEmberAge, uEmberBloom } from './materials';
 import { StarEmbers, STAR_SYMBOLS, EMBER_SECONDS } from './traits';
 
