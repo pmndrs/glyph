@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:f621fe36b8fd5724e8b4648a9f80d9aa3c3229e6a260b861524a793c4896bc2d'
+source_digest: 'sha256:b8aad71b24f54fc303aae40b6d1f637b4e93d1d09ad799e282105df75ecc9642'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -53,6 +53,9 @@ sources:
   - id: outline
     resource: ../../../apps/hero/src/letters/utils.ts
     title: Letter outlines cut into invisible colliders
+  - id: collision-check
+    resource: ../../../apps/hero/scripts/collision.probe.ts
+    title: Real glyph separation and floor height after the robot push
   - id: robot-pack
     resource: ../../../apps/hero/scripts/robot.mts
     title: Robot glTF packing and staleness check
@@ -225,7 +228,7 @@ closes the finale, restores the field, lifts the title, and resets typing and ro
 The old, unmounted break/rewind presentation and its exclusive director and compressed recording code/tests were
 removed during the Koota migration. The root cleanup also removed retired ink, glass, and silhouette variants and
 their unused uniforms. Materials and post-processing now live in their domains. Browser checks own common playback stories: title lift and landing, robot dust, typed text, collapse, blackness,
-and Space replay. Six numerical tests retain precise evidence for baked title colliders and their counters, glyph transforms, edge-on motif changes,
+and Space replay. Seven numerical tests retain precise evidence for baked title colliders and their counters, glyph transforms, edge-on motif changes,
 bounded pointer response, lift/drop/revival with one landing notification, and robot pushes without tipping or
 leaving an invisible collider behind. These checks catch errors that
 pixel comparisons cannot isolate reliably. Buffer identity and duplicate timeline/path tests are omitted.
@@ -243,7 +246,9 @@ solver ID, motion targets, published pose, and landing state. There is no separa
 letter body array. World-bound actions create, hold, release, park, and revive bodies. Removing `Body` or destroying
 its entity removes the solver body through one lifecycle subscription. The letters domain supplies outline prisms and
 animation targets. Crashcat combines each letter's prisms into
-an immutable compound collider with a BVH, preserving counters and concave outlines. Only box, convex-hull,
+an immutable compound collider with a BVH, preserving counters and concave outlines. Triangle indices are resolved
+against the contours after Three removes duplicate closing vertices. An independent quadratic area integral
+checks that the extruded triangles preserve the filled glyph area, including counters. Only box, convex-hull,
 and static-compound shape implementations are registered. World and shape creation are synchronous and happen
 during preparation, without a physics Wasm download. `stepPhysics(world)` keeps 60 Hz updates with four collision substeps,
 gravity along negative z, free translation and yaw, and locked pitch/roll. Material mixing preserves the configured
@@ -270,7 +275,12 @@ used as coordinate frames are invertible, and frame deltas are nonnegative.
 
 The field tests compare direct transforms with Three's matrix composition, bound pointer disturbances, and check
 edge-on motif substitution. The physics tests compose only clock and physics resources with the actors under test. They use real Crashcat contacts to verify bounce, one landing per release, revival, and robot pushes
-without tipping or leaving collisions after departure. WebGPU checks cover visible robot emission and fade, finale timing, and replay.
+without tipping or leaving collisions after departure. Dynamic letter contacts reject vertical support between
+letters, so a falling letter reaches the floor instead of stacking on another letter. Side contacts still separate
+the letters, and floor restitution still supplies the bounce. A regression drops partially overlapping bodies
+and verifies they settle beside one another. `hero:collision-check` verifies the actual glyph bodies after the
+robot push, allowing at most 0.04 units of floor-height error or penetration against the solver's 0.02 contact
+slop. A coincident-shape control verifies that the overlap measurement detects intersections. WebGPU checks cover visible robot emission and fade, finale timing, and replay.
 
 The scene builds two interleaved lattices of eleven icons on mass-spring grids at different depths, scaled
 so they interleave on screen and stay in phase. The Slug-glass `Glyph` and feature line start at rest. One second
@@ -366,17 +376,17 @@ meshes, or asset loads, with a deliberate new-material control proving the compi
 raw render intervals, CPU submission work, asynchronous GPU queue completion, and long tasks, along with the
 adapter, viewport, and drawing-buffer dimensions. The canvas uses adaptive DPR between 1 and 2, and the report records the actual drawing-buffer size for each run.
 
-With the declarative hero script, two complete 1280×720 replays on Apple Metal with Chromium 149 averaged 60.00 fps
-across 1,702 frames after 3.13 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long
-tasks were observed. Render intervals were 17.5 ms at p95 and 28.9 ms worst, with one interval over 25 ms.
-CPU submission time was 4.2 ms at p95, and browser GPU queue completion was 8.9 ms at p95.
+With corrected colliders and stacking disabled, two complete 1280×720 replays on Apple Metal with Chromium 149 averaged 60.00 fps
+across 1,701 frames after 3.80 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long
+tasks were observed. Render intervals were 17.5 ms at p95 and 25.4 ms worst, with one interval over 25 ms.
+CPU submission time was 4.3 ms at p95, and browser GPU queue completion was 11.0 ms at p95.
 Earlier SoA runs on this host averaged 58.38 and 58.46 fps, while the preceding AoS commit (`64fcb3bd`) averaged
 58.00 fps. These separate runs show variable pacing and do not establish a speedup from the domain extraction.
 They verify resource preparation but do not measure delivery through a screen recorder or guarantee steady 60 fps.
 
-The full hero package check passes, including six numerical tests, two timeline tests, all five font bake checks, and the production
+The full hero package check passes, including seven numerical tests, two timeline tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
-The production entry bundle is 599.36 kB gzip, down from 609.11 kB before removing the alternate scene.
+The production entry bundle is 599.57 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/letters/materials.ts`: red G, orange l,

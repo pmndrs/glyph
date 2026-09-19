@@ -92,7 +92,10 @@ for (const [index, moment] of MOMENTS.entries()) {
   renderer.render(scene, camera);
 }
 
-if (heights[0]! < 8 || heights[heights.length - 1]! > 1) {
+if (
+  heights[0]! < 8 ||
+  title.pieces.some(({ entity, letter }) => Math.abs(entity.get(Body)!.position[2] - letter.home[2]) > 0.04)
+) {
   throw new Error(`The title did not lift and settle: ${JSON.stringify(heights)}`);
 }
 

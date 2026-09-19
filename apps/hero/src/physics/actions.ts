@@ -12,6 +12,7 @@ import {
   convexHull,
   dof,
   MaterialCombineMode,
+  ContactValidateResult,
   MotionType,
   rigidBody,
   staticCompound,
@@ -54,6 +55,15 @@ export const physicsActions = createActions((world) => {
       enableCollision(settings, movingLayer, floorLayer);
       const entities = new Map<number, Entity>();
       const listener: Listener = {
+        onContactValidate: (a, b, _offset, hit) => {
+          if (a.motionType !== MotionType.DYNAMIC || b.motionType !== MotionType.DYNAMIC)
+            return ContactValidateResult.ACCEPT_ALL_CONTACTS_FOR_THIS_BODY_PAIR;
+
+          // Letter sides collide, but their top faces cannot support a stack.
+          const [x, y, z] = hit.penetrationAxis;
+
+          return z * z > x * x + y * y ? ContactValidateResult.REJECT_CONTACT : ContactValidateResult.ACCEPT_CONTACT;
+        },
         onContactAdded(a, b) {
           const first = entities.get(a.id)!;
           const second = entities.get(b.id)!;

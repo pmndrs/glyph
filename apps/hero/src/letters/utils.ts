@@ -63,9 +63,11 @@ export function solidOf(font: SlugFont, glyphId: number, fontSize: number, thick
   const half = thickness / 2;
 
   for (const { shape: contour, holes } of points) {
+    // Triangulation removes duplicate closing points before assigning vertex indices.
+    const triangles = ShapeUtils.triangulateShape(contour, holes);
     const vertices: Vector2[] = [...contour, ...holes.flat()];
 
-    for (const triangle of ShapeUtils.triangulateShape(contour, holes)) {
+    for (const triangle of triangles) {
       const p = vertices[triangle[0] ?? -1];
       const q = vertices[triangle[1] ?? -1];
       const r = vertices[triangle[2] ?? -1];

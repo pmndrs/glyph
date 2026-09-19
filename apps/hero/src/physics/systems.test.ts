@@ -86,6 +86,30 @@ it('lifts, lands once, and repeats after being swallowed and revived on the shar
   expect(() => letters.disposeTitle(titleEntity)).not.toThrow();
 });
 
+it('lands overlapping letters beside one another instead of stacking them', () => {
+  const world = createWorld(Time);
+  physicsActions(world).initializePhysics();
+  const physics = physicsActions(world);
+  physics.setPhysicsFloor(0);
+  const first = physics.spawnSolidBody([0, 0, 0.5], prism());
+  const second = physics.spawnSolidBody([0.8, 0, 4], prism());
+  physics.holdBody(second, { x: 0.8, y: 0, z: 4, yaw: 0 });
+  physics.releaseBody(second, [0, 0, -35], 0);
+  world.set(Time, { delta: 1 / 60 });
+
+  try {
+    for (let frame = 0; frame < 240; frame++) stepPhysics(world);
+
+    const a = first.get(Body)!;
+    const b = second.get(Body)!;
+    expect(a.position[2]).toBeCloseTo(0.5, 1);
+    expect(b.position[2]).toBeCloseTo(0.5, 1);
+    expect(Math.hypot(a.position[0] - b.position[0], a.position[1] - b.position[1])).toBeGreaterThan(0.97);
+  } finally {
+    world.destroy();
+  }
+});
+
 it('lets the robot push a flat letter and removes its collision when it leaves', () => {
   const world = createWorld(Time);
   physicsActions(world).initializePhysics();

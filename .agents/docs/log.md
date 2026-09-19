@@ -1,5 +1,16 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-20
+
+- **Corrected hero glyph colliders and prevented stacking** — Resolve triangulation indices against the
+  normalized contour vertices, preserving the filled outline and counters. Dynamic letters retain side contacts
+  while rejecting vertical support from other letters, so they settle on the floor with their bounce intact.
+  Independent glyph-area and overlapping-drop regressions fail before the fixes and pass afterward. The full
+  hero check passes with nine tests. WebGPU lift, finale/replay, and robot-push checks pass, with the final push
+  measuring at most 0.0021 units of collider penetration against the solver's 0.02 contact allowance.
+  Two complete 720p replays average 60.00 fps with no late resources or long tasks and one 25.4 ms frame interval.
+  See [the hero reference](packages/hero.md).
+
 ## 2026-09-19
 
 - **Separated the hero app shell from its scene** — Root `app.tsx` owns Canvas, providers, loading, and the
