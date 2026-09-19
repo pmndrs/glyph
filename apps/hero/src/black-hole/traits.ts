@@ -2,6 +2,13 @@ import { trait } from 'koota';
 
 import { HOLE_CENTER, HORIZON } from './content';
 
+export interface Flight {
+  radius: number;
+  turn: number;
+  stretch: number;
+  size: number;
+}
+
 /** What the rest of the scene reads each frame. */
 export interface HoleState {
   beat: 'closed' | 'open' | 'black';

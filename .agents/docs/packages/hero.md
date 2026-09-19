@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:025fcb2ca5c1fb9ab5efd46f45449def5d2bfa733a967b4f2e58d763e7422120'
+source_digest: 'sha256:783111bee500c10f8affb7746de37bc68f0c1984cbcd095e04ddbe800dcfb7f6'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -184,7 +184,7 @@ Domain behavior stays with its owner: black-hole beats, robot motion and dust, l
 icon-field simulation live in systems. Icon-field actions build the lattice, and traits contain its data models.
 Shared content lives in each domain's `content.ts`. Letters own retained typing in `text.ts` and glass projection
 in `shadows.tsx`. Only small attraction calculations, cell transforms, outline conversion, and physics pose
-conversion remain in `utils.ts`. The view domain keeps preparation in `startup.tsx`, font loading in `hooks.ts`,
+conversion remain in `utils.ts`. Trivial object defaults are inlined at their allocation sites. The view domain keeps preparation in `startup.tsx`, font loading in `hooks.ts`,
 and lighting and paper in `renderer.tsx`. Simulation does not import React or shader construction.
 Domain tests remain beside their implementations.
 
@@ -352,7 +352,7 @@ They verify resource preparation but do not measure delivery through a screen re
 
 The full hero package check passes, including six numerical tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
-The production entry bundle is 598.54 kB gzip, down from 609.11 kB before removing the alternate scene.
+The production entry bundle is 598.51 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/letters/materials.ts`: red G, orange l,

@@ -1,7 +1,7 @@
 import { trait, type Entity } from 'koota';
 import type { Mat4, Vec3 } from 'math';
 import type { HeldPose } from '../physics/traits';
-import type { Flight } from '../black-hole/utils';
+import type { Flight } from '../black-hole/traits';
 import type { Solid } from './utils';
 import { FEATURE_LINE } from './content';
 

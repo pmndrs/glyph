@@ -2,6 +2,10 @@
 
 ## 2026-09-19
 
+- **Inlined trivial hero factories** — Pose and flight defaults now appear at their allocation sites instead of
+  calling helpers that only return object literals. The flight data model lives with black-hole traits.
+  The full hero check passes, including six existing tests and the production build.
+
 - **Restored hero utility boundaries** — Moved content to domain roots, robot motion and dust to systems,
   icon-field construction to actions and simulation to systems, and letter synchronization to systems.
   Letters own named text and shadow modules. Remaining utilities are calculations and geometry or pose

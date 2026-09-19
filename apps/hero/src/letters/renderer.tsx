@@ -1,5 +1,5 @@
 import type { HoleState } from '../black-hole/traits';
-import { createFlight, departureAt, flight } from '../black-hole/utils';
+import { departureAt, flight } from '../black-hole/utils';
 import { type RetainedLine, createRetainedLine, disposeLine, showLine, resetLine } from './text';
 import { mat4, vec3 } from 'math';
 import { useWorld } from 'koota/react';
@@ -185,7 +185,7 @@ export function FeatureLine({ field, collapse }: { readonly field: MsdfFont; rea
         inverse: mat4.create(),
         center: vec3.create(),
         scale: vec3.create(),
-        flight: createFlight(),
+        flight: { radius: 1, turn: 0, stretch: 1, size: 1 },
       }),
       [],
     ),

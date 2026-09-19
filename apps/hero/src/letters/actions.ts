@@ -1,8 +1,7 @@
 import { createActions, type Entity } from 'koota';
 import { mat4, vec3, type Mat4 } from 'math';
-import { createFlight } from '../black-hole/utils';
 import { physicsActions } from '../physics/actions';
-import { createHeldPose, readBodyPose } from '../physics/utils';
+import { readBodyPose } from '../physics/utils';
 import { Time } from '../time/traits';
 import { writeLetter } from './systems';
 import { Title, Typing, type Letter, type TitleBodies } from './traits';
@@ -47,15 +46,15 @@ export const letterActions = createActions((world) => ({
       elapsed: 0,
       replays: 0,
       departing: false,
-      from: letters.map(createHeldPose),
-      origins: letters.map(createHeldPose),
+      from: letters.map(() => ({ x: 0, y: 0, z: 0, yaw: 0 })),
+      origins: letters.map(() => ({ x: 0, y: 0, z: 0, yaw: 0 })),
       released: new Uint8Array(letters.length),
       swallowed: new Uint8Array(letters.length),
       grow: new Float64Array(letters.length).fill(1),
       landings: letters.map((_, index) => ({ index, x: 0, y: 0 })),
       landingCount: 0,
-      pose: createHeldPose(),
-      flight: createFlight(),
+      pose: { x: 0, y: 0, z: 0, yaw: 0 },
+      flight: { radius: 1, turn: 0, stretch: 1, size: 1 },
       velocity: vec3.create(),
       scale: vec3.create(),
       body: mat4.create(),

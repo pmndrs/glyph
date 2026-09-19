@@ -1,5 +1,6 @@
 import { clamp } from 'math';
 import { jitter } from '../random.ts';
+import type { Flight } from './traits';
 
 /** When a piece `fraction` (0 = nearest, 1 = furthest) of the way out leaves, on the hole's clock. */
 export function departureAt(fraction: number, index: number): number {
@@ -24,12 +25,6 @@ export function release(time: number, departure: number): number {
 
   return t * t * t;
 }
-
-export function createFlight() {
-  return { radius: 1, turn: 0, stretch: 1, size: 1 };
-}
-
-export type Flight = ReturnType<typeof createFlight>;
 
 /** A letter's accelerating arc, written into caller-owned output. Duration is positive. */
 export function flight(out: Flight, time: number, departure: number, duration: number): Flight {
