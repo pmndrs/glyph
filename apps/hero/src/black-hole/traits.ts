@@ -1,5 +1,5 @@
 import { trait } from 'koota';
-import { createHoleState } from './motion';
+import { createHoleState } from './utils';
 
 export const Collapse = trait(() => ({
   openedAt: undefined as number | undefined,

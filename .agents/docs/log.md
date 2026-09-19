@@ -2,6 +2,14 @@
 
 ## 2026-09-19
 
+- **Consolidated hero domain files** — Grouped uniforms, material builders, and shader helpers in each domain's
+  `materials.ts`. Combined compact motion helpers in `utils.ts`, nested larger lattice and typography helpers under
+  `utils/`, and kept tests beside their implementations. Combined the black-hole post renderer and the view's paper
+  and lighting components with their domain renderers. The five affected domain roots now contain 28 files instead
+  of 43. The full hero check and WebGPU automatic lift, finale/replay, robot dust, and retained typing checks pass.
+  Two 1080p replays averaged 59.91 fps with no late resources, long tasks, or intervals over 25 ms.
+  See [the hero reference](packages/hero.md).
+
 - **Composed hero from domain modules** — Moved clock and input into their own domains and viewport/readiness into
   the view domain. Renamed the effect domain to `black-hole` and moved experience choreography into application
   actions and systems. Domains own spawning and reset actions, typography publishes landings, and the robot publishes

@@ -1,4 +1,5 @@
 import { Environment, Lightformer } from '@react-three/drei/webgpu';
+import { paperMaterial } from './materials';
 
 /** Bright studio for glass on paper: a broad key overhead, two side strips for edge highlights, and a soft fill. */
 export function Lighting() {
@@ -34,5 +35,13 @@ export function Lighting() {
       <directionalLight name="glass-key" color="#ffffff" intensity={1.6} position={[4, 6, 10]} />
       <ambientLight intensity={0.35} />
     </>
+  );
+}
+
+export function Paper() {
+  return (
+    <mesh material={paperMaterial} position={[0, 0, -14]}>
+      <planeGeometry args={[160, 90]} />
+    </mesh>
   );
 }

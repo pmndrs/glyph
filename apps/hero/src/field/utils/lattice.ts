@@ -1,7 +1,7 @@
 import { clamp, euler, mat4, quat, vec3, type Mat4 } from 'math';
 import { mulberry32 } from 'math/random';
 import { ICON_CODE_POINTS, GEM_TONES, type IconName } from './content';
-import { release, swirl } from '../black-hole/departure';
+import { release, swirl } from '../../black-hole/utils';
 
 /** Scroll direction, as an angle from the x axis. Both layers share it, so the field moves as one. */
 export const PATTERN_ANGLE = -0.32;

@@ -11,9 +11,8 @@ import { Time } from './time/traits';
 import { Preparation, Viewport } from './view/traits';
 import { advanceHero } from './systems';
 import { heroReady } from './view/startup';
-import { updatePaper } from './view/Paper';
-import { PATTERN_ANGLE } from './field/lattice';
-import { uTime } from './view/uniforms';
+import { updatePaper, uTime } from './view/materials';
+import { PATTERN_ANGLE } from './field/utils/lattice';
 
 export function FrameLoop() {
   const world = useWorld();

@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:b684f2770c2c8549c86c7d670baad560ef44ab50cd00a0f04836ebc8938a59fe'
+source_digest: 'sha256:6dcd235180e335239c5c02dc8ebf7dfe5eced5184d732bae85dc66b2616d8ab0'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -24,7 +24,7 @@ sources:
     resource: ../../../apps/hero/scripts/refraction.probe.ts
     title: WebGPU stained-glass verification
   - id: glass-shadows
-    resource: ../../../apps/hero/src/typography/shadows.tsx
+    resource: ../../../apps/hero/src/typography/utils/shadows.tsx
     title: Light-space glass projection
   - id: glass-shadows-check
     resource: ../../../apps/hero/scripts/glass-shadows.probe.ts
@@ -48,25 +48,25 @@ sources:
     resource: ../../../apps/hero/src/physics/systems.ts
     title: Fixed stepping and entity lifecycle cleanup
   - id: outline
-    resource: ../../../apps/hero/src/typography/outline.ts
+    resource: ../../../apps/hero/src/typography/utils/outline.ts
     title: Letter outlines cut into invisible colliders
   - id: robot-pack
     resource: ../../../apps/hero/scripts/robot.mts
     title: Robot glTF packing and staleness check
   - id: hole
-    resource: ../../../apps/hero/src/black-hole/motion.ts
+    resource: ../../../apps/hero/src/black-hole/utils.ts
     title: Pure black-hole beat timeline
   - id: hole-warp
-    resource: ../../../apps/hero/src/black-hole/warp.ts
+    resource: ../../../apps/hero/src/black-hole/materials.ts
     title: Outline-exact glyph warp around the hole
   - id: screen-ink
-    resource: ../../../apps/hero/src/robot/material.ts
+    resource: ../../../apps/hero/src/robot/materials.ts
     title: Pixels lit on the robot's face screen
   - id: startup
     resource: ../../../apps/hero/src/view/startup.tsx
     title: Scene preparation and GPU completion gate
   - id: retained-line
-    resource: ../../../apps/hero/src/view/retained-line.ts
+    resource: ../../../apps/hero/src/view/utils.ts
     title: Prepared glyph records for typing and replay
   - id: performance-check
     resource: ../../../apps/hero/scripts/performance.probe.ts
@@ -75,16 +75,16 @@ sources:
     resource: ../../../apps/hero/scripts/retained-lines.probe.ts
     title: Retained typing compared with independently shaped prefixes
   - id: lattice-simulation
-    resource: ../../../apps/hero/src/field/lattice.ts
+    resource: ../../../apps/hero/src/field/utils/lattice.ts
     title: Fixed-capacity lattice simulation and direct glyph transforms
   - id: robot-motion
-    resource: ../../../apps/hero/src/robot/motion.ts
+    resource: ../../../apps/hero/src/robot/utils.ts
     title: Caller-owned robot path and pose output
   - id: dust-simulation
-    resource: ../../../apps/hero/src/robot/dust.ts
+    resource: ../../../apps/hero/src/robot/utils.ts
     title: Fixed particle storage and distance-based emission
   - id: lattice-check
-    resource: ../../../apps/hero/src/field/lattice.test.ts
+    resource: ../../../apps/hero/src/field/utils/lattice.test.ts
     title: Matrix equivalence, bounded simulation, and edge-on morph checks
   - id: physics-check
     resource: ../../../apps/hero/src/physics/systems.test.ts
@@ -152,9 +152,13 @@ field and title systems and the feature-line view. The physics solver depends on
 `main.tsx` mounts React once and provides the world to the canvas. `hero.tsx` composes the visual modules and supplies their preparation requirements to the view gate.
 `frameloop.tsx` samples renderer inputs, delegates DOM input to its domain, and runs the headless application tick
 at 60 Hz. `random.ts` contains the deterministic jitter function shared by independent effects. These seven files
-are application-wide. Domain helpers stay beside their owners, while shared font loading, typing views, and shader
-time belong to `view`. Numerical kernels and the large shadow pass remain separate where they have independent
-responsibilities. Domain tests live beside their implementations.
+are application-wide. Domain roots expose traits, actions, systems, renderers, and materials where needed.
+`materials.ts` groups each domain's uniforms with the shader graphs and material builders that use them.
+Black-hole timing and departure helpers share `utils.ts`, as do robot motion and dust simulation. The larger
+lattice, title-body, outline, and shadow implementations live in their owning domains' nested `utils/` directories.
+The view domain keeps preparation in `startup.tsx`, font loading in `hooks.ts`, lighting and paper in `renderer.tsx`,
+and retained typing helpers in `utils.ts`. Simulation helpers do not import React or shader construction.
+Domain tests remain beside their implementations.
 
 Koota AoS traits retain math arrays and pools, and high-frequency values never pass through React state. Query
 mutations use `updateEach`, while composition reads published landings and departures with `readEach`. Preparation
@@ -260,13 +264,13 @@ its edges. After a brief empty hold, sixteen pastel Unicode stars (★ ☆ ✦ �
 light sparks. The stars shrink like embers, with enhanced bloom and a 1.25-second fade applied after composition so their halos dim along with their cores; the output is exactly black by 4.6 seconds and stays there until Space replays. `?post=0` remains a plain
 scene capture control and omits the paper warp, bloom, composed ember fade, and screen-space light sparks.
 
-The ember material in `src/black-hole/embers.ts` keeps the exact Slug star silhouettes and shades each glyph's
+The ember material in `src/black-hole/materials.ts` keeps the exact Slug star silhouettes and shades each glyph's
 own quad with a creamy hot core, an amber rim, moving fire noise, and gentle asynchronous flicker. As the stars
 shrink, the surface cools toward orange; the composed stars and bloom still fade together. The WebGPU capture
 compares this surface against a flat pastel control.
 
 The six star shapes are baked from the vendored OFL Noto Sans Symbols 2 face, with the symbols shared between the
-bake and the burst in `src/black-hole/symbols.ts`. `hero:star-font` restores the pinned source and license, and
+bake and the burst in `src/black-hole/utils.ts`. `hero:star-font` restores the pinned source and license, and
 `hero:bake -- --only=stars` regenerates the tiny Slug subset. Both accept `--check`.
 
 The timeline and feature-glyph paths are pure functions. The WebGPU finale check covers collapse, completion,
@@ -303,15 +307,15 @@ raw render intervals, CPU submission work, asynchronous GPU queue completion, an
 adapter, viewport, and drawing-buffer dimensions. The default 1280×720 viewport with `dpr=1.5` draws at 1920×1080;
 explicit DPR choices are 1, 1.5, 2, and 3.
 
-Two complete 1920×1080 replays on Apple Metal with Chromium 149 averaged 59.88 fps across 1,698 frames after
-3.09 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long tasks were observed.
-Render intervals were 17.9 ms at p95 and 26.0 ms worst, with three intervals over 25 ms. CPU submission time was 4.0 ms
-at p95 and browser GPU queue completion was 9.1 ms at p95. This verifies resource preparation and near-60 fps
+Two complete 1920×1080 replays on Apple Metal with Chromium 149 averaged 59.91 fps across 1,701 frames after
+3.08 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long tasks were observed.
+Render intervals were 17.6 ms at p95 and 25.0 ms worst, with no intervals over 25 ms. CPU submission time was 4.0 ms
+at p95 and browser GPU queue completion was 9.0 ms at p95. This verifies resource preparation and near-60 fps
 playback on this host. It does not measure delivery through a screen recorder or guarantee every frame meets budget.
 
 The full hero package check passes, including six numerical tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
-The production entry bundle is 598.62 kB gzip, down from 609.11 kB before removing the alternate scene.
+The production entry bundle is 598.60 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/typography/materials.ts`: red G, orange l,

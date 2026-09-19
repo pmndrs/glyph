@@ -1,10 +1,9 @@
 import { mat4, vec3, lerp, type Mat4 } from 'math';
 import type { World } from 'koota';
 import { easing } from 'math/time';
-import { Body, createHeldPose, readBodyPose } from '../physics/traits';
-import { physicsActions } from '../physics/actions';
-import { createFlight, departureAt, flight } from '../black-hole/departure';
-import type { HoleState } from '../black-hole/motion';
+import { Body, createHeldPose, readBodyPose } from '../../physics/traits';
+import { physicsActions } from '../../physics/actions';
+import { createFlight, departureAt, flight, type HoleState } from '../../black-hole/utils';
 import type { Solid } from './outline';
 
 const LIFT_SECONDS = 0.45;

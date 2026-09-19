@@ -6,7 +6,7 @@ import { robotActions } from '../robot/actions';
 import { Time } from '../time/traits';
 import { Robot } from '../robot/traits';
 import { moveRobotBodies } from '../robot/systems';
-import { createTitleBodies, disposeTitle } from '../typography/bodies';
+import { createTitleBodies, disposeTitle } from '../typography/utils/bodies';
 import { Body, Physics } from './traits';
 import { physicsActions } from './actions';
 import { stepPhysics, subscribePhysics } from './systems';

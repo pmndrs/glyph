@@ -1,9 +1,9 @@
 import type { World } from 'koota';
 import { Time } from '../time/traits';
-import type { HoleState } from '../black-hole/motion';
-import { FEATURE_LINE } from './content';
+import type { HoleState } from '../black-hole/utils';
+import { FEATURE_LINE } from './utils/content';
 import { Title, Typing } from './traits';
-import { prepareTitle, titleReach, updateTitle } from './bodies';
+import { prepareTitle, titleReach, updateTitle } from './utils/bodies';
 
 export function moveTitle(world: World, hole: HoleState): void {
   const time = world.get(Time)!;

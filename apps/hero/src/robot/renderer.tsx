@@ -1,52 +1,33 @@
-import { COUNT, BASE_Z, RISE } from './dust';
+import { COUNT, LOOK_UP_AT, LOOK_DOWN_AT } from './utils';
 import { jitter } from '../random';
-import { ICON_CODE_POINTS } from '../field/content';
+import { ICON_CODE_POINTS } from '../field/utils/content';
 import { Text, TextGroup } from '@pmndrs/glyph/react';
-import { defineTextMaterial, type Text as ThreeText } from '@pmndrs/glyph/three';
+import type { Text as ThreeText } from '@pmndrs/glyph/three';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { useGLTF } from '@react-three/drei/webgpu';
 import { useFrame } from '@react-three/fiber/webgpu';
 import { useEffect, useMemo, useRef } from 'react';
 import {
-  exp,
-  float,
-  hash,
-  mix,
-  step as threshold,
-  texture,
-  uniform,
-  uv,
-  positionWorld,
-  smoothstep,
-  vec2,
-  vec3,
-} from 'three/tsl';
-import {
-  DoubleSide,
   AnimationMixer,
   type Bone,
   type Group,
   Matrix4,
   type Mesh,
-  MeshBasicNodeMaterial,
   type MeshStandardMaterial,
-  MeshStandardNodeMaterial,
   type Object3D,
   Quaternion,
   Vector3,
 } from 'three/webgpu';
-
-import robotUrl from '../../assets/robot.glb?url';
-import type { SlugFont } from '../view/fonts';
-import { screenInk } from './material';
-import { LOOK_UP_AT, LOOK_DOWN_AT } from './motion';
+import type { SlugFont } from '../view/hooks';
+import { screenInk, uEyes, uTear, uSeed, glitchingScreen, shadowMaterial, dust } from './materials';
 import { mat4, quat, vec3 as vector3 } from 'math';
 import { Robot as RobotTrait } from './traits';
 import { Time } from '../time/traits';
 import { useWorld, useQuery } from 'koota/react';
 import type { Entity } from 'koota';
 import { heroReady, textPrepared, usePreparation } from '../view/startup';
-import { type RetainedLine, createRetainedLine, disposeLine, showLine } from '../view/retained-line';
+import { type RetainedLine, createRetainedLine, disposeLine, showLine } from '../view/utils';
+import robotUrl from '../../assets/robot.glb?url';
 
 const SCALE = 3 / 2.85;
 /** Display coordinates in the head joint. Text up follows +x, text right follows +z, and its normal follows +y. */
@@ -84,44 +65,6 @@ function eyesAt(out: { shown: number; tear: number }, now: number): void {
     out.tear = 0;
   }
 }
-
-/** Driven each frame: the eyes shown or not, the tear's strength, and a seed that reshuffles the bands. */
-const uEyes = uniform(1);
-const uTear = uniform(0);
-const uSeed = uniform(0);
-
-/** Glitch the eyes out in horizontal bands while the face text appears, then restore them as it clears. */
-function glitchingScreen(screen: MeshStandardMaterial): MeshStandardNodeMaterial {
-  const material = new MeshStandardNodeMaterial({
-    map: screen.map,
-    roughnessMap: screen.roughnessMap,
-    metalnessMap: screen.metalnessMap,
-    roughness: screen.roughness,
-    metalness: screen.metalness,
-    emissive: screen.emissive,
-    emissiveIntensity: screen.emissiveIntensity,
-    envMapIntensity: screen.envMapIntensity,
-    side: screen.side,
-  });
-
-  if (screen.map === null) return material;
-
-  const at = uv();
-  const band = hash(at.y.mul(36).floor().add(uSeed));
-  const torn = vec2(at.x.add(band.sub(0.5).mul(uTear).mul(0.06)), at.y);
-  const picture = texture(screen.map, torn).rgb;
-  // The eyes are the only thing on the panel brighter than the panel: painting them its colour puts them out.
-  const lit = threshold(0.06, picture.r.max(picture.g).max(picture.b));
-  const dark = mix(picture, vec3(0.03), lit);
-  const flipped = threshold(band, uTear);
-  const eyes = mix(uEyes, float(1).sub(uEyes), flipped);
-  material.colorNode = mix(dark, picture, eyes);
-
-  return material;
-}
-
-const shadowMaterial = new MeshBasicNodeMaterial({ color: '#000000', depthWrite: false, transparent: true });
-shadowMaterial.opacityNode = exp(uv().sub(0.5).length().mul(3.2).pow(2).negate()).mul(0.32);
 
 useGLTF.preload(robotUrl);
 
@@ -333,23 +276,6 @@ const SLOTS = Array.from({ length: COUNT }, (_, index) => ({
   index,
   symbol: SYMBOLS[Math.floor(jitter(index + 17) * SYMBOLS.length)]!,
 }));
-
-// Height encodes lifetime, so all particles share one material and fade without re-shaping their text.
-const dust = defineTextMaterial((context) => {
-  if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
-
-  const material = new MeshBasicNodeMaterial({ side: DoubleSide, transparent: true, depthWrite: false });
-  material.name = 'robot-glyph-dust';
-  material.positionNode = context.position;
-  material.colorNode = context.shader.color;
-  material.opacityNode = context.shader.coverage.mul(
-    smoothstep(BASE_Z + RISE * 0.15, BASE_Z + RISE, positionWorld.z)
-      .oneMinus()
-      .mul(0.65),
-  );
-
-  return material;
-});
 
 /** A bounded trail in world space, fed by distance travelled rather than time spent on screen. */
 function RobotDust({ entity, font }: { readonly entity: Entity; readonly font: SlugFont }) {

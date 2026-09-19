@@ -18,7 +18,7 @@ import {
   WebGPURenderer,
 } from 'three/webgpu';
 
-import type { TitleBodies } from '../src/typography/bodies';
+import type { TitleBodies } from '../src/typography/utils/bodies';
 const { advanceHero } = (await import(
   new URL('/src/systems.ts', location.origin).href
 )) as typeof import('../src/systems');

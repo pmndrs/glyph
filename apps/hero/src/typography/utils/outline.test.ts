@@ -6,7 +6,7 @@ import { solidOf, type Solid } from './outline';
 
 it('builds every title collider from its shaped glyph and keeps the p counter open', async () => {
   await glyph.init();
-  const bytes = await readFile(new URL('../../assets/geist-black.font.glb', import.meta.url));
+  const bytes = await readFile(new URL('../../../assets/geist-black.font.glb', import.meta.url));
   const face = glyph.fontFace(new Blob([bytes]), { format: slug });
   const handle = glyph.handle('hero-outline-test', ThreeConfig);
 

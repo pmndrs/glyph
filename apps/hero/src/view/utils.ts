@@ -1,4 +1,4 @@
-import { type Glyphs, type Text } from '@pmndrs/glyph/three';
+import type { Glyphs, Text } from '@pmndrs/glyph/three';
 import { mat4, vec3 } from 'math';
 import { Matrix4 } from 'three/webgpu';
 

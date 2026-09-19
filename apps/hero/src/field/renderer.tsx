@@ -3,10 +3,10 @@ import { defineTextMaterial, type Glyphs, type Text as ThreeText } from '@pmndrs
 import { useFrame } from '@react-three/fiber/webgpu';
 import { useEffect, useMemo, useRef } from 'react';
 import { DoubleSide, MeshBasicNodeMaterial, Matrix4, type Group } from 'three/webgpu';
-import type { SlugFont } from '../view/fonts';
-import { holeWarp } from '../black-hole/warp';
+import type { SlugFont } from '../view/hooks';
+import { holeWarp } from '../black-hole/materials';
 import { usePreparation } from '../view/startup';
-import { PATTERN_ANGLE, GLYPHS, cellMatrix } from './lattice';
+import { PATTERN_ANGLE, GLYPHS, cellMatrix } from './utils/lattice';
 import { Field } from './traits';
 import { Time } from '../time/traits';
 import { useQuery, useWorld } from 'koota/react';

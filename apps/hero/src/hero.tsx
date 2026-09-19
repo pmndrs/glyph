@@ -3,15 +3,12 @@ import { useWorld } from 'koota/react';
 import { Collapse } from './black-hole/traits';
 import { useThree } from '@react-three/fiber/webgpu';
 import { useEffect } from 'react';
-
-import { useFonts } from './view/fonts';
-import { Post } from './black-hole/post';
-import { BlackHole, GlyphBurst } from './black-hole/renderer';
-import { GlassShadows } from './typography/shadows';
+import { useFonts } from './view/hooks';
+import { Post, BlackHole, GlyphBurst } from './black-hole/renderer';
+import { GlassShadows } from './typography/utils/shadows';
 import { GlassTitle, FeatureLine } from './typography/renderer';
 import { FieldRenderer } from './field/renderer';
-import { Lighting } from './view/Lighting';
-import { Paper } from './view/Paper';
+import { Lighting, Paper } from './view/renderer';
 import { RobotRenderer } from './robot/renderer';
 import { PrepareHero } from './view/startup';
 

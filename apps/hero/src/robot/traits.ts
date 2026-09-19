@@ -1,6 +1,5 @@
 import { trait } from 'koota';
-import { createRobotMotion } from './motion';
-import { createDust } from './dust';
+import { createRobotMotion, createDust } from './utils';
 import { createHeldPose } from '../physics/traits';
 
 /** Along the heading, across it, and up. Shared by the visual rig and its prepared collider. */

@@ -1,83 +1,43 @@
 import { Text, TextGroup } from '@pmndrs/glyph/react';
-import { emberMaterial } from './embers';
-import { STAR_SYMBOLS } from './symbols';
-import type { SlugFont } from '../view/fonts';
-import { jitter } from '../random';
-import { useFrame, useThree } from '@react-three/fiber/webgpu';
-import { useMemo, useRef } from 'react';
-import { atan, color, float, mix, smoothstep, uniform, uv, vec2 } from 'three/tsl';
-import { AdditiveBlending, type Group, MeshBasicNodeMaterial } from 'three/webgpu';
-
-import { BURST_SECONDS, HOLE_CENTER, PAPER_FROM, PAPER_UNTIL, type HoleState } from './motion';
 import {
-  uHoleCenter,
-  uHoleHorizon,
-  uHoleBend,
+  emberMaterial,
   uHoleBlackout,
   uHoleCollapse,
   uHoleBurst,
   uHoleBloom,
-  uHoleSpin,
   uHoleShake,
   uHoleCamera,
-} from './uniforms';
+  buildMaterials,
+  HORIZON_ON_PLANE,
+  uPresence,
+  uHeat,
+  syncHoleUniforms,
+} from './materials';
+import { STAR_SYMBOLS, BURST_SECONDS, HOLE_CENTER } from './utils';
+import type { SlugFont } from '../view/hooks';
+import { jitter } from '../random';
+import { useFrame, useThree, useRenderPipeline } from '@react-three/fiber/webgpu';
+import { useMemo, useRef } from 'react';
+import {
+  color,
+  float,
+  mix,
+  smoothstep,
+  uv,
+  vec2,
+  convertToTexture,
+  cos,
+  pass,
+  screenSize,
+  sin,
+  vec3,
+  vec4,
+} from 'three/tsl';
+import type { Group, Node } from 'three/webgpu';
 import { useWorld } from 'koota/react';
 import { Collapse } from './traits';
-import { clamp } from 'math';
-import { easing } from 'math/time';
 import { heroReady, textPrepared, usePreparation } from '../view/startup';
-
-/** The horizon's radius on the hole's own plane, as a fraction of the plane's half size. */
-const HORIZON_ON_PLANE = 0.42;
-
-/** The hole's own drawing, driven from the beat once a frame. */
-const uPresence = uniform(0);
-const uHeat = uniform(0);
-
-function buildMaterials() {
-  const point = uv().sub(0.5).mul(2);
-  const radius = point.length();
-  // The accretion disk: a squashed ring, swirling with the spin, hotter as the pull builds.
-  const diskPoint = point.mul(vec2(1, 3.2));
-  const diskRadius = diskPoint.length();
-  const angle = atan(diskPoint.y, diskPoint.x);
-  const swirl = angle.mul(3).sub(diskRadius.mul(18)).add(uHoleSpin).sin().mul(0.24).add(0.76);
-  const disk = diskRadius.sub(0.62).pow(2).mul(-60).exp().mul(swirl);
-  const photonRing = radius
-    .sub(HORIZON_ON_PLANE + 0.02)
-    .pow(2)
-    .mul(-3400)
-    .exp();
-  const halo = radius
-    .sub(HORIZON_ON_PLANE + 0.03)
-    .max(0)
-    .mul(-7)
-    .exp()
-    .mul(0.12);
-  const glow = uHeat.mul(1.6).add(1);
-
-  const core = new MeshBasicNodeMaterial({ color: '#000000', transparent: true, depthWrite: false });
-  core.opacityNode = float(1)
-    .sub(smoothstep(HORIZON_ON_PLANE - 0.02, HORIZON_ON_PLANE, radius))
-    .mul(uPresence);
-  core.toneMapped = false;
-
-  const light = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending });
-  light.colorNode = mix(color('#ffa36a'), color('#b6adff'), point.y.mul(2).add(0.5).clamp())
-    .mul(disk.mul(0.8).add(halo))
-    .mul(glow)
-    .add(color('#fff5dc').mul(photonRing).mul(glow).mul(1.3));
-  light.opacityNode = smoothstep(HORIZON_ON_PLANE, HORIZON_ON_PLANE + 0.04, radius)
-    .mul(float(1).sub(smoothstep(0.7, 1, radius)))
-    .mul(uPresence);
-  light.toneMapped = false;
-
-  const black = new MeshBasicNodeMaterial({ color: '#000000', transparent: true, depthTest: false, depthWrite: false });
-  black.opacityNode = uHoleBlackout;
-  black.toneMapped = false;
-
-  return { core, light, black };
-}
+import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 
 /** After the robot leaves, the hole pulls in the scene and fades to black. Space replays the sequence. */
 export function BlackHole() {
@@ -121,21 +81,6 @@ export function BlackHole() {
       </mesh>
     </>
   );
-}
-
-/** GPU publication is a view concern. Simulation only changes the sequence trait. */
-export function syncHoleUniforms(current: HoleState): void {
-  uHoleCenter.value.set(current.x, current.y);
-  uHoleHorizon.value = Math.max(current.horizon, 0.001);
-  uHoleBend.value = current.pull;
-  uHoleBlackout.value = current.blackout;
-  uHoleCollapse.value = easing.cubicIn(clamp((current.time - PAPER_FROM) / (PAPER_UNTIL - PAPER_FROM), 0, 1));
-  uHoleBurst.value = current.sincePop ?? -1;
-  uHoleBloom.value = current.sincePop === undefined ? 0.18 : 0.75;
-  const t = Math.max(0, current.time);
-  uHoleSpin.value = t * 1.2 + 3 * t ** 3;
-  const shake = current.beat === 'open' ? 0.003 * current.pull * (1 - uHoleCollapse.value) : 0;
-  uHoleShake.value.set(Math.sin(t * 71) * shake, Math.cos(t * 93) * shake);
 }
 
 const COLORS = ['#fff0ac', '#ffd0dc', '#cbbcff', '#b9e6ff'];
@@ -209,4 +154,66 @@ export function GlyphBurst({ font }: { readonly font: SlugFont }) {
       </TextGroup>
     </group>
   );
+}
+
+/** The rendered sheet itself corkscrews into the hole. The explosion is composed afterward, over true black. */
+export function Post() {
+  useRenderPipeline(({ renderPipeline, scene, camera }) => {
+    const scenePass = pass(scene, camera, { samples: 4 });
+    const beauty = scenePass.getTextureNode('output');
+    const lit = convertToTexture(beauty.add(bloom(beauty, uHoleBloom, 0.55, 1)));
+    const point = uv().sub(0.5).add(uHoleShake);
+    const aspect = vec2(screenSize.x.div(screenSize.y), 1);
+    const radius = point.mul(aspect).length();
+    const collapse = uHoleCollapse;
+    const scale = float(1).sub(collapse).max(0.002);
+    // Inverse mapping keeps every pixel attached to the paper as its edges curl away from the viewport.
+    const turn = collapse.mul(5).mul(float(1).sub(radius).max(0));
+    const source = vec2(
+      point.x.mul(cos(turn)).sub(point.y.mul(sin(turn))),
+      point.x.mul(sin(turn)).add(point.y.mul(cos(turn))),
+    )
+      .div(scale)
+      .add(0.5);
+    const edge = source.sub(0.5).abs().max(source.sub(0.5).abs().yx).x;
+    const paper = float(1)
+      .sub(smoothstep(0.48, 0.5, edge))
+      .mul(float(1).sub(smoothstep(0.995, 1, collapse)))
+      .mul(float(1).sub(uHoleBlackout));
+    const warped = lit.sample(source.clamp()).rgb;
+    const sheet = mix(lit.rgb, warped.mul(paper), smoothstep(0, 0.025, collapse));
+    // After the pop the scene contains only the emitted glyphs over the opaque black sheet.
+    const age = uHoleBurst.max(0);
+    // Dimming after bloom keeps the halo-to-core ratio intact all the way down to black.
+    const emberFade = float(1)
+      .sub(smoothstep(0.08, BURST_SECONDS, age))
+      .pow(1.5);
+    const sceneColor = mix(sheet, lit.rgb.mul(emberFade), uHoleBlackout);
+    const alive = uHoleBurst.greaterThanEqual(0).select(float(1).sub(smoothstep(0.03, 0.24, age)), 0);
+    const expansion = float(1).sub(age.mul(-14).exp());
+    const sparkPoint = point.mul(aspect);
+    let sparks: Node<'vec3'> = vec3(0);
+
+    for (let index = 0; index < 7; index += 1) {
+      const angle = index * 2.39996;
+      const reach = 0.025 + (index % 3) * 0.021;
+      const delta = sparkPoint.sub(vec2(Math.cos(angle), Math.sin(angle)).mul(expansion.mul(reach))).abs();
+      const glint = delta.x
+        .mul(-850)
+        .sub(delta.y.mul(180))
+        .exp()
+        .add(delta.x.mul(-180).sub(delta.y.mul(850)).exp());
+      sparks = sparks.add(
+        color(index % 2 === 0 ? '#e1c99d' : '#b7c4d9')
+          .mul(glint)
+          .mul(0.65),
+      );
+    }
+
+    const ember = radius.mul(-95).exp().mul(age.mul(-24).exp());
+    const finished = sceneColor.add(sparks.add(color('#dfccb0').mul(ember)).mul(alive));
+    renderPipeline.outputNode = vec4(finished.mul(uHoleBurst.greaterThanEqual(BURST_SECONDS).select(0, 1)), 1);
+  });
+
+  return null;
 }

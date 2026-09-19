@@ -1,7 +1,7 @@
 import { createActions, type Entity } from 'koota';
 import type { Mat4 } from 'math';
 import { Time } from '../time/traits';
-import { createTitleBodies, disposeTitle, replayTitle, type Letter } from './bodies';
+import { createTitleBodies, disposeTitle, replayTitle, type Letter } from './utils/bodies';
 import { Title, Typing } from './traits';
 
 export const typographyActions = createActions((world) => ({

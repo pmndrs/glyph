@@ -1,6 +1,5 @@
-import type { HoleState } from '../black-hole/motion';
-import { createFlight, departureAt, flight } from '../black-hole/departure';
-import { type RetainedLine, createRetainedLine, disposeLine, showLine, resetLine } from '../view/retained-line';
+import { type HoleState, createFlight, departureAt, flight } from '../black-hole/utils';
+import { type RetainedLine, createRetainedLine, disposeLine, showLine, resetLine } from '../view/utils';
 import { mat4, vec3 } from 'math';
 import { useWorld } from 'koota/react';
 import { Title, Typing } from './traits';
@@ -10,13 +9,12 @@ import type { Glyphs, Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Box3, Vector3, Matrix4 } from 'three/webgpu';
-
-import { FEATURE_LINE } from './content';
+import { FEATURE_LINE } from './utils/content';
 import { heroReady, usePreparation } from '../view/startup';
-import type { SlugFont, MsdfFont } from '../view/fonts';
+import type { SlugFont, MsdfFont } from '../view/hooks';
 import { stainedGlassLetters, titleOrigin } from './materials';
-import { solidOf } from './outline';
-import { type Letter, type TitleBodies } from './bodies';
+import { solidOf } from './utils/outline';
+import type { Letter, TitleBodies } from './utils/bodies';
 
 /**
  * How deep each letter's invisible solid reaches: enough that the robot meets it squarely, never drives over it.

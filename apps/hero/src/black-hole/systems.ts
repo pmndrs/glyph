@@ -1,6 +1,6 @@
 import type { World } from 'koota';
 import { Time } from '../time/traits';
-import { collapseAt } from './motion';
+import { collapseAt } from './utils';
 import { Collapse } from './traits';
 
 export function advanceCollapse(world: World): void {

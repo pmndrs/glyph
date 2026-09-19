@@ -1,6 +1,6 @@
 import { trait } from 'koota';
 import { vec3 } from 'math';
-import { buildLayout, createLattice, type IconLayoutOptions } from './lattice';
+import { buildLayout, createLattice, type IconLayoutOptions } from './utils/lattice';
 
 /** Pitch and speed scale together with depth, preserving the two sheets' interleave. */
 export const LAYERS: readonly IconLayoutOptions[] = [

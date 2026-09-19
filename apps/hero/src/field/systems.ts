@@ -3,10 +3,9 @@ import { mat4, vec3 } from 'math';
 import { Time } from '../time/traits';
 import { Pointer } from '../input/traits';
 import { Viewport } from '../view/traits';
-import { departureAt } from '../black-hole/departure';
-import { HORIZON, type HoleState } from '../black-hole/motion';
+import { departureAt, HORIZON, type HoleState } from '../black-hole/utils';
 import { Field, Impacts } from './traits';
-import { PATTERN_ANGLE, FIELD_OF_VIEW, simulate, advanceMorph, type LatticeState, type Layout } from './lattice';
+import { PATTERN_ANGLE, FIELD_OF_VIEW, simulate, advanceMorph, type LatticeState, type Layout } from './utils/lattice';
 
 export function moveFields(world: World, collapse: HoleState): void {
   const time = world.get(Time)!;

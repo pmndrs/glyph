@@ -2,8 +2,7 @@ import type { World } from 'koota';
 import { Time } from '../time/traits';
 import { Viewport } from '../view/traits';
 import { Robot } from './traits';
-import { layPath, poseAt, RUN_SECONDS, LEAVE_AT, BODY_REACH } from './motion';
-import { stepDust } from './dust';
+import { layPath, poseAt, RUN_SECONDS, LEAVE_AT, BODY_REACH, stepDust } from './utils';
 import { Body } from '../physics/traits';
 import { physicsActions } from '../physics/actions';
 

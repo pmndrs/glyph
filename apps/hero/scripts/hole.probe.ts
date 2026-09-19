@@ -19,25 +19,19 @@ import {
   WebGPURenderer,
 } from 'three/webgpu';
 
-import type { TitleBodies } from '../src/typography/bodies';
-const { COLLAPSE_SECONDS, POP_AT } = (await import(
-  new URL('/src/black-hole/motion.ts', location.origin).href
-)) as typeof import('../src/black-hole/motion');
-const { uHoleCollapse, uHoleBloom } = (await import(
-  new URL('/src/black-hole/uniforms.ts', location.origin).href
-)) as typeof import('../src/black-hole/uniforms');
+import type { TitleBodies } from '../src/typography/utils/bodies';
+const { COLLAPSE_SECONDS, POP_AT, STAR_SYMBOLS } = (await import(
+  new URL('/src/black-hole/utils.ts', location.origin).href
+)) as typeof import('../src/black-hole/utils');
+const { uHoleCollapse, uHoleBloom, uEmberFire } = (await import(
+  new URL('/src/black-hole/materials.ts', location.origin).href
+)) as typeof import('../src/black-hole/materials');
 const { blackHoleActions } = (await import(
   new URL('/src/black-hole/actions.ts', location.origin).href
 )) as typeof import('../src/black-hole/actions');
-const { uEmberFire } = (await import(
-  new URL('/src/black-hole/embers.ts', location.origin).href
-)) as typeof import('../src/black-hole/embers');
-const { STAR_SYMBOLS } = (await import(
-  new URL('/src/black-hole/symbols.ts', location.origin).href
-)) as typeof import('../src/black-hole/symbols');
 const handles = globalThis as {
   heroWorld?: import('koota').World;
-  heroHole?: { state(): import('../src/black-hole/motion').HoleState };
+  heroHole?: { state(): import('../src/black-hole/utils').HoleState };
   heroTitle?: TitleBodies;
   heroRobot?: { hold(at: number): void };
 };
