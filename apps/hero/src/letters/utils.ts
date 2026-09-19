@@ -1,6 +1,6 @@
 import { getSlugGlyphCurves } from '@pmndrs/glyph';
 import { ShapePath, ShapeUtils, type Vector2 } from 'three/webgpu';
-import type { SlugFont } from '../view/hooks';
+import type { SlugFont } from '../hero/fonts';
 
 /** Invisible convex prisms extruded from a glyph outline and centered on its ink box. */
 export interface Solid {

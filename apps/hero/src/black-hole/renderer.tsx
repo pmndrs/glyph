@@ -2,7 +2,7 @@ import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useWorld } from 'koota/react';
 import { useMemo, useRef } from 'react';
 import type { Group } from 'three/webgpu';
-import { heroReady } from '../view/startup';
+import { heroReady } from '../hero/startup';
 import { buildMaterials, HORIZON_ON_PLANE, uPresence, uHeat, uHoleCamera, syncHoleUniforms } from './materials';
 import { Collapse } from './traits';
 import { HOLE_CENTER } from './content';

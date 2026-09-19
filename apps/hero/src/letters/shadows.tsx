@@ -52,8 +52,8 @@ import {
   Vector3,
   type WebGPURenderer,
 } from 'three/webgpu';
-import { heroReady } from '../view/startup';
-import { uTime } from '../view/materials';
+import { heroReady } from '../hero/startup';
+import { uTime } from '../hero/materials';
 import { useWorld } from 'koota/react';
 import { Title } from './traits';
 

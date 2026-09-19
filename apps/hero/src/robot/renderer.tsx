@@ -18,14 +18,14 @@ import {
   Quaternion,
   Vector3,
 } from 'three/webgpu';
-import type { SlugFont } from '../view/hooks';
+import type { SlugFont } from '../hero/fonts';
 import { screenInk, uEyes, uTear, uSeed, glitchingScreen, shadowMaterial, dust } from './materials';
 import { mat4, quat, vec3 as vector3 } from 'math';
 import { Robot as RobotTrait } from './traits';
 import { Time } from '../time/traits';
 import { useWorld, useQuery } from 'koota/react';
 import type { Entity } from 'koota';
-import { heroReady, textPrepared, usePreparation } from '../view/startup';
+import { heroReady, textPrepared, usePreparation } from '../hero/startup';
 import { type RetainedLine, createRetainedLine, disposeLine, showLine } from '../letters/text';
 import robotUrl from '../../assets/robot.glb?url';
 

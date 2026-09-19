@@ -1,6 +1,6 @@
 import type { World } from 'koota';
 import { Time } from '../time/traits';
-import { Viewport } from '../view/traits';
+import { Viewport } from '../hero/traits';
 import { Robot, type Path, type Pose } from './traits';
 import { COUNT, BASE_Z, RISE, ARRIVE_AT, LOOK_UP_AT, LOOK_DOWN_AT, RUN_SECONDS, LEAVE_AT, BODY_REACH } from './content';
 import { clamp, lerp, vec2, vec3 } from 'math';

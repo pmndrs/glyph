@@ -4,8 +4,8 @@ import { useWorld } from 'koota/react';
 import { useRef } from 'react';
 import type { Group } from 'three/webgpu';
 import { jitter } from '../random';
-import type { SlugFont } from '../view/hooks';
-import { heroReady, textPrepared, usePreparation } from '../view/startup';
+import type { SlugFont } from '../hero/fonts';
+import { heroReady, textPrepared, usePreparation } from '../hero/startup';
 import { emberMaterial, uEmberAge, uEmberBloom } from './materials';
 import { StarEmbers, STAR_SYMBOLS, EMBER_SECONDS } from './traits';
 

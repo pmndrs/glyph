@@ -4,7 +4,7 @@ import { clamp, mat4, vec3 } from 'math';
 import { mulberry32 } from 'math/random';
 import { Time } from '../time/traits';
 import { Pointer } from '../input/traits';
-import { Viewport } from '../view/traits';
+import { Viewport } from '../hero/traits';
 import { departureAt, release, swirl } from '../black-hole/utils';
 import { HORIZON } from '../black-hole/content';
 import { IconField, Impacts, type LatticeState, type Layout, type IconLayoutOptions } from './traits';

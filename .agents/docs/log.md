@@ -2,6 +2,14 @@
 
 ## 2026-09-19
 
+- **Separated hero composition from the timeline runner** — The `hero` domain owns its scene, post-processing,
+  frame order, actor lifecycle, and former view files for loading, fonts, lighting, paper, and viewport state.
+  Hero actions declare the opening and event-driven beats with `at`, `on`, `after`, and command callbacks.
+  Sequence traits, actions, and systems own only cue storage, deadlines, triggering, cancellation, and dispatch.
+  The full hero check passes with eight tests, as do WebGPU opening and finale/replay checks. Two complete
+  720p replays average 60.00 fps with no late resources or long tasks and one 28.9 ms frame interval.
+  See [the hero reference](packages/hero.md).
+
 - **Standardized hero action syntax** — Root and domain action sets use arrow-function properties, with their
   command bodies and signatures unchanged. The full hero check passes, including all six tests and the build.
 
