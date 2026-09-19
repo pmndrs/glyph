@@ -168,7 +168,7 @@ const FEATURE_LAYOUT_WIDTH = 60;
 export function FeatureLine({ field, collapse }: { readonly field: MsdfFont; readonly collapse: HoleState }) {
   const text = useRef<ThreeText<never> | null>(null);
   const world = useWorld();
-  const typing = world.queryFirst(Typing)!.get(Typing)!;
+  const typing = world.queryFirst(Typing)!;
   /** Set once the full line has been measured against the title and the size and tracking are settled. */
   const [fit, setFit] = useState<{ fontSize: number; letterSpacing: number } | undefined>(undefined);
   const fitRevision = useRef(-1);
@@ -207,7 +207,7 @@ export function FeatureLine({ field, collapse }: { readonly field: MsdfFont; rea
       if (collapse.beat === 'closed' && collapsed.current) {
         collapsed.current = false;
 
-        if (line.current !== undefined) resetLine(line.current, typing.count);
+        if (line.current !== undefined) resetLine(line.current, typing.get(Typing)!.count);
       }
 
       if (collapse.beat !== 'closed' && line.current !== undefined) {
@@ -287,7 +287,7 @@ export function FeatureLine({ field, collapse }: { readonly field: MsdfFont; rea
 
       if (!heroReady()) return;
 
-      showLine(line.current, typing.count);
+      showLine(line.current, typing.get(Typing)!.count);
     },
     { fps: 60 },
   );

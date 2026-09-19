@@ -12,17 +12,17 @@ export interface HeldPose {
 export const Floor = trait();
 
 /** Entity-owned motion and the handle into the shared solver. */
-export const Body = trait(() => ({
+export const Body = trait({
   id: 0,
   mode: 'dynamic' as 'static' | 'dynamic' | 'held' | 'parked',
-  position: vec3.create(),
-  rotation: quat.create(),
-  from: { x: 0, y: 0, z: 0, yaw: 0 },
-  to: { x: 0, y: 0, z: 0, yaw: 0 },
+  position: () => vec3.create(),
+  rotation: () => quat.create(),
+  from: () => ({ x: 0, y: 0, z: 0, yaw: 0 }),
+  to: () => ({ x: 0, y: 0, z: 0, yaw: 0 }),
   airborne: false,
   landed: false,
   moved: false,
-}));
+});
 
 export interface PhysicsState {
   engine: Simulation;

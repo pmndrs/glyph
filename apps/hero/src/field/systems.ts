@@ -14,9 +14,10 @@ export function moveFields(world: World, collapse: HoleState): void {
   const pointer = world.get(Pointer)!;
   const step = Math.min(time.delta, 0.05);
 
-  world.query(Field).updateEach(([state]) => {
-    const field = state!;
-    const { options, layout, lattice } = field;
+  world.query(Field).updateEach(([field]) => {
+    const options = field.options!;
+    const layout = field.layout!;
+    const lattice = field.lattice!;
     field.offset += step * options.speed * (1 - 0.7 * collapse.pull);
 
     if (collapse.beat === 'closed') field.offset %= layout.loop;

@@ -17,9 +17,9 @@ export interface Footprint {
   readonly halfExtents: readonly [number, number, number];
 }
 
-export const Robot = trait(() => ({
-  motion: { path: { inward: 0, outward: 0, phase: 0 }, pose: { x: 0, y: 0, heading: 0, look: 0 } },
-  dust: {
+export const Robot = trait({
+  motion: () => ({ path: { inward: 0, outward: 0, phase: 0 }, pose: { x: 0, y: 0, heading: 0, look: 0 } }),
+  dust: () => ({
     particles: Array.from({ length: COUNT }, () => ({
       age: 1,
       life: 1,
@@ -33,9 +33,9 @@ export const Robot = trait(() => ({
     hasPrevious: false,
     carry: 0,
     emitted: 0,
-  },
-  footprint: { x: 0, y: 0, z: 0.04, heading: 0, halfExtents: ROBOT_HALF_EXTENTS },
-  physicsPose: { x: 0, y: 0, z: 0, yaw: 0 },
+  }),
+  footprint: () => ({ x: 0, y: 0, z: 0.04, heading: 0, halfExtents: ROBOT_HALF_EXTENTS }),
+  physicsPose: () => ({ x: 0, y: 0, z: 0, yaw: 0 }),
   active: false,
   time: undefined as number | undefined,
   runAt: Number.POSITIVE_INFINITY,
@@ -43,6 +43,6 @@ export const Robot = trait(() => ({
   runs: 0,
   departed: false,
   gone: false,
-}));
+});
 
 export type DustState = TraitRecord<typeof Robot>['dust'];

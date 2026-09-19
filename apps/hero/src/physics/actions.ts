@@ -29,6 +29,7 @@ export const physicsActions = createActions((world) => {
     body.mode = mode;
     vec3.copy(body.position, handle.position);
     quat.copy(body.rotation, handle.quaternion);
+    entity.set(Body, body);
     physics.entities.set(handle.id, entity);
 
     return entity;
@@ -61,8 +62,7 @@ export const physicsActions = createActions((world) => {
 
           if (body === undefined || !body.airborne) return;
 
-          body.airborne = false;
-          body.landed = true;
+          entity!.set(Body, { airborne: false, landed: true });
         },
       };
 
@@ -158,6 +158,7 @@ export const physicsActions = createActions((world) => {
       } else Object.assign(body.from, body.to);
 
       Object.assign(body.to, pose);
+      entity.set(Body, body);
     },
     parkBody(entity: Entity) {
       const physics = world.get(Physics)!;
@@ -167,6 +168,7 @@ export const physicsActions = createActions((world) => {
       body.airborne = false;
       rigidBody.setObjectLayer(physics.engine, handle, physics.parkedLayer);
       rigidBody.setMotionType(physics.engine, handle, MotionType.STATIC, false);
+      entity.set(Body, body);
     },
     reviveBody(entity: Entity, pose: HeldPose) {
       const physics = world.get(Physics)!;
@@ -185,6 +187,7 @@ export const physicsActions = createActions((world) => {
       body.mode = 'held';
       body.airborne = false;
       body.moved = true;
+      entity.set(Body, body);
     },
     releaseBody(entity: Entity, velocity: Vec3, spin: number) {
       const physics = world.get(Physics)!;
@@ -200,6 +203,7 @@ export const physicsActions = createActions((world) => {
       rigidBody.setAngularVelocity(physics.engine, handle, vec3.set(physics.velocity, 0, 0, spin));
       body.mode = 'dynamic';
       body.airborne = true;
+      entity.set(Body, body);
     },
   };
 });

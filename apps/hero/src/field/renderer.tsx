@@ -40,10 +40,8 @@ export function FieldRenderer({ font }: { readonly font: SlugFont }) {
 function IconPattern({ entity, font }: { readonly entity: Entity; readonly font: SlugFont }) {
   const world = useWorld();
   const field = entity.get(Field)!;
-  const {
-    options: { iconSize, depth, opacity },
-    layout,
-  } = field;
+  const { iconSize, depth, opacity } = field.options!;
+  const layout = field.layout!;
   const count = layout.cells.length;
 
   const source = useRef<ThreeText<never> | null>(null);
@@ -68,7 +66,7 @@ function IconPattern({ entity, font }: { readonly entity: Entity; readonly font:
 
   useFrame(() => {
     const current = entity.get(Field)!;
-    const state = current.lattice;
+    const state = current.lattice!;
     const group = sheet.current;
 
     if (group === null) return;

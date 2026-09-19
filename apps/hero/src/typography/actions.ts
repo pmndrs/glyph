@@ -13,7 +13,7 @@ export const typographyActions = createActions((world) => ({
     world.spawn(Typing);
   },
   prepareTitle(worldMatrix: Mat4, letters: readonly Letter[], cameraHeight: number, thickness: number, width: number) {
-    const title = world.queryFirst(Title)!.get(Title)!;
+    const titleEntity = world.queryFirst(Title)!;
     const inverse = mat4.create();
     mat4.copy(inverse, worldMatrix);
     mat4.invert(inverse, inverse);
@@ -64,8 +64,7 @@ export const typographyActions = createActions((world) => ({
 
     for (let index = 0; index < pieces.length; index++) writeLetter(state, index);
 
-    title.bodies = state;
-    title.width = width;
+    titleEntity.set(Title, { bodies: state, width });
 
     return state;
   },
@@ -78,9 +77,7 @@ export const typographyActions = createActions((world) => ({
       for (const piece of title.bodies.pieces) physicsActions(world).destroyBody(piece.entity);
     }
 
-    title.bodies = undefined;
-    title.width = undefined;
-    title.reach = 0;
+    entity.set(Title, { bodies: undefined, width: undefined, reach: 0 });
   },
   replayTitle() {
     world.query(Title).updateEach(([title]) => {

@@ -59,13 +59,12 @@ if (world === undefined) throw new Error('Missing the hero world');
 
 // Sample the adapter once after the readiness gate before taking over the deterministic clock.
 getScheduler().stepJob('hero-simulation');
-const frame = world.get(Time)!;
-let clock = frame.now;
+let clock = world.get(Time)!.now;
 
-while (frame.elapsed < 1) {
+while (world.get(Time)!.elapsed < 1) {
   if (title.lifting) throw new Error('The title lifted before its opening beat');
 
-  const delta = Math.min(STEP, 1 - frame.elapsed);
+  const delta = Math.min(STEP, 1 - world.get(Time)!.elapsed);
   clock += delta * 1000;
   advanceHero(world, delta, clock);
 }

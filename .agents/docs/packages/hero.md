@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:74065f7906d25745a3031e8a48d50377e995bfef90306b5ac5c4e11c1b102feb'
+source_digest: 'sha256:27201129195e464f28b4cee322a1401c44da72a949d482f17c0de3429f84b7d1'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -167,8 +167,12 @@ The view domain keeps preparation in `startup.tsx`, font loading in `hooks.ts`, 
 and retained typing helpers in `utils.ts`. Simulation helpers do not import React or shader construction.
 Domain tests remain beside their implementations.
 
-Koota AoS traits retain math arrays and pools, and high-frequency values never pass through React state. Query
-mutations use `updateEach`, while composition reads published landings and departures with `readEach`. Preparation
+Twelve scalar-bearing traits use Koota SoA schemas. Per-field factories retain each entity's math tuples,
+buffers, motion records, and pools. Only `Physics`, the opaque solver resource with its entity map, callbacks,
+and scratch, stays AoS. High-frequency values never pass through React state. SoA `get()` returns a snapshot,
+so actions and singleton updates publish scalar changes with `set`, and render callbacks sample current scalar
+state. Query mutations use `updateEach`, while composition reads published landings and departures with `readEach`.
+The robot body query selects only `Robot` for writeback, preserving the physics actions' writes to `Body`. Preparation
 passes measured letter geometry into typography actions before playback. Those actions create bodies on the same
 world and dispose them with the mounted title. Renderers publish matrices and uniforms after simulation. Replay
 closes the finale, restores the field, lifts the title, and resets typing and robot scheduling through their owners.
@@ -313,15 +317,18 @@ meshes, or asset loads, with a deliberate new-material control proving the compi
 raw render intervals, CPU submission work, asynchronous GPU queue completion, and long tasks, along with the
 adapter, viewport, and drawing-buffer dimensions. The canvas uses adaptive DPR between 1 and 2, and the report records the actual drawing-buffer size for each run.
 
-Two complete 1280×720 replays on Apple Metal with Chromium 149 averaged 60.01 fps across 1,701 frames after
-3.23 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long tasks were observed.
-Render intervals were 17.9 ms at p95 and 23.3 ms worst, with no intervals over 25 ms. CPU submission time was 4.5 ms
-at p95 and browser GPU queue completion was 8.9 ms at p95. This verifies resource preparation and near-60 fps
-playback on this host. It does not measure delivery through a screen recorder or guarantee every frame meets budget.
+Two runs of the two-replay check at 1280×720 on Apple Metal with Chromium 149 averaged 58.38 and 58.46 fps
+after 2.91 and 2.96 seconds of preparation. Neither run observed late shader programs, pipelines, meshes, assets,
+or long tasks. Render intervals were 24.1 and 23.4 ms at p95, with 52 and 50 intervals over 25 ms. CPU submission
+time was 3.9 and 4.1 ms at p95, and browser GPU queue completion was 9.2 and 9.4 ms at p95. These runs verify
+resource preparation but fall short of steady 60 fps. They do not measure delivery through a screen recorder.
+The preceding AoS commit (`64fcb3bd`) was then measured in an isolated checkout on the same host. It averaged
+58.00 fps with a 24.7 ms p95 render interval and 55 intervals over 25 ms. This comparison does not identify
+the SoA conversion as the cause of the pacing shortfall or establish a material speedup.
 
 The full hero package check passes, including six numerical tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
-The production entry bundle is 598.86 kB gzip, down from 609.11 kB before removing the alternate scene.
+The production entry bundle is 598.93 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/typography/materials.ts`: red G, orange l,

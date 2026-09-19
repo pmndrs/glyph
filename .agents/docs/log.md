@@ -2,6 +2,12 @@
 
 ## 2026-09-19
 
+- **Moved hero scalar state to SoA** — Converted twelve traits to Koota schemas with per-field factories for
+  owned vectors, records, and pools. The opaque physics solver resource remains AoS. Actions publish scalar
+  writes explicitly, renderers sample current scalars, and the robot query excludes physics state from its
+  writeback. The six existing tests and WebGPU automatic lift, finale/replay, and dust checks pass.
+  See [the hero reference](packages/hero.md) for playback measurements and the storage policy.
+
 - **Made hero actions the command boundary** — Moved field construction, solver setup and lifecycle handlers,
   title creation/replay/disposal, and input/view sampling into domain actions. Root actions combine the domain sets
   while direct domain imports remain available. Trait files now contain only data models and defaults, and title

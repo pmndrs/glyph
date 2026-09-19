@@ -45,13 +45,13 @@ export interface TitleBodies {
   matrix: Mat4;
 }
 
-export const Title = trait(() => ({
-  bodies: undefined as TitleBodies | undefined,
+export const Title = trait({
+  bodies: (): TitleBodies | undefined => undefined,
   width: undefined as number | undefined,
   reach: 0,
-}));
-export const Typing = trait(() => ({
+});
+export const Typing = trait({
   count: FEATURE_LINE.length,
   beat: 0,
   start: Number.POSITIVE_INFINITY,
-}));
+});

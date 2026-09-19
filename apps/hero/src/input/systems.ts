@@ -6,5 +6,5 @@ export function fadePointer(world: World): void {
   const pointer = world.get(Pointer)!;
   pointer.strength *= Math.exp(-Math.min(world.get(Time)!.delta, 0.05) / 0.16);
 
-  if (pointer.strength < 0.01) pointer.strength = 0;
+  world.set(Pointer, { strength: pointer.strength < 0.01 ? 0 : pointer.strength });
 }

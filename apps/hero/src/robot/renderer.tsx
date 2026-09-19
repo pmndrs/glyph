@@ -114,7 +114,6 @@ export function RobotRenderer({ font, icons }: { readonly font: SlugFont; readon
 
 function Robot({ entity, font }: { readonly entity: Entity; readonly font: SlugFont }) {
   const world = useWorld();
-  const robot = entity.get(RobotTrait)!;
   const model = useGLTF(robotUrl);
   const { animations } = model;
   const mover = useRef<Group>(null);
@@ -181,6 +180,7 @@ function Robot({ entity, font }: { readonly entity: Entity; readonly font: SlugF
 
       if (!heroReady()) return;
 
+      const robot = entity.get(RobotTrait)!;
       root.visible = robot.active;
 
       if (!robot.active || robot.time === undefined) {
@@ -281,19 +281,17 @@ const SLOTS = Array.from({ length: COUNT }, (_, index) => ({
 function RobotDust({ entity, font }: { readonly entity: Entity; readonly font: SlugFont }) {
   const groups = useRef<(Group | null)[]>([]);
   usePreparation('dust', () => groups.current.length === COUNT && groups.current.every(textPrepared));
-  const robot = entity.get(RobotTrait)!;
+  const particles = entity.get(RobotTrait)!.dust.particles;
 
   useFrame(() => {
     if (!heroReady()) return;
-
-    const state = robot.dust;
 
     for (let index = 0; index < COUNT; index++) {
       const group = groups.current[index];
 
       if (group == null) continue;
 
-      const particle = state.particles[index]!;
+      const particle = particles[index]!;
       group.visible = particle.age < particle.life;
 
       if (!group.visible) continue;

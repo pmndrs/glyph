@@ -24,7 +24,7 @@ export const actions = createActions((world) => ({
     fieldActions(world).spawnFields();
   },
   replayHero() {
-    world.get(Playback)!.started = true;
+    world.set(Playback, { started: true });
     blackHoleActions(world).dismissBlackHole();
     typographyActions(world).replayTitle();
     robotActions(world).resetRobot();

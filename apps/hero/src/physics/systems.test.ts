@@ -38,7 +38,7 @@ it('lifts, lands once, and repeats after being swallowed and revived on the shar
   );
   const letter = title.pieces[0]!.entity;
   const body = letter.get(Body)!;
-  world.get(Time)!.delta = 1 / 60;
+  world.set(Time, { delta: 1 / 60 });
 
   try {
     for (let replay = 0; replay < 2; replay++) {
@@ -54,7 +54,7 @@ it('lifts, lands once, and repeats after being swallowed and revived on the shar
 
       for (let frame = 0; frame < 240; frame++) {
         stepPhysics(world);
-        landings += Number(body.landed);
+        landings += Number(letter.get(Body)!.landed);
         const height = body.position[2];
 
         if (landings > 0 && height > lastHeight + 0.01) bounced = true;
@@ -69,7 +69,7 @@ it('lifts, lands once, and repeats after being swallowed and revived on the shar
       expect(body.rotation[1]).toBeCloseTo(0);
       physics.parkBody(letter);
       stepPhysics(world);
-      expect(body.landed).toBe(false);
+      expect(letter.get(Body)!.landed).toBe(false);
       physics.reviveBody(letter, { x: 0, y: 0, z: 0.5, yaw: 0 });
     }
 
@@ -95,11 +95,11 @@ it('lets the robot push a flat letter and removes its collision when it leaves',
   robotEntity.remove(Body);
   physics.attachKinematicBody(robotEntity, [0.3, 0.3, 0.5]);
   const robot = robotEntity.get(Robot)!;
-  robot.active = true;
+  robotEntity.set(Robot, { active: true });
   Object.assign(robot.footprint, { x: -2, y: 0.55, z: 0, heading: 0 });
   const letter = physics.spawnSolidBody([0, 0, 0.5], prism());
   const body = letter.get(Body)!;
-  world.get(Time)!.delta = 1 / 60;
+  world.set(Time, { delta: 1 / 60 });
 
   try {
     for (let frame = 0; frame < 120; frame++) {
@@ -112,10 +112,10 @@ it('lets the robot push a flat letter and removes its collision when it leaves',
     expect(body.position[2]).toBeCloseTo(0.5, 1);
     expect(body.rotation[0]).toBeCloseTo(0);
     expect(body.rotation[1]).toBeCloseTo(0);
-    expect(body.landed).toBe(false);
+    expect(letter.get(Body)!.landed).toBe(false);
     physics.holdBody(letter, { x: robot.footprint.x, y: robot.footprint.y, z: 4, yaw: 0 });
     physics.releaseBody(letter, [0, 0, -35], 0);
-    robot.active = false;
+    robotEntity.set(Robot, { active: false });
     moveRobotBodies(world);
 
     for (let frame = 0; frame < 240; frame++) stepPhysics(world);

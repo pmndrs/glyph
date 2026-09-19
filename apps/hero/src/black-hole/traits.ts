@@ -23,26 +23,18 @@ export interface HoleState {
   blackout: number;
 }
 
-interface CollapseState {
-  openedAt: number | undefined;
-  held: number | undefined;
-  hole: HoleState;
-}
-
-export const Collapse = trait(
-  (): CollapseState => ({
-    openedAt: undefined,
-    held: undefined,
-    hole: {
-      beat: 'closed',
-      time: -1,
-      x: HOLE_CENTER[0],
-      y: HOLE_CENTER[1],
-      horizon: HORIZON,
-      pull: 0,
-      presence: 0,
-      sincePop: undefined,
-      blackout: 0,
-    },
+export const Collapse = trait({
+  openedAt: undefined as number | undefined,
+  held: undefined as number | undefined,
+  hole: (): HoleState => ({
+    beat: 'closed',
+    time: -1,
+    x: HOLE_CENTER[0],
+    y: HOLE_CENTER[1],
+    horizon: HORIZON,
+    pull: 0,
+    presence: 0,
+    sincePop: undefined,
+    blackout: 0,
   }),
-);
+});

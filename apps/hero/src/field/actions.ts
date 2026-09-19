@@ -59,11 +59,11 @@ export const fieldActions = createActions((world) => ({
     impact.id = impacts.next++;
     impact.at = world.get(Time)!.now;
     vec3.set(impact.world, x, y, z);
+    world.set(Impacts, { latest: impacts.latest, next: impacts.next });
   },
   resetFields() {
-    world.query(Field).updateEach(([state]) => {
-      const field = state!;
-      const lattice = field.lattice;
+    world.query(Field).updateEach(([field]) => {
+      const lattice = field.lattice!;
       lattice.swallowed.fill(0);
       lattice.x.fill(0);
       lattice.y.fill(0);

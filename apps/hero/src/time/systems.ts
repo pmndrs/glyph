@@ -7,4 +7,5 @@ export function updateTime(world: World, delta: number, now: number, running: bo
   time.now = now;
   time.delta = running ? Math.min(delta, 0.1) : 0;
   time.elapsed += time.delta;
+  world.set(Time, time);
 }

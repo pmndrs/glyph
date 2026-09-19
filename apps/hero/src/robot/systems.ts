@@ -62,24 +62,30 @@ export function emitDust(world: World): void {
 export function moveRobotBodies(world: World): void {
   const physics = physicsActions(world);
 
-  world.query(Robot, Body).updateEach(([robot, body], entity) => {
-    if (!robot.active) {
-      if (body.mode !== 'parked') physics.parkBody(entity);
+  // Only robot data is written back here, preserving the physics actions' body updates.
+  world
+    .query(Robot, Body)
+    .select(Robot)
+    .updateEach(([robot], entity) => {
+      const body = entity.get(Body)!;
 
-      return;
-    }
+      if (!robot.active) {
+        if (body.mode !== 'parked') physics.parkBody(entity);
 
-    const target = robot.footprint;
-    const pose = robot.physicsPose;
-    pose.x = target.x;
-    pose.y = target.y;
-    pose.z = target.z;
-    pose.yaw = target.heading;
-    const dx = target.x - body.to.x;
-    const dy = target.y - body.to.y;
+        return;
+      }
 
-    if (body.mode === 'parked' || dx * dx + dy * dy > 2.5 * 2.5) physics.reviveBody(entity, pose);
+      const target = robot.footprint;
+      const pose = robot.physicsPose;
+      pose.x = target.x;
+      pose.y = target.y;
+      pose.z = target.z;
+      pose.yaw = target.heading;
+      const dx = target.x - body.to.x;
+      const dy = target.y - body.to.y;
 
-    physics.holdBody(entity, pose);
-  });
+      if (body.mode === 'parked' || dx * dx + dy * dy > 2.5 * 2.5) physics.reviveBody(entity, pose);
+
+      physics.holdBody(entity, pose);
+    });
 }

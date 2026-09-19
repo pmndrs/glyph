@@ -5,12 +5,13 @@ import { collapseAt } from './utils';
 
 export const blackHoleActions = createActions((world) => ({
   openBlackHole() {
-    world.get(Collapse)!.openedAt ??= world.get(Time)!.now;
+    const collapse = world.get(Collapse)!;
+
+    if (collapse.openedAt === undefined) world.set(Collapse, { openedAt: world.get(Time)!.now });
   },
   dismissBlackHole() {
     const collapse = world.get(Collapse)!;
-    collapse.openedAt = undefined;
-    collapse.held = undefined;
+    world.set(Collapse, { openedAt: undefined, held: undefined });
     collapseAt(collapse.hole, -1);
   },
   holdBlackHole(at: number | undefined) {
@@ -18,5 +19,7 @@ export const blackHoleActions = createActions((world) => ({
     collapse.held = at;
 
     if (at !== undefined) collapse.openedAt ??= world.get(Time)!.now;
+
+    world.set(Collapse, collapse);
   },
 }));
