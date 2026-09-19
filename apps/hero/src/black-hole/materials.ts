@@ -1,5 +1,5 @@
 import type { HoleState } from './traits';
-import { HOLE_CENTER, HORIZON, PAPER_FROM, PAPER_UNTIL } from './utils';
+import { HOLE_CENTER, HORIZON, PAPER_FROM, PAPER_UNTIL } from './content';
 import {
   uniform,
   atan,

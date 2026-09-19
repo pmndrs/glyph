@@ -4,7 +4,7 @@ import { createFlight } from '../black-hole/utils';
 import { physicsActions } from '../physics/actions';
 import { createHeldPose, readBodyPose } from '../physics/utils';
 import { Time } from '../time/traits';
-import { writeLetter } from './utils/bodies';
+import { writeLetter } from './systems';
 import { Title, Typing, type Letter, type TitleBodies } from './traits';
 
 export const letterActions = createActions((world) => ({

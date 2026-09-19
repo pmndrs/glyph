@@ -11,7 +11,7 @@ import { Collapse } from '../black-hole/traits';
 import { moveIconFields } from '../icon-field/systems';
 import { fadePointer } from '../input/systems';
 import { stepPhysics } from '../physics/systems';
-import { moveRobots, moveRobotBodies, emitDust } from '../robot/systems';
+import { moveRobots, moveRobotBodies, stepDust } from '../robot/systems';
 import { Robot } from '../robot/traits';
 import { updateTime } from '../time/systems';
 import { Time } from '../time/traits';
@@ -61,5 +61,5 @@ export function advanceSequence(world: World, delta: number, now: number): void 
 
   fadePointer(world);
   moveIconFields(world, hole);
-  emitDust(world);
+  stepDust(world);
 }

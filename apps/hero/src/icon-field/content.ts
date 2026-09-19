@@ -26,8 +26,6 @@ export const ICON_CODE_POINTS: Readonly<Record<IconName, number>> = {
   crow: 0xf520,
 };
 
-/** Hue rotations in OKLab hold lightness and chroma constant across the deep icon sheet. */
-
 function linearToSrgb(channel: number): number {
   return channel <= 0.003_130_8 ? 12.92 * channel : 1.055 * channel ** (1 / 2.4) - 0.055;
 }
@@ -56,4 +54,18 @@ function oklch(lightness: number, chroma: number, hueDegrees: number): string {
   return `#${hex}`;
 }
 
+/** Hue rotations in OKLab hold lightness and chroma constant across the deep icon sheet. */
 export const GEM_TONES: readonly string[] = [25, 75, 145, 195, 255, 310].map((hue) => oklch(0.7464, 0.105, hue));
+
+/** Scroll direction, as an angle from the x axis. Both layers share it, so the field moves as one. */
+export const PATTERN_ANGLE = -0.32;
+/** How long one flip takes, and the window over which a motif's cells start theirs. */
+export const MORPH_SECONDS = 0.32;
+export const STAGGER_SECONDS = 0.5;
+/** Quantized start times spread each motif flip across the sheet. */
+export const STAGGER_STEPS = 5;
+
+/** The canvas camera's vertical field of view, for projecting the pointer onto a layer. */
+export const FIELD_OF_VIEW = 35;
+
+export const GLYPHS = Object.values(ICON_CODE_POINTS).map((point) => String.fromCodePoint(point));

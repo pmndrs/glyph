@@ -6,7 +6,8 @@ import { DoubleSide, MeshBasicNodeMaterial, Matrix4, type Group } from 'three/we
 import type { SlugFont } from '../view/hooks';
 import { holeWarp } from '../black-hole/materials';
 import { usePreparation } from '../view/startup';
-import { PATTERN_ANGLE, GLYPHS, cellMatrix } from './utils/lattice';
+import { PATTERN_ANGLE, GLYPHS } from './content';
+import { cellMatrix } from './utils';
 import { IconField } from './traits';
 import { Time } from '../time/traits';
 import { useQuery, useWorld } from 'koota/react';

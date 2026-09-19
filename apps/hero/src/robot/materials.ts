@@ -20,7 +20,7 @@ import {
   vec3,
 } from 'three/tsl';
 import { DoubleSide, type MeshStandardMaterial, MeshStandardNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu';
-import { BASE_Z, RISE } from './utils';
+import { BASE_Z, RISE } from './content';
 
 /** Glossy display finish shared by the face and its text. */
 export interface ScreenFinish {

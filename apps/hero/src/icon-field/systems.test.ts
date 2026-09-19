@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { mat4 } from 'math';
 import { Group, Matrix4 } from 'three/webgpu';
-import { advanceMorph, buildLayout, cellMatrix, createLattice, simulate, type IconLayoutOptions } from './lattice';
+import { buildLayout, createLattice } from './actions';
+import { advanceMorph, simulate } from './systems';
+import { cellMatrix } from './utils';
+import type { IconLayoutOptions } from './traits';
 
 const layer: IconLayoutOptions = {
   rows: 2,

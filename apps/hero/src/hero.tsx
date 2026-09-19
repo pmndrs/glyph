@@ -12,7 +12,7 @@ import { useFonts } from './view/hooks';
 import { BlackHole } from './black-hole/renderer';
 import { StarEmbersRenderer } from './star-embers/renderer';
 import { Post } from './sequence/renderer';
-import { GlassShadows } from './letters/utils/shadows';
+import { GlassShadows } from './letters/shadows';
 import { GlassTitle, FeatureLine } from './letters/renderer';
 import { IconFieldRenderer } from './icon-field/renderer';
 import { Lighting, Paper } from './view/renderer';

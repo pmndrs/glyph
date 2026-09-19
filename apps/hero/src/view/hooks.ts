@@ -1,6 +1,6 @@
 import type { Font, msdf, slug } from '@pmndrs/glyph';
 import { useMsdf, useSlug } from '@pmndrs/glyph/react';
-import { FEATURE_FIELD } from '../letters/utils/content';
+import { FEATURE_FIELD } from '../letters/content';
 import title from '../../assets/geist-black.font.glb?url';
 import feature from '../../assets/geist-mono-bold.font.glb?url';
 import robot from '../../assets/geist-pixel-grid.font.glb?url';

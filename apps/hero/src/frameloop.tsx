@@ -8,7 +8,7 @@ import { Time } from './time/traits';
 import { advanceSequence } from './sequence/systems';
 import { heroReady } from './view/startup';
 import { updatePaper, uTime } from './view/materials';
-import { PATTERN_ANGLE } from './icon-field/utils/lattice';
+import { PATTERN_ANGLE } from './icon-field/content';
 
 export function FrameLoop() {
   const world = useWorld();

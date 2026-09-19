@@ -1,5 +1,6 @@
 import { trait } from 'koota';
-import { HOLE_CENTER, HORIZON } from './utils';
+
+import { HOLE_CENTER, HORIZON } from './content';
 
 /** What the rest of the scene reads each frame. */
 export interface HoleState {

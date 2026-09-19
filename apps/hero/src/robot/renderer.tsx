@@ -1,6 +1,6 @@
-import { COUNT, LOOK_UP_AT, LOOK_DOWN_AT } from './utils';
+import { COUNT, LOOK_UP_AT, LOOK_DOWN_AT } from './content';
 import { jitter } from '../random';
-import { ICON_CODE_POINTS } from '../icon-field/utils/content';
+import { ICON_CODE_POINTS } from '../icon-field/content';
 import { Text, TextGroup } from '@pmndrs/glyph/react';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
@@ -26,7 +26,7 @@ import { Time } from '../time/traits';
 import { useWorld, useQuery } from 'koota/react';
 import type { Entity } from 'koota';
 import { heroReady, textPrepared, usePreparation } from '../view/startup';
-import { type RetainedLine, createRetainedLine, disposeLine, showLine } from '../view/utils';
+import { type RetainedLine, createRetainedLine, disposeLine, showLine } from '../letters/text';
 import robotUrl from '../../assets/robot.glb?url';
 
 const SCALE = 3 / 2.85;

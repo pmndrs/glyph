@@ -21,8 +21,8 @@ import {
 
 import type { TitleBodies } from '../src/letters/traits';
 const { POP_AT } = (await import(
-  new URL('/src/black-hole/utils.ts', location.origin).href
-)) as typeof import('../src/black-hole/utils');
+  new URL('/src/black-hole/content.ts', location.origin).href
+)) as typeof import('../src/black-hole/content');
 const { uHoleCollapse } = (await import(
   new URL('/src/black-hole/materials.ts', location.origin).href
 )) as typeof import('../src/black-hole/materials');

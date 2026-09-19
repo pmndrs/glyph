@@ -2,8 +2,8 @@ import { trait, type Entity } from 'koota';
 import type { Mat4, Vec3 } from 'math';
 import type { HeldPose } from '../physics/traits';
 import type { Flight } from '../black-hole/utils';
-import type { Solid } from './utils/outline';
-import { FEATURE_LINE } from './utils/content';
+import type { Solid } from './utils';
+import { FEATURE_LINE } from './content';
 
 /** One letter of the title: its rest place in world units, its solid for the physics, and its glyph. */
 export interface Letter {

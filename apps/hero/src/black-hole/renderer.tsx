@@ -5,7 +5,7 @@ import type { Group } from 'three/webgpu';
 import { heroReady } from '../view/startup';
 import { buildMaterials, HORIZON_ON_PLANE, uPresence, uHeat, uHoleCamera, syncHoleUniforms } from './materials';
 import { Collapse } from './traits';
-import { HOLE_CENTER } from './utils';
+import { HOLE_CENTER } from './content';
 
 /** After the robot leaves, the hole pulls in the scene and fades to black. Space replays the sequence. */
 export function BlackHole() {

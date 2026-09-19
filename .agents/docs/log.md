@@ -2,6 +2,12 @@
 
 ## 2026-09-19
 
+- **Restored hero utility boundaries** — Moved content to domain roots, robot motion and dust to systems,
+  icon-field construction to actions and simulation to systems, and letter synchronization to systems.
+  Letters own named text and shadow modules. Remaining utilities are calculations and geometry or pose
+  conversions. The full hero check and WebGPU dust, opening, finale/replay, and retained typing checks pass.
+  See [the hero reference](packages/hero.md).
+
 - **Renamed hero typography to letters** — The `letters` domain owns title construction, motion, feature typing,
   glass materials, and shadows. Updated imports, action names, probes, and the package reference to match.
   The full hero check and WebGPU automatic opening check pass.

@@ -1,6 +1,6 @@
 import type { HoleState } from '../black-hole/traits';
 import { createFlight, departureAt, flight } from '../black-hole/utils';
-import { type RetainedLine, createRetainedLine, disposeLine, showLine, resetLine } from '../view/utils';
+import { type RetainedLine, createRetainedLine, disposeLine, showLine, resetLine } from './text';
 import { mat4, vec3 } from 'math';
 import { useWorld } from 'koota/react';
 import { Title, Typing } from './traits';
@@ -10,11 +10,11 @@ import type { Glyphs, Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Box3, Vector3, Matrix4 } from 'three/webgpu';
-import { FEATURE_LINE } from './utils/content';
+import { FEATURE_LINE } from './content';
 import { heroReady, usePreparation } from '../view/startup';
 import type { SlugFont, MsdfFont } from '../view/hooks';
 import { stainedGlassLetters, titleOrigin } from './materials';
-import { solidOf } from './utils/outline';
+import { solidOf } from './utils';
 import type { Letter, TitleBodies } from './traits';
 
 /**

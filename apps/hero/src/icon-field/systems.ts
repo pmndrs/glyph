@@ -1,12 +1,17 @@
 import type { HoleState } from '../black-hole/traits';
 import type { World } from 'koota';
-import { mat4, vec3 } from 'math';
+import { clamp, mat4, vec3 } from 'math';
+import { mulberry32 } from 'math/random';
 import { Time } from '../time/traits';
 import { Pointer } from '../input/traits';
 import { Viewport } from '../view/traits';
-import { departureAt, HORIZON } from '../black-hole/utils';
-import { IconField, Impacts } from './traits';
-import { PATTERN_ANGLE, FIELD_OF_VIEW, simulate, advanceMorph, type LatticeState, type Layout } from './utils/lattice';
+import { departureAt, release, swirl } from '../black-hole/utils';
+import { HORIZON } from '../black-hole/content';
+import { IconField, Impacts, type LatticeState, type Layout, type IconLayoutOptions } from './traits';
+import { PATTERN_ANGLE, FIELD_OF_VIEW, GLYPHS, MORPH_SECONDS, STAGGER_SECONDS } from './content';
+
+/** Fixed substeps keep stiff neighbour coupling stable. */
+const SUBSTEP = 1 / 120;
 
 export function moveIconFields(world: World, collapse: HoleState): void {
   const time = world.get(Time)!;
@@ -131,6 +136,170 @@ function trackHole(cameraZ: number, state: HoleState, lattice: LatticeState, lay
         ) / reachOnSheet,
         index,
       );
+    }
+  }
+}
+
+/** Motifs change on the render clock. No timers, sets, callbacks, or temporary candidate arrays. */
+export function advanceMorph(state: LatticeState, layout: Layout, now: number): void {
+  const morph = state.morph;
+
+  if (state.nextSwap === 0) state.nextSwap = now + 1.1 * 1000;
+
+  if (morph.motif < 0 && now >= state.nextSwap) {
+    let count = 0;
+
+    for (let glyph = 0; glyph < GLYPHS.length; glyph++) {
+      if (!state.motifGlyphs.includes(glyph)) state.spare[count++] = glyph;
+    }
+
+    if (count > 0) {
+      morph.motif = Math.floor(mulberry32.sample(state.random) * state.motifGlyphs.length);
+      morph.to = state.spare[Math.floor(mulberry32.sample(state.random) * count)]!;
+      morph.start = now;
+      state.motifGlyphs[morph.motif] = morph.to;
+      state.applied.fill(0);
+    }
+
+    state.nextSwap = now + 1.1 * 1000;
+  }
+
+  if (morph.motif < 0) return;
+
+  const elapsed = (now - morph.start) / 1000;
+  const members = layout.cellsByMotif[morph.motif]!;
+
+  for (let slot = 0; slot < members.length; slot++) {
+    const index = members[slot]!;
+
+    if (state.applied[index] === 1 || elapsed < layout.cells[index]!.delay + MORPH_SECONDS / 2) continue;
+
+    state.selected[index] = morph.to;
+    state.applied[index] = 1;
+  }
+
+  if (elapsed > STAGGER_SECONDS + MORPH_SECONDS) morph.motif = -1;
+}
+
+/** Fixed-step integration: spring home, damping, neighbour coupling, the travelling ring, and the pointer. */
+export function simulate(
+  state: LatticeState,
+  layout: Layout,
+  delta: number,
+  layer: IconLayoutOptions,
+  now: number,
+): void {
+  const count = layout.cells.length;
+  const open = state.hole.time >= 0;
+  const limit = open ? 60 : 2.4;
+  let waveCount = 0;
+
+  for (let index = 0; index < state.waves.length; index++) {
+    const wave = state.waves[index]!;
+    const seconds = (now - wave.start) / 1000;
+
+    if (seconds <= 0 || seconds > 2) continue;
+
+    wave.radius = layer.waveSpeed * seconds;
+    state.activeWaves[waveCount++] = index;
+  }
+
+  state.accumulator = Math.min(state.accumulator + delta, SUBSTEP * 8);
+  let guard = 0;
+
+  while (state.accumulator >= SUBSTEP && guard < 8) {
+    state.accumulator -= SUBSTEP;
+    guard += 1;
+
+    for (let index = 0; index < count; index += 1) {
+      if (state.swallowed[index] === 1) continue;
+
+      const px = state.x[index] ?? 0;
+      const py = state.y[index] ?? 0;
+      // A cell's turn: it holds its place until its moment, then gradually lets go of
+      // its springs entirely and is pulled in.
+      const departure = open ? (state.departAt[index] ?? Number.NaN) : Number.NaN;
+      const loose = open && !Number.isNaN(departure) ? release(state.hole.time, departure) : 0;
+      const hold = 1 - loose;
+      const damping = 3.4 + (5 - 3.4) * loose;
+      let ax = -26 * hold * px - damping * (state.vx[index] ?? 0);
+      let ay = -26 * hold * py - damping * (state.vy[index] ?? 0);
+
+      const base = index * 4;
+
+      for (let link = 0; link < 4; link += 1) {
+        const other = layout.neighbours[base + link] ?? -1;
+
+        if (other < 0 || state.swallowed[other] === 1) continue;
+
+        ax += 16 * hold * ((state.x[other] ?? 0) - px);
+        ay += 16 * hold * ((state.y[other] ?? 0) - py);
+      }
+
+      const restX = layout.restX[index] ?? 0;
+      const restY = layout.restY[index] ?? 0;
+
+      if (open && !Number.isNaN(departure)) {
+        const dx = state.hole.x - (restX + px);
+        const dy = state.hole.y - (restY + py);
+        const distance = Math.hypot(dx, dy);
+
+        if (loose > 0 && distance < state.hole.horizon) {
+          state.swallowed[index] = 1;
+          continue;
+        }
+
+        if (loose > 0) {
+          // Into the hole, and round it: the pull grows as the inverse square of the distance in horizons, and part
+          // of it runs across the line to the centre, which is what winds the sheet into a spiral.
+          const near = distance / state.hole.horizon;
+          const gravity = 0.12 + state.hole.pull * 3;
+          const force = (240 / (near * near + 0.35) + 70) * loose * gravity;
+          const round = swirl(near, 1.05);
+          ax += (dx / distance) * force - (dy / distance) * force * round;
+          ay += (dy / distance) * force + (dx / distance) * force * round;
+        }
+      }
+
+      // Visit active wave slots directly inside the cell substeps.
+      for (let wave = 0; wave < waveCount; wave += 1) {
+        const entry = state.waves[state.activeWaves[wave]!];
+
+        if (entry === undefined) continue;
+
+        const dx = restX - entry.x;
+        const dy = restY - entry.y;
+        const distance = Math.hypot(dx, dy);
+        const front = distance - entry.radius;
+        const band = Math.exp(-(front * front) / (2 * 2.2 * 2.2));
+
+        if (band <= 0.002 || distance <= 0.0001) continue;
+
+        const push = (layer.waveImpulse * entry.scale * band) / (1 + distance * 0.35);
+        ax += (dx / distance) * push;
+        ay += (dy / distance) * push;
+      }
+
+      if (state.pointer.active && state.pointer.strength > 0) {
+        const dx = restX + px - state.pointer.x;
+        const dy = restY + py - state.pointer.y;
+        const distance = Math.hypot(dx, dy);
+
+        if (distance < 4.5 && distance > 0.0001) {
+          const falloff = 1 - distance / 4.5;
+          const push = 26 * state.pointer.strength * falloff * falloff;
+          ax += (dx / distance) * push;
+          ay += (dy / distance) * push;
+        }
+      }
+
+      const speed = open ? 26 * 3 : 26;
+      const vx = clamp((state.vx[index] ?? 0) + ax * SUBSTEP, -speed, speed);
+      const vy = clamp((state.vy[index] ?? 0) + ay * SUBSTEP, -speed, speed);
+      state.vx[index] = vx;
+      state.vy[index] = vy;
+      state.x[index] = clamp(px + vx * SUBSTEP, -limit, limit);
+      state.y[index] = clamp(py + vy * SUBSTEP, -limit, limit);
     }
   }
 }

@@ -52,10 +52,10 @@ import {
   Vector3,
   type WebGPURenderer,
 } from 'three/webgpu';
-import { heroReady } from '../../view/startup';
-import { uTime } from '../../view/materials';
+import { heroReady } from '../view/startup';
+import { uTime } from '../view/materials';
 import { useWorld } from 'koota/react';
-import { Title } from '../traits';
+import { Title } from './traits';
 
 /** Projection lamp above the title. Its offset makes lifted shadows spread down and left. */
 const LAMP = new Vector3(4, 6, 24);

@@ -1,7 +1,7 @@
 import { createActions } from 'koota';
 import { Time } from '../time/traits';
 import { Collapse } from './traits';
-import { collapseAt } from './utils';
+import { collapseAt } from './systems';
 
 export const blackHoleActions = createActions((world) => ({
   openBlackHole() {
