@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:783111bee500c10f8affb7746de37bc68f0c1984cbcd095e04ddbe800dcfb7f6'
+source_digest: 'sha256:578a6a4bede3edd3d98404f310f82f098b21987107526878b0d51877badfc961'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -175,7 +175,7 @@ field and title systems and the feature-line view. The physics solver depends on
 
 `main.tsx` only mounts `<Hero />`. `hero.tsx` owns the application shell, styles, world instance and hot-reload
 disposal, loading screen, canvas configuration, and Suspense boundary. Its private scene component composes the
-visual modules and supplies their preparation requirements to the view gate.
+visual modules. `PrepareHero` owns the scene-specific preparation requirements and takes no props.
 `frameloop.tsx` samples renderer inputs, delegates DOM input to its domain, and runs the headless application tick
 at 60 Hz. `random.ts` contains the deterministic jitter function shared by independent effects. These six files
 are application-wide. `sequence/traits.ts` holds playback state, alongside its actions and systems. Domain roots expose traits, actions, systems, renderers, and materials where needed.
@@ -352,7 +352,7 @@ They verify resource preparation but do not measure delivery through a screen re
 
 The full hero package check passes, including six numerical tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
-The production entry bundle is 598.51 kB gzip, down from 609.11 kB before removing the alternate scene.
+The production entry bundle is 598.40 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/letters/materials.ts`: red G, orange l,

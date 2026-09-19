@@ -3,8 +3,8 @@ import './view/styles.css';
 import { FrameLoop } from './frameloop';
 import { useWorld, WorldProvider } from 'koota/react';
 import { Collapse } from './black-hole/traits';
-import { Canvas, useThree } from '@react-three/fiber/webgpu';
-import { StrictMode, Suspense, useEffect } from 'react';
+import { Canvas } from '@react-three/fiber/webgpu';
+import { StrictMode, Suspense } from 'react';
 import { NeutralToneMapping } from 'three/webgpu';
 import { actions } from './actions';
 import { createHeroWorld } from './world';
@@ -31,10 +31,10 @@ export function Hero() {
         <Canvas
           camera={{ far: 90, fov: 35, near: 0.5, position: [0, 0, 16] }}
           dpr={[1, 2]}
+          background={'#f2efe8'}
           // Preserve paper white under the scene lighting.
           renderer={{ scheduler: { fps: 60 }, toneMapping: NeutralToneMapping, toneMappingExposure: 1 }}
         >
-          <color args={['#f2efe8']} attach="background" />
           <Suspense fallback={null}>
             <Scene />
           </Suspense>
@@ -47,22 +47,10 @@ export function Hero() {
 function Scene() {
   const fonts = useFonts();
   const collapse = useWorld().get(Collapse)!.hole;
-  const scene = useThree((state) => state.scene);
-  const renderer = useThree((state) => state.renderer);
-
-  useEffect(() => {
-    // Development-only handle for inspecting the scene from DevTools.
-    if (!import.meta.env.DEV) return;
-
-    Object.assign(globalThis, { heroScene: scene, heroRenderer: renderer });
-  }, [renderer, scene]);
 
   return (
     <>
-      <PrepareHero
-        required={['title', 'feature', 'icons:-6', 'icons:-9.5', 'robot', 'dust', 'star-embers']}
-        sceneReady={() => scene.environment !== null && scene.getObjectByName('glass-shadows') !== undefined}
-      />
+      <PrepareHero />
       <FrameLoop />
       <Lighting />
       <Paper />

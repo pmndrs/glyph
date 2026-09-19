@@ -66,13 +66,8 @@ async function uploadsComplete(renderer: WebGPURenderer): Promise<void> {
 }
 
 /** Owns the render job so warm-up uses the same targets, transmission, shadows, and post passes as playback. */
-export function PrepareHero({
-  required,
-  sceneReady,
-}: {
-  readonly required: readonly string[];
-  readonly sceneReady: () => boolean;
-}) {
+export function PrepareHero() {
+  const required = ['title', 'feature', 'icons:-6', 'icons:-9.5', 'robot', 'dust', 'star-embers'];
   const state = useThree();
   const alive = useRef(false);
   const pending = useEffectEvent(() => required.filter((name) => checks.get(name)?.() !== true));
@@ -145,7 +140,12 @@ export function PrepareHero({
       try {
         render();
 
-        if (sceneReady() && renderPipeline !== null && required.every((name) => checks.get(name)?.() === true)) {
+        if (
+          scene.environment !== null &&
+          scene.getObjectByName('glass-shadows') !== undefined &&
+          renderPipeline !== null &&
+          required.every((name) => checks.get(name)?.() === true)
+        ) {
           publish('compiling');
 
           void renderer

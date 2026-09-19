@@ -2,6 +2,10 @@
 
 ## 2026-09-19
 
+- **Localized hero preparation requirements** — `PrepareHero` now owns its fixed readiness checks for the
+  mounted producers, environment, and glass shadows. Scene composition mounts it without configuration props.
+  The full hero check and WebGPU startup with retained typing checks pass.
+
 - **Inlined trivial hero factories** — Pose and flight defaults now appear at their allocation sites instead of
   calling helpers that only return object literals. The flight data model lives with black-hole traits.
   The full hero check passes, including six existing tests and the production build.
