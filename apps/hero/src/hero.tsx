@@ -1,8 +1,13 @@
+import './view/styles.css';
+
 import { FrameLoop } from './frameloop';
-import { useWorld } from 'koota/react';
+import { useWorld, WorldProvider } from 'koota/react';
 import { Collapse } from './black-hole/traits';
-import { useThree } from '@react-three/fiber/webgpu';
-import { useEffect } from 'react';
+import { Canvas, useThree } from '@react-three/fiber/webgpu';
+import { StrictMode, Suspense, useEffect } from 'react';
+import { NeutralToneMapping } from 'three/webgpu';
+import { actions } from './actions';
+import { createHeroWorld } from './world';
 import { useFonts } from './view/hooks';
 import { Post, BlackHole, GlyphBurst } from './black-hole/renderer';
 import { GlassShadows } from './typography/utils/shadows';
@@ -10,12 +15,37 @@ import { GlassTitle, FeatureLine } from './typography/renderer';
 import { FieldRenderer } from './field/renderer';
 import { Lighting, Paper } from './view/renderer';
 import { RobotRenderer } from './robot/renderer';
-import { PrepareHero } from './view/startup';
+import { HeroLoading, PrepareHero } from './view/startup';
+
+const world = createHeroWorld();
+
+if (import.meta.hot) import.meta.hot.dispose(() => actions(world).disposeHero());
 
 /** `?post=0` renders the plain scene: a clean capture pass, and a way to isolate post-processing. */
 const POST_ENABLED = new URLSearchParams(location.search).get('post') !== '0';
 
 export function Hero() {
+  return (
+    <StrictMode>
+      <HeroLoading />
+      <WorldProvider world={world}>
+        <Canvas
+          camera={{ far: 90, fov: 35, near: 0.5, position: [0, 0, 16] }}
+          dpr={[1, 2]}
+          // Preserve paper white under the scene lighting.
+          renderer={{ scheduler: { fps: 60 }, toneMapping: NeutralToneMapping, toneMappingExposure: 1 }}
+        >
+          <color args={['#f2efe8']} attach="background" />
+          <Suspense fallback={null}>
+            <Scene />
+          </Suspense>
+        </Canvas>
+      </WorldProvider>
+    </StrictMode>
+  );
+}
+
+function Scene() {
   const fonts = useFonts();
   const collapse = useWorld().get(Collapse)!.hole;
   const scene = useThree((state) => state.scene);

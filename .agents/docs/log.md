@@ -2,6 +2,10 @@
 
 ## 2026-09-19
 
+- **Minimized the hero entry point** — Moved the application shell, styles, world lifetime, loading screen,
+  canvas configuration, and Suspense boundary into `hero.tsx`. The scene remains a private component under the
+  canvas, and `main.tsx` only mounts `<Hero />`. See [the hero reference](packages/hero.md).
+
 - **Moved hero scalar state to SoA** — Converted twelve traits to Koota schemas with per-field factories for
   owned vectors, records, and pools. The opaque physics solver resource remains AoS. Actions publish scalar
   writes explicitly, renderers sample current scalars, and the robot query excludes physics state from its

@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:27201129195e464f28b4cee322a1401c44da72a949d482f17c0de3429f84b7d1'
+source_digest: 'sha256:0b16e3a851c1ab393d3af374582ffc9dbd87631d928a0107542fa5c1d5e42bc4'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -156,7 +156,9 @@ robot departure to the black hole. These relationships belong to the experience,
 black hole itself and typography never edits the robot or field. Black-hole state is passed explicitly into the
 field and title systems and the feature-line view. The physics solver depends on the clock and its own state.
 
-`main.tsx` mounts React once and provides the world to the canvas. `hero.tsx` composes the visual modules and supplies their preparation requirements to the view gate.
+`main.tsx` only mounts `<Hero />`. `hero.tsx` owns the application shell, styles, world instance and hot-reload
+disposal, loading screen, canvas configuration, and Suspense boundary. Its private scene component composes the
+visual modules and supplies their preparation requirements to the view gate.
 `frameloop.tsx` samples renderer inputs, delegates DOM input to its domain, and runs the headless application tick
 at 60 Hz. `random.ts` contains the deterministic jitter function shared by independent effects. Root `traits.ts` holds the application playback model. These eight files
 are application-wide. Domain roots expose traits, actions, systems, renderers, and materials where needed.
@@ -328,7 +330,7 @@ the SoA conversion as the cause of the pacing shortfall or establish a material 
 
 The full hero package check passes, including six numerical tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
-The production entry bundle is 598.93 kB gzip, down from 609.11 kB before removing the alternate scene.
+The production entry bundle is 598.47 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/typography/materials.ts`: red G, orange l,
