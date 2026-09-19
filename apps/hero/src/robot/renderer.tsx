@@ -1,5 +1,5 @@
 import { COUNT, LOOK_UP_AT, LOOK_DOWN_AT } from './content';
-import { jitter } from '../random';
+import { jitter } from '../utils';
 import { ICON_CODE_POINTS } from '../icon-field/content';
 import { Text, TextGroup } from '@pmndrs/glyph/react';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';

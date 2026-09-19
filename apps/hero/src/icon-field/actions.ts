@@ -1,7 +1,7 @@
 import { createActions } from 'koota';
 import { euler, mat4, quat, vec3 } from 'math';
 import { mulberry32 } from 'math/random';
-import { jitter } from '../random';
+import { jitter } from '../utils';
 import { Time } from '../time/traits';
 import { IconField, Impacts, type IconLayoutOptions, type Layout, type LatticeState } from './traits';
 import { GLYPHS, GEM_TONES, STAGGER_STEPS, STAGGER_SECONDS } from './content';

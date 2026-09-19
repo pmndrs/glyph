@@ -1,5 +1,5 @@
 import { clamp } from 'math';
-import { jitter } from '../random.ts';
+import { jitter } from '../utils.ts';
 import type { Flight } from './traits';
 
 /** When a piece `fraction` (0 = nearest, 1 = furthest) of the way out leaves, on the hole's clock. */

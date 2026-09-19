@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber/webgpu';
 import { useWorld } from 'koota/react';
 import { useRef } from 'react';
 import type { Group } from 'three/webgpu';
-import { jitter } from '../random';
+import { jitter } from '../utils';
 import type { SlugFont } from '../hero/fonts';
 import { heroReady, textPrepared, usePreparation } from '../hero/prepare';
 import { emberMaterial, uEmberAge, uEmberBloom } from './materials';
