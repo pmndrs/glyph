@@ -1,13 +1,13 @@
 import type { World } from 'koota';
 import { sequenceActions } from '../sequence/actions';
-import { iconFieldActions } from '../icon-field/actions';
+import { iconPaperActions } from '../icon-paper/actions';
 import { Robot } from '../robot/traits';
 import { Title } from '../letters/traits';
 import { PaperView } from './traits';
 import { Time } from '../time/traits';
-import { PATTERN_ANGLE } from '../icon-field/content';
+import { PATTERN_ANGLE } from '../icon-paper/content';
 
-/** Scroll the mounted paper with the foreground icon field. */
+/** Scroll the mounted paper with the foreground icon paper. */
 export function updatePaper(world: World): void {
   const drift = world.get(PaperView);
 
@@ -33,7 +33,7 @@ export function applyLetterLandings(world: World): void {
 
     for (let slot = 0; slot < bodies.landingCount; slot++) {
       const landing = bodies.landings[slot]!;
-      iconFieldActions(world).impactIconFields(landing.x, landing.y, 0);
+      iconPaperActions(world).impactIconPaper(landing.x, landing.y, 0);
     }
 
     sequenceActions(world).triggerSequence('letters-landed');

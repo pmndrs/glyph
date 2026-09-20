@@ -2,6 +2,11 @@
 
 ## 2026-09-20
 
+- **Renamed hero icon-field to icon-paper** — The background domain now uses `IconPaper`, `IconPaperRenderer`,
+  `iconPaperActions`, and corresponding motion and command names. Imports, the font bake, and the package
+  reference use the new path. Grid simulation keeps its lattice terminology. The full hero check and WebGPU
+  opening/input check pass. See [the hero reference](packages/hero.md).
+
 - **Moved hero viewport synchronization to React** — `useViewport` publishes dimensions, camera depth, and
   aspect into the existing world-level `Viewport` trait through a domain action. Removed viewport sampling
   from the frame loop. The full hero check and WebGPU opening/input check pass, including viewport

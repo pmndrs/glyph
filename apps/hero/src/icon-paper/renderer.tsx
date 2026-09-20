@@ -7,8 +7,8 @@ import type { SlugFont } from '../hero/fonts';
 import { holeWarp } from '../black-hole/materials';
 import { usePreparation } from '../hero/prepare';
 import { PATTERN_ANGLE, GLYPHS } from './content';
-import { IconField } from './traits';
-import { iconFieldActions } from './actions';
+import { IconPaper } from './traits';
+import { iconPaperActions } from './actions';
 import { useQuery, useWorld } from 'koota/react';
 import type { Entity } from 'koota';
 
@@ -17,7 +17,7 @@ const pattern = defineTextMaterial((context) => {
   if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
 
   // Opaque, with alpha-to-coverage edges: the icons must write depth, or the glass has nothing behind it to refract.
-  // Depth in the field is carried by colour, not by fading them out.
+  // Depth in the paper is carried by colour, not by fading them out.
   const material = new MeshBasicNodeMaterial({ side: DoubleSide });
   material.positionNode = context.position;
   material.colorNode = context.shader.color;
@@ -29,8 +29,8 @@ const pattern = defineTextMaterial((context) => {
   return material;
 });
 
-export function IconFieldRenderer({ font }: { readonly font: SlugFont }) {
-  return useQuery(IconField).map((entity) => <IconPattern key={entity} entity={entity} font={font} />);
+export function IconPaperRenderer({ font }: { readonly font: SlugFont }) {
+  return useQuery(IconPaper).map((entity) => <IconPattern key={entity} entity={entity} font={font} />);
 }
 
 /**
@@ -39,9 +39,9 @@ export function IconFieldRenderer({ font }: { readonly font: SlugFont }) {
  */
 function IconPattern({ entity, font }: { readonly entity: Entity; readonly font: SlugFont }) {
   const world = useWorld();
-  const field = entity.get(IconField)!;
-  const { iconSize, depth, opacity } = field.options!;
-  const layout = field.layout!;
+  const paper = entity.get(IconPaper)!;
+  const { iconSize, depth, opacity } = paper.options!;
+  const layout = paper.layout!;
   const count = layout.cells.length;
 
   const source = useRef<ThreeText<never> | null>(null);
@@ -55,7 +55,7 @@ function IconPattern({ entity, font }: { readonly entity: Entity; readonly font:
 
   useEffect(
     () => () => {
-      iconFieldActions(world).unmountIconView(entity);
+      iconPaperActions(world).unmountIconView(entity);
       pool.current?.removeFromParent();
       pool.current?.dispose();
       pool.current = undefined;
@@ -87,7 +87,7 @@ function IconPattern({ entity, font }: { readonly entity: Entity; readonly font:
         baselines.current[index] = -copies.glyphAt(index)!.advance / 2;
       }
 
-      iconFieldActions(world).mountIconView(entity, {
+      iconPaperActions(world).mountIconView(entity, {
         group,
         glyphs: copies,
         baselines: baselines.current,

@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:d4b576e66a72772e8e050c43657d7890305ab8a42be9f2ea0cae0aa8ba0218b1'
+source_digest: 'sha256:786c77243b0db01047ec69dec7091389ec9f59afd51597c6d14cdb4796aa8e85'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -84,7 +84,7 @@ sources:
     resource: ../../../apps/hero/scripts/retained-lines.probe.ts
     title: Retained typing compared with independently shaped prefixes
   - id: lattice-simulation
-    resource: ../../../apps/hero/src/icon-field/systems.ts
+    resource: ../../../apps/hero/src/icon-paper/systems.ts
     title: Fixed-capacity lattice simulation and direct glyph transforms
   - id: robot-motion
     resource: ../../../apps/hero/src/robot/systems.ts
@@ -93,7 +93,7 @@ sources:
     resource: ../../../apps/hero/src/robot/systems.ts
     title: Fixed particle storage and distance-based emission
   - id: lattice-check
-    resource: ../../../apps/hero/src/icon-field/systems.test.ts
+    resource: ../../../apps/hero/src/icon-paper/systems.test.ts
     title: Matrix equivalence, bounded simulation, and edge-on morph checks
   - id: physics-check
     resource: ../../../apps/hero/src/physics/systems.test.ts
@@ -180,7 +180,7 @@ implement its transitions.
 | `hero`        | Scene and pipeline composition, script, actor lifecycle, preparation, fonts, lighting, paper, and viewport |
 | `physics`     | Crashcat resource, body traits, actions, fixed stepping, and collision events                              |
 | `letters`     | Title construction and motion, published landings, retained text, feature typing, glass, and projection    |
-| `icon-field`  | Icon sheets, bounded impact queue, spring simulation, morphs, and rendering                                |
+| `icon-paper`  | Icon sheets, bounded impact queue, spring simulation, morphs, and rendering                                |
 | `robot`       | Spawn/reset/run actions, path, published departure, physics target, dust, rig, and display                 |
 | `black-hole`  | Collapse state and controls, attraction functions, glyph warp, and rendered sheet collapse                 |
 | `star-embers` | Emission age, prepared star particles, fire material, bloom, fading, and screen-space sparks               |
@@ -189,7 +189,7 @@ The root owns one Koota world and the combined action set. `world.ts` exports th
 Action sets define commands as arrow-function properties. Root `actions.ts` spreads the domain action sets.
 Hero actions initialize the actors, load the declared script, and replay the experience.
 Domain actions remain directly importable, including when names collide.
-Physics actions configure the solver and install contact/removal handlers before actors spawn. Field actions
+Physics actions configure the solver and install contact/removal handlers before actors spawn. Icon-paper actions
 build each configured lattice before attaching its trait. Letter actions create, replay, and dispose title bodies,
 while letter systems own continuous lift and attraction updates.
 
@@ -204,7 +204,7 @@ Two focused tests cover ordering, event delays, retriggering, and cancellation d
 `frameloop.ts` lists the domain systems in their execution order. Sequence cues run before motion, after robot
 departure, and after letter landings so events take effect in the same frame. Motion targets precede physics,
 and title poses synchronize after physics. `hero/systems.ts` scrolls mounted paper, turns
-landings into field impacts, and forwards landing and departure events to the script. Field, title, and star-ember
+landings into icon-paper impacts, and forwards landing and departure events to the script. Icon-paper, title, and star-ember
 systems read published black-hole state. Feature typing owns its closed-hole condition. The physics solver
 depends on the clock and its own state.
 
@@ -239,7 +239,7 @@ The source root contains `main.tsx`, `app.tsx`, `frameloop.ts`, `world.ts`, `act
 Domain roots expose traits, actions, systems, renderers, and materials where needed.
 `materials.ts` groups each domain's uniforms with the shader graphs and material builders that use them.
 Domain behavior stays with its owner: black-hole beats, robot motion and dust, letter synchronization, and
-icon-field simulation live in systems. Icon-field actions build the lattice, and traits contain its data models.
+icon-paper simulation live in systems. Icon-paper actions build the lattice, and traits contain its data models.
 Shared content lives in each domain's `content.ts`. Letters own retained typing in `text.ts` and glass projection
 in `shadows.tsx`. Only small attraction calculations, cell transforms, outline conversion, and physics pose
 conversion remain in `utils.ts`. Trivial object defaults are inlined at their allocation sites. Simulation does not import React or shader construction.
@@ -253,7 +253,7 @@ state. Query mutations use `updateEach`, while composition reads published landi
 The robot body query selects only `Robot` for writeback, preserving the physics actions' writes to `Body`. Preparation
 passes measured letter geometry into letter actions before playback. Those actions create bodies on the same
 world and dispose them with the mounted title. View systems publish matrices and uniforms after simulation. Replay
-closes the finale, restores the field, lifts the title, and resets typing and robot scheduling through their owners.
+closes the finale, restores the icon paper, lifts the title, and resets typing and robot scheduling through their owners.
 
 The old, unmounted break/rewind presentation and its exclusive director and compressed recording code/tests were
 removed during the Koota migration. The root cleanup also removed retired ink, glass, and silhouette variants and
@@ -288,7 +288,7 @@ static bodies, then return to kinematic or dynamic motion when playback needs th
 Different solvers can produce different resting positions and contact timing. The migration preserves the interaction
 and animation contracts rather than identical trajectories.
 
-The icon field composes glyph transforms directly, replacing 1,108 temporary Three groups. Its neighbour graph,
+The icon paper composes glyph transforms directly, replacing 1,108 temporary Three groups. Its neighbour graph,
 motif candidates, swap flags, selected records, and twelve wave slots are allocated once. Motif changes use a seeded
 `math/random` generator on the frame clock; the next change waits 1.1 seconds from its last start. Each update visits
 each cell and its four neighbours, plus active waves, at a bounded eight substeps: O(cells × (4 + active waves)) time
@@ -304,7 +304,7 @@ application-owned update kernels create no temporary arrays, collections, or pos
 library internals are outside that claim. Scene-authored dimensions and flight durations are positive, transforms
 used as coordinate frames are invertible, and frame deltas are nonnegative.
 
-The field tests compare direct transforms with Three's matrix composition, bound pointer disturbances, and check
+The lattice tests compare direct transforms with Three's matrix composition, bound pointer disturbances, and check
 edge-on motif substitution. The physics tests compose only clock and physics resources with the actors under test. They use real Crashcat contacts to verify bounce, one landing per release, revival, and robot pushes
 without tipping or leaving collisions after departure. Dynamic letter contacts reject vertical support between
 letters, so a falling letter reaches the floor instead of stacking on another letter. Side contacts still separate
@@ -400,7 +400,7 @@ not a fixed delay.
 
 Both typing lines retain their complete glyph records and precompute every prefix's centering with Glyph's own
 layout during preparation. Playback changes matrices only, including the feature line's departure and replay.
-The icon field retains all eleven choices for each cell (12,188 glyph records across both layers); motif changes
+The icon paper retains all eleven choices for each cell (12,188 glyph records across both layers); motif changes
 swap visible records without reshaping text or creating draw meshes. This trades retained storage for stable playback.
 `hero:retained-lines-check` compares all prefixes with independently shaped layouts and verifies transform reset.
 

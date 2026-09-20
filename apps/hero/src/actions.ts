@@ -1,7 +1,7 @@
 import { createActions } from 'koota';
 import { heroActions } from './hero/actions';
 import { blackHoleActions } from './black-hole/actions';
-import { iconFieldActions } from './icon-field/actions';
+import { iconPaperActions } from './icon-paper/actions';
 import { inputActions } from './input/actions';
 import { physicsActions } from './physics/actions';
 import { robotActions } from './robot/actions';
@@ -13,7 +13,7 @@ import { starEmberActions } from './star-embers/actions';
 export const actions = createActions((world) => ({
   ...blackHoleActions(world),
   ...heroActions(world),
-  ...iconFieldActions(world),
+  ...iconPaperActions(world),
   ...inputActions(world),
   ...physicsActions(world),
   ...robotActions(world),

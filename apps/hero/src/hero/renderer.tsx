@@ -7,7 +7,7 @@ import { StarEmbersRenderer } from '../star-embers/renderer';
 import { composeStarEmbers, uEmberBloom } from '../star-embers/materials';
 import { GlassShadows } from '../letters/shadows';
 import { GlassTitle, FeatureLine } from '../letters/renderer';
-import { IconFieldRenderer } from '../icon-field/renderer';
+import { IconPaperRenderer } from '../icon-paper/renderer';
 import { RobotRenderer } from '../robot/renderer';
 import { Lighting, Paper } from './lighting';
 import { PrepareHero } from './prepare';
@@ -21,7 +21,7 @@ export function Hero() {
       <PrepareHero />
       <Lighting />
       <Paper />
-      <IconFieldRenderer font={fonts.icons} />
+      <IconPaperRenderer font={fonts.icons} />
       <GlassTitle font={fonts.title} />
       <GlassShadows />
       <FeatureLine field={fonts.feature} />

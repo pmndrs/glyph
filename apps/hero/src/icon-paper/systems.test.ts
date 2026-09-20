@@ -25,7 +25,7 @@ const layer: IconLayoutOptions = {
   waveImpulse: 146,
 };
 
-describe('icon field motion', () => {
+describe('icon paper motion', () => {
   it('composes the same XYZ transforms as Three, including glyph centering during a flip and collapse', () => {
     const layout = buildLayout(layer);
     const state = createLattice(layout, layer.motifs, layer.seed);

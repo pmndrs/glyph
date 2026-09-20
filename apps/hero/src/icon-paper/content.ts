@@ -57,7 +57,7 @@ function oklch(lightness: number, chroma: number, hueDegrees: number): string {
 /** Hue rotations in OKLab hold lightness and chroma constant across the deep icon sheet. */
 export const GEM_TONES: readonly string[] = [25, 75, 145, 195, 255, 310].map((hue) => oklch(0.7464, 0.105, hue));
 
-/** Scroll direction, as an angle from the x axis. Both layers share it, so the field moves as one. */
+/** Scroll direction, as an angle from the x axis. Both layers share it, so the paper moves as one. */
 export const PATTERN_ANGLE = -0.32;
 /** How long one flip takes, and the window over which a motif's cells start theirs. */
 export const MORPH_SECONDS = 0.32;

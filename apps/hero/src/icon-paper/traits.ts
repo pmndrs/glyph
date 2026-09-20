@@ -82,7 +82,7 @@ export interface LatticeState {
   matrix: Mat4;
 }
 
-export const IconField = trait({
+export const IconPaper = trait({
   options: (): IconLayoutOptions | undefined => undefined,
   layout: (): Layout | undefined => undefined,
   lattice: (): LatticeState | undefined => undefined,

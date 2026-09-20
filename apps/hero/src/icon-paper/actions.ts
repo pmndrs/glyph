@@ -4,19 +4,19 @@ import { euler, mat4, quat, vec3 } from 'math';
 import { mulberry32 } from 'math/random';
 import { jitter } from '../utils';
 import { Time } from '../time/traits';
-import { IconField, Impacts, type IconLayoutOptions, type Layout, type LatticeState } from './traits';
+import { IconPaper, Impacts, type IconLayoutOptions, type Layout, type LatticeState } from './traits';
 import { GLYPHS, GEM_TONES, STAGGER_STEPS, STAGGER_SECONDS } from './content';
 
 const REPEATS = [0, 1];
 
-export const iconFieldActions = createActions((world) => ({
+export const iconPaperActions = createActions((world) => ({
   mountIconView: (entity: Entity, view: IconDraw) => {
     entity.add(IconView(view));
   },
   unmountIconView: (entity: Entity) => {
     entity.remove(IconView);
   },
-  spawnIconFields: () => {
+  spawnIconPaper: () => {
     // Pitch and speed scale together with depth, preserving the sheets' interleave.
     const layers: readonly IconLayoutOptions[] = [
       {
@@ -61,11 +61,11 @@ export const iconFieldActions = createActions((world) => ({
     for (const options of layers) {
       const layout = buildLayout(options);
       world.spawn(
-        IconField({ options, layout, lattice: createLattice(layout, options.motifs, options.seed), offset: 0 }),
+        IconPaper({ options, layout, lattice: createLattice(layout, options.motifs, options.seed), offset: 0 }),
       );
     }
   },
-  impactIconFields: (x: number, y: number, z: number) => {
+  impactIconPaper: (x: number, y: number, z: number) => {
     const impacts = world.get(Impacts)!;
     impacts.latest = (impacts.latest + 1) % impacts.entries.length;
     const impact = impacts.entries[impacts.latest]!;
@@ -74,9 +74,9 @@ export const iconFieldActions = createActions((world) => ({
     vec3.set(impact.world, x, y, z);
     world.set(Impacts, { latest: impacts.latest, next: impacts.next });
   },
-  resetIconFields: () => {
-    world.query(IconField).updateEach(([field]) => {
-      const lattice = field.lattice!;
+  resetIconPaper: () => {
+    world.query(IconPaper).updateEach(([paper]) => {
+      const lattice = paper.lattice!;
       lattice.swallowed.fill(0);
       lattice.x.fill(0);
       lattice.y.fill(0);

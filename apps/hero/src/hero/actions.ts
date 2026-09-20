@@ -1,6 +1,6 @@
 import { createActions } from 'koota';
 import { blackHoleActions } from '../black-hole/actions';
-import { iconFieldActions } from '../icon-field/actions';
+import { iconPaperActions } from '../icon-paper/actions';
 import { letterActions } from '../letters/actions';
 import { physicsActions } from '../physics/actions';
 import { robotActions } from '../robot/actions';
@@ -18,7 +18,7 @@ export const heroActions = createActions((world) => ({
     starEmberActions(world).initializeStarEmbers();
     robotActions(world).spawnRobot();
     letterActions(world).spawnLetters();
-    iconFieldActions(world).spawnIconFields();
+    iconPaperActions(world).spawnIconPaper();
 
     sequenceActions(world).loadSequence([
       { at: 1, run: () => heroActions(world).replayHero() },
@@ -33,7 +33,7 @@ export const heroActions = createActions((world) => ({
     starEmberActions(world).resetStarEmbers();
     letterActions(world).replayTitle();
     robotActions(world).resetRobot();
-    iconFieldActions(world).resetIconFields();
+    iconPaperActions(world).resetIconPaper();
   },
   mountPaperView: (drift: Vector2) => {
     world.add(PaperView(drift));

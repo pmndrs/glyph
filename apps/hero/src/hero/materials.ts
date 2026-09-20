@@ -1,12 +1,12 @@
 import { color, dFdx, dFdy, float, mix, mx_noise_float, normalize, positionLocal, uniform, vec3 } from 'three/tsl';
 import { MeshStandardNodeMaterial, Vector2 } from 'three/webgpu';
 
-/** Paper grain follows the icon field in the paper's own plane units. */
+/** Paper grain follows the icon paper in the paper's own plane units. */
 export const uPaperDrift = uniform(new Vector2());
 
 /** Procedural paper grain. Screen derivatives of the height field tilt the surface normal. */
 export const paperMaterial = new MeshStandardNodeMaterial({ roughness: 0.94, metalness: 0 });
-// Keep grain above pixel scale and scroll it with the icon field.
+// Keep grain above pixel scale and scroll it with the icon paper.
 const sample = positionLocal.add(vec3(uPaperDrift.x, uPaperDrift.y, 0));
 const grain = mx_noise_float(sample.mul(2.4))
   .mul(0.6)

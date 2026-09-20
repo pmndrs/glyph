@@ -8,31 +8,31 @@ import { Pointer } from '../input/traits';
 import { Viewport } from '../hero/traits';
 import { departureAt, release, swirl } from '../black-hole/utils';
 import { HORIZON } from '../black-hole/content';
-import { IconField, IconView, Impacts, type LatticeState, type Layout, type IconLayoutOptions } from './traits';
+import { IconPaper, IconView, Impacts, type LatticeState, type Layout, type IconLayoutOptions } from './traits';
 import { PATTERN_ANGLE, FIELD_OF_VIEW, GLYPHS, MORPH_SECONDS, STAGGER_SECONDS } from './content';
 
 /** Fixed substeps keep stiff neighbour coupling stable. */
 const SUBSTEP = 1 / 120;
 
-export function moveIconFields(world: World): void {
+export function moveIconPaper(world: World): void {
   const time = world.get(Time)!;
   const collapse = world.get(Collapse)!.hole;
   const viewport = world.get(Viewport)!;
   const pointer = world.get(Pointer)!;
   const step = Math.min(time.delta, 0.05);
 
-  world.query(IconField).updateEach(([field]) => {
-    const options = field.options!;
-    const layout = field.layout!;
-    const lattice = field.lattice!;
-    field.offset += step * options.speed * (1 - 0.7 * collapse.pull);
+  world.query(IconPaper).updateEach(([paper]) => {
+    const options = paper.options!;
+    const layout = paper.layout!;
+    const lattice = paper.lattice!;
+    paper.offset += step * options.speed * (1 - 0.7 * collapse.pull);
 
-    if (collapse.beat === 'closed') field.offset %= layout.loop;
+    if (collapse.beat === 'closed') paper.offset %= layout.loop;
 
     // Same rotated conveyor frame as the view, computed without reading a Three group.
     mat4.fromZRotation(lattice.world, PATTERN_ANGLE);
-    lattice.world[12] = -field.offset * Math.cos(PATTERN_ANGLE);
-    lattice.world[13] = -field.offset * Math.sin(PATTERN_ANGLE);
+    lattice.world[12] = -paper.offset * Math.cos(PATTERN_ANGLE);
+    lattice.world[13] = -paper.offset * Math.sin(PATTERN_ANGLE);
     lattice.world[14] = options.depth;
     mat4.invert(lattice.inverse, lattice.world);
     collectWaves(world, lattice, options.waveDelay);
@@ -46,7 +46,7 @@ export function moveIconFields(world: World): void {
 
 /**
  * Transform new impacts into sheet space. Divide simultaneous impacts by the square root of their count to keep
- * a title landing from overpowering the field.
+ * a title landing from overpowering the paper.
  */
 function collectWaves(world: World, state: LatticeState, delay: number): void {
   const pending = world.get(Impacts)!.entries;
@@ -126,7 +126,7 @@ function trackHole(cameraZ: number, state: HoleState, lattice: LatticeState, lay
 
   // The moment the hole opens, every cell is given its turn: nearer ones first, with some jitter.
   if (Number.isNaN(lattice.departAt[0] ?? Number.NaN)) {
-    // Use visible world distance, not the repeated offscreen lattice's extent. The field reaches a new
+    // Use visible world distance, not the repeated offscreen lattice's extent. The gravitational field reaches a new
     // band of the viewport as gravity builds, consistently at both sheet depths.
     const reachOnSheet = (HORIZON * 9 * (cameraZ - depth)) / cameraZ;
 
@@ -308,7 +308,7 @@ export function simulate(
 
 /** Publish lattice transforms only for prepared, mounted icon draws. */
 export function syncIconViews(world: World): void {
-  world.query(IconField, IconView).readEach(([current, mounted]) => {
+  world.query(IconPaper, IconView).readEach(([current, mounted]) => {
     const view = mounted!;
     const state = current.lattice!;
     const layout = current.layout!;

@@ -10,7 +10,7 @@ import { updateGlassShadows } from './letters/shadows';
 import { advanceSequence } from './sequence/systems';
 import { advanceCollapse, syncBlackHoleView } from './black-hole/systems';
 import { syncStarEmbers, syncEmberView } from './star-embers/systems';
-import { moveIconFields, syncIconViews } from './icon-field/systems';
+import { moveIconPaper, syncIconViews } from './icon-paper/systems';
 import { stepPhysics } from './physics/systems';
 import {
   moveRobots,
@@ -53,7 +53,7 @@ export function FrameLoop() {
 
       typeFeature(world);
       fadePointer(world);
-      moveIconFields(world);
+      moveIconPaper(world);
       stepDust(world);
     },
     { id: 'hero-simulation', phase: 'physics', fps: 60 },

@@ -1,6 +1,6 @@
 import { COUNT, FACE_TEXT } from './content';
 import { jitter } from '../utils';
-import { ICON_CODE_POINTS } from '../icon-field/content';
+import { ICON_CODE_POINTS } from '../icon-paper/content';
 import { Text, TextGroup } from '@pmndrs/glyph/react';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
