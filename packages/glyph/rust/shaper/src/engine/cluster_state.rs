@@ -1192,6 +1192,7 @@ impl ClusterArena {
         self.chunk_advance_sums.clear();
         self.chunk_auxiliary_sums.clear();
         self.chunk_flags_or.clear();
+        self.has_unsafe_break = false;
         self.word_breaks.clear();
         self.word_sidecar_mode = WordSidecarMode::Unbuilt;
         self.placement_segment_anchors.clear();
@@ -3692,4 +3693,13 @@ mod tests {
         assert_eq!(dense.arena.word_sidecar_mode, WordSidecarMode::Dense);
         assert_eq!(dense.arena.placement_segment_anchors, vec![1; count]);
     }
+}
+#[test]
+fn clear_resets_the_unsafe_break_summary() {
+    let mut clusters = ClusterArena {
+        has_unsafe_break: true,
+        ..ClusterArena::default()
+    };
+    clusters.clear();
+    assert!(!clusters.has_unsafe_break);
 }
