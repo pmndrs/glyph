@@ -23,7 +23,8 @@ const shared = defineConfig({
     neverBundle: true,
   },
   exports: false,
-  sourcemap: true,
+  // The package excludes the map files, so the emitted modules must not reference them.
+  sourcemap: 'hidden',
   report: false,
   // Auto-naming wraps constructor calls outside their PURE annotations, preventing
   // unused shader stages from being removed. Shader function metadata retains names.

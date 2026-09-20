@@ -2,6 +2,10 @@
 
 ## 2026-09-18
 
+- **Stopped publishing dangling source map references** — The package excludes `dist/**/*.map`, but the emitted modules
+  still carried `sourceMappingURL` comments, so consumers serving the package unbundled logged a warning per module.
+  The build now emits hidden source maps; the map files stay available locally.
+
 - **Added tagged stable publishing alongside canaries** — Extended the existing npm publishing workflow so matching
   `vMAJOR.MINOR.PATCH` tags publish to `latest`, while main-branch pushes continue publishing canaries. Both paths run
   the package check before publication. Version bumps and release preparation remain separate changes.
