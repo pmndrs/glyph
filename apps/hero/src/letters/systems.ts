@@ -1,7 +1,7 @@
 import type { World } from 'koota';
 import { Body } from '../physics/traits';
 import { Time } from '../time/traits';
-import type { HoleState } from '../black-hole/traits';
+import { Collapse, type HoleState } from '../black-hole/traits';
 import { FEATURE_LINE } from './content';
 import { Title, Typing, type TitleBodies } from './traits';
 import { mat4, vec3, lerp } from 'math';
@@ -10,8 +10,9 @@ import { physicsActions } from '../physics/actions';
 import { readBodyPose } from '../physics/utils';
 import { flight, departureAt } from '../black-hole/utils';
 
-export function moveTitle(world: World, hole: HoleState): void {
+export function moveTitle(world: World): void {
   const time = world.get(Time)!;
+  const hole = world.get(Collapse)!.hole;
 
   world.query(Title).updateEach(([title]) => {
     if (title.bodies === undefined) return;
@@ -32,6 +33,8 @@ export function syncTitle(world: World): void {
 }
 
 export function typeFeature(world: World): void {
+  if (world.get(Collapse)!.hole.beat !== 'closed') return;
+
   const time = world.get(Time)!;
 
   world.query(Typing).updateEach(([typing]) => {

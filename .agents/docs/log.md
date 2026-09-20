@@ -2,6 +2,12 @@
 
 ## 2026-09-20
 
+- **Made the hero frame callback systems-only** — `syncHeroFrame` owns renderer input sampling, clock and
+  paper synchronization, and readiness. The renderer adapter lives in `hero/frame.ts`, leaving headless domain
+  systems independent of shaders. Domain systems own collapse-state reads, star-ember age synchronization, and
+  the feature typing condition. The full hero check and WebGPU lift and finale/replay checks pass.
+  See [the hero reference](packages/hero.md).
+
 - **Made hero frame order explicit** — Root `frameloop.ts` directly lists domain systems in execution order,
   preserving cue dispatch around departure and landing events, motion targets before physics, and pose
   synchronization afterward. Hero systems now contain only cross-domain event routing and landing impacts.

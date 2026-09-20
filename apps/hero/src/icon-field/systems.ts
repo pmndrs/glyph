@@ -1,4 +1,4 @@
-import type { HoleState } from '../black-hole/traits';
+import { Collapse, type HoleState } from '../black-hole/traits';
 import type { World } from 'koota';
 import { clamp, mat4, vec3 } from 'math';
 import { mulberry32 } from 'math/random';
@@ -13,8 +13,9 @@ import { PATTERN_ANGLE, FIELD_OF_VIEW, GLYPHS, MORPH_SECONDS, STAGGER_SECONDS } 
 /** Fixed substeps keep stiff neighbour coupling stable. */
 const SUBSTEP = 1 / 120;
 
-export function moveIconFields(world: World, collapse: HoleState): void {
+export function moveIconFields(world: World): void {
   const time = world.get(Time)!;
+  const collapse = world.get(Collapse)!.hole;
   const viewport = world.get(Viewport)!;
   const pointer = world.get(Pointer)!;
   const step = Math.min(time.delta, 0.05);

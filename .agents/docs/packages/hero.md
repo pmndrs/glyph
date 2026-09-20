@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:f9dd739e65f24550bba02d8584b7a7e5676b244f80d75759bdbeeadc50faefa1'
+source_digest: 'sha256:a89b3c10d3b064e4d27d5ea4dc8db05bd16b65a0bd50a892de292d3e482ebf02'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -119,6 +119,9 @@ sources:
   - id: hero-systems
     resource: ../../../apps/hero/src/hero/systems.ts
     title: Landing impacts and hero script event routing
+  - id: hero-frame
+    resource: ../../../apps/hero/src/hero/frame.ts
+    title: Renderer input, clock, and paper synchronization
   - id: sequence-check
     resource: ../../../apps/hero/src/sequence/systems.test.ts
     title: Timeline ordering, delays, retriggering, and cancellation
@@ -198,8 +201,9 @@ Two focused tests cover ordering, event delays, retriggering, and cancellation d
 `frameloop.ts` lists the domain systems in their execution order. Sequence cues run before motion, after robot
 departure, and after letter landings so events take effect in the same frame. Motion targets precede physics,
 and title poses synchronize after physics. `hero/systems.ts` contains only the cross-domain systems that turn
-landings into field impacts and forward landing and departure events to the script. Black-hole state is passed explicitly into the
-field and title systems and the feature-line view. The physics solver depends on the clock and its own state.
+landings into field impacts and forward landing and departure events to the script. Field, title, and star-ember
+systems read published black-hole state. Feature typing owns its closed-hole condition. The physics solver
+depends on the clock and its own state.
 
 `main.tsx` mounts `<App />` inside StrictMode. Root `app.tsx` owns the application shell, world provider,
 loading screen, Canvas, and Suspense boundary. It mounts `<Hero />` from `hero/renderer.tsx` as the
@@ -207,6 +211,9 @@ scene, alongside `<FrameLoop />` from root `frameloop.ts`. Hero owns scene compo
 The frame loop samples renderer inputs, delegates DOM input, and runs domain simulation at 60 Hz using
 the scheduler's timestamp. Domain systems remain independent of React. The lift check steps the same registered
 simulation job used during playback.
+`syncHeroFrame` in `hero/frame.ts` samples viewport and pointer input, advances the clock, updates paper uniforms,
+and reports readiness. This renderer adapter keeps shader imports out of headless domain systems. The frame
+callback contains only its readiness gate and ordered system calls.
 The app publishes no development globals or pause controls. Browser checks import the same world module
 and read domain traits, while diagnostic render buffers remain private to their renderer.
 `hero/prepare.ts` owns preparation requirements and status subscriptions. `hero/loading.tsx` renders the loading overlay. `hero/fonts.ts` loads the fonts, `hero/lighting.tsx` defines the
@@ -393,7 +400,7 @@ They verify resource preparation but do not measure delivery through a screen re
 
 The full hero package check passes, including seven numerical tests, two timeline tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
-The production entry bundle is 599.30 kB gzip, down from 609.11 kB before removing the alternate scene.
+The production entry bundle is 599.31 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/letters/materials.ts`: red G, orange l,
