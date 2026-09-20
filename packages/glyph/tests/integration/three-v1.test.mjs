@@ -351,6 +351,8 @@ test('Text renderOrder ranks grouped paragraphs while standalone Text keeps Thre
   };
 
   const authored = groupedSequence();
+  const transforms = rootDraws(scene)[0].geometry.getAttribute('_pmndrsGlyphTransforms');
+  const transformVersion = transforms.version;
   const minimum = labels[0].boundingBox.min;
   const setMinimum = minimum.set;
   let boundingBoxPublications = 0;
@@ -375,6 +377,11 @@ test('Text renderOrder ranks grouped paragraphs while standalone Text keeps Thre
   );
   assert.equal(instrumentedGlyph.measureCrossings, 0, 'order-only publication reuses measurements');
   assert.equal(boundingBoxPublications, 0, 'order-only publication does not republish cached bounds');
+  assert.equal(
+    transforms.version,
+    transformVersion,
+    'order-only publication leaves the retained transform storage untouched',
+  );
   assert.deepEqual(
     instrumentedGlyph.latestParagraphMutations(),
     [],
