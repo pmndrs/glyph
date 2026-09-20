@@ -402,6 +402,8 @@ test('Text renderOrder ranks grouped paragraphs while standalone Text keeps Thre
   labels[0].renderOrder = 0;
   labels[1].renderOrder = 1;
   labels[2].renderOrder = 2;
+  labels[0].position.x = 7;
+  const transformVersionBeforeMixedUpdate = transforms.version;
   instrumentedGlyph.reset();
   scene.updateMatrixWorld(true);
   assert.deepEqual(groupedSequence(), authored, 'the aggregate draw survives a reverse-order round trip');
@@ -409,6 +411,16 @@ test('Text renderOrder ranks grouped paragraphs while standalone Text keeps Thre
     instrumentedGlyph.latestPlanCounts(),
     { buffers: 0, draws: 0, patches: 9, primitives: 0, resources: 0, retirements: 0 },
     'the reverse-order round trip also stays patch-only',
+  );
+  assert.equal(
+    transforms.version,
+    transformVersionBeforeMixedUpdate + 1,
+    'the ordinary transform synchronizer uploads one mixed transform-and-order frame',
+  );
+  assert.equal(
+    transforms.array[authored[0] * 16 + 12],
+    7,
+    'the order-only publication does not suppress a transform changed in the same frame',
   );
 
   const loose = three.createText({ font, text: 'D' });
@@ -503,6 +515,77 @@ test('rank-only updates republish bindings for direct paragraph transforms', asy
     first.dispose();
     second.dispose();
     group.dispose();
+    font.dispose();
+  }
+});
+
+test('patch-only publications retain direct transform synchronization', async (t) => {
+  const three = await createThreeTestHandle(t, defineThreeConfig({ transformMode: 'direct' }));
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const label = three.createText({
+    constraints: { width: { mode: 'exact', size: 200 } },
+    font,
+    layout: { wrap: 'word' },
+    text: 'one two three four',
+  });
+  scene.add(label);
+  scene.updateMatrixWorld(true);
+
+  try {
+    const draw = rootDraws(scene)[0];
+    label.position.x = 42;
+    label.constraints = { ...label.constraints, width: { mode: 'exact', size: 60 } };
+    instrumentedGlyph.reset();
+    scene.updateMatrixWorld(true);
+    assert.equal(rootDraws(scene)[0], draw, 'a width-only reflow keeps the direct draw');
+    assert.equal(instrumentedGlyph.latestPlanCounts().draws, 0, 'the width-only reflow remains patch-only');
+    assert.equal(draw.matrix.elements[12], 42, 'the direct draw receives the transform changed in the same frame');
+
+    label.visible = false;
+    label.constraints = { ...label.constraints, width: { mode: 'exact', size: 80 } };
+    instrumentedGlyph.reset();
+    scene.updateMatrixWorld(true);
+    assert.equal(
+      instrumentedGlyph.latestPlanCounts().draws,
+      0,
+      'visibility with a width-only reflow remains patch-only',
+    );
+    assert.equal(draw.visible, false, 'the retained direct draw receives visibility changed in the same frame');
+  } finally {
+    label.dispose();
+    font.dispose();
+  }
+});
+
+test('manual shaping preserves sibling Text transforms during draw replacement', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const label = three.createText({ font, text: 'A' });
+  scene.add(label);
+  scene.updateMatrixWorld(true);
+
+  try {
+    scene.matrixWorldAutoUpdate = false;
+    label.position.x = 11;
+    label.updateMatrix();
+    label.updateWorldMatrix(true, false);
+    label.text = 'A much longer replacement paragraph';
+    instrumentedGlyph.reset();
+    glyph.shape();
+    assert.ok(instrumentedGlyph.latestPlanCounts().draws > 0, 'the edit replaces the draw publication');
+    const draw = rootDraws(scene)[0];
+    const transformIndices = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id));
+    const transformId = transformIndices.getX(draw.userData.pmndrsGlyphRunStart);
+    const transforms = draw.geometry.getAttribute('_pmndrsGlyphTransforms');
+    assert.equal(
+      transforms.array[transformId * 16 + 12],
+      11,
+      'manual publication resolves visibility through the application scene rather than the private draw root',
+    );
+  } finally {
+    label.dispose();
     font.dispose();
   }
 });
