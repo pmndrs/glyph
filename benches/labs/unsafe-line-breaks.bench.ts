@@ -38,6 +38,7 @@ const safeText =
 const unsafeBoundaryText =
   'Reveals one grapheme at a time over a duration. Layout stays put and a trigger fires at the end.';
 const longUnsafeBoundaryText = Array.from({ length: 48 }, () => unsafeBoundaryText).join(' ');
+const editedLongUnsafeBoundaryText = longUnsafeBoundaryText.replaceAll('Reveals', 'reveals');
 const disableSpaceKerning = (text: string) =>
   Array.from(text.matchAll(/ /gu), (match) => ({
     end: match.index + 1,
@@ -110,6 +111,21 @@ function benchmarkReflow(
   });
 }
 
+function benchmarkTextEdit(name: string, texts: readonly [string, string], font: typeof safeFont, width: number): void {
+  bench(name, function* () {
+    const created = createParagraph(texts[0], width, font);
+    let alternate = false;
+    const measurementChecksum = yield () => {
+      alternate = !alternate;
+      created.paragraph.text = texts[Number(alternate)];
+      const measurement = created.paragraph.measure();
+      return measurement.contentWidth + measurement.lineCount;
+    };
+    assert(measurementChecksum > 0, 'edited word-wrap measurement must contain laid-out lines');
+    disposeParagraph(created);
+  });
+}
+
 group('unsafe legal line boundaries @core', () => {
   benchmarkReflow('common-safe word-wrap reflow @layout', safeText, safeFont, [419, 420]);
   benchmarkReflow(
@@ -137,5 +153,11 @@ group('unsafe legal line boundaries @core', () => {
     longUnsafeBoundaryText,
     unsafeBoundaryFont,
     [419, 420],
+  );
+  benchmarkTextEdit(
+    'long unsafe-boundary paragraph text edit @layout',
+    [longUnsafeBoundaryText, editedLongUnsafeBoundaryText],
+    unsafeBoundaryFont,
+    420,
   );
 });
