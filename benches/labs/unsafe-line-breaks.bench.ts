@@ -37,9 +37,27 @@ const safeText =
   'Typography is a moving system. Familiar words wrap while a responsive panel changes the space around them.';
 const unsafeBoundaryText =
   'Reveals one grapheme at a time over a duration. Layout stays put and a trigger fires at the end.';
+const longUnsafeBoundaryText = Array.from({ length: 48 }, () => unsafeBoundaryText).join(' ');
+const disableSpaceKerning = (text: string) =>
+  Array.from(text.matchAll(/ /gu), (match) => ({
+    end: match.index + 1,
+    start: match.index,
+    tag: 'kern',
+    value: 0,
+  }));
 let nextHandle = 1;
 
-function createParagraph(text: string, width: number, font: typeof safeFont) {
+function createParagraph(
+  text: string,
+  width: number,
+  font: typeof safeFont,
+  features: readonly {
+    readonly end: number;
+    readonly start: number;
+    readonly tag: string;
+    readonly value: number;
+  }[] = [],
+) {
   const root = glyph.handle(
     `labs:unsafe-line-breaks:${String(nextHandle++)}`,
     defineThreeConfig({ capacity: { size: 256, policy: 'grow' } }),
@@ -48,7 +66,7 @@ function createParagraph(text: string, width: number, font: typeof safeFont) {
   const paragraph = root.createText({
     font,
     text,
-    style: { fontSize: 24 },
+    style: { features, fontSize: 24 },
     layout: { wrap: 'word' },
     constraints: { width: { mode: 'exact', size: width } },
   });
@@ -64,9 +82,20 @@ function disposeParagraph(created: ReturnType<typeof createParagraph>): void {
   created.root.dispose();
 }
 
-function benchmarkReflow(name: string, text: string, font: typeof safeFont, widths: readonly [number, number]): void {
+function benchmarkReflow(
+  name: string,
+  text: string,
+  font: typeof safeFont,
+  widths: readonly [number, number],
+  features: readonly {
+    readonly end: number;
+    readonly start: number;
+    readonly tag: string;
+    readonly value: number;
+  }[] = [],
+): void {
   bench(name, function* () {
-    const created = createParagraph(text, widths[0], font);
+    const created = createParagraph(text, widths[0], font, features);
     let alternate = false;
     const measurementChecksum = yield () => {
       alternate = !alternate;
@@ -84,8 +113,28 @@ function benchmarkReflow(name: string, text: string, font: typeof safeFont, widt
 group('unsafe legal line boundaries @core', () => {
   benchmarkReflow('common-safe word-wrap reflow @layout', safeText, safeFont, [419, 420]);
   benchmarkReflow(
+    'issue 216 reporter workaround @layout',
+    unsafeBoundaryText,
+    unsafeBoundaryFont,
+    [419, 420],
+    disableSpaceKerning(unsafeBoundaryText),
+  );
+  benchmarkReflow(
     'issue 216 unsafe-boundary word-wrap reflow @layout',
     unsafeBoundaryText,
+    unsafeBoundaryFont,
+    [419, 420],
+  );
+  benchmarkReflow(
+    'long reporter workaround paragraph reflow @layout',
+    longUnsafeBoundaryText,
+    unsafeBoundaryFont,
+    [419, 420],
+    disableSpaceKerning(longUnsafeBoundaryText),
+  );
+  benchmarkReflow(
+    'long unsafe-boundary paragraph reflow @layout',
+    longUnsafeBoundaryText,
     unsafeBoundaryFont,
     [419, 420],
   );

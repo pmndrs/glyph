@@ -20,8 +20,12 @@ pub(crate) const CLUSTER_HARD_BREAK: u8 = 1 << 2;
 pub(crate) const CLUSTER_ALLOWED_BREAK: u8 = 1 << 3;
 /// The cluster starts with U+0020 — a justifiable, shrinkable word space.
 pub(crate) const CLUSTER_SPACE: u8 = 1 << 4;
-/// Chunk-summary marker for a negative advance, packed above the cluster flag domain.
+/// Chunk-summary marker for a negative advance. This bit is meaningful only in
+/// `chunk_flags_or`; cluster flags may use higher bits independently.
 pub(crate) const CHUNK_NEGATIVE_ADVANCE: u8 = 1 << 5;
+/// UAX #14 permits a break after this cluster, but HarfRust requires the
+/// selected line to be shaped independently before its width/glyphs are final.
+pub(crate) const CLUSTER_RESHAPE_AFTER: u8 = 1 << 6;
 
 use super::shaping_state::GLYPH_FLAG_UNSAFE_TO_BREAK as GLYPH_UNSAFE_TO_BREAK;
 
@@ -92,6 +96,7 @@ pub(crate) enum LayoutRunSourceKind {
     Paragraph,
     Boundary {
         flow_thread_id: u32,
+        boundary_id: u64,
         role: BoundaryRunRole,
     },
 }
@@ -236,6 +241,10 @@ pub(crate) struct ClusterArena {
     pub chunk_advance_sums: Vec<i64>,
     pub chunk_auxiliary_sums: Vec<i64>,
     pub chunk_flags_or: Vec<u8>,
+    /// Whether any legal word-break opportunity needs boundary-local reshaping.
+    /// Refreshed with the chunk summaries so line composition can select its
+    /// algorithm in O(1) rather than scanning every cluster for every line.
+    pub has_unsafe_break: bool,
     pub word_breaks: Vec<WordBreakRecord>,
     pub(crate) word_sidecar_mode: WordSidecarMode,
     // Stable word/run root per cluster. Positioning reads this directly instead of
@@ -308,6 +317,38 @@ impl ClusterArena {
         reserve(&mut self.shaped, capacity)?;
         reserve(&mut self.unsafe_before, capacity)?;
         Ok(())
+    }
+
+    pub(crate) fn unsafe_splice_island(&self, boundary: usize) -> Option<(usize, usize)> {
+        if boundary == 0
+            || boundary >= self.starts.len()
+            || self.flags.get(boundary - 1).copied().unwrap_or(0) & CLUSTER_RESHAPE_AFTER == 0
+        {
+            return None;
+        }
+        let source_run = self.source_runs[boundary];
+        let binding_handle = self.binding_handles[boundary];
+        let font_handle = self.font_handles[boundary];
+        let same_owner = |index: usize| {
+            self.source_runs[index] == source_run
+                && self.binding_handles[index] == binding_handle
+                && self.font_handles[index] == font_handle
+        };
+        if !same_owner(boundary - 1) || source_run == NO_SOURCE_RUN {
+            return None;
+        }
+        let mut start = boundary;
+        while start > 0 && same_owner(start - 1) && self.flags[start] & CLUSTER_SAFE_BEFORE == 0 {
+            start -= 1;
+        }
+        let mut end = boundary + 1;
+        while end < self.starts.len()
+            && same_owner(end)
+            && self.flags[end] & CLUSTER_SAFE_BEFORE == 0
+        {
+            end += 1;
+        }
+        Some((start, end))
     }
 
     pub(crate) fn build(
@@ -592,7 +633,7 @@ impl ClusterArena {
         }
         self.rebuild_layout_runs_for_shaping(runs)?;
         if cluster_start > 0 {
-            self.flags[cluster_start - 1] &= !CLUSTER_ALLOWED_BREAK;
+            self.flags[cluster_start - 1] &= !(CLUSTER_ALLOWED_BREAK | CLUSTER_RESHAPE_AFTER);
         }
         for line_break in unicode.line_breaks() {
             let Some(preceding) = self.break_target(line_break.position, line_break.required)
@@ -602,19 +643,7 @@ impl ClusterArena {
             if preceding < cluster_start.saturating_sub(1) || preceding >= cluster_end {
                 continue;
             }
-            if line_break.required {
-                self.flags[preceding] |= CLUSTER_REQUIRED_BREAK;
-            } else {
-                let safe = line_break.position == self.ends.last().copied().unwrap_or(0)
-                    || self
-                        .starts
-                        .binary_search(&line_break.position)
-                        .ok()
-                        .is_some_and(|next| self.flags[next] & CLUSTER_SAFE_BEFORE != 0);
-                if safe {
-                    self.flags[preceding] |= CLUSTER_ALLOWED_BREAK;
-                }
-            }
+            self.apply_break(preceding, line_break.position, line_break.required);
         }
         self.refresh_layout_units()?;
         Ok(Some((cluster_start, cluster_end)))
@@ -652,6 +681,10 @@ impl ClusterArena {
             &mut self.chunk_auxiliary_sums,
             &mut self.chunk_flags_or,
         );
+        self.has_unsafe_break = self
+            .chunk_flags_or
+            .iter()
+            .any(|flags| *flags & CLUSTER_RESHAPE_AFTER != 0);
         self.word_breaks.clear();
         self.word_sidecar_mode = WordSidecarMode::Unbuilt;
         self.placement_segment_anchors.clear();
@@ -838,7 +871,14 @@ impl ClusterArena {
                 0.0
             };
             let can_break_after = match wrap {
-                WRAP_WORD => flags & CLUSTER_ALLOWED_BREAK != 0,
+                // Boundary-local shaping can change the exact width on either
+                // side of an unsafe opportunity. The allocation-free intrinsic
+                // scan has no shaper, so keep that opportunity conservative
+                // rather than publishing a min-content width that real layout
+                // cannot satisfy.
+                WRAP_WORD => {
+                    flags & (CLUSTER_ALLOWED_BREAK | CLUSTER_RESHAPE_AFTER) == CLUSTER_ALLOWED_BREAK
+                }
                 WRAP_CHARACTER => {
                     index + 1 == self.starts.len()
                         || self.flags[index + 1] & CLUSTER_SAFE_BEFORE != 0
@@ -1675,21 +1715,30 @@ impl ClusterArena {
             let Some(preceding) = self.break_target(end, line_break.required) else {
                 continue;
             };
-            if line_break.required {
-                self.flags[preceding] |= CLUSTER_REQUIRED_BREAK;
-                continue;
-            }
-            let safe = end == self.ends.last().copied().unwrap_or(0)
-                || self
-                    .starts
-                    .binary_search(&end)
-                    .ok()
-                    .is_some_and(|next| self.flags[next] & CLUSTER_SAFE_BEFORE != 0);
-            if safe {
-                self.flags[preceding] |= CLUSTER_ALLOWED_BREAK;
-            }
+            self.apply_break(preceding, end, line_break.required);
         }
         Ok(())
+    }
+
+    fn apply_break(&mut self, preceding: usize, position: u32, required: bool) {
+        if required {
+            self.flags[preceding] |= CLUSTER_REQUIRED_BREAK;
+        } else {
+            self.flags[preceding] |= CLUSTER_ALLOWED_BREAK;
+        }
+        let requires_reshape = self
+            .starts
+            .binary_search(&position)
+            .ok()
+            .is_some_and(|next| {
+                self.flags[next] & CLUSTER_SAFE_BEFORE == 0
+                    && self.source_runs[preceding] == self.source_runs[next]
+                    && self.binding_handles[preceding] == self.binding_handles[next]
+                    && self.font_handles[preceding] == self.font_handles[next]
+            });
+        if requires_reshape {
+            self.flags[preceding] |= CLUSTER_RESHAPE_AFTER;
+        }
     }
 
     /// Resolve a UAX #14 opportunity to the cluster it can act on, or discard it.
@@ -2741,7 +2790,10 @@ mod tests {
                 clusters.index_at.capacity(),
             )
         );
-        assert_eq!(clusters.flags[1], CLUSTER_SAFE_BEFORE | CLUSTER_SPACE);
+        assert_eq!(
+            clusters.flags[1],
+            CLUSTER_SAFE_BEFORE | CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE | CLUSTER_RESHAPE_AFTER
+        );
         assert_eq!(clusters.flags[2], 0);
     }
 
@@ -3445,6 +3497,27 @@ mod tests {
         let widths = clusters.intrinsic_widths(WRAP_WORD);
         assert_eq!(widths.min_content_width, 9.0);
         assert_eq!(widths.max_content_width, 27.0);
+    }
+
+    #[test]
+    fn intrinsic_widths_do_not_understate_unsafe_boundary_segments() {
+        let clusters = ClusterArena {
+            advances: vec![10.0, 3.0, 7.0],
+            flags: vec![
+                0,
+                CLUSTER_SPACE | CLUSTER_ALLOWED_BREAK | CLUSTER_RESHAPE_AFTER,
+                0,
+            ],
+            starts: vec![0, 1, 2],
+            ends: vec![1, 2, 3],
+            ..Default::default()
+        };
+        let widths = clusters.intrinsic_widths(WRAP_WORD);
+        assert_eq!(
+            widths.min_content_width, 20.0,
+            "the allocation-free scan conservatively joins the two segments around an unsafe break"
+        );
+        assert_eq!(widths.max_content_width, 20.0);
     }
 
     #[test]
