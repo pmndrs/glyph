@@ -12,9 +12,10 @@
 
 - **Kept direct TypeGPU position updates out of semantic publication** — `TypeGpuText.update({ position })` now writes
   only its retained uniform; it does not merge desired text, stage a controller update, enter Wasm, or publish renderer
-  commands. A packed-artifact Labs comparison improves 1,000 moving labels from `4.85 ms` to `0.374 ms` p50 (-92.3%),
+  commands. A packed-artifact Labs comparison improves 1,000 moving labels from `4.85 ms` to `0.363 ms` p50 (-92.5%),
   while normalized Three updates remain neutral and the cold 1,000-label lifecycle stays within the five-percent
-  threshold. Focused rejection evidence proves the semantic root remains idle while the new position is visible.
+  threshold. The deterministic Labs uniform isolates CPU publication cost rather than hardware upload latency. Focused
+  rejection evidence proves the semantic root remains idle while the new position is visible.
 
 - **Recorded the allocation-light adapter publication frontier** — Established the invariant that Rust owns normalized
   text state, ordering, and patch planning while JavaScript adapters bind stable views and realize patches. Catalogued the

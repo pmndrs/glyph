@@ -182,6 +182,7 @@ async function resolveRegistryVersion(requested: string): Promise<string> {
 async function runLabs(name: string, packageRoot: string, blocks: number, suite: PackageLabsSuite): Promise<void> {
   const selection = suite === 'full' ? [] : [`@${suite}`];
   await run(labsExecutable, [...selection, '--name', name, '--force', '--blocks', String(blocks)], benchesRoot, false, {
+    GLYPH_LABS_ARTIFACT_ROLE: name,
     GLYPH_LABS_PACKAGE_ROOT: packageRoot,
   });
   await assertLabsResultSucceeded(resolve(labsResults, `${name}.json`));

@@ -1735,10 +1735,11 @@ bytes. A real-engine integration test checks localized edits, allocation and upl
 parity. These are structural cost checks, not GPU timing claims.
 Position is renderer-owned uniform state. A position-only `TypeGpuText.update()` validates and writes that existing
 uniform without constructing merged semantic state, staging a controller update, entering Wasm, or publishing renderer
-commands. A packed-artifact Labs comparison over 1,000 moving labels improves `4.85 ms` to `0.374 ms` p50 (-92.3%,
-`p<.001`, 95% CI -92.5..-91.8%). Normalized Three updates remain neutral, and the complete cold 1,000-label lifecycle
-moves by +1.9%, below the five-percent decision threshold. A rejection-injected integration test proves position remains
-visible while the semantic root stays idle.
+commands. A packed-artifact Labs comparison over 1,000 moving labels improves `4.85 ms` to `0.363 ms` p50 (-92.5%,
+`p<.001`, 95% CI -92.8..-92.4%). Normalized Three updates remain neutral, and the complete cold 1,000-label lifecycle
+moves by +0.4%, below the five-percent decision threshold. A rejection-injected integration test proves position remains
+visible while the semantic root stays idle. The Labs host is deterministic and isolates CPU publication overhead; its
+uniform stub does not claim the absolute cost of a hardware `queue.writeBuffer` call.
 The focused TypeGPU suite checks real engine publications, named-root isolation, failed input, updates, and disposal.
 The browser probe renders all three formats, checks nonzero alpha, updates, idle frames, empty text, and shared-pass use.
 It also verifies uniform-driven perspective and color changes without reshaping, fragment-position access, depth
