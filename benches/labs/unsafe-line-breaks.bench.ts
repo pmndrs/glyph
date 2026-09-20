@@ -101,7 +101,7 @@ function benchmarkReflow(
     const measurementChecksum = yield () => {
       alternate = !alternate;
       created.paragraph.constraints = {
-        width: { mode: 'exact', size: widths[Number(alternate)] },
+        width: { mode: 'exact', size: alternate ? widths[1] : widths[0] },
       };
       const measurement = created.paragraph.measure();
       return measurement.contentWidth + measurement.lineCount;
@@ -117,7 +117,7 @@ function benchmarkTextEdit(name: string, texts: readonly [string, string], font:
     let alternate = false;
     const measurementChecksum = yield () => {
       alternate = !alternate;
-      created.paragraph.text = texts[Number(alternate)];
+      created.paragraph.text = alternate ? texts[1] : texts[0];
       const measurement = created.paragraph.measure();
       return measurement.contentWidth + measurement.lineCount;
     };
