@@ -20,7 +20,4 @@ export const actions = createActions((world) => ({
   ...sequenceActions(world),
   ...starEmberActions(world),
   ...letterActions(world),
-  disposeHero: () => {
-    world.destroy();
-  },
 }));

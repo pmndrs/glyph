@@ -130,9 +130,6 @@ export function GlassTitle({ font }: { readonly font: SlugFont }) {
         ink.max.x - ink.min.x,
       );
 
-      // Development-only handle for inspecting the smash from DevTools.
-      if (import.meta.env.DEV) Object.assign(globalThis, { heroTitle: bodies.current });
-
       reported.current = true;
     },
     { id: 'hero-title-motion' },

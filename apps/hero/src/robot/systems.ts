@@ -27,7 +27,7 @@ export function moveRobots(world: World): void {
       robot.gone = false;
     }
 
-    robot.time = robot.held ?? robot.time + time.delta;
+    robot.time += time.delta;
 
     if (robot.time >= RUN_SECONDS) {
       robot.time = undefined;

@@ -70,16 +70,10 @@ export function PrepareHero() {
   const required = ['title', 'feature', 'icons:-6', 'icons:-9.5', 'robot', 'dust', 'star-embers'];
   const state = useThree();
   const alive = useRef(false);
-  const pending = useEffectEvent(() => required.filter((name) => checks.get(name)?.() !== true));
 
   useEffect(() => {
     alive.current = true;
     publish('preparing');
-
-    if (import.meta.env.DEV)
-      Object.assign(globalThis, {
-        heroStartup: { phase: () => phase, pending: () => pending() },
-      });
 
     return () => {
       alive.current = false;

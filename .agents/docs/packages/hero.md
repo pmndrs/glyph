@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:b8aad71b24f54fc303aae40b6d1f637b4e93d1d09ad799e282105df75ecc9642'
+source_digest: 'sha256:c9f5793287c9ba3deb795f376a28f867fdd13352b12e705df81c5b4c2cb5b42c'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -142,7 +142,7 @@ sources:
     title: Star fire, bloom, fading, and screen-space sparks
   - id: frameloop
     resource: ../../../apps/hero/src/frameloop.ts
-    title: R3F clock, input, and development controls
+    title: R3F clock and input
 generated:
   by: anthropic/claude-opus-5
   at: '2026-09-18T09:20:00Z'
@@ -179,9 +179,9 @@ implement its transitions.
 | `black-hole`  | Collapse state and controls, attraction functions, glyph warp, and rendered sheet collapse                 |
 | `star-embers` | Emission age, prepared star particles, fire material, bloom, fading, and screen-space sparks               |
 
-The root owns one Koota world and the combined action set. `world.ts` invokes the hero initialization action.
-Action sets define commands as arrow-function properties. Root `actions.ts` spreads the domain action sets and
-adds world disposal. Hero actions initialize the actors, load the declared script, and replay the experience.
+The root owns one Koota world and the combined action set. `world.ts` exports the shared world and invokes the hero initialization action.
+Action sets define commands as arrow-function properties. Root `actions.ts` spreads the domain action sets.
+Hero actions initialize the actors, load the declared script, and replay the experience.
 Domain actions remain directly importable, including when names collide.
 Physics actions configure the solver and install contact/removal handlers before actors spawn. Field actions
 build each configured lattice before attaching its trait. Letter actions create, replay, and dispose title bodies,
@@ -199,10 +199,13 @@ Two focused tests cover ordering, event delays, retriggering, and cancellation d
 to field waves, and samples black-hole pop age for star embers. Black-hole state is passed explicitly into the
 field and title systems and the feature-line view. The physics solver depends on the clock and its own state.
 
-`main.tsx` only mounts `<App />`. Root `app.tsx` owns the application shell, world instance and hot-reload
-disposal, loading screen, Canvas, and Suspense boundary. It mounts `<Hero />` from `hero/renderer.tsx` as the
+`main.tsx` mounts `<App />` inside StrictMode. Root `app.tsx` owns the application shell, world provider,
+loading screen, Canvas, and Suspense boundary. It mounts `<Hero />` from `hero/renderer.tsx` as the
 scene, alongside `<FrameLoop />` from root `frameloop.ts`. Hero owns scene composition and post-processing.
-The frame loop samples renderer inputs, delegates DOM input, and runs the headless hero tick at 60 Hz.
+The frame loop samples renderer inputs, delegates DOM input, and runs the headless hero tick at 60 Hz using
+the scheduler's timestamp. Manual stepping and normal playback share that clock.
+The app publishes no development globals or pause controls. Browser checks import the same world module
+and read domain traits, while diagnostic render buffers remain private to their renderer.
 `hero/prepare.ts` owns preparation requirements and status subscriptions. `hero/loading.tsx` renders the loading overlay. `hero/fonts.ts` loads the fonts, `hero/lighting.tsx` defines the
 lighting and paper, and hero traits and actions own viewport and readiness state. There is no separate view domain.
 The source root contains `main.tsx`, `app.tsx`, `frameloop.ts`, `world.ts`, `actions.ts`, and the shared deterministic `random.ts`.
@@ -344,7 +347,7 @@ bake and the burst in `src/star-embers/traits.ts`. `hero:star-font` restores the
 `hero:bake -- --only=stars` regenerates the tiny Slug subset. Both accept `--check`.
 
 The timeline and feature-glyph paths are pure functions. The WebGPU finale check covers collapse, completion,
-and replay from black. The development handle `heroHole` opens, freezes, or dismisses the beat.
+and replay from black.
 `mise exec -- pnpm scripts run hero:hole-check` steps the actual WebGPU scene through six moments, compares collapsed
 paper against an uncollapsed control, checks the luminous glyphs against a hidden control and the exact black frame, and verifies replay restores the
 paper. It also checks the bloom against a disabled control and confirms stars and their bloom still linger at 0.8 seconds. Its filmstrip is saved at `apps/hero/.cache/hole.png`.
@@ -376,17 +379,17 @@ meshes, or asset loads, with a deliberate new-material control proving the compi
 raw render intervals, CPU submission work, asynchronous GPU queue completion, and long tasks, along with the
 adapter, viewport, and drawing-buffer dimensions. The canvas uses adaptive DPR between 1 and 2, and the report records the actual drawing-buffer size for each run.
 
-With corrected colliders and stacking disabled, two complete 1280×720 replays on Apple Metal with Chromium 149 averaged 60.00 fps
-across 1,701 frames after 3.80 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long
-tasks were observed. Render intervals were 17.5 ms at p95 and 25.4 ms worst, with one interval over 25 ms.
-CPU submission time was 4.3 ms at p95, and browser GPU queue completion was 11.0 ms at p95.
+After removing development controls, two complete 1280×720 replays on Apple Metal with Chromium 149 averaged 59.95 fps
+across 1,699 frames after 3.14 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long
+tasks were observed. Render intervals were 17.7 ms at p95 and 47.7 ms worst, with one interval over 25 ms.
+CPU submission time was 4.3 ms at p95, and browser GPU queue completion was 8.8 ms at p95.
 Earlier SoA runs on this host averaged 58.38 and 58.46 fps, while the preceding AoS commit (`64fcb3bd`) averaged
 58.00 fps. These separate runs show variable pacing and do not establish a speedup from the domain extraction.
 They verify resource preparation but do not measure delivery through a screen recorder or guarantee steady 60 fps.
 
 The full hero package check passes, including seven numerical tests, two timeline tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
-The production entry bundle is 599.57 kB gzip, down from 609.11 kB before removing the alternate scene.
+The production entry bundle is 599.31 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/letters/materials.ts`: red G, orange l,
@@ -413,8 +416,6 @@ directed projection, not multi-bounce light transport.
 
 `mise exec -- pnpm scripts run hero:refraction-check` verifies the five visible stained-glass finishes against an
 untinted control on WebGPU and checks repeated captures and resizing.
-`mise exec -- pnpm scripts run hero:glass-shadow-buffers` tiles the capture, lens normals, heights, and caustic map
-into `apps/hero/.cache/glass-shadow-buffers.png` and logs the caustic grid's vertex sample count.
 `mise exec -- pnpm scripts run hero:lift-sheet` verifies the automatic opening beat, steps its physics deterministically,
 and tiles four moments of the lift and smash into `apps/hero/.cache/lift-sheet.png`.
 `mise exec -- pnpm scripts run hero:glass-shadow-check` compares the projection with disabled and untinted

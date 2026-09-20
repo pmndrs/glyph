@@ -18,7 +18,10 @@ import {
   WebGPURenderer,
 } from 'three/webgpu';
 
-import type { TitleBodies } from '../src/letters/traits';
+const { world } = (await import(new URL('/src/world.ts', location.origin).href)) as typeof import('../src/world');
+const { Title } = (await import(
+  new URL('/src/letters/traits.ts', location.origin).href
+)) as typeof import('../src/letters/traits');
 const { advanceHero } = (await import(
   new URL('/src/hero/systems.ts', location.origin).href
 )) as typeof import('../src/hero/systems');
@@ -46,17 +49,11 @@ if (!(renderer instanceof WebGPURenderer) || !(renderer.backend instanceof WebGP
   throw new Error('The lift sheet must execute on WebGPU');
 }
 
-const title = (globalThis as { heroTitle?: TitleBodies }).heroTitle;
-
-if (title === undefined) throw new Error('Missing the title development handle');
+const title = world.queryFirst(Title)!.get(Title)!.bodies!;
 
 await renderer.compileAsync(scene, camera);
 
 const tiles = MOMENTS.map(() => new RenderTarget(960, 540, { samples: 4 }));
-const world = (globalThis as { heroWorld?: import('koota').World }).heroWorld;
-
-if (world === undefined) throw new Error('Missing the hero world');
-
 // Sample the adapter once after the readiness gate before taking over the deterministic clock.
 getScheduler().stepJob('hero-simulation');
 let clock = world.get(Time)!.now;

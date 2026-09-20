@@ -8,7 +8,10 @@
 import { _roots, getScheduler } from '@react-three/fiber/webgpu';
 import { vec4 } from 'three/tsl';
 import { Mesh, MeshBasicNodeMaterial, PlaneGeometry, Scene, WebGPUBackend, WebGPURenderer } from 'three/webgpu';
-import type { HoleState } from '../src/black-hole/traits';
+const { world } = (await import(new URL('/src/world.ts', location.origin).href)) as typeof import('../src/world');
+const { Collapse } = (await import(
+  new URL('/src/black-hole/traits.ts', location.origin).href
+)) as typeof import('../src/black-hole/traits');
 
 const { EMBER_SECONDS } = (await import(
   new URL('/src/star-embers/traits.ts', location.origin).href
@@ -35,10 +38,6 @@ if (!(renderer instanceof WebGPURenderer) || !(renderer.backend instanceof WebGP
 renderer.onDeviceLost = (info) => {
   throw new Error(info.message);
 };
-
-const hole = (globalThis as { heroHole?: { state(): HoleState } }).heroHole;
-
-if (hole === undefined) throw new Error('Missing hero timeline');
 
 // Three 0.185.1 implements these backend methods. @types/three 0.185.4 omits them.
 const backend = renderer.backend as WebGPUBackend & {
@@ -99,7 +98,7 @@ const render = renderPipeline.render;
 renderPipeline.render = function () {
   const at = performance.now();
   render.call(this);
-  const beat = hole.state();
+  const beat = world.get(Collapse)!.hole;
   const sample: (typeof samples)[number] = {
     at,
     cpuMs: performance.now() - frameStart,
@@ -129,7 +128,7 @@ try {
       await nextFrame();
 
       for (const id of meshIds()) if (!preparedMeshes.has(id)) newMeshes.add(id);
-    } while ((hole.state().sincePop ?? -1) < EMBER_SECONDS);
+    } while ((world.get(Collapse)!.hole.sincePop ?? -1) < EMBER_SECONDS);
   }
 } finally {
   stopBefore();

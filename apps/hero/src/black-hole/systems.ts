@@ -7,10 +7,7 @@ import { easing } from 'math/time';
 
 export function advanceCollapse(world: World): void {
   const collapse = world.get(Collapse)!;
-  collapseAt(
-    collapse.hole,
-    collapse.held ?? (collapse.openedAt === undefined ? -1 : (world.get(Time)!.now - collapse.openedAt) / 1000),
-  );
+  collapseAt(collapse.hole, collapse.openedAt === undefined ? -1 : (world.get(Time)!.now - collapse.openedAt) / 1000);
 }
 
 /** Fraction of the way from `from` to `to`, clamped. */

@@ -13,7 +13,7 @@ import {
   createDefaultCollideShapeSettings,
   rigidBody,
 } from 'crashcat';
-import type { World } from 'koota';
+const { world } = (await import(new URL('/src/world.ts', location.origin).href)) as typeof import('../src/world');
 const { Body, Physics } = (await import(
   new URL('/src/physics/traits.ts', location.origin).href
 )) as typeof import('../src/physics/traits');
@@ -31,10 +31,6 @@ const state = _roots.values().next().value!.store.getState();
 
 if (!(state.renderer instanceof WebGPURenderer) || !(state.renderer.backend instanceof WebGPUBackend))
   throw new Error('Collision verification requires WebGPU');
-
-const world = (globalThis as { heroWorld?: World }).heroWorld;
-
-if (world === undefined) throw new Error('Missing the hero world');
 
 const robot = world.queryFirst(Robot)!;
 const pieces = world.queryFirst(Title)!.get(Title)!.bodies!.pieces;

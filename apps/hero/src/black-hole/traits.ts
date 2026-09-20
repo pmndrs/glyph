@@ -33,7 +33,6 @@ export interface HoleState {
 
 export const Collapse = trait({
   openedAt: undefined as number | undefined,
-  held: undefined as number | undefined,
   hole: (): HoleState => ({
     beat: 'closed',
     time: -1,

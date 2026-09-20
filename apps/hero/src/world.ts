@@ -7,10 +7,6 @@ import { Pointer } from './input/traits';
 import { Time } from './time/traits';
 import { Preparation, Viewport } from './hero/traits';
 
-/** Compose domains on one world before playback. */
-export function createHeroWorld() {
-  const world = createWorld(Time, Pointer, Viewport, Preparation, Timeline, Collapse, Impacts);
-  actions(world).initializeHero();
-
-  return world;
-}
+/** The application shares one initialized world across its domains. */
+export const world = createWorld(Time, Pointer, Viewport, Preparation, Timeline, Collapse, Impacts);
+actions(world).initializeHero();

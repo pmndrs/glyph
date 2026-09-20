@@ -19,36 +19,28 @@ import {
   WebGPURenderer,
 } from 'three/webgpu';
 
-import type { TitleBodies } from '../src/letters/traits';
+const { world } = (await import(new URL('/src/world.ts', location.origin).href)) as typeof import('../src/world');
+const { Collapse } = (await import(
+  new URL('/src/black-hole/traits.ts', location.origin).href
+)) as typeof import('../src/black-hole/traits');
 const { POP_AT } = (await import(
   new URL('/src/black-hole/content.ts', location.origin).href
 )) as typeof import('../src/black-hole/content');
 const { uHoleCollapse } = (await import(
   new URL('/src/black-hole/materials.ts', location.origin).href
 )) as typeof import('../src/black-hole/materials');
-const { blackHoleActions } = (await import(
-  new URL('/src/black-hole/actions.ts', location.origin).href
-)) as typeof import('../src/black-hole/actions');
 const { STAR_SYMBOLS, EMBER_SECONDS } = (await import(
   new URL('/src/star-embers/traits.ts', location.origin).href
 )) as typeof import('../src/star-embers/traits');
 const { uEmberBloom, uEmberFire } = (await import(
   new URL('/src/star-embers/materials.ts', location.origin).href
 )) as typeof import('../src/star-embers/materials');
-const handles = globalThis as {
-  heroWorld?: import('koota').World;
-  heroHole?: { state(): import('../src/black-hole/traits').HoleState };
-  heroTitle?: TitleBodies;
-  heroRobot?: { hold(at: number): void };
-};
-
 while (document.documentElement.dataset.heroState !== 'ready')
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
-const { dismissBlackHole: dismissCollapse, holdBlackHole: holdCollapse } = blackHoleActions(handles.heroWorld!);
 const { actions } = (await import(new URL('/src/actions.ts', location.origin).href)) as typeof import('../src/actions');
-const { replayHero: requestReplay } = actions(handles.heroWorld!);
-const hole = handles.heroHole!.state;
+const { replayHero: requestReplay } = actions(world);
+const hole = () => world.get(Collapse)!.hole;
 const state = _roots.values().next().value!.store.getState();
 state.setFrameloop('never');
 const { renderer, renderPipeline } = state;
@@ -62,11 +54,15 @@ renderer.onDeviceLost = (info) => {
 };
 
 requestReplay();
-handles.heroRobot!.hold(9);
 const scheduler = getScheduler();
-const base = performance.now();
-scheduler.step(base);
-dismissCollapse();
+let clock = performance.now();
+scheduler.step(clock);
+
+while (hole().beat === 'closed') {
+  clock += 1000 / 60;
+  scheduler.step(clock);
+}
+
 const movingSheet = state.scene.getObjectByName('icon-pattern--6')?.parent;
 
 if (movingSheet === null || movingSheet === undefined) throw new Error('Missing the foreground icon sheet');
@@ -75,7 +71,6 @@ const initialScroll = movingSheet.position.x;
 const moments = [0.65, 1.4, 2, 2.95, POP_AT + 0.12, POP_AT + EMBER_SECONDS] as const;
 const tiles = moments.map(() => new RenderTarget(640, 360));
 let elapsed = 0;
-let clock = base;
 const stats: { time: number; lit: number; bright: number; total: number }[] = [];
 
 // PassNode updates once per renderer frame. Capture on its native animation callback so every tile samples
@@ -119,7 +114,6 @@ for (const [index, moment] of moments.entries()) {
     const delta = Math.min(1 / 60, moment - elapsed);
     elapsed += delta;
     clock += delta * 1000;
-    holdCollapse(elapsed);
     scheduler.step(clock);
   }
 
@@ -127,7 +121,10 @@ for (const [index, moment] of moments.entries()) {
     throw new Error('The background stopped scrolling as soon as the hole appeared');
   }
 
-  if (Math.abs(hole().time - moment) > 0.02) throw new Error('The scheduler did not advance the held beat');
+  if (Math.abs(hole().time - moment) > 0.02)
+    throw new Error(
+      `The scheduler did not advance the finale: ${JSON.stringify({ moment, time: hole().time, clock })}`,
+    );
 
   const tile = tiles[index]!;
   const pixels = await capture(tile);
@@ -136,7 +133,7 @@ for (const [index, moment] of moments.entries()) {
 }
 
 // A disabled-collapse control must restore the paper at the same scene state.
-holdCollapse(2.95);
+world.set(Collapse, { openedAt: clock + 16.667 - 2950 });
 scheduler.step(clock + 16.667);
 uHoleCollapse.value = 0;
 const control = new RenderTarget(640, 360);
@@ -163,7 +160,7 @@ burst.traverse((object) => {
   }
 });
 
-holdCollapse(POP_AT + 0.12);
+world.set(Collapse, { openedAt: clock + 33.334 - (POP_AT + 0.12) * 1000 });
 scheduler.step(clock + 33.334);
 const emitted = await capture(control);
 uEmberFire.value = 0;
@@ -223,7 +220,7 @@ for (let offset = 0; offset < emitted.length; offset += 4) {
 
 if (bloomPixels < 100) throw new Error(`The stars have no visible bloom: ${bloomPixels}`);
 
-holdCollapse(POP_AT + 0.8);
+world.set(Collapse, { openedAt: clock + 50.001 - (POP_AT + 0.8) * 1000 });
 scheduler.step(clock + 50.001);
 const embers = await capture(control);
 const lingeringStars = litPixels(embers);

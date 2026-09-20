@@ -2,6 +2,14 @@
 
 ## 2026-09-20
 
+- **Removed hero development controls** — Deleted runtime globals for the world, title, robot, black hole,
+  startup, and shadow buffers, along with debug pause state and the hot-reload disposal branch. The app and
+  browser checks import one shared world from `world.ts`. Simulation uses the scheduler timestamp, so the
+  finale check follows normal playback without pause overrides. Removed the buffer diagnostic while retaining
+  rendered shadow checks. StrictMode remains in `main.tsx`. The full hero check and WebGPU lift,
+  collision, and finale/replay checks pass. Two complete 720p replays average 59.95 fps with no late resources
+  or long tasks and one 47.7 ms frame interval. See [the hero reference](packages/hero.md).
+
 - **Corrected hero glyph colliders and prevented stacking** — Resolve triangulation indices against the
   normalized contour vertices, preserving the filled outline and counters. Dynamic letters retain side contacts
   while rejecting vertical support from other letters, so they settle on the floor with their bounce intact.

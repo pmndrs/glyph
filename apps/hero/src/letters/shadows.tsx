@@ -292,11 +292,6 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
   receiver.renderOrder = 1;
   scene.add(receiver);
 
-  // Development-only handle for reading the intermediate buffers from DevTools and the buffer probe.
-  if (import.meta.env.DEV) {
-    Object.assign(globalThis, { heroGlassShadows: { source, caustic, causticScene, lightCamera, receiver, spread } });
-  }
-
   return {
     renderer,
     scene,
