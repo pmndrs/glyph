@@ -328,7 +328,6 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
               directDrawsByTransform: this.#directDrawsByTransform,
             };
       this.#applyBoundRetirements(frame, context);
-      const preparedTransforms = replacesDraws ? this.#prepareTransforms(preparedDraws) : undefined;
       const retainedMaterials = preparedDraws.changed
         ? new Set([...context.materials.values()].map(({ material }) => material))
         : undefined;
@@ -340,14 +339,24 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
             ].filter((material) => !retainedMaterials.has(material));
       const retiredTextures = preparedDraws.changed ? this.#retiredTextures(context) : [];
       const bufferMutations = this.#stageBoundBufferMutations(frame, context.buffers);
-      return {
+      const publication = {
         context,
         bufferMutations,
         draws: preparedDraws,
-        transforms: preparedTransforms,
         retiredMaterials,
         retiredTextures,
       };
+      return replacesDraws
+        ? {
+            ...publication,
+            replacesDraws: true,
+            transforms: this.#prepareTransforms(preparedDraws),
+          }
+        : {
+            ...publication,
+            replacesDraws: false,
+            transforms: undefined,
+          };
     } catch (error) {
       this.#discardPreparation(context, preparedDraws);
       throw error;
@@ -368,7 +377,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       }
     };
     commitBufferMutations(prepared.bufferMutations);
-    if (prepared.transforms !== undefined) {
+    if (prepared.replacesDraws) {
       commitTransforms(prepared.context.transformAttribute, prepared.transforms);
       for (const update of prepared.transforms.direct) applyTransformUpdate(update);
     }
@@ -391,8 +400,8 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     this.#msdfAtlases = prepared.context.msdfAtlases;
     this.#slugPages = prepared.context.slugPages;
     this.#materials = prepared.context.materials;
-    if (prepared.transforms !== undefined) {
-      this.#transforms = new Map(prepared.context.transforms);
+    if (prepared.replacesDraws) {
+      this.#transforms = prepared.context.transforms;
       this.#indexTransforms();
       this.#transformAttribute = prepared.context.transformAttribute;
       this.#transformGeneration = prepared.context.transformGeneration;
@@ -412,7 +421,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     for (const material of prepared.retiredMaterials) attempt(() => material.dispose());
     for (const texture of prepared.retiredTextures) attempt(() => texture.dispose());
     for (const buffer of retiredBuffers) attempt(() => buffer.attribute.dispose());
-    if (prepared.transforms !== undefined) {
+    if (prepared.replacesDraws) {
       for (const draw of this.#draws) attempt(() => draw.updateMatrixWorld(false));
     }
     this.#originRecords.clear();
@@ -612,7 +621,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       object.updateWorldMatrix(true, false, true);
       if (object === draws.root) relative.identity();
       else relative.multiplyMatrices(rootInverse, object.matrixWorld);
-      const visible = visibleBelowRoot(object, draws.root);
+      const visible = this.#owner.visibleObject?.(object) ?? visibleBelowRoot(object, draws.root);
       if (draws.activeTransformIndices.has(transformId)) {
         const offset = transformId * 16;
         if (offset > contents.length - 16) throw new RangeError('transform identity exceeds its prepared table');
