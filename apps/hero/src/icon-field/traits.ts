@@ -1,3 +1,5 @@
+import type { Glyphs } from '@pmndrs/glyph/three';
+import type { Group, Matrix4 } from 'three/webgpu';
 import { trait } from 'koota';
 import { vec3, type Mat4, type Vec3, type Quat, type Euler } from 'math';
 import type { Mulberry32 } from 'math/random';
@@ -92,3 +94,12 @@ export const Impacts = trait({
   next: 1,
   latest: -1,
 });
+export interface IconDraw {
+  group: Group;
+  glyphs: Glyphs;
+  baselines: Float64Array;
+  hidden: Matrix4;
+  matrix: Matrix4;
+}
+
+export const IconView = trait((): IconDraw | undefined => undefined);

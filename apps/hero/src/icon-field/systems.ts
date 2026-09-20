@@ -1,3 +1,4 @@
+import { cellMatrix } from './utils';
 import { Collapse, type HoleState } from '../black-hole/traits';
 import type { World } from 'koota';
 import { clamp, mat4, vec3 } from 'math';
@@ -7,7 +8,7 @@ import { Pointer } from '../input/traits';
 import { Viewport } from '../hero/traits';
 import { departureAt, release, swirl } from '../black-hole/utils';
 import { HORIZON } from '../black-hole/content';
-import { IconField, Impacts, type LatticeState, type Layout, type IconLayoutOptions } from './traits';
+import { IconField, IconView, Impacts, type LatticeState, type Layout, type IconLayoutOptions } from './traits';
 import { PATTERN_ANGLE, FIELD_OF_VIEW, GLYPHS, MORPH_SECONDS, STAGGER_SECONDS } from './content';
 
 /** Fixed substeps keep stiff neighbour coupling stable. */
@@ -303,4 +304,35 @@ export function simulate(
       state.y[index] = clamp(py + vy * SUBSTEP, -limit, limit);
     }
   }
+}
+
+/** Publish lattice transforms only for prepared, mounted icon draws. */
+export function syncIconViews(world: World): void {
+  world.query(IconField, IconView).readEach(([current, mounted]) => {
+    const view = mounted!;
+    const state = current.lattice!;
+    const layout = current.layout!;
+    const { iconSize } = current.options!;
+    const copies = view.glyphs;
+    view.group.position.x = -current.offset;
+    const now = world.get(Time)!.now;
+
+    for (let index = 0; index < layout.cells.length; index++) {
+      const selected = state.selected[index]!;
+      const previous = state.previous[index]!;
+
+      if (selected !== previous) {
+        copies.setMatrixAt(index * GLYPHS.length + previous, view.hidden);
+        state.previous[index] = selected;
+      }
+
+      const record = index * GLYPHS.length + selected;
+
+      if (state.swallowed[index] === 1) copies.setMatrixAt(record, view.hidden);
+      else {
+        cellMatrix(state.matrix, state, layout, index, view.baselines[record]!, iconSize, now);
+        copies.setMatrixAt(record, view.matrix.fromArray(state.matrix));
+      }
+    }
+  });
 }

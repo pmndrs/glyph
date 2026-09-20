@@ -7,9 +7,8 @@ import type { SlugFont } from '../hero/fonts';
 import { holeWarp } from '../black-hole/materials';
 import { usePreparation } from '../hero/prepare';
 import { PATTERN_ANGLE, GLYPHS } from './content';
-import { cellMatrix } from './utils';
 import { IconField } from './traits';
-import { Time } from '../time/traits';
+import { iconFieldActions } from './actions';
 import { useQuery, useWorld } from 'koota/react';
 import type { Entity } from 'koota';
 
@@ -56,18 +55,17 @@ function IconPattern({ entity, font }: { readonly entity: Entity; readonly font:
 
   useEffect(
     () => () => {
+      iconFieldActions(world).unmountIconView(entity);
       pool.current?.removeFromParent();
       pool.current?.dispose();
       pool.current = undefined;
     },
-    [],
+    [world, entity],
   );
 
   const sheet = useRef<Group>(null);
 
   useFrame(() => {
-    const current = entity.get(IconField)!;
-    const state = current.lattice!;
     const group = sheet.current;
 
     if (group === null) return;
@@ -88,28 +86,14 @@ function IconPattern({ entity, font }: { readonly entity: Entity; readonly font:
         copies.setMatrixAt(index, hidden.current);
         baselines.current[index] = -copies.glyphAt(index)!.advance / 2;
       }
-    }
 
-    const copies = pool.current;
-    group.position.x = -current.offset;
-    const now = world.get(Time)!.now;
-
-    for (let index = 0; index < count; index++) {
-      const selected = state.selected[index]!;
-      const previous = state.previous[index]!;
-
-      if (selected !== previous) {
-        copies.setMatrixAt(index * GLYPHS.length + previous, hidden.current);
-        state.previous[index] = selected;
-      }
-
-      const record = index * GLYPHS.length + selected;
-
-      if (state.swallowed[index] === 1) copies.setMatrixAt(record, hidden.current);
-      else {
-        cellMatrix(state.matrix, state, layout, index, baselines.current[record]!, iconSize, now);
-        copies.setMatrixAt(record, matrix.current.fromArray(state.matrix));
-      }
+      iconFieldActions(world).mountIconView(entity, {
+        group,
+        glyphs: copies,
+        baselines: baselines.current,
+        hidden: hidden.current,
+        matrix: matrix.current,
+      });
     }
   });
 

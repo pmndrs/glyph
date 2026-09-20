@@ -1,7 +1,8 @@
+import { Viewport } from '../hero/traits';
 import type { World } from 'koota';
 import { Time } from '../time/traits';
-import { Collapse, type HoleState } from './traits';
-import { HOLE_CENTER, HORIZON, POP_AT } from './content';
+import { Collapse, BlackHoleView, type HoleState } from './traits';
+import { HOLE_CENTER, HORIZON, POP_AT, PAPER_FROM, PAPER_UNTIL, HORIZON_ON_PLANE } from './content';
 import { clamp } from 'math';
 import { easing } from 'math/time';
 
@@ -45,4 +46,29 @@ export function collapseAt(out: HoleState, t: number): HoleState {
   out.blackout = popped ? 1 : 0;
 
   return out;
+}
+
+/** GPU publication is a view concern. Simulation only changes the collapse trait. */
+export function syncBlackHoleView(world: World): void {
+  const view = world.get(BlackHoleView);
+
+  if (view === undefined) return;
+
+  const { group, uniforms } = view;
+  const current = world.get(Collapse)!.hole;
+  uniforms.uHoleCamera.value = world.get(Viewport)!.cameraZ;
+  group.visible = current.beat === 'open';
+  uniforms.uPresence.value = current.presence;
+  uniforms.uHeat.value = current.pull;
+  const size = Math.max(current.horizon / HORIZON_ON_PLANE, 0.001);
+  group.scale.set(size, size, 1);
+  uniforms.uHoleCenter.value.set(current.x, current.y);
+  uniforms.uHoleHorizon.value = Math.max(current.horizon, 0.001);
+  uniforms.uHoleBend.value = current.pull;
+  uniforms.uHoleBlackout.value = current.blackout;
+  uniforms.uHoleCollapse.value = easing.cubicIn(clamp((current.time - PAPER_FROM) / (PAPER_UNTIL - PAPER_FROM), 0, 1));
+  const t = Math.max(0, current.time);
+  uniforms.uHoleSpin.value = t * 1.2 + 3 * t ** 3;
+  const shake = current.beat === 'open' ? 0.003 * current.pull * (1 - uniforms.uHoleCollapse.value) : 0;
+  uniforms.uHoleShake.value.set(Math.sin(t * 71) * shake, Math.cos(t * 93) * shake);
 }

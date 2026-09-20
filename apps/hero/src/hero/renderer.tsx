@@ -1,8 +1,6 @@
 import { useRenderPipeline } from '@react-three/fiber/webgpu';
-import { useWorld } from 'koota/react';
 import { convertToTexture, pass, uv } from 'three/tsl';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
-import { Collapse } from '../black-hole/traits';
 import { BlackHole } from '../black-hole/renderer';
 import { collapseSheet, uHoleBlackout, uHoleShake } from '../black-hole/materials';
 import { StarEmbersRenderer } from '../star-embers/renderer';
@@ -17,7 +15,6 @@ import { useFonts } from './fonts';
 
 export function Hero() {
   const fonts = useFonts();
-  const collapse = useWorld().get(Collapse)!.hole;
 
   return (
     <>
@@ -27,7 +24,7 @@ export function Hero() {
       <IconFieldRenderer font={fonts.icons} />
       <GlassTitle font={fonts.title} />
       <GlassShadows />
-      <FeatureLine field={fonts.feature} collapse={collapse} />
+      <FeatureLine field={fonts.feature} />
       <RobotRenderer font={fonts.robot} icons={fonts.icons} />
       <BlackHole />
       <StarEmbersRenderer font={fonts.stars} />

@@ -1,6 +1,13 @@
 import { trait } from 'koota';
-
+import type { Group } from 'three/webgpu';
 import { HOLE_CENTER, HORIZON } from './content';
+
+export interface BlackHoleDraw {
+  group: Group;
+  uniforms: typeof import('./materials').holeUniforms;
+}
+
+export const BlackHoleView = trait((): BlackHoleDraw | undefined => undefined);
 
 export interface Flight {
   radius: number;

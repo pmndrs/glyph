@@ -10,3 +10,5 @@ export const BODY_REACH = -0.8;
 export const COUNT = 128;
 export const BASE_Z = 0.12;
 export const RISE = 0.8;
+
+export const FACE_TEXT = 'PMNDRS';

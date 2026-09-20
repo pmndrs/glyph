@@ -4,6 +4,35 @@ import type { HeldPose } from '../physics/traits';
 import type { Flight } from '../black-hole/traits';
 import type { Solid } from './utils';
 import { FEATURE_LINE } from './content';
+import type { Projection } from './shadows';
+import type { Glyphs } from '@pmndrs/glyph/three';
+import type { Matrix4 } from 'three/webgpu';
+import type { RetainedLine } from './text';
+
+export const ShadowView = trait((): Projection | undefined => undefined);
+
+export interface TitleDraw {
+  glyphs: Glyphs;
+  draw: Matrix4;
+}
+
+export interface FeatureDraw {
+  line: RetainedLine;
+  collapsed: boolean;
+  work: {
+    transform: Mat4;
+    rotation: Mat4;
+    pivot: Mat4;
+    world: Mat4;
+    inverse: Mat4;
+    center: Vec3;
+    scale: Vec3;
+    flight: Flight;
+  };
+}
+
+export const TitleView = trait((): TitleDraw | undefined => undefined);
+export const FeatureView = trait((): FeatureDraw | undefined => undefined);
 
 /** One letter of the title: its rest place in world units, its solid for the physics, and its glyph. */
 export interface Letter {

@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:a89b3c10d3b064e4d27d5ea4dc8db05bd16b65a0bd50a892de292d3e482ebf02'
+source_digest: 'sha256:163a22e8554e10bbd079a28577bb69870bfc857294f011c2e1286e56a54fdd8a'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -119,9 +119,9 @@ sources:
   - id: hero-systems
     resource: ../../../apps/hero/src/hero/systems.ts
     title: Landing impacts and hero script event routing
-  - id: hero-frame
-    resource: ../../../apps/hero/src/hero/frame.ts
-    title: Renderer input, clock, and paper synchronization
+  - id: mounted-view-check
+    resource: ../../../apps/hero/src/hero/systems.test.ts
+    title: Loading, mounted view replacement, and detached resource behavior
   - id: sequence-check
     resource: ../../../apps/hero/src/sequence/systems.test.ts
     title: Timeline ordering, delays, retriggering, and cancellation
@@ -163,9 +163,9 @@ and reusable materials keep named storage. Comments describe the current algorit
 
 Koota is pinned to `0.6.6-canary.63c1187`. The organization follows the local `minecraft-like` example. Each
 domain is a module with explicit ownership. Trait files contain data models and defaults. Actions own world and
-entity commands, including construction, disposal, input sampling, and discrete transitions. Systems advance
-existing state and invoke actions for commands. Renderers own mounted resources and send state changes through
-actions. Only the files a domain needs exist.
+entity commands, including construction, disposal, view attachment, and discrete transitions. Systems sample inputs,
+advance existing state, and invoke actions for commands. Renderers prepare mounted resources and attach them through
+actions. Domain view systems update those resources while their view traits are attached. Only the files a domain needs exist.
 Dependencies use domain actions, published state, or explicit inputs rather than reaching into another domain to
 implement its transitions.
 
@@ -200,8 +200,8 @@ Two focused tests cover ordering, event delays, retriggering, and cancellation d
 
 `frameloop.ts` lists the domain systems in their execution order. Sequence cues run before motion, after robot
 departure, and after letter landings so events take effect in the same frame. Motion targets precede physics,
-and title poses synchronize after physics. `hero/systems.ts` contains only the cross-domain systems that turn
-landings into field impacts and forward landing and departure events to the script. Field, title, and star-ember
+and title poses synchronize after physics. `hero/systems.ts` samples the viewport, scrolls mounted paper, turns
+landings into field impacts, and forwards landing and departure events to the script. Field, title, and star-ember
 systems read published black-hole state. Feature typing owns its closed-hole condition. The physics solver
 depends on the clock and its own state.
 
@@ -211,15 +211,18 @@ scene, alongside `<FrameLoop />` from root `frameloop.ts`. Hero owns scene compo
 The frame loop samples renderer inputs, delegates DOM input, and runs domain simulation at 60 Hz using
 the scheduler's timestamp. Domain systems remain independent of React. The lift check steps the same registered
 simulation job used during playback.
-`syncHeroFrame` in `hero/frame.ts` samples viewport and pointer input, advances the clock, updates paper uniforms,
-and reports readiness. This renderer adapter keeps shader imports out of headless domain systems. The frame
-callback contains only its readiness gate and ordered system calls.
+Viewport sampling, pointer sampling, and clock advancement are separate systems before the simulation readiness
+gate. A second ordered job publishes view state after renderer preparation callbacks and before the final render.
+It updates paper, title and icon draws, feature text, robot pose, rig animation, robot display, dust, the black hole,
+embers, and glass shadows. Both jobs are capped at 60 fps. View systems read attached resource traits, so detaching
+a view stops updates before its renderer disposes the resources. Hidden mounted resources remain available for
+preparation. Shadow time belongs to the mounted projection. Simulation systems do not construct shaders.
 The app publishes no development globals or pause controls. Browser checks import the same world module
 and read domain traits, while diagnostic render buffers remain private to their renderer.
 `hero/prepare.ts` owns preparation requirements and status subscriptions. `hero/loading.tsx` renders the loading overlay. `hero/fonts.ts` loads the fonts, `hero/lighting.tsx` defines the
 lighting and paper, and hero traits and actions own viewport state. Preparation owns readiness without mirroring
 it into another trait. There is no separate view domain.
-The source root contains `main.tsx`, `app.tsx`, `frameloop.ts`, `world.ts`, `actions.ts`, and the shared deterministic `random.ts`.
+The source root contains `main.tsx`, `app.tsx`, `frameloop.ts`, `world.ts`, `actions.ts`, and shared deterministic helpers in `utils.ts`.
 Domain roots expose traits, actions, systems, renderers, and materials where needed.
 `materials.ts` groups each domain's uniforms with the shader graphs and material builders that use them.
 Domain behavior stays with its owner: black-hole beats, robot motion and dust, letter synchronization, and
@@ -230,13 +233,13 @@ conversion remain in `utils.ts`. Trivial object defaults are inlined at their al
 Domain tests remain beside their implementations.
 
 Scalar-bearing traits use Koota SoA schemas. Per-field factories retain each entity's math tuples,
-buffers, motion records, and pools. Only `Physics`, the opaque solver resource with its entity map, callbacks,
-and scratch, stays AoS. High-frequency values never pass through React state. SoA `get()` returns a snapshot,
-so actions and singleton updates publish scalar changes with `set`, and render callbacks sample current scalar
+buffers, motion records, and pools. Opaque resources use AoS, including `Physics` with its entity map, callbacks,
+and scratch, and mounted view bundles with scene objects and uniforms. High-frequency values never pass through React state. SoA `get()` returns a snapshot,
+so actions and singleton updates publish scalar changes with `set`, and systems sample current scalar
 state. Query mutations use `updateEach`, while composition reads published landings and departures with `readEach`.
 The robot body query selects only `Robot` for writeback, preserving the physics actions' writes to `Body`. Preparation
 passes measured letter geometry into letter actions before playback. Those actions create bodies on the same
-world and dispose them with the mounted title. Renderers publish matrices and uniforms after simulation. Replay
+world and dispose them with the mounted title. View systems publish matrices and uniforms after simulation. Replay
 closes the finale, restores the field, lifts the title, and resets typing and robot scheduling through their owners.
 
 The old, unmounted break/rewind presentation and its exclusive director and compressed recording code/tests were
@@ -245,7 +248,8 @@ their unused uniforms. Materials and post-processing now live in their domains. 
 and Space replay. Seven numerical tests retain precise evidence for baked title colliders and their counters, glyph transforms, edge-on motif changes,
 bounded pointer response, lift/drop/revival with one landing notification, and robot pushes without tipping or
 leaving an invisible collider behind. These checks catch errors that
-pixel comparisons cannot isolate reliably. Buffer identity and duplicate timeline/path tests are omitted.
+pixel comparisons cannot isolate reliably. Two lifecycle tests cover paper freezing during loading, view replacement,
+hidden mounted dust updates, and detached resources remaining untouched. Buffer identity and duplicate timeline/path tests are omitted.
 
 The application pins Poimandres' `math` package at `0.1.0` for the hero's CPU simulation and transforms. Its upstream
 skill is installed at `.agents/skills/math/SKILL.md` from `pmndrs/math` commit
@@ -344,8 +348,8 @@ its edges. After a brief empty hold, sixteen pastel Unicode stars (★ ☆ ✦ �
 light sparks. The stars shrink like embers, with enhanced bloom and a 1.25-second fade applied after composition so their halos dim along with their cores; the output is exactly black by 4.6 seconds and stays there until Space replays.
 Post-processing is always enabled, and preparation waits for its render pipeline.
 
-The `star-embers` domain owns its SoA emission age, actions, renderer, and materials. Its actions initialize and
-sample the age, and replay clears it before the next opening. It has no dependency on the black-hole domain.
+The `star-embers` domain owns its SoA emission age, actions, systems, renderer, and materials. Its actions initialize
+and reset the age, while its synchronization system samples the published black-hole pop age.
 `hero/renderer.tsx` composes the black-hole sheet warp with the ember bloom, fade, and sparks.
 
 The ember material in `src/star-embers/materials.ts` keeps the exact Slug star silhouettes and shades each glyph's
@@ -367,8 +371,8 @@ paper. It also checks the bloom against a disabled control and confirms stars an
 into the single `assets/robot.glb` the app imports: the model's own floor disc is dropped, textures are reduced to
 1024² WebP, and the animation is resampled. `--check` verifies the committed file is what the source still packs to.
 
-The main render job is capped at 60 fps through R3F v10's native scheduler. The offscreen glass-shadow job is
-capped separately because Canvas's limit does not throttle update jobs.
+The main render job is capped at 60 fps through R3F v10's native scheduler. Simulation and view publication are
+capped separately, with glass-shadow updates last in the view job before the final render.
 
 The scene uses the conference slides’ lime loading screen and centered black Poimandres mark, including
 the subtle shake, reduced-motion support, and 400 ms fade when GPU preparation finishes. Preparation failures
@@ -390,17 +394,17 @@ meshes, or asset loads, with a deliberate new-material control proving the compi
 raw render intervals, CPU submission work, asynchronous GPU queue completion, and long tasks, along with the
 adapter, viewport, and drawing-buffer dimensions. The canvas uses adaptive DPR between 1 and 2, and the report records the actual drawing-buffer size for each run.
 
-After removing development controls, two complete 1280×720 replays on Apple Metal with Chromium 149 averaged 59.95 fps
-across 1,699 frames after 3.14 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long
-tasks were observed. Render intervals were 17.7 ms at p95 and 47.7 ms worst, with one interval over 25 ms.
-CPU submission time was 4.3 ms at p95, and browser GPU queue completion was 8.8 ms at p95.
+After separating mounted view systems, two complete 1280×720 replays on Apple Metal with Chromium 149 averaged 59.93 fps
+across 1,700 frames after 3.09 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long
+tasks were observed. Render intervals were 17.7 ms at p95 and 25.2 ms worst, with two intervals over 25 ms.
+CPU submission time was 4.2 ms at p95, and browser GPU queue completion was 9.0 ms at p95.
 Earlier SoA runs on this host averaged 58.38 and 58.46 fps, while the preceding AoS commit (`64fcb3bd`) averaged
 58.00 fps. These separate runs show variable pacing and do not establish a speedup from the domain extraction.
 They verify resource preparation but do not measure delivery through a screen recorder or guarantee steady 60 fps.
 
-The full hero package check passes, including seven numerical tests, two timeline tests, all five font bake checks, and the production
+The full hero package check passes, including seven numerical tests, two timeline tests, two mounted-view lifecycle tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
-The production entry bundle is 599.31 kB gzip, down from 609.11 kB before removing the alternate scene.
+The production entry bundle is 599.58 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/letters/materials.ts`: red G, orange l,
@@ -436,7 +440,8 @@ and save scene readbacks under `apps/hero/.cache/`.
 
 `pnpm --filter @pmndrs/glyph-hero dev` starts the development server. `bake` and `bake:check` drive the five font
 assets through the Glyph CLI, and `check` runs typecheck, lint, format, unit tests, the bake staleness check, and the
-build. `hero:bake -- --only=<asset-name>` limits a bake to one face. Geist Black, Geist Mono Bold, and Geist Pixel
+build. `mise exec -- pnpm scripts run hero:format` applies the repository formatter to the app.
+`hero:bake -- --only=<asset-name>` limits a bake to one face. Geist Black, Geist Mono Bold, and Geist Pixel
 Grid include Basic Latin. The tagline adds its punctuation to Mono Bold. Icons and stars include only the symbols
 used by their domains. `useFonts` preloads four Slug fonts and the tagline's MSDF font before rendering the scene,
 and each renderer receives only the fonts it draws. The origin scene, video, multilingual faces, unused copy, and

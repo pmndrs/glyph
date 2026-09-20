@@ -1,9 +1,22 @@
+import type { Object3D } from 'three/webgpu';
+import { showLine } from '../letters/text';
 import type { World } from 'koota';
 import { Time } from '../time/traits';
 import { Viewport } from '../hero/traits';
-import { Robot, type Path, type Pose } from './traits';
-import { COUNT, BASE_Z, RISE, ARRIVE_AT, LOOK_UP_AT, LOOK_DOWN_AT, RUN_SECONDS, LEAVE_AT, BODY_REACH } from './content';
-import { clamp, lerp, vec2, vec3 } from 'math';
+import { Robot, RobotView, DustView, type RobotDraw, type Path, type Pose } from './traits';
+import {
+  COUNT,
+  BASE_Z,
+  RISE,
+  ARRIVE_AT,
+  LOOK_UP_AT,
+  LOOK_DOWN_AT,
+  RUN_SECONDS,
+  LEAVE_AT,
+  BODY_REACH,
+  FACE_TEXT,
+} from './content';
+import { clamp, lerp, mat4, quat, vec2, vec3 } from 'math';
 import { easing } from 'math/time';
 import { jitter } from '../utils';
 import { Body } from '../physics/traits';
@@ -223,4 +236,136 @@ function poseAt(out: Pose, time: number, path: Path): Pose {
 
 function saturate(value: number): number {
   return clamp(value, 0, 1);
+}
+
+const TYPE_FROM = LOOK_UP_AT + 1.1;
+const TYPE_UNTIL = LOOK_DOWN_AT + 0.25;
+const GLITCH_SECONDS = 0.3;
+
+/** The eyes' glitch: whether they are shown, and how hard the screen is tearing, `now` seconds into a run. */
+function eyesAt(out: { shown: number; tear: number }, now: number): void {
+  const away = (now - (TYPE_FROM - GLITCH_SECONDS)) / GLITCH_SECONDS;
+  const back = (now - TYPE_UNTIL) / GLITCH_SECONDS;
+
+  if (away >= 0 && away < 1) {
+    out.shown = away < 0.5 ? 1 : 0;
+    out.tear = 1 - Math.abs(away * 2 - 1);
+  } else if (back >= 0 && back < 1) {
+    out.shown = back < 0.5 ? 0 : 1;
+    out.tear = 1 - Math.abs(back * 2 - 1);
+  } else {
+    out.shown = now >= TYPE_FROM && now < TYPE_UNTIL ? 0 : 1;
+    out.tear = 0;
+  }
+}
+
+/** Marshal the animated bone once at each boundary. Composition stays in math scratch. */
+function tiltJoint(joint: Object3D, scratch: RobotDraw['transforms'], heading: number, angle: number): void {
+  if (joint.parent === null) return;
+
+  vec3.set(scratch.axis, -Math.sin(heading), Math.cos(heading), 0);
+  joint.parent.getWorldQuaternion(scratch.parentWorld).toArray(scratch.parent);
+  quat.setAxisAngle(scratch.tilt, scratch.axis, angle);
+  quat.invert(scratch.rotation, scratch.parent);
+  quat.multiply(scratch.rotation, scratch.rotation, scratch.tilt);
+  quat.multiply(scratch.rotation, scratch.rotation, scratch.parent);
+  joint.quaternion.toArray(scratch.local);
+  quat.multiply(scratch.local, scratch.rotation, scratch.local);
+  joint.quaternion.fromArray(scratch.local);
+}
+
+/** Publish the simulated pose into the mounted robot root. */
+export function syncRobotPose(world: World): void {
+  world.query(Robot, RobotView).readEach(([robot, mounted]) => {
+    const { root, lean } = mounted!;
+    root.visible = robot.active;
+
+    if (!robot.active) return;
+
+    const { x, y, heading, look } = robot.motion.pose;
+    root.position.set(x, y, 0.04);
+    root.rotation.z = heading;
+    lean.rotation.y = -0.34 * look;
+  });
+}
+
+/** Advance the mounted rig before placing its screen on the head joint. */
+export function animateRobotRig(world: World): void {
+  world.query(Robot, RobotView).readEach(([robot, mounted]) => {
+    if (!robot.active) return;
+
+    const { root, head, mixer, transforms } = mounted!;
+    const { heading, look } = robot.motion.pose;
+    mixer.update(world.get(Time)!.delta);
+
+    if (head !== undefined && look > 0) {
+      root.updateWorldMatrix(true, true);
+      tiltJoint(head, transforms, heading, -0.62 * look);
+    }
+  });
+}
+
+/** Update the mounted display's text, glitch uniforms, and head-relative pose. */
+export function syncRobotDisplay(world: World): void {
+  world.query(Robot, RobotView).readEach(([robot, mounted]) => {
+    const view = mounted!;
+    const { root, head, transforms } = view;
+
+    if (!robot.active || robot.time === undefined) {
+      showLine(view.line, 0);
+
+      return;
+    }
+
+    // Looking up, the face prints its message a letter at a time, and clears it as it looks back down.
+    const now = robot.time;
+    const count =
+      now >= TYPE_FROM && now < TYPE_UNTIL ? Math.min(FACE_TEXT.length, Math.floor((now - TYPE_FROM) * 9)) : 0;
+    showLine(view.line, count);
+
+    if (view.screen !== null) view.screen.visible = count > 0;
+
+    eyesAt(transforms.eyes, now);
+    const eyes = transforms.eyes;
+    view.eyes.value = eyes.shown;
+    view.tear.value = eyes.tear;
+    view.seed.value = Math.floor(now * 48);
+
+    // The display rides on the head joint: its matrix is the joint's, brought into the mover's frame.
+    const screen = view.screen;
+
+    if (head !== undefined && screen !== null && count > 0) {
+      root.updateWorldMatrix(true, true);
+      root.matrixWorld.toArray(transforms.world);
+      head.matrixWorld.toArray(transforms.head);
+      mat4.invert(transforms.world, transforms.world);
+      mat4.multiply(transforms.world, transforms.world, transforms.head);
+      view.faceLocal.toArray(transforms.face);
+      mat4.multiply(transforms.world, transforms.world, transforms.face);
+      screen.matrix.fromArray(transforms.world);
+    }
+  });
+}
+
+/** Copy simulated dust particles into mounted glyph groups. */
+export function syncDustViews(world: World): void {
+  world.query(Robot, DustView).readEach(([robot, mounted]) => {
+    const groups = mounted!;
+    const particles = robot.dust.particles;
+
+    for (let index = 0; index < COUNT; index++) {
+      const group = groups[index];
+
+      if (group == null) continue;
+
+      const particle = particles[index]!;
+      group.visible = particle.age < particle.life;
+
+      if (!group.visible) continue;
+
+      group.position.fromArray(particle.position);
+      group.rotation.z = particle.roll;
+      group.scale.setScalar(particle.size * (1 - (particle.age / particle.life) * 0.55));
+    }
+  });
 }

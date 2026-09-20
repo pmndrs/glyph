@@ -6,7 +6,8 @@ import { physicsActions } from '../physics/actions';
 import { robotActions } from '../robot/actions';
 import { sequenceActions } from '../sequence/actions';
 import { starEmberActions } from '../star-embers/actions';
-import { Viewport } from './traits';
+import { PaperView } from './traits';
+import type { Vector2 } from 'three/webgpu';
 
 export const heroActions = createActions((world) => ({
   initializeHero: () => {
@@ -26,12 +27,15 @@ export const heroActions = createActions((world) => ({
   replayHero: () => {
     sequenceActions(world).cancelSequence();
     blackHoleActions(world).dismissBlackHole();
-    starEmberActions(world).sampleStarEmbers(undefined);
+    starEmberActions(world).resetStarEmbers();
     letterActions(world).replayTitle();
     robotActions(world).resetRobot();
     iconFieldActions(world).resetIconFields();
   },
-  sampleView: (width: number, height: number, cameraZ: number, aspect: number) => {
-    world.set(Viewport, { width, height, cameraZ, aspect });
+  mountPaperView: (drift: Vector2) => {
+    world.add(PaperView(drift));
+  },
+  unmountPaperView: () => {
+    world.remove(PaperView);
   },
 }));

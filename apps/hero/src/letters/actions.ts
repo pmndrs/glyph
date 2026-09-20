@@ -4,9 +4,38 @@ import { physicsActions } from '../physics/actions';
 import { readBodyPose } from '../physics/utils';
 import { Time } from '../time/traits';
 import { writeLetter } from './systems';
-import { Title, Typing, type Letter, type TitleBodies } from './traits';
+import {
+  Title,
+  Typing,
+  ShadowView,
+  TitleView,
+  FeatureView,
+  type TitleDraw,
+  type FeatureDraw,
+  type Letter,
+  type TitleBodies,
+} from './traits';
+import type { Projection } from './shadows';
 
 export const letterActions = createActions((world) => ({
+  mountTitleView: (view: TitleDraw) => {
+    world.queryFirst(Title)!.add(TitleView(view));
+  },
+  unmountTitleView: () => {
+    world.queryFirst(Title)!.remove(TitleView);
+  },
+  mountFeatureView: (view: FeatureDraw) => {
+    world.queryFirst(Typing)!.add(FeatureView(view));
+  },
+  unmountFeatureView: () => {
+    world.queryFirst(Typing)!.remove(FeatureView);
+  },
+  mountShadowView: (view: Projection) => {
+    world.queryFirst(Title)!.add(ShadowView(view));
+  },
+  unmountShadowView: () => {
+    world.queryFirst(Title)!.remove(ShadowView);
+  },
   spawnLetters: () => {
     world.spawn(Title);
     world.spawn(Typing);

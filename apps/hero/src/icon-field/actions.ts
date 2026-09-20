@@ -1,4 +1,5 @@
-import { createActions } from 'koota';
+import { createActions, type Entity } from 'koota';
+import { IconView, type IconDraw } from './traits';
 import { euler, mat4, quat, vec3 } from 'math';
 import { mulberry32 } from 'math/random';
 import { jitter } from '../utils';
@@ -9,6 +10,12 @@ import { GLYPHS, GEM_TONES, STAGGER_STEPS, STAGGER_SECONDS } from './content';
 const REPEATS = [0, 1];
 
 export const iconFieldActions = createActions((world) => ({
+  mountIconView: (entity: Entity, view: IconDraw) => {
+    entity.add(IconView(view));
+  },
+  unmountIconView: (entity: Entity) => {
+    entity.remove(IconView);
+  },
   spawnIconFields: () => {
     // Pitch and speed scale together with depth, preserving the sheets' interleave.
     const layers: readonly IconLayoutOptions[] = [

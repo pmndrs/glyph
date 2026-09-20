@@ -5,9 +5,14 @@
   "writes": "apps/hero/.cache/glass-shadows.png and stdout",
   "args": ["--gpu", "--timeout", "120", "--screenshot", ".cache/glass-shadows.png"]
 } */
-import { _roots, getScheduler } from '@react-three/fiber/webgpu';
+import { _roots } from '@react-three/fiber/webgpu';
 import { Text } from '@pmndrs/glyph/three';
 import { Mesh, MeshPhysicalNodeMaterial, RenderTarget, WebGPUBackend, WebGPURenderer } from 'three/webgpu';
+
+const { world } = (await import(new URL('/src/world.ts', location.origin).href)) as typeof import('../src/world');
+const { updateGlassShadows } = (await import(
+  new URL('/src/letters/shadows.tsx', location.origin).href
+)) as typeof import('../src/letters/shadows');
 
 function ready() {
   const scene = _roots.values().next().value?.store.getState().scene;
@@ -88,7 +93,7 @@ function changed(a: ArrayLike<number>, b: ArrayLike<number>) {
 
 try {
   await renderer.compileAsync(scene, camera);
-  getScheduler().stepJob('hero-glass-shadows');
+  updateGlassShadows(world);
   const lit = await capture();
   const repeat = await capture();
   projection.visible = false;
@@ -97,7 +102,7 @@ try {
 
   for (const material of glass) material.attenuationColor.set('#ffffff');
 
-  getScheduler().stepJob('hero-glass-shadows');
+  updateGlassShadows(world);
   glass.forEach((material, i) => material.attenuationColor.copy(tints[i]!));
   const untinted = await capture();
 
@@ -108,7 +113,7 @@ try {
     mesh.matrix.elements[14] += 3;
   });
 
-  getScheduler().stepJob('hero-glass-shadows');
+  updateGlassShadows(world);
 
   meshes.forEach((mesh, i) => {
     mesh.position.copy(poses[i]!.position);
@@ -116,7 +121,7 @@ try {
   });
 
   const lifted = await capture();
-  getScheduler().stepJob('hero-glass-shadows');
+  updateGlassShadows(world);
   const landed = await capture();
   const depthResponse = changed(lit, lifted);
   const settled = changed(lit, landed);
@@ -145,7 +150,7 @@ try {
   glass.forEach((material, i) => material.attenuationColor.copy(tints[i]!));
   projection.visible = true;
   renderer.setRenderTarget(previousTarget);
-  getScheduler().stepJob('hero-glass-shadows');
+  updateGlassShadows(world);
 }
 
 // Resizing the readback target invalidates frame-scoped transmission textures. Let the renderer advance its

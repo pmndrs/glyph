@@ -1,5 +1,8 @@
 import { Environment, Lightformer } from '@react-three/drei/webgpu';
-import { paperMaterial } from './materials';
+import { paperMaterial, uPaperDrift } from './materials';
+import { useEffect } from 'react';
+import { useActions } from 'koota/react';
+import { heroActions } from './actions';
 
 /** Bright studio for glass on paper: a broad key overhead, two side strips for edge highlights, and a soft fill. */
 export function Lighting() {
@@ -39,6 +42,14 @@ export function Lighting() {
 }
 
 export function Paper() {
+  const { mountPaperView, unmountPaperView } = useActions(heroActions);
+
+  useEffect(() => {
+    mountPaperView(uPaperDrift.value);
+
+    return unmountPaperView;
+  }, [mountPaperView, unmountPaperView]);
+
   return (
     <mesh material={paperMaterial} position={[0, 0, -14]}>
       <planeGeometry args={[160, 90]} />

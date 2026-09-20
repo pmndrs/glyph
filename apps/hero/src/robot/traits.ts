@@ -1,6 +1,37 @@
 import { trait } from 'koota';
 import { vec2, vec3 } from 'math';
 import { COUNT } from './content';
+import type { Group, Object3D, AnimationMixer, Quaternion, Matrix4 } from 'three/webgpu';
+import type { Mat4, Quat, Vec3 } from 'math';
+import type { RetainedLine } from '../letters/text';
+
+export interface RobotDraw {
+  root: Group;
+  lean: Group;
+  screen: Group | null;
+  head: Object3D | undefined;
+  mixer: AnimationMixer;
+  line: RetainedLine;
+  faceLocal: Matrix4;
+  eyes: { value: number };
+  tear: { value: number };
+  seed: { value: number };
+  transforms: {
+    axis: Vec3;
+    parent: Quat;
+    tilt: Quat;
+    rotation: Quat;
+    local: Quat;
+    parentWorld: Quaternion;
+    world: Mat4;
+    head: Mat4;
+    face: Mat4;
+    eyes: { shown: number; tear: number };
+  };
+}
+
+export const RobotView = trait((): RobotDraw | undefined => undefined);
+export const DustView = trait((): (Group | null)[] | undefined => undefined);
 
 export interface Path {
   /** Arc length from the start to the stop, and from the stop to the exit. */

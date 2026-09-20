@@ -1,9 +1,10 @@
+import { resetLine, showLine } from './text';
 import type { World } from 'koota';
 import { Body } from '../physics/traits';
 import { Time } from '../time/traits';
 import { Collapse, type HoleState } from '../black-hole/traits';
 import { FEATURE_LINE } from './content';
-import { Title, Typing, type TitleBodies } from './traits';
+import { Title, Typing, TitleView, FeatureView, type TitleBodies } from './traits';
 import { mat4, vec3, lerp } from 'math';
 import { easing } from 'math/time';
 import { physicsActions } from '../physics/actions';
@@ -184,4 +185,75 @@ export function writeLetter(state: TitleBodies, index: number): void {
   mat4.multiply(state.matrix, state.inverse, state.body);
   mat4.multiply(state.matrix, state.matrix, piece.offset);
   state.matrices.set(state.matrix, index * 16);
+}
+
+/** Copy simulated letter poses into the mounted glyph draw. */
+export function syncTitleViews(world: World): void {
+  world.query(Title, TitleView).readEach(([title, mounted]) => {
+    const view = mounted!;
+    const state = title.bodies!;
+
+    for (let index = 0; index < state.pieces.length; index++) {
+      view.glyphs.setMatrixAt(state.pieces[index]!.letter.index, view.draw.fromArray(state.matrices, index * 16));
+    }
+  });
+}
+
+/** Apply typing and collapse to prepared, mounted feature glyphs. */
+export function syncFeatureViews(world: World): void {
+  const collapse = world.get(Collapse)!.hole;
+
+  world.query(Typing, FeatureView).readEach(([typing, mounted]) => {
+    const view = mounted!;
+
+    if (collapse.beat === 'closed' && view.collapsed) {
+      view.collapsed = false;
+
+      resetLine(view.line, typing.count);
+    }
+
+    if (collapse.beat !== 'closed') {
+      view.collapsed = true;
+      const copies = view.line.glyphs;
+
+      if (copies !== undefined) {
+        copies.visible = collapse.beat === 'open';
+        copies.updateWorldMatrix(true, false);
+        const work = view.work;
+        copies.matrixWorld.toArray(work.world);
+        mat4.invert(work.inverse, work.world);
+        const records = view.line.records;
+
+        for (let index = 0; index < records.length; index++) {
+          const glyph = records[index]!;
+
+          if (glyph.empty) continue;
+
+          vec3.transformMat4(work.center, glyph.center, work.world);
+          const x = work.center[0] - collapse.x;
+          const y = work.center[1] - collapse.y;
+          const pose = flight(work.flight, collapse.time, departureAt(Math.abs(x) / 12, glyph.index), 0.8);
+          const cosine = Math.cos(pose.turn);
+          const sine = Math.sin(pose.turn);
+          work.center[0] = collapse.x + (x * cosine - y * sine) * pose.radius;
+          work.center[1] = collapse.y + (x * sine + y * cosine) * pose.radius;
+          vec3.transformMat4(work.center, work.center, work.inverse);
+          mat4.fromTranslation(work.transform, work.center);
+          mat4.fromZRotation(work.rotation, pose.turn);
+          mat4.multiply(work.transform, work.transform, work.rotation);
+          vec3.set(work.scale, pose.size * pose.stretch, pose.size / pose.stretch, 1);
+          mat4.scale(work.transform, work.transform, work.scale);
+          vec3.set(work.center, -glyph.center[0], -glyph.center[1], 0);
+          mat4.fromTranslation(work.pivot, work.center);
+          mat4.multiply(work.transform, work.transform, work.pivot);
+          mat4.multiply(work.transform, work.transform, glyph.original);
+          copies.setMatrixAt(glyph.index, view.line.draw.fromArray(work.transform));
+        }
+      }
+
+      return;
+    }
+
+    showLine(view.line, typing.count);
+  });
 }

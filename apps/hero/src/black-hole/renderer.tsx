@@ -1,38 +1,21 @@
-import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useWorld } from 'koota/react';
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { Group } from 'three/webgpu';
-import { heroReady } from '../hero/prepare';
-import { buildMaterials, HORIZON_ON_PLANE, uPresence, uHeat, uHoleCamera, syncHoleUniforms } from './materials';
-import { Collapse } from './traits';
+import { buildMaterials, holeUniforms } from './materials';
+import { blackHoleActions } from './actions';
 import { HOLE_CENTER } from './content';
 
 /** After the robot leaves, the hole pulls in the scene and fades to black. Space replays the sequence. */
 export function BlackHole() {
   const world = useWorld();
   const materials = useMemo(() => buildMaterials(), []);
-  const camera = useThree((state) => state.camera);
   const hole = useRef<Group>(null);
 
-  useFrame(
-    () => {
-      if (!heroReady()) return;
+  useEffect(() => {
+    blackHoleActions(world).mountBlackHoleView({ group: hole.current!, uniforms: holeUniforms });
 
-      uHoleCamera.value = camera.position.z;
-      const state = world.get(Collapse)!.hole;
-      syncHoleUniforms(state);
-      const group = hole.current;
-
-      if (group === null) return;
-
-      group.visible = state.beat === 'open';
-      uPresence.value = state.presence;
-      uHeat.value = state.pull;
-      const size = Math.max(state.horizon / HORIZON_ON_PLANE, 0.001);
-      group.scale.set(size, size, 1);
-    },
-    { fps: 60 },
-  );
+    return () => blackHoleActions(world).unmountBlackHoleView();
+  }, [world]);
 
   return (
     <>

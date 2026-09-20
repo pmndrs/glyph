@@ -1,4 +1,4 @@
-import { COUNT, LOOK_UP_AT, LOOK_DOWN_AT } from './content';
+import { COUNT, FACE_TEXT } from './content';
 import { jitter } from '../utils';
 import { ICON_CODE_POINTS } from '../icon-field/content';
 import { Text, TextGroup } from '@pmndrs/glyph/react';
@@ -14,7 +14,6 @@ import {
   Matrix4,
   type Mesh,
   type MeshStandardMaterial,
-  type Object3D,
   Quaternion,
   Vector3,
 } from 'three/webgpu';
@@ -22,10 +21,10 @@ import type { SlugFont } from '../hero/fonts';
 import { screenInk, uEyes, uTear, uSeed, glitchingScreen, shadowMaterial, dust } from './materials';
 import { mat4, quat, vec3 as vector3 } from 'math';
 import { Robot as RobotTrait } from './traits';
-import { Time } from '../time/traits';
+import { robotActions } from './actions';
 import { useWorld, useQuery } from 'koota/react';
 import type { Entity } from 'koota';
-import { heroReady, textPrepared, usePreparation } from '../hero/prepare';
+import { textPrepared, usePreparation } from '../hero/prepare';
 import { type RetainedLine, createRetainedLine, disposeLine, showLine } from '../letters/text';
 import robotUrl from '../../assets/robot.glb?url';
 
@@ -39,32 +38,8 @@ const FACE_BASIS = new Quaternion().setFromRotationMatrix(
 const FACE_LOCAL = new Matrix4().compose(FACE_CENTER, FACE_BASIS, new Vector3().setScalar(1 / (0.05737 * SCALE)));
 /** The display's finish under the printed pixels. */
 const FACE_FINISH = { roughness: 0.35, metalness: 0.6 };
-/** The eyes glitch out over this long before the text starts, and back in over it after the text clears. */
-const GLITCH_SECONDS = 0.3;
-/** What it prints while it looks up, and how: pixels in the eyes' violet, typed a few a second. */
-const FACE_TEXT = 'PMNDRS';
 const FACE_FONT_SIZE = 0.26;
 const FACE_WIDTH = 1.7;
-/** The happy face holds a moment once it is looking up before the letters take over. */
-const TYPE_FROM = LOOK_UP_AT + 1.1;
-const TYPE_UNTIL = LOOK_DOWN_AT + 0.25;
-
-/** The eyes' glitch: whether they are shown, and how hard the screen is tearing, `now` seconds into a run. */
-function eyesAt(out: { shown: number; tear: number }, now: number): void {
-  const away = (now - (TYPE_FROM - GLITCH_SECONDS)) / GLITCH_SECONDS;
-  const back = (now - TYPE_UNTIL) / GLITCH_SECONDS;
-
-  if (away >= 0 && away < 1) {
-    out.shown = away < 0.5 ? 1 : 0;
-    out.tear = 1 - Math.abs(away * 2 - 1);
-  } else if (back >= 0 && back < 1) {
-    out.shown = back < 0.5 ? 0 : 1;
-    out.tear = 1 - Math.abs(back * 2 - 1);
-  } else {
-    out.shown = now >= TYPE_FROM && now < TYPE_UNTIL ? 0 : 1;
-    out.tear = 0;
-  }
-}
 
 useGLTF.preload(robotUrl);
 
@@ -81,26 +56,6 @@ function createRobotTransforms() {
     face: mat4.create(),
     eyes: { shown: 1, tear: 0 },
   };
-}
-
-/** Marshal the animated bone once at each boundary. Composition stays in math scratch. */
-function tiltJoint(
-  joint: Object3D,
-  scratch: ReturnType<typeof createRobotTransforms>,
-  heading: number,
-  angle: number,
-): void {
-  if (joint.parent === null) return;
-
-  vector3.set(scratch.axis, -Math.sin(heading), Math.cos(heading), 0);
-  joint.parent.getWorldQuaternion(scratch.parentWorld).toArray(scratch.parent);
-  quat.setAxisAngle(scratch.tilt, scratch.axis, angle);
-  quat.invert(scratch.rotation, scratch.parent);
-  quat.multiply(scratch.rotation, scratch.rotation, scratch.tilt);
-  quat.multiply(scratch.rotation, scratch.rotation, scratch.parent);
-  joint.quaternion.toArray(scratch.local);
-  quat.multiply(scratch.local, scratch.rotation, scratch.local);
-  joint.quaternion.fromArray(scratch.local);
 }
 
 export function RobotRenderer({ font, icons }: { readonly font: SlugFont; readonly icons: SlugFont }) {
@@ -137,12 +92,14 @@ function Robot({ entity, font }: { readonly entity: Entity; readonly font: SlugF
 
   useEffect(
     () => () => {
+      robotActions(world).unmountRobotView(entity);
+
       if (line.current !== undefined) disposeLine(line.current);
 
       line.current = undefined;
       screenMaterial.dispose();
     },
-    [screenMaterial],
+    [screenMaterial, world, entity],
   );
 
   /** The display's group: kept in the robot's tree and moved to the head joint each frame. */
@@ -176,57 +133,19 @@ function Robot({ entity, font }: { readonly entity: Entity; readonly font: SlugF
 
         line.current = createRetainedLine(text.current);
         showLine(line.current, FACE_TEXT.length);
-      }
-
-      if (!heroReady()) return;
-
-      const robot = entity.get(RobotTrait)!;
-      root.visible = robot.active;
-
-      if (!robot.active || robot.time === undefined) {
-        showLine(line.current, 0);
-
-        return;
-      }
-
-      const { x, y, heading, look } = robot.motion.pose;
-      root.position.set(x, y, 0.04);
-      root.rotation.z = heading;
-      // Rocks back on its wheels. The axle is the mover's y, and a negative turn about it tips the top backwards.
-      lean.rotation.y = -0.34 * look;
-      // Looking up, the face prints its message a letter at a time, and clears it as it looks back down.
-      const now = robot.time;
-      const count =
-        now >= TYPE_FROM && now < TYPE_UNTIL ? Math.min(FACE_TEXT.length, Math.floor((now - TYPE_FROM) * 9)) : 0;
-      showLine(line.current, count);
-
-      if (face.current !== null) face.current.visible = count > 0;
-
-      eyesAt(transforms.eyes, now);
-      const eyes = transforms.eyes;
-      uEyes.value = eyes.shown;
-      uTear.value = eyes.tear;
-      uSeed.value = Math.floor(now * 48);
-
-      mixer.update(world.get(Time)!.delta);
-
-      if (head !== undefined && look > 0) {
-        root.updateWorldMatrix(true, true);
-        tiltJoint(head, transforms, heading, -0.62 * look);
-      }
-
-      // The display rides on the head joint: its matrix is the joint's, brought into the mover's frame.
-      const screen = face.current;
-
-      if (head !== undefined && screen !== null && count > 0) {
-        root.updateWorldMatrix(true, true);
-        root.matrixWorld.toArray(transforms.world);
-        head.matrixWorld.toArray(transforms.head);
-        mat4.invert(transforms.world, transforms.world);
-        mat4.multiply(transforms.world, transforms.world, transforms.head);
-        FACE_LOCAL.toArray(transforms.face);
-        mat4.multiply(transforms.world, transforms.world, transforms.face);
-        screen.matrix.fromArray(transforms.world);
+        robotActions(world).mountRobotView(entity, {
+          root,
+          lean,
+          screen: face.current,
+          head,
+          mixer,
+          line: line.current,
+          transforms,
+          faceLocal: FACE_LOCAL,
+          eyes: uEyes,
+          tear: uTear,
+          seed: uSeed,
+        });
       }
     },
     { fps: 60 },
@@ -281,26 +200,13 @@ const SLOTS = Array.from({ length: COUNT }, (_, index) => ({
 function RobotDust({ entity, font }: { readonly entity: Entity; readonly font: SlugFont }) {
   const groups = useRef<(Group | null)[]>([]);
   usePreparation('dust', () => groups.current.length === COUNT && groups.current.every(textPrepared));
-  const particles = entity.get(RobotTrait)!.dust.particles;
+  const world = useWorld();
 
-  useFrame(() => {
-    if (!heroReady()) return;
+  useEffect(() => {
+    robotActions(world).mountDustView(entity, groups.current);
 
-    for (let index = 0; index < COUNT; index++) {
-      const group = groups.current[index];
-
-      if (group == null) continue;
-
-      const particle = particles[index]!;
-      group.visible = particle.age < particle.life;
-
-      if (!group.visible) continue;
-
-      group.position.fromArray(particle.position);
-      group.rotation.z = particle.roll;
-      group.scale.setScalar(particle.size * (1 - (particle.age / particle.life) * 0.55));
-    }
-  });
+    return () => robotActions(world).unmountDustView(entity);
+  }, [world, entity]);
 
   return (
     <TextGroup name="robot-glyph-dust">

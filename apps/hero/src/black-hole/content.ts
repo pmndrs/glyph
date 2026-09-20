@@ -10,3 +10,6 @@ export const HORIZON = 1.1;
 export const POP_AT = 3.35;
 export const PAPER_FROM = 2.15;
 export const PAPER_UNTIL = 3.12;
+
+/** Horizon radius relative to the black-hole plane's half size. */
+export const HORIZON_ON_PLANE = 0.42;

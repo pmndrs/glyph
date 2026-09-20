@@ -1,9 +1,7 @@
-import type { HoleState } from '../black-hole/traits';
-import { departureAt, flight } from '../black-hole/utils';
-import { type RetainedLine, createRetainedLine, disposeLine, showLine, resetLine } from './text';
+import { type RetainedLine, createRetainedLine, disposeLine, showLine } from './text';
 import { mat4, vec3 } from 'math';
 import { useWorld } from 'koota/react';
-import { Title, Typing } from './traits';
+import { Title } from './traits';
 import { letterActions } from './actions';
 import { Text } from '@pmndrs/glyph/react';
 import type { Glyphs, Text as ThreeText } from '@pmndrs/glyph/three';
@@ -11,7 +9,7 @@ import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Box3, Vector3, Matrix4 } from 'three/webgpu';
 import { FEATURE_LINE } from './content';
-import { heroReady, usePreparation } from '../hero/prepare';
+import { usePreparation } from '../hero/prepare';
 import type { SlugFont, MsdfFont } from '../hero/fonts';
 import { stainedGlassLetters, titleOrigin } from './materials';
 import { solidOf } from './utils';
@@ -52,6 +50,7 @@ export function GlassTitle({ font }: { readonly font: SlugFont }) {
     const object = word.current;
 
     return () => {
+      letterActions(world).unmountTitleView();
       letterActions(world).disposeTitle(title);
 
       bodies.current = undefined;
@@ -66,16 +65,7 @@ export function GlassTitle({ font }: { readonly font: SlugFont }) {
 
   useFrame(
     () => {
-      if (reported.current) {
-        const state = bodies.current!;
-        const copies = glyphs.current!;
-
-        for (let index = 0; index < state.pieces.length; index++) {
-          copies.setMatrixAt(state.pieces[index]!.letter.index, draw.current.fromArray(state.matrices, index * 16));
-        }
-
-        return;
-      }
+      if (reported.current) return;
 
       const object = word.current;
 
@@ -130,9 +120,10 @@ export function GlassTitle({ font }: { readonly font: SlugFont }) {
         ink.max.x - ink.min.x,
       );
 
+      letterActions(world).mountTitleView({ glyphs: copies, draw: draw.current });
       reported.current = true;
     },
-    { id: 'hero-title-motion' },
+    { id: 'hero-title-prepare' },
   );
 
   return (
@@ -162,15 +153,13 @@ const SIZE_STEP = 0.005;
 /** Wide exact box so `align: 'center'` centres the line on the origin, as the title does. */
 const FEATURE_LAYOUT_WIDTH = 60;
 
-export function FeatureLine({ field, collapse }: { readonly field: MsdfFont; readonly collapse: HoleState }) {
+export function FeatureLine({ field }: { readonly field: MsdfFont }) {
   const text = useRef<ThreeText<never> | null>(null);
   const world = useWorld();
-  const typing = world.queryFirst(Typing)!;
   /** Set once the full line has been measured against the title and the size and tracking are settled. */
   const [fit, setFit] = useState<{ fontSize: number; letterSpacing: number } | undefined>(undefined);
   const fitRevision = useRef(-1);
   const line = useRef<RetainedLine | undefined>(undefined);
-  const collapsed = useRef(false);
   usePreparation('feature', () => line.current !== undefined);
   const scratch = useRef(
     useMemo(
@@ -190,64 +179,18 @@ export function FeatureLine({ field, collapse }: { readonly field: MsdfFont; rea
 
   useEffect(
     () => () => {
+      letterActions(world).unmountFeatureView();
+
       if (line.current !== undefined) disposeLine(line.current);
 
       line.current = undefined;
     },
-    [],
+    [world],
   );
 
   useFrame(
     () => {
       const object = text.current;
-
-      if (collapse.beat === 'closed' && collapsed.current) {
-        collapsed.current = false;
-
-        if (line.current !== undefined) resetLine(line.current, typing.get(Typing)!.count);
-      }
-
-      if (collapse.beat !== 'closed' && line.current !== undefined) {
-        collapsed.current = true;
-        const copies = line.current.glyphs;
-
-        if (copies !== undefined) {
-          copies.visible = collapse.beat === 'open';
-          copies.updateWorldMatrix(true, false);
-          const work = scratch.current;
-          copies.matrixWorld.toArray(work.world);
-          mat4.invert(work.inverse, work.world);
-          const records = line.current.records;
-
-          for (let index = 0; index < records.length; index++) {
-            const glyph = records[index]!;
-
-            if (glyph.empty) continue;
-
-            vec3.transformMat4(work.center, glyph.center, work.world);
-            const x = work.center[0] - collapse.x;
-            const y = work.center[1] - collapse.y;
-            const pose = flight(work.flight, collapse.time, departureAt(Math.abs(x) / 12, glyph.index), 0.8);
-            const cosine = Math.cos(pose.turn);
-            const sine = Math.sin(pose.turn);
-            work.center[0] = collapse.x + (x * cosine - y * sine) * pose.radius;
-            work.center[1] = collapse.y + (x * sine + y * cosine) * pose.radius;
-            vec3.transformMat4(work.center, work.center, work.inverse);
-            mat4.fromTranslation(work.transform, work.center);
-            mat4.fromZRotation(work.rotation, pose.turn);
-            mat4.multiply(work.transform, work.transform, work.rotation);
-            vec3.set(work.scale, pose.size * pose.stretch, pose.size / pose.stretch, 1);
-            mat4.scale(work.transform, work.transform, work.scale);
-            vec3.set(work.center, -glyph.center[0], -glyph.center[1], 0);
-            mat4.fromTranslation(work.pivot, work.center);
-            mat4.multiply(work.transform, work.transform, work.pivot);
-            mat4.multiply(work.transform, work.transform, glyph.original);
-            copies.setMatrixAt(glyph.index, line.current.draw.fromArray(work.transform));
-          }
-        }
-
-        return;
-      }
 
       // Fit first: the line renders its whole text, unseen, until it knows what size and tracking match the title.
       if (fit === undefined) {
@@ -280,11 +223,8 @@ export function FeatureLine({ field, collapse }: { readonly field: MsdfFont; rea
 
         line.current = createRetainedLine(object);
         showLine(line.current, FEATURE_LINE.length);
+        letterActions(world).mountFeatureView({ line: line.current, work: scratch.current, collapsed: false });
       }
-
-      if (!heroReady()) return;
-
-      showLine(line.current, typing.get(Typing)!.count);
     },
     { fps: 60 },
   );

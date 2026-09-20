@@ -2,6 +2,14 @@
 
 ## 2026-09-20
 
+- **Separated hero simulation from mounted view updates** — Root `frameloop.ts` lists focused input, clock,
+  simulation, and view systems in scheduler order. Renderers prepare resources and attach view traits through
+  domain actions, then detach them before disposal. Robot pose, rig animation, display, and dust are separate
+  systems. Hidden views still prepare before playback, and shadow time belongs to its projection. The full hero
+  check passes with 11 tests, including loading and mounted-resource lifecycle regressions. WebGPU lift, dust,
+  shadow, retained-text, and finale/replay checks pass. Two complete 720p replays average 59.93 fps with no late
+  resources or long tasks and a 25.2 ms worst frame interval. See [the hero reference](packages/hero.md).
+
 - **Made the hero frame callback systems-only** — `syncHeroFrame` owns renderer input sampling, clock and
   paper synchronization, and readiness. The renderer adapter lives in `hero/frame.ts`, leaving headless domain
   systems independent of shaders. Domain systems own collapse-state reads, star-ember age synchronization, and

@@ -1,11 +1,17 @@
 import { createActions } from 'koota';
-import { StarEmbers } from './traits';
+import { StarEmbers, EmberView, type EmberDraw } from './traits';
 
 export const starEmberActions = createActions((world) => ({
+  mountEmberView: (view: EmberDraw) => {
+    world.add(EmberView(view));
+  },
+  unmountEmberView: () => {
+    world.remove(EmberView);
+  },
   initializeStarEmbers: () => {
     world.add(StarEmbers);
   },
-  sampleStarEmbers: (age: number | undefined) => {
-    world.set(StarEmbers, { age: age ?? -1 });
+  resetStarEmbers: () => {
+    world.set(StarEmbers, { age: -1 });
   },
 }));

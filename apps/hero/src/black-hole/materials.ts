@@ -1,5 +1,4 @@
-import type { HoleState } from './traits';
-import { HOLE_CENTER, HORIZON, PAPER_FROM, PAPER_UNTIL } from './content';
+import { HOLE_CENTER, HORIZON, HORIZON_ON_PLANE } from './content';
 import {
   uniform,
   atan,
@@ -20,8 +19,6 @@ import {
 } from 'three/tsl';
 import { Vector2, type Node, type TextureNode, AdditiveBlending, MeshBasicNodeMaterial } from 'three/webgpu';
 import type { ThreeTextMaterialContext } from '@pmndrs/glyph/three';
-import { clamp } from 'math';
-import { easing } from 'math/time';
 
 /** Shared with the glyph shaders: where the hole is, how far it reaches, how hard it bends, and how it spins. */
 export const uHoleCenter = uniform(new Vector2(HOLE_CENTER[0], HOLE_CENTER[1]));
@@ -113,12 +110,22 @@ export function holeWarp(context: SlugContext): HoleWarp {
   };
 }
 
-/** The horizon's radius on the hole's own plane, as a fraction of the plane's half size. */
-export const HORIZON_ON_PLANE = 0.42;
-
 /** The hole's own drawing, driven from the beat once a frame. */
 export const uPresence = uniform(0);
 export const uHeat = uniform(0);
+
+export const holeUniforms = {
+  uHoleCenter,
+  uHoleHorizon,
+  uHoleBend,
+  uHoleBlackout,
+  uHoleCamera,
+  uHoleCollapse,
+  uHoleSpin,
+  uHoleShake,
+  uPresence,
+  uHeat,
+};
 
 export function buildMaterials() {
   const point = uv().sub(0.5).mul(2);
@@ -163,19 +170,6 @@ export function buildMaterials() {
   black.toneMapped = false;
 
   return { core, light, black };
-}
-
-/** GPU publication is a view concern. Simulation only changes the collapse trait. */
-export function syncHoleUniforms(current: HoleState): void {
-  uHoleCenter.value.set(current.x, current.y);
-  uHoleHorizon.value = Math.max(current.horizon, 0.001);
-  uHoleBend.value = current.pull;
-  uHoleBlackout.value = current.blackout;
-  uHoleCollapse.value = easing.cubicIn(clamp((current.time - PAPER_FROM) / (PAPER_UNTIL - PAPER_FROM), 0, 1));
-  const t = Math.max(0, current.time);
-  uHoleSpin.value = t * 1.2 + 3 * t ** 3;
-  const shake = current.beat === 'open' ? 0.003 * current.pull * (1 - uHoleCollapse.value) : 0;
-  uHoleShake.value.set(Math.sin(t * 71) * shake, Math.cos(t * 93) * shake);
 }
 
 /** Wind the rendered sheet into the centre and expose black behind its edges. */

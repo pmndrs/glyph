@@ -1,5 +1,5 @@
-import { useFrame, useThree } from '@react-three/fiber/webgpu';
-import { useEffect, useRef } from 'react';
+import { useThree } from '@react-three/fiber/webgpu';
+import { useEffect } from 'react';
 import {
   abs,
   cos,
@@ -53,9 +53,11 @@ import {
   type WebGPURenderer,
 } from 'three/webgpu';
 import { heroReady } from '../hero/prepare';
-import { uTime } from '../hero/materials';
 import { useWorld } from 'koota/react';
-import { Title } from './traits';
+import { Title, ShadowView } from './traits';
+import { Time } from '../time/traits';
+import { letterActions } from './actions';
+import type { World } from 'koota';
 
 /** Projection lamp above the title. Its offset makes lifted shadows spread down and left. */
 const LAMP = new Vector3(4, 6, 24);
@@ -94,6 +96,7 @@ function captureUV(world: Node<'vec2'>) {
  * area.
  */
 function createProjection(renderer: WebGPURenderer, scene: Scene) {
+  const uTime = uniform(0);
   const sourceScene = new Scene();
   const lightCamera = new OrthographicCamera(-WIDTH / 2, WIDTH / 2, HEIGHT / 2, -HEIGHT / 2, 0.1, 80);
   lightCamera.position.set(0, 0, 25);
@@ -302,6 +305,7 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     caustic,
     uLamp,
     uReach,
+    uTime,
     receiver,
     receiverGeometry,
     projectionMaterial,
@@ -314,7 +318,15 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
   };
 }
 
-type Projection = ReturnType<typeof createProjection>;
+export type Projection = ReturnType<typeof createProjection>;
+
+/** Update the mounted projection after title matrices have reached their draw objects. */
+export function updateGlassShadows(world: World): void {
+  world.query(Title, ShadowView).readEach(([title, view]) => {
+    view!.uTime.value = world.get(Time)!.elapsed;
+    updateProjection(view!, title.reach);
+  });
+}
 
 /** Discover the retained title draws during warm-up. Playback uses the prepared list directly. */
 function discoverCaptures(state: Projection): void {
@@ -440,30 +452,16 @@ export function GlassShadows() {
   const world = useWorld();
   const renderer = useThree((state) => state.renderer);
   const scene = useThree((state) => state.scene);
-  const projection = useRef<ReturnType<typeof createProjection> | null>(null);
 
   useEffect(() => {
     const owned = createProjection(renderer, scene);
-    projection.current = owned;
+    letterActions(world).mountShadowView(owned);
 
     return () => {
-      projection.current = null;
+      letterActions(world).unmountShadowView();
       disposeProjection(owned);
     };
-  }, [renderer, scene]);
-
-  useFrame(
-    () => {
-      if (projection.current !== null) updateProjection(projection.current, world.queryFirst(Title)!.get(Title)!.reach);
-    },
-    {
-      id: 'hero-glass-shadows',
-      phase: 'update',
-      after: ['hero-title-motion'],
-      // Canvas's FPS limit applies only to its default render job, not this offscreen pass.
-      fps: 60,
-    },
-  );
+  }, [renderer, scene, world]);
 
   return null;
 }
