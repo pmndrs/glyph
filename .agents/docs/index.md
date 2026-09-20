@@ -34,6 +34,8 @@ okf_version: '0.2'
 ## Verification and evidence
 
 - [Engineering reports](reports/index.md) — durable HTML implementation, ownership, review, and benchmark reports.
+- [Allocation-light adapter publication frontier](planning/adapter-publication-performance-frontier.md) — the future
+  correctness and performance pass for removing duplicate host reconstruction from retained publication paths.
 - [Workspace package catalog](packages/index.md) — enforced package roles, boundaries, status, and source-freshness digests.
 - [Portable font baker implementation evidence](planning/font-baker-implementation.md) — package-owned Rust/Wasm/TypeScript core evidence.
 - [Wasm allocator experiment](planning/font-baker-allocator.md) — evidence plan for the ABI-private Wasm allocator choice.
