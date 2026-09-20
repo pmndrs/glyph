@@ -2,6 +2,11 @@
 
 ## 2026-09-20
 
+- **Moved hero viewport synchronization to React** — `useViewport` publishes dimensions, camera depth, and
+  aspect into the existing world-level `Viewport` trait through a domain action. Removed viewport sampling
+  from the frame loop. The full hero check and WebGPU opening/input check pass, including viewport
+  initialization and resizing with the frame loop stopped. See [the hero reference](packages/hero.md).
+
 - **Consolidated hero pointer synchronization** — `usePointer` reads DOM coordinates relative to the canvas
   and updates position and activity together through input actions. Removed frame-loop pointer sampling.
   Leave, cancellation, blur, and cleanup clear activity, while the frame system retains gradual decay.

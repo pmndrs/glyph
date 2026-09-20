@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:9710e95c0dd700fc15c80d28300efb3cd0e3480020fb92db852c7dd6d0790aa1'
+source_digest: 'sha256:d4b576e66a72772e8e050c43657d7890305ab8a42be9f2ea0cae0aa8ba0218b1'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -119,6 +119,9 @@ sources:
   - id: hero-systems
     resource: ../../../apps/hero/src/hero/systems.ts
     title: Landing impacts and hero script event routing
+  - id: viewport-hook
+    resource: ../../../apps/hero/src/hero/hooks.ts
+    title: React synchronization of the world viewport
   - id: mounted-view-check
     resource: ../../../apps/hero/src/hero/systems.test.ts
     title: Loading, mounted view replacement, and detached resource behavior
@@ -200,7 +203,7 @@ Two focused tests cover ordering, event delays, retriggering, and cancellation d
 
 `frameloop.ts` lists the domain systems in their execution order. Sequence cues run before motion, after robot
 departure, and after letter landings so events take effect in the same frame. Motion targets precede physics,
-and title poses synchronize after physics. `hero/systems.ts` samples the viewport, scrolls mounted paper, turns
+and title poses synchronize after physics. `hero/systems.ts` scrolls mounted paper, turns
 landings into field impacts, and forwards landing and departure events to the script. Field, title, and star-ember
 systems read published black-hole state. Feature typing owns its closed-hole condition. The physics solver
 depends on the clock and its own state.
@@ -208,10 +211,13 @@ depends on the clock and its own state.
 `main.tsx` mounts `<App />` inside StrictMode. Root `app.tsx` owns the application shell, world provider,
 loading screen, Canvas, and Suspense boundary. It mounts `<Hero />` from `hero/renderer.tsx` as the
 scene, alongside `<FrameLoop />` from root `frameloop.ts`. Hero owns scene composition and post-processing.
-The frame loop samples renderer inputs, delegates DOM input, and runs domain simulation at 60 Hz using
+The frame loop mounts viewport and DOM input hooks and runs domain simulation at 60 Hz using
 the scheduler's timestamp. Domain systems remain independent of React. The lift check steps the same registered
 simulation job used during playback.
-Viewport sampling runs before the simulation readiness gate. Clock advancement runs after it, so time
+`useViewport(world)` publishes R3F viewport dimensions, camera depth, and aspect into the existing world-level
+`Viewport` trait through a domain action in a layout effect. React changes synchronize before frames consume them,
+independently of readiness or a simulation tick. Systems read the trait without accessing React or R3F.
+Clock advancement runs after the simulation readiness gate, so time
 retains its initial values during preparation. `updateTime` only samples the timestamp and accumulates a bounded
 delta. `useHeroReady()` subscribes to preparation status, and the frame loop captures its `isReady` value in the
 keyboard hook and frame callbacks. `useKeyboard` synchronizes a world-level `Keys` set through input actions and
@@ -227,7 +233,7 @@ preparation. Shadow time belongs to the mounted projection. Simulation systems d
 The app publishes no development globals or pause controls. Browser checks import the same world module
 and read domain traits, while diagnostic render buffers remain private to their renderer.
 `hero/prepare.ts` owns preparation requirements and status subscriptions. `hero/loading.tsx` renders the loading overlay. `hero/fonts.ts` loads the fonts, `hero/lighting.tsx` defines the
-lighting and paper, and hero traits and actions own viewport state. Preparation owns readiness without mirroring
+lighting and paper, and `hero/hooks.ts` synchronizes viewport state owned by hero traits and actions. Preparation owns readiness without mirroring
 it into another trait. There is no separate view domain.
 The source root contains `main.tsx`, `app.tsx`, `frameloop.ts`, `world.ts`, `actions.ts`, and shared deterministic helpers in `utils.ts`.
 Domain roots expose traits, actions, systems, renderers, and materials where needed.
@@ -319,7 +325,7 @@ the lattices, so the impacts land where the letters actually do. The feature lin
 Holding Space does not restart the animation, and focused form controls retain their normal keyboard behavior.
 Keyup releases held keys, and window blur or keyboard-hook cleanup clears them. The opening browser check also
 covers one replay per press, form input exclusion, key normalization, focus-loss cleanup, and pointer position
-and activity from canvas events.
+and activity from canvas events. It also verifies viewport initialization and a resize while the frame loop is stopped.
 
 A small robot treats the screen as its floor: Sketchfab's _Cute Home Robot_ by Yandrack (CC-BY-4.0; the credit
 ships in the build's `notices.txt`). It drives in from the bottom left along a meandering diagonal whose phase
@@ -414,7 +420,7 @@ They verify resource preparation but do not measure delivery through a screen re
 
 The full hero package check passes, including seven numerical tests, two timeline tests, two mounted-view lifecycle tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
-The production entry bundle is 599.89 kB gzip, down from 609.11 kB before removing the alternate scene.
+The production entry bundle is 600.07 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/letters/materials.ts`: red G, orange l,

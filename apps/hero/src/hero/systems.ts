@@ -3,13 +3,9 @@ import { sequenceActions } from '../sequence/actions';
 import { iconFieldActions } from '../icon-field/actions';
 import { Robot } from '../robot/traits';
 import { Title } from '../letters/traits';
-import { PaperView, Viewport } from './traits';
+import { PaperView } from './traits';
 import { Time } from '../time/traits';
 import { PATTERN_ANGLE } from '../icon-field/content';
-
-export function sampleViewport(world: World, width: number, height: number, cameraZ: number, aspect: number): void {
-  world.set(Viewport, { width, height, cameraZ, aspect });
-}
 
 /** Scroll the mounted paper with the foreground icon field. */
 export function updatePaper(world: World): void {

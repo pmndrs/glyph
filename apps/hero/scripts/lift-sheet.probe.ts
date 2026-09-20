@@ -5,7 +5,7 @@
   "writes": "apps/hero/.cache/lift-sheet.png and stdout",
   "args": ["--gpu", "--timeout", "180", "--screenshot", ".cache/lift-sheet.png"]
 } */
-import { _roots, getScheduler } from '@react-three/fiber/webgpu';
+import { _roots, flushSync, getScheduler } from '@react-three/fiber/webgpu';
 import { texture, uv, vec4 } from 'three/tsl';
 import {
   Mesh,
@@ -31,6 +31,9 @@ const { Body } = (await import(
 const { Keys, Pointer } = (await import(
   new URL('/src/input/traits.ts', location.origin).href
 )) as typeof import('../src/input/traits');
+const { Viewport } = (await import(
+  new URL('/src/hero/traits.ts', location.origin).href
+)) as typeof import('../src/hero/traits');
 /** Seconds into the replay for each tile: carried up, at the top, falling, and landed. */
 const MOMENTS = [0.3, 0.6, 0.85, 1.6] as const;
 const STEP = 1 / 60;
@@ -50,6 +53,29 @@ const state = _roots.values().next().value?.store.getState();
 if (state === undefined) throw new Error('Hero did not mount');
 
 state.setFrameloop('never');
+const viewport = world.get(Viewport)!;
+
+if (viewport.width !== state.viewport.width || viewport.height !== state.viewport.height) {
+  throw new Error('React did not initialize the world viewport');
+}
+
+try {
+  flushSync(() => state.setSize(state.size.width / 2, state.size.height));
+  const resized = world.get(Viewport)!;
+
+  if (
+    Math.abs(resized.width - viewport.width / 2) > 0.000001 ||
+    resized.height !== viewport.height ||
+    resized.aspect !== viewport.aspect / 2 ||
+    resized.cameraZ !== state.camera.position.z
+  ) {
+    throw new Error('Resizing did not synchronize the world viewport without a simulation frame');
+  }
+} finally {
+  flushSync(() => state.setSize(state.size.width, state.size.height));
+  state.setSize();
+}
+
 const { renderer, scene, camera } = state;
 
 if (!(renderer instanceof WebGPURenderer) || !(renderer.backend instanceof WebGPUBackend)) {

@@ -3,7 +3,8 @@ import { useWorld } from 'koota/react';
 import { useKeyboard, usePointer } from './input/hooks';
 import { fadePointer } from './input/systems';
 import { useHeroReady } from './hero/prepare';
-import { applyLetterLandings, triggerRobotDeparture, sampleViewport, updatePaper } from './hero/systems';
+import { applyLetterLandings, triggerRobotDeparture, updatePaper } from './hero/systems';
+import { useViewport } from './hero/hooks';
 import { updateTime } from './time/systems';
 import { updateGlassShadows } from './letters/shadows';
 import { advanceSequence } from './sequence/systems';
@@ -28,11 +29,10 @@ export function FrameLoop() {
 
   useKeyboard(world, isReady);
   usePointer(world);
+  useViewport(world);
 
   useFrame(
-    ({ viewport, camera, size, time }, delta) => {
-      sampleViewport(world, viewport.width, viewport.height, camera.position.z, size.width / size.height);
-
+    ({ time }, delta) => {
       if (!isReady) return;
 
       updateTime(world, delta, time);

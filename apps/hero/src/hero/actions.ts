@@ -6,10 +6,13 @@ import { physicsActions } from '../physics/actions';
 import { robotActions } from '../robot/actions';
 import { sequenceActions } from '../sequence/actions';
 import { starEmberActions } from '../star-embers/actions';
-import { PaperView } from './traits';
+import { PaperView, Viewport } from './traits';
 import type { Vector2 } from 'three/webgpu';
 
 export const heroActions = createActions((world) => ({
+  setViewport: (width: number, height: number, cameraZ: number, aspect: number) => {
+    world.set(Viewport, { width, height, cameraZ, aspect });
+  },
   initializeHero: () => {
     physicsActions(world).initializePhysics();
     starEmberActions(world).initializeStarEmbers();
