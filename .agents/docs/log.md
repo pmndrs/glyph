@@ -2,6 +2,11 @@
 
 ## 2026-09-18
 
+- **Exposed the placement snapshot to custom renderers** — `createGlyphPlacements` and its types now publish from
+  `@pmndrs/glyph/core`, and `GlyphPlacements` gained `caretForOffset` (mirrored on the Three `Text`) so an
+  integration can place a caret for a collapsed selection without reconstructing cluster boundaries itself.
+  See [the package reference](packages/glyph.md).
+
 - **Added tagged stable publishing alongside canaries** — Extended the existing npm publishing workflow so matching
   `vMAJOR.MINOR.PATCH` tags publish to `latest`, while main-branch pushes continue publishing canaries. Both paths run
   the package check before publication. Version bumps and release preparation remain separate changes.

@@ -87,6 +87,8 @@ export interface GlyphPlacements {
   readonly incomplete: readonly number[];
   /** Nearest cluster boundary to a point, in this snapshot's space. */
   caretAt(x: number, y: number): GlyphCaret;
+  /** Caret before the cluster boundary at a UTF-16 offset; an offset at a wrap boundary sits at the start of the following line. */
+  caretForOffset(offset: number): GlyphCaret;
   /** Line-clipped rectangles covering the clusters in a UTF-16 range. */
   selectionRects(start: number, end: number): readonly LayoutBox[];
 }
@@ -206,6 +208,7 @@ export function createGlyphPlacements(
     lines: Object.freeze(lines),
     incomplete: Object.freeze([...incomplete]),
     caretAt: (x: number, y: number) => caretAt(lines, clusterEnds, x, y),
+    caretForOffset: (offset: number) => caretForOffset(lines, text.length, offset),
     selectionRects: (start: number, end: number) => selectionRects(lines, clusterEnds, start, end),
   };
   return Object.freeze(placements);
@@ -410,6 +413,33 @@ function caretAt(
     return Object.freeze({ offset: line.textStart, line: line.index, leading: true, rect: caretRect(line, 0) });
   }
   return Object.freeze({ offset: best.offset, line: line.index, leading: best.leading, rect: caretRect(line, best.x) });
+}
+
+/** Resolves an offset to the leading edge of the first cluster at or after it on the line that owns it (an RTL cluster's leading edge draws on its right), or to the trailing edge of the line's last cluster when the offset ends the line. */
+function caretForOffset(lines: readonly GlyphLine[], textLength: number, offset: number): GlyphCaret {
+  if (!Number.isInteger(offset) || offset < 0 || offset > textLength) {
+    throw new RangeError(`caret offset ${offset} is outside the paragraph text`);
+  }
+  const line = lines.find((candidate) => offset < candidate.textEnd) ?? lines[lines.length - 1];
+  if (line === undefined) return Object.freeze({ offset: 0, line: 0, leading: true, rect: EMPTY_BOX });
+  for (const glyph of line.glyphs) {
+    if (glyph.cluster < offset) continue;
+    const rtl = (glyph.bidiLevel & 1) !== 0;
+    const edge = rtl ? Math.max(glyph.x, glyph.x + glyph.advance) : Math.min(glyph.x, glyph.x + glyph.advance);
+    return Object.freeze({ offset: glyph.cluster, line: line.index, leading: true, rect: caretRect(line, edge) });
+  }
+  const last = line.glyphs[line.glyphs.length - 1];
+  if (last === undefined) {
+    return Object.freeze({
+      offset: line.textStart,
+      line: line.index,
+      leading: true,
+      rect: caretRect(line, line.bounds.x),
+    });
+  }
+  const rtl = (last.bidiLevel & 1) !== 0;
+  const edge = rtl ? Math.min(last.x, last.x + last.advance) : Math.max(last.x, last.x + last.advance);
+  return Object.freeze({ offset: line.textEnd, line: line.index, leading: false, rect: caretRect(line, edge) });
 }
 
 /** Rectangles covering clusters in `[start, end)`, one per touched line — union of glyph advance boxes at full line height, matching `Range.getClientRects()`. A bidi line split by the selection yields two rectangles, not one spanning the gap. */
