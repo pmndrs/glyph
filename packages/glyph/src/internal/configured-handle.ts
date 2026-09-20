@@ -832,6 +832,11 @@ class ConfiguredTextController<
     const snapshot = withOwnedTextPropertySnapshots(this.#state, this.#acceptedPropertyInputs, state);
     const reusableUpdate = reusablePlainTextUpdate(this.#state, snapshot);
     if (reusableUpdate !== undefined) {
+      if (Reflect.ownKeys(reusableUpdate).length === 0) {
+        this.#state = snapshot;
+        acceptTextPropertyInputs(this.#acceptedPropertyInputs, state);
+        return;
+      }
       this.#text.update(reusableUpdate);
       this.#state = snapshot;
       acceptTextPropertyInputs(this.#acceptedPropertyInputs, state);

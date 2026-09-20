@@ -2552,6 +2552,20 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   scene.updateMatrixWorld();
   assert.equal(instrumented.crossings, 0, 'an unchanged plain string must not cross into Rust');
 
+  instrumented.reset();
+  const unchangedCommit = left.commitState();
+  left.style = { ...left.style };
+  left.layout = { ...left.layout };
+  left.constraints = { ...left.constraints };
+  assert.equal(
+    left.measure(),
+    initialLeftMeasurement,
+    'equivalent normalized properties must preserve cached measurement',
+  );
+  scene.updateMatrixWorld();
+  assert.equal(instrumented.crossings, 0, 'equivalent normalized properties must not cross into Rust');
+  assert.deepEqual(left.commitState(), unchangedCommit, 'a semantic no-op must preserve the committed revision');
+
   // Assigning `text` states the desired string. Publication derives the narrowest scalar-aligned
   // replacement from the last published string, coalescing intermediate desired states.
   left.text = 'A';
