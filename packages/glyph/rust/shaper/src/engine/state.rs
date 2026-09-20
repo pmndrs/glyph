@@ -4205,6 +4205,7 @@ impl ParagraphState {
         };
         if !self.style_invalidation.metrics
             && !self.clusters.is_prepared()
+            && !clusters.has_unsafe_break
             && self.text_edit.is_none()
             && self.boundary_shape.records.is_empty()
             && geometry
@@ -4235,6 +4236,7 @@ impl ParagraphState {
         }
         if !self.geometry.is_prepared()
             && !self.style_invalidation.metrics
+            && !clusters.has_unsafe_break
             && self.boundary_shape.records.is_empty()
             && geometry
                 .constraints

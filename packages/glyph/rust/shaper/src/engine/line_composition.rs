@@ -692,7 +692,7 @@ fn layout_next_line_integer_scalar(
         let cluster_is_space = flags & CLUSTER_SPACE != 0;
         let next_trailing_space_units = if cluster_is_space {
             trailing_space_units.saturating_add(cluster_advance)
-        } else if required_break {
+        } else if flags & CLUSTER_HARD_BREAK != 0 {
             // A hard-break control does not make the spaces immediately before it
             // interior. They still terminate this line and hang from its measure.
             trailing_space_units
@@ -2084,6 +2084,8 @@ mod tests {
                     flags.push(CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK | CLUSTER_SAFE_BEFORE);
                 }
             }
+            advances.push(1.0);
+            flags.push(CLUSTER_REQUIRED_BREAK | CLUSTER_SAFE_BEFORE);
             make_quantized_clusters(&advances, &flags)
         }
 

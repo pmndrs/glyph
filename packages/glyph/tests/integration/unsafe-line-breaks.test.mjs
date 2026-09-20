@@ -245,3 +245,43 @@ test('unsafe fitting preserves hard breaks and narrow ellipsis lines', async (t)
   assert.equal(clipped.measure().overflowed, true);
   assert.doesNotThrow(() => clipped.glyphs());
 });
+
+test('equal-length incremental edits use the same exact unsafe fit as a cold paragraph', async (t) => {
+  await glyph.init();
+  const font = await loadBitmapFont(fredokaUrl);
+  const warmRoot = glyph.handle(
+    'three:integration:unsafe-line-breaks:incremental',
+    defineThreeConfig({ capacity: { size: 256, policy: 'grow' } }),
+  );
+  const coldRoot = glyph.handle(
+    'three:integration:unsafe-line-breaks:cold',
+    defineThreeConfig({ capacity: { size: 256, policy: 'grow' } }),
+  );
+  const narrowText = `${'i '.repeat(24)}i`;
+  const wideText = `${'W '.repeat(24)}W`;
+  const properties = {
+    font,
+    style: { fontSize: 24 },
+    layout: { wrap: 'word' },
+    constraints: { width: { mode: 'exact', size: 420 } },
+  };
+  const warm = warmRoot.createText({ ...properties, text: narrowText });
+  t.after(() => {
+    warm.dispose();
+    warmRoot.dispose();
+    coldRoot.dispose();
+    font.dispose();
+  });
+
+  assert.equal(warm.measure().lineCount, 1, 'the retained paragraph starts without boundary corrections');
+  warm.text = wideText;
+  const warmMeasurement = warm.measure();
+  const cold = coldRoot.createText({ ...properties, text: wideText });
+  t.after(() => cold.dispose());
+  const coldMeasurement = cold.measure();
+
+  assert.equal(warmMeasurement.lineCount > 1, true);
+  assert.deepEqual(warmMeasurement, coldMeasurement);
+  assert.deepEqual(Array.from(warm.glyphs().lineTextStarts), Array.from(cold.glyphs().lineTextStarts));
+  assert.deepEqual(Array.from(warm.glyphs().lineTextEnds), Array.from(cold.glyphs().lineTextEnds));
+});
