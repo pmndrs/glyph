@@ -123,6 +123,7 @@ const started = performance.now();
 try {
   for (cycle = 0; cycle < 2; cycle++) {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: ' ' }));
 
     do {
       await nextFrame();

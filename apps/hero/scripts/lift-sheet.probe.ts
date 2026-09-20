@@ -28,6 +28,9 @@ const { Time } = (await import(
 const { Body } = (await import(
   new URL('/src/physics/traits.ts', location.origin).href
 )) as typeof import('../src/physics/traits');
+const { Keys } = (await import(
+  new URL('/src/input/traits.ts', location.origin).href
+)) as typeof import('../src/input/traits');
 /** Seconds into the replay for each tile: carried up, at the top, falling, and landed. */
 const MOMENTS = [0.3, 0.6, 0.85, 1.6] as const;
 const STEP = 1 / 60;
@@ -90,6 +93,43 @@ if (
 ) {
   throw new Error(`The title did not lift and settle: ${JSON.stringify(heights)}`);
 }
+
+const replays = title.replays;
+const input = document.createElement('input');
+document.body.append(input);
+input.focus();
+const typing = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+input.dispatchEvent(typing);
+
+if (typing.defaultPrevented || title.replays !== replays || world.get(Keys)!.has(' ')) {
+  throw new Error('Typing in a form control reached hero keyboard input');
+}
+
+input.remove();
+window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', repeat: true }));
+window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+
+if (title.replays !== replays + 1 || !title.lifting || !world.get(Keys)!.has(' ')) {
+  throw new Error('Holding Space must start exactly one replay and retain the held key');
+}
+
+window.dispatchEvent(new KeyboardEvent('keyup', { key: ' ' }));
+
+if (world.get(Keys)!.has(' ')) throw new Error('Releasing Space left it held');
+
+window.dispatchEvent(new KeyboardEvent('keydown', { key: 'W' }));
+
+if (!world.get(Keys)!.has('w')) throw new Error('Keyboard state did not normalize the held key');
+
+window.dispatchEvent(new Event('blur'));
+
+if (world.get(Keys)!.size !== 0) throw new Error('Losing focus left keys held');
+
+window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+window.dispatchEvent(new KeyboardEvent('keyup', { key: ' ' }));
+
+if (title.replays !== replays + 2) throw new Error('A new Space press did not replay after focus loss');
 
 const sheet = new Scene();
 const quad = new PlaneGeometry(1, 1);

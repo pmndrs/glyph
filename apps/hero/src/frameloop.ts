@@ -1,7 +1,6 @@
 import { useFrame } from '@react-three/fiber/webgpu';
-import { useActions, useWorld } from 'koota/react';
-import { actions } from './actions';
-import { useInput } from './input/hooks';
+import { useWorld } from 'koota/react';
+import { useKeyboard, usePointer } from './input/hooks';
 import { fadePointer, samplePointer } from './input/systems';
 import { useHeroReady } from './hero/prepare';
 import { applyLetterLandings, triggerRobotDeparture, sampleViewport, updatePaper } from './hero/systems';
@@ -25,12 +24,10 @@ import { moveTitle, syncTitle, typeFeature, syncTitleViews, syncFeatureViews } f
 
 export function FrameLoop() {
   const world = useWorld();
-  const commands = useActions(actions);
   const isReady = useHeroReady();
 
-  useInput(world, () => {
-    if (isReady) commands.replayHero();
-  });
+  useKeyboard(world, isReady);
+  usePointer(world);
 
   useFrame(
     ({ viewport, camera, pointer, size, time }, delta) => {

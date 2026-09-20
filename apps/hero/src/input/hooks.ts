@@ -1,34 +1,56 @@
 import type { World } from 'koota';
-import { useEffect, useEffectEvent } from 'react';
+import { useEffect } from 'react';
 import { inputActions } from './actions';
+import { heroActions } from '../hero/actions';
+import { Keys } from './traits';
 
-/** DOM events update input state and request application commands. */
-export function useInput(world: World, replay: () => void): void {
-  const requestReplay = useEffectEvent(replay);
-
+/** Synchronize browser keyboard events with the world's key state. */
+export function useKeyboard(world: World, isReady: boolean): void {
   useEffect(() => {
-    const { activatePointer: moved, clearPointer: left } = inputActions(world);
+    const { setKey, clearKeys } = inputActions(world);
+    const { replayHero } = heroActions(world);
+    const keys = world.get(Keys)!;
 
-    const restart = (event: KeyboardEvent) => {
-      if (event.key !== ' ') return;
-
+    const down = (event: KeyboardEvent) => {
       if (
         event.target instanceof HTMLElement &&
         (event.target.isContentEditable || event.target.closest('input, textarea, select, button') !== null)
       )
         return;
 
-      event.preventDefault();
+      if (event.key === ' ') event.preventDefault();
 
-      if (!event.repeat) requestReplay();
+      const key = event.key.toLowerCase();
+
+      if (event.repeat || keys.has(key)) return;
+
+      setKey(key, true);
+
+      if (isReady && key === ' ') replayHero();
     };
+    const up = (event: KeyboardEvent) => setKey(event.key.toLowerCase(), false);
 
-    window.addEventListener('keydown', restart);
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', clearKeys);
+
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', clearKeys);
+      clearKeys();
+    };
+  }, [world, isReady]);
+}
+
+export function usePointer(world: World): void {
+  useEffect(() => {
+    const { activatePointer: moved, clearPointer: left } = inputActions(world);
+
     window.addEventListener('pointermove', moved, { passive: true });
     window.addEventListener('pointerleave', left, { passive: true });
 
     return () => {
-      window.removeEventListener('keydown', restart);
       window.removeEventListener('pointermove', moved);
       window.removeEventListener('pointerleave', left);
     };

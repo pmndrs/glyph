@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:cff3670aeb402fbfa0214aae89f4be2249e9854dd0e3e7c50fa32999bac6df5e'
+source_digest: 'sha256:6711939b626cf637ce3e9ff350d94b49c9da7cba636f176c59cff0220c0a4a64'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -173,7 +173,7 @@ implement its transitions.
 | ------------- | ---------------------------------------------------------------------------------------------------------- |
 | `sequence`    | Declarative timed and event cues, pending deadlines, cancellation, and dispatch                            |
 | `time`        | Playback clock and bounded frame delta                                                                     |
-| `input`       | Pointer state, DOM listeners, and pointer decay                                                            |
+| `input`       | Held keys, pointer state, DOM listeners, and pointer decay                                                 |
 | `hero`        | Scene and pipeline composition, script, actor lifecycle, preparation, fonts, lighting, paper, and viewport |
 | `physics`     | Crashcat resource, body traits, actions, fixed stepping, and collision events                              |
 | `letters`     | Title construction and motion, published landings, retained text, feature typing, glass, and projection    |
@@ -213,7 +213,9 @@ the scheduler's timestamp. Domain systems remain independent of React. The lift 
 simulation job used during playback.
 Viewport sampling, pointer sampling, and clock advancement are separate systems before the simulation readiness
 gate. `useHeroReady()` subscribes to preparation status, and the frame loop captures its `isReady` value in the
-input and frame callbacks. Shadow discovery receives that same value explicitly. A second ordered job publishes
+keyboard hook and frame callbacks. `useKeyboard` synchronizes a world-level `Keys` set through input actions and
+issues the explicit replay command inside its event effect on the first Space keydown. `usePointer` owns pointer
+listeners separately. Shadow discovery receives readiness explicitly. A second ordered job publishes
 view state after renderer preparation callbacks and before the final render.
 It updates paper, title and icon draws, feature text, robot pose, rig animation, robot display, dust, the black hole,
 embers, and glass shadows. Both jobs are capped at 60 fps. View systems read attached resource traits, so detaching
@@ -236,7 +238,7 @@ Domain tests remain beside their implementations.
 
 Scalar-bearing traits use Koota SoA schemas. Per-field factories retain each entity's math tuples,
 buffers, motion records, and pools. Opaque resources use AoS, including `Physics` with its entity map, callbacks,
-and scratch, and mounted view bundles with scene objects and uniforms. High-frequency values never pass through React state. SoA `get()` returns a snapshot,
+and scratch, the held-key set, and mounted view bundles with scene objects and uniforms. High-frequency values never pass through React state. SoA `get()` returns a snapshot,
 so actions and singleton updates publish scalar changes with `set`, and systems sample current scalar
 state. Query mutations use `updateEach`, while composition reads published landings and departures with `readEach`.
 The robot body query selects only `Robot` for writeback, preserving the physics actions' writes to `Body`. Preparation
@@ -312,6 +314,8 @@ down with a little sideways drift and spin, rebounds once, and comes to rest whe
 its mark and off square, differently on every replay. The floor's first contact with each letter is what strikes
 the lattices, so the impacts land where the letters actually do. The feature line retypes after the final landing.
 Holding Space does not restart the animation, and focused form controls retain their normal keyboard behavior.
+Keyup releases held keys, and window blur or keyboard-hook cleanup clears them. The opening browser check also
+covers one replay per press, form input exclusion, key normalization, and focus-loss cleanup.
 
 A small robot treats the screen as its floor: Sketchfab's _Cute Home Robot_ by Yandrack (CC-BY-4.0; the credit
 ships in the build's `notices.txt`). It drives in from the bottom left along a meandering diagonal whose phase
@@ -396,17 +400,17 @@ meshes, or asset loads, with a deliberate new-material control proving the compi
 raw render intervals, CPU submission work, asynchronous GPU queue completion, and long tasks, along with the
 adapter, viewport, and drawing-buffer dimensions. The canvas uses adaptive DPR between 1 and 2, and the report records the actual drawing-buffer size for each run.
 
-After separating mounted view systems, two complete 1280×720 replays on Apple Metal with Chromium 149 averaged 59.93 fps
-across 1,700 frames after 3.09 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long
-tasks were observed. Render intervals were 17.7 ms at p95 and 25.2 ms worst, with two intervals over 25 ms.
-CPU submission time was 4.2 ms at p95, and browser GPU queue completion was 9.0 ms at p95.
+With world-backed keyboard input, two complete 1280×720 replays on Apple Metal with Chromium 149 averaged 60.01 fps
+across 1,703 frames after 3.20 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long
+tasks were observed. Render intervals were 17.4 ms at p95 and 25.0 ms worst, with no intervals over 25 ms.
+CPU submission time was 4.4 ms at p95, and browser GPU queue completion was 8.9 ms at p95.
 Earlier SoA runs on this host averaged 58.38 and 58.46 fps, while the preceding AoS commit (`64fcb3bd`) averaged
 58.00 fps. These separate runs show variable pacing and do not establish a speedup from the domain extraction.
 They verify resource preparation but do not measure delivery through a screen recorder or guarantee steady 60 fps.
 
 The full hero package check passes, including seven numerical tests, two timeline tests, two mounted-view lifecycle tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
-The production entry bundle is 599.66 kB gzip, down from 609.11 kB before removing the alternate scene.
+The production entry bundle is 599.81 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/letters/materials.ts`: red G, orange l,

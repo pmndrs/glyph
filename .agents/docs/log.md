@@ -2,6 +2,13 @@
 
 ## 2026-09-20
 
+- **Aligned hero keyboard input with minecraft-like** — A world-level `Keys` trait retains held keys.
+  Separate keyboard and pointer hooks synchronize DOM events through domain actions. The keyboard effect
+  issues replay directly on the first ready Space press, releases keys on keyup, and clears them on blur or
+  cleanup. The full hero check and WebGPU lift check pass, including keyboard replay, held-key suppression,
+  form controls, and focus-loss cleanup. Two keyboard-triggered 720p replays average 60.01 fps with no late
+  resources or long tasks. See [the hero reference](packages/hero.md).
+
 - **Made hero readiness reactive** — `useHeroReady()` subscribes to preparation status. The frame loop captures
   `isReady` in its input and frame callbacks and passes it to shadow discovery, removing global readiness reads.
   The full hero check and WebGPU loading-to-lift and shadow checks pass. See [the hero reference](packages/hero.md).
