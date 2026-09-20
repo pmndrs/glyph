@@ -216,6 +216,7 @@ async function runLabs(
       benchesRoot,
       false,
       {
+        GLYPH_LABS_ARTIFACT_ROLE: role,
         GLYPH_LABS_PACKAGE_ROOT: packageRoot,
       },
     );

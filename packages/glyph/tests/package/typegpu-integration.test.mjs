@@ -36,7 +36,7 @@ function recordingHost() {
   const allocations = new Set();
   const recorded = [];
   const uploads = [];
-  const stats = { allocations: 0, preparations: 0, publications: 0, reject: false };
+  const stats = { allocations: 0, preparations: 0, publications: 0, uniformWrites: 0, reject: false };
   function buffer(size, usage = 0) {
     const value = {
       bytes: new Uint8Array(size),
@@ -57,6 +57,7 @@ function recordingHost() {
         buffer: allocation,
         value: [0, 0],
         write(value) {
+          stats.uniformWrites++;
           this.value = [...value];
         },
       };
@@ -344,8 +345,13 @@ test('TypeGPU roots consume real engine output, retain idle draws and isolate na
     assert.deepEqual(host.recorded[0].position, [100, 80]);
     host.recorded.length = 0;
     const publicationCount = host.stats.publications;
+    const uniformWriteCount = host.stats.uniformWrites;
     host.stats.reject = true;
     text.update({ position: [36, 48] });
+    assert.equal(host.stats.uniformWrites, uniformWriteCount + 1);
+    text.update({ position: [36, 48] });
+    text.update({});
+    assert.equal(host.stats.uniformWrites, uniformWriteCount + 1, 'unchanged positions do not touch the uniform');
     assert.doesNotThrow(() => glyph.shape(), 'position-only updates must not enter semantic publication');
     assert.equal(host.stats.publications, publicationCount, 'position-only updates leave the semantic root idle');
     handle.draw({}, { width: 640, height: 240 });
@@ -355,6 +361,16 @@ test('TypeGPU roots consume real engine output, retain idle draws and isolate na
     glyph.shape();
     handle.draw({}, { width: 640, height: 240 });
     assert.deepEqual(host.recorded.splice(0), moved);
+    const writesBeforeRejectedUpdate = host.stats.uniformWrites;
+    assert.throws(
+      () => text.update({ constraints: { width: { mode: 'at-most', size: NaN } }, position: [72, 96] }),
+      /width/i,
+    );
+    assert.equal(
+      host.stats.uniformWrites,
+      writesBeforeRejectedUpdate,
+      'failed semantic updates cannot move accepted text',
+    );
     assert.throws(() => text.update({ constraints: { width: { mode: 'at-most', size: NaN } } }), /width/i);
     assert.throws(() => text.update({ position: [NaN, 0] }), /position/);
     handle.draw({}, { width: 640, height: 240 });

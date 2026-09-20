@@ -185,9 +185,12 @@ group('allocation-light adapter publication @publication', () => {
         uniformWrites: created.stats.uniformWrites - uniformWriteCount,
       };
     };
-    assert.equal(result.publications <= 1, true);
-    assert.equal(result.uniformWrites, count);
-
-    created.handle.dispose();
+    try {
+      if (process.env.GLYPH_LABS_ARTIFACT_ROLE === 'baseline') assert.equal(result.publications <= 1, true);
+      else assert.equal(result.publications, 0);
+      assert.equal(result.uniformWrites, count);
+    } finally {
+      created.handle.dispose();
+    }
   });
 });
