@@ -4144,6 +4144,7 @@ impl ParagraphState {
         self.abort_geometry();
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn prepare_flow_layout(
         &mut self,
         shaper: &mut ShaperRegistry,
@@ -5353,14 +5354,14 @@ fn shape_unsafe_span(
             item_end,
             SHAPE_PRODUCE_UNSAFE_TO_CONCAT
                 | SHAPE_END_OF_TEXT
-                | u32::from(cluster_start == 0) * SHAPE_BEGINNING_OF_TEXT,
+                | (u32::from(cluster_start == 0) * SHAPE_BEGINNING_OF_TEXT),
         ),
         UnsafeSpanRole::Right => (
             item_start,
             run.text_end,
             SHAPE_PRODUCE_UNSAFE_TO_CONCAT
                 | SHAPE_BEGINNING_OF_TEXT
-                | u32::from(cluster_end == clusters.starts.len()) * SHAPE_END_OF_TEXT,
+                | (u32::from(cluster_end == clusters.starts.len()) * SHAPE_END_OF_TEXT),
         ),
         UnsafeSpanRole::SelectedLine => (
             item_start,

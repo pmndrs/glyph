@@ -1835,10 +1835,8 @@ impl PositionedGlyphArena {
                 }
             }
         }
-        if state.decorated_run.is_some() {
-            if boundary.is_none() {
-                self.flush_decorated_run(&mut state.decorated_run, line, metrics_for)?;
-            }
+        if state.decorated_run.is_some() && boundary.is_none() {
+            self.flush_decorated_run(&mut state.decorated_run, line, metrics_for)?;
         }
         if let Some(boundary) = boundary {
             let _ = self.position_boundary(
