@@ -1113,8 +1113,12 @@ impl TextEngine {
             return Err(EngineError::RevisionConflict);
         }
         // The lifecycle describes the desired retained plan so creations and replacements can share one
-        // candidate, while semantic mutations still belong only to the queried paragraph.
-        let mut queried_paragraph_present = request.paragraph_mutations.len() == 0;
+        // candidate, while semantic mutations still belong only to the queried paragraph. A paragraph
+        // the committed plan retains stays queryable while the lifecycle removes its siblings.
+        let mut queried_paragraph_present = request.paragraph_mutations.len() == 0
+            || planner
+                .paragraph(paragraph_id)
+                .is_some_and(|paragraph| !paragraph.created);
         for index in 0..request.paragraph_mutations.len() {
             match request
                 .paragraph_mutations
@@ -1125,7 +1129,13 @@ impl TextEngine {
                     paragraph_id: mutated,
                     ..
                 } => queried_paragraph_present |= mutated == paragraph_id,
-                super::semantic_wire::ParagraphMutation::Remove { .. } => {}
+                super::semantic_wire::ParagraphMutation::Remove {
+                    paragraph_id: mutated,
+                } => {
+                    if mutated == paragraph_id {
+                        return Err(EngineError::InvalidRequest);
+                    }
+                }
             }
         }
         if !queried_paragraph_present {
@@ -6006,6 +6016,94 @@ mod tests {
                 .collect::<Vec<_>>(),
             [1, 3, 4]
         );
+    }
+
+    #[test]
+    fn a_committed_paragraph_measures_while_a_sibling_removal_is_pending() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine.create_root(4).unwrap();
+        engine.reserve_root_text(4, 8).unwrap();
+
+        let initial_bytes = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 1),
+        ]);
+        let mut initial = update(0, 0, 0);
+        initial.limits.max_paragraphs = 2;
+        initial.paragraph_mutations =
+            parse_paragraph_mutations(&initial_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        // The query carries only the sibling's removal: the committed paragraph 1 needs no
+        // upsert to stay queryable.
+        let removal_bytes = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_REMOVE, 2, 0)]);
+        let mut query = update(1, 1, 1);
+        query.limits.max_paragraphs = 2;
+        query.paragraph_mutations =
+            parse_paragraph_mutations(&removal_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        engine.measure_paragraph(query, 1).unwrap();
+        let planner = engine.planners.get(&4).unwrap();
+        assert!(planner.speculative.is_some());
+        assert_eq!(
+            planner
+                .active_order()
+                .iter()
+                .map(|paragraph| paragraph.id)
+                .collect::<Vec<_>>(),
+            [1]
+        );
+
+        // The frame carrying the same removal adopts the transaction and commits it.
+        let mut frame = update(1, 1, 1);
+        frame.limits.max_paragraphs = 2;
+        frame.paragraph_mutations =
+            parse_paragraph_mutations(&removal_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        let prepared = engine.prepare_update(frame, 2).unwrap();
+        engine.commit_update(prepared).unwrap();
+        let planner = engine.planners.get(&4).unwrap();
+        assert!(planner.paragraph(1).is_some());
+        assert!(planner.paragraph(2).is_none());
+    }
+
+    #[test]
+    fn a_query_cannot_measure_the_paragraph_its_lifecycle_removes() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine.create_root(4).unwrap();
+        engine.reserve_root_text(4, 8).unwrap();
+
+        let initial_bytes = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 1),
+        ]);
+        let mut initial = update(0, 0, 0);
+        initial.limits.max_paragraphs = 2;
+        initial.paragraph_mutations =
+            parse_paragraph_mutations(&initial_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let removal_bytes = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_REMOVE, 2, 0)]);
+        let mut query = update(1, 1, 1);
+        query.limits.max_paragraphs = 2;
+        query.paragraph_mutations =
+            parse_paragraph_mutations(&removal_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        assert_eq!(
+            engine.measure_paragraph(query, 2),
+            Err(EngineError::InvalidRequest)
+        );
+        assert!(engine.planners.get(&4).unwrap().paragraph(2).is_some());
     }
 
     #[test]
