@@ -1024,6 +1024,7 @@ pub enum CodecError {
     InvalidInputSources,
     EmptyBuffers,
     TooManyBuffers,
+    TooManyBuffersPerDraw,
     InvalidBufferId,
     DuplicateBufferId,
     InvalidVectorWidth,
@@ -1531,6 +1532,13 @@ fn validate_codec(descriptor: &CodecDescriptor) -> Result<(), CodecError> {
                 && set.flags & CAP_ORDERED_DIRECT == 0
         }) {
             return Err(CodecError::UnsupportedAllocationStrategy);
+        }
+        // Every buffer a program declares binds to each of its draws.
+        if descriptor.capability_sets.iter().any(|set| {
+            (program.capability_set.0 == 0 || program.capability_set == set.id)
+                && program.buffers.len() > usize::from(set.max_buffers_per_draw)
+        }) {
+            return Err(CodecError::TooManyBuffersPerDraw);
         }
         for previous in &descriptor.programs[..index] {
             if previous.capability_set == program.capability_set
@@ -2149,6 +2157,63 @@ mod tests {
                 programs: vec![valid_program()],
             }),
             Err(CodecError::InvalidUploadCostModel)
+        );
+    }
+
+    #[test]
+    fn rejects_programs_declaring_more_buffers_than_one_draw_binds() {
+        let mut program = valid_program();
+        program.u32_input_count = 1;
+        program.inputs.push(InputSource::semantic(2));
+        program.buffers.push(BufferSchema::packed(
+            COLORS,
+            ScalarType::U32,
+            1,
+            BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST,
+            1,
+        ));
+        program.operations.extend([
+            Operation::LoadU32 {
+                target: 2,
+                field: 0,
+            },
+            Operation::StoreU32 {
+                source: 2,
+                buffer: COLORS,
+                lane: 0,
+            },
+        ]);
+        let mut narrow = valid_capability_set();
+        narrow.max_buffers_per_draw = 1;
+        assert_eq!(
+            ValidatedCodec::new(CodecDescriptor {
+                capability_sets: vec![narrow],
+                programs: vec![program.clone()],
+            }),
+            Err(CodecError::TooManyBuffersPerDraw)
+        );
+
+        let mut wide = valid_capability_set();
+        wide.id = CapabilitySetId(2);
+        wide.max_buffers_per_draw = 2;
+        let mut wide_program = program.clone();
+        wide_program.id = ProgramId(2);
+        wide_program.capability_set = wide.id;
+        let mut narrow_program = valid_program();
+        narrow_program.capability_set = narrow.id;
+        assert!(
+            ValidatedCodec::new(CodecDescriptor {
+                capability_sets: vec![narrow, wide],
+                programs: vec![narrow_program, wide_program],
+            })
+            .is_ok()
+        );
+        assert_eq!(
+            ValidatedCodec::new(CodecDescriptor {
+                capability_sets: vec![narrow, wide],
+                programs: vec![program],
+            }),
+            Err(CodecError::TooManyBuffersPerDraw)
         );
     }
 

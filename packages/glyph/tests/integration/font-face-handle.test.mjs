@@ -26,7 +26,7 @@ const portableCapabilities = Object.freeze({
   updateAlignment: 4,
   coalesceGapBytes: 64,
   rangeCallPenaltyBytes: 128,
-  maxBuffersPerDraw: 4,
+  maxBuffersPerDraw: 8,
   maxResourcesPerDraw: 4,
   maxIndirectDraws: 0,
   fragmentationBudget: 4,

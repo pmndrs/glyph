@@ -1,5 +1,13 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-20
+
+- **Rejected codec programs that declare more buffers than one draw binds at registration** — `validate_codec` and
+  the mirrored `compileCodec` preflight now compare each program's buffer count against `maxBuffersPerDraw` of every
+  capability set it serves, and `createRasterCodecProgram` names the technique and system buffers when its assembled
+  program exceeds the limit. The engine previously discovered the mismatch in `compile_bindings` and reported it as
+  `result-too-large` on the first publish. See [the package reference](packages/glyph.md).
+
 ## 2026-09-18
 
 - **Added tagged stable publishing alongside canaries** — Extended the existing npm publishing workflow so matching
