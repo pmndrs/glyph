@@ -843,7 +843,13 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       updateKeys.length === 1 && updateKeys[0] === 'text' && typeof update.text === 'string'
         ? replaceDesiredString(this.#desired, update.text)
         : normalizeDesired({ ...this.#desired, ...replacedContent(update) } as TextProperties<Format>, this.#desired);
-    if (sameDesiredTextState(this.#desired, next)) return;
+    if (
+      !Object.hasOwn(update, 'font') &&
+      !Object.hasOwn(update, 'material') &&
+      sameDesiredTextState(this.#desired, next)
+    ) {
+      return;
+    }
     const nextRevision = checkedNextRevision(this.#desiredRevision);
     this.#binding?.stageUpdate(this.#root.member(this), next, nextRevision);
     this.#desired = next;
