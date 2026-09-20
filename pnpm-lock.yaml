@@ -65,6 +65,12 @@ importers:
       '@react-three/fiber':
         specifier: catalog:renderer
         version: 10.0.0-alpha.4(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
+      koota:
+        specifier: 0.6.6-canary.63c1187
+        version: 0.6.6-canary.63c1187(@types/react@19.2.14)(react@19.2.8)
+      math:
+        specifier: 0.1.0
+        version: 0.1.0
       react:
         specifier: catalog:renderer
         version: 19.2.8
@@ -3460,6 +3466,20 @@ packages:
       react:
         optional: true
 
+  koota@0.6.6-canary.63c1187:
+    resolution: {integrity: sha512-WF12D28TTefLlzIvwGBtAhUAe+SqR/V0BbFFslr9zTg/JL4LTLdwc1qTNQWIsSvkc2ZmV+ozYcoqyp9VI3AnuA==}
+    peerDependencies:
+      '@types/react': '>=18.0.0'
+      react: '>=18.0.0'
+      svelte: '>=5.0.0'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      react:
+        optional: true
+      svelte:
+        optional: true
+
   ktx-parse@1.1.0:
     resolution: {integrity: sha512-mKp3y+FaYgR7mXWAbyyzpa/r1zDWeaunH+INJO4fou3hb45XuNSwar+7llrRyvpMWafxSIi99RNFJ05MHedaJQ==}
 
@@ -3654,6 +3674,9 @@ packages:
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
     engines: {node: '>= 0.4'}
+
+  math@0.1.0:
+    resolution: {integrity: sha512-hq5KkLblFiR8OO8ZYqPK02mBqrXuxJ6hwvhL3ZM9OFkAR82/20n4H768SWl4yVVrufh8VijEm42D4V9N8hDa2g==}
 
   media-typer@1.1.1:
     resolution: {integrity: sha512-yz3xRaG20c6/BOzvYoDaGtPmGscs7YivItZEEqe6GbwNfHuxu9YNmvnEkMzKldAGY4/80pRcQRZSEnhquk9XuQ==}
@@ -7099,6 +7122,11 @@ snapshots:
       '@types/react': 19.2.14
       react: 19.2.8
 
+  koota@0.6.6-canary.63c1187(@types/react@19.2.14)(react@19.2.8):
+    optionalDependencies:
+      '@types/react': 19.2.14
+      react: 19.2.8
+
   ktx-parse@1.1.0: {}
 
   levn@0.4.1:
@@ -7241,6 +7269,8 @@ snapshots:
       '@jridgewell/sourcemap-codec': 1.5.5
 
   math-intrinsics@1.1.0: {}
+
+  math@0.1.0: {}
 
   media-typer@1.1.1: {}
 

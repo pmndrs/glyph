@@ -1,26 +1,26 @@
 # Juggler
 
-A stick figure juggles the letters you type. The typed sentence appears at the top as one shaped paragraph, with the
-engine's kerning and word spacing. Each letter arrives red hot and cools to white. The sentence then drops its letters
-one at a time in typing order: a letter hops out of its slot with a spin and a squash, the paragraph flinches, and the
-letter picks up a colour as it falls. The juggler runs under each one, catches it, and tosses it to the other hand in
-a cascade that grows taller as more letters join. Backspace removes the newest character. With nothing to juggle, the
-figure waves for input.
+A stick figure juggles the letters you type. The sentence appears at the top as one shaped paragraph with the engine's
+kerning and word spacing; each letter is struck in white-hot with flames and embers, and cools through yellow, orange,
+and red to steel. The sentence then drops its letters one at a time in typing order: a letter hops out with a spin and
+a squash, the paragraph flinches, and the letter takes a colour as it falls. The juggler runs under it, catches it, and
+tosses it to the other hand in a cascade that grows taller as more letters join. Backspace removes the newest
+character. With nothing to juggle, the figure waves for input.
 
-The juggler has superhuman speed and always catches every letter. That is a property of the simulation in
-`src/juggler.ts`, not luck: the body chases the letter that will land soonest, a hand that is still holding a letter
-tosses it the instant another one arrives, and a catch places the hand exactly under the letter however far the arm
-stretches. Hands carry each catch inward along a scoop and throw from beside the body, and a free hand reaches toward
-the next letter it will receive. `src/juggler.test.ts` types a sentence and a forty-letter burst, steps the world for
-tens of seconds, and asserts that no falling letter ever passes the hands, that letters release in sentence order with
-a hop, that a free hand reaches for its incoming letter, and that the idle wave starts.
+The juggler has stats: body speed, hand speed, reach, and grip. He runs to stand under the letter that lands soonest,
+leaning toward the other hand's next catch as far as his reach allows, and a hand closes only on a letter within its
+grip. Type more than he can handle and letters drop; a dropped letter falls to the floor and explodes into shards.
 
-The scene in `src/app.tsx` keeps the sentence as a single `Text` paragraph so shaping is uniform, parks it off screen,
-and breaks each committed layout apart with `Text.breakApart()` into per-glyph copies drawn at the top of the view. A
-glyph copy shows only while its letter waits and has cooled; a separate one-glyph `Text` per letter draws the hot
-overlay on the paragraph and then becomes the falling letter. The stick figure is plain meshes posed with two-bone
-inverse kinematics. Simulation steps run in the R3F physics phase; view synchronization runs afterward in the update
-phase.
+The app is built the way the hero is: one koota world shared by the `letters` and `juggler` domains, trait files that
+hold only data, actions for state transitions, systems that advance state, renderers that mount view traits, and every
+system listed in execution order in `src/frameloop.ts`. Vector and matrix work uses the `math` package. The
+simulation runs without React; `src/juggler/systems.test.ts` types words and a forty-letter burst through the real
+systems and asserts the catching, dropping, exploding, releasing, reaching, waving, and deleting stories.
+
+The sentence's paragraph is never drawn: it is a layout oracle parked off screen, and each committed layout seats every
+letter on its glyph's ink centre. Every letter is its own one-glyph `Text` sharing a single forge material, with its
+heat, tint progress, and hue encoded in the instance style colour and outline, so typing never compiles a shader.
+Flames and shards are one instanced mesh each.
 
 ```sh
 mise exec -- pnpm --filter @pmndrs/glyph-juggler dev

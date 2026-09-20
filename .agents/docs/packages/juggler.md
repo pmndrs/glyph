@@ -1,25 +1,31 @@
 ---
 type: Workspace Package
 title: '@pmndrs/glyph-juggler'
-description: A superhuman stick figure juggles the letters of a shaped, kerned sentence you type, proven by a pure simulation test.
+description: A koota-driven stick figure with stats juggles the forge-hot letters of a shaped sentence you type, dropping and exploding what he cannot catch.
 resource: ../../../apps/juggler
 workspace_package: '@pmndrs/glyph-juggler'
 documentation_type: reference
-source_digest: 'sha256:11bb14829a1e581d92a8de7434b5e0ed320167fdc47ea0afe59b516dddddd286'
-tags: [package, example, react, react-three-fiber, simulation, vite]
+source_digest: 'sha256:1385b8d4e77d435e88f46056a1a775a548d6a39100e1785496c8b0b0f5902fd0'
+tags: [package, example, react, react-three-fiber, koota, tsl, simulation, vite]
 sources:
   - id: manifest
     resource: ../../../apps/juggler/package.json
     title: Example application manifest
-  - id: simulation
-    resource: ../../../apps/juggler/src/juggler.ts
-    title: Pure juggling simulation with the always-catches guarantee
+  - id: frameloop
+    resource: ../../../apps/juggler/src/frameloop.ts
+    title: Simulation and view systems in execution order
+  - id: letters
+    resource: ../../../apps/juggler/src/letters/systems.ts
+    title: Letter release, fall, seating, scrolling, explosion, and view systems
+  - id: juggler
+    resource: ../../../apps/juggler/src/juggler/systems.ts
+    title: Body chase, catch rule with stats, hand motion, and figure pose
+  - id: materials
+    resource: ../../../apps/juggler/src/letters/materials.ts
+    title: Shared forge text material with instance-encoded state, flames, and shards
   - id: proof
-    resource: ../../../apps/juggler/src/juggler.test.ts
-    title: Deterministic proof that no letter passes the hands
-  - id: scene
-    resource: ../../../apps/juggler/src/app.tsx
-    title: R3F scene with batched letter Text nodes and an inverse-kinematics stick figure
+    resource: ../../../apps/juggler/src/juggler/systems.test.ts
+    title: Headless stories through the real systems
 generated:
   by: anthropic/claude-fable-5-1
   at: '2026-09-20T00:00:00Z'
@@ -27,33 +33,38 @@ generated:
 
 # Package reference: `@pmndrs/glyph-juggler`
 
-This private Vite package is a small React Three Fiber example. The typed sentence appears at the top of the view as
-one shaped paragraph, so kerning and word spacing come from the text engine. Each new letter is red hot and cools to
-white. The sentence then drops its letters one at a time in typing order; each hops out with a spin and a squash, the
-paragraph flinches, and the letter takes a colour as it falls. A stick figure runs under it, catches it, and tosses it
-to the other hand. Backspace removes the newest character. With nothing in play the figure waves for input.
+This private Vite package is a React Three Fiber example structured like the hero: one koota world, a `letters`
+domain and a `juggler` domain with trait, action, system, and renderer files, a `time` domain, an `input` hook, and
+every system listed in order in `src/frameloop.ts`. Vector and matrix work uses the `math` package with caller-owned
+scratch. The simulation runs without React.
 
-`src/juggler.ts` is a pure simulation in pixel units with no React or Three imports. Waiting letters sit where the
-view places them from a committed layout, so the simulation never lays out text. The juggler always catches every
-letter by construction rather than by tuning: the body chases the letter whose predicted landing is soonest, a hand
-that still holds a letter tosses it the instant another arrives, and a catch places the hand exactly under the letter
-so the arm stretches as far as needed. Hands carry a catch inward along a scoop and throw from beside the body; a free
-hand reaches toward the next letter assigned to it. Toss flight time grows with the number of letters in play so each
-hand clears its dwell, capped so the apex stays inside the view. `src/juggler.test.ts` steps a sentence and a
-forty-letter burst for tens of seconds at 120 Hz and asserts that no falling letter is ever below the catch plane,
-every letter is caught, release follows sentence order with an upward hop, a free hand reaches for its incoming
-letter, the idle wave starts, and removal by sentence offset frees the holding hand.
+The typed sentence appears at the top as one shaped paragraph. Each letter is struck in white-hot with flames and
+embers and cools through yellow, orange, and red to steel. The sentence drops its letters one at a time in typing
+order, faster under a backlog, and scrolls emptied leading lines out of the way. A released letter hops out with a
+spin and a squash and takes a colour as it falls. The juggler has stats: body speed, hand speed, reach, and grip. He
+runs to stand under the letter landing soonest, leaning toward the other hand's next catch within reach; each released
+letter is routed to the hand with the widest gap in its arrivals; a hand may throw early once it has handled a letter
+for half its dwell; and a catch requires a free hand within grip, otherwise the letter drops, falls to the floor, and
+explodes into shards. With nothing in play the figure waves.
 
-`src/app.tsx` keeps the sentence as one uniformly styled `Text` so it shapes as a single run; per-character style
-spans would split shaping runs, because the engine's resolved style includes colour. The paragraph is parked far below
-the view, and each committed layout revision is broken apart with `Text.breakApart()` into per-glyph copies drawn at
-the top. A copy's matrix is scaled to zero while its letter is hot or has left, and restored once the letter has
-cooled; each glyph's ink centre, keyed by UTF-16 cluster, places the waiting letter in the simulation. A separate
-one-glyph `Text` per letter, inside one `TextGroup`, draws the hot overlay through the imperative `style` setter and
-then becomes the falling letter, centred on its own ink box. World mutations happen in the key handler, not in React
-state updaters, which StrictMode invokes twice. The simulation steps in the R3F `physics` phase with the delta clamped;
-view synchronization runs in the update phase. The stick figure is plain node-material meshes posed by two-bone
-inverse kinematics, with elbows that flip outward when a hand is raised.
+`src/juggler/systems.test.ts` builds the world headlessly and steps the real systems in frame-loop order. It covers
+juggling a short word without drops, dropping and exploding under a forty-letter burst, release order with a hop and
+the body under the first letter, reaching a free hand toward its incoming letter, faster releases under backlog,
+catching only within grip, the idle wave, and deletion freeing a hand.
+
+Rendering avoids per-letter shader work. The sentence's paragraph is a layout oracle parked far below the view; each
+committed layout seats every letter on its glyph's ink centre by UTF-16 cluster, and line baselines drive the scroll.
+Each letter is a one-glyph `Text` inside one `TextGroup`, all sharing a single `defineTextMaterial` forge material.
+The letter's heat, tint progress, and hue ride in its style colour, duplicated on a cell-wide outline so the values
+are readable outside the ink where the halo is drawn; the view system rewrites the style only when the quantized
+values change. Per-character style spans were rejected because the engine's resolved style includes colour, so they
+would split shaping runs and lose kerning. Flames and explosion shards are one instanced mesh each with per-instance
+attributes. Letter views mount from callback refs because the R3F text ref settles after the group's effect runs.
+The glyph reads its character once on mount so an exploded entity never reaches React's render.
+
+Measured in headless Chromium with WebGPU at a 120 Hz frame budget: typing forty characters previously created about
+ten GPU pipelines per letter with hitches up to 617 ms; with the shared material it creates about one per letter and
+the worst typing frame is 16 ms, with idle and juggling frames at the display rate.
 
 The checked-in Inter asset is a Basic Latin MSDF bake through the published CLI; `bake:check` verifies byte-identical
 regeneration.
@@ -66,6 +77,6 @@ mise exec -- pnpm --filter @pmndrs/glyph-juggler test
 mise exec -- pnpm --filter @pmndrs/glyph-juggler check
 ```
 
-The complete check runs typechecking, lint, formatting, the simulation tests, deterministic asset verification, and a
-production build. No browser probe exists yet; the always-catches property is proven in the simulation rather than in
-the rendered scene, and the paragraph, cooling, and wave were verified by a scripted Chromium run with screenshots.
+The complete check runs typechecking, lint, formatting, the headless system tests, deterministic asset verification,
+and a production build. No browser probe exists yet; rendering, performance, and the explosion were verified by
+scripted Chromium runs with screenshots, pipeline counts, and frame timing.
