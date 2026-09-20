@@ -62,6 +62,9 @@ export function createText<Selection extends TypeGpuFontSelection>(
 ): TypeGpuText<Selection> {
   if (options.style?.decoration !== undefined) throw new TypeError('TypeGPU text decoration lines are not supported');
   let state = options;
+  validatePosition(options.position);
+  let positionX = options.position?.[0] ?? 0;
+  let positionY = options.position?.[1] ?? 0;
   let font = fonts.acquire(options.font);
   let controller: GlyphTextController<FontFaceRasterOf<Selection>, object, TypeGpuTransform>;
   let disposed = false;
@@ -75,7 +78,7 @@ export function createText<Selection extends TypeGpuFontSelection>(
     ...(next.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: next.rasterPixelRatio }),
   });
   try {
-    setPosition(transform, options.position);
+    writePosition(transform, positionX, positionY);
     controller = services.createText(coreState(options, font));
   } catch (error) {
     font.dispose();
@@ -90,9 +93,20 @@ export function createText<Selection extends TypeGpuFontSelection>(
     },
     update(update) {
       assertActive();
+      const updatesPosition = Object.hasOwn(update, 'position');
+      if (updatesPosition) validatePosition(update.position);
+      const nextPositionX = updatesPosition ? (update.position?.[0] ?? 0) : positionX;
+      const nextPositionY = updatesPosition ? (update.position?.[1] ?? 0) : positionY;
+      if (!hasSemanticUpdate(update)) {
+        if (nextPositionX !== positionX || nextPositionY !== positionY) {
+          writePosition(transform, nextPositionX, nextPositionY);
+          positionX = nextPositionX;
+          positionY = nextPositionY;
+        }
+        return;
+      }
       const next = { ...state, ...update };
       if (next.style?.decoration !== undefined) throw new TypeError('TypeGPU text decoration lines are not supported');
-      validatePosition(next.position);
       const nextFont = next.font === state.font ? font : fonts.acquire(next.font);
       try {
         controller.update(coreState(next, nextFont));
@@ -100,7 +114,11 @@ export function createText<Selection extends TypeGpuFontSelection>(
         if (nextFont !== font) nextFont.dispose();
         throw error;
       }
-      setPosition(transform, next.position);
+      if (nextPositionX !== positionX || nextPositionY !== positionY) {
+        writePosition(transform, nextPositionX, nextPositionY);
+        positionX = nextPositionX;
+        positionY = nextPositionY;
+      }
       if (nextFont !== font) font.dispose();
       font = nextFont;
       state = next;
@@ -134,7 +152,18 @@ function validatePosition(position: readonly [number, number] = [0, 0]): void {
   if (position.length !== 2 || !position.every(Number.isFinite))
     throw new RangeError('TypeGPU text position must contain two finite coordinates');
 }
-function setPosition(transform: TypeGpuTransform, position: readonly [number, number] = [0, 0]): void {
-  validatePosition(position);
-  transform.position.write(position);
+
+function writePosition(transform: TypeGpuTransform, x: number, y: number): void {
+  transform.position.write([x, y]);
+}
+
+function hasSemanticUpdate<Selection extends TypeGpuFontSelection>(update: TypeGpuTextUpdate<Selection>): boolean {
+  return (
+    Object.hasOwn(update, 'font') ||
+    Object.hasOwn(update, 'text') ||
+    Object.hasOwn(update, 'style') ||
+    Object.hasOwn(update, 'layout') ||
+    Object.hasOwn(update, 'constraints') ||
+    Object.hasOwn(update, 'rasterPixelRatio')
+  );
 }

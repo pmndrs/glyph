@@ -283,6 +283,16 @@ choice. Available focused suites are `layout`, `measure`, `glyphs`, `publication
 `stress`.
 `full` does not run browser observations, native/Worker profiles, or correctness and release gates.
 
+The main package suite measures public-system edits, measurement and glyph access, Three publication, column reflow,
+font-size relayout, retained batches, and 1,000-label order changes. Each mutation case deliberately invalidates the state
+it names instead of timing an accidental cache hit. The focused adapter-publication suite adds three countermeasures:
+1,000 normalized-equal retained Three updates, the complete cold lifecycle of a fresh 1,000-label root, and 1,000 direct
+TypeGPU position-only updates. The isolated package consumers install the pinned optional TypeGPU peer so the last case
+exercises the packed `/typegpu` entry rather than workspace source. Browser `startupMs` remains the end-to-end cold-start
+measure across module, asset, renderer, and scene activation. Fresh-process blocks and a five-percent minimum effect
+produce the comparison report. This lane is report-only while runner noise and false-positive rates are established;
+browser, GPU, and frame-pacing evidence remains owned by the browser workflows.
+
 Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentation are complete
 
 The application now also contains focused target-v1 browser proofs for Bitmap, MTSDF, Slug, and Worker preparation while
