@@ -8,6 +8,14 @@
   See [the benchmark package reference](packages/benchmarks.md) and D-370 in
   [the decision register](planning/decision-register.md).
 
+## 2026-09-20
+
+- **Fixed paragraph removal across the measurement boundary** — A text controller measured but never published can now
+  be disposed before the next publication, and a committed paragraph re-measures while a sibling's removal waits for
+  the next frame. The planner only stages removals for published paragraphs, and the engine treats a committed
+  paragraph as present in a measurement whose lifecycle removes only its siblings.
+  See [the package reference](packages/glyph.md).
+
 ## 2026-09-18
 
 - **Added tagged stable publishing alongside canaries** — Extended the existing npm publishing workflow so matching
