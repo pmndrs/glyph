@@ -76,6 +76,7 @@ pub(crate) struct BoundaryShape {
     pub source_font_handle: u32,
     pub ellipsis_binding_handle: u32,
     pub ellipsis_font_handle: u32,
+    pub source_shape_run_index: u32,
     pub source_glyph_start: u32,
     pub source_glyph_count: u32,
     pub ellipsis_glyph_start: u32,
