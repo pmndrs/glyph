@@ -328,7 +328,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
               directDrawsByTransform: this.#directDrawsByTransform,
             };
       this.#applyBoundRetirements(frame, context);
-      const preparedTransforms = this.#prepareTransforms(preparedDraws);
+      const preparedTransforms = replacesDraws ? this.#prepareTransforms(preparedDraws) : undefined;
       const retainedMaterials = preparedDraws.changed
         ? new Set([...context.materials.values()].map(({ material }) => material))
         : undefined;
@@ -368,11 +368,13 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       }
     };
     commitBufferMutations(prepared.bufferMutations);
-    commitTransforms(prepared.context.transformAttribute, prepared.transforms);
+    if (prepared.transforms !== undefined) {
+      commitTransforms(prepared.context.transformAttribute, prepared.transforms);
+      for (const update of prepared.transforms.direct) applyTransformUpdate(update);
+    }
     if (prepared.draws.changed) {
       for (const update of prepared.draws.reusedUpdates) applyReusedDrawUpdate(update);
     }
-    for (const update of prepared.transforms.direct) applyTransformUpdate(update);
     if (prepared.draws.changed) {
       for (const mesh of prepared.draws.draws) {
         if (mesh.parent !== prepared.draws.root) attempt(() => prepared.draws.root.add(mesh));
@@ -389,10 +391,12 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     this.#msdfAtlases = prepared.context.msdfAtlases;
     this.#slugPages = prepared.context.slugPages;
     this.#materials = prepared.context.materials;
-    this.#transforms = new Map(prepared.context.transforms);
-    this.#indexTransforms();
-    this.#transformAttribute = prepared.context.transformAttribute;
-    this.#transformGeneration = prepared.context.transformGeneration;
+    if (prepared.transforms !== undefined) {
+      this.#transforms = new Map(prepared.context.transforms);
+      this.#indexTransforms();
+      this.#transformAttribute = prepared.context.transformAttribute;
+      this.#transformGeneration = prepared.context.transformGeneration;
+    }
     if (prepared.draws.changed) {
       this.#draws = prepared.draws.draws;
       this.#drawKeys = prepared.draws.keys;
@@ -408,7 +412,9 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     for (const material of prepared.retiredMaterials) attempt(() => material.dispose());
     for (const texture of prepared.retiredTextures) attempt(() => texture.dispose());
     for (const buffer of retiredBuffers) attempt(() => buffer.attribute.dispose());
-    for (const draw of this.#draws) attempt(() => draw.updateMatrixWorld(false));
+    if (prepared.transforms !== undefined) {
+      for (const draw of this.#draws) attempt(() => draw.updateMatrixWorld(false));
+    }
     this.#originRecords.clear();
     return failure;
   }

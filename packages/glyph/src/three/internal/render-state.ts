@@ -104,7 +104,7 @@ export interface PreparedPublication {
   readonly context: PreparationContext;
   readonly bufferMutations: StagedBufferMutations;
   readonly draws: PreparedDrawReplacement;
-  readonly transforms: PreparedTransforms;
+  readonly transforms: PreparedTransforms | undefined;
   readonly retiredMaterials: readonly THREE.NodeMaterial[];
   readonly retiredTextures: readonly RetainedGpuResourceLease[];
 }
