@@ -1,5 +1,12 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-20
+
+- **Added the juggler example** — `apps/juggler` is a small R3F app where typed glyphs wait in a row at the top,
+  drop one at a time, and a stick figure with superhuman speed catches and juggles every one. The simulation is a
+  pure module; its Vitest proof steps a word and a forty-letter burst and asserts no letter ever passes the hands.
+  The package check passes. See [the juggler reference](packages/juggler.md).
+
 ## 2026-09-18
 
 - **Added tagged stable publishing alongside canaries** — Extended the existing npm publishing workflow so matching
