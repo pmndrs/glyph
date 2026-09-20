@@ -77,6 +77,8 @@ useSlug.preload('/fonts/Inter.font.glb');
 
 A `GlyphProvider` can be used to load and map fonts to a string name allowing you to refer to the font by name anywhere under the provider. The provider also acts as an optional Suspense and Error boundary to handle glyph errors or suspend while loading fonts.
 
+Check out the [React Three Fiber playground](apps/r3f-playground/README.md) example for more details.
+
 ## TypeGPU
 
 You can use TypeGPU over TSL in three.js by importing the `ThreeConfig` from `@pmndrs/glyph/three/typegpu`.
@@ -108,6 +110,38 @@ handle.draw(pass, { width: canvas.clientWidth, height: canvas.clientHeight });
 ```
 
 See the [TypeGPU hello world](apps/typegpu-hello-world/README.md) example for more details.
+
+## TresJS (Vue)
+
+Use `@pmndrs/glyph/vue` for [TresJS](https://tresjs.org) integration.
+
+Pass a `WebGPURenderer` factory to `TresCanvas` through its `renderer` prop; Glyph does not support the classic `WebGLRenderer`.
+
+```vue
+<script setup lang="ts">
+import { GlyphProvider, Text } from '@pmndrs/glyph/vue';
+import { preloadSlug } from '@pmndrs/glyph/vue/slug';
+import { TresCanvas, type TresRendererSetupContext } from '@tresjs/core';
+import { WebGPURenderer } from 'three/webgpu';
+import { toValue } from 'vue';
+
+preloadSlug('/fonts/Inter.font.glb');
+
+const createRenderer = (context: TresRendererSetupContext) => new WebGPURenderer({ canvas: toValue(context.canvas) });
+</script>
+
+<template>
+  <TresCanvas :renderer="createRenderer">
+    <GlyphProvider handle="hud" :font-faces="{ Inter: '/fonts/Inter.font.glb' }">
+      <Text font="Inter">Hello, HUD</Text>
+    </GlyphProvider>
+  </TresCanvas>
+</template>
+```
+
+`GlyphProvider`, `Text`, and `TextGroup` mirror the React components and reconcile into the same Three objects. Vue has no render-phase suspension, so a `Text` mounts nothing until its fonts load and reports failures through `@error`. `useSlug`, `useMsdf`, and `useBitmap` from `@pmndrs/glyph/vue/*` let a component own a font's declaration and lifetime; each returns a `ready` promise for `<Suspense>`.
+
+See the [TresJS playground](apps/tres-playground/README.md) example for more details.
 
 ## Integrate with a custom renderer
 
@@ -179,7 +213,7 @@ Glyph is pre-release and its features may change with time. **✅ Stable** is th
 | Bitmap rendering                     | ✅ Stable       | Baked size-specific strikes. No outline or shadow effects.                                                                       |
 | MSDF rendering                       | ✅ Stable       | MTSDF atlases with outline and hard-shadow effects.                                                                              |
 | Slug rendering                       | ✅ Stable       | Vector-outline rendering. No outline or shadow effects.                                                                          |
-| Three.js, React Three Fiber, and TSL | ✅ Stable       | WebGPU and WebGL2 through `WebGPURenderer`. Standalone TSL shaders are also available. Classic `WebGLRenderer` is not supported. |
+| Three.js, R3F, TresJS, and TSL       | ✅ Stable       | WebGPU and WebGL2 through `WebGPURenderer`. Standalone TSL shaders are also available. Classic `WebGLRenderer` is not supported. |
 | Custom renderer integration          | ✅ Stable       | Renderer-neutral `GlyphConfig` API and custom raster/baker extensions.                                                           |
 | Wasm engine and SIMD kernels         | ✅ Stable       | HarfRust shaping and retained Rust layout with SIMD-optimized kernels.                                                           |
 | Runtime and offline font baking      | ✅ Stable       | Node API/CLI baking and browser Worker baking for Bitmap, MSDF, and Slug.                                                        |
