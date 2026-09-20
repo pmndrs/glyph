@@ -6,7 +6,7 @@ import { physicsActions } from '../physics/actions';
 import { robotActions } from '../robot/actions';
 import { sequenceActions } from '../sequence/actions';
 import { starEmberActions } from '../star-embers/actions';
-import { Preparation, Viewport } from './traits';
+import { Viewport } from './traits';
 
 export const heroActions = createActions((world) => ({
   initializeHero: () => {
@@ -31,8 +31,7 @@ export const heroActions = createActions((world) => ({
     robotActions(world).resetRobot();
     iconFieldActions(world).resetIconFields();
   },
-  sampleView: (width: number, height: number, cameraZ: number, aspect: number, ready: boolean) => {
+  sampleView: (width: number, height: number, cameraZ: number, aspect: number) => {
     world.set(Viewport, { width, height, cameraZ, aspect });
-    world.set(Preparation, { ready });
   },
 }));

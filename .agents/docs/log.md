@@ -2,6 +2,12 @@
 
 ## 2026-09-20
 
+- **Made hero frame order explicit** — Root `frameloop.ts` directly lists domain systems in execution order,
+  preserving cue dispatch around departure and landing events, motion targets before physics, and pose
+  synchronization afterward. Hero systems now contain only cross-domain event routing and landing impacts.
+  Removed the redundant readiness trait. The lift check steps the actual registered simulation job.
+  The full hero check and WebGPU lift and finale/replay checks pass. See [the hero reference](packages/hero.md).
+
 - **Removed hero development controls** — Deleted runtime globals for the world, title, robot, black hole,
   startup, and shadow buffers, along with debug pause state and the hot-reload disposal branch. The app and
   browser checks import one shared world from `world.ts`. Simulation uses the scheduler timestamp, so the

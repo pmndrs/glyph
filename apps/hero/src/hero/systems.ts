@@ -1,44 +1,18 @@
 import type { World } from 'koota';
 import { sequenceActions } from '../sequence/actions';
-import { advanceSequence } from '../sequence/systems';
 import { iconFieldActions } from '../icon-field/actions';
-import { starEmberActions } from '../star-embers/actions';
-import { advanceCollapse } from '../black-hole/systems';
-import { Collapse } from '../black-hole/traits';
-import { moveIconFields } from '../icon-field/systems';
-import { fadePointer } from '../input/systems';
-import { stepPhysics } from '../physics/systems';
-import { moveRobots, moveRobotBodies, stepDust } from '../robot/systems';
 import { Robot } from '../robot/traits';
-import { updateTime } from '../time/systems';
-import { moveTitle, syncTitle, typeFeature } from '../letters/systems';
 import { Title } from '../letters/traits';
-import { Preparation } from './traits';
 
-/** Step the domains and feed their published events into the hero script. */
-export function advanceHero(world: World, delta: number, now: number): void {
-  const ready = world.get(Preparation)!.ready;
-  updateTime(world, delta, now, ready);
-
-  if (!ready) return;
-
-  advanceSequence(world);
-
-  moveRobots(world);
-
+/** Feed robot departure into the hero script. */
+export function triggerRobotDeparture(world: World): void {
   world.query(Robot).readEach(([robot]) => {
     if (robot.departed) sequenceActions(world).triggerSequence('robot-departed');
   });
+}
 
-  advanceSequence(world);
-  advanceCollapse(world);
-  const hole = world.get(Collapse)!.hole;
-  starEmberActions(world).sampleStarEmbers(hole.sincePop);
-  moveTitle(world, hole);
-  moveRobotBodies(world);
-  stepPhysics(world);
-  syncTitle(world);
-
+/** Turn letter landings into field impacts and script events. */
+export function applyLetterLandings(world: World): void {
   world.query(Title).readEach(([title]) => {
     const bodies = title.bodies;
 
@@ -51,12 +25,4 @@ export function advanceHero(world: World, delta: number, now: number): void {
 
     sequenceActions(world).triggerSequence('letters-landed');
   });
-
-  advanceSequence(world);
-
-  if (hole.beat === 'closed') typeFeature(world);
-
-  fadePointer(world);
-  moveIconFields(world, hole);
-  stepDust(world);
 }

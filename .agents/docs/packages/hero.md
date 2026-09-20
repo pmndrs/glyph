@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:c9f5793287c9ba3deb795f376a28f867fdd13352b12e705df81c5b4c2cb5b42c'
+source_digest: 'sha256:f9dd739e65f24550bba02d8584b7a7e5676b244f80d75759bdbeeadc50faefa1'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -118,7 +118,7 @@ sources:
     title: Actor lifecycle and declared hero script
   - id: hero-systems
     resource: ../../../apps/hero/src/hero/systems.ts
-    title: Headless simulation order and event routing
+    title: Landing impacts and hero script event routing
   - id: sequence-check
     resource: ../../../apps/hero/src/sequence/systems.test.ts
     title: Timeline ordering, delays, retriggering, and cancellation
@@ -195,19 +195,23 @@ Replay cancels pending cues before resetting the actors and lifting the title ag
 order, breaking ties by declaration order. Each scheduled cue runs once, and events can rearm their cues.
 Two focused tests cover ordering, event delays, retriggering, and cancellation during dispatch.
 
-`hero/systems.ts` orders simulation, forwards landing and departure events to the script, sends landing positions
-to field waves, and samples black-hole pop age for star embers. Black-hole state is passed explicitly into the
+`frameloop.ts` lists the domain systems in their execution order. Sequence cues run before motion, after robot
+departure, and after letter landings so events take effect in the same frame. Motion targets precede physics,
+and title poses synchronize after physics. `hero/systems.ts` contains only the cross-domain systems that turn
+landings into field impacts and forward landing and departure events to the script. Black-hole state is passed explicitly into the
 field and title systems and the feature-line view. The physics solver depends on the clock and its own state.
 
 `main.tsx` mounts `<App />` inside StrictMode. Root `app.tsx` owns the application shell, world provider,
 loading screen, Canvas, and Suspense boundary. It mounts `<Hero />` from `hero/renderer.tsx` as the
 scene, alongside `<FrameLoop />` from root `frameloop.ts`. Hero owns scene composition and post-processing.
-The frame loop samples renderer inputs, delegates DOM input, and runs the headless hero tick at 60 Hz using
-the scheduler's timestamp. Manual stepping and normal playback share that clock.
+The frame loop samples renderer inputs, delegates DOM input, and runs domain simulation at 60 Hz using
+the scheduler's timestamp. Domain systems remain independent of React. The lift check steps the same registered
+simulation job used during playback.
 The app publishes no development globals or pause controls. Browser checks import the same world module
 and read domain traits, while diagnostic render buffers remain private to their renderer.
 `hero/prepare.ts` owns preparation requirements and status subscriptions. `hero/loading.tsx` renders the loading overlay. `hero/fonts.ts` loads the fonts, `hero/lighting.tsx` defines the
-lighting and paper, and hero traits and actions own viewport and readiness state. There is no separate view domain.
+lighting and paper, and hero traits and actions own viewport state. Preparation owns readiness without mirroring
+it into another trait. There is no separate view domain.
 The source root contains `main.tsx`, `app.tsx`, `frameloop.ts`, `world.ts`, `actions.ts`, and the shared deterministic `random.ts`.
 Domain roots expose traits, actions, systems, renderers, and materials where needed.
 `materials.ts` groups each domain's uniforms with the shader graphs and material builders that use them.
@@ -389,7 +393,7 @@ They verify resource preparation but do not measure delivery through a screen re
 
 The full hero package check passes, including seven numerical tests, two timeline tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
-The production entry bundle is 599.31 kB gzip, down from 609.11 kB before removing the alternate scene.
+The production entry bundle is 599.30 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/letters/materials.ts`: red G, orange l,

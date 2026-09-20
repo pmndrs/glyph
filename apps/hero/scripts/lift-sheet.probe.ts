@@ -22,9 +22,6 @@ const { world } = (await import(new URL('/src/world.ts', location.origin).href))
 const { Title } = (await import(
   new URL('/src/letters/traits.ts', location.origin).href
 )) as typeof import('../src/letters/traits');
-const { advanceHero } = (await import(
-  new URL('/src/hero/systems.ts', location.origin).href
-)) as typeof import('../src/hero/systems');
 const { Time } = (await import(
   new URL('/src/time/traits.ts', location.origin).href
 )) as typeof import('../src/time/traits');
@@ -33,7 +30,7 @@ const { Body } = (await import(
 )) as typeof import('../src/physics/traits');
 /** Seconds into the replay for each tile: carried up, at the top, falling, and landed. */
 const MOMENTS = [0.3, 0.6, 0.85, 1.6] as const;
-const STEP = 1 / 120;
+const STEP = 1 / 60;
 
 while (document.documentElement.dataset.heroState !== 'ready')
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -55,15 +52,14 @@ await renderer.compileAsync(scene, camera);
 
 const tiles = MOMENTS.map(() => new RenderTarget(960, 540, { samples: 4 }));
 // Sample the adapter once after the readiness gate before taking over the deterministic clock.
-getScheduler().stepJob('hero-simulation');
+getScheduler().step(performance.now());
 let clock = world.get(Time)!.now;
 
 while (world.get(Time)!.elapsed < 1) {
   if (title.lifting) throw new Error('The title lifted before its opening beat');
 
-  const delta = Math.min(STEP, 1 - world.get(Time)!.elapsed);
-  clock += delta * 1000;
-  advanceHero(world, delta, clock);
+  clock += STEP * 1000;
+  getScheduler().step(clock);
 }
 
 if (!title.lifting) throw new Error('The title did not lift automatically after its opening beat');
@@ -74,7 +70,7 @@ const heights: number[] = [];
 
 for (const [index, moment] of MOMENTS.entries()) {
   while (elapsed < moment) {
-    advanceHero(world, STEP, base + (elapsed + STEP) * 1000);
+    getScheduler().step(base + (elapsed + STEP) * 1000);
     elapsed += STEP;
   }
 
@@ -83,10 +79,9 @@ for (const [index, moment] of MOMENTS.entries()) {
   for (const piece of title.pieces) height = Math.max(height, piece.entity.get(Body)!.position[2]);
 
   heights.push(height);
-  getScheduler().stepJob('hero-title-motion');
-  getScheduler().stepJob('hero-glass-shadows');
   renderer.setRenderTarget(tiles[index] ?? null);
   renderer.render(scene, camera);
+  renderer.setRenderTarget(null);
 }
 
 if (
