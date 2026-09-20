@@ -10,7 +10,7 @@ import { COUNT } from '../robot/content';
 import { robotActions } from '../robot/actions';
 import { syncDustViews } from '../robot/systems';
 
-it('freezes during loading and only updates the currently mounted paper', () => {
+it('only updates the currently mounted paper from the playback clock', () => {
   const world = createWorld(Time);
   const commands = heroActions(world);
   const first = new Vector2();
@@ -18,17 +18,16 @@ it('freezes during loading and only updates the currently mounted paper', () => 
 
   try {
     commands.mountPaperView(first);
-    updateTime(world, 0.1, 100, false);
     updatePaper(world);
     expect(first.length()).toBe(0);
 
-    updateTime(world, 0.1, 200, true);
+    updateTime(world, 0.1, 200);
     updatePaper(world);
     expect(first.length()).toBeGreaterThan(0);
     const last = first.clone();
 
     commands.unmountPaperView();
-    updateTime(world, 0.1, 300, true);
+    updateTime(world, 0.1, 300);
     updatePaper(world);
     expect(first.equals(last)).toBe(true);
 

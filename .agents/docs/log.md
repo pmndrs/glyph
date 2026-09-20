@@ -2,6 +2,11 @@
 
 ## 2026-09-20
 
+- **Decoupled hero time from readiness** — The frame loop advances time only after its readiness gate.
+  `updateTime` samples the timestamp and accumulates a bounded delta without knowing about preparation.
+  The full hero check and WebGPU opening check pass, including a check that every clock field stays zero
+  during preparation and the opening lift starts after its playback beat. See [the hero reference](packages/hero.md).
+
 - **Aligned hero keyboard input with minecraft-like** — A world-level `Keys` trait retains held keys.
   Separate keyboard and pointer hooks synchronize DOM events through domain actions. The keyboard effect
   issues replay directly on the first ready Space press, releases keys on keyup, and clears them on blur or

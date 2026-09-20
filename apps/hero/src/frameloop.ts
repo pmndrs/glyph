@@ -33,10 +33,10 @@ export function FrameLoop() {
     ({ viewport, camera, pointer, size, time }, delta) => {
       sampleViewport(world, viewport.width, viewport.height, camera.position.z, size.width / size.height);
       samplePointer(world, pointer.x, pointer.y);
-      updateTime(world, delta, time, isReady);
 
       if (!isReady) return;
 
+      updateTime(world, delta, time);
       advanceSequence(world);
       moveRobots(world);
       triggerRobotDeparture(world);

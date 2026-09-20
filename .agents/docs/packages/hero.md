@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:6711939b626cf637ce3e9ff350d94b49c9da7cba636f176c59cff0220c0a4a64'
+source_digest: 'sha256:57eb409ec88341f2913ad60706a9a617bc4aebe7be31570a6ab41e2c9c909f20'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -211,8 +211,9 @@ scene, alongside `<FrameLoop />` from root `frameloop.ts`. Hero owns scene compo
 The frame loop samples renderer inputs, delegates DOM input, and runs domain simulation at 60 Hz using
 the scheduler's timestamp. Domain systems remain independent of React. The lift check steps the same registered
 simulation job used during playback.
-Viewport sampling, pointer sampling, and clock advancement are separate systems before the simulation readiness
-gate. `useHeroReady()` subscribes to preparation status, and the frame loop captures its `isReady` value in the
+Viewport and pointer sampling run before the simulation readiness gate. Clock advancement runs after it, so time
+retains its initial values during preparation. `updateTime` only samples the timestamp and accumulates a bounded
+delta. `useHeroReady()` subscribes to preparation status, and the frame loop captures its `isReady` value in the
 keyboard hook and frame callbacks. `useKeyboard` synchronizes a world-level `Keys` set through input actions and
 issues the explicit replay command inside its event effect on the first Space keydown. `usePointer` owns pointer
 listeners separately. Shadow discovery receives readiness explicitly. A second ordered job publishes
@@ -252,7 +253,7 @@ their unused uniforms. Materials and post-processing now live in their domains. 
 and Space replay. Seven numerical tests retain precise evidence for baked title colliders and their counters, glyph transforms, edge-on motif changes,
 bounded pointer response, lift/drop/revival with one landing notification, and robot pushes without tipping or
 leaving an invisible collider behind. These checks catch errors that
-pixel comparisons cannot isolate reliably. Two lifecycle tests cover paper freezing during loading, view replacement,
+pixel comparisons cannot isolate reliably. Two lifecycle tests cover paper following the playback clock, view replacement,
 hidden mounted dust updates, and detached resources remaining untouched. Buffer identity and duplicate timeline/path tests are omitted.
 
 The application pins Poimandres' `math` package at `0.1.0` for the hero's CPU simulation and transforms. Its upstream

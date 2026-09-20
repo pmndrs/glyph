@@ -35,8 +35,15 @@ const { Keys } = (await import(
 const MOMENTS = [0.3, 0.6, 0.85, 1.6] as const;
 const STEP = 1 / 60;
 
-while (document.documentElement.dataset.heroState !== 'ready')
+while (document.documentElement.dataset.heroState !== 'ready') {
+  const time = world.get(Time)!;
+
+  if (time.now !== 0 || time.delta !== 0 || time.elapsed !== 0) {
+    throw new Error('The playback clock advanced during preparation');
+  }
+
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+}
 
 const state = _roots.values().next().value?.store.getState();
 
