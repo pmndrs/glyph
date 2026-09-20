@@ -7,6 +7,11 @@
   The full hero check and WebGPU opening check pass, including a check that every clock field stays zero
   during preparation and the opening lift starts after its playback beat. See [the hero reference](packages/hero.md).
 
+- **Added the juggler example** — `apps/juggler` is a small R3F app where typed glyphs wait in a row at the top,
+  drop one at a time, and a stick figure with superhuman speed catches and juggles every one. The simulation is a
+  pure module; its Vitest proof steps a word and a forty-letter burst and asserts no letter ever passes the hands.
+  The package check passes. See [the juggler reference](packages/juggler.md).
+
 - **Aligned hero keyboard input with minecraft-like** — A world-level `Keys` trait retains held keys.
   Separate keyboard and pointer hooks synchronize DOM events through domain actions. The keyboard effect
   issues replay directly on the first ready Space press, releases keys on keyup, and clears them on blur or
