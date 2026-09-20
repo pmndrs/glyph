@@ -2,6 +2,12 @@
 
 ## 2026-09-20
 
+- **Made the juggler's sentence a shaped paragraph** — The typed text is one uniformly styled `Text` broken apart
+  per committed layout with `breakApart()`, so kerning and spaces are the engine's while single glyphs hide as their
+  letters leave. Letters arrive red hot and cool to white, hop out with spin and squash, and take a colour as they
+  fall. Hands scoop each catch inward, reach for incoming letters, and wave when idle. Six simulation tests pass and
+  the package check passes. See [the juggler reference](packages/juggler.md).
+
 - **Renamed hero icon-field to icon-paper** — The background domain now uses `IconPaper`, `IconPaperRenderer`,
   `iconPaperActions`, and corresponding motion and command names. Imports, the font bake, and the package
   reference use the new path. Grid simulation keeps its lattice terminology. The full hero check and WebGPU
