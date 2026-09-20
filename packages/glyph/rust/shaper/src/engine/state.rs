@@ -5296,6 +5296,57 @@ fn allocate_glyph_id(next_glyph_id: &mut u32) -> Result<u32, EngineError> {
 const SHAPE_PRODUCE_UNSAFE_TO_CONCAT: u32 = 0x40;
 const SHAPE_BEGINNING_OF_TEXT: u32 = 0x01;
 const SHAPE_END_OF_TEXT: u32 = 0x02;
+const SHAPING_CONTEXT_SCALARS: usize = 5;
+
+const fn is_utf16_high_surrogate(unit: u16) -> bool {
+    unit >= 0xD800 && unit <= 0xDBFF
+}
+
+const fn is_utf16_low_surrogate(unit: u16) -> bool {
+    unit >= 0xDC00 && unit <= 0xDFFF
+}
+
+fn preceding_context_start(
+    text: &[u16],
+    run_start: u32,
+    item_start: u32,
+) -> Result<u32, EngineError> {
+    let lower = usize::try_from(run_start).map_err(|_| EngineError::InvalidRequest)?;
+    let mut start = usize::try_from(item_start).map_err(|_| EngineError::InvalidRequest)?;
+    if lower > start || start > text.len() {
+        return Err(EngineError::InvalidRequest);
+    }
+    let mut scalars = 0usize;
+    while start > lower && scalars < SHAPING_CONTEXT_SCALARS {
+        start -= 1;
+        if is_utf16_low_surrogate(text[start])
+            && start > lower
+            && is_utf16_high_surrogate(text[start - 1])
+        {
+            start -= 1;
+        }
+        scalars += 1;
+    }
+    u32::try_from(start).map_err(|_| EngineError::ResultTooLarge)
+}
+
+fn following_context_end(text: &[u16], item_end: u32, run_end: u32) -> Result<u32, EngineError> {
+    let mut end = usize::try_from(item_end).map_err(|_| EngineError::InvalidRequest)?;
+    let upper = usize::try_from(run_end).map_err(|_| EngineError::InvalidRequest)?;
+    if end > upper || upper > text.len() {
+        return Err(EngineError::InvalidRequest);
+    }
+    let mut scalars = 0usize;
+    while end < upper && scalars < SHAPING_CONTEXT_SCALARS {
+        let unit = text[end];
+        end += 1;
+        if is_utf16_high_surrogate(unit) && end < upper && is_utf16_low_surrogate(text[end]) {
+            end += 1;
+        }
+        scalars += 1;
+    }
+    u32::try_from(end).map_err(|_| EngineError::ResultTooLarge)
+}
 
 #[derive(Clone, Copy)]
 enum UnsafeSpanRole {
@@ -5352,7 +5403,7 @@ fn shape_unsafe_span(
     }
     let (context_start, context_end, range_flags) = match role {
         UnsafeSpanRole::Left => (
-            run.text_start,
+            preceding_context_start(text, run.text_start, item_start)?,
             item_end,
             SHAPE_PRODUCE_UNSAFE_TO_CONCAT
                 | SHAPE_END_OF_TEXT
@@ -5360,7 +5411,7 @@ fn shape_unsafe_span(
         ),
         UnsafeSpanRole::Right => (
             item_start,
-            run.text_end,
+            following_context_end(text, item_end, run.text_end)?,
             SHAPE_PRODUCE_UNSAFE_TO_CONCAT
                 | SHAPE_BEGINNING_OF_TEXT
                 | (u32::from(cluster_end == clusters.starts.len()) * SHAPE_END_OF_TEXT),
@@ -6407,6 +6458,33 @@ mod tests {
     use crate::engine::style_state::ResolvedStyle;
 
     use super::*;
+
+    #[test]
+    fn unsafe_boundary_context_is_five_scalars_and_surrogate_safe() {
+        let text = [
+            b'x' as u16,
+            0xD83D,
+            0xDE00,
+            b'a' as u16,
+            b'b' as u16,
+            b'c' as u16,
+            b'd' as u16,
+            b'e' as u16,
+            0xD83D,
+            0xDE00,
+            b'f' as u16,
+            b'g' as u16,
+            b'h' as u16,
+            b'i' as u16,
+            b'j' as u16,
+            b'x' as u16,
+        ];
+
+        assert_eq!(preceding_context_start(&text, 1, 10), Ok(4));
+        assert_eq!(following_context_end(&text, 3, 15), Ok(8));
+        assert_eq!(preceding_context_start(&text, 6, 10), Ok(6));
+        assert_eq!(following_context_end(&text, 10, 13), Ok(13));
+    }
 
     #[test]
     fn placement_identity_survives_run_geometry_revisions_but_distinguishes_boundary_roles() {
