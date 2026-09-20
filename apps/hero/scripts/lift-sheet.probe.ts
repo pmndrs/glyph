@@ -28,7 +28,7 @@ const { Time } = (await import(
 const { Body } = (await import(
   new URL('/src/physics/traits.ts', location.origin).href
 )) as typeof import('../src/physics/traits');
-const { Keys } = (await import(
+const { Keys, Pointer } = (await import(
   new URL('/src/input/traits.ts', location.origin).href
 )) as typeof import('../src/input/traits');
 /** Seconds into the replay for each tile: carried up, at the top, falling, and landed. */
@@ -137,6 +137,24 @@ window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
 window.dispatchEvent(new KeyboardEvent('keyup', { key: ' ' }));
 
 if (title.replays !== replays + 2) throw new Error('A new Space press did not replay after focus loss');
+
+const canvas = renderer.domElement;
+const bounds = canvas.getBoundingClientRect();
+canvas.dispatchEvent(
+  new PointerEvent('pointermove', {
+    clientX: bounds.left + bounds.width / 4,
+    clientY: bounds.top + bounds.height / 4,
+  }),
+);
+const pointer = world.get(Pointer)!;
+
+if (Math.abs(pointer.x + 0.5) > 0.000001 || Math.abs(pointer.y - 0.5) > 0.000001 || pointer.strength !== 1) {
+  throw new Error('DOM pointer movement did not synchronize normalized position and activity');
+}
+
+canvas.dispatchEvent(new PointerEvent('pointerleave'));
+
+if (world.get(Pointer)!.strength !== 0) throw new Error('Leaving the canvas did not clear pointer activity');
 
 const sheet = new Scene();
 const quad = new PlaneGeometry(1, 1);

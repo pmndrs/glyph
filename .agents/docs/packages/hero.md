@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:57eb409ec88341f2913ad60706a9a617bc4aebe7be31570a6ab41e2c9c909f20'
+source_digest: 'sha256:9710e95c0dd700fc15c80d28300efb3cd0e3480020fb92db852c7dd6d0790aa1'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -211,12 +211,14 @@ scene, alongside `<FrameLoop />` from root `frameloop.ts`. Hero owns scene compo
 The frame loop samples renderer inputs, delegates DOM input, and runs domain simulation at 60 Hz using
 the scheduler's timestamp. Domain systems remain independent of React. The lift check steps the same registered
 simulation job used during playback.
-Viewport and pointer sampling run before the simulation readiness gate. Clock advancement runs after it, so time
+Viewport sampling runs before the simulation readiness gate. Clock advancement runs after it, so time
 retains its initial values during preparation. `updateTime` only samples the timestamp and accumulates a bounded
 delta. `useHeroReady()` subscribes to preparation status, and the frame loop captures its `isReady` value in the
 keyboard hook and frame callbacks. `useKeyboard` synchronizes a world-level `Keys` set through input actions and
 issues the explicit replay command inside its event effect on the first Space keydown. `usePointer` owns pointer
-listeners separately. Shadow discovery receives readiness explicitly. A second ordered job publishes
+listeners and synchronizes normalized position and activity together from DOM events using the canvas bounds.
+Leaving or cancelling the pointer, losing window focus, or unmounting clears activity. The frame loop only fades
+pointer strength over time. Shadow discovery receives readiness explicitly. A second ordered job publishes
 view state after renderer preparation callbacks and before the final render.
 It updates paper, title and icon draws, feature text, robot pose, rig animation, robot display, dust, the black hole,
 embers, and glass shadows. Both jobs are capped at 60 fps. View systems read attached resource traits, so detaching
@@ -316,7 +318,8 @@ its mark and off square, differently on every replay. The floor's first contact 
 the lattices, so the impacts land where the letters actually do. The feature line retypes after the final landing.
 Holding Space does not restart the animation, and focused form controls retain their normal keyboard behavior.
 Keyup releases held keys, and window blur or keyboard-hook cleanup clears them. The opening browser check also
-covers one replay per press, form input exclusion, key normalization, and focus-loss cleanup.
+covers one replay per press, form input exclusion, key normalization, focus-loss cleanup, and pointer position
+and activity from canvas events.
 
 A small robot treats the screen as its floor: Sketchfab's _Cute Home Robot_ by Yandrack (CC-BY-4.0; the credit
 ships in the build's `notices.txt`). It drives in from the bottom left along a meandering diagonal whose phase
@@ -411,7 +414,7 @@ They verify resource preparation but do not measure delivery through a screen re
 
 The full hero package check passes, including seven numerical tests, two timeline tests, two mounted-view lifecycle tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
-The production entry bundle is 599.81 kB gzip, down from 609.11 kB before removing the alternate scene.
+The production entry bundle is 599.89 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/letters/materials.ts`: red G, orange l,

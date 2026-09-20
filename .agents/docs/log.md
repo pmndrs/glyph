@@ -2,6 +2,12 @@
 
 ## 2026-09-20
 
+- **Consolidated hero pointer synchronization** — `usePointer` reads DOM coordinates relative to the canvas
+  and updates position and activity together through input actions. Removed frame-loop pointer sampling.
+  Leave, cancellation, blur, and cleanup clear activity, while the frame system retains gradual decay.
+  The full hero check and WebGPU opening and input checks pass, including normalized pointer movement and
+  canvas-leave behavior. See [the hero reference](packages/hero.md).
+
 - **Decoupled hero time from readiness** — The frame loop advances time only after its readiness gate.
   `updateTime` samples the timestamp and accumulates a bounded delta without knowing about preparation.
   The full hero check and WebGPU opening check pass, including a check that every clock field stays zero

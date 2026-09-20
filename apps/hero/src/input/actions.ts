@@ -15,8 +15,8 @@ export const inputActions = createActions((world) => ({
     keys.clear();
     world.set(Keys, keys);
   },
-  activatePointer: () => {
-    world.set(Pointer, { strength: 1 });
+  movePointer: (x: number, y: number) => {
+    world.set(Pointer, { x, y, strength: 1 });
   },
   clearPointer: () => {
     world.set(Pointer, { strength: 0 });

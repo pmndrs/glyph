@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber/webgpu';
 import { useWorld } from 'koota/react';
 import { useKeyboard, usePointer } from './input/hooks';
-import { fadePointer, samplePointer } from './input/systems';
+import { fadePointer } from './input/systems';
 import { useHeroReady } from './hero/prepare';
 import { applyLetterLandings, triggerRobotDeparture, sampleViewport, updatePaper } from './hero/systems';
 import { updateTime } from './time/systems';
@@ -30,9 +30,8 @@ export function FrameLoop() {
   usePointer(world);
 
   useFrame(
-    ({ viewport, camera, pointer, size, time }, delta) => {
+    ({ viewport, camera, size, time }, delta) => {
       sampleViewport(world, viewport.width, viewport.height, camera.position.z, size.width / size.height);
-      samplePointer(world, pointer.x, pointer.y);
 
       if (!isReady) return;
 

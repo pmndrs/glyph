@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { inputActions } from './actions';
 import { heroActions } from '../hero/actions';
 import { Keys } from './traits';
+import { useThree } from '@react-three/fiber/webgpu';
 
 /** Synchronize browser keyboard events with the world's key state. */
 export function useKeyboard(world: World, isReady: boolean): void {
@@ -44,15 +45,30 @@ export function useKeyboard(world: World, isReady: boolean): void {
 }
 
 export function usePointer(world: World): void {
-  useEffect(() => {
-    const { activatePointer: moved, clearPointer: left } = inputActions(world);
+  const canvas = useThree((state) => state.renderer.domElement);
 
-    window.addEventListener('pointermove', moved, { passive: true });
-    window.addEventListener('pointerleave', left, { passive: true });
+  useEffect(() => {
+    const { movePointer, clearPointer } = inputActions(world);
+
+    const moved = (event: PointerEvent) => {
+      const bounds = canvas.getBoundingClientRect();
+      movePointer(
+        ((event.clientX - bounds.left) / bounds.width) * 2 - 1,
+        1 - ((event.clientY - bounds.top) / bounds.height) * 2,
+      );
+    };
+
+    canvas.addEventListener('pointermove', moved, { passive: true });
+    canvas.addEventListener('pointerleave', clearPointer, { passive: true });
+    canvas.addEventListener('pointercancel', clearPointer, { passive: true });
+    window.addEventListener('blur', clearPointer);
 
     return () => {
-      window.removeEventListener('pointermove', moved);
-      window.removeEventListener('pointerleave', left);
+      canvas.removeEventListener('pointermove', moved);
+      canvas.removeEventListener('pointerleave', clearPointer);
+      canvas.removeEventListener('pointercancel', clearPointer);
+      window.removeEventListener('blur', clearPointer);
+      clearPointer();
     };
-  }, [world]);
+  }, [world, canvas]);
 }
