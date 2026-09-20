@@ -4429,6 +4429,12 @@ impl ParagraphState {
             {
                 return Err(EngineError::InvalidRequest);
             }
+            let source_shape_run_index = if source_shape.runs.is_empty() {
+                u32::MAX
+            } else {
+                u32::try_from(self.pending_boundary_shape.shape.runs.len())
+                    .map_err(|_| EngineError::ResultTooLarge)?
+            };
             let source_span = if source_shape.runs.is_empty() {
                 (
                     u32::try_from(self.pending_boundary_shape.shape.glyph_ids.len())
@@ -4492,6 +4498,7 @@ impl ParagraphState {
                 source_font_handle: candidate.source_font_handle,
                 ellipsis_binding_handle: candidate.ellipsis_binding_handle,
                 ellipsis_font_handle: candidate.ellipsis_font_handle,
+                source_shape_run_index,
                 source_glyph_start: source_span.0,
                 source_glyph_count: source_span.1,
                 ellipsis_glyph_start: ellipsis_span.0,
@@ -6077,16 +6084,10 @@ fn try_append_retained_unsafe_boundary(
     else {
         return Ok(None);
     };
-    let source_run_index = previous
-        .shape
-        .runs
-        .iter()
-        .position(|run| {
-            run.glyph_start == record.source_glyph_start
-                && run.glyph_count == record.source_glyph_count
-                && run.source_run == record.source_run
-        })
-        .ok_or(EngineError::InvalidRequest)?;
+    let source_run_index =
+        usize::try_from(record.source_shape_run_index).map_err(|_| EngineError::InvalidRequest)?;
+    let retained_run_index =
+        u32::try_from(output.shape.runs.len()).map_err(|_| EngineError::ResultTooLarge)?;
     let source_span = output
         .shape
         .append_from(&previous.shape, source_run_index)?;
@@ -6107,6 +6108,7 @@ fn try_append_retained_unsafe_boundary(
     output.records.push(BoundaryShape {
         source_glyph_start: source_span.0,
         source_glyph_count: source_span.1,
+        source_shape_run_index: retained_run_index,
         ellipsis_glyph_start: source_span.0.saturating_add(source_span.1),
         ..record
     });
@@ -6131,6 +6133,8 @@ fn append_unsafe_boundary_record(
                 && usize::try_from(run.glyph_count).ok() == Some(source_shape.glyph_ids.len())
         })
         .ok_or(EngineError::InvalidRequest)?;
+    let output_run_index =
+        u32::try_from(output.shape.runs.len()).map_err(|_| EngineError::ResultTooLarge)?;
     let source_span = output.shape.append_from(source_shape, source_run_index)?;
     if source_stable_ids.len()
         != usize::try_from(source_span.1).map_err(|_| EngineError::InvalidRequest)?
@@ -6156,6 +6160,7 @@ fn append_unsafe_boundary_record(
         source_font_handle: span.font_handle,
         ellipsis_binding_handle: 0,
         ellipsis_font_handle: 0,
+        source_shape_run_index: output_run_index,
         source_glyph_start: source_span.0,
         source_glyph_count: source_span.1,
         ellipsis_glyph_start: source_span.0.saturating_add(source_span.1),
@@ -6455,7 +6460,7 @@ fn gather_error(error: GatherError) -> EngineError {
 
 #[cfg(test)]
 mod tests {
-    use crate::engine::style_state::ResolvedStyle;
+    use crate::engine::{shaping_state::ShapedRun, style_state::ResolvedStyle};
 
     use super::*;
 
@@ -6484,6 +6489,81 @@ mod tests {
         assert_eq!(following_context_end(&text, 3, 15), Ok(8));
         assert_eq!(preceding_context_start(&text, 6, 10), Ok(6));
         assert_eq!(following_context_end(&text, 10, 13), Ok(13));
+    }
+
+    #[test]
+    fn retained_unsafe_boundary_reuses_its_recorded_shape_run() {
+        let expected = UnsafeSpan {
+            cluster_start: 0,
+            cluster_end: 1,
+            source_run: 7,
+            binding_handle: 9,
+            font_handle: 11,
+            metrics: ExactLineMetrics {
+                advance_units: 0,
+                space_units: 0,
+                trailing_space_units: 0,
+            },
+        };
+        let previous = BoundaryShapeArena {
+            records: vec![BoundaryShape {
+                flow_thread_id: 3,
+                boundary_id: 13,
+                source_run: 7,
+                cluster_start: 0,
+                cluster_end: 1,
+                text_end: 1,
+                source_binding_handle: 9,
+                source_font_handle: 11,
+                ellipsis_binding_handle: 0,
+                ellipsis_font_handle: 0,
+                source_shape_run_index: 1,
+                source_glyph_start: 1,
+                source_glyph_count: 1,
+                ellipsis_glyph_start: 2,
+                ellipsis_glyph_count: 0,
+            }],
+            shape: ShapeArena {
+                runs: vec![
+                    ShapedRun {
+                        source_run: 7,
+                        binding_handle: 9,
+                        font_handle: 11,
+                        text_start: 0,
+                        text_end: 1,
+                        glyph_start: 0,
+                        glyph_count: 1,
+                    },
+                    ShapedRun {
+                        source_run: 7,
+                        binding_handle: 9,
+                        font_handle: 11,
+                        text_start: 0,
+                        text_end: 1,
+                        glyph_start: 1,
+                        glyph_count: 1,
+                    },
+                ],
+                glyph_ids: vec![10, 20],
+                clusters: vec![0, 0],
+                x_advances: vec![64, 96],
+                y_advances: vec![0, 0],
+                x_offsets: vec![0, 0],
+                y_offsets: vec![0, 0],
+                glyph_flags: vec![0, 0],
+            },
+            stable_ids: vec![100, 200],
+            ..BoundaryShapeArena::default()
+        };
+        let mut output = BoundaryShapeArena::default();
+
+        assert_eq!(
+            try_append_retained_unsafe_boundary(&mut output, &previous, Some(0), expected, 13, 3,),
+            Ok(Some(0)),
+        );
+        assert_eq!(output.shape.glyph_ids, vec![20]);
+        assert_eq!(output.stable_ids, vec![200]);
+        assert_eq!(output.records[0].source_shape_run_index, 0);
     }
 
     #[test]
