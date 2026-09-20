@@ -640,11 +640,15 @@ function preflightProgramSemantics(
   preflightProgramBody(program);
 
   for (const [index, set] of capabilitySets.entries()) {
-    if (
-      (effectiveCapabilitySetId === 0 || effectiveCapabilitySetId === index + 1) &&
-      !set.capabilities.includes('ordered-direct')
-    ) {
+    if (effectiveCapabilitySetId !== 0 && effectiveCapabilitySetId !== index + 1) continue;
+    if (!set.capabilities.includes('ordered-direct')) {
       throw new RangeError(`codec capability set ${index} lacks direct ordered allocation for ${label}`);
+    }
+    // Every buffer a program declares binds to each of its draws.
+    if (program.buffers.length > set.maxBuffersPerDraw) {
+      throw new RangeError(
+        `${label} declares ${program.buffers.length} buffers but codec capability set ${index} binds at most ${set.maxBuffersPerDraw} per draw`,
+      );
     }
   }
 }
