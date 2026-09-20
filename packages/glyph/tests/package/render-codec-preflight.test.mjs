@@ -473,6 +473,11 @@ const semanticRejections = [
   ],
   ['zero max buffer bytes', (d) => (d.capabilitySets[0].maxBufferBytes = 0), /limits need nonzero capacity/],
   [
+    'a program declaring more buffers than one draw binds',
+    (d) => (d.capabilitySets[0].maxBuffersPerDraw = 2),
+    /program \d+ declares 3 buffers but codec capability set 0 binds at most 2 per draw/,
+  ],
+  [
     'buffers per draw beyond the program maximum',
     (d) => (d.capabilitySets[0].maxBuffersPerDraw = 17),
     /limits need nonzero capacity/,

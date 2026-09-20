@@ -59,12 +59,26 @@ export function createHostRasterCodecProgram<
   assertTechniqueCodecBody(authoredBody, codec.schema);
   const body = attachHostCodecProgramSystemBuffers(authoredBody, codec.schema, system, placementSlotTarget);
   assertTechniqueCodecBody(body, codec.schema, system, placementSlotTarget);
+  const techniqueBuffers = schemaCodecBuffers(codec.schema);
+  const systemBuffers = systemCodecBuffers(system, placementSlotTarget);
+  if (techniqueBuffers.length + systemBuffers.length > capabilitySet.maxBuffersPerDraw) {
+    const systemNames = [
+      'stableGlyphId',
+      ...(placementSlotTarget === undefined ? ['placementSlot'] : []),
+      ...(system.transformIndex === undefined ? [] : ['transformIndex']),
+    ];
+    throw new TypeError(
+      `raster codec "${codec.schema.technique}" needs ${techniqueBuffers.length + systemBuffers.length} buffers per draw ` +
+        `(${techniqueBuffers.length} technique buffers plus ${systemNames.join(', ')}) ` +
+        `but the capability set binds at most ${capabilitySet.maxBuffersPerDraw}`,
+    );
+  }
   return Object.freeze({
     ...createCodecProgram(
       compiledTechniqueId,
       compiledProgramId,
       body,
-      [...schemaCodecBuffers(codec.schema), ...systemCodecBuffers(system, placementSlotTarget)],
+      [...techniqueBuffers, ...systemBuffers],
       options.transformMode,
     ),
     capabilitySet,
