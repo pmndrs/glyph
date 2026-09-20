@@ -2,6 +2,14 @@
 
 ## 2026-09-20
 
+- **Rebuilt the juggler on koota and math with a forge, stats, and explosions** — `apps/juggler` now mirrors the
+  hero: one world, `letters` and `juggler` domains, systems listed in `frameloop.ts`, math scratch. Letters are
+  struck white-hot with TSL flames and embers and cool to steel; the juggler has speed, hand speed, reach, and grip,
+  drops what he cannot reach, and dropped letters explode into instanced shards. A shared forge material carries
+  per-letter state in the instance style colour, removing the ten-pipelines-per-letter typing hitch measured at up to
+  617 ms; the worst typing frame is now 16 ms. Eight headless stories pass and the package check passes. See
+  [the juggler reference](packages/juggler.md).
+
 - **Made the juggler's sentence a shaped paragraph** — The typed text is one uniformly styled `Text` broken apart
   per committed layout with `breakApart()`, so kerning and spaces are the engine's while single glyphs hide as their
   letters leave. Letters arrive red hot and cool to white, hop out with spin and squash, and take a colour as they

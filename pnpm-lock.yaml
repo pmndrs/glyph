@@ -147,6 +147,12 @@ importers:
       '@react-three/fiber':
         specifier: catalog:renderer
         version: 10.0.0-alpha.4(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
+      koota:
+        specifier: 0.6.6-canary.63c1187
+        version: 0.6.6-canary.63c1187(@types/react@19.2.14)(react@19.2.8)
+      math:
+        specifier: 0.1.0
+        version: 0.1.0
       react:
         specifier: catalog:renderer
         version: 19.2.8
