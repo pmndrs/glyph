@@ -1,14 +1,16 @@
 import { Text, TextGroup, useMsdf } from '@pmndrs/glyph/react';
+import type { Glyphs, Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useEffect, useRef, useState } from 'react';
-import type { Group, Mesh } from 'three/webgpu';
+import { Box3, Color, Matrix4, Vector3, type Group, type Mesh } from 'three/webgpu';
 
 import fontUrl from '../assets/inter-latin.font.glb?url';
 import {
   FONT_SIZE,
   createJugglerWorld,
-  deleteLetter,
   figure,
+  placeLetter,
+  removeLetter,
   resizeJugglerWorld,
   stepJugglerWorld,
   typeLetter,
@@ -17,11 +19,20 @@ import {
   type Side,
 } from './juggler.js';
 
-const COLORS = ['#f59e0b', '#fb7185', '#ff4dc4', '#60a5fa', '#34d399', '#fde047', '#c084fc'] as const;
+const PALETTE = ['#f59e0b', '#fb7185', '#ff4dc4', '#60a5fa', '#34d399', '#fde047', '#c084fc'] as const;
 const INK = '#f4f7ff';
-const MUTED = '#6b7a90';
-/** Wide exact box so `align: 'center'` centres one glyph on its group origin. */
-const LETTER_BOX = FONT_SIZE * 1.5;
+/** Red-hot to white: a freshly typed letter walks these stops over `COOL_SECONDS`. */
+const HEAT = ['#ff2d1a', '#ff6a1f', '#ffb347', '#ffe9c4', INK] as const;
+const COOL_SECONDS = 1.8;
+/** After cooling, the overlay letter yields to the paragraph's own white glyph over this long. */
+const HANDOVER_SECONDS = 0.25;
+/** A released letter takes this long to pick up its colour. */
+const TINT_SECONDS = 0.5;
+const PARAGRAPH_MARGIN = 48;
+const PARAGRAPH_MAX_WIDTH = 960;
+const LINE_HEIGHT = 1.25;
+/** The sentence's source paragraph is kept far below the view; only its broken-apart copy is drawn. */
+const OFFSCREEN_Y = -100_000;
 /** Longest simulated step, so a background tab does not fling every letter through the floor on return. */
 const MAX_STEP = 1 / 20;
 
@@ -31,16 +42,25 @@ export function App() {
   const font = useMsdf(fontUrl);
   const viewport = useThree((state) => state.viewport);
   const [world] = useState(() => createJugglerWorld(viewport.width, viewport.height));
+  const [sentence, setSentence] = useState('');
   const [letters, setLetters] = useState<readonly Letter[]>([]);
-  const views = useRef(new Map<number, Group>());
+  /** The typed text, mutated in the key handler rather than in a state updater so the world changes exactly once per key. */
+  const typed = useRef('');
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
-      if (event.key === 'Backspace') deleteLetter(world);
-      else if (event.key.length === 1 && event.key.trim() !== '') typeLetter(world, event.key);
-      else return;
+      const current = typed.current;
+      if (event.key === 'Backspace') {
+        if (current.length === 0) return;
+        removeLetter(world, current.length - 1);
+        typed.current = current.slice(0, -1);
+      } else if (event.key.length === 1 && event.key >= ' ' && event.key <= '~') {
+        if (event.key !== ' ') typeLetter(world, event.key, current.length);
+        typed.current = current + event.key;
+      } else return;
       event.preventDefault();
+      setSentence(typed.current);
       setLetters([...world.letters]);
     };
     window.addEventListener('keydown', onKeyDown);
@@ -56,16 +76,8 @@ export function App() {
     { id: 'juggler-simulation', phase: 'physics' },
   );
 
-  useFrame(() => {
-    for (const letter of world.letters) {
-      const view = views.current.get(letter.id);
-      if (view === undefined) continue;
-      view.position.set(letter.x, letter.y, 0);
-      view.rotation.z = letter.rotation;
-    }
-  });
-
   const body = figure(viewport.height);
+  const paragraphWidth = Math.min(viewport.width - 2 * PARAGRAPH_MARGIN, PARAGRAPH_MAX_WIDTH);
 
   return (
     <>
@@ -74,41 +86,203 @@ export function App() {
         <planeGeometry args={[1, 2]} />
         <meshBasicNodeMaterial color="#293244" />
       </mesh>
+      <Sentence font={font} sentence={sentence} width={paragraphWidth} world={world} />
       <TextGroup name="letters">
         {letters.map((letter) => (
-          <group
-            key={letter.id}
-            position={[letter.x, letter.y, 0]}
-            ref={(view: Group | null) => {
-              if (view === null) views.current.delete(letter.id);
-              else views.current.set(letter.id, view);
-            }}
-          >
-            <Text
-              constraints={{ width: { mode: 'exact', size: LETTER_BOX } }}
-              font={font}
-              layout={{ align: 'center', wrap: 'none' }}
-              position={[-LETTER_BOX / 2, FONT_SIZE / 2, 0]}
-              style={{ color: letterColor(letter), fontSize: FONT_SIZE, lineHeight: 1 }}
-            >
-              {letter.char}
-            </Text>
-          </group>
+          <LetterView font={font} key={letter.id} letter={letter} />
         ))}
       </TextGroup>
+    </>
+  );
+}
+
+type Font = ReturnType<typeof useMsdf>;
+
+interface SentenceProps {
+  readonly font: Font;
+  readonly sentence: string;
+  readonly width: number;
+  readonly world: JugglerWorld;
+}
+
+/**
+ * The typed sentence is one shaped paragraph, so kerning and word spacing are the engine's. The paragraph itself
+ * lives off screen; each committed layout is broken apart into per-glyph copies drawn at the top of the view, which
+ * lets a single glyph hide when its letter is hot or has left, while every other glyph keeps its shaped position.
+ */
+function Sentence({ font, sentence, width, world }: SentenceProps) {
+  const source = useRef<ThreeText<never> | null>(null);
+  const anchor = useRef<Group | null>(null);
+  const copies = useRef<Glyphs | undefined>(undefined);
+  const revision = useRef(-1);
+  /** Glyph index by UTF-16 offset in the sentence, with the ink centre in paragraph space. */
+  const glyphs = useRef(new Map<number, { readonly index: number; readonly x: number; readonly y: number }>());
+  const shown = useRef<boolean[]>([]);
+  const kick = useRef(0);
+  const releases = useRef(0);
+  const matrix = useRef(new Matrix4());
+  const center = useRef(new Vector3());
+
+  useEffect(
+    () => () => {
+      copies.current?.dispose();
+      copies.current = undefined;
+    },
+    [],
+  );
+
+  useFrame((_, delta) => {
+    const text = source.current;
+    const group = anchor.current;
+    if (text === null || group === null) return;
+    const state = text.commitState();
+    if (state.status === 'committed' && state.revision !== revision.current) {
+      revision.current = state.revision;
+      copies.current?.dispose();
+      copies.current = undefined;
+      glyphs.current.clear();
+      shown.current = [];
+      if (text.computeBoundingBox().max.x > text.computeBoundingBox().min.x) {
+        const [broken, decorations] = text.breakApart();
+        decorations?.dispose();
+        broken.position.set(0, 0, 0);
+        group.add(broken);
+        copies.current = broken;
+        for (const measurement of broken.measurements) {
+          const glyph = broken.glyphAt(measurement.index);
+          if (glyph === undefined || measurement.localInkBounds.isEmpty()) continue;
+          measurement.localInkBounds.getCenter(center.current);
+          glyphs.current.set(glyph.cluster, { index: measurement.index, x: center.current.x, y: center.current.y });
+          shown.current[measurement.index] = true;
+        }
+      }
+    }
+
+    const broken = copies.current;
+    if (broken === undefined) return;
+    if (world.releases !== releases.current) {
+      releases.current = world.releases;
+      kick.current = 7;
+    }
+    kick.current *= Math.exp(-12 * delta);
+    group.position.y = paragraphTop(world.height) + kick.current;
+
+    // Waiting letters sit on their glyphs; a glyph shows only once its letter has cooled and until it leaves.
+    const visible = new Set<number>();
+    for (const letter of world.letters) {
+      const glyph = glyphs.current.get(letter.index);
+      if (glyph === undefined) continue;
+      if (letter.state === 'queued') {
+        placeLetter(world, letter.index, group.position.x + glyph.x, group.position.y + glyph.y);
+        if (letter.age >= COOL_SECONDS + HANDOVER_SECONDS) visible.add(glyph.index);
+      }
+    }
+    for (const { index, x, y } of glyphs.current.values()) {
+      const show = visible.has(index);
+      if (shown.current[index] === show) continue;
+      shown.current[index] = show;
+      matrix.current.makeScale(show ? 1 : 0, show ? 1 : 0, 1);
+      matrix.current.setPosition(x, y, 0);
+      broken.setMatrixAt(index, matrix.current);
+    }
+  });
+
+  return (
+    <>
+      <group position={[-width / 2, paragraphTop(world.height), 0]} ref={anchor} />
       <Text
+        constraints={{ width: { mode: 'exact', size: width } }}
         font={font}
-        position={[-viewport.width / 2 + 24, body.floorY - 12, 0]}
-        style={{ color: MUTED, fontSize: 14, letterSpacing: 0.6, lineHeight: 1 }}
+        layout={{ align: 'center', wrap: 'word' }}
+        position={[-width / 2, OFFSCREEN_Y, 0]}
+        ref={source}
+        style={{ color: INK, fontSize: FONT_SIZE, lineHeight: LINE_HEIGHT }}
       >
-        {letters.length === 0 ? 'TYPE TO JUGGLE' : 'BACKSPACE REMOVES A LETTER'}
+        {sentence}
       </Text>
     </>
   );
 }
 
-function letterColor(letter: Letter): string {
-  return COLORS[letter.id % COLORS.length] ?? INK;
+function paragraphTop(height: number): number {
+  return figure(height).topY + FONT_SIZE * 0.5;
+}
+
+interface LetterViewProps {
+  readonly font: Font;
+  readonly letter: Letter;
+}
+
+/**
+ * One glyph that follows its letter. While the letter waits in the sentence it is the red-hot overlay on the
+ * paragraph glyph's spot; once released it is the letter itself, picking up its colour as it falls.
+ */
+function LetterView({ font, letter }: LetterViewProps) {
+  const group = useRef<Group | null>(null);
+  const text = useRef<ThreeText<never> | null>(null);
+  const centered = useRef(false);
+  const applied = useRef('');
+  const ink = useRef(new Box3());
+  const center = useRef(new Vector3());
+  const tint = PALETTE[letter.id % PALETTE.length] ?? INK;
+
+  useFrame(() => {
+    const view = group.current;
+    const glyph = text.current;
+    if (view === null || glyph === null) return;
+
+    if (!centered.current && glyph.commitState().status === 'committed') {
+      ink.current.copy(glyph.computeBoundingBox());
+      if (ink.current.max.x > ink.current.min.x) {
+        ink.current.getCenter(center.current);
+        glyph.position.set(-center.current.x, -center.current.y, 0);
+        centered.current = true;
+      }
+    }
+
+    view.position.set(letter.x, letter.y, 0);
+    view.rotation.z = letter.rotation;
+    const boing = letter.released >= 0 ? 0.28 * Math.exp(-7 * letter.released) * Math.sin(22 * letter.released) : 0;
+    view.scale.set(1 + boing, 1 - boing, 1);
+
+    let color: string;
+    let opacity: number;
+    if (letter.released < 0) {
+      color = heat(letter.age);
+      opacity = letter.placed ? 1 - clamp((letter.age - COOL_SECONDS) / HANDOVER_SECONDS, 0, 1) : 0;
+    } else {
+      color = mix(INK, tint, clamp(letter.released / TINT_SECONDS, 0, 1));
+      opacity = 1;
+    }
+    const key = `${color}/${opacity.toFixed(3)}`;
+    if (key === applied.current) return;
+    applied.current = key;
+    glyph.style = { color, fontSize: FONT_SIZE, lineHeight: 1, opacity };
+  });
+
+  return (
+    <group ref={group} visible={letter.placed || letter.released >= 0}>
+      <Text font={font} ref={text} style={{ color: HEAT[0], fontSize: FONT_SIZE, lineHeight: 1, opacity: 0 }}>
+        {letter.char}
+      </Text>
+    </group>
+  );
+}
+
+const scratchA = new Color();
+const scratchB = new Color();
+
+/** Colour of a typed letter `age` seconds after it appeared. */
+function heat(age: number): string {
+  const position = clamp(age / COOL_SECONDS, 0, 1) * (HEAT.length - 1);
+  const stop = Math.min(Math.floor(position), HEAT.length - 2);
+  return mix(HEAT[stop] ?? INK, HEAT[stop + 1] ?? INK, position - stop);
+}
+
+function mix(from: string, to: string, amount: number): string {
+  scratchA.set(from);
+  scratchB.set(to);
+  return `#${scratchA.lerp(scratchB, amount).getHexString()}`;
 }
 
 type Limb =
@@ -165,7 +339,11 @@ function StickFigure({ world }: { readonly world: JugglerWorld }) {
       const sign = side === 'left' ? -1 : 1;
       const hand = juggler.hands[side];
       const sx = shoulderX + sign * 8;
-      const elbow = bend(sx, body.shoulderY, hand.x, hand.y, ARM_SEGMENT, sign * 0.4, -1);
+      // Elbows hang below a low hand and point outward under a raised one.
+      const elbow =
+        hand.y > body.shoulderY
+          ? bend(sx, body.shoulderY, hand.x, hand.y, ARM_SEGMENT, sign, 0.2)
+          : bend(sx, body.shoulderY, hand.x, hand.y, ARM_SEGMENT, sign * 0.4, -1);
       poseLimb(part(side === 'left' ? 'leftUpperArm' : 'rightUpperArm'), sx, body.shoulderY, elbow[0], elbow[1]);
       poseLimb(part(side === 'left' ? 'leftForearm' : 'rightForearm'), elbow[0], elbow[1], hand.x, hand.y);
       poseJoint(part(side === 'left' ? 'leftElbow' : 'rightElbow'), elbow[0], elbow[1]);

@@ -2,6 +2,9 @@
  * The juggling simulation. Pixel units, +Y up, origin at the centre of the view. Nothing here knows about React or
  * Three; the scene reads the world after each step and poses its objects from it.
  *
+ * Queued letters sit where the paragraph layout placed them: the view calls `placeLetter` once a layout commits,
+ * so kerning and word spacing belong to the text engine, not to this file.
+ *
  * The juggler is superhuman by construction: the body chases the letter that will land soonest, a hand that is still
  * holding a letter tosses it the instant another one arrives, and a catch places the hand exactly under the letter
  * however far the arm has to stretch. A letter therefore never passes the hands.
@@ -10,28 +13,40 @@
 /** Downward acceleration in px/s². */
 export const GRAVITY = 2200;
 export const FONT_SIZE = 56;
-/** Spacing of the typed row waiting at the top of the view. */
-export const SLOT_SPACING = 46;
 /** Pause between one queued letter dropping and the next. */
 export const RELEASE_INTERVAL = 0.45;
+/** Upward kick a letter gets as it leaves the sentence, before gravity takes over. */
+export const RELEASE_HOP = 340;
+/** Spin given to a released letter, alternating direction by position in the sentence. */
+export const RELEASE_SPIN = 2.4;
 /** How long a hand keeps a letter before tossing it to the other hand. */
 export const DWELL = 0.16;
 /** Body speed in px/s. */
 export const BODY_SPEED = 3600;
-/** Speed at which a hand returns to its resting position, in px/s. */
+/** Speed at which a hand moves toward its target, in px/s. */
 export const HAND_SPEED = 2600;
 export const FLOOR_MARGIN = 36;
-export const TOP_MARGIN = 56;
-/** Horizontal distance from the body's centre line to each resting hand. */
+export const TOP_MARGIN = 72;
+/** Horizontal distance from the body's centre line to each hand's outer catching position. */
 export const HAND_OFFSET_X = 46;
+/** Horizontal distance from the centre line to the inner throwing position. */
+export const THROW_OFFSET_X = 14;
 /** How far below the shoulders the hands rest. */
 export const HAND_DROP = 34;
+/** How far a hand dips while carrying a letter from the catch to the throw. */
+export const SCOOP_DEPTH = 18;
+/** How far from the shoulder a free hand reaches toward an incoming letter. */
+export const REACH = 64;
+/** Seconds with nothing in play before the juggler starts waving for input. */
+export const WAVE_AFTER = 1.5;
 
 export type Side = 'left' | 'right';
 export type LetterState = 'queued' | 'airborne' | 'held';
 
 export interface Letter {
   readonly id: number;
+  /** UTF-16 offset of this character in the typed sentence. */
+  readonly index: number;
   readonly char: string;
   x: number;
   y: number;
@@ -43,6 +58,12 @@ export interface Letter {
   /** Hand expected to receive the letter while it is airborne. */
   target: Side;
   catches: number;
+  /** Seconds since the letter was typed. */
+  age: number;
+  /** Seconds since the letter left the sentence, or -1 while it still waits there. */
+  released: number;
+  /** Whether the view has placed the letter from a committed layout. */
+  placed: boolean;
 }
 
 export interface Hand {
@@ -69,6 +90,10 @@ export interface JugglerWorld {
   readonly juggler: Juggler;
   releaseTimer: number;
   nextId: number;
+  /** Count of letters released so far; the view watches it for release effects. */
+  releases: number;
+  /** Time at which the last letter left play, for the idle wave. */
+  idleSince: number;
 }
 
 /** Fixed body landmarks for the current view height. */
@@ -80,7 +105,7 @@ export interface Figure {
   readonly headRadius: number;
   /** Height of the hands at rest, which is also the plane every letter is caught on. */
   readonly catchY: number;
-  /** Where queued letters wait. */
+  /** Top of the typed sentence. */
   readonly topY: number;
 }
 
@@ -117,6 +142,8 @@ export function createJugglerWorld(width: number, height: number): JugglerWorld 
     juggler: { x: 0, vx: 0, stride: 0, hands: { left: hand('left'), right: hand('right') } },
     releaseTimer: 0,
     nextId: 1,
+    releases: 0,
+    idleSince: 0,
   };
 }
 
@@ -125,14 +152,15 @@ export function resizeJugglerWorld(world: JugglerWorld, width: number, height: n
   world.height = height;
 }
 
-/** Adds one letter to the row at the top. The row drops one letter at a time in typing order. */
-export function typeLetter(world: JugglerWorld, char: string): Letter {
+/** Adds one typed character at sentence offset `index`. The sentence drops its letters one at a time in offset order. */
+export function typeLetter(world: JugglerWorld, char: string, index: number): Letter {
   const queued = world.letters.filter((letter) => letter.state === 'queued');
   if (queued.length === 0) world.releaseTimer = RELEASE_INTERVAL;
   const letter: Letter = {
     id: world.nextId++,
+    index,
     char,
-    x: slotX(queued.length, queued.length + 1),
+    x: 0,
     y: figure(world.height).topY,
     vx: 0,
     vy: 0,
@@ -141,17 +169,28 @@ export function typeLetter(world: JugglerWorld, char: string): Letter {
     state: 'queued',
     target: 'left',
     catches: 0,
+    age: 0,
+    released: -1,
+    placed: false,
   };
   world.letters.push(letter);
   return letter;
 }
 
-/** Removes the newest letter: the last queued one if the row is not empty, otherwise the last one in play. */
-export function deleteLetter(world: JugglerWorld): Letter | undefined {
-  const queued = world.letters.filter((letter) => letter.state === 'queued');
-  const letter = queued.at(-1) ?? world.letters.at(-1);
-  if (letter === undefined) return undefined;
-  world.letters.splice(world.letters.indexOf(letter), 1);
+/** Moves a waiting letter to where the paragraph layout put it. Letters already in flight keep their own motion. */
+export function placeLetter(world: JugglerWorld, index: number, x: number, y: number): void {
+  const letter = world.letters.find((candidate) => candidate.index === index);
+  if (letter === undefined || letter.state !== 'queued') return;
+  letter.x = x;
+  letter.y = y;
+  letter.placed = true;
+}
+
+/** Removes the letter typed at sentence offset `index`, freeing a hand if it was holding it. */
+export function removeLetter(world: JugglerWorld, index: number): Letter | undefined {
+  const position = world.letters.findIndex((letter) => letter.index === index);
+  if (position === -1) return undefined;
+  const [letter] = world.letters.splice(position, 1);
   for (const hand of Object.values(world.juggler.hands)) {
     if (hand.holding === letter) hand.holding = undefined;
   }
@@ -163,19 +202,24 @@ export function stepJugglerWorld(world: JugglerWorld, dt: number): void {
   const body = figure(world.height);
   const { juggler, letters } = world;
 
-  // The typed row waits centred at the top; the next letter drops on the release timer.
-  const queued = letters.filter((letter) => letter.state === 'queued');
-  queued.forEach((letter, index) => {
-    letter.x = slotX(index, queued.length);
-    letter.y = body.topY;
-  });
-  const next = queued[0];
+  for (const letter of letters) {
+    letter.age += dt;
+    if (letter.released >= 0) letter.released += dt;
+  }
+
+  // The sentence drops its earliest waiting letter on the release timer, with a hop and a spin.
+  const next = earliestQueued(letters);
   if (next !== undefined) {
     world.releaseTimer -= dt;
     if (world.releaseTimer <= 0) {
       world.releaseTimer = RELEASE_INTERVAL;
-      next.state = 'airborne';
       next.target = leastLoadedHand(letters);
+      next.state = 'airborne';
+      next.released = 0;
+      next.vy = RELEASE_HOP;
+      next.vx = 0;
+      next.spin = (next.index % 2 === 0 ? 1 : -1) * RELEASE_SPIN;
+      world.releases += 1;
     }
   }
 
@@ -187,13 +231,16 @@ export function stepJugglerWorld(world: JugglerWorld, dt: number): void {
     letter.rotation += letter.spin * dt;
   }
 
-  // The body runs to stand under whichever letter lands first.
+  // The body runs to stand under whichever letter lands first; each free hand reaches for its own next letter.
   let soonest: { readonly t: number; readonly x: number } | undefined;
+  const incoming: Record<Side, { t: number; x: number } | undefined> = { left: undefined, right: undefined };
   for (const letter of letters) {
     if (letter.state !== 'airborne') continue;
     const t = timeToPlane(letter, body.catchY);
-    const x = letter.x + letter.vx * t - handOffsetX(letter.target);
-    if (soonest === undefined || t < soonest.t) soonest = { t, x };
+    const x = letter.x + letter.vx * t;
+    if (soonest === undefined || t < soonest.t) soonest = { t, x: x - handOffsetX(letter.target) };
+    const current = incoming[letter.target];
+    if (current === undefined || t < current.t) incoming[letter.target] = { t, x };
   }
   const targetX = soonest?.x ?? 0;
   const reach = BODY_SPEED * dt;
@@ -218,14 +265,38 @@ export function stepJugglerWorld(world: JugglerWorld, dt: number): void {
     hand.y = letter.y;
   }
 
+  const inPlay = letters.some((letter) => letter.state !== 'queued');
+  if (inPlay) world.idleSince = world.time;
+  const waving = !inPlay && world.time - world.idleSince >= WAVE_AFTER;
+
   for (const hand of Object.values(juggler.hands)) {
-    const restX = juggler.x + handOffsetX(hand.side);
-    const step = HAND_SPEED * dt;
-    hand.x += clamp(restX - hand.x, -step, step);
-    hand.y += clamp(body.catchY - hand.y, -step, step);
+    const sign = hand.side === 'left' ? -1 : 1;
     const held = hand.holding;
+    let targetHandX: number;
+    let targetHandY: number;
+    if (held !== undefined) {
+      // Carry the catch inward along a scoop and throw from beside the body.
+      hand.heldFor += dt;
+      const progress = clamp(hand.heldFor / DWELL, 0, 1);
+      targetHandX = juggler.x + sign * THROW_OFFSET_X;
+      targetHandY = body.catchY - SCOOP_DEPTH * Math.sin(Math.PI * progress);
+    } else if (incoming[hand.side] !== undefined) {
+      // Reach toward where the next letter for this hand will land, as far as the arm allows.
+      const shoulderX = juggler.x + sign * 8;
+      targetHandX = shoulderX + clamp(incoming[hand.side]!.x - shoulderX, -REACH, REACH);
+      targetHandY = body.catchY;
+    } else if (waving && hand.side === 'right') {
+      const wave = world.time - world.idleSince - WAVE_AFTER;
+      targetHandX = juggler.x + 34 + Math.sin(wave * 7) * 14;
+      targetHandY = body.shoulderY + 44 + Math.cos(wave * 7) * 4;
+    } else {
+      targetHandX = juggler.x + handOffsetX(hand.side);
+      targetHandY = body.catchY;
+    }
+    const step = HAND_SPEED * dt;
+    hand.x += clamp(targetHandX - hand.x, -step, step);
+    hand.y += clamp(targetHandY - hand.y, -step, step);
     if (held === undefined) continue;
-    hand.heldFor += dt;
     held.x = hand.x;
     held.y = hand.y;
     held.rotation *= Math.exp(-14 * dt);
@@ -233,7 +304,7 @@ export function stepJugglerWorld(world: JugglerWorld, dt: number): void {
   }
 }
 
-/** Throws the held letter in an arc that lands on the other hand's resting spot. */
+/** Throws the held letter in an arc that lands on the other hand's outer catching spot. */
 function toss(world: JugglerWorld, hand: Hand): void {
   const letter = hand.holding;
   if (letter === undefined) return;
@@ -269,6 +340,15 @@ export function timeToPlane(letter: Letter, planeY: number): number {
   return (letter.vy + Math.sqrt(discriminant)) / GRAVITY;
 }
 
+function earliestQueued(letters: readonly Letter[]): Letter | undefined {
+  let earliest: Letter | undefined;
+  for (const letter of letters) {
+    if (letter.state !== 'queued') continue;
+    if (earliest === undefined || letter.index < earliest.index) earliest = letter;
+  }
+  return earliest;
+}
+
 function leastLoadedHand(letters: readonly Letter[]): Side {
   let left = 0;
   let right = 0;
@@ -278,10 +358,6 @@ function leastLoadedHand(letters: readonly Letter[]): Side {
     else right += 1;
   }
   return left <= right ? 'left' : 'right';
-}
-
-function slotX(index: number, count: number): number {
-  return (index - (count - 1) / 2) * SLOT_SPACING;
 }
 
 function clamp(value: number, low: number, high: number): number {

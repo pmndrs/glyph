@@ -2,6 +2,14 @@
 
 ## 2026-09-20
 
+## 2026-09-20
+
+- **Made the juggler's sentence a shaped paragraph** — The typed text is one uniformly styled `Text` broken apart
+  per committed layout with `breakApart()`, so kerning and spaces are the engine's while single glyphs hide as their
+  letters leave. Letters arrive red hot and cool to white, hop out with spin and squash, and take a colour as they
+  fall. Hands scoop each catch inward, reach for incoming letters, and wave when idle. Six simulation tests pass and
+  the package check passes. See [the juggler reference](packages/juggler.md).
+
 - **Added the juggler example** — `apps/juggler` is a small R3F app where typed glyphs wait in a row at the top,
   drop one at a time, and a stick figure with superhuman speed catches and juggles every one. The simulation is a
   pure module; its Vitest proof steps a word and a forty-letter burst and asserts no letter ever passes the hands.
