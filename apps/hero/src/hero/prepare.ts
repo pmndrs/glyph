@@ -10,8 +10,8 @@ let phase: Phase = 'preparing';
 let failure = '';
 
 /** Animation starts only after retained geometry, every draw variant, and GPU uploads are ready. */
-export function heroReady(): boolean {
-  return phase === 'ready';
+export function useHeroReady(): boolean {
+  return usePreparationStatus().phase === 'ready';
 }
 
 function publish(next: Phase): void {

@@ -93,7 +93,7 @@ function changed(a: ArrayLike<number>, b: ArrayLike<number>) {
 
 try {
   await renderer.compileAsync(scene, camera);
-  updateGlassShadows(world);
+  updateGlassShadows(world, true);
   const lit = await capture();
   const repeat = await capture();
   projection.visible = false;
@@ -102,7 +102,7 @@ try {
 
   for (const material of glass) material.attenuationColor.set('#ffffff');
 
-  updateGlassShadows(world);
+  updateGlassShadows(world, true);
   glass.forEach((material, i) => material.attenuationColor.copy(tints[i]!));
   const untinted = await capture();
 
@@ -113,7 +113,7 @@ try {
     mesh.matrix.elements[14] += 3;
   });
 
-  updateGlassShadows(world);
+  updateGlassShadows(world, true);
 
   meshes.forEach((mesh, i) => {
     mesh.position.copy(poses[i]!.position);
@@ -121,7 +121,7 @@ try {
   });
 
   const lifted = await capture();
-  updateGlassShadows(world);
+  updateGlassShadows(world, true);
   const landed = await capture();
   const depthResponse = changed(lit, lifted);
   const settled = changed(lit, landed);
@@ -150,7 +150,7 @@ try {
   glass.forEach((material, i) => material.attenuationColor.copy(tints[i]!));
   projection.visible = true;
   renderer.setRenderTarget(previousTarget);
-  updateGlassShadows(world);
+  updateGlassShadows(world, true);
 }
 
 // Resizing the readback target invalidates frame-scoped transmission textures. Let the renderer advance its

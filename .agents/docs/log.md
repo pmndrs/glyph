@@ -2,6 +2,10 @@
 
 ## 2026-09-20
 
+- **Made hero readiness reactive** — `useHeroReady()` subscribes to preparation status. The frame loop captures
+  `isReady` in its input and frame callbacks and passes it to shadow discovery, removing global readiness reads.
+  The full hero check and WebGPU loading-to-lift and shadow checks pass. See [the hero reference](packages/hero.md).
+
 - **Separated hero simulation from mounted view updates** — Root `frameloop.ts` lists focused input, clock,
   simulation, and view systems in scheduler order. Renderers prepare resources and attach view traits through
   domain actions, then detach them before disposal. Robot pose, rig animation, display, and dust are separate

@@ -52,7 +52,6 @@ import {
   Vector3,
   type WebGPURenderer,
 } from 'three/webgpu';
-import { heroReady } from '../hero/prepare';
 import { useWorld } from 'koota/react';
 import { Title, ShadowView } from './traits';
 import { Time } from '../time/traits';
@@ -321,10 +320,10 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
 export type Projection = ReturnType<typeof createProjection>;
 
 /** Update the mounted projection after title matrices have reached their draw objects. */
-export function updateGlassShadows(world: World): void {
+export function updateGlassShadows(world: World, isReady: boolean): void {
   world.query(Title, ShadowView).readEach(([title, view]) => {
     view!.uTime.value = world.get(Time)!.elapsed;
-    updateProjection(view!, title.reach);
+    updateProjection(view!, title.reach, isReady);
   });
 }
 
@@ -368,12 +367,12 @@ function discoverCaptures(state: Projection): void {
   });
 }
 
-function updateProjection(state: Projection, titleReach: number): void {
+function updateProjection(state: Projection, titleReach: number, isReady: boolean): void {
   const { scene, renderer, uLamp, uReach, source, sourceScene, caustic, causticScene, lightCamera, clear } = state;
   scene.updateMatrixWorld(true);
   uLamp.value.copy(LAMP);
 
-  if (!heroReady()) discoverCaptures(state);
+  if (!isReady) discoverCaptures(state);
 
   let reach = GLASS_DEPTH;
 

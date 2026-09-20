@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:163a22e8554e10bbd079a28577bb69870bfc857294f011c2e1286e56a54fdd8a'
+source_digest: 'sha256:cff3670aeb402fbfa0214aae89f4be2249e9854dd0e3e7c50fa32999bac6df5e'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -212,7 +212,9 @@ The frame loop samples renderer inputs, delegates DOM input, and runs domain sim
 the scheduler's timestamp. Domain systems remain independent of React. The lift check steps the same registered
 simulation job used during playback.
 Viewport sampling, pointer sampling, and clock advancement are separate systems before the simulation readiness
-gate. A second ordered job publishes view state after renderer preparation callbacks and before the final render.
+gate. `useHeroReady()` subscribes to preparation status, and the frame loop captures its `isReady` value in the
+input and frame callbacks. Shadow discovery receives that same value explicitly. A second ordered job publishes
+view state after renderer preparation callbacks and before the final render.
 It updates paper, title and icon draws, feature text, robot pose, rig animation, robot display, dust, the black hole,
 embers, and glass shadows. Both jobs are capped at 60 fps. View systems read attached resource traits, so detaching
 a view stops updates before its renderer disposes the resources. Hidden mounted resources remain available for
@@ -404,7 +406,7 @@ They verify resource preparation but do not measure delivery through a screen re
 
 The full hero package check passes, including seven numerical tests, two timeline tests, two mounted-view lifecycle tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
-The production entry bundle is 599.58 kB gzip, down from 609.11 kB before removing the alternate scene.
+The production entry bundle is 599.66 kB gzip, down from 609.11 kB before removing the alternate scene.
 
 The title reads `Glyph` in title case and uses Geist Black at weight 900, matching the family, weight, and font version used by `threejs-conf-talk`.
 Its five inline glass materials use that talk's brand accents in `src/letters/materials.ts`: red G, orange l,

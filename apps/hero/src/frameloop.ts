@@ -3,7 +3,7 @@ import { useActions, useWorld } from 'koota/react';
 import { actions } from './actions';
 import { useInput } from './input/hooks';
 import { fadePointer, samplePointer } from './input/systems';
-import { heroReady } from './hero/prepare';
+import { useHeroReady } from './hero/prepare';
 import { applyLetterLandings, triggerRobotDeparture, sampleViewport, updatePaper } from './hero/systems';
 import { updateTime } from './time/systems';
 import { updateGlassShadows } from './letters/shadows';
@@ -26,18 +26,19 @@ import { moveTitle, syncTitle, typeFeature, syncTitleViews, syncFeatureViews } f
 export function FrameLoop() {
   const world = useWorld();
   const commands = useActions(actions);
+  const isReady = useHeroReady();
 
   useInput(world, () => {
-    if (heroReady()) commands.replayHero();
+    if (isReady) commands.replayHero();
   });
 
   useFrame(
     ({ viewport, camera, pointer, size, time }, delta) => {
       sampleViewport(world, viewport.width, viewport.height, camera.position.z, size.width / size.height);
       samplePointer(world, pointer.x, pointer.y);
-      updateTime(world, delta, time, heroReady());
+      updateTime(world, delta, time, isReady);
 
-      if (!heroReady()) return;
+      if (!isReady) return;
 
       advanceSequence(world);
       moveRobots(world);
@@ -68,7 +69,7 @@ export function FrameLoop() {
       syncTitleViews(world);
       syncIconViews(world);
 
-      if (heroReady()) {
+      if (isReady) {
         syncFeatureViews(world);
         syncRobotPose(world);
         animateRobotRig(world);
@@ -78,7 +79,7 @@ export function FrameLoop() {
         syncEmberView(world);
       }
 
-      updateGlassShadows(world);
+      updateGlassShadows(world, isReady);
     },
     { id: 'hero-views', phase: 'render', before: 'hero-render', fps: 60 },
   );
