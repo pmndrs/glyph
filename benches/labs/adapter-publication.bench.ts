@@ -67,7 +67,10 @@ function disposeLabels(created: ReturnType<typeof createLabels>): void {
 }
 
 function createTypeGpuLabels(count: number) {
-  globalThis.GPUBufferUsage ??= { COPY_DST: 8, STORAGE: 128, VERTEX: 32 } as GPUBufferUsage;
+  const gpuGlobals = globalThis as typeof globalThis & {
+    GPUBufferUsage?: Readonly<{ COPY_DST: number; STORAGE: number; VERTEX: number }>;
+  };
+  gpuGlobals.GPUBufferUsage ??= { COPY_DST: 8, STORAGE: 128, VERTEX: 32 };
   const stats = { publications: 0, uniformWrites: 0 };
   const root = {
     createUniform() {
@@ -101,16 +104,19 @@ function createTypeGpuLabels(count: number) {
           stats.publications++;
           return renderer.decode(frame);
         },
-        syncTransforms: () => renderer.syncTransforms(),
+        syncTransforms(updates: Parameters<typeof renderer.syncTransforms>[0]) {
+          renderer.syncTransforms(updates);
+        },
         dispose: () => renderer.dispose(),
       };
     },
     resolve: () =>
       resourceLease(
         {
-          prepare() {
+          prepare(..._arguments: unknown[]) {
             return { draw() {} };
           },
+          dispose() {},
         },
         () => {},
       ),
