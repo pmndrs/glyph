@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:85a8442e0a4a0cf89d3414dca48d60142e786d9172a6797c567615660018185a'
+source_digest: 'sha256:5af0f2f364eb5462738f72656f4ff7018578678a8e9beabb365813f3fc8a5794'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -151,13 +151,16 @@ sources:
     title: R3F clock and input
   - id: play-button
     resource: ../../../apps/hero/src/play-button/renderer.tsx
-    title: Play button sheet, camera, and framed pixel label
+    title: Play button sheet, camera, and segment-display module
   - id: play-button-materials
     resource: ../../../apps/hero/src/play-button/materials.ts
-    title: Self-drawing frame, cell-by-cell label, and sheet composition
+    title: Segment-display distance fields, module shading, power-up, and sheet composition
   - id: play-button-systems
     resource: ../../../apps/hero/src/play-button/systems.ts
     title: Reveal timing, hit test, and mounted sheet synchronization
+  - id: play-button-check
+    resource: ../../../apps/hero/scripts/play-button.probe.ts
+    title: WebGPU power-up, self-test, label, and hover checks with a tiled close-up
   - id: steering-check
     resource: ../../../apps/hero/src/robot/systems.test.ts
     title: Arrival, curvature, bounded turning, retargeting, and greeting checks
@@ -170,13 +173,14 @@ generated:
 
 This Vite application presents glass letters, a robot, and a black-hole finale over an animated icon lattice.
 It runs on `WebGPURenderer` through React Three Fiber v10 and drei v11. The title, icons, robot display, finale
-stars, and play button use Slug analytic coverage. The feature tagline uses MSDF for its outline.
+stars use Slug analytic coverage. The feature tagline uses MSDF for its outline. The play button is a pure
+distance-field shader.
 
 The world runs one of two modes, held in the world-level `Mode` trait. `sequence` is the scripted experience:
 the title drops, the robot drives in, stops, greets, and leaves, and the black hole swallows the scene. While the
 hole is closed, any press takes the wheel into `play`: a dropped title stays put, a robot on the floor carries on
 from where it is, and the tagline backspaces away. Once the hole has opened, presses wait until the embers have gone
-out and a "Play" button has drawn itself over the black frame; pressing it restarts the scene into `play` with the
+out and a segment display reading "PLAY" has powered up over the black frame; pressing it restarts the scene into `play` with the
 robot scooting in from off screen. In play each press on the floor sends the robot to that point. It never drives a
 straight line, and it rests, looks up, and greets at each stop. Space returns to `sequence` from either mode.
 
@@ -204,7 +208,7 @@ implement its transitions.
 | `robot`       | Spawn/reset/run actions, path, published departure, physics target, dust, rig, and display                 |
 | `black-hole`  | Collapse state and controls, attraction functions, glyph warp, and rendered sheet collapse                 |
 | `star-embers` | Emission age, prepared star particles, fire material, bloom, fading, and screen-space sparks               |
-| `play-button` | Reveal timing, sheet geometry and hit test, mounted sheet camera, cursor state, and the framed pixel label |
+| `play-button` | Reveal timing, sheet geometry and hit test, mounted sheet camera, cursor state, and the display module     |
 | `rain`        | Glyph rain in play: prepared glyph solids, drop pool, spawning, edge culling, fading, and glass slots      |
 
 The root owns one Koota world and the combined action set. `world.ts` exports the shared world and invokes the hero initialization action.
@@ -349,9 +353,10 @@ Two seconds into play, glyphs start raining: each drop is a glyph from the title
 one of the five theme tints, spawned as a dynamic body cut from its outline at the drop's size, falling from near the camera
 under lighter gravity until it lands, where it weighs what the letters weigh and the robot can push it. Rain bodies
 stack, so glyphs may land on letters and on each other; title letters keep their no-stack rule. A glyph pushed past
-the edge is destroyed at once, a full pool fades its oldest glyph to make room, and leaving play fades them all.
-Landings ripple nothing. Each glyph falls at its own angle with a little spin, and one going swells for an instant
-then twists as it shrinks away. Rain arrives above the solver's restitution threshold, so it bounces off the robot's
+the edge is destroyed at once; with the pool full, the oldest glyph scales away first and the next drop waits for
+its slot, one recycle at a time; leaving play fades them all.
+Landings ripple nothing. Each glyph falls at its own angle with a little spin, and one going gathers itself for an
+instant then scales away. Rain arrives above the solver's restitution threshold, so it bounces off the robot's
 stadium, which carries a sloped roof and its own bounce; since a letter body cannot tip, a glyph that still comes to
 rest on the robot's back is flicked off sideways by the rain system. The renderer cuts each slot's unit solid and
 centres its glyph on the body's origin before playback. A rain pane composes as stained glass does, multiplying
@@ -363,9 +368,16 @@ recycling, and the stop, and a physics test the bounce off the robot.
 
 The play button lives on its own screen-space sheet with an orthographic camera fitted to the viewport aspect, so
 its geometry and hit test share the pointer's normalized units. The hero's post pass renders that sheet after the
-scene has gone black and adds it to the finished frame, which is why it survives the ember fade. The frame is a
-rounded-rectangle distance field that draws itself round from the top; the label materializes cell by cell on the
-pixel font's grid, lit by a sweep and by hover. Both stay mounted and compile during preparation, revealed by uniforms.
+scene has gone black and adds it to the finished frame, which is why it survives the ember fade. The button is one
+distance-field shader after Maxime Heckel's isometric LCD: a black metal module lit from above with a recessed
+screen, reading "PLAY" on a leaning segment display in the title's red over the faint ghosts of every segment,
+including the four diagonals, with a soft glow, scanlines, and light spilling onto the black around it. Each cell's
+eleven segments are cut from a hollow box by diagonals through its corners, as in the reference's WGSL, and the
+label's lit set is chosen while the graph is built, so the shader carries no character table. Powering up, the
+module fades in, lights every segment in a self-test, then settles on the label; hover brightens the segments and
+their glow. It stays mounted and compiles during preparation, revealed by uniforms. `hero:play-button-check`
+powers the module up on WebGPU, verifies that the self-test lights more than the label and that hover brightens
+it, and tiles the three moments with a close-up of the module.
 The finale check verifies the black frame stays black at the ember fade, the button then lights it, a press beside
 it changes nothing, a press on it restores the paper with the robot driving, and Space returns to the sequence.
 

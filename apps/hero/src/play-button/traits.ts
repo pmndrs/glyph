@@ -5,7 +5,6 @@ export interface PlayButtonDraw {
   camera: OrthographicCamera;
   reveal: { value: number };
   hover: { value: number };
-  time: { value: number };
   /** Receives the hover state for the cursor. */
   root: { dataset: DOMStringMap };
 }
