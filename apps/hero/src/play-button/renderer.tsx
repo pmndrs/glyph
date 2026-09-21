@@ -6,7 +6,7 @@ import { type Group, OrthographicCamera, Scene } from 'three/webgpu';
 import type { SlugFont } from '../hero/fonts';
 import { textPrepared, usePreparation } from '../hero/prepare';
 import { playButtonActions } from './actions';
-import { BUTTON_HEIGHT, BUTTON_WIDTH, LABEL, LABEL_SIZE } from './content';
+import { BUTTON_HEIGHT, BUTTON_WIDTH, FRAME_MARGIN, LABEL, LABEL_SIZE } from './content';
 import { createFrameMaterial, labelMaterial, uPlayHover, uPlayReveal, uPlayTime } from './materials';
 
 const scene = new Scene();
@@ -44,7 +44,7 @@ export function PlayButtonRenderer({ font }: { readonly font: SlugFont }) {
   return createPortal(
     <group ref={group} name="play-button">
       <mesh material={frame}>
-        <planeGeometry args={[BUTTON_WIDTH, BUTTON_HEIGHT]} />
+        <planeGeometry args={[BUTTON_WIDTH + 2 * FRAME_MARGIN, BUTTON_HEIGHT + 2 * FRAME_MARGIN]} />
       </mesh>
       <Text
         constraints={{ width: { mode: 'exact', size: BUTTON_WIDTH } }}

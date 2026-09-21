@@ -21,7 +21,7 @@ import {
   vec4,
 } from 'three/tsl';
 import { AdditiveBlending, DoubleSide, MeshBasicNodeMaterial, type Node } from 'three/webgpu';
-import { BUTTON_HEIGHT, BUTTON_RADIUS, BUTTON_WIDTH, LABEL_SIZE } from './content';
+import { BUTTON_HEIGHT, BUTTON_RADIUS, BUTTON_WIDTH, FRAME_MARGIN, LABEL_SIZE } from './content';
 
 /** 0..1: how far the button has drawn in. */
 export const uPlayReveal = uniform(0);
@@ -84,14 +84,20 @@ export function createFrameMaterial(): MeshBasicNodeMaterial {
     blending: AdditiveBlending,
   });
   material.name = 'play-frame';
-  const point = uv().sub(0.5).mul(vec2(BUTTON_WIDTH, BUTTON_HEIGHT));
+  const point = uv()
+    .sub(0.5)
+    .mul(vec2(BUTTON_WIDTH + 2 * FRAME_MARGIN, BUTTON_HEIGHT + 2 * FRAME_MARGIN));
   const corner = abs(point).sub(vec2(BUTTON_WIDTH / 2 - BUTTON_RADIUS, BUTTON_HEIGHT / 2 - BUTTON_RADIUS));
   const distance = length(max(corner, 0))
     .add(min(max(corner.x, corner.y), 0))
     .sub(BUTTON_RADIUS);
   const width = fwidth(distance);
   const stroke = smoothstep(float(0.0045).add(width), float(0.0045).sub(width), abs(distance));
-  const halo = exp(abs(distance).mul(-28)).mul(0.28);
+  // A soft glow inside the frame, and a tight one outside that is gone before the plane's edge.
+  const halo = exp(distance.mul(28))
+    .mul(0.28)
+    .mul(step(distance, 0))
+    .add(exp(distance.mul(-70)).mul(step(0, distance)).mul(0.22));
   const fill = smoothstep(0, -0.12, distance).mul(uPlayHover).mul(0.16);
   // Angle from straight up, either way round, as a share of the way to the bottom.
   const around = abs(atan(point.x, point.y)).div(Math.PI);
