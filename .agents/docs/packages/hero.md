@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:f489ab33d3d4305f3b27c678dc51940c296b95fc5646b987a36b35817ce51041'
+source_digest: 'sha256:dc4dfae5451e314735b6653df93c70b1e9dcf6f6bc64383c8e8e4af9a8764bce'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -161,12 +161,12 @@ sources:
   - id: play-button-check
     resource: ../../../apps/hero/scripts/play-button.probe.ts
     title: WebGPU power-up, self-test, label, and hover checks with a tiled close-up
-  - id: rain-shade
+  - id: rain-pane
     resource: ../../../apps/hero/src/rain/materials.ts
-    title: Rain panes and their projected shadows and caustics
+    title: Rain panes, composed by multiplication and captured by the glass projection
   - id: rain-check
     resource: ../../../apps/hero/scripts/rain.probe.ts
-    title: WebGPU rain shadows and caustics against a control without them
+    title: WebGPU rain shadows and caustics from the projection against a control without them
   - id: steering-check
     resource: ../../../apps/hero/src/robot/systems.test.ts
     title: Arrival, curvature, bounded turning, retargeting, and greeting checks
@@ -371,13 +371,14 @@ tints the paper; the title's true refraction cannot see other glass, because the
 only the opaque scene. The pane is lit by the environment, so its highlights brighten what shows through, and it
 uses WebGPU's premultiplied multiply blend with alpha one, which is exactly what is beneath times the pane. A rain test covers spawning, landing, edge culling, pool
 recycling, and the stop, and a physics test the bounce off the robot.
-Each drop also casts a cheap coloured shadow with a caustic, the way the title does but for the price of one more
-draw: the glyph is drawn a second time with a material whose vertex stage projects the pane's own quad from the
-title's lamp onto its receiving plane, so the shadow lies under the glyph and spreads as it climbs with no capture,
-march, or blur. Drawn before any pane, it composes with a premultiplied blend that takes paper away in the pane's
-tint and adds a pool of tinted light toward the glyph's centre, both fainter the higher the glass.
-`hero:rain-check` rains in play on WebGPU and verifies that hiding the shadows makes the paper both lighter, where
-the shadows were, and darker, where the caustics were.
+Each drop casts the same coloured shadow and caustic as the title, from the same glass projection: rain panes are
+physical glass materials named like the title's, each glyph is broken apart into a plain mesh under its slot once
+shaped, and the rain publishes its root as a second capture source beside the title's draw group. The projection's
+per-pixel march and blur cost the same however many panes it captures, so the rain adds only its draws into the
+capture. A glyph falling from near the camera would stretch the march over the whole scene and coarsen every
+shadow, so rain captures only over the last four units of the fall, and its shadow arrives just before it does.
+`hero:rain-check` rains in play on WebGPU and verifies that detaching the rain's captures from the projection makes
+the paper both lighter, where the shadows were, and darker, where the caustics were.
 
 The play button lives on its own screen-space sheet with an orthographic camera fitted to the viewport aspect, so
 its geometry and hit test share the pointer's normalized units. The hero's post pass renders that sheet after the

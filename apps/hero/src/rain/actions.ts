@@ -1,8 +1,7 @@
 import { createActions } from 'koota';
-import type { Group } from 'three/webgpu';
 import type { Solid } from '../letters/utils';
 import { physicsActions } from '../physics/actions';
-import { Rain, RainView } from './traits';
+import { Rain, RainView, type RainDraw } from './traits';
 
 export const rainActions = createActions((world) => ({
   initializeRain: () => {
@@ -22,8 +21,8 @@ export const rainActions = createActions((world) => ({
     drop.phase = fade ? 'fading' : 'idle';
     drop.age = 0;
   },
-  mountRainView: (groups: (Group | null)[]) => {
-    world.add(RainView(groups));
+  mountRainView: (view: RainDraw) => {
+    world.add(RainView(view));
   },
   unmountRainView: () => {
     world.remove(RainView);

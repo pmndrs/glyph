@@ -58,7 +58,8 @@ scene.traverseVisible((object) => {
   if (
     object instanceof Mesh &&
     object.material instanceof MeshPhysicalNodeMaterial &&
-    object.material.name.startsWith('stained-glass-')
+    object.material.name.startsWith('stained-glass-') &&
+    !object.material.name.startsWith('stained-glass-rain-')
   ) {
     meshes.push(object);
 

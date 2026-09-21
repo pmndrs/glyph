@@ -55,6 +55,7 @@ import {
 } from 'three/webgpu';
 import { useWorld } from 'koota/react';
 import { Title, ShadowView, TitleView } from './traits';
+import { RainView } from '../rain/traits';
 import { Time } from '../time/traits';
 import { letterActions } from './actions';
 import { SHADOW_LAMP, SHADOW_RECEIVER_Z } from './content';
@@ -313,29 +314,40 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     causticMaterials,
     gridGeometry,
     blurs,
-    captures: [] as { original: Mesh; capture: Mesh }[],
-    /** The title draw group the captures were taken from. A new group, as after a remount, is captured afresh. */
-    capturedFrom: undefined as Object3D | undefined,
+    captures: [] as { original: Mesh; capture: Mesh; ceiling: number }[],
+    /** The draw groups the captures were taken from. A new group, as after a remount, is captured afresh. */
+    capturedFrom: [] as Object3D[],
     clear: new Color(),
   };
 }
 
 export type Projection = ReturnType<typeof createProjection>;
 
-/** Update the mounted projection after title matrices have reached their draw objects. */
+const sources: Object3D[] = [];
+
+/** Update the mounted projection after title and rain matrices have reached their draw objects. */
 export function updateGlassShadows(world: World): void {
   world.query(Title, TitleView, ShadowView).readEach(([title, draws, view]) => {
     const state = view!;
+    sources.length = 0;
+    sources.push(draws!.glyphs);
+    const rain = world.get(RainView);
 
-    if (state.capturedFrom !== draws!.glyphs) captureTitle(state, draws!.glyphs);
+    if (rain !== undefined) sources.push(rain.root);
+
+    if (
+      sources.length !== state.capturedFrom.length ||
+      sources.some((source, index) => source !== state.capturedFrom[index])
+    )
+      captureGlass(state, sources);
 
     state.uTime.value = world.get(Time)!.elapsed;
     updateProjection(state, title.reach);
   });
 }
 
-/** Take captures of the title's stained-glass draws, replacing any from a title draw group since replaced. */
-function captureTitle(state: Projection, glyphs: Object3D): void {
+/** Take captures of every stained-glass draw under `roots`, replacing any from draw groups since replaced. */
+function captureGlass(state: Projection, roots: readonly Object3D[]): void {
   const { sourceScene } = state;
 
   for (const { capture } of state.captures) {
@@ -345,40 +357,52 @@ function captureTitle(state: Projection, glyphs: Object3D): void {
   }
 
   state.captures.length = 0;
-  state.capturedFrom = glyphs;
+  state.capturedFrom = [...roots];
 
-  glyphs.traverse((object) => {
-    if (
-      !(object instanceof Mesh) ||
-      !(object.material instanceof MeshPhysicalNodeMaterial) ||
-      !object.material.name.startsWith('stained-glass-')
-    )
-      return;
+  // The title's shadows spread as it lifts, but rain falls from near the camera: one glyph that high would stretch
+  // the march over the whole scene and coarsen every shadow, so rain casts only over the last stretch of its fall.
+  // Being small, a rain glyph's shadow and caustic would read as a glowing blob at the title's strength; it casts
+  // at under half.
+  for (const [index, root] of roots.entries()) {
+    const ceiling = index === 0 ? Number.POSITIVE_INFINITY : RECEIVER_Z + 4;
+    const strength = index === 0 ? 1 : 0.4;
+    root.traverse((object) => {
+      if (
+        !(object instanceof Mesh) ||
+        !(object.material instanceof MeshPhysicalNodeMaterial) ||
+        !object.material.name.startsWith('stained-glass-')
+      )
+        return;
 
-    const material = object.material.clone();
-    material.name = 'glass-shadow-capture';
-    material.transmission = 0;
-    // Retain the Slug shader's fractional analytic coverage instead of forcing opaque alpha to one.
-    material.transparent = true;
-    material.blending = NoBlending;
-    material.depthWrite = true;
-    material.alphaToCoverage = false;
-    material.alphaTest = 0;
-    // Preserve the original deformation and coverage. Three supplies the existing glass attenuation values.
-    const transmission = materialAttenuationColor.pow(vec3(materialThickness.div(materialAttenuationDistance)));
-    const height = positionWorld.z.sub(RECEIVER_Z).max(0);
-    // Every attachment is coverage-weighted, so blurring keeps it valid across the soft edge.
-    material.mrtNode = mrt({
-      output: vec4(transmission.mul(diffuseColor.a), diffuseColor.a),
-      distance: vec4(height, materialIOR, materialDispersion, 1).mul(diffuseColor.a),
-      normal: vec4(normalWorld.xy, 0, 1).mul(diffuseColor.a),
+      const material = object.material.clone();
+      material.name = 'glass-shadow-capture';
+      material.transmission = 0;
+      // The rain composes its panes by multiplication; the capture wants the plain lit output.
+      material.outputNode = null;
+      material.premultipliedAlpha = false;
+      // Retain the Slug shader's fractional analytic coverage instead of forcing opaque alpha to one.
+      material.transparent = true;
+      material.blending = NoBlending;
+      material.depthWrite = true;
+      material.alphaToCoverage = false;
+      material.alphaTest = 0;
+      // Preserve the original deformation and coverage. Three supplies the existing glass attenuation values.
+      const transmission = materialAttenuationColor.pow(vec3(materialThickness.div(materialAttenuationDistance)));
+      const height = positionWorld.z.sub(RECEIVER_Z).max(0);
+      // Every attachment is coverage-weighted, so blurring keeps it valid across the soft edge.
+      const weight = diffuseColor.a.mul(strength);
+      material.mrtNode = mrt({
+        output: vec4(transmission.mul(weight), weight),
+        distance: vec4(height, materialIOR, materialDispersion, 1).mul(weight),
+        normal: vec4(normalWorld.xy, 0, 1).mul(weight),
+      });
+      const capture = new Mesh(object.geometry, material);
+      capture.matrixAutoUpdate = false;
+      capture.frustumCulled = false;
+      sourceScene.add(capture);
+      state.captures.push({ original: object, capture, ceiling });
     });
-    const capture = new Mesh(object.geometry, material);
-    capture.matrixAutoUpdate = false;
-    capture.frustumCulled = false;
-    sourceScene.add(capture);
-    state.captures.push({ original: object, capture });
-  });
+  }
 }
 
 function updateProjection(state: Projection, titleReach: number): void {
@@ -388,7 +412,7 @@ function updateProjection(state: Projection, titleReach: number): void {
   let reach = GLASS_DEPTH;
 
   for (let index = 0; index < state.captures.length; index++) {
-    const { original: object, capture } = state.captures[index]!;
+    const { original: object, capture, ceiling } = state.captures[index]!;
     let visible = object.visible;
     let parent = object.parent;
 
@@ -397,7 +421,7 @@ function updateProjection(state: Projection, titleReach: number): void {
       parent = parent.parent;
     }
 
-    capture.visible = visible && object.parent !== null;
+    capture.visible = visible && object.parent !== null && (object.matrixWorld.elements[14] ?? 0) < ceiling;
 
     if (!capture.visible || !(object.material instanceof MeshPhysicalNodeMaterial)) continue;
 

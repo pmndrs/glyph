@@ -1,5 +1,5 @@
 import { trait, type Entity } from 'koota';
-import type { Group } from 'three/webgpu';
+import type { Group, Object3D } from 'three/webgpu';
 import type { Solid } from '../letters/utils';
 import { COUNT } from './content';
 
@@ -42,4 +42,10 @@ export const Rain = trait({
   dropped: 0,
 });
 
-export const RainView = trait((): (Group | null)[] | undefined => undefined);
+/** The rain's draws: the group every glyph hangs under, for the glass projection to capture, and a group a slot. */
+export interface RainDraw {
+  root: Object3D;
+  groups: (Group | null)[];
+}
+
+export const RainView = trait((): RainDraw | undefined => undefined);

@@ -1,12 +1,12 @@
 /* @workflow {
   "name": "hero:rain-check",
-  "summary": "Rain glyphs in play on WebGPU and verify their projected shadows and caustics mark the paper.",
+  "summary": "Rain glyphs in play on WebGPU and verify the glass projection casts their shadows and caustics.",
   "requirements": "Workspace dependencies, baked hero assets, and GPU-enabled Chromium through Vitexec.",
   "writes": "apps/hero/.cache/rain.png and stdout",
   "args": ["--gpu", "--timeout", "180", "--screenshot", ".cache/rain.png"]
 } */
 import { _roots, getScheduler } from '@react-three/fiber/webgpu';
-import { type Object3D, RenderTarget, WebGPUBackend, WebGPURenderer } from 'three/webgpu';
+import { RenderTarget, WebGPUBackend, WebGPURenderer } from 'three/webgpu';
 
 const { world } = (await import(new URL('/src/world.ts', location.origin).href)) as typeof import('../src/world');
 const { Rain } = (await import(
@@ -18,6 +18,12 @@ const { RAIN_AFTER } = (await import(
 const { Mode } = (await import(
   new URL('/src/hero/traits.ts', location.origin).href
 )) as typeof import('../src/hero/traits');
+const { Title, ShadowView } = (await import(
+  new URL('/src/letters/traits.ts', location.origin).href
+)) as typeof import('../src/letters/traits');
+const { updateGlassShadows } = (await import(
+  new URL('/src/letters/shadows.tsx', location.origin).href
+)) as typeof import('../src/letters/shadows');
 while (document.documentElement.dataset.heroState !== 'ready')
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
@@ -77,21 +83,30 @@ const capture = async (target: RenderTarget) => {
   }
 };
 
-const shades: Object3D[] = [];
-state.scene.traverse((object) => {
-  if (object.name === 'rain-shade') shades.push(object);
+// The projection's captures of the rain: those whose original hangs under the rain's root.
+const projection = world.queryFirst(Title)!.get(ShadowView)!;
+const shades = projection.captures.filter(({ original }) => {
+  let parent = original.parent;
+
+  while (parent !== null && parent.name !== 'glyph-rain') parent = parent.parent;
+
+  return parent !== null;
 });
 
-if (shades.length === 0) throw new Error('The rain casts no shadows');
+if (shades.length === 0) throw new Error('The projection captured no rain');
 
+// The projection renders in the frame job, so it is run again by hand after each change to its sources.
 const target = new RenderTarget(1280, 720);
 const shaded = await capture(target);
 
-for (const shade of shades) shade.visible = false;
+for (const { capture: mesh } of shades) projection.sourceScene.remove(mesh);
 
+updateGlassShadows(world);
 const bare = await capture(target);
 
-for (const shade of shades) shade.visible = true;
+for (const { capture: mesh } of shades) projection.sourceScene.add(mesh);
+
+updateGlassShadows(world);
 
 // The shadows take paper away, and the caustics put tinted light back where the glyphs lie.
 let darker = 0;

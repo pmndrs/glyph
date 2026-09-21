@@ -138,10 +138,11 @@ function riding(x: number, y: number, footprint: { x: number; y: number; heading
 
 /** Copy the drops into their mounted glyph groups, at the body's pose while live and shrinking away while fading. */
 export function syncRainViews(world: World): void {
-  const groups = world.get(RainView);
+  const view = world.get(RainView);
 
-  if (groups === undefined) return;
+  if (view === undefined) return;
 
+  const { groups } = view;
   const { drops } = world.get(Rain)!;
 
   for (let index = 0; index < COUNT; index++) {
