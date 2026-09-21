@@ -3,7 +3,6 @@ import type { Mat4, Vec3 } from 'math';
 import type { HeldPose } from '../physics/traits';
 import type { Flight } from '../black-hole/traits';
 import type { Solid } from './utils';
-import { FEATURE_LINE } from './content';
 import type { Projection } from './shadows';
 import type { Glyphs } from '@pmndrs/glyph/three';
 import type { Matrix4 } from 'three/webgpu';
@@ -79,8 +78,10 @@ export const Title = trait({
   width: undefined as number | undefined,
   reach: 0,
 });
+/** The tagline is off the paper until the title first smashes down, types in from `start`, and backspaces out while `leaving`. */
 export const Typing = trait({
-  count: FEATURE_LINE.length,
+  count: 0,
   beat: 0,
   start: Number.POSITIVE_INFINITY,
+  leaving: false,
 });

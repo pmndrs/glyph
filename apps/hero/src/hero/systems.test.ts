@@ -14,6 +14,8 @@ import { Keys, Pointer } from '../input/traits';
 import { Timeline } from '../sequence/traits';
 import { Collapse } from '../black-hole/traits';
 import { Impacts } from '../icon-paper/traits';
+import { letterActions } from '../letters/actions';
+import { mat4 } from 'math';
 import { StarEmbers, EMBER_SECONDS } from '../star-embers/traits';
 import { REVEAL_AFTER, REVEAL_SECONDS } from '../play-button/content';
 import { playReveal } from '../play-button/systems';
@@ -74,33 +76,36 @@ it('updates hidden mounted dust and stops touching its groups after detachment',
   }
 });
 
-it('starts play from the button once the embers are out, sends the robot with each press, and Space returns to the sequence', () => {
+it('takes the wheel on a press while the hole is closed, waits for Play once it has opened, and Space returns', () => {
   const world = createWorld(Time, Keys, Pointer, Viewport, Mode, Timeline, Collapse, Impacts);
   const commands = heroActions(world);
   commands.initializeHero();
   commands.setViewport(18, 10, 16, 1.8);
   world.set(Time, { delta: 1 / 60 });
   const robot = world.queryFirst(Robot)!;
+  const prism = [
+    -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, -0.5, 0.5, 0.5,
+    0.5, 0.5, 0.5,
+  ];
+  const title = letterActions(world).prepareTitle(
+    mat4.create(),
+    [{ home: [0, 0, 0.5], solid: { prisms: [prism] }, index: 0, original: mat4.create() }],
+    10,
+    1,
+    1,
+  );
 
   try {
-    // Pressing the button's spot does nothing until the button has started to draw.
-    commands.pressHero(0, 0);
-    expect(world.get(Mode)!.kind).toBe('sequence');
-
-    world.set(StarEmbers, { age: EMBER_SECONDS + REVEAL_AFTER + REVEAL_SECONDS / 2 });
-    expect(playReveal(world)).toBeCloseTo(0.5);
-    commands.pressHero(0.8, 0.8);
-    expect(world.get(Mode)!.kind).toBe('sequence');
-
+    // Before the title has dropped, a press restarts into play and the robot scoots in from off screen.
     commands.pressHero(0.1, -0.05);
     expect(world.get(Mode)!.kind).toBe('play');
-    expect(playReveal(world)).toBe(0);
-    expect(world.get(Collapse)!.openedAt).toBeUndefined();
+    expect(title.replays).toBe(1);
     moveRobots(world);
     driveRobots(world);
     expect(robot.get(Robot)!.active).toBe(true);
-    expect(robot.get(Robot)!.drive.hasTarget).toBe(true);
     expect(Math.abs(robot.get(Robot)!.motion.pose.x)).toBeGreaterThan(9);
+    expect(robot.get(Robot)!.drive.targetX).toBeCloseTo(0.9);
+    expect(robot.get(Robot)!.drive.targetY).toBeCloseTo(-0.25);
 
     commands.pressHero(0.5, -0.5);
     expect(robot.get(Robot)!.drive.targetX).toBeCloseTo(4.5);
@@ -114,10 +119,40 @@ it('starts play from the button once the embers are out, sends the robot with ea
 
     commands.replayHero();
     expect(world.get(Mode)!.kind).toBe('sequence');
+    expect(title.replays).toBe(2);
     moveRobots(world);
     driveRobots(world);
     expect(robot.get(Robot)!.active).toBe(false);
     expect(robot.get(Robot)!.drive.hasTarget).toBe(false);
+
+    // With the title dropped and the robot on its scripted run, a press keeps the scene and the robot's spot.
+    robotActions(world).runRobot();
+    moveRobots(world);
+    expect(robot.get(Robot)!.active).toBe(true);
+    const { x, y } = robot.get(Robot)!.motion.pose;
+    commands.pressHero(0.2, 0.2);
+    expect(world.get(Mode)!.kind).toBe('play');
+    expect(title.replays).toBe(2);
+    moveRobots(world);
+    driveRobots(world);
+    expect(robot.get(Robot)!.time).toBeUndefined();
+    expect(Math.hypot(robot.get(Robot)!.motion.pose.x - x, robot.get(Robot)!.motion.pose.y - y)).toBeLessThan(0.2);
+
+    // Once the hole has opened, presses wait for the Play button, which restarts the scene into play.
+    commands.replayHero();
+    world.set(Collapse, { openedAt: 0 });
+    world.get(Collapse)!.hole.beat = 'open';
+    commands.pressHero(0.1, 0.1);
+    expect(world.get(Mode)!.kind).toBe('sequence');
+    world.set(StarEmbers, { age: EMBER_SECONDS + REVEAL_AFTER + REVEAL_SECONDS });
+    expect(playReveal(world)).toBeCloseTo(1);
+    commands.pressHero(0.8, 0.8);
+    expect(world.get(Mode)!.kind).toBe('sequence');
+    commands.pressHero(0.05, -0.05);
+    expect(world.get(Mode)!.kind).toBe('play');
+    expect(world.get(Collapse)!.openedAt).toBeUndefined();
+    expect(playReveal(world)).toBe(0);
+    expect(title.replays).toBe(4);
   } finally {
     world.destroy();
   }

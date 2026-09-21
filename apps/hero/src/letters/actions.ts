@@ -3,6 +3,7 @@ import { mat4, vec3, type Mat4 } from 'math';
 import { physicsActions } from '../physics/actions';
 import { readBodyPose } from '../physics/utils';
 import { Time } from '../time/traits';
+import { Collapse } from '../black-hole/traits';
 import { writeLetter } from './systems';
 import {
   Title,
@@ -143,10 +144,21 @@ export const letterActions = createActions((world) => ({
       state.elapsed = 0;
     });
 
+    letterActions(world).clearFeature();
+  },
+  /**
+   * Take the tagline off the paper and forget any pending typing. On the paper it backspaces out; once the hole
+   * has taken it, it is simply gone.
+   */
+  clearFeature: () => {
+    const onPaper = world.get(Collapse)!.hole.beat === 'closed';
+
     world.query(Typing).updateEach(([typing]) => {
       typing.start = Number.POSITIVE_INFINITY;
       typing.beat = 0;
-      typing.count = 0;
+      typing.leaving = onPaper && typing.count > 0;
+
+      if (!typing.leaving) typing.count = 0;
     });
   },
   typeFeatureAfter: (delay: number) => {
@@ -154,6 +166,7 @@ export const letterActions = createActions((world) => ({
       typing.start = world.get(Time)!.now + delay * 1000;
       typing.beat = 0;
       typing.count = 0;
+      typing.leaving = false;
     });
   },
 }));

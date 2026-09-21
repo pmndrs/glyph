@@ -39,6 +39,14 @@ export function typeFeature(world: World): void {
   const time = world.get(Time)!;
 
   world.query(Typing).updateEach(([typing]) => {
+    // Leaving backspaces a character a frame, three times as fast as it typed.
+    if (typing.leaving) {
+      typing.count = Math.max(typing.count - 1, 0);
+      typing.leaving = typing.count > 0;
+
+      return;
+    }
+
     if (time.now < typing.start) return;
 
     // Three captured frames per character at the shared 60 Hz update cadence.

@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:fe372ef4b4370d85488c833328514c0517df2ce1a2c4eedd3cd1697257b4451e'
+source_digest: 'sha256:69ca5ba24919c97cb0a473111993cebbc52c9088a70a39864b88cd4359fcd92f'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -173,10 +173,12 @@ It runs on `WebGPURenderer` through React Three Fiber v10 and drei v11. The titl
 stars, and play button use Slug analytic coverage. The feature tagline uses MSDF for its outline.
 
 The world runs one of two modes, held in the world-level `Mode` trait. `sequence` is the scripted experience:
-the title drops, the robot drives in, stops, greets, and leaves, and the black hole swallows the scene. Once the
-embers have gone out, a "Play" button draws itself over the black frame. Pressing it enters `play`: the scene
-restores with the robot scooting in from off screen, and each press on the floor sends it to that point. It never
-drives a straight line, and it rests, looks up, and greets at each stop. Space returns to `sequence` from either mode.
+the title drops, the robot drives in, stops, greets, and leaves, and the black hole swallows the scene. While the
+hole is closed, any press takes the wheel into `play`: a dropped title stays put, a robot on the floor carries on
+from where it is, and the tagline backspaces away. Once the hole has opened, presses wait until the embers have gone
+out and a "Play" button has drawn itself over the black frame; pressing it restarts the scene into `play` with the
+robot scooting in from off screen. In play each press on the floor sends the robot to that point. It never drives a
+straight line, and it rests, looks up, and greets at each stop. Space returns to `sequence` from either mode.
 
 Local tuning values live at their use sites. Shared timing and geometry contracts, retained buffers, uniforms,
 and reusable materials keep named storage. Comments describe the current algorithm or feature. The app-specific
@@ -219,8 +221,10 @@ the black hole. The play script is empty: nothing types above the title in play.
 their pending delays.
 Replay and play both load their mode's script, which drops any pending cues, then reset the actors and lift the
 title again; play then places the robot beyond the lower-left edge and drives it to a spot above the title.
-`pressHero` takes a normalized screen point: in play it drives the robot to that floor point; in the sequence it
-starts play when the button has begun to draw and the point lies on it, and otherwise does nothing.
+`pressHero` takes a normalized screen point and drives the robot to that floor point. In the sequence it first
+takes the wheel while the hole is closed: with the title dropped it switches mode, loads the play script, retracts
+the tagline, and keeps the robot's pose if it is on the floor; before the first drop it restarts into play. Once
+the hole has opened it only answers a press on the drawn Play button, which restarts into play.
 `sequence` knows only the clock, cue declarations, and retained deadlines. It runs due commands in chronological
 order, breaking ties by declaration order, re-reading the timeline after each cue so a cue may replace it. Each
 scheduled cue runs once, and events can rearm their cues.
@@ -229,7 +233,9 @@ Two focused tests cover ordering, event delays, retriggering, and timeline repla
 `frameloop.ts` lists the domain systems in their execution order. Sequence cues run before motion, after robot
 departure, and after letter landings so events take effect in the same frame. The scripted robot mover runs only in
 `sequence` and the pointer-driven mover only in `play`; both publish the same pose and footprint. Motion targets
-precede physics, and title poses synchronize after physics. `hero/systems.ts` scrolls mounted paper, turns
+precede physics, and title poses synchronize after physics. The tagline is off the paper until the title's first landing, types in
+three frames a character, and backspaces out one a frame when cleared on the paper; cleared after the hole took it,
+it is simply gone. A typing test covers both directions. `hero/systems.ts` scrolls mounted paper, turns
 landings into icon-paper impacts, and forwards landing and departure events to the script. Icon-paper, title, and star-ember
 systems read published black-hole state. Feature typing owns its closed-hole condition. The physics solver
 depends on the clock and its own state.

@@ -6,6 +6,9 @@ import { physicsActions } from '../physics/actions';
 import { robotActions } from '../robot/actions';
 import { sequenceActions } from '../sequence/actions';
 import { starEmberActions } from '../star-embers/actions';
+import { Collapse } from '../black-hole/traits';
+import { Title } from '../letters/traits';
+import { Robot } from '../robot/traits';
 import { overPlayButton, playReveal } from '../play-button/systems';
 import { Mode, PaperView, Viewport, type ModeKind } from './traits';
 import type { Cue } from '../sequence/traits';
@@ -57,12 +60,36 @@ export const heroActions = createActions((world) => {
       robot.placeRobot(-width / 2 - 2.6, -height / 2 - 1.2, 0.9);
       robot.driveRobotTo(-width * 0.33, height * 0.32);
     },
-    /** A press at a normalized screen point: in play it sends the robot, over the button it starts play. */
+    /**
+     * A press at a normalized screen point sends the robot there. While the sequence's hole is closed it takes the
+     * wheel first: a dropped title stays put and a robot on the floor carries on from where it is, while a title
+     * that has not dropped yet restarts into play. Once the hole has opened only the Play button answers.
+     */
     pressHero: (x: number, y: number) => {
       const { width, height, aspect } = world.get(Viewport)!;
+      const robot = robotActions(world);
 
-      if (world.get(Mode)!.kind === 'play') robotActions(world).driveRobotTo((x * width) / 2, (y * height) / 2);
-      else if (playReveal(world) > 0 && overPlayButton(x * aspect, y)) heroActions(world).startPlay();
+      if (world.get(Mode)!.kind === 'sequence') {
+        if (world.get(Collapse)!.hole.beat !== 'closed') {
+          if (playReveal(world) > 0 && overPlayButton(x * aspect, y)) heroActions(world).startPlay();
+
+          return;
+        }
+
+        const dropped = (world.queryFirst(Title)!.get(Title)!.bodies?.replays ?? 0) > 0;
+        const onFloor = dropped && world.queryFirst(Robot)!.get(Robot)!.active;
+
+        if (dropped) {
+          world.set(Mode, { kind: 'play' });
+          sequenceActions(world).loadSequence(script('play'));
+          letterActions(world).clearFeature();
+          robot.resetRobot();
+        } else restart('play');
+
+        if (!onFloor) robot.placeRobot(-width / 2 - 2.6, -height / 2 - 1.2, 0.9);
+      }
+
+      robot.driveRobotTo((x * width) / 2, (y * height) / 2);
     },
     mountPaperView: (drift: Vector2) => {
       world.add(PaperView(drift));
