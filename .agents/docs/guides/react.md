@@ -151,9 +151,9 @@ renderer, scene, or canvas.
 ## Cache and ownership rules
 
 Paragraph props describe complete desired state. Removing `style`, `layout`, `constraints`, `flow`, `material`, or
-`rasterPixelRatio` restores its default. Replace property objects through normal React updates; the adapter compares
-fresh props with Three's immutable accepted state and requests a frame after applying a real change on a demand-rendered
-Canvas. Caller-owned prop objects are never retained as accepted engine state.
+`rasterPixelRatio` restores its default. Replace property objects through normal React updates; the adapter submits fresh
+props to Three's canonical normalizer, which reports whether the accepted revision changed, and requests a frame only for
+a real change on a demand-rendered Canvas. Caller-owned prop objects are never retained as accepted engine state.
 
 - The Glyph FontFace graph is the sole semantic cache for source bytes, decoded formats, dependencies, and renderer
   resources.

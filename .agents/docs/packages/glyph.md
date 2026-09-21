@@ -347,14 +347,13 @@ missing loads together, and keeps the current paragraph while a later selection 
 React hooks. See [Vue and TresJS font loading](../guides/vue.md).
 
 Both component adapters treat each committed prop set as complete desired state: removing style, layout, constraints,
-flow, material, or raster pixel ratio restores the corresponding default. React passes its caller-owned semantic paragraph
-props to Three's canonical normalizer and keys that derivation independently from transform, event, and other Object3D
-props. Subsequent React commits compare fresh props with Three's immutable accepted state rather than retaining a
-caller-owned shadow; an ignored in-place mutation therefore cannot swallow a later valid immutable update. Vue instead
-detaches nested reactive records so in-place proxy mutations cannot rewrite accepted comparison state.
-Structurally equal Vue property lists reuse the previous package-owned snapshot before merging or cloning, and Three
-adopts that snapshot rather than normalizing it again. Neither adapter mutates a render-time React ref or treats object
-identity as paragraph correctness. `TextGroup` material and render order follow the same rule through one shared
+flow, material, or raster pixel ratio restores the corresponding default. React and Vue pass that state through Three's
+canonical framework-update path, which normalizes it once, reuses equal package-owned property and span snapshots, and
+reports whether the accepted revision changed. Neither adapter retains a caller-owned applied-state cache, so an ignored
+in-place mutation cannot swallow a later valid immutable update. Vue still detaches nested reactive records before the
+call so proxy mutation cannot rewrite a package-owned snapshot; Three adopts equal records without another clone.
+Neither adapter mutates a render-time React ref or treats object identity as paragraph correctness. `TextGroup` material
+and render order follow the same rule through one shared
 imperative apply step rather than framework prop diffing, so removing either restores the Three default. Paragraph and group
 updates request a frame on demand-rendered canvases only when the desired snapshot changed; a re-render with identical
 props requests nothing. A pending Vue font switch keeps the current Three object and its leases until replacement fonts

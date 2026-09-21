@@ -10,18 +10,20 @@
 
 ## 2026-09-20
 
-- **Removed framework shadow normalization** — React now keys derivation to semantic text props, compares them with
-  Three's immutable accepted state, and passes real changes to the canonical normalizer instead of retaining caller-owned
-  input as a second snapshot. Vue retains the detached snapshots required
-  for in-place reactive proxies, marks them package-owned, and Three adopts them without another merge or clone. Focused
+- **Centralized framework normalization** — React and Vue now pass complete desired state through Three's canonical
+  framework-update path instead of retaining caller-owned applied-state mirrors. Three reuses equal package-owned property
+  and span snapshots and reports whether the accepted revision changed. Vue retains only the detached snapshots required
+  for in-place reactive proxies, which Three adopts without another merge or clone. Focused
   tests cover presentation-only React/Vue changes, equivalent PropertyList shapes, malformed property input, a Vue reuse
-  hit followed by a nested mutation, a React caller-mutation followed by a valid immutable update, enforced deep-freeze
-  ownership, and PropertyList enumerable-key parity. A 16-block
+  hit followed by a nested mutation, React root and nested-span caller mutations followed by valid immutable updates,
+  enforced deep-freeze ownership, and PropertyList enumerable-key parity. A 16-block
   packed-artifact Labs comparison improves 1,000 unchanged plain-record Vue snapshot
   calls from `0.651 ms` to `0.281 ms` p50 (-56.8%); normalized Three publication, TypeGPU position updates, and the cold
-  1,000-label lifecycle remain below the five-percent effect threshold. This is a patch-level implementation optimization
-  with no public API or behavior change. A fresh full-build size report keeps core effectively flat (`-1 B` Brotli) and
-  adds `42 B` Brotli to React, `134 B` to Vue, and `37 B` to Three for the ownership and validation seams.
+  1,000-label lifecycle remain below the five-percent effect threshold. A focused 8-block comparison of fresh but
+  equivalent formatted updates improves from `35.78 ms` to `3.08 ms` p50 (-91.4%); all four neighboring workloads remain
+  neutral. This is a patch-level implementation optimization with no public API or behavior change. A fresh full-build
+  size report keeps core effectively flat (`-16 B` Brotli), reduces React by `163 B` Brotli, and adds `139 B` to Vue and
+  `218 B` to Three for canonical span reuse and the shared framework-update seam.
 
 - **Kept direct TypeGPU position updates out of semantic publication** — `TypeGpuText.update({ position })` now writes
   only its retained uniform; it does not merge desired text, stage a controller update, enter Wasm, or publish renderer
