@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { rigidBody } from 'crashcat';
-import { mat4 } from 'math';
+import { mat4, wrapAngle } from 'math';
 import { createWorld } from 'koota';
 import { robotActions } from '../robot/actions';
 import { Time } from '../time/traits';
@@ -145,6 +145,40 @@ it('lets the robot push a flat letter and removes its collision when it leaves',
     for (let frame = 0; frame < 240; frame++) stepPhysics(world);
 
     expect(body.position[2]).toBeCloseTo(0.5, 1);
+  } finally {
+    world.destroy();
+  }
+});
+
+it('keeps a letter the robot sweeps through from flying when its heading wraps past a half turn', () => {
+  const world = createWorld(Time);
+  physicsActions(world).initializePhysics();
+  const physics = physicsActions(world);
+  physics.setPhysicsFloor(0);
+  const robotEntity = robotActions(world).spawnRobot();
+  const robot = robotEntity.get(Robot)!;
+  robotEntity.set(Robot, { active: true });
+  Object.assign(robot.footprint, { x: 0, y: 0, z: 0.04, heading: Math.PI - 0.3 });
+  const letter = physics.spawnSolidBody([-1.4, 0.6, 0.5], prism());
+  const body = letter.get(Body)!;
+  const engine = world.get(Physics)!.engine;
+  const handle = rigidBody.get(engine, body.id)!;
+  world.set(Time, { delta: 1 / 60 });
+  let peak = 0;
+
+  try {
+    // Turn at the cart's hardest pivot back and forth across the half turn while sliding into the letter.
+    for (let frame = 0; frame < 120; frame++) {
+      robot.footprint.heading = wrapAngle(robot.footprint.heading + (frame % 40 < 20 ? 9.4 : -9.4) / 60);
+      robot.footprint.x -= 2 / 60;
+      moveRobotBodies(world);
+      stepPhysics(world);
+      peak = Math.max(peak, Math.hypot(...handle.motionProperties.linearVelocity));
+    }
+
+    // Nothing the robot does at two units a second and one turn a second can fling a letter faster than its own sweep.
+    expect(peak).toBeLessThan(12);
+    expect(Math.hypot(body.position[0], body.position[1])).toBeLessThan(6);
   } finally {
     world.destroy();
   }

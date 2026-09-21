@@ -45,6 +45,7 @@ import {
   NoBlending,
   type Node,
   NodeUpdateType,
+  type Object3D,
   OrthographicCamera,
   PlaneGeometry,
   RenderTarget,
@@ -53,7 +54,7 @@ import {
   type WebGPURenderer,
 } from 'three/webgpu';
 import { useWorld } from 'koota/react';
-import { Title, ShadowView } from './traits';
+import { Title, ShadowView, TitleView } from './traits';
 import { Time } from '../time/traits';
 import { letterActions } from './actions';
 import type { World } from 'koota';
@@ -312,7 +313,8 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     gridGeometry,
     blurs,
     captures: [] as { original: Mesh; capture: Mesh }[],
-    known: new Set<Mesh>(),
+    /** The title draw group the captures were taken from. A new group, as after a remount, is captured afresh. */
+    capturedFrom: undefined as Object3D | undefined,
     clear: new Color(),
   };
 }
@@ -320,23 +322,35 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
 export type Projection = ReturnType<typeof createProjection>;
 
 /** Update the mounted projection after title matrices have reached their draw objects. */
-export function updateGlassShadows(world: World, isReady: boolean): void {
-  world.query(Title, ShadowView).readEach(([title, view]) => {
-    view!.uTime.value = world.get(Time)!.elapsed;
-    updateProjection(view!, title.reach, isReady);
+export function updateGlassShadows(world: World): void {
+  world.query(Title, TitleView, ShadowView).readEach(([title, draws, view]) => {
+    const state = view!;
+
+    if (state.capturedFrom !== draws!.glyphs) captureTitle(state, draws!.glyphs);
+
+    state.uTime.value = world.get(Time)!.elapsed;
+    updateProjection(state, title.reach);
   });
 }
 
-/** Discover the retained title draws during warm-up. Playback uses the prepared list directly. */
-function discoverCaptures(state: Projection): void {
+/** Take captures of the title's stained-glass draws, replacing any from a title draw group since replaced. */
+function captureTitle(state: Projection, glyphs: Object3D): void {
   const { sourceScene } = state;
 
-  state.scene.traverseVisible((object) => {
+  for (const { capture } of state.captures) {
+    sourceScene.remove(capture);
+
+    if (!Array.isArray(capture.material)) capture.material.dispose();
+  }
+
+  state.captures.length = 0;
+  state.capturedFrom = glyphs;
+
+  glyphs.traverse((object) => {
     if (
       !(object instanceof Mesh) ||
       !(object.material instanceof MeshPhysicalNodeMaterial) ||
-      !object.material.name.startsWith('stained-glass-') ||
-      state.known.has(object)
+      !object.material.name.startsWith('stained-glass-')
     )
       return;
 
@@ -363,17 +377,13 @@ function discoverCaptures(state: Projection): void {
     capture.frustumCulled = false;
     sourceScene.add(capture);
     state.captures.push({ original: object, capture });
-    state.known.add(object);
   });
 }
 
-function updateProjection(state: Projection, titleReach: number, isReady: boolean): void {
+function updateProjection(state: Projection, titleReach: number): void {
   const { scene, renderer, uLamp, uReach, source, sourceScene, caustic, causticScene, lightCamera, clear } = state;
   scene.updateMatrixWorld(true);
   uLamp.value.copy(LAMP);
-
-  if (!isReady) discoverCaptures(state);
-
   let reach = GLASS_DEPTH;
 
   for (let index = 0; index < state.captures.length; index++) {

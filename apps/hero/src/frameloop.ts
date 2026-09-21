@@ -81,7 +81,7 @@ export function FrameLoop() {
         syncPlayButtonView(world);
       }
 
-      updateGlassShadows(world, isReady);
+      updateGlassShadows(world);
     },
     { id: 'hero-views', phase: 'render', before: 'hero-render', fps: 60 },
   );

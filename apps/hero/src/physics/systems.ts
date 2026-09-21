@@ -23,6 +23,10 @@ export function stepPhysics(world: World): void {
 
       interpolate(physics.position, physics.rotation, body.from, body.to, step / steps);
       const handle = rigidBody.get(physics.engine, body.id)!;
+      // Crashcat 0.0.5 reads the move's angle as 2 acos(w) of the delta rotation, so a target on the far side of
+      // the quaternion double cover, as when a yaw wraps past a half turn, would read as a near full turn a step.
+      if (quat.dot(physics.rotation, handle.quaternion) < 0) quat.scale(physics.rotation, physics.rotation, -1);
+
       rigidBody.wake(physics.engine, handle);
       rigidBody.moveKinematic(handle, physics.position, physics.rotation, 1 / 60);
     });

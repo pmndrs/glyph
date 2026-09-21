@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:69ca5ba24919c97cb0a473111993cebbc52c9088a70a39864b88cd4359fcd92f'
+source_digest: 'sha256:47840bf90a0bef234cf7e1d5764bd0102bbd9739e9ea14ef1087c3712e7f8d22'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -257,7 +257,8 @@ issues the explicit replay command inside its event effect on the first Space ke
 listeners and synchronizes normalized position and activity together from DOM events using the canvas bounds, and
 hands each primary-button press to `pressHero` once playback is ready.
 Leaving or cancelling the pointer, losing window focus, or unmounting clears activity. The frame loop only fades
-pointer strength over time. Shadow discovery receives readiness explicitly. A second ordered job publishes
+pointer strength over time. Shadow captures follow the title's published draw group: whenever the mounted `TitleView` holds a new group, as
+after a title remount under hot module replacement, the projection recaptures from it, so readiness plays no part. A second ordered job publishes
 view state after renderer preparation callbacks and before the final render.
 It updates paper, title and icon draws, feature text, robot pose, rig animation, robot display, dust, the black hole,
 embers, the play button, and glass shadows. Both jobs are capped at 60 fps. View systems read attached resource traits, so detaching
@@ -315,7 +316,11 @@ an immutable compound collider with a BVH, preserving counters and concave outli
 against the contours after Three removes duplicate closing vertices. An independent quadratic area integral
 checks that the extruded triangles preserve the filled glyph area, including counters. Only box, convex-hull,
 and static-compound shape implementations are registered. World and shape creation are synchronous and happen
-during preparation, without a physics Wasm download. `stepPhysics(world)` keeps 60 Hz updates with four collision substeps,
+during preparation, without a physics Wasm download. Kinematic targets are kept in each body's current quaternion hemisphere before `moveKinematic`, because crashcat
+0.0.5 reads the move's angle as `2 acos(w)` of the delta rotation: a yaw wrapping past a half turn would otherwise
+read as a near full turn a step and fling any letter it touched off the screen. A physics test sweeps the robot
+back and forth across the half turn against a letter and bounds the letter's speed.
+`stepPhysics(world)` keeps 60 Hz updates with four collision substeps,
 gravity along negative z, free translation and yaw, and locked pitch/roll. Material mixing preserves the configured
 friction and bounce threshold. Hidden letters and the absent robot remain allocated on a noncolliding layer as
 static bodies, then return to kinematic or dynamic motion when playback needs them. No colliders are rebuilt on replay.
