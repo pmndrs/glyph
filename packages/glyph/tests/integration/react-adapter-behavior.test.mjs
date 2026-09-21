@@ -4,7 +4,6 @@ import { createElement, Suspense } from 'react';
 import { create, act } from '@react-three/test-renderer/webgpu';
 import { glyph } from '@pmndrs/glyph';
 import { Text, TextGroup } from '@pmndrs/glyph/react';
-import { updateTextFromFramework } from '../../dist/three/text.js';
 import { adapterBehavior, adapterFont } from '../support/adapter-behavior.mjs';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -113,19 +112,20 @@ test('React does not let a mutated nested span swallow a fresh update', async ()
   const initial = { font: font.face, text: nested };
   const host = await mountReactAdapter(initial);
   try {
+    const accepted = host.text.measure();
     decoration.underline = false;
-    const fresh = {
-      text: {
-        text: 'nested span',
-        spans: [{ start: 0, end: 11, style: { decoration: { underline: false } } }],
-      },
-    };
-    assert.equal(
-      updateTextFromFramework(host.text, fresh),
-      true,
+    await host.update(initial);
+    assert.equal(host.text.measure(), accepted, 'mutating stable nested props must not invalidate accepted state');
+
+    await host.update({
+      ...initial,
+      text: createElement(Text, { style: { decoration: { underline: false } } }, 'nested span'),
+    });
+    assert.notEqual(
+      host.text.measure(),
+      accepted,
       'a fresh nested update must not be swallowed by mutated caller input',
     );
-    assert.equal(updateTextFromFramework(host.text, fresh), false, 'the accepted nested snapshot must be reusable');
   } finally {
     await host.unmount();
     font.dispose();
