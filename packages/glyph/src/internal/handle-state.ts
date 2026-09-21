@@ -11,6 +11,7 @@ import { createRenderPlanner, type RenderPlanner, type RenderPlannerOptions } fr
 import { compileCodec, type CodecDescriptor, type CodecIdFactory } from '../config/codec.js';
 import { CodecIdScope } from './render-id.js';
 import { resolveRasterCodecInternal } from './raster-codec-registry.js';
+import { preparePlannerFrameUpdate, type PlannerFrameUpdate } from './frame-wire.js';
 import {
   assertGlyphId,
   createHandleIdFactory,
@@ -1256,13 +1257,11 @@ export class PlanTransport {
     this.#textCapacity = Math.max(this.#textCapacity, textCapacity);
   }
 
-  /** @internal Stage one root request in its retained Wasm arena without invoking the engine. */
-  stageUpdate(request: Uint8Array): number {
+  /** @internal Compile one root request directly into its retained Wasm arena without invoking the engine. */
+  stageUpdate(frame: PlannerFrameUpdate): number {
     this.#assertActive();
     if (this.#stagedUpdate !== undefined) throw new Error('text update request is already staged');
-    if (!(request instanceof Uint8Array) || request.byteLength === 0) {
-      throw new TypeError('text update request must be a nonempty Uint8Array');
-    }
+    const request = preparePlannerFrameUpdate(frame);
     this.#invalidate();
     const requestLength = uint32(request.byteLength, 'text update byte length');
     const initialMemoryBuffer = this.#exports.memory.buffer;
@@ -1273,7 +1272,7 @@ export class PlanTransport {
     if (requestPointer === 0) {
       throw engineStatusError('resolve text request arena', textShaperAbi.status.rootMissing);
     }
-    new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength).set(request);
+    request.write(new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength));
     this.#stagedUpdate = { requestLength, initialMemoryBuffer };
     return requestLength;
   }
@@ -1316,11 +1315,13 @@ export class PlanTransport {
   }
 
   /** Answers one paragraph-scoped synchronous measurement without publishing. Result bytes stay readable only until the next Wasm call; revisions and renderer fences are untouched. */
-  measureParagraph(request: Uint8Array, paragraphId: ParagraphId, maxOutputBytes: number): PlanPublication {
+  measureParagraph(
+    requestFrame: PlannerFrameUpdate,
+    paragraphId: ParagraphId,
+    maxOutputBytes: number,
+  ): PlanPublication {
     this.#assertActive();
-    if (!(request instanceof Uint8Array) || request.byteLength === 0) {
-      throw new TypeError('paragraph measure request must be a nonempty Uint8Array');
-    }
+    const request = preparePlannerFrameUpdate(requestFrame);
     assertGlyphId(paragraphId, 'paragraph', 'paragraph id');
     maxOutputBytes = uint32(maxOutputBytes, 'paragraph measure max output bytes');
     this.#invalidate();
@@ -1333,7 +1334,7 @@ export class PlanTransport {
     for (;;) {
       const requestPointer = this.#exports.requestPointer(this.#handle);
       if (requestPointer === 0) throw engineStatusError('resolve text request arena', textShaperAbi.status.rootMissing);
-      new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength).set(request);
+      request.write(new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength));
       const resultPointer = this.#exports.measureParagraph(this.#handle, requestPointer, requestLength, paragraphId);
       const memoryBuffer = this.#exports.memory.buffer;
       if (resultPointer === 0) throw engineStatusError('measure paragraph', textShaperAbi.status.resultTooLarge);
@@ -1370,7 +1371,7 @@ export class PlanTransport {
 
   /** @internal Prepares positioning and returns only a fixed-size demand-read descriptor. */
   borrowParagraphLayout(
-    request: Uint8Array,
+    request: PlannerFrameUpdate,
     paragraphId: ParagraphId,
     maxOutputBytes: number,
   ): BorrowedLayoutPublication {
