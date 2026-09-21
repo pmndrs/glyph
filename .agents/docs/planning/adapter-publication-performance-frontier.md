@@ -64,8 +64,9 @@ byte-for-byte compatibility path. The `txt`, React, and Vue compilers record tha
 against the exact text they accompany, so Three validates but does not rebuild that grapheme grid. Arbitrary caller arrays,
 changed text, and unaligned spans still enter the shared Unicode path. The existing `withGlyphs` path already starts sparse
 and promotes only a repeated or explicit inspection. Focused Labs evidence improves one semantic request by 5.8%, 1,000
-order records by 7.1%, and 1,000 equivalent formatted-flow updates by 7.5%, while a changed trailing-span stress case and
-the neighboring retained and cold workloads remain below the five-percent regression threshold.
+order records by 7.1%, 1,000 equivalent `txt` formatted-flow updates by 5.8%, and the framework-bound equivalent by 6.0%,
+while a changed trailing-span stress case and the neighboring retained and cold workloads remain below the five-percent
+regression threshold.
 
 The remaining measured host work is now:
 

@@ -1,6 +1,7 @@
 import {
   areOwnedRangesClusterAligned,
   type ClusterAlignableRange,
+  inheritClusterAlignedRanges,
   ownClusterAlignedRanges,
   resolveRangesToClusters,
 } from './internal/graphemes.js';
@@ -36,15 +37,21 @@ export interface TextSpanFragment<
   readonly properties: Properties;
 }
 
-/** Re-exported so `flattenText` (the React `<Text>` compiler) can resolve joins by the same rule as `compose` below — adapter layers don't import `internal/`, and the two must never drift. */
-export { resolveRangesToClusters } from './internal/graphemes.js';
-
 /** Internal adapter handoff: resolves and freezes spans while recording that the exact array is canonical for `text`. */
 export function ownClusterAlignedSpans<Span extends ClusterAlignableRange>(
   text: string,
   spans: readonly Span[],
 ): readonly Span[] {
   return ownClusterAlignedRanges(text, spans);
+}
+
+/** Internal adapter handoff for font binding, which replaces records without changing their proven boundaries. */
+export function inheritClusterAlignedSpans<Span extends ClusterAlignableRange>(
+  text: string,
+  source: readonly ClusterAlignableRange[],
+  spans: readonly Span[],
+): readonly Span[] {
+  return inheritClusterAlignedRanges(text, source, spans);
 }
 
 /** Internal adapter check for the package-owned handoff above. Arbitrary caller arrays deliberately return false. */
@@ -126,7 +133,7 @@ export function span<Format extends RasterFormatMetadata>(
   return createSpanTag<Format, typeof properties>(properties) as SpanTag<Format> | UnboundSpanTag;
 }
 
-/** Compiles a fragment tree into `(text, spans)`; boundaries are concatenation joins (`start`/`end` = length before/after append) that may land mid-cluster. `resolveRangesToClusters` settles them under the same rule as `flattenText` — the fused cluster takes its earlier base's style. */
+/** Compiles a fragment tree into `(text, spans)`; boundaries are concatenation joins (`start`/`end` = length before/after append) that may land mid-cluster. The caller settles the complete tree through the shared cluster-alignment rule, where a fused cluster takes its earlier base's style. */
 function compose<Format extends RasterFormatMetadata>(
   strings: TemplateStringsArray,
   values: readonly TextTemplateValue<Format>[],

@@ -5,7 +5,11 @@ import { createElement } from 'react';
 import { glyph, span, txt, bitmap } from '@pmndrs/glyph';
 import { Text as R3fText } from '@pmndrs/glyph/react';
 import { createFontCache, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
-import { areOwnedRangesClusterAligned, findGraphemeBoundaries } from '../../dist/internal/graphemes.js';
+import {
+  areOwnedRangesClusterAligned,
+  findGraphemeBoundaries,
+  inheritClusterAlignedRanges,
+} from '../../dist/internal/graphemes.js';
 
 globalThis.self ??= globalThis;
 globalThis.requestAnimationFrame ??= () => 0;
@@ -40,8 +44,15 @@ test('txt resolves a styled fragment opening with a combining mark onto the base
   assert.deepEqual([...findGraphemeBoundaries(literal.text)], [0, 2, 3]);
   assert.deepEqual(ranges(literal), [[2, 3]]);
   assertAligned(literal);
+  assert.equal(literal.spans.every(Object.isFrozen), true, 'rewritten package-owned span records must stay immutable');
   assert.equal(areOwnedRangesClusterAligned(literal.text, literal.spans), true);
   assert.equal(areOwnedRangesClusterAligned(`${literal.text}c`, literal.spans), false);
+  const rebound = inheritClusterAlignedRanges(
+    literal.text,
+    literal.spans,
+    literal.spans.map((entry) => Object.freeze({ ...entry })),
+  );
+  assert.equal(areOwnedRangesClusterAligned(literal.text, rebound), true);
 
   const font = await fonts.load('inter');
   const mounted = mount(font, [{ properties: { constraints, layout, style, text: literal } }]);

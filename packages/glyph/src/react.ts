@@ -28,7 +28,12 @@ import {
   type FontFaceRasterOf,
   type FontFaceSource,
 } from './font-face.js';
-import { ownClusterAlignedSpans, type FormattedText, type TextInput } from './formatted-text.js';
+import {
+  inheritClusterAlignedSpans,
+  ownClusterAlignedSpans,
+  type FormattedText,
+  type TextInput,
+} from './formatted-text.js';
 import type { Font } from './font.js';
 import { glyph } from './glyph.js';
 import { GlyphFontError } from './loader.js';
@@ -653,9 +658,12 @@ function bindFlattenedTextFonts(
 ): FlattenedText<RasterFormatMetadata> {
   const spans = flattened.spans.map((span): ThreeTextSpanRecord<RasterFormatMetadata> => {
     const { font, ...properties } = span;
-    return font === undefined ? properties : Object.freeze({ ...properties, font: loadedTextFont(font, loaded) });
+    return Object.freeze({ ...properties, ...(font === undefined ? {} : { font: loadedTextFont(font, loaded) }) });
   });
-  return Object.freeze({ text: flattened.text, spans: Object.freeze(spans) });
+  return Object.freeze({
+    text: flattened.text,
+    spans: inheritClusterAlignedSpans(flattened.text, flattened.spans, spans),
+  });
 }
 
 function bindDesiredFont(
@@ -1106,7 +1114,7 @@ function createMountedHookFontStore(resource: ReactFontFaceResource): MountedHoo
   };
 }
 
-/** Boundaries are JOIN offsets in the concatenated text; when a JOIN fuses a grapheme cluster across children, `resolveRangesToClusters` gives the fused cluster the earlier child's style. */
+/** Boundaries are JOIN offsets in the concatenated text; when a JOIN fuses a grapheme cluster across children, the shared cluster alignment gives the fused cluster the earlier child's style. */
 function flattenText(
   children: R3fTextChild<RasterFormatMetadata> | undefined,
   context: GlyphReactContext,
