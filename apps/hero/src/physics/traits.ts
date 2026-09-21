@@ -15,6 +15,8 @@ export const Floor = trait();
 export const Body = trait({
   id: 0,
   mode: 'dynamic' as 'static' | 'dynamic' | 'held' | 'parked',
+  /** Whether other bodies may rest on this one's top face. Title letters never stack; rain may pile up. */
+  stacks: false,
   position: () => vec3.create(),
   rotation: () => quat.create(),
   from: () => ({ x: 0, y: 0, z: 0, yaw: 0 }),

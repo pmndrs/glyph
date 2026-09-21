@@ -25,7 +25,7 @@ import {
   type Node,
 } from 'three/webgpu';
 import { holeWarp } from '../black-hole/materials';
-import { THEME_RED } from './content';
+import { THEME_TINTS } from './content';
 
 type SlugContext = Extract<ThreeTextMaterialContext, { format: 'pmndrs.slug' }>;
 
@@ -93,13 +93,28 @@ function jostle(position: Node<'vec3'>, motion: PaneMotion): Node<'vec3'> {
     .add(vec3(motion.sway, 0, 0));
 }
 
+/** A pane of stained glass in `tint`, without the title's settling motion. Rain glyphs are cut from it. */
+export function createStainedGlass(name: string, tint: string) {
+  return createGlass({
+    name,
+    color: new Color(tint).lerp(new Color('#ffffff'), 0.38),
+    attenuationColor: new Color(tint),
+    attenuationDistance: 4,
+    thickness: 2.6,
+    roughness: 0.04,
+    ior: 1.54,
+    dispersion: 0.7,
+    iridescence: 0,
+  });
+}
+
 /** Separate inline materials preserve one shaped word while giving each pane its own tint and finish. */
 export const stainedGlassLetters = [
-  { letter: 'G', tint: THEME_RED, thickness: 2.8, roughness: 0.035, ior: 1.52 },
-  { letter: 'l', tint: '#ffc043', thickness: 2.4, roughness: 0.06, ior: 1.5 },
-  { letter: 'y', tint: '#00f7a3', thickness: 3, roughness: 0.045, ior: 1.54 },
-  { letter: 'p', tint: '#2bdcf6', thickness: 2.6, roughness: 0.025, ior: 1.56 },
-  { letter: 'h', tint: '#d855f9', thickness: 2.9, roughness: 0.05, ior: 1.53 },
+  { letter: 'G', tint: THEME_TINTS[0], thickness: 2.8, roughness: 0.035, ior: 1.52 },
+  { letter: 'l', tint: THEME_TINTS[1], thickness: 2.4, roughness: 0.06, ior: 1.5 },
+  { letter: 'y', tint: THEME_TINTS[2], thickness: 3, roughness: 0.045, ior: 1.54 },
+  { letter: 'p', tint: THEME_TINTS[3], thickness: 2.6, roughness: 0.025, ior: 1.56 },
+  { letter: 'h', tint: THEME_TINTS[4], thickness: 2.9, roughness: 0.05, ior: 1.53 },
 ].map(({ letter, tint, thickness, roughness, ior }) => {
   const motion = {
     scale: uniform(1),

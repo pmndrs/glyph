@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:47840bf90a0bef234cf7e1d5764bd0102bbd9739e9ea14ef1087c3712e7f8d22'
+source_digest: 'sha256:03c0a4475681479d56f965e7eaea351699fcce5e8a69b8960d689f6b698cfca8'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -205,6 +205,7 @@ implement its transitions.
 | `black-hole`  | Collapse state and controls, attraction functions, glyph warp, and rendered sheet collapse                 |
 | `star-embers` | Emission age, prepared star particles, fire material, bloom, fading, and screen-space sparks               |
 | `play-button` | Reveal timing, sheet geometry and hit test, mounted sheet camera, cursor state, and the framed pixel label |
+| `rain`        | Glyph rain in play: prepared glyph solids, drop pool, spawning, edge culling, fading, and glass slots      |
 
 The root owns one Koota world and the combined action set. `world.ts` exports the shared world and invokes the hero initialization action.
 Action sets define commands as arrow-function properties. Root `actions.ts` spreads the domain action sets.
@@ -219,8 +220,10 @@ callback. Initialization loads one opening cue that replays after one playback s
 the tagline 0.55 seconds after a letter landing and runs the robot 1.4 seconds after it, and robot departure opens
 the black hole. The play script is empty: nothing types above the title in play. Repeated landing events restart
 their pending delays.
-Replay and play both load their mode's script, which drops any pending cues, then reset the actors and lift the
-title again; play then places the robot beyond the lower-left edge and drives it to a spot above the title.
+Replay and play both load their mode's script, which drops any pending cues, and reset the actors. The sequence
+lifts and smashes the title down again; play settles it on the floor where it belongs, with letters the hole took
+returning home and nothing lifted, takes the tagline off, and places the robot beyond the lower-left edge to drive
+to a spot above the title.
 `pressHero` takes a normalized screen point and drives the robot to that floor point. In the sequence it first
 takes the wheel while the hole is closed: with the title dropped it switches mode, loads the play script, retracts
 the tagline, and keeps the robot's pose if it is on the floor; before the first drop it restarts into play. Once
@@ -341,6 +344,14 @@ tight with slowly turning gaps around a dot, eases in on each press and out once
 its shader compiles during preparation. The pure `steer` step is tested for arrival all round, curvature, bounded turning,
 and retargeting mid-trip. At rest the robot's face runs the scripted stop's clock from its look-up, so the greeting
 is shared; the published `face` clock is what the display reads in both modes.
+
+Two seconds into play, glyphs start raining: each drop is a stained-glass glyph from the title font in one of the
+five theme tints, spawned as a dynamic body cut from its outline at the drop's size, falling from near the camera
+under lighter gravity until it lands, where it weighs what the letters weigh and the robot can push it. Rain bodies
+stack, so glyphs may land on letters and on each other; title letters keep their no-stack rule. A glyph pushed past
+the edge is destroyed at once, a full pool fades its oldest glyph to make room, and leaving play fades them all.
+Landings ripple nothing. The renderer cuts each slot's unit solid and centres its glyph on the body's origin before
+playback. A rain test covers spawning, landing, edge culling, pool recycling, and the stop.
 
 The play button lives on its own screen-space sheet with an orthographic camera fitted to the viewport aspect, so
 its geometry and hit test share the pointer's normalized units. The hero's post pass renders that sheet after the

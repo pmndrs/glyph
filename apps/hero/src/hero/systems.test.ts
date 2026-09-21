@@ -15,6 +15,7 @@ import { Timeline } from '../sequence/traits';
 import { Collapse } from '../black-hole/traits';
 import { Impacts } from '../icon-paper/traits';
 import { letterActions } from '../letters/actions';
+import { Body } from '../physics/traits';
 import { mat4 } from 'math';
 import { StarEmbers, EMBER_SECONDS } from '../star-embers/traits';
 import { REVEAL_AFTER, REVEAL_SECONDS } from '../play-button/content';
@@ -96,10 +97,11 @@ it('takes the wheel on a press while the hole is closed, waits for Play once it 
   );
 
   try {
-    // Before the title has dropped, a press restarts into play and the robot scoots in from off screen.
+    // Before the title has dropped, a press restarts into play, without a lift, and the robot scoots in from off screen.
     commands.pressHero(0.1, -0.05);
     expect(world.get(Mode)!.kind).toBe('play');
-    expect(title.replays).toBe(1);
+    expect(title.replays).toBe(0);
+    expect(title.lifting).toBe(false);
     moveRobots(world);
     driveRobots(world);
     expect(robot.get(Robot)!.active).toBe(true);
@@ -119,7 +121,8 @@ it('takes the wheel on a press while the hole is closed, waits for Play once it 
 
     commands.replayHero();
     expect(world.get(Mode)!.kind).toBe('sequence');
-    expect(title.replays).toBe(2);
+    expect(title.replays).toBe(1);
+    expect(title.lifting).toBe(true);
     moveRobots(world);
     driveRobots(world);
     expect(robot.get(Robot)!.active).toBe(false);
@@ -132,7 +135,7 @@ it('takes the wheel on a press while the hole is closed, waits for Play once it 
     const { x, y } = robot.get(Robot)!.motion.pose;
     commands.pressHero(0.2, 0.2);
     expect(world.get(Mode)!.kind).toBe('play');
-    expect(title.replays).toBe(2);
+    expect(title.replays).toBe(1);
     moveRobots(world);
     driveRobots(world);
     expect(robot.get(Robot)!.time).toBeUndefined();
@@ -148,11 +151,16 @@ it('takes the wheel on a press while the hole is closed, waits for Play once it 
     expect(playReveal(world)).toBeCloseTo(1);
     commands.pressHero(0.8, 0.8);
     expect(world.get(Mode)!.kind).toBe('sequence');
+    title.swallowed.fill(1);
     commands.pressHero(0.05, -0.05);
     expect(world.get(Mode)!.kind).toBe('play');
     expect(world.get(Collapse)!.openedAt).toBeUndefined();
     expect(playReveal(world)).toBe(0);
-    expect(title.replays).toBe(4);
+    // Play settles the title home on the floor rather than lifting it for another smash.
+    expect(title.replays).toBe(2);
+    expect(title.lifting).toBe(false);
+    expect(title.swallowed[0]).toBe(0);
+    expect(title.pieces[0]!.entity.get(Body)!.mode).toBe('dynamic');
   } finally {
     world.destroy();
   }

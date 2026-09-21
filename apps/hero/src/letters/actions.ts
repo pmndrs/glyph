@@ -147,6 +147,40 @@ export const letterActions = createActions((world) => ({
     letterActions(world).clearFeature();
   },
   /**
+   * Put the title on the floor without a lift: letters the hole took come back home, letters mid-lift drop from
+   * where they are, and letters on the floor stay put.
+   */
+  settleTitle: () => {
+    world.query(Title).updateEach(([title]) => {
+      const state = title.bodies;
+
+      if (state === undefined) return;
+
+      for (let index = 0; index < state.pieces.length; index++) {
+        const entity = state.pieces[index]!.entity;
+
+        if (state.swallowed[index] === 1) {
+          const home = state.pieces[index]!.letter.home;
+          state.pose.x = home[0];
+          state.pose.y = home[1];
+          state.pose.z = home[2];
+          state.pose.yaw = 0;
+          physicsActions(world).reviveBody(entity, state.pose);
+          state.grow[index] = 1;
+          writeLetter(state, index);
+        }
+
+        physicsActions(world).releaseBody(entity, vec3.zero(state.velocity), 0);
+      }
+
+      state.swallowed.fill(0);
+      state.released.fill(1);
+      state.departing = false;
+      state.lifting = false;
+      state.elapsed = 0;
+    });
+  },
+  /**
    * Take the tagline off the paper and forget any pending typing. On the paper it backspaces out; once the hole
    * has taken it, it is simply gone.
    */

@@ -6,6 +6,7 @@ import { collapseSheet, uHoleBlackout, uHoleShake } from '../black-hole/material
 import { StarEmbersRenderer } from '../star-embers/renderer';
 import { composeStarEmbers, uEmberBloom } from '../star-embers/materials';
 import { PlayButtonRenderer, playSheet } from '../play-button/renderer';
+import { RainRenderer } from '../rain/renderer';
 import { composePlayButton } from '../play-button/materials';
 import { GlassShadows } from '../letters/shadows';
 import { GlassTitle, FeatureLine } from '../letters/renderer';
@@ -30,6 +31,7 @@ export function Hero() {
       <RobotRenderer font={fonts.robot} icons={fonts.icons} />
       <BlackHole />
       <StarEmbersRenderer font={fonts.stars} />
+      <RainRenderer font={fonts.title} />
       <PlayButtonRenderer font={fonts.robot} />
       <Post />
     </>

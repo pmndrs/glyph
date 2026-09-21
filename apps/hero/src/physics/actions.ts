@@ -22,12 +22,18 @@ import { Body, Floor, Physics, type HeldPose } from './traits';
 import { readBodyPose } from './utils';
 
 export const physicsActions = createActions((world) => {
-  function attach(entity: Entity, handle: RigidBody, mode: 'static' | 'dynamic' | 'parked' = 'dynamic'): Entity {
+  function attach(
+    entity: Entity,
+    handle: RigidBody,
+    mode: 'static' | 'dynamic' | 'parked' = 'dynamic',
+    stacks = false,
+  ): Entity {
     const physics = world.get(Physics)!;
     entity.add(Body);
     const body = entity.get(Body)!;
     body.id = handle.id;
     body.mode = mode;
+    body.stacks = stacks;
     vec3.copy(body.position, handle.position);
     quat.copy(body.rotation, handle.quaternion);
     entity.set(Body, body);
@@ -57,6 +63,9 @@ export const physicsActions = createActions((world) => {
       const listener: Listener = {
         onContactValidate: (a, b, _offset, hit) => {
           if (a.motionType !== MotionType.DYNAMIC || b.motionType !== MotionType.DYNAMIC)
+            return ContactValidateResult.ACCEPT_ALL_CONTACTS_FOR_THIS_BODY_PAIR;
+
+          if (entities.get(a.id)?.get(Body)?.stacks || entities.get(b.id)?.get(Body)?.stacks)
             return ContactValidateResult.ACCEPT_ALL_CONTACTS_FOR_THIS_BODY_PAIR;
 
           // Letter sides collide, but their top faces cannot support a stack.
@@ -101,7 +110,15 @@ export const physicsActions = createActions((world) => {
     destroyBody: (entity: Entity) => {
       if (entity.isAlive()) entity.destroy();
     },
-    spawnSolidBody: (position: Vec3, prisms: readonly (readonly number[])[]) => {
+    /**
+     * A dynamic body of convex prisms. Rain spawns airborne under lighter gravity, and stacks so glyphs may pile
+     * up; title letters spawn resting on the floor.
+     */
+    spawnSolidBody: (
+      position: Vec3,
+      prisms: readonly (readonly number[])[],
+      options: { stacks?: boolean; gravityFactor?: number; airborne?: boolean } = {},
+    ) => {
       const physics = world.get(Physics)!;
       const handle = rigidBody.create(physics.engine, {
         motionType: MotionType.DYNAMIC,
@@ -118,13 +135,22 @@ export const physicsActions = createActions((world) => {
         allowedDegreesOfFreedom: dof(true, true, true, false, false, true),
         linearDamping: 0,
         angularDamping: 0,
+        gravityFactor: options.gravityFactor ?? 1,
         friction: 0.9,
         restitution: 0.3,
         frictionCombineMode: MaterialCombineMode.GEOMETRIC_MEAN,
         restitutionCombineMode: MaterialCombineMode.MAX,
       });
 
-      return attach(world.spawn(), handle);
+      const entity = attach(world.spawn(), handle, 'dynamic', options.stacks ?? false);
+
+      if (options.airborne === true) entity.set(Body, { airborne: true });
+
+      return entity;
+    },
+    setGravityFactor: (entity: Entity, factor: number) => {
+      const physics = world.get(Physics)!;
+      rigidBody.get(physics.engine, entity.get(Body)!.id)!.motionProperties.gravityFactor = factor;
     },
     setPhysicsFloor: (top: number) => {
       const physics = world.get(Physics)!;

@@ -11,6 +11,7 @@ import { advanceSequence } from './sequence/systems';
 import { advanceCollapse, syncBlackHoleView } from './black-hole/systems';
 import { syncStarEmbers, syncEmberView } from './star-embers/systems';
 import { syncPlayButtonView } from './play-button/systems';
+import { rainGlyphs, syncRainViews } from './rain/systems';
 import { moveIconPaper, syncIconViews } from './icon-paper/systems';
 import { stepPhysics } from './physics/systems';
 import {
@@ -57,6 +58,7 @@ export function FrameLoop() {
 
       typeFeature(world);
       fadePointer(world);
+      rainGlyphs(world);
       moveIconPaper(world);
       stepDust(world);
     },
@@ -78,6 +80,7 @@ export function FrameLoop() {
         syncMarkerView(world);
         syncBlackHoleView(world);
         syncEmberView(world);
+        syncRainViews(world);
         syncPlayButtonView(world);
       }
 

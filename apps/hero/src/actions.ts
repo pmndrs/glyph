@@ -8,6 +8,7 @@ import { robotActions } from './robot/actions';
 import { letterActions } from './letters/actions';
 import { sequenceActions } from './sequence/actions';
 import { starEmberActions } from './star-embers/actions';
+import { rainActions } from './rain/actions';
 
 /** Domain commands share one action set for application composition and input. */
 export const actions = createActions((world) => ({
@@ -19,5 +20,6 @@ export const actions = createActions((world) => ({
   ...robotActions(world),
   ...sequenceActions(world),
   ...starEmberActions(world),
+  ...rainActions(world),
   ...letterActions(world),
 }));

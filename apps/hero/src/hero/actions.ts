@@ -6,7 +6,9 @@ import { physicsActions } from '../physics/actions';
 import { robotActions } from '../robot/actions';
 import { sequenceActions } from '../sequence/actions';
 import { starEmberActions } from '../star-embers/actions';
+import { rainActions } from '../rain/actions';
 import { Collapse } from '../black-hole/traits';
+import { Time } from '../time/traits';
 import { Title } from '../letters/traits';
 import { Robot } from '../robot/traits';
 import { overPlayButton, playReveal } from '../play-button/systems';
@@ -26,13 +28,22 @@ export const heroActions = createActions((world) => {
     ];
   }
 
-  /** Close the finale, restore the paper, lift the title, and reset the robot, then run `mode`'s script. */
+  /**
+   * Close the finale, restore the paper, and reset the robot, then run `mode`'s script. The sequence lifts and
+   * smashes the title down again; play settles it on the floor where it belongs and takes the tagline off.
+   */
   function restart(mode: ModeKind): void {
-    world.set(Mode, { kind: mode });
+    world.set(Mode, { kind: mode, since: world.get(Time)!.elapsed });
     sequenceActions(world).loadSequence(script(mode));
     blackHoleActions(world).dismissBlackHole();
     starEmberActions(world).resetStarEmbers();
-    letterActions(world).replayTitle();
+
+    if (mode === 'sequence') letterActions(world).replayTitle();
+    else {
+      letterActions(world).settleTitle();
+      letterActions(world).clearFeature();
+    }
+
     robotActions(world).resetRobot();
     iconPaperActions(world).resetIconPaper();
   }
@@ -44,6 +55,7 @@ export const heroActions = createActions((world) => {
     initializeHero: () => {
       physicsActions(world).initializePhysics();
       starEmberActions(world).initializeStarEmbers();
+      rainActions(world).initializeRain();
       robotActions(world).spawnRobot();
       letterActions(world).spawnLetters();
       iconPaperActions(world).spawnIconPaper();
@@ -52,7 +64,7 @@ export const heroActions = createActions((world) => {
     replayHero: () => {
       restart('sequence');
     },
-    /** Free play: the robot scoots in from the lower left to a spot above the title, and waits for the pointer. */
+    /** Free play: the title sits where it belongs, and the robot rolls in from the lower left to a spot above it. */
     startPlay: () => {
       restart('play');
       const { width, height } = world.get(Viewport)!;
@@ -80,7 +92,7 @@ export const heroActions = createActions((world) => {
         const onFloor = dropped && world.queryFirst(Robot)!.get(Robot)!.active;
 
         if (dropped) {
-          world.set(Mode, { kind: 'play' });
+          world.set(Mode, { kind: 'play', since: world.get(Time)!.elapsed });
           sequenceActions(world).loadSequence(script('play'));
           letterActions(world).clearFeature();
           robot.resetRobot();
