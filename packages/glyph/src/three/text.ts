@@ -1058,6 +1058,11 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   }
 }
 
+/** @internal Three's immutable normalized state for package-owned framework adapters. */
+export function acceptedTextState<Format extends RasterFormatMetadata>(text: Text<Format>): DesiredTextState<Format> {
+  return reconciler.desired(text);
+}
+
 interface TextGroupRenderOrderState {
   stated: number | undefined;
   observed: number;
