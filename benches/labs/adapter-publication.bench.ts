@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -22,17 +23,26 @@ const typeGpuPackage = (await import(
 const corePackage = (await import(
   pathToFileURL(resolve(packageRoot, 'dist/core.js')).href
 )) as typeof import('@pmndrs/glyph/core');
-const desiredTextPackage = (await import(
-  pathToFileURL(resolve(packageRoot, 'dist/internal/desired-text.js')).href
-)) as {
-  snapshotPropertyList<Value extends object>(value: unknown, label: string, previous?: Value): Value;
-};
+interface ReactiveSnapshotPackage {
+  snapshotReactivePropertyList<Value extends object>(value: unknown, label: string, previous?: Value): Value;
+}
+
+let reactiveSnapshotPackage: ReactiveSnapshotPackage;
+const reactiveSnapshotPath = resolve(packageRoot, 'dist/vue/internal/property-snapshot.js');
+if (existsSync(reactiveSnapshotPath)) {
+  reactiveSnapshotPackage = (await import(pathToFileURL(reactiveSnapshotPath).href)) as ReactiveSnapshotPackage;
+} else {
+  const previous = (await import(pathToFileURL(resolve(packageRoot, 'dist/internal/desired-text.js')).href)) as {
+    snapshotPropertyList<Value extends object>(value: unknown, label: string, prior?: Value): Value;
+  };
+  reactiveSnapshotPackage = { snapshotReactivePropertyList: previous.snapshotPropertyList };
+}
 
 const { bitmap, glyph } = glyphPackage;
 const { defineThreeConfig } = threePackage;
 const { defineTypeGpuConfig } = typeGpuPackage;
 const { resourceLease } = corePackage;
-const { snapshotPropertyList } = desiredTextPackage;
+const { snapshotReactivePropertyList } = reactiveSnapshotPackage;
 const fontBytes = await readFile(new URL('../fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url));
 
 await glyph.init();
@@ -162,20 +172,20 @@ group('allocation-light adapter publication @publication', () => {
     disposeLabels(created);
   });
 
-  bench('reuse 1000 unchanged framework property snapshots @framework', function* () {
+  bench('reuse 1000 unchanged Vue property snapshots @vue', function* () {
     const count = 1_000;
     const inputs = Array.from({ length: count }, (_, index) => [
       { fontSize: 16 },
       false,
       { color: index % 2 === 0 ? '#ffffff' : '#eeeeee', decoration: { underline: true } },
     ]);
-    const snapshots = inputs.map((input) => snapshotPropertyList(input, 'Labs text style'));
+    const snapshots = inputs.map((input) => snapshotReactivePropertyList(input, 'Labs text style'));
 
     const reused = yield () => {
       let reusedCount = 0;
       for (let index = 0; index < inputs.length; index++) {
         const previous = snapshots[index]!;
-        const next = snapshotPropertyList(inputs[index], 'Labs text style', previous);
+        const next = snapshotReactivePropertyList(inputs[index], 'Labs text style', previous);
         if (next === previous) reusedCount++;
         snapshots[index] = next;
       }

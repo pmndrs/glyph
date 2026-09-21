@@ -346,14 +346,14 @@ missing loads together, and keeps the current paragraph while a later selection 
 `{ font, error, ready }` shallow refs plus a promise for async setup; the format leaves compose it exactly like the
 React hooks. See [Vue and TresJS font loading](../guides/vue.md).
 
-Both component adapters snapshot paragraph property data and treat each committed prop set as complete desired state:
-removing style, layout, constraints, flow, material, or raster pixel ratio restores the corresponding default. Vue reads
-through nested reactive records while taking those snapshots, so in-place changes trigger updates without retaining
-mutable comparison state. Structurally equal Vue property lists reuse their previous immutable normalized records without
-merging or cloning replacements. React keys normalization to the semantic paragraph props rather than the component props
-wrapper, so transform-only or event-only renders do not rebuild paragraph snapshots. Neither adapter mutates a render-time
-React ref or treats object identity as paragraph correctness. `TextGroup` material and render order follow the same rule through one shared imperative
-apply step rather than framework prop diffing, so removing either restores the Three default. Paragraph and group
+Both component adapters treat each committed prop set as complete desired state: removing style, layout, constraints,
+flow, material, or raster pixel ratio restores the corresponding default. React passes its immutable semantic paragraph
+props to Three's canonical normalizer and keys that derivation independently from transform, event, and other Object3D
+props. Vue instead detaches nested reactive records so in-place proxy mutations cannot rewrite accepted comparison state.
+Structurally equal Vue property lists reuse the previous package-owned snapshot before merging or cloning, and Three
+adopts that snapshot rather than normalizing it again. Neither adapter mutates a render-time React ref or treats object
+identity as paragraph correctness. `TextGroup` material and render order follow the same rule through one shared
+imperative apply step rather than framework prop diffing, so removing either restores the Three default. Paragraph and group
 updates request a frame on demand-rendered canvases only when the desired snapshot changed; a re-render with identical
 props requests nothing. A pending Vue font switch keeps the current Three object and its leases until replacement fonts
 are ready; constructor arguments remain valid for that mounted object's lifetime. React retains its ordinary Suspense
@@ -361,9 +361,10 @@ lifecycle.
 
 `pnpm scripts run glyph:adapters-check` runs the shared React/Vue behavior cases and each framework's lifecycle tests
 against a freshly built distribution, plus adapter formatting, lint, and source declaration checks. Shared cases cover
-prop removal, nested property replacement, frame requests with an identical-snapshot negative control, flow retention
-and removal, group material and render-order removal, loaded-to-pending font switches, and lease disposal; Vue also
-proves in-place reactive updates. Three's `Text.set({ material: undefined })` explicitly clears an override.
+prop removal, nested property replacement, presentation-only changes, frame requests with an identical-snapshot negative
+control, flow retention and removal, group material and render-order removal, loaded-to-pending font switches, and lease
+disposal. Vue additionally proves a reuse hit followed by in-place nested reactive updates. Three's
+`Text.set({ material: undefined })` explicitly clears an override.
 
 The public `ThreeRoot` contract stops at that retained scene API: identity and disposal, Text/TextGroup construction,
 counts, and mutable material presentation. The renderer draw object, discovered Three Scene, root services, command

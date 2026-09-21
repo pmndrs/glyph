@@ -34,13 +34,7 @@ import type { Font } from './font.js';
 import { glyph } from './glyph.js';
 import { GlyphFontError } from './loader.js';
 import type { FontSelection, FontStack } from './loaded-font.js';
-import {
-  applyTextGroupOptions,
-  desiredTextUpdate,
-  sameDesiredText,
-  snapshotProperty,
-  snapshotPropertyList,
-} from './internal/desired-text.js';
+import { applyTextGroupOptions, desiredTextUpdate, sameDesiredText } from './internal/desired-text.js';
 import { fontResourceKey } from './internal/font-resource-key.js';
 import type { Constraints, ParagraphLayout, PropertyList, TextFlow, TextStyle } from './text-properties.js';
 import type { RasterFormatMetadata } from './config/raster-format.js';
@@ -72,6 +66,7 @@ import {
   type PendingFlattenedVueText,
   type VueFontSelectionInput,
 } from './vue/internal/flatten-slots.js';
+import { snapshotReactiveProperty, snapshotReactivePropertyList } from './vue/internal/property-snapshot.js';
 
 // Private catalogue tags so Tres can `new target(...args)` and `remove()` the retained Three classes; applications
 // use the wrapper components, never the tags.
@@ -769,10 +764,10 @@ function desiredText(
   return Object.freeze({
     font: loadedFont(outerFont, loaded),
     text: Object.freeze({ text: flattened.text, spans: Object.freeze(spans) }) as FormattedText<RasterFormatMetadata>,
-    style: snapshotPropertyList(props.textStyle, 'Text style', previous?.style),
-    layout: snapshotPropertyList(props.layout, 'Text layout', previous?.layout),
-    constraints: snapshotPropertyList(props.constraints, 'Text constraints', previous?.constraints),
-    ...(props.flow === undefined ? {} : { flow: snapshotProperty(props.flow, previous?.flow) }),
+    style: snapshotReactivePropertyList(props.textStyle, 'Text style', previous?.style),
+    layout: snapshotReactivePropertyList(props.layout, 'Text layout', previous?.layout),
+    constraints: snapshotReactivePropertyList(props.constraints, 'Text constraints', previous?.constraints),
+    ...(props.flow === undefined ? {} : { flow: snapshotReactiveProperty(props.flow, previous?.flow) }),
     ...(props.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: props.rasterPixelRatio }),
     ...(props.material === undefined ? {} : { material: props.material }),
     ...(props.pixelSnapping === undefined ? {} : { pixelSnapping: props.pixelSnapping }),

@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { reuseOrCreateTextPropertySnapshot } from '../../dist/config/text-property.js';
+import {
+  isOwnedTextPropertySnapshot,
+  ownTextPropertySnapshot,
+  reuseOrCreateTextPropertySnapshot,
+} from '../../dist/config/text-property.js';
 
 test('text property snapshots compare cyclic graphs without changing their topology', () => {
   const original = {};
@@ -21,4 +25,12 @@ test('text property snapshots compare cyclic graphs without changing their topol
   assert.equal(replaced.next.next, replaced);
   assert.equal(Object.isFrozen(replaced), true);
   assert.equal(Object.isFrozen(replaced.next), true);
+});
+
+test('package-created frozen snapshots cross normalization seams without another clone', () => {
+  const snapshot = Object.freeze({ fontSize: 16 });
+  assert.equal(isOwnedTextPropertySnapshot(snapshot), false);
+  assert.equal(ownTextPropertySnapshot(snapshot), snapshot);
+  assert.equal(isOwnedTextPropertySnapshot(snapshot), true);
+  assert.equal(reuseOrCreateTextPropertySnapshot(undefined, snapshot, 'Test property'), snapshot);
 });

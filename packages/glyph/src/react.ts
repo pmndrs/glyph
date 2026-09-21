@@ -35,13 +35,7 @@ import { glyph } from './glyph.js';
 import { GlyphFontError } from './loader.js';
 import { type FontSelection, type FontStack } from './loaded-font.js';
 import { mergePropertyList } from './property-list.js';
-import {
-  applyTextGroupOptions,
-  desiredTextUpdate,
-  sameDesiredText,
-  snapshotProperty,
-  snapshotPropertyList,
-} from './internal/desired-text.js';
+import { applyTextGroupOptions, desiredTextUpdate, sameDesiredText } from './internal/desired-text.js';
 import { fontResourceKey } from './internal/font-resource-key.js';
 import {
   type Constraints,
@@ -155,26 +149,17 @@ interface InlineProperties<Technique extends RasterFormatMetadata> {
   readonly material?: ThreeTextMaterial;
 }
 
-type DesiredR3fTextProperties<Technique extends RasterFormatMetadata> = Omit<
-  Partial<StandaloneTextProperties<Technique>>,
-  'constraints' | 'layout' | 'style'
-> & {
+type DesiredR3fTextProperties<Technique extends RasterFormatMetadata> = Partial<StandaloneTextProperties<Technique>> & {
   readonly font: FontSelection<Technique>;
   readonly text: TextInput<Technique>;
-  readonly constraints: Constraints;
-  readonly layout: ParagraphLayout;
-  readonly style: TextStyle;
 };
 
 type DesiredR3fTextInput<Technique extends RasterFormatMetadata> = Omit<
   Partial<StandaloneTextProperties<Technique>>,
-  'constraints' | 'font' | 'layout' | 'style'
+  'font'
 > & {
   readonly font?: R3fFontSelection<Technique>;
   readonly text: TextInput<Technique>;
-  readonly constraints: Constraints;
-  readonly layout: ParagraphLayout;
-  readonly style: TextStyle;
 };
 
 interface DesiredR3fTextSource {
@@ -1217,10 +1202,10 @@ function textProperties<Technique extends RasterFormatMetadata>(
       text: flattened.text,
       spans: flattened.spans,
     }) as FormattedText<Technique>,
-    style: snapshotPropertyList(properties.style, 'Text style'),
-    layout: snapshotPropertyList(properties.layout, 'Text layout'),
-    constraints: snapshotPropertyList(properties.constraints, 'Text constraints'),
-    ...(properties.flow === undefined ? {} : { flow: snapshotProperty(properties.flow) }),
+    style: properties.style,
+    layout: properties.layout,
+    constraints: properties.constraints,
+    ...(properties.flow === undefined ? {} : { flow: properties.flow }),
     ...(properties.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: properties.rasterPixelRatio }),
     ...(properties.material === undefined ? {} : { material: properties.material }),
     ...(properties.pixelSnapping === undefined ? {} : { pixelSnapping: properties.pixelSnapping }),

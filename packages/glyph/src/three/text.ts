@@ -35,7 +35,7 @@ import {
 } from '../text-properties.js';
 import { assertTextEffectsSupported, normalizedColumns, replacedContent } from '../engine-encoding.js';
 import type { GlyphCopy, GlyphRoot, GlyphRootServices, GlyphTextController } from '../config/glyph.js';
-import { reuseOrCreateTextPropertySnapshot } from '../config/text-property.js';
+import { isOwnedTextPropertySnapshot, reuseOrCreateTextPropertySnapshot } from '../config/text-property.js';
 import { ThreeCommandBufferRenderer } from './command-buffer-renderer.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import type { ThreeBindings, ThreeMaterialBinding } from './schema.js';
@@ -1720,11 +1720,21 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
   const layoutReused = previous !== undefined && properties.layout === previous.layout;
   const constraintsReused = previous !== undefined && properties.constraints === previous.constraints;
   const flowReused = previous !== undefined && properties.flow === previous.flow;
-  const style = styleReused ? previous.style : mergePropertyList(properties.style, 'Text style');
-  const layout = layoutReused ? previous.layout : mergePropertyList(properties.layout, 'Text layout');
+  const style = styleReused
+    ? previous.style
+    : isOwnedTextPropertySnapshot(properties.style)
+      ? (properties.style as TextStyle)
+      : mergePropertyList(properties.style, 'Text style');
+  const layout = layoutReused
+    ? previous.layout
+    : isOwnedTextPropertySnapshot(properties.layout)
+      ? (properties.layout as ParagraphLayout)
+      : mergePropertyList(properties.layout, 'Text layout');
   const constraints = constraintsReused
     ? previous.constraints
-    : mergePropertyList(properties.constraints, 'Text constraints');
+    : isOwnedTextPropertySnapshot(properties.constraints)
+      ? (properties.constraints as Constraints)
+      : mergePropertyList(properties.constraints, 'Text constraints');
   if (!styleReused) assertTextStyle(style, 'Text style');
   if (!layoutReused) assertParagraphLayout(layout, 'Text layout');
   if (!constraintsReused) assertConstraints(constraints, 'Text constraints');

@@ -286,9 +286,10 @@ choice. Available focused suites are `layout`, `measure`, `glyphs`, `publication
 The main package suite measures public-system edits, measurement and glyph access, Three publication, column reflow,
 font-size relayout, retained batches, and 1,000-label order changes. Each mutation case deliberately invalidates the state
 it names instead of timing an accidental cache hit. The focused adapter-publication suite adds four countermeasures:
-1,000 normalized-equal retained Three updates, 1,000 unchanged framework property snapshots, the complete cold lifecycle
-of a fresh 1,000-label root, and 1,000 direct TypeGPU position-only updates. The framework case requires the candidate to
-reuse every immutable normalized snapshot while the historical baseline is allowed to allocate replacements. The isolated
+1,000 normalized-equal retained Three updates, 1,000 unchanged plain-record Vue snapshot-helper calls, the complete cold
+lifecycle of a fresh 1,000-label root, and 1,000 direct TypeGPU position-only updates. The Vue helper case requires the
+candidate to reuse every immutable normalized snapshot while the historical baseline is allowed to allocate replacements;
+it isolates snapshot comparison cost and does not claim to measure Vue proxy traps or a framework render. The isolated
 package consumers install the pinned optional TypeGPU peer so the last case
 exercises the packed `/typegpu` entry rather than workspace source. Browser `startupMs` remains the end-to-end cold-start
 measure across module, asset, renderer, and scene activation. Fresh-process blocks and a five-percent minimum effect

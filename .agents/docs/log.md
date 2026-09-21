@@ -10,12 +10,15 @@
 
 ## 2026-09-20
 
-- **Reused unchanged framework property snapshots** — React now keys paragraph normalization to semantic text props
-  instead of its always-new component props wrapper, while Vue compares reactive property lists directly with the prior
-  immutable normalized snapshot before merging or cloning. Focused behavior tests preserve fresh-equal and in-place nested
-  update correctness. A 16-block packed-artifact Labs comparison improves 1,000 unchanged property snapshots from
-  `0.649 ms` to `0.249 ms` p50 (-61.6%); normalized Three publication, TypeGPU position updates, and the cold 1,000-label
-  lifecycle remain neutral. This is a patch-level implementation optimization with no public API or behavior change.
+- **Removed framework shadow normalization** — React now keys derivation to semantic text props and passes their immutable
+  values to Three's canonical normalizer instead of cloning a second snapshot. Vue retains the detached snapshots required
+  for in-place reactive proxies, marks them package-owned, and Three adopts them without another merge or clone. Focused
+  tests cover presentation-only React/Vue changes, a Vue reuse hit followed by a nested mutation, and PropertyList
+  enumerable-key parity. A 16-block packed-artifact Labs comparison improves 1,000 unchanged plain-record Vue snapshot
+  calls from `0.651 ms` to `0.281 ms` p50 (-56.8%); normalized Three publication, TypeGPU position updates, and the cold
+  1,000-label lifecycle remain below the five-percent effect threshold. This is a patch-level implementation optimization
+  with no public API or behavior change. Packed payload evidence keeps core Brotli unchanged, reduces React by `1,123 B`
+  raw / `177 B` Brotli, and adds `325 B` raw / `23 B` Brotli to Vue plus `193 B` raw / `100 B` Brotli to Three.
 
 - **Kept direct TypeGPU position updates out of semantic publication** — `TypeGpuText.update({ position })` now writes
   only its retained uniform; it does not merge desired text, stage a controller update, enter Wasm, or publish renderer
