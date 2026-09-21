@@ -34,7 +34,7 @@ import type { Font } from './font.js';
 import { glyph } from './glyph.js';
 import { GlyphFontError } from './loader.js';
 import { type FontSelection, type FontStack } from './loaded-font.js';
-import { mergePropertyList } from './property-list.js';
+import { assertPropertyList, mergePropertyList } from './property-list.js';
 import { applyTextGroupOptions, desiredTextUpdate, sameDesiredText } from './internal/desired-text.js';
 import { fontResourceKey } from './internal/font-resource-key.js';
 import {
@@ -1197,6 +1197,9 @@ function textProperties<Technique extends RasterFormatMetadata>(
   properties: DesiredR3fTextSource,
   flattened: FlattenedText<Technique>,
 ): DesiredR3fTextInput<Technique> {
+  assertPropertyList(properties.style, 'Text style');
+  assertPropertyList(properties.layout, 'Text layout');
+  assertPropertyList(properties.constraints, 'Text constraints');
   return Object.freeze({
     text: Object.freeze({
       text: flattened.text,

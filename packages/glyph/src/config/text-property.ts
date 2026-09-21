@@ -4,6 +4,7 @@ const ownedTextPropertySnapshots = new WeakSet<object>();
 
 /** @internal Mark one deeply frozen package-created text-property snapshot for zero-copy adoption. */
 export function ownTextPropertySnapshot<Value extends object>(value: Value): Value {
+  deepFreeze(value);
   ownedTextPropertySnapshots.add(value);
   return value;
 }
@@ -19,8 +20,9 @@ export function reuseOrCreateTextPropertySnapshot<Value extends object>(
   value: Value,
   label: string,
 ): Value {
-  if (previous === value || isOwnedTextPropertySnapshot(value)) return value;
+  if (previous === value) return value;
   if (previous !== undefined && equalTextProperty(previous, value)) return previous;
+  if (isOwnedTextPropertySnapshot(value)) return value;
   let snapshot: Value;
   try {
     snapshot = structuredClone(value);

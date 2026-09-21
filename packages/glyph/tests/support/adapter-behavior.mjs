@@ -98,6 +98,21 @@ export function adapterBehavior(name, mount) {
     }
   });
 
+  test(`${name}: malformed PropertyList input throws at the framework update`, async () => {
+    const font = await adapterFont();
+    const initial = { font: font.face, text: 'invalid style' };
+    const host = await mount(initial);
+    try {
+      await assert.rejects(
+        () => host.update({ ...initial, style: 5 }),
+        /Text style must be an object or property array/u,
+      );
+    } finally {
+      await host.unmount();
+      font.dispose();
+    }
+  });
+
   test(`${name}: loaded and pending font switches retain a live paragraph and release leases`, async () => {
     const first = await adapterFont();
     const second = await adapterFont();
@@ -150,6 +165,37 @@ export function adapterBehavior(name, mount) {
     }
   });
 
+  test(`${name}: equivalent PropertyList shapes do not republish paragraph state`, async () => {
+    const font = await adapterFont();
+    const initial = {
+      font: font.face,
+      text: 'same shape',
+      style: { fontSize: 16 },
+      constraints: { width: { mode: 'exact', size: 200 } },
+    };
+    const host = await mount(initial);
+    const object = host.text;
+    const set = object.set.bind(object);
+    let semanticUpdates = 0;
+    object.set = (update) => {
+      semanticUpdates += 1;
+      return set(update);
+    };
+    try {
+      host.resetFrameRequests();
+      await host.update({
+        ...initial,
+        style: [false, { fontSize: 12 }, { fontSize: 16 }],
+        constraints: [{ width: { mode: 'at-most', size: 100 } }, initial.constraints],
+      });
+      assert.equal(semanticUpdates, 0);
+      assert.equal(host.frameRequests, 0, 'equivalent merged properties must not request a frame');
+    } finally {
+      await host.unmount();
+      font.dispose();
+    }
+  });
+
   test(`${name}: presentation-only changes do not republish semantic text state`, async () => {
     const font = await adapterFont();
     const initial = { font: font.face, text: 'position', style: { fontSize: 16 } };
@@ -162,7 +208,7 @@ export function adapterBehavior(name, mount) {
       return set(update);
     };
     try {
-      await host.update({ ...initial, position: [12, 24, 0] });
+      await host.update({ ...initial, style: { fontSize: 16 }, position: [12, 24, 0] });
       assert.equal(host.text, object);
       assert.equal(object.position.x, 12);
       assert.equal(object.position.y, 24);

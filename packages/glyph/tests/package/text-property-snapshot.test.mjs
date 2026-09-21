@@ -28,9 +28,17 @@ test('text property snapshots compare cyclic graphs without changing their topol
 });
 
 test('package-created frozen snapshots cross normalization seams without another clone', () => {
-  const snapshot = Object.freeze({ fontSize: 16 });
+  const snapshot = Object.freeze({ fontSize: 16, decoration: { underline: true } });
   assert.equal(isOwnedTextPropertySnapshot(snapshot), false);
   assert.equal(ownTextPropertySnapshot(snapshot), snapshot);
+  assert.equal(Object.isFrozen(snapshot.decoration), true);
   assert.equal(isOwnedTextPropertySnapshot(snapshot), true);
   assert.equal(reuseOrCreateTextPropertySnapshot(undefined, snapshot, 'Test property'), snapshot);
+});
+
+test('an equal prior snapshot wins over a different package-owned identity', () => {
+  const previous = reuseOrCreateTextPropertySnapshot(undefined, { fontSize: 16 }, 'Test property');
+  const equalOwned = ownTextPropertySnapshot({ fontSize: 16 });
+  assert.notEqual(equalOwned, previous);
+  assert.equal(reuseOrCreateTextPropertySnapshot(previous, equalOwned, 'Test property'), previous);
 });

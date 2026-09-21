@@ -1,5 +1,7 @@
 import type { RasterFormatMetadata } from '../config/raster-format.js';
 import type { TextInput } from '../formatted-text.js';
+import { mergePropertyList } from '../property-list.js';
+import type { PropertyList } from '../text-properties.js';
 import type { StandaloneTextProperties, TextGroup, TextUpdate } from '../three/text.js';
 
 /** Component props describe complete state; omitted props must reset Three's otherwise partial update. */
@@ -29,13 +31,22 @@ export function sameDesiredText<Technique extends RasterFormatMetadata>(
     !sameSnapshot(left.text, right.text) ||
     left.rasterPixelRatio !== right.rasterPixelRatio ||
     left.material !== right.material ||
-    !sameSnapshot(left.style, right.style) ||
-    !sameSnapshot(left.layout, right.layout) ||
-    !sameSnapshot(left.constraints, right.constraints) ||
+    !samePropertyList(left.style, right.style, 'Text style') ||
+    !samePropertyList(left.layout, right.layout, 'Text layout') ||
+    !samePropertyList(left.constraints, right.constraints, 'Text constraints') ||
     !sameSnapshot(left.flow, right.flow)
   )
     return false;
   return true;
+}
+
+function samePropertyList<Value extends object>(
+  left: PropertyList<Value>,
+  right: PropertyList<Value>,
+  label: string,
+): boolean {
+  if (sameSnapshot(left, right)) return true;
+  return sameSnapshot(mergePropertyList(left, label), mergePropertyList(right, label));
 }
 
 /** Structural equality over frozen property snapshots; NaN equals NaN so a stale layout never republishes. */
