@@ -10,6 +10,13 @@
 
 ## 2026-09-20
 
+- **Reused unchanged framework property snapshots** — React now keys paragraph normalization to semantic text props
+  instead of its always-new component props wrapper, while Vue compares reactive property lists directly with the prior
+  immutable normalized snapshot before merging or cloning. Focused behavior tests preserve fresh-equal and in-place nested
+  update correctness. A 16-block packed-artifact Labs comparison improves 1,000 unchanged property snapshots from
+  `0.649 ms` to `0.249 ms` p50 (-61.6%); normalized Three publication, TypeGPU position updates, and the cold 1,000-label
+  lifecycle remain neutral. This is a patch-level implementation optimization with no public API or behavior change.
+
 - **Kept direct TypeGPU position updates out of semantic publication** — `TypeGpuText.update({ position })` now writes
   only its retained uniform; it does not merge desired text, stage a controller update, enter Wasm, or publish renderer
   commands. A packed-artifact Labs comparison improves 1,000 moving labels from `4.85 ms` to `0.363 ms` p50 (-92.5%),

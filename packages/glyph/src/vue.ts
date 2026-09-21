@@ -616,9 +616,15 @@ function createFontLeases() {
   };
 }
 
-type DesiredVueText = Partial<StandaloneTextProperties<RasterFormatMetadata>> & {
+type DesiredVueText = Omit<
+  Partial<StandaloneTextProperties<RasterFormatMetadata>>,
+  'constraints' | 'layout' | 'style'
+> & {
   readonly font: FontSelection<RasterFormatMetadata>;
   readonly text: FormattedText<RasterFormatMetadata>;
+  readonly constraints: Constraints;
+  readonly layout: ParagraphLayout;
+  readonly style: TextStyle;
 };
 
 type TextConstructorArguments = readonly [
@@ -698,7 +704,7 @@ export const Text: TextComponent = defineComponent({
         const loaded = new Map<FontFaceSelection, Font<RasterFormatMetadata>>();
         for (const selection of selections) loaded.set(selection, leases.acquire(handle, selection));
         desiredSelections = new Set(selections);
-        desired = desiredText(props, outerFont, flattened, loaded);
+        desired = desiredText(props, outerFont, flattened, loaded, desired);
 
         const key = `${rootId(root)}:${props.pixelSnapping === true ? 'pixel-snapped' : 'unsnapped'}`;
         if (publication?.key !== key) {
@@ -754,6 +760,7 @@ function desiredText(
   outerFont: FontSelection<RasterFormatMetadata> | FontFaceSelection,
   flattened: PendingFlattenedVueText,
   loaded: ReadonlyMap<FontFaceSelection, Font<RasterFormatMetadata>>,
+  previous?: DesiredVueText,
 ): DesiredVueText {
   const spans = flattened.spans.map((span): ThreeTextSpanRecord<RasterFormatMetadata> => {
     const { font, ...properties } = span;
@@ -762,10 +769,10 @@ function desiredText(
   return Object.freeze({
     font: loadedFont(outerFont, loaded),
     text: Object.freeze({ text: flattened.text, spans: Object.freeze(spans) }) as FormattedText<RasterFormatMetadata>,
-    style: snapshotPropertyList(props.textStyle, 'Text style'),
-    layout: snapshotPropertyList(props.layout, 'Text layout'),
-    constraints: snapshotPropertyList(props.constraints, 'Text constraints'),
-    ...(props.flow === undefined ? {} : { flow: snapshotProperty(props.flow) }),
+    style: snapshotPropertyList(props.textStyle, 'Text style', previous?.style),
+    layout: snapshotPropertyList(props.layout, 'Text layout', previous?.layout),
+    constraints: snapshotPropertyList(props.constraints, 'Text constraints', previous?.constraints),
+    ...(props.flow === undefined ? {} : { flow: snapshotProperty(props.flow, previous?.flow) }),
     ...(props.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: props.rasterPixelRatio }),
     ...(props.material === undefined ? {} : { material: props.material }),
     ...(props.pixelSnapping === undefined ? {} : { pixelSnapping: props.pixelSnapping }),
