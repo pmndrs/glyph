@@ -53,9 +53,9 @@ needed to avoid that duplication.[^render-planner][^layout-query-view]
 
 The current PR stack has removed complete-state reconstruction for normalized no-ops, kept Three order-only publication
 out of transform work, kept TypeGPU position-only changes out of semantic publication, and removed framework shadow
-normalization. React now compares immutable semantic props with Three's authoritative accepted state and delegates real
-changes to its canonical normalizer; it retains no caller-owned accepted-state mirror. Vue retains only the detached reactive
-snapshot its mutable proxy contract requires, and Three adopts those package-owned records without a second clone. The
+normalization. React and Vue now submit complete desired state through Three's authoritative normalizer, which reuses equal
+property and span snapshots and reports whether the accepted revision changed. Neither adapter retains a caller-owned
+accepted-state mirror; Vue retains only the detached reactive snapshots required by its mutable proxy contract. The
 existing `withGlyphs` path already starts sparse and promotes only a repeated or explicit inspection.
 
 The remaining measured host work is narrower:

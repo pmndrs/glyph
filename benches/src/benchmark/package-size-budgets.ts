@@ -69,10 +69,10 @@ export const packageSizeBudgets = {
     brotliBytes: 112_000,
   },
   // The Vue adapter includes Glyph's root and Three integration while Vue, Tres, and Three remain consumer peers.
-  // The initial surface measures 541,957 raw / 529,712 minified / 133,003 gzip / 109,563 Brotli bytes.
+  // Canonical framework normalization measures 546,246 raw / 534,024 minified / 134,116 gzip / 110,390 Brotli bytes.
   'vue-runtime-js': {
-    rawBytes: 546_000,
-    minifiedBytes: 534_000,
+    rawBytes: 547_000,
+    minifiedBytes: 535_000,
     gzipBytes: 136_000,
     brotliBytes: 112_000,
   },

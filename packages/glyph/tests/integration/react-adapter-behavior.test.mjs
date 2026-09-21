@@ -4,6 +4,7 @@ import { createElement, Suspense } from 'react';
 import { create, act } from '@react-three/test-renderer/webgpu';
 import { glyph } from '@pmndrs/glyph';
 import { Text, TextGroup } from '@pmndrs/glyph/react';
+import { updateTextFromFramework } from '../../dist/three/text.js';
 import { adapterBehavior, adapterFont } from '../support/adapter-behavior.mjs';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -75,7 +76,7 @@ async function mountReactAdapter(initial) {
 
 adapterBehavior('React', mountReactAdapter);
 
-test('React compares fresh props with accepted state after caller-owned input mutates in place', async () => {
+test('React delegates fresh props after caller-owned input mutates in place', async () => {
   const font = await adapterFont();
   const style = { fontSize: 16, decoration: { underline: true } };
   const initial = { font: font.face, text: 'authoritative state', style };
@@ -99,6 +100,32 @@ test('React compares fresh props with accepted state after caller-owned input mu
       { fontSize: 48, decoration: { underline: false } },
       'a fresh legitimate update must not be swallowed by mutated caller input',
     );
+  } finally {
+    await host.unmount();
+    font.dispose();
+  }
+});
+
+test('React does not let a mutated nested span swallow a fresh update', async () => {
+  const font = await adapterFont();
+  const decoration = { underline: true };
+  const nested = createElement(Text, { style: { decoration } }, 'nested span');
+  const initial = { font: font.face, text: nested };
+  const host = await mountReactAdapter(initial);
+  try {
+    decoration.underline = false;
+    const fresh = {
+      text: {
+        text: 'nested span',
+        spans: [{ start: 0, end: 11, style: { decoration: { underline: false } } }],
+      },
+    };
+    assert.equal(
+      updateTextFromFramework(host.text, fresh),
+      true,
+      'a fresh nested update must not be swallowed by mutated caller input',
+    );
+    assert.equal(updateTextFromFramework(host.text, fresh), false, 'the accepted nested snapshot must be reusable');
   } finally {
     await host.unmount();
     font.dispose();

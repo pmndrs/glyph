@@ -34,7 +34,7 @@ import type { Font } from './font.js';
 import { glyph } from './glyph.js';
 import { GlyphFontError } from './loader.js';
 import type { FontSelection, FontStack } from './loaded-font.js';
-import { applyTextGroupOptions, desiredTextUpdate, sameDesiredText } from './internal/desired-text.js';
+import { applyTextGroupOptions, desiredTextUpdate } from './internal/desired-text.js';
 import { fontResourceKey } from './internal/font-resource-key.js';
 import type { Constraints, ParagraphLayout, PropertyList, TextFlow, TextStyle } from './text-properties.js';
 import type { RasterFormatMetadata } from './config/raster-format.js';
@@ -58,6 +58,7 @@ import {
 import {
   threeRootHost,
   threeTextConstructionToken,
+  updateTextFromFramework,
   type TextSpan as ThreeTextSpanRecord,
   type ThreeRootHost,
 } from './three/text.js';
@@ -632,7 +633,6 @@ type TextConstructorArguments = readonly [
 interface TextPublication {
   readonly key: string;
   readonly args: TextConstructorArguments;
-  applied: DesiredVueText;
 }
 
 const textPropDefinitions = {
@@ -670,11 +670,7 @@ export const Text: TextComponent = defineComponent({
     const apply = (): void => {
       const object = instance.value;
       if (object === undefined || publication === undefined || desired === undefined) return;
-      if (!sameDesiredText(publication.applied, desired)) {
-        object.set(desiredTextUpdate(desired));
-        publication.applied = desired;
-        invalidate();
-      }
+      if (updateTextFromFramework(object, desiredTextUpdate(desired))) invalidate();
       leases.prune(desiredSelections);
     };
     onMounted(apply);
@@ -707,7 +703,6 @@ export const Text: TextComponent = defineComponent({
           publication = {
             key,
             args: [threeTextConstructionToken, desired, [], threeRootHost(root)],
-            applied: desired,
           };
         }
       }

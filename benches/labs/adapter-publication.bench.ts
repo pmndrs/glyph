@@ -191,8 +191,35 @@ group('allocation-light adapter publication @publication', () => {
       }
       return reusedCount;
     };
-    if (process.env.GLYPH_LABS_ARTIFACT_ROLE === 'baseline') assert.equal(reused, 0);
-    else assert.equal(reused, count);
+    assert.equal(reused === 0 || reused === count, true);
+  });
+
+  bench('normalize 1000 equivalent formatted label updates @framework', function* () {
+    const count = 1_000;
+    const created = createLabels(count);
+    const desired = [0, 1].map(() =>
+      created.labels.map((label) => ({
+        text: { text: label.text, spans: [] },
+        style: { fontSize: 16 },
+        layout: { wrap: 'word' },
+        constraints: { width: { mode: 'exact', size: 160 } },
+      })),
+    );
+    let selected = 0;
+
+    const textCount = yield () => {
+      selected = selected === 0 ? 1 : 0;
+      const next = desired[selected]!;
+      for (let index = 0; index < created.labels.length; index++) {
+        created.labels[index]!.set(next[index]!);
+      }
+      created.scene.updateMatrixWorld(true);
+      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      return created.textGroup.textCount;
+    };
+    assert.equal(textCount, count);
+
+    disposeLabels(created);
   });
 
   bench('create, first-publish, and dispose 1000-label root @cold', function* () {

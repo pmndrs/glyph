@@ -34,7 +34,7 @@ import { glyph } from './glyph.js';
 import { GlyphFontError } from './loader.js';
 import { type FontSelection, type FontStack } from './loaded-font.js';
 import { assertPropertyList, mergePropertyList } from './property-list.js';
-import { acceptedDesiredTextMatches, applyTextGroupOptions, desiredTextUpdate } from './internal/desired-text.js';
+import { applyTextGroupOptions, desiredTextUpdate } from './internal/desired-text.js';
 import { fontResourceKey } from './internal/font-resource-key.js';
 import {
   type Constraints,
@@ -65,7 +65,7 @@ import {
 import {
   threeRootHost,
   threeTextConstructionToken,
-  acceptedTextState,
+  updateTextFromFramework,
   type TextSpan as ThreeTextSpanRecord,
   type ThreeRootHost,
 } from './three/text.js';
@@ -694,9 +694,7 @@ function TextObject({
 
   useLayoutEffect(() => {
     if (object === undefined) return;
-    if (acceptedDesiredTextMatches(acceptedTextState(object), desired)) return;
-    object.set(desiredTextUpdate(desired));
-    invalidate();
+    if (updateTextFromFramework(object, desiredTextUpdate(desired))) invalidate();
   }, [desired, invalidate, object]);
 
   return createElement<ThreeElement<typeof ThreeText>>('pmndrsGlyphText', {
