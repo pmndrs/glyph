@@ -68,11 +68,22 @@ it('rains pushable glyph bodies a couple of seconds into play, takes them away p
     expect(first.entity).toBeUndefined();
     expect(entity.isAlive()).toBe(false);
 
-    // The pool bounds the physics: once full, the oldest fades to make room for the next drop.
+    // The pool bounds the physics: once full, the oldest scales away first, and only then does the next drop fall.
     advance(COUNT * 0.6);
     expect(world.get(Rain)!.dropped).toBeGreaterThan(COUNT);
     expect(live().length).toBeLessThanOrEqual(COUNT);
     expect(live().length).toBeGreaterThan(COUNT - 3);
+    const oldest = live().reduce((low, drop) => (drop.serial < low.serial ? drop : low));
+
+    for (let frame = 0; frame < 120 && oldest.phase === 'live'; frame++) advance(1 / 60);
+
+    expect(oldest.phase).toBe('fading');
+    const count = world.get(Rain)!.dropped;
+    advance(FADE_SECONDS / 2);
+    expect(oldest.phase).toBe('fading');
+    expect(world.get(Rain)!.dropped).toBe(count);
+    advance(FADE_SECONDS);
+    expect(world.get(Rain)!.dropped).toBe(count + 1);
 
     // Leaving play fades them all and stops the rain.
     world.set(Mode, { kind: 'sequence', since: 0 });

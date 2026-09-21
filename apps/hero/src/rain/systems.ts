@@ -69,21 +69,23 @@ export function rainGlyphs(world: World): void {
 
   if (!raining) dropAt = time.elapsed;
   else if (time.elapsed >= dropAt) {
-    let slot = rain.drops.findIndex((drop) => drop.phase === 'idle');
+    const slot = rain.drops.findIndex((drop) => drop.phase === 'idle');
 
-    if (slot < 0) {
+    // With every slot taken, the oldest glyph goes first, and the next drop waits for its slot to free up.
+    if (slot < 0 && !rain.drops.some((drop) => drop.phase === 'fading')) {
       let oldest = Number.POSITIVE_INFINITY;
+      let leaving = -1;
 
       for (let index = 0; index < COUNT; index++) {
         const drop = rain.drops[index]!;
 
         if (drop.phase === 'live' && drop.serial < oldest) {
           oldest = drop.serial;
-          slot = index;
+          leaving = index;
         }
       }
 
-      if (slot >= 0) dismiss(slot, true);
+      if (leaving >= 0) dismiss(leaving, true);
     }
 
     const solid = slot >= 0 ? rain.solids[slot] : undefined;
@@ -117,9 +119,8 @@ export function rainGlyphs(world: World): void {
       drop.size = size;
       drop.serial = serial;
       drop.age = 0;
+      dropAt = time.elapsed + DROP_EVERY * (0.6 + jitter(dropped * 7) * 0.8);
     }
-
-    dropAt = time.elapsed + DROP_EVERY * (0.6 + jitter(dropped * 7) * 0.8);
   }
 
   world.set(Rain, { dropAt, dropped });
@@ -154,10 +155,10 @@ export function syncRainViews(world: World): void {
     if (!group.visible) continue;
 
     group.position.set(drop.x, drop.y, drop.z);
-    // Going, a glyph swells for an instant, then twists as it shrinks away.
+    // Going, a glyph gathers itself for an instant, then scales away.
     const t = drop.phase === 'fading' ? Math.min(drop.age / FADE_SECONDS, 1) : 0;
-    const scale = drop.size * (1 + 0.35 * Math.sin(Math.PI * t)) * (1 - t * t);
-    group.rotation.z = drop.yaw + t * t * Math.PI * 0.75;
+    const scale = drop.size * (1 + 0.12 * Math.sin(Math.PI * Math.min(t * 2.5, 1))) * (1 - t * t);
+    group.rotation.z = drop.yaw;
     group.scale.set(scale, scale, 1);
   }
 }

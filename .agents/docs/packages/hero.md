@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:ca19f2c4046a62e8ecfdf1b4b3d2e8018e158f4849c0450e9aa0f92775bf16a0'
+source_digest: 'sha256:f489ab33d3d4305f3b27c678dc51940c296b95fc5646b987a36b35817ce51041'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -359,9 +359,10 @@ Two seconds into play, glyphs start raining: each drop is a glyph from the title
 one of the five theme tints, spawned as a dynamic body cut from its outline at the drop's size, falling from near the camera
 under lighter gravity until it lands, where it weighs what the letters weigh and the robot can push it. Rain bodies
 stack, so glyphs may land on letters and on each other; title letters keep their no-stack rule. A glyph pushed past
-the edge is destroyed at once, a full pool fades its oldest glyph to make room, and leaving play fades them all.
-Landings ripple nothing. Each glyph falls at its own angle with a little spin, and one going swells for an instant
-then twists as it shrinks away. Rain arrives above the solver's restitution threshold, so it bounces off the robot's
+the edge is destroyed at once; with the pool full, the oldest glyph scales away first and the next drop waits for
+its slot, one recycle at a time; leaving play fades them all.
+Landings ripple nothing. Each glyph falls at its own angle with a little spin, and one going gathers itself for an
+instant then scales away. Rain arrives above the solver's restitution threshold, so it bounces off the robot's
 stadium, which carries a sloped roof and its own bounce; since a letter body cannot tip, a glyph that still comes to
 rest on the robot's back is flicked off sideways by the rain system. The renderer cuts each slot's unit solid and
 centres its glyph on the body's origin before playback. A rain pane composes as stained glass does, multiplying
