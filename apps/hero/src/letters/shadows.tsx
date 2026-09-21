@@ -86,6 +86,17 @@ const FACET_CELLS = [
 const CAPTURE_WIDTH = 1024;
 const CAPTURE_HEIGHT = 640;
 
+/**
+ * How thick the glass at a texel is: the title's full slab, or the rain's thin one, from the coverage-weighted
+ * ratio the normal capture carries, normalized by the coverage `weight` like the normals are. Where the coverage
+ * has thinned to a soft edge the full slab stands in, so the title's penumbra is exactly what it was.
+ */
+function slabAt(sample: Node<'vec4'>, weight: Node<'float'>): Node<'float'> {
+  const ratio = sample.z.div(weight);
+
+  return mix(float(GLASS_DEPTH), ratio.mul(GLASS_DEPTH), smoothstep(0.05, 0.4, weight));
+}
+
 /** The capture is a straight-down orthographic view over the receiving plane, so its texels are world x and y. */
 function captureUV(world: Node<'vec2'>) {
   // Camera clip space is bottom-up. WebGPU render textures are top-down.
@@ -175,9 +186,7 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     const dispersion = field.b.div(weight);
     const lensSample = normals.sample(uv);
     const lens = lensSample.xy.div(weight);
-    // How thick this pane's glass is, as captured: the title's full slab, or the rain's thin one. Its own weight
-    // shares its blur, so the ratio holds across the soft edge.
-    const slab = lensSample.z.div(lensSample.w.max(0.0001)).mul(GLASS_DEPTH);
+    const slab = slabAt(lensSample, weight);
     // The chamfer follows the silhouette's outward direction, from the wide blur's gradient.
     const texel = vec2(1 / CAPTURE_WIDTH, 1 / CAPTURE_HEIGHT).mul(2);
     const gradient = vec2(
@@ -273,8 +282,7 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
       If(level.lessThan(1), blend(0)).ElseIf(level.lessThan(2), blend(1)).Else(blend(2));
 
       const weight = sample.a.max(0.0001);
-      const thickness = normals.sample(uv);
-      const slab = thickness.z.div(thickness.w.max(0.0001)).mul(GLASS_DEPTH);
+      const slab = slabAt(normals.sample(uv), weight);
       const base = field.div(weight).sub(slab.div(2)).max(0);
       const inside = sample.a
         .mul(step(base, t))

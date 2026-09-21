@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:41e62ce7a30e3664e493bafa23722f00546d191294ae64eda63408efa87cd1c4'
+source_digest: 'sha256:56069284dd69f991bedc2ceedd6de5118f318040888cf9bff6c83a39929b5c9d'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -377,11 +377,13 @@ shaped, and the rain publishes its root as a second capture source beside the ti
 per-pixel march and blur cost the same however many panes it captures, so the rain adds only its draws into the
 capture. A glyph falling from near the camera would stretch the march over the whole scene and coarsen every
 shadow, so rain captures only over the last four units of the fall, and its shadow arrives just before it does.
-A rain glyph is thin glass lying on the floor, so its shadow would sit hidden under it: it casts as if lifted a
-little, which sets its shadow beside the glyph like the letters', at two thirds of the title's weight so a small
-glyph reads as a shade rather than a glowing blob.
-`hero:rain-check` rains in play on WebGPU and verifies that detaching the rain's captures from the projection makes
-the paper both lighter, where the shadows were, and darker, where the caustics were.
+A rain glyph is thin glass lying on the floor, and its shadow is cast that way: the title's projection assumes a
+slab as thick as its letters, whose top the lamp's slant sets off beside the glass, so a small pane would see its
+shadow shifted by most of itself. The normal capture carries each pane's slab depth in its spare channel, the
+title's full slab or the rain's thin one, normalized by the coverage weight as the normals are and standing in the
+full slab where the coverage has thinned to a soft edge, so the title's penumbra is exactly what it was while a
+rain glyph's shade sits under and just around it, at two thirds of the title's weight. The glass-shadow check pins
+the title's effect, tint, and depth response to their values before the rain cast anything.
 
 The play button lives on its own screen-space sheet with an orthographic camera fitted to the viewport aspect, so
 its geometry and hit test share the pointer's normalized units. The hero's post pass renders that sheet after the
