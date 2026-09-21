@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:f423c0084690790526b9dbf7f12da957d4c5cd0cd1e9b2a4c1866d6570b4009c'
+source_digest: 'sha256:fe372ef4b4370d85488c833328514c0517df2ce1a2c4eedd3cd1697257b4451e'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -215,7 +215,8 @@ while letter systems own continuous lift and attraction updates.
 `hero/actions.ts` declares each mode's script as cues with `at`, or `on` and optional `after`, plus an action
 callback. Initialization loads one opening cue that replays after one playback second. The sequence script types
 the tagline 0.55 seconds after a letter landing and runs the robot 1.4 seconds after it, and robot departure opens
-the black hole. The play script only types the tagline. Repeated landing events restart their pending delays.
+the black hole. The play script is empty: nothing types above the title in play. Repeated landing events restart
+their pending delays.
 Replay and play both load their mode's script, which drops any pending cues, then reset the actors and lift the
 title again; play then places the robot beyond the lower-left edge and drives it to a spot above the title.
 `pressHero` takes a normalized screen point: in play it drives the robot to that floor point; in the sequence it
@@ -324,8 +325,8 @@ simulation backlog instead of accumulating work indefinitely.
 
 In play the robot is a cart with a bounded turn rate: the desired heading sways either side of the bearing along
 the trip and settles onto it over the last stretch, slow carts pivot harder so a target behind them stays reachable,
-and speed brakes in time to stop. A floor marker at the destination, an ink ring that lands from wide to tight with
-slowly turning gaps around a dot, eases in on each press and out once the robot arrives; it stays mounted hidden so
+and speed brakes in time to stop. A floor marker at the destination, a ring in the title's red that lands from wide to
+tight with slowly turning gaps around a dot, eases in on each press and out once the robot arrives; it stays mounted hidden so
 its shader compiles during preparation. The pure `steer` step is tested for arrival all round, curvature, bounded turning,
 and retargeting mid-trip. At rest the robot's face runs the scripted stop's clock from its look-up, so the greeting
 is shared; the published `face` clock is what the display reads in both modes.

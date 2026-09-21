@@ -25,6 +25,7 @@ import {
   type Node,
 } from 'three/webgpu';
 import { holeWarp } from '../black-hole/materials';
+import { THEME_RED } from './content';
 
 type SlugContext = Extract<ThreeTextMaterialContext, { format: 'pmndrs.slug' }>;
 
@@ -94,7 +95,7 @@ function jostle(position: Node<'vec3'>, motion: PaneMotion): Node<'vec3'> {
 
 /** Separate inline materials preserve one shaped word while giving each pane its own tint and finish. */
 export const stainedGlassLetters = [
-  { letter: 'G', tint: '#ff4980', thickness: 2.8, roughness: 0.035, ior: 1.52 },
+  { letter: 'G', tint: THEME_RED, thickness: 2.8, roughness: 0.035, ior: 1.52 },
   { letter: 'l', tint: '#ffc043', thickness: 2.4, roughness: 0.06, ior: 1.5 },
   { letter: 'y', tint: '#00f7a3', thickness: 3, roughness: 0.045, ior: 1.54 },
   { letter: 'p', tint: '#2bdcf6', thickness: 2.6, roughness: 0.025, ior: 1.56 },

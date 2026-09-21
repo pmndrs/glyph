@@ -12,14 +12,12 @@ import type { Cue } from '../sequence/traits';
 import type { Vector2 } from 'three/webgpu';
 
 export const heroActions = createActions((world) => {
-  /** Each mode's script. The sequence runs the robot and the finale; play only types the tagline. */
+  /** Each mode's script. The sequence types the tagline and runs the robot and the finale; play has no script. */
   function script(mode: ModeKind): Cue[] {
-    const typing: Cue = { on: 'letters-landed', after: 0.55, run: () => letterActions(world).typeFeatureAfter(0) };
-
-    if (mode === 'play') return [typing];
+    if (mode === 'play') return [];
 
     return [
-      typing,
+      { on: 'letters-landed', after: 0.55, run: () => letterActions(world).typeFeatureAfter(0) },
       { on: 'letters-landed', after: 1.4, run: () => robotActions(world).runRobot() },
       { on: 'robot-departed', run: () => blackHoleActions(world).openBlackHole() },
     ];

@@ -23,6 +23,7 @@ import {
 } from 'three/tsl';
 import { DoubleSide, type MeshStandardMaterial, MeshStandardNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu';
 import { BASE_Z, RISE } from './content';
+import { THEME_RED } from '../letters/content';
 
 /** Glossy display finish shared by the face and its text. */
 export interface ScreenFinish {
@@ -102,13 +103,13 @@ export const uMarkerAge = uniform(0);
 
 /**
  * Where the robot is headed: a ring that lands from wide to tight, its gaps turning slowly, around a dot. Drawn
- * in ink on the paper, it fades as soon as the robot arrives.
+ * in the title's red on the paper, it fades as soon as the robot arrives.
  */
-export const markerMaterial = new MeshBasicNodeMaterial({ color: '#3c3c4a', depthWrite: false, transparent: true });
+export const markerMaterial = new MeshBasicNodeMaterial({ color: THEME_RED, depthWrite: false, transparent: true });
 const point = uv().sub(0.5).mul(2);
 const radius = point.length();
 const landed = float(1).sub(uMarkerAge.mul(-8).exp());
-const ring = smoothstep(0.075, 0.035, radius.sub(mix(0.95, 0.46, landed)).abs());
+const ring = smoothstep(0.09, 0.05, radius.sub(mix(0.95, 0.46, landed)).abs());
 const gaps = threshold(
   0.22,
   fract(
@@ -118,8 +119,8 @@ const gaps = threshold(
       .sub(uMarkerAge.mul(0.3)),
   ),
 );
-const centre = smoothstep(0.1, 0.05, radius);
-markerMaterial.opacityNode = ring.mul(gaps).add(centre).mul(uMarkerPresence).mul(0.7);
+const centre = smoothstep(0.12, 0.07, radius);
+markerMaterial.opacityNode = ring.mul(gaps).add(centre).mul(uMarkerPresence);
 
 // Height encodes lifetime, so all particles share one material and fade without re-shaping their text.
 export const dust = defineTextMaterial((context) => {
