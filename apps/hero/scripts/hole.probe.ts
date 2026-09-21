@@ -1,6 +1,6 @@
 /* @workflow {
   "name": "hero:hole-check",
-  "summary": "Capture the black-hole finale and verify paper collapse, explosion, blackness, and replay on WebGPU.",
+  "summary": "Capture the black-hole finale and verify paper collapse, explosion, blackness, replay, and the play button on WebGPU.",
   "requirements": "Workspace dependencies, baked hero assets, and GPU-enabled Chromium through Vitexec.",
   "writes": "apps/hero/.cache/hole.png and stdout",
   "args": ["--gpu", "--timeout", "180", "--screenshot", ".cache/hole.png"]
@@ -35,11 +35,20 @@ const { STAR_SYMBOLS, EMBER_SECONDS } = (await import(
 const { uEmberBloom, uEmberFire } = (await import(
   new URL('/src/star-embers/materials.ts', location.origin).href
 )) as typeof import('../src/star-embers/materials');
+const { REVEAL_AFTER, REVEAL_SECONDS } = (await import(
+  new URL('/src/play-button/content.ts', location.origin).href
+)) as typeof import('../src/play-button/content');
+const { Mode } = (await import(
+  new URL('/src/hero/traits.ts', location.origin).href
+)) as typeof import('../src/hero/traits');
+const { Robot } = (await import(
+  new URL('/src/robot/traits.ts', location.origin).href
+)) as typeof import('../src/robot/traits');
 while (document.documentElement.dataset.heroState !== 'ready')
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 const { actions } = (await import(new URL('/src/actions.ts', location.origin).href)) as typeof import('../src/actions');
-const { replayHero: requestReplay } = actions(world);
+const { replayHero: requestReplay, pressHero } = actions(world);
 const hole = () => world.get(Collapse)!.hole;
 const state = _roots.values().next().value!.store.getState();
 state.setFrameloop('never');
@@ -253,6 +262,34 @@ const replay = litPixels(await capture(control));
 
 if (replay < uncollapsed * 0.85) throw new Error('Replay did not restore the paper');
 
+// Once the embers are out, the play button is the only light on the frame. A press beside it changes nothing;
+// a press on it starts play, which restores the paper and puts the robot on the floor.
+world.set(Collapse, {
+  openedAt: clock + 83.335 - (POP_AT + EMBER_SECONDS + REVEAL_AFTER + REVEAL_SECONDS + 0.2) * 1000,
+});
+scheduler.step(clock + 83.335);
+const buttonPixels = litPixels(await capture(control));
+
+if (buttonPixels < 100 || buttonPixels > control.width * control.height * 0.2)
+  throw new Error(`The play button did not light the black frame: ${buttonPixels}`);
+
+pressHero(0.9, 0.9);
+
+if (world.get(Mode)!.kind !== 'sequence') throw new Error('A press beside the play button started play');
+
+pressHero(0.05, -0.05);
+scheduler.step(clock + 100.002);
+const played = litPixels(await capture(control));
+const robot = world.queryFirst(Robot)!.get(Robot)!;
+
+if (world.get(Mode)!.kind !== 'play' || !robot.active || !robot.drive.hasTarget || played < uncollapsed * 0.85)
+  throw new Error(`Pressing play did not restart with the robot: ${JSON.stringify({ played, robot: robot.drive })}`);
+
+requestReplay();
+scheduler.step(clock + 116.669);
+
+if (world.get(Mode)!.kind !== 'sequence') throw new Error('Space did not return to the sequence');
+
 const sheet = new Scene();
 // Letterbox the 16:9 captures within each cell of the 3-by-2 sheet.
 const quad = new PlaneGeometry(1, 2 / 3);
@@ -283,6 +320,8 @@ console.log(
     lingeringStars,
     emberGlowPixels,
     replay,
+    buttonPixels,
+    played,
   }),
 );
 quad.dispose();

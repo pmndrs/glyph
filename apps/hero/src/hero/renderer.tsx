@@ -5,6 +5,8 @@ import { BlackHole } from '../black-hole/renderer';
 import { collapseSheet, uHoleBlackout, uHoleShake } from '../black-hole/materials';
 import { StarEmbersRenderer } from '../star-embers/renderer';
 import { composeStarEmbers, uEmberBloom } from '../star-embers/materials';
+import { PlayButtonRenderer, playSheet } from '../play-button/renderer';
+import { composePlayButton } from '../play-button/materials';
 import { GlassShadows } from '../letters/shadows';
 import { GlassTitle, FeatureLine } from '../letters/renderer';
 import { IconPaperRenderer } from '../icon-paper/renderer';
@@ -28,12 +30,13 @@ export function Hero() {
       <RobotRenderer font={fonts.robot} icons={fonts.icons} />
       <BlackHole />
       <StarEmbersRenderer font={fonts.stars} />
+      <PlayButtonRenderer font={fonts.robot} />
       <Post />
     </>
   );
 }
 
-/** Collapse the scene first, then compose the star embers over black. */
+/** Collapse the scene first, compose the star embers over black, then lay the play button's sheet on top. */
 function Post() {
   useRenderPipeline(({ renderPipeline, scene, camera }) => {
     const scenePass = pass(scene, camera, { samples: 4 });
@@ -41,7 +44,11 @@ function Post() {
     const lit = convertToTexture(beauty.add(bloom(beauty, uEmberBloom, 0.55, 1)));
     const point = uv().sub(0.5).add(uHoleShake);
     const sheet = collapseSheet(lit, point);
-    renderPipeline.outputNode = composeStarEmbers(sheet, lit.rgb, uHoleBlackout, point);
+    const button = pass(playSheet.scene, playSheet.camera, { depthBuffer: false });
+    renderPipeline.outputNode = composePlayButton(
+      composeStarEmbers(sheet, lit.rgb, uHoleBlackout, point),
+      button.getTextureNode('output'),
+    );
   });
 
   return null;

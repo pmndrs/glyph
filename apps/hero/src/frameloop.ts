@@ -10,10 +10,12 @@ import { updateGlassShadows } from './letters/shadows';
 import { advanceSequence } from './sequence/systems';
 import { advanceCollapse, syncBlackHoleView } from './black-hole/systems';
 import { syncStarEmbers, syncEmberView } from './star-embers/systems';
+import { syncPlayButtonView } from './play-button/systems';
 import { moveIconPaper, syncIconViews } from './icon-paper/systems';
 import { stepPhysics } from './physics/systems';
 import {
   moveRobots,
+  driveRobots,
   moveRobotBodies,
   stepDust,
   syncRobotPose,
@@ -28,7 +30,7 @@ export function FrameLoop() {
   const isReady = useHeroReady();
 
   useKeyboard(world, isReady);
-  usePointer(world);
+  usePointer(world, isReady);
   useViewport(world);
 
   useFrame(
@@ -38,6 +40,7 @@ export function FrameLoop() {
       updateTime(world, delta, time);
       advanceSequence(world);
       moveRobots(world);
+      driveRobots(world);
       triggerRobotDeparture(world);
 
       advanceSequence(world);
@@ -73,6 +76,7 @@ export function FrameLoop() {
         syncDustViews(world);
         syncBlackHoleView(world);
         syncEmberView(world);
+        syncPlayButtonView(world);
       }
 
       updateGlassShadows(world, isReady);

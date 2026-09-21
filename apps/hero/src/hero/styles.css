@@ -13,6 +13,10 @@ canvas {
   cursor: crosshair;
 }
 
+html[data-hero-hover='play'] canvas {
+  cursor: pointer;
+}
+
 /* Centered Poimandres loading mark with a short shake and readiness fade. */
 .hero-loading {
   position: fixed;

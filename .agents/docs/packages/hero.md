@@ -1,11 +1,11 @@
 ---
 type: Workspace Package
 title: '@pmndrs/glyph-hero'
-description: 'Glass letters, a robot, and a black-hole finale over a Slug icon lattice.'
+description: 'Glass letters, a robot, and a black-hole finale over a Slug icon lattice, then a play mode that drives the robot.'
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:786c77243b0db01047ec69dec7091389ec9f59afd51597c6d14cdb4796aa8e85'
+source_digest: 'sha256:6c6bb64c5c976b3220a6b75a26fd7bbdd03cef792972c0260f9fefeeb7387340'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -127,13 +127,13 @@ sources:
     title: Loading, mounted view replacement, and detached resource behavior
   - id: sequence-check
     resource: ../../../apps/hero/src/sequence/systems.test.ts
-    title: Timeline ordering, delays, retriggering, and cancellation
+    title: Timeline ordering, delays, retriggering, and replacement during dispatch
   - id: systems
     resource: ../../../apps/hero/src/sequence/systems.ts
     title: Declarative cue scheduling and dispatch
   - id: sequence-actions
     resource: ../../../apps/hero/src/sequence/actions.ts
-    title: Timeline loading, event triggering, and cancellation
+    title: Timeline loading and event triggering
   - id: sequence-traits
     resource: ../../../apps/hero/src/sequence/traits.ts
     title: Cue declarations and retained deadlines
@@ -149,6 +149,18 @@ sources:
   - id: frameloop
     resource: ../../../apps/hero/src/frameloop.ts
     title: R3F clock and input
+  - id: play-button
+    resource: ../../../apps/hero/src/play-button/renderer.tsx
+    title: Play button sheet, camera, and framed pixel label
+  - id: play-button-materials
+    resource: ../../../apps/hero/src/play-button/materials.ts
+    title: Self-drawing frame, cell-by-cell label, and sheet composition
+  - id: play-button-systems
+    resource: ../../../apps/hero/src/play-button/systems.ts
+    title: Reveal timing, hit test, and mounted sheet synchronization
+  - id: steering-check
+    resource: ../../../apps/hero/src/robot/systems.test.ts
+    title: Arrival, curvature, bounded turning, retargeting, and greeting checks
 generated:
   by: anthropic/claude-opus-5
   at: '2026-09-18T09:20:00Z'
@@ -157,8 +169,14 @@ generated:
 # Package reference: `@pmndrs/glyph-hero`
 
 This Vite application presents glass letters, a robot, and a black-hole finale over an animated icon lattice.
-It runs on `WebGPURenderer` through React Three Fiber v10 and drei v11. The title, icons, robot display, and finale
-stars use Slug analytic coverage. The feature tagline uses MSDF for its outline.
+It runs on `WebGPURenderer` through React Three Fiber v10 and drei v11. The title, icons, robot display, finale
+stars, and play button use Slug analytic coverage. The feature tagline uses MSDF for its outline.
+
+The world runs one of two modes, held in the world-level `Mode` trait. `sequence` is the scripted experience:
+the title drops, the robot drives in, stops, greets, and leaves, and the black hole swallows the scene. Once the
+embers have gone out, a "Play" button draws itself over the black frame. Pressing it enters `play`: the scene
+restores with the robot scooting in from off screen, and each press on the floor sends it to that point. It never
+drives a straight line, and it rests, looks up, and greets at each stop. Space returns to `sequence` from either mode.
 
 Local tuning values live at their use sites. Shared timing and geometry contracts, retained buffers, uniforms,
 and reusable materials keep named storage. Comments describe the current algorithm or feature. The app-specific
@@ -184,6 +202,7 @@ implement its transitions.
 | `robot`       | Spawn/reset/run actions, path, published departure, physics target, dust, rig, and display                 |
 | `black-hole`  | Collapse state and controls, attraction functions, glyph warp, and rendered sheet collapse                 |
 | `star-embers` | Emission age, prepared star particles, fire material, bloom, fading, and screen-space sparks               |
+| `play-button` | Reveal timing, sheet geometry and hit test, mounted sheet camera, cursor state, and the framed pixel label |
 
 The root owns one Koota world and the combined action set. `world.ts` exports the shared world and invokes the hero initialization action.
 Action sets define commands as arrow-function properties. Root `actions.ts` spreads the domain action sets.
@@ -193,17 +212,23 @@ Physics actions configure the solver and install contact/removal handlers before
 build each configured lattice before attaching its trait. Letter actions create, replay, and dispose title bodies,
 while letter systems own continuous lift and attraction updates.
 
-`hero/actions.ts` declares the script as cues with `at`, or `on` and optional `after`, plus an action callback.
-The opening cue runs after one playback second. A letter landing schedules typing after 0.55 seconds and the robot
-after 1.4 seconds. Robot departure opens the black hole. Repeated landing events restart their pending delays.
-Replay cancels pending cues before resetting the actors and lifting the title again.
+`hero/actions.ts` declares each mode's script as cues with `at`, or `on` and optional `after`, plus an action
+callback. Initialization loads one opening cue that replays after one playback second. The sequence script types
+the tagline 0.55 seconds after a letter landing and runs the robot 1.4 seconds after it, and robot departure opens
+the black hole. The play script only types the tagline. Repeated landing events restart their pending delays.
+Replay and play both load their mode's script, which drops any pending cues, then reset the actors and lift the
+title again; play then places the robot beyond the lower-left edge and drives it to a spot above the title.
+`pressHero` takes a normalized screen point: in play it drives the robot to that floor point and ripples the icon
+paper there; in the sequence it starts play when the button has begun to draw and the point lies on it.
 `sequence` knows only the clock, cue declarations, and retained deadlines. It runs due commands in chronological
-order, breaking ties by declaration order. Each scheduled cue runs once, and events can rearm their cues.
-Two focused tests cover ordering, event delays, retriggering, and cancellation during dispatch.
+order, breaking ties by declaration order, re-reading the timeline after each cue so a cue may replace it. Each
+scheduled cue runs once, and events can rearm their cues.
+Two focused tests cover ordering, event delays, retriggering, and timeline replacement during dispatch.
 
 `frameloop.ts` lists the domain systems in their execution order. Sequence cues run before motion, after robot
-departure, and after letter landings so events take effect in the same frame. Motion targets precede physics,
-and title poses synchronize after physics. `hero/systems.ts` scrolls mounted paper, turns
+departure, and after letter landings so events take effect in the same frame. The scripted robot mover runs only in
+`sequence` and the pointer-driven mover only in `play`; both publish the same pose and footprint. Motion targets
+precede physics, and title poses synchronize after physics. `hero/systems.ts` scrolls mounted paper, turns
 landings into icon-paper impacts, and forwards landing and departure events to the script. Icon-paper, title, and star-ember
 systems read published black-hole state. Feature typing owns its closed-hole condition. The physics solver
 depends on the clock and its own state.
@@ -222,12 +247,13 @@ retains its initial values during preparation. `updateTime` only samples the tim
 delta. `useHeroReady()` subscribes to preparation status, and the frame loop captures its `isReady` value in the
 keyboard hook and frame callbacks. `useKeyboard` synchronizes a world-level `Keys` set through input actions and
 issues the explicit replay command inside its event effect on the first Space keydown. `usePointer` owns pointer
-listeners and synchronizes normalized position and activity together from DOM events using the canvas bounds.
+listeners and synchronizes normalized position and activity together from DOM events using the canvas bounds, and
+hands each primary-button press to `pressHero` once playback is ready.
 Leaving or cancelling the pointer, losing window focus, or unmounting clears activity. The frame loop only fades
 pointer strength over time. Shadow discovery receives readiness explicitly. A second ordered job publishes
 view state after renderer preparation callbacks and before the final render.
 It updates paper, title and icon draws, feature text, robot pose, rig animation, robot display, dust, the black hole,
-embers, and glass shadows. Both jobs are capped at 60 fps. View systems read attached resource traits, so detaching
+embers, the play button, and glass shadows. Both jobs are capped at 60 fps. View systems read attached resource traits, so detaching
 a view stops updates before its renderer disposes the resources. Hidden mounted resources remain available for
 preparation. Shadow time belongs to the mounted projection. Simulation systems do not construct shaders.
 The app publishes no development globals or pause controls. Browser checks import the same world module
@@ -262,7 +288,8 @@ and Space replay. Seven numerical tests retain precise evidence for baked title 
 bounded pointer response, lift/drop/revival with one landing notification, and robot pushes without tipping or
 leaving an invisible collider behind. These checks catch errors that
 pixel comparisons cannot isolate reliably. Two lifecycle tests cover paper following the playback clock, view replacement,
-hidden mounted dust updates, and detached resources remaining untouched. Buffer identity and duplicate timeline/path tests are omitted.
+hidden mounted dust updates, and detached resources remaining untouched, and one mode test covers the press flow from
+the button into play, presses driving the robot, the scripted run staying out of play, and Space returning. Buffer identity and duplicate timeline/path tests are omitted.
 
 The application pins Poimandres' `math` package at `0.1.0` for the hero's CPU simulation and transforms. Its upstream
 skill is installed at `.agents/skills/math/SKILL.md` from `pmndrs/math` commit
@@ -294,6 +321,20 @@ motif candidates, swap flags, selected records, and twelve wave slots are alloca
 each cell and its four neighbours, plus active waves, at a bounded eight substeps: O(cells × (4 + active waves)) time
 and O(cells) retained storage. Expired waves are excluded before the inner loop. A long frame discards excess
 simulation backlog instead of accumulating work indefinitely.
+
+In play the robot is a cart with a bounded turn rate: the desired heading sways either side of the bearing along
+the trip and settles onto it over the last stretch, slow carts pivot harder so a target behind them stays reachable,
+and speed brakes in time to stop. The pure `steer` step is tested for arrival all round, curvature, bounded turning,
+and retargeting mid-trip. At rest the robot's face runs the scripted stop's clock from its look-up, so the greeting
+is shared; the published `face` clock is what the display reads in both modes.
+
+The play button lives on its own screen-space sheet with an orthographic camera fitted to the viewport aspect, so
+its geometry and hit test share the pointer's normalized units. The hero's post pass renders that sheet after the
+scene has gone black and adds it to the finished frame, which is why it survives the ember fade. The frame is a
+rounded-rectangle distance field that draws itself round from the top; the label materializes cell by cell on the
+pixel font's grid, lit by a sweep and by hover. Both stay mounted and compile during preparation, revealed by uniforms.
+The finale check verifies the black frame stays black at the ember fade, the button then lights it, a press beside
+it changes nothing, a press on it restores the paper with the robot driving, and Space returns to the sequence.
 
 Robot path sampling, eye transitions, and floor footprints overwrite retained outputs. Consumers copy a footprint
 when they need its previous-frame position. Dust uses 128 reusable particle records; saturation replaces the oldest

@@ -2,8 +2,8 @@ import type { Object3D } from 'three/webgpu';
 import { showLine } from '../letters/text';
 import type { World } from 'koota';
 import { Time } from '../time/traits';
-import { Viewport } from '../hero/traits';
-import { Robot, RobotView, DustView, type RobotDraw, type Path, type Pose } from './traits';
+import { Mode, Viewport } from '../hero/traits';
+import { Robot, RobotView, DustView, type RobotDraw, type Drive, type Path, type Pose } from './traits';
 import {
   COUNT,
   BASE_Z,
@@ -16,13 +16,16 @@ import {
   BODY_REACH,
   FACE_TEXT,
 } from './content';
-import { clamp, lerp, mat4, quat, vec2, vec3 } from 'math';
+import { clamp, deltaAngle, lerp, mat4, quat, vec2, vec3, wrapAngle } from 'math';
 import { easing } from 'math/time';
 import { jitter } from '../utils';
 import { Body } from '../physics/traits';
 import { physicsActions } from '../physics/actions';
 
+/** Run the scripted drive-in, stop, and exit. Only the sequence runs it: play leaves the robot to the pointer. */
 export function moveRobots(world: World): void {
+  if (world.get(Mode)!.kind !== 'sequence') return;
+
   const time = world.get(Time)!;
   const viewport = world.get(Viewport)!;
 
@@ -31,6 +34,7 @@ export function moveRobots(world: World): void {
 
     if (robot.time === undefined) {
       robot.active = false;
+      robot.face = undefined;
 
       if (time.now < robot.runAt) return;
 
@@ -44,6 +48,7 @@ export function moveRobots(world: World): void {
 
     if (robot.time >= RUN_SECONDS) {
       robot.time = undefined;
+      robot.face = undefined;
       robot.active = false;
       robot.departed = true;
 
@@ -52,6 +57,7 @@ export function moveRobots(world: World): void {
 
     const pose = poseAt(robot.motion.pose, robot.time, robot.motion.path);
     robot.active = true;
+    robot.face = robot.time;
     robot.footprint.x = pose.x;
     robot.footprint.y = pose.y;
     robot.footprint.heading = pose.heading;
@@ -65,6 +71,87 @@ export function moveRobots(world: World): void {
       robot.departed = true;
     }
   });
+}
+
+/** Free play: scoot the robot to wherever the pointer last sent it. */
+export function driveRobots(world: World): void {
+  if (world.get(Mode)!.kind !== 'play') return;
+
+  const delta = world.get(Time)!.delta;
+
+  world.query(Robot).updateEach(([robot]) => {
+    robot.departed = false;
+    robot.active = true;
+    const pose = steer(robot.motion.pose, robot.drive, delta);
+    robot.footprint.x = pose.x;
+    robot.footprint.y = pose.y;
+    robot.footprint.heading = pose.heading;
+    // Once it has settled, the face runs the same greeting as the scripted stop.
+    robot.face = robot.drive.hasTarget || robot.drive.rested < REST_BEAT ? undefined : faceClock(robot.drive.rested);
+  });
+}
+
+/** How long the robot sits before it looks up. */
+const REST_BEAT = 0.3;
+
+/** The scripted stop's clock, entered at the look-up, `rested` seconds after arriving. */
+function faceClock(rested: number): number {
+  return LOOK_UP_AT + rested - REST_BEAT;
+}
+
+/**
+ * Advance a cart with a bounded turn rate by `delta` seconds. The desired heading sways either side of the bearing
+ * along the trip, so no trip is a straight line, and settles onto the bearing over the last stretch so the cart stops
+ * on the target rather than circling it. Slow carts pivot harder, which is what keeps a target behind them reachable.
+ */
+export function steer(pose: Pose, drive: Drive, delta: number): Pose {
+  const cruise = 7;
+  const accelerate = 14;
+  const brake = 11;
+
+  if (!drive.hasTarget) {
+    drive.speed = Math.max(0, drive.speed - brake * delta);
+    drive.rested += delta;
+    approachLook(pose, drive.rested < REST_BEAT ? 0 : lookAt(faceClock(drive.rested)), delta);
+
+    return pose;
+  }
+
+  const dx = drive.targetX - pose.x;
+  const dy = drive.targetY - pose.y;
+  const distance = Math.hypot(dx, dy);
+
+  if (distance <= 0.06) {
+    pose.x = drive.targetX;
+    pose.y = drive.targetY;
+    drive.hasTarget = false;
+    drive.speed = 0;
+    drive.rested = 0;
+
+    return pose;
+  }
+
+  const settle = clamp(distance / 2.4, 0, 1);
+  const sway = drive.bend * Math.cos((drive.travelled / 4.6) * Math.PI * 2) * settle;
+  const turn = deltaAngle(pose.heading, Math.atan2(dy, dx) + sway);
+  const rate = (3.4 + 6 * (1 - Math.min(drive.speed / cruise, 1))) * delta;
+  pose.heading = wrapAngle(pose.heading + clamp(turn, -rate, rate));
+  // Brake in time to stop, and ease off through a sharp turn.
+  const wanted = Math.min(cruise, Math.sqrt(2 * brake * distance)) * (1 - 0.6 * Math.min(Math.abs(turn) / Math.PI, 1));
+  drive.speed += clamp(wanted - drive.speed, -brake * delta, accelerate * delta);
+  const step = Math.min(drive.speed * delta, distance);
+  pose.x += Math.cos(pose.heading) * step;
+  pose.y += Math.sin(pose.heading) * step;
+  drive.travelled += step;
+  approachLook(pose, 0, delta);
+
+  return pose;
+}
+
+/** Ease the look towards `goal` no faster than the scripted look-down, so an interrupted greeting settles. */
+function approachLook(pose: Pose, goal: number, delta: number): void {
+  const rate = delta / 0.4;
+  pose.look += clamp(goal - pose.look, -rate, rate);
 }
 
 /** Emit by distance and integrate the retained dust pool. Teleports above four units reset the trail. */
@@ -220,18 +307,20 @@ function poseAt(out: Pose, time: number, path: Path): Pose {
   const x = STOP[0] + cos * s - sin * offset;
   const y = STOP[1] + sin * s + cos * offset;
 
-  let look: number;
-
-  if (time < LOOK_UP_AT) look = 0;
-  else if (time < LOOK_DOWN_AT) look = easing.sineInOut(saturate((time - LOOK_UP_AT) / 0.55));
-  else look = 1 - easing.sineInOut(saturate((time - LOOK_DOWN_AT) / 0.4));
-
   out.x = x;
   out.y = y;
   out.heading = HEADING + Math.atan(slope);
-  out.look = look;
+  out.look = lookAt(time);
 
   return out;
+}
+
+/** 0 = looking ahead, 1 = face turned up to the camera, `time` seconds into a run. */
+function lookAt(time: number): number {
+  if (time < LOOK_UP_AT) return 0;
+  if (time < LOOK_DOWN_AT) return easing.sineInOut(saturate((time - LOOK_UP_AT) / 0.55));
+
+  return 1 - easing.sineInOut(saturate((time - LOOK_DOWN_AT) / 0.4));
 }
 
 function saturate(value: number): number {
@@ -311,14 +400,18 @@ export function syncRobotDisplay(world: World): void {
     const view = mounted!;
     const { root, head, transforms } = view;
 
-    if (!robot.active || robot.time === undefined) {
+    if (!robot.active || robot.face === undefined) {
       showLine(view.line, 0);
+      view.eyes.value = 1;
+      view.tear.value = 0;
+
+      if (view.screen !== null) view.screen.visible = false;
 
       return;
     }
 
     // Looking up, the face prints its message a letter at a time, and clears it as it looks back down.
-    const now = robot.time;
+    const now = robot.face;
     const count =
       now >= TYPE_FROM && now < TYPE_UNTIL ? Math.min(FACE_TEXT.length, Math.floor((now - TYPE_FROM) * 9)) : 0;
     showLine(view.line, count);

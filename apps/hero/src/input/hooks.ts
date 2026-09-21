@@ -44,11 +44,13 @@ export function useKeyboard(world: World, isReady: boolean): void {
   }, [world, isReady]);
 }
 
-export function usePointer(world: World): void {
+/** Synchronize the pointer with the world, and hand its presses to the hero once playback is ready. */
+export function usePointer(world: World, isReady: boolean): void {
   const canvas = useThree((state) => state.renderer.domElement);
 
   useEffect(() => {
     const { movePointer, clearPointer } = inputActions(world);
+    const { pressHero } = heroActions(world);
 
     const moved = (event: PointerEvent) => {
       const bounds = canvas.getBoundingClientRect();
@@ -58,17 +60,29 @@ export function usePointer(world: World): void {
       );
     };
 
+    const pressed = (event: PointerEvent) => {
+      if (!isReady || event.button !== 0) return;
+
+      const bounds = canvas.getBoundingClientRect();
+      pressHero(
+        ((event.clientX - bounds.left) / bounds.width) * 2 - 1,
+        1 - ((event.clientY - bounds.top) / bounds.height) * 2,
+      );
+    };
+
     canvas.addEventListener('pointermove', moved, { passive: true });
+    canvas.addEventListener('pointerdown', pressed, { passive: true });
     canvas.addEventListener('pointerleave', clearPointer, { passive: true });
     canvas.addEventListener('pointercancel', clearPointer, { passive: true });
     window.addEventListener('blur', clearPointer);
 
     return () => {
       canvas.removeEventListener('pointermove', moved);
+      canvas.removeEventListener('pointerdown', pressed);
       canvas.removeEventListener('pointerleave', clearPointer);
       canvas.removeEventListener('pointercancel', clearPointer);
       window.removeEventListener('blur', clearPointer);
       clearPointer();
     };
-  }, [world, canvas]);
+  }, [world, canvas, isReady]);
 }

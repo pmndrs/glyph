@@ -17,9 +17,6 @@ export const sequenceActions = createActions((world) => ({
       if ('on' in cue && cue.on === event) due[index] = now + (cue.after ?? 0);
     }
   },
-  cancelSequence: () => {
-    world.get(Timeline)!.due.fill(Infinity);
-  },
   runSequenceCue: (index: number) => {
     const { cues, due } = world.get(Timeline)!;
     due[index] = Infinity;

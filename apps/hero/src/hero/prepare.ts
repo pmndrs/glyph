@@ -67,7 +67,7 @@ async function uploadsComplete(renderer: WebGPURenderer): Promise<void> {
 
 /** Owns the render job so warm-up uses the same targets, transmission, shadows, and post passes as playback. */
 export function PrepareHero() {
-  const required = ['title', 'feature', 'icons:-6', 'icons:-9.5', 'robot', 'dust', 'star-embers'];
+  const required = ['title', 'feature', 'icons:-6', 'icons:-9.5', 'robot', 'dust', 'star-embers', 'play-button'];
   const state = useThree();
   const alive = useRef(false);
 

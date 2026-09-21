@@ -32,16 +32,18 @@ it('runs timed and event cues once in playback order, preserving declaration ord
   }
 });
 
-it('restarts event delays on later landings and cancels pending cues for replay', () => {
+it('restarts event delays on later landings, and a cue can replace the timeline to drop pending cues', () => {
   const world = createWorld(Time, Timeline);
   const commands = sequenceActions(world);
   const played: string[] = [];
-
-  try {
+  const script = () =>
     commands.loadSequence([
       { on: 'landed', after: 1, run: () => played.push('robot') },
-      { on: 'replay', run: () => commands.cancelSequence() },
+      { on: 'replay', run: script },
     ]);
+
+  try {
+    script();
     commands.triggerSequence('landed');
     world.set(Time, { elapsed: 0.5 });
     commands.triggerSequence('landed');
