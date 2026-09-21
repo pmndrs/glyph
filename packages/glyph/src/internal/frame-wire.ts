@@ -222,7 +222,23 @@ export interface PlannerFrameUpdate {
 /** @internal One validated frame encoding that can write directly into a retained request arena. */
 export interface PreparedPlannerFrameUpdate {
   readonly byteLength: number;
-  write(bytes: Uint8Array): void;
+  readonly frame: PlannerFrameUpdate;
+  readonly paragraphMutations: readonly PlannerParagraphMutation[];
+  readonly paragraphOrderMutations: readonly PlannerParagraphOrderMutation[];
+  readonly textMutations: readonly PlannerTextMutation[];
+  readonly styleMutations: readonly PlannerStyleMutation[];
+  readonly constraints: readonly PlannerConstraint[];
+  readonly regions: readonly PlannerRegion[];
+  readonly exclusions: readonly PlannerExclusion[];
+  readonly inlineObjects: readonly PlannerInlineObject[];
+  readonly offsets: HeaderOffsets;
+  readonly textPayloads: readonly number[];
+  readonly languageBytes: readonly Uint8Array[];
+  readonly languageOffsets: readonly number[];
+  readonly featureOffsets: readonly number[];
+  readonly regionVertexOffsets: readonly number[];
+  readonly exclusionVertexOffsets: readonly number[];
+  readonly dropCapVertexOffsets: readonly number[];
 }
 
 /** @internal Prepare one package-owned frame without allocating its final wire buffer. */
@@ -292,41 +308,68 @@ export function preparePlannerFrameUpdate(frame: PlannerFrameUpdate): PreparedPl
   const dropCapVertexOffsets = constraints.map((constraint) =>
     allocate(constraint.dropCap?.contour?.length ?? 0, abi.layouts.engineFlowVertex.size, 4, 'drop cap vertices'),
   );
-  return Object.freeze({
+  return {
     byteLength: cursor,
-    write(bytes: Uint8Array): void {
-      if (!(bytes instanceof Uint8Array) || bytes.byteLength !== cursor) {
-        throw new RangeError(`planner frame target must contain exactly ${cursor} bytes`);
-      }
-      bytes.fill(0);
-      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-      writeHeader(view, frame, bytes.length, {
-        textOffset,
-        paragraphOffset,
-        paragraphOrderOffset,
-        styleOffset,
-        constraintOffset,
-        regionOffset,
-        exclusionOffset,
-        inlineObjectOffset,
-      });
-      writeParagraphMutations(view, paragraphOffset, paragraphMutations);
-      writeParagraphOrderMutations(view, paragraphOrderOffset, paragraphOrderMutations);
-      writeTextMutations(view, textOffset, textMutations, textPayloads);
-      writeStyleMutations(view, bytes, styleOffset, styleMutations, languageBytes, languageOffsets, featureOffsets);
-      writeConstraints(view, constraintOffset, constraints, dropCapVertexOffsets);
-      writeRegions(view, regionOffset, regions, regionVertexOffsets);
-      writeExclusions(view, exclusionOffset, exclusions, exclusionVertexOffsets);
-      writeInlineObjects(view, inlineObjectOffset, inlineObjects);
+    frame,
+    paragraphMutations,
+    paragraphOrderMutations,
+    textMutations,
+    styleMutations,
+    constraints,
+    regions,
+    exclusions,
+    inlineObjects,
+    offsets: {
+      textOffset,
+      paragraphOffset,
+      paragraphOrderOffset,
+      styleOffset,
+      constraintOffset,
+      regionOffset,
+      exclusionOffset,
+      inlineObjectOffset,
     },
-  });
+    textPayloads,
+    languageBytes,
+    languageOffsets,
+    featureOffsets,
+    regionVertexOffsets,
+    exclusionVertexOffsets,
+    dropCapVertexOffsets,
+  };
+}
+
+/** @internal Write one prepared frame into an exact retained request-arena slice. */
+export function writePreparedPlannerFrameUpdate(prepared: PreparedPlannerFrameUpdate, bytes: Uint8Array): void {
+  if (!(bytes instanceof Uint8Array) || bytes.byteLength !== prepared.byteLength) {
+    throw new RangeError(`planner frame target must contain exactly ${prepared.byteLength} bytes`);
+  }
+  bytes.fill(0);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  writeHeader(view, prepared.frame, bytes.length, prepared.offsets);
+  writeParagraphMutations(view, prepared.offsets.paragraphOffset, prepared.paragraphMutations);
+  writeParagraphOrderMutations(view, prepared.offsets.paragraphOrderOffset, prepared.paragraphOrderMutations);
+  writeTextMutations(view, prepared.offsets.textOffset, prepared.textMutations, prepared.textPayloads);
+  writeStyleMutations(
+    view,
+    bytes,
+    prepared.offsets.styleOffset,
+    prepared.styleMutations,
+    prepared.languageBytes,
+    prepared.languageOffsets,
+    prepared.featureOffsets,
+  );
+  writeConstraints(view, prepared.offsets.constraintOffset, prepared.constraints, prepared.dropCapVertexOffsets);
+  writeRegions(view, prepared.offsets.regionOffset, prepared.regions, prepared.regionVertexOffsets);
+  writeExclusions(view, prepared.offsets.exclusionOffset, prepared.exclusions, prepared.exclusionVertexOffsets);
+  writeInlineObjects(view, prepared.offsets.inlineObjectOffset, prepared.inlineObjects);
 }
 
 /** @internal Serialize one package-owned frame; tests use this owned copy as the direct-arena wire oracle. */
 export function compilePlannerFrameUpdate(frame: PlannerFrameUpdate): Uint8Array {
   const prepared = preparePlannerFrameUpdate(frame);
   const bytes = new Uint8Array(prepared.byteLength);
-  prepared.write(bytes);
+  writePreparedPlannerFrameUpdate(prepared, bytes);
   return bytes;
 }
 

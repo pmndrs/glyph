@@ -296,6 +296,15 @@ measure across module, asset, renderer, and scene activation. Fresh-process bloc
 produce the comparison report. This lane is report-only while runner noise and false-positive rates are established;
 browser, GPU, and frame-pacing evidence remains owned by the browser workflows.
 
+`request-arena.bench.ts` isolates the internal host-to-Wasm request encoding seam without substituting workspace source.
+The historical artifact compiles an owned wire buffer and copies it into a retained target; the candidate prepares the
+same checked offsets and writes directly into that target. Separate 1,000-paragraph order-only and text-mutation cases
+distinguish the copy-sensitive frame from payload encoding whose cost is expected to remain neutral. Exact wire equality
+is owned by package integration tests rather than inferred from benchmark timing. A 16-block comparison improves one
+paragraph-plus-text request by 5.8% and 1,000 order records by 7.1%; 1,000 paragraph-plus-text records remain neutral.
+The 20-case package suite reports 19 neutral workloads and one noisy 12.0% column-reflow improvement. In particular,
+equal-size Three publication is neutral at +2.5%, replacing an earlier closure-based candidate that regressed that path.
+
 Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentation are complete
 
 The application now also contains focused target-v1 browser proofs for Bitmap, MTSDF, Slug, and Worker preparation while

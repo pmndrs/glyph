@@ -32,6 +32,9 @@ sources:
   - id: package-benchmark
     resource: ../../../benches/labs/package
     title: Public package performance benchmark suites
+  - id: request-arena-benchmark
+    resource: ../../../benches/labs/request-arena.bench.ts
+    title: Direct request-arena encoding benchmarks
 generated:
   by: openai-codex/gpt-6
   at: '2026-09-20T05:36:40Z'
@@ -56,13 +59,15 @@ out of transform work, kept TypeGPU position-only changes out of semantic public
 normalization. React and Vue now submit complete desired state through Three's authoritative normalizer, which reuses equal
 property and span snapshots and reports whether the accepted revision changed. Neither adapter retains a caller-owned
 accepted-state mirror; Vue retains only the detached reactive snapshots required by its mutable proxy contract. The
-existing `withGlyphs` path already starts sparse and promotes only a repeated or explicit inspection.
+Prepared planner frames now write directly into the retained Wasm request arena; the owned wire copy remains only as a
+byte-for-byte test oracle. The existing `withGlyphs` path already starts sparse and promotes only a repeated or explicit
+inspection. Focused Labs evidence improves one semantic request by 5.8% and 1,000 order records by 7.1%, while 1,000
+semantic records remain neutral. The complete 20-case package suite keeps every established workload below the five-percent
+regression threshold.
 
-The remaining measured host work is narrower:
+The remaining measured host work is now:
 
-- TypeGPU patch realization still copies some borrowed payload and map data beyond backend-required upload ownership;
-- planner frames compile into an intermediate JavaScript `Uint8Array` before copying the same request into the retained
-  Wasm request arena.
+- TypeGPU patch realization still copies some borrowed payload and map data beyond backend-required upload ownership.
 
 These are not independent invitations to add caches. The first question for each path is whether the engine can publish the
 authoritative delta through its existing stable identity, dependency masks, borrowed buffers, and patch tables. Adapter-
