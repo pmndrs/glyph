@@ -21,6 +21,18 @@ test('structurally equal snapshots with the same font match', () => {
   assert.equal(sameDesiredText(base, { ...base, style: { fontSize: 16 } }), true);
 });
 
+test('property-list shape changes with the same merged meaning match', () => {
+  assert.equal(
+    sameDesiredText(base, {
+      ...base,
+      style: [false, { fontSize: 12 }, [{ fontSize: 16 }]],
+      layout: [{ wrap: 'none' }, null, { wrap: 'word' }],
+      constraints: [{ width: { mode: 'at-most', size: 100 } }, { width: { mode: 'exact', size: 300 } }],
+    }),
+    true,
+  );
+});
+
 test('a different font identity does not match even when structurally alike', () => {
   assert.equal(sameDesiredText(base, { ...base, font: { raster: 'bitmap' } }), false);
 });

@@ -10,15 +10,16 @@
 
 ## 2026-09-20
 
-- **Removed framework shadow normalization** — React now keys derivation to semantic text props and passes their immutable
-  values to Three's canonical normalizer instead of cloning a second snapshot. Vue retains the detached snapshots required
+- **Removed framework shadow normalization** — React now keys derivation to semantic text props and passes their
+  caller-owned values to Three's canonical normalizer instead of cloning a second snapshot. Vue retains the detached snapshots required
   for in-place reactive proxies, marks them package-owned, and Three adopts them without another merge or clone. Focused
-  tests cover presentation-only React/Vue changes, a Vue reuse hit followed by a nested mutation, and PropertyList
-  enumerable-key parity. A 16-block packed-artifact Labs comparison improves 1,000 unchanged plain-record Vue snapshot
+  tests cover presentation-only React/Vue changes, equivalent PropertyList shapes, malformed property input, a Vue reuse
+  hit followed by a nested mutation, enforced deep-freeze ownership, and PropertyList enumerable-key parity. A 16-block
+  packed-artifact Labs comparison improves 1,000 unchanged plain-record Vue snapshot
   calls from `0.651 ms` to `0.281 ms` p50 (-56.8%); normalized Three publication, TypeGPU position updates, and the cold
   1,000-label lifecycle remain below the five-percent effect threshold. This is a patch-level implementation optimization
-  with no public API or behavior change. Packed payload evidence keeps core Brotli unchanged, reduces React by `1,123 B`
-  raw / `177 B` Brotli, and adds `325 B` raw / `23 B` Brotli to Vue plus `193 B` raw / `100 B` Brotli to Three.
+  with no public API or behavior change. A fresh full-build size report keeps core effectively flat (`-1 B` Brotli) and
+  adds `42 B` Brotli to React, `134 B` to Vue, and `37 B` to Three for the ownership and validation seams.
 
 - **Kept direct TypeGPU position updates out of semantic publication** — `TypeGpuText.update({ position })` now writes
   only its retained uniform; it does not merge desired text, stage a controller update, enter Wasm, or publish renderer

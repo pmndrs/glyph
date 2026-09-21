@@ -347,7 +347,7 @@ missing loads together, and keeps the current paragraph while a later selection 
 React hooks. See [Vue and TresJS font loading](../guides/vue.md).
 
 Both component adapters treat each committed prop set as complete desired state: removing style, layout, constraints,
-flow, material, or raster pixel ratio restores the corresponding default. React passes its immutable semantic paragraph
+flow, material, or raster pixel ratio restores the corresponding default. React passes its caller-owned semantic paragraph
 props to Three's canonical normalizer and keys that derivation independently from transform, event, and other Object3D
 props. Vue instead detaches nested reactive records so in-place proxy mutations cannot rewrite accepted comparison state.
 Structurally equal Vue property lists reuse the previous package-owned snapshot before merging or cloning, and Three
@@ -361,9 +361,10 @@ lifecycle.
 
 `pnpm scripts run glyph:adapters-check` runs the shared React/Vue behavior cases and each framework's lifecycle tests
 against a freshly built distribution, plus adapter formatting, lint, and source declaration checks. Shared cases cover
-prop removal, nested property replacement, presentation-only changes, frame requests with an identical-snapshot negative
-control, flow retention and removal, group material and render-order removal, loaded-to-pending font switches, and lease
-disposal. Vue additionally proves a reuse hit followed by in-place nested reactive updates. Three's
+prop removal, nested property replacement, presentation-only changes, equivalent PropertyList shapes, malformed property
+input, frame requests with an identical-snapshot negative control, flow retention and removal, group material and
+render-order removal, loaded-to-pending font switches, and lease disposal. Vue additionally proves a reuse hit followed by
+in-place nested reactive updates. Three's
 `Text.set({ material: undefined })` explicitly clears an override.
 
 The public `ThreeRoot` contract stops at that retained scene API: identity and disposal, Text/TextGroup construction,
