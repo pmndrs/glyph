@@ -93,21 +93,6 @@ function jostle(position: Node<'vec3'>, motion: PaneMotion): Node<'vec3'> {
     .add(vec3(motion.sway, 0, 0));
 }
 
-/** A pane of stained glass in `tint`, without the title's settling motion. Rain glyphs are cut from it. */
-export function createStainedGlass(name: string, tint: string) {
-  return createGlass({
-    name,
-    color: new Color(tint).lerp(new Color('#ffffff'), 0.38),
-    attenuationColor: new Color(tint),
-    attenuationDistance: 4,
-    thickness: 2.6,
-    roughness: 0.04,
-    ior: 1.54,
-    dispersion: 0.7,
-    iridescence: 0,
-  });
-}
-
 /** Separate inline materials preserve one shaped word while giving each pane its own tint and finish. */
 export const stainedGlassLetters = [
   { letter: 'G', tint: THEME_TINTS[0], thickness: 2.8, roughness: 0.035, ior: 1.52 },

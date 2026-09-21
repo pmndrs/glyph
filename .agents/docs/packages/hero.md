@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:f199bc4b92c4a64e148471e13cc69ccab98dab7ffc9179cf69e39404ca303a71'
+source_digest: 'sha256:85a8442e0a4a0cf89d3414dca48d60142e786d9172a6797c567615660018185a'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -345,8 +345,8 @@ its shader compiles during preparation. The pure `steer` step is tested for arri
 and retargeting mid-trip. At rest the robot's face runs the scripted stop's clock from its look-up, so the greeting
 is shared; the published `face` clock is what the display reads in both modes.
 
-Two seconds into play, glyphs start raining: each drop is a stained-glass glyph from the title font in one of the
-five theme tints, spawned as a dynamic body cut from its outline at the drop's size, falling from near the camera
+Two seconds into play, glyphs start raining: each drop is a glyph from the title font as a pane of stained glass in
+one of the five theme tints, spawned as a dynamic body cut from its outline at the drop's size, falling from near the camera
 under lighter gravity until it lands, where it weighs what the letters weigh and the robot can push it. Rain bodies
 stack, so glyphs may land on letters and on each other; title letters keep their no-stack rule. A glyph pushed past
 the edge is destroyed at once, a full pool fades its oldest glyph to make room, and leaving play fades them all.
@@ -354,7 +354,11 @@ Landings ripple nothing. Each glyph falls at its own angle with a little spin, a
 then twists as it shrinks away. Rain arrives above the solver's restitution threshold, so it bounces off the robot's
 stadium, which carries a sloped roof and its own bounce; since a letter body cannot tip, a glyph that still comes to
 rest on the robot's back is flicked off sideways by the rain system. The renderer cuts each slot's unit solid and
-centres its glyph on the body's origin before playback. A rain test covers spawning, landing, edge culling, pool
+centres its glyph on the body's origin before playback. A rain pane composes as stained glass does, multiplying
+whatever is beneath it, so panes overlapping each other or the title go dark where they cross and a pane over paper
+tints the paper; the title's true refraction cannot see other glass, because the renderer's transmission pass holds
+only the opaque scene. The pane is lit by the environment, so its highlights brighten what shows through, and it
+uses WebGPU's premultiplied multiply blend with alpha one, which is exactly what is beneath times the pane. A rain test covers spawning, landing, edge culling, pool
 recycling, and the stop, and a physics test the bounce off the robot.
 
 The play button lives on its own screen-space sheet with an orthographic camera fitted to the viewport aspect, so
