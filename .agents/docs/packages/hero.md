@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:03c0a4475681479d56f965e7eaea351699fcce5e8a69b8960d689f6b698cfca8'
+source_digest: 'sha256:f199bc4b92c4a64e148471e13cc69ccab98dab7ffc9179cf69e39404ca303a71'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -350,8 +350,12 @@ five theme tints, spawned as a dynamic body cut from its outline at the drop's s
 under lighter gravity until it lands, where it weighs what the letters weigh and the robot can push it. Rain bodies
 stack, so glyphs may land on letters and on each other; title letters keep their no-stack rule. A glyph pushed past
 the edge is destroyed at once, a full pool fades its oldest glyph to make room, and leaving play fades them all.
-Landings ripple nothing. The renderer cuts each slot's unit solid and centres its glyph on the body's origin before
-playback. A rain test covers spawning, landing, edge culling, pool recycling, and the stop.
+Landings ripple nothing. Each glyph falls at its own angle with a little spin, and one going swells for an instant
+then twists as it shrinks away. Rain arrives above the solver's restitution threshold, so it bounces off the robot's
+stadium, which carries a sloped roof and its own bounce; since a letter body cannot tip, a glyph that still comes to
+rest on the robot's back is flicked off sideways by the rain system. The renderer cuts each slot's unit solid and
+centres its glyph on the body's origin before playback. A rain test covers spawning, landing, edge culling, pool
+recycling, and the stop, and a physics test the bounce off the robot.
 
 The play button lives on its own screen-space sheet with an orthographic camera fitted to the viewport aspect, so
 its geometry and hit test share the pointer's normalized units. The hero's post pass renders that sheet after the

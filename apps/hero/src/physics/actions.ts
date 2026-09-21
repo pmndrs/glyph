@@ -117,9 +117,10 @@ export const physicsActions = createActions((world) => {
     spawnSolidBody: (
       position: Vec3,
       prisms: readonly (readonly number[])[],
-      options: { stacks?: boolean; gravityFactor?: number; airborne?: boolean } = {},
+      options: { stacks?: boolean; gravityFactor?: number; airborne?: boolean; yaw?: number; spin?: number } = {},
     ) => {
       const physics = world.get(Physics)!;
+      const yaw = options.yaw ?? 0;
       const handle = rigidBody.create(physics.engine, {
         motionType: MotionType.DYNAMIC,
         objectLayer: physics.movingLayer,
@@ -131,6 +132,7 @@ export const physicsActions = createActions((world) => {
           })),
         }),
         position,
+        quaternion: quat.set(physics.rotation, 0, 0, Math.sin(yaw / 2), Math.cos(yaw / 2)),
         // Letters translate and turn around the floor normal without tipping.
         allowedDegreesOfFreedom: dof(true, true, true, false, false, true),
         linearDamping: 0,
@@ -142,11 +144,21 @@ export const physicsActions = createActions((world) => {
         restitutionCombineMode: MaterialCombineMode.MAX,
       });
 
+      if (options.spin !== undefined) {
+        rigidBody.setAngularVelocity(physics.engine, handle, vec3.set(physics.velocity, 0, 0, options.spin));
+      }
+
       const entity = attach(world.spawn(), handle, 'dynamic', options.stacks ?? false);
 
       if (options.airborne === true) entity.set(Body, { airborne: true });
 
       return entity;
+    },
+    kickBody: (entity: Entity, velocity: Vec3) => {
+      const physics = world.get(Physics)!;
+      const handle = rigidBody.get(physics.engine, entity.get(Body)!.id)!;
+      rigidBody.wake(physics.engine, handle);
+      rigidBody.setLinearVelocity(physics.engine, handle, velocity);
     },
     setGravityFactor: (entity: Entity, factor: number) => {
       const physics = world.get(Physics)!;
@@ -178,6 +190,9 @@ export const physicsActions = createActions((world) => {
         shape: convexHull.create({ positions: stadium(halfExtents), convexRadius: 0 }),
         friction: 0.1,
         frictionCombineMode: MaterialCombineMode.GEOMETRIC_MEAN,
+        // Rain bounces off the robot rather than settling on it.
+        restitution: 0.55,
+        restitutionCombineMode: MaterialCombineMode.MAX,
         allowSleeping: false,
       });
       attach(entity, handle, 'parked');
@@ -244,18 +259,25 @@ export const physicsActions = createActions((world) => {
   };
 });
 
-/** Upright rounded sides let off-center contacts nudge letters aside. */
+/**
+ * Upright rounded sides let off-center contacts nudge letters aside, and a sloped roof over the top fifth sheds
+ * whatever lands on it.
+ */
 function stadium([along, across, up]: readonly [number, number, number]): number[] {
   const points: number[] = [];
   const radius = Math.min(along, across);
   const reach = Math.max(across - radius, 0);
 
-  for (const z of [0, up * 2]) {
+  for (const [z, scale] of [
+    [0, 1],
+    [up * 1.6, 1],
+    [up * 2, 0.35],
+  ] as const) {
     for (let side = 0; side < 10; side++) {
       const angle = (side / 10) * Math.PI * 2;
-      const x = Math.cos(angle) * radius;
-      const y = Math.sin(angle) * radius;
-      points.push(x, y + reach, z, x, y - reach, z);
+      const x = Math.cos(angle) * radius * scale;
+      const y = Math.sin(angle) * radius * scale;
+      points.push(x, y + reach * scale, z, x, y - reach * scale, z);
     }
   }
 

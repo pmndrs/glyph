@@ -183,3 +183,33 @@ it('keeps a letter the robot sweeps through from flying when its heading wraps p
     world.destroy();
   }
 });
+
+it('bounces rain off the robot', () => {
+  const world = createWorld(Time);
+  physicsActions(world).initializePhysics();
+  const physics = physicsActions(world);
+  physics.setPhysicsFloor(-0.4);
+  const robotEntity = robotActions(world).spawnRobot();
+  const robot = robotEntity.get(Robot)!;
+  robotEntity.set(Robot, { active: true });
+  Object.assign(robot.footprint, { x: 0, y: 0, z: 0.04, heading: 0 });
+  const drop = physics.spawnSolidBody([0.1, 0.2, 12], prism(), { stacks: true, gravityFactor: 0.6, airborne: true });
+  const body = drop.get(Body)!;
+  const engine = world.get(Physics)!.engine;
+  const handle = rigidBody.get(engine, body.id)!;
+  world.set(Time, { delta: 1 / 60 });
+  let rebound = 0;
+
+  try {
+    for (let frame = 0; frame < 180; frame++) {
+      moveRobotBodies(world);
+      stepPhysics(world);
+
+      if (body.position[2] > 2.5) rebound = Math.max(rebound, handle.motionProperties.linearVelocity[2]);
+    }
+
+    expect(rebound).toBeGreaterThan(4);
+  } finally {
+    world.destroy();
+  }
+});

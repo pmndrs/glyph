@@ -3,6 +3,7 @@ import { vec3 } from 'math';
 import { Mode, Viewport } from '../hero/traits';
 import { physicsActions } from '../physics/actions';
 import { Body } from '../physics/traits';
+import { Robot } from '../robot/traits';
 import { Time } from '../time/traits';
 import { jitter } from '../utils';
 import { rainActions } from './actions';
@@ -10,6 +11,7 @@ import { COUNT, DROP_EVERY, FADE_SECONDS, FALL_GRAVITY, MARGIN, RAIN_AFTER, RELE
 import { Rain, RainView } from './traits';
 
 const spawnPosition = vec3.create();
+const kick = vec3.create();
 
 /**
  * A couple of seconds into play, glyphs start falling from near the camera onto the paper as glass bodies the robot
@@ -24,6 +26,7 @@ export function rainGlyphs(world: World): void {
   const raining = mode.kind === 'play' && time.elapsed - mode.since >= RAIN_AFTER;
   let { dropAt, dropped } = rain;
   const dismiss = rainActions(world).dismissDrop;
+  const robot = world.queryFirst(Robot)?.get(Robot);
 
   for (let slot = 0; slot < COUNT; slot++) {
     const drop = rain.drops[slot]!;
@@ -51,6 +54,14 @@ export function rainGlyphs(world: World): void {
 
     // Landed, it weighs what the letters weigh, so the robot's pushes and the floor's friction feel the same.
     if (body.landed) physicsActions(world).setGravityFactor(drop.entity!, 1);
+
+    // A glyph cannot tip, so one that comes to rest on the robot's back would ride it. Flick it off sideways.
+    if (robot?.active && drop.z > 2 && riding(drop.x, drop.y, robot.footprint)) {
+      const dx = drop.x - robot.footprint.x;
+      const dy = drop.y - robot.footprint.y;
+      const away = Math.atan2(dy, dx);
+      physicsActions(world).kickBody(drop.entity!, vec3.set(kick, Math.cos(away) * 7, Math.sin(away) * 7, 4));
+    }
 
     if (Math.abs(drop.x) > viewport.width / 2 + MARGIN || Math.abs(drop.y) > viewport.height / 2 + MARGIN)
       dismiss(slot, false);
@@ -89,16 +100,20 @@ export function rainGlyphs(world: World): void {
       );
       // The unit solid grows with the glyph in its plane; the thickness is the same for every size.
       const prisms = solid.prisms.map((prism) => prism.map((value, index) => (index % 3 === 2 ? value : value * size)));
+      // Each glyph falls at its own angle, turning a little, so no two look alike.
+      const yaw = jitter(serial * 5 + 17) * Math.PI * 2;
       drop.entity = physicsActions(world).spawnSolidBody(spawnPosition, prisms, {
         stacks: true,
         gravityFactor: FALL_GRAVITY,
         airborne: true,
+        yaw,
+        spin: (jitter(serial * 5 + 19) - 0.5) * 3,
       });
       drop.phase = 'live';
       drop.x = spawnPosition[0];
       drop.y = spawnPosition[1];
       drop.z = spawnPosition[2];
-      drop.yaw = 0;
+      drop.yaw = yaw;
       drop.size = size;
       drop.serial = serial;
       drop.age = 0;
@@ -108,6 +123,16 @@ export function rainGlyphs(world: World): void {
   }
 
   world.set(Rain, { dropAt, dropped });
+}
+
+/** Whether a point over the floor lies within the robot's footprint, with a little room around it. */
+function riding(x: number, y: number, footprint: { x: number; y: number; heading: number }): boolean {
+  const dx = x - footprint.x;
+  const dy = y - footprint.y;
+  const cos = Math.cos(footprint.heading);
+  const sin = Math.sin(footprint.heading);
+
+  return Math.abs(dx * cos + dy * sin) < 1.3 && Math.abs(dy * cos - dx * sin) < 1.7;
 }
 
 /** Copy the drops into their mounted glyph groups, at the body's pose while live and shrinking away while fading. */
@@ -129,8 +154,10 @@ export function syncRainViews(world: World): void {
     if (!group.visible) continue;
 
     group.position.set(drop.x, drop.y, drop.z);
-    group.rotation.z = drop.yaw;
-    const scale = drop.size * (drop.phase === 'fading' ? 1 - drop.age / FADE_SECONDS : 1);
+    // Going, a glyph swells for an instant, then twists as it shrinks away.
+    const t = drop.phase === 'fading' ? Math.min(drop.age / FADE_SECONDS, 1) : 0;
+    const scale = drop.size * (1 + 0.35 * Math.sin(Math.PI * t)) * (1 - t * t);
+    group.rotation.z = drop.yaw + t * t * Math.PI * 0.75;
     group.scale.set(scale, scale, 1);
   }
 }
