@@ -93,7 +93,9 @@ function sample(bytes: Uint8Array): number {
 function benchmarkFrame(name: string, frame: PlannerFrame): void {
   bench(name, function* () {
     const expected = frameWire.compilePlannerFrameUpdate(frame);
-    const target = new Uint8Array(expected.byteLength);
+    const arenaOffset = 64;
+    const memory = new WebAssembly.Memory({ initial: Math.ceil((arenaOffset + expected.byteLength) / 65_536) });
+    const target = new Uint8Array(memory.buffer, arenaOffset, expected.byteLength);
     const expectedSample = sample(expected);
 
     const result = yield () => {
@@ -114,7 +116,7 @@ function benchmarkFrame(name: string, frame: PlannerFrame): void {
 }
 
 group('direct request-arena encoding @engine', () => {
-  benchmarkFrame('write one paragraph and text mutation @semantic', singleSemanticFrame);
+  benchmarkFrame('write one paragraph and text mutation @single-semantic', singleSemanticFrame);
   benchmarkFrame('write 1000 paragraph-order mutations @order', orderFrame);
-  benchmarkFrame('write 1000 paragraph and text mutations @semantic', semanticFrame);
+  benchmarkFrame('write 1000 paragraph and text mutations @bulk-semantic', semanticFrame);
 });
