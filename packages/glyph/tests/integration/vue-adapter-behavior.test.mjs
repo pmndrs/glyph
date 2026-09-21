@@ -96,9 +96,15 @@ test('Vue tracks in-place root and nested reactive property changes', async () =
   try {
     const object = component.instance;
     const previous = object.style;
+    const acceptedMeasurement = object.measure();
     revision.value += 1;
     await nextTick();
     assert.equal(object.style, previous, 'an unrelated re-render must reuse the accepted reactive snapshot');
+    assert.equal(
+      object.measure(),
+      acceptedMeasurement,
+      'fresh equivalent nested text must retain accepted measurement',
+    );
     style.fontSize = 24;
     style.decoration.underline = false;
     constraints.width.size = 100;

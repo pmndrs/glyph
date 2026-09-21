@@ -49,7 +49,7 @@ const VNODE_BOOKKEEPING = new Set(['key', 'ref', 'ref_for', 'ref_key']);
 // Nested Text accepts `textStyle`, never `style`: Vue normalizes a `style` prop into one object before the walker runs.
 const INLINE_TEXT_PROPERTIES = new Set(['font', 'material', 'textStyle']);
 
-/** Boundaries are JOIN offsets in the concatenated text; when a JOIN fuses a grapheme cluster across children, `resolveRangesToClusters` gives the fused cluster the earlier child's style. */
+/** Boundaries are JOIN offsets in the concatenated text; when a JOIN fuses a grapheme cluster across children, the shared cluster alignment gives the fused cluster the earlier child's style. */
 export function flattenVueText(
   children: VNodeArrayChildren | string | number | undefined | null,
   options: FlattenVueTextOptions,

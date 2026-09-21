@@ -48,7 +48,7 @@ export function alignRangesToClusters<Range extends ClusterAlignableRange>(
       continue;
     }
     aligned ??= ranges.slice(0, index);
-    aligned.push({ ...range, start, end });
+    aligned.push(Object.freeze({ ...range, start, end }));
   }
   return aligned ?? ranges;
 }
@@ -74,9 +74,29 @@ export function ownClusterAlignedRanges<Range extends ClusterAlignableRange>(
   return aligned;
 }
 
+/** Transfers proven alignment from one package-owned range array to a derived array whose boundaries are unchanged.
+ *  An unproven source falls back to full alignment, preserving correctness across duplicate package copies. */
+export function inheritClusterAlignedRanges<Range extends ClusterAlignableRange>(
+  text: string,
+  source: readonly ClusterAlignableRange[],
+  ranges: readonly Range[],
+): readonly Range[] {
+  return areOwnedRangesClusterAligned(text, source)
+    ? markOwnedRangesClusterAligned(text, Object.freeze(ranges))
+    : ownClusterAlignedRanges(text, ranges);
+}
+
 /** True only for an exact package-owned range array normalized against the same text. */
 export function areOwnedRangesClusterAligned(text: string, ranges: readonly ClusterAlignableRange[]): boolean {
   return clusterAlignedTextByRanges.get(ranges) === text;
+}
+
+function markOwnedRangesClusterAligned<Range extends ClusterAlignableRange>(
+  text: string,
+  ranges: readonly Range[],
+): readonly Range[] {
+  clusterAlignedTextByRanges.set(ranges, text);
+  return ranges;
 }
 
 /** End of the cluster containing `offset`, or `offset` itself when it is already a boundary or lies outside the text's range. */
