@@ -38,7 +38,7 @@ if (existsSync(reactiveSnapshotPath)) {
   reactiveSnapshotPackage = { snapshotReactivePropertyList: previous.snapshotPropertyList };
 }
 
-const { bitmap, glyph } = glyphPackage;
+const { bitmap, glyph, span, txt } = glyphPackage;
 const { defineThreeConfig } = threePackage;
 const { defineTypeGpuConfig } = typeGpuPackage;
 const { resourceLease } = corePackage;
@@ -53,22 +53,34 @@ await font.load();
 
 let nextHandle = 1;
 
-function createLabels(count: number) {
+function formattedLabel(text: string) {
+  return txt`${span({ color: '#ffffff', decoration: { underline: true } })`${text.slice(0, 5)}`}${text.slice(5)}`;
+}
+
+function createLabels(count: number, content: 'plain' | 'styled-flow' = 'plain') {
   const root = glyph.handle(
     `labs:adapter-publication:${String(nextHandle++)}`,
     defineThreeConfig({ capacity: { size: count * 16, policy: 'grow' } }),
   );
   const textGroup = root.createTextGroup();
   const scene = new THREE.Scene();
-  const labels = Array.from({ length: count }, (_, index) =>
-    root.createText({
+  const labels = Array.from({ length: count }, (_, index) => {
+    const text = `label ${String(index).padStart(4, '0')}`;
+    return root.createText({
       font,
-      text: `label ${String(index).padStart(4, '0')}`,
+      text: content === 'plain' ? text : formattedLabel(text),
       style: { fontSize: 16 },
       layout: { wrap: 'word' },
       constraints: { width: { mode: 'exact', size: 160 } },
-    }),
-  );
+      ...(content === 'plain'
+        ? {}
+        : {
+            flow: {
+              regions: [{ key: 'main', shape: { kind: 'rectangle' as const, bounds: [0, 0, 160, 64] as const } }],
+            },
+          }),
+    });
+  });
   textGroup.add(...labels);
   scene.add(textGroup);
   scene.updateMatrixWorld(true);
@@ -191,18 +203,22 @@ group('allocation-light adapter publication @publication', () => {
       }
       return reusedCount;
     };
-    assert.equal(reused === 0 || reused === count, true);
+    if (process.env.GLYPH_LABS_ARTIFACT_ROLE === 'candidate') assert.equal(reused, count);
+    else assert.equal(reused === 0 || reused === count, true);
   });
 
-  bench('normalize 1000 equivalent formatted label updates @framework', function* () {
+  bench('normalize 1000 equivalent formatted flow updates @normalization', function* () {
     const count = 1_000;
     const created = createLabels(count);
     const desired = [0, 1].map(() =>
       created.labels.map((label) => ({
-        text: { text: label.text, spans: [] },
+        text: formattedLabel(label.text),
         style: { fontSize: 16 },
-        layout: { wrap: 'word' },
-        constraints: { width: { mode: 'exact', size: 160 } },
+        layout: { wrap: 'word' as const },
+        constraints: { width: { mode: 'exact' as const, size: 160 } },
+        flow: {
+          regions: [{ key: 'main', shape: { kind: 'rectangle' as const, bounds: [0, 0, 160, 64] as const } }],
+        },
       })),
     );
     let selected = 0;
@@ -226,6 +242,17 @@ group('allocation-light adapter publication @publication', () => {
     const count = 1_000;
     const textCount = yield () => {
       const created = createLabels(count);
+      const published = created.textGroup.textCount;
+      disposeLabels(created);
+      return published;
+    };
+    assert.equal(textCount, count);
+  });
+
+  bench('create, first-publish, and dispose 1000 styled-flow labels @cold-spans', function* () {
+    const count = 1_000;
+    const textCount = yield () => {
+      const created = createLabels(count, 'styled-flow');
       const published = created.textGroup.textCount;
       disposeLabels(created);
       return published;

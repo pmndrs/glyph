@@ -35,7 +35,11 @@ import {
 } from '../text-properties.js';
 import { assertTextEffectsSupported, normalizedColumns, replacedContent } from '../engine-encoding.js';
 import type { GlyphCopy, GlyphRoot, GlyphRootServices, GlyphTextController } from '../config/glyph.js';
-import { isOwnedTextPropertySnapshot, reuseOrCreateTextPropertySnapshot } from '../config/text-property.js';
+import {
+  equalTextPropertySnapshots,
+  isOwnedTextPropertySnapshot,
+  reuseOrCreateTextPropertySnapshot,
+} from '../config/text-property.js';
 import { ThreeCommandBufferRenderer } from './command-buffer-renderer.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import type { ThreeBindings, ThreeMaterialBinding } from './schema.js';
@@ -1752,11 +1756,17 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
   if (!styleReused) assertTextStyle(style, 'Text style');
   if (!layoutReused) assertParagraphLayout(layout, 'Text layout');
   if (!constraintsReused) assertConstraints(constraints, 'Text constraints');
-  const flow = flowReused
+  const normalizedFlow = flowReused
     ? previous.flow
     : properties.flow === undefined
       ? undefined
       : normalizeTextFlow(properties.flow, 'Text flow');
+  const flow =
+    !flowReused && previous?.flow !== undefined && normalizedFlow !== undefined
+      ? equalTextPropertySnapshots(previous.flow, normalizedFlow)
+        ? previous.flow
+        : normalizedFlow
+      : normalizedFlow;
   if (!layoutReused || !constraintsReused) normalizedColumns(layout, constraints);
   const formatted = typeof properties.text === 'string' ? undefined : properties.text;
   if (formatted !== undefined && !isFormattedText(formatted)) throw new TypeError('Text content is invalid');
@@ -1832,7 +1842,7 @@ function sameDesiredTextState<Format extends RasterFormatMetadata>(
     previous.layout === next.layout &&
     previous.constraints === next.constraints &&
     previous.flow === next.flow &&
-    Object.is(previous.rasterPixelRatio, next.rasterPixelRatio) &&
+    Object.is(previous.rasterPixelRatio ?? 1, next.rasterPixelRatio ?? 1) &&
     previous.material === next.material
   );
 }
@@ -1841,8 +1851,8 @@ function reuseOrCreateTextSpans<Format extends RasterFormatMetadata>(
   previous: readonly TextSpan<Format>[] | undefined,
   spans: readonly TextSpan<Format>[],
 ): readonly TextSpan<Format>[] {
-  let allReused = previous?.length === spans.length;
-  const snapshot = spans.map((span, index) => {
+  let snapshot: TextSpan<Format>[] | undefined = previous?.length === spans.length ? undefined : [];
+  for (const [index, span] of spans.entries()) {
     const prior = previous?.[index];
     const style =
       span.style === undefined
@@ -1856,12 +1866,13 @@ function reuseOrCreateTextSpans<Format extends RasterFormatMetadata>(
       prior.material === span.material &&
       prior.style === style
     ) {
-      return prior;
+      snapshot?.push(prior);
+      continue;
     }
-    allReused = false;
-    return Object.freeze({ ...span, ...(style === undefined ? {} : { style }) });
-  });
-  return allReused ? previous! : Object.freeze(snapshot);
+    if (snapshot === undefined) snapshot = previous!.slice(0, index);
+    snapshot.push(Object.freeze({ ...span, ...(style === undefined ? {} : { style }) }));
+  }
+  return snapshot === undefined ? previous! : Object.freeze(snapshot);
 }
 
 function assertNoRawSpans(value: object, subject: string): void {
