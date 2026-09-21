@@ -1,28 +1,6 @@
 import type { RasterFormatMetadata } from '../config/raster-format.js';
 import type { TextInput } from '../formatted-text.js';
-import { mergePropertyList } from '../property-list.js';
-import type { PropertyList } from '../text-properties.js';
 import type { StandaloneTextProperties, TextGroup, TextUpdate } from '../three/text.js';
-
-/** Read through reactive property records during render and retain a detached snapshot for later comparison. */
-export function snapshotPropertyList<Value extends object>(
-  value: PropertyList<Value>,
-  label: string,
-  previous?: NoInfer<Value>,
-): Value {
-  if (previous !== undefined && propertyListMatchesSnapshot(value, previous, label)) return previous;
-  return snapshotProperty(mergePropertyList(value, label));
-}
-
-/** Text-property data contains only records, arrays, and primitives; font and material identities never enter here. */
-export function snapshotProperty<Value>(value: Value, previous?: Value): Value {
-  if (previous !== undefined && sameSnapshot(previous, value)) return previous;
-  if (typeof value !== 'object' || value === null) return value;
-  if (Array.isArray(value)) return Object.freeze(value.map(snapshotProperty)) as Value;
-  return Object.freeze(
-    Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, snapshotProperty(entry)])),
-  ) as Value;
-}
 
 /** Component props describe complete state; omitted props must reset Three's otherwise partial update. */
 export function desiredTextUpdate<Technique extends RasterFormatMetadata>(
@@ -84,59 +62,6 @@ export function sameSnapshot(left: unknown, right: unknown): boolean {
     if (Object.hasOwn(rightRecord, key)) rightCount++;
   }
   return leftCount === rightCount;
-}
-
-const propertyNotFound = Symbol('property not found');
-
-/** Compare one left-to-right property list with a normalized snapshot without constructing another merged record. */
-function propertyListMatchesSnapshot<Value extends object>(
-  value: PropertyList<Value>,
-  snapshot: Value,
-  label: string,
-): boolean {
-  if (!propertyListKeysBelongToSnapshot(value, snapshot, label)) return false;
-  for (const key in snapshot) {
-    if (!Object.hasOwn(snapshot, key)) continue;
-    const current = finalPropertyListValue(value, key, label);
-    if (current === propertyNotFound || !sameSnapshot(snapshot[key as keyof Value], current)) return false;
-  }
-  return true;
-}
-
-function propertyListKeysBelongToSnapshot<Value extends object>(
-  value: PropertyList<Value>,
-  snapshot: Value,
-  label: string,
-): boolean {
-  if (value === undefined || value === null || value === false) return true;
-  if (Array.isArray(value)) {
-    for (const nested of value) {
-      if (!propertyListKeysBelongToSnapshot(nested, snapshot, label)) return false;
-    }
-    return true;
-  }
-  if (typeof value !== 'object') throw new TypeError(`${label} must be an object or property array`);
-  for (const key in value) {
-    if (Object.hasOwn(value, key) && !Object.hasOwn(snapshot, key)) return false;
-  }
-  return true;
-}
-
-function finalPropertyListValue<Value extends object>(
-  value: PropertyList<Value>,
-  key: string,
-  label: string,
-): unknown | typeof propertyNotFound {
-  if (value === undefined || value === null || value === false) return propertyNotFound;
-  if (Array.isArray(value)) {
-    for (let index = value.length - 1; index >= 0; index--) {
-      const current = finalPropertyListValue(value[index], key, label);
-      if (current !== propertyNotFound) return current;
-    }
-    return propertyNotFound;
-  }
-  if (typeof value !== 'object') throw new TypeError(`${label} must be an object or property array`);
-  return Object.hasOwn(value, key) ? (value as Readonly<Record<string, unknown>>)[key] : propertyNotFound;
 }
 
 /** Committed group props are complete desired state; `renderOrder` and `material` reset to Three's defaults when omitted. */

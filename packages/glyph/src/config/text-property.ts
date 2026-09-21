@@ -2,13 +2,24 @@
 // package-owned snapshots lets that seam retain them without a second deep clone.
 const ownedTextPropertySnapshots = new WeakSet<object>();
 
+/** @internal Mark one deeply frozen package-created text-property snapshot for zero-copy adoption. */
+export function ownTextPropertySnapshot<Value extends object>(value: Value): Value {
+  ownedTextPropertySnapshots.add(value);
+  return value;
+}
+
+/** @internal Whether a text-property record is already a deeply frozen package-created snapshot. */
+export function isOwnedTextPropertySnapshot(value: unknown): value is object {
+  return typeof value === 'object' && value !== null && ownedTextPropertySnapshots.has(value);
+}
+
 /** @internal Snapshot one text-property record or retain an equal owned snapshot. */
 export function reuseOrCreateTextPropertySnapshot<Value extends object>(
   previous: Value | undefined,
   value: Value,
   label: string,
 ): Value {
-  if (previous === value || ownedTextPropertySnapshots.has(value)) return value;
+  if (previous === value || isOwnedTextPropertySnapshot(value)) return value;
   if (previous !== undefined && equalTextProperty(previous, value)) return previous;
   let snapshot: Value;
   try {
@@ -17,8 +28,7 @@ export function reuseOrCreateTextPropertySnapshot<Value extends object>(
     throw new TypeError(`${label} must contain cloneable data`, { cause });
   }
   deepFreeze(snapshot);
-  ownedTextPropertySnapshots.add(snapshot);
-  return snapshot;
+  return ownTextPropertySnapshot(snapshot);
 }
 
 function equalTextProperty(previous: unknown, next: unknown): boolean {

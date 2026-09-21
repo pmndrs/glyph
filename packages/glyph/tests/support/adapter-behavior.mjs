@@ -150,6 +150,29 @@ export function adapterBehavior(name, mount) {
     }
   });
 
+  test(`${name}: presentation-only changes do not republish semantic text state`, async () => {
+    const font = await adapterFont();
+    const initial = { font: font.face, text: 'position', style: { fontSize: 16 } };
+    const host = await mount(initial);
+    const object = host.text;
+    const set = object.set.bind(object);
+    let semanticUpdates = 0;
+    object.set = (update) => {
+      semanticUpdates += 1;
+      return set(update);
+    };
+    try {
+      await host.update({ ...initial, position: [12, 24, 0] });
+      assert.equal(host.text, object);
+      assert.equal(object.position.x, 12);
+      assert.equal(object.position.y, 24);
+      assert.equal(semanticUpdates, 0, 'object presentation must not invalidate paragraph semantics');
+    } finally {
+      await host.unmount();
+      font.dispose();
+    }
+  });
+
   test(`${name}: flow is paragraph state that survives unrelated updates and clears on removal`, async () => {
     const font = await adapterFont();
     const flow = { regions: [{ key: 'main', shape: { kind: 'rectangle', bounds: [0, 0, 200, 100] } }] };
