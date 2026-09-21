@@ -349,7 +349,10 @@ React hooks. See [Vue and TresJS font loading](../guides/vue.md).
 Both component adapters snapshot paragraph property data and treat each committed prop set as complete desired state:
 removing style, layout, constraints, flow, material, or raster pixel ratio restores the corresponding default. Vue reads
 through nested reactive records while taking those snapshots, so in-place changes trigger updates without retaining
-mutable comparison state. `TextGroup` material and render order follow the same rule through one shared imperative
+mutable comparison state. Structurally equal Vue property lists reuse their previous immutable normalized records without
+merging or cloning replacements. React keys normalization to the semantic paragraph props rather than the component props
+wrapper, so transform-only or event-only renders do not rebuild paragraph snapshots. Neither adapter mutates a render-time
+React ref or treats object identity as paragraph correctness. `TextGroup` material and render order follow the same rule through one shared imperative
 apply step rather than framework prop diffing, so removing either restores the Three default. Paragraph and group
 updates request a frame on demand-rendered canvases only when the desired snapshot changed; a re-render with identical
 props requests nothing. A pending Vue font switch keeps the current Three object and its leases until replacement fonts

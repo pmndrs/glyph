@@ -21,11 +21,11 @@
       "label": "TypeGPU direct renderer JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "704d91b5a5625f5e78659f52adb6e72c020382b14f30ce956425a8041d6a7af6",
-      "rawBytes": 218095,
-      "minifiedBytes": 212906,
-      "gzipBytes": 42216,
-      "brotliBytes": 35859
+      "sha256": "1dc7dd83e3d2014bee7dbfbd0d5d59da42e9632cd1492daef9e8e8080312b943",
+      "rawBytes": 218353,
+      "minifiedBytes": 213150,
+      "gzipBytes": 42302,
+      "brotliBytes": 35938
     },
     {
       "id": "browser-core",
@@ -65,22 +65,22 @@
       "label": "React adapter JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "21653962d804774e4642fff21fb9d147516ad4b74e355ace35f30cc5728d91be",
-      "rawBytes": 546712,
-      "minifiedBytes": 533774,
-      "gzipBytes": 134062,
-      "brotliBytes": 110587
+      "sha256": "97e64e3ffba72c99764138352f8dcd67be25baf639d27db4a32862a03b53c4b9",
+      "rawBytes": 548095,
+      "minifiedBytes": 535112,
+      "gzipBytes": 134389,
+      "brotliBytes": 110745
     },
     {
       "id": "vue-runtime-js",
       "label": "Vue adapter JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "a302758117d45a3ce7c642a053f171e399e659ef621d0f3d37790f27f94a6f56",
-      "rawBytes": 544516,
-      "minifiedBytes": 532260,
-      "gzipBytes": 133619,
-      "brotliBytes": 110117
+      "sha256": "8c7a310ffa519ba73e02d7b882e8fa8f844fe0e0a7d30dab3f216788bd8b01ce",
+      "rawBytes": 545703,
+      "minifiedBytes": 533415,
+      "gzipBytes": 133925,
+      "brotliBytes": 110202
     },
     {
       "id": "three-typegpu-runtime-js",
@@ -98,11 +98,11 @@
       "label": "R3F hello-world app JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "def9c3975723a3d1317350ef437cb9011545ab8978a3454f148e38728271365a",
-      "rawBytes": 2624774,
-      "minifiedBytes": 2624774,
-      "gzipBytes": 740069,
-      "brotliBytes": 562336
+      "sha256": "5e91beb21745be59bd6eeafc436c2529afa96d1fb3cfdb8118a672bcc07db0d8",
+      "rawBytes": 2624918,
+      "minifiedBytes": 2624918,
+      "gzipBytes": 740125,
+      "brotliBytes": 562424
     },
     {
       "id": "tres-playground-production-js",

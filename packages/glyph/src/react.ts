@@ -155,18 +155,37 @@ interface InlineProperties<Technique extends RasterFormatMetadata> {
   readonly material?: ThreeTextMaterial;
 }
 
-type DesiredR3fTextProperties<Technique extends RasterFormatMetadata> = Partial<StandaloneTextProperties<Technique>> & {
+type DesiredR3fTextProperties<Technique extends RasterFormatMetadata> = Omit<
+  Partial<StandaloneTextProperties<Technique>>,
+  'constraints' | 'layout' | 'style'
+> & {
   readonly font: FontSelection<Technique>;
   readonly text: TextInput<Technique>;
+  readonly constraints: Constraints;
+  readonly layout: ParagraphLayout;
+  readonly style: TextStyle;
 };
 
 type DesiredR3fTextInput<Technique extends RasterFormatMetadata> = Omit<
   Partial<StandaloneTextProperties<Technique>>,
-  'font'
+  'constraints' | 'font' | 'layout' | 'style'
 > & {
   readonly font?: R3fFontSelection<Technique>;
   readonly text: TextInput<Technique>;
+  readonly constraints: Constraints;
+  readonly layout: ParagraphLayout;
+  readonly style: TextStyle;
 };
+
+interface DesiredR3fTextSource {
+  readonly constraints: PropertyList<Constraints>;
+  readonly flow: TextFlow | undefined;
+  readonly layout: PropertyList<ParagraphLayout>;
+  readonly material: ThreeTextMaterial | undefined;
+  readonly pixelSnapping: boolean | undefined;
+  readonly rasterPixelRatio: number | undefined;
+  readonly style: PropertyList<TextStyle>;
+}
 
 type SelectedHookFontConfig<Format> = Readonly<{ format: FontFaceFormatInput<Format> }>;
 type DefaultHookFontConfig = Readonly<{ format?: FontFaceFormat }>;
@@ -599,13 +618,18 @@ function ResolvedTextObject({
   readonly publishObject: (value: ThreeText<RasterFormatMetadata> | null) => void;
 }): ReactElement {
   const loadedFonts = useHandleFontFaces(handle, fontFaces);
+  const { constraints, flow, layout, material, pixelSnapping, rasterPixelRatio, style } = input;
+  const semanticInput = useMemo<DesiredR3fTextSource>(
+    () => ({ constraints, flow, layout, material, pixelSnapping, rasterPixelRatio, style }),
+    [constraints, flow, layout, material, pixelSnapping, rasterPixelRatio, style],
+  );
   const desired = useMemo(
     () =>
       bindDesiredFont(
-        textProperties(input, bindFlattenedTextFonts(flattened, loadedFonts)),
+        textProperties(semanticInput, bindFlattenedTextFonts(flattened, loadedFonts)),
         loadedTextFont(selected, loadedFonts),
       ),
-    [flattened, input, loadedFonts, selected],
+    [flattened, loadedFonts, selected, semanticInput],
   );
   return createElement(TextObject, { ...renderedProperties, desired });
 }
@@ -1185,11 +1209,10 @@ function assertInlineTextProperties<Technique extends RasterFormatMetadata>(prop
 }
 
 function textProperties<Technique extends RasterFormatMetadata>(
-  properties: R3fTextProps<Technique>,
+  properties: DesiredR3fTextSource,
   flattened: FlattenedText<Technique>,
 ): DesiredR3fTextInput<Technique> {
   return Object.freeze({
-    ...(properties.font === undefined ? {} : { font: properties.font }),
     text: Object.freeze({
       text: flattened.text,
       spans: flattened.spans,
