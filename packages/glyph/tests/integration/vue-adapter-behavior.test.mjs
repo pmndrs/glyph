@@ -90,7 +90,7 @@ test('Vue tracks in-place root and nested reactive property changes', async () =
           component = value;
         },
       },
-      () => ['root ', h(Text, { textStyle: inline }, () => 'inline')],
+      () => ['a', h(Text, { textStyle: inline }, () => '\u0301b')],
     ),
   );
   try {
