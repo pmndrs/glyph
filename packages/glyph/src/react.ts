@@ -28,7 +28,7 @@ import {
   type FontFaceRasterOf,
   type FontFaceSource,
 } from './font-face.js';
-import { resolveRangesToClusters, type FormattedText, type TextInput } from './formatted-text.js';
+import { ownClusterAlignedSpans, type FormattedText, type TextInput } from './formatted-text.js';
 import type { Font } from './font.js';
 import { glyph } from './glyph.js';
 import { GlyphFontError } from './loader.js';
@@ -1160,7 +1160,7 @@ function flattenText(
   const text = chunks.join('');
   return Object.freeze({
     text,
-    spans: Object.freeze(resolveRangesToClusters(text, spans)),
+    spans: ownClusterAlignedSpans(text, spans),
     fontFaces: Object.freeze(fontFaces),
   });
 }
