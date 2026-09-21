@@ -55,6 +55,9 @@ const { defineTypeGpuConfig } = typeGpuPackage;
 const { resourceLease } = corePackage;
 const { inheritClusterAlignedSpans } = formattedTextPackage;
 const { snapshotReactivePropertyList } = reactiveSnapshotPackage;
+if (process.env.GLYPH_LABS_ARTIFACT_ROLE === 'candidate' && inheritClusterAlignedSpans === undefined) {
+  throw new Error('candidate package does not expose the cluster-provenance helper exercised by @frameworks');
+}
 const fontBytes = await readFile(new URL('../fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url));
 
 await glyph.init();

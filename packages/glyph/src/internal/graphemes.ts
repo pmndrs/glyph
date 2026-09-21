@@ -63,8 +63,8 @@ export function resolveRangesToClusters<Range extends ClusterAlignableRange>(
 }
 
 /** Resolves, freezes, and records package-owned ranges so adapters can prove that the exact array is already on this
- *  text's cluster grid. The text association matters: reusing an array with different content must fall back to normal
- *  Unicode alignment. */
+ *  text's cluster grid. This takes ownership of a fresh package-local array and freezes both it and its records. The text
+ *  association matters: reusing an array with different content must fall back to normal Unicode alignment. */
 export function ownClusterAlignedRanges<Range extends ClusterAlignableRange>(
   text: string,
   ranges: readonly Range[],

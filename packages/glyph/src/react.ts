@@ -652,6 +652,9 @@ interface FontFaceSelectionListNode {
 }
 
 const emptyFontFaceSelections = Object.freeze([]) as readonly FontFaceSelection[];
+// Each trie edge is weak. Although a leaf's canonical array strongly retains its selections, that leaf is reachable only
+// while every FontFaceSelection key on its path is independently live; ephemeron reachability therefore does not pin
+// transient resources. Module-scope faces intentionally retain the small set of orderings an application actually uses.
 const fontFaceSelectionLists: FontFaceSelectionListNode = { children: new WeakMap() };
 
 function internFontFaceSelections(selections: readonly FontFaceSelection[]): readonly FontFaceSelection[] {

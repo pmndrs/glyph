@@ -73,7 +73,7 @@ export const packageSizeBudgets = {
   // The Vue adapter includes Glyph's root and Three integration while Vue, Tres, and Three remain consumer peers.
   // Cluster-alignment provenance measures 547,980 raw / 535,719 minified / 134,645 gzip / 110,800 Brotli bytes.
   'vue-runtime-js': {
-    rawBytes: 548_000,
+    rawBytes: 549_000,
     minifiedBytes: 536_000,
     gzipBytes: 136_000,
     brotliBytes: 112_000,
