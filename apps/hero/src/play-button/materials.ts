@@ -87,7 +87,7 @@ export const labelMaterial = defineTextMaterial((context) => {
   const shown = step(order, smoothstep(0.3, 1, reveal));
   const glow = float(1.1)
     .add(sweep(snap(positionWorld.xy).x).mul(0.9))
-    .add(uPlayHover.mul(0.6));
+    .add(uPlayHover.mul(1));
   material.colorNode = tint(positionWorld.x).mul(glow);
   material.opacityNode = step(0.5, ink).mul(gap).mul(shown);
   material.toneMapped = false;
@@ -97,7 +97,8 @@ export const labelMaterial = defineTextMaterial((context) => {
 
 /**
  * A rounded frame drawn as a signed distance on the button's pixel grid: a one-pixel outline that draws itself from
- * the top, round both sides, as the reveal grows, with a halo and a pointer fill held to a few levels.
+ * the top, round both sides, as the reveal grows, with a halo held to a few levels. Under the pointer it fills
+ * faintly and glows in stepped rings around the frame.
  */
 export function createFrameMaterial(): MeshBasicNodeMaterial {
   const material = new MeshBasicNodeMaterial({
@@ -125,12 +126,17 @@ export function createFrameMaterial(): MeshBasicNodeMaterial {
       .add(exp(distance.mul(-70)).mul(step(0, distance)).mul(0.22)),
     8,
   );
-  const fill = posterize(smoothstep(0, -0.12, distance).mul(uPlayHover).mul(0.16), 4);
+  const fill = posterize(smoothstep(-0.16, 0, distance).mul(uPlayHover).mul(0.1), 4);
+  // Under the pointer the button glows: stepped rings of light swell out around the frame.
+  const glow = posterize(
+    smoothstep(FRAME_MARGIN, 0, distance).pow(2).mul(step(0, distance)).mul(uPlayHover).mul(0.3),
+    6,
+  );
   // Angle from straight up, either way round, as a share of the way to the bottom.
   const around = abs(atan(point.x, point.y)).div(Math.PI);
   const drawn = step(around, smoothstep(0, 0.75, reveal).mul(1.02));
   material.colorNode = tint(point.x).mul(float(1).add(uPlayHover.mul(0.5)));
-  material.opacityNode = stroke.add(halo).add(fill).add(sweep(point.x).mul(stroke).mul(0.6)).mul(drawn);
+  material.opacityNode = stroke.add(halo).add(fill).add(glow).add(sweep(point.x).mul(stroke).mul(0.6)).mul(drawn);
   material.toneMapped = false;
 
   return material;

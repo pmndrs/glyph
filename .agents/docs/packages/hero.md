@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:eb5c497794d1acf8215eb0b35e4a8fdee07c8f694366714d8ffbb061729b8567'
+source_digest: 'sha256:41e62ce7a30e3664e493bafa23722f00546d191294ae64eda63408efa87cd1c4'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -390,8 +390,8 @@ is quantized to one pixel, two of the pixel font's squares. The frame is a round
 evaluated at pixel centres, a one-pixel outline that draws itself round from the top, with its halo and pointer
 fill held to a few levels. The label samples the font's coverage at the four squares of each pixel and lights the
 pixel when at least half are ink, keeping the hair of a gap the font leaves between squares; the pixels
-materialize in a fixed random order as the frame closes, lit by a sweep and by hover. The reveal advances in
-twenty notches. Both stay mounted and compile during preparation, revealed by uniforms. `hero:play-button-check`
+materialize in a fixed random order as the frame closes, lit by a sweep and by hover, and the pointer swells
+stepped rings of light out around the frame. The reveal advances in twenty notches. Both stay mounted and compile during preparation, revealed by uniforms. `hero:play-button-check`
 draws the button in on WebGPU, verifies that half way in only some of the pixels have lit and that hover brightens
 it, and tiles the three moments with a close-up.
 The finale check verifies the black frame stays black at the ember fade, the button then lights it, a press beside

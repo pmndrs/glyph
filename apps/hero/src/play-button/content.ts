@@ -5,8 +5,8 @@
 export const BUTTON_WIDTH = 1.16;
 export const BUTTON_HEIGHT = 0.44;
 export const BUTTON_RADIUS = 0.1;
-/** Room around the frame on its plane for the halo to fade out, so the plane's square edge never shows. */
-export const FRAME_MARGIN = 0.06;
+/** Room around the frame on its plane for the hover glow to fade out, so the plane's square edge never shows. */
+export const FRAME_MARGIN = 0.2;
 export const LABEL = 'Play';
 export const LABEL_SIZE = 0.22;
 /** The button's pixel: two of the pixel font's squares, which sit 38 thousandths of an em apart. */
