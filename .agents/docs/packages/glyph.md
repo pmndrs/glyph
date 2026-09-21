@@ -358,7 +358,9 @@ derives replacement span records with unchanged boundaries. Three still range-va
 skips rebuilding the grapheme boundary grid only for that exact proven text/array pair. Arbitrary caller arrays, text
 changes, and unproven derived arrays still use the shared cluster-alignment path before equal accepted spans may be reused.
 Malformed UTF-16 is rejected by the existing public validation path and is never marked as cluster-aligned provenance.
-Neither adapter mutates a render-time React ref or treats object identity as paragraph correctness. `TextGroup` material
+Proof transfer verifies the derived array has the same ordered boundaries as its source before marking it. React
+canonicalizes equal ordered FontFace-selection lists, so equivalent nested Text renders retain their mounted font store and
+loaded Font identities. Neither adapter mutates a render-time React ref or treats object identity as paragraph correctness. `TextGroup` material
 and render order follow the same rule through one shared
 imperative apply step rather than framework prop diffing, so removing either restores the Three default. Paragraph and group
 updates request a frame on demand-rendered canvases only when the desired snapshot changed; a re-render with identical

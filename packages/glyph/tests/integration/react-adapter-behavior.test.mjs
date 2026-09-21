@@ -140,7 +140,7 @@ test('React preserves layout across fresh equivalent nested text', async () => {
   try {
     const accepted = host.text.measure();
     await host.update({ ...initial, text: nested() });
-    assert.deepEqual(host.text.measure(), accepted);
+    assert.equal(host.text.measure(), accepted);
   } finally {
     await host.unmount();
     font.dispose();

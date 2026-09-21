@@ -641,8 +641,31 @@ function collectTextFontFaces(
   selected: FontSelection<RasterFormatMetadata> | FontFaceSelection,
   nested: readonly FontFaceSelection[],
 ): readonly FontFaceSelection[] {
-  if (!isFontFaceSelection(selected) || nested.includes(selected)) return nested;
-  return Object.freeze([selected, ...nested]);
+  return internFontFaceSelections(
+    !isFontFaceSelection(selected) || nested.includes(selected) ? nested : [selected, ...nested],
+  );
+}
+
+interface FontFaceSelectionListNode {
+  readonly children: WeakMap<FontFaceSelection, FontFaceSelectionListNode>;
+  canonical?: readonly FontFaceSelection[];
+}
+
+const emptyFontFaceSelections = Object.freeze([]) as readonly FontFaceSelection[];
+const fontFaceSelectionLists: FontFaceSelectionListNode = { children: new WeakMap() };
+
+function internFontFaceSelections(selections: readonly FontFaceSelection[]): readonly FontFaceSelection[] {
+  if (selections.length === 0) return emptyFontFaceSelections;
+  let node = fontFaceSelectionLists;
+  for (const selection of selections) {
+    let child = node.children.get(selection);
+    if (child === undefined) {
+      child = { children: new WeakMap() };
+      node.children.set(selection, child);
+    }
+    node = child;
+  }
+  return (node.canonical ??= Object.freeze([...selections]));
 }
 
 function loadedTextFont(

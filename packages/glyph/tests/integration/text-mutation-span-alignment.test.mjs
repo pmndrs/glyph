@@ -87,6 +87,15 @@ test('span provenance inheritance realigns unproven and changed-text sources', (
   );
   assert.deepEqual(ranges({ spans: fromChangedText }), [[2, 2]]);
   assert.equal(areOwnedRangesClusterAligned(text, fromChangedText), true);
+
+  const alignedSource = ownClusterAlignedRanges(text, Object.freeze([Object.freeze({ start: 2, end: 3 })]));
+  const fromChangedBoundaries = inheritClusterAlignedRanges(
+    text,
+    alignedSource,
+    Object.freeze([Object.freeze({ start: 1, end: 3 })]),
+  );
+  assert.deepEqual(ranges({ spans: fromChangedBoundaries }), [[2, 3]]);
+  assert.equal(areOwnedRangesClusterAligned(text, fromChangedBoundaries), true);
 });
 
 test('malformed UTF-16 is never marked as cluster aligned', () => {
@@ -123,6 +132,14 @@ test('repeated raw Unicode spans realign before retaining the accepted measureme
     node.set({ text: formatted() });
     mounted.scene.updateMatrixWorld(true);
     assert.equal(node.measure(), accepted, 'equivalent unaligned input must retain its aligned accepted state');
+    node.set({
+      text: {
+        text,
+        spans: [{ start: 2, end: 3, style: { color: '#ff2f00', decoration: { underline: true } } }],
+      },
+    });
+    mounted.scene.updateMatrixWorld(true);
+    assert.equal(node.measure(), accepted, 'raw input must align before desired-state equality is decided');
   } finally {
     unmount(mounted);
   }
