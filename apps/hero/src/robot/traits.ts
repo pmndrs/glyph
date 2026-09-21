@@ -31,6 +31,15 @@ export interface RobotDraw {
 }
 
 export const RobotView = trait((): RobotDraw | undefined => undefined);
+
+/** The floor marker at the robot's destination. */
+export interface MarkerDraw {
+  mesh: Object3D;
+  presence: { value: number };
+  age: { value: number };
+}
+
+export const MarkerView = trait((): MarkerDraw | undefined => undefined);
 export const DustView = trait((): (Group | null)[] | undefined => undefined);
 
 export interface Path {
@@ -57,6 +66,8 @@ export interface Drive {
   speed: number;
   /** Arc length covered on this trip, which phases the sway. */
   travelled: number;
+  /** Seconds since the robot was sent, which times the marker's entrance. */
+  since: number;
   /** Signed sway amplitude for this trip, so no two trips bend alike. */
   bend: number;
   /** Seconds spent at the target. The robot looks up and greets once it has rested. */
@@ -75,6 +86,7 @@ export const Robot = trait({
     hasTarget: false,
     speed: 0,
     travelled: 0,
+    since: 0,
     bend: 0,
     rested: 0,
     trips: 0,

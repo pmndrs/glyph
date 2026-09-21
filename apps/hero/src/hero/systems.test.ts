@@ -102,11 +102,10 @@ it('starts play from the button once the embers are out, sends the robot with ea
     expect(robot.get(Robot)!.drive.hasTarget).toBe(true);
     expect(Math.abs(robot.get(Robot)!.motion.pose.x)).toBeGreaterThan(9);
 
-    const impacts = world.get(Impacts)!.next;
     commands.pressHero(0.5, -0.5);
     expect(robot.get(Robot)!.drive.targetX).toBeCloseTo(4.5);
     expect(robot.get(Robot)!.drive.targetY).toBeCloseTo(-2.5);
-    expect(world.get(Impacts)!.next).toBe(impacts + 1);
+    expect(robot.get(Robot)!.drive.since).toBe(0);
 
     // The scripted run never takes the wheel in play.
     robotActions(world).runRobot();

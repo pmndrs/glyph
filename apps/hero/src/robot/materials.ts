@@ -1,5 +1,6 @@
 import { defineTextMaterial, type ThreeTextMaterial } from '@pmndrs/glyph/three';
 import {
+  atan,
   cross,
   dFdx,
   dFdy,
@@ -8,6 +9,7 @@ import {
   positionView,
   exp,
   float,
+  fract,
   hash,
   mix,
   step as threshold,
@@ -93,6 +95,31 @@ export function glitchingScreen(screen: MeshStandardMaterial): MeshStandardNodeM
 
 export const shadowMaterial = new MeshBasicNodeMaterial({ color: '#000000', depthWrite: false, transparent: true });
 shadowMaterial.opacityNode = exp(uv().sub(0.5).length().mul(3.2).pow(2).negate()).mul(0.32);
+
+/** 0..1: the destination marker's presence, and seconds since the robot was sent there. */
+export const uMarkerPresence = uniform(0);
+export const uMarkerAge = uniform(0);
+
+/**
+ * Where the robot is headed: a ring that lands from wide to tight, its gaps turning slowly, around a dot. Drawn
+ * in ink on the paper, it fades as soon as the robot arrives.
+ */
+export const markerMaterial = new MeshBasicNodeMaterial({ color: '#3c3c4a', depthWrite: false, transparent: true });
+const point = uv().sub(0.5).mul(2);
+const radius = point.length();
+const landed = float(1).sub(uMarkerAge.mul(-8).exp());
+const ring = smoothstep(0.075, 0.035, radius.sub(mix(0.95, 0.46, landed)).abs());
+const gaps = threshold(
+  0.22,
+  fract(
+    atan(point.y, point.x)
+      .div(Math.PI * 2)
+      .mul(4)
+      .sub(uMarkerAge.mul(0.3)),
+  ),
+);
+const centre = smoothstep(0.1, 0.05, radius);
+markerMaterial.opacityNode = ring.mul(gaps).add(centre).mul(uMarkerPresence).mul(0.7);
 
 // Height encodes lifetime, so all particles share one material and fade without re-shaping their text.
 export const dust = defineTextMaterial((context) => {

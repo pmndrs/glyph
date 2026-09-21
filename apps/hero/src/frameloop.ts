@@ -22,6 +22,7 @@ import {
   animateRobotRig,
   syncRobotDisplay,
   syncDustViews,
+  syncMarkerView,
 } from './robot/systems';
 import { moveTitle, syncTitle, typeFeature, syncTitleViews, syncFeatureViews } from './letters/systems';
 
@@ -74,6 +75,7 @@ export function FrameLoop() {
         animateRobotRig(world);
         syncRobotDisplay(world);
         syncDustViews(world);
+        syncMarkerView(world);
         syncBlackHoleView(world);
         syncEmberView(world);
         syncPlayButtonView(world);

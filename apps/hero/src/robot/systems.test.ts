@@ -12,7 +12,7 @@ const STEP = 1 / 60;
 /** Drive one trip from rest, sampling the pose each frame until the cart settles or `seconds` run out. */
 function trip(x: number, y: number, heading: number, targetX: number, targetY: number, seconds = 8) {
   const pose = { x, y, heading, look: 0 };
-  const drive = { targetX, targetY, hasTarget: true, speed: 0, travelled: 0, bend: 0.6, rested: 0, trips: 1 };
+  const drive = { targetX, targetY, hasTarget: true, speed: 0, travelled: 0, since: 0, bend: 0.6, rested: 0, trips: 1 };
   const samples: { x: number; y: number; heading: number }[] = [];
   let frames = 0;
 
@@ -57,7 +57,17 @@ it('never drives a straight line, and turns no faster than a cart can', () => {
 
 it('carries speed and heading into a new target instead of restarting the trip', () => {
   const pose = { x: 0, y: 0, heading: 0, look: 0 };
-  const drive = { targetX: 8, targetY: 0, hasTarget: true, speed: 0, travelled: 0, bend: 0.5, rested: 0, trips: 1 };
+  const drive = {
+    targetX: 8,
+    targetY: 0,
+    hasTarget: true,
+    speed: 0,
+    travelled: 0,
+    since: 0,
+    bend: 0.5,
+    rested: 0,
+    trips: 1,
+  };
 
   for (let frame = 0; frame < 30; frame++) steer(pose, drive, STEP);
 

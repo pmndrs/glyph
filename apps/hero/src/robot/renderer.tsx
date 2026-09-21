@@ -18,7 +18,18 @@ import {
   Vector3,
 } from 'three/webgpu';
 import type { SlugFont } from '../hero/fonts';
-import { screenInk, uEyes, uTear, uSeed, glitchingScreen, shadowMaterial, dust } from './materials';
+import {
+  screenInk,
+  uEyes,
+  uTear,
+  uSeed,
+  glitchingScreen,
+  shadowMaterial,
+  dust,
+  markerMaterial,
+  uMarkerPresence,
+  uMarkerAge,
+} from './materials';
 import { mat4, quat, vec3 as vector3 } from 'math';
 import { Robot as RobotTrait } from './traits';
 import { robotActions } from './actions';
@@ -63,8 +74,31 @@ export function RobotRenderer({ font, icons }: { readonly font: SlugFont; readon
     <group key={entity}>
       <Robot entity={entity} font={font} />
       <RobotDust entity={entity} font={icons} />
+      <RobotMarker entity={entity} />
     </group>
   ));
+}
+
+/** The destination marker on the floor. Mounted hidden so its shader is ready before the first press. */
+function RobotMarker({ entity }: { readonly entity: Entity }) {
+  const world = useWorld();
+  const mesh = useRef<Mesh>(null);
+
+  useEffect(() => {
+    const object = mesh.current;
+
+    if (object === null) return;
+
+    robotActions(world).mountMarkerView(entity, { mesh: object, presence: uMarkerPresence, age: uMarkerAge });
+
+    return () => robotActions(world).unmountMarkerView(entity);
+  }, [world, entity]);
+
+  return (
+    <mesh ref={mesh} material={markerMaterial} name="robot-marker" visible={false}>
+      <planeGeometry args={[1.5, 1.5]} />
+    </mesh>
+  );
 }
 
 function Robot({ entity, font }: { readonly entity: Entity; readonly font: SlugFont }) {

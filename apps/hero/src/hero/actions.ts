@@ -63,12 +63,8 @@ export const heroActions = createActions((world) => {
     pressHero: (x: number, y: number) => {
       const { width, height, aspect } = world.get(Viewport)!;
 
-      if (world.get(Mode)!.kind === 'play') {
-        const floorX = (x * width) / 2;
-        const floorY = (y * height) / 2;
-        robotActions(world).driveRobotTo(floorX, floorY);
-        iconPaperActions(world).impactIconPaper(floorX, floorY, 0);
-      } else if (playReveal(world) > 0 && overPlayButton(x * aspect, y)) heroActions(world).startPlay();
+      if (world.get(Mode)!.kind === 'play') robotActions(world).driveRobotTo((x * width) / 2, (y * height) / 2);
+      else if (playReveal(world) > 0 && overPlayButton(x * aspect, y)) heroActions(world).startPlay();
     },
     mountPaperView: (drift: Vector2) => {
       world.add(PaperView(drift));

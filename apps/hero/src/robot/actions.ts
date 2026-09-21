@@ -3,7 +3,7 @@ import type { Group } from 'three/webgpu';
 import { Time } from '../time/traits';
 import { physicsActions } from '../physics/actions';
 import { jitter } from '../utils';
-import { Robot, ROBOT_HALF_EXTENTS, RobotView, DustView, type RobotDraw } from './traits';
+import { Robot, ROBOT_HALF_EXTENTS, RobotView, DustView, MarkerView, type MarkerDraw, type RobotDraw } from './traits';
 
 export const robotActions = createActions((world) => ({
   mountRobotView: (entity: Entity, view: RobotDraw) => {
@@ -11,6 +11,12 @@ export const robotActions = createActions((world) => ({
   },
   unmountRobotView: (entity: Entity) => {
     entity.remove(RobotView);
+  },
+  mountMarkerView: (entity: Entity, view: MarkerDraw) => {
+    entity.add(MarkerView(view));
+  },
+  unmountMarkerView: (entity: Entity) => {
+    entity.remove(MarkerView);
   },
   mountDustView: (entity: Entity, groups: (Group | null)[]) => {
     entity.add(DustView(groups));
@@ -57,6 +63,7 @@ export const robotActions = createActions((world) => ({
       drive.targetY = y;
       drive.hasTarget = true;
       drive.travelled = 0;
+      drive.since = 0;
       drive.rested = 0;
       drive.bend = (drive.trips % 2 === 0 ? 1 : -1) * (0.45 + jitter(drive.trips) * 0.3);
       drive.trips++;

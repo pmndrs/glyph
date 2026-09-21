@@ -3,7 +3,7 @@ import { showLine } from '../letters/text';
 import type { World } from 'koota';
 import { Time } from '../time/traits';
 import { Mode, Viewport } from '../hero/traits';
-import { Robot, RobotView, DustView, type RobotDraw, type Drive, type Path, type Pose } from './traits';
+import { Robot, RobotView, DustView, MarkerView, type RobotDraw, type Drive, type Path, type Pose } from './traits';
 import {
   COUNT,
   BASE_Z,
@@ -117,6 +117,7 @@ export function steer(pose: Pose, drive: Drive, delta: number): Pose {
     return pose;
   }
 
+  drive.since += delta;
   const dx = drive.targetX - pose.x;
   const dy = drive.targetY - pose.y;
   const distance = Math.hypot(dx, dy);
@@ -437,6 +438,22 @@ export function syncRobotDisplay(world: World): void {
       mat4.multiply(transforms.world, transforms.world, transforms.face);
       screen.matrix.fromArray(transforms.world);
     }
+  });
+}
+
+/** Place the destination marker and ease it in while the robot is on its way, out once it has arrived. */
+export function syncMarkerView(world: World): void {
+  const delta = world.get(Time)!.delta;
+
+  world.query(Robot, MarkerView).readEach(([robot, mounted]) => {
+    const view = mounted!;
+    const drive = robot.drive;
+
+    if (drive.hasTarget) view.mesh.position.set(drive.targetX, drive.targetY, 0.02);
+
+    view.presence.value += ((drive.hasTarget ? 1 : 0) - view.presence.value) * (1 - Math.exp(-delta / 0.1));
+    view.age.value = drive.since;
+    view.mesh.visible = view.presence.value > 0.005;
   });
 }
 
