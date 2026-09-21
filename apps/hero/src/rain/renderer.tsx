@@ -11,24 +11,34 @@ import { solidOf } from '../letters/utils';
 import { jitter } from '../utils';
 import { rainActions } from './actions';
 import { COUNT, GLYPHS, THICKNESS } from './content';
-import { rainGlass } from './materials';
+import { rainGlass, rainShade } from './materials';
 
 const SLOTS = Array.from({ length: COUNT }, (_, index) => ({
   index,
   glyph: GLYPHS[Math.floor(jitter(index + 29) * GLYPHS.length)]!,
   material: rainGlass[index % rainGlass.length]!,
+  shade: rainShade[index % rainShade.length]!,
 }));
+/** Both draws of a slot's glyph shape it the same way, so the shadow is the pane's own outline. */
+const CELL = {
+  constraints: { width: { mode: 'exact', size: 2 } },
+  layout: { align: 'center', wrap: 'none' },
+  position: [-1, 0.5, 0],
+  style: { color: '#ffffff', fontSize: 1, lineHeight: 1 },
+} as const;
 const ink = new Box3();
 
 /**
  * A pool of stained-glass glyphs, mounted hidden so every slot is shaped, cut into a solid, and compiled before
- * playback. Each glyph sits on its ink centre, which is where its body's origin is.
+ * playback. Each glyph sits on its ink centre, which is where its body's origin is, and casts its shadow from a
+ * second draw of the same glyph that its shader projects onto the floor, drawn before any pane.
  */
 export function RainRenderer({ font }: { readonly font: SlugFont }) {
   const world = useWorld();
   const groups = useRef<(Group | null)[]>([]);
   const aligns = useRef<(Group | null)[]>([]);
   const texts = useRef<(ThreeText<typeof slug> | null)[]>([]);
+  const shades = useRef<(ThreeText<typeof slug> | null)[]>([]);
   const prepared = useRef(new Uint8Array(COUNT));
   usePreparation('rain', () => prepared.current.every((flag) => flag === 1));
 
@@ -48,6 +58,7 @@ export function RainRenderer({ font }: { readonly font: SlugFont }) {
 
         if (text === null || text === undefined || align === null || align === undefined) continue;
         if (text.commitState().status !== 'committed') continue;
+        if (shades.current[slot]?.commitState().status !== 'committed') continue;
 
         const layout = text.glyphs();
         const glyphId = layout.glyphIds[0];
@@ -70,7 +81,7 @@ export function RainRenderer({ font }: { readonly font: SlugFont }) {
 
   return (
     <TextGroup name="glyph-rain">
-      {SLOTS.map(({ index, glyph, material }) => (
+      {SLOTS.map(({ index, glyph, material, shade }) => (
         <group
           key={index}
           ref={(group) => {
@@ -83,16 +94,25 @@ export function RainRenderer({ font }: { readonly font: SlugFont }) {
               aligns.current[index] = group;
             }}
           >
+            <group name="rain-shade" renderOrder={-1}>
+              <Text
+                {...CELL}
+                font={font}
+                material={shade}
+                ref={(text) => {
+                  shades.current[index] = text;
+                }}
+              >
+                {glyph}
+              </Text>
+            </group>
             <Text
-              constraints={{ width: { mode: 'exact', size: 2 } }}
+              {...CELL}
               font={font}
-              layout={{ align: 'center', wrap: 'none' }}
               material={material}
-              position={[-1, 0.5, 0]}
               ref={(text) => {
                 texts.current[index] = text;
               }}
-              style={{ color: '#ffffff', fontSize: 1, lineHeight: 1 }}
             >
               {glyph}
             </Text>

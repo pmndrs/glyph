@@ -57,15 +57,16 @@ import { useWorld } from 'koota/react';
 import { Title, ShadowView, TitleView } from './traits';
 import { Time } from '../time/traits';
 import { letterActions } from './actions';
+import { SHADOW_LAMP, SHADOW_RECEIVER_Z } from './content';
 import type { World } from 'koota';
 
 /** Projection lamp above the title. Its offset makes lifted shadows spread down and left. */
-const LAMP = new Vector3(4, 6, 24);
+const LAMP = new Vector3(...SHADOW_LAMP);
 /** The receiving plane, in world units, centred on the title. */
 const WIDTH = 32;
 const HEIGHT = 20;
 /** One apparent receiving surface, just behind the flat letters and in front of the patterned parallax layers. */
-const RECEIVER_Z = -0.06;
+const RECEIVER_Z = SHADOW_RECEIVER_Z;
 /** Apparent slab thickness used by shadow marching and refraction. */
 const GLASS_DEPTH = 1.2;
 /** Quadratic height samples concentrate shadow detail near the floor. */
