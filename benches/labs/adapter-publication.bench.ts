@@ -203,8 +203,8 @@ group('allocation-light adapter publication @publication', () => {
       }
       return reusedCount;
     };
-    if (process.env.GLYPH_LABS_ARTIFACT_ROLE === 'candidate') assert.equal(reused, count);
-    else assert.equal(reused === 0 || reused === count, true);
+    if (process.env.GLYPH_LABS_ARTIFACT_ROLE === 'baseline') assert.equal(reused === 0 || reused === count, true);
+    else assert.equal(reused, count);
   });
 
   bench('normalize 1000 equivalent formatted flow updates @normalization', function* () {
