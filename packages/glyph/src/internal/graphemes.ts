@@ -69,6 +69,7 @@ export function ownClusterAlignedRanges<Range extends ClusterAlignableRange>(
   text: string,
   ranges: readonly Range[],
 ): readonly Range[] {
+  if (!text.isWellFormed()) return Object.freeze(ranges);
   const aligned = Object.freeze(resolveRangesToClusters(text, ranges));
   clusterAlignedTextByRanges.set(aligned, text);
   return aligned;

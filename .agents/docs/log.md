@@ -14,11 +14,13 @@
   record that their frozen spans were normalized against the exact text they accompany. React and Vue transfer that proof
   to the exact derived array created while binding loaded fonts. Three validates those spans but does not rebuild their
   grapheme boundary grid; arbitrary caller arrays, changed text, and unaligned spans still enter the existing
-  Unicode-alignment path. Focused regressions cover package-owned provenance and transfer, text association, unaligned
-  combining-mark input, nested React/Vue text, and invalid inline properties. An 8-block packed Labs comparison improves
-  1,000 equivalent `txt` formatted-flow updates by 5.8% (`8.71` to `8.21 ms`, p=.021) and the framework-bound equivalent
-  by 6.0% (`8.66` to `8.14 ms`, p=.038). A changed trailing-span stress case and cold plain/styled-flow creation, retained
-  plain normalization, Vue snapshot reuse, and TypeGPU position updates remain below the five-percent effect threshold.
+  Unicode-alignment path. Focused regressions cover positive transfer, unproven and changed-text fallback, malformed UTF-16,
+  text association, unaligned combining-mark input, nested React/Vue text, and invalid inline properties. An 8-block packed
+  Labs comparison improves 1,000 equivalent `txt` formatted-flow updates by 7.0% (`8.69` to `8.08 ms`, p<.001,
+  95% CI -8.9..-5.3%). The framework-shaped lane separately times record cloning and provenance transfer together with
+  Three normalization; it is neutral at -2.0% and does not claim to be a React or Vue render benchmark. A changed
+  trailing-span stress case and cold plain/styled-flow creation, retained plain normalization, Vue snapshot reuse, and
+  TypeGPU position updates remain below the five-percent effect threshold.
   This is a patch-level internal performance fix with no public API change.
 
 ## 2026-09-20
