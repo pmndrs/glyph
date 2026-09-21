@@ -64,6 +64,22 @@ test('nested structural spans preserve hierarchy after a joining boundary moves'
   assertAligned(literal);
 });
 
+test('equivalent formatted spans retain the accepted measurement snapshot', { timeout }, async () => {
+  const formatted = () => txt`${span({ color: '#ff2f00', decoration: { underline: true } })`same`} spans`;
+  const font = await fonts.load('inter');
+  const mounted = mount(font, [{ properties: { constraints, layout, style, text: formatted() } }]);
+  try {
+    mounted.scene.updateMatrixWorld(true);
+    const node = mounted.nodes[0];
+    const accepted = node.measure();
+    node.set({ text: formatted() });
+    mounted.scene.updateMatrixWorld(true);
+    assert.equal(node.measure(), accepted, 'equivalent formatted text must retain accepted state');
+  } finally {
+    unmount(mounted);
+  }
+});
+
 test('nested React Text crossing a joining boundary mounts and publishes', { timeout }, async () => {
   const { create } = await import('../support/r3f-test-renderer.mjs');
   const font = await fonts.load('inter');

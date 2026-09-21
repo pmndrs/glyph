@@ -8,6 +8,16 @@
   See [the benchmark package reference](packages/benchmarks.md) and D-370 in
   [the decision register](planning/decision-register.md).
 
+## 2026-09-21
+
+- **Skipped repeat grapheme segmentation for equivalent formatted text** — Three now validates fresh span input and
+  compares it with the accepted canonical spans before rebuilding the grapheme boundary grid. Equal text and spans reuse
+  the retained snapshot and measurement cache; changed or unaligned spans still enter the existing Unicode-alignment
+  path. A focused regression preserves measurement identity, and an 8-block packed Labs comparison improves 1,000
+  equivalent formatted-flow updates from `8.55 ms` to `8.07 ms` p50 (-5.6%, p=.010). Cold plain and styled-flow creation,
+  retained plain normalization, Vue snapshot reuse, and TypeGPU position updates remain below the five-percent effect
+  threshold. This is a patch-level internal performance fix with no public API change.
+
 ## 2026-09-20
 
 - **Removed the owned request-wire copy** — Planner frames now prepare checked offsets and write directly into the retained

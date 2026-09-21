@@ -1777,10 +1777,16 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
     (formatted?.spans as readonly TextSpan<Format>[] | undefined) ??
     (properties as DesiredTextState<Format>).spans ??
     [];
-  const resolved =
-    previous !== undefined && previous.text === text && previous.spans === stated
-      ? stated
-      : alignSpansToClusters(text, assertSpanRanges(text, stated));
+  let resolved: readonly TextSpan<Format>[];
+  if (previous !== undefined && previous.text === text && previous.spans === stated) {
+    resolved = stated;
+  } else {
+    const checked = assertSpanRanges(text, stated);
+    resolved =
+      previous !== undefined && previous.text === text && equalTextSpans(previous.spans, checked)
+        ? previous.spans
+        : alignSpansToClusters(text, checked);
+  }
   const spans = resolved === previous?.spans ? previous.spans : reuseOrCreateTextSpans(previous?.spans, resolved);
   const rootTechniques = immutableFontSelectionFonts(properties.font).map((font) => font.raster);
   const inheritedTechniques = [
@@ -1873,6 +1879,23 @@ function reuseOrCreateTextSpans<Format extends RasterFormatMetadata>(
     snapshot.push(Object.freeze({ ...span, ...(style === undefined ? {} : { style }) }));
   }
   return snapshot === undefined ? previous! : Object.freeze(snapshot);
+}
+
+function equalTextSpans<Format extends RasterFormatMetadata>(
+  previous: readonly TextSpan<Format>[],
+  spans: readonly TextSpan<Format>[],
+): boolean {
+  if (previous.length !== spans.length) return false;
+  return spans.every((span, index) => {
+    const prior = previous[index]!;
+    return (
+      prior.start === span.start &&
+      prior.end === span.end &&
+      prior.font === span.font &&
+      prior.material === span.material &&
+      (prior.style === span.style || equalTextPropertySnapshots(prior.style, span.style))
+    );
+  });
 }
 
 function assertNoRawSpans(value: object, subject: string): void {

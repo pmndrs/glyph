@@ -352,6 +352,9 @@ canonical framework-update path, which normalizes it once, reuses equal package-
 and reports whether the accepted revision changed. Neither adapter retains a caller-owned applied-state cache, so an ignored
 in-place mutation cannot swallow a later valid immutable update. Vue still detaches nested reactive records before the
 call so proxy mutation cannot rewrite a package-owned snapshot; Three adopts equal records without another clone.
+Fresh formatted input is range-validated first; when its text and spans equal the accepted canonical snapshot, Three
+reuses that snapshot before rebuilding the Unicode grapheme boundary grid. Changed spans still use the shared
+cluster-alignment path.
 Neither adapter mutates a render-time React ref or treats object identity as paragraph correctness. `TextGroup` material
 and render order follow the same rule through one shared
 imperative apply step rather than framework prop diffing, so removing either restores the Three default. Paragraph and group
