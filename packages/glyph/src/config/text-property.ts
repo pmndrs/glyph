@@ -21,7 +21,7 @@ export function reuseOrCreateTextPropertySnapshot<Value extends object>(
   label: string,
 ): Value {
   if (previous === value) return value;
-  if (previous !== undefined && equalTextProperty(previous, value)) return previous;
+  if (previous !== undefined && equalTextPropertySnapshots(previous, value)) return previous;
   if (isOwnedTextPropertySnapshot(value)) return value;
   let snapshot: Value;
   try {
@@ -32,7 +32,8 @@ export function reuseOrCreateTextPropertySnapshot<Value extends object>(
   return ownTextPropertySnapshot(snapshot);
 }
 
-function equalTextProperty(previous: unknown, next: unknown): boolean {
+/** @internal Structural equality for canonical package-owned text state. */
+export function equalTextPropertySnapshots(previous: unknown, next: unknown): boolean {
   if (Object.is(previous, next)) return true;
   if (typeof previous !== 'object' || previous === null || typeof next !== 'object' || next === null) return false;
   return equalTextPropertyObjects(previous, next, new WeakMap(), new WeakMap());

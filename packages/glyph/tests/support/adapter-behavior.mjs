@@ -153,11 +153,17 @@ export function adapterBehavior(name, mount) {
       text: 'same',
       style: { fontSize: 16 },
       constraints: { width: { mode: 'exact', size: 200 } },
+      flow: { regions: [{ key: 'main', shape: { kind: 'rectangle', bounds: [0, 0, 200, 100] } }] },
     };
     const host = await mount(initial);
+    const object = host.text;
+    const acceptedFlow = object.flow;
+    const acceptedMeasurement = object.measure();
     try {
       host.resetFrameRequests();
       await host.update({ ...initial, style: { fontSize: 16 }, constraints: { width: { mode: 'exact', size: 200 } } });
+      assert.equal(object.flow, acceptedFlow, 'an equivalent flow must reuse accepted state');
+      assert.equal(object.measure(), acceptedMeasurement, 'an equivalent flow must retain the measurement cache');
       assert.equal(host.frameRequests, 0, 'an unchanged paragraph must not request a frame');
     } finally {
       await host.unmount();
@@ -175,12 +181,8 @@ export function adapterBehavior(name, mount) {
     };
     const host = await mount(initial);
     const object = host.text;
-    const set = object.set.bind(object);
-    let semanticUpdates = 0;
-    object.set = (update) => {
-      semanticUpdates += 1;
-      return set(update);
-    };
+    const acceptedStyle = object.style;
+    const acceptedConstraints = object.constraints;
     try {
       host.resetFrameRequests();
       await host.update({
@@ -188,7 +190,8 @@ export function adapterBehavior(name, mount) {
         style: [false, { fontSize: 12 }, { fontSize: 16 }],
         constraints: [{ width: { mode: 'at-most', size: 100 } }, initial.constraints],
       });
-      assert.equal(semanticUpdates, 0);
+      assert.equal(object.style, acceptedStyle, 'equivalent style must reuse accepted state');
+      assert.equal(object.constraints, acceptedConstraints, 'equivalent constraints must reuse accepted state');
       assert.equal(host.frameRequests, 0, 'equivalent merged properties must not request a frame');
     } finally {
       await host.unmount();
@@ -201,18 +204,19 @@ export function adapterBehavior(name, mount) {
     const initial = { font: font.face, text: 'position', style: { fontSize: 16 } };
     const host = await mount(initial);
     const object = host.text;
-    const set = object.set.bind(object);
-    let semanticUpdates = 0;
-    object.set = (update) => {
-      semanticUpdates += 1;
-      return set(update);
-    };
+    const acceptedStyle = object.style;
+    const acceptedMeasurement = object.measure();
     try {
       await host.update({ ...initial, style: { fontSize: 16 }, position: [12, 24, 0] });
       assert.equal(host.text, object);
       assert.equal(object.position.x, 12);
       assert.equal(object.position.y, 24);
-      assert.equal(semanticUpdates, 0, 'object presentation must not invalidate paragraph semantics');
+      assert.equal(object.style, acceptedStyle, 'object presentation must retain accepted style state');
+      assert.equal(
+        object.measure(),
+        acceptedMeasurement,
+        'object presentation must not invalidate paragraph semantics',
+      );
     } finally {
       await host.unmount();
       font.dispose();

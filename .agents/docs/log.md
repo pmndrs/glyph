@@ -21,9 +21,14 @@
   calls from `0.651 ms` to `0.281 ms` p50 (-56.8%); normalized Three publication, TypeGPU position updates, and the cold
   1,000-label lifecycle remain below the five-percent effect threshold. A focused 8-block comparison of fresh but
   equivalent formatted updates improves from `35.78 ms` to `3.08 ms` p50 (-91.4%); all four neighboring workloads remain
-  neutral. This is a patch-level implementation optimization with no public API or behavior change. A fresh full-build
-  size report keeps core effectively flat (`-16 B` Brotli), reduces React by `163 B` Brotli, and adds `139 B` to Vue and
-  `218 B` to Three for canonical span reuse and the shared framework-update seam.
+  neutral. An adversarial-review follow-up made equal flow descriptions reuse the accepted canonical flow, removed an
+  allocation from the all-reused span path, and strengthened the shared React/Vue behavior tests around accepted flow and
+  measurement identity. The packed-artifact formatted-flow lane improves from `49.69 ms` to `10.03 ms` p50 (-79.8%);
+  the new cold styled-flow lane remains statistically neutral, although the candidate run was clock-confounded and the
+  cold confidence interval is correspondingly wide. This is a patch-level correctness and performance fix with no public
+  API change; React now follows immutable-prop semantics instead of observing unsupported in-place prop mutation. A fresh
+  full-build size report keeps core effectively flat (`-17 B` Brotli), reduces React by `72 B`
+  Brotli, and adds `231 B` to Vue and `216 B` to Three for canonical span/flow reuse and the shared framework-update seam.
 
 - **Kept direct TypeGPU position updates out of semantic publication** — `TypeGpuText.update({ position })` now writes
   only its retained uniform; it does not merge desired text, stage a controller update, enter Wasm, or publish renderer
