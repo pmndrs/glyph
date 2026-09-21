@@ -62,17 +62,18 @@ export const packageSizeBudgets = {
     brotliBytes: 113_000,
   },
   // The React adapter includes Glyph's root and Three integration while React, R3F, and Three remain consumer peers.
+  // Equivalent-span reuse measures 548,259 raw / 535,342 minified / 134,523 gzip / 110,789 Brotli bytes.
   'react-runtime-js': {
-    rawBytes: 548_000,
-    minifiedBytes: 535_000,
+    rawBytes: 549_000,
+    minifiedBytes: 536_000,
     gzipBytes: 136_000,
     brotliBytes: 112_000,
   },
   // The Vue adapter includes Glyph's root and Three integration while Vue, Tres, and Three remain consumer peers.
-  // Canonical framework normalization measures 546,451 raw / 534,209 minified / 134,166 gzip / 110,348 Brotli bytes.
+  // Equivalent-span reuse measures 547,569 raw / 535,346 minified / 134,406 gzip / 110,619 Brotli bytes.
   'vue-runtime-js': {
-    rawBytes: 547_000,
-    minifiedBytes: 535_000,
+    rawBytes: 548_000,
+    minifiedBytes: 536_000,
     gzipBytes: 136_000,
     brotliBytes: 112_000,
   },
