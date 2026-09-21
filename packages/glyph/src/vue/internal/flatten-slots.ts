@@ -1,7 +1,7 @@
 import { Comment, Fragment, Text as TextVNode, isVNode, type VNode, type VNodeArrayChildren } from 'vue';
 
 import type { FontFaceSelection } from '../../font-face.js';
-import { resolveRangesToClusters } from '../../formatted-text.js';
+import { ownClusterAlignedSpans } from '../../formatted-text.js';
 import type { FontSelection } from '../../loaded-font.js';
 import type { PropertyList, TextStyle } from '../../text-properties.js';
 import type { RasterFormatMetadata } from '../../config/raster-format.js';
@@ -107,7 +107,7 @@ export function flattenVueText(
   const text = chunks.join('');
   return Object.freeze({
     text,
-    spans: Object.freeze(resolveRangesToClusters(text, spans)),
+    spans: ownClusterAlignedSpans(text, spans),
     fontFaces: Object.freeze(fontFaces),
   });
 }

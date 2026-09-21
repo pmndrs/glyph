@@ -57,6 +57,19 @@ function formattedLabel(text: string) {
   return txt`${span({ color: '#ffffff', decoration: { underline: true } })`${text.slice(0, 5)}`}${text.slice(5)}`;
 }
 
+function trailingSpanLabel(text: string, trailingColor: string) {
+  const content = `${text} alpha beta gamma delta epsilon`;
+  const spanCount = 8;
+  return {
+    text: content,
+    spans: Array.from({ length: spanCount }, (_, index) => ({
+      start: Math.floor((content.length * index) / spanCount),
+      end: Math.floor((content.length * (index + 1)) / spanCount),
+      style: { color: index === spanCount - 1 ? trailingColor : '#ffffff' },
+    })),
+  };
+}
+
 function createLabels(count: number, content: 'plain' | 'styled-flow' = 'plain') {
   const root = glyph.handle(
     `labs:adapter-publication:${String(nextHandle++)}`,
@@ -221,6 +234,33 @@ group('allocation-light adapter publication @publication', () => {
         },
       })),
     );
+    let selected = 0;
+
+    const textCount = yield () => {
+      selected = selected === 0 ? 1 : 0;
+      const next = desired[selected]!;
+      for (let index = 0; index < created.labels.length; index++) {
+        created.labels[index]!.set(next[index]!);
+      }
+      created.scene.updateMatrixWorld(true);
+      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      return created.textGroup.textCount;
+    };
+    assert.equal(textCount, count);
+
+    disposeLabels(created);
+  });
+
+  bench('mutate one trailing span across 1000 formatted labels @spans', function* () {
+    const count = 1_000;
+    const created = createLabels(count);
+    const desired = ['#ff2f00', '#2f7fff'].map((trailingColor) =>
+      created.labels.map((label) => ({ text: trailingSpanLabel(label.text, trailingColor) })),
+    );
+    for (let index = 0; index < created.labels.length; index++) {
+      created.labels[index]!.set(desired[0]![index]!);
+    }
+    created.scene.updateMatrixWorld(true);
     let selected = 0;
 
     const textCount = yield () => {

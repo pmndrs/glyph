@@ -1,5 +1,7 @@
 import { graphemeSegments } from 'unicode-segmenter/grapheme';
 
+const clusterAlignedTextByRanges = new WeakMap<object, string>();
+
 /** Extended grapheme cluster boundaries (UTF-16 units), pinned to the same Unicode version as the Rust shaper's `cluster_state.rs` segmenter. Use this, not `Intl.Segmenter`, wherever boundaries must agree with the engine's grid — host ICU versions drift. */
 export function findGraphemeBoundaries(text: string): Uint32Array {
   assertWellFormed(text);
@@ -58,6 +60,23 @@ export function resolveRangesToClusters<Range extends ClusterAlignableRange>(
 ): readonly Range[] {
   if (ranges.length === 0 || !text.isWellFormed()) return ranges;
   return alignRangesToClusters(ranges, findGraphemeBoundaries(text));
+}
+
+/** Resolves, freezes, and records package-owned ranges so adapters can prove that the exact array is already on this
+ *  text's cluster grid. The text association matters: reusing an array with different content must fall back to normal
+ *  Unicode alignment. */
+export function ownClusterAlignedRanges<Range extends ClusterAlignableRange>(
+  text: string,
+  ranges: readonly Range[],
+): readonly Range[] {
+  const aligned = Object.freeze(resolveRangesToClusters(text, ranges));
+  clusterAlignedTextByRanges.set(aligned, text);
+  return aligned;
+}
+
+/** True only for an exact package-owned range array normalized against the same text. */
+export function areOwnedRangesClusterAligned(text: string, ranges: readonly ClusterAlignableRange[]): boolean {
+  return clusterAlignedTextByRanges.get(ranges) === text;
 }
 
 /** End of the cluster containing `offset`, or `offset` itself when it is already a boundary or lies outside the text's range. */

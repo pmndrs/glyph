@@ -5,7 +5,7 @@ import { createElement } from 'react';
 import { glyph, span, txt, bitmap } from '@pmndrs/glyph';
 import { Text as R3fText } from '@pmndrs/glyph/react';
 import { createFontCache, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
-import { findGraphemeBoundaries } from '../../dist/internal/graphemes.js';
+import { areOwnedRangesClusterAligned, findGraphemeBoundaries } from '../../dist/internal/graphemes.js';
 
 globalThis.self ??= globalThis;
 globalThis.requestAnimationFrame ??= () => 0;
@@ -40,6 +40,8 @@ test('txt resolves a styled fragment opening with a combining mark onto the base
   assert.deepEqual([...findGraphemeBoundaries(literal.text)], [0, 2, 3]);
   assert.deepEqual(ranges(literal), [[2, 3]]);
   assertAligned(literal);
+  assert.equal(areOwnedRangesClusterAligned(literal.text, literal.spans), true);
+  assert.equal(areOwnedRangesClusterAligned(`${literal.text}c`, literal.spans), false);
 
   const font = await fonts.load('inter');
   const mounted = mount(font, [{ properties: { constraints, layout, style, text: literal } }]);
@@ -64,17 +66,22 @@ test('nested structural spans preserve hierarchy after a joining boundary moves'
   assertAligned(literal);
 });
 
-test('equivalent formatted spans retain the accepted measurement snapshot', { timeout }, async () => {
-  const formatted = () => txt`${span({ color: '#ff2f00', decoration: { underline: true } })`same`} spans`;
+test('repeated raw Unicode spans realign before retaining the accepted measurement', { timeout }, async () => {
+  const text = `a${ACUTE}b`;
+  const formatted = () => ({
+    text,
+    spans: [{ start: 1, end: 3, style: { color: '#ff2f00', decoration: { underline: true } } }],
+  });
   const font = await fonts.load('inter');
   const mounted = mount(font, [{ properties: { constraints, layout, style, text: formatted() } }]);
   try {
     mounted.scene.updateMatrixWorld(true);
     const node = mounted.nodes[0];
     const accepted = node.measure();
+    assert.equal(accepted.glyphCount, 2);
     node.set({ text: formatted() });
     mounted.scene.updateMatrixWorld(true);
-    assert.equal(node.measure(), accepted, 'equivalent formatted text must retain accepted state');
+    assert.equal(node.measure(), accepted, 'equivalent unaligned input must retain its aligned accepted state');
   } finally {
     unmount(mounted);
   }

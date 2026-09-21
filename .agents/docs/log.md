@@ -10,13 +10,14 @@
 
 ## 2026-09-21
 
-- **Skipped repeat grapheme segmentation for equivalent formatted text** — Three now validates fresh span input and
-  compares it with the accepted canonical spans before rebuilding the grapheme boundary grid. Equal text and spans reuse
-  the retained snapshot and measurement cache; changed or unaligned spans still enter the existing Unicode-alignment
-  path. A focused regression preserves measurement identity, and an 8-block packed Labs comparison improves 1,000
-  equivalent formatted-flow updates from `8.55 ms` to `8.07 ms` p50 (-5.6%, p=.010). Cold plain and styled-flow creation,
-  retained plain normalization, Vue snapshot reuse, and TypeGPU position updates remain below the five-percent effect
-  threshold. This is a patch-level internal performance fix with no public API change.
+- **Skipped repeat grapheme segmentation for package-owned formatted text** — The `txt`, React, and Vue compilers now
+  record that their frozen spans were normalized against the exact text they accompany. Three validates those spans but
+  does not rebuild their grapheme boundary grid; arbitrary caller arrays, changed text, and unaligned spans still enter
+  the existing Unicode-alignment path. Focused regressions cover package-owned provenance, text association, unaligned
+  combining-mark input, nested React joins, and invalid inline properties. An 8-block packed Labs comparison improves
+  1,000 equivalent formatted-flow updates from `8.68 ms` to `8.03 ms` p50 (-7.5%, p=.003). A changed trailing-span stress
+  case and cold plain/styled-flow creation, retained plain normalization, Vue snapshot reuse, and TypeGPU position updates
+  remain below the five-percent effect threshold. This is a patch-level internal performance fix with no public API change.
 
 ## 2026-09-20
 
