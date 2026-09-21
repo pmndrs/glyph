@@ -9,6 +9,7 @@ import {
   areOwnedRangesClusterAligned,
   findGraphemeBoundaries,
   inheritClusterAlignedRanges,
+  ownClusterAlignedRanges,
 } from '../../dist/internal/graphemes.js';
 
 globalThis.self ??= globalThis;
@@ -64,6 +65,35 @@ test('txt resolves a styled fragment opening with a combining mark onto the base
   } finally {
     unmount(mounted);
   }
+});
+
+test('span provenance inheritance realigns unproven and changed-text sources', () => {
+  const text = `a${ACUTE}b`;
+  const raw = Object.freeze([Object.freeze({ start: 1, end: 3 })]);
+  const fromUnproven = inheritClusterAlignedRanges(
+    text,
+    raw,
+    raw.map((entry) => Object.freeze({ ...entry })),
+  );
+  assert.deepEqual(ranges({ spans: fromUnproven }), [[2, 3]]);
+  assert.equal(areOwnedRangesClusterAligned(text, fromUnproven), true);
+  assert.equal(fromUnproven.every(Object.isFrozen), true);
+
+  const source = ownClusterAlignedRanges('ab', Object.freeze([Object.freeze({ start: 1, end: 2 })]));
+  const fromChangedText = inheritClusterAlignedRanges(
+    text,
+    source,
+    source.map((entry) => Object.freeze({ ...entry })),
+  );
+  assert.deepEqual(ranges({ spans: fromChangedText }), [[2, 2]]);
+  assert.equal(areOwnedRangesClusterAligned(text, fromChangedText), true);
+});
+
+test('malformed UTF-16 is never marked as cluster aligned', () => {
+  const text = '\ud800';
+  const spans = ownClusterAlignedRanges(text, Object.freeze([Object.freeze({ start: 0, end: 1 })]));
+  assert.equal(Object.isFrozen(spans), true);
+  assert.equal(areOwnedRangesClusterAligned(text, spans), false);
 });
 
 test('nested structural spans preserve hierarchy after a joining boundary moves', () => {

@@ -287,10 +287,11 @@ The main package suite measures public-system edits, measurement and glyph acces
 font-size relayout, retained batches, and 1,000-label order changes. Each mutation case deliberately invalidates the state
 it names instead of timing an accidental cache hit. The focused adapter-publication suite carries eight workloads: 1,000
 normalized-equal retained Three updates, 1,000 unchanged plain-record Vue snapshot-helper calls, equivalent `txt`
-formatted flow, equivalent framework-bound formatted flow, a changed trailing span, the complete cold lifecycle of plain
-and styled-flow 1,000-label roots, and 1,000 direct TypeGPU position-only updates. The framework-bound lane deliberately
-clones the aligned records as React and Vue font binding does; historical packages receive an unproven array while
-packages with the transfer helper preserve exact text/array provenance. The Vue helper case isolates snapshot comparison
+formatted flow, equivalent framework-shaped formatted flow, a changed trailing span, the complete cold lifecycle of plain
+and styled-flow 1,000-label roots, and 1,000 direct TypeGPU position-only updates. The framework-shaped lane times the
+record cloning and provenance transfer shape used by React and Vue together with Three normalization; it is not a framework
+render benchmark and does not import either adapter. Historical packages receive an unproven array while packages with the
+transfer helper preserve exact text/array provenance. The Vue helper case isolates snapshot comparison
 cost and does not claim to measure Vue proxy traps or a framework render. The isolated package consumers install the
 pinned optional TypeGPU peer so the last case exercises the packed `/typegpu` entry rather than workspace source. Browser
 `startupMs` remains the end-to-end cold-start measure across module, asset, renderer, and scene activation. Fresh-process

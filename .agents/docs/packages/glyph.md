@@ -357,6 +357,7 @@ exact text whose Unicode cluster grid it uses. React and Vue transfer that packa
 derives replacement span records with unchanged boundaries. Three still range-validates every formatted update, but it
 skips rebuilding the grapheme boundary grid only for that exact proven text/array pair. Arbitrary caller arrays, text
 changes, and unproven derived arrays still use the shared cluster-alignment path before equal accepted spans may be reused.
+Malformed UTF-16 is rejected by the existing public validation path and is never marked as cluster-aligned provenance.
 Neither adapter mutates a render-time React ref or treats object identity as paragraph correctness. `TextGroup` material
 and render order follow the same rule through one shared
 imperative apply step rather than framework prop diffing, so removing either restores the Three default. Paragraph and group

@@ -30,9 +30,10 @@ interface FormattedTextInternals {
     spans: readonly Span[],
   ): readonly Span[];
 }
-const formattedTextPackage = (await import(
-  pathToFileURL(resolve(packageRoot, 'dist/formatted-text.js')).href
-)) as FormattedTextInternals;
+const formattedTextPath = resolve(packageRoot, 'dist/formatted-text.js');
+const formattedTextPackage = (
+  existsSync(formattedTextPath) ? await import(pathToFileURL(formattedTextPath).href) : {}
+) as FormattedTextInternals;
 interface ReactiveSnapshotPackage {
   snapshotReactivePropertyList<Value extends object>(value: unknown, label: string, previous?: Value): Value;
 }
@@ -68,8 +69,7 @@ function formattedLabel(text: string) {
   return txt`${span({ color: '#ffffff', decoration: { underline: true } })`${text.slice(0, 5)}`}${text.slice(5)}`;
 }
 
-function frameworkBoundLabel(text: string) {
-  const flattened = formattedLabel(text);
+function bindFrameworkLabel(flattened: ReturnType<typeof formattedLabel>) {
   const spans = flattened.spans.map((entry) => Object.freeze({ ...entry }));
   return Object.freeze({
     text: flattened.text,
@@ -274,27 +274,25 @@ group('allocation-light adapter publication @publication', () => {
     disposeLabels(created);
   });
 
-  bench('normalize 1000 framework-bound formatted flow updates @frameworks', function* () {
+  bench('bind and normalize 1000 framework-shaped formatted flow updates @frameworks', function* () {
     const count = 1_000;
     const created = createLabels(count);
-    const desired = [0, 1].map(() =>
-      created.labels.map((label) => ({
-        text: frameworkBoundLabel(label.text),
-        style: { fontSize: 16 },
-        layout: { wrap: 'word' as const },
-        constraints: { width: { mode: 'exact' as const, size: 160 } },
-        flow: {
-          regions: [{ key: 'main', shape: { kind: 'rectangle' as const, bounds: [0, 0, 160, 64] as const } }],
-        },
-      })),
-    );
+    const flattened = [0, 1].map(() => created.labels.map((label) => formattedLabel(label.text)));
     let selected = 0;
 
     const textCount = yield () => {
       selected = selected === 0 ? 1 : 0;
-      const next = desired[selected]!;
+      const next = flattened[selected]!;
       for (let index = 0; index < created.labels.length; index++) {
-        created.labels[index]!.set(next[index]!);
+        created.labels[index]!.set({
+          text: bindFrameworkLabel(next[index]!),
+          style: { fontSize: 16 },
+          layout: { wrap: 'word' as const },
+          constraints: { width: { mode: 'exact' as const, size: 160 } },
+          flow: {
+            regions: [{ key: 'main', shape: { kind: 'rectangle' as const, bounds: [0, 0, 160, 64] as const } }],
+          },
+        });
       }
       created.scene.updateMatrixWorld(true);
       if (created.textGroup.error !== undefined) throw created.textGroup.error;
