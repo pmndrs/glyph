@@ -1,6 +1,6 @@
 /* @workflow {
   "name": "hero:play-button-check",
-  "summary": "Power up the play button's segment display on WebGPU, verify its self-test, label, and hover, and tile them.",
+  "summary": "Draw the play button in on WebGPU, verify its label fills in block by block and hover brightens it, and tile the moments.",
   "requirements": "Workspace dependencies, baked hero assets, and GPU-enabled Chromium through Vitexec.",
   "writes": "apps/hero/.cache/play-button.png and stdout",
   "args": ["--gpu", "--timeout", "180", "--screenshot", ".cache/play-button.png"]
@@ -90,18 +90,26 @@ const capture = async (target: RenderTarget) => {
   }
 };
 
-/** Pixels the module lights at all, pixels bright enough to be lit segments, and the summed brightness. */
-const measure = (pixels: ArrayLike<number>) => {
+/**
+ * Pixels the button lights at all, pixels of the label bright enough to be its lit blocks, and the summed
+ * brightness. The label is read inside the frame, so the frame's own stroke does not count as label.
+ */
+const measure = (pixels: ArrayLike<number>, width: number, height: number) => {
+  const { aspect } = world.get(Viewport)!;
   let lit = 0;
   let bright = 0;
   let light = 0;
 
   for (let i = 0; i < pixels.length; i += 4) {
     const peak = Math.max(pixels[i]!, pixels[i + 1]!, pixels[i + 2]!);
+    const pixel = i / 4;
+    const x = ((pixel % width) / width - 0.5) * 2 * aspect;
+    const y = (Math.floor(pixel / width) / height - 0.5) * 2;
+    const withinFrame = Math.abs(x) < BUTTON_WIDTH / 2 - 0.08 && Math.abs(y) < BUTTON_HEIGHT / 2 - 0.08;
 
     if (peak > 8) lit++;
 
-    if (peak > 160) bright++;
+    if (withinFrame && peak > 160) bright++;
 
     light += peak;
   }
@@ -117,24 +125,24 @@ const emberAge = (seconds: number) => {
 };
 
 const tiles = [0, 1, 2].map(() => new RenderTarget(1280, 720));
-// Every segment lit in the self-test, then the label alone, then the label under the pointer.
-emberAge(REVEAL_AFTER + REVEAL_SECONDS * 0.42);
-const selfTest = measure(await capture(tiles[0]!));
-const selfTestReveal = uPlayReveal.value;
+// The label half filled in, then whole, then under the pointer.
+emberAge(REVEAL_AFTER + REVEAL_SECONDS * 0.55);
+const filling = measure(await capture(tiles[0]!), 1280, 720);
+const fillingReveal = uPlayReveal.value;
 emberAge(REVEAL_AFTER + REVEAL_SECONDS + 0.2);
-const label = measure(await capture(tiles[1]!));
+const label = measure(await capture(tiles[1]!), 1280, 720);
 const labelReveal = uPlayReveal.value;
 uPlayHover.value = 1;
-const hovered = measure(await capture(tiles[2]!));
+const hovered = measure(await capture(tiles[2]!), 1280, 720);
 uPlayHover.value = 0;
 
-if (selfTestReveal < 0.35 || selfTestReveal > 0.5 || labelReveal !== 1) {
-  throw new Error(`The reveal did not reach its moments: ${JSON.stringify({ selfTestReveal, labelReveal })}`);
+if (fillingReveal < 0.5 || fillingReveal > 0.62 || labelReveal !== 1) {
+  throw new Error(`The reveal did not reach its moments: ${JSON.stringify({ fillingReveal, labelReveal })}`);
 }
 
-// Every segment lit is far more segment than the label's nineteen of forty-four.
-if (label.bright < 100 || selfTest.bright <= label.bright * 1.4) {
-  throw new Error(`The self-test did not light more than the label: ${JSON.stringify({ selfTest, label })}`);
+// Half way in, only some of the label's blocks have lit.
+if (label.bright < 100 || filling.bright < 20 || filling.bright >= label.bright * 0.85) {
+  throw new Error(`The label did not fill in block by block: ${JSON.stringify({ filling, label })}`);
 }
 
 if (hovered.light <= label.light * 1.05) {
@@ -170,7 +178,7 @@ renderer.setRenderTarget(null);
 renderer.render(sheet, camera);
 console.log(
   'hero-play-button-ready',
-  JSON.stringify({ backend: 'webgpu', selfTest, label, hovered, selfTestReveal, labelReveal }),
+  JSON.stringify({ backend: 'webgpu', filling, label, hovered, fillingReveal, labelReveal }),
 );
 quad.dispose();
 closeUpQuad.dispose();

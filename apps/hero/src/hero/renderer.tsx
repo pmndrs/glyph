@@ -32,7 +32,7 @@ export function Hero() {
       <BlackHole />
       <StarEmbersRenderer font={fonts.stars} />
       <RainRenderer font={fonts.title} />
-      <PlayButtonRenderer />
+      <PlayButtonRenderer font={fonts.robot} />
       <Post />
     </>
   );

@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:dc4dfae5451e314735b6653df93c70b1e9dcf6f6bc64383c8e8e4af9a8764bce'
+source_digest: 'sha256:c247629798311c6cc5186fee24e4e63cc50baf2a9cd1a553694489dae0a9adde'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -151,16 +151,16 @@ sources:
     title: R3F clock and input
   - id: play-button
     resource: ../../../apps/hero/src/play-button/renderer.tsx
-    title: Play button sheet, camera, and segment-display module
+    title: Play button sheet, camera, and framed pixel label
   - id: play-button-materials
     resource: ../../../apps/hero/src/play-button/materials.ts
-    title: Segment-display distance fields, module shading, power-up, and sheet composition
+    title: Quantized frame, block-sampled label, stepped reveal, and sheet composition
   - id: play-button-systems
     resource: ../../../apps/hero/src/play-button/systems.ts
     title: Reveal timing, hit test, and mounted sheet synchronization
   - id: play-button-check
     resource: ../../../apps/hero/scripts/play-button.probe.ts
-    title: WebGPU power-up, self-test, label, and hover checks with a tiled close-up
+    title: WebGPU draw-in, block fill, and hover checks with a tiled close-up
   - id: rain-pane
     resource: ../../../apps/hero/src/rain/materials.ts
     title: Rain panes, composed by multiplication and captured by the glass projection
@@ -186,7 +186,7 @@ The world runs one of two modes, held in the world-level `Mode` trait. `sequence
 the title drops, the robot drives in, stops, greets, and leaves, and the black hole swallows the scene. While the
 hole is closed, any press takes the wheel into `play`: a dropped title stays put, a robot on the floor carries on
 from where it is, and the tagline backspaces away. Once the hole has opened, presses wait until the embers have gone
-out and a segment display reading "PLAY" has powered up over the black frame; pressing it restarts the scene into `play` with the
+out and a "Play" button has drawn itself over the black frame; pressing it restarts the scene into `play` with the
 robot scooting in from off screen. In play each press on the floor sends the robot to that point. It never drives a
 straight line, and it rests, looks up, and greets at each stop. Space returns to `sequence` from either mode.
 
@@ -382,16 +382,15 @@ the paper both lighter, where the shadows were, and darker, where the caustics w
 
 The play button lives on its own screen-space sheet with an orthographic camera fitted to the viewport aspect, so
 its geometry and hit test share the pointer's normalized units. The hero's post pass renders that sheet after the
-scene has gone black and adds it to the finished frame, which is why it survives the ember fade. The button is one
-distance-field shader after Maxime Heckel's isometric LCD: a black metal module lit from above with a recessed
-screen, reading "PLAY" on a leaning segment display in the title's red over the faint ghosts of every segment,
-including the four diagonals, with a soft glow, scanlines, and light spilling onto the black around it. Each cell's
-eleven segments are cut from a hollow box by diagonals through its corners, as in the reference's WGSL, and the
-label's lit set is chosen while the graph is built, so the shader carries no character table. Powering up, the
-module fades in, lights every segment in a self-test, then settles on the label; hover brightens the segments and
-their glow. It stays mounted and compiles during preparation, revealed by uniforms. `hero:play-button-check`
-powers the module up on WebGPU, verifies that the self-test lights more than the label and that hover brightens
-it, and tiles the three moments with a close-up of the module.
+scene has gone black and adds it to the finished frame, which is why it survives the ember fade. Everything on it
+is quantized to one pixel, two of the pixel font's squares. The frame is a rounded-rectangle distance field
+evaluated at pixel centres, a one-pixel outline that draws itself round from the top, with its halo and pointer
+fill held to a few levels. The label samples the font's coverage at the four squares of each pixel and lights the
+pixel when at least half are ink, keeping the hair of a gap the font leaves between squares; the pixels
+materialize in a fixed random order as the frame closes, lit by a sweep and by hover. The reveal advances in
+twenty notches. Both stay mounted and compile during preparation, revealed by uniforms. `hero:play-button-check`
+draws the button in on WebGPU, verifies that half way in only some of the pixels have lit and that hover brightens
+it, and tiles the three moments with a close-up.
 The finale check verifies the black frame stays black at the ember fade, the button then lights it, a press beside
 it changes nothing, a press on it restores the paper with the robot driving, and Space returns to the sequence.
 
