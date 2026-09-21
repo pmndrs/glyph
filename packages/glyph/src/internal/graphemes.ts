@@ -69,8 +69,10 @@ export function ownClusterAlignedRanges<Range extends ClusterAlignableRange>(
   text: string,
   ranges: readonly Range[],
 ): readonly Range[] {
+  freezeRanges(ranges);
   if (!text.isWellFormed()) return Object.freeze(ranges);
   const aligned = Object.freeze(resolveRangesToClusters(text, ranges));
+  freezeRanges(aligned);
   clusterAlignedTextByRanges.set(aligned, text);
   return aligned;
 }
@@ -82,7 +84,7 @@ export function inheritClusterAlignedRanges<Range extends ClusterAlignableRange>
   source: readonly ClusterAlignableRange[],
   ranges: readonly Range[],
 ): readonly Range[] {
-  return areOwnedRangesClusterAligned(text, source)
+  return areOwnedRangesClusterAligned(text, source) && haveEqualBoundaries(source, ranges)
     ? markOwnedRangesClusterAligned(text, Object.freeze(ranges))
     : ownClusterAlignedRanges(text, ranges);
 }
@@ -96,8 +98,23 @@ function markOwnedRangesClusterAligned<Range extends ClusterAlignableRange>(
   text: string,
   ranges: readonly Range[],
 ): readonly Range[] {
+  freezeRanges(ranges);
   clusterAlignedTextByRanges.set(ranges, text);
   return ranges;
+}
+
+function haveEqualBoundaries(
+  source: readonly ClusterAlignableRange[],
+  ranges: readonly ClusterAlignableRange[],
+): boolean {
+  return (
+    source.length === ranges.length &&
+    source.every((range, index) => range.start === ranges[index]!.start && range.end === ranges[index]!.end)
+  );
+}
+
+function freezeRanges(ranges: readonly ClusterAlignableRange[]): void {
+  for (const range of ranges) Object.freeze(range);
 }
 
 /** End of the cluster containing `offset`, or `offset` itself when it is already a boundary or lies outside the text's range. */

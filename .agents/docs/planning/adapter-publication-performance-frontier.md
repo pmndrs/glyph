@@ -63,10 +63,12 @@ Prepared planner frames now write directly into the retained Wasm request arena;
 byte-for-byte compatibility path. The `txt`, React, and Vue compilers record that their frozen spans are already normalized
 against the exact text they accompany, so Three validates but does not rebuild that grapheme grid. Arbitrary caller arrays,
 changed text, and unaligned spans still enter the shared Unicode path. The existing `withGlyphs` path already starts sparse
-and promotes only a repeated or explicit inspection. Focused Labs evidence improves one semantic request by 5.8%, 1,000
-order records by 7.1% and 1,000 equivalent `txt` formatted-flow updates by 7.0%. A framework-shaped lane separately prices
+and promotes only a repeated or explicit inspection. Provenance transfer checks every ordered boundary, and React interns
+equal ordered FontFace-selection lists so equivalent nested Text renders do not rebuild their mounted font store. Focused
+Labs evidence improves one semantic request by 5.8%, 1,000
+order records by 7.1% and 1,000 equivalent `txt` formatted-flow updates by 7.3%. A framework-shaped lane separately prices
 record cloning and provenance transfer together with Three normalization without claiming to render either framework; it
-is neutral at -2.0%. A changed trailing-span stress case and the neighboring retained and cold workloads remain below the
+is neutral at -2.5%. A changed trailing-span stress case and the neighboring retained and cold workloads remain below the
 five-percent regression threshold.
 
 The remaining measured host work is now:

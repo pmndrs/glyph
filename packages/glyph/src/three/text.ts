@@ -1791,7 +1791,7 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
     // Glyph's text compilers hand off package-owned arrays already normalized to this text's cluster grid. Raw caller
     // arrays still take the exact shared Unicode path; the provenance marker is only a redundant-work fast path.
     const aligned = areOwnedSpansClusterAligned(text, checked) ? checked : alignSpansToClusters(text, checked);
-    spans = reuseOrCreateTextSpans(previous?.text === text ? previous.spans : undefined, aligned);
+    spans = reuseOrCreateTextSpans(previous?.spans, aligned);
   }
   const rootTechniques = immutableFontSelectionFonts(properties.font).map((font) => font.raster);
   const inheritedTechniques = [
