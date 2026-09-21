@@ -11,7 +11,7 @@ import { createRenderPlanner, type RenderPlanner, type RenderPlannerOptions } fr
 import { compileCodec, type CodecDescriptor, type CodecIdFactory } from '../config/codec.js';
 import { CodecIdScope } from './render-id.js';
 import { resolveRasterCodecInternal } from './raster-codec-registry.js';
-import { preparePlannerFrameUpdate, type PlannerFrameUpdate } from './frame-wire.js';
+import { preparePlannerFrameUpdate, type PlannerFrameUpdate, writePreparedPlannerFrameUpdate } from './frame-wire.js';
 import {
   assertGlyphId,
   createHandleIdFactory,
@@ -1272,7 +1272,10 @@ export class PlanTransport {
     if (requestPointer === 0) {
       throw engineStatusError('resolve text request arena', textShaperAbi.status.rootMissing);
     }
-    request.write(new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength));
+    writePreparedPlannerFrameUpdate(
+      request,
+      new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength),
+    );
     this.#stagedUpdate = { requestLength, initialMemoryBuffer };
     return requestLength;
   }
@@ -1334,7 +1337,10 @@ export class PlanTransport {
     for (;;) {
       const requestPointer = this.#exports.requestPointer(this.#handle);
       if (requestPointer === 0) throw engineStatusError('resolve text request arena', textShaperAbi.status.rootMissing);
-      request.write(new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength));
+      writePreparedPlannerFrameUpdate(
+        request,
+        new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength),
+      );
       const resultPointer = this.#exports.measureParagraph(this.#handle, requestPointer, requestLength, paragraphId);
       const memoryBuffer = this.#exports.memory.buffer;
       if (resultPointer === 0) throw engineStatusError('measure paragraph', textShaperAbi.status.resultTooLarge);

@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { compilePlannerFrameUpdate, preparePlannerFrameUpdate } from '../../dist/internal/frame-wire.js';
+import {
+  compilePlannerFrameUpdate,
+  preparePlannerFrameUpdate,
+  writePreparedPlannerFrameUpdate,
+} from '../../dist/internal/frame-wire.js';
 import { permanentGlyphId } from '../../dist/internal/glyph-id.js';
 import { engineFrameUpdateBytes } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
@@ -43,13 +47,13 @@ test('prepared frame writes exact bytes into a nonzero-offset request arena', ()
   const storage = new Uint8Array(prepared.byteLength + 16).fill(0xa5);
   const arena = storage.subarray(8, 8 + prepared.byteLength);
 
-  prepared.write(arena);
+  writePreparedPlannerFrameUpdate(prepared, arena);
 
   assert.equal(prepared.byteLength, expected.byteLength);
   assert.deepEqual(arena, expected);
   assert.deepEqual(storage.subarray(0, 8), new Uint8Array(8).fill(0xa5));
   assert.deepEqual(storage.subarray(8 + prepared.byteLength), new Uint8Array(8).fill(0xa5));
-  assert.throws(() => prepared.write(arena.subarray(1)), /exactly/u);
+  assert.throws(() => writePreparedPlannerFrameUpdate(prepared, arena.subarray(1)), /exactly/u);
 });
 
 test('production frame compiler preserves the established benchmark request bytes', async () => {
