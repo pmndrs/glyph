@@ -72,10 +72,10 @@ function formattedLabel(text: string) {
   return txt`${span({ color: '#ffffff', decoration: { underline: true } })`${text.slice(0, 5)}`}${text.slice(5)}`;
 }
 
-function bindFrameworkLabel(flattened: ReturnType<typeof formattedLabel>) {
+function bindFrameworkLabel(flattened: ReturnType<typeof formattedLabel>): ReturnType<typeof formattedLabel> {
   const spans = flattened.spans.map((entry) => Object.freeze({ ...entry }));
   return Object.freeze({
-    text: flattened.text,
+    ...flattened,
     spans:
       inheritClusterAlignedSpans === undefined
         ? Object.freeze(spans)
@@ -83,11 +83,12 @@ function bindFrameworkLabel(flattened: ReturnType<typeof formattedLabel>) {
   });
 }
 
-function trailingSpanLabel(text: string, trailingColor: string) {
+function trailingSpanLabel(text: string, trailingColor: string): ReturnType<typeof formattedLabel> {
   const content = `${text} alpha beta gamma delta epsilon`;
+  const literal = formattedLabel(content);
   const spanCount = 8;
   return {
-    text: content,
+    ...literal,
     spans: Array.from({ length: spanCount }, (_, index) => ({
       start: Math.floor((content.length * index) / spanCount),
       end: Math.floor((content.length * (index + 1)) / spanCount),
