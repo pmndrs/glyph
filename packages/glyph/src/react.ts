@@ -9,7 +9,6 @@ import {
   use,
   useLayoutEffect,
   useMemo,
-  useRef,
   useState,
   useSyncExternalStore,
   type ReactElement,
@@ -35,7 +34,7 @@ import { glyph } from './glyph.js';
 import { GlyphFontError } from './loader.js';
 import { type FontSelection, type FontStack } from './loaded-font.js';
 import { assertPropertyList, mergePropertyList } from './property-list.js';
-import { applyTextGroupOptions, desiredTextUpdate, sameDesiredText } from './internal/desired-text.js';
+import { acceptedDesiredTextMatches, applyTextGroupOptions, desiredTextUpdate } from './internal/desired-text.js';
 import { fontResourceKey } from './internal/font-resource-key.js';
 import {
   type Constraints,
@@ -66,6 +65,7 @@ import {
 import {
   threeRootHost,
   threeTextConstructionToken,
+  acceptedTextState,
   type TextSpan as ThreeTextSpanRecord,
   type ThreeRootHost,
 } from './three/text.js';
@@ -681,7 +681,6 @@ function TextObject({
   const [constructorArguments] = useState<
     [typeof threeTextConstructionToken, StandaloneTextProperties<RasterFormatMetadata>, readonly [], ThreeRootHost]
   >(() => [threeTextConstructionToken, desired, [], threeRootHost(root)]);
-  const appliedRef = useRef(desired);
   const [store] = useState(() => createObjectStore<ThreeText<RasterFormatMetadata>>());
   const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const invalidate = useThree((state) => state.invalidate);
@@ -695,9 +694,8 @@ function TextObject({
 
   useLayoutEffect(() => {
     if (object === undefined) return;
-    if (sameDesiredText(appliedRef.current, desired)) return;
+    if (acceptedDesiredTextMatches(acceptedTextState(object), desired)) return;
     object.set(desiredTextUpdate(desired));
-    appliedRef.current = desired;
     invalidate();
   }, [desired, invalidate, object]);
 

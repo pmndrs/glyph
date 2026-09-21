@@ -10,11 +10,13 @@
 
 ## 2026-09-20
 
-- **Removed framework shadow normalization** — React now keys derivation to semantic text props and passes their
-  caller-owned values to Three's canonical normalizer instead of cloning a second snapshot. Vue retains the detached snapshots required
+- **Removed framework shadow normalization** — React now keys derivation to semantic text props, compares them with
+  Three's immutable accepted state, and passes real changes to the canonical normalizer instead of retaining caller-owned
+  input as a second snapshot. Vue retains the detached snapshots required
   for in-place reactive proxies, marks them package-owned, and Three adopts them without another merge or clone. Focused
   tests cover presentation-only React/Vue changes, equivalent PropertyList shapes, malformed property input, a Vue reuse
-  hit followed by a nested mutation, enforced deep-freeze ownership, and PropertyList enumerable-key parity. A 16-block
+  hit followed by a nested mutation, a React caller-mutation followed by a valid immutable update, enforced deep-freeze
+  ownership, and PropertyList enumerable-key parity. A 16-block
   packed-artifact Labs comparison improves 1,000 unchanged plain-record Vue snapshot
   calls from `0.651 ms` to `0.281 ms` p50 (-56.8%); normalized Three publication, TypeGPU position updates, and the cold
   1,000-label lifecycle remain below the five-percent effect threshold. This is a patch-level implementation optimization

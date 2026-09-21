@@ -29,7 +29,6 @@ export function reuseOrCreateTextPropertySnapshot<Value extends object>(
   } catch (cause) {
     throw new TypeError(`${label} must contain cloneable data`, { cause });
   }
-  deepFreeze(snapshot);
   return ownTextPropertySnapshot(snapshot);
 }
 
