@@ -1064,9 +1064,9 @@ checked size arithmetic and destination bounds.
 
 The TypeScript request compiler likewise owns one checked, monotonic allocation stream for fixed tables and variable
 payloads. Production prepares those offsets and writes directly into the retained Wasm request arena instead of allocating
-an intermediate wire `Uint8Array` and copying it. The owned compiler remains a test oracle; an exact-byte product test
-writes through both paths at a nonzero arena offset, pins every table, text, language, feature, and polygon range as
-disjoint and in bounds, and proves bytes outside the target slice remain untouched. Rust therefore borrows each individual
+an intermediate wire `Uint8Array` and copying it. The owned compiler is a convenience wrapper over the same writer, while
+independent ABI fixtures pin every table, text, language, feature, and polygon range. A focused product test writes at a
+nonzero arena offset, proves the bytes match the wrapper, and proves bytes outside the target slice remain untouched. Rust therefore borrows each individual
 slice with checked offset, count, alignment, and work limits, but does not compare those immutable slices pairwise or
 quadratically after the package has constructed them. Maintainers can build a deliberately
 instrumented shaper with Cargo feature `debug-validation`; tests enable the publication oracle automatically, while the
