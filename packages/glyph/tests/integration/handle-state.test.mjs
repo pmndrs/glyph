@@ -16,6 +16,26 @@ import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 const THREE_CODEC_HANDLE = permanentGlyphId('codec', 'test.text-engine-handle-state/three');
 
+function emptyPlannerFrame(rootId = 1) {
+  return {
+    rootId,
+    codecHandle: 1,
+    expectedEngineRevision: 0,
+    consumedRevision: 0,
+    acknowledgedPublicationGeneration: 0,
+    limits: {
+      maxParagraphs: 1,
+      maxClusters: 1,
+      maxLines: 1,
+      maxRegions: 1,
+      maxExclusions: 1,
+      maxInlineObjects: 1,
+      maxSlotsPerBand: 1,
+      maxOutputBytes: 1_000,
+    },
+  };
+}
+
 test('measurement growth uses the exact failing result capacity', () => {
   const memory = { buffer: new ArrayBuffer(2_048) };
   const resultPointer = 512;
@@ -34,7 +54,7 @@ test('measurement growth uses the exact failing result capacity', () => {
   };
   const exports = {
     memory,
-    requestCapacity: () => 64,
+    requestCapacity: () => 512,
     requestPointer: () => requestPointer,
     reserveRoot: (_handle, _requestCapacity, resultCapacity) => {
       reserves += 1;
@@ -50,7 +70,7 @@ test('measurement growth uses the exact failing result capacity', () => {
   const transport = new PlanTransport(
     exports,
     1,
-    64,
+    512,
     8,
     0,
     () => undefined,
@@ -58,7 +78,7 @@ test('measurement growth uses the exact failing result capacity', () => {
   );
   const paragraph = permanentGlyphId('paragraph', 'test.text-engine-handle-state/asymmetric-query');
 
-  const result = transport.measureParagraph(new Uint8Array([1]), paragraph, 1_000);
+  const result = transport.measureParagraph(emptyPlannerFrame(), paragraph, 1_000);
   assert.equal(result.bytes.byteLength, layout.size);
   assert.equal(reserves, 1, 'the failing arena must trigger one strict growth');
 });
@@ -71,7 +91,7 @@ test('measurement growth permits at most one bounded capacity repair', () => {
   let reserves = 0;
   const exports = {
     memory,
-    requestCapacity: () => 64,
+    requestCapacity: () => 512,
     requestPointer: () => 64,
     reserveRoot: () => {
       reserves += 1;
@@ -93,7 +113,7 @@ test('measurement growth permits at most one bounded capacity repair', () => {
   const transport = new PlanTransport(
     exports,
     1,
-    64,
+    512,
     8,
     0,
     () => undefined,
@@ -102,7 +122,7 @@ test('measurement growth permits at most one bounded capacity repair', () => {
   const paragraph = permanentGlyphId('paragraph', 'test.text-engine-handle-state/bounded-query-growth');
 
   assert.throws(
-    () => transport.measureParagraph(new Uint8Array([1]), paragraph, 1_000),
+    () => transport.measureParagraph(emptyPlannerFrame(), paragraph, 1_000),
     (error) => {
       assert.equal(error.statusCode, 'result-too-large');
       return true;
@@ -120,7 +140,7 @@ test('measurement growth rejects capacity beyond the authored output limit witho
   let reserves = 0;
   const exports = {
     memory,
-    requestCapacity: () => 64,
+    requestCapacity: () => 512,
     requestPointer: () => 64,
     reserveRoot: () => {
       reserves += 1;
@@ -141,7 +161,7 @@ test('measurement growth rejects capacity beyond the authored output limit witho
   const transport = new PlanTransport(
     exports,
     1,
-    64,
+    512,
     8,
     0,
     () => undefined,
@@ -150,7 +170,7 @@ test('measurement growth rejects capacity beyond the authored output limit witho
   const paragraph = permanentGlyphId('paragraph', 'test.text-engine-handle-state/over-limit-query-growth');
 
   assert.throws(
-    () => transport.measureParagraph(new Uint8Array([1]), paragraph, 100),
+    () => transport.measureParagraph(emptyPlannerFrame(), paragraph, 100),
     (error) => {
       assert.equal(error.statusCode, 'result-too-large');
       return true;
@@ -182,7 +202,7 @@ test('a glyph engine owns every configured-handle state it creates', async () =>
   assert.equal(handleState.integration, 'test.glyphEngine-owner');
   glyphEngine.dispose();
   assert.throws(() => handleState.id('planner', 'test.glyphEngine-owner/stale'), /disposed/u);
-  assert.throws(() => transport.stageUpdate(request), /disposed/u);
+  assert.throws(() => transport.stageUpdate(emptyPlannerFrame(plannerHandle)), /disposed/u);
 });
 
 test('handle-scoped ID provenance expires with its owning handle state', async () => {
