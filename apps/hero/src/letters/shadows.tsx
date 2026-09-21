@@ -173,7 +173,11 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     const height = field.r.div(weight);
     const ior = field.g.div(weight).max(1);
     const dispersion = field.b.div(weight);
-    const lens = normals.sample(uv).xy.div(weight);
+    const lensSample = normals.sample(uv);
+    const lens = lensSample.xy.div(weight);
+    // How thick this pane's glass is, as captured: the title's full slab, or the rain's thin one. Its own weight
+    // shares its blur, so the ratio holds across the soft edge.
+    const slab = lensSample.z.div(lensSample.w.max(0.0001)).mul(GLASS_DEPTH);
     // The chamfer follows the silhouette's outward direction, from the wide blur's gradient.
     const texel = vec2(1 / CAPTURE_WIDTH, 1 / CAPTURE_HEIGHT).mul(2);
     const gradient = vec2(
@@ -199,14 +203,14 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
 
     const normal = vec3(lens.mul(2).add(outward).add(facets.mul(0.3)), 1).normalize();
     const channelIOR = ior.add(dispersion.mul(0.09 * (channel - 1)));
-    const base = height.sub(GLASS_DEPTH / 2).max(0);
-    const incident = vec3(world, base.add(GLASS_DEPTH)).sub(uLamp).normalize();
+    const base = height.sub(slab.div(2)).max(0);
+    const incident = vec3(world, base.add(slab)).sub(uLamp).normalize();
     const inside = refract(incident, normal, float(1).div(channelIOR));
     // Refract through the slab and onto the receiver. Height spreads the caustics while gathered area controls
     // brightness.
     const exit = refract(inside, vec3(0, 0, 1), channelIOR);
     const landing = world
-      .add(inside.xy.mul(GLASS_DEPTH).div(inside.z.negate().max(0.05)))
+      .add(inside.xy.mul(slab).div(inside.z.negate().max(0.05)))
       .add(exit.xy.mul(base).div(exit.z.negate().max(0.05)));
     material.vertexNode = vec4(landing.div(halfPlane), 0, 1);
     const origin = varying(world);
@@ -269,13 +273,12 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
       If(level.lessThan(1), blend(0)).ElseIf(level.lessThan(2), blend(1)).Else(blend(2));
 
       const weight = sample.a.max(0.0001);
-      const base = field
-        .div(weight)
-        .sub(GLASS_DEPTH / 2)
-        .max(0);
+      const thickness = normals.sample(uv);
+      const slab = thickness.z.div(thickness.w.max(0.0001)).mul(GLASS_DEPTH);
+      const base = field.div(weight).sub(slab.div(2)).max(0);
       const inside = sample.a
         .mul(step(base, t))
-        .mul(step(t, base.add(GLASS_DEPTH)))
+        .mul(step(t, base.add(slab)))
         .mul(bounds)
         .div(t.mul(0.03).add(1));
 
@@ -361,11 +364,13 @@ function captureGlass(state: Projection, roots: readonly Object3D[]): void {
 
   // The title's shadows spread as it lifts, but rain falls from near the camera: one glyph that high would stretch
   // the march over the whole scene and coarsen every shadow, so rain casts only over the last stretch of its fall.
-  // Being small, a rain glyph's shadow and caustic would read as a glowing blob at the title's strength; it casts
-  // at under half.
+  // The title is thick glass, and the lamp's slant sets its shadow off beside it by that thickness. A rain glyph
+  // is a small thin pane: the same slab would shift its shadow by most of the glyph, so it casts as thin glass,
+  // keeping its shadow under and just around it, and at two thirds of the title's weight so it reads as a shade.
   for (const [index, root] of roots.entries()) {
     const ceiling = index === 0 ? Number.POSITIVE_INFINITY : RECEIVER_Z + 4;
-    const strength = index === 0 ? 1 : 0.4;
+    const strength = index === 0 ? 1 : 0.65;
+    const slab = index === 0 ? GLASS_DEPTH : 0.3;
     root.traverse((object) => {
       if (
         !(object instanceof Mesh) ||
@@ -394,7 +399,7 @@ function captureGlass(state: Projection, roots: readonly Object3D[]): void {
       material.mrtNode = mrt({
         output: vec4(transmission.mul(weight), weight),
         distance: vec4(height, materialIOR, materialDispersion, 1).mul(weight),
-        normal: vec4(normalWorld.xy, 0, 1).mul(weight),
+        normal: vec4(normalWorld.xy, slab / GLASS_DEPTH, 1).mul(weight),
       });
       const capture = new Mesh(object.geometry, material);
       capture.matrixAutoUpdate = false;

@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:c247629798311c6cc5186fee24e4e63cc50baf2a9cd1a553694489dae0a9adde'
+source_digest: 'sha256:eb5c497794d1acf8215eb0b35e4a8fdee07c8f694366714d8ffbb061729b8567'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -377,6 +377,9 @@ shaped, and the rain publishes its root as a second capture source beside the ti
 per-pixel march and blur cost the same however many panes it captures, so the rain adds only its draws into the
 capture. A glyph falling from near the camera would stretch the march over the whole scene and coarsen every
 shadow, so rain captures only over the last four units of the fall, and its shadow arrives just before it does.
+A rain glyph is thin glass lying on the floor, so its shadow would sit hidden under it: it casts as if lifted a
+little, which sets its shadow beside the glyph like the letters', at two thirds of the title's weight so a small
+glyph reads as a shade rather than a glowing blob.
 `hero:rain-check` rains in play on WebGPU and verifies that detaching the rain's captures from the projection makes
 the paper both lighter, where the shadows were, and darker, where the caustics were.
 
