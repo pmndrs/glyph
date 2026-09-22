@@ -573,7 +573,10 @@ function updateProjection(state: Projection, titleReach: number, caster: Object3
       // The casters join the same capture, over the glass render's depth, from the scene they live in.
       if (caster !== undefined) {
         const overridden = scene.overrideMaterial;
+        const background = scene.background;
         scene.overrideMaterial = state.casterMaterial;
+        // The scene's background would be drawn into the capture as pale glass everywhere, washing the frame out.
+        scene.background = null;
         lightCamera.layers.set(SHADOW_CASTER_LAYER);
         renderer.autoClear = false;
 
@@ -582,6 +585,7 @@ function updateProjection(state: Projection, titleReach: number, caster: Object3
         } finally {
           renderer.autoClear = true;
           lightCamera.layers.set(0);
+          scene.background = background;
           scene.overrideMaterial = overridden;
         }
       }

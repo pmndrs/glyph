@@ -6,7 +6,7 @@
   "args": ["--gpu", "--timeout", "120", "--screenshot", ".cache/robot-dust.png"]
 } */
 import { _roots } from '@react-three/fiber/webgpu';
-import { type Object3D, RenderTarget, WebGPUBackend, WebGPURenderer } from 'three/webgpu';
+import { RenderTarget, type Object3D, Vector3, WebGPUBackend, WebGPURenderer } from 'three/webgpu';
 
 function trail(): Object3D | undefined {
   return _roots.values().next().value?.store.getState().scene?.getObjectByName('robot-glyph-dust');
@@ -107,6 +107,63 @@ try {
 
   if (shaded < 300) throw new Error(`The robot cast no shadow on the paper: ${shaded}`);
 
+  // Its shadow is its own: far from the robot the frame is exactly as it was.
+  const at = new Vector3().setFromMatrixPosition(robot.matrixWorld).project(camera);
+  // Read-back rows run top-down, against clip space's bottom-up.
+  const centreX = ((at.x + 1) / 2) * target.width;
+  const centreY = ((1 - at.y) / 2) * target.height;
+  let washed = 0;
+
+  for (let offset = 0; offset < shown.length; offset += 4) {
+    const pixel = offset / 4;
+    const dx = (pixel % target.width) - centreX;
+    const dy = Math.floor(pixel / target.width) - centreY;
+
+    if (dx * dx + dy * dy < 220 * 220) continue;
+
+    if (
+      Math.abs(unshaded[offset]! - shown[offset]!) > 6 ||
+      Math.abs(unshaded[offset + 1]! - shown[offset + 1]!) > 6 ||
+      Math.abs(unshaded[offset + 2]! - shown[offset + 2]!) > 6
+    )
+      washed += 1;
+  }
+
+  if (washed > 50) {
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity,
+      up = 0,
+      down = 0;
+
+    for (let offset = 0; offset < shown.length; offset += 4) {
+      const pixel = offset / 4;
+      const x = pixel % target.width;
+      const y = Math.floor(pixel / target.width);
+      const dx = x - centreX;
+      const dy = y - centreY;
+
+      if (dx * dx + dy * dy < 220 * 220) continue;
+
+      const d = unshaded[offset]! - shown[offset]!;
+
+      if (Math.abs(d) > 6) {
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+
+        if (d > 0) down++;
+        else up++;
+      }
+    }
+
+    throw new Error(
+      `The robot's shadow changed the frame far from it: ${JSON.stringify({ washed, centreX, centreY, minX, maxX, minY, maxY, darker: down, lighter: up })}`,
+    );
+  }
+
   for (const particle of particles) particle.position.z = 0.93;
 
   const faded = await capture();
@@ -133,7 +190,7 @@ try {
 
   console.log(
     'hero-robot-dust-ready',
-    JSON.stringify({ backend: 'webgpu', changed, remaining, shaded, pool: particles.length }),
+    JSON.stringify({ backend: 'webgpu', changed, remaining, shaded, washed, pool: particles.length }),
   );
 } finally {
   layer.visible = true;
