@@ -836,6 +836,36 @@ test('a hidden automatic TextGroup never exposes its first realized draw', async
   }
 });
 
+test('a reused hidden boundary draw becomes visible after joining the shared pool', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const label = three.createText({ font, text: 'reused' });
+  group.add(label);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+
+  try {
+    const [draw] = rootDraws(scene);
+    assert.ok(draw);
+    group.visible = false;
+    scene.updateMatrixWorld(true);
+    assert.equal(draw.visible, false);
+
+    group.batching = 'shared';
+    group.visible = true;
+    scene.updateMatrixWorld(true);
+    const [reused] = rootDraws(scene);
+    assert.equal(reused, draw, 'changing scope reuses the compatible mesh');
+    assert.equal(reused.visible, true, 'a scope-less reused draw cannot retain hidden boundary state');
+  } finally {
+    label.dispose();
+    group.dispose();
+    font.dispose();
+  }
+});
+
 test('a root releases its renderer publication when its final Text is disposed', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));

@@ -6,7 +6,8 @@ This file records user-facing package changes. It is hand-authored and intention
 
 ### Breaking
 
-- `TextGroup` now creates a batch boundary by default. Compatible text no longer coalesces across separate top-level authored groups, and hiding a group can skip its owned draws. This makes `TextGroup.visible` intuitive but may increase draw counts in applications that relied on the 0.1.0 global pool. Set `batching="shared"` to retain the 0.1.0 coalescing behavior.
+- `TextGroup` now creates a batch boundary by default. Compatible text no longer coalesces across separate top-level authored groups, and hiding a group can skip its owned draws. This makes `TextGroup.visible` intuitive but may increase draw counts and renumber renderer-owned mesh `renderOrder` values in applications that relied on the 0.1.0 global pool. Set `batching="shared"` to retain the 0.1.0 coalescing behavior.
+- `Text.set()` with state equivalent to the accepted state no longer forces another publication. Assign `font` or `material` explicitly to force resource restaging.
 
 ### Added
 
@@ -21,8 +22,7 @@ This file records user-facing package changes. It is hand-authored and intention
 
 ### Changed
 
-- Equivalent `Text.set()` state is now a validated no-op instead of forcing another publication. Explicit `font` or `material` assignment remains the supported way to force resource restaging.
-- React and Vue apply canonical text state directly; wrapping or spying on `Text.set()` is not an adapter lifecycle hook.
+- React and Vue apply canonical text state directly; wrapping or spying on `Text.set()` is not an adapter lifecycle hook. React no longer re-snapshots `style`, `layout`, `constraints`, and `flow` when their prop identities are unchanged; pass a new object instead of mutating one in place.
 - TypeGPU position-only updates now write the retained transform uniform without entering semantic publication. Empty and identical-position updates are no-ops.
 - `txt` and `span` now enforce their readonly contract by freezing individual span records as well as the containing array.
 - Equivalent framework snapshots and aligned spans retain their identities, and engine requests write directly into the retained request arena to reduce repeated allocations and copies.
