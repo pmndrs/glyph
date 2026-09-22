@@ -98,22 +98,22 @@
       "label": "R3F hello-world app JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "3bb0b2ea075fccafaa3c34282febcf88da121f3f0743dc6abb960454ca38fedb",
-      "rawBytes": 2626488,
-      "minifiedBytes": 2626488,
-      "gzipBytes": 740583,
-      "brotliBytes": 562848
+      "sha256": "7f1cf68fc47ac1333e0f83cc71534d94499ecd02afdea4c6232c91d950248446",
+      "rawBytes": 2626881,
+      "minifiedBytes": 2626881,
+      "gzipBytes": 740726,
+      "brotliBytes": 563098
     },
     {
       "id": "tres-playground-production-js",
       "label": "Tres playground app JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "044bd0f6f90116bb0d2e8dad7ab26e1abfd70f0ca355f43790ec4ea0ab3021fc",
-      "rawBytes": 2022837,
-      "minifiedBytes": 2022837,
-      "gzipBytes": 565698,
-      "brotliBytes": 452883
+      "sha256": "5976ed86429edd73b7d13983c6ddb685ffbf50f25c861575c0119918d62cbc27",
+      "rawBytes": 2022997,
+      "minifiedBytes": 2022997,
+      "gzipBytes": 565801,
+      "brotliBytes": 453025
     },
     {
       "id": "font-inter-bitmap-16-32",
@@ -318,11 +318,11 @@
       "label": "Slug baker Wasm",
       "status": "measured",
       "format": "wasm",
-      "sha256": "8dc749571be45cbd98e634e5551f5f3104a98b64f06c14c3839a708ae7073a76",
+      "sha256": "eed34e7657ebaba94a1c59343e9ad42822e5ea38c550bf50c2f1c1de010d0c6f",
       "rawBytes": 454625,
       "minifiedBytes": 454625,
       "gzipBytes": 183706,
-      "brotliBytes": 145169
+      "brotliBytes": 145072
     },
     {
       "id": "slug-baker-js",
@@ -351,11 +351,11 @@
       "label": "Font baker Wasm",
       "status": "measured",
       "format": "wasm",
-      "sha256": "35b4cd17ea0499a06953b27767fd8da66e7590d997f7e9f6b50f666d00b66788",
-      "rawBytes": 1074180,
-      "minifiedBytes": 1074180,
-      "gzipBytes": 386308,
-      "brotliBytes": 301676
+      "sha256": "100e42715f0e3e819c9ad4c192259539a84f1cdf68fec655b25213e3517a2b96",
+      "rawBytes": 1074327,
+      "minifiedBytes": 1074327,
+      "gzipBytes": 386349,
+      "brotliBytes": 301735
     }
   ]
 }
