@@ -111,7 +111,11 @@ const percentile = (values: number[], fraction: number) => {
   return sorted[Math.floor((sorted.length - 1) * fraction)]!;
 };
 
-/** Median and 95th percentile GPU milliseconds over `count` frames, after a few to settle. */
+/**
+ * Median and 95th percentile GPU milliseconds over `count` frames, after a few to settle. Allocation is not
+ * measured here: the browser's heap reading is quantized coarsely enough that over a window this short a
+ * collection landing inside it swamps what the frames actually allocated.
+ */
 const measure = async (count = 45) => {
   for (let warm = 0; warm < 6; warm++) await frame();
 

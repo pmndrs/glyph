@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:a016640725277bcaece83715820abb59a63ff930bcb86fe7514826905e24cc1f'
+source_digest: 'sha256:90067b83e8ba66f315947f49bb1c9300bddc31815a332e76b8bf319cc7f5e899'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -616,7 +616,8 @@ nothing over thirty still frames, then again under the pointer.
 collapse, and burst replays on WebGPU after preparation. It rejects new shader programs, render pipelines, scene
 meshes, or asset loads, with a deliberate new-material control proving the compilation counters work. It reports
 raw render intervals, CPU submission work, asynchronous GPU queue completion, GPU time from timestamp queries,
-the preparation phases, and long tasks, along with the adapter, viewport, and drawing-buffer dimensions. The canvas uses adaptive DPR
+the preparation phases, how much the heap grows a frame and how often it is collected, and long tasks, along
+with the adapter, viewport, and drawing-buffer dimensions. The canvas uses adaptive DPR
 between 1 and 2, and the report records the actual drawing-buffer size for each run. Queue completion is latency,
 not GPU time: on 2026-09-22 it read 9 ms while the GPU's own clock read 15 ms median and 32 ms at p95 for the
 same 720p frames, and it had hidden a frame that would not survive a retina display.
@@ -642,8 +643,17 @@ each carry about a screen of fill, and four-sample multisampling over all of it 
 pass: a double-sided transmissive material is drawn twice, back faces then front, which a closed solid needs and
 a flat pane does not, and the title's letters are flat panes. Drawing them once, from whichever side faces the
 camera, took 4.8 ms off a 15.7 ms resting frame at 2560 × 1440, as much as hiding the glass altogether, and left
-the letters looking as they did. Dispersion is the next of it, three samples of the frame behind rather than one,
-worth 2.5 ms and the chromatic fringe. The glyphs are antialiased by that multisampling
+the letters looking as they did. Dispersion is the next of it, three samples of the frame behind rather than one, worth 2.5 ms and the chromatic
+fringe.
+
+Collection is not where the rest is. Over a playback the heap grows about six hundred kilobytes a frame and is
+collected some forty times, but the profiler's own account puts collection at 111 ms of 28.4 s, a hundredth of
+the busy time and a two hundred and fiftieth of the wall, and its cost shows as the odd twenty-millisecond pause
+rather than a tax on every frame. Attributing that allocation to a system is beyond what the browser's heap
+reading can tell: it is quantized coarsely enough that over the profile's short windows a collection landing
+inside one swamps what the frames allocated, which is why the profile reports passes and draws but not
+allocation. Doing it properly wants an allocation sampler, which is a debugger-protocol domain the probes cannot
+reach from inside the page. The glyphs are antialiased by that multisampling
 through alpha-to-coverage, so it is not free to drop; the levers left are the pixel ratio, the sample count, and
 folding the receiver into the sheets it darkens. Over a whole playback at 720p, where the
 lift and the finale redraw the captures every frame, the performance check's GPU median runs 8 to 12 ms from one

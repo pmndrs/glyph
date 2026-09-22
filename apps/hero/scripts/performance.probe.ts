@@ -75,6 +75,7 @@ const meshIds = () => {
 
 const preparedMeshes = meshIds();
 const newMeshes = new Set<number>();
+const heapSamples: number[] = [];
 const samples: {
   at: number;
   cpuMs: number;
@@ -116,6 +117,9 @@ renderPipeline.render = function () {
     time: beat.time,
   };
   samples.push(sample);
+  const reading = (performance as { memory?: { usedJSHeapSize: number } }).memory;
+
+  if (reading !== undefined) heapSamples.push(reading.usedJSHeapSize);
 
   // Observe completion without serializing playback. This detects queued GPU work that submission FPS hides.
   const completion = backend.device.queue.onSubmittedWorkDone().then(async () => {
@@ -180,6 +184,17 @@ try {
   material.dispose();
 }
 
+// Chrome's own reading of the heap, sampled a frame at a time: every rise is what the frame allocated, and the
+// falls are collections. Quantized and coarse, but enough to weigh the allocation rate against a collection.
+const heap = (performance as { memory?: { usedJSHeapSize: number } }).memory;
+const allocated = heapSamples.reduce(
+  (sum, value, index) => sum + Math.max(0, value - (heapSamples[index - 1] ?? value)),
+  0,
+);
+const collections = heapSamples.reduce(
+  (count, value, index) => count + (value < (heapSamples[index - 1] ?? value) ? 1 : 0),
+  0,
+);
 const intervals = samples.slice(1).map((sample, index) => sample.at - samples[index]!.at);
 
 if (intervals.length === 0) throw new Error('No rendered frames were measured');
@@ -239,6 +254,8 @@ console.log(
       0.5,
     ),
     maxPendingFrames,
+    heapKbPerFrame: heap === undefined ? null : Math.round(allocated / Math.max(1, heapSamples.length) / 1024),
+    heapCollections: collections,
     longTasks,
     samples,
   }),
