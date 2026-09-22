@@ -1,5 +1,23 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-22
+
+- **Added the cameo example: a robot, a shallow lens, and a drifting icon floor** — `apps/cameo` is a self-contained
+  React Three Fiber example. A fixed, raised, slightly rolled camera on a 22 degree lens holds the robot's face at
+  its mark and throws the whole floor away through a `dof` pass; `src/cameo/content.ts` owns the shot and every other
+  measure is derived from it, including off frame, which is solved through the lens rather than approximated from the
+  frame's width because the frame widens with depth. The take is data: two beat tracks and five screenfuls in
+  `src/robot/content.ts`. The robot rushes in on a diagonal out of the blur, whips past the lens and settles back
+  onto it on each turn, reads a release note a screenful at a time, remembers one more thing, and bolts; its body
+  pitch and its lens knocks fall out of the travel track rather than being scripted twice. The face prints from
+  retained per-prefix layouts, centred on its ink rather than its advances, and the sign-off's hearts swell about
+  their own middles on a staggered heartbeat. The floor is a pair of scrolling Slug icon sheets whose motif flips
+  turn in the plane of the print, on springs the robot's wheels shove and its braking rings. Sixteen headless stories
+  pass, one of them walking a whole take and failing if the rig steps; `cameo:take-check` measures on hardware WebGPU
+  that the face keeps 69 percent of its detail through the lens while the far floor keeps 43 percent of its own, that
+  every screenful fits the display inside its margin, and that the robot is outside the picture at both ends of the
+  take. See [the cameo reference](packages/cameo.md).
+
 ## 2026-09-18
 
 - **Added tagged stable publishing alongside canaries** — Extended the existing npm publishing workflow so matching

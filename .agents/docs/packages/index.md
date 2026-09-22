@@ -4,6 +4,7 @@
 - [`@pmndrs/glyph-benchmarks`](benchmarks.md) — Figma-backed benchmark and product-verification application.
 - [`@pmndrs/glyph-examples`](examples.md) — paired imperative Three.js and R3F examples over shared assets.
 
+- [`@pmndrs/glyph-cameo`](cameo.md) — a robot rushes into a shallow close-up, reads a release note off its own face, and bolts across a drifting icon floor.
 - [`@pmndrs/glyph-typegpu-hello-world`](typegpu-hello-world.md) — editable text using the high-level TypeGPU integration.
 - [`@pmndrs/glyph-tres-playground`](tres-playground.md) — Vue adapter playground rendering every raster format inside a TresJS canvas.
 

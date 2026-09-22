@@ -1,0 +1,35 @@
+/// <reference types="vitest/config" />
+import babel from '@rolldown/plugin-babel';
+import react, { reactCompilerPreset } from '@vitejs/plugin-react';
+import { readFile } from 'node:fs/promises';
+import { defaultClientConditions, defineConfig } from 'vite';
+
+/** Third-party notices bundled with the build: the face font, the icon font, and the robot. */
+const NOTICES = [
+  { name: 'Geist 1.7.2', url: new URL('./fonts/geist-1.7.2/OFL.txt', import.meta.url) },
+  {
+    name: 'Font Awesome Free 6.7.2',
+    url: new URL('../../benches/fixtures/fonts/font-awesome-free-6.7.2/LICENSE.txt', import.meta.url),
+  },
+  // CC-BY-4.0: the credit line inside must travel with the build.
+  { name: 'Cute Home Robot by Yandrack', url: new URL('./assets/cute_home_robot/license.txt', import.meta.url) },
+] as const;
+
+export default defineConfig({
+  resolve: { conditions: ['source', ...defaultClientConditions] },
+  plugins: [
+    react(),
+    babel({ presets: [reactCompilerPreset()] }),
+    {
+      name: 'notices',
+      async generateBundle() {
+        const notices = await Promise.all(
+          NOTICES.map(async ({ name, url }) => `${name}\n${'='.repeat(name.length)}\n\n${await readFile(url, 'utf8')}`),
+        );
+        this.emitFile({ type: 'asset', fileName: 'notices.txt', source: notices.join('\n\n') });
+      },
+    },
+  ],
+  build: { target: 'es2022' },
+  test: { include: ['src/**/*.test.ts'], environment: 'node' },
+});

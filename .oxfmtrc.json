@@ -10,6 +10,7 @@
     "benches/fixtures/**",
     "benches/vitexec/admission.probe.ts",
     ".agents/docs/planning/extensions/**/*.json",
+    "apps/cameo/assets/**",
     "packages/font-baker/src/schemas/**",
     "packages/glyph/dist/**",
     "packages/glyph/rust/mtsdf-admission/evidence/**",
