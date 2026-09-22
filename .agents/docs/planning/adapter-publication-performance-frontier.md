@@ -30,8 +30,8 @@ sources:
     resource: ../../../packages/glyph/src/internal/layout-query-view.ts
     title: Borrowed layout query views
   - id: package-benchmark
-    resource: ../../../benches/labs/glyph-package.bench.ts
-    title: Public package performance benchmarks
+    resource: ../../../benches/labs/package
+    title: Public package performance benchmark suites
 generated:
   by: openai-codex/gpt-6
   at: '2026-09-20T05:36:40Z'
