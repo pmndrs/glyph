@@ -1,0 +1,81 @@
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #111318;
+}
+
+canvas {
+  display: block;
+}
+
+/* Centered Poimandres loading mark with a short shake and readiness fade. */
+.cameo-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  background: #caf543;
+  color: #000000;
+  font:
+    16px system-ui,
+    sans-serif;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 0.4s ease,
+    visibility 0s 0.4s;
+}
+
+.cameo-loading svg {
+  width: 48px;
+  overflow: visible;
+  fill: #000000;
+  animation: loading-shake 3.6s ease-in-out infinite;
+  will-change: transform;
+}
+
+.cameo-loading[data-ready='true'] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.cameo-loading[data-ready='true'] svg {
+  animation-play-state: paused;
+  will-change: auto;
+}
+
+@keyframes loading-shake {
+  0%,
+  78%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  82% {
+    transform: translateX(-2px) rotate(-3deg);
+  }
+  86% {
+    transform: translateX(2px) rotate(3deg);
+  }
+  90% {
+    transform: translateX(-1px) rotate(-2deg);
+  }
+  94% {
+    transform: translateX(1px) rotate(1deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cameo-loading svg {
+    animation: none;
+  }
+
+  .cameo-loading {
+    transition-duration: 0.01s;
+  }
+}
