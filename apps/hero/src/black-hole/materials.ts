@@ -19,21 +19,47 @@ import {
 } from 'three/tsl';
 import { Vector2, type Node, type TextureNode, AdditiveBlending, MeshBasicNodeMaterial } from 'three/webgpu';
 import type { ThreeTextMaterialContext } from '@pmndrs/glyph/three';
+import { retained } from '../hmr';
 
-/** Shared with the glyph shaders: where the hole is, how far it reaches, how hard it bends, and how it spins. */
-export const uHoleCenter = uniform(new Vector2(HOLE_CENTER[0], HOLE_CENTER[1]));
-export const uHoleHorizon = uniform(HORIZON);
-/** 0 = no warp. 1 = the full spiral. */
-export const uHoleBend = uniform(0);
-/** Accumulated spin of the accretion disk and the warp's drag, in radians. */
-export const uHoleSpin = uniform(0);
-/** 0..1: how much of the frame is black. */
-export const uHoleBlackout = uniform(0);
-/** The camera's height over the floor: a glyph deeper down needs a wider reach to look the same size on screen. */
-export const uHoleCamera = uniform(16);
-/** The whole rendered sheet winds into the centre, exposing black behind its edges. */
-export const uHoleCollapse = uniform(0);
-export const uHoleShake = uniform(new Vector2());
+/**
+ * Every uniform the hole publishes, kept across a hot module replacement: the mounted view writes them each frame
+ * and the post pass reads them once when its graph is built, so both must hold the same set.
+ */
+export const holeUniforms = retained('black-hole', () => ({
+  /** Shared with the glyph shaders: where the hole is on the floor, and how far it reaches. */
+  uHoleCenter: uniform(new Vector2(HOLE_CENTER[0], HOLE_CENTER[1])),
+  uHoleHorizon: uniform(HORIZON),
+  /** 0 = no warp. 1 = the full spiral. */
+  uHoleBend: uniform(0),
+  /** Accumulated spin of the accretion disk and the warp's drag, in radians. */
+  uHoleSpin: uniform(0),
+  /** 0..1: how much of the frame is black. */
+  uHoleBlackout: uniform(0),
+  /** The camera's height over the floor: a glyph deeper down needs a wider reach to look the same size on screen. */
+  uHoleCamera: uniform(16),
+  /** The whole rendered sheet winds into the hole, exposing black behind its edges. */
+  uHoleCollapse: uniform(0),
+  /** Where the hole is on screen, as an offset from the centre in the frame's 0..1 coordinates. */
+  uHoleScreen: uniform(new Vector2()),
+  uHoleShake: uniform(new Vector2()),
+  /** The hole's own drawing, driven from the beat once a frame. */
+  uPresence: uniform(0),
+  uHeat: uniform(0),
+}));
+
+export const {
+  uHeat,
+  uHoleBend,
+  uHoleBlackout,
+  uHoleCamera,
+  uHoleCenter,
+  uHoleCollapse,
+  uHoleHorizon,
+  uHoleScreen,
+  uHoleShake,
+  uHoleSpin,
+  uPresence,
+} = holeUniforms;
 
 type SlugContext = Extract<ThreeTextMaterialContext, { format: 'pmndrs.slug' }>;
 
@@ -68,12 +94,15 @@ export function holeWarp(context: SlugContext): HoleWarp {
   const centerStepY = quadX.x.mul(toCenter.y).sub(quadX.y.mul(toCenter.x)).mul(inverseQuad);
   const center = quadSafe.select(here.add(worldX.mul(centerStepX)).add(worldY.mul(centerStepY)), here);
 
-  // On screen the hole is the same size at every depth, so the horizon widens with the distance from the camera.
-  const horizon = uHoleHorizon.mul(uHoleCamera.sub(world.z).div(uHoleCamera));
-  const centerOffset = center.sub(uHoleCenter);
+  // On screen the hole is in the same place and the same size at every depth: its floor position is carried along
+  // the camera's ray to this depth, and the horizon widens with the distance from the camera.
+  const depth = uHoleCamera.sub(world.z).div(uHoleCamera);
+  const holeCenter = uHoleCenter.mul(depth);
+  const horizon = uHoleHorizon.mul(depth);
+  const centerOffset = center.sub(holeCenter);
   const centerReach = centerOffset.length().max(0.0001);
   const near = centerReach.div(horizon);
-  const fragmentOffset = here.sub(uHoleCenter);
+  const fragmentOffset = here.sub(holeCenter);
   const fragmentReach = fragmentOffset.length().max(0.0001);
 
   // Drag and stretch fall off with the square of the distance, in horizons, so far glyphs are untouched.
@@ -87,7 +116,7 @@ export function holeWarp(context: SlugContext): HoleWarp {
   // Invert angular drag and radial stretch to locate the source ink.
   const angle = atan(fragmentOffset.y, fragmentOffset.x).sub(dragAt(fragmentReach).sub(dragAt(centerReach)));
   const radius = centerReach.add(fragmentReach.sub(centerReach).div(stretch.add(1)));
-  const source = uHoleCenter.add(vec2(cos(angle), sin(angle)).mul(radius));
+  const source = holeCenter.add(vec2(cos(angle), sin(angle)).mul(radius));
 
   // em = em(here) + A · (source - here), with A the em-per-world Jacobian from screen derivatives.
   const em = context.shader.renderCoordinate;
@@ -109,23 +138,6 @@ export function holeWarp(context: SlugContext): HoleWarp {
     survive: smoothstep(float(0.9), float(1.7), near).mul(uHoleBend).add(float(1).sub(uHoleBend)),
   };
 }
-
-/** The hole's own drawing, driven from the beat once a frame. */
-export const uPresence = uniform(0);
-export const uHeat = uniform(0);
-
-export const holeUniforms = {
-  uHoleCenter,
-  uHoleHorizon,
-  uHoleBend,
-  uHoleBlackout,
-  uHoleCamera,
-  uHoleCollapse,
-  uHoleSpin,
-  uHoleShake,
-  uPresence,
-  uHeat,
-};
 
 export function buildMaterials() {
   const point = uv().sub(0.5).mul(2);
@@ -174,6 +186,7 @@ export function buildMaterials() {
 
 /** Wind the rendered sheet into the centre and expose black behind its edges. */
 export function collapseSheet(lit: TextureNode, point: Node<'vec2'>) {
+  // `point` is the fragment's offset from the hole on screen; the sheet winds in about the hole, wherever it is.
   const aspect = vec2(screenSize.x.div(screenSize.y), 1);
   const radius = point.mul(aspect).length();
   const collapse = uHoleCollapse;
@@ -185,7 +198,8 @@ export function collapseSheet(lit: TextureNode, point: Node<'vec2'>) {
     point.x.mul(sin(turn)).add(point.y.mul(cos(turn))),
   )
     .div(scale)
-    .add(0.5);
+    .add(0.5)
+    .add(uHoleScreen);
   const edge = source.sub(0.5).abs().max(source.sub(0.5).abs().yx).x;
   const paper = float(1)
     .sub(smoothstep(0.48, 0.5, edge))

@@ -11,6 +11,16 @@ export const rainActions = createActions((world) => ({
   prepareRainGlyph: (slot: number, solid: Solid) => {
     world.get(Rain)!.solids[slot] = solid;
   },
+  /** The hole eats a glyph: its body goes at once, and its glyph flies into the hole from where it was. */
+  eatDrop: (slot: number) => {
+    const drop = world.get(Rain)!.drops[slot]!;
+
+    if (drop.entity !== undefined) physicsActions(world).destroyBody(drop.entity);
+
+    drop.entity = undefined;
+    drop.phase = 'eaten';
+    drop.age = 0;
+  },
   /** Take a glyph's body away and free its slot, either fading it out first or at once. */
   dismissDrop: (slot: number, fade: boolean) => {
     const drop = world.get(Rain)!.drops[slot]!;

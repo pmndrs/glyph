@@ -1,14 +1,17 @@
 import { color, float, mix, mx_noise_float, screenSize, smoothstep, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
 import { AdditiveBlending, DoubleSide, MeshBasicNodeMaterial, type Node } from 'three/webgpu';
 import { defineTextMaterial } from '@pmndrs/glyph/three';
+import { retained } from '../hmr';
 import { EMBER_SECONDS } from './traits';
 
-/** Seconds since emission. Negative before it. */
-export const uEmberAge = uniform(-1);
-export const uEmberBloom = uniform(0.18);
-
-/** Burning surface strength. Zero is the flat pastel control used by the WebGPU capture. */
-export const uEmberFire = uniform(1);
+/** Kept across a hot module replacement, since the mounted view writes these and the post pass reads them. */
+export const { uEmberAge, uEmberBloom, uEmberFire } = retained('star-embers', () => ({
+  /** Seconds since emission. Negative before it. */
+  uEmberAge: uniform(-1),
+  uEmberBloom: uniform(0.18),
+  /** Burning surface strength. Zero is the flat pastel control used by the WebGPU capture. */
+  uEmberFire: uniform(1),
+}));
 
 /** Analytic star silhouettes filled with a moving hot core, glowing amber tips, and cooling pastel light. */
 export const emberMaterial = defineTextMaterial((context) => {

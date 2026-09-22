@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:56069284dd69f991bedc2ceedd6de5118f318040888cf9bff6c83a39929b5c9d'
+source_digest: 'sha256:6f0117de5aa953fee544e2dfe3818904e294c05a05edb3d4f9cc49710853f34a'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -188,7 +188,10 @@ hole is closed, any press takes the wheel into `play`: a dropped title stays put
 from where it is, and the tagline backspaces away. Once the hole has opened, presses wait until the embers have gone
 out and a "Play" button has drawn itself over the black frame; pressing it restarts the scene into `play` with the
 robot scooting in from off screen. In play each press on the floor sends the robot to that point. It never drives a
-straight line, and it rests, looks up, and greets at each stop. Space returns to `sequence` from either mode.
+straight line, and it rests, looks up, and greets at each stop. A beat after the rain starts, a little black hole
+opens at the centre with a gravity field that grows with it; what the player pushes into it is eaten with a gulp
+and widens it, until it is the finale's hole and the finale takes everything, ending at the Play button again.
+Space returns to `sequence` from either mode.
 
 Local tuning values live at their use sites. Shared timing and geometry contracts, retained buffers, uniforms,
 and reusable materials keep named storage. Comments describe the current algorithm or feature. The app-specific
@@ -202,20 +205,20 @@ actions. Domain view systems update those resources while their view traits are 
 Dependencies use domain actions, published state, or explicit inputs rather than reaching into another domain to
 implement its transitions.
 
-| Domain        | Ownership                                                                                                  |
-| ------------- | ---------------------------------------------------------------------------------------------------------- |
-| `sequence`    | Declarative timed and event cues, pending deadlines, cancellation, and dispatch                            |
-| `time`        | Playback clock and bounded frame delta                                                                     |
-| `input`       | Held keys, pointer state, DOM listeners, and pointer decay                                                 |
-| `hero`        | Scene and pipeline composition, script, actor lifecycle, preparation, fonts, lighting, paper, and viewport |
-| `physics`     | Crashcat resource, body traits, actions, fixed stepping, and collision events                              |
-| `letters`     | Title construction and motion, published landings, retained text, feature typing, glass, and projection    |
-| `icon-paper`  | Icon sheets, bounded impact queue, spring simulation, morphs, and rendering                                |
-| `robot`       | Spawn/reset/run actions, path, published departure, physics target, dust, rig, and display                 |
-| `black-hole`  | Collapse state and controls, attraction functions, glyph warp, and rendered sheet collapse                 |
-| `star-embers` | Emission age, prepared star particles, fire material, bloom, fading, and screen-space sparks               |
-| `play-button` | Reveal timing, sheet geometry and hit test, mounted sheet camera, cursor state, and the display module     |
-| `rain`        | Glyph rain in play: prepared glyph solids, drop pool, spawning, edge culling, fading, panes, and shadows   |
+| Domain        | Ownership                                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------------------------- |
+| `sequence`    | Declarative timed and event cues, pending deadlines, cancellation, and dispatch                             |
+| `time`        | Playback clock and bounded frame delta                                                                      |
+| `input`       | Held keys, pointer state, DOM listeners, and pointer decay                                                  |
+| `hero`        | Scene and pipeline composition, script, actor lifecycle, preparation, fonts, lighting, paper, and viewport  |
+| `physics`     | Crashcat resource, body traits, actions, fixed stepping, and collision events                               |
+| `letters`     | Title construction and motion, published landings, retained text, feature typing, glass, and projection     |
+| `icon-paper`  | Icon sheets, bounded impact queue, spring simulation, morphs, and rendering                                 |
+| `robot`       | Spawn/reset/run actions, path, published departure, physics target, dust, rig, and display                  |
+| `black-hole`  | Collapse state and controls, play's feeding hole and its field, attraction functions, glyph warp, and sheet |
+| `star-embers` | Emission age, prepared star particles, fire material, bloom, fading, and screen-space sparks                |
+| `play-button` | Reveal timing, sheet geometry and hit test, mounted sheet camera, cursor state, and the display module      |
+| `rain`        | Glyph rain in play: prepared glyph solids, drop pool, spawning, edge culling, fading, panes, and shadows    |
 
 The root owns one Koota world and the combined action set. `world.ts` exports the shared world and invokes the hero initialization action.
 Action sets define commands as arrow-function properties. Root `actions.ts` spreads the domain action sets.
@@ -269,9 +272,16 @@ keyboard hook and frame callbacks. `useKeyboard` synchronizes a world-level `Key
 issues the explicit replay command inside its event effect on the first Space keydown. `usePointer` owns pointer
 listeners and synchronizes normalized position and activity together from DOM events using the canvas bounds, and
 hands each primary-button press to `pressHero` once playback is ready.
-Leaving or cancelling the pointer, losing window focus, or unmounting clears activity. The frame loop only fades
-pointer strength over time. Shadow captures follow the title's published draw group: whenever the mounted `TitleView` holds a new group, as
-after a title remount under hot module replacement, the projection recaptures from it, so readiness plays no part. A second ordered job publishes
+Leaving or cancelling the pointer, losing window focus, or unmounting clears activity. The pointer publishes two
+things: whether it is present over the canvas, and a strength that the frame loop fades over time once it stops
+moving. The lattice reads the strength, so its disturbance settles; the play button reads presence, so it stays
+lit under a resting pointer. Shadow captures follow the title's published draw group: whenever the mounted `TitleView` holds a new group, as
+after a title remount under hot module replacement, the projection recaptures from it, so readiness plays no part. Root `hmr.ts` keeps one set of uniforms across a module
+replacement: a set is written every frame by a mounted view and read once by the render pipeline when its node
+graph is built, and the two import it from the same module but re-execute at their own times, so a fresh set on
+replacement would leave the writer and the reader on different objects and the simulation would carry on while
+the frame stopped answering it. The hole's, the embers', and the play button's uniforms are kept this way. Outside
+development nothing is replaced and every caller builds its own. A second ordered job publishes
 view state after renderer preparation callbacks and before the final render.
 It updates paper, title and icon draws, feature text, robot pose, rig animation, robot display, dust, the black hole,
 embers, the play button, and glass shadows. Both jobs are capped at 60 fps. View systems read attached resource traits, so detaching
@@ -369,7 +379,9 @@ centres its glyph on the body's origin before playback. A rain pane composes as 
 whatever is beneath it, so panes overlapping each other or the title go dark where they cross and a pane over paper
 tints the paper; the title's true refraction cannot see other glass, because the renderer's transmission pass holds
 only the opaque scene. The pane is lit by the environment, so its highlights brighten what shows through, and it
-uses WebGPU's premultiplied multiply blend with alpha one, which is exactly what is beneath times the pane. A rain test covers spawning, landing, edge culling, pool
+uses WebGPU's premultiplied multiply blend with alpha one, which is exactly what is beneath times the pane. Its
+ink is bent round the black hole through the same warp as the title's and the icon field's, so a pane near the
+hole shows a warped letter rather than a straight one inside a warped quad. A rain test covers spawning, landing, edge culling, pool
 recycling, and the stop, and a physics test the bounce off the robot.
 Each drop casts the same coloured shadow and caustic as the title, from the same glass projection: rain panes are
 physical glass materials named like the title's, each glyph is broken apart into a plain mesh under its slot once
@@ -385,6 +397,48 @@ full slab where the coverage has thinned to a soft edge, so the title's penumbra
 rain glyph's shade sits under and just around it, at two thirds of the title's weight. The glass-shadow check pins
 the title's effect, tint, and depth response to their values before the rain cast anything.
 
+Play's hole is a third beat of the hole state, `play`, beside the finale's `open` and `black`. The play script
+opens it a beat after the rain starts, somewhere off the centre within a bounded offset that the collapse trait
+carries as the hole's place, so the finale it becomes, the eaten glyphs' arcs, the drawn hole, the lattice, the
+post pass's sheet collapse and sparks, and the embers' burst all follow it. The hole's place is a floor position,
+and everything at another depth carries it along the camera's ray to its own depth, as the horizon already was
+scaled, so the field, the glyph warp, the bent lattice, and the drawn hole all sit over one screen point: the
+view publishes the hole's place on screen as an offset from the centre, measured on the floor where the
+viewport's extent is, and the post pass winds the frame in about that point; the sequence's finale opens at the
+centre. `advanceCollapse` drives it from its own clock while the
+finale's is unset, easing its width up to what its meals have earned and swelling it into a gulp that decays over
+a moment after each one, its pull flinching with it so nearby glass bends. `feedHole` runs after physics: every
+landed rain glyph and every letter within the field, which reaches fourteen horizons out and so grows with the hole,
+is set on a current, since friction would hold a body against any force it could be given. The field is wide and
+weak: most of it is an orbit, a speed round the hole that quickens toward it, over an inward creep that is next to
+nothing far out and grows only near, so a body settles into going round and round before it is much nearer; the orbit gives out over the last
+horizons, where the creep becomes a rush, so nothing settles just outside. A letter rides the same current at two
+thirds the pace. Whatever crosses the horizon is eaten, rain widening the hole a little and a letter by about as
+much again, so the title alone does not fill it, and some forty meals to the finale's horizon, so what the hole
+has caught has time to settle into orbit before it goes critical. An eaten glyph
+loses its body at once and its glyph flies into the centre on the finale's tightening arc, stretched along it and
+shrinking; an eaten letter leaves on the same flight from where it was, one letter at a time, each departure held
+on the hole's clock beside the finale's, which sets them all at once. Rain still in the air passes over it. Once
+the drawn hole, easing after its meals, reaches the finale's horizon it hands over to the finale timeline joined
+where that hole is already open, so nothing shrinks to reopen, and the finale is congruent with what play built:
+the collapse trait keeps the pull play's hole had at the handover and the finale's pull rises from there to full
+instead of from nothing, and the tagline's glyphs fly in only as far as they had been typed, so play, with the
+tagline off, sends none. Through the finale the same system draws the rain in and eats it on its own rushing
+spiral whose speed is set by how far the finale has wound rather than by the pull, so nothing lurches at the
+handover; the wind-up is squared over about a second, a brief hold and then a hard pull that is at full speed well
+before the pop, and the title rides that field too instead of being sent off on the sequence's scripted departures: the
+letters keep their places for a beat, then spin in faster and faster, each taken as the field carries it across
+the horizon, and the pop takes the rest. The beat leaves the paper's cells on their springs and the title in place,
+though the hole's gravity bends the sheet: within the field each cell still holding its springs is leaned in and
+wound round the hole, so the paper strains toward it and springs back once it has gone, and none is swallowed;
+the finale carries that bend on, letting go of it as each cell lets go, so the strain runs into the collapse.
+Only the Play button answers a press while either mode's finale is open. Play's finale ends at the Play button
+too, since the reveal follows the embers rather than the mode. A hole test feeds the hole from a rain glyph
+pushed to it, checks the gulp and the settled width, carries a glyph a few horizons out about a quarter turn
+round it in two seconds while it only creeps nearer, feeds it to the finale, checks the pull carries over and
+only rises, and reaches the button in play. A lattice test bends the sheet under play's hole and lets it spring
+back.
+
 The play button lives on its own screen-space sheet with an orthographic camera fitted to the viewport aspect, so
 its geometry and hit test share the pointer's normalized units. The hero's post pass renders that sheet after the
 scene has gone black and adds it to the finished frame, which is why it survives the ember fade. Everything on it
@@ -392,8 +446,9 @@ is quantized to one pixel, two of the pixel font's squares. The frame is a round
 evaluated at pixel centres, a one-pixel outline that draws itself round from the top, with its halo and pointer
 fill held to a few levels. The label samples the font's coverage at the four squares of each pixel and lights the
 pixel when at least half are ink, keeping the hair of a gap the font leaves between squares; the pixels
-materialize in a fixed random order as the frame closes, lit by a sweep and by hover, and the pointer swells
-stepped rings of light out around the frame. The reveal advances in twenty notches. Both stay mounted and compile during preparation, revealed by uniforms. `hero:play-button-check`
+materialize in a fixed random order as the frame closes, lit by a sweep and by hover, and under the pointer the
+frame blooms softly either side of its stroke, the one light on the button that is not on its pixel grid. The
+reveal advances in twenty notches. Both stay mounted and compile during preparation, revealed by uniforms. `hero:play-button-check`
 draws the button in on WebGPU, verifies that half way in only some of the pixels have lit and that hover brightens
 it, and tiles the three moments with a close-up.
 The finale check verifies the black frame stays black at the ember fade, the button then lights it, a press beside

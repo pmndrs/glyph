@@ -19,7 +19,7 @@ export function moveTitle(world: World): void {
     if (title.bodies === undefined) return;
 
     carryTitle(world, title.bodies, time.delta);
-    attractTitle(world, title.bodies, hole);
+    attractTitle(world, title.bodies, hole, world.get(Collapse)!.fromPlay);
   });
 }
 
@@ -104,7 +104,15 @@ function carryTitle(world: World, state: TitleBodies, delta: number): void {
   state.lifting = pending;
 }
 
-function attractTitle(world: World, state: TitleBodies, hole: HoleState): void {
+/** Park a letter where the hole has taken it, and hide it. */
+function swallowLetter(world: World, state: TitleBodies, index: number): void {
+  state.swallowed[index] = 1;
+  physicsActions(world).parkBody(state.pieces[index]!.entity);
+  state.grow[index] = 0;
+  writeLetter(state, index);
+}
+
+function attractTitle(world: World, state: TitleBodies, hole: HoleState, fromPlay: boolean): void {
   if (hole.beat === 'closed') {
     for (let index = 0; index < state.pieces.length; index++) {
       if (state.grow[index] !== 1) {
@@ -116,26 +124,37 @@ function attractTitle(world: World, state: TitleBodies, hole: HoleState): void {
     return;
   }
 
-  if (!state.departing) {
-    for (let index = 0; index < state.pieces.length; index++)
-      readBodyPose(state.origins[index]!, state.pieces[index]!.entity);
+  // The pop takes whatever is left, including the letters still riding the field through play's finale.
+  if (hole.beat === 'black') {
+    for (let index = 0; index < state.pieces.length; index++) {
+      if (state.swallowed[index] !== 1) swallowLetter(world, state, index);
+    }
+
+    return;
+  }
+
+  // The sequence's finale sends every letter off on its own moment. Play's hole, and the finale it grows into,
+  // take only the letters their field carries in, one at a time, each leaving when it was eaten.
+  if (!state.departing && hole.beat !== 'play' && !fromPlay) {
+    for (let index = 0; index < state.pieces.length; index++) {
+      const from = state.origins[index]!;
+      readBodyPose(from, state.pieces[index]!.entity);
+      state.departure[index] = departureAt(Math.hypot(from.x - hole.x, from.y - hole.y) / 9, index);
+    }
 
     state.departing = true;
   }
 
   for (let index = 0; index < state.pieces.length; index++) {
-    if (state.swallowed[index] === 1) continue;
+    if (state.swallowed[index] === 1 || Number.isNaN(state.departure[index])) continue;
 
     const from = state.origins[index]!;
     const x = from.x - hole.x;
     const y = from.y - hole.y;
-    const flightPose = flight(state.flight, hole.time, departureAt(Math.hypot(x, y) / 9, index), 0.85);
+    const flightPose = flight(state.flight, hole.time, state.departure[index]!, hole.beat === 'play' ? 0.6 : 0.85);
 
-    if (flightPose.size === 0 || hole.beat === 'black') {
-      state.swallowed[index] = 1;
-      physicsActions(world).parkBody(state.pieces[index]!.entity);
-      state.grow[index] = 0;
-      writeLetter(state, index);
+    if (flightPose.size === 0) {
+      swallowLetter(world, state, index);
       continue;
     }
 
@@ -236,6 +255,12 @@ export function syncFeatureViews(world: World): void {
           const glyph = records[index]!;
 
           if (glyph.empty) continue;
+
+          // Only what had been typed flies in: play, with the tagline off, sends nothing.
+          if (glyph.cluster >= typing.count) {
+            copies.setMatrixAt(glyph.index, view.line.hidden);
+            continue;
+          }
 
           vec3.transformMat4(work.center, glyph.center, work.world);
           const x = work.center[0] - collapse.x;

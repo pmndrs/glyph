@@ -3,13 +3,13 @@ import type { Group, Object3D } from 'three/webgpu';
 import type { Solid } from '../letters/utils';
 import { COUNT } from './content';
 
-export type DropPhase = 'idle' | 'live' | 'fading';
+export type DropPhase = 'idle' | 'live' | 'fading' | 'eaten';
 
 export interface Drop {
   phase: DropPhase;
   /** The glyph's body while live. */
   entity: Entity | undefined;
-  /** Its last pose, kept for the fade. */
+  /** Its last pose, kept for the fade, and where the hole took it from, for the flight in. */
   x: number;
   y: number;
   z: number;
@@ -17,7 +17,7 @@ export interface Drop {
   size: number;
   /** Which drop this was, so the oldest can be found. */
   serial: number;
-  /** Seconds fading. */
+  /** Seconds fading or flying in. */
   age: number;
 }
 

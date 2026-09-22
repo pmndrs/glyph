@@ -1,5 +1,6 @@
 import { createWorld } from 'koota';
 import { expect, it } from 'vitest';
+import { Collapse } from '../black-hole/traits';
 import { Mode, Viewport } from '../hero/traits';
 import { Impacts } from '../icon-paper/traits';
 import { physicsActions } from '../physics/actions';
@@ -15,7 +16,7 @@ import { Rain } from './traits';
 const PRISM = [-0.5, -0.5, -0.4, 0.5, -0.5, -0.4, -0.5, 0.5, -0.4, -0.5, -0.5, 0.4, 0.5, -0.5, 0.4, -0.5, 0.5, 0.4];
 
 it('rains pushable glyph bodies a couple of seconds into play, takes them away past the edge, and stops with play', () => {
-  const world = createWorld(Time, Mode, Viewport, Impacts, Rain);
+  const world = createWorld(Time, Mode, Viewport, Impacts, Collapse, Rain);
   const physics = physicsActions(world);
   physics.initializePhysics();
   physics.setPhysicsFloor(-0.4);

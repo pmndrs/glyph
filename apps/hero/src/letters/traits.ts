@@ -58,6 +58,8 @@ export interface TitleBodies {
   elapsed: number;
   replays: number;
   departing: boolean;
+  /** When each letter leaves for the hole on the hole's clock: the finale sets them all, play's hole one at a time. */
+  departure: Float64Array;
   from: HeldPose[];
   origins: HeldPose[];
   released: Uint8Array;

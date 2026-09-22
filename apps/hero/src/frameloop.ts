@@ -8,7 +8,7 @@ import { useViewport } from './hero/hooks';
 import { updateTime } from './time/systems';
 import { updateGlassShadows } from './letters/shadows';
 import { advanceSequence } from './sequence/systems';
-import { advanceCollapse, syncBlackHoleView } from './black-hole/systems';
+import { advanceCollapse, feedHole, syncBlackHoleView } from './black-hole/systems';
 import { syncStarEmbers, syncEmberView } from './star-embers/systems';
 import { syncPlayButtonView } from './play-button/systems';
 import { rainGlyphs, syncRainViews } from './rain/systems';
@@ -59,6 +59,7 @@ export function FrameLoop() {
       typeFeature(world);
       fadePointer(world);
       rainGlyphs(world);
+      feedHole(world);
       moveIconPaper(world);
       stepDust(world);
     },

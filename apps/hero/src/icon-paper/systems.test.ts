@@ -68,6 +68,31 @@ describe('icon paper motion', () => {
     for (const value of [...state.x, ...state.y]) expect(Math.abs(value)).toBeLessThanOrEqual(2.4);
   });
 
+  it("lets play's hole bend the sheet round itself without taking it, and springs back when it closes", () => {
+    const layout = buildLayout(layer);
+    const state = createLattice(layout, layer.motifs, layer.seed);
+    Object.assign(state.hole, { x: 0, y: 0, horizon: 0.5, pull: 0.3, time: -1 });
+    const index = layout.restX.findIndex((x, cell) => x > 0 && layout.restY[cell]! > 0);
+    const restAngle = Math.atan2(layout.restY[index]!, layout.restX[index]!);
+    const restDistance = Math.hypot(layout.restX[index]!, layout.restY[index]!);
+
+    for (let frame = 0; frame < 240; frame++) simulate(state, layout, 1 / 60, layer, (frame * 1000) / 60);
+
+    const x = layout.restX[index]! + state.x[index]!;
+    const y = layout.restY[index]! + state.y[index]!;
+    // The cell leans in and round the hole, held short of it by its springs, and none is swallowed.
+    expect(Math.hypot(x, y)).toBeLessThan(restDistance);
+    expect(Math.hypot(x, y)).toBeGreaterThan(state.hole.horizon);
+    expect(Math.atan2(y, x)).toBeLessThan(restAngle - 0.05);
+    expect([...state.swallowed].every((value) => value === 0)).toBe(true);
+
+    state.hole.pull = 0;
+
+    for (let frame = 0; frame < 240; frame++) simulate(state, layout, 1 / 60, layer, 4000 + (frame * 1000) / 60);
+
+    for (const value of [...state.x, ...state.y]) expect(Math.abs(value)).toBeLessThan(0.02);
+  });
+
   it('swaps a motif only at edge-on and keeps its choices distinct over repeated changes', () => {
     const layout = buildLayout(layer);
     const state = createLattice(layout, layer.motifs, layer.seed);

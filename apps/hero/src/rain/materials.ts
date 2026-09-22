@@ -1,6 +1,7 @@
 import { defineTextMaterial } from '@pmndrs/glyph/three';
 import { color, cross, dFdx, dFdy, dot, float, mix, normalize, output, positionView, uv, vec3, vec4 } from 'three/tsl';
 import { Color, DoubleSide, MeshPhysicalNodeMaterial, MultiplyBlending } from 'three/webgpu';
+import { holeWarp } from '../black-hole/materials';
 import { THEME_TINTS } from '../letters/content';
 
 /**
@@ -9,7 +10,8 @@ import { THEME_TINTS } from '../letters/content';
  * see other glass, since the renderer's transmission pass holds only the opaque scene, so the rain composes this way
  * instead. Lit by the environment, its highlights brighten what shows through, like gloss on the pane. It carries
  * the title glass's attenuation, thickness, and index, and its name, so the glass projection captures it like a
- * letter and casts its shadow and caustic.
+ * letter and casts its shadow and caustic. Like the title and the icon field, its ink is bent round the black
+ * hole, so a pane near the hole shows a warped letter rather than a warped quad with a straight one inside.
  */
 function createPane(name: string, tint: string) {
   return defineTextMaterial((context) => {
@@ -40,7 +42,8 @@ function createPane(name: string, tint: string) {
     const falloff = float(1).sub(lens.length().mul(lens.length())).max(0).mul(0.45);
     material.normalNode = normalize(facing.add(vec3(lens.x.mul(falloff), lens.y.negate().mul(falloff), 0)));
     // Outside the ink the pane is clear: multiplying by one leaves the paper as it was.
-    material.outputNode = vec4(mix(vec3(1), output.rgb, context.shader.coverage), 1);
+    const warp = holeWarp(context);
+    material.outputNode = vec4(mix(vec3(1), output.rgb, warp.coverage.mul(warp.survive)), 1);
     material.emissiveNode = color(tint).mul(0.05);
 
     return material;

@@ -7,7 +7,7 @@ import { Time } from '../time/traits';
 import { Pointer } from '../input/traits';
 import { Viewport } from '../hero/traits';
 import { departureAt, release, swirl } from '../black-hole/utils';
-import { HORIZON } from '../black-hole/content';
+import { HORIZON, PLAY_REACH } from '../black-hole/content';
 import { IconPaper, IconView, Impacts, type LatticeState, type Layout, type IconLayoutOptions } from './traits';
 import { PATTERN_ANGLE, FIELD_OF_VIEW, GLYPHS, MORPH_SECONDS, STAGGER_SECONDS } from './content';
 
@@ -27,7 +27,7 @@ export function moveIconPaper(world: World): void {
     const lattice = paper.lattice!;
     paper.offset += step * options.speed * (1 - 0.7 * collapse.pull);
 
-    if (collapse.beat === 'closed') paper.offset %= layout.loop;
+    if (collapse.beat === 'closed' || collapse.beat === 'play') paper.offset %= layout.loop;
 
     // Same rotated conveyor frame as the view, computed without reading a Three group.
     mat4.fromZRotation(lattice.world, PATTERN_ANGLE);
@@ -103,26 +103,35 @@ function trackPointer(
   target.active = true;
 }
 
-/** Project the hole into sheet space and scale its horizon with depth. */
+/**
+ * Project the hole into sheet space: its floor position carried along the camera's ray to the sheet's depth, so it
+ * sits over the hole on screen, and its horizon scaled the same way.
+ */
 function trackHole(cameraZ: number, state: HoleState, lattice: LatticeState, layout: Layout): void {
   lattice.hole.pull = state.pull;
   lattice.hole.time = state.time;
 
-  if (state.beat === 'closed') {
+  // Play's little hole never takes the paper: the cells stay on their springs, as if the hole were closed, and only
+  // its gravity reaches them.
+  if (state.beat === 'closed' || state.beat === 'play') {
+    lattice.hole.time = -1;
     lattice.departAt.fill(Number.NaN);
 
-    return;
+    if (state.beat === 'closed') return;
   }
 
   // The pop takes whatever is left.
   if (state.beat === 'black') lattice.swallowed.fill(1);
 
   const depth = lattice.world[14];
-  vec3.set(lattice.projected, state.x, state.y, depth);
+  const along = (cameraZ - depth) / cameraZ;
+  vec3.set(lattice.projected, state.x * along, state.y * along, depth);
   vec3.transformMat4(lattice.projected, lattice.projected, lattice.inverse);
   lattice.hole.x = lattice.projected[0];
   lattice.hole.y = lattice.projected[1];
-  lattice.hole.horizon = (state.horizon * (cameraZ - depth)) / cameraZ;
+  lattice.hole.horizon = state.horizon * along;
+
+  if (state.beat === 'play') return;
 
   // The moment the hole opens, every cell is given its turn: nearer ones first, with some jitter.
   if (Number.isNaN(lattice.departAt[0] ?? Number.NaN)) {
@@ -241,7 +250,7 @@ export function simulate(
       const restX = layout.restX[index] ?? 0;
       const restY = layout.restY[index] ?? 0;
 
-      if (open && !Number.isNaN(departure)) {
+      if (open ? !Number.isNaN(departure) : state.hole.pull > 0) {
         const dx = state.hole.x - (restX + px);
         const dy = state.hole.y - (restY + py);
         const distance = Math.hypot(dx, dy);
@@ -251,10 +260,22 @@ export function simulate(
           continue;
         }
 
+        const near = distance / state.hole.horizon;
+
+        // While a cell holds its springs the hole's field bends the sheet without taking it: the cell is leaned in
+        // and wound round the hole, and springs back once it has gone. Play's hole does only this, and the finale
+        // carries it on, letting go of it as the cell lets go.
+        if (hold > 0 && near < PLAY_REACH && distance > 0.0001) {
+          const bend = 1 - near / PLAY_REACH;
+          const force = 150 * state.hole.pull * bend * bend * hold;
+          const round = swirl(near, 1);
+          ax += (dx / distance) * force - (dy / distance) * force * round;
+          ay += (dy / distance) * force + (dx / distance) * force * round;
+        }
+
         if (loose > 0) {
           // Into the hole, and round it: the pull grows as the inverse square of the distance in horizons, and part
           // of it runs across the line to the centre, which is what winds the sheet into a spiral.
-          const near = distance / state.hole.horizon;
           const gravity = 0.12 + state.hole.pull * 3;
           const force = (240 / (near * near + 0.35) + 70) * loose * gravity;
           const round = swirl(near, 1.05);

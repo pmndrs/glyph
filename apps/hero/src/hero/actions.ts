@@ -12,14 +12,18 @@ import { Time } from '../time/traits';
 import { Title } from '../letters/traits';
 import { Robot } from '../robot/traits';
 import { overPlayButton, playReveal } from '../play-button/systems';
+import { PLAY_HOLE_AFTER } from '../black-hole/content';
 import { Mode, PaperView, Viewport, type ModeKind } from './traits';
 import type { Cue } from '../sequence/traits';
 import type { Vector2 } from 'three/webgpu';
 
 export const heroActions = createActions((world) => {
-  /** Each mode's script. The sequence types the tagline and runs the robot and the finale; play has no script. */
+  /**
+   * Each mode's script. The sequence types the tagline and runs the robot and the finale; play opens its little
+   * hole a beat after the rain starts, and feeding it brings on the finale.
+   */
   function script(mode: ModeKind): Cue[] {
-    if (mode === 'play') return [];
+    if (mode === 'play') return [{ at: PLAY_HOLE_AFTER, run: () => blackHoleActions(world).openPlayHole() }];
 
     return [
       { on: 'letters-landed', after: 0.55, run: () => letterActions(world).typeFeatureAfter(0) },
@@ -75,19 +79,21 @@ export const heroActions = createActions((world) => {
     /**
      * A press at a normalized screen point sends the robot there. While the sequence's hole is closed it takes the
      * wheel first: a dropped title stays put and a robot on the floor carries on from where it is, while a title
-     * that has not dropped yet restarts into play. Once the hole has opened only the Play button answers.
+     * that has not dropped yet restarts into play. Once either mode's finale has opened only the Play button
+     * answers; play's little feeding hole leaves the wheel in hand.
      */
     pressHero: (x: number, y: number) => {
       const { width, height, aspect } = world.get(Viewport)!;
       const robot = robotActions(world);
+      const beat = world.get(Collapse)!.hole.beat;
+
+      if (beat === 'open' || beat === 'black') {
+        if (playReveal(world) > 0 && overPlayButton(x * aspect, y)) heroActions(world).startPlay();
+
+        return;
+      }
 
       if (world.get(Mode)!.kind === 'sequence') {
-        if (world.get(Collapse)!.hole.beat !== 'closed') {
-          if (playReveal(world) > 0 && overPlayButton(x * aspect, y)) heroActions(world).startPlay();
-
-          return;
-        }
-
         const dropped = (world.queryFirst(Title)!.get(Title)!.bodies?.replays ?? 0) > 0;
         const onFloor = dropped && world.queryFirst(Robot)!.get(Robot)!.active;
 

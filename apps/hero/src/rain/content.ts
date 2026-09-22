@@ -12,6 +12,8 @@ export const FALL_GRAVITY = 0.6;
 /** How far past the edge a glyph may be pushed before it is taken away. */
 export const MARGIN = 2;
 export const FADE_SECONDS = 0.45;
+/** How long a glyph the hole eats takes to fly in. */
+export const EAT_SECONDS = 0.5;
 /** Each glyph's solid: as thick as the title letters, so the robot meets it squarely. */
 export const THICKNESS = 0.8;
 /** What falls: one of these per slot, so the rain is a different glyph every time. */

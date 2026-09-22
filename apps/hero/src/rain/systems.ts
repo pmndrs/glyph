@@ -1,5 +1,6 @@
 import type { World } from 'koota';
 import { vec3 } from 'math';
+import { Collapse } from '../black-hole/traits';
 import { Mode, Viewport } from '../hero/traits';
 import { physicsActions } from '../physics/actions';
 import { Body } from '../physics/traits';
@@ -7,7 +8,9 @@ import { Robot } from '../robot/traits';
 import { Time } from '../time/traits';
 import { jitter } from '../utils';
 import { rainActions } from './actions';
-import { COUNT, DROP_EVERY, FADE_SECONDS, FALL_GRAVITY, MARGIN, RAIN_AFTER, RELEASE_Z } from './content';
+import { COUNT, DROP_EVERY, EAT_SECONDS, FADE_SECONDS, FALL_GRAVITY, MARGIN, RAIN_AFTER, RELEASE_Z } from './content';
+import { flight } from '../black-hole/utils';
+import type { Flight } from '../black-hole/traits';
 import { Rain, RainView } from './traits';
 
 const spawnPosition = vec3.create();
@@ -16,14 +19,16 @@ const kick = vec3.create();
 /**
  * A couple of seconds into play, glyphs start falling from near the camera onto the paper as glass bodies the robot
  * can push. One pushed past the edge is taken away. When every slot is taken, the oldest fades to make room.
- * Leaving play fades them all and stops the rain.
+ * The finale stops the rain and leaves what has fallen to the hole; leaving play fades them all.
  */
 export function rainGlyphs(world: World): void {
   const mode = world.get(Mode)!;
   const time = world.get(Time)!;
   const viewport = world.get(Viewport)!;
   const rain = world.get(Rain)!;
-  const raining = mode.kind === 'play' && time.elapsed - mode.since >= RAIN_AFTER;
+  const beat = world.get(Collapse)!.hole.beat;
+  const playing = mode.kind === 'play';
+  const raining = playing && time.elapsed - mode.since >= RAIN_AFTER && (beat === 'closed' || beat === 'play');
   let { dropAt, dropped } = rain;
   const dismiss = rainActions(world).dismissDrop;
   const robot = world.queryFirst(Robot)?.get(Robot);
@@ -31,17 +36,17 @@ export function rainGlyphs(world: World): void {
   for (let slot = 0; slot < COUNT; slot++) {
     const drop = rain.drops[slot]!;
 
-    if (drop.phase === 'fading') {
+    if (drop.phase === 'fading' || drop.phase === 'eaten') {
       drop.age += time.delta;
 
-      if (drop.age >= FADE_SECONDS) drop.phase = 'idle';
+      if (drop.age >= (drop.phase === 'eaten' ? EAT_SECONDS : FADE_SECONDS)) drop.phase = 'idle';
 
       continue;
     }
 
     if (drop.phase !== 'live') continue;
 
-    if (!raining) {
+    if (!playing) {
       dismiss(slot, true);
       continue;
     }
@@ -136,7 +141,13 @@ function riding(x: number, y: number, footprint: { x: number; y: number; heading
   return Math.abs(dx * cos + dy * sin) < 1.3 && Math.abs(dy * cos - dx * sin) < 1.7;
 }
 
-/** Copy the drops into their mounted glyph groups, at the body's pose while live and shrinking away while fading. */
+const eating: Flight = { radius: 1, turn: 0, stretch: 1, size: 1 };
+
+/**
+ * Copy the drops into their mounted glyph groups: at the body's pose while live, shrinking away while fading, and
+ * flying into the hole while eaten, the way the finale's letters do, on a tightening arc, stretched along it and
+ * shrinking as it goes.
+ */
 export function syncRainViews(world: World): void {
   const view = world.get(RainView);
 
@@ -144,6 +155,7 @@ export function syncRainViews(world: World): void {
 
   const { groups } = view;
   const { drops } = world.get(Rain)!;
+  const hole = world.get(Collapse)!.hole;
 
   for (let index = 0; index < COUNT; index++) {
     const group = groups[index];
@@ -154,6 +166,21 @@ export function syncRainViews(world: World): void {
     group.visible = drop.phase !== 'idle';
 
     if (!group.visible) continue;
+
+    if (drop.phase === 'eaten') {
+      const { radius, turn, stretch, size } = flight(eating, drop.age, 0, EAT_SECONDS);
+      const dx = drop.x - hole.x;
+      const dy = drop.y - hole.y;
+      const cosine = Math.cos(turn);
+      const sine = Math.sin(turn);
+      const x = hole.x + (dx * cosine - dy * sine) * radius;
+      const y = hole.y + (dx * sine + dy * cosine) * radius;
+      group.position.set(x, y, drop.z + Math.sin(Math.PI * (1 - size)) * 0.8);
+      // Stretched along the arc, which at the end runs straight into the centre.
+      group.rotation.z = Math.atan2(y - hole.y, x - hole.x) + turn * 0.5;
+      group.scale.set(drop.size * size * stretch, (drop.size * size) / stretch, 1);
+      continue;
+    }
 
     group.position.set(drop.x, drop.y, drop.z);
     // Going, a glyph gathers itself for an instant, then scales away.

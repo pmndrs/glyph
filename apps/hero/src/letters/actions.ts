@@ -82,6 +82,7 @@ export const letterActions = createActions((world) => ({
       elapsed: 0,
       replays: 0,
       departing: false,
+      departure: new Float64Array(letters.length).fill(Number.NaN),
       from: letters.map(() => ({ x: 0, y: 0, z: 0, yaw: 0 })),
       origins: letters.map(() => ({ x: 0, y: 0, z: 0, yaw: 0 })),
       released: new Uint8Array(letters.length),
@@ -140,11 +141,26 @@ export const letterActions = createActions((world) => ({
       state.swallowed.fill(0);
       state.released.fill(0);
       state.departing = false;
+      state.departure.fill(Number.NaN);
       state.lifting = true;
       state.elapsed = 0;
     });
 
     letterActions(world).clearFeature();
+  },
+  /**
+   * Play's hole eats a letter pushed into it: from where it is, it flies into the hole the way the finale's letters
+   * do, leaving at `at` on the hole's clock, and is parked and hidden when it arrives.
+   */
+  eatLetter: (index: number, at: number) => {
+    world.query(Title).updateEach(([title]) => {
+      const state = title.bodies;
+
+      if (state === undefined || state.swallowed[index] === 1 || !Number.isNaN(state.departure[index])) return;
+
+      readBodyPose(state.origins[index]!, state.pieces[index]!.entity);
+      state.departure[index] = at;
+    });
   },
   /**
    * Put the title on the floor without a lift: letters the hole took come back home, letters mid-lift drop from
@@ -176,6 +192,7 @@ export const letterActions = createActions((world) => ({
       state.swallowed.fill(0);
       state.released.fill(1);
       state.departing = false;
+      state.departure.fill(Number.NaN);
       state.lifting = false;
       state.elapsed = 0;
     });

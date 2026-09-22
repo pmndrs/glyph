@@ -20,14 +20,18 @@ import {
   vec4,
 } from 'three/tsl';
 import { AdditiveBlending, DoubleSide, MeshBasicNodeMaterial, type Node } from 'three/webgpu';
+import { retained } from '../hmr';
 import { BUTTON_HEIGHT, BUTTON_RADIUS, BUTTON_WIDTH, FRAME_MARGIN, PIXEL } from './content';
 
-/** 0..1: how far the button has drawn in. */
-export const uPlayReveal = uniform(0);
-/** 0..1: the pointer resting on the button, smoothed. */
-export const uPlayHover = uniform(0);
-/** Playback seconds, for the light that sweeps the label. */
-export const uPlayTime = uniform(0);
+/** Kept across a hot module replacement, since the mounted view writes these and the post pass reads them. */
+export const { uPlayHover, uPlayReveal, uPlayTime } = retained('play-button', () => ({
+  /** 0..1: how far the button has drawn in. */
+  uPlayReveal: uniform(0),
+  /** 0..1: the pointer resting on the button, smoothed. */
+  uPlayHover: uniform(0),
+  /** Playback seconds, for the light that sweeps the label. */
+  uPlayTime: uniform(0),
+}));
 
 /** The reveal in twenty notches, so the button draws itself a step at a time. */
 const reveal = uPlayReveal.mul(20).floor().div(20);
@@ -97,8 +101,8 @@ export const labelMaterial = defineTextMaterial((context) => {
 
 /**
  * A rounded frame drawn as a signed distance on the button's pixel grid: a one-pixel outline that draws itself from
- * the top, round both sides, as the reveal grows, with a halo held to a few levels. Under the pointer it fills
- * faintly and glows in stepped rings around the frame.
+ * the top, round both sides, as the reveal grows, with a halo held to a few levels. Under the pointer it blooms
+ * softly either side of the stroke.
  */
 export function createFrameMaterial(): MeshBasicNodeMaterial {
   const material = new MeshBasicNodeMaterial({
@@ -108,15 +112,18 @@ export function createFrameMaterial(): MeshBasicNodeMaterial {
     blending: AdditiveBlending,
   });
   material.name = 'play-frame';
-  const point = snap(
-    uv()
-      .sub(0.5)
-      .mul(vec2(BUTTON_WIDTH + 2 * FRAME_MARGIN, BUTTON_HEIGHT + 2 * FRAME_MARGIN)),
-  );
-  const corner = abs(point).sub(vec2(BUTTON_WIDTH / 2 - BUTTON_RADIUS, BUTTON_HEIGHT / 2 - BUTTON_RADIUS));
-  const distance = length(max(corner, 0))
-    .add(min(max(corner.x, corner.y), 0))
-    .sub(BUTTON_RADIUS);
+  const plane = uv()
+    .sub(0.5)
+    .mul(vec2(BUTTON_WIDTH + 2 * FRAME_MARGIN, BUTTON_HEIGHT + 2 * FRAME_MARGIN));
+  const roundedDistance = (at: Node<'vec2'>): Node<'float'> => {
+    const corner = abs(at).sub(vec2(BUTTON_WIDTH / 2 - BUTTON_RADIUS, BUTTON_HEIGHT / 2 - BUTTON_RADIUS));
+
+    return length(max(corner, 0))
+      .add(min(max(corner.x, corner.y), 0))
+      .sub(BUTTON_RADIUS);
+  };
+  const point = snap(plane);
+  const distance = roundedDistance(point);
   const stroke = step(abs(distance), PIXEL / 2);
   // A soft glow inside the frame, and a tight one outside that is gone before the plane's edge.
   const halo = posterize(
@@ -126,17 +133,24 @@ export function createFrameMaterial(): MeshBasicNodeMaterial {
       .add(exp(distance.mul(-70)).mul(step(0, distance)).mul(0.22)),
     8,
   );
-  const fill = posterize(smoothstep(-0.16, 0, distance).mul(uPlayHover).mul(0.1), 4);
-  // Under the pointer the button glows: stepped rings of light swell out around the frame.
-  const glow = posterize(
-    smoothstep(FRAME_MARGIN, 0, distance).pow(2).mul(step(0, distance)).mul(uPlayHover).mul(0.3),
-    6,
-  );
+  // Under the pointer the frame blooms: a soft light falling off either side of the stroke, off the unsnapped
+  // distance so it is the one light on the button that is not on its pixel grid.
+  const smooth = roundedDistance(plane);
+  const glow = exp(abs(smooth).mul(-28))
+    .mul(smoothstep(FRAME_MARGIN, FRAME_MARGIN / 2, smooth))
+    .mul(uPlayHover)
+    .mul(0.175);
   // Angle from straight up, either way round, as a share of the way to the bottom.
   const around = abs(atan(point.x, point.y)).div(Math.PI);
   const drawn = step(around, smoothstep(0, 0.75, reveal).mul(1.02));
-  material.colorNode = tint(point.x).mul(float(1).add(uPlayHover.mul(0.5)));
-  material.opacityNode = stroke.add(halo).add(fill).add(glow).add(sweep(point.x).mul(stroke).mul(0.6)).mul(drawn);
+  const drawnFrame = stroke.add(halo).add(sweep(point.x).mul(stroke).mul(0.6));
+  // The glow is tinted from where it truly is; the frame from its pixel.
+  material.colorNode = tint(point.x)
+    .mul(drawnFrame)
+    .add(tint(plane.x).mul(glow))
+    .mul(float(1).add(uPlayHover.mul(0.5)))
+    .mul(drawn);
+  material.opacityNode = float(1);
   material.toneMapped = false;
 
   return material;
