@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:a581cc0eb3a861b9d862762501348b35ead8950a2c5ddc9269bf1f8c990fc905'
+source_digest: 'sha256:a016640725277bcaece83715820abb59a63ff930bcb86fe7514826905e24cc1f'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -636,9 +636,14 @@ to 11.9, and seventeen of its sixty passes.
 The hero is bound by the GPU, and by fill rather than by passes. Over a whole playback at 720p the GPU's own
 clock reads 8 to 12 ms a frame against 4.6 to 5.2 ms of CPU submission, so the CPU has half the work. The frame
 draws forty to sixty passes, but the captures are fixed small targets and leaving the whole chain out at rest
-costs nothing the profile can read; what the frame spends is the main pass, where the paper, the two icon sheets,
-the glass and the shadow receiver each carry about a screen of fill, and four-sample multisampling over all of it
-is 3.2 ms of the 11.9 at 2560 × 1440, a little over a quarter. The glyphs are antialiased by that multisampling
+costs nothing the profile can read; what the frame spends is the main pass, where the paper, the two icon sheets, the glass and the shadow receiver
+each carry about a screen of fill, and four-sample multisampling over all of it is 3.2 ms of the 11.9 at
+2560 × 1440, a little over a quarter. The costliest thing in it was not the shading but the renderer's back-face
+pass: a double-sided transmissive material is drawn twice, back faces then front, which a closed solid needs and
+a flat pane does not, and the title's letters are flat panes. Drawing them once, from whichever side faces the
+camera, took 4.8 ms off a 15.7 ms resting frame at 2560 × 1440, as much as hiding the glass altogether, and left
+the letters looking as they did. Dispersion is the next of it, three samples of the frame behind rather than one,
+worth 2.5 ms and the chromatic fringe. The glyphs are antialiased by that multisampling
 through alpha-to-coverage, so it is not free to drop; the levers left are the pixel ratio, the sample count, and
 folding the receiver into the sheets it darkens. Over a whole playback at 720p, where the
 lift and the finale redraw the captures every frame, the performance check's GPU median runs 8 to 12 ms from one

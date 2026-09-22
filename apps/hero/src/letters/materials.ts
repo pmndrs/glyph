@@ -37,6 +37,9 @@ function createGlass(properties: MeshPhysicalNodeMaterialParameters = {}, motion
 
     const material = new MeshPhysicalNodeMaterial({
       side: DoubleSide,
+      // A letter is a flat pane, not a closed solid: the renderer's back-face pass for double-sided transmission
+      // buys it nothing and costs it nearly everything, so it is drawn once from whichever side faces the camera.
+      forceSinglePass: true,
       // A very faint smoky tint: the pattern reads through the letters, bent rather than dimmed.
       color: new Color('#f1f3f6'),
       metalness: 0,

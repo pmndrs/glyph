@@ -6,7 +6,7 @@
   "args": ["--gpu", "--timeout", "240", "--path", "/?profile"]
 } */
 import { _roots, getScheduler } from '@react-three/fiber/webgpu';
-import { Mesh, type Object3D, WebGPUBackend, WebGPURenderer } from 'three/webgpu';
+import { Mesh, MeshPhysicalNodeMaterial, type Object3D, WebGPUBackend, WebGPURenderer } from 'three/webgpu';
 
 const { world } = (await import(new URL('/src/world.ts', location.origin).href)) as typeof import('../src/world');
 const { Title, TitleView, ShadowView, LensView, FeatureView } = (await import(
@@ -151,6 +151,16 @@ const icons = find((object) => object.name.startsWith('icon-pattern-'));
 const paper = find((object) => object instanceof Mesh && object.material === paperMaterial);
 const feature = titleEntity.get(FeatureView)?.line.glyphs;
 const embers = find((object) => object.name === 'star-embers');
+const glass = new Set<MeshPhysicalNodeMaterial>();
+scene.traverse((object) => {
+  if (
+    object instanceof Mesh &&
+    object.material instanceof MeshPhysicalNodeMaterial &&
+    object.material.name.startsWith('stained-glass-') &&
+    !object.material.name.startsWith('stained-glass-rain-')
+  )
+    glass.add(object.material);
+});
 
 /** Each pass or layer left out in turn, at rest. Restoring puts the scene back as it was. */
 const leaveOut: [string, () => () => void][] = [
@@ -191,6 +201,26 @@ const leaveOut: [string, () => () => void][] = [
       shadow.causticScene.visible = false;
 
       return () => (shadow.causticScene.visible = shown);
+    },
+  ],
+  [
+    // Transmissive double-sided glass is drawn twice, back faces then front. The letters are flat quads.
+    'glass back pass',
+    () => {
+      for (const material of glass) material.forceSinglePass = true;
+
+      return () => {
+        for (const material of glass) material.forceSinglePass = false;
+      };
+    },
+  ],
+  [
+    'glass dispersion',
+    () => {
+      const was = [...glass].map((material) => material.dispersion);
+      for (const material of glass) material.dispersion = 0;
+
+      return () => [...glass].forEach((material, index) => (material.dispersion = was[index]!));
     },
   ],
   ['icon paper', () => hide(icons)],
