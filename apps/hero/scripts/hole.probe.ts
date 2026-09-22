@@ -26,6 +26,15 @@ const { Collapse } = (await import(
 const { POP_AT } = (await import(
   new URL('/src/black-hole/content.ts', location.origin).href
 )) as typeof import('../src/black-hole/content');
+const { uHoleShadow, updateGlassShadows } = (await import(
+  new URL('/src/letters/shadows.tsx', location.origin).href
+)) as typeof import('../src/letters/shadows');
+const { Viewport } = (await import(
+  new URL('/src/hero/traits.ts', location.origin).href
+)) as typeof import('../src/hero/traits');
+const { uHoleLens } = (await import(
+  new URL('/src/black-hole/materials.ts', location.origin).href
+)) as typeof import('../src/black-hole/materials');
 const { uHoleCollapse } = (await import(
   new URL('/src/black-hole/materials.ts', location.origin).href
 )) as typeof import('../src/black-hole/materials');
@@ -158,6 +167,120 @@ if (
   stats[5]!.lit !== 0
 )
   throw new Error(`Explosion/black frame failed: ${JSON.stringify(stats)}`);
+
+// The hole shades the paper beneath it. Its caster stays in the capture with the shade turned off, so the march
+// keeps its reach and the control differs only by the shade itself. Its lens is off for both, so the shade is
+// measured where it falls rather than where the bend carries it.
+const lensRadius = uHoleLens.value;
+uHoleLens.value = 0;
+const shaded = await capture(control);
+uHoleShadow.value = 0;
+updateGlassShadows(world);
+const unshaded = await capture(control);
+uHoleShadow.value = 1;
+updateGlassShadows(world);
+uHoleLens.value = lensRadius;
+let shadowed = 0;
+let strayed = 0;
+
+for (let offset = 0; offset < shaded.length; offset += 4) {
+  const darker =
+    unshaded[offset]! - shaded[offset]! > 6 &&
+    unshaded[offset + 1]! - shaded[offset + 1]! > 6 &&
+    unshaded[offset + 2]! - shaded[offset + 2]! > 6;
+
+  if (!darker) continue;
+
+  shadowed++;
+  const pixel = offset / 4;
+  const dx = (pixel % control.width) - control.width / 2;
+  const dy = Math.floor(pixel / control.width) - control.height / 2;
+
+  // The hole sits at the centre of the floor, so its shade belongs within a couple of horizons of the middle.
+  if (dx * dx + dy * dy > 150 * 150) strayed++;
+}
+
+if (shadowed < 300) throw new Error(`The hole cast no shadow on the paper: ${shadowed}`);
+
+if (strayed > 50) throw new Error(`The hole's shadow reached away from it: ${JSON.stringify({ shadowed, strayed })}`);
+
+// The hole bends the frame around it. Its lens off, the pixels near it move back and the far frame holds still.
+const bent = await capture(control);
+uHoleLens.value = 0;
+const straight = await capture(control);
+let bentPixels = 0;
+let bentFar = 0;
+
+for (let offset = 0; offset < bent.length; offset += 4) {
+  const moved =
+    Math.max(
+      Math.abs(bent[offset]! - straight[offset]!),
+      Math.abs(bent[offset + 1]! - straight[offset + 1]!),
+      Math.abs(bent[offset + 2]! - straight[offset + 2]!),
+    ) > 8;
+
+  if (!moved) continue;
+
+  bentPixels++;
+  const pixel = offset / 4;
+  const dx = (pixel % control.width) - control.width / 2;
+  const dy = Math.floor(pixel / control.width) - control.height / 2;
+
+  if (dx * dx + dy * dy > 300 * 300) bentFar++;
+}
+
+if (bentPixels < 500) throw new Error(`The hole did not bend the frame around it: ${bentPixels}`);
+
+if (bentFar > 100) throw new Error(`The hole bent the far frame: ${JSON.stringify({ bentPixels, bentFar })}`);
+
+// The bend follows the hole wherever it is: moved off the centre, its pixels gather about it on screen.
+const { width: worldWidth, height: worldHeight } = world.get(Viewport)!;
+world.set(Collapse, { x: 3, y: 1.5 });
+clock += 33.334;
+scheduler.step(clock);
+// The view job recomputes the collapse from the hole's clock; the bend is measured on the flat paper.
+uHoleCollapse.value = 0;
+// Read-back rows run top-down, against the world's y.
+const expectedX = control.width / 2 + (3 / worldWidth) * control.width;
+const expectedY = control.height / 2 - (1.5 / worldHeight) * control.height;
+const movedBent = await capture(control);
+const movedLens = uHoleLens.value;
+uHoleLens.value = 0;
+const movedStraight = await capture(control);
+uHoleLens.value = movedLens;
+// Its bend gathers about where it is rather than its mirror, which is what an inverted screen axis would give.
+let nearHole = 0;
+let nearMirror = 0;
+let count = 0;
+
+for (let offset = 0; offset < movedBent.length; offset += 4) {
+  if (
+    Math.max(
+      Math.abs(movedBent[offset]! - movedStraight[offset]!),
+      Math.abs(movedBent[offset + 1]! - movedStraight[offset + 1]!),
+      Math.abs(movedBent[offset + 2]! - movedStraight[offset + 2]!),
+    ) <= 8
+  )
+    continue;
+
+  const pixel = offset / 4;
+  const x = pixel % control.width;
+  const y = Math.floor(pixel / control.width);
+  nearHole += Math.hypot(x - expectedX, y - expectedY);
+  nearMirror += Math.hypot(x - (control.width - expectedX), y - (control.height - expectedY));
+  count++;
+}
+
+const bentAt = { count, hole: Math.round(nearHole / count), mirror: Math.round(nearMirror / count) };
+
+if (count < 500 || bentAt.hole >= bentAt.mirror)
+  throw new Error(
+    `The bend did not follow the hole off the centre: ${JSON.stringify({ ...bentAt, movedLens, collapse: uHoleCollapse.value, beat: hole().beat, time: hole().time, at: [hole().x, hole().y], expectedX, expectedY })}`,
+  );
+
+world.set(Collapse, { x: 0, y: 0 });
+clock += 16.667;
+scheduler.step(clock);
 
 const burst = state.scene.getObjectByName('star-embers');
 
@@ -314,6 +437,11 @@ console.log(
     backend: 'webgpu',
     stats,
     uncollapsed,
+    bentPixels,
+    bentFar,
+    bentAt,
+    shadowed,
+    strayed,
     glyphPixels,
     burningPixels,
     bloomPixels,

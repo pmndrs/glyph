@@ -271,13 +271,18 @@ export function syncBlackHoleView(world: World): void {
   const current = world.get(Collapse)!.hole;
   const { width, height, cameraZ } = world.get(Viewport)!;
   uniforms.uHoleCamera.value = cameraZ;
-  // The viewport's extent is measured on the floor, where the hole lies, so this is its place on screen.
-  uniforms.uHoleScreen.value.set(current.x / width, current.y / height);
-  group.visible = current.beat === 'open' || current.beat === 'play';
+  // The viewport's extent is measured on the floor, where the hole lies, so this is its place on screen. The
+  // frame's rows run the other way to the world's y, so the offset down the frame is the negative of it.
+  uniforms.uHoleScreen.value.set(current.x / width, -current.y / height);
+  const drawn = current.beat === 'open' || current.beat === 'play';
+  group.visible = drawn;
   // The hole is drawn above the floor: its floor position carried up the camera's ray, so it sits over the field.
   const along = (cameraZ - group.position.z) / cameraZ;
   group.position.x = current.x * along;
   group.position.y = current.y * along;
+  // Drawn up there it also covers more of the frame than its horizon covers of the floor, so the lens is given
+  // that apparent radius. A hole that is not drawn bends nothing.
+  uniforms.uHoleLens.value = drawn ? current.horizon / along / height : 0;
   uniforms.uPresence.value = current.presence;
   uniforms.uHeat.value = current.pull;
   const size = Math.max(current.horizon / HORIZON_ON_PLANE, 0.001);

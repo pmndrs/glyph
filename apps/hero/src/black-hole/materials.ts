@@ -41,6 +41,8 @@ export const holeUniforms = retained('black-hole', () => ({
   uHoleCollapse: uniform(0),
   /** Where the hole is on screen, as an offset from the centre in the frame's 0..1 coordinates. */
   uHoleScreen: uniform(new Vector2()),
+  /** The hole's horizon on screen, as a share of the frame's height, or zero while it is not drawn. */
+  uHoleLens: uniform(0),
   uHoleShake: uniform(new Vector2()),
   /** The hole's own drawing, driven from the beat once a frame. */
   uPresence: uniform(0),
@@ -49,6 +51,7 @@ export const holeUniforms = retained('black-hole', () => ({
 
 export const {
   uHeat,
+  uHoleLens,
   uHoleBend,
   uHoleBlackout,
   uHoleCamera,
@@ -186,22 +189,47 @@ export function buildMaterials() {
   return { core, light, black };
 }
 
-/** Wind the rendered sheet into the centre and expose black behind its edges. */
+/**
+ * Light bends toward the hole, so the frame around it is read from nearer in and stretches outward: a ray passing
+ * at some distance is deflected by the square of the horizon over that distance. The bend begins outside the
+ * hole's own drawing, whose glow reaches well past the horizon, and rises from nothing there, so the disk and its
+ * ring of light stay exactly as drawn and no pixel of them is smeared outward; it closes off a few horizons
+ * further on, so the far frame holds still rather than swimming. A hole that is not drawn bends nothing.
+ */
+function lensed(point: Node<'vec2'>, aspect: Node<'vec2'>): Node<'vec2'> {
+  const horizon = uHoleLens.max(1e-5);
+  const at = point.mul(aspect);
+  const radius = at.length().max(1e-5);
+  // The hole's core is drawn out to its horizon, and its ring of light a little past that. The bend rises from
+  // nothing there and over the next horizon, which keeps what it reads always outside that ring however hard it
+  // pulls, and closes off a few horizons further on so the far frame holds still rather than swimming.
+  const drawn = horizon.mul(1.25);
+  const full = horizon.mul(2.5);
+  const bend = horizon
+    .mul(horizon)
+    .div(radius)
+    .mul(1.8)
+    .mul(smoothstep(drawn, full, radius))
+    .mul(smoothstep(horizon.mul(5), full, radius));
+
+  return at.mul(radius.sub(bend).div(radius)).div(aspect);
+}
+
+/** Bend the rendered sheet around the hole, wind it into the centre, and expose black behind its edges. */
 export function collapseSheet(lit: TextureNode, point: Node<'vec2'>) {
-  // `point` is the fragment's offset from the hole on screen; the sheet winds in about the hole, wherever it is.
+  // `point` is the fragment's offset from the hole on screen; the sheet bends and winds about the hole, wherever
+  // it is.
   const aspect = vec2(screenSize.x.div(screenSize.y), 1);
   const radius = point.mul(aspect).length();
   const collapse = uHoleCollapse;
   const scale = float(1).sub(collapse).max(0.002);
   // Inverse mapping keeps every pixel attached to the paper as its edges curl away from the viewport.
   const turn = collapse.mul(5).mul(float(1).sub(radius).max(0));
-  const source = vec2(
+  const wound = vec2(
     point.x.mul(cos(turn)).sub(point.y.mul(sin(turn))),
     point.x.mul(sin(turn)).add(point.y.mul(cos(turn))),
-  )
-    .div(scale)
-    .add(0.5)
-    .add(uHoleScreen);
+  ).div(scale);
+  const source = lensed(wound, aspect).add(0.5).add(uHoleScreen);
   const edge = source.sub(0.5).abs().max(source.sub(0.5).abs().yx).x;
   const paper = float(1)
     .sub(smoothstep(0.48, 0.5, edge))
@@ -209,5 +237,6 @@ export function collapseSheet(lit: TextureNode, point: Node<'vec2'>) {
     .mul(float(1).sub(uHoleBlackout));
   const warped = lit.sample(source.clamp()).rgb;
 
-  return mix(lit.rgb, warped.mul(paper), smoothstep(0, 0.025, collapse));
+  // The bend applies whenever the hole is drawn; the curling paper only once it is collapsing.
+  return warped.mul(mix(float(1), paper, smoothstep(0, 0.025, collapse)));
 }

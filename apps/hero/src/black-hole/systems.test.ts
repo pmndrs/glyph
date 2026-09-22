@@ -142,7 +142,8 @@ it('opens small in play, grows as it eats the rain pushed to it, then becomes th
     expect(group.position.x).toBeCloseTo((1.5 * 11) / 16);
     expect(holeUniforms.uHoleCenter.value.x).toBeCloseTo(1.5);
     expect(holeUniforms.uHoleScreen.value.x).toBeCloseTo(1.5 / 18);
-    expect(holeUniforms.uHoleScreen.value.y).toBeCloseTo(-0.5 / 10);
+    // The frame's rows run the other way to the world's y.
+    expect(holeUniforms.uHoleScreen.value.y).toBeCloseTo(0.5 / 10);
     blackHoleActions(world).unmountBlackHoleView();
     expect(hole().time).toBeGreaterThanOrEqual(FINALE_JOIN);
     expect(hole().horizon).toBeGreaterThanOrEqual(HORIZON * 0.98);

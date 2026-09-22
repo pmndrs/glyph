@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:6db3bf8cd24898d77cb84c419ff6d9d625a60c43bfa689520f2da8d8ff4a3143'
+source_digest: 'sha256:4fb1d943ef480d142cbff88d04f88856bb01bd0d10f0a8862ac6a1d4dc089fc2'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -434,12 +434,22 @@ lens changes nothing at rest and, with the overlap, changes pixels only where gl
 Play's hole is a third beat of the hole state, `play`, beside the finale's `open` and `black`. The play script
 opens it a beat after the rain starts, somewhere off the centre within a bounded offset that the collapse trait
 carries as the hole's place, so the finale it becomes, the eaten glyphs' arcs, the drawn hole, the lattice, the
-post pass's sheet collapse and sparks, and the embers' burst all follow it. The hole's place is a floor position,
+post pass's sheet collapse, lens and sparks, and the embers' burst all follow it. The hole's place is a floor position,
 and everything at another depth carries it along the camera's ray to its own depth, as the horizon already was
 scaled, so the field, the glyph warp, the bent lattice, and the drawn hole all sit over one screen point: the
 view publishes the hole's place on screen as an offset from the centre, measured on the floor where the
-viewport's extent is, and the post pass winds the frame in about that point; the sequence's finale opens at the
-centre. `advanceCollapse` drives it from its own clock while the
+viewport's extent is and negated down the frame, whose rows run the other way to the world's y, and the post pass
+bends and winds the frame about that point; the sequence's finale opens at the centre.
+
+Light bends toward the hole, so the post pass reads the frame around it from nearer in and it stretches outward:
+the offset from the hole, pulled in by the square of its horizon over the distance, which is how far a ray
+passing that far out is deflected. The horizon it is given is the apparent one, since the hole is drawn above the
+floor and covers more of the frame than its horizon covers of the floor. The bend rises from nothing just outside
+the hole's own ring of light and over the next horizon, which keeps what it reads always outside that ring
+however hard it pulls, so the disk stays exactly the circle it was drawn, and it closes off a few horizons
+further on so the far frame holds still rather than swimming. The finale check verifies the frame bends around
+the hole, that the far frame does not, and that with the hole moved off the centre the bend gathers about it
+rather than about its mirror, which is what an inverted screen axis would give. `advanceCollapse` drives it from its own clock while the
 finale's is unset, easing its width up to what its meals have earned and swelling it into a gulp that decays over
 a moment after each one, its pull flinching with it so nearby glass bends. `feedHole` runs after physics: every
 landed rain glyph and every letter within the field, which reaches fourteen horizons out and so grows with the hole,
@@ -666,12 +676,19 @@ turn with time: a 128 × 80 grid over the plane, eight capture texels a cell sin
 is carried in its vertex shader to where each ray lands after refracting through the lens normal, an edge chamfer,
 and two slowly turning lattices of facets, once per colour channel with a small index spread, and its brightness
 is the source area gathering in each pixel, so the light pools into faint, spectrally fringed glints inside the
-shadow. The robot casts in the same projection: its model sits on a caster layer, and while it shows, the
-capture also draws the main scene under the lamp with that layer alone and an override that writes no tint, so
-it pools no light, and a little over half the weight, so its shade reads beside the tinted glass rather than as a
-hole; skinning and joints come with the objects, which clones would lose. Its shadow is redrawn every frame it
-shows, since it is always moving then, at no cost the profile can tell apart. The robot check verifies the shadow
-against the robot taken off that layer. It is an art-directed projection, not multi-bounce light transport.
+shadow. The robot casts in the same projection: its model sits on a caster layer, and while it shows, the capture also
+draws the main scene under the lamp with that layer alone and an override that writes no tint, so it pools no
+light, and a little over half the weight, so its shade reads beside the tinted glass rather than as a hole;
+skinning and joints come with the objects, which clones would lose. The scene's background is left out of that
+draw, or it would fill the capture as pale glass everywhere and wash every shadow off the frame. The black hole
+casts too, as a disk the size of its drawn core at the height it is drawn, so the lamp's slant throws its shade
+well down and to the left of it rather than into a lump under it; the march's samples are spaced quadratically,
+so reaching that high still leaves more than half of them under the letters. Both are redrawn every frame they
+show, since neither is ever still then, at no cost the profile can tell apart, and both are drawn once while
+hidden during preparation so their programs compile there rather than when they first appear. The robot check
+verifies its shadow against the robot taken off that layer and that the frame away from it is untouched; the
+finale check verifies the hole's against its shade turned off, with its lens off for both so the shade is
+measured where it falls. It is an art-directed projection, not multi-bounce light transport.
 
 The paper behind everything is grain: three octaves of noise whose height tints and roughens the sheet and whose
 slope tilts its normal. A plane the size of the screen at a retina pixel ratio asked for those octaves millions
