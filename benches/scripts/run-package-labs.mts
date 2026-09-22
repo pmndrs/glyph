@@ -12,13 +12,14 @@ import { basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { assertLabsResultSucceeded } from './support/labs-result.mts';
+import { type PackageLabsSuite, requirePackageLabsSuite } from './support/package-labs-suite.mts';
 
 interface Options {
   readonly baseline?: string;
   readonly blocks: number;
   readonly candidate: string;
   readonly output: string;
-  readonly suite: string;
+  readonly suite: PackageLabsSuite;
 }
 
 interface InstalledArtifact {
@@ -99,12 +100,7 @@ async function parseOptions(argv: readonly string[]): Promise<Options> {
     }
     values.set(name.slice(2), value);
   }
-  const suite = values.get('suite') ?? 'smoke';
-  if (!/^[a-z][a-z0-9-]*$/u.test(suite)) {
-    throw new RangeError(
-      '--suite must be a tag name such as smoke, layout, measure, glyphs, publication, style, reflow, stress, or full',
-    );
-  }
+  const suite = requirePackageLabsSuite(values.get('suite') ?? 'smoke');
   const blocks = Number(values.get('blocks') ?? (suite === 'smoke' ? 4 : 8));
   if (!Number.isSafeInteger(blocks) || blocks < 2) throw new RangeError('--blocks must be an integer of at least 2');
   return {
@@ -183,7 +179,7 @@ async function resolveRegistryVersion(requested: string): Promise<string> {
   return version;
 }
 
-async function runLabs(name: string, packageRoot: string, blocks: number, suite: string): Promise<void> {
+async function runLabs(name: string, packageRoot: string, blocks: number, suite: PackageLabsSuite): Promise<void> {
   const selection = suite === 'full' ? [] : [`@${suite}`];
   await run(labsExecutable, [...selection, '--name', name, '--force', '--blocks', String(blocks)], benchesRoot, false, {
     GLYPH_LABS_PACKAGE_ROOT: packageRoot,

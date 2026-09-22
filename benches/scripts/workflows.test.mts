@@ -10,6 +10,7 @@ import { forwardedWorkflowArguments, workflowCommandArguments } from './workflow
 import { hasVitexecFailure } from './workflow-output.mts';
 import { assertLabsResultHasNoErrors } from './support/labs-result.mts';
 import { LOOPBACK_HOST, selectLoopbackPort } from './support/loopback-port.mts';
+import { selectPackageLabsSuite } from './support/package-labs-suite.mts';
 import { packedArchiveDependency } from './support/packed-archive.mts';
 
 const execute = promisify(execFile);
@@ -59,6 +60,39 @@ test('rejects benchmark-body errors even when Labs exits successfully', () => {
     /broken\.bench\.ts \/ layout \/ suffix-edit: memory grew/u,
   );
   assert.throws(() => assertLabsResultHasNoErrors({ files: [] }), /did not contain any benchmark runs/u);
+});
+
+test('routes package Labs by event and one explicit pull-request label', () => {
+  assert.equal(selectPackageLabsSuite({ eventName: 'pull_request' }), 'smoke');
+  assert.equal(
+    selectPackageLabsSuite({ eventName: 'pull_request', labels: ['documentation', 'benchmark:layout'] }),
+    'layout',
+  );
+  assert.equal(
+    selectPackageLabsSuite({
+      eventName: 'pull_request',
+      labels: ['benchmark:measure', 'benchmark:full', 'benchmark:stress'],
+    }),
+    'full',
+  );
+  assert.equal(selectPackageLabsSuite({ eventName: 'push', ref: 'refs/heads/main' }), 'full');
+  assert.equal(selectPackageLabsSuite({ eventName: 'workflow_dispatch', requestedSuite: 'glyphs' }), 'glyphs');
+  assert.throws(
+    () =>
+      selectPackageLabsSuite({
+        eventName: 'pull_request',
+        labels: ['benchmark:layout', 'benchmark:measure'],
+      }),
+    /Select one focused benchmark label/u,
+  );
+  assert.throws(
+    () => selectPackageLabsSuite({ eventName: 'workflow_dispatch', requestedSuite: 'unknown' }),
+    /Unknown Package Labs suite/u,
+  );
+  assert.throws(
+    () => selectPackageLabsSuite({ eventName: 'pull_request', labels: ['benchmark:typo'] }),
+    /Unknown Package Labs suite/u,
+  );
 });
 
 test('forwards runner options in the position each runner parses', () => {

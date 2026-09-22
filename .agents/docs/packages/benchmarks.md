@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:07f6f587f60ec66eebb5fca45a74bb6ebe3fb676bbc572351a2fe40bad575f17'
+source_digest: 'sha256:ed8debb7e2cf4b6bea71c59fb1a6d646d232ca37e82d6b36505d228f4aaf6342'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -266,20 +266,22 @@ remain under their focused checks because a byte mismatch, pixel mismatch, or si
 timing distribution. The CPU migration retires hand-rolled Node timers only after their Labs replacement has produced a
 valid record; browser and native/Worker workflows are not renamed into Labs benchmarks they cannot faithfully become.
 
-Package performance is measured from installable artifacts rather than workspace source. The pull-request `check` job
-builds `@pmndrs/glyph` once, creates one package tarball with `pnpm pack`, and retains that tarball for the separate
-non-blocking performance job. `benchmark:labs-package` installs the candidate tarball and an exact version resolved from
-the current npm canary into isolated temporary consumers, then runs both through `@pmndrs/labs`. It never rebuilds either
-artifact. The retained report includes native Labs JSON, comparison output, exact package manifests and lockfiles, and the
-candidate tarball SHA-256.
+Package performance is measured from installable artifacts rather than workspace source. The `check` job builds
+`@pmndrs/glyph` once, creates one package tarball with `pnpm pack`, and retains that tarball for the separate non-blocking
+performance job. `benchmark:labs-package` installs the candidate tarball and an exact version resolved from the current
+npm canary into isolated temporary consumers, then runs both through `@pmndrs/labs`. It never rebuilds either artifact.
+The retained report includes native Labs JSON, comparison output, exact package manifests and lockfiles, and the candidate
+tarball SHA-256.
 
 The default package suite is a common-use smoke comparison: cached `measure()`, measurement and publication after a text
 change, exact-width reflow, paint-only style publication, and font-size relayout. It deliberately excludes per-glyph
 inspection and high-scale stress work. Four fresh-process blocks are the smallest Labs comparison that can reach the
-configured five-percent significance threshold, keeping the pull-request signal concise. Maintainers select focused
-`layout`, `measure`, `glyphs`, `publication`, `batch`, or `stress` tags when a change touches those concerns, or select
-`full` for the complete installed-package matrix. `full` does not run browser observations, native/Worker profiles, or
-correctness and release gates.
+configured five-percent significance threshold, keeping the pull-request signal concise. A pull request runs `smoke`
+unless it carries one `benchmark:<suite>` label. `benchmark:full` overrides focused labels; otherwise multiple focused
+benchmark labels are rejected as ambiguous. A push to `main` runs `full`, and manual dispatch exposes the same suite
+choice. Available focused suites are `layout`, `measure`, `glyphs`, `publication`, `batch`, `style`, `reflow`, and
+`stress`.
+`full` does not run browser observations, native/Worker profiles, or correctness and release gates.
 
 Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentation are complete
 
@@ -713,20 +715,27 @@ host initialization, initialized-plus-corpus work, and retained-generator corpus
 Browser frame, GPU, and input-latency observations remain Vitexec or Playwright workflows, while package size and
 conformance remain deterministic gates rather than timing benchmarks.
 
-| Need                                  | Command                                                                                   |
-| ------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Common installed-package signal       | `pnpm scripts run benchmark:labs-package -- --candidate <package-or-tgz>`                 |
-| Focused/full installed-package signal | add `--suite layout`, `measure`, `glyphs`, `publication`, `batch`, `stress`, or `full`    |
-| Raw retained-engine signal            | `pnpm scripts run benchmark:labs-internal -- --suite <engine-case>`                       |
-| Kernel signal                         | build with `glyph:kernel-lab-build`, then select `kernel`, `pack`, `break`, or `bidi`     |
-| Generator signal                      | `pnpm scripts run benchmark:labs-internal -- --suite mtsdf-generator`                     |
-| Browser/GPU/frame signal              | select the maintained `benchmark:*` or `glyph:kernel-lab-browser` workflow from the index |
+| Need                                  | Command                                                                                                   |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Common installed-package signal       | `pnpm scripts run benchmark:labs-package -- --candidate <package-or-tgz>`                                 |
+| Focused/full installed-package signal | add `--suite layout`, `measure`, `glyphs`, `publication`, `batch`, `style`, `reflow`, `stress`, or `full` |
+| Raw retained-engine signal            | `pnpm scripts run benchmark:labs-internal -- --suite <engine-case>`                                       |
+| Kernel signal                         | build with `glyph:kernel-lab-build`, then select `kernel`, `pack`, `break`, or `bidi`                     |
+| Generator signal                      | `pnpm scripts run benchmark:labs-internal -- --suite mtsdf-generator`                                     |
+| Browser/GPU/frame signal              | select the maintained `benchmark:*` or `glyph:kernel-lab-browser` workflow from the index                 |
 
 Both Labs runners inspect the saved result and fail on an empty selection or any recorded benchmark-body error; Labs
 0.9.0 can otherwise print such an error and still exit zero. Generator fixture scripts may print elapsed progress while
 writing authenticated fixtures, but those wall-clock messages are not comparison benchmarks. The MTSDF baker profiler
 remains separate because it compares native, direct Wasm, Worker transfer, and peak-memory phases that an in-process Labs
 callback cannot represent faithfully.
+
+CI routes the installed-package lane by event. Pull requests default to the four-block `smoke` suite. One
+`benchmark:layout`, `benchmark:measure`, `benchmark:glyphs`, `benchmark:publication`, `benchmark:style`,
+`benchmark:batch`, `benchmark:reflow`, or `benchmark:stress` label selects that focused eight-block suite;
+`benchmark:full` selects the complete matrix and overrides focused labels. Pushes to `main` always run `full`. Manual
+dispatch accepts the same suite names. This routing changes only the installed-package timing report; correctness,
+browser, payload, and conformance lanes retain their own workflows.
 
 The 0.1.0 export cleanup removes raw ABI re-exports from the baker size entries. The regenerated package-size report
 records the supported consumer surface, including the root format move. Relative to the original pre-cleanup build,
