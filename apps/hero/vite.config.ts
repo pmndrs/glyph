@@ -13,7 +13,10 @@ const NOTICES = [
     url: new URL('../../benches/fixtures/fonts/font-awesome-free-6.7.2/LICENSE.txt', import.meta.url),
   },
   // CC-BY-4.0: the credit line inside must travel with the build.
-  { name: 'Cute Home Robot by Yandrack', url: new URL('./assets/cute_home_robot/license.txt', import.meta.url) },
+  {
+    name: 'Cute Home Robot by Yandrack',
+    url: new URL('../../benches/fixtures/models/cute_home_robot/license.txt', import.meta.url),
+  },
 ] as const;
 
 export default defineConfig({

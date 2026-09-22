@@ -1,7 +1,7 @@
 /* @workflow {
   "name": "hero:robot",
   "summary": "Pack the Cute Home Robot glTF into the hero's single-file robot.glb, or verify it with --check.",
-  "requirements": "The Sketchfab source under apps/hero/assets/cute_home_robot (Git LFS).",
+  "requirements": "The Sketchfab source under benches/fixtures/models/cute_home_robot (Git LFS).",
   "writes": "apps/hero/assets/robot.glb"
 } */
 import { NodeIO } from '@gltf-transform/core';
@@ -17,7 +17,7 @@ import sharp from 'sharp';
  * reach a build anyway. This packs it into one GLB: the ground disc the model ships with is dropped (the hero has
  * its own floor), the textures are brought down to 1024² WebP, and the animation is resampled.
  */
-const SOURCE = new URL('../assets/cute_home_robot/scene.gltf', import.meta.url);
+const SOURCE = new URL('../../../benches/fixtures/models/cute_home_robot/scene.gltf', import.meta.url);
 const OUTPUT = new URL('../assets/robot.glb', import.meta.url);
 /** The model's own floor: a textured disc under the wheels. */
 const FLOOR_NODE = 'Cylinder001';

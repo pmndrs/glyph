@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:90067b83e8ba66f315947f49bb1c9300bddc31815a332e76b8bf319cc7f5e899'
+source_digest: 'sha256:374e79ad57b7556dafba7079a7524b7e471732bd8c0e44885d4de82d1ab5bd88'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
