@@ -46,9 +46,14 @@ export function Hero() {
  */
 function Post() {
   useRenderPipeline(({ renderPipeline, scene, camera }) => {
-    const scenePass = pass(scene, camera, { samples: 4 });
+    // The profile page can leave out the multisampling and the bloom, to weigh them.
+    const query = new URLSearchParams(location.search);
+    const scenePass = pass(scene, camera, { samples: query.has('nomsaa') ? 0 : 4 });
     const beauty = scenePass.getTextureNode('output');
-    const lit = convertToTexture(beauty.add(bloom(beauty, uEmberBloom, 0.55, 1)));
+    // The bloom takes only what is brighter than white, and a quarter of the frame's resolution is plenty for a glow.
+    const glow = bloom(beauty, uEmberBloom, 0.55, 1);
+    glow.setResolutionScale(0.25);
+    const lit = convertToTexture(query.has('nobloom') ? beauty : beauty.add(glow));
     const point = uv().sub(0.5).sub(uHoleScreen).add(uHoleShake);
     const sheet = collapseSheet(lit, point);
     const button = pass(playSheet.scene, playSheet.camera, { depthBuffer: false });

@@ -3,7 +3,7 @@
   "summary": "Run two complete hero replays and reject late shader compilation, mesh creation, or asset loads after preparation.",
   "requirements": "Workspace dependencies, baked hero assets, and GPU-enabled Chromium through Vitexec.",
   "writes": "Raw frame timings, long tasks, resource counts, and environment details to stdout",
-  "args": ["--gpu", "--timeout", "180"]
+  "args": ["--gpu", "--timeout", "180", "--path", "/?profile"]
 } */
 import { _roots, getScheduler } from '@react-three/fiber/webgpu';
 import { vec4 } from 'three/tsl';
@@ -75,7 +75,16 @@ const meshIds = () => {
 
 const preparedMeshes = meshIds();
 const newMeshes = new Set<number>();
-const samples: { at: number; cpuMs: number; cycle: number; beat: string; time: number; gpuDoneMs?: number }[] = [];
+const samples: {
+  at: number;
+  cpuMs: number;
+  cycle: number;
+  beat: string;
+  time: number;
+  gpuDoneMs?: number;
+  gpuMs?: number;
+  drawCalls?: number;
+}[] = [];
 const pendingFrames = new Set<Promise<void>>();
 let maxPendingFrames = 0;
 const longTasks: { at: number; duration: number }[] = [];
@@ -109,8 +118,12 @@ renderPipeline.render = function () {
   samples.push(sample);
 
   // Observe completion without serializing playback. This detects queued GPU work that submission FPS hides.
-  const completion = backend.device.queue.onSubmittedWorkDone().then(() => {
+  const completion = backend.device.queue.onSubmittedWorkDone().then(async () => {
     sample.gpuDoneMs = performance.now() - at;
+    // The GPU's own clock across every render pass of the frame, from timestamp queries the profile page enables.
+    await renderer.resolveTimestampsAsync('render');
+    sample.gpuMs = renderer.info.render.timestamp;
+    sample.drawCalls = renderer.info.render.drawCalls;
     pendingFrames.delete(completion);
   });
 
@@ -207,6 +220,18 @@ console.log(
     gpuCompletionP95: percentile(
       samples.map((sample) => sample.gpuDoneMs!),
       0.95,
+    ),
+    gpuP50: percentile(
+      samples.map((sample) => sample.gpuMs ?? 0),
+      0.5,
+    ),
+    gpuP95: percentile(
+      samples.map((sample) => sample.gpuMs ?? 0),
+      0.95,
+    ),
+    drawCallsP50: percentile(
+      samples.map((sample) => sample.drawCalls ?? 0),
+      0.5,
     ),
     maxPendingFrames,
     longTasks,

@@ -1,5 +1,6 @@
 import { Environment, Lightformer } from '@react-three/drei/webgpu';
-import { paperMaterial, uPaperDrift } from './materials';
+import { bakePaperGrain, paperMaterial, uPaperDrift } from './materials';
+import { useThree } from '@react-three/fiber/webgpu';
 import { useEffect } from 'react';
 import { useActions } from 'koota/react';
 import { heroActions } from './actions';
@@ -43,12 +44,14 @@ export function Lighting() {
 
 export function Paper() {
   const { mountPaperView, unmountPaperView } = useActions(heroActions);
+  const renderer = useThree((state) => state.renderer);
 
   useEffect(() => {
+    bakePaperGrain(renderer);
     mountPaperView(uPaperDrift.value);
 
     return unmountPaperView;
-  }, [mountPaperView, unmountPaperView]);
+  }, [mountPaperView, renderer, unmountPaperView]);
 
   return (
     <mesh material={paperMaterial} position={[0, 0, -14]}>

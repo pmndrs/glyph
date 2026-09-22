@@ -44,6 +44,7 @@ import {
   MultiplyBlending,
   NoBlending,
   type Node,
+  type NodeFrame,
   NodeUpdateType,
   type Object3D,
   OrthographicCamera,
@@ -58,6 +59,7 @@ import { Title, ShadowView, TitleView } from './traits';
 import { RainView } from '../rain/traits';
 import { Time } from '../time/traits';
 import { letterActions } from './actions';
+import { uHoleBend } from '../black-hole/materials';
 import { plainCoverageOf } from './lens';
 import { SHADOW_LAMP, SHADOW_RECEIVER_Z } from './content';
 import type { World } from 'koota';
@@ -143,10 +145,14 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
   const normalBlur = gaussianBlur(texture(normalTexture), 2, 3);
   const causticBlur = gaussianBlur(texture(caustic.texture), 2, 2);
   penumbra.resolutionScale = 0.5;
-  const blurs = [...spread.flatMap(({ coverage, heights }) => [coverage, heights]), penumbra, normalBlur, causticBlur];
+  const sourceBlurs = [...spread.flatMap(({ coverage, heights }) => [coverage, heights]), penumbra, normalBlur];
+  const blurs = [...sourceBlurs, causticBlur];
 
-  // Captures may change between renders within one animation frame, including deterministic readbacks.
-  for (const node of blurs) node.updateBeforeType = NodeUpdateType.RENDER;
+  // The source blurs run only when the capture is redrawn, by hand; the caustic's follows each caustic render,
+  // which may happen more than once in an animation frame, as in deterministic readbacks.
+  for (const node of sourceBlurs) node.updateBeforeType = NodeUpdateType.NONE;
+
+  causticBlur.updateBeforeType = NodeUpdateType.RENDER;
 
   const [finest] = spread;
 
@@ -164,7 +170,8 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
 
   // The light grid, warped per channel to where the refracted rays land.
   const causticScene = new Scene();
-  const gridGeometry = new PlaneGeometry(2, 2, 512, 320);
+  // Eight texels of the capture a cell: the warped grid is blurred after, so finer cells add nothing.
+  const gridGeometry = new PlaneGeometry(2, 2, 128, 80);
 
   const causticMaterials = [0, 1, 2].map((channel) => {
     const material = new MeshBasicNodeMaterial({
@@ -300,8 +307,21 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     return mix(vec3(1), through.mul(1 - 0.3), cover);
   })();
 
+  // The march is drawn once over the receiving plane into a texture, at the capture's resolution, which is all
+  // the detail the blurred capture holds, and only when the glass or the hole has moved. The receiver reads it
+  // back with one sample a pixel, so the march costs the plane's texels rather than every screen pixel.
+  const shadowTarget = new RenderTarget(CAPTURE_WIDTH, CAPTURE_HEIGHT);
+  shadowTarget.texture.name = 'shadow';
+  const marchMaterial = new MeshBasicNodeMaterial({ name: 'glass-shadow-march', toneMapped: false });
+  marchMaterial.fragmentNode = vec4(shadow, 1);
+  const marchGeometry = new PlaneGeometry(WIDTH, HEIGHT);
+  const march = new Mesh(marchGeometry, marchMaterial);
+  march.frustumCulled = false;
+  const marchScene = new Scene();
+  marchScene.add(march);
   const pooled = causticBlur.getTextureNode().sample(captureUV(point)).rgb;
-  projectionMaterial.fragmentNode = vec4(shadow.add(pooled.mul(0.45)), 1);
+  const marched = texture(shadowTarget.texture).sample(captureUV(point)).rgb;
+  projectionMaterial.fragmentNode = vec4(marched.add(pooled.mul(0.45)), 1);
   const receiverGeometry = new PlaneGeometry(WIDTH, HEIGHT);
   const receiver = new Mesh(receiverGeometry, projectionMaterial);
   receiver.name = 'glass-shadows';
@@ -317,6 +337,15 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     lightCamera,
     source,
     caustic,
+    shadowTarget,
+    marchScene,
+    marchMaterial,
+    marchGeometry,
+    sourceBlurs,
+    /** Each capture's visibility and world matrix as last drawn, to tell a moved glass from a still one. */
+    previous: new Float32Array(0),
+    /** Whether the march and caustic readers have been drawn, which sets up the blur nodes they read. */
+    built: false,
     uLamp,
     uReach,
     uTime,
@@ -422,6 +451,9 @@ function captureGlass(state: Projection, roots: readonly Object3D[]): void {
       state.captures.push({ original: object, capture, ceiling });
     });
   }
+
+  // Fresh captures have no last drawing to match, so the next projection redraws.
+  state.previous = new Float32Array(state.captures.length * 17).fill(Number.NaN);
 }
 
 function updateProjection(state: Projection, titleReach: number): void {
@@ -429,6 +461,9 @@ function updateProjection(state: Projection, titleReach: number): void {
   scene.updateMatrixWorld(true);
   uLamp.value.copy(LAMP);
   let reach = GLASS_DEPTH;
+  // The hole bends every outline while it pulls, so the capture is redrawn as long as it does.
+  let moved = uHoleBend.value > 0;
+  const previous = state.previous;
 
   for (let index = 0; index < state.captures.length; index++) {
     const { original: object, capture, ceiling } = state.captures[index]!;
@@ -441,6 +476,13 @@ function updateProjection(state: Projection, titleReach: number): void {
     }
 
     capture.visible = visible && object.parent !== null && (object.matrixWorld.elements[14] ?? 0) < ceiling;
+    const base = index * 17;
+    const shown = capture.visible ? 1 : 0;
+
+    if (previous[base] !== shown) {
+      previous[base] = shown;
+      moved = true;
+    }
 
     if (!capture.visible || !(object.material instanceof MeshPhysicalNodeMaterial)) continue;
 
@@ -457,11 +499,25 @@ function updateProjection(state: Projection, titleReach: number): void {
     capture.matrix.copy(object.matrixWorld);
     // The highest this letter can reach: its centre, plus however far its tilt lifts a corner.
     const { elements } = object.matrixWorld;
+
+    for (let lane = 0; lane < 16; lane++) {
+      if (previous[base + 1 + lane] !== elements[lane]) {
+        previous[base + 1 + lane] = elements[lane]!;
+        moved = true;
+      }
+    }
+
     const tilt = (Math.abs(elements[2] ?? 0) + Math.abs(elements[6] ?? 0)) * 2.4;
     reach = Math.max(reach, (elements[14] ?? 0) + tilt - RECEIVER_Z + GLASS_DEPTH / 2);
   }
 
-  uReach.value = Math.max(reach, titleReach - RECEIVER_Z + GLASS_DEPTH / 2);
+  const reached = Math.max(reach, titleReach - RECEIVER_Z + GLASS_DEPTH / 2);
+
+  if (uReach.value !== reached) {
+    uReach.value = reached;
+    moved = true;
+  }
+
   const previousTarget = renderer.getRenderTarget();
   const previousMRT = renderer.getMRT();
   const previousAlpha = renderer.getClearAlpha();
@@ -472,8 +528,28 @@ function updateProjection(state: Projection, titleReach: number): void {
     renderer.autoClear = true;
     renderer.setClearColor(0, 0);
     renderer.setMRT(null);
-    renderer.setRenderTarget(source);
-    renderer.render(sourceScene, lightCamera);
+    if (moved) {
+      renderer.setRenderTarget(source);
+      renderer.render(sourceScene, lightCamera);
+
+      // A blur node is set up by the first draw that reads it, so the first projection draws both readers once
+      // before it can run the blurs by hand.
+      if (!state.built) {
+        renderer.setRenderTarget(state.shadowTarget);
+        renderer.render(state.marchScene, lightCamera);
+        renderer.setRenderTarget(caustic);
+        renderer.render(causticScene, lightCamera);
+        state.built = true;
+      }
+
+      // The blur nodes ask their frame only for the renderer.
+      for (const node of state.sourceBlurs) node.updateBefore({ renderer } as unknown as NodeFrame);
+
+      renderer.setRenderTarget(state.shadowTarget);
+      renderer.render(state.marchScene, lightCamera);
+    }
+
+    // The caustics' facets turn with time, so they are drawn every frame from the blurred capture as it stands.
     renderer.setRenderTarget(caustic);
     renderer.render(causticScene, lightCamera);
   } finally {
@@ -491,6 +567,9 @@ function disposeProjection(state: Projection): void {
 
   state.source.dispose();
   state.caustic.dispose();
+  state.shadowTarget.dispose();
+  state.marchMaterial.dispose();
+  state.marchGeometry.dispose();
 
   for (const node of state.blurs) node.dispose();
 

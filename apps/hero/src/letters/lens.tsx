@@ -37,6 +37,7 @@ import {
   type WebGPURenderer,
 } from 'three/webgpu';
 import type { World } from 'koota';
+import { uHoleBend } from '../black-hole/materials';
 import { retained } from '../hmr';
 import { RainView } from '../rain/traits';
 import { letterActions } from './actions';
@@ -118,6 +119,8 @@ function createLens(renderer: WebGPURenderer, camera: Camera) {
     captures: [] as { original: Mesh; capture: Mesh }[],
     /** The draw groups the captures were taken from. A new group, as after a remount, is captured afresh. */
     capturedFrom: [] as Object3D[],
+    /** Each capture's visibility and world matrix as last drawn, to tell a moved glass from a still one. */
+    previous: new Float32Array(0),
     clear: new Color(),
     size: new Vector2(),
   };
@@ -198,13 +201,18 @@ function captureGlass(state: Lens, roots: readonly Object3D[]): void {
       state.captures.push({ original: object, capture });
     });
   }
+
+  // Fresh captures have no last drawing to match, so the next frame draws.
+  state.previous = new Float32Array(state.captures.length * 17).fill(Number.NaN);
 }
 
 function drawLens(state: Lens): void {
-  const { renderer, camera, sourceScene, clear, size } = state;
+  const { renderer, camera, sourceScene, clear, size, previous } = state;
   const { target } = lens;
+  // The hole bends every outline while it pulls, so the capture is redrawn as long as it does.
+  let moved = uHoleBend.value > 0;
 
-  for (const { original: object, capture } of state.captures) {
+  for (const [index, { original: object, capture }] of state.captures.entries()) {
     let visible = object.visible;
     let parent = object.parent;
 
@@ -214,19 +222,40 @@ function drawLens(state: Lens): void {
     }
 
     capture.visible = visible && object.parent !== null;
+    const base = index * 17;
+    const shown = capture.visible ? 1 : 0;
+
+    if (previous[base] !== shown) {
+      previous[base] = shown;
+      moved = true;
+    }
 
     if (!capture.visible) continue;
 
     // Glyph uses this metadata to select the retained run. Ordinary extruded meshes have no such metadata.
     capture.userData = object.userData;
     capture.matrix.copy(object.matrixWorld);
+    const { elements } = object.matrixWorld;
+
+    for (let lane = 0; lane < 16; lane++) {
+      if (previous[base + 1 + lane] !== elements[lane]) {
+        previous[base + 1 + lane] = elements[lane]!;
+        moved = true;
+      }
+    }
   }
 
   renderer.getDrawingBufferSize(size);
   const width = Math.max(1, Math.round(size.x * SCALE));
   const height = Math.max(1, Math.round(size.y * SCALE));
 
-  if (target.width !== width || target.height !== height) target.setSize(width, height);
+  if (target.width !== width || target.height !== height) {
+    target.setSize(width, height);
+    moved = true;
+  }
+
+  // Glass that has not moved is captured already.
+  if (!moved) return;
 
   const previousTarget = renderer.getRenderTarget();
   const previousMRT = renderer.getMRT();

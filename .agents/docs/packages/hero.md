@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:55f45b63be118ba610882fcd48a69cd58f61dceb45fc12c2265eddb15cd4a827'
+source_digest: 'sha256:ec21945497393ef259f92b2e0fea73f6fa67fc56867600d83c65ab2e29958faa'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -80,6 +80,21 @@ sources:
   - id: performance-check
     resource: ../../../apps/hero/scripts/performance.probe.ts
     title: Two-cycle WebGPU performance and late-resource check
+  - id: profile-check
+    resource: ../../../apps/hero/scripts/profile.probe.ts
+    title: GPU-timestamp profile of each pass at rest and through the finale
+  - id: glass-lens
+    resource: ../../../apps/hero/src/letters/lens.tsx
+    title: Camera-view glass capture that bends glass seen through glass
+  - id: glass-lens-check
+    resource: ../../../apps/hero/scripts/glass-lens.probe.ts
+    title: Glass over glass bends only the glass beneath it
+  - id: hmr
+    resource: ../../../apps/hero/src/hmr.ts
+    title: Uniform sets kept across a hot module replacement
+  - id: paper-material
+    resource: ../../../apps/hero/src/hero/materials.ts
+    title: Paper grain baked once into a wrapping tile
   - id: retained-lines-check
     resource: ../../../apps/hero/scripts/retained-lines.probe.ts
     title: Retained typing compared with independently shaped prefixes
@@ -410,7 +425,8 @@ the hole warp as one more displacement before the coverage integral, so a bent l
 correctly. The captures, this one and the lamp's, read each glass material's coverage without the lens through a
 registry the materials fill, since a capture must not read the texture it draws and the lamp's view has no
 screen to read it at; that registry also gives the rain panes, which never set an opacity node, glyph-shaped
-captures where they had quads. The capture target and its sampling nodes are kept across a module replacement
+captures where they had quads. The capture is redrawn only when a pane's matrix or visibility changed, the frame was resized, or the hole is
+pulling, as the shadow capture is. The capture target and its sampling nodes are kept across a module replacement
 like the uniforms. `hero:glass-lens-check` holds one title letter a slab above another on WebGPU and verifies the
 lens changes nothing at rest and, with the overlap, changes pixels only where glass lies.
 
@@ -542,7 +558,8 @@ Post-processing is always enabled, and preparation waits for its render pipeline
 
 The `star-embers` domain owns its SoA emission age, actions, systems, renderer, and materials. Its actions initialize
 and reset the age, while its synchronization system samples the published black-hole pop age.
-`hero/renderer.tsx` composes the black-hole sheet warp with the ember bloom, fade, and sparks.
+`hero/renderer.tsx` composes the black-hole sheet warp with the ember bloom, fade, and sparks. The bloom takes
+only what is brighter than white and runs at a quarter of the frame's resolution, plenty for a glow.
 
 The ember material in `src/star-embers/materials.ts` keeps the exact Slug star silhouettes and shades each glyph's
 own quad with a creamy hot core, an amber rim, moving fire noise, and gentle asynchronous flicker. As the stars
@@ -583,8 +600,23 @@ swap visible records without reshaping text or creating draw meshes. This trades
 `mise exec -- pnpm scripts run hero:performance` runs two complete lift, typing, robot,
 collapse, and burst replays on WebGPU after preparation. It rejects new shader programs, render pipelines, scene
 meshes, or asset loads, with a deliberate new-material control proving the compilation counters work. It reports
-raw render intervals, CPU submission work, asynchronous GPU queue completion, and long tasks, along with the
-adapter, viewport, and drawing-buffer dimensions. The canvas uses adaptive DPR between 1 and 2, and the report records the actual drawing-buffer size for each run.
+raw render intervals, CPU submission work, asynchronous GPU queue completion, GPU time from timestamp queries,
+and long tasks, along with the adapter, viewport, and drawing-buffer dimensions. The canvas uses adaptive DPR
+between 1 and 2, and the report records the actual drawing-buffer size for each run. Queue completion is latency,
+not GPU time: on 2026-09-22 it read 9 ms while the GPU's own clock read 15 ms median and 32 ms at p95 for the
+same 720p frames, and it had hidden a frame that would not survive a retina display.
+
+The page opened with `?profile` creates the renderer with timestamp queries, `dpr` pins the pixel ratio, and
+`nomsaa` and `nobloom` leave those out of the post pipeline. `mise exec -- pnpm scripts run hero:profile`, with
+`--path "/?profile&dpr=2"` and the like, weighs the frame on that clock: with the title at rest it hides each
+pass or layer in turn, the shadow capture, the receiver, the lens capture, the icon paper, the paper, the title,
+the feature line, and the embers, and reports the median and p95 GPU milliseconds of each, then the finale's
+moments with everything drawn. On the Apple GPU that produced these numbers, differences under about 3 ms are
+noise, since lighter frames run at lower clocks and read slower; only the large differences are trusted. That
+profile found the resting frame at 11.1 ms at 720p and 38 ms at 2560 × 1440, with the shadow receiver's march
+over half of it and the paper's noise most of the rest. After the march texture, the still-frame skips, the
+quarter-resolution bloom, the coarser caustic grid, and the baked grain, the resting frame is 5.3 ms at 720p and
+12.6 ms at 2560 × 1440, and the finale's moments there are 12 to 19 ms.
 
 With world-backed keyboard input, two complete 1280×720 replays on Apple Metal with Chromium 149 averaged 60.01 fps
 across 1,703 frames after 3.20 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long
@@ -609,17 +641,31 @@ The title's shadow and caustics are one projection under a lamp of their own, a 
 a little to the upper right; the studio lights are untouched, so the glass keeps its highlights. Each frame the five
 glass panes are captured straight down into a 1024 × 640 height field: analytic coverage, transmitted tint from
 Three's attenuation values, height above a receiving plane at z = -0.06, refractive index, dispersion, and the
-pane's lens normal. A multiply-blended receiver marches each pixel toward the light through that field, treating
-every flat letter as a slab 1.2 units deep, so the glyphs throw a soft, extruded, tinted shadow that leans slightly
-down and to the left. The march's samples are spaced quadratically and its range follows the highest letter, which
-the title's bodies publish each physics step because the poses live in the glyph instance buffer. Under the lamp's
-perspective a lifted letter's shadow grows and spreads beneath it as the letter grows on screen, softening and
-thinning through a four-level Gaussian pyramid of the capture blended by height, and settles back to the same pixels
-on landing. The light the glass turns aside returns as caustics: a 512 × 320 grid over the plane is carried in its
-vertex shader to where each ray lands after refracting through the lens normal, an edge chamfer, and two slowly
-turning lattices of facets, once per colour channel with a small index spread, and its brightness is the source area
-gathering in each pixel, so the light pools into faint, spectrally fringed glints inside the shadow. It is an art-
-directed projection, not multi-bounce light transport.
+pane's lens normal. The shadow marches each texel of the receiving plane toward the light through that field,
+treating every flat letter as a slab 1.2 units deep, so the glyphs throw a soft, extruded, tinted shadow that leans
+slightly down and to the left. The march's samples are spaced quadratically and its range follows the highest
+letter, which the title's bodies publish each physics step because the poses live in the glyph instance buffer.
+It is drawn into a texture over the plane at the capture's resolution, which is all the detail the blurred capture
+holds, and the multiply-blended receiver reads that texture back with one sample a pixel, so the march costs the
+plane's texels rather than every screen pixel; at a retina pixel ratio that was over half the frame. The capture,
+its four-level Gaussian pyramid, and the march are redrawn only when a pane's matrix or visibility changed, the
+reach changed, or the hole is pulling, which bends every outline; the pyramid's blur nodes are run by hand at that
+moment rather than every frame. Under the lamp's perspective a lifted letter's shadow grows and spreads beneath it
+as the letter grows on screen, softening and thinning through the pyramid blended by height, and settles back to
+the same pixels on landing. The light the glass turns aside returns as caustics every frame, since their facets
+turn with time: a 128 × 80 grid over the plane, eight capture texels a cell since the warped grid is blurred after,
+is carried in its vertex shader to where each ray lands after refracting through the lens normal, an edge chamfer,
+and two slowly turning lattices of facets, once per colour channel with a small index spread, and its brightness
+is the source area gathering in each pixel, so the light pools into faint, spectrally fringed glints inside the
+shadow. It is an art-directed projection, not multi-bounce light transport.
+
+The paper behind everything is grain: three octaves of noise whose height tints and roughens the sheet and whose
+slope tilts its normal. A plane the size of the screen at a retina pixel ratio asked for those octaves millions
+of times a frame, a third of the frame. The grain is baked once, when the paper mounts, into a 2048-texel tile
+over 32 world units that wraps, blended from four copies of itself shifted a tile along each axis and weighted so
+the copies agree along every edge; the slope is taken across the tile's texels and scaled to the screen pixel it
+used to be taken across, so the look is the same at every pixel ratio. The paper reads height and slope back with
+one sample, scrolled with the icon paper. The tile is kept across a module replacement like the uniforms.
 
 `mise exec -- pnpm scripts run hero:refraction-check` verifies the five visible stained-glass finishes against an
 untinted control on WebGPU and checks repeated captures and resizing.
