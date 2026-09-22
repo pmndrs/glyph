@@ -6,7 +6,6 @@
 
 - [`@pmndrs/glyph-juggler`](juggler.md) — a superhuman stick figure juggles the glyphs you type, with the always-catches property proven in a pure simulation test.
 - [`@pmndrs/glyph-hero`](hero.md) — Glass letters, a robot, and a black-hole finale over a Slug icon lattice.
-- [`@pmndrs/glyph-cameo`](cameo.md) — the hero's robot alone in a shallow close-up, reading a release note off its own face over a drifting icon floor.
 - [`@pmndrs/glyph-typegpu-hello-world`](typegpu-hello-world.md) — editable text using the high-level TypeGPU integration.
 - [`@pmndrs/glyph-tres-playground`](tres-playground.md) — Vue adapter playground rendering every raster format inside a TresJS canvas.
 

@@ -1,39 +1,5 @@
 # pmndrs/glyph documentation update log
 
-## 2026-09-22
-
-- **Stopped the cameo's robot popping as it arrived** — Two defects, both of them jumps. The body lean read the
-  travel track's second difference raw, so it flipped its whole range in one frame where the entry's charge gave way
-  to its brake; it now chases that target over a fifth of a second, which takes the worst frame-to-frame step from
-  0.68 radians to under 0.06, and the false start eases off the mark instead of leaving it at full speed from a
-  standstill. The robot's source clip is also a one-shot, not a loop: one track swings a limb over the first second
-  and settles elsewhere, jerking it back every 4.3 seconds, so the pack now holds any track that does not close its
-  loop at its settled value. The rig is set from the take's clock rather than stepped by frame deltas, which makes
-  the pose at a moment reproducible and the WebGPU check deterministic. A sixteenth headless story walks a whole take
-  and fails if the rig steps. See [the cameo reference](packages/cameo.md).
-
-- **Added the cameo example: a robot, a shallow lens, and a drifting icon floor** — `apps/cameo` is the hero
-  stripped to one joke. A fixed, raised, slightly rolled camera on a 22 degree lens holds the robot's face at its
-  mark and throws the whole floor away through a `dof` pass; `src/cameo/content.ts` owns the shot and every other
-  measure is derived from it. The take is data: two beat tracks and five screenfuls in `src/robot/content.ts`, with
-  the robot's body pitch taken from the travel track's own second difference so it tips into every charge and rocks
-  back out of every brake. The face prints a screenful at a time from retained per-prefix layouts, centred on its ink
-  rather than its advances, and the sign-off's hearts swell about their own middles on a staggered heartbeat. The
-  floor is the hero's icon paper lying down: two scrolling Slug sheets whose motif flips turn in the plane of the
-  print, on springs the robot's wheels shove and its braking rings. Twelve headless stories pass; `cameo:take-check`
-  measures on hardware WebGPU that the face keeps 68 percent of its detail through the lens while the far floor keeps
-  43 percent of its own, that every screenful fits the panel inside its margin, and that the robot is outside the
-  picture at both ends of the take. The robot arrives on a diagonal from deep behind the mark, whips past the lens
-  and settles back onto it on every turn, and knocks the camera on each hard stop; off frame is solved through the
-  lens rather than approximated from the frame's width, because the frame widens with depth. Fifteen headless
-  stories pass, built from the same world trait list the application registers. See
-  [the cameo reference](packages/cameo.md).
-
-- **Moved the vendored Cute Home Robot source to shared fixtures** — The Sketchfab glTF now lives at
-  `benches/fixtures/models/cute_home_robot`, so both the hero and the cameo pack their own `robot.glb` from one
-  source instead of duplicating ten megabytes. `hero:robot --check` still reproduces the committed file byte for
-  byte. See [the hero reference](packages/hero.md).
-
 ## 2026-09-20
 
 - **Rebuilt the juggler on koota and math with a forge, stats, and explosions** — `apps/juggler` now mirrors the
