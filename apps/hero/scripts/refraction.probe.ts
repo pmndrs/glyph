@@ -7,7 +7,6 @@
 } */
 import { _roots } from '@react-three/fiber/webgpu';
 import { Mesh, MeshPhysicalNodeMaterial, RenderTarget, WebGPUBackend, WebGPURenderer } from 'three/webgpu';
-import { Text } from '@pmndrs/glyph/three';
 
 function glassMesh(): Mesh | undefined {
   const scene = _roots.values().next().value?.store.getState().scene;
@@ -26,26 +25,18 @@ function glassMesh(): Mesh | undefined {
   return glass;
 }
 
-function featureReady(): boolean {
-  const scene = _roots.values().next().value?.store.getState().scene;
-  let ready = false;
+const { world } = (await import(new URL('/src/world.ts', location.origin).href)) as typeof import('../src/world');
+const { FeatureView } = (await import(
+  new URL('/src/letters/traits.ts', location.origin).href
+)) as typeof import('../src/letters/traits');
 
-  scene?.traverseVisible((object) => {
-    if (object instanceof Text && object.text.startsWith('SHAPING') && object.style.opacity === 1) {
-      ready = object.commitState().status === 'committed';
-    }
-  });
-
-  return ready;
-}
-
-// Fonts, fitted feature text, and the environment become ready independently.
+// Fonts, the fitted feature line's retained glyphs, and the environment become ready independently.
 while (document.documentElement.dataset.heroState !== 'ready')
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 while (
   glassMesh() === undefined ||
-  !featureReady() ||
+  world.queryFirst(FeatureView) === undefined ||
   !_roots.values().next().value?.store.getState().scene.environment
 ) {
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -64,7 +55,8 @@ state.scene.traverseVisible((object) => {
   if (
     object instanceof Mesh &&
     object.material instanceof MeshPhysicalNodeMaterial &&
-    object.material.name.startsWith('stained-glass-')
+    object.material.name.startsWith('stained-glass-') &&
+    !object.material.name.startsWith('stained-glass-rain-')
   ) {
     materials.add(object.material);
   }

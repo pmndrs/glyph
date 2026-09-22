@@ -73,9 +73,10 @@ export interface HoleWarp {
 
 /**
  * Inverse-warp analytic glyph coverage around the hole. Anchor deformation at the glyph center and use screen
- * derivatives to map between world and glyph coordinates.
+ * derivatives to map between world and glyph coordinates. `through` shifts the point the outline is read from a
+ * little further, in world units across the floor, for glass seen through other glass.
  */
-export function holeWarp(context: SlugContext): HoleWarp {
+export function holeWarp(context: SlugContext, through?: Node<'vec2'>): HoleWarp {
   // Use per-glyph placement from the text material context when deriving world position.
   const world = varying(modelWorldMatrix.mul(vec4(context.position, 1)).xyz, 'pmndrsHoleWorld');
   const here = world.xy;
@@ -116,7 +117,8 @@ export function holeWarp(context: SlugContext): HoleWarp {
   // Invert angular drag and radial stretch to locate the source ink.
   const angle = atan(fragmentOffset.y, fragmentOffset.x).sub(dragAt(fragmentReach).sub(dragAt(centerReach)));
   const radius = centerReach.add(fragmentReach.sub(centerReach).div(stretch.add(1)));
-  const source = holeCenter.add(vec2(cos(angle), sin(angle)).mul(radius));
+  const bent = holeCenter.add(vec2(cos(angle), sin(angle)).mul(radius));
+  const source = through === undefined ? bent : bent.add(through);
 
   // em = em(here) + A · (source - here), with A the em-per-world Jacobian from screen derivatives.
   const em = context.shader.renderCoordinate;

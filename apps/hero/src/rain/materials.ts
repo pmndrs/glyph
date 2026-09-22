@@ -2,6 +2,7 @@ import { defineTextMaterial } from '@pmndrs/glyph/three';
 import { color, cross, dFdx, dFdy, dot, float, mix, normalize, output, positionView, uv, vec3, vec4 } from 'three/tsl';
 import { Color, DoubleSide, MeshPhysicalNodeMaterial, MultiplyBlending } from 'three/webgpu';
 import { holeWarp } from '../black-hole/materials';
+import { lensShift, registerGlass } from '../letters/lens';
 import { THEME_TINTS } from '../letters/content';
 
 /**
@@ -41,9 +42,12 @@ function createPane(name: string, tint: string) {
     const lens = uv().sub(0.5).mul(2);
     const falloff = float(1).sub(lens.length().mul(lens.length())).max(0).mul(0.45);
     material.normalNode = normalize(facing.add(vec3(lens.x.mul(falloff), lens.y.negate().mul(falloff), 0)));
-    // Outside the ink the pane is clear: multiplying by one leaves the paper as it was.
-    const warp = holeWarp(context);
+    // Outside the ink the pane is clear: multiplying by one leaves the paper as it was. The captures read the
+    // coverage without the lens, since they draw what the lens reads.
+    const plain = holeWarp(context);
+    const warp = holeWarp(context, lensShift());
     material.outputNode = vec4(mix(vec3(1), output.rgb, warp.coverage.mul(warp.survive)), 1);
+    registerGlass(material, plain.coverage.mul(plain.survive));
     material.emissiveNode = color(tint).mul(0.05);
 
     return material;

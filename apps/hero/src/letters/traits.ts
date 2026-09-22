@@ -4,11 +4,13 @@ import type { HeldPose } from '../physics/traits';
 import type { Flight } from '../black-hole/traits';
 import type { Solid } from './utils';
 import type { Projection } from './shadows';
+import type { Lens } from './lens';
 import type { Glyphs } from '@pmndrs/glyph/three';
 import type { Matrix4 } from 'three/webgpu';
 import type { RetainedLine } from './text';
 
 export const ShadowView = trait((): Projection | undefined => undefined);
+export const LensView = trait((): Lens | undefined => undefined);
 
 export interface TitleDraw {
   glyphs: Glyphs;

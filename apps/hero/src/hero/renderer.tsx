@@ -9,6 +9,7 @@ import { PlayButtonRenderer, playSheet } from '../play-button/renderer';
 import { RainRenderer } from '../rain/renderer';
 import { composePlayButton } from '../play-button/materials';
 import { GlassShadows } from '../letters/shadows';
+import { GlassLens } from '../letters/lens';
 import { GlassTitle, FeatureLine } from '../letters/renderer';
 import { IconPaperRenderer } from '../icon-paper/renderer';
 import { RobotRenderer } from '../robot/renderer';
@@ -26,6 +27,7 @@ export function Hero() {
       <Paper />
       <IconPaperRenderer font={fonts.icons} />
       <GlassTitle font={fonts.title} />
+      <GlassLens />
       <GlassShadows />
       <FeatureLine field={fonts.feature} />
       <RobotRenderer font={fonts.robot} icons={fonts.icons} />

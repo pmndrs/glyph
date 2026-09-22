@@ -7,6 +7,7 @@ import { applyLetterLandings, triggerRobotDeparture, updatePaper } from './hero/
 import { useViewport } from './hero/hooks';
 import { updateTime } from './time/systems';
 import { updateGlassShadows } from './letters/shadows';
+import { updateGlassLens } from './letters/lens';
 import { advanceSequence } from './sequence/systems';
 import { advanceCollapse, feedHole, syncBlackHoleView } from './black-hole/systems';
 import { syncStarEmbers, syncEmberView } from './star-embers/systems';
@@ -85,6 +86,7 @@ export function FrameLoop() {
         syncPlayButtonView(world);
       }
 
+      updateGlassLens(world);
       updateGlassShadows(world);
     },
     { id: 'hero-views', phase: 'render', before: 'hero-render', fps: 60 },

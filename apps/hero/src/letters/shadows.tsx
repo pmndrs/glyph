@@ -58,6 +58,7 @@ import { Title, ShadowView, TitleView } from './traits';
 import { RainView } from '../rain/traits';
 import { Time } from '../time/traits';
 import { letterActions } from './actions';
+import { plainCoverageOf } from './lens';
 import { SHADOW_LAMP, SHADOW_RECEIVER_Z } from './content';
 import type { World } from 'koota';
 
@@ -399,6 +400,11 @@ function captureGlass(state: Projection, roots: readonly Object3D[]): void {
       material.depthWrite = true;
       material.alphaToCoverage = false;
       material.alphaTest = 0;
+      // The coverage without the lens: this capture is drawn from the lamp, where the lens has no meaning.
+      const plain = plainCoverageOf(object.material);
+
+      if (plain !== undefined) material.opacityNode = plain;
+
       // Preserve the original deformation and coverage. Three supplies the existing glass attenuation values.
       const transmission = materialAttenuationColor.pow(vec3(materialThickness.div(materialAttenuationDistance)));
       const height = positionWorld.z.sub(RECEIVER_Z).max(0);

@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:6f0117de5aa953fee544e2dfe3818904e294c05a05edb3d4f9cc49710853f34a'
+source_digest: 'sha256:55f45b63be118ba610882fcd48a69cd58f61dceb45fc12c2265eddb15cd4a827'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -276,7 +276,8 @@ Leaving or cancelling the pointer, losing window focus, or unmounting clears act
 things: whether it is present over the canvas, and a strength that the frame loop fades over time once it stops
 moving. The lattice reads the strength, so its disturbance settles; the play button reads presence, so it stays
 lit under a resting pointer. Shadow captures follow the title's published draw group: whenever the mounted `TitleView` holds a new group, as
-after a title remount under hot module replacement, the projection recaptures from it, so readiness plays no part. Root `hmr.ts` keeps one set of uniforms across a module
+after a title remount under hot module replacement, the projection recaptures from it, so readiness plays no part;
+the lens capture follows the same groups the same way. Root `hmr.ts` keeps one set of uniforms across a module
 replacement: a set is written every frame by a mounted view and read once by the render pipeline when its node
 graph is built, and the two import it from the same module but re-execute at their own times, so a fresh set on
 replacement would leave the writer and the reader on different objects and the simulation would carry on while
@@ -396,6 +397,22 @@ title's full slab or the rain's thin one, normalized by the coverage weight as t
 full slab where the coverage has thinned to a soft edge, so the title's penumbra is exactly what it was while a
 rain glyph's shade sits under and just around it, at two thirds of the title's weight. The glass-shadow check pins
 the title's effect, tint, and depth response to their values before the rain cast anything.
+
+Glass is also seen through glass. The renderer's transmission refracts only the opaque scene, so on its own a
+letter bends the icon field beneath it but not another letter or a rain pane. `letters/lens.tsx` renders every
+stained-glass draw from the scene camera, at half the frame's resolution, into the frontmost pane's shading
+normal, view depth, coverage, refractive index and slab, every channel coverage-weighted so filtering the capture
+at a pane's edge blends only real glass. A glass material reads the pane over its fragment, and where that pane
+is nearer the camera than the fragment by more than a hair it shifts the point its own outline is integrated at
+along the refracted ray into the pane, carried the pane's slab deep: the title's slab is its transmission
+thickness, so a letter bends a letter exactly as it bends the paper, and a rain pane's is thin. The shift rides
+the hole warp as one more displacement before the coverage integral, so a bent letter under glass is bent twice,
+correctly. The captures, this one and the lamp's, read each glass material's coverage without the lens through a
+registry the materials fill, since a capture must not read the texture it draws and the lamp's view has no
+screen to read it at; that registry also gives the rain panes, which never set an opacity node, glyph-shaped
+captures where they had quads. The capture target and its sampling nodes are kept across a module replacement
+like the uniforms. `hero:glass-lens-check` holds one title letter a slab above another on WebGPU and verifies the
+lens changes nothing at rest and, with the overlap, changes pixels only where glass lies.
 
 Play's hole is a third beat of the hole state, `play`, beside the finale's `open` and `black`. The play script
 opens it a beat after the rain starts, somewhere off the centre within a bounded offset that the collapse trait

@@ -25,6 +25,7 @@ import {
   type Node,
 } from 'three/webgpu';
 import { holeWarp } from '../black-hole/materials';
+import { lensShift, registerGlass } from './lens';
 import { THEME_TINTS } from './content';
 
 type SlugContext = Extract<ThreeTextMaterialContext, { format: 'pmndrs.slug' }>;
@@ -130,10 +131,13 @@ export const stainedGlassLetters = [
 /** Use analytic coverage for edges and shadows. Screen derivatives recover each transformed glyph face normal. */
 function shapeSlug(material: MeshPhysicalNodeMaterial, context: SlugContext) {
   material.positionNode = context.position;
-  // The black hole bends the letterform itself: coverage is integrated where each fragment's ink came from.
-  // Not `shader.opacity`: that carries its own integral, and the hero's Slug paint is opaque anyway.
-  const warp = holeWarp(context);
+  // The black hole bends the letterform itself, and glass over it bends it again: coverage is integrated where
+  // each fragment's ink came from. Not `shader.opacity`: that carries its own integral, and the hero's Slug paint
+  // is opaque anyway. The captures read the coverage without the lens, since they draw what the lens reads.
+  const plain = holeWarp(context);
+  const warp = holeWarp(context, lensShift());
   material.opacityNode = warp.coverage.mul(warp.survive);
+  registerGlass(material, plain.coverage.mul(plain.survive));
   material.alphaToCoverage = true;
   material.maskShadowNode = warp.coverage.greaterThan(0.5);
 

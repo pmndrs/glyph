@@ -9,6 +9,7 @@ import {
   Title,
   Typing,
   ShadowView,
+  LensView,
   TitleView,
   FeatureView,
   type TitleDraw,
@@ -17,6 +18,7 @@ import {
   type TitleBodies,
 } from './traits';
 import type { Projection } from './shadows';
+import type { Lens } from './lens';
 
 export const letterActions = createActions((world) => ({
   mountTitleView: (view: TitleDraw) => {
@@ -36,6 +38,12 @@ export const letterActions = createActions((world) => ({
   },
   unmountShadowView: () => {
     world.queryFirst(Title)!.remove(ShadowView);
+  },
+  mountLensView: (view: Lens) => {
+    world.queryFirst(Title)!.add(LensView(view));
+  },
+  unmountLensView: () => {
+    world.queryFirst(Title)!.remove(LensView);
   },
   spawnLetters: () => {
     world.spawn(Title);
