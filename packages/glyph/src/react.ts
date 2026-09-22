@@ -773,6 +773,7 @@ function TextGroupObject({
     threeTextConstructionToken,
     {
       ...(options.renderOrder === undefined ? {} : { renderOrder: options.renderOrder }),
+      ...(options.batching === undefined ? {} : { batching: options.batching }),
       ...(options.material === undefined ? {} : { material: options.material }),
       ...(options.pixelSnapping === undefined ? {} : { pixelSnapping: options.pixelSnapping }),
     },
@@ -788,13 +789,13 @@ function TextGroupObject({
     },
     [publishCommittedObject, store],
   );
-  const { material, renderOrder } = options;
+  const { batching, material, renderOrder } = options;
 
   // Group presentation is complete desired state owned here, not by r3f prop diffing, so a removed prop resets.
   useLayoutEffect(() => {
     if (object === undefined) return;
-    if (applyTextGroupOptions(object, { material, renderOrder })) invalidate();
-  }, [invalidate, material, object, renderOrder]);
+    if (applyTextGroupOptions(object, { batching, material, renderOrder })) invalidate();
+  }, [batching, invalidate, material, object, renderOrder]);
 
   return createElement<ThreeElement<typeof ThreeTextGroup>>(
     'pmndrsGlyphTextGroup',
@@ -1268,7 +1269,8 @@ function objectProperties<Technique extends RasterFormatMetadata>(
 
 function groupObjectProperties(properties: R3fTextGroupProps): TextGroupElementProps {
   const object = { ...properties } as Record<string, unknown>;
-  for (const key of ['material', 'renderOrder', 'pixelSnapping', 'children', 'onError', 'ref']) delete object[key];
+  for (const key of ['batching', 'material', 'renderOrder', 'pixelSnapping', 'children', 'onError', 'ref'])
+    delete object[key];
   return object as TextGroupElementProps;
 }
 

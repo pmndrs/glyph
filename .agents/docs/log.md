@@ -2,6 +2,14 @@
 
 ## 2026-09-22
 
+- **Made authored TextGroup boundaries explicit** — Added `batching: 'auto' | 'shared' | 'group'` across Three, React,
+  and Vue. Top-level automatic groups now own physical draw boundaries, nested automatic groups inherit, explicit group
+  boundaries may nest, and shared groups retain the 0.1.0 global coalescing behavior. Boundary visibility skips whole
+  draws without entering Wasm or replacing retained meshes. This changes the default draw topology for existing
+  multi-TextGroup applications, so the pending hand-authored changelog targets 0.2.0 and documents `shared` as the
+  compatibility migration. See [the Three API plan](planning/three-api.md), [the package contract](packages/glyph.md),
+  and D-371 in [the decision register](planning/decision-register.md).
+
 - **Routed package performance by intent** — Pull requests now run only the concise installed-package smoke comparison by
   default. Explicit `benchmark:<suite>` labels select focused or full evidence, pushes to `main` run the full matrix, and
   manual dispatch exposes the same choices. Browser, conformance, payload, and native profiling remain separate lanes.

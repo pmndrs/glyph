@@ -617,8 +617,8 @@ test('Rust ranks interleaved TextGroup scopes only within their stable root slot
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
-  const firstGroup = three.createTextGroup({ renderOrder: 4 });
-  const secondGroup = three.createTextGroup({ renderOrder: 4 });
+  const firstGroup = three.createTextGroup({ batching: 'shared', renderOrder: 4 });
+  const secondGroup = three.createTextGroup({ batching: 'shared', renderOrder: 4 });
   const firstA = three.createText({ font, text: 'A' });
   const secondA = three.createText({ font, text: 'B' });
   const firstB = three.createText({ font, text: 'C' });
@@ -701,6 +701,139 @@ test('Rust ranks interleaved TextGroup scopes only within their stable root slot
   firstGroup.dispose();
   secondGroup.dispose();
   font.dispose();
+});
+
+test('automatic sibling TextGroups own draws while shared siblings recover 0.1.0 coalescing', async (t) => {
+  const three = await createThreeTestHandle(t);
+  assert.throws(
+    () => three.createTextGroup({ batching: 'isolated' }),
+    /TextGroup batching must be "auto", "shared", or "group"/,
+  );
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const first = three.createTextGroup();
+  const second = three.createTextGroup();
+  const firstLabel = three.createText({ font, text: 'A' });
+  const secondLabel = three.createText({ font, text: 'B' });
+  first.add(firstLabel);
+  second.add(secondLabel);
+  scene.add(first, second);
+  scene.updateMatrixWorld(true);
+
+  try {
+    const automaticDraws = rootDraws(scene);
+    assert.equal(automaticDraws.length, 2, 'each top-level automatic group owns one compatible draw');
+    assert.deepEqual(
+      automaticDraws.map((draw) => draw.userData.pmndrsGlyphBatchScope),
+      [first, second],
+      'automatic sibling draws preserve authored group order',
+    );
+    assert.equal(automaticDraws[0].material, automaticDraws[1].material, 'split draws reuse one realized material');
+    assert.deepEqual(
+      automaticDraws.map((draw) => draw.renderOrder),
+      [0, 1],
+      'split draws receive stable authored-order submission ranks',
+    );
+
+    first.batching = 'shared';
+    second.batching = 'shared';
+    scene.updateMatrixWorld(true);
+    assert.equal(rootDraws(scene).length, 1, 'shared restores the globally coalesced 0.1.0 draw topology');
+  } finally {
+    firstLabel.dispose();
+    secondLabel.dispose();
+    first.dispose();
+    second.dispose();
+    font.dispose();
+  }
+});
+
+test('TextGroup batching resolves automatic roots, shared structure, and explicit nested boundaries', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const first = three.createTextGroup();
+  const nestedAuto = three.createTextGroup();
+  const nestedGroup = three.createTextGroup({ batching: 'group' });
+  const second = three.createTextGroup();
+  const sharedA = three.createTextGroup({ batching: 'shared' });
+  const sharedB = three.createTextGroup({ batching: 'shared' });
+  const labels = Array.from({ length: 6 }, (_, index) => three.createText({ font, text: String(index) }));
+  nestedAuto.add(labels[1]);
+  nestedGroup.add(labels[2]);
+  first.add(labels[0], nestedAuto, nestedGroup);
+  second.add(labels[3]);
+  sharedA.add(labels[4]);
+  sharedB.add(labels[5]);
+  scene.add(first, second, sharedA, sharedB);
+  scene.updateMatrixWorld(true);
+
+  try {
+    const initialDraws = rootDraws(scene);
+    assert.equal(
+      initialDraws.length,
+      4,
+      'two automatic roots, one explicit nested group, and one implicit shared scope own four draws',
+    );
+    assert.equal(first.batching, 'auto');
+    const firstBoundaryDraws = initialDraws.filter(
+      (draw) => draw.userData.pmndrsGlyphBatchScope === first || draw.userData.pmndrsGlyphBatchScope === nestedGroup,
+    );
+    assert.equal(firstBoundaryDraws.length, 2, 'the automatic root and explicit descendant own separate draw scopes');
+    instrumentedGlyph.reset();
+    first.visible = false;
+    scene.updateMatrixWorld(true);
+    assert.equal(instrumentedGlyph.crossings, 0, 'group visibility does not enter Wasm or rebuild the display list');
+    assert.deepEqual(rootDraws(scene), initialDraws, 'group visibility preserves every realized mesh');
+    assert.ok(
+      firstBoundaryDraws.every((draw) => !draw.visible),
+      'ancestor visibility suppresses owned draw scopes',
+    );
+    assert.equal(
+      rootDraws(scene).filter((draw) => draw.visible).length,
+      2,
+      'hiding an automatic root suppresses its draw and every explicit descendant boundary',
+    );
+    instrumentedGlyph.reset();
+    first.visible = true;
+    scene.updateMatrixWorld(true);
+    assert.equal(instrumentedGlyph.crossings, 0, 'restoring group visibility remains renderer-owned');
+    assert.deepEqual(rootDraws(scene), initialDraws, 'restoring visibility reuses the same meshes and buffers');
+    assert.ok(
+      firstBoundaryDraws.every((draw) => draw.visible),
+      'restoring the ancestor restores each owned draw scope',
+    );
+    nestedGroup.batching = 'shared';
+    scene.updateMatrixWorld(true);
+    assert.equal(rootDraws(scene).length, 3, 'a shared nested group rejoins its automatic root draw scope');
+  } finally {
+    for (const label of labels) label.dispose();
+    for (const group of [nestedAuto, nestedGroup, first, second, sharedA, sharedB]) group.dispose();
+    font.dispose();
+  }
+});
+
+test('a hidden automatic TextGroup never exposes its first realized draw', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const label = three.createText({ font, text: 'hidden' });
+  group.visible = false;
+  group.add(label);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+
+  try {
+    const draws = rootDraws(scene);
+    assert.equal(draws.length, 1);
+    assert.equal(draws[0].userData.pmndrsGlyphBatchScope, group);
+    assert.equal(draws[0].visible, false, 'the first publication observes authored ancestor visibility');
+  } finally {
+    label.dispose();
+    group.dispose();
+    font.dispose();
+  }
 });
 
 test('a root releases its renderer publication when its final Text is disposed', async (t) => {
