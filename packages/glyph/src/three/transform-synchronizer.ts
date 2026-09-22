@@ -22,8 +22,8 @@ export class ThreeTransformSynchronizer {
       draw.renderOrder = (draw.userData.pmndrsGlyphRenderOrder as number | undefined) ?? draw.renderOrder;
       const transformId = (draw.userData.pmndrsGlyphTransformId as number | undefined) ?? 0;
       const batchScope = draw.userData.pmndrsGlyphBatchScope as THREE.Object3D | undefined;
-      if (transformId === 0 && batchScope !== undefined && state.visibleObject !== undefined) {
-        draw.visible = state.visibleObject(batchScope);
+      if (transformId === 0) {
+        draw.visible = batchScope === undefined || state.visibleObject === undefined || state.visibleObject(batchScope);
       }
     }
     const target = state.transformAttribute.array as Float32Array;

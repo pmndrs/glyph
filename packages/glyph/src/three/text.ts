@@ -1739,11 +1739,14 @@ function coreTextState(
   };
 }
 
+interface ThreeMaterialBindingVariants {
+  readonly default: Map<string, ThreeMaterialBinding>;
+  readonly custom: WeakMap<ThreeTextMaterial, Map<string, ThreeMaterialBinding>>;
+}
+
 class ThreeMaterialBindingCache {
-  readonly #default = new Map<string, ThreeMaterialBinding>();
-  readonly #custom = new WeakMap<ThreeTextMaterial, Map<string, ThreeMaterialBinding>>();
-  readonly #batchGroupIds = new WeakMap<TextGroup, number>();
-  #nextBatchGroupId = 1;
+  readonly #shared = createMaterialBindingVariants();
+  readonly #scoped = new WeakMap<TextGroup, ThreeMaterialBindingVariants>();
 
   get(
     material: ThreeTextMaterial | undefined,
@@ -1751,19 +1754,19 @@ class ThreeMaterialBindingCache {
     renderOrder: number,
     batchGroup: TextGroup | undefined,
   ): ThreeMaterialBinding {
+    let bindings = this.#shared;
+    if (batchGroup !== undefined) {
+      bindings = this.#scoped.get(batchGroup) ?? createMaterialBindingVariants();
+      this.#scoped.set(batchGroup, bindings);
+    }
     let variants: Map<string, ThreeMaterialBinding>;
     if (material === undefined) {
-      variants = this.#default;
+      variants = bindings.default;
     } else {
-      variants = this.#custom.get(material) ?? new Map();
-      this.#custom.set(material, variants);
+      variants = bindings.custom.get(material) ?? new Map();
+      bindings.custom.set(material, variants);
     }
-    let batchGroupId = 0;
-    if (batchGroup !== undefined) {
-      batchGroupId = this.#batchGroupIds.get(batchGroup) ?? this.#nextBatchGroupId++;
-      this.#batchGroupIds.set(batchGroup, batchGroupId);
-    }
-    const key = `${pixelSnapping ? 1 : 0}:${String(renderOrder)}:${String(batchGroupId)}`;
+    const key = `${pixelSnapping ? 1 : 0}:${String(renderOrder)}`;
     let binding = variants.get(key);
     if (binding === undefined) {
       binding = Object.freeze({ material, pixelSnapping, renderOrder });
@@ -1772,6 +1775,13 @@ class ThreeMaterialBindingCache {
     }
     return binding;
   }
+}
+
+function createMaterialBindingVariants(): ThreeMaterialBindingVariants {
+  return {
+    default: new Map(),
+    custom: new WeakMap(),
+  };
 }
 
 function normalizeDesired<Format extends RasterFormatMetadata>(
