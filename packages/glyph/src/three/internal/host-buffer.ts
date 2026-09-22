@@ -155,13 +155,24 @@ function commitBufferUpload(uploadRange: StagedBufferUpload): void {
 function mergeUpdateRange(attribute: THREE.BufferAttribute, start: number, count: number): void {
   let mergedStart = start;
   let mergedEnd = start + count;
+  // The lowest range the span touches is widened where it lies; any further ranges it bridges are dropped. A
+  // caller writing one glyph at a time would otherwise leave a range object behind for every glyph of every frame.
+  let widened = -1;
   for (let index = attribute.updateRanges.length - 1; index >= 0; index -= 1) {
     const range = attribute.updateRanges[index]!;
     const rangeEnd = range.start + range.count;
     if (rangeEnd < mergedStart || mergedEnd < range.start) continue;
     mergedStart = Math.min(mergedStart, range.start);
     mergedEnd = Math.max(mergedEnd, rangeEnd);
-    attribute.updateRanges.splice(index, 1);
+    // Only indices above this one are dropped, so the index this loop walks down to stays the one it named.
+    if (widened >= 0) attribute.updateRanges.splice(widened, 1);
+    widened = index;
+  }
+  if (widened >= 0 && attribute.updateRanges.length < MAX_UPDATE_RANGES) {
+    const range = attribute.updateRanges[widened]!;
+    range.start = mergedStart;
+    range.count = mergedEnd - mergedStart;
+    return;
   }
   if (attribute.updateRanges.length >= MAX_UPDATE_RANGES) {
     for (const range of attribute.updateRanges) {
