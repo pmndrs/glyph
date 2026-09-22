@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:4fb1d943ef480d142cbff88d04f88856bb01bd0d10f0a8862ac6a1d4dc089fc2'
+source_digest: 'sha256:a581cc0eb3a861b9d862762501348b35ead8950a2c5ddc9269bf1f8c990fc905'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -426,8 +426,7 @@ correctly. Meshes that share a material share one capture clone in both captures
 preparation time. The captures, this one and the lamp's, read each glass material's coverage without the lens
 through a registry the materials fill, since a capture must not read the texture it draws and the lamp's view has no
 screen to read it at; that registry also gives the rain panes, which never set an opacity node, glyph-shaped
-captures where they had quads. The capture is redrawn only when a pane's matrix or visibility changed, the frame was resized, or the hole is
-pulling, as the shadow capture is. The capture target and its sampling nodes are kept across a module replacement
+captures where they had quads. The capture is redrawn on the same terms as the shadow capture, and when the frame is resized. The capture target and its sampling nodes are kept across a module replacement
 like the uniforms. `hero:glass-lens-check` holds one title letter a slab above another on WebGPU and verifies the
 lens changes nothing at rest and, with the overlap, changes pixels only where glass lies.
 
@@ -628,11 +627,20 @@ The page opened with `?profile` creates the renderer with timestamp queries, `dp
 pass or layer in turn, the shadow capture, the receiver, the lens capture, the icon paper, the paper, the title,
 the feature line, and the embers, and reports the median and p95 GPU milliseconds of each, then the finale's
 moments with everything drawn. On the Apple GPU that produced these numbers, differences under about 3 ms are
-noise, since lighter frames run at lower clocks and read slower; only the large differences are trusted. That
-profile found the resting frame at 11.1 ms at 720p and 38 ms at 2560 × 1440, with the shadow receiver's march
-over half of it and the paper's noise most of the rest. After the march texture, the still-frame skips, the
+noise, since lighter frames run at lower clocks and read slower; only the large differences are trusted. That profile found the resting frame at 11.1 ms at 720p and 38 ms at 2560 × 1440, with the shadow receiver's
+march over half of it and the paper's noise most of the rest. After the march texture, the still-frame skips, the
 quarter-resolution bloom, the coarser caustic grid, and the baked grain, the resting frame is 5.3 ms at 720p and
-12.6 ms at 2560 × 1440, and the finale's moments there are 12 to 19 ms. Over a whole playback at 720p, where the
+12.6 ms at 2560 × 1440. Teaching the captures what a still scene is worth another 2.9 ms at 2560 × 1440, 14.8 ms
+to 11.9, and seventeen of its sixty passes.
+
+The hero is bound by the GPU, and by fill rather than by passes. Over a whole playback at 720p the GPU's own
+clock reads 8 to 12 ms a frame against 4.6 to 5.2 ms of CPU submission, so the CPU has half the work. The frame
+draws forty to sixty passes, but the captures are fixed small targets and leaving the whole chain out at rest
+costs nothing the profile can read; what the frame spends is the main pass, where the paper, the two icon sheets,
+the glass and the shadow receiver each carry about a screen of fill, and four-sample multisampling over all of it
+is 3.2 ms of the 11.9 at 2560 × 1440, a little over a quarter. The glyphs are antialiased by that multisampling
+through alpha-to-coverage, so it is not free to drop; the levers left are the pixel ratio, the sample count, and
+folding the receiver into the sheets it darkens. Over a whole playback at 720p, where the
 lift and the finale redraw the captures every frame, the performance check's GPU median runs 8 to 12 ms from one
 run to the next, from 15 before; run-to-run spread on this machine is about a millisecond at rest and more in
 motion, so a claim needs more than one run.
@@ -666,10 +674,12 @@ slightly down and to the left. The march's samples are spaced quadratically and 
 letter, which the title's bodies publish each physics step because the poses live in the glyph instance buffer.
 It is drawn into a texture over the plane at the capture's resolution, which is all the detail the blurred capture
 holds, and the multiply-blended receiver reads that texture back with one sample a pixel, so the march costs the
-plane's texels rather than every screen pixel; at a retina pixel ratio that was over half the frame. The capture,
-its four-level Gaussian pyramid, and the march are redrawn only when a pane's matrix or visibility changed, the
-reach changed, or the hole is pulling, which bends every outline; the pyramid's blur nodes are run by hand at that
-moment rather than every frame. Under the lamp's perspective a lifted letter's shadow grows and spreads beneath it
+plane's texels rather than every screen pixel; at a retina pixel ratio that was over half the frame. The capture, its four-level Gaussian pyramid, and the march are redrawn only when the scene under the lamp has
+stirred: a pane's own matrix or visibility, the title's letter transforms, which live in one instanced draw whose
+container never moves, any glass value the capture carries, the reach, a caster showing, or the hole pulling,
+which bends every outline. A body at rest still settles by hairs, so a move counts only past a fraction of a
+pixel; an exact comparison redrew every frame for a scene that had stopped. The pyramid's blur nodes are run by
+hand at that moment rather than every frame. The lens capture follows the same rule. Under the lamp's perspective a lifted letter's shadow grows and spreads beneath it
 as the letter grows on screen, softening and thinning through the pyramid blended by height, and settles back to
 the same pixels on landing. The light the glass turns aside returns as caustics every frame, since their facets
 turn with time: a 128 × 80 grid over the plane, eight capture texels a cell since the warped grid is blurred after,

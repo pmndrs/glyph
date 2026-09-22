@@ -70,8 +70,13 @@ while (title().bodies === undefined || title().bodies!.replays === 0 || title().
 
 step(90);
 
+let passes = 0;
+let draws = 0;
+
 /** One frame: the simulation and views stepped once, the frame rendered once, and its GPU time resolved. */
 const frame = async (): Promise<number> => {
+  // Counted from before the step, so the captures the view job draws are counted with the frame's own passes.
+  const startedCalls = renderer.info.render.calls;
   step(1);
   const previousLoop = renderer.getAnimationLoop();
 
@@ -93,6 +98,9 @@ const frame = async (): Promise<number> => {
   }
 
   await renderer.resolveTimestampsAsync('render');
+  // Every render target the frame drew into, and every draw within them.
+  passes = renderer.info.render.calls - startedCalls;
+  draws = renderer.info.render.drawCalls;
 
   return renderer.info.render.timestamp;
 };
@@ -111,7 +119,12 @@ const measure = async (count = 45) => {
 
   for (let index = 0; index < count; index++) times.push(await frame());
 
-  return { p50: Number(percentile(times, 0.5).toFixed(2)), p95: Number(percentile(times, 0.95).toFixed(2)) };
+  return {
+    p50: Number(percentile(times, 0.5).toFixed(2)),
+    p95: Number(percentile(times, 0.95).toFixed(2)),
+    passes,
+    draws,
+  };
 };
 
 const find = (test: (object: Object3D) => boolean): Object3D[] => {
@@ -171,6 +184,15 @@ const leaveOut: [string, () => () => void][] = [
       return () => mountLensView(lens);
     },
   ],
+  [
+    'caustics',
+    () => {
+      const shown = shadow.causticScene.visible;
+      shadow.causticScene.visible = false;
+
+      return () => (shadow.causticScene.visible = shown);
+    },
+  ],
   ['icon paper', () => hide(icons)],
   ['paper', () => hide(paper)],
   ['title glass', () => hide([titleEntity.get(TitleView)!.glyphs])],
@@ -178,20 +200,29 @@ const leaveOut: [string, () => () => void][] = [
   ['embers', () => hide(embers)],
 ];
 
-const atRest: Record<string, { p50: number; p95: number }> = {};
+type Timing = { p50: number; p95: number; passes: number; draws: number };
 
-for (const [name, leave] of leaveOut) {
-  const restore = leave();
+/** Each pass or layer left out in turn, at whatever moment the scene is holding. */
+const sweep = async (count: number) => {
+  const timings: Record<string, Timing> = {};
 
-  try {
-    atRest[name] = await measure();
-  } finally {
-    restore();
+  for (const [name, leave] of leaveOut) {
+    const restore = leave();
+
+    try {
+      timings[name] = await measure(count);
+    } finally {
+      restore();
+    }
   }
-}
+
+  return timings;
+};
+
+const atRest = await sweep(45);
 
 /** The finale's moments, everything drawn: the hole pulling, the paper collapsing, and the embers after the pop. */
-const finale: Record<string, { p50: number; p95: number }> = {};
+const finale: Record<string, Timing> = {};
 
 for (const [name, at] of [
   ['hole open', 1.5],
@@ -201,6 +232,11 @@ for (const [name, at] of [
   world.set(Collapse, { openedAt: clock - at * 1000 });
   finale[name] = await measure(30);
 }
+
+// The same sweep while the hole pulls, where every capture is redrawn each frame rather than held.
+world.set(Collapse, { openedAt: clock - 1.5 * 1000 });
+const pulling = await sweep(30);
+world.set(Collapse, { openedAt: undefined });
 
 const baseline = atRest['baseline']!;
 const weight = Object.fromEntries(
@@ -217,5 +253,6 @@ console.log(
     /** Milliseconds each leaves out of the resting frame's median. */
     weight,
     finale,
+    pulling,
   }),
 );

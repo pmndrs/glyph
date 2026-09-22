@@ -76,6 +76,26 @@ const lens = retained('glass-lens', () => {
 /** 0..1: how far glass bends the glass behind it. The lens check turns it off for its control. */
 export const uLens = lens.uLens;
 
+/**
+ * Whether `values` have stirred from `previous` by more than a hair, copying them in where they have. A body at
+ * rest still settles by hairs, and an exact comparison would redraw a capture every frame for a scene that has
+ * stopped. A length that no longer matches is a change in itself.
+ */
+export function stirred(previous: Float32Array | Float64Array, values: ArrayLike<number>): boolean {
+  if (previous.length !== values.length) return true;
+
+  let moved = false;
+
+  for (let index = 0; index < values.length; index++) {
+    if (Math.abs(previous[index]! - values[index]!) <= 1e-4) continue;
+
+    previous[index] = values[index]!;
+    moved = true;
+  }
+
+  return moved;
+}
+
 const plainCoverage = new WeakMap<Material, Node<'float'>>();
 
 /** Give a glass material's coverage without the lens to the captures, which must not read what they draw. */
@@ -121,6 +141,8 @@ function createLens(renderer: WebGPURenderer, camera: Camera) {
     capturedFrom: [] as Object3D[],
     /** Each capture's visibility and world matrix as last drawn, to tell a moved glass from a still one. */
     previous: new Float32Array(0),
+    /** The title's letter transforms as last drawn: they live in one instanced draw whose own matrix never moves. */
+    letters: new Float64Array(0),
     clear: new Color(),
     size: new Vector2(),
   };
@@ -129,11 +151,17 @@ function createLens(renderer: WebGPURenderer, camera: Camera) {
 export type Lens = ReturnType<typeof createLens>;
 
 const sources: Object3D[] = [];
+const NO_LETTERS = new Float64Array(0);
 
 /** Draw the capture after title and rain matrices have reached their draw objects, before the frame is rendered. */
 export function updateGlassLens(world: World): void {
-  world.query(Title, TitleView, LensView).readEach(([, draws, view]) => {
+  world.query(Title, TitleView, LensView).readEach(([title, draws, view]) => {
     const state = view!;
+    const letters = title.bodies?.matrices ?? NO_LETTERS;
+
+    if (state.letters.length !== letters.length) state.letters = new Float64Array(letters.length).fill(Number.NaN);
+
+    const stirredLetters = stirred(state.letters, letters);
     sources.length = 0;
     sources.push(draws!.glyphs);
     const rain = world.get(RainView);
@@ -146,7 +174,7 @@ export function updateGlassLens(world: World): void {
     )
       captureGlass(state, sources);
 
-    drawLens(state);
+    drawLens(state, stirredLetters);
   });
 }
 
@@ -221,11 +249,11 @@ function captureGlass(state: Lens, roots: readonly Object3D[]): void {
   state.previous = new Float32Array(state.captures.length * 17).fill(Number.NaN);
 }
 
-function drawLens(state: Lens): void {
+function drawLens(state: Lens, stirredLetters: boolean): void {
   const { renderer, camera, sourceScene, clear, size, previous } = state;
   const { target } = lens;
   // The hole bends every outline while it pulls, so the capture is redrawn as long as it does.
-  let moved = uHoleBend.value > 0;
+  let moved = uHoleBend.value > 0 || stirredLetters;
 
   for (const [index, { original: object, capture }] of state.captures.entries()) {
     let visible = object.visible;
@@ -252,8 +280,10 @@ function drawLens(state: Lens): void {
     capture.matrix.copy(object.matrixWorld);
     const { elements } = object.matrixWorld;
 
+    // A body at rest still settles by hairs, and an exact comparison would redraw the capture every frame for a
+    // scene that has stopped; only a move worth a fraction of a pixel counts.
     for (let lane = 0; lane < 16; lane++) {
-      if (previous[base + 1 + lane] !== elements[lane]) {
+      if (!(Math.abs(previous[base + 1 + lane]! - elements[lane]!) <= 1e-4)) {
         previous[base + 1 + lane] = elements[lane]!;
         moved = true;
       }

@@ -60,7 +60,7 @@ import { RainView } from '../rain/traits';
 import { Time } from '../time/traits';
 import { letterActions } from './actions';
 import { uHoleBend, uHoleCamera } from '../black-hole/materials';
-import { plainCoverageOf } from './lens';
+import { plainCoverageOf, stirred } from './lens';
 import { SHADOW_CASTER_LAYER, SHADOW_LAMP, SHADOW_RECEIVER_Z } from './content';
 import { RobotView } from '../robot/traits';
 import { Collapse, type HoleState } from '../black-hole/traits';
@@ -402,8 +402,10 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     castersDrawn: false,
     /** Whether every caster has been drawn once, which compiles their programs during preparation. */
     castersBuilt: false,
-    /** Each capture's visibility and world matrix as last drawn, to tell a moved glass from a still one. */
+    /** Each capture's visibility, world matrix, and glass values as last drawn, to tell a moved glass from a still one. */
     previous: new Float32Array(0),
+    /** The title's letter transforms as last drawn: they live in one instanced draw whose own matrix never moves. */
+    letters: new Float64Array(0),
     /** Whether the march and caustic readers have been drawn, which sets up the blur nodes they read. */
     built: false,
     uLamp,
@@ -425,6 +427,7 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
 export type Projection = ReturnType<typeof createProjection>;
 
 const sources: Object3D[] = [];
+const NO_LETTERS = new Float64Array(0);
 
 /** Update the mounted projection after title and rain matrices have reached their draw objects. */
 export function updateGlassShadows(world: World): void {
@@ -443,8 +446,19 @@ export function updateGlassShadows(world: World): void {
       captureGlass(state, sources);
 
     state.uTime.value = world.get(Time)!.elapsed;
+    const letters = title.bodies?.matrices ?? NO_LETTERS;
+
+    if (state.letters.length !== letters.length) state.letters = new Float64Array(letters.length).fill(Number.NaN);
+
+    const stirredLetters = stirred(state.letters, letters);
     // The robot is handed over even while it is hidden, so its caster can be drawn once to compile.
-    updateProjection(state, title.reach, world.queryFirst(RobotView)?.get(RobotView)?.root, world.get(Collapse)!.hole);
+    updateProjection(
+      state,
+      title.reach,
+      world.queryFirst(RobotView)?.get(RobotView)?.root,
+      world.get(Collapse)!.hole,
+      stirredLetters,
+    );
   });
 }
 
@@ -532,13 +546,40 @@ function captureGlass(state: Projection, roots: readonly Object3D[]): void {
   state.previous = new Float32Array(state.captures.length * 17).fill(Number.NaN);
 }
 
-function updateProjection(state: Projection, titleReach: number, caster: Object3D | undefined, hole: HoleState): void {
+/** Draw the opaque casters over the glass capture, from the scene they live in, under the lamp. */
+function drawCasters(state: Projection): void {
+  const { renderer, scene, lightCamera } = state;
+  const overridden = scene.overrideMaterial;
+  const background = scene.background;
+  scene.overrideMaterial = state.casterMaterial;
+  // The scene's background would be drawn into the capture as pale glass everywhere, washing the frame out.
+  scene.background = null;
+  lightCamera.layers.set(SHADOW_CASTER_LAYER);
+  renderer.autoClear = false;
+
+  try {
+    renderer.render(scene, lightCamera);
+  } finally {
+    renderer.autoClear = true;
+    lightCamera.layers.set(0);
+    scene.background = background;
+    scene.overrideMaterial = overridden;
+  }
+}
+
+function updateProjection(
+  state: Projection,
+  titleReach: number,
+  caster: Object3D | undefined,
+  hole: HoleState,
+  stirredLetters: boolean,
+): void {
   const { scene, renderer, uLamp, uReach, source, sourceScene, caustic, causticScene, lightCamera, clear } = state;
   scene.updateMatrixWorld(true);
   uLamp.value.copy(LAMP);
   let reach = GLASS_DEPTH;
   // The hole bends every outline while it pulls, so the capture is redrawn as long as it does.
-  let moved = uHoleBend.value > 0;
+  let moved = uHoleBend.value > 0 || stirredLetters;
   const previous = state.previous;
 
   for (let index = 0; index < state.captures.length; index++) {
@@ -563,11 +604,24 @@ function updateProjection(state: Projection, titleReach: number, caster: Object3
     if (!capture.visible || !(object.material instanceof MeshPhysicalNodeMaterial)) continue;
 
     if (capture.material instanceof MeshPhysicalNodeMaterial) {
-      capture.material.ior = object.material.ior;
-      capture.material.dispersion = object.material.dispersion;
-      capture.material.thickness = object.material.thickness;
-      capture.material.attenuationColor.copy(object.material.attenuationColor);
-      capture.material.attenuationDistance = object.material.attenuationDistance;
+      const glass = capture.material;
+      const original = object.material;
+
+      // The capture holds what it was last given, so a glass whose values have changed is caught on that frame.
+      if (
+        glass.ior !== original.ior ||
+        glass.dispersion !== original.dispersion ||
+        glass.thickness !== original.thickness ||
+        glass.attenuationDistance !== original.attenuationDistance ||
+        !glass.attenuationColor.equals(original.attenuationColor)
+      )
+        moved = true;
+
+      glass.ior = original.ior;
+      glass.dispersion = original.dispersion;
+      glass.thickness = original.thickness;
+      glass.attenuationColor.copy(original.attenuationColor);
+      glass.attenuationDistance = original.attenuationDistance;
     }
 
     // Glyph uses this metadata to select the retained run. Ordinary extruded meshes have no such metadata.
@@ -576,8 +630,10 @@ function updateProjection(state: Projection, titleReach: number, caster: Object3
     // The highest this letter can reach: its centre, plus however far its tilt lifts a corner.
     const { elements } = object.matrixWorld;
 
+    // A body at rest still settles by hairs, and an exact comparison would redraw the capture every frame for a
+    // scene that has stopped; only a move worth a fraction of a pixel counts.
     for (let lane = 0; lane < 16; lane++) {
-      if (previous[base + 1 + lane] !== elements[lane]) {
+      if (!(Math.abs(previous[base + 1 + lane]! - elements[lane]!) <= 1e-4)) {
         previous[base + 1 + lane] = elements[lane]!;
         moved = true;
       }
@@ -610,7 +666,7 @@ function updateProjection(state: Projection, titleReach: number, caster: Object3
   state.castersDrawn = casting || holeCaster.visible;
   const reached = Math.max(reach, titleReach - RECEIVER_Z + GLASS_DEPTH / 2);
 
-  if (uReach.value !== reached) {
+  if (!(Math.abs(uReach.value - reached) <= 1e-4)) {
     uReach.value = reached;
     moved = true;
   }
@@ -625,36 +681,27 @@ function updateProjection(state: Projection, titleReach: number, caster: Object3
     renderer.autoClear = true;
     renderer.setClearColor(0, 0);
     renderer.setMRT(null);
-    if (moved) {
-      const holeShown = holeCaster.visible;
-      holeCaster.visible = holeShown || warming;
+    // Every caster is drawn once, even one not showing yet, so its program compiles here rather than when it
+    // first appears. That draw is thrown away by the real one below, which follows it in the same frame.
+    if (warming && caster !== undefined) {
+      const shownHole = holeCaster.visible;
+      const shownCaster = caster.visible;
+      holeCaster.visible = true;
+      caster.visible = true;
       renderer.setRenderTarget(source);
       renderer.render(sourceScene, lightCamera);
-      holeCaster.visible = holeShown;
+      drawCasters(state);
+      holeCaster.visible = shownHole;
+      caster.visible = shownCaster;
+      state.castersBuilt = true;
+    }
+
+    if (moved) {
+      renderer.setRenderTarget(source);
+      renderer.render(sourceScene, lightCamera);
 
       // The casters join the same capture, over the glass render's depth, from the scene they live in.
-      if (caster !== undefined && (casting || warming)) {
-        const shown = caster.visible;
-        caster.visible = true;
-        const overridden = scene.overrideMaterial;
-        const background = scene.background;
-        scene.overrideMaterial = state.casterMaterial;
-        // The scene's background would be drawn into the capture as pale glass everywhere, washing the frame out.
-        scene.background = null;
-        lightCamera.layers.set(SHADOW_CASTER_LAYER);
-        renderer.autoClear = false;
-
-        try {
-          renderer.render(scene, lightCamera);
-        } finally {
-          renderer.autoClear = true;
-          lightCamera.layers.set(0);
-          scene.background = background;
-          scene.overrideMaterial = overridden;
-          caster.visible = shown;
-          state.castersBuilt = true;
-        }
-      }
+      if (casting) drawCasters(state);
 
       // A blur node is set up by the first draw that reads it, so the first projection draws both readers once
       // before it can run the blurs by hand.
