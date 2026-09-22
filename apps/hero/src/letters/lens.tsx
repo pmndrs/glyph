@@ -162,6 +162,8 @@ function captureGlass(state: Lens, roots: readonly Object3D[]): void {
 
   state.captures.length = 0;
   state.capturedFrom = [...roots];
+  // Meshes that share a material share its capture too: every node graph built is preparation time.
+  const clones = new Map<MeshPhysicalNodeMaterial, MeshPhysicalNodeMaterial>();
 
   for (const [index, root] of roots.entries()) {
     const slab = index === 0 ? materialThickness : float(RAIN_SLAB);
@@ -173,7 +175,20 @@ function captureGlass(state: Lens, roots: readonly Object3D[]): void {
       )
         return;
 
+      const shared = clones.get(object.material);
+
+      if (shared !== undefined) {
+        const capture = new Mesh(object.geometry, shared);
+        capture.matrixAutoUpdate = false;
+        capture.frustumCulled = false;
+        sourceScene.add(capture);
+        state.captures.push({ original: object, capture });
+
+        return;
+      }
+
       const material = object.material.clone();
+      clones.set(object.material, material);
       material.name = 'glass-lens-capture';
       material.transmission = 0;
       material.outputNode = null;

@@ -399,6 +399,8 @@ function captureGlass(state: Projection, roots: readonly Object3D[]): void {
 
   state.captures.length = 0;
   state.capturedFrom = [...roots];
+  // Meshes that share a material share its capture too: every node graph built is preparation time.
+  const clones = new Map<MeshPhysicalNodeMaterial, MeshPhysicalNodeMaterial>();
 
   // The title's shadows spread as it lifts, but rain falls from near the camera: one glyph that high would stretch
   // the march over the whole scene and coarsen every shadow, so rain casts only over the last stretch of its fall.
@@ -417,7 +419,20 @@ function captureGlass(state: Projection, roots: readonly Object3D[]): void {
       )
         return;
 
+      const shared = clones.get(object.material);
+
+      if (shared !== undefined) {
+        const capture = new Mesh(object.geometry, shared);
+        capture.matrixAutoUpdate = false;
+        capture.frustumCulled = false;
+        sourceScene.add(capture);
+        state.captures.push({ original: object, capture, ceiling });
+
+        return;
+      }
+
       const material = object.material.clone();
+      clones.set(object.material, material);
       material.name = 'glass-shadow-capture';
       material.transmission = 0;
       // The rain composes its panes by multiplication; the capture wants the plain lit output.

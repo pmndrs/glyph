@@ -204,6 +204,11 @@ console.log(
     viewport: [innerWidth, innerHeight],
     drawingBuffer: [renderer.domElement.width, renderer.domElement.height],
     preparationMs: started,
+    /** When each preparation phase began, from the page's own marks. */
+    phases: performance
+      .getEntriesByType('mark')
+      .filter((mark) => mark.name.startsWith('hero-'))
+      .map((mark) => [mark.name.slice(5), Math.round(mark.startTime)]),
     observed,
     frames: samples.length,
     fps: (intervals.length * 1000) / intervals.reduce((sum, value) => sum + value, 0),

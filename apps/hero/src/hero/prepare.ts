@@ -17,6 +17,8 @@ export function useHeroReady(): boolean {
 function publish(next: Phase): void {
   phase = next;
   document.documentElement.dataset.heroState = next;
+  // User Timing marks, so a check can split the preparation into its phases.
+  performance.mark(`hero-${next}`);
 
   for (const listener of listeners) listener();
 }

@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { mat4 } from 'math';
 import { Group, Matrix4 } from 'three/webgpu';
-import { buildLayout, createLattice } from './actions';
-import { advanceMorph, simulate } from './systems';
+import { createWorld } from 'koota';
+import type { Glyphs } from '@pmndrs/glyph/three';
+import { Time } from '../time/traits';
+import { Viewport } from '../hero/traits';
+import { Pointer } from '../input/traits';
+import { Collapse } from '../black-hole/traits';
+import { buildLayout, createLattice, iconPaperActions } from './actions';
+import { IconPaper, Impacts } from './traits';
+import { advanceMorph, moveIconPaper, simulate, syncIconViews } from './systems';
 import { cellMatrix } from './utils';
 import type { IconLayoutOptions } from './traits';
 
@@ -112,6 +119,53 @@ describe('icon paper motion', () => {
       }
 
       expect(new Set(state.motifGlyphs).size).toBe(layer.motifs);
+    }
+  });
+});
+
+describe('icon paper uploads', () => {
+  it('writes every cell once, then nothing while the sheet is still, and again when the pointer disturbs it', () => {
+    const world = createWorld(Time, Viewport, Pointer, Collapse, Impacts);
+    iconPaperActions(world).spawnIconPaper();
+    world.set(Viewport, { width: 18, height: 10, cameraZ: 16, aspect: 1.8 });
+    let writes = 0;
+    const glyphs = { setMatrixAt: () => writes++ } as unknown as Glyphs;
+    let cells = 0;
+
+    for (const entity of world.query(IconPaper)) {
+      const count = entity.get(IconPaper)!.layout!.cells.length;
+      cells += count;
+      iconPaperActions(world).mountIconView(entity, {
+        group: new Group(),
+        glyphs,
+        baselines: new Float64Array(count * 11),
+        hidden: new Matrix4().makeScale(0, 0, 0),
+        matrix: new Matrix4(),
+        written: new Float64Array(count * 16).fill(Number.NaN),
+      });
+    }
+
+    const frame = (now: number) => {
+      world.set(Time, { now, delta: 1 / 60, elapsed: now / 1000 });
+      moveIconPaper(world);
+      syncIconViews(world);
+    };
+
+    try {
+      frame(0);
+      expect(writes).toBe(cells);
+      writes = 0;
+
+      for (let step = 1; step <= 30; step++) frame(step * (1000 / 60));
+
+      expect(writes).toBe(0);
+      world.set(Pointer, { x: 0, y: 0, present: true, strength: 1 });
+
+      for (let step = 31; step <= 40; step++) frame(step * (1000 / 60));
+
+      expect(writes).toBeGreaterThan(0);
+    } finally {
+      world.destroy();
     }
   });
 });

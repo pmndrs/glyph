@@ -100,6 +100,8 @@ export interface IconDraw {
   baselines: Float64Array;
   hidden: Matrix4;
   matrix: Matrix4;
+  /** Each cell's matrix as last written to its glyph, so a cell that has not moved uploads nothing. */
+  written: Float64Array;
 }
 
 export const IconView = trait((): IconDraw | undefined => undefined);

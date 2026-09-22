@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:ec21945497393ef259f92b2e0fea73f6fa67fc56867600d83c65ab2e29958faa'
+source_digest: 'sha256:384028c38465395bb85f35d346f4fad510b03076009abd35f893bb5ce799572b'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -422,8 +422,9 @@ is nearer the camera than the fragment by more than a hair it shifts the point i
 along the refracted ray into the pane, carried the pane's slab deep: the title's slab is its transmission
 thickness, so a letter bends a letter exactly as it bends the paper, and a rain pane's is thin. The shift rides
 the hole warp as one more displacement before the coverage integral, so a bent letter under glass is bent twice,
-correctly. The captures, this one and the lamp's, read each glass material's coverage without the lens through a
-registry the materials fill, since a capture must not read the texture it draws and the lamp's view has no
+correctly. Meshes that share a material share one capture clone in both captures, since every node graph built is
+preparation time. The captures, this one and the lamp's, read each glass material's coverage without the lens
+through a registry the materials fill, since a capture must not read the texture it draws and the lamp's view has no
 screen to read it at; that registry also gives the rain panes, which never set an opacity node, glyph-shaped
 captures where they had quads. The capture is redrawn only when a pane's matrix or visibility changed, the frame was resized, or the hole is
 pulling, as the shadow capture is. The capture target and its sampling nodes are kept across a module replacement
@@ -589,19 +590,24 @@ remain visible in the overlay. It holds animation until all text, detached glyph
 the robot, environment, dust, and burst are ready. Preparation renders hidden and offscreen objects through the
 actual shadow, transmission, and post passes, compiles the scene, and waits for submitted GPU work before revealing
 the normal visibility set. Browser checks wait for `data-hero-state="ready"`; readiness follows completed work,
-not a fixed delay.
+not a fixed delay. Each phase also leaves a User Timing mark, and the performance check reports when each began:
+on 2026-09-22 through the development server the app mounted at about 2.2 s, prepared for 1.5 s, and compiled for
+0.65 s, with the preparing phase almost entirely Three building node graphs for materials rather than shaping.
 
 Both typing lines retain their complete glyph records and precompute every prefix's centering with Glyph's own
 layout during preparation. Playback changes matrices only, including the feature line's departure and replay.
 The icon paper retains all eleven choices for each cell (12,188 glyph records across both layers); motif changes
 swap visible records without reshaping text or creating draw meshes. This trades retained storage for stable playback.
+The view keeps each cell's matrix as last written and writes a glyph only when the cell moved by more than a hair,
+was swapped, or was swallowed, so a still sheet uploads nothing; a lattice test writes every cell once, then
+nothing over thirty still frames, then again under the pointer.
 `hero:retained-lines-check` compares all prefixes with independently shaped layouts and verifies transform reset.
 
 `mise exec -- pnpm scripts run hero:performance` runs two complete lift, typing, robot,
 collapse, and burst replays on WebGPU after preparation. It rejects new shader programs, render pipelines, scene
 meshes, or asset loads, with a deliberate new-material control proving the compilation counters work. It reports
 raw render intervals, CPU submission work, asynchronous GPU queue completion, GPU time from timestamp queries,
-and long tasks, along with the adapter, viewport, and drawing-buffer dimensions. The canvas uses adaptive DPR
+the preparation phases, and long tasks, along with the adapter, viewport, and drawing-buffer dimensions. The canvas uses adaptive DPR
 between 1 and 2, and the report records the actual drawing-buffer size for each run. Queue completion is latency,
 not GPU time: on 2026-09-22 it read 9 ms while the GPU's own clock read 15 ms median and 32 ms at p95 for the
 same 720p frames, and it had hidden a frame that would not survive a retina display.
@@ -616,7 +622,10 @@ noise, since lighter frames run at lower clocks and read slower; only the large 
 profile found the resting frame at 11.1 ms at 720p and 38 ms at 2560 × 1440, with the shadow receiver's march
 over half of it and the paper's noise most of the rest. After the march texture, the still-frame skips, the
 quarter-resolution bloom, the coarser caustic grid, and the baked grain, the resting frame is 5.3 ms at 720p and
-12.6 ms at 2560 × 1440, and the finale's moments there are 12 to 19 ms.
+12.6 ms at 2560 × 1440, and the finale's moments there are 12 to 19 ms. Over a whole playback at 720p, where the
+lift and the finale redraw the captures every frame, the performance check's GPU median runs 8 to 12 ms from one
+run to the next, from 15 before; run-to-run spread on this machine is about a millisecond at rest and more in
+motion, so a claim needs more than one run.
 
 With world-backed keyboard input, two complete 1280×720 replays on Apple Metal with Chromium 149 averaged 60.01 fps
 across 1,703 frames after 3.20 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long

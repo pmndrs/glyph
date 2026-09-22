@@ -338,22 +338,45 @@ export function syncIconViews(world: World): void {
     view.group.position.x = -current.offset;
     const now = world.get(Time)!.now;
 
+    const { written } = view;
+
     for (let index = 0; index < layout.cells.length; index++) {
       const selected = state.selected[index]!;
       const previous = state.previous[index]!;
+      const base = index * 16;
+      // A swapped cell's new glyph must be written whatever its matrix was.
+      let changed = selected !== previous;
 
-      if (selected !== previous) {
+      if (changed) {
         copies.setMatrixAt(index * GLYPHS.length + previous, view.hidden);
         state.previous[index] = selected;
       }
 
       const record = index * GLYPHS.length + selected;
 
-      if (state.swallowed[index] === 1) copies.setMatrixAt(record, view.hidden);
-      else {
-        cellMatrix(state.matrix, state, layout, index, view.baselines[record]!, iconSize, now);
-        copies.setMatrixAt(record, view.matrix.fromArray(state.matrix));
+      if (state.swallowed[index] === 1) {
+        // Hidden once: the sentinel keeps a swallowed cell from writing every frame.
+        if (changed || written[base] !== Number.POSITIVE_INFINITY) {
+          copies.setMatrixAt(record, view.hidden);
+          written.fill(Number.POSITIVE_INFINITY, base, base + 16);
+        }
+
+        continue;
       }
+
+      cellMatrix(state.matrix, state, layout, index, view.baselines[record]!, iconSize, now);
+
+      // A cell at rest still settles by hairs on its springs; only a visible move is worth an upload.
+      for (let lane = 0; lane < 16 && !changed; lane++) {
+        const value = state.matrix[lane]!;
+
+        if (!(Math.abs(value - written[base + lane]!) <= 0.0001)) changed = true;
+      }
+
+      if (!changed) continue;
+
+      copies.setMatrixAt(record, view.matrix.fromArray(state.matrix));
+      written.set(state.matrix, base);
     }
   });
 }

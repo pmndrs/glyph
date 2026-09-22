@@ -93,6 +93,7 @@ function IconPattern({ entity, font }: { readonly entity: Entity; readonly font:
         baselines: baselines.current,
         hidden: hidden.current,
         matrix: matrix.current,
+        written: new Float64Array(count * 16).fill(Number.NaN),
       });
     }
   });
