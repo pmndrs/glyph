@@ -11,3 +11,5 @@ export const THEME_RED = THEME_TINTS[0];
 /** The lamp the title's shadows are cast from, above and to the upper right, and the plane they fall on. */
 export const SHADOW_LAMP = [4, 6, 24] as const;
 export const SHADOW_RECEIVER_Z = -0.06;
+/** Objects on this layer cast in the glass projection as opaque casters, drawn under its lamp with an override. */
+export const SHADOW_CASTER_LAYER = 2;

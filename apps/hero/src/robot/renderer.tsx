@@ -24,7 +24,6 @@ import {
   uTear,
   uSeed,
   glitchingScreen,
-  shadowMaterial,
   dust,
   markerMaterial,
   uMarkerPresence,
@@ -33,6 +32,7 @@ import {
 import { mat4, quat, vec3 as vector3 } from 'math';
 import { Robot as RobotTrait } from './traits';
 import { robotActions } from './actions';
+import { SHADOW_CASTER_LAYER } from '../letters/content';
 import { useWorld, useQuery } from 'koota/react';
 import type { Entity } from 'koota';
 import { textPrepared, usePreparation } from '../hero/prepare';
@@ -110,6 +110,8 @@ function Robot({ entity, font }: { readonly entity: Entity; readonly font: SlugF
 
   const { scene, display, screenMaterial } = useMemo(() => {
     const owned = clone(model.scene);
+    // The body casts in the glass projection, drawn under its lamp from this very scene.
+    owned.traverse((object) => object.layers.enable(SHADOW_CASTER_LAYER));
     const screenMesh = owned.getObjectByName('Object_9') as Mesh;
     const original = screenMesh.material as MeshStandardMaterial;
     const material = glitchingScreen(original);
@@ -196,9 +198,6 @@ function Robot({ entity, font }: { readonly entity: Entity; readonly font: SlugF
           </group>
         </group>
       </group>
-      <mesh material={shadowMaterial} position={[0, 0, 0.01]}>
-        <planeGeometry args={[3.2, 2.6]} />
-      </mesh>
       {display !== undefined ? (
         <group matrixAutoUpdate={false} ref={face} visible={false}>
           <Text

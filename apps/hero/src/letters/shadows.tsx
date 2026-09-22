@@ -61,7 +61,8 @@ import { Time } from '../time/traits';
 import { letterActions } from './actions';
 import { uHoleBend } from '../black-hole/materials';
 import { plainCoverageOf } from './lens';
-import { SHADOW_LAMP, SHADOW_RECEIVER_Z } from './content';
+import { SHADOW_CASTER_LAYER, SHADOW_LAMP, SHADOW_RECEIVER_Z } from './content';
+import { RobotView } from '../robot/traits';
 import type { World } from 'koota';
 
 /** Projection lamp above the title. Its offset makes lifted shadows spread down and left. */
@@ -250,6 +251,20 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     return material;
   });
 
+  // Opaque casters, the robot, drawn into the capture from the main scene through this override on their own
+  // layer: skinning and joints come with the objects, which clones would lose. No tint, so they pool no light,
+  // and a little over half the weight, so their shade reads beside the tinted glass rather than as a hole.
+  const casterMaterial = new MeshBasicNodeMaterial({ name: 'glass-shadow-caster', side: DoubleSide });
+  {
+    const weight = float(0.55);
+    const height = positionWorld.z.sub(RECEIVER_Z).max(0);
+    casterMaterial.mrtNode = mrt({
+      output: vec4(0, 0, 0, 1).mul(weight),
+      distance: vec4(height, 1, 0, 1).mul(weight),
+      normal: vec4(0, 0, 1, 1).mul(weight),
+    });
+  }
+
   // The receiver: the shadow marched toward the light, and the caustics laid back over it.
   const projectionMaterial = new MeshBasicNodeMaterial({
     name: 'glass-shadows',
@@ -342,6 +357,9 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     marchMaterial,
     marchGeometry,
     sourceBlurs,
+    casterMaterial,
+    /** Whether an opaque caster was drawn last time, so its leaving is a change too. */
+    castersDrawn: false,
     /** Each capture's visibility and world matrix as last drawn, to tell a moved glass from a still one. */
     previous: new Float32Array(0),
     /** Whether the march and caustic readers have been drawn, which sets up the blur nodes they read. */
@@ -383,7 +401,8 @@ export function updateGlassShadows(world: World): void {
       captureGlass(state, sources);
 
     state.uTime.value = world.get(Time)!.elapsed;
-    updateProjection(state, title.reach);
+    const robot = world.queryFirst(RobotView)?.get(RobotView);
+    updateProjection(state, title.reach, robot !== undefined && robot.root.visible ? robot.root : undefined);
   });
 }
 
@@ -471,7 +490,7 @@ function captureGlass(state: Projection, roots: readonly Object3D[]): void {
   state.previous = new Float32Array(state.captures.length * 17).fill(Number.NaN);
 }
 
-function updateProjection(state: Projection, titleReach: number): void {
+function updateProjection(state: Projection, titleReach: number, caster: Object3D | undefined): void {
   const { scene, renderer, uLamp, uReach, source, sourceScene, caustic, causticScene, lightCamera, clear } = state;
   scene.updateMatrixWorld(true);
   uLamp.value.copy(LAMP);
@@ -526,6 +545,10 @@ function updateProjection(state: Projection, titleReach: number): void {
     reach = Math.max(reach, (elements[14] ?? 0) + tilt - RECEIVER_Z + GLASS_DEPTH / 2);
   }
 
+  // A caster on the move, and it is always moving while it shows, redraws the capture; so does its leaving.
+  if (caster !== undefined || state.castersDrawn) moved = true;
+
+  state.castersDrawn = caster !== undefined;
   const reached = Math.max(reach, titleReach - RECEIVER_Z + GLASS_DEPTH / 2);
 
   if (uReach.value !== reached) {
@@ -546,6 +569,22 @@ function updateProjection(state: Projection, titleReach: number): void {
     if (moved) {
       renderer.setRenderTarget(source);
       renderer.render(sourceScene, lightCamera);
+
+      // The casters join the same capture, over the glass render's depth, from the scene they live in.
+      if (caster !== undefined) {
+        const overridden = scene.overrideMaterial;
+        scene.overrideMaterial = state.casterMaterial;
+        lightCamera.layers.set(SHADOW_CASTER_LAYER);
+        renderer.autoClear = false;
+
+        try {
+          renderer.render(scene, lightCamera);
+        } finally {
+          renderer.autoClear = true;
+          lightCamera.layers.set(0);
+          scene.overrideMaterial = overridden;
+        }
+      }
 
       // A blur node is set up by the first draw that reads it, so the first projection draws both readers once
       // before it can run the blurs by hand.
@@ -585,6 +624,7 @@ function disposeProjection(state: Projection): void {
   state.shadowTarget.dispose();
   state.marchMaterial.dispose();
   state.marchGeometry.dispose();
+  state.casterMaterial.dispose();
 
   for (const node of state.blurs) node.dispose();
 

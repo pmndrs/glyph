@@ -7,7 +7,6 @@ import {
   dot,
   normalize,
   positionView,
-  exp,
   float,
   fract,
   hash,
@@ -93,9 +92,6 @@ export function glitchingScreen(screen: MeshStandardMaterial): MeshStandardNodeM
 
   return material;
 }
-
-export const shadowMaterial = new MeshBasicNodeMaterial({ color: '#000000', depthWrite: false, transparent: true });
-shadowMaterial.opacityNode = exp(uv().sub(0.5).length().mul(3.2).pow(2).negate()).mul(0.32);
 
 /** 0..1: the destination marker's presence, and seconds since the robot was sent there. */
 export const uMarkerPresence = uniform(0);

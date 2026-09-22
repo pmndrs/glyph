@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:384028c38465395bb85f35d346f4fad510b03076009abd35f893bb5ce799572b'
+source_digest: 'sha256:8a5f54b881c46589ee32dbc5adae1d70355d00b58d45af0c30ea2f4080e752ae'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
 sources:
   - id: hero-policy
@@ -666,7 +666,12 @@ turn with time: a 128 × 80 grid over the plane, eight capture texels a cell sin
 is carried in its vertex shader to where each ray lands after refracting through the lens normal, an edge chamfer,
 and two slowly turning lattices of facets, once per colour channel with a small index spread, and its brightness
 is the source area gathering in each pixel, so the light pools into faint, spectrally fringed glints inside the
-shadow. It is an art-directed projection, not multi-bounce light transport.
+shadow. The robot casts in the same projection: its model sits on a caster layer, and while it shows, the
+capture also draws the main scene under the lamp with that layer alone and an override that writes no tint, so
+it pools no light, and a little over half the weight, so its shade reads beside the tinted glass rather than as a
+hole; skinning and joints come with the objects, which clones would lose. Its shadow is redrawn every frame it
+shows, since it is always moving then, at no cost the profile can tell apart. The robot check verifies the shadow
+against the robot taken off that layer. It is an art-directed projection, not multi-bounce light transport.
 
 The paper behind everything is grain: three octaves of noise whose height tints and roughens the sheet and whose
 slope tilts its normal. A plane the size of the screen at a retina pixel ratio asked for those octaves millions
