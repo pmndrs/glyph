@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:5b1a1034dc73d9141cb2cf79a2ad7e1ab61afbcaf21bc96fa14adb4f2080b876'
+source_digest: 'sha256:f802206dc6b10fb944db55496595d85dd31bb619d82b282ba12024e2af4369ce'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -129,6 +129,8 @@ The release workflow publishes main-branch pushes under npm's `canary` tag. A pu
 publishes under `latest` only when it matches the package manifest version exactly. Both paths build and check the
 package before publishing through the existing npm trusted publisher. Prepare each release's version separately,
 then cut its stable tag from the reviewed commit after CI passes.
+`packages/glyph/CHANGELOG.md` is the hand-authored user-facing release record; its Unreleased section declares the next
+semver target and excludes CI or commit-history narration.
 
 ## Ownership
 
@@ -591,8 +593,12 @@ Within a `TextGroup`, each child `Text.renderOrder` ranks that paragraph's insta
 text, styles, geometry, measurement, or per-glyph records. Ordinary content updates retain the 12-byte lifecycle record
 and omit the sideband when scope and rank are unchanged. An ungrouped
 `Text.renderOrder` retains ordinary Three draw-mesh meaning. Paragraph rank is deliberately absent from glyph storage and
-draw keys: compatible spans and grouped paragraphs therefore coalesce by resource, material, and fixed paint layer, with
-under-decoration, glyph, and over-decoration layers preserving CSS paint order.
+draw keys: compatible spans and grouped paragraphs therefore coalesce within their authored batch boundary by resource,
+material, and fixed paint layer, with under-decoration, glyph, and over-decoration layers preserving CSS paint order.
+`TextGroup.batching` controls only that physical boundary; it does not create another planner, Wasm root, or publication
+stream. The default `auto` makes each top-level authored group a boundary while nested automatic groups inherit it;
+`group` forces a nested boundary, and `shared` joins the nearest authored boundary or the implicit root pool. Hiding a
+boundary-owning group skips its compatible draws without resizing buffers, replacing meshes, or entering Wasm.
 When a rank-only permutation keeps the committed Codec, capability, one-batch single-aggregate-draw storage topology,
 and renderable stable-ID set, Rust copies the committed physical records into their new order and publishes write patches only. It transactionally
 updates its internal aggregate primitive/draw spans but does not republish unchanged buffers, resources, primitives,

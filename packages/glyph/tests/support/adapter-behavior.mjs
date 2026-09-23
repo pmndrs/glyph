@@ -242,18 +242,20 @@ export function adapterBehavior(name, mount) {
     }
   });
 
-  test(`${name}: removing group material and renderOrder restores the defaults`, async () => {
+  test(`${name}: removing group batching, material, and renderOrder restores the defaults`, async () => {
     const font = await adapterFont();
     const material = defineTextMaterial((context) => context.createDefaultMaterial());
-    const initial = { font: font.face, text: 'group', group: { material, renderOrder: 3 } };
+    const initial = { font: font.face, text: 'group', group: { batching: 'group', material, renderOrder: 3 } };
     const host = await mount(initial);
     const group = host.group;
     try {
+      assert.equal(group.batching, 'group');
       assert.equal(group.material, material);
       assert.equal(group.renderOrder, 3);
       host.resetFrameRequests();
       await host.update({ ...initial, group: {} });
       assert.equal(host.group, group, 'removing group props must not remount the group');
+      assert.equal(group.batching, 'auto');
       assert.equal(group.material, undefined);
       assert.equal(group.renderOrder, 0);
       assert.ok(host.frameRequests > 0, 'a group change must request a frame');

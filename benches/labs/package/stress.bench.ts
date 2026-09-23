@@ -3,6 +3,20 @@ import { assert, bench, group } from '@pmndrs/labs';
 import { borrowedGlyphChecksum, createLabels, createTextBatch, disposeLabels, disposeTextBatch } from './fixture.ts';
 
 group('1,000-label stress @stress', () => {
+  bench('toggle one group containing 1000 retained labels @visibility @publication', function* () {
+    const created = createLabels(1_000);
+    let visible = true;
+    const textCount = yield () => {
+      visible = !visible;
+      created.textGroup.visible = visible;
+      created.scene.updateMatrixWorld(true);
+      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      return created.textGroup.textCount;
+    };
+    assert.equal(textCount, created.labels.length);
+    disposeLabels(created);
+  });
+
   bench('reorder 1000 unchanged retained labels @publication', function* () {
     const created = createLabels(1_000);
     for (const [index, label] of created.labels.entries()) label.renderOrder = index;
