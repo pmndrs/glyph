@@ -8,6 +8,18 @@
       "port": 5273
     },
     {
+      "name": "dev-242",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "/Users/tjw/Developer/glyph-wt/unsafe-fix", "--filter", "@pmndrs/glyph-benchmarks", "run", "dev", "--port", "5275", "--strictPort"],
+      "port": 5275
+    },
+    {
+      "name": "dev-main",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "/Users/tjw/Developer/glyph-wt/size-main", "--filter", "@pmndrs/glyph-benchmarks", "run", "dev", "--port", "5276", "--strictPort"],
+      "port": 5276
+    },
+    {
       "name": "r3f",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@pmndrs/glyph-r3f-hello-world", "run", "dev", "--port", "5274", "--strictPort"],
