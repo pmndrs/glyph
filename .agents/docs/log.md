@@ -2,20 +2,6 @@
 
 ## 2026-09-20
 
-- **Rebuilt the juggler on koota and math with a forge, stats, and explosions** — `apps/juggler` now mirrors the
-  hero: one world, `letters` and `juggler` domains, systems listed in `frameloop.ts`, math scratch. Letters are
-  struck white-hot with TSL flames and embers and cool to steel; the juggler has speed, hand speed, reach, and grip,
-  drops what he cannot reach, and dropped letters explode into instanced shards. A shared forge material carries
-  per-letter state in the instance style colour, removing the ten-pipelines-per-letter typing hitch measured at up to
-  617 ms; the worst typing frame is now 16 ms. Eight headless stories pass and the package check passes. See
-  [the juggler reference](packages/juggler.md).
-
-- **Made the juggler's sentence a shaped paragraph** — The typed text is one uniformly styled `Text` broken apart
-  per committed layout with `breakApart()`, so kerning and spaces are the engine's while single glyphs hide as their
-  letters leave. Letters arrive red hot and cool to white, hop out with spin and squash, and take a colour as they
-  fall. Hands scoop each catch inward, reach for incoming letters, and wave when idle. Six simulation tests pass and
-  the package check passes. See [the juggler reference](packages/juggler.md).
-
 - **Renamed hero icon-field to icon-paper** — The background domain now uses `IconPaper`, `IconPaperRenderer`,
   `iconPaperActions`, and corresponding motion and command names. Imports, the font bake, and the package
   reference use the new path. Grid simulation keeps its lattice terminology. The full hero check and WebGPU
@@ -36,11 +22,6 @@
   `updateTime` samples the timestamp and accumulates a bounded delta without knowing about preparation.
   The full hero check and WebGPU opening check pass, including a check that every clock field stays zero
   during preparation and the opening lift starts after its playback beat. See [the hero reference](packages/hero.md).
-
-- **Added the juggler example** — `apps/juggler` is a small R3F app where typed glyphs wait in a row at the top,
-  drop one at a time, and a stick figure with superhuman speed catches and juggles every one. The simulation is a
-  pure module; its Vitest proof steps a word and a forty-letter burst and asserts no letter ever passes the hands.
-  The package check passes. See [the juggler reference](packages/juggler.md).
 
 - **Aligned hero keyboard input with minecraft-like** — A world-level `Keys` trait retains held keys.
   Separate keyboard and pointer hooks synchronize DOM events through domain actions. The keyboard effect
