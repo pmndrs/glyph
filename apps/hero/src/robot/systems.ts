@@ -332,6 +332,11 @@ const TYPE_FROM = LOOK_UP_AT + 1.1;
 const TYPE_UNTIL = LOOK_DOWN_AT + 0.25;
 const GLITCH_SECONDS = 0.3;
 
+/** How many letters of the face's message are lit, `face` seconds on the display's clock. */
+export function faceLetters(face: number): number {
+  return face >= TYPE_FROM && face < TYPE_UNTIL ? Math.min(FACE_TEXT.length, Math.floor((face - TYPE_FROM) * 9)) : 0;
+}
+
 /** The eyes' glitch: whether they are shown, and how hard the screen is tearing, `now` seconds into a run. */
 function eyesAt(out: { shown: number; tear: number }, now: number): void {
   const away = (now - (TYPE_FROM - GLITCH_SECONDS)) / GLITCH_SECONDS;
@@ -413,8 +418,7 @@ export function syncRobotDisplay(world: World): void {
 
     // Looking up, the face prints its message a letter at a time, and clears it as it looks back down.
     const now = robot.face;
-    const count =
-      now >= TYPE_FROM && now < TYPE_UNTIL ? Math.min(FACE_TEXT.length, Math.floor((now - TYPE_FROM) * 9)) : 0;
+    const count = faceLetters(now);
     showLine(view.line, count);
 
     if (view.screen !== null) view.screen.visible = count > 0;

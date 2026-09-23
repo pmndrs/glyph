@@ -7,6 +7,7 @@ import { robotActions } from '../robot/actions';
 import { sequenceActions } from '../sequence/actions';
 import { starEmberActions } from '../star-embers/actions';
 import { rainActions } from '../rain/actions';
+import { soundActions } from '../sound/actions';
 import { Collapse } from '../black-hole/traits';
 import { Time } from '../time/traits';
 import { Title } from '../letters/traits';
@@ -60,6 +61,7 @@ export const heroActions = createActions((world) => {
       physicsActions(world).initializePhysics();
       starEmberActions(world).initializeStarEmbers();
       rainActions(world).initializeRain();
+      soundActions(world).initializeSound();
       robotActions(world).spawnRobot();
       letterActions(world).spawnLetters();
       iconPaperActions(world).spawnIconPaper();

@@ -60,6 +60,12 @@ export const physicsActions = createActions((world) => {
       enableCollision(settings, movingLayer, movingLayer);
       enableCollision(settings, movingLayer, floorLayer);
       const entities = new Map<number, Entity>();
+      // An airborne body strikes whatever it meets, and lands once that is the floor.
+      const strike = (entity: Entity, floor: boolean) => {
+        if (!entity.get(Body)?.airborne) return;
+
+        entity.set(Body, floor ? { struck: true, airborne: false, landed: true } : { struck: true });
+      };
       const listener: Listener = {
         onContactValidate: (a, b, _offset, hit) => {
           if (a.motionType !== MotionType.DYNAMIC || b.motionType !== MotionType.DYNAMIC)
@@ -76,12 +82,8 @@ export const physicsActions = createActions((world) => {
         onContactAdded(a, b) {
           const first = entities.get(a.id)!;
           const second = entities.get(b.id)!;
-          const entity = first.has(Floor) ? second : second.has(Floor) ? first : undefined;
-          const body = entity?.get(Body);
-
-          if (body === undefined || !body.airborne) return;
-
-          entity!.set(Body, { airborne: false, landed: true });
+          strike(first, second.has(Floor));
+          strike(second, first.has(Floor));
         },
       };
 

@@ -21,8 +21,12 @@ export const Body = trait({
   rotation: () => quat.create(),
   from: () => ({ x: 0, y: 0, z: 0, yaw: 0 }),
   to: () => ({ x: 0, y: 0, z: 0, yaw: 0 }),
+  /** Released or spawned and still to reach the floor. */
   airborne: false,
+  /** The frame an airborne body reaches the floor. */
   landed: false,
+  /** Each frame an airborne body meets anything new: the floor, another body, or the robot. */
+  struck: false,
   moved: false,
 });
 

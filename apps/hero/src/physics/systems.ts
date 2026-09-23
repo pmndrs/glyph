@@ -15,6 +15,7 @@ export function stepPhysics(world: World): void {
   bodies.updateEach(([body]) => {
     body.moved = false;
     body.landed = false;
+    body.struck = false;
   });
 
   for (let step = 1; step <= steps; step++) {

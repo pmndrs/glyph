@@ -1,12 +1,12 @@
 ---
 type: Workspace Package
 title: '@pmndrs/glyph-hero'
-description: 'Glass letters, a robot, and a black-hole finale over a Slug icon lattice, then a play mode that drives the robot.'
+description: 'Glass letters, a robot, and a black-hole finale over a Slug icon lattice, then a play mode that drives the robot, scored with console-era sound.'
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:079a0adcf128324502619682466d97c248c417a2041782d7df24699523adae61'
-tags: [package, example, react-three-fiber, webgpu, slug, vite, koota]
+source_digest: 'sha256:0a801d20a490e79bfbcabe138029344352d8bfe396087638c610c62980069c9b'
+tags: [package, example, react-three-fiber, webgpu, slug, vite, koota, web-audio]
 sources:
   - id: hero-policy
     resource: ../../../apps/hero/AGENTS.md
@@ -185,6 +185,18 @@ sources:
   - id: steering-check
     resource: ../../../apps/hero/src/robot/systems.test.ts
     title: Arrival, curvature, bounded turning, retargeting, and greeting checks
+  - id: sound-listener
+    resource: ../../../apps/hero/src/sound/systems.ts
+    title: Scene listener, bounded cue queue, and mixer playback
+  - id: sound-samples
+    resource: ../../../apps/hero/src/sound/samples.ts
+    title: Console-era voices baked offline behind one cached promise
+  - id: sound-mixer
+    resource: ../../../apps/hero/src/sound/renderer.tsx
+    title: Mixer, hall, echo, loops, and the gesture that starts audio
+  - id: sound-check
+    resource: ../../../apps/hero/src/sound/systems.test.ts
+    title: The sequence and play heard through the headless simulation
 generated:
   by: anthropic/claude-opus-5
   at: '2026-09-18T09:20:00Z'
@@ -234,6 +246,7 @@ implement its transitions.
 | `star-embers` | Emission age, prepared star particles, fire material, bloom, fading, and screen-space sparks                |
 | `play-button` | Reveal timing, sheet geometry and hit test, mounted sheet camera, cursor state, and the display module      |
 | `rain`        | Glyph rain in play: prepared glyph solids, drop pool, spawning, edge culling, fading, panes, and shadows    |
+| `sound`       | Scene listener, bounded cue queue, baked console-era samples, mixer, continuous loops, and mute             |
 
 The root owns one Koota world and the combined action set. `world.ts` exports the shared world and invokes the hero initialization action.
 Action sets define commands as arrow-function properties. Root `actions.ts` spreads the domain action sets.
@@ -264,7 +277,7 @@ Two focused tests cover ordering, event delays, retriggering, and timeline repla
 `frameloop.ts` lists the domain systems in their execution order. Sequence cues run before motion, after robot
 departure, and after letter landings so events take effect in the same frame. The scripted robot mover runs only in
 `sequence` and the pointer-driven mover only in `play`; both publish the same pose and footprint. Motion targets
-precede physics, and title poses synchronize after physics. The tagline is off the paper until the title's first landing, types in
+precede physics, and title poses synchronize after physics. The sound listener runs last, so it hears everything the frame changed. The tagline is off the paper until the title's first landing, types in
 three frames a character, and backspaces out one a frame when cleared on the paper; cleared after the hole took it,
 it is simply gone. A typing test covers both directions. `hero/systems.ts` scrolls mounted paper, turns
 landings into icon-paper impacts, and forwards landing and departure events to the script. Icon-paper, title, and star-ember
@@ -284,7 +297,7 @@ Clock advancement runs after the simulation readiness gate, so time
 retains its initial values during preparation. `updateTime` only samples the timestamp and accumulates a bounded
 delta. `useHeroReady()` subscribes to preparation status, and the frame loop captures its `isReady` value in the
 keyboard hook and frame callbacks. `useKeyboard` synchronizes a world-level `Keys` set through input actions and
-issues the explicit replay command inside its event effect on the first Space keydown. `usePointer` owns pointer
+issues the explicit replay command inside its event effect on the first Space keydown. M, without a modifier, toggles sound. `usePointer` owns pointer
 listeners and synchronizes normalized position and activity together from DOM events using the canvas bounds, and
 hands each primary-button press to `pressHero` once playback is ready.
 Leaving or cancelling the pointer, losing window focus, or unmounting clears activity. The pointer publishes two
@@ -300,7 +313,7 @@ the frame stopped answering it. The hole's, the embers', and the play button's u
 development nothing is replaced and every caller builds its own. A second ordered job publishes
 view state after renderer preparation callbacks and before the final render.
 It updates paper, title and icon draws, feature text, robot pose, rig animation, robot display, dust, the black hole,
-embers, the play button, and glass shadows. Both jobs are capped at 60 fps. View systems read attached resource traits, so detaching
+embers, the play button, and glass shadows, and plays the frame's sound. Both jobs are capped at 60 fps. View systems read attached resource traits, so detaching
 a view stops updates before its renderer disposes the resources. Hidden mounted resources remain available for
 preparation. Shadow time belongs to the mounted projection. Simulation systems do not construct shaders.
 The app publishes no development globals or pause controls. Browser checks import the same world module
@@ -347,7 +360,8 @@ which the letters domain projects into its matrix stream. Three matrices and sce
 
 The `physics` domain pins `crashcat@0.0.5` and splits into `traits.ts`, `actions.ts`, and `systems.ts`, with a small
 `utils.ts` for pose data and behavior checks beside the systems. `Physics` holds the solver resource on the Koota world, while `Body` owns each entity's
-solver ID, motion targets, published pose, and landing state. There is no separate simulation world or parallel
+solver ID, motion targets, published pose, and contact events: `landed` on the frame a released body reaches the
+floor, and `struck` on each frame an airborne body meets anything new. There is no separate simulation world or parallel
 letter body array. World-bound actions create, hold, release, park, and revive bodies. Removing `Body` or destroying
 its entity removes the solver body through one lifecycle subscription. The letters domain supplies outline prisms and
 animation targets. Crashcat combines each letter's prisms into
@@ -496,6 +510,68 @@ draws the button in on WebGPU, verifies that half way in only some of the pixels
 it, and tiles the three moments with a close-up.
 The finale check verifies the black frame stays black at the ember fade, the button then lights it, a press beside
 it changes nothing, a press on it restores the paper with the robot driving, and Space returns to the sequence.
+
+The `sound` domain scores the scene without writing any other domain's state. `listenForSounds` runs last in the
+simulation and compares what the scene publishes with what it last heard: the title's lift and landings, the
+tagline's typed count, the robot's floor position, trips, and printed face letters, the rain's strikes, the hole's
+beat, meals, and clock, the mode, and the Play button's reveal and hover. Each change queues a cue through
+`cueSound` into a fixed 32-slot buffer, and the listener publishes two continuous levels: the robot's motor, from
+its speed across the floor, and the hole's drones, which climb. Nothing else rises into the pop: the drones climb as
+play's hole grows, and through the finale on its own clock to the pop, carrying on from where play left them, since
+the pull is full a second and more before it; they swell as they climb and do not fade with the hole's last pinch.
+The drone rises by up to a fifth, faster the nearer the pop, and the same drone an octave up climbs with it, joining
+as it goes. At the pop they hold where they reached while they fade under it, rather than gliding back down.
+`playSounds` in the view job drains the queue into the mounted mixer and sets the loops. Browsers hold audio until a
+gesture, and until then the cues are dropped rather than held, so nothing plays late; mounting a mixer likewise
+drops whatever was queued while none listened. The face's printed count comes from the robot's `faceLetters`, which
+its display reads too. A glyph of rain rings once, on the first frame its body is `struck`, whether it comes down on
+the floor, on the glass, or on another glyph: on `landed`, which is the floor alone, a third of the rain that came
+to rest had stayed silent.
+
+The voices are console-era samples, baked once through `OfflineAudioContext` at 11 or 22 kHz and five to eight bits
+after normalizing to full scale, and pitched by playback rate the way a sampler pitched them: an FM bell, a thud, a
+key tick, a whoosh, a voice-chip blip, a gulp, a boom, and the motor and drone loops, baked twice over to repeat
+their settled half. The acoustic voices are finer, at 12 bits, since grit on a clean decay sounds like a machine:
+the tagline's soft mallet on a wooden bar, the tap that answers each press in play, and the robot's hums. The
+robot's voice sits halfway between a hummed voice and that mallet. A recorded voice measured about 124 Hz, settling
+onto its pitch from a little above, with its first formant near 515 Hz and its second near 2.1 kHz, nearly all its
+energy under 800 Hz, and no hiss at its onsets. The hum is C4, the geometric middle of that voice and the mallet's
+C5, a round sine and a dark sawtooth through two formants in equal parts, easing about five percent down into its
+note from a twelve-millisecond onset. Six syllables vary the vowel, the glide, and the length within what the
+recording showed, and each letter the face prints takes the next one on a note from a narrow pentatonic spread, so
+no two greetings sound alike. The recording shaped the synthesis and does not ship. `loadSamples` keeps one promise
+so `use` sees it settle, and the renderer suspends inside its own boundary, so the scene never waits on sound. The
+notes share one major pentatonic scale: each title letter lands on its own note, the tagline plays a very quiet note
+a letter chosen by the letter, the robot's syllables take nearby notes, each glyph of rain rings one as it comes
+down, and play opens on a fanfare. The embers take no notes at all, so the Play button's run after them is the only
+tune there: they sparkle, two faint sprays of tiny high grains either side of where the hole popped, starting with
+the burst on the embers' own clock from `StarEmbers`. Each spray is ninety grains of a few milliseconds of a sine
+between 4 and 9 kHz, crowded at the burst and thinning over the embers' life the way a sparkler spits, written as
+arithmetic into a buffer the bake plays through. They sit far above the boom they play over, whose noise is below
+2.4 kHz: a faint twinkle of discrete tings at 2.6 kHz and below, under the boom, had gone unheard. The sparkle alone
+is sent into a void, a second space beside the hall, and the only delay in the mix: an eight-second impulse with no
+walls, so no early reflections, that swells in after a long moment and keeps its highs, and a ping-pong echo whose
+repeats sink into it, so the grains hang there glittering after the embers have gone. Every other voice has at most
+the hall. In the browser the sparkle holds the 4 to 10 kHz band 12 dB over a silent control through the embers'
+life, and three, four, and five seconds after the burst its tail is still 19, 41, and 72 dB over it, fading about
+eight decibels a second. The mix splits between a plain path and a four-bit crush, then passes a low-pass, a
+compressor, and the master, with a generated stereo hall on a send, and a void on another that only the embers'
+sparkle reaches. The hole bends it: as its pull rises, everything but the tap sinks by up to thirty percent in
+pitch, the low-pass closes toward 700 Hz, and the crush takes most of the mix, until the pop, which comes back
+clean.
+
+Three sound stories run the frame loop's simulation headlessly. In the opening, the lift, both real landings on
+distinct notes, one note for each letter of the tagline, six syllables for the face in order, the motor only while
+the robot drives, the hole's gulp and boom with its drones climbing right up to the pop, the embers' two sprays of
+sparkle from their burst, and the button's power-up each sound once and in order. In play, the press gives a fanfare
+and a tap, the motor runs while the robot drives and stops at rest, the little hole opens with a gulp, the robot
+hums its greeting, and a later press is a single tap. In the rain, with the title's letters on the floor, every
+glyph that has come down rings exactly once, counted against the solver's own fall speed, and some of them rest on
+the glass; ringing on `landed` instead, nine of twelve rang. The hole stays shut for that story, since play's opens
+at random. On 2026-09-23 an analyser on the master bus followed a Space replay in the browser: the lift peaked at -7
+dBFS, the landings at -3, and the pop at -4, and with the robot stopped and the tagline done the output fell below
+-50. Twenty headless replays of five letters rang all five landings every time. `hero:performance`'s headless
+browser gives no gesture, so it measures the listener but not playback.
 
 Robot path sampling, eye transitions, and floor footprints overwrite retained outputs. Consumers copy a footprint
 when they need its previous-frame position. Dust uses 128 reusable particle records; saturation replaces the oldest

@@ -2,6 +2,7 @@ import type { World } from 'koota';
 import { useEffect } from 'react';
 import { inputActions } from './actions';
 import { heroActions } from '../hero/actions';
+import { soundActions } from '../sound/actions';
 import { Keys } from './traits';
 import { useThree } from '@react-three/fiber/webgpu';
 
@@ -10,6 +11,7 @@ export function useKeyboard(world: World, isReady: boolean): void {
   useEffect(() => {
     const { setKey, clearKeys } = inputActions(world);
     const { replayHero } = heroActions(world);
+    const { toggleSound } = soundActions(world);
     const keys = world.get(Keys)!;
 
     const down = (event: KeyboardEvent) => {
@@ -26,6 +28,8 @@ export function useKeyboard(world: World, isReady: boolean): void {
       if (event.repeat || keys.has(key)) return;
 
       setKey(key, true);
+
+      if (key === 'm' && !event.metaKey && !event.ctrlKey && !event.altKey) toggleSound();
 
       if (isReady && key === ' ') replayHero();
     };

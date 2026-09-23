@@ -1,4 +1,5 @@
 import { useRenderPipeline } from '@react-three/fiber/webgpu';
+import { Suspense } from 'react';
 import { convertToTexture, pass, uv } from 'three/tsl';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { BlackHole } from '../black-hole/renderer';
@@ -13,6 +14,7 @@ import { GlassLens } from '../letters/lens';
 import { GlassTitle, FeatureLine } from '../letters/renderer';
 import { IconPaperRenderer } from '../icon-paper/renderer';
 import { RobotRenderer } from '../robot/renderer';
+import { SoundRenderer } from '../sound/renderer';
 import { Lighting, Paper } from './lighting';
 import { PrepareHero } from './prepare';
 import { useFonts } from './fonts';
@@ -36,6 +38,10 @@ export function Hero() {
       <RainRenderer font={fonts.title} />
       <PlayButtonRenderer font={fonts.robot} />
       <Post />
+      {/* The scene never waits on its sound: the samples bake beside preparation and join when they are ready. */}
+      <Suspense fallback={null}>
+        <SoundRenderer />
+      </Suspense>
     </>
   );
 }

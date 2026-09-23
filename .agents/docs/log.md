@@ -1,5 +1,18 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-23
+
+- **Scored the hero with console-era sound** — A `sound` domain listens to what the scene publishes and cues baked
+  voices: low-rate, low-bit samples pitched like an N64 or PlayStation sampler, with finer acoustic voices for the
+  tagline's mallet notes, the press tap, and the robot's hums, synthesized halfway between a measured recording of a
+  voice and the mallet. Only the hole's drones build into the pop, climbing to it on the finale's clock, and the
+  embers sparkle, faint high grains above the boom that hang on alone in a void of their own, so the Play button's
+  run is the only tune after it; the void and its echo carry the sparkle alone. A modern mix with a hall, and a
+  crush and low-pass that the black hole leans on.
+  Physics now publishes `struck`, so each glyph of rain rings once on whatever it first meets. Samples bake once
+  behind a promise read with `use`, and M toggles sound. Three headless stories and the package check pass. See
+  [the hero reference](packages/hero.md).
+
 ## 2026-09-20
 
 - **Renamed hero icon-field to icon-paper** — The background domain now uses `IconPaper`, `IconPaperRenderer`,

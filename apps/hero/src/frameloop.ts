@@ -13,6 +13,7 @@ import { advanceCollapse, feedHole, syncBlackHoleView } from './black-hole/syste
 import { syncStarEmbers, syncEmberView } from './star-embers/systems';
 import { syncPlayButtonView } from './play-button/systems';
 import { rainGlyphs, syncRainViews } from './rain/systems';
+import { listenForSounds, playSounds } from './sound/systems';
 import { moveIconPaper, syncIconViews } from './icon-paper/systems';
 import { stepPhysics } from './physics/systems';
 import {
@@ -63,6 +64,7 @@ export function FrameLoop() {
       feedHole(world);
       moveIconPaper(world);
       stepDust(world);
+      listenForSounds(world);
     },
     { id: 'hero-simulation', phase: 'physics', fps: 60 },
   );
@@ -84,6 +86,7 @@ export function FrameLoop() {
         syncEmberView(world);
         syncRainViews(world);
         syncPlayButtonView(world);
+        playSounds(world);
       }
 
       updateGlassLens(world);
