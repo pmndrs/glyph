@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:73ad5a2747245d29bfa40b75d13c1013acef99acb5f23de372a59dd196385b84'
+source_digest: 'sha256:c8793de24aff8fcc6b2d92a064f0d5cf6dc60dfc853575329667211fda33540e'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -295,6 +295,15 @@ exercises the packed `/typegpu` entry rather than workspace source. Browser `sta
 measure across module, asset, renderer, and scene activation. Fresh-process blocks and a five-percent minimum effect
 produce the comparison report. This lane is report-only while runner noise and false-positive rates are established;
 browser, GPU, and frame-pacing evidence remains owned by the browser workflows.
+
+`request-arena.bench.ts` isolates the internal host-to-Wasm request encoding seam without substituting workspace source.
+The historical artifact compiles an owned wire buffer and copies it into a retained target; the candidate prepares the
+same checked offsets and writes directly into that target. Separate 1,000-paragraph order-only and text-mutation cases
+distinguish the copy-sensitive frame from payload encoding whose cost is expected to remain neutral. Exact wire equality
+is owned by package integration tests rather than inferred from benchmark timing. A 16-block comparison improves one
+paragraph-plus-text request by 5.8% and 1,000 order records by 7.1%; 1,000 paragraph-plus-text records remain neutral.
+The 20-case package suite reports 19 neutral workloads and one noisy 12.0% column-reflow improvement. In particular,
+equal-size Three publication is neutral at +2.5%, replacing an earlier closure-based candidate that regressed that path.
 
 Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentation are complete
 

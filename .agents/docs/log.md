@@ -10,6 +10,13 @@
 
 ## 2026-09-20
 
+- **Removed the owned request-wire copy** — Planner frames now prepare checked offsets and write directly into the retained
+  Wasm request arena; the allocating compiler remains an exact-byte test oracle. A nonzero-offset integration test proves
+  both paths produce identical bytes and leave adjacent arena storage untouched. A 16-block packed-artifact comparison
+  improves one paragraph-plus-text request by 5.8% and 1,000 order mutations by 7.1%, while 1,000 semantic mutations remain
+  neutral. The 20-case package suite reports 19 neutral workloads and one noisy column-reflow improvement; equal-size Three
+  publication is neutral at +2.5%. This is a patch-level internal allocation and copy reduction with no public API change.
+
 - **Centralized framework normalization** — React and Vue now pass complete desired state through Three's canonical
   framework-update path instead of retaining caller-owned applied-state mirrors. Three reuses equal package-owned property
   and span snapshots and reports whether the accepted revision changed. Vue retains only the detached snapshots required
