@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:0a801d20a490e79bfbcabe138029344352d8bfe396087638c610c62980069c9b'
+source_digest: 'sha256:d09a712dfca428b8d0f3bd0e05f0345e3f2cf60455195a57a4d1afde9cd62fb6'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota, web-audio]
 sources:
   - id: hero-policy
@@ -781,15 +781,11 @@ shadow. The robot casts in the same projection: its model sits on a caster layer
 draws the main scene under the lamp with that layer alone and an override that writes no tint, so it pools no
 light, and a little over half the weight, so its shade reads beside the tinted glass rather than as a hole;
 skinning and joints come with the objects, which clones would lose. The scene's background is left out of that
-draw, or it would fill the capture as pale glass everywhere and wash every shadow off the frame. The black hole
-casts too, as a disk the size of its drawn core at the height it is drawn, so the lamp's slant throws its shade
-well down and to the left of it rather than into a lump under it; the march's samples are spaced quadratically,
-so reaching that high still leaves more than half of them under the letters. Both are redrawn every frame they
-show, since neither is ever still then, at no cost the profile can tell apart, and both are drawn once while
-hidden during preparation so their programs compile there rather than when they first appear. The robot check
-verifies its shadow against the robot taken off that layer and that the frame away from it is untouched; the
-finale check verifies the hole's against its shade turned off, with its lens off for both so the shade is
-measured where it falls. It is an art-directed projection, not multi-bounce light transport.
+draw, or it would fill the capture as pale glass everywhere and wash every shadow off the frame. The robot is
+redrawn every frame it shows, since it is never still then, at no cost the profile can tell apart, and it is drawn
+once while hidden during preparation so its program compiles there rather than when it first appears. The robot
+check verifies its shadow against the robot taken off that layer and that the frame away from it is untouched. It is
+an art-directed projection, not multi-bounce light transport.
 
 The paper behind everything is grain: three octaves of noise whose height tints and roughens the sheet and whose
 slope tilts its normal. A plane the size of the screen at a retina pixel ratio asked for those octaves millions

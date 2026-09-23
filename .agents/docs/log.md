@@ -2,6 +2,10 @@
 
 ## 2026-09-23
 
+- **Took the black hole's shadow out of the glass projection** — The hole no longer casts a disk into the capture,
+  so the projection's only opaque caster is the robot, and the finale check no longer measures a shade. The frame's
+  bend around the hole is unchanged. See [the hero reference](packages/hero.md).
+
 - **Scored the hero with console-era sound** — A `sound` domain listens to what the scene publishes and cues baked
   voices: low-rate, low-bit samples pitched like an N64 or PlayStation sampler, with finer acoustic voices for the
   tagline's mallet notes, the press tap, and the robot's hums, synthesized halfway between a measured recording of a

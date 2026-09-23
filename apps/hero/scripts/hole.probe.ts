@@ -26,9 +26,6 @@ const { Collapse } = (await import(
 const { POP_AT } = (await import(
   new URL('/src/black-hole/content.ts', location.origin).href
 )) as typeof import('../src/black-hole/content');
-const { uHoleShadow, updateGlassShadows } = (await import(
-  new URL('/src/letters/shadows.tsx', location.origin).href
-)) as typeof import('../src/letters/shadows');
 const { Viewport } = (await import(
   new URL('/src/hero/traits.ts', location.origin).href
 )) as typeof import('../src/hero/traits');
@@ -167,42 +164,6 @@ if (
   stats[5]!.lit !== 0
 )
   throw new Error(`Explosion/black frame failed: ${JSON.stringify(stats)}`);
-
-// The hole shades the paper beneath it. Its caster stays in the capture with the shade turned off, so the march
-// keeps its reach and the control differs only by the shade itself. Its lens is off for both, so the shade is
-// measured where it falls rather than where the bend carries it.
-const lensRadius = uHoleLens.value;
-uHoleLens.value = 0;
-const shaded = await capture(control);
-uHoleShadow.value = 0;
-updateGlassShadows(world);
-const unshaded = await capture(control);
-uHoleShadow.value = 1;
-updateGlassShadows(world);
-uHoleLens.value = lensRadius;
-let shadowed = 0;
-let strayed = 0;
-
-for (let offset = 0; offset < shaded.length; offset += 4) {
-  const darker =
-    unshaded[offset]! - shaded[offset]! > 6 &&
-    unshaded[offset + 1]! - shaded[offset + 1]! > 6 &&
-    unshaded[offset + 2]! - shaded[offset + 2]! > 6;
-
-  if (!darker) continue;
-
-  shadowed++;
-  const pixel = offset / 4;
-  const dx = (pixel % control.width) - control.width / 2;
-  const dy = Math.floor(pixel / control.width) - control.height / 2;
-
-  // The hole sits at the centre of the floor, so its shade belongs within a couple of horizons of the middle.
-  if (dx * dx + dy * dy > 150 * 150) strayed++;
-}
-
-if (shadowed < 300) throw new Error(`The hole cast no shadow on the paper: ${shadowed}`);
-
-if (strayed > 50) throw new Error(`The hole's shadow reached away from it: ${JSON.stringify({ shadowed, strayed })}`);
 
 // The hole bends the frame around it. Its lens off, the pixels near it move back and the far frame holds still.
 const bent = await capture(control);
@@ -440,8 +401,6 @@ console.log(
     bentPixels,
     bentFar,
     bentAt,
-    shadowed,
-    strayed,
     glyphPixels,
     burningPixels,
     bloomPixels,

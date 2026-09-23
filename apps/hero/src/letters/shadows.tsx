@@ -59,11 +59,10 @@ import { Title, ShadowView, TitleView } from './traits';
 import { RainView } from '../rain/traits';
 import { Time } from '../time/traits';
 import { letterActions } from './actions';
-import { uHoleBend, uHoleCamera } from '../black-hole/materials';
+import { uHoleBend } from '../black-hole/materials';
 import { plainCoverageOf, stirred } from './lens';
 import { SHADOW_CASTER_LAYER, SHADOW_LAMP, SHADOW_RECEIVER_Z } from './content';
 import { RobotView } from '../robot/traits';
-import { Collapse, type HoleState } from '../black-hole/traits';
 import type { World } from 'koota';
 
 /** Projection lamp above the title. Its offset makes lifted shadows spread down and left. */
@@ -75,15 +74,6 @@ const HEIGHT = 20;
 const RECEIVER_Z = SHADOW_RECEIVER_Z;
 /** Apparent slab thickness used by shadow marching and refraction. */
 const GLASS_DEPTH = 1.2;
-/**
- * How high over the paper the black hole casts, which is where it is drawn. The march's samples are spaced
- * quadratically, so reaching this far still leaves more than half of them under the letters. From up here the
- * lamp's slant throws its shadow well down and to the left of it, clear of the hole itself.
- */
-const HOLE_CAST_Z = 5;
-
-/** 0..1: how darkly the hole shades the paper. The finale check turns it off for its control. */
-export const uHoleShadow = uniform(1);
 /** Quadratic height samples concentrate shadow detail near the floor. */
 const MARCH_STEPS = 32;
 /** Blur levels for height-dependent penumbra sampling. */
@@ -275,32 +265,6 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     });
   }
 
-  // The hole swallows every ray that falls on it: a disk the size of its drawn core, black to the last and
-  // fading out over its outer half, with no tint so it pools no light either. Its own presence fades the disk in and out with the hole.
-  const uHolePresence = uniform(0);
-  const holeMaterial = new MeshBasicNodeMaterial({ name: 'glass-shadow-hole', side: DoubleSide });
-  holeMaterial.transparent = true;
-  holeMaterial.blending = NoBlending;
-  holeMaterial.depthWrite = true;
-  // Only the disk writes, so the quad's clear corners cannot punch the glass behind it out of the capture.
-  holeMaterial.alphaTest = 0.02;
-  holeMaterial.opacityNode = smoothstep(1, 0.45, positionGeometry.xy.length()).mul(uHolePresence).mul(uHoleShadow);
-  {
-    const weight = diffuseColor.a;
-    const height = positionWorld.z.sub(RECEIVER_Z).max(0);
-    holeMaterial.mrtNode = mrt({
-      output: vec4(0, 0, 0, 1).mul(weight),
-      distance: vec4(height, 1, 0, 1).mul(weight),
-      normal: vec4(0, 0, 1, 1).mul(weight),
-    });
-  }
-  // The unit quad spans minus one to one, so the disk's rim is the horizon once scaled.
-  const holeGeometry = new PlaneGeometry(2, 2);
-  const holeCaster = new Mesh(holeGeometry, holeMaterial);
-  holeCaster.frustumCulled = false;
-  holeCaster.visible = false;
-  sourceScene.add(holeCaster);
-
   // The receiver: the shadow marched toward the light, and the caustics laid back over it.
   const projectionMaterial = new MeshBasicNodeMaterial({
     name: 'glass-shadows',
@@ -394,10 +358,6 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     marchGeometry,
     sourceBlurs,
     casterMaterial,
-    holeCaster,
-    holeMaterial,
-    holeGeometry,
-    uHolePresence,
     /** Whether an opaque caster was drawn last time, so its leaving is a change too. */
     castersDrawn: false,
     /** Whether every caster has been drawn once, which compiles their programs during preparation. */
@@ -452,13 +412,7 @@ export function updateGlassShadows(world: World): void {
 
     const stirredLetters = stirred(state.letters, letters);
     // The robot is handed over even while it is hidden, so its caster can be drawn once to compile.
-    updateProjection(
-      state,
-      title.reach,
-      world.queryFirst(RobotView)?.get(RobotView)?.root,
-      world.get(Collapse)!.hole,
-      stirredLetters,
-    );
+    updateProjection(state, title.reach, world.queryFirst(RobotView)?.get(RobotView)?.root, stirredLetters);
   });
 }
 
@@ -571,7 +525,6 @@ function updateProjection(
   state: Projection,
   titleReach: number,
   caster: Object3D | undefined,
-  hole: HoleState,
   stirredLetters: boolean,
 ): void {
   const { scene, renderer, uLamp, uReach, source, sourceScene, caustic, causticScene, lightCamera, clear } = state;
@@ -643,27 +596,15 @@ function updateProjection(
     reach = Math.max(reach, (elements[14] ?? 0) + tilt - RECEIVER_Z + GLASS_DEPTH / 2);
   }
 
-  const { holeCaster } = state;
-  holeCaster.visible = (hole.beat === 'play' || hole.beat === 'open') && hole.presence > 0.01 && hole.horizon > 0.01;
-
-  if (holeCaster.visible) {
-    // Where the hole is drawn: its floor place carried up the camera's ray to the height it casts from.
-    const along = (uHoleCamera.value - HOLE_CAST_Z) / uHoleCamera.value;
-    holeCaster.position.set(hole.x * along, hole.y * along, HOLE_CAST_Z);
-    holeCaster.scale.setScalar(hole.horizon);
-    state.uHolePresence.value = Math.min(1, hole.presence);
-    reach = Math.max(reach, HOLE_CAST_Z - RECEIVER_Z + GLASS_DEPTH / 2);
-  }
-
-  // A caster on the move, and neither is ever still while it shows, redraws the capture; so does its leaving.
+  // A caster on the move, and it is never still while it shows, redraws the capture; so does its leaving.
   const casting = caster !== undefined && caster.visible;
   // Every caster is drawn once, even one not showing yet, so its program compiles during preparation rather than
   // when it first appears and the frame is already running.
   const warming = !state.castersBuilt && caster !== undefined;
 
-  if (casting || holeCaster.visible || warming || state.castersDrawn) moved = true;
+  if (casting || warming || state.castersDrawn) moved = true;
 
-  state.castersDrawn = casting || holeCaster.visible;
+  state.castersDrawn = casting;
   const reached = Math.max(reach, titleReach - RECEIVER_Z + GLASS_DEPTH / 2);
 
   if (!(Math.abs(uReach.value - reached) <= 1e-4)) {
@@ -684,14 +625,11 @@ function updateProjection(
     // Every caster is drawn once, even one not showing yet, so its program compiles here rather than when it
     // first appears. That draw is thrown away by the real one below, which follows it in the same frame.
     if (warming && caster !== undefined) {
-      const shownHole = holeCaster.visible;
       const shownCaster = caster.visible;
-      holeCaster.visible = true;
       caster.visible = true;
       renderer.setRenderTarget(source);
       renderer.render(sourceScene, lightCamera);
       drawCasters(state);
-      holeCaster.visible = shownHole;
       caster.visible = shownCaster;
       state.castersBuilt = true;
     }
@@ -742,8 +680,6 @@ function disposeProjection(state: Projection): void {
   state.marchMaterial.dispose();
   state.marchGeometry.dispose();
   state.casterMaterial.dispose();
-  state.holeMaterial.dispose();
-  state.holeGeometry.dispose();
 
   for (const node of state.blurs) node.dispose();
 
