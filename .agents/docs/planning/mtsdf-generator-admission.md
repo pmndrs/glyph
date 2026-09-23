@@ -118,4 +118,12 @@ The accepted admission evidence was produced by rebuilding and optimizing the Wa
 
 Dependency and generator admission are closed. Milestone 8 can recommend MSDF only after the fixed baker, payload, runtime shader, visual corpus, transforms, effects, and performance gates also close.
 
-The scalar production boundary is integrated. `pnpm scripts run glyph:mtsdf-generator-profile` refuses to publish timing when any of the seven independent candidate SHA-256 identities changes, then separates Wasm compilation, host initialization, first-corpus, and warm-corpus samples. The retained final SIMD decision additionally replayed a Fontations-emitted complete Inter request corpus through scalar, auto-vectorized, and explicit-four-lane Wasm modules. All three yielded 2,915 generated glyphs, 22 rejected non-rendering slots, checksum `a5a6aa6e`, and composite SHA-256 `f6381c2f…eef6`. Scalar remained fastest for the bounded seven-case corpus: 46.462 milliseconds in Node and 47.6 milliseconds in Chromium, versus 47.079/48.1 milliseconds for explicit SIMD. Scalar therefore remains the single production kernel; the rejected experiment variants and their closed runner are historical decision evidence rather than maintained alternate distributions.
+The scalar production boundary is integrated. `pnpm scripts run benchmark:labs-internal -- --suite mtsdf-generator`
+refuses to publish timing when any of the seven independent candidate SHA-256 identities changes, then separates Wasm
+compilation, host initialization, initialized-plus-corpus, and retained-generator corpus samples across fresh processes.
+The retained final SIMD decision additionally replayed a Fontations-emitted complete Inter request corpus through scalar,
+auto-vectorized, and explicit-four-lane Wasm modules. All three yielded 2,915 generated glyphs, 22 rejected non-rendering
+slots, checksum `a5a6aa6e`, and composite SHA-256 `f6381c2f…eef6`. Scalar remained fastest for the bounded seven-case
+corpus: 46.462 milliseconds in Node and 47.6 milliseconds in Chromium, versus 47.079/48.1 milliseconds for explicit
+SIMD. Scalar therefore remains the single production kernel; the rejected experiment variants and their closed runner
+are historical decision evidence rather than maintained alternate distributions.

@@ -25,11 +25,14 @@ sources:
     resource: decision-register.md
     title: 'Decision register'
   - id: rust-layout-benchmark
-    resource: '../../../packages/glyph/scripts/benchmark-rust-layout-engine.mjs'
-    title: 'Workflow glyph:rust-layout-benchmark'
+    resource: '../../../benches/labs-internal/engine.bench.ts'
+    title: 'Labs raw retained-engine benchmarks'
   - id: layout-benchmark
-    resource: '../../../packages/glyph/scripts/benchmark-paragraph-layout.mts'
-    title: 'Workflow glyph:layout-benchmark'
+    resource: '../../../benches/labs/package/layout.bench.ts'
+    title: 'Labs public layout benchmarks'
+  - id: retained-batch-benchmark
+    resource: '../../../benches/labs/package/batching.bench.ts'
+    title: 'Labs retained batch benchmarks'
   - id: harness-runner
     resource: '../../../benches/src/benchmark/runner.ts'
     title: 'Interactive and headless benchmark runner'
@@ -52,7 +55,8 @@ generated:
 
 # Benchmarks we can trust
 
-Status: draft; supersedes nothing until the retirement table below is executed
+Status: implemented for Node CPU timing retirement; the public-package smoke lane and workspace-only exhaustive lane are
+active, while browser observations, native/Worker profiles, payload gates, and conformance retain their separate owners
 Purpose: make a performance number in this repository mean "this change did that", and make the absence of a number mean "we could not tell".
 
 This plan owns the **core API measurement lane in Node**. The [benchmark plan](benchmark-plan.md) keeps ownership of the
@@ -63,7 +67,7 @@ browser lab, conformance, GPU timing, and payload; nothing here replaces it, and
 
 The complaint is drift, and drift has a specific cause here. Every timing number in the repository is a **median of correlated samples from one process**.
 
-[`glyph:rust-layout-benchmark`](../../../packages/glyph/scripts/benchmark-rust-layout-engine.mjs) defaults to `--warmup 8 --reps 31`: thirty-one repetitions inside a single Node process, sorted into a median, p95, and a relative standard deviation. Those thirty-one samples share one JIT state, one heap layout, and one GC history. Their spread measures how much the _loop_ varies once warm. It does not measure how much the _number_ varies when you run the command again — which is the only variance a reader actually cares about, because that is the variance a code change has to beat.
+The retired `glyph:rust-layout-benchmark` defaulted to `--warmup 8 --reps 31`: thirty-one repetitions inside a single Node process, sorted into a median, p95, and a relative standard deviation. Those thirty-one samples shared one JIT state, one heap layout, and one GC history. Their spread measured how much the _loop_ varied once warm. It did not measure how much the _number_ varied when the command ran again — which is the variance a code change has to beat.
 
 So `rsdPercent` reads low, the median looks precise to four decimals, and the number still moves between runs. The statistic is answering a different question than the one being asked of it.
 
@@ -74,7 +78,7 @@ The rest of the surface is weaker still:
 | [`runner.ts`](../../../benches/src/benchmark/runner.ts) via CI | 3, warmup 1               | median, p95                | none                                                |
 | `runtime-fallback-parity`, `source-outline-fidelity` probes    | 1, warmup 0               | none possible              | none                                                |
 | `benchmark:presentation-performance`                           | 1.5 s rAF window per cell | p95, max, slow-frame count | none — the 20 ms counter is printed, never asserted |
-| `glyph:layout-benchmark`                                       | 31, warmup 8              | median, p95, RSD           | none                                                |
+| retired `glyph:layout-benchmark`                               | 31, warmup 8              | median, p95, RSD           | none                                                |
 | `glyph:kernel-lab*`                                            | 101, warmup 40            | median                     | none                                                |
 
 Three facts follow, and all three are load-bearing:
@@ -221,9 +225,9 @@ Scope is the root Glyph API in Node against `@pmndrs/glyph`, the built-in `@pmnd
 
 Every measurement bench binds through the public Glyph/Three handle and retained paragraph surface. The fixture initializes `glyph`, creates one configured handle and named roots, loads an immutable font, and uses `measure()` and `glyphs()` for the pre-render query split. Renderer-integration measurements publish through `glyph.shape()` and synchronize the public Three objects; they do not construct internal engine, planner, or wire values. This prices the real ownership seam rather than a raw shaper shortcut.
 
-All eight paths run in plain Node against the packaged Wasm with no browser, canvas, or GPU. That is established, not assumed: `glyph:rust-layout-benchmark` drives the raw ABI in Node today, and `glyph:layout-benchmark` drives the full path including render-plan application in Node. The one Node-specific wrinkle is that the shaper defaults to `fetch`-ing its Wasm relative to the module URL, so the benches pass the Wasm path explicitly, as the existing fixture helper already does.
+All eight paths run in plain Node against the packaged Wasm with no browser, canvas, or GPU. The internal Labs engine suite drives the raw ABI, while the Labs public-layout and retained-batch files drive the full path including render-plan application. The one Node-specific wrinkle is that the shaper defaults to `fetch`-ing its Wasm relative to the module URL, so the internal workflow accepts an explicit `--wasm` path for candidate comparisons.
 
-Every bench states its unit of work. The fixture is the existing `paragraphTextForGlyphs` corpus at a pinned glyph count so the numbers stay comparable to the records being replaced, and the invalidation classes are kept apart rather than averaged — a principle already established in [`glyph:layout-benchmark`](../../../packages/glyph/scripts/benchmark-paragraph-layout.mts) and worth preserving verbatim: they invalidate different caches, so averaging them hides whichever one is slow.
+Every bench states its unit of work. The fixture is the existing `paragraphTextForGlyphs` corpus at a pinned glyph count so the numbers stay comparable to the records being replaced, and the invalidation classes are kept apart rather than averaged — a principle preserved by [`layout.bench.ts`](../../../benches/labs/package/layout.bench.ts): they invalidate different caches, so averaging them hides whichever one is slow.
 
 | #   | Path                          | Entry point                                                                                                               | Unit of work                                                                                                                        | Counts as a regression                                                                                                                       |
 | --- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -239,7 +243,7 @@ Every bench states its unit of work. The fixture is the existing `paragraphTextF
 
 Four of these are not merely being re-implemented — **they are unmeasured today at any level**, and finding that out is part of what this exercise bought:
 
-- **4b, materialized measurement.** No existing benchmark requests the layout-inspection semantic view. `glyph:rust-layout-benchmark`'s `measure-query` case runs at the measurement mask only, so the metrics-versus-materialization split that commit `ffe65e11` created has never been measured.
+- **4b, materialized measurement.** The raw engine `measure-query` case runs at the measurement mask only; materialized public inspection is measured separately by the package Labs `glyphs` cases.
 - **5, the frame wire compile.** It is pure, synchronous, and touches no Wasm, so it is trivially isolatable — and it has only ever been timed inside a window that also contained a Wasm call.
 - **7, the cost of `copyPublication()`.** Nothing prices the contiguous copy against borrowing and decoding in place, and nothing varies acknowledgement lag.
 - **2 on CJK.** Line breaking is only swept per corpus by the Rust script; the break-heavy CJK path is where a quadratic scan once hid, and it deserves a standing bench.
@@ -248,7 +252,7 @@ Four of these are not merely being re-implemented — **they are unmeasured toda
 
 These are the reasons a benchmark of this API can report a confident number that means nothing. Each has to be designed against, not discovered later.
 
-**Two cache layers sit between the bench and the engine.** `Paragraph` memoizes measurements and inspections in `Map`s keyed by the constraint, and returns the _identical object_ for a repeated equal constraint without touching Wasm at all. Behind that, Rust keeps one speculative transaction that survives a _different_ constraint and dies on a text or style change. Labs calls the yielded function thousands of times, so a bench written as `p.measure(sameConstraints)` or `p.glyphs(sameConstraints)` measures a `Map` lookup after its first iteration and will report picosecond-class timings with excellent stability. Every measure and glyphs bench must therefore invalidate deliberately — the existing [`glyph:layout-benchmark`](../../../packages/glyph/scripts/benchmark-paragraph-layout.mts) already does this correctly by using a constraint value no earlier repetition used, and that discipline carries over. Where invalidation is not possible without also measuring `update()`, the bench measures the pair and says so in its name.
+**Two cache layers sit between the bench and the engine.** `Paragraph` memoizes measurements and inspections in `Map`s keyed by the constraint, and returns the _identical object_ for a repeated equal constraint without touching Wasm at all. Behind that, Rust keeps one speculative transaction that survives a _different_ constraint and dies on a text or style change. Labs calls the yielded function thousands of times, so a bench written as `p.measure(sameConstraints)` or `p.glyphs(sameConstraints)` measures a `Map` lookup after its first iteration and will report picosecond-class timings with excellent stability. Every measure and glyphs bench must therefore invalidate deliberately — [`layout.bench.ts`](../../../benches/labs/package/layout.bench.ts) uses a constraint value no earlier iteration used. Where invalidation is not possible without also measuring `update()`, the bench measures the pair and says so in its name.
 
 **The positioned columns are expensive to even hold.** The inspection `glyphs()` returns carries twenty-one positioned properties — `inkBounds`, `x`, `y`, `glyphIds`, `clusters`, the per-line arrays. Any spread, `Object.keys`, `JSON.stringify`, deep-equal, or console log of one copies all of them. Since labs requires the measured function to return a value to defeat dead-code elimination, the returned sink must be a single eager scalar such as `m.contentWidth`, never the query result object itself. A bench that returns the object measures the opposite of what its name claims.
 
@@ -339,13 +343,15 @@ A slower comparison is not itself a process failure in Labs 0.9.0. The initial w
 
 ### Replaced by labs benches
 
-| Today                         | Why it moves                                                                                                                                                                                                                                                                      |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `glyph:rust-layout-benchmark` | 31 in-process reps → block medians; its eight invalidation cases map directly onto benches 1–7                                                                                                                                                                                    |
-| `glyph:layout-benchmark`      | same, for the public path; its invalidation-class separation is preserved. Its `/three` call site has already been re-pointed at the settled `Text.measure()`/`Text.glyphs()` split, and rewriting it onto `Paragraph` and labs together is still cheaper than repairing it twice |
-| `glyph:kernel-lab` (Node)     | 101 in-process samples with no significance test; scalar/auto/explicit SIMD variants become three benches compared pairwise                                                                                                                                                       |
+| Today                            | Why it moves                                                                                                                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `glyph:rust-layout-benchmark`    | **retired** after the internal Labs engine suite reproduced its retained-engine invalidation classes with selectable raster technique, corpus, glyph target, and Wasm artifact |
+| `glyph:layout-benchmark`         | **retired** after `layout.bench.ts` reproduced its 22k-glyph public invalidation classes and produced Labs records                                                             |
+| `glyph:retained-batch-benchmark` | **retired** after `batching.bench.ts` reproduced its 64/128/256/512 nested `Text` publication sweep, including exact one-draw and stable-glyph-count assertions                |
+| `glyph:kernel-lab` (Node)        | **retired** after the internal Labs kernel suite reproduced every scalar/auto/explicit operation at 22k and 86k target scales with output-hash and memory-growth checks        |
+| `glyph:mtsdf-generator-profile`  | **retired** after the internal Labs suite separated compile, initialization, initialized-plus-corpus, and retained-generator work while enforcing every oracle hash            |
 
-The fixture and corpus helpers (`paragraphTextForGlyphs`, `paragraph-benchmark-fixture.mts`) are reused unchanged. The workflows are retired only once their replacements produce records; the scripts are not deleted on the same commit that adds the benches.
+The fixture and corpus helpers are reused where their ownership still fits. Workflows are retired only after their replacements produce records; replacement and deletion land in separate commits.
 
 ### Kept unchanged
 
@@ -389,7 +395,7 @@ Stated plainly, because a benchmark suite that is trusted beyond its evidence is
 2. Land benches 1–3 and 7 against the existing fixture; confirm between-block spread is under 3.6 % on a maintainer machine, and raise `blocks` for any bench that is not.
 3. Land benches 4a/4b, 5, 6, and 8, including the exact-equality teardown assertions.
 4. Build the CI gate over `blocks.medians` and run it non-blocking on pull requests for long enough to measure its false-positive rate on no-op changes. Do not make it required before that number is known.
-5. Execute the retirement table; record the replacement in the decision register and amend D-160, which currently names `glyph:layout-benchmark` as the source of layout performance claims.
+5. Execute the retirement table; record each replacement in the decision register. The public layout, retained-batch, raw Rust, and Node kernel timers are retired.
 6. Re-pin the affected package concepts and run `docs:update` / `docs:check`.
 
 Step 4 is not optional. A gate whose false-positive rate is unknown will be disabled by the first person it blocks unfairly, and the repository will be back where it started — with benchmarks nobody trusts.

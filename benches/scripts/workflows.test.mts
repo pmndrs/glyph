@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url';
 
 import { forwardedWorkflowArguments, workflowCommandArguments } from './workflow-arguments.mts';
 import { hasVitexecFailure } from './workflow-output.mts';
+import { assertLabsResultHasNoErrors } from './support/labs-result.mts';
 import { LOOPBACK_HOST, selectLoopbackPort } from './support/loopback-port.mts';
+import { selectPackageLabsSuite } from './support/package-labs-suite.mts';
 import { packedArchiveDependency } from './support/packed-archive.mts';
 
 const execute = promisify(execFile);
@@ -37,6 +39,60 @@ test('treats Vitexec browser and injected-module errors as workflow failures', (
   assert.equal(hasVitexecFailure('logs:\n[log] presentation-ready'), false);
   assert.equal(hasVitexecFailure('logs:\n[error] injected probe failed'), true);
   assert.equal(hasVitexecFailure('logs:\n[page error] renderer failed'), true);
+});
+
+test('rejects benchmark-body errors even when Labs exits successfully', () => {
+  assert.doesNotThrow(() =>
+    assertLabsResultHasNoErrors({
+      files: [{ file: 'healthy.bench.ts', benchmarks: [{ runs: [{ name: 'healthy' }] }] }],
+    }),
+  );
+  assert.throws(
+    () =>
+      assertLabsResultHasNoErrors({
+        files: [
+          {
+            file: 'broken.bench.ts',
+            benchmarks: [{ alias: 'layout', runs: [{ name: 'suffix-edit', error: { message: 'memory grew' } }] }],
+          },
+        ],
+      }),
+    /broken\.bench\.ts \/ layout \/ suffix-edit: memory grew/u,
+  );
+  assert.throws(() => assertLabsResultHasNoErrors({ files: [] }), /did not contain any benchmark runs/u);
+});
+
+test('routes package Labs by event and one explicit pull-request label', () => {
+  assert.equal(selectPackageLabsSuite({ eventName: 'pull_request' }), 'smoke');
+  assert.equal(
+    selectPackageLabsSuite({ eventName: 'pull_request', labels: ['documentation', 'benchmark:layout'] }),
+    'layout',
+  );
+  assert.equal(
+    selectPackageLabsSuite({
+      eventName: 'pull_request',
+      labels: ['benchmark:measure', 'benchmark:full', 'benchmark:stress'],
+    }),
+    'full',
+  );
+  assert.equal(selectPackageLabsSuite({ eventName: 'push', ref: 'refs/heads/main' }), 'full');
+  assert.equal(selectPackageLabsSuite({ eventName: 'workflow_dispatch', requestedSuite: 'glyphs' }), 'glyphs');
+  assert.throws(
+    () =>
+      selectPackageLabsSuite({
+        eventName: 'pull_request',
+        labels: ['benchmark:layout', 'benchmark:measure'],
+      }),
+    /Select one focused benchmark label/u,
+  );
+  assert.throws(
+    () => selectPackageLabsSuite({ eventName: 'workflow_dispatch', requestedSuite: 'unknown' }),
+    /Unknown Package Labs suite/u,
+  );
+  assert.throws(
+    () => selectPackageLabsSuite({ eventName: 'pull_request', labels: ['benchmark:typo'] }),
+    /Unknown Package Labs suite/u,
+  );
 });
 
 test('forwards runner options in the position each runner parses', () => {

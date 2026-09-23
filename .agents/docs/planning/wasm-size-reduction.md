@@ -55,20 +55,20 @@ functionality, not to propose removing it.
 
 Post-`wasm-opt` section split for the shipped shaper:
 
-| Section | Bytes | Share | gzip |
-| ------- | ----: | ----: | ---: |
+| Section |   Bytes | Share |    gzip |
+| ------- | ------: | ----: | ------: |
 | `code`  | 899,942 | 80.2% | 343,873 |
-| `data`  | 220,094 | 19.6% | 84,768 |
+| `data`  | 220,094 | 19.6% |  84,768 |
 
 Pre-optimizer symbol attribution (code + data, 1,238,626 B):
 
-| Owner | Bytes | Share |
-| ----- | ----: | ----: |
+| Owner                                   |   Bytes | Share |
+| --------------------------------------- | ------: | ----: |
 | `pmndrs_glyph_shaper` (this repository) | 406,572 | 32.8% |
 | HarfRust (incl. generic instantiations) | 365,471 | 29.5% |
-| `.rodata` data segment | 227,710 | 18.4% |
-| `read-fonts` | 160,641 | 13.0% |
-| everything else | ~78,000 | 6.3% |
+| `.rodata` data segment                  | 227,710 | 18.4% |
+| `read-fonts`                            | 160,641 | 13.0% |
+| everything else                         | ~78,000 |  6.3% |
 
 The first row is the finding that reframes the problem. **Our own layout engine is the single
 largest block, larger than HarfRust.** Within it, `engine::state` alone is `128,705 B` — 14%
@@ -81,7 +81,7 @@ The upstream thread ends at "probably nothing we can do." That conclusion does n
 and it is important to say why rather than to inherit it.
 
 The thread is measuring `.data.rel.ro` in a **dynamically linked ELF shared object**. That
-section is a *relocation table*: for every `&'static str` in a static array, the linker emits
+section is a _relocation table_: for every `&'static str` in a static array, the linker emits
 an 8-byte pointer plus an 8-byte length that must be fixed up at load time. Wasm has no dynamic
 relocations. Static data is a data segment with immediate offsets, so the entire cost the thread
 was chasing does not exist in our artifact.
@@ -91,7 +91,7 @@ Two of the thread's incidental findings are confirmed absent here:
 - `read_fonts::tables::post::DEFAULT_GLYPH_NAMES` (fontations#1671) is **already dead-stripped**
   from the shaper — shaping never resolves glyph names.
 - The `tag_table` language strings are **not in `.rodata`** at all. HarfRust compiles them into
-  comparison *code*, which is why `tags_from_complex_language` shows up as 17,409 B of code.
+  comparison _code_, which is why `tags_from_complex_language` shows up as 17,409 B of code.
 
 What does transfer are the block sizes the thread surfaced. Those are priced below.
 
@@ -114,10 +114,10 @@ fn panic(_info: &core::panic::PanicInfo<'_>) -> ! {
 Every byte spent formatting a panic message is therefore provably unobservable. Removing it via
 `-Zbuild-std=core,alloc -Zunstable-options -Cpanic=immediate-abort`:
 
-| Build | raw | gzip | Brotli |
-| ----- | --: | ---: | -----: |
-| shipped (stable 1.97.1) | 1,122,345 | 432,771 | 345,445 |
-| nightly, no other change | 1,123,305 | 432,975 | — |
+| Build                     |           raw |        gzip |      Brotli |
+| ------------------------- | ------------: | ----------: | ----------: |
+| shipped (stable 1.97.1)   |     1,122,345 |     432,771 |     345,445 |
+| nightly, no other change  |     1,123,305 |     432,975 |           — |
 | `-Cpanic=immediate-abort` | **1,034,100** | **398,901** | **313,306** |
 
 **−88,245 raw / −33,870 gzip / −32,139 Brotli, with no behaviour change.**
@@ -131,10 +131,10 @@ A stable-toolchain equivalent was built and measured: a Binaryen post-pass that 
 bodies of the ten `core::panicking::*` / `rust_begin_unwind` entry points with `unreachable`
 before the D-244 sandwich, so `-Oz` collects the formatting graph.
 
-| Path | raw | gzip | share of the nightly win |
-| ---- | --: | ---: | -----------------------: |
-| stable + Binaryen panic stub | 1,093,370 | 420,069 | 33% raw / 37% gzip |
-| nightly `-Cpanic=immediate-abort` | 1,034,100 | 398,901 | 100% |
+| Path                              |       raw |    gzip | share of the nightly win |
+| --------------------------------- | --------: | ------: | -----------------------: |
+| stable + Binaryen panic stub      | 1,093,370 | 420,069 |       33% raw / 37% gzip |
+| nightly `-Cpanic=immediate-abort` | 1,034,100 | 398,901 |                     100% |
 
 The post-pass recovers only about a third. The gap is caller-side codegen: `immediate-abort`
 also stops emitting the `Location` construction and argument marshalling at every panic site,
@@ -162,14 +162,14 @@ is unacceptable, the stable post-pass is the permanent answer at a third of the 
 
 Each cut is measured on top of lever 1 (control: 1,034,100 / 398,892).
 
-| Cut | raw | Δ raw | gzip | Δ gzip |
-| --- | --: | ----: | ---: | -----: |
-| control | 1,034,100 | — | 398,892 | — |
-| AAT — `morx`/`kerx`/`trak`/`ankr`/`feat`, **legacy `kern` retained** | 977,913 | −56,187 | 380,350 | −18,542 |
-| AAT — legacy `kern` dropped as well | 975,276 | −58,824 | 379,351 | −19,541 |
-| `tag_table::tags_from_complex_language` | 1,020,037 | −14,063 | 395,716 | −3,176 |
-| complex-script shapers (Indic, Khmer, Myanmar, USE, Arabic, Hangul, Hebrew, Thai, vowel constraints) | 908,286 | −125,814 | 359,248 | −39,644 |
-| all three | **835,403** | **−198,697** | **336,541** | **−62,351** |
+| Cut                                                                                                  |         raw |        Δ raw |        gzip |      Δ gzip |
+| ---------------------------------------------------------------------------------------------------- | ----------: | -----------: | ----------: | ----------: |
+| control                                                                                              |   1,034,100 |            — |     398,892 |           — |
+| AAT — `morx`/`kerx`/`trak`/`ankr`/`feat`, **legacy `kern` retained**                                 |     977,913 |      −56,187 |     380,350 |     −18,542 |
+| AAT — legacy `kern` dropped as well                                                                  |     975,276 |      −58,824 |     379,351 |     −19,541 |
+| `tag_table::tags_from_complex_language`                                                              |   1,020,037 |      −14,063 |     395,716 |      −3,176 |
+| complex-script shapers (Indic, Khmer, Myanmar, USE, Arabic, Hangul, Hebrew, Thai, vowel constraints) |     908,286 |     −125,814 |     359,248 |     −39,644 |
+| all three                                                                                            | **835,403** | **−198,697** | **336,541** | **−62,351** |
 
 The two AAT rows must not be conflated. HarfRust reaches the legacy OpenType `kern` table through
 `AatCache`/`AatTables` even though `kern` is not an AAT-only table, so the naive "cut AAT" patch
@@ -190,10 +190,10 @@ the same mechanism and has the same limit. `twiggy` is analysis-only and cannot 
 
 The limit is not the tooling — it is whether LTO left a seam:
 
-| Block | survives LTO as a callable seam? | post-build Δ raw | vs source patch |
-| ----- | -------------------------------- | ---------------: | --------------: |
-| `tags_from_complex_language` | yes, one function | **−18,234** (gzip −4,694) | **fully recoverable, no fork** |
-| AAT | only `layout_morx_table::apply` | −17,142 (gzip −5,355) | 31% |
+| Block                        | survives LTO as a callable seam? |          post-build Δ raw |                vs source patch |
+| ---------------------------- | -------------------------------- | ------------------------: | -----------------------------: |
+| `tags_from_complex_language` | yes, one function                | **−18,234** (gzip −4,694) | **fully recoverable, no fork** |
+| AAT                          | only `layout_morx_table::apply`  |     −17,142 (gzip −5,355) |                            31% |
 
 `tags_from_complex_language` is a single leaf function and is strippable from the shipped
 artifact today with no HarfRust change at all — but **stripping it is not unconditionally
@@ -202,8 +202,8 @@ behaviour-preserving**, and the language payload is what makes it so. See below.
 ### 2b. The language path, and why the payload unlocks it
 
 `language` is a public style property (`text-properties.ts:59`), optional and unset by default,
-plumbed through the wire to the HarfRust plan (`lib.rs:427`). So the default path never *calls*
-language resolution, but always *links* it.
+plumbed through the wire to the HarfRust plan (`lib.rs:427`). So the default path never _calls_
+language resolution, but always _links_ it.
 
 HarfRust resolves in two stages (`hb/tag.rs:189`): `tags_from_complex_language` first — a
 17,409 B `match` handling multi-subtag cases like `zh-Hant → ZHT`, `sr-Latn`, `-fonnapa` — then a
@@ -222,10 +222,10 @@ tag resolution as a data table — which is the representation we want regardles
 hands HarfRust `zh-x-hbotZHT`. Resolution inside HarfRust then becomes provably dead code rather
 than merely unused, and stripping it is a no-op by construction.
 
-| Scope | Δ raw | Δ gzip | reachable how |
-| ----- | ----: | -----: | ------------- |
-| `tags_from_complex_language` only | −14,063 (src) / **−18,234** (post-build) | −3,176 / **−4,694** | post-build stub, no fork |
-| **all language resolution** (adds the 1,662-entry table) | **−27,912** | **−10,511** | needs an `#[inline(never)]` seam |
+| Scope                                                    |                                    Δ raw |              Δ gzip | reachable how                    |
+| -------------------------------------------------------- | ---------------------------------------: | ------------------: | -------------------------------- |
+| `tags_from_complex_language` only                        | −14,063 (src) / **−18,234** (post-build) | −3,176 / **−4,694** | post-build stub, no fork         |
+| **all language resolution** (adds the 1,662-entry table) |                              **−27,912** |         **−10,511** | needs an `#[inline(never)]` seam |
 
 The full bypass is worth roughly **twice** the complex function alone. Post-build tooling reaches
 only the first row, because `tags_from_language` and the `OPEN_TYPE_LANGUAGES` binary search were
@@ -248,31 +248,31 @@ permanent parallel codebase.
 
 `--converge`, `--gufa`, `--code-folding`, `--dae-optimizing`, `--signature-pruning`, and
 `--signature-refining` were each measured against the D-244 sandwich. Every variant lands within
-±100 bytes, and `--converge` makes gzip marginally *worse*. This confirms D-244 and closes the
+±100 bytes, and `--converge` makes gzip marginally _worse_. This confirms D-244 and closes the
 pass-ordering lever. D-242 already closed `opt-level`.
 
 ### 4. Static Unicode tables in this repository
 
 Our own generated tables, measured from their declarations:
 
-| Table | Bytes |
-| ----- | ----: |
-| `SCRIPT_EXTENSION_END_VALUES` `[u32; 3,764]` | 15,056 |
-| `BIDI_CLASS_RANGES` `[(u32,u32,BidiClass); 1,267]` | 15,204 |
-| `SCRIPT_END_VALUES` `[u32; 3,434]` | 13,736 |
-| `LINE_BREAK_END_VALUES` `[u32; 5,624]` | 22,496 |
-| `SCRIPT_EXTENSION_TAGS` `[u32; 702]` | 2,808 |
-| `SCRIPT_EXTENSION_OFFSETS` `[u32; 285]` | 1,140 |
-| `BIDI_BRACKETS` `[(u32,u32,bool); 128]` | 1,152 |
-| **total** | **71,592** |
+| Table                                              |      Bytes |
+| -------------------------------------------------- | ---------: |
+| `SCRIPT_EXTENSION_END_VALUES` `[u32; 3,764]`       |     15,056 |
+| `BIDI_CLASS_RANGES` `[(u32,u32,BidiClass); 1,267]` |     15,204 |
+| `SCRIPT_END_VALUES` `[u32; 3,434]`                 |     13,736 |
+| `LINE_BREAK_END_VALUES` `[u32; 5,624]`             |     22,496 |
+| `SCRIPT_EXTENSION_TAGS` `[u32; 702]`               |      2,808 |
+| `SCRIPT_EXTENSION_OFFSETS` `[u32; 285]`            |      1,140 |
+| `BIDI_BRACKETS` `[(u32,u32,bool); 128]`            |      1,152 |
+| **total**                                          | **71,592** |
 
 That is 45% of the `.rodata` remaining after every HarfRust cut. The encoding is naive: a flat
 `u32` per boundary and a full 4-byte FourCC per script, repeated for every range. A delta-varint
 boundary stream plus a byte index into a deduplicated tag table measures, on `SCRIPT_END_VALUES`:
 
-| Encoding | raw | gzip |
-| -------- | --: | ---: |
-| current `[u32]` | 13,736 | 4,423 |
+| Encoding                                      |       raw |      gzip |
+| --------------------------------------------- | --------: | --------: |
+| current `[u32]`                               |    13,736 |     4,423 |
 | delta-varint + byte index (175 distinct tags) | **4,225** | **2,602** |
 
 −69% raw, −41% gzip, and it applies to every table in the list.
@@ -299,7 +299,7 @@ in cold-start, which is already a reported lane, so a regression there would sho
 ## The staged-table model
 
 Levers 1–4 are worth roughly 300 KB raw. They do not by themselves answer the "one runtime"
-question, because the complex-script cut in lever 2 removes *behaviour*, not just data. The
+question, because the complex-script cut in lever 2 removes _behaviour_, not just data. The
 architecture that keeps one runtime is to stop compiling script-specific mass into the module
 and start delivering it beside the font.
 
@@ -360,11 +360,11 @@ dependency left at `3`**. It is reachable on the stable toolchain with
 
 The size half is deterministic and stands:
 
-| | raw | gzip |
-| --- | --: | ---: |
-| engine=3 (shipped) | 1,122,345 | 432,771 |
-| engine=z | 1,013,270 | 396,702 |
-| | **−109,075 (−9.7%)** | **−36,069 (−8.3%)** |
+|                    |                  raw |                gzip |
+| ------------------ | -------------------: | ------------------: |
+| engine=3 (shipped) |            1,122,345 |             432,771 |
+| engine=z           |            1,013,270 |             396,702 |
+|                    | **−109,075 (−9.7%)** | **−36,069 (−8.3%)** |
 
 That is a larger byte win than the nightly panic lever, from one profile line on stable.
 
@@ -387,8 +387,8 @@ below exists because of it.
 3. 8 warmup / ≥31 measured, comparing medians only. `column-resize` and `localized-edit` ran at
    46% and 70% RSD even on a quiet host, so single samples in those lanes mean nothing; `no-op`
    and `measure-query` are the tight lanes.
-4. `benchmark-rust-layout-engine.mjs` accepts `--wasm <path>`, so candidates are compared without
-   rebuilding `dist`.
+4. `benchmark:labs-internal -- --suite engine --wasm <path>` accepts an explicit shaper artifact, so candidates are
+   compared without rebuilding `dist`.
 
 Until that runs, the standing prior is D-242's: size levels regressed shaping-bound lanes by
 22–98%, and warm planner lanes stayed within noise only while the engine crate kept `3`. The
@@ -413,11 +413,11 @@ and should be priced before any upstream HarfRust fork is contemplated.
 (422,538 → 1,097,702) is fully explained: the Wasm build invocation gained
 `--features subsetting`, where `subsetting = ["std", "dep:skera"]`.
 
-| Build | raw | gzip |
-| ----- | --: | ---: |
-| core (`no_std`, no subsetting) | 488,569 | 171,246 |
-| `+ std` | 550,492 | 189,286 |
-| `+ skera` (shipped) | 1,082,576 | 386,748 |
+| Build                          |       raw |    gzip |
+| ------------------------------ | --------: | ------: |
+| core (`no_std`, no subsetting) |   488,569 | 171,246 |
+| `+ std`                        |   550,492 | 189,286 |
+| `+ skera` (shipped)            | 1,082,576 | 386,748 |
 
 `std` costs `+61,923`; **skera costs `+532,084` raw / `+197,462` gzip.** `read-fonts` is 43.4%
 of the artifact, and `read_fonts::ps::cs` — the CFF charstring interpreter — is `177,970 B` of
@@ -435,15 +435,15 @@ is a prerequisite for any shared-artifact consolidation.
 
 ## Sequencing
 
-| Order | Work | Measured value | Gate |
-| ----- | ---- | -------------- | ---- |
-| 1 | Panic machinery removal | −88,245 raw / −33,870 gzip on nightly; −28,975 / −12,702 via the stable post-pass (shaper alone; applies to all five artifacts) | nightly pin decision, weighed against the 2.7× gap |
-| 2 | Lazy subsetting module | −593,743 raw / −215,502 gzip on the default baker download | public export surface change |
-| 3 | Language payload owns BCP-47 → OT tags; emit `-x-hbot`, then strip resolution | −18,234 raw / −4,694 gzip post-build; **−27,912 / −10,511** with one `#[inline(never)]` | the payload must land first — stripping before it silently degrades `zh-Hant` |
-| 4 | Unicode table re-encoding, decode at init | ~−45,000 raw / ~−18,000 gzip estimated from the measured `SCRIPT_END_VALUES` ratio | cold-start lane must hold; costs ~71,592 B of heap |
-| 5 | `engine::state` size audit | unpriced; 406,572 B surface | none — pure measurement first |
-| 6 | AAT removal | −56,187 raw / −18,542 gzip (**legacy `kern` retained**) | 31% post-build; the rest needs an `aat` cargo feature upstream or in a fork |
-| 7 | Data-driven syllabic interpreter | unlocks −125,814 raw / −39,644 gzip as payload | correctness parity against the HarfBuzz oracle |
+| Order | Work                                                                          | Measured value                                                                                                                  | Gate                                                                          |
+| ----- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| 1     | Panic machinery removal                                                       | −88,245 raw / −33,870 gzip on nightly; −28,975 / −12,702 via the stable post-pass (shaper alone; applies to all five artifacts) | nightly pin decision, weighed against the 2.7× gap                            |
+| 2     | Lazy subsetting module                                                        | −593,743 raw / −215,502 gzip on the default baker download                                                                      | public export surface change                                                  |
+| 3     | Language payload owns BCP-47 → OT tags; emit `-x-hbot`, then strip resolution | −18,234 raw / −4,694 gzip post-build; **−27,912 / −10,511** with one `#[inline(never)]`                                         | the payload must land first — stripping before it silently degrades `zh-Hant` |
+| 4     | Unicode table re-encoding, decode at init                                     | ~−45,000 raw / ~−18,000 gzip estimated from the measured `SCRIPT_END_VALUES` ratio                                              | cold-start lane must hold; costs ~71,592 B of heap                            |
+| 5     | `engine::state` size audit                                                    | unpriced; 406,572 B surface                                                                                                     | none — pure measurement first                                                 |
+| 6     | AAT removal                                                                   | −56,187 raw / −18,542 gzip (**legacy `kern` retained**)                                                                         | 31% post-build; the rest needs an `aat` cargo feature upstream or in a fork   |
+| 7     | Data-driven syllabic interpreter                                              | unlocks −125,814 raw / −39,644 gzip as payload                                                                                  | correctness parity against the HarfBuzz oracle                                |
 
 Steps 1–4 need no HarfRust source change (step 3 gets two-thirds of its value without one, and
 all of it with a single `#[inline(never)]`). Step 3 is the first place the external-payload
