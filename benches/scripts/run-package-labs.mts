@@ -123,7 +123,7 @@ async function installArtifact(name: string, requested: string, root: string): P
         name: `glyph-labs-${name}`,
         private: true,
         type: 'module',
-        dependencies: { '@pmndrs/glyph': normalized.spec, three: '0.185.1' },
+        dependencies: { '@pmndrs/glyph': normalized.spec, three: '0.185.1', typegpu: '0.12.5' },
       },
       null,
       2,
@@ -182,6 +182,7 @@ async function resolveRegistryVersion(requested: string): Promise<string> {
 async function runLabs(name: string, packageRoot: string, blocks: number, suite: PackageLabsSuite): Promise<void> {
   const selection = suite === 'full' ? [] : [`@${suite}`];
   await run(labsExecutable, [...selection, '--name', name, '--force', '--blocks', String(blocks)], benchesRoot, false, {
+    GLYPH_LABS_ARTIFACT_ROLE: name,
     GLYPH_LABS_PACKAGE_ROOT: packageRoot,
   });
   await assertLabsResultSucceeded(resolve(labsResults, `${name}.json`));

@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:244433741b243b3453bf13ee156b48117b4c8d0af09b48a13f633e88a8b1a717'
+source_digest: 'sha256:ab4c9d56439430a1be239e5caac04542ddfa8265005d5fc3515f43c4ce423fe6'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1733,6 +1733,13 @@ updates reuse CPU storage, GPU allocations, and unchanged draw bindings; uploads
 to 32 ranges per buffer. Resizing replaces storage, and discard releases staged allocations without changing accepted
 bytes. A real-engine integration test checks localized edits, allocation and upload costs, rejection, and cold-publication
 parity. These are structural cost checks, not GPU timing claims.
+Position is renderer-owned uniform state. A position-only `TypeGpuText.update()` validates and writes that existing
+uniform without constructing merged semantic state, staging a controller update, entering Wasm, or publishing renderer
+commands. A packed-artifact Labs comparison over 1,000 moving labels improves `4.85 ms` to `0.363 ms` p50 (-92.5%,
+`p<.001`, 95% CI -92.8..-92.4%). Normalized Three updates remain neutral, and the complete cold 1,000-label lifecycle
+moves by +0.4%, below the five-percent decision threshold. A rejection-injected integration test proves position remains
+visible while the semantic root stays idle. The Labs host is deterministic and isolates CPU publication overhead; its
+uniform stub does not claim the absolute cost of a hardware `queue.writeBuffer` call.
 The focused TypeGPU suite checks real engine publications, named-root isolation, failed input, updates, and disposal.
 The browser probe renders all three formats, checks nonzero alpha, updates, idle frames, empty text, and shared-pass use.
 It also verifies uniform-driven perspective and color changes without reshaping, fragment-position access, depth
