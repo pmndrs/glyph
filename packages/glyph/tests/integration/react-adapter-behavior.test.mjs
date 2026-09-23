@@ -1,8 +1,10 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
 import { createElement, Suspense } from 'react';
 import { create, act } from '@react-three/test-renderer/webgpu';
 import { glyph } from '@pmndrs/glyph';
 import { Text, TextGroup } from '@pmndrs/glyph/react';
-import { adapterBehavior } from '../support/adapter-behavior.mjs';
+import { adapterBehavior, adapterFont } from '../support/adapter-behavior.mjs';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 globalThis.self ??= globalThis;
@@ -10,7 +12,7 @@ globalThis.requestAnimationFrame ??= () => 0;
 globalThis.cancelAnimationFrame ??= () => undefined;
 await glyph.init();
 
-adapterBehavior('React', async (initial) => {
+async function mountReactAdapter(initial) {
   let object;
   let groupObject;
   let requests = 0;
@@ -69,4 +71,63 @@ adapterBehavior('React', async (initial) => {
     },
     unmount: () => renderer.unmount(),
   };
+}
+
+adapterBehavior('React', mountReactAdapter);
+
+test('React delegates fresh props after caller-owned input mutates in place', async () => {
+  const font = await adapterFont();
+  const style = { fontSize: 16, decoration: { underline: true } };
+  const initial = { font: font.face, text: 'authoritative state', style };
+  const host = await mountReactAdapter(initial);
+  try {
+    style.fontSize = 48;
+    style.decoration.underline = false;
+    await host.update(initial);
+    assert.deepEqual(
+      host.text.style,
+      { fontSize: 16, decoration: { underline: true } },
+      'mutating stable React props must not rewrite accepted engine state',
+    );
+
+    await host.update({
+      ...initial,
+      style: { fontSize: 48, decoration: { underline: false } },
+    });
+    assert.deepEqual(
+      host.text.style,
+      { fontSize: 48, decoration: { underline: false } },
+      'a fresh legitimate update must not be swallowed by mutated caller input',
+    );
+  } finally {
+    await host.unmount();
+    font.dispose();
+  }
+});
+
+test('React does not let a mutated nested span swallow a fresh update', async () => {
+  const font = await adapterFont();
+  const decoration = { underline: true };
+  const nested = createElement(Text, { style: { decoration } }, 'nested span');
+  const initial = { font: font.face, text: nested };
+  const host = await mountReactAdapter(initial);
+  try {
+    const accepted = host.text.measure();
+    decoration.underline = false;
+    await host.update(initial);
+    assert.equal(host.text.measure(), accepted, 'mutating stable nested props must not invalidate accepted state');
+
+    await host.update({
+      ...initial,
+      text: createElement(Text, { style: { decoration: { underline: false } } }, 'nested span'),
+    });
+    assert.notEqual(
+      host.text.measure(),
+      accepted,
+      'a fresh nested update must not be swallowed by mutated caller input',
+    );
+  } finally {
+    await host.unmount();
+    font.dispose();
+  }
 });

@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -22,11 +23,26 @@ const typeGpuPackage = (await import(
 const corePackage = (await import(
   pathToFileURL(resolve(packageRoot, 'dist/core.js')).href
 )) as typeof import('@pmndrs/glyph/core');
+interface ReactiveSnapshotPackage {
+  snapshotReactivePropertyList<Value extends object>(value: unknown, label: string, previous?: Value): Value;
+}
 
-const { bitmap, glyph } = glyphPackage;
+let reactiveSnapshotPackage: ReactiveSnapshotPackage;
+const reactiveSnapshotPath = resolve(packageRoot, 'dist/vue/internal/property-snapshot.js');
+if (existsSync(reactiveSnapshotPath)) {
+  reactiveSnapshotPackage = (await import(pathToFileURL(reactiveSnapshotPath).href)) as ReactiveSnapshotPackage;
+} else {
+  const previous = (await import(pathToFileURL(resolve(packageRoot, 'dist/internal/desired-text.js')).href)) as {
+    snapshotPropertyList<Value extends object>(value: unknown, label: string, prior?: Value): Value;
+  };
+  reactiveSnapshotPackage = { snapshotReactivePropertyList: previous.snapshotPropertyList };
+}
+
+const { bitmap, glyph, span, txt } = glyphPackage;
 const { defineThreeConfig } = threePackage;
 const { defineTypeGpuConfig } = typeGpuPackage;
 const { resourceLease } = corePackage;
+const { snapshotReactivePropertyList } = reactiveSnapshotPackage;
 const fontBytes = await readFile(new URL('../fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url));
 
 await glyph.init();
@@ -37,22 +53,34 @@ await font.load();
 
 let nextHandle = 1;
 
-function createLabels(count: number) {
+function formattedLabel(text: string) {
+  return txt`${span({ color: '#ffffff', decoration: { underline: true } })`${text.slice(0, 5)}`}${text.slice(5)}`;
+}
+
+function createLabels(count: number, content: 'plain' | 'styled-flow' = 'plain') {
   const root = glyph.handle(
     `labs:adapter-publication:${String(nextHandle++)}`,
     defineThreeConfig({ capacity: { size: count * 16, policy: 'grow' } }),
   );
   const textGroup = root.createTextGroup();
   const scene = new THREE.Scene();
-  const labels = Array.from({ length: count }, (_, index) =>
-    root.createText({
+  const labels = Array.from({ length: count }, (_, index) => {
+    const text = `label ${String(index).padStart(4, '0')}`;
+    return root.createText({
       font,
-      text: `label ${String(index).padStart(4, '0')}`,
+      text: content === 'plain' ? text : formattedLabel(text),
       style: { fontSize: 16 },
       layout: { wrap: 'word' },
       constraints: { width: { mode: 'exact', size: 160 } },
-    }),
-  );
+      ...(content === 'plain'
+        ? {}
+        : {
+            flow: {
+              regions: [{ key: 'main', shape: { kind: 'rectangle' as const, bounds: [0, 0, 160, 64] as const } }],
+            },
+          }),
+    });
+  });
   textGroup.add(...labels);
   scene.add(textGroup);
   scene.updateMatrixWorld(true);
@@ -156,10 +184,75 @@ group('allocation-light adapter publication @publication', () => {
     disposeLabels(created);
   });
 
+  bench('reuse 1000 unchanged Vue property snapshots @vue', function* () {
+    const count = 1_000;
+    const inputs = Array.from({ length: count }, (_, index) => [
+      { fontSize: 16 },
+      false,
+      { color: index % 2 === 0 ? '#ffffff' : '#eeeeee', decoration: { underline: true } },
+    ]);
+    const snapshots = inputs.map((input) => snapshotReactivePropertyList(input, 'Labs text style'));
+
+    const reused = yield () => {
+      let reusedCount = 0;
+      for (let index = 0; index < inputs.length; index++) {
+        const previous = snapshots[index]!;
+        const next = snapshotReactivePropertyList(inputs[index], 'Labs text style', previous);
+        if (next === previous) reusedCount++;
+        snapshots[index] = next;
+      }
+      return reusedCount;
+    };
+    if (process.env.GLYPH_LABS_ARTIFACT_ROLE === 'baseline') assert.equal(reused === 0 || reused === count, true);
+    else assert.equal(reused, count);
+  });
+
+  bench('normalize 1000 equivalent formatted flow updates @normalization', function* () {
+    const count = 1_000;
+    const created = createLabels(count);
+    const desired = [0, 1].map(() =>
+      created.labels.map((label) => ({
+        text: formattedLabel(label.text),
+        style: { fontSize: 16 },
+        layout: { wrap: 'word' as const },
+        constraints: { width: { mode: 'exact' as const, size: 160 } },
+        flow: {
+          regions: [{ key: 'main', shape: { kind: 'rectangle' as const, bounds: [0, 0, 160, 64] as const } }],
+        },
+      })),
+    );
+    let selected = 0;
+
+    const textCount = yield () => {
+      selected = selected === 0 ? 1 : 0;
+      const next = desired[selected]!;
+      for (let index = 0; index < created.labels.length; index++) {
+        created.labels[index]!.set(next[index]!);
+      }
+      created.scene.updateMatrixWorld(true);
+      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      return created.textGroup.textCount;
+    };
+    assert.equal(textCount, count);
+
+    disposeLabels(created);
+  });
+
   bench('create, first-publish, and dispose 1000-label root @cold', function* () {
     const count = 1_000;
     const textCount = yield () => {
       const created = createLabels(count);
+      const published = created.textGroup.textCount;
+      disposeLabels(created);
+      return published;
+    };
+    assert.equal(textCount, count);
+  });
+
+  bench('create, first-publish, and dispose 1000 styled-flow labels @cold-spans', function* () {
+    const count = 1_000;
+    const textCount = yield () => {
+      const created = createLabels(count, 'styled-flow');
       const published = created.textGroup.textCount;
       disposeLabels(created);
       return published;

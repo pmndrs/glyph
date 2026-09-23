@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:ab4c9d56439430a1be239e5caac04542ddfa8265005d5fc3515f43c4ce423fe6'
+source_digest: 'sha256:3792ebe0fb4506d7196cf0f31414d9e6ad7c9a0eb7a11001890172c16a8a5848'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -346,11 +346,15 @@ missing loads together, and keeps the current paragraph while a later selection 
 `{ font, error, ready }` shallow refs plus a promise for async setup; the format leaves compose it exactly like the
 React hooks. See [Vue and TresJS font loading](../guides/vue.md).
 
-Both component adapters snapshot paragraph property data and treat each committed prop set as complete desired state:
-removing style, layout, constraints, flow, material, or raster pixel ratio restores the corresponding default. Vue reads
-through nested reactive records while taking those snapshots, so in-place changes trigger updates without retaining
-mutable comparison state. `TextGroup` material and render order follow the same rule through one shared imperative
-apply step rather than framework prop diffing, so removing either restores the Three default. Paragraph and group
+Both component adapters treat each committed prop set as complete desired state: removing style, layout, constraints,
+flow, material, or raster pixel ratio restores the corresponding default. React and Vue pass that state through Three's
+canonical framework-update path, which normalizes it once, reuses equal package-owned property, span, and flow snapshots,
+and reports whether the accepted revision changed. Neither adapter retains a caller-owned applied-state cache, so an ignored
+in-place mutation cannot swallow a later valid immutable update. Vue still detaches nested reactive records before the
+call so proxy mutation cannot rewrite a package-owned snapshot; Three adopts equal records without another clone.
+Neither adapter mutates a render-time React ref or treats object identity as paragraph correctness. `TextGroup` material
+and render order follow the same rule through one shared
+imperative apply step rather than framework prop diffing, so removing either restores the Three default. Paragraph and group
 updates request a frame on demand-rendered canvases only when the desired snapshot changed; a re-render with identical
 props requests nothing. A pending Vue font switch keeps the current Three object and its leases until replacement fonts
 are ready; constructor arguments remain valid for that mounted object's lifetime. React retains its ordinary Suspense
@@ -358,9 +362,13 @@ lifecycle.
 
 `pnpm scripts run glyph:adapters-check` runs the shared React/Vue behavior cases and each framework's lifecycle tests
 against a freshly built distribution, plus adapter formatting, lint, and source declaration checks. Shared cases cover
-prop removal, nested property replacement, frame requests with an identical-snapshot negative control, flow retention
-and removal, group material and render-order removal, loaded-to-pending font switches, and lease disposal; Vue also
-proves in-place reactive updates. Three's `Text.set({ material: undefined })` explicitly clears an override.
+prop removal, nested property replacement, presentation-only changes, equivalent PropertyList shapes, malformed property
+input, frame requests with an identical-snapshot negative control that also retains flow and measurement identity, flow
+retention and removal, group material and render-order removal, loaded-to-pending font switches, and lease disposal. Vue
+additionally proves a reuse hit followed by
+in-place nested reactive updates. React additionally proves that mutating stable caller input cannot poison the accepted
+state used by a later fresh update. Three's
+`Text.set({ material: undefined })` explicitly clears an override.
 
 The public `ThreeRoot` contract stops at that retained scene API: identity and disposal, Text/TextGroup construction,
 counts, and mutable material presentation. The renderer draw object, discovered Three Scene, root services, command

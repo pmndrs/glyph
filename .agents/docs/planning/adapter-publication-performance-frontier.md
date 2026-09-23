@@ -49,15 +49,20 @@ This is both a performance and correctness contract. Duplicate representations c
 and obscure which layer owns an update. The retained engine and borrowed publication arena already provide the mechanisms
 needed to avoid that duplication.[^render-planner][^layout-query-view]
 
-## Remaining frontier
+## Current frontier
 
-The repository still contains several paths where host work exceeds this contract:
+The current PR stack has removed complete-state reconstruction for normalized no-ops, kept Three order-only publication
+out of transform work, kept TypeGPU position-only changes out of semantic publication, and removed framework shadow
+normalization. React and Vue now submit complete desired state through Three's authoritative normalizer, which reuses equal
+property and span snapshots and reports whether the accepted revision changed. Neither adapter retains a caller-owned
+accepted-state mirror; Vue retains only the detached reactive snapshots required by its mutable proxy contract. The
+existing `withGlyphs` path already starts sparse and promotes only a repeated or explicit inspection.
 
-- constraints and style updates reconstruct complete desired-text state instead of publishing compact changed fields;
-- Three order-only realization copies transform tables and can upload more matrix data than the changed order requires;
-- TypeGPU position-only updates still enter semantic engine work, and TypeGPU patch realization copies payloads and maps;
-- React and Vue snapshots allocate before equality can prove that nothing changed;
-- `withGlyphs` can promote a narrow query into full inspection and decoding work.
+The remaining measured host work is narrower:
+
+- TypeGPU patch realization still copies some borrowed payload and map data beyond backend-required upload ownership;
+- planner frames compile into an intermediate JavaScript `Uint8Array` before copying the same request into the retained
+  Wasm request arena.
 
 These are not independent invitations to add caches. The first question for each path is whether the engine can publish the
 authoritative delta through its existing stable identity, dependency masks, borrowed buffers, and patch tables. Adapter-
