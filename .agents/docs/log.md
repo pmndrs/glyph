@@ -2,6 +2,12 @@
 
 ## 2026-09-23
 
+- **Let the rain land before play's hole takes it** — The field took any glyph below a fixed height, and it sets a
+  body's whole velocity, so glyphs in the last of their fall were held circling just off the paper and some were
+  eaten before touching anything. It now waits until physics says a glyph has reached the paper. A hole test drops
+  rain through a field over the whole paper and finds none held or eaten untouched. See
+  [the hero reference](packages/hero.md).
+
 - **Took the black hole's shadow out of the glass projection** — The hole no longer casts a disk into the capture,
   so the projection's only opaque caster is the robot, and the finale check no longer measures a shade. The frame's
   bend around the hole is unchanged. See [the hero reference](packages/hero.md).

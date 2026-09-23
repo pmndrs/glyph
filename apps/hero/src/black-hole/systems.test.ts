@@ -1,3 +1,4 @@
+import { rigidBody } from 'crashcat';
 import { createWorld } from 'koota';
 import { mat4 } from 'math';
 import { Group } from 'three/webgpu';
@@ -7,7 +8,7 @@ import { Impacts } from '../icon-paper/traits';
 import { letterActions } from '../letters/actions';
 import { moveTitle, syncTitle } from '../letters/systems';
 import { physicsActions } from '../physics/actions';
-import { Body } from '../physics/traits';
+import { Body, Physics } from '../physics/traits';
 import { stepPhysics } from '../physics/systems';
 import { playReveal } from '../play-button/systems';
 import { REVEAL_AFTER, REVEAL_SECONDS } from '../play-button/content';
@@ -71,9 +72,10 @@ it('opens small in play, grows as it eats the rain pushed to it, then becomes th
     expect(live().length).toBeGreaterThan(1);
     const [near, far] = live();
     const before = world.get(Collapse)!.playHorizon;
-    physics.holdBody(near!.entity!, { x: 1.6, y: -0.5, z: 0, yaw: 0 });
+    // Each is set down a hair above the paper, so it lands there as rain does before the field will take it.
+    physics.holdBody(near!.entity!, { x: 1.6, y: -0.5, z: 0.02, yaw: 0 });
     physics.releaseBody(near!.entity!, [0, 0, 0], 0);
-    physics.holdBody(far!.entity!, { x: 6, y: 4, z: 0, yaw: 0 });
+    physics.holdBody(far!.entity!, { x: 6, y: 4, z: 0.02, yaw: 0 });
     physics.releaseBody(far!.entity!, [0, 0, 0], 0);
     advance(3 / 60);
     expect(near!.phase).toBe('eaten');
@@ -99,7 +101,7 @@ it('opens small in play, grows as it eats the rain pushed to it, then becomes th
     const [orbiting, distant] = [live()[1]!, live()[2]!];
     type Drop = ReturnType<typeof live>[number];
     const place = (drop: Drop, out: number) => {
-      physics.holdBody(drop.entity!, { x: 1.5 + out, y: -0.5, z: 0, yaw: 0 });
+      physics.holdBody(drop.entity!, { x: 1.5 + out, y: -0.5, z: 0.02, yaw: 0 });
       physics.releaseBody(drop.entity!, [0, 0, 0], 0);
     };
     const swungBy = (drop: Drop) => Math.abs(Math.atan2(drop.y - hole().y, drop.x - hole().x));
@@ -124,7 +126,7 @@ it('opens small in play, grows as it eats the rain pushed to it, then becomes th
         continue;
       }
 
-      physics.holdBody(next.entity!, { x: 1.6, y: -0.5, z: 0, yaw: 0 });
+      physics.holdBody(next.entity!, { x: 1.6, y: -0.5, z: 0.02, yaw: 0 });
       physics.releaseBody(next.entity!, [0, 0, 0], 0);
       advance(3 / 60);
     }
@@ -229,6 +231,76 @@ it("holds the letters where they are when play's hole goes critical, then spiral
 
     advance(POP_AT);
     expect([...title.swallowed].every((taken) => taken === 1)).toBe(true);
+  } finally {
+    world.destroy();
+  }
+});
+
+it('lets the rain fall through its field onto the paper before carrying it round', () => {
+  const world = createWorld(Time, Mode, Viewport, Impacts, Collapse, StarEmbers, Rain);
+  const physics = physicsActions(world);
+  physics.initializePhysics();
+  physics.setPhysicsFloor(-0.4);
+  starEmberActions(world).initializeStarEmbers();
+  const rain = rainActions(world);
+  rain.initializeRain();
+
+  for (let slot = 0; slot < COUNT; slot++) rain.prepareRainGlyph(slot, { prisms: [PRISM] });
+
+  world.set(Viewport, { width: 18, height: 10 });
+  world.set(Mode, { kind: 'play', since: 0 });
+  // A hole grown most of the way to the finale, whose field reaches over nearly all the paper.
+  blackHoleActions(world).openPlayHole({ x: 0, y: 0 });
+  blackHoleActions(world).growPlayHole(0.6);
+  const engine = world.get(Physics)!.engine;
+  // How long each glyph has spent low over the paper without having touched anything yet, and whether it has.
+  const hovering = new Map<number, number>();
+  const touched = new Set<number>();
+  let eatenUntouched = 0;
+  let caught = 0;
+  let now = 0;
+
+  try {
+    for (let frame = 0; frame < 10 * 60; frame++) {
+      now += 1000 / 60;
+      updateTime(world, 1 / 60, now);
+      advanceCollapse(world);
+      stepPhysics(world);
+      rainGlyphs(world);
+
+      // What the rain struck this step is read before the hole feeds, since a glyph it eats loses its body.
+      for (const drop of world.get(Rain)!.drops) {
+        if (drop.phase !== 'live') continue;
+
+        const body = drop.entity!.get(Body)!;
+
+        if (body.struck) touched.add(drop.serial);
+
+        if (touched.has(drop.serial) || drop.z > 1.2) continue;
+
+        hovering.set(drop.serial, (hovering.get(drop.serial) ?? 0) + 1);
+        const [vx, vy] = rigidBody.get(engine, body.id)!.motionProperties.linearVelocity;
+
+        if (Math.hypot(vx, vy) > 0.5) caught++;
+      }
+
+      feedHole(world);
+
+      // Only play's hole is held to this: the finale draws in the rain still in the air as well.
+      if (world.get(Collapse)!.hole.beat !== 'play') continue;
+
+      for (const drop of world.get(Rain)!.drops) {
+        if (drop.phase === 'eaten' && drop.age === 0 && !touched.has(drop.serial)) eatenUntouched++;
+      }
+    }
+
+    // None was taken off course in the last of its fall, held off the paper, or eaten before it touched anything.
+    expect(caught).toBe(0);
+    expect(Math.max(...hovering.values())).toBeLessThan(10);
+    expect(eatenUntouched).toBe(0);
+    // And the field was there to do it: glyphs came down within it and it fed on them once they were on the paper.
+    expect(touched.size).toBeGreaterThan(10);
+    expect(world.get(Collapse)!.fedAt).toBeGreaterThan(0);
   } finally {
     world.destroy();
   }

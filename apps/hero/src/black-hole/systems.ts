@@ -156,8 +156,10 @@ export function feedHole(world: World): void {
         continue;
       }
 
-      // The field lies on the paper: rain still falling passes over it until it lands, on the paper or on glass.
-      if (!finale && drop.z > 1.2) continue;
+      // The field lies on the paper: rain passes over it until it has come down there. Its height cannot tell, since
+      // a glyph in the last of its fall is as low as one lying on the paper, and the field sets a body's whole
+      // velocity, so it would hold that glyph off the paper, circling, until the hole ate it untouched.
+      if (!finale && drop.entity!.get(Body)!.airborne) continue;
 
       const dx = hole.x - drop.x;
       const dy = hole.y - drop.y;

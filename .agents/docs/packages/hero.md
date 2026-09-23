@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:d09a712dfca428b8d0f3bd0e05f0345e3f2cf60455195a57a4d1afde9cd62fb6'
+source_digest: 'sha256:58d2f257a44950de8cf338b78118fd60b6b9e88d5e9d0ce37b81b576fbfddd2c'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota, web-audio]
 sources:
   - id: hero-policy
@@ -475,7 +475,7 @@ much again, so the title alone does not fill it, and some forty meals to the fin
 has caught has time to settle into orbit before it goes critical. An eaten glyph
 loses its body at once and its glyph flies into the centre on the finale's tightening arc, stretched along it and
 shrinking; an eaten letter leaves on the same flight from where it was, one letter at a time, each departure held
-on the hole's clock beside the finale's, which sets them all at once. Rain still in the air passes over it. Once
+on the hole's clock beside the finale's, which sets them all at once. Rain still in the air passes over it until it has come down on the paper, which physics records, not its height: the field sets a body's whole velocity, so gated by height it caught glyphs in the last of their fall and held them circling just off the paper, and some were eaten before they touched anything. A hole test drops rain through a field that covers the paper and finds none swept aside before it lands, held off the paper, or eaten untouched; gated by height, it counted seven hundred frames of glyphs swept along in the air. Once
 the drawn hole, easing after its meals, reaches the finale's horizon it hands over to the finale timeline joined
 where that hole is already open, so nothing shrinks to reopen, and the finale is congruent with what play built:
 the collapse trait keeps the pull play's hole had at the handover and the finale's pull rises from there to full
