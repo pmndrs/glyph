@@ -67,6 +67,7 @@ pub(crate) struct ShapeArena {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct BoundaryShape {
     pub flow_thread_id: u32,
+    pub boundary_id: u64,
     pub source_run: u32,
     pub cluster_start: u32,
     pub cluster_end: u32,
@@ -75,6 +76,7 @@ pub(crate) struct BoundaryShape {
     pub source_font_handle: u32,
     pub ellipsis_binding_handle: u32,
     pub ellipsis_font_handle: u32,
+    pub source_shape_run_index: u32,
     pub source_glyph_start: u32,
     pub source_glyph_count: u32,
     pub ellipsis_glyph_start: u32,
@@ -86,6 +88,10 @@ pub(crate) struct BoundaryShapeArena {
     pub records: Vec<BoundaryShape>,
     pub shape: ShapeArena,
     pub stable_ids: Vec<u32>,
+    /// Direct per-fragment references for line-start and line-end correction
+    /// records. Ellipsis keeps its authored `FlowFragment::boundary_index`.
+    pub start_indices: Vec<u32>,
+    pub end_indices: Vec<u32>,
 }
 
 impl ShapingRunArena {
@@ -488,6 +494,8 @@ impl BoundaryShapeArena {
         self.records.clear();
         self.shape.clear();
         self.stable_ids.clear();
+        self.start_indices.clear();
+        self.end_indices.clear();
     }
 
     pub(crate) fn reserve(&mut self, glyph_capacity: usize) -> Result<(), EngineError> {

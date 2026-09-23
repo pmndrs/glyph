@@ -2,7 +2,7 @@ use super::{
     EngineError,
     cluster_state::{
         CHUNK_NEGATIVE_ADVANCE, CLUSTER_ALLOWED_BREAK, CLUSTER_HARD_BREAK, CLUSTER_REQUIRED_BREAK,
-        CLUSTER_SAFE_BEFORE, CLUSTER_SPACE, ClusterArena,
+        CLUSTER_RESHAPE_AFTER, CLUSTER_SAFE_BEFORE, CLUSTER_SPACE, ClusterArena,
     },
     frame::{WRAP_CHARACTER, WRAP_NONE, WRAP_WORD},
     layout_units::scaled_from_layout_units,
@@ -44,6 +44,16 @@ pub(crate) struct ComposedLine {
     pub hung_advance: f64,
     pub hard_break: bool,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ExactLineMetrics {
+    pub advance_units: i64,
+    pub space_units: i64,
+    pub trailing_space_units: i64,
+}
+
+pub(crate) type ExactLineMeasure<'a> =
+    dyn FnMut(usize, usize, ExactLineMetrics) -> Result<ExactLineMetrics, EngineError> + 'a;
 
 /// The f64 parity reference for [`layout_next_line_integer`]. The integer fit
 /// is authoritative (D-254); this twin exists only so the parity property
@@ -238,10 +248,282 @@ pub(crate) fn layout_next_line_integer(
     wrap: u8,
     word_space_shrink: f64,
 ) -> Result<Option<ComposedLine>, EngineError> {
+    let mut no_exact_measure = |_: usize, _: usize, metrics: ExactLineMetrics| Ok(metrics);
+    layout_next_line_integer_with_exact(
+        clusters,
+        cursor,
+        max_width_units,
+        wrap,
+        word_space_shrink,
+        &mut no_exact_measure,
+    )
+}
+
+pub(crate) fn layout_next_line_integer_with_exact(
+    clusters: &ClusterArena,
+    cursor: &mut LineCursor,
+    max_width_units: Option<i64>,
+    wrap: u8,
+    word_space_shrink: f64,
+    exact_measure: &mut ExactLineMeasure<'_>,
+) -> Result<Option<ComposedLine>, EngineError> {
+    if wrap == WRAP_WORD && clusters.has_unsafe_break {
+        if !clusters.word_breaks.is_empty() {
+            return layout_next_unsafe_word_line_indexed(
+                clusters,
+                cursor,
+                max_width_units,
+                word_space_shrink,
+                exact_measure,
+            );
+        }
+        return layout_next_unsafe_word_line(
+            clusters,
+            cursor,
+            max_width_units,
+            word_space_shrink,
+            exact_measure,
+        );
+    }
     if wrap == WRAP_WORD && !clusters.word_breaks.is_empty() {
         return layout_next_word_line_indexed(clusters, cursor, max_width_units, word_space_shrink);
     }
     layout_next_line_integer_scalar(clusters, cursor, max_width_units, wrap, word_space_shrink)
+}
+
+fn layout_next_unsafe_word_line_indexed(
+    clusters: &ClusterArena,
+    cursor: &mut LineCursor,
+    max_width_units: Option<i64>,
+    word_space_shrink: f64,
+    exact_measure: &mut ExactLineMeasure<'_>,
+) -> Result<Option<ComposedLine>, EngineError> {
+    if max_width_units.is_some_and(|units| units < 0) || !(0.0..1.0).contains(&word_space_shrink) {
+        return Err(EngineError::InvalidRequest);
+    }
+    let count = clusters.starts.len();
+    if cursor.cluster > count || clusters.advance_units.len() != count {
+        return Err(EngineError::InvalidRequest);
+    }
+    if cursor.trailing_empty || cursor.cluster == count {
+        return layout_next_line_integer_scalar(
+            clusters,
+            cursor,
+            max_width_units,
+            WRAP_WORD,
+            word_space_shrink,
+        );
+    }
+
+    let line_start = cursor.cluster;
+    let first_break = clusters
+        .word_breaks
+        .partition_point(|record| record.cluster_end as usize <= line_start);
+    let starts_at_break = if first_break == 0 {
+        line_start == 0
+    } else {
+        clusters.word_breaks[first_break - 1].cluster_end as usize == line_start
+    };
+    if !starts_at_break {
+        return layout_next_unsafe_word_line(
+            clusters,
+            cursor,
+            max_width_units,
+            word_space_shrink,
+            exact_measure,
+        );
+    }
+
+    let start_requires_reshape =
+        line_start > 0 && clusters.flags[line_start - 1] & CLUSTER_RESHAPE_AFTER != 0;
+    let mut line_advance = 0_i64;
+    let mut line_spaces = 0_i64;
+    let mut selected = None;
+    let mut first_candidate = None;
+
+    for record in &clusters.word_breaks[first_break..] {
+        let end = usize::try_from(record.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+        if end <= line_start || end > count {
+            return Err(EngineError::InvalidRequest);
+        }
+        line_advance = line_advance.saturating_add(i64::from(record.advance_units));
+        line_spaces = line_spaces.saturating_add(i64::from(record.space_units));
+        let trailing_space_units = trailing_space_units(clusters, line_start, end);
+        let base = ExactLineMetrics {
+            advance_units: line_advance,
+            space_units: line_spaces,
+            trailing_space_units,
+        };
+        let metrics =
+            if start_requires_reshape || clusters.flags[end - 1] & CLUSTER_RESHAPE_AFTER != 0 {
+                exact_measure(line_start, end, base)?
+            } else {
+                base
+            };
+        let visible_spaces = metrics
+            .space_units
+            .saturating_sub(metrics.trailing_space_units);
+        let effective = metrics
+            .advance_units
+            .saturating_sub(metrics.trailing_space_units)
+            .saturating_sub(super::layout_units::apply_ratio(
+                visible_spaces,
+                word_space_shrink,
+            ));
+        let candidate = (end, metrics.advance_units, metrics.trailing_space_units);
+        first_candidate.get_or_insert(candidate);
+
+        let flags = clusters.flags[end - 1];
+        let required = flags & (CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK) != 0;
+        if max_width_units.is_some_and(|width| effective > width) {
+            break;
+        }
+        selected = Some(candidate);
+        if required || end == count {
+            break;
+        }
+    }
+
+    if selected.is_none() && first_candidate.is_some() {
+        return layout_next_unsafe_word_line(
+            clusters,
+            cursor,
+            max_width_units,
+            word_space_shrink,
+            exact_measure,
+        );
+    }
+
+    finish_unsafe_word_line(clusters, cursor, line_start, selected)
+}
+
+fn layout_next_unsafe_word_line(
+    clusters: &ClusterArena,
+    cursor: &mut LineCursor,
+    max_width_units: Option<i64>,
+    word_space_shrink: f64,
+    exact_measure: &mut ExactLineMeasure<'_>,
+) -> Result<Option<ComposedLine>, EngineError> {
+    if max_width_units.is_some_and(|units| units < 0) || !(0.0..1.0).contains(&word_space_shrink) {
+        return Err(EngineError::InvalidRequest);
+    }
+    let count = clusters.starts.len();
+    if cursor.cluster > count || clusters.advance_units.len() != count {
+        return Err(EngineError::InvalidRequest);
+    }
+    if cursor.trailing_empty || cursor.cluster == count {
+        return layout_next_line_integer_scalar(
+            clusters,
+            cursor,
+            max_width_units,
+            WRAP_WORD,
+            word_space_shrink,
+        );
+    }
+
+    let line_start = cursor.cluster;
+    let start_requires_reshape =
+        line_start > 0 && clusters.flags[line_start - 1] & CLUSTER_RESHAPE_AFTER != 0;
+    let mut advance_units = 0_i64;
+    let mut space_units = 0_i64;
+    let mut trailing_space_units = 0_i64;
+    let mut selected = None;
+    let mut first_candidate = None;
+    let mut last_safe = None;
+    let mut first_safe = None;
+
+    for index in line_start..count {
+        let flags = clusters.flags[index];
+        if index > line_start && flags & CLUSTER_SAFE_BEFORE != 0 {
+            let safe = (index, advance_units, trailing_space_units);
+            first_safe.get_or_insert(safe);
+            let effective = advance_units.saturating_sub(super::layout_units::apply_ratio(
+                space_units,
+                word_space_shrink,
+            ));
+            if max_width_units.is_none_or(|width| effective <= width) {
+                last_safe = Some(safe);
+            }
+        }
+        let cluster_advance = clusters.advance_units[index];
+        advance_units = advance_units.saturating_add(cluster_advance);
+        if flags & CLUSTER_SPACE != 0 {
+            space_units = space_units.saturating_add(cluster_advance);
+            trailing_space_units = trailing_space_units.saturating_add(cluster_advance);
+        } else if flags & CLUSTER_HARD_BREAK == 0 {
+            trailing_space_units = 0;
+        }
+        let end = index + 1;
+        let required = flags & (CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK) != 0;
+        let candidate = required || flags & CLUSTER_ALLOWED_BREAK != 0 || end == count;
+        if !candidate {
+            continue;
+        }
+
+        let base = ExactLineMetrics {
+            advance_units,
+            space_units,
+            trailing_space_units,
+        };
+        let metrics = if start_requires_reshape || flags & CLUSTER_RESHAPE_AFTER != 0 {
+            exact_measure(line_start, end, base)?
+        } else {
+            base
+        };
+        let visible_spaces = metrics
+            .space_units
+            .saturating_sub(metrics.trailing_space_units);
+        let effective = metrics
+            .advance_units
+            .saturating_sub(metrics.trailing_space_units)
+            .saturating_sub(super::layout_units::apply_ratio(
+                visible_spaces,
+                word_space_shrink,
+            ));
+        let record = (end, metrics.advance_units, metrics.trailing_space_units);
+        first_candidate.get_or_insert(record);
+        if max_width_units.is_some_and(|width| effective > width) {
+            break;
+        }
+        selected = Some(record);
+        if required || end == count {
+            break;
+        }
+    }
+
+    finish_unsafe_word_line(
+        clusters,
+        cursor,
+        line_start,
+        selected.or(last_safe).or(first_safe).or(first_candidate),
+    )
+}
+
+fn finish_unsafe_word_line(
+    clusters: &ClusterArena,
+    cursor: &mut LineCursor,
+    line_start: usize,
+    selected: Option<(usize, i64, i64)>,
+) -> Result<Option<ComposedLine>, EngineError> {
+    let count = clusters.starts.len();
+    let (selected_end, full_advance, hung_advance) = selected.ok_or(EngineError::InvalidRequest)?;
+    let hard_break = clusters.flags[selected_end - 1] & CLUSTER_HARD_BREAK != 0;
+    let text_end = if hard_break {
+        clusters.starts[selected_end - 1]
+    } else {
+        clusters.ends[selected_end - 1]
+    };
+    cursor.cluster = selected_end;
+    cursor.trailing_empty = selected_end == count && hard_break;
+    Ok(Some(ComposedLine {
+        cluster_start: u32::try_from(line_start).map_err(|_| EngineError::ResultTooLarge)?,
+        cluster_end: u32::try_from(selected_end).map_err(|_| EngineError::ResultTooLarge)?,
+        text_start: clusters.starts[line_start],
+        text_end,
+        advance: scaled_from_layout_units(full_advance.saturating_sub(hung_advance)),
+        hung_advance: scaled_from_layout_units(hung_advance),
+        hard_break,
+    }))
 }
 
 fn layout_next_line_integer_scalar(
@@ -410,7 +692,7 @@ fn layout_next_line_integer_scalar(
         let cluster_is_space = flags & CLUSTER_SPACE != 0;
         let next_trailing_space_units = if cluster_is_space {
             trailing_space_units.saturating_add(cluster_advance)
-        } else if required_break {
+        } else if flags & CLUSTER_HARD_BREAK != 0 {
             // A hard-break control does not make the spaces immediately before it
             // interior. They still terminate this line and hang from its measure.
             trailing_space_units
@@ -1589,6 +1871,291 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!((line.cluster_end, line.advance), (1, 7.0));
+    }
+
+    #[test]
+    fn exact_measurement_is_demanded_only_for_selected_unsafe_boundaries() {
+        let clusters = make_clusters(
+            &[4.0, 4.0, 4.0],
+            &[
+                CLUSTER_SAFE_BEFORE,
+                CLUSTER_ALLOWED_BREAK | CLUSTER_RESHAPE_AFTER,
+                CLUSTER_SAFE_BEFORE,
+            ],
+        );
+        let mut calls = Vec::new();
+        let mut exact = |start: usize, end: usize, mut metrics: ExactLineMetrics| {
+            calls.push((start, end));
+            if (start, end) == (0, 2) {
+                metrics.advance_units = super::super::layout_units::layout_units_from_scaled(6.0);
+            }
+            Ok(metrics)
+        };
+        let mut cursor = LineCursor::default();
+        let line = layout_next_line_integer_with_exact(
+            &clusters,
+            &mut cursor,
+            Some(super::super::layout_units::layout_units_from_scaled(7.0)),
+            WRAP_WORD,
+            0.0,
+            &mut exact,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!((line.cluster_end, line.advance), (2, 6.0));
+        assert_eq!(calls, [(0, 2)]);
+
+        let safe = make_clusters(&[4.0, 4.0], &[CLUSTER_SAFE_BEFORE, CLUSTER_ALLOWED_BREAK]);
+        let mut never = |_: usize, _: usize, _: ExactLineMetrics| {
+            panic!("the ordinary safe path must not request exact shaping")
+        };
+        let mut cursor = LineCursor::default();
+        let line = layout_next_line_integer_with_exact(
+            &safe,
+            &mut cursor,
+            Some(super::super::layout_units::layout_units_from_scaled(8.0)),
+            WRAP_WORD,
+            0.0,
+            &mut never,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!((line.cluster_end, line.advance), (2, 8.0));
+    }
+
+    #[test]
+    fn sparse_break_records_drive_exact_unsafe_fitting() {
+        let mut clusters = make_clusters(
+            &[4.0, 4.0, 4.0],
+            &[
+                CLUSTER_SAFE_BEFORE,
+                CLUSTER_ALLOWED_BREAK | CLUSTER_RESHAPE_AFTER,
+                CLUSTER_SAFE_BEFORE,
+            ],
+        );
+        clusters.word_breaks = vec![
+            WordBreakRecord {
+                cluster_end: 2,
+                advance_units: 8 * 65_536,
+                space_units: 0,
+            },
+            WordBreakRecord {
+                cluster_end: 3,
+                advance_units: 4 * 65_536,
+                space_units: 0,
+            },
+        ];
+        let mut calls = Vec::new();
+        let mut exact = |start: usize, end: usize, mut metrics: ExactLineMetrics| {
+            calls.push((start, end));
+            if (start, end) == (0, 2) {
+                metrics.advance_units = 6 * 65_536;
+            }
+            Ok(metrics)
+        };
+        let mut cursor = LineCursor::default();
+        let line = layout_next_line_integer_with_exact(
+            &clusters,
+            &mut cursor,
+            Some(7 * 65_536),
+            WRAP_WORD,
+            0.0,
+            &mut exact,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!((line.cluster_end, line.advance), (2, 6.0));
+        assert_eq!(calls, [(0, 2)]);
+    }
+
+    #[test]
+    fn unsafe_fit_keeps_a_fitting_soft_break_before_an_overflowing_hard_break() {
+        fn fixture(indexed: bool) -> ClusterArena {
+            let mut clusters = make_clusters(
+                &[4.0, 1.0, 5.0, 0.0],
+                &[
+                    CLUSTER_SAFE_BEFORE,
+                    CLUSTER_ALLOWED_BREAK | CLUSTER_RESHAPE_AFTER | CLUSTER_SPACE,
+                    CLUSTER_SAFE_BEFORE,
+                    CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK | CLUSTER_SAFE_BEFORE,
+                ],
+            );
+            if indexed {
+                clusters.word_breaks = vec![
+                    WordBreakRecord {
+                        cluster_end: 2,
+                        advance_units: 5 * 65_536,
+                        space_units: 65_536,
+                    },
+                    WordBreakRecord {
+                        cluster_end: 4,
+                        advance_units: 5 * 65_536,
+                        space_units: 0,
+                    },
+                ];
+            }
+            clusters
+        }
+
+        for indexed in [false, true] {
+            let clusters = fixture(indexed);
+            let mut identity = |_: usize, _: usize, metrics: ExactLineMetrics| Ok(metrics);
+            let line = layout_next_line_integer_with_exact(
+                &clusters,
+                &mut LineCursor::default(),
+                Some(4 * 65_536),
+                WRAP_WORD,
+                0.0,
+                &mut identity,
+            )
+            .unwrap()
+            .unwrap();
+            assert_eq!(
+                (line.cluster_end, line.advance, line.hard_break),
+                (2, 4.0, false),
+                "indexed {indexed}",
+            );
+        }
+    }
+
+    #[test]
+    fn unsafe_fit_emergency_breaks_an_overlong_first_word_at_safe_before() {
+        fn fixture(indexed: bool) -> ClusterArena {
+            let mut flags = vec![CLUSTER_SAFE_BEFORE; 14];
+            flags[9] |= CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+            flags[13] |= CLUSTER_ALLOWED_BREAK | CLUSTER_RESHAPE_AFTER;
+            let mut clusters = make_clusters(&[1.0; 14], &flags);
+            if indexed {
+                clusters.word_breaks = vec![
+                    WordBreakRecord {
+                        cluster_end: 10,
+                        advance_units: 10 * 65_536,
+                        space_units: 65_536,
+                    },
+                    WordBreakRecord {
+                        cluster_end: 14,
+                        advance_units: 4 * 65_536,
+                        space_units: 0,
+                    },
+                ];
+            }
+            clusters
+        }
+
+        for indexed in [false, true] {
+            let clusters = fixture(indexed);
+            let mut identity = |_: usize, _: usize, metrics: ExactLineMetrics| Ok(metrics);
+            let line = layout_next_line_integer_with_exact(
+                &clusters,
+                &mut LineCursor::default(),
+                Some(3 * 65_536),
+                WRAP_WORD,
+                0.0,
+                &mut identity,
+            )
+            .unwrap()
+            .unwrap();
+            assert_eq!(
+                (line.cluster_end, line.advance),
+                (3, 3.0),
+                "indexed {indexed}"
+            );
+        }
+    }
+
+    #[test]
+    fn identity_exact_unsafe_fit_matches_ordinary_scalar_for_scalar_and_indexed_paths() {
+        fn fixture() -> ClusterArena {
+            let mut advances = Vec::new();
+            let mut flags = Vec::new();
+            for word in 0..20 {
+                for letter in 0..4 + word % 4 {
+                    advances.push(1.0 + f64::from((word * 5 + letter * 3) % 7) * 0.25);
+                    flags.push(CLUSTER_SAFE_BEFORE);
+                }
+                advances.push(0.75);
+                let mut space_flags = CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+                if matches!(word, 3 | 12) {
+                    space_flags |= CLUSTER_RESHAPE_AFTER;
+                }
+                flags.push(space_flags);
+                if word == 8 {
+                    advances.push(0.0);
+                    flags.push(CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK | CLUSTER_SAFE_BEFORE);
+                }
+            }
+            advances.push(1.0);
+            flags.push(CLUSTER_REQUIRED_BREAK | CLUSTER_SAFE_BEFORE);
+            make_quantized_clusters(&advances, &flags)
+        }
+
+        for width in [5_i64, 17, 39, 83] {
+            for shrink in [0.0, 0.25] {
+                let mut ordinary = fixture();
+                ordinary.word_breaks.clear();
+                ordinary.chunk_flags_or.clear();
+                ordinary.chunk_auxiliary_sums.clear();
+                let mut ordinary_cursor = LineCursor::default();
+                let mut expected = Vec::new();
+                while let Some(line) = layout_next_line_integer_scalar(
+                    &ordinary,
+                    &mut ordinary_cursor,
+                    Some(width * 65_536),
+                    WRAP_WORD,
+                    shrink,
+                )
+                .unwrap()
+                {
+                    expected.push(line);
+                }
+
+                let mut scalar = fixture();
+                scalar.word_breaks.clear();
+                let mut scalar_cursor = LineCursor::default();
+                let mut scalar_lines = Vec::new();
+                let mut scalar_identity =
+                    |_: usize, _: usize, metrics: ExactLineMetrics| Ok(metrics);
+                while let Some(line) = layout_next_line_integer_with_exact(
+                    &scalar,
+                    &mut scalar_cursor,
+                    Some(width * 65_536),
+                    WRAP_WORD,
+                    shrink,
+                    &mut scalar_identity,
+                )
+                .unwrap()
+                {
+                    scalar_lines.push(line);
+                }
+                assert_eq!(
+                    scalar_lines, expected,
+                    "scalar width {width} shrink {shrink}"
+                );
+
+                let indexed = fixture();
+                assert!(!indexed.word_breaks.is_empty());
+                let mut indexed_cursor = LineCursor::default();
+                let mut indexed_lines = Vec::new();
+                let mut indexed_identity =
+                    |_: usize, _: usize, metrics: ExactLineMetrics| Ok(metrics);
+                while let Some(line) = layout_next_line_integer_with_exact(
+                    &indexed,
+                    &mut indexed_cursor,
+                    Some(width * 65_536),
+                    WRAP_WORD,
+                    shrink,
+                    &mut indexed_identity,
+                )
+                .unwrap()
+                {
+                    indexed_lines.push(line);
+                }
+                assert_eq!(
+                    indexed_lines, expected,
+                    "indexed width {width} shrink {shrink}",
+                );
+            }
+        }
     }
 
     #[test]

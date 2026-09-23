@@ -2,13 +2,16 @@ use alloc::{collections::BTreeMap, vec::Vec};
 use core::num::NonZeroU32;
 
 use crate::{
-    STATUS_RESULT_TOO_LARGE, ShapeRangeRef, ShapeRunRef, ShaperRegistry,
+    FontMetrics, STATUS_RESULT_TOO_LARGE, ShapeRangeRef, ShapeRunRef, ShaperRegistry,
     bidi::{BidiAnalysis, BidiError, DIRECTION_AUTO, analyze_into as analyze_bidi_into},
     unicode::{UnicodeAnalysis, UnicodeError},
 };
 
 use super::{
-    cluster_state::{ClusterArena, ClusterBuildInput, LayoutRunSourceKind, RunCanonicalInput},
+    cluster_state::{
+        CLUSTER_ALLOWED_BREAK, CLUSTER_HARD_BREAK, CLUSTER_REQUIRED_BREAK, CLUSTER_SPACE,
+        ClusterArena, ClusterBuildInput, IntrinsicWidths, LayoutRunSourceKind, RunCanonicalInput,
+    },
     codec::{CapabilitySetId, ValidatedCodec},
     codec_gather::{
         CodecGatherWorkspace, DEFAULT_GATHER_RECORD_CAPACITY, GatherError, LayoutPlanInput,
@@ -19,9 +22,10 @@ use super::{
     font_binding::FontRenderBinding,
     frame::{
         CommittedUpdate, MeasuredParagraph, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE,
-        PreparedUpdate, RootRevision, UpdateRequest,
+        PreparedUpdate, RootRevision, UpdateRequest, WRAP_WORD,
     },
     identity_index::IdentityIndex,
+    line_composition::ExactLineMetrics,
     placement_slot_arena::{PlacementSlotArena, PlacementSlotError},
     placement_state::{GlyphSource, LayoutRunOwner, PlacementIdentity, PlacementSegment},
     positioning::{PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT},
@@ -378,6 +382,11 @@ struct ParagraphState {
     shape: Staged<ShapeArena>,
     incremental_shape_source_run: Option<u32>,
     clusters: Staged<ClusterArena>,
+    unsafe_line_cache: Staged<UnsafeLineCache>,
+    unsafe_shape_scratch: ShapeArena,
+    unsafe_stable_id_scratch: Vec<u32>,
+    unsafe_cluster_advance_scratch: Vec<f64>,
+    unsafe_font_metrics_scratch: Vec<(u32, FontMetrics)>,
     glyph_identity_index: IdentityIndex,
     layout_run_identity_index: IdentityIndex,
     next_run_canonical_revision: u32,
@@ -388,6 +397,7 @@ struct ParagraphState {
     intrinsic_geometry_scratch: FlowGeometryArena,
     intrinsic_flow_layout_scratch: FlowLayoutArena,
     intrinsic_flow_slot_scratch: super::flow_geometry::InlineSlotArena,
+    intrinsic_boundary_shape_scratch: BoundaryShapeArena,
     intrinsic_positioned_scratch: PositionedGlyphArena,
     intrinsic_identity_scratch: IdentityIndex,
     boundary_shape: BoundaryShapeArena,
@@ -413,6 +423,75 @@ struct ParagraphState {
     speculative_text_fingerprint: u64,
     speculative_style_fingerprint: u64,
 }
+
+#[derive(Clone, Copy, Default)]
+struct CachedBoundaryMetrics {
+    left: Option<ExactLineMetrics>,
+    right: Option<ExactLineMetrics>,
+}
+
+#[derive(Clone, Copy)]
+struct CachedExactLine {
+    start: usize,
+    end: usize,
+    metrics: ExactLineMetrics,
+}
+
+#[derive(Default)]
+struct UnsafeLineCache {
+    boundaries: Vec<CachedBoundaryMetrics>,
+    exact_lines: Vec<CachedExactLine>,
+    intrinsic_widths: Option<IntrinsicWidths>,
+}
+
+impl UnsafeLineCache {
+    const EXACT_LINE_CAPACITY: usize = 64;
+
+    fn reset(&mut self, cluster_count: usize) -> Result<(), EngineError> {
+        self.boundaries.clear();
+        self.boundaries
+            .try_reserve(cluster_count.saturating_add(1))
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        self.boundaries.resize(
+            cluster_count.saturating_add(1),
+            CachedBoundaryMetrics::default(),
+        );
+        self.exact_lines.clear();
+        self.intrinsic_widths = None;
+        if self.exact_lines.capacity() < Self::EXACT_LINE_CAPACITY {
+            self.exact_lines
+                .try_reserve_exact(Self::EXACT_LINE_CAPACITY - self.exact_lines.capacity())
+                .map_err(|_| EngineError::ResultTooLarge)?;
+        }
+        Ok(())
+    }
+
+    fn invalidate(&mut self) {
+        self.boundaries.clear();
+        self.exact_lines.clear();
+        self.intrinsic_widths = None;
+    }
+
+    fn exact(&self, start: usize, end: usize) -> Option<ExactLineMetrics> {
+        self.exact_lines
+            .iter()
+            .find(|entry| entry.start == start && entry.end == end)
+            .map(|entry| entry.metrics)
+    }
+
+    fn insert_exact(&mut self, start: usize, end: usize, metrics: ExactLineMetrics) {
+        if self.exact_lines.len() == Self::EXACT_LINE_CAPACITY {
+            self.exact_lines.remove(0);
+        }
+        self.exact_lines.push(CachedExactLine {
+            start,
+            end,
+            metrics,
+        });
+    }
+}
+
+const ELLIPSIS_BOUNDARY_ID: u64 = u64::MAX;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct CodecBinding {
@@ -1227,9 +1306,11 @@ impl TextEngine {
                     // An inspection query re-using a measurement-only transaction
                     // runs just the missing positioning tail.
                     if let Some(shaper) = shaper.as_deref_mut() {
-                        paragraph
-                            .state
-                            .prepare_positioned(shaper, &mut next_content_revision)?;
+                        paragraph.state.prepare_positioned(
+                            shaper,
+                            &mut next_glyph_id,
+                            &mut next_content_revision,
+                        )?;
                     }
                 }
             } else {
@@ -1264,7 +1345,7 @@ impl TextEngine {
                         .ok_or(EngineError::InvalidRequest)?
                         .state,
                     paragraph_id,
-                    shaper.as_deref(),
+                    shaper.as_deref_mut(),
                     font_stacks,
                     font_bindings,
                     request.limits,
@@ -1526,7 +1607,11 @@ impl TextEngine {
                     {
                         paragraph
                             .state
-                            .prepare_positioned(shaper, &mut next_content_revision)
+                            .prepare_positioned(
+                                shaper,
+                                &mut next_glyph_id,
+                                &mut next_content_revision,
+                            )
                             .map_err(|error| error.in_paragraph(paragraph_id))?;
                     }
                     paragraph.state.speculative_positioned_changed()
@@ -1689,7 +1774,7 @@ impl TextEngine {
                             &mut records,
                             &mut paragraph.state,
                             paragraph_id,
-                            shaper.as_deref(),
+                            shaper.as_deref_mut(),
                             font_stacks,
                             font_bindings,
                             request.limits,
@@ -1933,7 +2018,7 @@ fn append_paragraph_measurement(
     records: &mut Vec<super::semantic_view::SemanticRecord>,
     state: &mut ParagraphState,
     paragraph_id: u32,
-    shaper: Option<&ShaperRegistry>,
+    mut shaper: Option<&mut ShaperRegistry>,
     font_stacks: &[RegisteredFontStack],
     font_bindings: &[RegisteredFontBinding],
     limits: super::frame::UpdateLimits,
@@ -1970,11 +2055,26 @@ fn append_paragraph_measurement(
     // arena, mirroring the breaker's wrap decisions (see `ClusterArena::
     // intrinsic_widths`), so hosts never re-measure at zero width to size a
     // flex item.
-    let intrinsics = state.clusters.active().intrinsic_widths(constraint.wrap);
+    let intrinsics = if constraint.wrap == WRAP_WORD && state.clusters.active().has_unsafe_break {
+        let shaper = shaper.as_deref_mut().ok_or(EngineError::InvalidRequest)?;
+        let clusters = state.clusters.active();
+        exact_intrinsic_widths(
+            shaper,
+            &state.text.active().units,
+            clusters,
+            state.shaping_runs.active().runs(),
+            &state.styles.active().arena,
+            &mut state.unsafe_shape_scratch,
+            &mut state.unsafe_cluster_advance_scratch,
+            state.unsafe_line_cache.active_mut(),
+        )?
+    } else {
+        state.clusters.active().intrinsic_widths(constraint.wrap)
+    };
     let needs_intrinsic = visible_extents.consumed_clusters < cluster_count || has_ellipsis;
     if needs_intrinsic {
         state.prepare_intrinsic_flow_layout(
-            shaper.ok_or(EngineError::InvalidRequest)?,
+            shaper.as_deref_mut().ok_or(EngineError::InvalidRequest)?,
             font_stacks,
             font_bindings,
             limits.max_lines,
@@ -1987,7 +2087,8 @@ fn append_paragraph_measurement(
     let inspect_full_clipped_layout =
         needs_intrinsic && constraint.overflow == OVERFLOW_CLIP && !max_lines_truncated;
     if inspect_full_clipped_layout {
-        state.prepare_intrinsic_positioned(shaper.ok_or(EngineError::InvalidRequest)?)?;
+        state
+            .prepare_intrinsic_positioned(shaper.as_deref().ok_or(EngineError::InvalidRequest)?)?;
     }
     let text = &state.text.active().units;
     let clusters = state.clusters.active();
@@ -2863,6 +2964,12 @@ impl ParagraphState {
             pending.clear();
         }
         self.clusters.abort();
+        {
+            let (committed, pending) = self.unsafe_line_cache.pair_mut();
+            committed.invalidate();
+            pending.invalidate();
+        }
+        self.unsafe_line_cache.abort();
         self.next_run_canonical_revision = 0;
         self.pending_source_run_canonical_revision = 0;
         self.pending_next_run_canonical_revision = 0;
@@ -2880,6 +2987,7 @@ impl ParagraphState {
         self.flow_layout.abort();
         self.intrinsic_geometry_scratch.clear();
         self.intrinsic_flow_layout_scratch.clear();
+        self.intrinsic_boundary_shape_scratch.clear();
         self.intrinsic_positioned_scratch.clear();
         self.boundary_shape.clear();
         self.pending_boundary_shape.clear();
@@ -3031,6 +3139,7 @@ impl ParagraphState {
                     font_bindings,
                     limits.max_lines,
                     limits.max_slots_per_band,
+                    position,
                     next_glyph_id,
                 )?;
                 // Geometry-only resize equivalence: a third of alternating-width
@@ -3073,7 +3182,7 @@ impl ParagraphState {
             // STALE one behind: staging a flow drops the positioning that described the
             // previous flow, so there is nothing here to repair.
             if positioned_changed && position {
-                self.prepare_positioned(shaper, next_content_revision)?;
+                self.prepare_positioned(shaper, next_glyph_id, next_content_revision)?;
             }
         }
         Ok(positioned_changed)
@@ -3960,8 +4069,18 @@ impl ParagraphState {
         };
         match result {
             Ok(()) => {
+                if let Err(error) = self
+                    .unsafe_line_cache
+                    .pending_mut()
+                    .reset(self.clusters.pending().starts.len())
+                {
+                    self.unsafe_line_cache.pending_mut().invalidate();
+                    self.abort_clusters();
+                    return Err(error);
+                }
                 self.pending_source_run_canonical_revision = next_revision;
                 self.pending_next_run_canonical_revision = next_revision;
+                self.unsafe_line_cache.mark_prepared();
                 self.clusters.mark_prepared();
                 Ok(())
             }
@@ -3975,6 +4094,7 @@ impl ParagraphState {
     fn abort_clusters(&mut self) {
         self.clusters.pending_mut().clear();
         self.clusters.abort();
+        self.unsafe_line_cache.abort();
         self.pending_source_run_canonical_revision = self.next_run_canonical_revision;
         self.pending_next_run_canonical_revision = self.next_run_canonical_revision;
     }
@@ -3982,6 +4102,7 @@ impl ParagraphState {
     fn commit_clusters(&mut self) {
         if self.clusters.is_prepared() {
             self.clusters.commit();
+            self.unsafe_line_cache.commit();
         }
         // The shared cursor also includes replacement runs prepared after the cluster stage.
         self.next_run_canonical_revision = self.pending_next_run_canonical_revision;
@@ -4023,6 +4144,7 @@ impl ParagraphState {
         self.abort_geometry();
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn prepare_flow_layout(
         &mut self,
         shaper: &mut ShaperRegistry,
@@ -4030,6 +4152,7 @@ impl ParagraphState {
         font_bindings: &[RegisteredFontBinding],
         max_lines: u32,
         max_slots_per_band: u32,
+        materialize_boundaries: bool,
         next_glyph_id: &mut u32,
     ) -> Result<(), EngineError> {
         self.abort_flow_layout();
@@ -4082,6 +4205,7 @@ impl ParagraphState {
         };
         if !self.style_invalidation.metrics
             && !self.clusters.is_prepared()
+            && !clusters.has_unsafe_break
             && self.text_edit.is_none()
             && self.boundary_shape.records.is_empty()
             && geometry
@@ -4112,6 +4236,7 @@ impl ParagraphState {
         }
         if !self.geometry.is_prepared()
             && !self.style_invalidation.metrics
+            && !clusters.has_unsafe_break
             && self.boundary_shape.records.is_empty()
             && geometry
                 .constraints
@@ -4142,18 +4267,101 @@ impl ParagraphState {
             self.flow_layout.mark_prepared();
             return Ok(());
         }
-        self.flow_layout.pending_mut().build_with_drop_cap_context(
-            geometry,
-            clusters,
-            runs,
-            styles,
-            &mut self.flow_slot_scratch,
-            paragraph_level,
-            max_lines,
-            max_slots_per_band,
-            metrics_for,
-            first_font_for_stack,
-        )?;
+        let has_unsafe_break = clusters.has_unsafe_break;
+        if has_unsafe_break {
+            self.unsafe_font_metrics_scratch.clear();
+            for style in styles {
+                let Some(font_handle) = first_font_for_stack(style.style.font_stack_handle) else {
+                    continue;
+                };
+                if self
+                    .unsafe_font_metrics_scratch
+                    .iter()
+                    .any(|(cached, _)| *cached == font_handle)
+                {
+                    continue;
+                }
+                let metrics = shaper
+                    .font_metrics(font_handle)
+                    .ok_or(EngineError::FontMetricsMissing(FrameFault::default()))?;
+                self.unsafe_font_metrics_scratch
+                    .push((font_handle, metrics));
+            }
+            for font_handle in clusters
+                .layout_runs()
+                .iter()
+                .map(|run| run.font_handle)
+                .filter(|handle| *handle != 0)
+            {
+                if self
+                    .unsafe_font_metrics_scratch
+                    .iter()
+                    .any(|(cached, _)| *cached == font_handle)
+                {
+                    continue;
+                }
+                let metrics = shaper
+                    .font_metrics(font_handle)
+                    .ok_or(EngineError::FontMetricsMissing(FrameFault::default()))?;
+                self.unsafe_font_metrics_scratch
+                    .push((font_handle, metrics));
+            }
+            let cached_metrics_for = |handle| {
+                self.unsafe_font_metrics_scratch
+                    .iter()
+                    .find(|(cached, _)| *cached == handle)
+                    .map(|(_, metrics)| *metrics)
+            };
+            let cache = self.unsafe_line_cache.active_mut();
+            let shape = &mut self.unsafe_shape_scratch;
+            let cluster_advances = &mut self.unsafe_cluster_advance_scratch;
+            let mut exact_measure = |line_start: usize,
+                                     line_end: usize,
+                                     base: ExactLineMetrics|
+             -> Result<ExactLineMetrics, EngineError> {
+                exact_unsafe_line_metrics(
+                    shaper,
+                    text,
+                    clusters,
+                    runs,
+                    style_storage,
+                    shape,
+                    cluster_advances,
+                    cache,
+                    line_start,
+                    line_end,
+                    base,
+                )
+            };
+            self.flow_layout
+                .pending_mut()
+                .build_with_drop_cap_context_and_exact(
+                    geometry,
+                    clusters,
+                    runs,
+                    styles,
+                    &mut self.flow_slot_scratch,
+                    paragraph_level,
+                    max_lines,
+                    max_slots_per_band,
+                    cached_metrics_for,
+                    first_font_for_stack,
+                    &mut exact_measure,
+                )?;
+        } else {
+            self.flow_layout.pending_mut().build_with_drop_cap_context(
+                geometry,
+                clusters,
+                runs,
+                styles,
+                &mut self.flow_slot_scratch,
+                paragraph_level,
+                max_lines,
+                max_slots_per_band,
+                metrics_for,
+                first_font_for_stack,
+            )?;
+        }
         let mut ellipsis_index = 0usize;
         while ellipsis_index < self.flow_layout.pending_mut().ellipsis_threads().len() {
             let flow_thread_id = self.flow_layout.pending_mut().ellipsis_threads()[ellipsis_index];
@@ -4221,6 +4429,12 @@ impl ParagraphState {
             {
                 return Err(EngineError::InvalidRequest);
             }
+            let source_shape_run_index = if source_shape.runs.is_empty() {
+                u32::MAX
+            } else {
+                u32::try_from(self.pending_boundary_shape.shape.runs.len())
+                    .map_err(|_| EngineError::ResultTooLarge)?
+            };
             let source_span = if source_shape.runs.is_empty() {
                 (
                     u32::try_from(self.pending_boundary_shape.shape.glyph_ids.len())
@@ -4246,7 +4460,11 @@ impl ParagraphState {
                 .boundary_shape
                 .records
                 .iter()
-                .find(|record| record.flow_thread_id == flow_thread_id)
+                .find(|record| {
+                    record.flow_thread_id == flow_thread_id
+                        && record.boundary_id == ELLIPSIS_BOUNDARY_ID
+                        && record.ellipsis_glyph_count != 0
+                })
                 .copied();
             let previous_ellipsis_ids = previous
                 .and_then(|record| {
@@ -4270,6 +4488,7 @@ impl ParagraphState {
                 .map_err(|_| EngineError::ResultTooLarge)?;
             self.pending_boundary_shape.records.push(BoundaryShape {
                 flow_thread_id,
+                boundary_id: ELLIPSIS_BOUNDARY_ID,
                 source_run: u32::try_from(candidate.source_run)
                     .map_err(|_| EngineError::ResultTooLarge)?,
                 cluster_start: target.boundary_cluster_start,
@@ -4279,6 +4498,7 @@ impl ParagraphState {
                 source_font_handle: candidate.source_font_handle,
                 ellipsis_binding_handle: candidate.ellipsis_binding_handle,
                 ellipsis_font_handle: candidate.ellipsis_font_handle,
+                source_shape_run_index,
                 source_glyph_start: source_span.0,
                 source_glyph_count: source_span.1,
                 ellipsis_glyph_start: ellipsis_span.0,
@@ -4288,13 +4508,37 @@ impl ParagraphState {
                 boundary_index;
             ellipsis_index += 1;
         }
+        if materialize_boundaries {
+            self.materialize_pending_unsafe_boundaries(shaper, next_glyph_id)?;
+        }
         self.flow_layout.mark_prepared();
         Ok(())
     }
 
+    fn materialize_pending_unsafe_boundaries(
+        &mut self,
+        shaper: &mut ShaperRegistry,
+        next_glyph_id: &mut u32,
+    ) -> Result<(), EngineError> {
+        materialize_unsafe_flow_boundaries(
+            self.flow_layout.pending_mut(),
+            &mut self.pending_boundary_shape,
+            &self.boundary_shape,
+            self.clusters.active(),
+            shaper,
+            self.text.active().units.as_slice(),
+            self.shaping_runs.active().runs(),
+            &self.styles.active().arena,
+            &mut self.unsafe_shape_scratch,
+            &mut self.unsafe_stable_id_scratch,
+            &mut self.unsafe_cluster_advance_scratch,
+            next_glyph_id,
+        )
+    }
+
     fn prepare_intrinsic_flow_layout(
         &mut self,
-        shaper: &ShaperRegistry,
+        shaper: &mut ShaperRegistry,
         font_stacks: &[RegisteredFontStack],
         font_bindings: &[RegisteredFontBinding],
         max_lines: u32,
@@ -4331,27 +4575,140 @@ impl ParagraphState {
 
         let clusters = self.clusters.active();
         let styles = self.styles.active().resolved.segments();
-        self.intrinsic_flow_layout_scratch.build(
-            &self.intrinsic_geometry_scratch,
-            clusters,
-            styles,
-            &mut self.intrinsic_flow_slot_scratch,
-            usize::try_from(max_lines).map_err(|_| EngineError::ResultTooLarge)?,
-            usize::try_from(max_slots_per_band).map_err(|_| EngineError::ResultTooLarge)?,
-            |handle| shaper.font_metrics(handle),
-            |stack_handle| {
-                font_stacks
-                    .binary_search_by_key(&stack_handle, |stack| stack.handle)
-                    .ok()
-                    .and_then(|index| font_stacks[index].fonts.first().copied())
-                    .and_then(|handle| {
-                        font_bindings
-                            .iter()
-                            .find(|binding| binding.handle == handle)
-                            .map(|binding| binding.shaping_handle)
-                    })
-            },
-        )
+        let style_storage = &self.styles.active().arena;
+        let runs = self.shaping_runs.active().runs();
+        let text = self.text.active().units.as_slice();
+        let max_lines = usize::try_from(max_lines).map_err(|_| EngineError::ResultTooLarge)?;
+        let max_slots_per_band =
+            usize::try_from(max_slots_per_band).map_err(|_| EngineError::ResultTooLarge)?;
+        let first_font_for_stack = |stack_handle| {
+            font_stacks
+                .binary_search_by_key(&stack_handle, |stack| stack.handle)
+                .ok()
+                .and_then(|index| font_stacks[index].fonts.first().copied())
+                .and_then(|handle| {
+                    font_bindings
+                        .iter()
+                        .find(|binding| binding.handle == handle)
+                        .map(|binding| binding.shaping_handle)
+                })
+        };
+        if clusters.has_unsafe_break {
+            self.unsafe_font_metrics_scratch.clear();
+            for style in styles {
+                let Some(font_handle) = first_font_for_stack(style.style.font_stack_handle) else {
+                    continue;
+                };
+                if self
+                    .unsafe_font_metrics_scratch
+                    .iter()
+                    .any(|(cached, _)| *cached == font_handle)
+                {
+                    continue;
+                }
+                let metrics = shaper
+                    .font_metrics(font_handle)
+                    .ok_or(EngineError::FontMetricsMissing(FrameFault::default()))?;
+                self.unsafe_font_metrics_scratch
+                    .push((font_handle, metrics));
+            }
+            for font_handle in clusters
+                .layout_runs()
+                .iter()
+                .map(|run| run.font_handle)
+                .filter(|handle| *handle != 0)
+            {
+                if self
+                    .unsafe_font_metrics_scratch
+                    .iter()
+                    .any(|(cached, _)| *cached == font_handle)
+                {
+                    continue;
+                }
+                let metrics = shaper
+                    .font_metrics(font_handle)
+                    .ok_or(EngineError::FontMetricsMissing(FrameFault::default()))?;
+                self.unsafe_font_metrics_scratch
+                    .push((font_handle, metrics));
+            }
+            let cached_metrics_for = |handle| {
+                self.unsafe_font_metrics_scratch
+                    .iter()
+                    .find(|(cached, _)| *cached == handle)
+                    .map(|(_, metrics)| *metrics)
+            };
+            let cache = self.unsafe_line_cache.active_mut();
+            let shape = &mut self.unsafe_shape_scratch;
+            let cluster_advances = &mut self.unsafe_cluster_advance_scratch;
+            let mut exact_measure = |line_start: usize,
+                                     line_end: usize,
+                                     base: ExactLineMetrics|
+             -> Result<ExactLineMetrics, EngineError> {
+                exact_unsafe_line_metrics(
+                    shaper,
+                    text,
+                    clusters,
+                    runs,
+                    style_storage,
+                    shape,
+                    cluster_advances,
+                    cache,
+                    line_start,
+                    line_end,
+                    base,
+                )
+            };
+            self.intrinsic_flow_layout_scratch
+                .build_with_drop_cap_context_and_exact(
+                    &self.intrinsic_geometry_scratch,
+                    clusters,
+                    runs,
+                    styles,
+                    &mut self.intrinsic_flow_slot_scratch,
+                    0,
+                    max_lines,
+                    max_slots_per_band,
+                    cached_metrics_for,
+                    first_font_for_stack,
+                    &mut exact_measure,
+                )?;
+            self.intrinsic_boundary_shape_scratch.clear();
+            let mut scratch_glyph_id = clusters
+                .glyph_stable_ids
+                .iter()
+                .chain(clusters.stable_ids.iter())
+                .copied()
+                .max()
+                .unwrap_or(0)
+                .checked_add(1)
+                .ok_or(EngineError::RevisionExhausted)?;
+            materialize_unsafe_flow_boundaries(
+                &mut self.intrinsic_flow_layout_scratch,
+                &mut self.intrinsic_boundary_shape_scratch,
+                &BoundaryShapeArena::default(),
+                clusters,
+                shaper,
+                text,
+                runs,
+                style_storage,
+                &mut self.unsafe_shape_scratch,
+                &mut self.unsafe_stable_id_scratch,
+                &mut self.unsafe_cluster_advance_scratch,
+                &mut scratch_glyph_id,
+            )
+        } else {
+            self.intrinsic_boundary_shape_scratch.clear();
+            self.intrinsic_flow_layout_scratch.build(
+                &self.intrinsic_geometry_scratch,
+                clusters,
+                styles,
+                &mut self.intrinsic_flow_slot_scratch,
+                max_lines,
+                max_slots_per_band,
+                |handle| shaper.font_metrics(handle),
+                first_font_for_stack,
+            )
+        }
     }
 
     fn prepare_intrinsic_positioned(&mut self, shaper: &ShaperRegistry) -> Result<(), EngineError> {
@@ -4360,21 +4717,21 @@ impl ParagraphState {
         let runs = self.shaping_runs.active().runs();
         let styles = self.styles.active().resolved.segments();
         let bidi = self.bidi.active();
-        let previous = self.positioned.active();
+        let previous = PositionedGlyphArena::default();
         let mut next_content_revision = 1;
         let mut next_run_canonical_revision = 1;
-        let boundary_shape = BoundaryShapeArena::default();
+        let previous_boundary_shape = BoundaryShapeArena::default();
         let geometry = &self.intrinsic_geometry_scratch;
         self.intrinsic_positioned_scratch.build(
-            previous,
+            &previous,
             &self.intrinsic_flow_layout_scratch,
             None,
             text,
             clusters,
             runs,
             runs,
-            &boundary_shape,
-            &boundary_shape,
+            &self.intrinsic_boundary_shape_scratch,
+            &previous_boundary_shape,
             styles,
             bidi,
             &mut self.intrinsic_identity_scratch,
@@ -4404,10 +4761,18 @@ impl ParagraphState {
 
     fn prepare_positioned(
         &mut self,
-        shaper: &ShaperRegistry,
+        shaper: &mut ShaperRegistry,
+        next_glyph_id: &mut u32,
         next_content_revision: &mut u32,
     ) -> Result<(), EngineError> {
         self.abort_positioned();
+        if self.flow_layout.is_prepared()
+            && self.clusters.active().has_unsafe_break
+            && self.pending_boundary_shape.start_indices.len()
+                != self.flow_layout.pending().fragments.len()
+        {
+            self.materialize_pending_unsafe_boundaries(shaper, next_glyph_id)?;
+        }
         let text = self.text.active().units.as_slice();
         let clusters = self.clusters.active();
         let runs = self.shaping_runs.active().runs();
@@ -4935,6 +5300,875 @@ fn allocate_glyph_id(next_glyph_id: &mut u32) -> Result<u32, EngineError> {
     Ok(stable_id)
 }
 
+const SHAPE_PRODUCE_UNSAFE_TO_CONCAT: u32 = 0x40;
+const SHAPE_BEGINNING_OF_TEXT: u32 = 0x01;
+const SHAPE_END_OF_TEXT: u32 = 0x02;
+const SHAPING_CONTEXT_SCALARS: usize = 5;
+
+const fn is_utf16_high_surrogate(unit: u16) -> bool {
+    unit >= 0xD800 && unit <= 0xDBFF
+}
+
+const fn is_utf16_low_surrogate(unit: u16) -> bool {
+    unit >= 0xDC00 && unit <= 0xDFFF
+}
+
+fn preceding_context_start(
+    text: &[u16],
+    run_start: u32,
+    item_start: u32,
+) -> Result<u32, EngineError> {
+    let lower = usize::try_from(run_start).map_err(|_| EngineError::InvalidRequest)?;
+    let mut start = usize::try_from(item_start).map_err(|_| EngineError::InvalidRequest)?;
+    if lower > start || start > text.len() {
+        return Err(EngineError::InvalidRequest);
+    }
+    let mut scalars = 0usize;
+    while start > lower && scalars < SHAPING_CONTEXT_SCALARS {
+        start -= 1;
+        if is_utf16_low_surrogate(text[start])
+            && start > lower
+            && is_utf16_high_surrogate(text[start - 1])
+        {
+            start -= 1;
+        }
+        scalars += 1;
+    }
+    u32::try_from(start).map_err(|_| EngineError::ResultTooLarge)
+}
+
+fn following_context_end(text: &[u16], item_end: u32, run_end: u32) -> Result<u32, EngineError> {
+    let mut end = usize::try_from(item_end).map_err(|_| EngineError::InvalidRequest)?;
+    let upper = usize::try_from(run_end).map_err(|_| EngineError::InvalidRequest)?;
+    if end > upper || upper > text.len() {
+        return Err(EngineError::InvalidRequest);
+    }
+    let mut scalars = 0usize;
+    while end < upper && scalars < SHAPING_CONTEXT_SCALARS {
+        let unit = text[end];
+        end += 1;
+        if is_utf16_high_surrogate(unit) && end < upper && is_utf16_low_surrogate(text[end]) {
+            end += 1;
+        }
+        scalars += 1;
+    }
+    u32::try_from(end).map_err(|_| EngineError::ResultTooLarge)
+}
+
+#[derive(Clone, Copy)]
+enum UnsafeSpanRole {
+    Left,
+    Right,
+    SelectedLine,
+}
+
+#[derive(Clone, Copy)]
+struct UnsafeSpan {
+    cluster_start: usize,
+    cluster_end: usize,
+    source_run: u32,
+    binding_handle: u32,
+    font_handle: u32,
+    metrics: ExactLineMetrics,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn shape_unsafe_span(
+    shaper: &mut ShaperRegistry,
+    text: &[u16],
+    clusters: &ClusterArena,
+    runs: &[ShapingRun],
+    styles: &StyleArena,
+    shape: &mut ShapeArena,
+    cluster_advances: &mut Vec<f64>,
+    role: UnsafeSpanRole,
+    cluster_start: usize,
+    cluster_end: usize,
+) -> Result<UnsafeSpan, EngineError> {
+    if cluster_start >= cluster_end || cluster_end > clusters.starts.len() {
+        return Err(EngineError::InvalidRequest);
+    }
+    let source_run = clusters.source_runs[cluster_start];
+    let binding_handle = clusters.binding_handles[cluster_start];
+    let font_handle = clusters.font_handles[cluster_start];
+    if source_run == u32::MAX || binding_handle == 0 || font_handle == 0 {
+        return Err(EngineError::InvalidRequest);
+    }
+    if (cluster_start..cluster_end).any(|cluster| {
+        clusters.source_runs[cluster] != source_run
+            || clusters.binding_handles[cluster] != binding_handle
+            || clusters.font_handles[cluster] != font_handle
+    }) {
+        return Err(EngineError::InvalidRequest);
+    }
+    let source_index = usize::try_from(source_run).map_err(|_| EngineError::InvalidRequest)?;
+    let run = *runs.get(source_index).ok_or(EngineError::InvalidRequest)?;
+    let item_start = clusters.starts[cluster_start];
+    let item_end = clusters.ends[cluster_end - 1];
+    if item_start < run.text_start || item_end > run.text_end {
+        return Err(EngineError::InvalidRequest);
+    }
+    let (context_start, context_end, range_flags) = match role {
+        UnsafeSpanRole::Left => (
+            preceding_context_start(text, run.text_start, item_start)?,
+            item_end,
+            SHAPE_PRODUCE_UNSAFE_TO_CONCAT
+                | SHAPE_END_OF_TEXT
+                | (u32::from(cluster_start == 0) * SHAPE_BEGINNING_OF_TEXT),
+        ),
+        UnsafeSpanRole::Right => (
+            item_start,
+            following_context_end(text, item_end, run.text_end)?,
+            SHAPE_PRODUCE_UNSAFE_TO_CONCAT
+                | SHAPE_BEGINNING_OF_TEXT
+                | (u32::from(cluster_end == clusters.starts.len()) * SHAPE_END_OF_TEXT),
+        ),
+        UnsafeSpanRole::SelectedLine => (
+            item_start,
+            item_end,
+            SHAPE_PRODUCE_UNSAFE_TO_CONCAT | SHAPE_BEGINNING_OF_TEXT | SHAPE_END_OF_TEXT,
+        ),
+    };
+
+    shape.clear();
+    shaper
+        .with_shaped_range(
+            font_handle,
+            text,
+            ShapeRunRef {
+                text_start: run.text_start,
+                text_end: run.text_end,
+                script: run.script,
+                language: styles.resolved_language(run.style),
+                features: styles.resolved_features(run.style),
+                direction: run.direction,
+                cluster_level: 0,
+                flags: SHAPE_PRODUCE_UNSAFE_TO_CONCAT,
+            },
+            ShapeRangeRef {
+                item_start,
+                item_end,
+                context_start,
+                context_end,
+                flags: range_flags,
+            },
+            |shaped| {
+                shape.append(
+                    source_index,
+                    font_handle,
+                    binding_handle,
+                    item_start,
+                    item_end,
+                    shaped,
+                )
+            },
+        )
+        .map_err(shaper_error)?;
+
+    let metrics = shaper
+        .font_metrics(font_handle)
+        .ok_or(EngineError::FontMetricsMissing(FrameFault::default()))?;
+    if metrics.units_per_em == 0 {
+        return Err(EngineError::InvalidRequest);
+    }
+    let scale = f64::from(run.style.font_size) / f64::from(metrics.units_per_em);
+    let cluster_count = cluster_end - cluster_start;
+    cluster_advances.clear();
+    if cluster_advances.capacity() < cluster_count {
+        cluster_advances
+            .try_reserve_exact(cluster_count - cluster_advances.capacity())
+            .map_err(|_| EngineError::ResultTooLarge)?;
+    }
+    for cluster in cluster_start..cluster_end {
+        let spacing = f64::from(run.style.letter_spacing)
+            + if clusters.flags[cluster] & CLUSTER_SPACE != 0 {
+                f64::from(run.style.word_spacing)
+            } else {
+                0.0
+            };
+        cluster_advances.push(spacing);
+    }
+    for glyph in 0..shape.glyph_ids.len() {
+        let shaped_cluster = shape.clusters[glyph];
+        let cluster = clusters
+            .starts
+            .partition_point(|start| *start <= shaped_cluster)
+            .checked_sub(1)
+            .filter(|cluster| *cluster >= cluster_start && *cluster < cluster_end)
+            .ok_or(EngineError::InvalidRequest)?;
+        let advance = f64::from(shape.x_advances[glyph].unsigned_abs()) * scale;
+        let value = cluster_advances[cluster - cluster_start] + advance;
+        if !value.is_finite() {
+            return Err(EngineError::InvalidRequest);
+        }
+        cluster_advances[cluster - cluster_start] = value;
+    }
+    let mut advance_units = 0_i64;
+    let mut space_units = 0_i64;
+    let mut trailing_space_units = 0_i64;
+    for (ordinal, advance) in cluster_advances.iter().copied().enumerate() {
+        let units = super::layout_units::layout_units_from_scaled(advance);
+        advance_units = advance_units
+            .checked_add(units)
+            .ok_or(EngineError::ResultTooLarge)?;
+        if clusters.flags[cluster_start + ordinal] & CLUSTER_SPACE != 0 {
+            space_units = space_units
+                .checked_add(units)
+                .ok_or(EngineError::ResultTooLarge)?;
+        }
+    }
+    let mut trailing = cluster_end;
+    while trailing > cluster_start && clusters.flags[trailing - 1] & CLUSTER_SPACE != 0 {
+        trailing -= 1;
+        trailing_space_units = trailing_space_units
+            .checked_add(super::layout_units::layout_units_from_scaled(
+                cluster_advances[trailing - cluster_start],
+            ))
+            .ok_or(EngineError::ResultTooLarge)?;
+    }
+    Ok(UnsafeSpan {
+        cluster_start,
+        cluster_end,
+        source_run,
+        binding_handle,
+        font_handle,
+        metrics: ExactLineMetrics {
+            advance_units,
+            space_units,
+            trailing_space_units,
+        },
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn exact_unsafe_line_metrics(
+    shaper: &mut ShaperRegistry,
+    text: &[u16],
+    clusters: &ClusterArena,
+    runs: &[ShapingRun],
+    styles: &StyleArena,
+    shape: &mut ShapeArena,
+    cluster_advances: &mut Vec<f64>,
+    cache: &mut UnsafeLineCache,
+    line_start: usize,
+    line_end: usize,
+    base: ExactLineMetrics,
+) -> Result<ExactLineMetrics, EngineError> {
+    let start_island = clusters.unsafe_splice_island(line_start);
+    let end_island = clusters.unsafe_splice_island(line_end);
+    if start_island.is_none() && end_island.is_none() {
+        return Ok(base);
+    }
+    let requires_full_line = start_island.is_some_and(|island| island.1 >= line_end)
+        || end_island.is_some_and(|island| island.0 <= line_start)
+        || start_island
+            .zip(end_island)
+            .is_some_and(|(start, end)| start.1 > end.0);
+    if requires_full_line {
+        if let Some(metrics) = cache.exact(line_start, line_end) {
+            return Ok(metrics);
+        }
+        let metrics = shape_unsafe_span(
+            shaper,
+            text,
+            clusters,
+            runs,
+            styles,
+            shape,
+            cluster_advances,
+            UnsafeSpanRole::SelectedLine,
+            line_start,
+            line_end,
+        )?
+        .metrics;
+        cache.insert_exact(line_start, line_end, metrics);
+        return Ok(metrics);
+    }
+
+    let mut corrected = base;
+    if let Some((_, island_end)) = start_island {
+        let cached = cache
+            .boundaries
+            .get(line_start)
+            .and_then(|entry| entry.right);
+        let delta = match cached {
+            Some(delta) => delta,
+            None => {
+                let metrics = shape_unsafe_span(
+                    shaper,
+                    text,
+                    clusters,
+                    runs,
+                    styles,
+                    shape,
+                    cluster_advances,
+                    UnsafeSpanRole::Right,
+                    line_start,
+                    island_end,
+                )?
+                .metrics;
+                let delta = ExactLineMetrics {
+                    advance_units: metrics.advance_units.saturating_sub(sum_layout_units(
+                        &clusters.advance_units[line_start..island_end],
+                    )?),
+                    space_units: metrics
+                        .space_units
+                        .saturating_sub(space_units_for_range(clusters, line_start, island_end)?),
+                    trailing_space_units: 0,
+                };
+                cache
+                    .boundaries
+                    .get_mut(line_start)
+                    .ok_or(EngineError::InvalidRequest)?
+                    .right = Some(delta);
+                delta
+            }
+        };
+        corrected.advance_units = corrected.advance_units.saturating_add(delta.advance_units);
+        corrected.space_units = corrected.space_units.saturating_add(delta.space_units);
+    }
+    if let Some((island_start, _)) = end_island {
+        let cached = cache.boundaries.get(line_end).and_then(|entry| entry.left);
+        let delta = match cached {
+            Some(delta) => delta,
+            None => {
+                let metrics = shape_unsafe_span(
+                    shaper,
+                    text,
+                    clusters,
+                    runs,
+                    styles,
+                    shape,
+                    cluster_advances,
+                    UnsafeSpanRole::Left,
+                    island_start,
+                    line_end,
+                )?
+                .metrics;
+                let delta = ExactLineMetrics {
+                    advance_units: metrics.advance_units.saturating_sub(sum_layout_units(
+                        &clusters.advance_units[island_start..line_end],
+                    )?),
+                    space_units: metrics.space_units.saturating_sub(space_units_for_range(
+                        clusters,
+                        island_start,
+                        line_end,
+                    )?),
+                    trailing_space_units: metrics.trailing_space_units.saturating_sub(
+                        trailing_units_for_range(clusters, island_start, line_end)?,
+                    ),
+                };
+                cache
+                    .boundaries
+                    .get_mut(line_end)
+                    .ok_or(EngineError::InvalidRequest)?
+                    .left = Some(delta);
+                delta
+            }
+        };
+        corrected.advance_units = corrected.advance_units.saturating_add(delta.advance_units);
+        corrected.space_units = corrected.space_units.saturating_add(delta.space_units);
+        corrected.trailing_space_units = corrected
+            .trailing_space_units
+            .saturating_add(delta.trailing_space_units);
+    }
+    Ok(corrected)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn exact_intrinsic_widths(
+    shaper: &mut ShaperRegistry,
+    text: &[u16],
+    clusters: &ClusterArena,
+    runs: &[ShapingRun],
+    styles: &StyleArena,
+    shape: &mut ShapeArena,
+    cluster_advances: &mut Vec<f64>,
+    cache: &mut UnsafeLineCache,
+) -> Result<IntrinsicWidths, EngineError> {
+    if let Some(widths) = cache.intrinsic_widths {
+        return Ok(widths);
+    }
+    let mut segment_start = 0usize;
+    let mut min_content_units = 0_i64;
+    for cluster in 0..clusters.starts.len() {
+        let flags = clusters.flags[cluster];
+        let (segment_end, next_start) = if flags & CLUSTER_HARD_BREAK != 0 {
+            (cluster, cluster + 1)
+        } else if flags & (CLUSTER_REQUIRED_BREAK | CLUSTER_ALLOWED_BREAK) != 0 {
+            (cluster + 1, cluster + 1)
+        } else {
+            continue;
+        };
+        if segment_end > segment_start {
+            let base = exact_metrics_for_range(clusters, segment_start, segment_end)?;
+            let exact = exact_unsafe_line_metrics(
+                shaper,
+                text,
+                clusters,
+                runs,
+                styles,
+                shape,
+                cluster_advances,
+                cache,
+                segment_start,
+                segment_end,
+                base,
+            )?;
+            min_content_units = min_content_units.max(
+                exact
+                    .advance_units
+                    .saturating_sub(exact.trailing_space_units),
+            );
+        }
+        segment_start = next_start;
+    }
+    if segment_start < clusters.starts.len() {
+        let base = exact_metrics_for_range(clusters, segment_start, clusters.starts.len())?;
+        let exact = exact_unsafe_line_metrics(
+            shaper,
+            text,
+            clusters,
+            runs,
+            styles,
+            shape,
+            cluster_advances,
+            cache,
+            segment_start,
+            clusters.starts.len(),
+            base,
+        )?;
+        min_content_units = min_content_units.max(
+            exact
+                .advance_units
+                .saturating_sub(exact.trailing_space_units),
+        );
+    }
+    let max_content_width = clusters.intrinsic_widths(WRAP_WORD).max_content_width;
+    let widths = IntrinsicWidths {
+        min_content_width: super::layout_units::scaled_from_layout_units(min_content_units.max(0)),
+        max_content_width,
+    };
+    cache.intrinsic_widths = Some(widths);
+    Ok(widths)
+}
+
+fn exact_metrics_for_range(
+    clusters: &ClusterArena,
+    start: usize,
+    end: usize,
+) -> Result<ExactLineMetrics, EngineError> {
+    Ok(ExactLineMetrics {
+        advance_units: sum_layout_units(&clusters.advance_units[start..end])?,
+        space_units: space_units_for_range(clusters, start, end)?,
+        trailing_space_units: trailing_units_for_range(clusters, start, end)?,
+    })
+}
+
+fn sum_layout_units(values: &[i64]) -> Result<i64, EngineError> {
+    values.iter().try_fold(0_i64, |sum, value| {
+        sum.checked_add(*value).ok_or(EngineError::ResultTooLarge)
+    })
+}
+
+fn space_units_for_range(
+    clusters: &ClusterArena,
+    start: usize,
+    end: usize,
+) -> Result<i64, EngineError> {
+    (start..end).try_fold(0_i64, |sum, cluster| {
+        if clusters.flags[cluster] & CLUSTER_SPACE == 0 {
+            Ok(sum)
+        } else {
+            sum.checked_add(clusters.advance_units[cluster])
+                .ok_or(EngineError::ResultTooLarge)
+        }
+    })
+}
+
+fn trailing_units_for_range(
+    clusters: &ClusterArena,
+    start: usize,
+    mut end: usize,
+) -> Result<i64, EngineError> {
+    let mut trailing = 0_i64;
+    while end > start && clusters.flags[end - 1] & CLUSTER_SPACE != 0 {
+        end -= 1;
+        trailing = trailing
+            .checked_add(clusters.advance_units[end])
+            .ok_or(EngineError::ResultTooLarge)?;
+    }
+    Ok(trailing)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn materialize_unsafe_flow_boundaries(
+    flow: &mut FlowLayoutArena,
+    output: &mut BoundaryShapeArena,
+    previous: &BoundaryShapeArena,
+    clusters: &ClusterArena,
+    shaper: &mut ShaperRegistry,
+    text: &[u16],
+    runs: &[ShapingRun],
+    styles: &StyleArena,
+    shape: &mut ShapeArena,
+    stable_ids: &mut Vec<u32>,
+    cluster_advances: &mut Vec<f64>,
+    next_glyph_id: &mut u32,
+) -> Result<(), EngineError> {
+    output.start_indices.clear();
+    output.end_indices.clear();
+    output
+        .start_indices
+        .resize(flow.fragments.len(), super::flow_composition::NO_BOUNDARY);
+    output
+        .end_indices
+        .resize(flow.fragments.len(), super::flow_composition::NO_BOUNDARY);
+    let mut covered_fragments = 0usize;
+    for line in &flow.lines {
+        let fragment_start =
+            usize::try_from(line.fragment_start).map_err(|_| EngineError::InvalidRequest)?;
+        let fragment_end = fragment_start
+            .checked_add(usize::from(line.fragment_count))
+            .ok_or(EngineError::InvalidRequest)?;
+        if fragment_start != covered_fragments || fragment_end > flow.fragments.len() {
+            return Err(EngineError::InvalidRequest);
+        }
+        for fragment_index in fragment_start..fragment_end {
+            let fragment = flow.fragments[fragment_index];
+            let line_start = usize::try_from(fragment.line.cluster_start)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let line_end = usize::try_from(fragment.line.cluster_end)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let retained_line_end =
+                if fragment.boundary_index == super::flow_composition::NO_BOUNDARY {
+                    line_end
+                } else {
+                    usize::try_from(
+                        output
+                            .record(fragment.boundary_index)
+                            .ok_or(EngineError::InvalidRequest)?
+                            .cluster_start,
+                    )
+                    .map_err(|_| EngineError::InvalidRequest)?
+                };
+            if retained_line_end > line_end {
+                return Err(EngineError::InvalidRequest);
+            }
+            if line_start >= retained_line_end {
+                continue;
+            }
+            let start_island = clusters.unsafe_splice_island(line_start);
+            let end_island = if fragment.boundary_index == super::flow_composition::NO_BOUNDARY {
+                clusters.unsafe_splice_island(line_end)
+            } else {
+                None
+            };
+            if start_island.is_none() && end_island.is_none() {
+                continue;
+            }
+            let flow_thread_id = line.flow_thread_id;
+            let requires_full_line = start_island
+                .is_some_and(|island| island.1 >= retained_line_end)
+                || end_island.is_some_and(|island| island.0 <= line_start)
+                || start_island
+                    .zip(end_island)
+                    .is_some_and(|(start, end)| start.1 > end.0);
+            if requires_full_line {
+                output.start_indices[fragment_index] = append_or_shape_unsafe_boundary(
+                    output,
+                    previous,
+                    previous.start_indices.get(fragment_index).copied(),
+                    clusters,
+                    shaper,
+                    text,
+                    runs,
+                    styles,
+                    shape,
+                    stable_ids,
+                    cluster_advances,
+                    line_start,
+                    retained_line_end,
+                    UnsafeSpanRole::SelectedLine,
+                    0,
+                    flow_thread_id,
+                    next_glyph_id,
+                )?;
+                continue;
+            }
+            if let Some((_, island_end)) = start_island {
+                output.start_indices[fragment_index] = append_or_shape_unsafe_boundary(
+                    output,
+                    previous,
+                    previous.start_indices.get(fragment_index).copied(),
+                    clusters,
+                    shaper,
+                    text,
+                    runs,
+                    styles,
+                    shape,
+                    stable_ids,
+                    cluster_advances,
+                    line_start,
+                    island_end.min(retained_line_end),
+                    UnsafeSpanRole::Right,
+                    0,
+                    flow_thread_id,
+                    next_glyph_id,
+                )?;
+            }
+            if let Some((island_start, _)) = end_island {
+                output.end_indices[fragment_index] = append_or_shape_unsafe_boundary(
+                    output,
+                    previous,
+                    previous.end_indices.get(fragment_index).copied(),
+                    clusters,
+                    shaper,
+                    text,
+                    runs,
+                    styles,
+                    shape,
+                    stable_ids,
+                    cluster_advances,
+                    island_start,
+                    line_end,
+                    UnsafeSpanRole::Left,
+                    1,
+                    flow_thread_id,
+                    next_glyph_id,
+                )?;
+            }
+        }
+        covered_fragments = fragment_end;
+    }
+    (covered_fragments == flow.fragments.len())
+        .then_some(())
+        .ok_or(EngineError::InvalidRequest)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_or_shape_unsafe_boundary(
+    output: &mut BoundaryShapeArena,
+    previous: &BoundaryShapeArena,
+    previous_index_hint: Option<u32>,
+    clusters: &ClusterArena,
+    shaper: &mut ShaperRegistry,
+    text: &[u16],
+    runs: &[ShapingRun],
+    styles: &StyleArena,
+    shape: &mut ShapeArena,
+    stable_ids: &mut Vec<u32>,
+    cluster_advances: &mut Vec<f64>,
+    cluster_start: usize,
+    cluster_end: usize,
+    span_role: UnsafeSpanRole,
+    boundary_role: u8,
+    flow_thread_id: u32,
+    next_glyph_id: &mut u32,
+) -> Result<u32, EngineError> {
+    let expected = unsafe_span_metadata(clusters, cluster_start, cluster_end)?;
+    let boundary_id = unsafe_boundary_identity(clusters, expected, boundary_role)?;
+    if let Some(index) = try_append_retained_unsafe_boundary(
+        output,
+        previous,
+        previous_index_hint,
+        expected,
+        boundary_id,
+        flow_thread_id,
+    )? {
+        return Ok(index);
+    }
+    let span = shape_unsafe_span(
+        shaper,
+        text,
+        clusters,
+        runs,
+        styles,
+        shape,
+        cluster_advances,
+        span_role,
+        cluster_start,
+        cluster_end,
+    )?;
+    stable_ids.clear();
+    append_boundary_source_ids(stable_ids, shape, clusters, next_glyph_id)?;
+    append_unsafe_boundary_record(
+        output,
+        shape,
+        stable_ids,
+        span,
+        boundary_id,
+        flow_thread_id,
+        clusters,
+    )
+}
+
+fn unsafe_span_metadata(
+    clusters: &ClusterArena,
+    cluster_start: usize,
+    cluster_end: usize,
+) -> Result<UnsafeSpan, EngineError> {
+    if cluster_start >= cluster_end || cluster_end > clusters.starts.len() {
+        return Err(EngineError::InvalidRequest);
+    }
+    let source_run = clusters.source_runs[cluster_start];
+    let binding_handle = clusters.binding_handles[cluster_start];
+    let font_handle = clusters.font_handles[cluster_start];
+    if source_run == u32::MAX
+        || binding_handle == 0
+        || font_handle == 0
+        || (cluster_start..cluster_end).any(|cluster| {
+            clusters.source_runs[cluster] != source_run
+                || clusters.binding_handles[cluster] != binding_handle
+                || clusters.font_handles[cluster] != font_handle
+        })
+    {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok(UnsafeSpan {
+        cluster_start,
+        cluster_end,
+        source_run,
+        binding_handle,
+        font_handle,
+        metrics: ExactLineMetrics {
+            advance_units: 0,
+            space_units: 0,
+            trailing_space_units: 0,
+        },
+    })
+}
+
+fn unsafe_boundary_identity(
+    clusters: &ClusterArena,
+    span: UnsafeSpan,
+    role: u8,
+) -> Result<u64, EngineError> {
+    let anchor_cluster = match role {
+        0 => span.cluster_start,
+        1 => span.cluster_end.saturating_sub(1),
+        _ => return Err(EngineError::InvalidRequest),
+    };
+    let anchor = *clusters
+        .stable_ids
+        .get(anchor_cluster)
+        .ok_or(EngineError::InvalidRequest)?;
+    Ok((u64::from(anchor) << 1) | u64::from(role))
+}
+
+fn try_append_retained_unsafe_boundary(
+    output: &mut BoundaryShapeArena,
+    previous: &BoundaryShapeArena,
+    previous_index_hint: Option<u32>,
+    expected: UnsafeSpan,
+    boundary_id: u64,
+    flow_thread_id: u32,
+) -> Result<Option<u32>, EngineError> {
+    let matches = |record: &&BoundaryShape| {
+        record.flow_thread_id == flow_thread_id
+            && record.boundary_id == boundary_id
+            && usize::try_from(record.cluster_start).ok() == Some(expected.cluster_start)
+            && usize::try_from(record.cluster_end).ok() == Some(expected.cluster_end)
+            && record.source_run == expected.source_run
+            && record.source_binding_handle == expected.binding_handle
+            && record.source_font_handle == expected.font_handle
+            && record.ellipsis_glyph_count == 0
+    };
+    let hinted = previous_index_hint
+        .filter(|index| *index != super::flow_composition::NO_BOUNDARY)
+        .and_then(|index| previous.records.get(index as usize));
+    let Some(record) = hinted
+        .filter(matches)
+        .or_else(|| previous.records.iter().find(matches))
+        .copied()
+    else {
+        return Ok(None);
+    };
+    let source_run_index =
+        usize::try_from(record.source_shape_run_index).map_err(|_| EngineError::InvalidRequest)?;
+    let retained_run_index =
+        u32::try_from(output.shape.runs.len()).map_err(|_| EngineError::ResultTooLarge)?;
+    let source_span = output
+        .shape
+        .append_from(&previous.shape, source_run_index)?;
+    let stable_start =
+        usize::try_from(record.source_glyph_start).map_err(|_| EngineError::InvalidRequest)?;
+    let stable_end = stable_start
+        .checked_add(
+            usize::try_from(record.source_glyph_count).map_err(|_| EngineError::InvalidRequest)?,
+        )
+        .ok_or(EngineError::InvalidRequest)?;
+    output.stable_ids.extend_from_slice(
+        previous
+            .stable_ids
+            .get(stable_start..stable_end)
+            .ok_or(EngineError::InvalidRequest)?,
+    );
+    let index = u32::try_from(output.records.len()).map_err(|_| EngineError::ResultTooLarge)?;
+    output.records.push(BoundaryShape {
+        source_glyph_start: source_span.0,
+        source_glyph_count: source_span.1,
+        source_shape_run_index: retained_run_index,
+        ellipsis_glyph_start: source_span.0.saturating_add(source_span.1),
+        ..record
+    });
+    Ok(Some(index))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_unsafe_boundary_record(
+    output: &mut BoundaryShapeArena,
+    source_shape: &ShapeArena,
+    source_stable_ids: &[u32],
+    span: UnsafeSpan,
+    boundary_id: u64,
+    flow_thread_id: u32,
+    clusters: &ClusterArena,
+) -> Result<u32, EngineError> {
+    let source_run_index = source_shape
+        .runs
+        .iter()
+        .position(|run| {
+            run.source_run == span.source_run
+                && usize::try_from(run.glyph_count).ok() == Some(source_shape.glyph_ids.len())
+        })
+        .ok_or(EngineError::InvalidRequest)?;
+    let output_run_index =
+        u32::try_from(output.shape.runs.len()).map_err(|_| EngineError::ResultTooLarge)?;
+    let source_span = output.shape.append_from(source_shape, source_run_index)?;
+    if source_stable_ids.len()
+        != usize::try_from(source_span.1).map_err(|_| EngineError::InvalidRequest)?
+    {
+        return Err(EngineError::InvalidRequest);
+    }
+    output.stable_ids.extend_from_slice(source_stable_ids);
+    let text_end = clusters
+        .ends
+        .get(span.cluster_end - 1)
+        .copied()
+        .ok_or(EngineError::InvalidRequest)?;
+    let index = u32::try_from(output.records.len()).map_err(|_| EngineError::ResultTooLarge)?;
+    output.records.push(BoundaryShape {
+        flow_thread_id,
+        boundary_id,
+        source_run: span.source_run,
+        cluster_start: u32::try_from(span.cluster_start)
+            .map_err(|_| EngineError::ResultTooLarge)?,
+        cluster_end: u32::try_from(span.cluster_end).map_err(|_| EngineError::ResultTooLarge)?,
+        text_end,
+        source_binding_handle: span.binding_handle,
+        source_font_handle: span.font_handle,
+        ellipsis_binding_handle: 0,
+        ellipsis_font_handle: 0,
+        source_shape_run_index: output_run_index,
+        source_glyph_start: source_span.0,
+        source_glyph_count: source_span.1,
+        ellipsis_glyph_start: source_span.0.saturating_add(source_span.1),
+        ellipsis_glyph_count: 0,
+    });
+    Ok(index)
+}
+
 fn push_fallback_span(
     spans: &mut Vec<FallbackSpan>,
     span: FallbackSpan,
@@ -5226,9 +6460,111 @@ fn gather_error(error: GatherError) -> EngineError {
 
 #[cfg(test)]
 mod tests {
-    use crate::engine::style_state::ResolvedStyle;
+    use crate::engine::{shaping_state::ShapedRun, style_state::ResolvedStyle};
 
     use super::*;
+
+    #[test]
+    fn unsafe_boundary_context_is_five_scalars_and_surrogate_safe() {
+        let text = [
+            b'x' as u16,
+            0xD83D,
+            0xDE00,
+            b'a' as u16,
+            b'b' as u16,
+            b'c' as u16,
+            b'd' as u16,
+            b'e' as u16,
+            0xD83D,
+            0xDE00,
+            b'f' as u16,
+            b'g' as u16,
+            b'h' as u16,
+            b'i' as u16,
+            b'j' as u16,
+            b'x' as u16,
+        ];
+
+        assert_eq!(preceding_context_start(&text, 1, 10), Ok(4));
+        assert_eq!(following_context_end(&text, 3, 15), Ok(8));
+        assert_eq!(preceding_context_start(&text, 6, 10), Ok(6));
+        assert_eq!(following_context_end(&text, 10, 13), Ok(13));
+    }
+
+    #[test]
+    fn retained_unsafe_boundary_reuses_its_recorded_shape_run() {
+        let expected = UnsafeSpan {
+            cluster_start: 0,
+            cluster_end: 1,
+            source_run: 7,
+            binding_handle: 9,
+            font_handle: 11,
+            metrics: ExactLineMetrics {
+                advance_units: 0,
+                space_units: 0,
+                trailing_space_units: 0,
+            },
+        };
+        let previous = BoundaryShapeArena {
+            records: vec![BoundaryShape {
+                flow_thread_id: 3,
+                boundary_id: 13,
+                source_run: 7,
+                cluster_start: 0,
+                cluster_end: 1,
+                text_end: 1,
+                source_binding_handle: 9,
+                source_font_handle: 11,
+                ellipsis_binding_handle: 0,
+                ellipsis_font_handle: 0,
+                source_shape_run_index: 1,
+                source_glyph_start: 1,
+                source_glyph_count: 1,
+                ellipsis_glyph_start: 2,
+                ellipsis_glyph_count: 0,
+            }],
+            shape: ShapeArena {
+                runs: vec![
+                    ShapedRun {
+                        source_run: 7,
+                        binding_handle: 9,
+                        font_handle: 11,
+                        text_start: 0,
+                        text_end: 1,
+                        glyph_start: 0,
+                        glyph_count: 1,
+                    },
+                    ShapedRun {
+                        source_run: 7,
+                        binding_handle: 9,
+                        font_handle: 11,
+                        text_start: 0,
+                        text_end: 1,
+                        glyph_start: 1,
+                        glyph_count: 1,
+                    },
+                ],
+                glyph_ids: vec![10, 20],
+                clusters: vec![0, 0],
+                x_advances: vec![64, 96],
+                y_advances: vec![0, 0],
+                x_offsets: vec![0, 0],
+                y_offsets: vec![0, 0],
+                glyph_flags: vec![0, 0],
+            },
+            stable_ids: vec![100, 200],
+            ..BoundaryShapeArena::default()
+        };
+        let mut output = BoundaryShapeArena::default();
+
+        assert_eq!(
+            try_append_retained_unsafe_boundary(&mut output, &previous, Some(0), expected, 13, 3,),
+            Ok(Some(0)),
+        );
+        assert_eq!(output.shape.glyph_ids, vec![20]);
+        assert_eq!(output.stable_ids, vec![200]);
+        assert_eq!(output.records[0].source_shape_run_index, 0);
+    }
 
     #[test]
     fn placement_identity_survives_run_geometry_revisions_but_distinguishes_boundary_roles() {
@@ -5254,10 +6590,12 @@ mod tests {
         let paragraph = ParagraphIncarnation(NonZeroU32::new(3).unwrap());
         let source = LayoutRunSourceKind::Boundary {
             flow_thread_id: 9,
+            boundary_id: 0,
             role: BoundaryRunRole::BoundarySource,
         };
         let ellipsis = LayoutRunSourceKind::Boundary {
             flow_thread_id: 9,
+            boundary_id: 0,
             role: BoundaryRunRole::Ellipsis,
         };
 
@@ -5324,6 +6662,83 @@ mod tests {
         assert_eq!(paragraph.next_run_canonical_revision, 18);
         assert_eq!(paragraph.pending_source_run_canonical_revision, 18);
         assert_eq!(paragraph.pending_next_run_canonical_revision, 18);
+    }
+
+    #[test]
+    fn unsafe_line_cache_follows_cluster_stage_commit_and_abort() {
+        let committed = ExactLineMetrics {
+            advance_units: 17,
+            space_units: 3,
+            trailing_space_units: 1,
+        };
+        let pending = ExactLineMetrics {
+            advance_units: 29,
+            space_units: 5,
+            trailing_space_units: 2,
+        };
+        let mut paragraph = ParagraphState::default();
+
+        let mut committed_cache = UnsafeLineCache::default();
+        committed_cache.reset(2).unwrap();
+        committed_cache.insert_exact(0, 1, committed);
+        committed_cache.intrinsic_widths = Some(IntrinsicWidths {
+            min_content_width: 17.0,
+            max_content_width: 31.0,
+        });
+        paragraph.unsafe_line_cache.reset(committed_cache);
+        paragraph.unsafe_line_cache.pending_mut().reset(3).unwrap();
+        paragraph
+            .unsafe_line_cache
+            .pending_mut()
+            .insert_exact(0, 2, pending);
+        paragraph.unsafe_line_cache.pending_mut().intrinsic_widths = Some(IntrinsicWidths {
+            min_content_width: 29.0,
+            max_content_width: 47.0,
+        });
+        paragraph.unsafe_line_cache.mark_prepared();
+        paragraph.clusters.mark_prepared();
+
+        paragraph.abort_clusters();
+
+        assert_eq!(
+            paragraph.unsafe_line_cache.active().exact(0, 1),
+            Some(committed)
+        );
+        assert_eq!(paragraph.unsafe_line_cache.active().exact(0, 2), None);
+        assert_eq!(
+            paragraph.unsafe_line_cache.active().intrinsic_widths,
+            Some(IntrinsicWidths {
+                min_content_width: 17.0,
+                max_content_width: 31.0,
+            })
+        );
+
+        paragraph.unsafe_line_cache.pending_mut().reset(3).unwrap();
+        paragraph
+            .unsafe_line_cache
+            .pending_mut()
+            .insert_exact(0, 2, pending);
+        paragraph.unsafe_line_cache.pending_mut().intrinsic_widths = Some(IntrinsicWidths {
+            min_content_width: 29.0,
+            max_content_width: 47.0,
+        });
+        paragraph.unsafe_line_cache.mark_prepared();
+        paragraph.clusters.mark_prepared();
+
+        paragraph.commit_clusters();
+
+        assert_eq!(paragraph.unsafe_line_cache.active().exact(0, 1), None);
+        assert_eq!(
+            paragraph.unsafe_line_cache.active().exact(0, 2),
+            Some(pending)
+        );
+        assert_eq!(
+            paragraph.unsafe_line_cache.active().intrinsic_widths,
+            Some(IntrinsicWidths {
+                min_content_width: 29.0,
+                max_content_width: 47.0,
+            })
+        );
     }
 
     #[test]

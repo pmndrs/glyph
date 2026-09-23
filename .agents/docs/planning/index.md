@@ -46,6 +46,8 @@
 
 ## Rendering analysis
 
+- [Allocation-light adapter publication frontier](adapter-publication-performance-frontier.md) — remaining correctness
+  and performance work needed to keep Rust authoritative while adapters bind stable views and realize minimal patches.
 - [Adaptive dirty-range uploads](dirty-range-upload-research.md) — three-flatland comparison, existing Rust upload-cost
   model, backend behavior, remaining per-buffer work, and measurement gate.
 - [MTSDF generation research](mtsdf-generation-research.md) — primary literature, implementation/license survey, owned Rust boundary, and data-oriented optimization gates.

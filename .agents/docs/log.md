@@ -8,6 +8,14 @@
   See [the benchmark package reference](packages/benchmarks.md) and D-370 in
   [the decision register](planning/decision-register.md).
 
+## 2026-09-20
+
+- **Recorded the allocation-light adapter publication frontier** — Established the invariant that Rust owns normalized
+  text state, ordering, and patch planning while JavaScript adapters bind stable views and realize patches. Catalogued the
+  remaining reconstruction and copy paths in Three, TypeGPU, and framework snapshots, and linked the scoped performance
+  and correctness follow-up in [GitHub issue #219](https://github.com/pmndrs/glyph/issues/219). See
+  [the frontier](planning/adapter-publication-performance-frontier.md).
+
 ## 2026-09-18
 
 - **Added tagged stable publishing alongside canaries** — Extended the existing npm publishing workflow so matching

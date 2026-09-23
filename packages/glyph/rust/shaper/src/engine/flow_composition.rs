@@ -13,7 +13,9 @@ use super::{
         DROP_CAP_ALIGN_TEXT_TOP, DROP_CAP_SIDE_INLINE_START, EXCLUSION_WRAP_INLINE_END,
         EXCLUSION_WRAP_INLINE_START, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, WRITING_HORIZONTAL_TB,
     },
-    line_composition::{ComposedLine, LineCursor, layout_next_line_integer},
+    line_composition::{
+        ComposedLine, ExactLineMeasure, LineCursor, layout_next_line_integer_with_exact,
+    },
     semantic_wire::FlowConstraint,
     shaping_state::ShapingRun,
     style_state::StyleSegment,
@@ -502,6 +504,38 @@ impl FlowLayoutArena {
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
     ) -> Result<(), EngineError> {
+        let mut retained_measure =
+            |_: usize, _: usize, metrics: super::line_composition::ExactLineMetrics| Ok(metrics);
+        self.build_with_drop_cap_context_and_exact(
+            geometry,
+            clusters,
+            runs,
+            styles,
+            slots,
+            paragraph_level,
+            max_lines,
+            max_slots_per_band,
+            metrics_for,
+            first_font_for_stack,
+            &mut retained_measure,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn build_with_drop_cap_context_and_exact(
+        &mut self,
+        geometry: &FlowGeometryArena,
+        clusters: &ClusterArena,
+        runs: &[ShapingRun],
+        styles: &[StyleSegment],
+        slots: &mut InlineSlotArena,
+        paragraph_level: u8,
+        max_lines: usize,
+        max_slots_per_band: usize,
+        metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
+        first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
+        exact_measure: &mut ExactLineMeasure<'_>,
+    ) -> Result<(), EngineError> {
         self.clear();
         if clusters.starts.is_empty() || geometry.constraints.is_empty() {
             return Ok(());
@@ -592,7 +626,7 @@ impl FlowLayoutArena {
                         first_font_for_stack,
                     )?;
                     let estimate = positive_extents(estimate, styles, clusters, cursor.cluster())?;
-                    match self.compose_band(
+                    match self.compose_band_with_exact(
                         geometry,
                         region_index,
                         constraint.flow_thread_id,
@@ -627,6 +661,7 @@ impl FlowLayoutArena {
                         max_slots_per_band,
                         metrics_for,
                         first_font_for_stack,
+                        exact_measure,
                     )? {
                         Some(height) => {
                             if self.lines.len() == thread_line_start + 1
@@ -1263,6 +1298,62 @@ impl FlowLayoutArena {
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
     ) -> Result<Option<f64>, EngineError> {
+        let mut retained_measure =
+            |_: usize, _: usize, metrics: super::line_composition::ExactLineMetrics| Ok(metrics);
+        self.compose_band_with_exact(
+            geometry,
+            region_index,
+            flow_thread_id,
+            region_id,
+            transform_index,
+            clip_id,
+            clusters,
+            styles,
+            slot_arena,
+            cursor,
+            block_start,
+            region_block_end,
+            initial_extents,
+            extra_cut,
+            wrap,
+            align,
+            flexible_width,
+            first_line_indent,
+            word_space_shrink,
+            max_slots,
+            metrics_for,
+            first_font_for_stack,
+            &mut retained_measure,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn compose_band_with_exact(
+        &mut self,
+        geometry: &FlowGeometryArena,
+        region_index: usize,
+        flow_thread_id: u32,
+        region_id: u32,
+        transform_index: u32,
+        clip_id: u32,
+        clusters: &ClusterArena,
+        styles: &[StyleSegment],
+        slot_arena: &mut InlineSlotArena,
+        cursor: &mut LineCursor,
+        block_start: f64,
+        region_block_end: f64,
+        initial_extents: LineExtents,
+        extra_cut: Option<InlineCut>,
+        wrap: u8,
+        align: u8,
+        flexible_width: bool,
+        first_line_indent: f64,
+        word_space_shrink: f64,
+        max_slots: usize,
+        metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
+        first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
+        exact_measure: &mut ExactLineMeasure<'_>,
+    ) -> Result<Option<f64>, EngineError> {
         let saved_cursor = *cursor;
         let fragment_start = self.fragments.len();
         let mut extents = initial_extents;
@@ -1309,7 +1400,7 @@ impl FlowLayoutArena {
                 // Slice 2b of the integer-layout-units plan: the available width
                 // quantizes to F16.16 once at this boundary and the integer fit is
                 // authoritative; the f64 twin remains only as the parity reference.
-                let Some(line) = layout_next_line_integer(
+                let Some(line) = layout_next_line_integer_with_exact(
                     clusters,
                     cursor,
                     Some(super::layout_units::layout_units_from_scaled(
@@ -1317,6 +1408,7 @@ impl FlowLayoutArena {
                     )),
                     wrap,
                     word_space_shrink,
+                    exact_measure,
                 )?
                 else {
                     break;

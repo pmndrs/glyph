@@ -46,11 +46,11 @@ export const packageSizeBudgets = {
     gzipBytes: 148_000,
     brotliBytes: 122_000,
   },
-  // Complete Rust shaping, layout, Codec execution, and command publication. The ceiling keeps less than one percent
-  // headroom plus bounded cross-host compression variance; feature attribution lives in the decision log.
+  // Complete Rust shaping, layout, Codec execution, and command publication. Unsafe legal-boundary shaping measures
+  // 1,412,956 raw/minified bytes; keep less than one percent raw headroom while preserving the reviewed compressed limits.
   'text-shaper-wasm': {
-    rawBytes: 1_385_000,
-    minifiedBytes: 1_385_000,
+    rawBytes: 1_425_000,
+    minifiedBytes: 1_425_000,
     gzipBytes: 536_000,
     brotliBytes: 413_000,
   },
