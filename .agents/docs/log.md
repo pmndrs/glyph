@@ -8,6 +8,24 @@
   See [the benchmark package reference](packages/benchmarks.md) and D-370 in
   [the decision register](planning/decision-register.md).
 
+## 2026-09-21
+
+- **Skipped repeat grapheme segmentation for package-owned formatted text** — The `txt`, React, and Vue compilers now
+  record that their frozen spans were normalized against the exact text they accompany. React and Vue transfer that proof
+  to the exact derived array created while binding loaded fonts. Three validates those spans but does not rebuild their
+  grapheme boundary grid; arbitrary caller arrays, changed text, and unaligned spans still enter the existing
+  Unicode-alignment path. Focused regressions cover positive transfer, unproven and changed-text fallback, malformed UTF-16,
+  changed-boundary fallback, text association, unaligned combining-mark input, nested React/Vue text, and invalid inline
+  properties. React also canonicalizes equal ordered FontFace-selection lists, so an equivalent nested Text render reuses
+  the mounted font store and preserves the accepted Three measurement identity instead of republishing through a fresh Font.
+  A 16-block packed Labs comparison improves 1,000 equivalent `txt` formatted-flow updates by 7.3% (`8.66` to
+  `8.03 ms`, p<.001, 95% CI -8.9..-5.9%). The framework-shaped lane separately times record cloning and provenance
+  transfer together with Three normalization; it is neutral at -2.5% and does not claim to be a React or Vue render
+  benchmark. A changed
+  trailing-span stress case and cold plain/styled-flow creation, retained plain normalization, Vue snapshot reuse, and
+  TypeGPU position updates remain below the five-percent effect threshold.
+  This is a patch-level internal performance fix with no public API change.
+
 ## 2026-09-20
 
 - **Removed the owned request-wire copy** — Planner frames now prepare checked offsets and write directly into the retained

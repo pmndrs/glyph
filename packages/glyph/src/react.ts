@@ -28,7 +28,12 @@ import {
   type FontFaceRasterOf,
   type FontFaceSource,
 } from './font-face.js';
-import { resolveRangesToClusters, type FormattedText, type TextInput } from './formatted-text.js';
+import {
+  inheritClusterAlignedSpans,
+  ownClusterAlignedSpans,
+  type FormattedText,
+  type TextInput,
+} from './formatted-text.js';
 import type { Font } from './font.js';
 import { glyph } from './glyph.js';
 import { GlyphFontError } from './loader.js';
@@ -636,8 +641,34 @@ function collectTextFontFaces(
   selected: FontSelection<RasterFormatMetadata> | FontFaceSelection,
   nested: readonly FontFaceSelection[],
 ): readonly FontFaceSelection[] {
-  if (!isFontFaceSelection(selected) || nested.includes(selected)) return nested;
-  return Object.freeze([selected, ...nested]);
+  return internFontFaceSelections(
+    !isFontFaceSelection(selected) || nested.includes(selected) ? nested : [selected, ...nested],
+  );
+}
+
+interface FontFaceSelectionListNode {
+  readonly children: WeakMap<FontFaceSelection, FontFaceSelectionListNode>;
+  canonical?: readonly FontFaceSelection[];
+}
+
+const emptyFontFaceSelections = Object.freeze([]) as readonly FontFaceSelection[];
+// Each trie edge is weak. Although a leaf's canonical array strongly retains its selections, that leaf is reachable only
+// while every FontFaceSelection key on its path is independently live; ephemeron reachability therefore does not pin
+// transient resources. Module-scope faces intentionally retain the small set of orderings an application actually uses.
+const fontFaceSelectionLists: FontFaceSelectionListNode = { children: new WeakMap() };
+
+function internFontFaceSelections(selections: readonly FontFaceSelection[]): readonly FontFaceSelection[] {
+  if (selections.length === 0) return emptyFontFaceSelections;
+  let node = fontFaceSelectionLists;
+  for (const selection of selections) {
+    let child = node.children.get(selection);
+    if (child === undefined) {
+      child = { children: new WeakMap() };
+      node.children.set(selection, child);
+    }
+    node = child;
+  }
+  return (node.canonical ??= Object.freeze([...selections]));
 }
 
 function loadedTextFont(
@@ -653,9 +684,12 @@ function bindFlattenedTextFonts(
 ): FlattenedText<RasterFormatMetadata> {
   const spans = flattened.spans.map((span): ThreeTextSpanRecord<RasterFormatMetadata> => {
     const { font, ...properties } = span;
-    return font === undefined ? properties : Object.freeze({ ...properties, font: loadedTextFont(font, loaded) });
+    return Object.freeze({ ...properties, ...(font === undefined ? {} : { font: loadedTextFont(font, loaded) }) });
   });
-  return Object.freeze({ text: flattened.text, spans: Object.freeze(spans) });
+  return Object.freeze({
+    text: flattened.text,
+    spans: inheritClusterAlignedSpans(flattened.text, flattened.spans, spans),
+  });
 }
 
 function bindDesiredFont(
@@ -1106,7 +1140,7 @@ function createMountedHookFontStore(resource: ReactFontFaceResource): MountedHoo
   };
 }
 
-/** Boundaries are JOIN offsets in the concatenated text; when a JOIN fuses a grapheme cluster across children, `resolveRangesToClusters` gives the fused cluster the earlier child's style. */
+/** Boundaries are JOIN offsets in the concatenated text; when a JOIN fuses a grapheme cluster across children, the shared cluster alignment gives the fused cluster the earlier child's style. */
 function flattenText(
   children: R3fTextChild<RasterFormatMetadata> | undefined,
   context: GlyphReactContext,
@@ -1160,7 +1194,7 @@ function flattenText(
   const text = chunks.join('');
   return Object.freeze({
     text,
-    spans: Object.freeze(resolveRangesToClusters(text, spans)),
+    spans: ownClusterAlignedSpans(text, spans),
     fontFaces: Object.freeze(fontFaces),
   });
 }

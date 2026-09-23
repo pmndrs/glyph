@@ -131,3 +131,18 @@ test('React does not let a mutated nested span swallow a fresh update', async ()
     font.dispose();
   }
 });
+
+test('React preserves layout across fresh equivalent nested text', async () => {
+  const font = await adapterFont();
+  const nested = () => createElement(Text, { style: { decoration: { underline: true } } }, 'nested span');
+  const initial = { font: font.face, text: nested() };
+  const host = await mountReactAdapter(initial);
+  try {
+    const accepted = host.text.measure();
+    await host.update({ ...initial, text: nested() });
+    assert.equal(host.text.measure(), accepted);
+  } finally {
+    await host.unmount();
+    font.dispose();
+  }
+});

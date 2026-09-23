@@ -29,7 +29,7 @@ import {
   type FontFaceRasterOf,
   type FontFaceSource,
 } from './font-face.js';
-import type { FormattedText } from './formatted-text.js';
+import { inheritClusterAlignedSpans, type FormattedText } from './formatted-text.js';
 import type { Font } from './font.js';
 import { glyph } from './glyph.js';
 import { GlyphFontError } from './loader.js';
@@ -754,11 +754,14 @@ function desiredText(
 ): DesiredVueText {
   const spans = flattened.spans.map((span): ThreeTextSpanRecord<RasterFormatMetadata> => {
     const { font, ...properties } = span;
-    return font === undefined ? properties : Object.freeze({ ...properties, font: loadedFont(font, loaded) });
+    return Object.freeze({ ...properties, ...(font === undefined ? {} : { font: loadedFont(font, loaded) }) });
   });
   return Object.freeze({
     font: loadedFont(outerFont, loaded),
-    text: Object.freeze({ text: flattened.text, spans: Object.freeze(spans) }) as FormattedText<RasterFormatMetadata>,
+    text: Object.freeze({
+      text: flattened.text,
+      spans: inheritClusterAlignedSpans(flattened.text, flattened.spans, spans),
+    }) as FormattedText<RasterFormatMetadata>,
     style: snapshotReactivePropertyList(props.textStyle, 'Text style', previous?.style),
     layout: snapshotReactivePropertyList(props.layout, 'Text layout', previous?.layout),
     constraints: snapshotReactivePropertyList(props.constraints, 'Text constraints', previous?.constraints),

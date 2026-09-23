@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:01c34eb80c09e9de760c5a226f8f586aa1d67742fb00411e412ed2efba5fd508'
+source_digest: 'sha256:5b1a1034dc73d9141cb2cf79a2ad7e1ab61afbcaf21bc96fa14adb4f2080b876'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -352,7 +352,15 @@ canonical framework-update path, which normalizes it once, reuses equal package-
 and reports whether the accepted revision changed. Neither adapter retains a caller-owned applied-state cache, so an ignored
 in-place mutation cannot swallow a later valid immutable update. Vue still detaches nested reactive records before the
 call so proxy mutation cannot rewrite a package-owned snapshot; Three adopts equal records without another clone.
-Neither adapter mutates a render-time React ref or treats object identity as paragraph correctness. `TextGroup` material
+The `txt`, React, and Vue compilers align and freeze complete span arrays once, then associate the exact array with the
+exact text whose Unicode cluster grid it uses. React and Vue transfer that package-owned proof when loaded-font binding
+derives replacement span records with unchanged boundaries. Three still range-validates every formatted update, but it
+skips rebuilding the grapheme boundary grid only for that exact proven text/array pair. Arbitrary caller arrays, text
+changes, and unproven derived arrays still use the shared cluster-alignment path before equal accepted spans may be reused.
+Malformed UTF-16 is rejected by the existing public validation path and is never marked as cluster-aligned provenance.
+Proof transfer verifies the derived array has the same ordered boundaries as its source before marking it. React
+canonicalizes equal ordered FontFace-selection lists, so equivalent nested Text renders retain their mounted font store and
+loaded Font identities. Neither adapter mutates a render-time React ref or treats object identity as paragraph correctness. `TextGroup` material
 and render order follow the same rule through one shared
 imperative apply step rather than framework prop diffing, so removing either restores the Three default. Paragraph and group
 updates request a frame on demand-rendered canvases only when the desired snapshot changed; a re-render with identical
