@@ -95,16 +95,27 @@ export interface PreparationContext {
   readonly materials: Map<string, MaterialRealization>;
   readonly newMaterials: Set<THREE.NodeMaterial>;
   readonly newTextures: Set<RetainedGpuResourceLease>;
-  readonly transforms: ReadonlyMap<number, THREE.Object3D>;
+  readonly transforms: Map<number, THREE.Object3D>;
   transformAttribute: THREE.StorageInstancedBufferAttribute;
   transformGeneration: number;
 }
 
-export interface PreparedPublication {
+interface PreparedPublicationBase {
   readonly context: PreparationContext;
   readonly bufferMutations: StagedBufferMutations;
   readonly draws: PreparedDrawReplacement;
-  readonly transforms: PreparedTransforms;
   readonly retiredMaterials: readonly THREE.NodeMaterial[];
   readonly retiredTextures: readonly RetainedGpuResourceLease[];
 }
+
+export type PreparedPublication =
+  | (PreparedPublicationBase &
+      Readonly<{
+        replacesDraws: false;
+        transforms: undefined;
+      }>)
+  | (PreparedPublicationBase &
+      Readonly<{
+        replacesDraws: true;
+        transforms: PreparedTransforms;
+      }>);
