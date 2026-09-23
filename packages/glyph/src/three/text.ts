@@ -843,6 +843,13 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       updateKeys.length === 1 && updateKeys[0] === 'text' && typeof update.text === 'string'
         ? replaceDesiredString(this.#desired, update.text)
         : normalizeDesired({ ...this.#desired, ...replacedContent(update) } as TextProperties<Format>, this.#desired);
+    if (
+      !Object.hasOwn(update, 'font') &&
+      !Object.hasOwn(update, 'material') &&
+      sameDesiredTextState(this.#desired, next)
+    ) {
+      return;
+    }
     const nextRevision = checkedNextRevision(this.#desiredRevision);
     this.#binding?.stageUpdate(this.#root.member(this), next, nextRevision);
     this.#desired = next;
@@ -1788,6 +1795,23 @@ function replaceDesiredString<Format extends RasterFormatMetadata>(
     text,
     spans: emptyTextSpans,
   });
+}
+
+function sameDesiredTextState<Format extends RasterFormatMetadata>(
+  previous: DesiredTextState<Format>,
+  next: DesiredTextState<Format>,
+): boolean {
+  return (
+    previous.font === next.font &&
+    previous.text === next.text &&
+    previous.spans === next.spans &&
+    previous.style === next.style &&
+    previous.layout === next.layout &&
+    previous.constraints === next.constraints &&
+    previous.flow === next.flow &&
+    Object.is(previous.rasterPixelRatio, next.rasterPixelRatio) &&
+    previous.material === next.material
+  );
 }
 
 function assertNoRawSpans(value: object, subject: string): void {
