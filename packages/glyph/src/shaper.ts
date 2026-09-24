@@ -138,12 +138,15 @@ class RuntimeShaperImpl implements RuntimeShaper {
 
   glyphOutline(glyph: BorrowedGlyph): GlyphOutlineContour[] {
     this.#assertActive();
-    const font = this.registry.getByHandle(glyph.fontHandle as FontHandle);
-    if (font === undefined) throw new Error('laid-out glyph font is not registered with this shaper');
+    const font = this.registry.getByHandle(glyph.fontHandle as FontHandle)!;
     let sfnt = this.#outlineSfnts.get(font.handle);
     if (sfnt === undefined) {
       const bytes = getRegisteredFontData(font).glyphOutlines;
-      if (bytes === undefined) throw new TypeError('font was baked without outlines; bake it with --outlines');
+      if (bytes === undefined) {
+        throw new TypeError(
+          'font was baked without outlines; outlines need a font prebaked with glyph bake --outlines',
+        );
+      }
       sfnt = copyIntoWasm(this.#exports, bytes);
       this.#outlineSfnts.set(font.handle, sfnt);
     }

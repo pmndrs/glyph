@@ -188,7 +188,7 @@ test('a glyph whose font was baked without outlines throws at the call', async (
   const text = three.createText({ font, text: 'Plain' });
   assert.throws(
     () => text.withGlyphs((glyphs) => glyphs.outlineAt(0)),
-    /baked without outlines; bake it with --outlines/,
+    /baked without outlines; outlines need a font prebaked with glyph bake --outlines/,
   );
   text.dispose();
   font.dispose();
