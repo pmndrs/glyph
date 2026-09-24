@@ -1,20 +1,26 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
+import type { GlyphOutlineContour } from '../glyph-outline.js';
 import type { BorrowedGlyph, BorrowedGlyphLayout, GlyphLayoutInspection } from '../layout.js';
 import type { BorrowedLayoutPublication, PlanTransport } from './handle-state.js';
+
+type OutlineDecoder = (glyph: BorrowedGlyph) => GlyphOutlineContour[];
 
 export function createBorrowedGlyphLayout(
   transport: PlanTransport,
   publication: BorrowedLayoutPublication,
-  assertActive: () => void,
+  assertOpen: () => void,
+  assertCurrent: () => void,
+  decodeOutline: OutlineDecoder,
 ): BorrowedGlyphLayout {
-  return Object.freeze(new BorrowedGlyphLayoutView(transport, publication, assertActive));
+  return Object.freeze(new BorrowedGlyphLayoutView(transport, publication, assertOpen, assertCurrent, decodeOutline));
 }
 
 export function createInspectionBorrowedGlyphLayout(
   inspection: GlyphLayoutInspection,
   assertActive: () => void,
+  decodeOutline: OutlineDecoder,
 ): BorrowedGlyphLayout {
-  return Object.freeze(new InspectionBorrowedGlyphLayoutView(inspection, assertActive));
+  return Object.freeze(new InspectionBorrowedGlyphLayoutView(inspection, assertActive, decodeOutline));
 }
 
 function assertGlyphIndex(index: number, glyphCount: number): void {
@@ -26,12 +32,23 @@ function assertGlyphIndex(index: number, glyphCount: number): void {
 class BorrowedGlyphLayoutView implements BorrowedGlyphLayout {
   readonly #transport: PlanTransport;
   readonly #publication: BorrowedLayoutPublication;
-  readonly #assertActive: () => void;
+  readonly #assertOpen: () => void;
+  readonly #assertCurrent: () => void;
+  readonly #decodeOutline: OutlineDecoder;
+  #snapshot: readonly BorrowedGlyph[] | undefined;
 
-  constructor(transport: PlanTransport, publication: BorrowedLayoutPublication, assertActive: () => void) {
+  constructor(
+    transport: PlanTransport,
+    publication: BorrowedLayoutPublication,
+    assertOpen: () => void,
+    assertCurrent: () => void,
+    decodeOutline: OutlineDecoder,
+  ) {
     this.#transport = transport;
     this.#publication = publication;
-    this.#assertActive = assertActive;
+    this.#assertOpen = assertOpen;
+    this.#assertCurrent = assertCurrent;
+    this.#decodeOutline = decodeOutline;
   }
 
   get glyphCount(): number {
@@ -41,6 +58,28 @@ class BorrowedGlyphLayoutView implements BorrowedGlyphLayout {
 
   glyphAt(index: number): BorrowedGlyph {
     this.#assertActive();
+    if (this.#snapshot === undefined) return this.#readGlyph(index);
+    assertGlyphIndex(index, this.#snapshot.length);
+    return this.#snapshot[index]!;
+  }
+
+  outlineAt(index: number): GlyphOutlineContour[] {
+    this.#assertActive();
+    if (this.#snapshot === undefined) {
+      const snapshot: BorrowedGlyph[] = [];
+      for (let glyph = 0; glyph < this.#publication.glyphCount; glyph += 1) snapshot.push(this.#readGlyph(glyph));
+      this.#snapshot = snapshot;
+    }
+    assertGlyphIndex(index, this.#snapshot.length);
+    return this.#decodeOutline(this.#snapshot[index]!);
+  }
+
+  #assertActive(): void {
+    this.#assertOpen();
+    if (this.#snapshot === undefined) this.#assertCurrent();
+  }
+
+  #readGlyph(index: number): BorrowedGlyph {
     const pointer = this.#transport.borrowParagraphGlyph(this.#publication, index);
     const layout = textShaperAbi.layouts.borrowedGlyph;
     const view = new DataView(this.#publication.memoryBuffer, pointer, layout.size);
@@ -68,10 +107,16 @@ class BorrowedGlyphLayoutView implements BorrowedGlyphLayout {
 class InspectionBorrowedGlyphLayoutView implements BorrowedGlyphLayout {
   readonly #inspection: GlyphLayoutInspection;
   readonly #assertActive: () => void;
+  readonly #decodeOutline: OutlineDecoder;
 
-  constructor(inspection: GlyphLayoutInspection, assertActive: () => void) {
+  constructor(inspection: GlyphLayoutInspection, assertActive: () => void, decodeOutline: OutlineDecoder) {
     this.#inspection = inspection;
     this.#assertActive = assertActive;
+    this.#decodeOutline = decodeOutline;
+  }
+
+  outlineAt(index: number): GlyphOutlineContour[] {
+    return this.#decodeOutline(this.glyphAt(index));
   }
 
   get glyphCount(): number {

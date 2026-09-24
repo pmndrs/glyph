@@ -1,6 +1,8 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { GlyphEngineStatusError, setGlyphEngineStatusErrorDetails, type GlyphEngineFault } from '../engine-error.js';
 import type { Font } from '../font.js';
+import type { GlyphOutlineContour } from '../glyph-outline.js';
+import type { BorrowedGlyph } from '../layout.js';
 import type { FontHandle } from '../identity.js';
 import { immutableFontStackFonts, type FontStack } from '../loaded-font.js';
 import type { RasterFormatMetadata } from '../config/raster-format.js';
@@ -260,6 +262,7 @@ const handleOpaqueBindings = new WeakMap<
 export class GlyphHandleState {
   readonly integration: string;
   readonly #identityNamespace: string;
+  readonly #shaper: RuntimeShaper;
   readonly #wireIdentities = new CodecIdScope();
   readonly #ids = new GlyphIdScope();
   readonly #exports;
@@ -313,12 +316,19 @@ export class GlyphHandleState {
     }
     this.integration = options.integration;
     this.#identityNamespace = identityNamespace ?? options.integration;
+    this.#shaper = shaper;
     this.#exports = runtimeShaperEngineExports(shaper);
     this.#owners = ownersFor(this.#exports);
     this.#onDispose = onDispose;
     this.#bindEngineFont = bindEngineFont;
     this.#assertEngineAvailable = assertEngineAvailable;
     this.#enterEngineBorrow = enterEngineBorrow;
+  }
+
+  /** @internal */
+  _glyphOutline(glyph: BorrowedGlyph): GlyphOutlineContour[] {
+    if (this.#disposed) throw new Error('Glyph handle state is disposed');
+    return this.#shaper.glyphOutline(glyph);
   }
 
   /** @internal Derive one branded ID retained until its registration or this handle is disposed. */

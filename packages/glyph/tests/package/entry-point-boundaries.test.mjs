@@ -43,7 +43,17 @@ test('application values and types stay at root while integration construction l
   );
   assert.ok(manifest.exports['./core'], 'renderer-neutral integration construction must be public');
 
-  for (const name of ['GlyphConfig', 'Codec', 'TechniqueSchema', 'RasterFormat', 'bitmap', 'msdf', 'slug']) {
+  for (const name of [
+    'GlyphConfig',
+    'Codec',
+    'TechniqueSchema',
+    'RasterFormat',
+    'bitmap',
+    'msdf',
+    'slug',
+    'GlyphOutlineContour',
+    'GlyphOutlineCurve',
+  ]) {
     assert.equal(root.has(name), true, `applications must be able to name ${name} from the root`);
   }
   for (const retiredRootName of [
