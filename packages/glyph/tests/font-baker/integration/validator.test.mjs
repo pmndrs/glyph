@@ -11,6 +11,7 @@ const GLB_MAGIC = 0x46546c67;
 const JSON_CHUNK = 0x4e4f534a;
 const BIN_CHUNK = 0x004e4942;
 let artifact;
+let outlinedArtifact;
 let cjkProfileArtifact;
 
 before(async () => {
@@ -20,6 +21,8 @@ before(async () => {
   ]);
   const baker = await createFontBaker(wasm);
   artifact = baker.bake({ source, descriptor: { formatVersion: 0, fontFaceIndex: 0 } }).artifacts[0].bytes;
+  outlinedArtifact = baker.bake({ source, descriptor: { formatVersion: 0, fontFaceIndex: 0, outlines: true } })
+    .artifacts[0].bytes;
   const cjkProfileSource = source.slice();
   for (const [sourceTag, retainedTag] of [
     ['cvt ', 'BASE'],
@@ -272,6 +275,64 @@ test('rejects semantic and embedded-payload mutations deterministically', async 
   reciprocal.extensions.PMNDRS_font_bitmap = { rasterKey: 'b'.repeat(32) };
   await rejectsWithCode(encodeDocument(artifact, reciprocal), 'RASTER_RECIPROCAL_KEY');
 });
+
+test('an outlined bake validates, and a glyph the runtime cannot decode fails validation', async () => {
+  const plain = await validateFontArtifact(artifact);
+  const outlined = await validateFontArtifact(outlinedArtifact);
+  assert.equal(outlined.shapingFingerprint, plain.shapingFingerprint, 'outlines leave the shaping identity unchanged');
+
+  const { document, binStart } = decodeDocument(outlinedArtifact);
+  const sfntStart = binStart + document.bufferViews[document.extensions.PMNDRS_font.outlines.bufferView].byteOffset;
+  const loca = outlineTable(outlinedArtifact, sfntStart, 'loca');
+  const glyf = outlineTable(outlinedArtifact, sfntStart, 'glyf');
+  const broken = outlinedArtifact.slice();
+  const offsets = new DataView(broken.buffer, loca.offset, loca.length);
+  const lastGlyph = plain.glyphCount - 1;
+  if (loca.length === (plain.glyphCount + 1) * 4) offsets.setUint32(lastGlyph * 4, glyf.length + 64, false);
+  else offsets.setUint16(lastGlyph * 2, (glyf.length + 64) / 2, false);
+  await rejectsWithCode(rechecksum(broken, sfntStart), 'OUTLINE_GLYPH_DECODE');
+});
+
+function outlineTable(bytes, sfntStart, tag) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const count = view.getUint16(sfntStart + 4, false);
+  for (let index = 0; index < count; index += 1) {
+    const record = sfntStart + 12 + index * 16;
+    if (new TextDecoder().decode(bytes.subarray(record, record + 4)) === tag) {
+      return { offset: sfntStart + view.getUint32(record + 8, false), length: view.getUint32(record + 12, false) };
+    }
+  }
+  throw new Error(`outline SFNT has no ${tag}`);
+}
+
+function rechecksum(bytes, sfntStart) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const sum = (from, length) => {
+    let total = 0;
+    for (let at = from; at < from + length; at += 4) {
+      let word = 0;
+      for (let byte = 0; byte < 4; byte += 1) word = (word << 8) | (at + byte < from + length ? bytes[at + byte] : 0);
+      total = (total + (word >>> 0)) >>> 0;
+    }
+    return total;
+  };
+  const count = view.getUint16(sfntStart + 4, false);
+  let sfntEnd = sfntStart + 12 + count * 16;
+  let head;
+  for (let index = 0; index < count; index += 1) {
+    const record = sfntStart + 12 + index * 16;
+    const offset = sfntStart + view.getUint32(record + 8, false);
+    const length = view.getUint32(record + 12, false);
+    if (new TextDecoder().decode(bytes.subarray(record, record + 4)) === 'head') {
+      head = offset;
+      view.setUint32(offset + 8, 0, false);
+    }
+    view.setUint32(record + 4, sum(offset, length), false);
+    sfntEnd = Math.max(sfntEnd, offset + ((length + 3) & ~3));
+  }
+  view.setUint32(head + 8, (0xb1b0afba - sum(sfntStart, sfntEnd - sfntStart)) >>> 0, false);
+  return bytes;
+}
 
 async function rejectsWithCode(bytes, code) {
   await assert.rejects(

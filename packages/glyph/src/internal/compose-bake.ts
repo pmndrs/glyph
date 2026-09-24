@@ -239,7 +239,7 @@ function mapReport(
   rasters: readonly RasterComposition[],
   artifacts: readonly BakeArtifact[],
 ): FontPayloadReport {
-  const shaping = core.report.shared.shaping;
+  const { shaping, outlines } = core.report.shared;
   return {
     source: core.report.source,
     shared: {
@@ -247,6 +247,7 @@ function mapReport(
         ...shaping,
         rawBytes: shaping.totalRawBytes,
       },
+      ...(outlines === undefined ? {} : { outlines: { ...outlines, rawBytes: outlines.totalRawBytes } }),
     },
     rasters: rasters.map(({ raster }) => ({ kind: raster.kind, ...raster.report })),
     containers: rasters.length === 0 ? core.report.containers : artifacts.map((artifact) => containerReport(artifact)),

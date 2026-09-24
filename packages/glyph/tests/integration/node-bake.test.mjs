@@ -675,4 +675,12 @@ test('a bake is skipped only when the artifact on disk is the whole result the r
   assert.equal(await rasterCount(), 2);
   assert.doesNotMatch(await bake(['--bitmap', '16']), /is up to date/);
   assert.equal(await rasterCount(), 1);
+
+  const hasOutlines = async () =>
+    (await validateFontArtifact(await readFile(output))).document.extensions.PMNDRS_font.outlines !== undefined;
+  assert.doesNotMatch(await bake(['--bitmap', '16', '--outlines']), /is up to date/);
+  assert.equal(await hasOutlines(), true);
+  assert.match(await bake(['--bitmap', '16', '--outlines']), /is up to date/);
+  assert.doesNotMatch(await bake(['--bitmap', '16']), /is up to date/);
+  assert.equal(await hasOutlines(), false);
 });

@@ -11,6 +11,7 @@ export interface FontBakePipelineOptions {
   readonly fontBaker: FontBakeCore;
   readonly source: Uint8Array;
   readonly fontFaceIndex: number;
+  readonly outlines?: boolean;
   readonly unicodeRanges?: readonly { readonly start: number; readonly end: number }[];
   readonly rasters: readonly ResolvedRasterBakePlan[];
   readonly signal?: AbortSignal;
@@ -53,7 +54,11 @@ export async function bakeFontPipeline(options: FontBakePipelineOptions): Promis
   const fontFaceIndex = preparation?.report.fontFaceIndex ?? options.fontFaceIndex;
   const core = options.fontBaker.bake({
     source,
-    descriptor: { formatVersion: 0, fontFaceIndex },
+    descriptor: {
+      formatVersion: 0,
+      fontFaceIndex,
+      ...(options.outlines === undefined ? {} : { outlines: options.outlines }),
+    },
   });
   timings.coreBake = performance.now() - phase;
   options.signal?.throwIfAborted();

@@ -248,6 +248,7 @@ interface DirectBakeArguments {
   readonly output: string;
   readonly glyphMap?: string;
   readonly fontFaceIndex: number;
+  readonly outlines: boolean;
   readonly bitmapStrikes?: readonly [number, ...number[]];
   readonly msdf: boolean;
   readonly msdfOptions?: MsdfOptions;
@@ -284,6 +285,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
   let glyphMap: string | undefined;
   let fontFaceIndex = 0;
   let fontFaceIndexSet = false;
+  let outlines = false;
   let split = false;
   let force = false;
   let yes = false;
@@ -320,6 +322,9 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
       if (fontFaceIndexSet) throw new TypeError('--font-face-index may be provided only once');
       fontFaceIndexSet = true;
       fontFaceIndex = nonnegativeInteger(valueAfter(argv, ++index, argument), argument);
+    } else if (argument === '--outlines') {
+      if (outlines) throw new TypeError('--outlines may be provided only once');
+      outlines = true;
     } else if (argument === '--bitmap') {
       if (bitmapStrikes !== undefined) throw new TypeError('--bitmap may be provided only once');
       bitmapStrikes = bitmapStrikeList(valueAfter(argv, ++index, argument));
@@ -360,6 +365,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
     input !== undefined ||
     output !== undefined ||
     glyphMap !== undefined ||
+    outlines ||
     bitmapStrikes !== undefined ||
     msdf ||
     slug ||
@@ -390,6 +396,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
             output: output ?? derivedOutputPath(input!),
             ...(glyphMap === undefined ? {} : { glyphMap }),
             fontFaceIndex,
+            outlines,
             ...(bitmapStrikes === undefined ? {} : { bitmapStrikes }),
             msdf,
             ...(msdfOptions === undefined ? {} : { msdfOptions }),
@@ -451,6 +458,7 @@ async function bakeDirect(
       output: options.output,
       input: options.input,
       fontFaceIndex: options.fontFaceIndex,
+      outlines: options.outlines,
       ...(options.unicodeRanges === undefined ? {} : { unicodeRanges: options.unicodeRanges }),
       rasters: resolved.map((plan) => ({
         rasterKey: plan.rasterKey,
@@ -476,7 +484,7 @@ async function bakeDirect(
     const report = await bakeFont({
       input: options.input,
       output,
-      font: { fontFaceIndex: options.fontFaceIndex },
+      font: { fontFaceIndex: options.fontFaceIndex, outlines: options.outlines },
       ...(options.unicodeRanges === undefined ? {} : { unicodeRanges: options.unicodeRanges }),
       rasters: plans,
     });
@@ -736,6 +744,7 @@ Direct font options:
   --unicodes <set>       Unicode set used to prepare a smaller source font
                         Example: U+0020-007E,U+00A0-00FF,U+4E00-9FFF
                         Selects code points, not raw glyph IDs
+  --outlines             Also keep every glyph's outline, read with outlineAt() in withGlyphs()
 
 Raster options:
   --bitmap <ppem,...>    Embed Bitmap at positive integer ppem strikes (example: 16,32)

@@ -316,8 +316,28 @@ async function validateFontSemantics(
     0,
     bufferViews.length - 1,
   );
-  if (new Set([shapingIndex, extentsIndex, availabilityIndex]).size !== 3) {
-    fail('FONT_BUFFER_VIEW_ALIAS', 'shaping, extents, and availability must use distinct buffer views');
+  const outlines =
+    font.outlines === undefined
+      ? undefined
+      : requireNonArrayObject(font.outlines, 'outlines', '/extensions/PMNDRS_font/outlines');
+  const outlineIndex =
+    outlines === undefined
+      ? undefined
+      : asInteger(
+          outlines.bufferView,
+          'outline bufferView',
+          '/extensions/PMNDRS_font/outlines/bufferView',
+          0,
+          bufferViews.length - 1,
+        );
+  const coreIndices = [
+    shapingIndex,
+    extentsIndex,
+    availabilityIndex,
+    ...(outlineIndex === undefined ? [] : [outlineIndex]),
+  ];
+  if (new Set(coreIndices).size !== coreIndices.length) {
+    fail('FONT_BUFFER_VIEW_ALIAS', 'shaping, extents, availability, and outlines must use distinct buffer views');
   }
   const rasters = asArray(font.rasters, 'rasters', '/extensions/PMNDRS_font/rasters');
   const hasEmbeddedRaster = rasters.some((value, index) => {
@@ -325,10 +345,10 @@ async function validateFontSemantics(
     const raster = requireNonArrayObject(value, 'raster', path);
     return requireNonArrayObject(raster.source, 'source', `${path}/source`).type === 'embedded';
   });
-  if (!hasEmbeddedRaster && bufferViews.length !== 3) {
+  if (!hasEmbeddedRaster && bufferViews.length !== coreIndices.length) {
     fail(
       'BUFFER_VIEW_UNCLAIMED',
-      'a core-only font artifact must contain exactly its three shaping buffer views',
+      'a core-only font artifact must contain exactly its shaping and outline buffer views',
       '/bufferViews',
     );
   }
@@ -356,6 +376,11 @@ async function validateFontSemantics(
   const glyphExtentsAvailability = sliceView(bin, availabilityView);
   validateShapingSfnt(shapingSfnt, metrics);
   validateExtents(glyphExtents, glyphExtentsAvailability, glyphCount);
+  if (outlineIndex !== undefined) {
+    const outlineSfnt = sliceView(bin, bufferViews[outlineIndex]!);
+    validateOutlineSfnt(outlineSfnt, metrics);
+    await validateOutlineGlyphs(outlineSfnt, glyphCount);
+  }
   const shapingFingerprint = asString(
     shaping.fingerprint,
     'shaping fingerprint',
@@ -437,14 +462,19 @@ function sliceView(bin: Uint8Array, view: ResolvedBufferView): Uint8Array {
   return bin.subarray(view.byteOffset, view.byteOffset + view.byteLength);
 }
 
-function validateShapingSfnt(bytes: Uint8Array, metrics: Readonly<Record<string, unknown>>): void {
-  if (bytes.byteLength < 12) fail('SFNT_HEADER', 'shaping SFNT is shorter than its offset table');
+function readSfntTables(
+  bytes: Uint8Array,
+  profile: ReadonlySet<string>,
+  code: 'SFNT' | 'OUTLINE_SFNT',
+  label: string,
+): Map<string, Uint8Array> {
+  if (bytes.byteLength < 12) fail(`${code}_HEADER`, `${label} is shorter than its offset table`);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const scalerType = view.getUint32(0, false);
-  if (scalerType !== 0x0001_0000 && scalerType !== 0x4f54_544f) fail('SFNT_FLAVOR', 'unsupported shaping SFNT flavor');
+  if (scalerType !== 0x0001_0000 && scalerType !== 0x4f54_544f) fail(`${code}_FLAVOR`, `unsupported ${label} flavor`);
   const count = view.getUint16(4, false);
   const directoryBytes = 12 + count * 16;
-  if (directoryBytes > bytes.byteLength) fail('SFNT_DIRECTORY', 'SFNT directory exceeds the shaping view');
+  if (directoryBytes > bytes.byteLength) fail(`${code}_DIRECTORY`, `${label} directory exceeds its view`);
   const entrySelector = count === 0 ? 0 : Math.floor(Math.log2(count));
   const searchRange = count === 0 ? 0 : 16 * 2 ** entrySelector;
   if (
@@ -452,24 +482,8 @@ function validateShapingSfnt(bytes: Uint8Array, metrics: Readonly<Record<string,
     view.getUint16(8, false) !== entrySelector ||
     view.getUint16(10, false) !== count * 16 - searchRange
   ) {
-    fail('SFNT_SEARCH_FIELDS', 'SFNT search fields are inconsistent');
+    fail(`${code}_SEARCH_FIELDS`, `${label} search fields are inconsistent`);
   }
-  const allowed = new Set([
-    'BASE',
-    'GDEF',
-    'GPOS',
-    'GSUB',
-    'OS/2',
-    'VORG',
-    'cmap',
-    'head',
-    'hhea',
-    'hmtx',
-    'kern',
-    'maxp',
-    'vhea',
-    'vmtx',
-  ]);
   const tables = new Map<string, Uint8Array>();
   const ranges: [number, number][] = [];
   let previousTag = '';
@@ -484,38 +498,63 @@ function validateShapingSfnt(bytes: Uint8Array, metrics: Readonly<Record<string,
     const expectedChecksum = view.getUint32(record + 4, false);
     const offset = view.getUint32(record + 8, false);
     const byteLength = view.getUint32(record + 12, false);
-    if (!allowed.has(tag)) fail('SFNT_TABLE_PROFILE', `table ${tag} is outside the closed shaping profile`);
-    if (previousTag >= tag) fail('SFNT_TABLE_ORDER', 'SFNT table tags must be unique and sorted');
+    if (!profile.has(tag)) fail(`${code}_TABLE_PROFILE`, `table ${tag} is outside the closed ${label} profile`);
+    if (previousTag >= tag) fail(`${code}_TABLE_ORDER`, `${label} table tags must be unique and sorted`);
     if ((offset & 3) !== 0 || offset < directoryBytes || offset > bytes.byteLength - byteLength)
-      fail('SFNT_TABLE_RANGE', `table ${tag} has an invalid range`);
+      fail(`${code}_TABLE_RANGE`, `table ${tag} has an invalid range`);
     const table = bytes.subarray(offset, offset + byteLength);
     // Buffer overrides Uint8Array#slice with an aliasing view. Always make an
     // explicit typed-array copy before zeroing checksumAdjustment so validation
     // is observationally pure for bytes read through Node's filesystem APIs.
     const checksumInput = tag === 'head' ? new Uint8Array(table) : table;
     if (tag === 'head') {
-      if (checksumInput.byteLength < 12) fail('SFNT_HEAD_LENGTH', 'head table is too short');
+      if (checksumInput.byteLength < 12) fail(`${code}_HEAD_LENGTH`, 'head table is too short');
       checksumInput.fill(0, 8, 12);
     }
-    if (checksum(checksumInput) !== expectedChecksum) fail('SFNT_TABLE_CHECKSUM', `table ${tag} checksum mismatch`);
+    if (checksum(checksumInput) !== expectedChecksum) fail(`${code}_TABLE_CHECKSUM`, `table ${tag} checksum mismatch`);
     const paddedEnd = align4(offset + byteLength);
     if (paddedEnd > bytes.byteLength || !allZero(bytes.subarray(offset + byteLength, paddedEnd)))
-      fail('SFNT_TABLE_PADDING', `table ${tag} padding is invalid`);
+      fail(`${code}_TABLE_PADDING`, `table ${tag} padding is invalid`);
     tables.set(tag, table);
     ranges.push([offset, paddedEnd]);
     previousTag = tag;
   }
-  for (const tag of ['OS/2', 'cmap', 'head', 'hhea', 'hmtx', 'maxp']) {
-    if (!tables.has(tag)) fail('SFNT_REQUIRED_TABLE', `shaping SFNT is missing ${tag}`);
-  }
   ranges.sort((left, right) => left[0] - right[0]);
   let end = directoryBytes;
   for (const range of ranges) {
-    if (range[0] < end) fail('SFNT_TABLE_OVERLAP', 'SFNT tables overlap');
+    if (range[0] < end) fail(`${code}_TABLE_OVERLAP`, `${label} tables overlap`);
     end = range[1];
   }
-  if (end !== bytes.byteLength) fail('SFNT_TRAILING_DATA', 'SFNT has unaccounted trailing bytes');
-  if (checksum(bytes) !== 0xb1b0_afba) fail('SFNT_CHECKSUM_ADJUSTMENT', 'SFNT whole-font checksum is invalid');
+  if (end !== bytes.byteLength) fail(`${code}_TRAILING_DATA`, `${label} has unaccounted trailing bytes`);
+  if (checksum(bytes) !== 0xb1b0_afba) fail(`${code}_CHECKSUM_ADJUSTMENT`, `${label} whole-font checksum is invalid`);
+  return tables;
+}
+
+function validateShapingSfnt(bytes: Uint8Array, metrics: Readonly<Record<string, unknown>>): void {
+  const tables = readSfntTables(
+    bytes,
+    new Set([
+      'BASE',
+      'GDEF',
+      'GPOS',
+      'GSUB',
+      'OS/2',
+      'VORG',
+      'cmap',
+      'head',
+      'hhea',
+      'hmtx',
+      'kern',
+      'maxp',
+      'vhea',
+      'vmtx',
+    ]),
+    'SFNT',
+    'shaping SFNT',
+  );
+  for (const tag of ['OS/2', 'cmap', 'head', 'hhea', 'hmtx', 'maxp']) {
+    if (!tables.has(tag)) fail('SFNT_REQUIRED_TABLE', `shaping SFNT is missing ${tag}`);
+  }
 
   const head = tableDataView(tables, 'head', 20);
   const maxp = tableDataView(tables, 'maxp', 6);
@@ -554,6 +593,35 @@ function validateExtents(extents: Uint8Array, availability: Uint8Array, glyphCou
       fail('GLYPH_EXTENTS_ABSENT_DATA', `absent glyph ${glyphId} must have a zero extents record`);
     }
   }
+}
+
+function validateOutlineSfnt(bytes: Uint8Array, metrics: Readonly<Record<string, unknown>>): void {
+  const tables = readSfntTables(
+    bytes,
+    new Set(['CFF ', 'glyf', 'head', 'loca', 'maxp']),
+    'OUTLINE_SFNT',
+    'outline SFNT',
+  );
+  const tags = [...tables.keys()].join();
+  if (tags !== 'CFF ,head,maxp' && tags !== 'glyf,head,loca,maxp') {
+    fail(
+      'OUTLINE_SFNT_TABLES',
+      'outline SFNT must hold head, maxp, and either glyf with loca or CFF',
+      '/extensions/PMNDRS_font/outlines/bufferView',
+    );
+  }
+  if (
+    tableDataView(tables, 'head', 20).getUint16(18, false) !== metrics.unitsPerEm ||
+    tableDataView(tables, 'maxp', 6).getUint16(4, false) !== metrics.glyphCount
+  ) {
+    fail('OUTLINE_SFNT_IDENTITY', 'outline SFNT head and maxp do not match the serialized font');
+  }
+}
+
+async function validateOutlineGlyphs(sfnt: Uint8Array, glyphCount: number): Promise<void> {
+  const { decodeEveryGlyphOutline } = await import('../internal/text-shaper-module.js');
+  const error = await decodeEveryGlyphOutline(sfnt, glyphCount);
+  if (error !== undefined) fail('OUTLINE_GLYPH_DECODE', error.message, '/extensions/PMNDRS_font/outlines/bufferView');
 }
 
 function checksum(bytes: Uint8Array): number {

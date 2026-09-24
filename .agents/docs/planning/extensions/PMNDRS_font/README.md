@@ -1,7 +1,7 @@
 ---
 type: glTF Extension Specification
 title: PMNDRS_font
-description: Defines the core font, shaping payload, metrics, provenance, and raster directory extension.
+description: Defines the core font, shaping payload, metrics, provenance, optional outlines, and raster directory extension.
 tags: [gltf, extension, font, shaping]
 sources:
   - id: 'citation-1'
@@ -35,7 +35,8 @@ generated:
 
 ## Status
 
-Draft vendor extension, version 0.
+Draft vendor extension, versions 0 and 1. Version 1 adds optional glyph outlines, and only a font that carries them
+declares it; a font without outlines stays version 0, so version 0 consumers still read it.
 
 ## Dependencies
 
@@ -43,7 +44,7 @@ Written against the glTF 2.0 specification.
 
 ## Overview
 
-`PMNDRS_font` stores one baked font face for runtime text shaping. It owns a canonical static OpenType shaping payload, authoritative font metrics, deterministic provenance, and a directory of renderer-specific rasters. Glyph IDs are local to this face and are shared by all attached rasters.
+`PMNDRS_font` stores one baked font face for runtime text shaping. It owns a canonical static OpenType shaping payload, authoritative font metrics, deterministic provenance, optional decoded glyph outlines, and a directory of renderer-specific rasters. Glyph IDs are local to this face and are shared by all attached rasters.
 
 The extension separates shaping from drawing. Shaping yields glyph IDs, UTF-16 clusters, advances, offsets, and flags. Raster packages draw those glyph IDs without duplicating advances or kerning. Bitmap, MTSDF-backed MSDF, and Slug are the companion extensions currently specified by this project, not an exhaustive registry.
 
@@ -127,6 +128,33 @@ glyph metrics that must agree. It identifies compatible bake outputs; it is not 
 `metrics.glyphCount` MUST equal `maxp.numGlyphs`; `metrics.unitsPerEm` MUST equal `head.unitsPerEm`; and V0 `glyphIdWidth` MUST be `16`.
 
 When `OS/2.fsSelection.USE_TYPO_METRICS` is set, the serialized line metrics come from the OS/2 typographic fields. Otherwise they come from `hhea`. Serialized metrics are authoritative for consumers and MUST agree with that policy.
+
+### Outlines
+
+Version 1 adds an optional `outlines` object. A baker writes it only when asked; its presence is the flag. A font with
+`outlines` MUST declare version 1, and a baker SHOULD keep a font without them at version 0 so version 0 consumers still
+read it. It carries every glyph's outline for consumers that need glyph geometry independent of any raster, such as
+physics colliders or extrusion.
+
+```json
+"outlines": {
+  "format": "opentype-sfnt-outlines-v0",
+  "bufferView": 3
+}
+```
+
+`bufferView` holds an SFNT with the face's `head` and `maxp` and exactly one outline source: `glyf` with `loca`, or
+`CFF `, copied unchanged from the source face. It follows the shaping payload's canonical layout: sorted tags, 4-byte
+table alignment, zero padding, table checksums, and a valid `head.checkSumAdjustment`. `head.unitsPerEm` and
+`maxp.numGlyphs` MUST equal the serialized metrics. A baker MUST NOT write `outlines` for a face without an outline
+table, and every glyph MUST decode. Consumers decode one glyph at a time.
+
+Consumers draw the unhinted outline at the default instance. The reference consumer returns closed quadratic contours:
+TrueType quadratics exactly, a line as the quadratic whose control is its midpoint, and each CFF cubic as four
+equal-parameter quadratics. This version does not define CFF2 outlines.
+
+The outline view is a core view, distinct from the shaping views and from every raster's views. It is not part of
+`shaping.fingerprint`: baking outlines changes neither the shaping identity nor any raster's compatibility.
 
 ### Raster directory
 
