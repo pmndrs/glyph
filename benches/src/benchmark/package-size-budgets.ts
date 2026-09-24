@@ -25,12 +25,13 @@ export const packageSizeBudgets = {
     brotliBytes: 38_000,
   },
   'font-validator-js': {
-    // The current tsdown graph is 734,377 raw / 584,675 minified / 138,073 gzip / 113,039 Brotli. Keep a small
-    // cross-host compression margin without pretending the validator belongs to the ordinary runtime closure.
-    rawBytes: 741_000,
-    minifiedBytes: 585_000,
-    gzipBytes: 139_000,
-    brotliBytes: 113_500,
+    // Decoding every baked glyph outline with the text shaper (D-371) brings its bindings into the validator graph:
+    // 757,386 raw / 607,406 minified / 144,479 gzip / 118,688 Brotli, with the shaper Wasm reported as its own entry.
+    // Keep a small cross-host compression margin without pretending the validator belongs to the runtime closure.
+    rawBytes: 765_000,
+    minifiedBytes: 614_000,
+    gzipBytes: 146_000,
+    brotliBytes: 120_000,
   },
   // Portable fingerprinting moved this graph from 5,816 to 6,022 gzip bytes.
   // Linux and macOS agree byte-for-byte, so this ceiling needs no host margin.
@@ -48,11 +49,13 @@ export const packageSizeBudgets = {
   },
   // Complete Rust shaping, layout, Codec execution, and command publication. The ceiling keeps less than one percent
   // headroom plus bounded cross-host compression variance; feature attribution lives in the decision log.
+  // With its read-fonts glyph outline decoder (D-371) the shaper measures 1,427,240 raw / 525,413 gzip /
+  // 411,200 Brotli.
   'text-shaper-wasm': {
-    rawBytes: 1_385_000,
-    minifiedBytes: 1_385_000,
+    rawBytes: 1_440_000,
+    minifiedBytes: 1_440_000,
     gzipBytes: 536_000,
-    brotliBytes: 413_000,
+    brotliBytes: 418_000,
   },
   // Three realization includes projected flow and the shared placement table, with peer dependencies external.
   'three-runtime-js': {
@@ -62,17 +65,20 @@ export const packageSizeBudgets = {
     brotliBytes: 113_000,
   },
   // The React adapter includes Glyph's root and Three integration while React, R3F, and Three remain consumer peers.
+  // With outline decoding in the borrowed glyph view (D-371) the adapter measures 549,167 raw / 536,209 minified /
+  // 134,636 gzip / 111,048 Brotli.
   'react-runtime-js': {
-    rawBytes: 548_000,
-    minifiedBytes: 535_000,
+    rawBytes: 554_000,
+    minifiedBytes: 541_000,
     gzipBytes: 136_000,
     brotliBytes: 112_000,
   },
   // The Vue adapter includes Glyph's root and Three integration while Vue, Tres, and Three remain consumer peers.
-  // The initial surface measures 541,957 raw / 529,712 minified / 133,003 gzip / 109,563 Brotli bytes.
+  // With outline decoding in the borrowed glyph view (D-371) the surface measures 546,971 raw / 534,691 minified /
+  // 134,242 gzip / 110,596 Brotli.
   'vue-runtime-js': {
-    rawBytes: 546_000,
-    minifiedBytes: 534_000,
+    rawBytes: 552_000,
+    minifiedBytes: 540_000,
     gzipBytes: 136_000,
     brotliBytes: 112_000,
   },
