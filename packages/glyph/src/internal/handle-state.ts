@@ -129,7 +129,6 @@ export interface PlanPublication {
 /** @internal Fixed-size lease for demand reads from one retained positioned paragraph. */
 export interface BorrowedLayoutPublication {
   readonly publication: PlanPublication;
-  readonly memoryBuffer: ArrayBuffer;
   readonly rootId: PlannerHandle;
   readonly paragraphId: ParagraphId;
   readonly generation: number;
@@ -1400,7 +1399,6 @@ export class PlanTransport {
     }
     return Object.freeze({
       publication,
-      memoryBuffer,
       rootId,
       paragraphId: describedParagraph,
       generation: uint32Handle(view.getUint32(layout.generation, true), 'borrowed layout generation'),
@@ -1408,8 +1406,8 @@ export class PlanTransport {
     });
   }
 
-  /** @internal Returns one fixed scratch glyph record during an active layout borrow. */
-  borrowParagraphGlyph(layout: BorrowedLayoutPublication, index: number): number {
+  /** @internal Returns one fixed scratch glyph record during an active layout borrow, over current Wasm memory. */
+  borrowParagraphGlyph(layout: BorrowedLayoutPublication, index: number): DataView {
     return this.#borrowParagraphRecord(layout, index);
   }
 
@@ -1501,8 +1499,8 @@ export class PlanTransport {
     return this.#decodeResult(header, resultPointer, memoryBuffer, initialMemoryBuffer);
   }
 
-  #borrowParagraphRecord(layout: BorrowedLayoutPublication, index: number): number {
-    if (layout.rootId !== this.#handle || this.isExpired(layout.publication)) {
+  #borrowParagraphRecord(layout: BorrowedLayoutPublication, index: number): DataView {
+    if (layout.rootId !== this.#handle || this.#disposed || this.#issued.get(layout.publication) !== this.#epoch) {
       throw new Error('borrowed glyph layout has expired');
     }
     if (!Number.isSafeInteger(index) || index < 0 || index >= layout.glyphCount) {
@@ -1512,7 +1510,7 @@ export class PlanTransport {
     const memoryBuffer = this.#exports.memory.buffer;
     const record = textShaperAbi.layouts.borrowedGlyph;
     this.#assertBorrowedRange(pointer, record.size, record.alignment, memoryBuffer, 'borrowed glyph record');
-    return pointer;
+    return new DataView(memoryBuffer, pointer, record.size);
   }
 
   #assertBorrowedRange(

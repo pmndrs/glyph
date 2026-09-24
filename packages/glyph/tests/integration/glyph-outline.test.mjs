@@ -151,33 +151,18 @@ test('a fallback glyph decodes from the font that shaped it', async (t) => {
   icon.dispose();
 });
 
-test('a Wasm-backed borrow keeps its records through the memory growth a decode can cause', async (t) => {
+test('a repeated read returns the same outlines, even when a decode grows engine memory', async (t) => {
   const three = await createHandle(t);
   const font = await load(bakes.inter);
   const text = three.createText({ font, text: 'Growing memory' });
-  const records = text.withGlyphs((glyphs) => {
-    glyphs.outlineAt(0);
-    engineMemory.grow(1);
-    return Array.from({ length: glyphs.glyphCount }, (_, index) => glyphs.glyphAt(index));
-  });
-  const owned = text.glyphs();
-  assert.deepEqual(
-    records.map(({ glyphId, x, y }) => [glyphId, x, y]),
-    Array.from(owned.glyphIds, (glyphId, index) => [glyphId, owned.x[index], owned.y[index]]),
+  const first = text.withGlyphs((glyphs) =>
+    Array.from({ length: glyphs.glyphCount }, (_, index) => {
+      const outline = glyphs.outlineAt(index);
+      engineMemory.grow(1);
+      return { glyph: glyphs.glyphAt(index), outline };
+    }),
   );
-
-  const fresh = three.createText({ font, text: 'Growing memory' });
-  assert.throws(
-    () =>
-      fresh.withGlyphs((glyphs) => {
-        glyphs.glyphAt(0);
-        engineMemory.grow(1);
-        return glyphs.glyphAt(1);
-      }),
-    /expired/,
-    'without a decode the same growth expires the view',
-  );
-  fresh.dispose();
+  assert.deepEqual(readOutlines(text), first);
   text.dispose();
   font.dispose();
 });

@@ -723,27 +723,19 @@ class RenderPlannerImpl {
         state.inspectionBorrowMode = 'sparse-only';
       }
     }
-    const assertOpen = (): void => {
+    const assertActive = (): void => {
       if (!active) throw new Error('borrowed glyph layout has expired');
     };
     const decodeOutline = (glyph: BorrowedGlyph) => this.#handleState._glyphOutline(glyph);
     if (inspection !== undefined) {
-      glyphs = createInspectionBorrowedGlyphLayout(inspection, assertOpen, decodeOutline);
+      glyphs = createInspectionBorrowedGlyphLayout(inspection, assertActive, decodeOutline);
     } else {
       const publication = this.#transport.borrowParagraphLayout(
         this.#queryTextRequest(state, textShaperAbi.engine.semanticViewMasks.borrowedLayout),
         state.paragraphId,
         this.#limits.maxOutputBytes,
       );
-      glyphs = createBorrowedGlyphLayout(
-        this.#transport,
-        publication,
-        assertOpen,
-        () => {
-          if (this.#transport.isExpired(publication.publication)) throw new Error('borrowed glyph layout has expired');
-        },
-        decodeOutline,
-      );
+      glyphs = createBorrowedGlyphLayout(this.#transport, publication, assertActive, decodeOutline);
       if (state.inspectionBorrowMode === 'sparse-first') state.inspectionBorrowMode = 'promotion-ready';
       this.#adoptMeasuredBindings(state);
     }
