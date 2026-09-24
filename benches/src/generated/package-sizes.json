@@ -186,11 +186,11 @@
       "label": "Font validator JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "b36eeceb53f13ce41a250da571b02cb25899882433beec7354b4b725b71c5cc0",
-      "rawBytes": 757386,
-      "minifiedBytes": 607406,
-      "gzipBytes": 144479,
-      "brotliBytes": 118688
+      "sha256": "ba27812b9a077cfc90b8b410a7b9f7a1407438af0c6b0b8b9e7ae53e8a086aef",
+      "rawBytes": 757428,
+      "minifiedBytes": 607448,
+      "gzipBytes": 144499,
+      "brotliBytes": 118566
     },
     {
       "id": "runtime-baker-host-js",
