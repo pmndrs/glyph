@@ -39,7 +39,8 @@ pnpm glyph bake --input Inter-Regular.ttf --output Inter.font.glb --bitmap 32 --
 ```
 
 Subset a font with `--unicodes U+0020-007E` to bake only a fixed range or specific glyphs for smaller font assets.  
-For an icon font, `--glyph-map <path>` outputs a JSON table keyed by the glyph name in an icon font like Font Awesome or Lucide.
+For an icon font, `--glyph-map <path>` outputs a JSON table keyed by the glyph name in an icon font like Font Awesome or Lucide.  
+Add `--outlines` to also keep every glyph's outline: inside `text.withGlyphs((glyphs) => ...)`, `glyphs.outlineAt(index)` returns that laid-out glyph's closed quadratic contours where it sits in the paragraph, for any raster format, for uses such as physics colliders.
 
 ## Measure text
 

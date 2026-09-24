@@ -28,12 +28,14 @@ read-fonts = { version = "0.41.0", default-features = false, features = ["libm"]
 serde_json = { version = "1.0.145", default-features = false, features = ["alloc"] }
 unicode-bidi = { version = "0.3.18", default-features = false }
 unicode-segmentation = { version = "=1.13.3", default-features = false, features = ["no_std"] }
+pmndrs-glyph-slug-core = { path = "../slug-core", default-features = false }
 
 [build-dependencies]
 serde_json = "1.0.145"
 
 [dev-dependencies]
 flate2 = "1.1.9"
+skrifa = { version = "=0.44.0", default-features = false, features = ["libm"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 talc = "=5.0.4"

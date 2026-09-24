@@ -3,6 +3,7 @@ use std::{string::ToString, vec::Vec};
 
 use crate::{
     error::{BakeError, BakeErrorCode},
+    outline::OutlinePayload,
     report::ProvenanceV0,
     sfnt::ShapingPayload,
 };
@@ -15,48 +16,65 @@ pub(crate) struct GlbArtifact {
 
 pub(crate) fn build_font_glb(
     shaping: &ShapingPayload,
+    outlines: Option<&OutlinePayload>,
     provenance: ProvenanceV0,
 ) -> Result<GlbArtifact, BakeError> {
-    let sfnt_offset = 0;
-    let extents_offset = align4(shaping.sfnt.len());
-    let availability_offset = extents_offset
-        .checked_add(align4(shaping.extents.len()))
-        .ok_or_else(overflow)?;
-    let bin_len = availability_offset
-        .checked_add(shaping.extents_availability.len())
-        .ok_or_else(overflow)?;
+    let mut sections: Vec<(&[u8], Option<usize>)> = vec![
+        (&shaping.sfnt, None),
+        (&shaping.extents, Some(8)),
+        (&shaping.extents_availability, None),
+    ];
+    if let Some(outlines) = outlines {
+        sections.push((&outlines.sfnt, None));
+    }
+    let mut offsets = Vec::with_capacity(sections.len());
+    let mut bin_len = 0_usize;
+    for (bytes, _) in &sections {
+        let offset = align4(bin_len);
+        offsets.push(offset);
+        bin_len = offset.checked_add(bytes.len()).ok_or_else(overflow)?;
+    }
     let mut bin = vec![0_u8; align4(bin_len)];
-    bin[sfnt_offset..sfnt_offset + shaping.sfnt.len()].copy_from_slice(&shaping.sfnt);
-    bin[extents_offset..extents_offset + shaping.extents.len()].copy_from_slice(&shaping.extents);
-    bin[availability_offset..availability_offset + shaping.extents_availability.len()]
-        .copy_from_slice(&shaping.extents_availability);
+    let mut buffer_views = Vec::with_capacity(sections.len());
+    for ((bytes, stride), offset) in sections.iter().zip(&offsets) {
+        bin[*offset..*offset + bytes.len()].copy_from_slice(bytes);
+        let mut view = json!({ "buffer": 0, "byteOffset": offset, "byteLength": bytes.len() });
+        if let Some(stride) = stride {
+            view["byteStride"] = json!(stride);
+        }
+        buffer_views.push(view);
+    }
 
+    let mut font = json!({
+        "version": 0,
+        "shaping": {
+            "format": "opentype-sfnt-harfrust-v0",
+            "bufferView": 0,
+            "fingerprint": shaping.shaping_fingerprint,
+            "fontFunctions": {
+                "glyphExtentsBufferView": 1,
+                "glyphExtentsStride": 8,
+                "glyphExtentsAvailabilityBufferView": 2
+            }
+        },
+        "metrics": shaping.metrics,
+        "provenance": provenance,
+        "rasters": []
+    });
+    if outlines.is_some() {
+        font["version"] = json!(1);
+        font["outlines"] = json!({
+            "format": "opentype-sfnt-outlines-v0",
+            "bufferView": sections.len() - 1
+        });
+    }
     let document = json!({
         "asset": { "version": "2.0", "generator": "@pmndrs/glyph" },
         "extensionsUsed": ["PMNDRS_font"],
         "extensionsRequired": ["PMNDRS_font"],
-        "extensions": { "PMNDRS_font": {
-            "version": 0,
-            "shaping": {
-                "format": "opentype-sfnt-harfrust-v0",
-                "bufferView": 0,
-                "fingerprint": shaping.shaping_fingerprint,
-                "fontFunctions": {
-                    "glyphExtentsBufferView": 1,
-                    "glyphExtentsStride": 8,
-                    "glyphExtentsAvailabilityBufferView": 2
-                }
-            },
-            "metrics": shaping.metrics,
-            "provenance": provenance,
-            "rasters": []
-        }},
+        "extensions": { "PMNDRS_font": font },
         "buffers": [{ "byteLength": bin_len }],
-        "bufferViews": [
-            { "buffer": 0, "byteOffset": sfnt_offset, "byteLength": shaping.sfnt.len() },
-            { "buffer": 0, "byteOffset": extents_offset, "byteLength": shaping.extents.len(), "byteStride": 8 },
-            { "buffer": 0, "byteOffset": availability_offset, "byteLength": shaping.extents_availability.len() }
-        ]
+        "bufferViews": buffer_views
     });
     let json_raw = serde_json::to_vec(&document)
         .map_err(|error| BakeError::new(BakeErrorCode::SerializationFailed, error.to_string()))?;

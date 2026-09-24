@@ -15,6 +15,7 @@ fn arbitrary_font_bytes_fail_safely_and_deterministically() {
         let descriptor = BakeDescriptorV0 {
             format_version: if case % 4 == 0 { 1 } else { 0 },
             font_face_index: random.next(),
+            outlines: case % 2 == 1,
         };
 
         let first = bake_font(&source, descriptor);

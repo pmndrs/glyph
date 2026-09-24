@@ -231,14 +231,18 @@ export function claimCoreRasterViews(
   const font = requireNonArrayObject(value, '/extensions/PMNDRS_font');
   const shaping = requireNonArrayObject(font.shaping, '/extensions/PMNDRS_font/shaping');
   const functions = requireNonArrayObject(shaping.fontFunctions, '/extensions/PMNDRS_font/shaping/fontFunctions');
-  for (const [candidate, path] of [
+  const outlines =
+    font.outlines === undefined ? undefined : requireNonArrayObject(font.outlines, '/extensions/PMNDRS_font/outlines');
+  const coreViews: [unknown, string][] = [
     [shaping.bufferView, '/extensions/PMNDRS_font/shaping/bufferView'],
     [functions.glyphExtentsBufferView, '/extensions/PMNDRS_font/shaping/fontFunctions/glyphExtentsBufferView'],
     [
       functions.glyphExtentsAvailabilityBufferView,
       '/extensions/PMNDRS_font/shaping/fontFunctions/glyphExtentsAvailabilityBufferView',
     ],
-  ] as const) {
+  ];
+  if (outlines !== undefined) coreViews.push([outlines.bufferView, '/extensions/PMNDRS_font/outlines/bufferView']);
+  for (const [candidate, path] of coreViews) {
     const index = asInteger(candidate, path, 0, viewCount - 1);
     if (claimed.has(index)) {
       fail('CORE_BUFFER_VIEW_ALIAS', 'core font buffer views must be distinct', path);

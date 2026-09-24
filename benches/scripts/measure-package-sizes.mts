@@ -421,6 +421,8 @@ const entries: SizeEntry[] = [
     'font-validator-js',
     'Font validator JS',
     new URL('../size-entries/font-validator.ts', import.meta.url),
+    true,
+    true,
   ),
   await measureJavaScript(
     'runtime-baker-host-js',

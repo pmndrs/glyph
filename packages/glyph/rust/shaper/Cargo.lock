@@ -145,11 +145,20 @@ version = "0.0.0"
 dependencies = [
  "flate2",
  "harfrust",
+ "pmndrs-glyph-slug-core",
  "read-fonts",
  "serde_json",
+ "skrifa",
  "talc",
  "unicode-bidi",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "pmndrs-glyph-slug-core"
+version = "0.0.0"
+dependencies = [
+ "core_maths",
 ]
 
 [[package]]
@@ -235,6 +244,17 @@ name = "simd-adler32"
 version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a219298ac11a56ea9a6d2120044824d6f01aeb034955e7af7bc16858527deea"
+
+[[package]]
+name = "skrifa"
+version = "0.44.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "819ab7d62b1d3e72d9d9dea5650bac30424f9111364bb94928dbf5ecad1baa68"
+dependencies = [
+ "bytemuck",
+ "core_maths",
+ "read-fonts",
+]
 
 [[package]]
 name = "smallvec"
