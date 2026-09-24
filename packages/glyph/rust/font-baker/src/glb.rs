@@ -63,7 +63,10 @@ pub(crate) fn build_font_glb(
     });
     if outlines.is_some() {
         font["version"] = json!(1);
-        font["outlines"] = json!({ "format": "opentype-sfnt-outlines-v0", "bufferView": 3 });
+        font["outlines"] = json!({
+            "format": "opentype-sfnt-outlines-v0",
+            "bufferView": sections.len() - 1
+        });
     }
     let document = json!({
         "asset": { "version": "2.0", "generator": "@pmndrs/glyph" },
