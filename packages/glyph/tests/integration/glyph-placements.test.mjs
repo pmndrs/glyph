@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
 
-import { glyphFlags, bitmap } from '@pmndrs/glyph';
+import { glyph, glyphFlags, bitmap } from '@pmndrs/glyph';
 import { loadFont as loadGlyphFont } from '../../dist/loader.js';
+import { defineTextMaterial, defineThreeConfig } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import { createThreeTestHandle } from '../support/three-handle.mjs';
@@ -181,14 +182,14 @@ test('breakApart carries stable line and word metadata without presentation over
     assert.ok(mounted.node.glyphs().lineCount > 1, 'the fixture must wrap so line membership is not trivial');
     const linesByWord = new Map();
     for (let index = 0; index < glyphs.count; index += 1) {
-      const glyph = glyphs.glyphAt(index);
-      assert.equal(glyph?.index, index);
-      assert.ok((glyph?.line ?? -1) >= 0);
-      assert.ok((glyph?.word ?? -2) >= -1);
-      if (glyph !== undefined && glyph.word >= 0) {
-        const lines = linesByWord.get(glyph.word) ?? new Set();
-        lines.add(glyph.line);
-        linesByWord.set(glyph.word, lines);
+      const placement = glyphs.glyphAt(index);
+      assert.equal(placement?.index, index);
+      assert.ok((placement?.line ?? -1) >= 0);
+      assert.ok((placement?.word ?? -2) >= -1);
+      if (placement !== undefined && placement.word >= 0) {
+        const lines = linesByWord.get(placement.word) ?? new Set();
+        lines.add(placement.line);
+        linesByWord.set(placement.word, lines);
       }
     }
     assert.equal(linesByWord.size, 3, 'three space-separated runs remain three words');
@@ -249,7 +250,6 @@ test('commit state distinguishes unbound, pending, and committed paragraph state
     assert.throws(() => node.breakApart(), /before its renderer state is committed/);
     scene.add(node);
     assert.equal(node.commitState().status, 'pending');
-    assert.throws(() => node.breakApart(), /before its renderer state is committed/);
     scene.updateMatrixWorld(true);
     const committed = node.commitState();
     assert.equal(committed.status, 'committed');
@@ -262,5 +262,155 @@ test('commit state distinguishes unbound, pending, and committed paragraph state
     assert.notEqual(node.commitState().revision, committed.revision);
   } finally {
     node.dispose();
+  }
+});
+
+test('committed-layout reads publish a pending paragraph in a Scene without waiting for a traversal', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont();
+  const scene = new THREE.Scene();
+  const parent = new THREE.Group();
+  const node = three.createText({ font, style: { fontSize: 16 }, text: 'ready' });
+  let copy;
+  try {
+    parent.add(node);
+    assert.equal(node.commitState().status, 'pending');
+    assert.equal(node.measureGlyphs(), undefined, 'a paragraph outside any Scene has no root publication');
+    assert.throws(() => node.breakApart(), /before its renderer state is committed/);
+
+    scene.add(parent);
+    assert.equal(node.measureGlyphs()?.length, node.measure().glyphCount);
+    assert.equal(node.commitState().status, 'committed');
+
+    node.text = 'steady';
+    assert.equal(node.commitState().status, 'pending');
+    [copy] = node.breakApart();
+    assert.equal(copy.count, node.measure().glyphCount);
+    assert.equal(node.commitState().status, 'committed');
+  } finally {
+    copy?.dispose();
+    node.dispose();
+  }
+});
+
+for (const [name, read] of [
+  ['measureGlyphs', (node) => node.measureGlyphs()],
+  ['caretAt', (node) => node.caretAt(0, 0)],
+  ['selectionRects', (node) => node.selectionRects(0, 1)],
+  ['breakApart', (node) => node.breakApart()],
+]) {
+  test(`${name} propagates publication failures from an explicit read`, async (t) => {
+    const three = await createThreeTestHandle(t);
+    const failure = new Error('material creation failed');
+    let node;
+    const material = defineTextMaterial(() => {
+      assert.throws(() => node.measureGlyphs(), /cannot be reentered/);
+      throw failure;
+    });
+    node = three.createText({ font: await loadFont(), material, text: 'ready' });
+    const scene = new THREE.Scene();
+    scene.add(node);
+    try {
+      assert.throws(
+        () => read(node),
+        (error) => error === failure,
+      );
+      assert.equal(node.error, failure);
+    } finally {
+      node.dispose();
+    }
+  });
+}
+
+for (const owner of ['text', 'group']) {
+  test(`a read retries a failed publication after explicit ${owner} material changes`, async (t) => {
+    const three = await createThreeTestHandle(t);
+    const failure = new Error('material creation failed');
+    let attempts = 0;
+    const material = defineTextMaterial(() => {
+      attempts += 1;
+      throw failure;
+    });
+    const node = three.createText({
+      font: await loadFont(),
+      text: 'ready',
+      ...(owner === 'text' ? { material } : {}),
+    });
+    const group = three.createTextGroup(owner === 'group' ? { material } : {});
+    const scene = new THREE.Scene();
+    group.add(node);
+    scene.add(group);
+    // Observing the same failure, including from onError, must not reenter or retry publication.
+    node.onError = () => assert.equal(node.measureGlyphs(), undefined);
+    let copies;
+    try {
+      assert.throws(
+        () => node.measureGlyphs(),
+        (error) => error === failure,
+      );
+      assert.equal(node.measureGlyphs(), undefined);
+      assert.throws(() => node.breakApart(), /after renderer realization failed/);
+      assert.equal(attempts, 1);
+
+      // Even a repeated failure with the same Error belongs to the new attempted revision.
+      if (owner === 'text') node.material = material;
+      else group.material = material;
+      assert.throws(
+        () => node.measureGlyphs(),
+        (error) => error === failure,
+      );
+      assert.equal(node.measureGlyphs(), undefined);
+      assert.equal(attempts, 2);
+
+      if (owner === 'text') node.material = undefined;
+      else group.material = undefined;
+      // A layout-only query may stage the repair, but must not consume the pending renderer publication.
+      assert.ok(node.computeBoundingBox().max.x > node.computeBoundingBox().min.x);
+      copies = node.breakApart();
+      assert.equal(copies[0].count, 5);
+      assert.equal(node.commitState().status, 'committed');
+      assert.equal(node.error, undefined);
+      assert.equal(group.error, undefined);
+    } finally {
+      copies?.forEach((copy) => copy?.dispose());
+      node.dispose();
+      group.dispose();
+    }
+  });
+}
+
+test('a repair skipped by fixed capacity keeps rejected draw data unavailable until publication succeeds', async (t) => {
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 6, policy: 'fixed' } }));
+  const font = await loadFont();
+  const node = three.createText({ font, text: 'ready' });
+  const group = three.createTextGroup();
+  group.add(node);
+  new THREE.Scene().add(group);
+  let extra;
+  let copies;
+  try {
+    assert.equal(node.measureGlyphs()?.length, 5);
+    const failure = new Error('material creation failed');
+    group.material = defineTextMaterial(() => {
+      throw failure;
+    });
+    assert.throws(glyph.shape.bind(glyph), (error) => error === failure);
+
+    group.material = undefined;
+    extra = three.createText({ font, text: 'more' });
+    group.add(extra);
+    node.computeBoundingBox();
+    assert.equal(node.measureGlyphs(), undefined, 'staging the repair cannot acknowledge rejected renderer data');
+    assert.throws(() => node.breakApart(), /after renderer realization failed/);
+
+    extra.dispose();
+    copies = node.breakApart();
+    assert.equal(copies[0].count, 5);
+    assert.equal(node.commitState().status, 'committed');
+  } finally {
+    copies?.forEach((copy) => copy?.dispose());
+    extra?.dispose();
+    node.dispose();
+    group.dispose();
   }
 });

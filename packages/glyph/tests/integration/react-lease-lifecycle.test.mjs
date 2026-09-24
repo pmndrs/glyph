@@ -72,6 +72,41 @@ test('Text and TextGroup retain their hosts after an application factory extensi
   }
 });
 
+test('callback refs attach a usable paragraph once and run their returned cleanup on unmount', async () => {
+  const { create } = await import('../support/r3f-test-renderer.mjs');
+  const fixture = await loadFixture();
+  const calls = [];
+  const groupRef = (object) => {
+    calls.push(object === null ? 'group:null' : 'group:attach');
+    return () => calls.push('group:cleanup');
+  };
+  // No frame is rendered: breaking apart on attach commits the pending paragraph on demand.
+  const textRef = (object) => {
+    if (object === null) {
+      calls.push('text:null');
+      return;
+    }
+    const [glyphs, decorations] = object.breakApart();
+    calls.push(`text:attach:${glyphs.count}`);
+    return () => {
+      decorations?.dispose();
+      glyphs.dispose();
+      calls.push('text:cleanup');
+    };
+  };
+  try {
+    const renderer = await create(
+      createElement(TextGroup, { ref: groupRef }, createElement(Text, { font: fixture.font, ref: textRef }, 'held')),
+    );
+    assert.deepEqual(calls.toSorted(), ['group:attach', 'text:attach:4']);
+    calls.length = 0;
+    await renderer.unmount();
+    assert.deepEqual(calls.toSorted(), ['group:cleanup', 'text:cleanup']);
+  } finally {
+    fixture.dispose();
+  }
+});
+
 test('R3F TextGroup material props update the retained Three material property', async () => {
   const { create } = await import('../support/r3f-test-renderer.mjs');
   const fixture = await loadFixture();

@@ -366,11 +366,11 @@ the Three executor decides which GPU resources can be shared safely.
 When `context.kind === 'glyph'` and `context.format === 'pmndrs.msdf'`, both `/three` and `/three/typegpu` expose
 these `Node<'float'>` fields on `context.shader`:
 
-| Field | Meaning |
-| --- | --- |
-| `fillDistance` | Corner-preserving signed distance from the median of the sampled RGB channels, minus 0.5. |
-| `trueDistance` | Smooth signed distance from the sampled alpha channel, minus 0.5; suitable for glows and bevels. |
-| `pixelRange` | Render-target pixels per normalized distance unit, using the canonical derivative-based conversion with a minimum of 1. |
+| Field          | Meaning                                                                                                                 |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `fillDistance` | Corner-preserving signed distance from the median of the sampled RGB channels, minus 0.5.                               |
+| `trueDistance` | Smooth signed distance from the sampled alpha channel, minus 0.5; suitable for glows and bevels.                        |
+| `pixelRange`   | Render-target pixels per normalized distance unit, using the canonical derivative-based conversion with a minimum of 1. |
 
 Both distances are negative outside, zero on the edge, and positive inside. They use normalized atlas distance units
 in `[-0.5, 0.5]`; multiply by `pixelRange` for the screen-space distance used by antialiasing. The values come from the
@@ -410,8 +410,14 @@ owned, already-shaped object whose existing per-glyph matrices can be manipulate
 ## Break committed glyphs into an independent object
 
 `breakApart()` copies the source paragraph's committed drawable records and any committed decoration draws into independently
-owned groups. The copy is synchronous, is available only when `commitState().status === 'committed'`, and returns a frozen
-two-entry tuple whose decoration slot is `undefined` when the paragraph has no decoration draws.
+owned groups. The copy is synchronous and returns a frozen two-entry tuple whose decoration slot is `undefined` when the
+paragraph has no decoration draws. A `pending` paragraph inside a Scene commits first through the ordinary engine-wide
+`glyph.shape()` batch, so a callback ref can break a paragraph apart as it mounts (D-369); a paragraph outside any Scene or
+one whose commit failed throws.
+
+Failures during a read-triggered commit propagate from the read. An unchanged rejected paragraph is not retried; explicit
+changes to the text or its root/group presentation allow the next read to retry without a draw. Reading the same failure
+from `onError` does not reenter publication. A successful retry clears the retained text and group errors.
 
 ```ts
 const [glyphs, decorations] = label.breakApart();
