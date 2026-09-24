@@ -197,7 +197,12 @@ export async function decodeEveryGlyphOutline(sfnt: Uint8Array, glyphCount: numb
 let defaultModulePromise: Promise<WebAssembly.Module> | undefined;
 
 function defaultModule(): Promise<WebAssembly.Module> {
-  defaultModulePromise ??= fetchDefaultWasm().then((bytes) => WebAssembly.compile(bytes));
+  defaultModulePromise ??= fetchDefaultWasm()
+    .then((bytes) => WebAssembly.compile(bytes))
+    .catch((error: unknown) => {
+      defaultModulePromise = undefined;
+      throw error;
+    });
   return defaultModulePromise;
 }
 
