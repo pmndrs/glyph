@@ -19,15 +19,10 @@ import {
   type RigidBody,
 } from 'crashcat';
 import { Body, Floor, Physics, type HeldPose } from './traits';
-import { readBodyPose } from './utils';
+import { readBodyPose, yawRotation } from './utils';
 
 export const physicsActions = createActions((world) => {
-  function attach(
-    entity: Entity,
-    handle: RigidBody,
-    mode: 'static' | 'dynamic' | 'parked' = 'dynamic',
-    stacks = false,
-  ): Entity {
+  function attach(entity: Entity, handle: RigidBody, mode: 'static' | 'dynamic' | 'parked', stacks = false): Entity {
     const physics = world.get(Physics)!;
     entity.add(Body);
     const body = entity.get(Body)!;
@@ -45,7 +40,7 @@ export const physicsActions = createActions((world) => {
   function transform(pose: HeldPose): void {
     const physics = world.get(Physics)!;
     vec3.set(physics.position, pose.x, pose.y, pose.z);
-    quat.set(physics.rotation, 0, 0, Math.sin(pose.yaw / 2), Math.cos(pose.yaw / 2));
+    yawRotation(physics.rotation, pose.yaw);
   }
 
   return {
@@ -134,7 +129,7 @@ export const physicsActions = createActions((world) => {
           })),
         }),
         position,
-        quaternion: quat.set(physics.rotation, 0, 0, Math.sin(yaw / 2), Math.cos(yaw / 2)),
+        quaternion: yawRotation(physics.rotation, yaw),
         // Letters translate and turn around the floor normal without tipping.
         allowedDegreesOfFreedom: dof(true, true, true, false, false, true),
         linearDamping: 0,
@@ -239,7 +234,6 @@ export const physicsActions = createActions((world) => {
       Object.assign(body.to, pose);
       body.mode = 'held';
       body.airborne = false;
-      body.moved = true;
       entity.set(Body, body);
     },
     releaseBody: (entity: Entity, velocity: Vec3, spin: number) => {

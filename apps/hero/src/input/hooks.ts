@@ -1,18 +1,15 @@
 import type { World } from 'koota';
 import { useEffect } from 'react';
 import { inputActions } from './actions';
-import { heroActions } from '../hero/actions';
+import { directorActions } from '../director/actions';
 import { soundActions } from '../sound/actions';
-import { Keys } from './traits';
 import { useThree } from '@react-three/fiber/webgpu';
 
-/** Synchronize browser keyboard events with the world's key state. */
+/** Replay on Space and toggle sound on M, once a press: held keys repeat with `repeat` set, and those are ignored. */
 export function useKeyboard(world: World, isReady: boolean): void {
   useEffect(() => {
-    const { setKey, clearKeys } = inputActions(world);
-    const { replayHero } = heroActions(world);
+    const { replayScene } = directorActions(world);
     const { toggleSound } = soundActions(world);
-    const keys = world.get(Keys)!;
 
     const down = (event: KeyboardEvent) => {
       if (
@@ -23,28 +20,16 @@ export function useKeyboard(world: World, isReady: boolean): void {
 
       if (event.key === ' ') event.preventDefault();
 
-      const key = event.key.toLowerCase();
+      if (event.repeat) return;
 
-      if (event.repeat || keys.has(key)) return;
+      if (event.key.toLowerCase() === 'm' && !event.metaKey && !event.ctrlKey && !event.altKey) toggleSound();
 
-      setKey(key, true);
-
-      if (key === 'm' && !event.metaKey && !event.ctrlKey && !event.altKey) toggleSound();
-
-      if (isReady && key === ' ') replayHero();
+      if (isReady && event.key === ' ') replayScene();
     };
-    const up = (event: KeyboardEvent) => setKey(event.key.toLowerCase(), false);
 
     window.addEventListener('keydown', down);
-    window.addEventListener('keyup', up);
-    window.addEventListener('blur', clearKeys);
 
-    return () => {
-      window.removeEventListener('keydown', down);
-      window.removeEventListener('keyup', up);
-      window.removeEventListener('blur', clearKeys);
-      clearKeys();
-    };
+    return () => window.removeEventListener('keydown', down);
   }, [world, isReady]);
 }
 
@@ -54,24 +39,19 @@ export function usePointer(world: World, isReady: boolean): void {
 
   useEffect(() => {
     const { movePointer, clearPointer } = inputActions(world);
-    const { pressHero } = heroActions(world);
+    const { pressScene } = directorActions(world);
 
-    const moved = (event: PointerEvent) => {
+    // The pointer's place over the canvas, in the -1..1 units the world uses, y up.
+    const at = (event: PointerEvent, send: (x: number, y: number) => void) => {
       const bounds = canvas.getBoundingClientRect();
-      movePointer(
+      send(
         ((event.clientX - bounds.left) / bounds.width) * 2 - 1,
         1 - ((event.clientY - bounds.top) / bounds.height) * 2,
       );
     };
-
+    const moved = (event: PointerEvent) => at(event, movePointer);
     const pressed = (event: PointerEvent) => {
-      if (!isReady || event.button !== 0) return;
-
-      const bounds = canvas.getBoundingClientRect();
-      pressHero(
-        ((event.clientX - bounds.left) / bounds.width) * 2 - 1,
-        1 - ((event.clientY - bounds.top) / bounds.height) * 2,
-      );
+      if (isReady && event.button === 0) at(event, pressScene);
     };
 
     canvas.addEventListener('pointermove', moved, { passive: true });

@@ -1,6 +1,6 @@
 import { trait } from 'koota';
 import type { HoleState } from '../black-hole/traits';
-import type { ModeKind } from '../hero/traits';
+import type { ModeKind } from '../director/traits';
 import { COUNT } from '../rain/content';
 
 /** The baked voices played once per cue. */
@@ -36,7 +36,7 @@ export interface SoundCue {
 export interface Heard {
   lifting: boolean;
   typed: number;
-  face: number;
+  printed: number;
   /** How many syllables the robot has said, so each greeting goes on where the last left off. */
   spoken: number;
   trips: number;
@@ -73,7 +73,7 @@ export const Sound = trait({
   heard: (): Heard => ({
     lifting: false,
     typed: 0,
-    face: 0,
+    printed: 0,
     spoken: 0,
     trips: 0,
     x: 0,

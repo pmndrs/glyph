@@ -12,3 +12,8 @@ export const BASE_Z = 0.12;
 export const RISE = 0.8;
 
 export const FACE_TEXT = 'PMNDRS';
+
+/** Along the heading, across it, and up. Shared by the visual rig and its prepared collider. */
+export const ROBOT_HALF_EXTENTS: readonly [number, number, number] = [0.68, 1.07, 1.5];
+/** How high the robot stands over the paper: its rig and its collider alike. */
+export const ROBOT_Z = 0.04;

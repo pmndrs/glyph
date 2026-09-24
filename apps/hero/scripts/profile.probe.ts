@@ -9,9 +9,12 @@ import { _roots, getScheduler } from '@react-three/fiber/webgpu';
 import { Mesh, MeshPhysicalNodeMaterial, type Object3D, WebGPUBackend, WebGPURenderer } from 'three/webgpu';
 
 const { world } = (await import(new URL('/src/world.ts', location.origin).href)) as typeof import('../src/world');
-const { Title, TitleView, ShadowView, LensView, FeatureView } = (await import(
+const { Title, TitleView, Typing, FeatureView } = (await import(
   new URL('/src/letters/traits.ts', location.origin).href
 )) as typeof import('../src/letters/traits');
+const { ShadowView, LensView } = (await import(
+  new URL('/src/glass/traits.ts', location.origin).href
+)) as typeof import('../src/glass/traits');
 const { Collapse } = (await import(
   new URL('/src/black-hole/traits.ts', location.origin).href
 )) as typeof import('../src/black-hole/traits');
@@ -19,14 +22,14 @@ const { POP_AT } = (await import(
   new URL('/src/black-hole/content.ts', location.origin).href
 )) as typeof import('../src/black-hole/content');
 const { paperMaterial } = (await import(
-  new URL('/src/hero/materials.ts', location.origin).href
-)) as typeof import('../src/hero/materials');
+  new URL('/src/paper/materials.ts', location.origin).href
+)) as typeof import('../src/paper/materials');
 while (document.documentElement.dataset.heroState !== 'ready')
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 const { actions } = (await import(new URL('/src/actions.ts', location.origin).href)) as typeof import('../src/actions');
 const {
-  replayHero: requestReplay,
+  replayScene: requestReplay,
   mountShadowView,
   unmountShadowView,
   mountLensView,
@@ -148,12 +151,12 @@ const hide = (objects: Object3D[]) => {
 };
 
 const titleEntity = world.queryFirst(Title)!;
-const shadow = titleEntity.get(ShadowView)!;
-const lens = titleEntity.get(LensView)!;
+const shadow = world.get(ShadowView)!;
+const lens = world.get(LensView)!;
 const receiver = find((object) => object.name === 'glass-shadows');
 const icons = find((object) => object.name.startsWith('icon-pattern-'));
 const paper = find((object) => object instanceof Mesh && object.material === paperMaterial);
-const feature = titleEntity.get(FeatureView)?.line.glyphs;
+const feature = world.queryFirst(Typing)!.get(FeatureView)!.line.glyphs;
 const embers = find((object) => object.name === 'star-embers');
 const glass = new Set<MeshPhysicalNodeMaterial>();
 scene.traverse((object) => {
@@ -208,17 +211,6 @@ const leaveOut: [string, () => () => void][] = [
     },
   ],
   [
-    // Transmissive double-sided glass is drawn twice, back faces then front. The letters are flat quads.
-    'glass back pass',
-    () => {
-      for (const material of glass) material.forceSinglePass = true;
-
-      return () => {
-        for (const material of glass) material.forceSinglePass = false;
-      };
-    },
-  ],
-  [
     'glass dispersion',
     () => {
       const was = [...glass].map((material) => material.dispersion);
@@ -230,7 +222,7 @@ const leaveOut: [string, () => () => void][] = [
   ['icon paper', () => hide(icons)],
   ['paper', () => hide(paper)],
   ['title glass', () => hide([titleEntity.get(TitleView)!.glyphs])],
-  ['feature line', () => hide(feature === undefined ? [] : [feature])],
+  ['feature line', () => hide([feature])],
   ['embers', () => hide(embers)],
 ];
 

@@ -1,8 +1,8 @@
 import { color, float, mix, mx_noise_float, screenSize, smoothstep, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
 import { AdditiveBlending, DoubleSide, MeshBasicNodeMaterial, type Node } from 'three/webgpu';
 import { defineTextMaterial } from '@pmndrs/glyph/three';
-import { retained } from '../hmr';
-import { EMBER_SECONDS } from './traits';
+import { retained } from '../utils';
+import { EMBER_SECONDS } from './content';
 
 /** Kept across a hot module replacement, since the mounted view writes these and the post pass reads them. */
 export const { uEmberAge, uEmberBloom, uEmberFire } = retained('star-embers', () => ({

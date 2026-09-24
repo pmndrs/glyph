@@ -10,8 +10,8 @@ import { Text } from '@pmndrs/glyph/three';
 import { Matrix4, WebGPUBackend, WebGPURenderer } from 'three/webgpu';
 
 const { createRetainedLine, showLine, resetLine, disposeLine } = (await import(
-  new URL('/src/letters/text.ts', location.origin).href
-)) as typeof import('../src/letters/text');
+  new URL('/src/letters/utils.ts', location.origin).href
+)) as typeof import('../src/letters/utils');
 
 while (document.documentElement.dataset.heroState !== 'ready')
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));

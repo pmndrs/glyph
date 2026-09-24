@@ -1,8 +1,9 @@
 import type { Object3D } from 'three/webgpu';
-import { showLine } from '../letters/text';
+import { showLine } from '../letters/utils';
 import type { World } from 'koota';
 import { Time } from '../time/traits';
-import { Mode, Viewport } from '../hero/traits';
+import { Mode } from '../director/traits';
+import { Viewport } from '../viewport/traits';
 import { Robot, RobotView, DustView, MarkerView, type RobotDraw, type Drive, type Path, type Pose } from './traits';
 import {
   COUNT,
@@ -15,6 +16,8 @@ import {
   LEAVE_AT,
   BODY_REACH,
   FACE_TEXT,
+  ROBOT_HALF_EXTENTS,
+  ROBOT_Z,
 } from './content';
 import { clamp, deltaAngle, lerp, mat4, quat, vec2, vec3, wrapAngle } from 'math';
 import { easing } from 'math/time';
@@ -33,14 +36,11 @@ export function moveRobots(world: World): void {
     robot.departed = false;
 
     if (robot.time === undefined) {
-      robot.active = false;
-      robot.face = undefined;
-
-      if (time.now < robot.runAt) return;
+      if (!robot.run) return;
 
       robot.time = 0;
-      robot.runAt = Number.POSITIVE_INFINITY;
-      layPath(robot.motion.path, viewport.width, viewport.height, robot.runs++);
+      robot.run = false;
+      layPath(robot.path, viewport.width, viewport.height, robot.runs++);
       robot.gone = false;
     }
 
@@ -49,18 +49,17 @@ export function moveRobots(world: World): void {
     if (robot.time >= RUN_SECONDS) {
       robot.time = undefined;
       robot.face = undefined;
+      robot.printed = 0;
       robot.active = false;
       robot.departed = true;
 
       return;
     }
 
-    const pose = poseAt(robot.motion.pose, robot.time, robot.motion.path);
+    const pose = poseAt(robot.pose, robot.time, robot.path);
     robot.active = true;
     robot.face = robot.time;
-    robot.footprint.x = pose.x;
-    robot.footprint.y = pose.y;
-    robot.footprint.heading = pose.heading;
+    robot.printed = faceLetters(robot.time);
 
     if (
       !robot.gone &&
@@ -82,12 +81,10 @@ export function driveRobots(world: World): void {
   world.query(Robot).updateEach(([robot]) => {
     robot.departed = false;
     robot.active = true;
-    const pose = steer(robot.motion.pose, robot.drive, delta);
-    robot.footprint.x = pose.x;
-    robot.footprint.y = pose.y;
-    robot.footprint.heading = pose.heading;
+    steer(robot.pose, robot.drive, delta);
     // Once it has settled, the face runs the same greeting as the scripted stop.
     robot.face = robot.drive.hasTarget || robot.drive.rested < REST_BEAT ? undefined : faceClock(robot.drive.rested);
+    robot.printed = robot.face === undefined ? 0 : faceLetters(robot.face);
   });
 }
 
@@ -162,7 +159,7 @@ export function stepDust(world: World): void {
   world.query(Robot).updateEach(([robot]) => {
     const state = robot.dust;
     const step = time.delta;
-    const current = robot.active ? robot.footprint : undefined;
+    const current = robot.active ? robot.pose : undefined;
 
     for (let index = 0; index < COUNT; index++) state.particles[index]!.age += step;
 
@@ -184,8 +181,8 @@ export function stepDust(world: World): void {
           const serial = state.emitted++;
           const particle = state.particles[serial % COUNT]!;
           const side = serial % 2 === 0 ? -1 : 1;
-          const across = side * current.halfExtents[1] * 0.85 + (jitter(serial + 31) - 0.5) * 0.2;
-          const rear = current.halfExtents[0] + jitter(serial + 53) * 0.25;
+          const across = side * ROBOT_HALF_EXTENTS[1] * 0.85 + (jitter(serial + 31) - 0.5) * 0.2;
+          const rear = ROBOT_HALF_EXTENTS[0] + jitter(serial + 53) * 0.25;
           const fraction = along / distance;
           const spread = side * (0.25 + jitter(serial + 71) * 0.65);
           particle.age = 0;
@@ -241,11 +238,11 @@ export function moveRobotBodies(world: World): void {
         return;
       }
 
-      const target = robot.footprint;
+      const target = robot.pose;
       const pose = robot.physicsPose;
       pose.x = target.x;
       pose.y = target.y;
-      pose.z = target.z;
+      pose.z = ROBOT_Z;
       pose.yaw = target.heading;
       const dx = target.x - body.to.x;
       const dy = target.y - body.to.y;
@@ -333,24 +330,24 @@ const TYPE_UNTIL = LOOK_DOWN_AT + 0.25;
 const GLITCH_SECONDS = 0.3;
 
 /** How many letters of the face's message are lit, `face` seconds on the display's clock. */
-export function faceLetters(face: number): number {
+function faceLetters(face: number): number {
   return face >= TYPE_FROM && face < TYPE_UNTIL ? Math.min(FACE_TEXT.length, Math.floor((face - TYPE_FROM) * 9)) : 0;
 }
 
 /** The eyes' glitch: whether they are shown, and how hard the screen is tearing, `now` seconds into a run. */
-function eyesAt(out: { shown: number; tear: number }, now: number): void {
+function eyesAt(view: Pick<RobotDraw, 'eyes' | 'tear'>, now: number): void {
   const away = (now - (TYPE_FROM - GLITCH_SECONDS)) / GLITCH_SECONDS;
   const back = (now - TYPE_UNTIL) / GLITCH_SECONDS;
 
   if (away >= 0 && away < 1) {
-    out.shown = away < 0.5 ? 1 : 0;
-    out.tear = 1 - Math.abs(away * 2 - 1);
+    view.eyes.value = away < 0.5 ? 1 : 0;
+    view.tear.value = 1 - Math.abs(away * 2 - 1);
   } else if (back >= 0 && back < 1) {
-    out.shown = back < 0.5 ? 0 : 1;
-    out.tear = 1 - Math.abs(back * 2 - 1);
+    view.eyes.value = back < 0.5 ? 0 : 1;
+    view.tear.value = 1 - Math.abs(back * 2 - 1);
   } else {
-    out.shown = now >= TYPE_FROM && now < TYPE_UNTIL ? 0 : 1;
-    out.tear = 0;
+    view.eyes.value = now >= TYPE_FROM && now < TYPE_UNTIL ? 0 : 1;
+    view.tear.value = 0;
   }
 }
 
@@ -377,8 +374,8 @@ export function syncRobotPose(world: World): void {
 
     if (!robot.active) return;
 
-    const { x, y, heading, look } = robot.motion.pose;
-    root.position.set(x, y, 0.04);
+    const { x, y, heading, look } = robot.pose;
+    root.position.set(x, y, ROBOT_Z);
     root.rotation.z = heading;
     lean.rotation.y = -0.34 * look;
   });
@@ -390,7 +387,7 @@ export function animateRobotRig(world: World): void {
     if (!robot.active) return;
 
     const { root, head, mixer, transforms } = mounted!;
-    const { heading, look } = robot.motion.pose;
+    const { heading, look } = robot.pose;
     mixer.update(world.get(Time)!.delta);
 
     if (head !== undefined && look > 0) {
@@ -410,35 +407,29 @@ export function syncRobotDisplay(world: World): void {
       showLine(view.line, 0);
       view.eyes.value = 1;
       view.tear.value = 0;
-
-      if (view.screen !== null) view.screen.visible = false;
+      view.screen.visible = false;
 
       return;
     }
 
     // Looking up, the face prints its message a letter at a time, and clears it as it looks back down.
     const now = robot.face;
-    const count = faceLetters(now);
+    const count = robot.printed;
     showLine(view.line, count);
 
-    if (view.screen !== null) view.screen.visible = count > 0;
-
-    eyesAt(transforms.eyes, now);
-    const eyes = transforms.eyes;
-    view.eyes.value = eyes.shown;
-    view.tear.value = eyes.tear;
+    view.screen.visible = count > 0;
+    eyesAt(view, now);
     view.seed.value = Math.floor(now * 48);
 
     // The display rides on the head joint: its matrix is the joint's, brought into the mover's frame.
     const screen = view.screen;
 
-    if (head !== undefined && screen !== null && count > 0) {
+    if (head !== undefined && count > 0) {
       root.updateWorldMatrix(true, true);
       root.matrixWorld.toArray(transforms.world);
       head.matrixWorld.toArray(transforms.head);
       mat4.invert(transforms.world, transforms.world);
       mat4.multiply(transforms.world, transforms.world, transforms.head);
-      view.faceLocal.toArray(transforms.face);
       mat4.multiply(transforms.world, transforms.world, transforms.face);
       screen.matrix.fromArray(transforms.world);
     }

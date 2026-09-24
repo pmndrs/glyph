@@ -9,13 +9,6 @@ export interface BlackHoleDraw {
 
 export const BlackHoleView = trait((): BlackHoleDraw | undefined => undefined);
 
-export interface Flight {
-  radius: number;
-  turn: number;
-  stretch: number;
-  size: number;
-}
-
 /** What the rest of the scene reads each frame. */
 export interface HoleState {
   /** Closed; play's little feeding hole; the finale open; and black after the pop. */
@@ -35,8 +28,6 @@ export interface HoleState {
   presence: number;
   /** Seconds since the pop, or undefined before it. */
   sincePop: number | undefined;
-  /** 0..1: how black the frame is. */
-  blackout: number;
 }
 
 export const Collapse = trait({
@@ -66,6 +57,5 @@ export const Collapse = trait({
     pull: 0,
     presence: 0,
     sincePop: undefined,
-    blackout: 0,
   }),
 });

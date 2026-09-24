@@ -2,6 +2,25 @@
 
 ## 2026-09-23
 
+- **Simplified the hero's data models, systems, and domains** — `hero/` became `director/`, which holds the mode,
+  script, presses, and choreography, and `viewport/`, which holds the floor and camera metrics every domain reads. No
+  domain now carries the app's name. The Play button and the loading overlay share a `ui` domain, and the studio
+  lighting is local to `app.tsx`. The embers run on the hole's time since its pop. The pass removed state that nothing
+  read or that could be derived: held keys, the robot's footprint, icon-lattice bookkeeping and unvarying layer
+  options, the title's inert pane-motion shader, and scratch buffers stored in title and feature records. The glass
+  shadow and lens captures now share one routine for cloning, tracking, and render state. Captures keep their glass
+  values instead of copying them every frame, so the shadow check recaptures when it tints the glass. The profile no
+  longer turns the glass back pass on for every row after its own, and its feature-line row now hides the tagline.
+  Behavior is unchanged; the package check and all twelve WebGPU checks pass. See
+  [the hero reference](packages/hero.md).
+
+- **Cleaned up the hero's domain boundaries** — Domains depend on each other through traits, actions, content, and
+  utils, and share shader contracts through materials. The robot publishes how many letters its face has printed and
+  the Play button publishes its reveal and hover, so nothing imports another domain's systems. The paper, the glass
+  shadows and lens, and loading (fonts and preparation) are domains of their own, and `letters` keeps the title and
+  tagline. The source root keeps only the app's entry, wiring, world, frame loop, page styles, and generic helpers.
+  Behavior is unchanged; the package check and every WebGPU check pass. See [the hero reference](packages/hero.md).
+
 - **Let the rain land before play's hole takes it** — The field took any glyph below a fixed height, and it sets a
   body's whole velocity, so glyphs in the last of their fall were held circling just off the paper and some were
   eaten before touching anything. It now waits until physics says a glyph has reached the paper. A hole test drops

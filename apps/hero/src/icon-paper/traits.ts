@@ -15,12 +15,10 @@ export interface IconLayoutOptions {
   readonly colour: string;
   /** Cycle gem colors diagonally across the scroll direction. */
   readonly gems?: boolean;
-  readonly opacity: number;
   /** Distinct motifs. Fewer than the available glyphs, so a motif always has a spare glyph to become. */
   readonly motifs: number;
   /** Shifts this layer's lattice into the gaps of the other one, across and down. */
   readonly offset: number;
-  readonly rowOffset: number;
   readonly seed: number;
   /** 0 = ignores the pointer, 1 = full push. Lower for deeper layers, which is what makes the parallax read. */
   readonly response: number;
@@ -63,15 +61,13 @@ export interface LatticeState {
   projected: Vec3;
   waveCursor: number;
   seenWave: number;
-  pointer: { x: number; y: number; active: boolean; strength: number };
+  pointer: { x: number; y: number; strength: number };
   hole: { x: number; y: number; horizon: number; pull: number; time: number };
   departAt: Float32Array;
   swallowed: Uint8Array;
   selected: Int32Array;
-  previous: Int32Array;
   motifGlyphs: Int32Array;
   spare: Int32Array;
-  applied: Uint8Array;
   morph: { motif: number; to: number; start: number };
   nextSwap: number;
   random: Mulberry32;
@@ -92,7 +88,6 @@ export const IconPaper = trait({
 export const Impacts = trait({
   entries: () => Array.from({ length: 16 }, () => ({ id: 0, at: 0, world: vec3.create() })),
   next: 1,
-  latest: -1,
 });
 export interface IconDraw {
   group: Group;
@@ -102,6 +97,8 @@ export interface IconDraw {
   matrix: Matrix4;
   /** Each cell's matrix as last written to its glyph, so a cell that has not moved uploads nothing. */
   written: Float64Array;
+  /** Each cell's glyph as last written, so a swap hides the glyph it replaces. */
+  shown: Int32Array;
 }
 
 export const IconView = trait((): IconDraw | undefined => undefined);

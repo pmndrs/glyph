@@ -1,9 +1,9 @@
 import { createActions, type Entity } from 'koota';
 import type { Group } from 'three/webgpu';
-import { Time } from '../time/traits';
 import { physicsActions } from '../physics/actions';
 import { jitter } from '../utils';
-import { Robot, ROBOT_HALF_EXTENTS, RobotView, DustView, MarkerView, type MarkerDraw, type RobotDraw } from './traits';
+import { Robot, RobotView, DustView, MarkerView, type MarkerDraw, type RobotDraw } from './traits';
+import { ROBOT_HALF_EXTENTS } from './content';
 
 export const robotActions = createActions((world) => ({
   mountRobotView: (entity: Entity, view: RobotDraw) => {
@@ -34,7 +34,8 @@ export const robotActions = createActions((world) => ({
     world.query(Robot).updateEach(([robot]) => {
       robot.time = undefined;
       robot.face = undefined;
-      robot.runAt = Number.POSITIVE_INFINITY;
+      robot.printed = 0;
+      robot.run = false;
       robot.active = false;
       robot.departed = false;
       robot.drive.hasTarget = false;
@@ -45,14 +46,11 @@ export const robotActions = createActions((world) => ({
   /** Stand the robot at a floor point, facing `heading`, ready to be driven. */
   placeRobot: (x: number, y: number, heading: number) => {
     world.query(Robot).updateEach(([robot]) => {
-      const pose = robot.motion.pose;
+      const pose = robot.pose;
       pose.x = x;
       pose.y = y;
       pose.heading = heading;
       pose.look = 0;
-      robot.footprint.x = x;
-      robot.footprint.y = y;
-      robot.footprint.heading = heading;
     });
   },
   /** Send the driven robot to a floor point. Each trip sways the other way from the last. */
@@ -69,9 +67,9 @@ export const robotActions = createActions((world) => ({
       drive.trips++;
     });
   },
-  runRobot: (delay = 0) => {
+  runRobot: () => {
     world.query(Robot).updateEach(([robot]) => {
-      robot.runAt = world.get(Time)!.now + delay * 1000;
+      robot.run = true;
     });
   },
 }));

@@ -16,19 +16,19 @@ const { RAIN_AFTER } = (await import(
   new URL('/src/rain/content.ts', location.origin).href
 )) as typeof import('../src/rain/content');
 const { Mode } = (await import(
-  new URL('/src/hero/traits.ts', location.origin).href
-)) as typeof import('../src/hero/traits');
-const { Title, ShadowView } = (await import(
-  new URL('/src/letters/traits.ts', location.origin).href
-)) as typeof import('../src/letters/traits');
+  new URL('/src/director/traits.ts', location.origin).href
+)) as typeof import('../src/director/traits');
+const { ShadowView } = (await import(
+  new URL('/src/glass/traits.ts', location.origin).href
+)) as typeof import('../src/glass/traits');
 const { updateGlassShadows } = (await import(
-  new URL('/src/letters/shadows.tsx', location.origin).href
-)) as typeof import('../src/letters/shadows');
+  new URL('/src/glass/systems.ts', location.origin).href
+)) as typeof import('../src/glass/systems');
 while (document.documentElement.dataset.heroState !== 'ready')
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 const { actions } = (await import(new URL('/src/actions.ts', location.origin).href)) as typeof import('../src/actions');
-const { pressHero } = actions(world);
+const { pressScene } = actions(world);
 const state = _roots.values().next().value!.store.getState();
 state.setFrameloop('never');
 const { renderer, renderPipeline } = state;
@@ -42,7 +42,7 @@ renderer.onDeviceLost = (info) => {
 };
 
 // A press before the title drops restarts straight into play, where the rain starts after its delay.
-pressHero(0.3, -0.3);
+pressScene(0.3, -0.3);
 
 if (world.get(Mode)!.kind !== 'play') throw new Error('The press did not start play');
 
@@ -84,7 +84,7 @@ const capture = async (target: RenderTarget) => {
 };
 
 // The projection's captures of the rain: those whose original hangs under the rain's root.
-const projection = world.queryFirst(Title)!.get(ShadowView)!;
+const projection = world.get(ShadowView)!;
 const shades = projection.captures.filter(({ original }) => {
   let parent = original.parent;
 

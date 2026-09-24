@@ -1,7 +1,8 @@
 import { createWorld } from 'koota';
 import { expect, it } from 'vitest';
 import { Collapse } from '../black-hole/traits';
-import { Mode, Viewport } from '../hero/traits';
+import { Mode } from '../director/traits';
+import { Viewport } from '../viewport/traits';
 import { Impacts } from '../icon-paper/traits';
 import { physicsActions } from '../physics/actions';
 import { stepPhysics } from '../physics/systems';

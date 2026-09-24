@@ -1,7 +1,10 @@
 import { createActions } from 'koota';
-import { PlayButtonView, type PlayButtonDraw } from './traits';
+import { PlayButton, PlayButtonView, type PlayButtonDraw } from './traits';
 
-export const playButtonActions = createActions((world) => ({
+export const uiActions = createActions((world) => ({
+  initializePlayButton: () => {
+    world.add(PlayButton);
+  },
   mountPlayButtonView: (view: PlayButtonDraw) => {
     world.add(PlayButtonView(view));
   },

@@ -5,8 +5,8 @@ import { useFrame } from '@react-three/fiber/webgpu';
 import { useWorld } from 'koota/react';
 import { useEffect, useRef } from 'react';
 import { Box3, type Group } from 'three/webgpu';
-import type { SlugFont } from '../hero/fonts';
-import { usePreparation } from '../hero/prepare';
+import type { SlugFont } from '../loading/fonts';
+import { usePreparation } from '../loading/prepare';
 import { solidOf } from '../letters/utils';
 import { jitter } from '../utils';
 import { rainActions } from './actions';
@@ -97,7 +97,7 @@ export function RainRenderer({ font }: { readonly font: SlugFont }) {
         mounted.current = true;
       }
     },
-    { id: 'rain-prepare' },
+    { id: 'hero-rain-prepare' },
   );
 
   return (

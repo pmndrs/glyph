@@ -1,7 +1,7 @@
 import { useThree } from '@react-three/fiber/webgpu';
 import type { World } from 'koota';
 import { useLayoutEffect } from 'react';
-import { heroActions } from './actions';
+import { viewportActions } from './actions';
 
 /** Publish React's viewport into the world before frames consume it. */
 export function useViewport(world: World): void {
@@ -11,6 +11,6 @@ export function useViewport(world: World): void {
   const aspect = useThree((state) => state.size.width / state.size.height);
 
   useLayoutEffect(() => {
-    heroActions(world).setViewport(width, height, cameraZ, aspect);
+    viewportActions(world).setViewport(width, height, cameraZ, aspect);
   }, [world, width, height, cameraZ, aspect]);
 }

@@ -2,16 +2,16 @@ import { useFrame } from '@react-three/fiber/webgpu';
 import { useWorld } from 'koota/react';
 import { useKeyboard, usePointer } from './input/hooks';
 import { fadePointer } from './input/systems';
-import { useHeroReady } from './hero/prepare';
-import { applyLetterLandings, triggerRobotDeparture, updatePaper } from './hero/systems';
-import { useViewport } from './hero/hooks';
+import { useHeroReady } from './loading/prepare';
+import { applyLetterLandings, triggerRobotDeparture } from './director/systems';
+import { updatePaper } from './paper/systems';
+import { useViewport } from './viewport/hooks';
 import { updateTime } from './time/systems';
-import { updateGlassShadows } from './letters/shadows';
-import { updateGlassLens } from './letters/lens';
+import { updateGlassLens, updateGlassShadows } from './glass/systems';
 import { advanceSequence } from './sequence/systems';
 import { advanceCollapse, feedHole, syncBlackHoleView } from './black-hole/systems';
-import { syncStarEmbers, syncEmberView } from './star-embers/systems';
-import { syncPlayButtonView } from './play-button/systems';
+import { syncEmberView } from './star-embers/systems';
+import { revealPlayButton, syncPlayButtonView } from './ui/systems';
 import { rainGlyphs, syncRainViews } from './rain/systems';
 import { listenForSounds, playSounds } from './sound/systems';
 import { moveIconPaper, syncIconViews } from './icon-paper/systems';
@@ -49,14 +49,12 @@ export function FrameLoop() {
 
       advanceSequence(world);
       advanceCollapse(world);
-      syncStarEmbers(world);
+      revealPlayButton(world);
       moveTitle(world);
       moveRobotBodies(world);
       stepPhysics(world);
       syncTitle(world);
       applyLetterLandings(world);
-
-      advanceSequence(world);
 
       typeFeature(world);
       fadePointer(world);

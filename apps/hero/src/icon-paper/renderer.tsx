@@ -1,11 +1,11 @@
 import { Text } from '@pmndrs/glyph/react';
 import { defineTextMaterial, type Glyphs, type Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame } from '@react-three/fiber/webgpu';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { DoubleSide, MeshBasicNodeMaterial, Matrix4, type Group } from 'three/webgpu';
-import type { SlugFont } from '../hero/fonts';
+import type { SlugFont } from '../loading/fonts';
 import { holeWarp } from '../black-hole/materials';
-import { usePreparation } from '../hero/prepare';
+import { usePreparation } from '../loading/prepare';
 import { PATTERN_ANGLE, GLYPHS } from './content';
 import { IconPaper } from './traits';
 import { iconPaperActions } from './actions';
@@ -40,17 +40,13 @@ export function IconPaperRenderer({ font }: { readonly font: SlugFont }) {
 function IconPattern({ entity, font }: { readonly entity: Entity; readonly font: SlugFont }) {
   const world = useWorld();
   const paper = entity.get(IconPaper)!;
-  const { iconSize, depth, opacity } = paper.options!;
+  const { iconSize, depth } = paper.options!;
   const layout = paper.layout!;
-  const count = layout.cells.length;
 
   const source = useRef<ThreeText<never> | null>(null);
   // Eleven immutable glyph choices per cell. Only the selected record has a nonzero transform, so swaps never
   // reshape text, rebuild a batch, or create a draw mesh while the film is running.
   const pool = useRef<Glyphs | undefined>(undefined);
-  const baselines = useRef(useMemo(() => new Float64Array(count * GLYPHS.length), [count]));
-  const hidden = useRef(new Matrix4().makeScale(0, 0, 0));
-  const matrix = useRef(new Matrix4());
   usePreparation(`icons:${depth}`, () => pool.current !== undefined);
 
   useEffect(
@@ -81,19 +77,23 @@ function IconPattern({ entity, font }: { readonly entity: Entity; readonly font:
       text.visible = false;
       copies.name = `icon-pattern-${depth}`;
       pool.current = copies;
+      const hidden = new Matrix4().makeScale(0, 0, 0);
+      const baselines = new Float64Array(copies.count);
 
       for (let index = 0; index < copies.count; index++) {
-        copies.setMatrixAt(index, hidden.current);
-        baselines.current[index] = -copies.glyphAt(index)!.advance / 2;
+        copies.setMatrixAt(index, hidden);
+        baselines[index] = -copies.glyphAt(index)!.advance / 2;
       }
 
       iconPaperActions(world).mountIconView(entity, {
         group,
         glyphs: copies,
-        baselines: baselines.current,
-        hidden: hidden.current,
-        matrix: matrix.current,
-        written: new Float64Array(count * 16).fill(Number.NaN),
+        baselines,
+        hidden,
+        matrix: new Matrix4(),
+        written: new Float64Array(layout.cells.length * 16).fill(Number.NaN),
+        // Every glyph starts hidden, so the first sync writes each cell's selected glyph.
+        shown: Int32Array.from(paper.lattice!.selected),
       });
     }
   });
@@ -106,7 +106,7 @@ function IconPattern({ entity, font }: { readonly entity: Entity; readonly font:
           font={font}
           layout={{ wrap: 'none' }}
           material={pattern}
-          style={{ fontSize: iconSize, lineHeight: 1, opacity }}
+          style={{ fontSize: iconSize, lineHeight: 1 }}
         >
           {layout.cells.map((entry) => (
             <Text key={entry.key} style={{ color: entry.colour }}>

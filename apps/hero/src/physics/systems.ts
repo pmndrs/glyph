@@ -3,6 +3,7 @@ import { deltaAngle, lerp, quat, vec3, type Vec3, type Quat } from 'math';
 import { rigidBody, updateWorld } from 'crashcat';
 import { Time } from '../time/traits';
 import { Body, Floor, Physics, type HeldPose } from './traits';
+import { yawRotation } from './utils';
 
 /** Fixed 60 Hz integration publishes entity poses and one-frame landing events. */
 export function stepPhysics(world: World): void {
@@ -56,5 +57,5 @@ export function stepPhysics(world: World): void {
 function interpolate(position: Vec3, rotation: Quat, from: HeldPose, to: HeldPose, t: number): void {
   vec3.set(position, lerp(from.x, to.x, t), lerp(from.y, to.y, t), lerp(from.z, to.z, t));
   const yaw = from.yaw + deltaAngle(from.yaw, to.yaw) * t;
-  quat.set(rotation, 0, 0, Math.sin(yaw / 2), Math.cos(yaw / 2));
+  yawRotation(rotation, yaw);
 }

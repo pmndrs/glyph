@@ -24,17 +24,11 @@ import { DoubleSide, type MeshStandardMaterial, MeshStandardNodeMaterial, MeshBa
 import { BASE_Z, RISE } from './content';
 import { THEME_RED } from '../letters/content';
 
-/** Glossy display finish shared by the face and its text. */
-export interface ScreenFinish {
-  readonly roughness: number;
-  readonly metalness: number;
-}
-
 /**
  * Glyphs as pixels lit on the robot's face screen: lit like the display they sit on, with the environment
  * glancing off them, and glowing from underneath.
  */
-export function screenInk(screen: MeshStandardMaterial, finish: ScreenFinish): ThreeTextMaterial {
+export function screenInk(screen: MeshStandardMaterial): ThreeTextMaterial {
   return defineTextMaterial((context) => {
     if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
 
@@ -42,8 +36,9 @@ export function screenInk(screen: MeshStandardMaterial, finish: ScreenFinish): T
     const material = new MeshStandardNodeMaterial({
       side: DoubleSide,
       envMapIntensity: screen.envMapIntensity,
-      roughness: finish.roughness,
-      metalness: finish.metalness,
+      // A glossy display finish under the printed pixels.
+      roughness: 0.35,
+      metalness: 0.6,
     });
     material.positionNode = position;
     material.opacityNode = shader.coverage;

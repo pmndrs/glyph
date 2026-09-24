@@ -1,19 +1,19 @@
-import { type RetainedLine, createRetainedLine, disposeLine, showLine } from './text';
-import { mat4, vec3 } from 'math';
+import { type RetainedLine, createRetainedLine, disposeLine, showLine } from './utils';
+import { mat4 } from 'math';
 import { useWorld } from 'koota/react';
 import { Title } from './traits';
 import { letterActions } from './actions';
 import { Text } from '@pmndrs/glyph/react';
 import type { Glyphs, Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Box3, Vector3, Matrix4 } from 'three/webgpu';
 import { FEATURE_LINE } from './content';
-import { usePreparation } from '../hero/prepare';
-import type { SlugFont, MsdfFont } from '../hero/fonts';
-import { stainedGlassLetters, titleOrigin } from './materials';
+import { usePreparation } from '../loading/prepare';
+import type { SlugFont, MsdfFont } from '../loading/fonts';
+import { stainedGlassLetters } from './materials';
 import { solidOf } from './utils';
-import type { Letter, TitleBodies } from './traits';
+import type { Letter } from './traits';
 
 /**
  * How deep each letter's invisible solid reaches: enough that the robot meets it squarely, never drives over it.
@@ -31,19 +31,11 @@ const inkCenter = new Vector3();
  */
 export function GlassTitle({ font }: { readonly font: SlugFont }) {
   const world = useWorld();
-  const draw = useRef(new Matrix4());
   const camera = useThree((state) => state.camera);
   const word = useRef<ThreeText<never> | null>(null);
-  /** Published once: the box is in the Text's own space, so the reveal's scale never enters into it. */
-  const reported = useRef(false);
-  /** The broken-apart paragraph and the bodies its glyphs follow, built once the layout has been measured. */
+  /** The broken-apart paragraph, built once the layout has been measured, whose glyphs follow the letters' bodies. */
   const glyphs = useRef<Glyphs | undefined>(undefined);
-  const bodies = useRef<TitleBodies | undefined>(undefined);
-  usePreparation('title', () => bodies.current !== undefined);
-
-  useEffect(() => {
-    titleOrigin.value.set(LAYOUT_WIDTH / 2, -FONT_SIZE / 2, 0);
-  }, []);
+  usePreparation('title', () => glyphs.current !== undefined);
 
   useEffect(() => {
     const title = world.queryFirst(Title)!;
@@ -53,8 +45,6 @@ export function GlassTitle({ font }: { readonly font: SlugFont }) {
       letterActions(world).unmountTitleView();
       letterActions(world).disposeTitle(title);
 
-      bodies.current = undefined;
-      reported.current = false;
       glyphs.current?.removeFromParent();
       glyphs.current?.dispose();
       glyphs.current = undefined;
@@ -65,7 +55,7 @@ export function GlassTitle({ font }: { readonly font: SlugFont }) {
 
   useFrame(
     () => {
-      if (reported.current) return;
+      if (glyphs.current !== undefined) return;
 
       const object = word.current;
 
@@ -75,10 +65,6 @@ export function GlassTitle({ font }: { readonly font: SlugFont }) {
       const ink = object.computeBoundingBox();
 
       if (ink.max.x <= ink.min.x) return;
-
-      for (const [index, pane] of stainedGlassLetters.entries()) {
-        object.measureGlyphs()?.[index]?.localInkBounds.getCenter(pane.pivot.value);
-      }
 
       // The paragraph is copied glyph by glyph and hidden: from here on the copies are what is drawn, and each
       // follows its body. Shaping and materials are the paragraph's own.
@@ -112,16 +98,14 @@ export function GlassTitle({ font }: { readonly font: SlugFont }) {
       }
 
       glyphs.current = copies;
-      bodies.current = letterActions(world).prepareTitle(
+      letterActions(world).prepareTitle(
         mat4.copy(mat4.create(), copies.matrixWorld.elements),
         letters,
         camera.position.z,
         SOLID_THICKNESS,
         ink.max.x - ink.min.x,
       );
-
-      letterActions(world).mountTitleView({ glyphs: copies, draw: draw.current });
-      reported.current = true;
+      letterActions(world).mountTitleView({ glyphs: copies, draw: new Matrix4() });
     },
     { id: 'hero-title-prepare' },
   );
@@ -161,21 +145,6 @@ export function FeatureLine({ field }: { readonly field: MsdfFont }) {
   const fitRevision = useRef(-1);
   const line = useRef<RetainedLine | undefined>(undefined);
   usePreparation('feature', () => line.current !== undefined);
-  const scratch = useRef(
-    useMemo(
-      () => ({
-        transform: mat4.create(),
-        rotation: mat4.create(),
-        pivot: mat4.create(),
-        world: mat4.create(),
-        inverse: mat4.create(),
-        center: vec3.create(),
-        scale: vec3.create(),
-        flight: { radius: 1, turn: 0, stretch: 1, size: 1 },
-      }),
-      [],
-    ),
-  );
 
   useEffect(
     () => () => {
@@ -223,7 +192,7 @@ export function FeatureLine({ field }: { readonly field: MsdfFont }) {
 
         line.current = createRetainedLine(object);
         showLine(line.current, FEATURE_LINE.length);
-        letterActions(world).mountFeatureView({ line: line.current, work: scratch.current, collapsed: false });
+        letterActions(world).mountFeatureView({ line: line.current, collapsed: false });
       }
     },
     { fps: 60 },

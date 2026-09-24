@@ -120,14 +120,14 @@ it('lets the robot push a flat letter and removes its collision when it leaves',
   physics.attachKinematicBody(robotEntity, [0.3, 0.3, 0.5]);
   const robot = robotEntity.get(Robot)!;
   robotEntity.set(Robot, { active: true });
-  Object.assign(robot.footprint, { x: -2, y: 0.55, z: 0, heading: 0 });
+  Object.assign(robot.pose, { x: -2, y: 0.55, heading: 0 });
   const letter = physics.spawnSolidBody([0, 0, 0.5], prism());
   const body = letter.get(Body)!;
   world.set(Time, { delta: 1 / 60 });
 
   try {
     for (let frame = 0; frame < 120; frame++) {
-      robot.footprint.x = -2 + frame / 60;
+      robot.pose.x = -2 + frame / 60;
       moveRobotBodies(world);
       stepPhysics(world);
     }
@@ -137,7 +137,7 @@ it('lets the robot push a flat letter and removes its collision when it leaves',
     expect(body.rotation[0]).toBeCloseTo(0);
     expect(body.rotation[1]).toBeCloseTo(0);
     expect(letter.get(Body)!.landed).toBe(false);
-    physics.holdBody(letter, { x: robot.footprint.x, y: robot.footprint.y, z: 4, yaw: 0 });
+    physics.holdBody(letter, { x: robot.pose.x, y: robot.pose.y, z: 4, yaw: 0 });
     physics.releaseBody(letter, [0, 0, -35], 0);
     robotEntity.set(Robot, { active: false });
     moveRobotBodies(world);
@@ -158,7 +158,7 @@ it('keeps a letter the robot sweeps through from flying when its heading wraps p
   const robotEntity = robotActions(world).spawnRobot();
   const robot = robotEntity.get(Robot)!;
   robotEntity.set(Robot, { active: true });
-  Object.assign(robot.footprint, { x: 0, y: 0, z: 0.04, heading: Math.PI - 0.3 });
+  Object.assign(robot.pose, { x: 0, y: 0, heading: Math.PI - 0.3 });
   const letter = physics.spawnSolidBody([-1.4, 0.6, 0.5], prism());
   const body = letter.get(Body)!;
   const engine = world.get(Physics)!.engine;
@@ -169,8 +169,8 @@ it('keeps a letter the robot sweeps through from flying when its heading wraps p
   try {
     // Turn at the cart's hardest pivot back and forth across the half turn while sliding into the letter.
     for (let frame = 0; frame < 120; frame++) {
-      robot.footprint.heading = wrapAngle(robot.footprint.heading + (frame % 40 < 20 ? 9.4 : -9.4) / 60);
-      robot.footprint.x -= 2 / 60;
+      robot.pose.heading = wrapAngle(robot.pose.heading + (frame % 40 < 20 ? 9.4 : -9.4) / 60);
+      robot.pose.x -= 2 / 60;
       moveRobotBodies(world);
       stepPhysics(world);
       peak = Math.max(peak, Math.hypot(...handle.motionProperties.linearVelocity));
@@ -192,7 +192,7 @@ it('bounces rain off the robot', () => {
   const robotEntity = robotActions(world).spawnRobot();
   const robot = robotEntity.get(Robot)!;
   robotEntity.set(Robot, { active: true });
-  Object.assign(robot.footprint, { x: 0, y: 0, z: 0.04, heading: 0 });
+  Object.assign(robot.pose, { x: 0, y: 0, heading: 0 });
   const drop = physics.spawnSolidBody([0.1, 0.2, 12], prism(), { stacks: true, gravityFactor: 0.6, airborne: true });
   const body = drop.get(Body)!;
   const engine = world.get(Physics)!.engine;

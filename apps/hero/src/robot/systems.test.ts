@@ -1,11 +1,12 @@
 import { createWorld } from 'koota';
+import { Group } from 'three/webgpu';
 import { expect, it } from 'vitest';
 import { Time } from '../time/traits';
-import { Mode } from '../hero/traits';
+import { Mode } from '../director/traits';
 import { robotActions } from './actions';
-import { driveRobots, steer } from './systems';
+import { driveRobots, steer, syncDustViews } from './systems';
 import { Robot } from './traits';
-import { LOOK_UP_AT } from './content';
+import { COUNT, LOOK_UP_AT } from './content';
 
 const STEP = 1 / 60;
 
@@ -102,7 +103,7 @@ it('greets after resting in play, and looks back down as soon as it is sent on',
 
     for (let frame = 0; frame < 2 * 60; frame++) driveRobots(world);
 
-    expect(entity.get(Robot)!.motion.pose.look).toBeGreaterThan(0.9);
+    expect(entity.get(Robot)!.pose.look).toBeGreaterThan(0.9);
     expect(entity.get(Robot)!.face).toBeGreaterThan(LOOK_UP_AT);
 
     commands.driveRobotTo(-3, 2);
@@ -111,7 +112,33 @@ it('greets after resting in play, and looks back down as soon as it is sent on',
 
     for (let frame = 0; frame < 30; frame++) driveRobots(world);
 
-    expect(entity.get(Robot)!.motion.pose.look).toBe(0);
+    expect(entity.get(Robot)!.pose.look).toBe(0);
+  } finally {
+    world.destroy();
+  }
+});
+
+it('updates hidden mounted dust and stops touching its groups after detachment', () => {
+  const world = createWorld();
+  const robot = world.spawn(Robot);
+  const commands = robotActions(world);
+  const groups = Array.from({ length: COUNT }, () => new Group());
+  const group = groups[0]!;
+  group.visible = false;
+  const particle = robot.get(Robot)!.dust.particles[0]!;
+  particle.age = 0.2;
+  particle.position[0] = 3;
+
+  try {
+    commands.mountDustView(robot, groups);
+    syncDustViews(world);
+    expect(group.visible).toBe(true);
+    expect(group.position.x).toBe(3);
+
+    commands.unmountDustView(robot);
+    particle.position[0] = 9;
+    syncDustViews(world);
+    expect(group.position.x).toBe(3);
   } finally {
     world.destroy();
   }

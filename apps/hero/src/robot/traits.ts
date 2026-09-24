@@ -1,18 +1,17 @@
 import { trait } from 'koota';
 import { vec2, vec3 } from 'math';
 import { COUNT } from './content';
-import type { Group, Object3D, AnimationMixer, Quaternion, Matrix4 } from 'three/webgpu';
+import type { Group, Object3D, AnimationMixer, Quaternion } from 'three/webgpu';
 import type { Mat4, Quat, Vec3 } from 'math';
-import type { RetainedLine } from '../letters/text';
+import type { RetainedLine } from '../letters/utils';
 
 export interface RobotDraw {
   root: Group;
   lean: Group;
-  screen: Group | null;
+  screen: Group;
   head: Object3D | undefined;
   mixer: AnimationMixer;
   line: RetainedLine;
-  faceLocal: Matrix4;
   eyes: { value: number };
   tear: { value: number };
   seed: { value: number };
@@ -26,7 +25,6 @@ export interface RobotDraw {
     world: Mat4;
     head: Mat4;
     face: Mat4;
-    eyes: { shown: number; tear: number };
   };
 }
 
@@ -75,11 +73,10 @@ export interface Drive {
   trips: number;
 }
 
-/** Along the heading, across it, and up. Shared by the visual rig and its prepared collider. */
-export const ROBOT_HALF_EXTENTS: readonly [number, number, number] = [0.68, 1.07, 1.5];
-
 export const Robot = trait({
-  motion: () => ({ path: { inward: 0, outward: 0, phase: 0 }, pose: { x: 0, y: 0, heading: 0, look: 0 } }),
+  path: (): Path => ({ inward: 0, outward: 0, phase: 0 }),
+  /** Where the robot is on the floor and which way it faces, published for the physics, the rain, and the sound. */
+  pose: (): Pose => ({ x: 0, y: 0, heading: 0, look: 0 }),
   drive: (): Drive => ({
     targetX: 0,
     targetY: 0,
@@ -106,13 +103,14 @@ export const Robot = trait({
     carry: 0,
     emitted: 0,
   }),
-  footprint: () => ({ x: 0, y: 0, z: 0.04, heading: 0, halfExtents: ROBOT_HALF_EXTENTS }),
   physicsPose: () => ({ x: 0, y: 0, z: 0, yaw: 0 }),
   active: false,
   time: undefined as number | undefined,
-  /** Seconds on the display's clock, or undefined while the face is blank. */
+  /** Seconds on the display's clock, or undefined while the face is blank, and how many letters it has printed. */
   face: undefined as number | undefined,
-  runAt: Number.POSITIVE_INFINITY,
+  printed: 0,
+  /** Whether the scripted run starts on the next move. */
+  run: false,
   runs: 0,
   departed: false,
   gone: false,

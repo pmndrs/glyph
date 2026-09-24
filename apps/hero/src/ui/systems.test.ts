@@ -1,18 +1,19 @@
 import { createWorld } from 'koota';
 import { OrthographicCamera } from 'three/webgpu';
 import { expect, it } from 'vitest';
-import { Viewport } from '../hero/traits';
+import { Viewport } from '../viewport/traits';
 import { inputActions } from '../input/actions';
 import { fadePointer } from '../input/systems';
 import { Pointer } from '../input/traits';
-import { EMBER_SECONDS, StarEmbers } from '../star-embers/traits';
+import { Collapse } from '../black-hole/traits';
+import { EMBER_SECONDS } from '../star-embers/content';
 import { Time } from '../time/traits';
-import { playButtonActions } from './actions';
+import { uiActions } from './actions';
 import { REVEAL_AFTER, REVEAL_SECONDS } from './content';
-import { syncPlayButtonView } from './systems';
+import { revealPlayButton, syncPlayButtonView } from './systems';
 
 it('keeps the button lit while the pointer rests on it, and lets go when the pointer leaves', () => {
-  const world = createWorld(Time, Pointer, Viewport, StarEmbers);
+  const world = createWorld(Time, Pointer, Viewport, Collapse);
   const view = {
     camera: new OrthographicCamera(),
     reveal: { value: 0 },
@@ -24,12 +25,16 @@ it('keeps the button lit while the pointer rests on it, and lets go when the poi
   const frame = () => {
     world.set(Time, { delta: 1 / 60, elapsed: world.get(Time)!.elapsed + 1 / 60 });
     fadePointer(world);
+    revealPlayButton(world);
     syncPlayButtonView(world);
   };
 
   try {
-    world.set(StarEmbers, { age: EMBER_SECONDS + REVEAL_AFTER + REVEAL_SECONDS });
-    playButtonActions(world).mountPlayButtonView(view);
+    // The finale has popped and its embers have burnt out.
+    world.get(Collapse)!.hole.beat = 'black';
+    world.get(Collapse)!.hole.sincePop = EMBER_SECONDS + REVEAL_AFTER + REVEAL_SECONDS;
+    uiActions(world).initializePlayButton();
+    uiActions(world).mountPlayButtonView(view);
     movePointer(0.1, 0.05);
 
     // Three seconds at rest: the pointer's motion has long faded, and the button stays lit.

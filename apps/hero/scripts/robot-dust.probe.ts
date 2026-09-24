@@ -29,11 +29,11 @@ const { RobotView } = (await import(
   new URL('/src/robot/traits.ts', location.origin).href
 )) as typeof import('../src/robot/traits');
 const { SHADOW_CASTER_LAYER } = (await import(
-  new URL('/src/letters/content.ts', location.origin).href
-)) as typeof import('../src/letters/content');
+  new URL('/src/glass/content.ts', location.origin).href
+)) as typeof import('../src/glass/content');
 const { updateGlassShadows } = (await import(
-  new URL('/src/letters/shadows.tsx', location.origin).href
-)) as typeof import('../src/letters/shadows');
+  new URL('/src/glass/systems.ts', location.origin).href
+)) as typeof import('../src/glass/systems');
 
 // Wait for visible dust from the real drive-in.
 while (document.documentElement.dataset.heroState !== 'ready')

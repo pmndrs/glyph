@@ -11,3 +11,6 @@ export interface PlayButtonDraw {
 }
 
 export const PlayButtonView = trait((): PlayButtonDraw | undefined => undefined);
+
+/** How far the button has drawn itself in, 0..1, and whether the pointer is over it once it has begun to. */
+export const PlayButton = trait({ reveal: 0, over: false });

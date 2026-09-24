@@ -4,11 +4,14 @@ import { mat4 } from 'math';
 import { expect, it } from 'vitest';
 import { Collapse } from '../black-hole/traits';
 import { advanceCollapse, feedHole } from '../black-hole/systems';
-import { heroActions } from '../hero/actions';
-import { applyLetterLandings, triggerRobotDeparture } from '../hero/systems';
-import { Mode, Viewport } from '../hero/traits';
+import { directorActions } from '../director/actions';
+import { applyLetterLandings, triggerRobotDeparture } from '../director/systems';
+import { Mode } from '../director/traits';
+import { Viewport } from '../viewport/traits';
+import { moveIconPaper } from '../icon-paper/systems';
 import { Impacts } from '../icon-paper/traits';
-import { Keys, Pointer } from '../input/traits';
+import { fadePointer } from '../input/systems';
+import { Pointer } from '../input/traits';
 import { letterActions } from '../letters/actions';
 import { FEATURE_LINE } from '../letters/content';
 import { moveTitle, syncTitle, typeFeature } from '../letters/systems';
@@ -18,14 +21,15 @@ import { rainActions } from '../rain/actions';
 import { COUNT } from '../rain/content';
 import { rainGlyphs } from '../rain/systems';
 import { Rain } from '../rain/traits';
-import { driveRobots, faceLetters, moveRobotBodies, moveRobots } from '../robot/systems';
+import { driveRobots, moveRobotBodies, moveRobots, stepDust } from '../robot/systems';
 import { Robot } from '../robot/traits';
 import { sequenceActions } from '../sequence/actions';
 import { advanceSequence } from '../sequence/systems';
 import { Timeline } from '../sequence/traits';
-import { syncStarEmbers } from '../star-embers/systems';
+import { revealPlayButton } from '../ui/systems';
 import { updateTime } from '../time/systems';
 import { Time } from '../time/traits';
+import { soundActions } from './actions';
 import { listenForSounds } from './systems';
 import { Sound, type SoundCue } from './traits';
 
@@ -40,14 +44,14 @@ const CUBE = [
 ];
 
 function scene(): World {
-  const world = createWorld(Time, Keys, Pointer, Viewport, Mode, Timeline, Collapse, Impacts);
-  heroActions(world).initializeHero();
-  heroActions(world).setViewport(18, 10, 16, 1.8);
+  const world = createWorld(Time, Pointer, Viewport, Mode, Timeline, Collapse, Impacts);
+  directorActions(world).initializeScene();
+  world.set(Viewport, { width: 18, height: 10, cameraZ: 16, aspect: 1.8 });
 
   return world;
 }
 
-/** Run the frame loop's simulation for `seconds`, draining each frame's cues into `heard` as the mixer would. */
+/** Run the frame loop's simulation, in its order, for `seconds`, draining each frame's cues into `heard` as the mixer would. */
 function simulate(world: World, seconds: number, heard: Heard[], each?: () => void): void {
   for (let frame = 0; frame < Math.round(seconds * 60); frame++) {
     updateTime(world, 1 / 60, world.get(Time)!.now + 1000 / 60);
@@ -57,23 +61,25 @@ function simulate(world: World, seconds: number, heard: Heard[], each?: () => vo
     triggerRobotDeparture(world);
     advanceSequence(world);
     advanceCollapse(world);
-    syncStarEmbers(world);
+    revealPlayButton(world);
     moveTitle(world);
     moveRobotBodies(world);
     stepPhysics(world);
     syncTitle(world);
     applyLetterLandings(world);
-    advanceSequence(world);
     typeFeature(world);
+    fadePointer(world);
     rainGlyphs(world);
     feedHole(world);
+    moveIconPaper(world);
+    stepDust(world);
     listenForSounds(world);
     const queue = world.get(Sound)!.queue;
     const at = world.get(Time)!.elapsed;
 
     for (let index = 0; index < queue.count; index++) heard.push({ ...queue.cues[index]!, at });
 
-    queue.count = 0;
+    soundActions(world).clearSoundCues();
     each?.();
   }
 }
@@ -120,8 +126,7 @@ it('hears the lift, each letter landing on its note, the typed tagline, the gree
       const { motor, drone, rise } = world.get(Sound)!;
       const hole = world.get(Collapse)!.hole;
 
-      if (current.active && current.face !== undefined && faceLetters(current.face) > 0)
-        greeting = Math.max(greeting, motor);
+      if (current.active && current.printed > 0) greeting = Math.max(greeting, motor);
       else if (current.active) driving = Math.max(driving, motor);
 
       if (hole.beat === 'open' && hole.time > 1) open = Math.max(open, drone);
@@ -171,7 +176,7 @@ it('plays a fanfare into play, taps each press, and runs the motor only while th
   let resting = 1;
 
   try {
-    heroActions(world).pressHero(0.2, 0.1);
+    directorActions(world).pressScene(0.2, 0.1);
     simulate(world, 1 / 60, heard);
     expect(heard.map(({ voice }) => voice).sort()).toEqual(['chime', 'chime', 'chime', 'chime', 'tap']);
 
@@ -191,7 +196,7 @@ it('plays a fanfare into play, taps each press, and runs the motor only while th
     expect(later.filter(({ voice }) => voice === 'speech').map(({ take }) => take)).toEqual([0, 1, 2, 3, 4, 5]);
 
     const pressed = heard.length;
-    heroActions(world).pressHero(-0.3, -0.2);
+    directorActions(world).pressScene(-0.3, -0.2);
     simulate(world, 1 / 60, heard);
     expect(heard.slice(pressed).map(({ voice }) => voice)).toEqual(['tap']);
   } finally {
@@ -225,7 +230,7 @@ it('rings each glyph of rain once as it comes down, whether on the floor, the gl
   let above = 0;
 
   try {
-    heroActions(world).pressHero(0, -0.9);
+    directorActions(world).pressScene(0, -0.9);
     // Play's script would open its little hole somewhere at random, so it stays shut here and the rain is the same
     // every run.
     sequenceActions(world).loadSequence([]);

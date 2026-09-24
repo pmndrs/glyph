@@ -1,11 +1,10 @@
-import { Viewport } from '../hero/traits';
+import { Viewport } from '../viewport/traits';
 import type { World } from 'koota';
 import { Time } from '../time/traits';
-import { Collapse, BlackHoleView, type HoleState } from './traits';
+import { Collapse, BlackHoleView } from './traits';
 import {
   HOLE_CENTER,
   HORIZON,
-  POP_AT,
   PAPER_FROM,
   PAPER_UNTIL,
   HORIZON_ON_PLANE,
@@ -24,7 +23,7 @@ import { rainActions } from '../rain/actions';
 import { physicsActions } from '../physics/actions';
 import { Body } from '../physics/traits';
 import { blackHoleActions } from './actions';
-import { swirl } from './utils';
+import { collapseAt, playHoleAt, swirl } from './utils';
 
 export function advanceCollapse(world: World): void {
   const collapse = world.get(Collapse)!;
@@ -45,35 +44,6 @@ export function advanceCollapse(world: World): void {
       collapse.y,
     );
   } else collapseAt(collapse.hole, -1, HOLE_CENTER[0], HOLE_CENTER[1]);
-}
-
-/**
- * Play's little hole at `x, y`, `t` seconds after appearing, `horizon` wide once open, `sinceFed` seconds after
- * its last meal: a meal is a gulp, the hole swelling past its size and settling back, its pull flinching with it.
- * Pure, like the finale's beat.
- */
-export function playHoleAt(
-  out: HoleState,
-  t: number,
-  horizon: number,
-  sinceFed: number,
-  x: number,
-  y: number,
-): HoleState {
-  const open = easing.cubicOut(ramp(t, 0, 0.5));
-  const gulp = sinceFed >= 0 && sinceFed < 3 ? Math.exp(-sinceFed * 4.5) * Math.sin(sinceFed * 19) * 0.3 : 0;
-  out.beat = 'play';
-  out.time = t;
-  out.x = x;
-  out.y = y;
-  out.horizon = horizon * open * (1 + gulp);
-  // Its pull, which bends the glass nearby, grows with it.
-  out.pull = (0.12 + 0.45 * (horizon / HORIZON)) * open * (1 + gulp * 2);
-  out.presence = open * (1 + gulp * 0.6);
-  out.sincePop = undefined;
-  out.blackout = 0;
-
-  return out;
 }
 
 const pull = vec3.create();
@@ -152,7 +122,7 @@ export function feedHole(world: World): void {
       if (drop.phase !== 'live') continue;
 
       if (hole.beat === 'black') {
-        rainActions(world).dismissDrop(slot, false);
+        rainActions(world).dismissDrop(slot, 'idle');
         continue;
       }
 
@@ -167,7 +137,7 @@ export function feedHole(world: World): void {
 
       // Overlapping the horizon is enough to be eaten: a glyph is about half its size across.
       if (distance < hole.horizon + drop.size * 0.45) {
-        rainActions(world).eatDrop(slot);
+        rainActions(world).dismissDrop(slot, 'eaten');
         growth += GLYPH_GROWTH;
       } else if (distance < reach) {
         physics.kickBody(
@@ -219,48 +189,8 @@ export function feedHole(world: World): void {
     if (growth > 0) blackHoleActions(world).growPlayHole(growth);
 
     // The handover waits for the drawn hole, easing after its meals, to reach the finale's horizon, so nothing jumps.
-    if (world.get(Collapse)!.playGrown >= HORIZON * 0.98) blackHoleActions(world).openBlackHole(FINALE_JOIN);
+    if (world.get(Collapse)!.playGrown >= HORIZON * 0.98) blackHoleActions(world).openBlackHole();
   }
-}
-
-/** Fraction of the way from `from` to `to`, clamped. */
-function ramp(t: number, from: number, to: number): number {
-  return clamp((t - from) / (to - from), 0, 1);
-}
-
-/**
- * The beat `t` seconds after the hole opened at `x, y`, its pull rising from `joinedPull`, what play's hole had
- * built by the handover, to full. Pure, so the timing can be tested without a scene.
- */
-export function collapseAt(out: HoleState, t: number, x: number, y: number, joinedPull = 0): HoleState {
-  out.time = t;
-  out.x = x;
-  out.y = y;
-
-  if (t < 0) {
-    out.beat = 'closed';
-    out.time = -1;
-    out.horizon = HORIZON;
-    out.pull = 0;
-    out.presence = 0;
-    out.sincePop = undefined;
-    out.blackout = 0;
-
-    return out;
-  }
-
-  const open = easing.cubicOut(ramp(t, 0, 0.4));
-  const swell = 1 + 0.6 * easing.sineInOut(ramp(t, 2.65, POP_AT - 0.1));
-  const pinch = easing.cubicIn(ramp(t, POP_AT - 0.1, POP_AT));
-  const popped = t >= POP_AT;
-  out.beat = popped ? 'black' : 'open';
-  out.horizon = HORIZON * open * swell;
-  out.pull = popped ? 0 : lerp(joinedPull, 1, easing.cubicIn(ramp(t, 0.65, 2.1)));
-  out.presence = popped ? 0 : open * swell * (1 - pinch);
-  out.sincePop = popped ? t - POP_AT : undefined;
-  out.blackout = popped ? 1 : 0;
-
-  return out;
 }
 
 /** GPU publication is a view concern. Simulation only changes the collapse trait. */
@@ -292,12 +222,13 @@ export function syncBlackHoleView(world: World): void {
   uniforms.uHoleCenter.value.set(current.x, current.y);
   uniforms.uHoleHorizon.value = Math.max(current.horizon, 0.001);
   uniforms.uHoleBend.value = current.pull;
-  uniforms.uHoleBlackout.value = current.blackout;
+  uniforms.uHoleBlackout.value = current.beat === 'black' ? 1 : 0;
   // Play's hole never takes the paper; only the finale does.
   uniforms.uHoleCollapse.value =
     current.beat === 'play' ? 0 : easing.cubicIn(clamp((current.time - PAPER_FROM) / (PAPER_UNTIL - PAPER_FROM), 0, 1));
   const t = Math.max(0, current.time);
-  uniforms.uHoleSpin.value = t * 1.2 + 3 * t ** 3;
+  // Play's hole turns steadily however long it feeds; only the finale winds up to its pop.
+  uniforms.uHoleSpin.value = current.beat === 'play' ? t * 1.2 : t * 1.2 + 3 * t ** 3;
   const shake = current.beat === 'open' ? 0.003 * current.pull * (1 - uniforms.uHoleCollapse.value) : 0;
   uniforms.uHoleShake.value.set(Math.sin(t * 71) * shake, Math.cos(t * 93) * shake);
 }

@@ -23,19 +23,19 @@ const { Title, TitleView } = (await import(
   new URL('/src/letters/traits.ts', location.origin).href
 )) as typeof import('../src/letters/traits');
 const { uLens } = (await import(
-  new URL('/src/letters/lens.tsx', location.origin).href
-)) as typeof import('../src/letters/lens');
+  new URL('/src/glass/materials.ts', location.origin).href
+)) as typeof import('../src/glass/materials');
 const { Body } = (await import(
   new URL('/src/physics/traits.ts', location.origin).href
 )) as typeof import('../src/physics/traits');
 const { Viewport } = (await import(
-  new URL('/src/hero/traits.ts', location.origin).href
-)) as typeof import('../src/hero/traits');
+  new URL('/src/viewport/traits.ts', location.origin).href
+)) as typeof import('../src/viewport/traits');
 while (document.documentElement.dataset.heroState !== 'ready')
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 const { actions } = (await import(new URL('/src/actions.ts', location.origin).href)) as typeof import('../src/actions');
-const { replayHero: requestReplay, holdBody } = actions(world);
+const { replayScene: requestReplay, holdBody } = actions(world);
 const state = _roots.values().next().value!.store.getState();
 state.setFrameloop('never');
 const { renderer, renderPipeline } = state;

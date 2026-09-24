@@ -15,7 +15,7 @@ it('types the tagline in three frames a character and backspaces it out one a fr
   const count = () => typing.get(Typing)!.count;
 
   try {
-    commands.typeFeatureAfter(0);
+    commands.startTyping();
     expect(count()).toBe(0);
 
     for (let frame = 0; frame < 30; frame++) typeFeature(world);
@@ -34,7 +34,7 @@ it('types the tagline in three frames a character and backspaces it out one a fr
     expect(typing.get(Typing)!.leaving).toBe(false);
 
     // Fully typed, then taken by the hole: nothing is left to backspace.
-    commands.typeFeatureAfter(0);
+    commands.startTyping();
 
     for (let frame = 0; frame < FEATURE_LINE.length * 3 + 3; frame++) typeFeature(world);
 

@@ -17,7 +17,7 @@ import {
   Quaternion,
   Vector3,
 } from 'three/webgpu';
-import type { SlugFont } from '../hero/fonts';
+import type { SlugFont } from '../loading/fonts';
 import {
   screenInk,
   uEyes,
@@ -32,11 +32,11 @@ import {
 import { mat4, quat, vec3 as vector3 } from 'math';
 import { Robot as RobotTrait } from './traits';
 import { robotActions } from './actions';
-import { SHADOW_CASTER_LAYER } from '../letters/content';
+import { SHADOW_CASTER_LAYER } from '../glass/content';
 import { useWorld, useQuery } from 'koota/react';
 import type { Entity } from 'koota';
-import { textPrepared, usePreparation } from '../hero/prepare';
-import { type RetainedLine, createRetainedLine, disposeLine, showLine } from '../letters/text';
+import { textPrepared, usePreparation } from '../loading/prepare';
+import { type RetainedLine, createRetainedLine, disposeLine, showLine } from '../letters/utils';
 import robotUrl from '../../assets/robot.glb?url';
 
 const SCALE = 3 / 2.85;
@@ -47,27 +47,10 @@ const FACE_BASIS = new Quaternion().setFromRotationMatrix(
 );
 /** The display frame in the head joint, in rig units. */
 const FACE_LOCAL = new Matrix4().compose(FACE_CENTER, FACE_BASIS, new Vector3().setScalar(1 / (0.05737 * SCALE)));
-/** The display's finish under the printed pixels. */
-const FACE_FINISH = { roughness: 0.35, metalness: 0.6 };
 const FACE_FONT_SIZE = 0.26;
 const FACE_WIDTH = 1.7;
 
 useGLTF.preload(robotUrl);
-
-function createRobotTransforms() {
-  return {
-    axis: vector3.create(),
-    parent: quat.create(),
-    tilt: quat.create(),
-    rotation: quat.create(),
-    local: quat.create(),
-    parentWorld: new Quaternion(),
-    world: mat4.create(),
-    head: mat4.create(),
-    face: mat4.create(),
-    eyes: { shown: 1, tear: 0 },
-  };
-}
 
 export function RobotRenderer({ font, icons }: { readonly font: SlugFont; readonly icons: SlugFont }) {
   return useQuery(RobotTrait).map((entity) => (
@@ -117,7 +100,7 @@ function Robot({ entity, font }: { readonly entity: Entity; readonly font: SlugF
     const material = glitchingScreen(original);
     screenMesh.material = material;
 
-    return { scene: owned, display: screenInk(original, FACE_FINISH), screenMaterial: material };
+    return { scene: owned, display: screenInk(original), screenMaterial: material };
   }, [model.scene]);
 
   const mixer = useMemo(() => new AnimationMixer(scene), [scene]);
@@ -140,7 +123,21 @@ function Robot({ entity, font }: { readonly entity: Entity; readonly font: SlugF
 
   /** The display's group: kept in the robot's tree and moved to the head joint each frame. */
   const face = useRef<Group>(null);
-  const transformsRef = useRef(useMemo(() => createRobotTransforms(), []));
+  // Retained scratch for the rig's joints and the display's place, the face fixed in the head joint once.
+  const transforms = useMemo(
+    () => ({
+      axis: vector3.create(),
+      parent: quat.create(),
+      tilt: quat.create(),
+      rotation: quat.create(),
+      local: quat.create(),
+      parentWorld: new Quaternion(),
+      world: mat4.create(),
+      head: mat4.create(),
+      face: FACE_LOCAL.toArray(mat4.create()),
+    }),
+    [],
+  );
 
   useEffect(() => {
     const clip = animations.find((candidate) => candidate.name === 'Take 001');
@@ -158,7 +155,6 @@ function Robot({ entity, font }: { readonly entity: Entity; readonly font: SlugF
 
   useFrame(
     () => {
-      const transforms = transformsRef.current;
       const root = mover.current;
       const lean = body.current;
 
@@ -172,12 +168,12 @@ function Robot({ entity, font }: { readonly entity: Entity; readonly font: SlugF
         robotActions(world).mountRobotView(entity, {
           root,
           lean,
-          screen: face.current,
+          // The text has committed inside the display group, so the group is mounted.
+          screen: face.current!,
           head,
           mixer,
           line: line.current,
           transforms,
-          faceLocal: FACE_LOCAL,
           eyes: uEyes,
           tear: uTear,
           seed: uSeed,
@@ -198,26 +194,24 @@ function Robot({ entity, font }: { readonly entity: Entity; readonly font: SlugF
           </group>
         </group>
       </group>
-      {display !== undefined ? (
-        <group matrixAutoUpdate={false} ref={face} visible={false}>
-          <Text
-            constraints={{ width: { mode: 'exact', size: FACE_WIDTH } }}
-            font={font}
-            layout={{ align: 'center', wrap: 'none' }}
-            material={display}
-            ref={text}
-            position={[-FACE_WIDTH / 2, FACE_FONT_SIZE / 2, 0]}
-            style={{
-              color: '#a99cff',
-              fontSize: FACE_FONT_SIZE,
-              letterSpacing: 0.09,
-              lineHeight: 1,
-            }}
-          >
-            {FACE_TEXT}
-          </Text>
-        </group>
-      ) : null}
+      <group matrixAutoUpdate={false} ref={face} visible={false}>
+        <Text
+          constraints={{ width: { mode: 'exact', size: FACE_WIDTH } }}
+          font={font}
+          layout={{ align: 'center', wrap: 'none' }}
+          material={display}
+          ref={text}
+          position={[-FACE_WIDTH / 2, FACE_FONT_SIZE / 2, 0]}
+          style={{
+            color: '#a99cff',
+            fontSize: FACE_FONT_SIZE,
+            letterSpacing: 0.09,
+            lineHeight: 1,
+          }}
+        >
+          {FACE_TEXT}
+        </Text>
+      </group>
     </group>
   );
 }

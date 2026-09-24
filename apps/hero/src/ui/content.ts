@@ -5,6 +5,12 @@
 export const BUTTON_WIDTH = 1.16;
 export const BUTTON_HEIGHT = 0.44;
 export const BUTTON_RADIUS = 0.1;
+
+/** Whether a sheet point lies on the button. */
+export function overPlayButton(x: number, y: number): boolean {
+  return Math.abs(x) <= BUTTON_WIDTH / 2 && Math.abs(y) <= BUTTON_HEIGHT / 2;
+}
+
 /** Room around the frame on its plane for the hover glow to fade out, so the plane's square edge never shows. */
 export const FRAME_MARGIN = 0.2;
 export const LABEL = 'Play';

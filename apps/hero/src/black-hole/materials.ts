@@ -19,7 +19,7 @@ import {
 } from 'three/tsl';
 import { Vector2, type Node, type TextureNode, AdditiveBlending, MeshBasicNodeMaterial } from 'three/webgpu';
 import type { ThreeTextMaterialContext } from '@pmndrs/glyph/three';
-import { retained } from '../hmr';
+import { retained } from '../utils';
 
 /**
  * Every uniform the hole publishes, kept across a hot module replacement: the mounted view writes them each frame
@@ -49,25 +49,13 @@ export const holeUniforms = retained('black-hole', () => ({
   uHeat: uniform(0),
 }));
 
-export const {
-  uHeat,
-  uHoleLens,
-  uHoleBend,
-  uHoleBlackout,
-  uHoleCamera,
-  uHoleCenter,
-  uHoleCollapse,
-  uHoleHorizon,
-  uHoleScreen,
-  uHoleShake,
-  uHoleSpin,
-  uPresence,
-} = holeUniforms;
+export const { uHoleLens, uHoleBend, uHoleBlackout, uHoleCollapse, uHoleScreen, uHoleShake } = holeUniforms;
+const { uHeat, uHoleCamera, uHoleCenter, uHoleHorizon, uHoleSpin, uPresence } = holeUniforms;
 
 type SlugContext = Extract<ThreeTextMaterialContext, { format: 'pmndrs.slug' }>;
 
 /** Coverage bent around the black hole, and how much of the glyph survives that close to it. */
-export interface HoleWarp {
+interface HoleWarp {
   readonly coverage: Node<'float'>;
   readonly survive: Node<'float'>;
   /** Distance from the hole in horizons at this depth, for tinting by proximity. */

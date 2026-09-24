@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 import { FEATURE_FIELD, FEATURE_LINE } from '../src/letters/content.ts';
 import { ICON_CODE_POINTS } from '../src/icon-paper/content.ts';
-import { STAR_SYMBOLS } from '../src/star-embers/traits.ts';
+import { STAR_SYMBOLS } from '../src/star-embers/content.ts';
 
 run('geist-black', ['--input', 'fonts/geist-1.7.2/Geist-Black.ttf', '--unicodes', 'U+0020-007E'], ['--msdf']);
 run(

@@ -1,11 +1,10 @@
-import { cellMatrix } from './utils';
 import { Collapse, type HoleState } from '../black-hole/traits';
 import type { World } from 'koota';
-import { clamp, mat4, vec3 } from 'math';
+import { clamp, mat4, quat, vec3, type Mat4 } from 'math';
 import { mulberry32 } from 'math/random';
 import { Time } from '../time/traits';
 import { Pointer } from '../input/traits';
-import { Viewport } from '../hero/traits';
+import { Viewport } from '../viewport/traits';
 import { departureAt, release, swirl } from '../black-hole/utils';
 import { HORIZON, PLAY_REACH } from '../black-hole/content';
 import { IconPaper, IconView, Impacts, type LatticeState, type Layout, type IconLayoutOptions } from './traits';
@@ -37,7 +36,7 @@ export function moveIconPaper(world: World): void {
     mat4.invert(lattice.inverse, lattice.world);
     collectWaves(world, lattice, options.waveDelay);
     lattice.pointer.strength = pointer.strength * options.response;
-    trackPointer(viewport.aspect, viewport.cameraZ, pointer, lattice, options.response);
+    trackPointer(viewport.aspect, viewport.cameraZ, pointer, lattice);
     trackHole(viewport.cameraZ, collapse, lattice, layout);
     simulate(lattice, layout, step, options, time.now);
     advanceMorph(lattice, layout, time.now);
@@ -52,16 +51,16 @@ function collectWaves(world: World, state: LatticeState, delay: number): void {
   const pending = world.get(Impacts)!.entries;
   let batch = 0;
 
-  for (let index = 0; index < pending.length; index += 1) if ((pending[index]?.id ?? 0) > state.seenWave) batch += 1;
+  for (let index = 0; index < pending.length; index += 1) if (pending[index]!.id > state.seenWave) batch += 1;
 
   if (batch === 0) return;
 
   const scale = 1 / Math.sqrt(batch);
 
   for (let index = 0; index < pending.length; index += 1) {
-    const shock = pending[index];
+    const shock = pending[index]!;
 
-    if (shock === undefined || shock.id <= state.seenWave) continue;
+    if (shock.id <= state.seenWave) continue;
 
     vec3.transformMat4(state.projected, shock.world, state.inverse);
     // Deeper layers answer a beat later, so the impact travels through the stack instead of striking it flat.
@@ -77,30 +76,15 @@ function collectWaves(world: World, state: LatticeState, delay: number): void {
 }
 
 /** Projects the pointer onto this layer's plane and stores it in sheet space. */
-function trackPointer(
-  aspect: number,
-  cameraZ: number,
-  pointer: { x: number; y: number },
-  state: LatticeState,
-  response: number,
-): void {
-  const target = state.pointer;
-
-  if (response <= 0) {
-    target.active = false;
-
-    return;
-  }
-
+function trackPointer(aspect: number, cameraZ: number, pointer: { x: number; y: number }, state: LatticeState): void {
   const depth = state.world[14];
   const distance = cameraZ - depth;
   const halfHeight = Math.tan((FIELD_OF_VIEW * Math.PI) / 360) * distance;
   const halfWidth = halfHeight * aspect;
   vec3.set(state.projected, pointer.x * halfWidth, pointer.y * halfHeight, depth);
   vec3.transformMat4(state.projected, state.projected, state.inverse);
-  target.x = state.projected[0];
-  target.y = state.projected[1];
-  target.active = true;
+  state.pointer.x = state.projected[0];
+  state.pointer.y = state.projected[1];
 }
 
 /**
@@ -134,7 +118,7 @@ function trackHole(cameraZ: number, state: HoleState, lattice: LatticeState, lay
   if (state.beat === 'play') return;
 
   // The moment the hole opens, every cell is given its turn: nearer ones first, with some jitter.
-  if (Number.isNaN(lattice.departAt[0] ?? Number.NaN)) {
+  if (Number.isNaN(lattice.departAt[0]!)) {
     // Use visible world distance, not the repeated offscreen lattice's extent. The gravitational field reaches a new
     // band of the viewport as gravity builds, consistently at both sheet depths.
     const reachOnSheet = (HORIZON * 9 * (cameraZ - depth)) / cameraZ;
@@ -169,7 +153,6 @@ export function advanceMorph(state: LatticeState, layout: Layout, now: number): 
       morph.to = state.spare[Math.floor(mulberry32.sample(state.random) * count)]!;
       morph.start = now;
       state.motifGlyphs[morph.motif] = morph.to;
-      state.applied.fill(0);
     }
 
     state.nextSwap = now + 1.1 * 1000;
@@ -180,13 +163,11 @@ export function advanceMorph(state: LatticeState, layout: Layout, now: number): 
   const elapsed = (now - morph.start) / 1000;
   const members = layout.cellsByMotif[morph.motif]!;
 
+  // Each member takes its new glyph edge-on, halfway through its flip.
   for (let slot = 0; slot < members.length; slot++) {
     const index = members[slot]!;
 
-    if (state.applied[index] === 1 || elapsed < layout.cells[index]!.delay + MORPH_SECONDS / 2) continue;
-
-    state.selected[index] = morph.to;
-    state.applied[index] = 1;
+    if (elapsed >= layout.cells[index]!.delay + MORPH_SECONDS / 2) state.selected[index] = morph.to;
   }
 
   if (elapsed > STAGGER_SECONDS + MORPH_SECONDS) morph.motif = -1;
@@ -225,32 +206,29 @@ export function simulate(
     for (let index = 0; index < count; index += 1) {
       if (state.swallowed[index] === 1) continue;
 
-      const px = state.x[index] ?? 0;
-      const py = state.y[index] ?? 0;
-      // A cell's turn: it holds its place until its moment, then gradually lets go of
-      // its springs entirely and is pulled in.
-      const departure = open ? (state.departAt[index] ?? Number.NaN) : Number.NaN;
-      const loose = open && !Number.isNaN(departure) ? release(state.hole.time, departure) : 0;
+      const px = state.x[index]!;
+      const py = state.y[index]!;
+      const loose = looseness(state, index);
       const hold = 1 - loose;
       const damping = 3.4 + (5 - 3.4) * loose;
-      let ax = -26 * hold * px - damping * (state.vx[index] ?? 0);
-      let ay = -26 * hold * py - damping * (state.vy[index] ?? 0);
+      let ax = -26 * hold * px - damping * state.vx[index]!;
+      let ay = -26 * hold * py - damping * state.vy[index]!;
 
       const base = index * 4;
 
       for (let link = 0; link < 4; link += 1) {
-        const other = layout.neighbours[base + link] ?? -1;
+        const other = layout.neighbours[base + link]!;
 
         if (other < 0 || state.swallowed[other] === 1) continue;
 
-        ax += 16 * hold * ((state.x[other] ?? 0) - px);
-        ay += 16 * hold * ((state.y[other] ?? 0) - py);
+        ax += 16 * hold * (state.x[other]! - px);
+        ay += 16 * hold * (state.y[other]! - py);
       }
 
-      const restX = layout.restX[index] ?? 0;
-      const restY = layout.restY[index] ?? 0;
+      const restX = layout.restX[index]!;
+      const restY = layout.restY[index]!;
 
-      if (open ? !Number.isNaN(departure) : state.hole.pull > 0) {
+      if (open ? !Number.isNaN(state.departAt[index]!) : state.hole.pull > 0) {
         const dx = state.hole.x - (restX + px);
         const dy = state.hole.y - (restY + py);
         const distance = Math.hypot(dx, dy);
@@ -286,10 +264,7 @@ export function simulate(
 
       // Visit active wave slots directly inside the cell substeps.
       for (let wave = 0; wave < waveCount; wave += 1) {
-        const entry = state.waves[state.activeWaves[wave]!];
-
-        if (entry === undefined) continue;
-
+        const entry = state.waves[state.activeWaves[wave]!]!;
         const dx = restX - entry.x;
         const dy = restY - entry.y;
         const distance = Math.hypot(dx, dy);
@@ -303,7 +278,7 @@ export function simulate(
         ay += (dy / distance) * push;
       }
 
-      if (state.pointer.active && state.pointer.strength > 0) {
+      if (state.pointer.strength > 0) {
         const dx = restX + px - state.pointer.x;
         const dy = restY + py - state.pointer.y;
         const distance = Math.hypot(dx, dy);
@@ -317,8 +292,8 @@ export function simulate(
       }
 
       const speed = open ? 26 * 3 : 26;
-      const vx = clamp((state.vx[index] ?? 0) + ax * SUBSTEP, -speed, speed);
-      const vy = clamp((state.vy[index] ?? 0) + ay * SUBSTEP, -speed, speed);
+      const vx = clamp(state.vx[index]! + ax * SUBSTEP, -speed, speed);
+      const vy = clamp(state.vy[index]! + ay * SUBSTEP, -speed, speed);
       state.vx[index] = vx;
       state.vy[index] = vy;
       state.x[index] = clamp(px + vx * SUBSTEP, -limit, limit);
@@ -338,18 +313,17 @@ export function syncIconViews(world: World): void {
     view.group.position.x = -current.offset;
     const now = world.get(Time)!.now;
 
-    const { written } = view;
+    const { written, shown } = view;
 
     for (let index = 0; index < layout.cells.length; index++) {
       const selected = state.selected[index]!;
-      const previous = state.previous[index]!;
       const base = index * 16;
       // A swapped cell's new glyph must be written whatever its matrix was.
-      let changed = selected !== previous;
+      let changed = selected !== shown[index];
 
       if (changed) {
-        copies.setMatrixAt(index * GLYPHS.length + previous, view.hidden);
-        state.previous[index] = selected;
+        copies.setMatrixAt(index * GLYPHS.length + shown[index]!, view.hidden);
+        shown[index] = selected;
       }
 
       const record = index * GLYPHS.length + selected;
@@ -379,4 +353,58 @@ export function syncIconViews(world: World): void {
       written.set(state.matrix, base);
     }
   });
+}
+
+/**
+ * How far a cell has let go of its springs for the hole: nothing until its turn, then all of it over a moment, and
+ * nothing while the hole is closed.
+ */
+function looseness(state: LatticeState, index: number): number {
+  const departure = state.departAt[index]!;
+
+  return state.hole.time >= 0 && !Number.isNaN(departure) ? release(state.hole.time, departure) : 0;
+}
+
+/** Compose one cell directly. Baseline is the precomputed glyph centering offset. */
+export function cellMatrix(
+  out: Mat4,
+  state: LatticeState,
+  layout: Layout,
+  index: number,
+  baseline: number,
+  iconSize: number,
+  now: number,
+): Mat4 {
+  const x = layout.restX[index]! + state.x[index]!;
+  const y = layout.restY[index]! + state.y[index]!;
+  const loose = looseness(state, index);
+  let grow = 1;
+
+  if (loose > 0) {
+    const dx = state.hole.x - x;
+    const dy = state.hole.y - y;
+    const nearSquared = (dx * dx + dy * dy) / (state.hole.horizon * state.hole.horizon);
+    grow += (1.6 * loose) / (nearSquared + 0.35);
+  }
+
+  const vx = state.vx[index]!;
+  const vy = state.vy[index]!;
+  const stretch = 1 + Math.min(1.8, Math.hypot(vx, vy) * 0.045) * loose;
+  let flip = 0;
+
+  if (state.morph.motif === layout.motifOfCell[index]) {
+    const progress = ((now - state.morph.start) / 1000 - layout.cells[index]!.delay) / MORPH_SECONDS;
+
+    if (progress > 0 && progress < 1) flip = progress < 0.5 ? Math.PI * progress : -Math.PI * (1 - progress);
+  }
+
+  state.angles[1] = flip;
+  state.angles[2] = loose > 0 ? Math.atan2(vy, vx) * loose : 0;
+  quat.fromEuler(state.rotation, state.angles);
+  vec3.set(state.position, x, y, 0);
+  vec3.set(state.scale, grow * stretch, grow / Math.sqrt(stretch), 1);
+  mat4.fromRotationTranslationScale(out, state.rotation, state.position, state.scale);
+  vec3.set(state.position, baseline, iconSize / 2, 0);
+
+  return mat4.translate(out, out, state.position);
 }

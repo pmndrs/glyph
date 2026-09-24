@@ -2,15 +2,13 @@ import type { World } from 'koota';
 import { clamp, lerp } from 'math';
 import { Collapse } from '../black-hole/traits';
 import { HORIZON, POP_AT } from '../black-hole/content';
-import { Mode, Viewport } from '../hero/traits';
-import { Pointer } from '../input/traits';
+import { Mode } from '../director/traits';
+import { Viewport } from '../viewport/traits';
 import { FEATURE_LINE } from '../letters/content';
 import { Title, Typing } from '../letters/traits';
 import { Body } from '../physics/traits';
-import { overPlayButton, playReveal } from '../play-button/systems';
+import { PlayButton } from '../ui/traits';
 import { Rain } from '../rain/traits';
-import { StarEmbers } from '../star-embers/traits';
-import { faceLetters } from '../robot/systems';
 import { Robot } from '../robot/traits';
 import { Time } from '../time/traits';
 import { jitter } from '../utils';
@@ -49,7 +47,7 @@ function across(x: number, width: number): number {
 export function listenForSounds(world: World): void {
   const sound = world.get(Sound)!;
   const heard = sound.heard;
-  const { width, aspect } = world.get(Viewport)!;
+  const { width } = world.get(Viewport)!;
   const { delta } = world.get(Time)!;
   const cue = soundActions(world).cueSound;
   const title = world.queryFirst(Title)?.get(Title)?.bodies;
@@ -94,16 +92,16 @@ export function listenForSounds(world: World): void {
   let motorPan = 0;
 
   if (robot?.active) {
-    const { x, y } = robot.footprint;
+    const { x, y } = robot.pose;
     const step = Math.hypot(x - heard.x, y - heard.y);
     motorPan = across(x, width);
 
     // A jump across the floor is the robot being placed, not driven.
     if (heard.rolling && delta > 0 && step < 1) motor = clamp(step / delta / 7, 0, 1);
 
-    const letters = robot.face === undefined ? 0 : faceLetters(robot.face);
+    const letters = robot.printed;
 
-    if (letters > heard.face) {
+    if (letters > heard.printed) {
       const note = SPEECH[Math.floor(jitter(heard.spoken * 3 + 1) * SPEECH.length)]!;
       cue('speech', motorPan, pitch(note), 0.25, 0, heard.spoken++);
     }
@@ -111,10 +109,10 @@ export function listenForSounds(world: World): void {
     heard.x = x;
     heard.y = y;
     heard.rolling = true;
-    heard.face = letters;
+    heard.printed = letters;
   } else {
     heard.rolling = false;
-    heard.face = 0;
+    heard.printed = 0;
   }
 
   // Each press that sends it off in play answers with a button's tap where the marker lands, never quite the same.
@@ -158,7 +156,7 @@ export function listenForSounds(world: World): void {
 
   // The embers sparkle from their burst on their own clock: two faint sprays, either side of where the hole popped,
   // which thin out with the stars as they cool and hang on in the void long after.
-  const embers = world.get(StarEmbers)!.age;
+  const embers = hole.sincePop ?? -1;
 
   if (heard.embers < 0 && embers >= 0) {
     cue('sparkle', clamp(holePan - 0.5, -1, 1), 1, 0.08, 0, 0);
@@ -184,9 +182,9 @@ export function listenForSounds(world: World): void {
   }
 
   // The Play button powers up with a run of blips as it draws in, and ticks when the pointer finds it.
-  const revealed = playReveal(world) > 0;
-  const pointer = world.get(Pointer)!;
-  const over = revealed && pointer.present && overPlayButton(pointer.x * aspect, pointer.y);
+  const button = world.get(PlayButton)!;
+  const revealed = button.reveal > 0;
+  const over = button.over;
 
   if (revealed && !heard.revealed) {
     for (let note = 0; note < POWER_UP.length; note++) cue('blip', 0, pitch(POWER_UP[note]!), 0.2, note * 0.12);
@@ -274,7 +272,7 @@ export function playSounds(world: World): void {
     }
   }
 
-  queue.count = 0;
+  soundActions(world).clearSoundCues();
 
   const { motor, drone, overtone } = view;
   motor.level.gain.setTargetAtTime(sound.motor * 0.2, now, 0.05);

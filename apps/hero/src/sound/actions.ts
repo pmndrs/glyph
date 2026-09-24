@@ -13,6 +13,10 @@ export const soundActions = createActions((world) => ({
   unmountSoundView: () => {
     world.remove(SoundView);
   },
+  /** The mixer has played this frame's cues. */
+  clearSoundCues: () => {
+    world.get(Sound)!.queue.count = 0;
+  },
   toggleSound: () => {
     world.set(Sound, { muted: !world.get(Sound)!.muted });
   },

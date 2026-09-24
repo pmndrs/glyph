@@ -1,16 +1,9 @@
 import { trait, type Entity } from 'koota';
-import type { Mat4, Vec3 } from 'math';
+import type { Mat4 } from 'math';
 import type { HeldPose } from '../physics/traits';
-import type { Flight } from '../black-hole/traits';
-import type { Solid } from './utils';
-import type { Projection } from './shadows';
-import type { Lens } from './lens';
 import type { Glyphs } from '@pmndrs/glyph/three';
 import type { Matrix4 } from 'three/webgpu';
-import type { RetainedLine } from './text';
-
-export const ShadowView = trait((): Projection | undefined => undefined);
-export const LensView = trait((): Lens | undefined => undefined);
+import type { RetainedLine, Solid } from './utils';
 
 export interface TitleDraw {
   glyphs: Glyphs;
@@ -20,16 +13,6 @@ export interface TitleDraw {
 export interface FeatureDraw {
   line: RetainedLine;
   collapsed: boolean;
-  work: {
-    transform: Mat4;
-    rotation: Mat4;
-    pivot: Mat4;
-    world: Mat4;
-    inverse: Mat4;
-    center: Vec3;
-    scale: Vec3;
-    flight: Flight;
-  };
 }
 
 export const TitleView = trait((): TitleDraw | undefined => undefined);
@@ -69,12 +52,6 @@ export interface TitleBodies {
   grow: Float64Array;
   landings: Landing[];
   landingCount: number;
-  pose: HeldPose;
-  flight: Flight;
-  velocity: Vec3;
-  scale: Vec3;
-  body: Mat4;
-  matrix: Mat4;
 }
 
 export const Title = trait({
@@ -82,10 +59,10 @@ export const Title = trait({
   width: undefined as number | undefined,
   reach: 0,
 });
-/** The tagline is off the paper until the title first smashes down, types in from `start`, and backspaces out while `leaving`. */
+/** The tagline is off the paper until the title first smashes down, types in once `started`, and backspaces out while `leaving`. */
 export const Typing = trait({
   count: 0,
   beat: 0,
-  start: Number.POSITIVE_INFINITY,
+  started: false,
   leaving: false,
 });

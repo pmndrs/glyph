@@ -26,22 +26,22 @@ const { POP_AT } = (await import(
   new URL('/src/black-hole/content.ts', location.origin).href
 )) as typeof import('../src/black-hole/content');
 const { EMBER_SECONDS } = (await import(
-  new URL('/src/star-embers/traits.ts', location.origin).href
-)) as typeof import('../src/star-embers/traits');
+  new URL('/src/star-embers/content.ts', location.origin).href
+)) as typeof import('../src/star-embers/content');
 const { BUTTON_HEIGHT, BUTTON_WIDTH, FRAME_MARGIN, REVEAL_AFTER, REVEAL_SECONDS } = (await import(
-  new URL('/src/play-button/content.ts', location.origin).href
-)) as typeof import('../src/play-button/content');
+  new URL('/src/ui/content.ts', location.origin).href
+)) as typeof import('../src/ui/content');
 const { uPlayHover, uPlayReveal } = (await import(
-  new URL('/src/play-button/materials.ts', location.origin).href
-)) as typeof import('../src/play-button/materials');
+  new URL('/src/ui/materials.ts', location.origin).href
+)) as typeof import('../src/ui/materials');
 const { Viewport } = (await import(
-  new URL('/src/hero/traits.ts', location.origin).href
-)) as typeof import('../src/hero/traits');
+  new URL('/src/viewport/traits.ts', location.origin).href
+)) as typeof import('../src/viewport/traits');
 while (document.documentElement.dataset.heroState !== 'ready')
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 const { actions } = (await import(new URL('/src/actions.ts', location.origin).href)) as typeof import('../src/actions');
-const { replayHero: requestReplay } = actions(world);
+const { replayScene: requestReplay } = actions(world);
 const hole = () => world.get(Collapse)!.hole;
 const state = _roots.values().next().value!.store.getState();
 state.setFrameloop('never');

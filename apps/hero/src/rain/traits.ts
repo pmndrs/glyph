@@ -3,7 +3,7 @@ import type { Group, Object3D } from 'three/webgpu';
 import type { Solid } from '../letters/utils';
 import { COUNT } from './content';
 
-export type DropPhase = 'idle' | 'live' | 'fading' | 'eaten';
+type DropPhase = 'idle' | 'live' | 'fading' | 'eaten';
 
 export interface Drop {
   phase: DropPhase;

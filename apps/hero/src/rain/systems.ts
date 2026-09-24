@@ -1,16 +1,17 @@
 import type { World } from 'koota';
 import { vec3 } from 'math';
 import { Collapse } from '../black-hole/traits';
-import { Mode, Viewport } from '../hero/traits';
+import { Mode } from '../director/traits';
+import { Viewport } from '../viewport/traits';
 import { physicsActions } from '../physics/actions';
+import { readBodyPose } from '../physics/utils';
 import { Body } from '../physics/traits';
 import { Robot } from '../robot/traits';
 import { Time } from '../time/traits';
 import { jitter } from '../utils';
 import { rainActions } from './actions';
 import { COUNT, DROP_EVERY, EAT_SECONDS, FADE_SECONDS, FALL_GRAVITY, MARGIN, RAIN_AFTER, RELEASE_Z } from './content';
-import { flight } from '../black-hole/utils';
-import type { Flight } from '../black-hole/traits';
+import { flight, type Flight } from '../black-hole/utils';
 import { Rain, RainView } from './traits';
 
 const spawnPosition = vec3.create();
@@ -47,29 +48,26 @@ export function rainGlyphs(world: World): void {
     if (drop.phase !== 'live') continue;
 
     if (!playing) {
-      dismiss(slot, true);
+      dismiss(slot, 'fading');
       continue;
     }
 
     const body = drop.entity!.get(Body)!;
-    drop.x = body.position[0];
-    drop.y = body.position[1];
-    drop.z = body.position[2];
-    drop.yaw = 2 * Math.atan2(body.rotation[2], body.rotation[3]);
+    readBodyPose(drop, drop.entity!);
 
     // Landed, it weighs what the letters weigh, so the robot's pushes and the floor's friction feel the same.
     if (body.landed) physicsActions(world).setGravityFactor(drop.entity!, 1);
 
     // A glyph cannot tip, so one that comes to rest on the robot's back would ride it. Flick it off sideways.
-    if (robot?.active && drop.z > 2 && riding(drop.x, drop.y, robot.footprint)) {
-      const dx = drop.x - robot.footprint.x;
-      const dy = drop.y - robot.footprint.y;
+    if (robot?.active && drop.z > 2 && riding(drop.x, drop.y, robot.pose)) {
+      const dx = drop.x - robot.pose.x;
+      const dy = drop.y - robot.pose.y;
       const away = Math.atan2(dy, dx);
       physicsActions(world).kickBody(drop.entity!, vec3.set(kick, Math.cos(away) * 7, Math.sin(away) * 7, 4));
     }
 
     if (Math.abs(drop.x) > viewport.width / 2 + MARGIN || Math.abs(drop.y) > viewport.height / 2 + MARGIN)
-      dismiss(slot, false);
+      dismiss(slot, 'idle');
   }
 
   if (!raining) dropAt = time.elapsed;
@@ -90,7 +88,7 @@ export function rainGlyphs(world: World): void {
         }
       }
 
-      if (leaving >= 0) dismiss(leaving, true);
+      if (leaving >= 0) dismiss(leaving, 'fading');
     }
 
     const solid = slot >= 0 ? rain.solids[slot] : undefined;

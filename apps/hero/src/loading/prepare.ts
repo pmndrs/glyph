@@ -1,5 +1,5 @@
 import { Text as ThreeText } from '@pmndrs/glyph/three';
-import { useFrame, useThree } from '@react-three/fiber/webgpu';
+import { type RootState, useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useEffect, useEffectEvent, useRef, useSyncExternalStore } from 'react';
 import { type Object3D, WebGPUBackend, type WebGPURenderer } from 'three/webgpu';
 
@@ -67,6 +67,12 @@ async function uploadsComplete(renderer: WebGPURenderer): Promise<void> {
   }
 }
 
+/** Draw the frame through the post pipeline once there is one. */
+function renderFrame({ renderer, scene, camera, renderPipeline }: RootState): void {
+  if (renderPipeline === null) renderer.render(scene, camera);
+  else renderPipeline.render();
+}
+
 /** Owns the render job so warm-up uses the same targets, transmission, shadows, and post passes as playback. */
 export function PrepareHero() {
   const required = [
@@ -96,19 +102,13 @@ export function PrepareHero() {
     () => {
       if (phase === 'compiling' || phase === 'failed') return;
 
-      const { renderer, scene, camera, renderPipeline } = state;
-
       if (phase === 'ready') {
-        if (renderPipeline === null) renderer.render(scene, camera);
-        else renderPipeline.render();
+        renderFrame(state);
 
         return;
       }
 
-      const render = () => {
-        if (renderPipeline === null) renderer.render(scene, camera);
-        else renderPipeline.render();
-      };
+      const { renderer, scene, camera, renderPipeline } = state;
 
       const fail = (error: unknown) => {
         if (!alive.current) return;
@@ -123,7 +123,7 @@ export function PrepareHero() {
         publish('compiling');
 
         try {
-          render();
+          renderFrame(state);
 
           void uploadsComplete(renderer).then(() => {
             if (alive.current) publish('ready');
@@ -144,7 +144,7 @@ export function PrepareHero() {
       });
 
       try {
-        render();
+        renderFrame(state);
 
         if (
           scene.environment !== null &&

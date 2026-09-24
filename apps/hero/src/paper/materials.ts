@@ -27,7 +27,7 @@ import {
   Vector2,
   type WebGPURenderer,
 } from 'three/webgpu';
-import { retained } from '../hmr';
+import { retained } from '../utils';
 
 /** Paper grain follows the icon paper in the paper's own plane units. */
 export const uPaperDrift = uniform(new Vector2());

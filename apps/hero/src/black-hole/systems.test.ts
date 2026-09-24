@@ -3,22 +3,24 @@ import { createWorld } from 'koota';
 import { mat4 } from 'math';
 import { Group } from 'three/webgpu';
 import { expect, it } from 'vitest';
-import { Mode, Viewport } from '../hero/traits';
+import { Mode } from '../director/traits';
+import { Viewport } from '../viewport/traits';
 import { Impacts } from '../icon-paper/traits';
 import { letterActions } from '../letters/actions';
 import { moveTitle, syncTitle } from '../letters/systems';
 import { physicsActions } from '../physics/actions';
 import { Body, Physics } from '../physics/traits';
 import { stepPhysics } from '../physics/systems';
-import { playReveal } from '../play-button/systems';
-import { REVEAL_AFTER, REVEAL_SECONDS } from '../play-button/content';
+import { uiActions } from '../ui/actions';
+import { revealPlayButton } from '../ui/systems';
+import { PlayButton } from '../ui/traits';
+import { Pointer } from '../input/traits';
+import { REVEAL_AFTER, REVEAL_SECONDS } from '../ui/content';
 import { rainActions } from '../rain/actions';
 import { COUNT, RAIN_AFTER } from '../rain/content';
 import { rainGlyphs } from '../rain/systems';
 import { Rain } from '../rain/traits';
-import { starEmberActions } from '../star-embers/actions';
-import { syncStarEmbers } from '../star-embers/systems';
-import { EMBER_SECONDS, StarEmbers } from '../star-embers/traits';
+import { EMBER_SECONDS } from '../star-embers/content';
 import { Time } from '../time/traits';
 import { updateTime } from '../time/systems';
 import { blackHoleActions } from './actions';
@@ -30,11 +32,11 @@ import { Collapse } from './traits';
 const PRISM = [-0.5, -0.5, -0.4, 0.5, -0.5, -0.4, -0.5, 0.5, -0.4, -0.5, -0.5, 0.4, 0.5, -0.5, 0.4, -0.5, 0.5, 0.4];
 
 it('opens small in play, grows as it eats the rain pushed to it, then becomes the finale and ends at the button', () => {
-  const world = createWorld(Time, Mode, Viewport, Impacts, Collapse, StarEmbers, Rain);
+  const world = createWorld(Time, Mode, Viewport, Pointer, Impacts, Collapse, Rain);
+  uiActions(world).initializePlayButton();
   const physics = physicsActions(world);
   physics.initializePhysics();
   physics.setPhysicsFloor(-0.4);
-  starEmberActions(world).initializeStarEmbers();
   const rain = rainActions(world);
   rain.initializeRain();
 
@@ -49,7 +51,6 @@ it('opens small in play, grows as it eats the rain pushed to it, then becomes th
       now += 1000 / 60;
       updateTime(world, 1 / 60, now);
       advanceCollapse(world);
-      syncStarEmbers(world);
       stepPhysics(world);
       rainGlyphs(world);
       feedHole(world);
@@ -65,7 +66,6 @@ it('opens small in play, grows as it eats the rain pushed to it, then becomes th
     // Rain may already have fallen into it, and a gulp swings either way, so it is about as wide as it opened.
     expect(hole().horizon).toBeGreaterThan(PLAY_HORIZON * 0.6);
     expect(hole().horizon).toBeLessThan(HORIZON);
-    expect(hole().blackout).toBe(0);
 
     // A glyph pushed to the hole is eaten and widens it; one further out is left to the player.
     const live = () => world.get(Rain)!.drops.filter((drop) => drop.phase === 'live');
@@ -161,14 +161,15 @@ it('opens small in play, grows as it eats the rain pushed to it, then becomes th
     expect(live()).toHaveLength(0);
     advance(EMBER_SECONDS + REVEAL_AFTER + REVEAL_SECONDS + 0.1);
     expect(world.get(Mode)!.kind).toBe('play');
-    expect(playReveal(world)).toBeCloseTo(1);
+    revealPlayButton(world);
+    expect(world.get(PlayButton)!.reveal).toBeCloseTo(1);
   } finally {
     world.destroy();
   }
 });
 
 it("holds the letters where they are when play's hole goes critical, then spirals them in before the pop", () => {
-  const world = createWorld(Time, Mode, Viewport, Impacts, Collapse, StarEmbers, Rain);
+  const world = createWorld(Time, Mode, Viewport, Impacts, Collapse, Rain);
   const physics = physicsActions(world);
   physics.initializePhysics();
   letterActions(world).spawnLetters();
@@ -207,7 +208,7 @@ it("holds the letters where they are when play's hole goes critical, then spiral
     blackHoleActions(world).openPlayHole({ x: 0, y: -2 });
     advance(1);
     const before = homes.map((_, index) => [at(index)[0], at(index)[1]] as const);
-    blackHoleActions(world).openBlackHole(FINALE_JOIN);
+    blackHoleActions(world).openBlackHole();
     advance(0.5);
 
     // Half a second after it goes critical every letter is still out there, drifting.
@@ -237,11 +238,10 @@ it("holds the letters where they are when play's hole goes critical, then spiral
 });
 
 it('lets the rain fall through its field onto the paper before carrying it round', () => {
-  const world = createWorld(Time, Mode, Viewport, Impacts, Collapse, StarEmbers, Rain);
+  const world = createWorld(Time, Mode, Viewport, Impacts, Collapse, Rain);
   const physics = physicsActions(world);
   physics.initializePhysics();
   physics.setPhysicsFloor(-0.4);
-  starEmberActions(world).initializeStarEmbers();
   const rain = rainActions(world);
   rain.initializeRain();
 

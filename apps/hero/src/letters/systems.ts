@@ -1,6 +1,6 @@
-import { resetLine, showLine } from './text';
+import { resetLine, showLine, writeLetter } from './utils';
 import type { World } from 'koota';
-import { Body } from '../physics/traits';
+import { Body, type HeldPose } from '../physics/traits';
 import { Time } from '../time/traits';
 import { Collapse, type HoleState } from '../black-hole/traits';
 import { FEATURE_LINE } from './content';
@@ -9,7 +9,18 @@ import { mat4, vec3, lerp } from 'math';
 import { easing } from 'math/time';
 import { physicsActions } from '../physics/actions';
 import { readBodyPose } from '../physics/utils';
-import { flight, departureAt } from '../black-hole/utils';
+import { flight, departureAt, type Flight } from '../black-hole/utils';
+
+const pose: HeldPose = { x: 0, y: 0, z: 0, yaw: 0 };
+const velocity = vec3.create();
+const path: Flight = { radius: 1, turn: 0, stretch: 1, size: 1 };
+const lineWorld = mat4.create();
+const lineInverse = mat4.create();
+const transform = mat4.create();
+const turn = mat4.create();
+const pivot = mat4.create();
+const center = vec3.create();
+const scale = vec3.create();
 
 export function moveTitle(world: World): void {
   const time = world.get(Time)!;
@@ -36,8 +47,6 @@ export function syncTitle(world: World): void {
 export function typeFeature(world: World): void {
   if (world.get(Collapse)!.hole.beat !== 'closed') return;
 
-  const time = world.get(Time)!;
-
   world.query(Typing).updateEach(([typing]) => {
     // Leaving backspaces a character a frame, three times as fast as it typed.
     if (typing.leaving) {
@@ -47,7 +56,7 @@ export function typeFeature(world: World): void {
       return;
     }
 
-    if (time.now < typing.start) return;
+    if (!typing.started) return;
 
     // Three captured frames per character at the shared 60 Hz update cadence.
     typing.beat++;
@@ -61,7 +70,6 @@ function carryTitle(world: World, state: TitleBodies, delta: number): void {
   const liftSeconds = 0.45;
   state.elapsed += delta;
   let pending = false;
-  const pose = state.pose;
 
   for (let index = 0; index < state.pieces.length; index++) {
     if (state.released[index] === 1) continue;
@@ -91,10 +99,10 @@ function carryTitle(world: World, state: TitleBodies, delta: number): void {
       pose.yaw = 0;
       physicsActions(world).holdBody(state.pieces[index]!.entity, pose);
       const way = (index + state.replays) * 2.4;
-      vec3.set(state.velocity, Math.cos(way) * 0.9, Math.sin(way) * 0.9, -35);
+      vec3.set(velocity, Math.cos(way) * 0.9, Math.sin(way) * 0.9, -35);
       physicsActions(world).releaseBody(
         state.pieces[index]!.entity,
-        state.velocity,
+        velocity,
         (index + state.replays) % 2 === 0 ? 0.35 : -0.35,
       );
       state.released[index] = 1;
@@ -151,7 +159,7 @@ function attractTitle(world: World, state: TitleBodies, hole: HoleState, fromPla
     const from = state.origins[index]!;
     const x = from.x - hole.x;
     const y = from.y - hole.y;
-    const flightPose = flight(state.flight, hole.time, state.departure[index]!, hole.beat === 'play' ? 0.6 : 0.85);
+    const flightPose = flight(path, hole.time, state.departure[index]!, hole.beat === 'play' ? 0.6 : 0.85);
 
     if (flightPose.size === 0) {
       swallowLetter(world, state, index);
@@ -160,7 +168,6 @@ function attractTitle(world: World, state: TitleBodies, hole: HoleState, fromPla
 
     const cosine = Math.cos(flightPose.turn);
     const sine = Math.sin(flightPose.turn);
-    const pose = state.pose;
     pose.x = hole.x + (x * cosine - y * sine) * flightPose.radius;
     pose.y = hole.y + (x * sine + y * cosine) * flightPose.radius;
     pose.z = from.z + Math.sin(Math.PI * (1 - flightPose.size)) * 1.8;
@@ -202,18 +209,6 @@ function titleReach(state: TitleBodies): number {
   return reach;
 }
 
-/** Publish each simulated pose into the retained matrix stream consumed by the view. */
-export function writeLetter(state: TitleBodies, index: number): void {
-  const piece = state.pieces[index]!;
-  const body = piece.entity.get(Body)!;
-  const grow = state.grow[index]!;
-  vec3.set(state.scale, grow, grow, 1);
-  mat4.fromRotationTranslationScale(state.body, body.rotation, body.position, state.scale);
-  mat4.multiply(state.matrix, state.inverse, state.body);
-  mat4.multiply(state.matrix, state.matrix, piece.offset);
-  state.matrices.set(state.matrix, index * 16);
-}
-
 /** Copy simulated letter poses into the mounted glyph draw. */
 export function syncTitleViews(world: World): void {
   world.query(Title, TitleView).readEach(([title, mounted]) => {
@@ -246,9 +241,8 @@ export function syncFeatureViews(world: World): void {
       if (copies !== undefined) {
         copies.visible = collapse.beat === 'open';
         copies.updateWorldMatrix(true, false);
-        const work = view.work;
-        copies.matrixWorld.toArray(work.world);
-        mat4.invert(work.inverse, work.world);
+        copies.matrixWorld.toArray(lineWorld);
+        mat4.invert(lineInverse, lineWorld);
         const records = view.line.records;
 
         for (let index = 0; index < records.length; index++) {
@@ -262,25 +256,25 @@ export function syncFeatureViews(world: World): void {
             continue;
           }
 
-          vec3.transformMat4(work.center, glyph.center, work.world);
-          const x = work.center[0] - collapse.x;
-          const y = work.center[1] - collapse.y;
-          const pose = flight(work.flight, collapse.time, departureAt(Math.abs(x) / 12, glyph.index), 0.8);
-          const cosine = Math.cos(pose.turn);
-          const sine = Math.sin(pose.turn);
-          work.center[0] = collapse.x + (x * cosine - y * sine) * pose.radius;
-          work.center[1] = collapse.y + (x * sine + y * cosine) * pose.radius;
-          vec3.transformMat4(work.center, work.center, work.inverse);
-          mat4.fromTranslation(work.transform, work.center);
-          mat4.fromZRotation(work.rotation, pose.turn);
-          mat4.multiply(work.transform, work.transform, work.rotation);
-          vec3.set(work.scale, pose.size * pose.stretch, pose.size / pose.stretch, 1);
-          mat4.scale(work.transform, work.transform, work.scale);
-          vec3.set(work.center, -glyph.center[0], -glyph.center[1], 0);
-          mat4.fromTranslation(work.pivot, work.center);
-          mat4.multiply(work.transform, work.transform, work.pivot);
-          mat4.multiply(work.transform, work.transform, glyph.original);
-          copies.setMatrixAt(glyph.index, view.line.draw.fromArray(work.transform));
+          vec3.transformMat4(center, glyph.center, lineWorld);
+          const x = center[0] - collapse.x;
+          const y = center[1] - collapse.y;
+          const glyphPose = flight(path, collapse.time, departureAt(Math.abs(x) / 12, glyph.index), 0.8);
+          const cosine = Math.cos(glyphPose.turn);
+          const sine = Math.sin(glyphPose.turn);
+          center[0] = collapse.x + (x * cosine - y * sine) * glyphPose.radius;
+          center[1] = collapse.y + (x * sine + y * cosine) * glyphPose.radius;
+          vec3.transformMat4(center, center, lineInverse);
+          mat4.fromTranslation(transform, center);
+          mat4.fromZRotation(turn, glyphPose.turn);
+          mat4.multiply(transform, transform, turn);
+          vec3.set(scale, glyphPose.size * glyphPose.stretch, glyphPose.size / glyphPose.stretch, 1);
+          mat4.scale(transform, transform, scale);
+          vec3.set(center, -glyph.center[0], -glyph.center[1], 0);
+          mat4.fromTranslation(pivot, center);
+          mat4.multiply(transform, transform, pivot);
+          mat4.multiply(transform, transform, glyph.original);
+          copies.setMatrixAt(glyph.index, view.line.draw.fromArray(transform));
         }
       }
 

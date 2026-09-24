@@ -5,9 +5,9 @@
 
 /** Where the finale's hole sits on the floor, in world units, and the horizon it swallows at when fully open. */
 export const HOLE_CENTER: readonly [x: number, y: number] = [0, 0];
+export const HORIZON = 1.1;
 /** How far from the centre, each way, play's hole may appear. */
 export const PLAY_OFFSET: readonly [x: number, y: number] = [4, 2];
-export const HORIZON = 1.1;
 /** Wind-up, an expanding gravity field, the paper collapse, and finally the pop. */
 export const POP_AT = 3.35;
 export const PAPER_FROM = 2.15;

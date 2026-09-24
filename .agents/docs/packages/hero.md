@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:58d2f257a44950de8cf338b78118fd60b6b9e88d5e9d0ce37b81b576fbfddd2c'
+source_digest: 'sha256:cb7f3320e5686ee56938ae700fd72188f5703fdf731662e3009d6e56ef6c2056'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota, web-audio]
 sources:
   - id: hero-policy
@@ -18,7 +18,7 @@ sources:
     resource: ../../../apps/hero/src/app.tsx
     title: Canvas, providers, and application shell
   - id: hero-scene
-    resource: ../../../apps/hero/src/hero/renderer.tsx
+    resource: ../../../apps/hero/src/app.tsx
     title: Hero sequence composition
   - id: glass-material
     resource: ../../../apps/hero/src/letters/materials.ts
@@ -27,7 +27,7 @@ sources:
     resource: ../../../apps/hero/scripts/refraction.probe.ts
     title: WebGPU stained-glass verification
   - id: glass-shadows
-    resource: ../../../apps/hero/src/letters/shadows.tsx
+    resource: ../../../apps/hero/src/glass/renderer.tsx
     title: Light-space glass projection
   - id: glass-shadows-check
     resource: ../../../apps/hero/scripts/glass-shadows.probe.ts
@@ -69,13 +69,13 @@ sources:
     resource: ../../../apps/hero/src/robot/materials.ts
     title: Pixels lit on the robot's face screen
   - id: startup
-    resource: ../../../apps/hero/src/hero/prepare.ts
+    resource: ../../../apps/hero/src/loading/prepare.ts
     title: Scene preparation and GPU completion gate
   - id: loading
-    resource: ../../../apps/hero/src/hero/loading.tsx
+    resource: ../../../apps/hero/src/ui/renderer.tsx
     title: Preparation overlay and failure display
   - id: retained-line
-    resource: ../../../apps/hero/src/letters/text.ts
+    resource: ../../../apps/hero/src/letters/utils.ts
     title: Prepared glyph records for typing and replay
   - id: performance-check
     resource: ../../../apps/hero/scripts/performance.probe.ts
@@ -84,16 +84,16 @@ sources:
     resource: ../../../apps/hero/scripts/profile.probe.ts
     title: GPU-timestamp profile of each pass at rest and through the finale
   - id: glass-lens
-    resource: ../../../apps/hero/src/letters/lens.tsx
+    resource: ../../../apps/hero/src/glass/systems.ts
     title: Camera-view glass capture that bends glass seen through glass
   - id: glass-lens-check
     resource: ../../../apps/hero/scripts/glass-lens.probe.ts
     title: Glass over glass bends only the glass beneath it
   - id: hmr
-    resource: ../../../apps/hero/src/hmr.ts
+    resource: ../../../apps/hero/src/utils.ts
     title: Uniform sets kept across a hot module replacement
   - id: paper-material
-    resource: ../../../apps/hero/src/hero/materials.ts
+    resource: ../../../apps/hero/src/paper/materials.ts
     title: Paper grain baked once into a wrapping tile
   - id: retained-lines-check
     resource: ../../../apps/hero/scripts/retained-lines.probe.ts
@@ -128,18 +128,18 @@ sources:
   - id: time
     resource: ../../../apps/hero/src/time/systems.ts
     title: Headless playback clock
-  - id: hero-actions
-    resource: ../../../apps/hero/src/hero/actions.ts
-    title: Actor lifecycle and declared hero script
-  - id: hero-systems
-    resource: ../../../apps/hero/src/hero/systems.ts
-    title: Landing impacts and hero script event routing
+  - id: director-actions
+    resource: ../../../apps/hero/src/director/actions.ts
+    title: Actor lifecycle and the declared script
+  - id: director-systems
+    resource: ../../../apps/hero/src/director/systems.ts
+    title: Landing impacts and script event routing
   - id: viewport-hook
-    resource: ../../../apps/hero/src/hero/hooks.ts
+    resource: ../../../apps/hero/src/viewport/hooks.ts
     title: React synchronization of the world viewport
-  - id: mounted-view-check
-    resource: ../../../apps/hero/src/hero/systems.test.ts
-    title: Loading, mounted view replacement, and detached resource behavior
+  - id: director-check
+    resource: ../../../apps/hero/src/director/systems.test.ts
+    title: Presses, replays, and the Play button across both modes
   - id: sequence-check
     resource: ../../../apps/hero/src/sequence/systems.test.ts
     title: Timeline ordering, delays, retriggering, and replacement during dispatch
@@ -153,7 +153,7 @@ sources:
     resource: ../../../apps/hero/src/sequence/traits.ts
     title: Cue declarations and retained deadlines
   - id: hero-renderer
-    resource: ../../../apps/hero/src/hero/renderer.tsx
+    resource: ../../../apps/hero/src/app.tsx
     title: Composition of collapse and star ember post-processing
   - id: star-embers
     resource: ../../../apps/hero/src/star-embers/renderer.tsx
@@ -165,13 +165,13 @@ sources:
     resource: ../../../apps/hero/src/frameloop.ts
     title: R3F clock and input
   - id: play-button
-    resource: ../../../apps/hero/src/play-button/renderer.tsx
+    resource: ../../../apps/hero/src/ui/renderer.tsx
     title: Play button sheet, camera, and framed pixel label
   - id: play-button-materials
-    resource: ../../../apps/hero/src/play-button/materials.ts
+    resource: ../../../apps/hero/src/ui/materials.ts
     title: Quantized frame, block-sampled label, stepped reveal, and sheet composition
   - id: play-button-systems
-    resource: ../../../apps/hero/src/play-button/systems.ts
+    resource: ../../../apps/hero/src/ui/systems.ts
     title: Reveal timing, hit test, and mounted sheet synchronization
   - id: play-button-check
     resource: ../../../apps/hero/scripts/play-button.probe.ts
@@ -229,34 +229,47 @@ domain is a module with explicit ownership. Trait files contain data models and 
 entity commands, including construction, disposal, view attachment, and discrete transitions. Systems sample inputs,
 advance existing state, and invoke actions for commands. Renderers prepare mounted resources and attach them through
 actions. Domain view systems update those resources while their view traits are attached. Only the files a domain needs exist.
-Dependencies use domain actions, published state, or explicit inputs rather than reaching into another domain to
-implement its transitions.
+Domains depend on each other through traits, actions, content, and utils, and share shader contracts through
+materials; none imports another's systems or renderers. The root composes the domains, and the few building blocks
+several of them share live in small modules there.
 
-| Domain        | Ownership                                                                                                   |
-| ------------- | ----------------------------------------------------------------------------------------------------------- |
-| `sequence`    | Declarative timed and event cues, pending deadlines, cancellation, and dispatch                             |
-| `time`        | Playback clock and bounded frame delta                                                                      |
-| `input`       | Held keys, pointer state, DOM listeners, and pointer decay                                                  |
-| `hero`        | Scene and pipeline composition, script, actor lifecycle, preparation, fonts, lighting, paper, and viewport  |
-| `physics`     | Crashcat resource, body traits, actions, fixed stepping, and collision events                               |
-| `letters`     | Title construction and motion, published landings, retained text, feature typing, glass, and projection     |
-| `icon-paper`  | Icon sheets, bounded impact queue, spring simulation, morphs, and rendering                                 |
-| `robot`       | Spawn/reset/run actions, path, published departure, physics target, dust, rig, and display                  |
-| `black-hole`  | Collapse state and controls, play's feeding hole and its field, attraction functions, glyph warp, and sheet |
-| `star-embers` | Emission age, prepared star particles, fire material, bloom, fading, and screen-space sparks                |
-| `play-button` | Reveal timing, sheet geometry and hit test, mounted sheet camera, cursor state, and the display module      |
-| `rain`        | Glyph rain in play: prepared glyph solids, drop pool, spawning, edge culling, fading, panes, and shadows    |
-| `sound`       | Scene listener, bounded cue queue, baked console-era samples, mixer, continuous loops, and mute             |
+| Domain        | Ownership                                                                                                |
+| ------------- | -------------------------------------------------------------------------------------------------------- |
+| `sequence`    | Declarative timed and event cues, pending deadlines, cancellation, and dispatch                          |
+| `time`        | Playback clock and bounded frame delta                                                                   |
+| `input`       | Pointer state, DOM listeners, and pointer decay                                                          |
+| `director`    | Mode and script, presses, actor lifecycle, and landing and departure choreography                        |
+| `viewport`    | Floor dimensions, camera depth, and aspect, published from React                                         |
+| `physics`     | Crashcat resource, body traits, actions, fixed stepping, collision events, and body pose reads           |
+| `letters`     | Title construction and motion, published landings, feature typing, retained text, colliders, glass       |
+| `icon-paper`  | Icon sheets, bounded impact queue, spring simulation, morphs, and rendering                              |
+| `robot`       | Spawn/reset/run actions, path, published departure, physics target, dust, rig, and display               |
+| `black-hole`  | Collapse state and controls, play's feeding hole and its field, the flight in, glyph warp, and sheet     |
+| `star-embers` | Emission age, prepared star particles, fire material, bloom, fading, and screen-space sparks             |
+| `ui`          | The Play button's reveal, hover, sheet, hit test, camera, cursor, and display, and the loading overlay   |
+| `rain`        | Glyph rain in play: prepared glyph solids, drop pool, spawning, edge culling, fading, panes, and shadows |
+| `sound`       | Scene listener, bounded cue queue, baked console-era samples, mixer, continuous loops, and mute          |
+| `paper`       | The paper under everything: baked grain, its drift with the icon paper, and its mounted view             |
+| `glass`       | Glass shadows and caustics under their lamp, the lens capture, and the glass shader contract             |
+| `loading`     | Fonts, preparation checks, and the GPU completion gate                                                   |
 
-The root owns one Koota world and the combined action set. `world.ts` exports the shared world and invokes the hero initialization action.
+The source root holds only what is the whole app's: `main.tsx`, `app.tsx`, which mounts the providers and the Canvas
+and composes every domain's renderer and the post pass, `frameloop.ts`, `world.ts`, `actions.ts`, the page's
+`styles.css`, and `utils.ts`, with deterministic jitter and the uniforms kept across a module replacement. Everything
+else belongs to a domain, including what other domains use: the hole's flight in (`black-hole/utils.ts`), which the
+title, the rain, and the icon paper follow; glyph colliders and retained typed lines (`letters/utils.ts`), which the
+rain and the robot's face use; a body's published pose (`physics/utils.ts`); and the
+fonts and preparation (`loading/`), which every renderer registers with.
+
+The root owns one Koota world and the combined action set. `world.ts` exports the shared world and invokes the director's initialization action.
 Action sets define commands as arrow-function properties. Root `actions.ts` spreads the domain action sets.
-Hero actions initialize the actors, load the declared script, and replay the experience.
+Director actions initialize the actors, load the declared script, and replay the experience.
 Domain actions remain directly importable, including when names collide.
 Physics actions configure the solver and install contact/removal handlers before actors spawn. Icon-paper actions
 build each configured lattice before attaching its trait. Letter actions create, replay, and dispose title bodies,
 while letter systems own continuous lift and attraction updates.
 
-`hero/actions.ts` declares each mode's script as cues with `at`, or `on` and optional `after`, plus an action
+`director/actions.ts` declares each mode's script as cues with `at`, or `on` and optional `after`, plus an action
 callback. Initialization loads one opening cue that replays after one playback second. The sequence script types
 the tagline 0.55 seconds after a letter landing and runs the robot 1.4 seconds after it, and robot departure opens
 the black hole. The play script is empty: nothing types above the title in play. Repeated landing events restart
@@ -265,7 +278,7 @@ Replay and play both load their mode's script, which drops any pending cues, and
 lifts and smashes the title down again; play settles it on the floor where it belongs, with letters the hole took
 returning home and nothing lifted, takes the tagline off, and places the robot beyond the lower-left edge to drive
 to a spot above the title.
-`pressHero` takes a normalized screen point and drives the robot to that floor point. In the sequence it first
+`pressScene` takes a normalized screen point and drives the robot to that floor point. In the sequence it first
 takes the wheel while the hole is closed: with the title dropped it switches mode, loads the play script, retracts
 the tagline, and keeps the robot's pose if it is on the floor; before the first drop it restarts into play. Once
 the hole has opened it only answers a press on the drawn Play button, which restarts into play.
@@ -276,17 +289,17 @@ Two focused tests cover ordering, event delays, retriggering, and timeline repla
 
 `frameloop.ts` lists the domain systems in their execution order. Sequence cues run before motion, after robot
 departure, and after letter landings so events take effect in the same frame. The scripted robot mover runs only in
-`sequence` and the pointer-driven mover only in `play`; both publish the same pose and footprint. Motion targets
+`sequence` and the pointer-driven mover only in `play`; both publish the same pose. Motion targets
 precede physics, and title poses synchronize after physics. The sound listener runs last, so it hears everything the frame changed. The tagline is off the paper until the title's first landing, types in
 three frames a character, and backspaces out one a frame when cleared on the paper; cleared after the hole took it,
-it is simply gone. A typing test covers both directions. `hero/systems.ts` scrolls mounted paper, turns
-landings into icon-paper impacts, and forwards landing and departure events to the script. Icon-paper, title, and star-ember
+it is simply gone. A typing test covers both directions. `director/systems.ts` turns landings into icon-paper
+impacts and forwards landing and departure events to the script. Icon-paper, title, and star-ember
 systems read published black-hole state. Feature typing owns its closed-hole condition. The physics solver
 depends on the clock and its own state.
 
 `main.tsx` mounts `<App />` inside StrictMode. Root `app.tsx` owns the application shell, world provider,
-loading screen, Canvas, and Suspense boundary. It mounts `<Hero />` from `hero/renderer.tsx` as the
-scene, alongside `<FrameLoop />` from root `frameloop.ts`. Hero owns scene composition and post-processing.
+loading screen, Canvas, and Suspense boundary. Its scene, beside `<FrameLoop />` from root
+`frameloop.ts`, composes every domain's renderer, the studio lighting, and post-processing.
 The frame loop mounts viewport and DOM input hooks and runs domain simulation at 60 Hz using
 the scheduler's timestamp. Domain systems remain independent of React. The lift check steps the same registered
 simulation job used during playback.
@@ -296,16 +309,16 @@ independently of readiness or a simulation tick. Systems read the trait without 
 Clock advancement runs after the simulation readiness gate, so time
 retains its initial values during preparation. `updateTime` only samples the timestamp and accumulates a bounded
 delta. `useHeroReady()` subscribes to preparation status, and the frame loop captures its `isReady` value in the
-keyboard hook and frame callbacks. `useKeyboard` synchronizes a world-level `Keys` set through input actions and
-issues the explicit replay command inside its event effect on the first Space keydown. M, without a modifier, toggles sound. `usePointer` owns pointer
+keyboard hook and frame callbacks. `useKeyboard` issues the replay command on a Space keydown and, without a
+modifier, toggles sound on M, ignoring repeats from a held key and keys typed into form controls. `usePointer` owns pointer
 listeners and synchronizes normalized position and activity together from DOM events using the canvas bounds, and
-hands each primary-button press to `pressHero` once playback is ready.
+hands each primary-button press to `pressScene` once playback is ready.
 Leaving or cancelling the pointer, losing window focus, or unmounting clears activity. The pointer publishes two
 things: whether it is present over the canvas, and a strength that the frame loop fades over time once it stops
 moving. The lattice reads the strength, so its disturbance settles; the play button reads presence, so it stays
 lit under a resting pointer. Shadow captures follow the title's published draw group: whenever the mounted `TitleView` holds a new group, as
 after a title remount under hot module replacement, the projection recaptures from it, so readiness plays no part;
-the lens capture follows the same groups the same way. Root `hmr.ts` keeps one set of uniforms across a module
+the lens capture follows the same groups the same way. Root `utils.ts` keeps one set of uniforms across a module
 replacement: a set is written every frame by a mounted view and read once by the render pipeline when its node
 graph is built, and the two import it from the same module but re-execute at their own times, so a fresh set on
 replacement would leave the writer and the reader on different objects and the simulation would carry on while
@@ -318,22 +331,22 @@ a view stops updates before its renderer disposes the resources. Hidden mounted 
 preparation. Shadow time belongs to the mounted projection. Simulation systems do not construct shaders.
 The app publishes no development globals or pause controls. Browser checks import the same world module
 and read domain traits, while diagnostic render buffers remain private to their renderer.
-`hero/prepare.ts` owns preparation requirements and status subscriptions. `hero/loading.tsx` renders the loading overlay. `hero/fonts.ts` loads the fonts, `hero/lighting.tsx` defines the
-lighting and paper, and `hero/hooks.ts` synchronizes viewport state owned by hero traits and actions. Preparation owns readiness without mirroring
-it into another trait. There is no separate view domain.
-The source root contains `main.tsx`, `app.tsx`, `frameloop.ts`, `world.ts`, `actions.ts`, and shared deterministic helpers in `utils.ts`.
+`loading/prepare.ts` owns preparation requirements and status subscriptions, `loading/fonts.ts` loads the fonts, and
+`ui/renderer.tsx` renders the loading overlay with the ui domain's styles.
+`viewport/hooks.ts` synchronizes the viewport through its domain's action. Preparation owns readiness without
+mirroring it into another trait. There is no separate view domain.
 Domain roots expose traits, actions, systems, renderers, and materials where needed.
 `materials.ts` groups each domain's uniforms with the shader graphs and material builders that use them.
 Domain behavior stays with its owner: black-hole beats, robot motion and dust, letter synchronization, and
 icon-paper simulation live in systems. Icon-paper actions build the lattice, and traits contain its data models.
-Shared content lives in each domain's `content.ts`. Letters own retained typing in `text.ts` and glass projection
-in `shadows.tsx`. Only small attraction calculations, cell transforms, outline conversion, and physics pose
-conversion remain in `utils.ts`. Trivial object defaults are inlined at their allocation sites. Simulation does not import React or shader construction.
+Shared content lives in each domain's `content.ts`, including the constants other domains read. A domain's
+`utils.ts` holds compact calculations with explicit inputs, which other domains may use. Trivial object defaults are inlined at their allocation
+sites. Simulation does not import React or shader construction.
 Domain tests remain beside their implementations.
 
 Scalar-bearing traits use Koota SoA schemas. Per-field factories retain each entity's math tuples,
 buffers, motion records, and pools. Opaque resources use AoS, including `Physics` with its entity map, callbacks,
-and scratch, the held-key set, and mounted view bundles with scene objects and uniforms. High-frequency values never pass through React state. SoA `get()` returns a snapshot,
+and scratch, and mounted view bundles with scene objects and uniforms. High-frequency values never pass through React state. SoA `get()` returns a snapshot,
 so actions and singleton updates publish scalar changes with `set`, and systems sample current scalar
 state. Query mutations use `updateEach`, while composition reads published landings and departures with `readEach`.
 The robot body query selects only `Robot` for writeback, preserving the physics actions' writes to `Body`. Preparation
@@ -344,8 +357,8 @@ closes the finale, restores the icon paper, lifts the title, and resets typing a
 The old, unmounted break/rewind presentation and its exclusive director and compressed recording code/tests were
 removed during the Koota migration. The root cleanup also removed retired ink, glass, and silhouette variants and
 their unused uniforms. Materials and post-processing now live in their domains. Browser checks own common playback stories: title lift and landing, robot dust, typed text, collapse, blackness,
-and Space replay. Seven numerical tests retain precise evidence for baked title colliders and their counters, glyph transforms, edge-on motif changes,
-bounded pointer response, lift/drop/revival with one landing notification, and robot pushes without tipping or
+and Space replay. Six numerical tests retain precise evidence for baked title colliders and their counters, glyph transforms, edge-on motif changes,
+lift/drop/revival with one landing notification, and robot pushes without tipping or
 leaving an invisible collider behind. These checks catch errors that
 pixel comparisons cannot isolate reliably. Two lifecycle tests cover paper following the playback clock, view replacement,
 hidden mounted dust updates, and detached resources remaining untouched, and one mode test covers the press flow from
@@ -358,8 +371,8 @@ Letter actions own title creation and disposal, letter systems advance title mot
 Math tuples hold transform scratch. Physics publishes retained position and rotation tuples on each `Body` trait,
 which the letters domain projects into its matrix stream. Three matrices and scene objects remain at the rendering boundary.
 
-The `physics` domain pins `crashcat@0.0.5` and splits into `traits.ts`, `actions.ts`, and `systems.ts`, with a small
-`utils.ts` for pose data and behavior checks beside the systems. `Physics` holds the solver resource on the Koota world, while `Body` owns each entity's
+The `physics` domain pins `crashcat@0.0.5` and splits into `traits.ts`, `actions.ts`, and `systems.ts`, with behavior
+checks beside the systems, and a small `utils.ts` whose pose reader the title uses too. `Physics` holds the solver resource on the Koota world, while `Body` owns each entity's
 solver ID, motion targets, published pose, and contact events: `landed` on the frame a released body reaches the
 floor, and `struck` on each frame an airborne body meets anything new. There is no separate simulation world or parallel
 letter body array. World-bound actions create, hold, release, park, and revive bodies. Removing `Body` or destroying
@@ -428,7 +441,7 @@ rain glyph's shade sits under and just around it, at two thirds of the title's w
 the title's effect, tint, and depth response to their values before the rain cast anything.
 
 Glass is also seen through glass. The renderer's transmission refracts only the opaque scene, so on its own a
-letter bends the icon field beneath it but not another letter or a rain pane. `letters/lens.tsx` renders every
+letter bends the icon field beneath it but not another letter or a rain pane. The glass lens renders every
 stained-glass draw from the scene camera, at half the frame's resolution, into the frontmost pane's shading
 normal, view depth, coverage, refractive index and slab, every channel coverage-weighted so filtering the capture
 at a pane's edge blends only real glass. A glass material reads the pane over its fragment, and where that pane
@@ -496,7 +509,8 @@ round it in two seconds while it only creeps nearer, feeds it to the finale, che
 only rises, and reaches the button in play. A lattice test bends the sheet under play's hole and lets it spring
 back.
 
-The play button lives on its own screen-space sheet with an orthographic camera fitted to the viewport aspect, so
+The play button publishes how far it has drawn in and whether the pointer is over it on a `PlayButton` trait, from
+its own system, so its view, the sound, and a press all read the same state. It lives on its own screen-space sheet with an orthographic camera fitted to the viewport aspect, so
 its geometry and hit test share the pointer's normalized units. The hero's post pass renders that sheet after the
 scene has gone black and adds it to the finished frame, which is why it survives the ember fade. Everything on it
 is quantized to one pixel, two of the pixel font's squares. The frame is a rounded-rectangle distance field
@@ -523,7 +537,7 @@ The drone rises by up to a fifth, faster the nearer the pop, and the same drone 
 as it goes. At the pop they hold where they reached while they fade under it, rather than gliding back down.
 `playSounds` in the view job drains the queue into the mounted mixer and sets the loops. Browsers hold audio until a
 gesture, and until then the cues are dropped rather than held, so nothing plays late; mounting a mixer likewise
-drops whatever was queued while none listened. The face's printed count comes from the robot's `faceLetters`, which
+drops whatever was queued while none listened. The face's printed count is the robot's published `printed`, which
 its display reads too. A glyph of rain rings once, on the first frame its body is `struck`, whether it comes down on
 the floor, on the glass, or on another glyph: on `landed`, which is the floor alone, a third of the rain that came
 to rest had stayed silent.
@@ -545,7 +559,7 @@ notes share one major pentatonic scale: each title letter lands on its own note,
 a letter chosen by the letter, the robot's syllables take nearby notes, each glyph of rain rings one as it comes
 down, and play opens on a fanfare. The embers take no notes at all, so the Play button's run after them is the only
 tune there: they sparkle, two faint sprays of tiny high grains either side of where the hole popped, starting with
-the burst on the embers' own clock from `StarEmbers`. Each spray is ninety grains of a few milliseconds of a sine
+the burst on the embers' own clock, the hole's time since its pop. Each spray is ninety grains of a few milliseconds of a sine
 between 4 and 9 kHz, crowded at the burst and thinning over the embers' life the way a sparkler spits, written as
 arithmetic into a buffer the bake plays through. They sit far above the boom they play over, whose noise is below
 2.4 kHz: a faint twinkle of discrete tings at 2.6 kHz and below, under the boom, had gone unheard. The sparkle alone
@@ -573,8 +587,7 @@ dBFS, the landings at -3, and the pop at -4, and with the robot stopped and the 
 -50. Twenty headless replays of five letters rang all five landings every time. `hero:performance`'s headless
 browser gives no gesture, so it measures the listener but not playback.
 
-Robot path sampling, eye transitions, and floor footprints overwrite retained outputs. Consumers copy a footprint
-when they need its previous-frame position. Dust uses 128 reusable particle records; saturation replaces the oldest
+Robot path sampling and eye transitions overwrite retained outputs. Dust uses 128 reusable particle records; saturation replaces the oldest
 slot, movement above four units is treated as a teleport, and absent robots emit nothing. Title landings use a
 fixed buffer and count; each released body reports its first floor contact once. Lift, departure, replay, and typing
 reuse their original records. The robot collider and shadow capture list are prepared before playback. These
@@ -582,8 +595,8 @@ application-owned update kernels create no temporary arrays, collections, or pos
 library internals are outside that claim. Scene-authored dimensions and flight durations are positive, transforms
 used as coordinate frames are invertible, and frame deltas are nonnegative.
 
-The lattice tests compare direct transforms with Three's matrix composition, bound pointer disturbances, and check
-edge-on motif substitution. The physics tests compose only clock and physics resources with the actors under test. They use real Crashcat contacts to verify bounce, one landing per release, revival, and robot pushes
+The lattice tests compare direct transforms with Three's matrix composition, check edge-on motif substitution, and
+count uploads: every cell once, nothing while the sheet is still, and again when the pointer disturbs it. The physics tests compose only clock and physics resources with the actors under test. They use real Crashcat contacts to verify bounce, one landing per release, revival, and robot pushes
 without tipping or leaving collisions after departure. Dynamic letter contacts reject vertical support between
 letters, so a falling letter reaches the floor instead of stacking on another letter. Side contacts still separate
 the letters, and floor restitution still supplies the bounce. A regression drops partially overlapping bodies
@@ -601,9 +614,8 @@ down with a little sideways drift and spin, rebounds once, and comes to rest whe
 its mark and off square, differently on every replay. The floor's first contact with each letter is what strikes
 the lattices, so the impacts land where the letters actually do. The feature line retypes after the final landing.
 Holding Space does not restart the animation, and focused form controls retain their normal keyboard behavior.
-Keyup releases held keys, and window blur or keyboard-hook cleanup clears them. The opening browser check also
-covers one replay per press, form input exclusion, key normalization, focus-loss cleanup, and pointer position
-and activity from canvas events. It also verifies viewport initialization and a resize while the frame loop is stopped.
+The opening browser check also covers one replay per press, form input exclusion, and pointer position and
+activity from canvas events. It also verifies viewport initialization and a resize while the frame loop is stopped.
 
 A small robot treats the screen as its floor: Sketchfab's _Cute Home Robot_ by Yandrack (CC-BY-4.0; the credit
 ships in the build's `notices.txt`). It drives in from the bottom left along a meandering diagonal whose phase
@@ -644,7 +656,7 @@ Post-processing is always enabled, and preparation waits for its render pipeline
 
 The `star-embers` domain owns its SoA emission age, actions, systems, renderer, and materials. Its actions initialize
 and reset the age, while its synchronization system samples the published black-hole pop age.
-`hero/renderer.tsx` composes the black-hole sheet warp with the ember bloom, fade, and sparks. The bloom takes
+Root `app.tsx` composes the black-hole sheet warp with the ember bloom, fade, and sparks. The bloom takes
 only what is brighter than white and runs at a quarter of the frame's resolution, plenty for a glow.
 
 The ember material in `src/star-embers/materials.ts` keeps the exact Slug star silhouettes and shades each glyph's
@@ -653,7 +665,7 @@ shrink, the surface cools toward orange; the composed stars and bloom still fade
 compares this surface against a flat pastel control.
 
 The six star shapes are baked from the vendored OFL Noto Sans Symbols 2 face, with the symbols shared between the
-bake and the burst in `src/star-embers/traits.ts`. `hero:star-font` restores the pinned source and license, and
+bake and the burst in `src/star-embers/content.ts`. `hero:star-font` restores the pinned source and license, and
 `hero:bake -- --only=stars` regenerates the tiny Slug subset. Both accept `--check`.
 
 The timeline and feature-glyph paths are pure functions. The WebGPU finale check covers collapse, completion,
@@ -767,10 +779,12 @@ It is drawn into a texture over the plane at the capture's resolution, which is 
 holds, and the multiply-blended receiver reads that texture back with one sample a pixel, so the march costs the
 plane's texels rather than every screen pixel; at a retina pixel ratio that was over half the frame. The capture, its four-level Gaussian pyramid, and the march are redrawn only when the scene under the lamp has
 stirred: a pane's own matrix or visibility, the title's letter transforms, which live in one instanced draw whose
-container never moves, any glass value the capture carries, the reach, a caster showing, or the hole pulling,
+container never moves, the reach, a caster showing, or the hole pulling,
 which bends every outline. A body at rest still settles by hairs, so a move counts only past a fraction of a
 pixel; an exact comparison redrew every frame for a scene that had stopped. The pyramid's blur nodes are run by
-hand at that moment rather than every frame. The lens capture follows the same rule. Under the lamp's perspective a lifted letter's shadow grows and spreads beneath it
+hand at that moment rather than every frame. The lens capture follows the same rule, and both keep the glass
+values their panes had when captured, since nothing changes them in playback; a check that changes them captures
+afresh. Under the lamp's perspective a lifted letter's shadow grows and spreads beneath it
 as the letter grows on screen, softening and thinning through the pyramid blended by height, and settles back to
 the same pixels on landing. The light the glass turns aside returns as caustics every frame, since their facets
 turn with time: a 128 × 80 grid over the plane, eight capture texels a cell since the warped grid is blurred after,

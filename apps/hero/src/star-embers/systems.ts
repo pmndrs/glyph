@@ -1,12 +1,8 @@
-import { EmberView, StarEmbers, EMBER_SECONDS } from './traits';
+import { EmberView } from './traits';
+import { EMBER_SECONDS, PARTICLES } from './content';
 import type { World } from 'koota';
 import { Collapse } from '../black-hole/traits';
-import { Viewport } from '../hero/traits';
-
-/** Follow the black-hole pop age so emission and replay share the same clock. */
-export function syncStarEmbers(world: World): void {
-  world.set(StarEmbers, { age: world.get(Collapse)!.hole.sincePop ?? -1 });
-}
+import { Viewport } from '../viewport/traits';
 
 /** Publish emission transforms and uniforms only while the ember view is mounted. */
 export function syncEmberView(world: World): void {
@@ -14,17 +10,18 @@ export function syncEmberView(world: World): void {
 
   if (view === undefined) return;
 
-  const since = world.get(StarEmbers)!.age;
-  view.age.value = since;
-  // The embers burst from the hole, wherever it popped: its floor position brought up to their height on screen.
+  // The embers burn on the pop's clock, and burst from the hole wherever it popped: its floor position brought up
+  // to their height on screen.
   const hole = world.get(Collapse)!.hole;
+  const since = hole.sincePop ?? -1;
+  view.age.value = since;
   const { cameraZ } = world.get(Viewport)!;
   const lift = (cameraZ - 8) / cameraZ;
   const originX = hole.x * lift;
   const originY = hole.y * lift;
   view.bloom.value = since < 0 ? 0.18 : 0.75;
 
-  for (const particle of view.particles) {
+  for (const particle of PARTICLES) {
     const group = view.groups[particle.index];
 
     if (group === null || group === undefined) continue;

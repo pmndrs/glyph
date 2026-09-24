@@ -17,10 +17,9 @@ import {
   uniform,
   uv,
   vec2,
-  vec4,
 } from 'three/tsl';
 import { AdditiveBlending, DoubleSide, MeshBasicNodeMaterial, type Node } from 'three/webgpu';
-import { retained } from '../hmr';
+import { retained } from '../utils';
 import { BUTTON_HEIGHT, BUTTON_RADIUS, BUTTON_WIDTH, FRAME_MARGIN, PIXEL } from './content';
 
 /** Kept across a hot module replacement, since the mounted view writes these and the post pass reads them. */
@@ -154,9 +153,4 @@ export function createFrameMaterial(): MeshBasicNodeMaterial {
   material.toneMapped = false;
 
   return material;
-}
-
-/** Lay the button's sheet over the finished frame. Its sheet is black where the button is not drawn. */
-export function composePlayButton(finished: Node<'vec4'>, sheet: Node<'vec4'>): Node<'vec4'> {
-  return vec4(finished.rgb.add(sheet.rgb), 1);
 }

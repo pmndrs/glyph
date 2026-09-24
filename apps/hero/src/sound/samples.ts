@@ -1,4 +1,4 @@
-import { EMBER_SECONDS } from '../star-embers/traits';
+import { EMBER_SECONDS } from '../star-embers/content';
 import { jitter } from '../utils';
 import type { SoundDraw } from './traits';
 

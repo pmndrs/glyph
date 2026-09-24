@@ -11,8 +11,15 @@ import { Mesh, MeshPhysicalNodeMaterial, RenderTarget, WebGPUBackend, WebGPURend
 
 const { world } = (await import(new URL('/src/world.ts', location.origin).href)) as typeof import('../src/world');
 const { updateGlassShadows } = (await import(
-  new URL('/src/letters/shadows.tsx', location.origin).href
-)) as typeof import('../src/letters/shadows');
+  new URL('/src/glass/systems.ts', location.origin).href
+)) as typeof import('../src/glass/systems');
+const { ShadowView } = (await import(
+  new URL('/src/glass/traits.ts', location.origin).href
+)) as typeof import('../src/glass/traits');
+/** The captures clone the glass as they find it, so a change to its tint is taken up by capturing it afresh. */
+const recapture = () => {
+  world.get(ShadowView)!.capturedFrom = [];
+};
 
 function ready() {
   const scene = _roots.values().next().value?.store.getState().scene;
@@ -103,9 +110,11 @@ try {
 
   for (const material of glass) material.attenuationColor.set('#ffffff');
 
+  recapture();
   updateGlassShadows(world);
   glass.forEach((material, i) => material.attenuationColor.copy(tints[i]!));
   const untinted = await capture();
+  recapture();
 
   // Lift the real draw surfaces for the projection, then restore the visible glass before reading pixels.
   // This isolates depth projection from the obvious screen-space movement of the title itself.
@@ -151,6 +160,7 @@ try {
   glass.forEach((material, i) => material.attenuationColor.copy(tints[i]!));
   projection.visible = true;
   renderer.setRenderTarget(previousTarget);
+  recapture();
   updateGlassShadows(world);
 }
 

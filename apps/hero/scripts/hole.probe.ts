@@ -27,8 +27,8 @@ const { POP_AT } = (await import(
   new URL('/src/black-hole/content.ts', location.origin).href
 )) as typeof import('../src/black-hole/content');
 const { Viewport } = (await import(
-  new URL('/src/hero/traits.ts', location.origin).href
-)) as typeof import('../src/hero/traits');
+  new URL('/src/viewport/traits.ts', location.origin).href
+)) as typeof import('../src/viewport/traits');
 const { uHoleLens } = (await import(
   new URL('/src/black-hole/materials.ts', location.origin).href
 )) as typeof import('../src/black-hole/materials');
@@ -36,17 +36,17 @@ const { uHoleCollapse } = (await import(
   new URL('/src/black-hole/materials.ts', location.origin).href
 )) as typeof import('../src/black-hole/materials');
 const { STAR_SYMBOLS, EMBER_SECONDS } = (await import(
-  new URL('/src/star-embers/traits.ts', location.origin).href
-)) as typeof import('../src/star-embers/traits');
+  new URL('/src/star-embers/content.ts', location.origin).href
+)) as typeof import('../src/star-embers/content');
 const { uEmberBloom, uEmberFire } = (await import(
   new URL('/src/star-embers/materials.ts', location.origin).href
 )) as typeof import('../src/star-embers/materials');
 const { REVEAL_AFTER, REVEAL_SECONDS } = (await import(
-  new URL('/src/play-button/content.ts', location.origin).href
-)) as typeof import('../src/play-button/content');
+  new URL('/src/ui/content.ts', location.origin).href
+)) as typeof import('../src/ui/content');
 const { Mode } = (await import(
-  new URL('/src/hero/traits.ts', location.origin).href
-)) as typeof import('../src/hero/traits');
+  new URL('/src/director/traits.ts', location.origin).href
+)) as typeof import('../src/director/traits');
 const { Robot } = (await import(
   new URL('/src/robot/traits.ts', location.origin).href
 )) as typeof import('../src/robot/traits');
@@ -54,7 +54,7 @@ while (document.documentElement.dataset.heroState !== 'ready')
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 const { actions } = (await import(new URL('/src/actions.ts', location.origin).href)) as typeof import('../src/actions');
-const { replayHero: requestReplay, pressHero } = actions(world);
+const { replayScene: requestReplay, pressScene } = actions(world);
 const hole = () => world.get(Collapse)!.hole;
 const state = _roots.values().next().value!.store.getState();
 state.setFrameloop('never');
@@ -357,11 +357,11 @@ const buttonPixels = litPixels(await capture(control));
 if (buttonPixels < 100 || buttonPixels > control.width * control.height * 0.2)
   throw new Error(`The play button did not light the black frame: ${buttonPixels}`);
 
-pressHero(0.9, 0.9);
+pressScene(0.9, 0.9);
 
 if (world.get(Mode)!.kind !== 'sequence') throw new Error('A press beside the play button started play');
 
-pressHero(0.05, -0.05);
+pressScene(0.05, -0.05);
 scheduler.step(clock + 100.002);
 const played = litPixels(await capture(control));
 const robot = world.queryFirst(Robot)!.get(Robot)!;

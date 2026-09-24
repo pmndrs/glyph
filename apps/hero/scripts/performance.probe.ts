@@ -14,8 +14,8 @@ const { Collapse } = (await import(
 )) as typeof import('../src/black-hole/traits');
 
 const { EMBER_SECONDS } = (await import(
-  new URL('/src/star-embers/traits.ts', location.origin).href
-)) as typeof import('../src/star-embers/traits');
+  new URL('/src/star-embers/content.ts', location.origin).href
+)) as typeof import('../src/star-embers/content');
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 while (document.documentElement.dataset.heroState !== 'ready') {

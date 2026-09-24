@@ -28,9 +28,7 @@ export const iconPaperActions = createActions((world) => ({
         iconSize: 0.42,
         motifs: 7,
         offset: 1.101,
-        opacity: 1,
         response: 0.35,
-        rowOffset: 0,
         rows: 13,
         seed: 4201,
         speed: 3.709,
@@ -46,9 +44,7 @@ export const iconPaperActions = createActions((world) => ({
         iconSize: 0.78,
         motifs: 8,
         offset: 0,
-        opacity: 1,
         response: 1,
-        rowOffset: 0,
         rows: 16,
         seed: 0,
         speed: 3.2,
@@ -65,14 +61,13 @@ export const iconPaperActions = createActions((world) => ({
       );
     }
   },
-  impactIconPaper: (x: number, y: number, z: number) => {
-    const impacts = world.get(Impacts)!;
-    impacts.latest = (impacts.latest + 1) % impacts.entries.length;
-    const impact = impacts.entries[impacts.latest]!;
-    impact.id = impacts.next++;
+  impactIconPaper: (x: number, y: number) => {
+    const { entries, next } = world.get(Impacts)!;
+    const impact = entries[next % entries.length]!;
+    impact.id = next;
     impact.at = world.get(Time)!.now;
-    vec3.set(impact.world, x, y, z);
-    world.set(Impacts, { latest: impacts.latest, next: impacts.next });
+    vec3.set(impact.world, x, y, 0);
+    world.set(Impacts, { next: next + 1 });
   },
   resetIconPaper: () => {
     world.query(IconPaper).updateEach(([paper]) => {
@@ -88,7 +83,7 @@ export const iconPaperActions = createActions((world) => ({
 }));
 
 export function buildLayout(layer: IconLayoutOptions): Layout {
-  const { rows, columns, cell, colour, gems, motifs, offset, rowOffset, seed } = layer;
+  const { rows, columns, cell, colour, gems, motifs, offset, seed } = layer;
   const loop = columns * cell;
   const grid: number[][] = [];
 
@@ -115,11 +110,11 @@ export function buildLayout(layer: IconLayoutOptions): Layout {
         cells.push({
           key: `${repeat}:${row}:${column}`,
           motif,
-          colour: gems === true ? (GEM_TONES[(row + column) % GEM_TONES.length] ?? colour) : colour,
+          colour: gems === true ? GEM_TONES[(row + column) % GEM_TONES.length]! : colour,
           position: [
             // Aligned rows leave consistent gaps for the second sheet.
             -loop / 2 + repeat * loop + column * cell + offset - cell / 2,
-            ((rows - 1) * cell) / 2 - row * cell + rowOffset,
+            ((rows - 1) * cell) / 2 - row * cell,
             0,
           ],
           // Stagger motif flips across the sheet using retained glyph records.
@@ -185,15 +180,13 @@ export function createLattice(layout: Layout, motifs: number, seed: number): Lat
     projected: vec3.create(),
     waveCursor: 0,
     seenWave: 0,
-    pointer: { x: 0, y: 0, active: false, strength: 0 },
+    pointer: { x: 0, y: 0, strength: 0 },
     hole: { x: 0, y: 0, horizon: 1, pull: 0, time: -1 },
     departAt: new Float32Array(count).fill(NaN),
     swallowed: new Uint8Array(count),
     selected: Int32Array.from(layout.cells, (cell) => cell.motif % GLYPHS.length),
-    previous: Int32Array.from(layout.cells, (cell) => cell.motif % GLYPHS.length),
     motifGlyphs: Int32Array.from({ length: motifs }, (_, index) => index),
     spare: new Int32Array(GLYPHS.length),
-    applied: new Uint8Array(count),
     morph: { motif: -1, to: 0, start: 0 },
     nextSwap: 0,
     random: mulberry32.create(seed),

@@ -4,13 +4,12 @@ import { Group, Matrix4 } from 'three/webgpu';
 import { createWorld } from 'koota';
 import type { Glyphs } from '@pmndrs/glyph/three';
 import { Time } from '../time/traits';
-import { Viewport } from '../hero/traits';
+import { Viewport } from '../viewport/traits';
 import { Pointer } from '../input/traits';
 import { Collapse } from '../black-hole/traits';
 import { buildLayout, createLattice, iconPaperActions } from './actions';
 import { IconPaper, Impacts } from './traits';
-import { advanceMorph, moveIconPaper, simulate, syncIconViews } from './systems';
-import { cellMatrix } from './utils';
+import { advanceMorph, cellMatrix, moveIconPaper, simulate, syncIconViews } from './systems';
 import type { IconLayoutOptions } from './traits';
 
 const layer: IconLayoutOptions = {
@@ -21,10 +20,8 @@ const layer: IconLayoutOptions = {
   depth: -6,
   speed: 3.2,
   colour: '#ffffff',
-  opacity: 1,
   motifs: 3,
   offset: 0,
-  rowOffset: 0,
   seed: 17,
   response: 1,
   waveDelay: 0,
@@ -59,20 +56,6 @@ describe('icon paper motion', () => {
     cellMatrix(out, state, layout, index, -0.3, 0.8, now);
 
     for (let lane = 0; lane < 16; lane++) expect(out[lane]).toBeCloseTo(expected.matrix.elements[lane]!, 12);
-  });
-
-  it('keeps resting cells still and confines a pointer disturbance', () => {
-    const layout = buildLayout(layer);
-    const state = createLattice(layout, layer.motifs, layer.seed);
-    simulate(state, layout, 1 / 60, layer, 100);
-    expect([...state.x, ...state.y]).toEqual(Array(layout.cells.length * 2).fill(0));
-    Object.assign(state.pointer, { active: true, strength: 1, x: -1, y: 0 });
-
-    for (let frame = 0; frame < 240; frame++) simulate(state, layout, 1 / 60, layer, (frame * 1000) / 60);
-
-    expect(state.x.some((value) => Math.abs(value) > 0.01)).toBe(true);
-
-    for (const value of [...state.x, ...state.y]) expect(Math.abs(value)).toBeLessThanOrEqual(2.4);
   });
 
   it("lets play's hole bend the sheet round itself without taking it, and springs back when it closes", () => {
@@ -133,7 +116,8 @@ describe('icon paper uploads', () => {
     let cells = 0;
 
     for (const entity of world.query(IconPaper)) {
-      const count = entity.get(IconPaper)!.layout!.cells.length;
+      const paper = entity.get(IconPaper)!;
+      const count = paper.layout!.cells.length;
       cells += count;
       iconPaperActions(world).mountIconView(entity, {
         group: new Group(),
@@ -142,6 +126,7 @@ describe('icon paper uploads', () => {
         hidden: new Matrix4().makeScale(0, 0, 0),
         matrix: new Matrix4(),
         written: new Float64Array(count * 16).fill(Number.NaN),
+        shown: Int32Array.from(paper.lattice!.selected),
       });
     }
 

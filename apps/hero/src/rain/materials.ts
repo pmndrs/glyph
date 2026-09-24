@@ -2,7 +2,7 @@ import { defineTextMaterial } from '@pmndrs/glyph/three';
 import { color, cross, dFdx, dFdy, dot, float, mix, normalize, output, positionView, uv, vec3, vec4 } from 'three/tsl';
 import { Color, DoubleSide, MeshPhysicalNodeMaterial, MultiplyBlending } from 'three/webgpu';
 import { holeWarp } from '../black-hole/materials';
-import { lensShift, registerGlass } from '../letters/lens';
+import { lensShift, registerGlass } from '../glass/materials';
 import { THEME_TINTS } from '../letters/content';
 
 /**
