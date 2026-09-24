@@ -22,6 +22,8 @@ export interface GlassCapture {
   capturedFrom: Object3D[];
   /** The title's letter transforms as last drawn: they live in one instanced draw whose own matrix never moves. */
   letters: Float64Array;
+  /** Whether every pane has been drawn once since it was captured, which compiles its program during preparation. */
+  warmed: boolean;
 }
 
 /** The glass as the scene camera sees it, captured before the frame for the lens to read. */

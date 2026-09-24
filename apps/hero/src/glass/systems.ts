@@ -14,6 +14,7 @@ import {
   vec4,
 } from 'three/tsl';
 import {
+  type Camera,
   Color,
   Mesh,
   MeshPhysicalNodeMaterial,
@@ -116,6 +117,7 @@ function captureGlass(
 
   state.captures.length = 0;
   state.capturedFrom = [...roots];
+  state.warmed = false;
   // Meshes that share a material share its capture too: every node graph built is preparation time.
   const clones = new Map<MeshPhysicalNodeMaterial, MeshPhysicalNodeMaterial>();
 
@@ -163,6 +165,32 @@ function captureGlass(
       });
     });
   }
+}
+
+/**
+ * Draw every pane once, showing or not, so its program compiles now, during preparation, rather than when the pane
+ * first shows and the frame is already running: rain panes hide until play. Fresh captures have not been drawn, so
+ * the real drawing follows in the same frame and replaces this one.
+ */
+function warmCaptures(state: GlassCapture, renderer: WebGPURenderer, target: RenderTarget, camera: Camera): void {
+  if (state.warmed) return;
+
+  for (const { original, capture } of state.captures) {
+    capture.visible = true;
+    capture.userData = original.userData;
+    capture.matrix.copy(original.matrixWorld);
+  }
+
+  beginCapture(renderer);
+
+  try {
+    renderer.setRenderTarget(target);
+    renderer.render(state.sourceScene, camera);
+  } finally {
+    endCapture(renderer);
+  }
+
+  state.warmed = true;
 }
 
 /**
@@ -271,6 +299,7 @@ export function updateGlassShadows(world: World): void {
   // pulls, so the capture is redrawn as long as it does.
   let moved = followGlass(world, state, shadowSources, SHADOW_RECEIVER_Z + 4, dressShadow) || uHoleBend.value > 0;
   state.scene.updateMatrixWorld(true);
+  warmCaptures(state, state.renderer, state.source, state.lightCamera);
   moved = trackCaptures(state) || moved;
   state.uTime.value = world.get(Time)!.elapsed;
   let reach = GLASS_DEPTH;
@@ -379,6 +408,7 @@ export function updateGlassLens(world: World): void {
 
   // The hole bends every outline while it pulls, so the capture is redrawn as long as it does.
   let moved = followGlass(world, state, lensSources, Number.POSITIVE_INFINITY, dressLens) || uHoleBend.value > 0;
+  warmCaptures(state, state.renderer, lensTarget, state.camera);
   moved = trackCaptures(state) || moved;
   moved = fitLensTarget(state) || moved;
 

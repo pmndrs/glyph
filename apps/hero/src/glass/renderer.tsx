@@ -344,6 +344,7 @@ function createProjection(renderer: WebGPURenderer, scene: Scene) {
     captures: [] as CapturedPane[],
     capturedFrom: [] as Object3D[],
     letters: new Float64Array(0),
+    warmed: false,
     dispose: () => {
       scene.remove(receiver);
       disposeCaptures(projection.captures);
@@ -401,6 +402,7 @@ export function GlassRenderer() {
       captures: [],
       capturedFrom: [],
       letters: new Float64Array(0),
+      warmed: false,
     };
     glassActions(world).mountLensView(lens);
 

@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:cb7f3320e5686ee56938ae700fd72188f5703fdf731662e3009d6e56ef6c2056'
+source_digest: 'sha256:08ecca52eecc94487d30887a9fcdc5782b65617f09e25d8dfcd944956db2624e'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota, web-audio]
 sources:
   - id: hero-policy
@@ -450,7 +450,9 @@ along the refracted ray into the pane, carried the pane's slab deep: the title's
 thickness, so a letter bends a letter exactly as it bends the paper, and a rain pane's is thin. The shift rides
 the hole warp as one more displacement before the coverage integral, so a bent letter under glass is bent twice,
 correctly. Meshes that share a material share one capture clone in both captures, since every node graph built is
-preparation time. The captures, this one and the lamp's, read each glass material's coverage without the lens
+preparation time. Each new capture draws every pane once during preparation, including panes hidden until play, so
+its shader program is ready before the pane appears. The captures, this one and the lamp's, read each glass
+material's coverage without the lens
 through a registry the materials fill, since a capture must not read the texture it draws and the lamp's view has no
 screen to read it at; that registry also gives the rain panes, which never set an opacity node, glyph-shaped
 captures where they had quads. The capture is redrawn on the same terms as the shadow capture, and when the frame is resized. The capture target and its sampling nodes are kept across a module replacement
