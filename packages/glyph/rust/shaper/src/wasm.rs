@@ -3,9 +3,9 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{
     STATUS_CODEC_CONFLICT, STATUS_CODEC_MISSING, STATUS_FONT_IN_USE, STATUS_FONT_STACK_MISSING,
-    STATUS_INVALID_HANDLE, STATUS_INVALID_REQUEST, STATUS_OK, STATUS_REGISTRATION_IN_USE,
-    STATUS_RESULT_TOO_LARGE, STATUS_REVISION_CONFLICT, STATUS_ROOT_CONFLICT, STATUS_ROOT_MISSING,
-    ShaperRegistry,
+    STATUS_INVALID_FONT, STATUS_INVALID_HANDLE, STATUS_INVALID_REQUEST, STATUS_OK,
+    STATUS_REGISTRATION_IN_USE, STATUS_RESULT_TOO_LARGE, STATUS_REVISION_CONFLICT,
+    STATUS_ROOT_CONFLICT, STATUS_ROOT_MISSING, ShaperRegistry,
     engine::{
         EngineError, FrameFault, TextEngine,
         codec::CapabilitySetId,
@@ -18,6 +18,7 @@ use crate::{
         render_plan_wire::{publication_layout, query_layout},
         transport::{FrameTransport, UpdateBatchResult, UpdateBatchTransport},
     },
+    outline::{GlyphOutline, OutlineError},
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -1087,6 +1088,46 @@ pub extern "C" fn pmndrs_glyph_engine_borrow_paragraph_glyph(
     })
 }
 
+/// Decodes one glyph from an outline SFNT in an owned allocation. The encoded result stays readable
+/// through the pointer and length exports until the next decode.
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_shaper_glyph_outline(
+    sfnt_pointer: u32,
+    sfnt_length: u32,
+    glyph_id: u32,
+) -> u32 {
+    with_state(|state| {
+        let WasmState {
+            allocations,
+            outline,
+            outline_result,
+            ..
+        } = state;
+        outline_result.clear();
+        let Some(sfnt) = owned_bytes(allocations, sfnt_pointer, sfnt_length) else {
+            return STATUS_INVALID_REQUEST;
+        };
+        match outline
+            .decode(sfnt, glyph_id)
+            .and_then(|()| outline.encode(outline_result))
+        {
+            Ok(()) => STATUS_OK,
+            Err(OutlineError::InvalidFont | OutlineError::InvalidGlyph) => STATUS_INVALID_FONT,
+            Err(OutlineError::OutOfMemory) => STATUS_RESULT_TOO_LARGE,
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_shaper_glyph_outline_ptr() -> u32 {
+    with_state(|state| u32::try_from(state.outline_result.as_ptr() as usize).unwrap_or(0))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_shaper_glyph_outline_len() -> u32 {
+    with_state(|state| u32::try_from(state.outline_result.len()).unwrap_or(0))
+}
+
 #[derive(Default)]
 struct WasmState {
     registry: ShaperRegistry,
@@ -1097,6 +1138,8 @@ struct WasmState {
     borrow_generation: u32,
     borrowed_layout: BorrowedLayoutDescriptor,
     borrowed_glyph: crate::engine::SemanticGlyph,
+    outline: GlyphOutline,
+    outline_result: Vec<u8>,
 }
 
 struct Allocation {
