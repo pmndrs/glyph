@@ -8,11 +8,10 @@ type OutlineDecoder = (glyph: BorrowedGlyph) => GlyphOutlineContour[];
 export function createBorrowedGlyphLayout(
   transport: PlanTransport,
   publication: BorrowedLayoutPublication,
-  assertOpen: () => void,
-  assertCurrent: () => void,
+  assertActive: () => void,
   decodeOutline: OutlineDecoder,
 ): BorrowedGlyphLayout {
-  return Object.freeze(new BorrowedGlyphLayoutView(transport, publication, assertOpen, assertCurrent, decodeOutline));
+  return Object.freeze(new BorrowedGlyphLayoutView(transport, publication, assertActive, decodeOutline));
 }
 
 export function createInspectionBorrowedGlyphLayout(
@@ -32,22 +31,18 @@ function assertGlyphIndex(index: number, glyphCount: number): void {
 class BorrowedGlyphLayoutView implements BorrowedGlyphLayout {
   readonly #transport: PlanTransport;
   readonly #publication: BorrowedLayoutPublication;
-  readonly #assertOpen: () => void;
-  readonly #assertCurrent: () => void;
+  readonly #assertActive: () => void;
   readonly #decodeOutline: OutlineDecoder;
-  #snapshot: readonly BorrowedGlyph[] | undefined;
 
   constructor(
     transport: PlanTransport,
     publication: BorrowedLayoutPublication,
-    assertOpen: () => void,
-    assertCurrent: () => void,
+    assertActive: () => void,
     decodeOutline: OutlineDecoder,
   ) {
     this.#transport = transport;
     this.#publication = publication;
-    this.#assertOpen = assertOpen;
-    this.#assertCurrent = assertCurrent;
+    this.#assertActive = assertActive;
     this.#decodeOutline = decodeOutline;
   }
 
@@ -56,33 +51,14 @@ class BorrowedGlyphLayoutView implements BorrowedGlyphLayout {
     return this.#publication.glyphCount;
   }
 
+  outlineAt(index: number): GlyphOutlineContour[] {
+    return this.#decodeOutline(this.glyphAt(index));
+  }
+
   glyphAt(index: number): BorrowedGlyph {
     this.#assertActive();
-    if (this.#snapshot === undefined) return this.#readGlyph(index);
-    assertGlyphIndex(index, this.#snapshot.length);
-    return this.#snapshot[index]!;
-  }
-
-  outlineAt(index: number): GlyphOutlineContour[] {
-    this.#assertActive();
-    if (this.#snapshot === undefined) {
-      const snapshot: BorrowedGlyph[] = [];
-      for (let glyph = 0; glyph < this.#publication.glyphCount; glyph += 1) snapshot.push(this.#readGlyph(glyph));
-      this.#snapshot = snapshot;
-    }
-    assertGlyphIndex(index, this.#snapshot.length);
-    return this.#decodeOutline(this.#snapshot[index]!);
-  }
-
-  #assertActive(): void {
-    this.#assertOpen();
-    if (this.#snapshot === undefined) this.#assertCurrent();
-  }
-
-  #readGlyph(index: number): BorrowedGlyph {
-    const pointer = this.#transport.borrowParagraphGlyph(this.#publication, index);
+    const view = this.#transport.borrowParagraphGlyph(this.#publication, index);
     const layout = textShaperAbi.layouts.borrowedGlyph;
-    const view = new DataView(this.#publication.memoryBuffer, pointer, layout.size);
     const bidiLevel = view.getUint8(layout.bidiLevel);
     if (bidiLevel > 125) throw new RangeError('borrowed layout glyph has an invalid bidi level');
     return Object.freeze({

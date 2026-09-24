@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:79afe988bab531f7a238e2b5b04f7ecb9b8a15ac419a609f06f8080e618b4125'
+source_digest: 'sha256:923a366a2fdbcbe00bd14e8afd815ce2ac4ae59f9cea09c1e65c1729e2b12775'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -780,9 +780,9 @@ to its font size and placed at its origin with y down, so they line up with its 
 winding for nonzero filling, and blank glyphs return `[]`. TrueType outlines are exact, and each CFF cubic becomes four
 equal-parameter quadratics through Slug's shared split. The call throws for a glyph whose font was baked without
 outlines and after its callback returns. The first decode for a font copies its outline SFNT into the shaper's memory,
-released with the font's engine registration. Because that copy and the decode can grow Wasm memory, which expires a
-Wasm-backed borrow, the view copies its glyph records before its first decode and serves `glyphAt` from that copy
-afterward. Every integration's Text reaches the method through the shared `BorrowedGlyphLayout`.
+released with the font's engine registration. That copy and the decode can grow Wasm memory, and a Wasm-backed borrow
+reads each glyph record from the current memory, so growth does not expire it. Every integration's Text reaches the
+method through the shared `BorrowedGlyphLayout`.
 
 The decoder adds 64,887 raw bytes (24,702 gzip) to `text-shaper.wasm`; Skrifa's outline drawing measured 97 KB gzip in
 the same shaper and cannot be trimmed by feature. `font-baker.wasm` draws no outlines: the bake validator decodes every
@@ -794,8 +794,8 @@ composites rewritten to use matched-point anchors and scaled offsets. Composites
 points past the bounds are refused, and corrupted `glyf`, `loca`, and `CFF ` tables fail without panicking. The
 validator rejects an outline SFNT that is out of profile, misidentified, or undecodable. Three Text tests check every
 TrueType glyph's control box against the ink box the layout reports and every CFF on-curve point against it, decode a
-font-stack fallback glyph from its own font, grow Wasm memory inside a borrow against a negative control, and read
-identical outlines from Bitmap and Slug.
+font-stack fallback glyph from its own font, read the same Text through its Wasm-backed and then its inspection-backed
+borrow with Wasm memory grown between decodes, and read identical outlines from Bitmap and Slug.
 
 ## Semantic queries
 
