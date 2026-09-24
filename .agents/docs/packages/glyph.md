@@ -5,9 +5,15 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:48d7c834b3535286bbe36038c945134846c0cb3771f7380160f298746d669c54'
+source_digest: 'sha256:7a740e29422f405f52d3f5737fcad8db3bcbe901f752949cfb93a64b529b221e'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
+  - id: shaper-loader
+    resource: ../../../packages/glyph/src/shaper.ts
+    title: Default shaper asset loading and compilation
+  - id: package-build
+    resource: ../../../packages/glyph/scripts/build.mjs
+    title: Optimized Wasm and compressed asset production
   - id: manifest
     resource: ../../../packages/glyph/package.json
     title: Package manifest
@@ -118,7 +124,7 @@ sources:
     title: Pinned msdfgen CLI scanline and error-correction configuration
 generated:
   by: openai-codex/gpt-6
-  at: '2026-09-16T22:19:41Z'
+  at: '2026-09-24T18:30:58Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -200,6 +206,19 @@ Codecs through `registerRasterCodec()` and can normalize a renderer-owned capabi
 config helpers.
 
 ## Public package surfaces
+
+Default shaper initialization loads `text-shaper.wasm.gz` in browsers and Node. The build generates this gzip asset
+from the final `wasm-opt -Oz` output at level 9; `@pmndrs/glyph/text-shaper.wasm.gz` and the unchanged raw
+`@pmndrs/glyph/text-shaper.wasm` are both exported. Caller-supplied raw bytes and compiled `WebAssembly.Module`
+values retain their existing behavior. Default loading buffers the asset and uses native `DecompressionStream('gzip')`
+only when the received bytes carry the gzip signature, so HTTP `Content-Encoding` decoding does not cause a second
+decompression. Static hosts need no compression configuration. Transfer compression leaves decoded Wasm and shaping
+functionality unchanged; it does not establish a startup-time improvement over an already compressed deployment.
+
+The shaper registration test proves reproducible gzip generation, byte identity after decompression, and default Node
+loading alongside supplied modules. Packed-package tests prove both resource exports ship, and the isolated browser
+consumer covers gzip assets, HTTP-decoded gzip, and rejected truncated gzip. `pnpm scripts run glyph:test-js --
+tests/integration/shaper-registration.test.mjs` runs the focused Node evidence against a built package.
 
 | Subpath                         | Purpose                                                                                                          |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------- |

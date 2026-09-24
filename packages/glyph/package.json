@@ -177,6 +177,7 @@
     "./generated/*": null,
     "./font-baker/*": null,
     "./text-shaper.wasm": "./dist/text-shaper.wasm",
+    "./text-shaper.wasm.gz": "./dist/text-shaper.wasm.gz",
     "./bitmap-baker.wasm": "./dist/bitmap-baker.wasm",
     "./mtsdf-baker.wasm": "./dist/mtsdf-baker.wasm",
     "./slug-baker.wasm": "./dist/slug-baker.wasm",

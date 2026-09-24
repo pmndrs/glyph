@@ -94,6 +94,7 @@ export function externalizeGlyphWasmPlugin(): Plugin {
         'bitmap-baker.wasm',
         'font-baker.wasm',
         'text-shaper.wasm',
+        'text-shaper.wasm.gz',
         'mtsdf-baker.wasm',
         'slug-baker.wasm',
       ];

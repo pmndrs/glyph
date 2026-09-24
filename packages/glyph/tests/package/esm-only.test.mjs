@@ -123,10 +123,11 @@ test('the published contract is ESM-only', async () => {
           './slug-baker.wasm',
           './font-baker.wasm',
           './text-shaper.wasm',
+          './text-shaper.wasm.gz',
         ].includes(subpath),
         `unexpected non-JavaScript resource export ${subpath}`,
       );
-      assert.match(target, /^\.\/dist\/.*\.wasm$|^\.\/package\.json$/);
+      assert.match(target, /^\.\/dist\/.*\.wasm(?:\.gz)?$|^\.\/package\.json$/);
       continue;
     }
 

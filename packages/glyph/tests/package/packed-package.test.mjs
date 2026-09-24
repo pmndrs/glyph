@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
+import { gunzipSync } from 'node:zlib';
 import { build } from 'vite';
 
 import { readJavaScriptModuleClosure } from '../support/javascript-module-closure.mjs';
@@ -106,6 +107,14 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     const resolved = import.meta.resolve(specifier, consumerEntry);
     assert.ok((await readFile(fileURLToPath(resolved))).byteLength > 0, `${specifier} must be packed`);
   }
+  const shaperBytes = await readFile(
+    fileURLToPath(import.meta.resolve('@pmndrs/glyph/text-shaper.wasm', consumerEntry)),
+  );
+  const compressedShaper = await readFile(
+    fileURLToPath(import.meta.resolve('@pmndrs/glyph/text-shaper.wasm.gz', consumerEntry)),
+  );
+  assert.deepEqual(gunzipSync(compressedShaper), shaperBytes);
+  assert.ok(compressedShaper.byteLength < shaperBytes.byteLength);
 
   // The JSON ABI subpaths were replaced by typed module subpaths. Prove they are unreachable from a real
   // install rather than absent from the manifest, so a wildcard or alias cannot resurrect them unnoticed.
