@@ -48,8 +48,8 @@ export interface TypeGpuText<Selection extends TypeGpuFontSelection = TypeGpuFon
   update(update: TypeGpuTextUpdate<Selection>): void;
   measure(): ParagraphLayoutSummary;
   glyphs(): GlyphLayoutInspection;
-  /** Reads indexed glyph data through a callback-scoped view; repeated unchanged reads may retain one private canonical snapshot. */
-  withGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result;
+  /** Synchronously reads indexed glyph data and returns the callback's result. The view expires when the callback exits; repeated unchanged reads may retain one private canonical snapshot. */
+  readGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result;
   dispose(): void;
 }
 
@@ -113,9 +113,9 @@ export function createText<Selection extends TypeGpuFontSelection>(
       assertActive();
       return controller.inspect();
     },
-    withGlyphs(read) {
+    readGlyphs(read) {
       assertActive();
-      return controller.withGlyphs(read);
+      return controller.readGlyphs(read);
     },
     dispose() {
       if (disposed) return;

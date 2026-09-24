@@ -19,6 +19,15 @@ const threePackage = (await import(
 
 const { bitmap, glyph } = glyphPackage;
 const { defineThreeConfig } = threePackage;
+// The comparison may load a canary from before the rename. Install the same method
+// under its current name once, outside timed work, without changing the shipped API.
+const textPrototype: {
+  readGlyphs?: (typeof threePackage.Text.prototype)['readGlyphs'];
+  withGlyphs?: (typeof threePackage.Text.prototype)['readGlyphs'];
+} = threePackage.Text.prototype;
+if (textPrototype.readGlyphs === undefined && textPrototype.withGlyphs !== undefined) {
+  textPrototype.readGlyphs = textPrototype.withGlyphs;
+}
 const fontBytes = await readFile(new URL('../fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url));
 
 await glyph.init();
@@ -92,7 +101,7 @@ function borrowedGlyphChecksum(labels: ReturnType<typeof createLabels>['labels']
   return labels.reduce(
     (total, label) =>
       total +
-      label.withGlyphs((glyphs) => {
+      label.readGlyphs((glyphs) => {
         let checksum = glyphs.glyphCount;
         for (let index = 0; index < glyphs.glyphCount; index += 1) {
           const record = glyphs.glyphAt(index);
@@ -193,7 +202,7 @@ group('retained batching @publication', () => {
 
   bench('borrow glyphs from 100 steadily promoted retained labels @cached', function* () {
     const created = createLabels();
-    created.labels.forEach((label) => label.withGlyphs((glyphs) => glyphs.glyphCount));
+    created.labels.forEach((label) => label.readGlyphs((glyphs) => glyphs.glyphCount));
     const readGlyphs = () => borrowedGlyphChecksum(created.labels);
     const expectedChecksum = readGlyphs();
     const checksum = yield readGlyphs;
@@ -308,14 +317,14 @@ group('retained batching at 1,000 labels @publication', () => {
   bench('first sparse borrow from 1000 retained labels @cached', function* () {
     const created = createLabels(1_000);
     const glyphCount = yield () =>
-      created.labels.reduce((total, label) => total + label.withGlyphs((glyphs) => glyphs.glyphCount), 0);
+      created.labels.reduce((total, label) => total + label.readGlyphs((glyphs) => glyphs.glyphCount), 0);
     assert(glyphCount > 0, 'sparse borrows must contain glyphs');
     disposeLabels(created);
   });
 
   bench('promote 1000 retained label borrows @cached', function* () {
     const created = createLabels(1_000);
-    created.labels.forEach((label) => label.withGlyphs((glyphs) => glyphs.glyphCount));
+    created.labels.forEach((label) => label.readGlyphs((glyphs) => glyphs.glyphCount));
     const checksum = yield () => borrowedGlyphChecksum(created.labels);
     assert(checksum > 0, 'promoted borrows must contain glyphs');
     disposeLabels(created);
@@ -323,7 +332,7 @@ group('retained batching at 1,000 labels @publication', () => {
 
   bench('borrow glyphs from 1000 steadily promoted retained labels @cached', function* () {
     const created = createLabels(1_000);
-    created.labels.forEach((label) => label.withGlyphs((glyphs) => glyphs.glyphCount));
+    created.labels.forEach((label) => label.readGlyphs((glyphs) => glyphs.glyphCount));
     const expectedChecksum = borrowedGlyphChecksum(created.labels);
     const checksum = yield () => borrowedGlyphChecksum(created.labels);
     assert.equal(checksum, expectedChecksum);
@@ -346,13 +355,13 @@ group('retained batching at 1,000 labels @publication', () => {
   bench('edit and sparsely borrow one of 1000 retained labels @layout', function* () {
     const created = createLabels(1_000);
     const target = created.labels[0]!;
-    target.withGlyphs((glyphs) => glyphs.glyphCount);
-    target.withGlyphs((glyphs) => glyphs.glyphCount);
+    target.readGlyphs((glyphs) => glyphs.glyphCount);
+    target.readGlyphs((glyphs) => glyphs.glyphCount);
     let alternate = false;
     const glyphId = yield () => {
       alternate = !alternate;
       target.text = alternate ? 'edited alpha' : 'edited bravo';
-      return target.withGlyphs((glyphs) => glyphs.glyphAt(0).glyphId);
+      return target.readGlyphs((glyphs) => glyphs.glyphAt(0).glyphId);
     };
     assert(glyphId > 0, 'edited sparse borrow must contain glyphs');
     disposeLabels(created);

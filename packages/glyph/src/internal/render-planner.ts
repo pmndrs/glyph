@@ -255,7 +255,7 @@ export interface RetainedText {
   /** Returns caller-owned columns; a cache miss may synchronously incur glyph lookup and positioning work. */
   glyphs(): GlyphLayoutInspection;
   /** Demand-reads positioned glyphs through a synchronous expiring view. */
-  withGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result;
+  readGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result;
   /** Offers a complete checkpoint containing selected committed stable glyph ids to one renderer target. */
   copyGlyphs(stableIds: ArrayLike<number>, target: PlanTarget): PlanAcceptance;
   /** Offers a complete checkpoint containing this paragraph's committed decorations. */
@@ -708,7 +708,7 @@ class RenderPlannerImpl {
   }
 
   /** @internal */
-  _withGlyphs<Result>(state: RetainedTextState, read: (glyphs: BorrowedGlyphLayout) => Result): Result {
+  _readGlyphs<Result>(state: RetainedTextState, read: (glyphs: BorrowedGlyphLayout) => Result): Result {
     this.#assertTextQueryable(state);
     if (typeof read !== 'function') throw new TypeError('borrowed glyph inspection callback must be a function');
     let active = true;
@@ -1451,8 +1451,8 @@ class RetainedTextImpl implements RetainedText {
     return this.#planner._inspectText(this.#state);
   }
 
-  withGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result {
-    return this.#planner._withGlyphs(this.#state, read);
+  readGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result {
+    return this.#planner._readGlyphs(this.#state, read);
   }
 
   copyGlyphs(stableIds: ArrayLike<number>, target: PlanTarget): PlanAcceptance {

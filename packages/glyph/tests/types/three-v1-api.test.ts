@@ -196,7 +196,7 @@ label.text = txt`${green`Updated`}`;
 label.constraints = [constraints.card, constraints.naturalHeight];
 const measurement = label.measure();
 void measurement.contentWidth;
-const borrowedGlyphId: number = label.withGlyphs((layout) => {
+const borrowedGlyphId: number = label.readGlyphs((layout) => {
   layout satisfies ThreeApi.BorrowedGlyphLayout;
   layout.glyphAt(0) satisfies BorrowedGlyph;
   return layout.glyphAt(0).glyphId;

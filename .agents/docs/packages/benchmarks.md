@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:f9e79c1fe6223dc7a1b0926c068e9f6fb2578b820e19f5b2bb7a57443123d947'
+source_digest: 'sha256:7137aca1aa46d6068e1d5a7617d1977e3c1818ba9c7b2c5aa4c9a07844be608b'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -223,7 +223,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-6
-  at: '2026-09-16T13:27:39Z'
+  at: '2026-09-24T20:29:45Z'
 ---
 
 # Package reference: `@pmndrs/glyph-benchmarks`
@@ -247,6 +247,10 @@ non-blocking performance job. `benchmark:labs-package` installs the candidate ta
 the current npm canary into isolated temporary consumers, then runs both through `@pmndrs/labs`. It never rebuilds either
 artifact. The retained report includes native Labs JSON, comparison output, exact package manifests and lockfiles, and the
 candidate tarball SHA-256.
+
+The suite calls `Text.readGlyphs()` for borrowed inspection. When a baseline canary still exposes `withGlyphs`, the
+benchmark aliases that same prototype method to `readGlyphs` once before timed work. This compatibility step is confined
+to the benchmark process; the current package does not retain the former method name.
 
 The first package suite measures six public-system workloads: `measure()` and `glyphs()` after equal-size edits, Three
 publication after an edit, column reflow, font-size relayout, and one publication of 128 retained `Text` instances. Each

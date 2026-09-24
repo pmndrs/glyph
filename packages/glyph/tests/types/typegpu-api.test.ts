@@ -63,7 +63,7 @@ const text = handle.createText({ font, text: 'Hello', style: { fontSize: 32 }, p
 text.update({ constraints: { width: { mode: 'at-most', size: 640 } } });
 text.measure();
 text.glyphs();
-const borrowedCluster: number = text.withGlyphs((layout) => {
+const borrowedCluster: number = text.readGlyphs((layout) => {
   layout satisfies import('@pmndrs/glyph/typegpu').BorrowedGlyphLayout;
   layout.glyphAt(0) satisfies BorrowedGlyph;
   return layout.glyphAt(0).cluster;

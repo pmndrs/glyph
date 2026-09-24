@@ -3173,7 +3173,7 @@ test('Text.measure retains unpublished lifecycle but skips published paragraph u
   font.dispose();
 });
 
-test('Text.withGlyphs demand-reads scalar records only inside one synchronous borrow', async (t) => {
+test('Text.readGlyphs demand-reads scalar records only inside one synchronous borrow', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const label = three.createText({ font, text: 'Borrowed glyph records wrap across two lines' });
@@ -3183,7 +3183,7 @@ test('Text.withGlyphs demand-reads scalar records only inside one synchronous bo
   let glyphCount = 0;
   const selected = [];
   const answer = Object.freeze({ answer: 42 });
-  const returned = label.withGlyphs((layout) => {
+  const returned = label.readGlyphs((layout) => {
     escaped = layout;
     glyphCount = layout.glyphCount;
     for (const index of [0, glyphCount - 1]) {
@@ -3225,14 +3225,14 @@ test('Text.withGlyphs demand-reads scalar records only inside one synchronous bo
   let thrownView;
   assert.throws(
     () =>
-      label.withGlyphs((layout) => {
+      label.readGlyphs((layout) => {
         thrownView = layout;
         throw new Error('borrow callback failed');
       }),
     /borrow callback failed/,
   );
   assert.throws(() => thrownView.glyphCount, /expired/);
-  assert.throws(() => label.withGlyphs(async () => 42), /must answer synchronously/);
+  assert.throws(() => label.readGlyphs(async () => 42), /must answer synchronously/);
   label.text = 'mutation succeeds after borrow release';
   assert.equal(label.measure().glyphCount, 38);
 
@@ -3240,7 +3240,7 @@ test('Text.withGlyphs demand-reads scalar records only inside one synchronous bo
   font.dispose();
 });
 
-test('Text.withGlyphs promotes repeated reads to a cached callback-scoped inspection', async (t) => {
+test('Text.readGlyphs promotes repeated reads to a cached callback-scoped inspection', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
@@ -3252,15 +3252,15 @@ test('Text.withGlyphs promotes repeated reads to a cached callback-scoped inspec
   glyph.shape();
 
   instrumentedGlyph.reset();
-  const firstGlyphId = label.withGlyphs((layout) => layout.glyphAt(0).glyphId);
-  const secondGlyphId = label.withGlyphs((layout) => layout.glyphAt(0).glyphId);
+  const firstGlyphId = label.readGlyphs((layout) => layout.glyphAt(0).glyphId);
+  const secondGlyphId = label.readGlyphs((layout) => layout.glyphAt(0).glyphId);
   assert.equal(firstGlyphId, secondGlyphId);
   assert.equal(instrumentedGlyph.measureCrossings, 2, 'the second borrow promotes one canonical inspection');
   assert.equal(instrumentedGlyph.borrowedGlyphReads, 1, 'the promoted borrow reads its scalar from cached columns');
 
   instrumentedGlyph.reset();
   assert.equal(
-    label.withGlyphs((layout) => layout.glyphAt(0).glyphId),
+    label.readGlyphs((layout) => layout.glyphAt(0).glyphId),
     firstGlyphId,
   );
   assert.equal(instrumentedGlyph.measureCrossings, 0, 'unchanged promoted borrows stay inside JS');
@@ -3269,17 +3269,17 @@ test('Text.withGlyphs promotes repeated reads to a cached callback-scoped inspec
   label.text = 'Dirty';
   instrumentedGlyph.reset();
   assert.equal(
-    label.withGlyphs((layout) => layout.glyphCount),
+    label.readGlyphs((layout) => layout.glyphCount),
     5,
   );
   assert.equal(instrumentedGlyph.measureCrossings, 1, 'the first borrow after an edit remains sparse');
   assert.equal(
-    label.withGlyphs((layout) => layout.glyphCount),
+    label.readGlyphs((layout) => layout.glyphCount),
     5,
   );
   assert.equal(instrumentedGlyph.measureCrossings, 2, 'the second unchanged borrow promotes the new revision');
   assert.equal(
-    label.withGlyphs((layout) => layout.glyphCount),
+    label.readGlyphs((layout) => layout.glyphCount),
     5,
   );
   assert.equal(instrumentedGlyph.measureCrossings, 2, 'the promoted revision stays cached');
@@ -3291,7 +3291,7 @@ test('Text.withGlyphs promotes repeated reads to a cached callback-scoped inspec
   label.renderOrder = 7;
   instrumentedGlyph.reset();
   assert.equal(
-    label.withGlyphs((layout) => layout.glyphCount),
+    label.readGlyphs((layout) => layout.glyphCount),
     5,
   );
   assert.equal(instrumentedGlyph.measureCrossings, 0, 'order-only changes preserve positioned glyph columns');
@@ -3301,7 +3301,7 @@ test('Text.withGlyphs promotes repeated reads to a cached callback-scoped inspec
   font.dispose();
 });
 
-test('Text.withGlyphs keeps sparse borrowing when canonical inspection exceeds the output limit', async (t) => {
+test('Text.readGlyphs keeps sparse borrowing when canonical inspection exceeds the output limit', async (t) => {
   const three = await createThreeTestHandle(t, {
     ...ThreeConfig,
     commands: {
@@ -3313,9 +3313,9 @@ test('Text.withGlyphs keeps sparse borrowing when canonical inspection exceeds t
   const label = three.createText({ font, text: 'capacity '.repeat(512) });
 
   instrumentedGlyph.reset();
-  const first = label.withGlyphs((layout) => layout.glyphAt(0).glyphId);
-  const second = label.withGlyphs((layout) => layout.glyphAt(0).glyphId);
-  const third = label.withGlyphs((layout) => layout.glyphAt(0).glyphId);
+  const first = label.readGlyphs((layout) => layout.glyphAt(0).glyphId);
+  const second = label.readGlyphs((layout) => layout.glyphAt(0).glyphId);
+  const third = label.readGlyphs((layout) => layout.glyphAt(0).glyphId);
   assert.equal(first, second);
   assert.equal(second, third);
   assert.equal(

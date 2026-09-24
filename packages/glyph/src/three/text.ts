@@ -488,9 +488,9 @@ export class ThreeRootHost {
   }
 
   /** @internal Borrow one root member's positioned layout for a synchronous callback. */
-  withGlyphs<Result>(text: THREE.Object3D, read: (glyphs: BorrowedGlyphLayout) => Result): Result {
+  readGlyphs<Result>(text: THREE.Object3D, read: (glyphs: BorrowedGlyphLayout) => Result): Result {
     this.#assertMember(text);
-    return this.#rootBinding().withGlyphs(text, read);
+    return this.#rootBinding().readGlyphs(text, read);
   }
 
   /** @internal Return the publication-facing view after authenticating root membership. */
@@ -869,10 +869,10 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return inspection;
   }
 
-  /** Reads selected positioned glyphs without copying the complete layout. */
-  withGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result {
+  /** Synchronously reads selected positioned glyphs and returns the callback's result. The view expires when the callback exits; the full layout is not copied. */
+  readGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result {
     this.#assertActive();
-    return this.#root.withGlyphs(this, read);
+    return this.#root.readGlyphs(this, read);
   }
 
   commitState(): TextCommitState {
@@ -1389,10 +1389,10 @@ class ThreeRootPublication {
     return inspection;
   }
 
-  withGlyphs<Result>(text: Text<RasterFormatMetadata>, read: (glyphs: BorrowedGlyphLayout) => Result): Result {
+  readGlyphs<Result>(text: Text<RasterFormatMetadata>, read: (glyphs: BorrowedGlyphLayout) => Result): Result {
     this.#assertActive();
     const entry = this.#queryEntry(text);
-    const result = entry.handle.withGlyphs(read);
+    const result = entry.handle.readGlyphs(read);
     this.#detachedQuery = nearestScene(text) === undefined ? text : undefined;
     return result;
   }
