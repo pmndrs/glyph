@@ -11,7 +11,8 @@
     "version": {
       "type": "integer",
       "enum": [
-        0
+        0,
+        1
       ]
     },
     "shaping": {
@@ -184,6 +185,32 @@
         "unicodeVersion"
       ]
     },
+    "outlines": {
+      "description": "Optional glyph outlines, baked on request: the face's own glyf and loca tables, or its CFF table, unchanged in an SFNT beside head and maxp. A consumer decodes one glyph at a time.",
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "glTFProperty.schema.json"
+        }
+      ],
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": [
+            "opentype-sfnt-outlines-v0"
+          ]
+        },
+        "bufferView": {
+          "description": "The outline SFNT: head, maxp, and either glyf with loca or CFF.",
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "format",
+        "bufferView"
+      ]
+    },
     "rasters": {
       "type": "array",
       "items": {
@@ -265,5 +292,16 @@
     "metrics",
     "provenance",
     "rasters"
-  ]
+  ],
+  "dependencies": {
+    "outlines": {
+      "properties": {
+        "version": {
+          "enum": [
+            1
+          ]
+        }
+      }
+    }
+  }
 }

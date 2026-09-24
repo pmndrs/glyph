@@ -9,6 +9,7 @@ export { fontBakerAbi } from './generated/font-baker-abi.js';
 export interface FontBakeDescriptor {
   readonly formatVersion: 0;
   readonly fontFaceIndex: number;
+  readonly outlines?: boolean;
 }
 
 export interface FontBakeRequest {
@@ -93,9 +94,21 @@ export interface ShapingPayloadReport {
   readonly brotliBytes?: number;
 }
 
+export interface OutlinePayloadReport {
+  readonly format: 'opentype-sfnt-outlines-v0';
+  readonly sourceFormat: 'truetype' | 'cff';
+  readonly sfntDirectoryBytes: number;
+  readonly tables: readonly {
+    readonly tag: string;
+    readonly rawBytes: number;
+    readonly paddedBytes: number;
+  }[];
+  readonly totalRawBytes: number;
+}
+
 export interface FontBakePayloadReport {
   readonly source: { readonly bytes: number };
-  readonly shared: { readonly shaping: ShapingPayloadReport };
+  readonly shared: { readonly shaping: ShapingPayloadReport; readonly outlines?: OutlinePayloadReport };
   readonly rasters: readonly unknown[];
   readonly containers: readonly {
     readonly artifactId: string;

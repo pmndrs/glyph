@@ -51,6 +51,7 @@ export interface RegisteredFontData {
   readonly shapingSfnt: Uint8Array;
   readonly glyphExtents: Uint8Array;
   readonly glyphExtentsAvailability: Uint8Array;
+  readonly glyphOutlines?: Uint8Array;
   readonly rasterSources: Map<string, RegisteredRasterSourceData>;
   /** Authenticated external resources shared by every raster through canonical content identity. */
   readonly resources: Map<string, RegisteredRasterResourceData>;

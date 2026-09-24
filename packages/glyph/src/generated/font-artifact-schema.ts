@@ -2,7 +2,7 @@
 // src/font-baker/schemas/extensions/glTF.PMNDRS_font.schema.json. Do not edit by hand.
 
 export type PmndrsFontExtension = {
-  readonly version: 0;
+  readonly version: 0 | 1;
   readonly shaping: {
     readonly format: "opentype-sfnt-harfrust-v0";
     readonly bufferView: number;
@@ -32,6 +32,10 @@ export type PmndrsFontExtension = {
     readonly harfrustVersion: string;
     readonly harfbuzzReferenceVersion: string;
     readonly unicodeVersion: string;
+  };
+  readonly outlines?: {
+    readonly format: "opentype-sfnt-outlines-v0";
+    readonly bufferView: number;
   };
   readonly rasters: readonly ({
     readonly rasterKey: string;

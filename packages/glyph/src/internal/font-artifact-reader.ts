@@ -14,6 +14,7 @@ export interface RuntimeFontArtifact {
   readonly shapingSfnt: Uint8Array;
   readonly glyphExtents: Uint8Array;
   readonly glyphExtentsAvailability: Uint8Array;
+  readonly glyphOutlines?: Uint8Array;
   readonly shapingFingerprint: Fingerprint;
   readonly sourceFingerprint: Fingerprint;
 }
@@ -28,7 +29,7 @@ export class RuntimeFontArtifactError extends GlyphError<'artifact-invalid'> {
   }
 }
 
-/** Locates the trusted package extension and its three shaping views. Bake and CI own schema validation; runtime is limited to the GLB envelope, extension/version identity, and byte ranges for safe typed-array views. */
+/** Locates the trusted package extension, its three shaping views, and any outline view. Bake and CI own schema validation. Runtime is limited to the GLB envelope, extension/version identity, and byte ranges for safe typed-array views. */
 export function readRuntimeFontArtifact(bytes: Uint8Array): RuntimeFontArtifact {
   const parsed = readGlb(bytes);
   requireExtensionName(parsed.document.extensionsUsed, 'extensionsUsed');
@@ -36,8 +37,9 @@ export function readRuntimeFontArtifact(bytes: Uint8Array): RuntimeFontArtifact 
   const extensions = record(parsed.document.extensions, 'extensions');
   const extension = record(extensions[FONT_EXTENSION], FONT_EXTENSION) as PmndrsFontExtension;
   if (
-    extension.version !== 0 ||
+    (extension.version !== 0 && extension.version !== 1) ||
     extension.shaping?.format !== 'opentype-sfnt-harfrust-v0' ||
+    (extension.outlines !== undefined && extension.outlines.format !== 'opentype-sfnt-outlines-v0') ||
     extension.metrics?.glyphIdWidth !== 16 ||
     extension.provenance?.bakerVersion !== FONT_BAKER_VERSION ||
     extension.provenance?.harfrustVersion !== '0.12.0' ||
@@ -57,6 +59,7 @@ export function readRuntimeFontArtifact(bytes: Uint8Array): RuntimeFontArtifact 
     functions.glyphExtentsAvailabilityBufferView,
     'glyphExtentsAvailabilityBufferView',
   );
+  const outlines = extension.outlines;
   return {
     parsed,
     extension,
@@ -64,6 +67,9 @@ export function readRuntimeFontArtifact(bytes: Uint8Array): RuntimeFontArtifact 
     shapingSfnt: shaping,
     glyphExtents: extents,
     glyphExtentsAvailability: availability,
+    ...(outlines === undefined
+      ? {}
+      : { glyphOutlines: viewAt(parsed, bufferViews, outlines.bufferView, 'outlines.bufferView') }),
     shapingFingerprint: text(extension.shaping.fingerprint, 'shaping.fingerprint') as Fingerprint,
     sourceFingerprint: text(extension.provenance.sourceFingerprint, 'provenance.sourceFingerprint') as Fingerprint,
   };

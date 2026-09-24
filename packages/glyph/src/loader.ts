@@ -332,6 +332,7 @@ export class FontRegistry {
       shapingSfnt: artifact.shapingSfnt,
       glyphExtents: artifact.glyphExtents,
       glyphExtentsAvailability: artifact.glyphExtentsAvailability,
+      ...(artifact.glyphOutlines === undefined ? {} : { glyphOutlines: artifact.glyphOutlines }),
       rasterSources,
       resources: new Map(),
       unicodeVersion: string(provenance.unicodeVersion, 'provenance.unicodeVersion'),
