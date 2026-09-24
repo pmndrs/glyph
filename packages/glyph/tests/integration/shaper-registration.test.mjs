@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { gunzipSync, gzipSync } from 'node:zlib';
 
 import { FontRegistry } from '../../dist/loader.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
@@ -11,6 +12,22 @@ import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const fixtureDirectory = new URL('../../../../benches/fixtures/fonts/inter-v4.1/', import.meta.url);
 const shaperWasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
+
+test('the default Node shaper loads reproducible gzip of the raw exported module', async (context) => {
+  const raw = await readFile(shaperWasmUrl);
+  const compressed = await readFile(new URL('../../dist/text-shaper.wasm.gz', import.meta.url));
+  assert.deepEqual(gunzipSync(compressed), raw);
+  assert.deepEqual(compressed, gzipSync(raw, { level: 9 }));
+  assert.ok(compressed.byteLength < raw.byteLength);
+  context.diagnostic(`shaper: ${raw.byteLength} raw bytes, ${compressed.byteLength} gzip bytes`);
+
+  const defaultShaper = await createRuntimeShaper();
+  context.after(() => defaultShaper.dispose());
+  const suppliedModule = await createRuntimeShaper({ wasm: await WebAssembly.compile(raw) });
+  context.after(() => suppliedModule.dispose());
+  assert.deepEqual(defaultShaper.memoryReport(), suppliedModule.memoryReport());
+});
+
 async function fixture() {
   const [source, bakerWasm, shaperWasm] = await Promise.all([
     readFile(new URL('Inter-Regular.ttf', fixtureDirectory)),

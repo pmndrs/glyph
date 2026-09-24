@@ -5,9 +5,12 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:f9e79c1fe6223dc7a1b0926c068e9f6fb2578b820e19f5b2bb7a57443123d947'
+source_digest: 'sha256:eb478c67c0827d07fc688996c637395789cd1a3f0115ad9296aeef99ddc1243c'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
+  - id: packed-consumer
+    resource: ../../../benches/scripts/run-packed-consumer.mts
+    title: Installed browser shaper and Worker verification
   - id: manifest
     resource: ../../../benches/package.json
     title: Package manifest
@@ -223,7 +226,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-6
-  at: '2026-09-16T13:27:39Z'
+  at: '2026-09-24T18:30:58Z'
 ---
 
 # Package reference: `@pmndrs/glyph-benchmarks`
@@ -684,7 +687,12 @@ The size lane is also a package-graph gate. Its consumer builds inspect emitted 
 
 The V0 autoresearch baseline is a fail-closed control artifact, not an active optimizer. Its generated evidence list authenticates the current package sizes, admitted harness, shaping, paragraph, bidi, CJK, and advanced-shaping conformance records at the exact root toolchain pins. A discriminated campaign state remains `disabled`; tests reject malformed evidence and prove that an enabled manifest cannot cross the campaign guard without a later explicit maintainer decision.
 
-The packed-consumer lane builds and packs both workspace packages, extracts only their published tarballs into an isolated Vite application, and executes `@pmndrs/glyph/runtime-bake` through the installed module Worker in Chromium. Canonical Inter returns the exact 172,144-byte artifact and SHA-256 `edf896923f38c9e6080e176540699a7b96b7cd15606b0522447750e7595170b5`. This closes the gap between source-workspace Worker evidence and what an installed consumer actually resolves.
+The packed-consumer lane packs the built Glyph package and installs its tarball into an isolated Vite application.
+It initializes the public `glyph` runtime and executes `@pmndrs/glyph/runtime-bake` through the installed module Worker
+in Chromium. Separate fresh pages load the default shaper as a gzip asset and with HTTP `Content-Encoding: gzip`,
+proving that browser decoding does not cause double decompression. A truncated gzip response must reject initialization.
+The successful cases return the exact Inter core artifact size and SHA-256 recorded in its authenticated manifest.
+This closes the gap between source-workspace evidence and what an installed consumer actually resolves.
 
 The `glyph:kernel-lab-browser` workflow runs the package-owned scalar, compiler-vectorized, and selected hybrid shaper
 artifacts in the project-pinned Chromium from a trustworthy loopback origin. It consumes the same captured 25,515- and

@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process';
 import { rmSync } from 'node:fs';
-import { chmod, copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { gzipSync } from 'node:zlib';
 
 import { captureCommand } from './support/capture-command.mjs';
 import { writeGeneratedTypescriptAbi } from './support/generated-typescript-abi.mjs';
@@ -303,6 +304,7 @@ await run(wasmOpt, [
   '-o',
   distributedShaperWasm,
 ]);
+await writeFile(staged('text-shaper.wasm.gz'), gzipSync(await readFile(distributedShaperWasm), { level: 9 }));
 await run(wasmOpt, [
   '--enable-bulk-memory',
   '--enable-nontrapping-float-to-int',

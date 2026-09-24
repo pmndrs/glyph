@@ -242,16 +242,24 @@ class RuntimeShaperImpl implements RuntimeShaper {
 
 async function fetchDefaultWasm(): Promise<ArrayBuffer> {
   const url = textShaperWasmUrl();
+  let bytes: ArrayBuffer;
   if (url.protocol === 'file:' && typeof process !== 'undefined' && typeof process.getBuiltinModule === 'function') {
     const fileSystem = process.getBuiltinModule('node:fs') as typeof import('node:fs');
-    const bytes = fileSystem.readFileSync(url);
-    return Uint8Array.from(bytes).buffer;
+    bytes = Uint8Array.from(fileSystem.readFileSync(url)).buffer;
+  } else {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`text shaper Wasm request failed with HTTP ${response.status}`);
+    }
+    bytes = await response.arrayBuffer();
   }
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`text shaper Wasm request failed with HTTP ${response.status}`);
+  // Fetch may already have decoded Content-Encoding. Inspect the received payload,
+  // since neither the URL suffix nor the response headers tell us which bytes remain.
+  const header = new Uint8Array(bytes, 0, Math.min(2, bytes.byteLength));
+  if (header[0] === 0x1f && header[1] === 0x8b) {
+    return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
   }
-  return response.arrayBuffer();
+  return bytes;
 }
 
 function readModule(instance: WebAssembly.Instance): ShaperModule {

@@ -1,5 +1,13 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-24
+
+- **Compressed the default shaper download** — The build publishes reproducible gzip beside the raw optimized Wasm.
+  Default browser and Node loading decodes gzip only when it remains compressed after transport; raw bytes and compiled
+  module overrides remain supported. Package tests cover artifact identity and exports, and the packed browser consumer
+  exercises static gzip, HTTP decoding, and truncated input. See [the package reference](packages/glyph.md) and
+  [browser verification](packages/benchmarks.md).
+
 ## 2026-09-18
 
 - **Added tagged stable publishing alongside canaries** — Extended the existing npm publishing workflow so matching
