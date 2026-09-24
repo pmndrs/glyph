@@ -1,3 +1,4 @@
+import type { GlyphOutlineContour } from './glyph-outline.js';
 import type { FontHandle } from './identity.js';
 import { textShaperAbi } from './generated/text-shaper-abi.js';
 
@@ -143,6 +144,13 @@ export interface BorrowedGlyph {
 export interface BorrowedGlyphLayout {
   readonly glyphCount: number;
   glyphAt(index: number): BorrowedGlyph;
+  /**
+   * Decodes the outline of the glyph `glyphAt(index)` describes, from a font baked with `--outlines`, as closed
+   * quadratic contours in the same paragraph space as its `x`, `y`, and ink box: scaled to its font size, y down.
+   * Contours keep the font's winding for nonzero filling, and a blank glyph returns `[]`. Each CFF cubic becomes four
+   * quadratics. The result is caller-owned. Throws when the glyph's font was baked without outlines.
+   */
+  outlineAt(index: number): GlyphOutlineContour[];
 }
 
 /** @internal Returns caller-owned columns while an integration keeps its canonical cached copy private. */

@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:8ff8117e1a98a5b373958f9bbf4810f785ca08ab1ef875edddccc11f3dcd21a7'
+source_digest: 'sha256:65da02a62a38460f9f023a54a87b1c2439f5ff5879c2735821838bfdaa7be4d0'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -753,6 +753,47 @@ shadow; Bitmap and Slug currently support neither. Three and root-configured int
 the selected font formats at the call that accepts a style, so an unsupported effect cannot become a malformed or
 silently degraded command buffer. The semantic ABI carries effect color, width, offset, and inherited opacity only for
 raster programs that opt in.
+
+## Glyph outlines
+
+Glyph geometry for colliders, extrusion, or other CPU consumers is core-font data, not raster data (D-371).
+`glyph bake --outlines` and Node `bakeFont({ font: { outlines: true } })` keep the face's own outline tables, `glyf`
+with `loca` or `CFF `, unchanged in a small SFNT beside `head` and `maxp`, stored as one optional `PMNDRS_font.outlines`
+buffer view. The object's presence is the flag, bakes without it are unchanged, and the CLI's up-to-date check treats a
+change of flag as stale. The outline view is outside `shaping.fingerprint`, so turning outlines on or off changes no
+raster's compatibility. Only a bake with outlines writes `PMNDRS_font` version 1; a bake without them still writes
+version 0, byte-identical to earlier bakes, so version 0 readers keep reading it. A face without outline tables, such as
+a bitmap-only face, fails an outline bake with `MISSING_TABLE`, and a CFF2 face fails with `UNSUPPORTED_OUTLINE_FORMAT`.
+
+Outlines cost about what the face's own outline tables do: 0.46 to 0.94 times the source file across the fixture faces.
+Inter adds 226 KB to a 412 KB font, and Noto Sans CJK JP adds 15.5 MB to 16.5 MB. The decoded-quadratic payload this
+replaced added 3 to 12 times the source file and could not bake Noto Sans CJK JP within the 64 MiB response limit.
+
+A Text's borrowed glyph view decodes outlines on request: inside `text.withGlyphs((glyphs) => ...)`,
+`glyphs.outlineAt(index)` decodes the glyph `glyphs.glyphAt(index)` describes, from the font that shaped it, so a
+fallback glyph decodes from its fallback font and callers never handle raw glyph IDs or `Font` objects. The shaper
+decodes with read-fonts, which HarfRust already links: TrueType simple and composite glyphs follow Skrifa's
+FreeType-style unscaled loader, and CFF uses read-fonts' charstring evaluator. Contours are caller-owned
+`[x0, y0, x1, y1, x2, y2]` quadratic curves in the glyph's paragraph space, scaled to its font size and placed at its
+origin with y down, so they line up with its ink box; they keep the source order and winding for nonzero filling, and
+blank glyphs return `[]`. TrueType outlines are exact, and each CFF cubic becomes four equal-parameter quadratics
+through Slug's shared split. The call throws for a glyph whose font was baked without outlines and after its callback
+returns. The first decode for a font copies its outline SFNT into the shaper's memory, released with the font's engine
+registration. Because that copy and the decode can grow Wasm memory, which expires a Wasm-backed borrow, the view copies
+its glyph records before its first decode and serves `glyphAt` from that copy afterward. Every integration's Text
+reaches the method through the shared `BorrowedGlyphLayout`.
+
+The decoder adds 64,887 raw bytes (24,702 gzip) to `text-shaper.wasm`; Skrifa's outline drawing measured 97 KB gzip in
+the same shaper and cannot be trimmed by feature. `font-baker.wasm` draws no outlines: the bake validator decodes every
+glyph with the runtime decoder, so a bake cannot ship an outline the runtime would refuse. Variation axes and a
+runtime-bake outline option are not implemented.
+
+Rust tests compare every glyph of all nine fixture faces, TrueType and CFF, segment for segment with Skrifa, as well as
+composites rewritten to use matched-point anchors and scaled offsets, and corrupted `glyf`, `loca`, and `CFF ` tables
+fail without panicking. The validator rejects an outline SFNT that is out of profile, misidentified, or undecodable.
+Three Text tests check every TrueType glyph's control box against the ink box the layout reports and every CFF on-curve
+point against it, decode a font-stack fallback glyph from its own font, grow Wasm memory inside a borrow against a
+negative control, and read identical outlines from Bitmap and Slug.
 
 ## Semantic queries
 

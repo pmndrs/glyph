@@ -1,5 +1,14 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-23
+
+- **Added optional glyph outlines to the core font** — `glyph bake --outlines` keeps the face's own `glyf`/`loca` or
+  `CFF ` table in `PMNDRS_font`, and a Text's `withGlyphs` view decodes any laid-out glyph with `outlineAt(index)` in the
+  text shaper through read-fonts, for a font of any raster format. Only an outlined bake writes `PMNDRS_font` version 1;
+  plain bakes stay version 0 and byte-identical, so no checked-in bake changed. See D-371 in
+  [the decision register](planning/decision-register.md), [the package reference](packages/glyph.md), and
+  [the extension](planning/extensions/PMNDRS_font/README.md).
+
 ## 2026-09-18
 
 - **Added tagged stable publishing alongside canaries** — Extended the existing npm publishing workflow so matching

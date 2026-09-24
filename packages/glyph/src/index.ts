@@ -193,6 +193,7 @@ export type {
 } from './font-face-transfer.js';
 
 export type { Font, FontMetrics, RasterDecodeFont } from './font.js';
+export type { GlyphOutlineContour, GlyphOutlineCurve } from './glyph-outline.js';
 
 export type { FontSlot, LocalGlyphId, RasterKey, Fingerprint } from './identity.js';
 // A technique stamps this in its own extension so a core font and its raster agree through one
