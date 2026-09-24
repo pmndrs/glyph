@@ -1,5 +1,13 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-24
+
+- **Renamed detached text copies to `split()`** — Replaced Three's `Text.breakApart()` with `Text.split()` while preserving
+  the frozen glyph/decorations tuple, committed-state requirement, source independence, and caller-owned disposal.
+  Updated typed and browser callers, diagnostics, and current API documentation. The
+  [archived migration](../skills/codemod/codemods/2026-09-24-text-split/instructions.md) includes tested transforms for
+  repository source and consumers of old or new declarations.
+
 ## 2026-09-18
 
 - **Added tagged stable publishing alongside canaries** — Extended the existing npm publishing workflow so matching

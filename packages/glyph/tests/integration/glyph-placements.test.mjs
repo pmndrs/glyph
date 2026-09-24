@@ -167,14 +167,14 @@ test('glyph flags decode through exported names rather than remembered indices',
   }
 });
 
-test('breakApart carries stable line and word metadata without presentation overrides', async (t) => {
+test('split carries stable line and word metadata without presentation overrides', async (t) => {
   const mounted = await mount(t, await loadFont(), 'one two three', {
     constraints: { width: { mode: 'exact', size: 60 } },
     layout: { wrap: 'word' },
   });
   let glyphs;
   try {
-    [glyphs] = mounted.node.breakApart();
+    [glyphs] = mounted.node.split();
     mounted.scene.add(glyphs);
     mounted.scene.updateMatrixWorld(true);
     assert.ok(glyphs.count > 0);
@@ -208,13 +208,13 @@ test('detached glyph keys survive movement-only reflow and change when text resh
   let resized;
   let reshaped;
   try {
-    [before] = mounted.node.breakApart();
+    [before] = mounted.node.split();
     const beforeKeys = Array.from({ length: before.count }, (_, index) => before.glyphAt(index)?.key);
     const beforeX = before.measurements.map((measurement) => measurement.originalMatrix.elements[12]);
 
     mounted.node.style = { fontSize: 32 };
     mounted.scene.updateMatrixWorld(true);
-    [resized] = mounted.node.breakApart();
+    [resized] = mounted.node.split();
     const resizedKeys = Array.from({ length: resized.count }, (_, index) => resized.glyphAt(index)?.key);
     assert.deepEqual(resizedKeys, beforeKeys, 'a font-size reflow moves the same glyph identities');
     assert.ok(
@@ -224,7 +224,7 @@ test('detached glyph keys survive movement-only reflow and change when text resh
 
     mounted.node.text = 'WXYZ';
     mounted.scene.updateMatrixWorld(true);
-    [reshaped] = mounted.node.breakApart();
+    [reshaped] = mounted.node.split();
     const reshapedKeys = new Set(Array.from({ length: reshaped.count }, (_, index) => reshaped.glyphAt(index)?.key));
     assert.equal(
       beforeKeys.filter((key) => reshapedKeys.has(key)).length,
@@ -246,10 +246,10 @@ test('commit state distinguishes unbound, pending, and committed paragraph state
   const node = three.createText({ font, style: { fontSize: 16 }, text: 'ready' });
   try {
     assert.deepEqual(node.commitState(), { status: 'unbound' });
-    assert.throws(() => node.breakApart(), /before its renderer state is committed/);
+    assert.throws(() => node.split(), /before its renderer state is committed/);
     scene.add(node);
     assert.equal(node.commitState().status, 'pending');
-    assert.throws(() => node.breakApart(), /before its renderer state is committed/);
+    assert.throws(() => node.split(), /before its renderer state is committed/);
     scene.updateMatrixWorld(true);
     const committed = node.commitState();
     assert.equal(committed.status, 'committed');

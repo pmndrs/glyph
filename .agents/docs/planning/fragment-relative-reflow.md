@@ -67,8 +67,8 @@ sources:
     resource: ../roadmap/roadmap.md
     title: Milestone 12 responsive flow-region and mixed-raster goals
 generated:
-  by: openai-codex/gpt-5.6
-  at: '2026-09-13T15:38:33Z'
+  by: openai-codex/gpt-6
+  at: '2026-09-24T20:41:15Z'
 ---
 
 # Fragment-relative retained reflow
@@ -646,7 +646,7 @@ Resolve hit tests as line -> physical fragment -> visual slice -> local cluster/
 built lazily for a queried line, but ordinary rendering and measurement must not allocate it.
 
 `withGlyphs(callback)` remains the zero-whole-copy inspection API. It composes an individual absolute result into the
-existing fixed Wasm scratch from slice placement plus local glyph data. `glyphs()` and `breakApart()` may explicitly
+existing fixed Wasm scratch from slice placement plus local glyph data. `glyphs()` and `split()` may explicitly
 materialize caller-owned arrays because the caller requested a full copy; they are not resize hot paths. Query results
 must remain synchronous, lifetime-bounded, and invalid after the callback.
 
@@ -661,7 +661,7 @@ count and order. Transform index `i` then applies to whichever glyph occupies in
 their overrides and newly appended indexes require new values. Core does not infer semantic continuity from glyph IDs,
 clusters, or source characters. An application that needs a physics body or authored object to survive arbitrary middle
 edits supplies and reconciles its own document-domain keys outside this positional API. Live deformation stays attached
-to the source `Text` lifecycle. `copyGlyphs()`/`breakApart()` remains the
+to the source `Text` lifecycle. `copyGlyphs()`/`split()` remains the
 complementary ownership boundary: it copies already-shaped glyphs into an independently owned object that no longer
 follows text shaping, layout, or topology updates. Presentation deformation does not feed line breaking or exclusions
 back into layout unless the application separately authors corresponding flow-region geometry.

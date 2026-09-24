@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:f9e79c1fe6223dc7a1b0926c068e9f6fb2578b820e19f5b2bb7a57443123d947'
+source_digest: 'sha256:de36a1d5d0f92abc5e5e3f64e566fc647c814b980f0a40a3885e0afb512ab4bd'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -223,7 +223,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-6
-  at: '2026-09-16T13:27:39Z'
+  at: '2026-09-24T20:41:15Z'
 ---
 
 # Package reference: `@pmndrs/glyph-benchmarks`
@@ -305,7 +305,7 @@ Their presentation transitions are application-owned consumers of the detached-c
 `captureBitmapGlyphPositions` and `createBitmapGlyphPositionTransition`, which combined identity matching and live-buffer
 overrides for Bitmap only. `techniques/shared/glyph-origin-transition.ts` now reads local matrices through
 `measureGlyphs()`, refreshes the source world matrix once at that explicit boundary, composes committed world matrices,
-updates the source layout, calls `breakApart()` for one independently rendered `Glyphs` branch, hides
+updates the source layout, calls `split()` for one independently rendered `Glyphs` branch, hides
 the live source, updates the detached root once per frame, converts each interpolated world matrix through a hoisted
 world inverse, and writes complete position/quaternion/scale matrices through `setMatrixAt()`. It matches
 records by the package-owned `GlyphKey`, disposes the copy at settle, and restores source visibility. No benchmark keeps a

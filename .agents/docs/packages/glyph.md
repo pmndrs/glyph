@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:48d7c834b3535286bbe36038c945134846c0cb3771f7380160f298746d669c54'
+source_digest: 'sha256:13aca77be7acc1db5f581141bd3c5852a8f46073fc0b2b9fd66aadd18ef34442'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -118,7 +118,7 @@ sources:
     title: Pinned msdfgen CLI scanline and error-correction configuration
 generated:
   by: openai-codex/gpt-6
-  at: '2026-09-16T22:19:41Z'
+  at: '2026-09-24T20:41:15Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -469,7 +469,7 @@ thenables, engine reentry, and retained-text mutation are rejected, and the inde
 Attached live deformation is accepted as the future D-356 design but is not shipped by either adapter. The current
 `Text` surface has no `transformGlyphs()` or `clearGlyphTransforms()` methods and allocates no attached matrix sidecar.
 A separately scoped follow-up must prove coordinated Three and TypeGPU storage, lifecycle, interaction geometry, and
-performance before exposing that API. Existing detached `Glyphs` transforms and `copyGlyphs()`/`breakApart()` remain
+performance before exposing that API. Existing detached `Glyphs` transforms and `copyGlyphs()`/`split()` remain
 the owned, already-shaped manipulation path and intentionally stop following the source `Text`.
 
 The FontFace source cache coalesces canonical-equivalent locators before I/O and converges different locators onto one
@@ -810,12 +810,16 @@ The semantic values preserve information useful to callers:
 
 ## Root-assisted detached glyph copies
 
-Public `Text.breakApart()` requests committed glyph and decoration subsets through its owning root. Rust compacts the
+`Text.split()` replaces `Text.breakApart()` without a deprecated alias. Existing callers can use the
+[archived migration](../../skills/codemod/codemods/2026-09-24-text-split/instructions.md).
+The rename preserves the tuple result, committed-state requirement, source independence, and disposal ownership.
+
+Public `Text.split()` requests committed glyph and decoration subsets through its owning root. Rust compacts the
 selected paragraph records through the installed Codec into complete checkpoints; it does not expose buffer offsets or
 private planning objects for each renderer to reconstruct. Root services synchronously decode each detached copy into its
 destination renderer. The query does not advance the source root's revision or publication generation.
 
-Three's `Text.breakApart()` uses both planner requests and returns the frozen tuple
+Three's `Text.split()` uses both planner requests and returns the frozen tuple
 `[Glyphs, Decorations | undefined]`. It preserves the source transform, Codec-defined batching, fallback raster formats,
 shared immutable atlas/page leases, and supplied geometry while adding one full affine matrix per drawable record. Its
 local methods mirror `InstancedMesh`; world methods bridge physics state to root-relative storage. Bulk world-space
@@ -828,7 +832,7 @@ stays live and may continue publishing while detached objects remain unchanged.
 Decoration passes are not glyph records and retain an independent object and lifetime; tuple slot two is `undefined`
 when the committed paragraph has no decoration draws. Three coordinates both roots' draw ranges so underline/overline
 remain below glyphs and line-through remains above them without assigning a group-level render order. If either import
-fails, `breakApart()` releases everything it created before throwing. Neither path reconstructs child `Text` objects,
+fails, `split()` releases everything it created before throwing. Neither path reconstructs child `Text` objects,
 installs mutable presentation overrides, creates physics bodies, or infers collision shapes. The detailed ownership and
 evidence contract is in
 [Planner-assisted detached glyph slices](../planning/detached-glyph-slice.md).
