@@ -5,7 +5,7 @@ description: 'Glass letters, a robot, and a black-hole finale over a Slug icon l
 resource: ../../../apps/hero
 workspace_package: '@pmndrs/glyph-hero'
 documentation_type: reference
-source_digest: 'sha256:08ecca52eecc94487d30887a9fcdc5782b65617f09e25d8dfcd944956db2624e'
+source_digest: 'sha256:06ba5e32f2df45e2a9557267ccb2c621ba8a1954f506728f61f17a093230ffc5'
 tags: [package, example, react-three-fiber, webgpu, slug, vite, koota, web-audio]
 sources:
   - id: hero-policy
@@ -750,13 +750,19 @@ lift and the finale redraw the captures every frame, the performance check's GPU
 run to the next, from 15 before; run-to-run spread on this machine is about a millisecond at rest and more in
 motion, so a claim needs more than one run.
 
-With world-backed keyboard input, two complete 1280×720 replays on Apple Metal with Chromium 149 averaged 60.01 fps
+An earlier check with world-backed keyboard input and two complete 1280×720 replays on Apple Metal with Chromium 149
+averaged 60.01 fps
 across 1,703 frames after 3.20 seconds of preparation. No late shader programs, pipelines, meshes, assets, or long
 tasks were observed. Render intervals were 17.4 ms at p95 and 25.0 ms worst, with no intervals over 25 ms.
 CPU submission time was 4.4 ms at p95, and browser GPU queue completion was 8.9 ms at p95.
 Earlier SoA runs on this host averaged 58.38 and 58.46 fps, while the preceding AoS commit (`64fcb3bd`) averaged
 58.00 fps. These separate runs show variable pacing and do not establish a speedup from the domain extraction.
 They verify resource preparation but do not measure delivery through a screen recorder or guarantee steady 60 fps.
+
+`hero:performance` now drives the sequence, Play through rain fed to its hole and finale, and a replay. It reports
+per-stage frame intervals, CPU and GPU times, scheduler jobs, and every hitch. One 1280×720 Apple Metal run covered
+924 sequence, 1,827 play, and 911 replay frames with no late programs, pipelines, meshes, or assets. It recorded
+two replay intervals above 34 ms and one 57 ms long task; the probe reports these rather than claiming steady pacing.
 
 The full hero package check passes, including seven numerical tests, two timeline tests, two mounted-view lifecycle tests, all five font bake checks, and the production
 build. WebGPU checks cover title lift and landing, both retained typing lines, the black-hole finale, and replay.
