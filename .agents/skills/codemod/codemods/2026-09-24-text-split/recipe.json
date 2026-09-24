@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-09-24-text-split",
+  "created": "2026-09-24",
+  "package": "@pmndrs/glyph",
+  "from": "canaries exposing Text.breakApart, including main at 5eccfac5",
+  "to": "canaries exposing Text.split",
+  "summary": "Rename Three Text.breakApart() to Text.split() without changing detached-copy ownership.",
+  "instructions": "./instructions.md",
+  "transform": "./transform.mjs",
+  "changes": [
+    {
+      "kind": "symbol-rename",
+      "from": "Text.breakApart",
+      "to": "Text.split",
+      "automatic": true
+    },
+    {
+      "kind": "manual",
+      "from": "untyped or structural breakApart wrappers",
+      "to": "split wrappers with unchanged detached-copy semantics",
+      "automatic": false
+    }
+  ],
+  "verification": [
+    "mise exec -- pnpm scripts run glyph:split:codemod-test",
+    "mise exec -- pnpm scripts run glyph:split:migrate",
+    "mise exec -- pnpm --filter @pmndrs/glyph check",
+    "mise exec -- pnpm scripts run docs:check"
+  ]
+}

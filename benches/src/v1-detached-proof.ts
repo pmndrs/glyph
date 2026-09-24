@@ -6,10 +6,10 @@ export interface DetachedRasterParity {
   readonly detachedSameFrameWriteMatches: boolean;
 }
 
-interface BreakableText {
+interface SplittableText {
   readonly parent: THREE.Object3D | null;
   visible: boolean;
-  breakApart(): readonly [Glyphs, Decorations | undefined];
+  split(): readonly [Glyphs, Decorations | undefined];
 }
 
 /** Pixel-compares the source, first detached frame, and an immediate full-matrix write. */
@@ -18,7 +18,7 @@ export async function proveDetachedRasterParity(
   scene: THREE.Scene,
   camera: THREE.Camera,
   target: THREE.RenderTarget,
-  text: BreakableText,
+  text: SplittableText,
 ): Promise<DetachedRasterParity> {
   const sourcePixels = await renderer.readRenderTargetPixelsAsync(target, 0, 0, target.width, target.height);
   const sourceVisible = text.visible;
@@ -27,7 +27,7 @@ export async function proveDetachedRasterParity(
   let detached: Glyphs | undefined;
   let decorations: Decorations | undefined;
   try {
-    [detached, decorations] = text.breakApart();
+    [detached, decorations] = text.split();
     parent.add(detached);
     if (decorations !== undefined) parent.add(decorations);
     text.visible = false;

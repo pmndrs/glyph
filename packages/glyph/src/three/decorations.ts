@@ -10,7 +10,7 @@ interface DetachedTextSource extends THREE.Object3D {
   readonly pixelSnapping: boolean;
 }
 
-/** @internal Constructed only by `Text.breakApart()`. */
+/** @internal Constructed only by `Text.split()`. */
 interface DecorationsOptions {
   readonly source: DetachedTextSource;
   readonly copy: (renderer: ThreeCommandBufferRenderer, boundary: ThreePublicationBoundary) => GlyphCopy<void>;
@@ -69,7 +69,7 @@ export class Decorations extends THREE.Object3D {
   private constructor(token: typeof decorationsConstructorToken, options: DecorationsOptions) {
     super();
     if (token !== decorationsConstructorToken) {
-      throw new TypeError('Decorations objects are created by Text.breakApart()');
+      throw new TypeError('Decorations objects are created by Text.split()');
     }
     let target: ThreeCommandBufferRenderer | undefined;
     let copy: GlyphCopy<void> | undefined;

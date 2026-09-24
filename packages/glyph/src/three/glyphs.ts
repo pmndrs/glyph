@@ -34,7 +34,7 @@ export function localToWorldMatrix(
   return target.copy(glyphsMatrixWorld).multiply(matrixLocal);
 }
 
-/** @internal Constructed only by `Text.breakApart()`. */
+/** @internal Constructed only by `Text.split()`. */
 interface GlyphsOptions {
   readonly source: DetachedTextSource;
   readonly placements: GlyphPlacements;
@@ -89,7 +89,7 @@ interface DetachedGlyphRecordAddress {
   readonly index: number;
 }
 
-/** A detached render-plan branch from `Text.breakApart()`: imports the planner's compacted publication into the normal renderer without child Text objects; per-glyph matrices are Three-side only and never reach the live paragraph. */
+/** A detached render-plan branch from `Text.split()`: imports the planner's compacted publication into the normal renderer without child Text objects; per-glyph matrices are Three-side only and never reach the live paragraph. */
 export class Glyphs extends THREE.Object3D {
   readonly #target: ThreeCommandBufferRenderer;
   readonly #copy: GlyphCopy<void>;
@@ -115,7 +115,7 @@ export class Glyphs extends THREE.Object3D {
 
   private constructor(token: typeof glyphsConstructorToken, options: GlyphsOptions) {
     super();
-    if (token !== glyphsConstructorToken) throw new TypeError('Glyphs objects are created by Text.breakApart()');
+    if (token !== glyphsConstructorToken) throw new TypeError('Glyphs objects are created by Text.split()');
     let target: ThreeCommandBufferRenderer | undefined;
     let copy: GlyphCopy<void> | undefined;
     try {
