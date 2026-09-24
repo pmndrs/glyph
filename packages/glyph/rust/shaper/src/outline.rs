@@ -4,8 +4,9 @@
 //! TrueType glyphs follow Skrifa's FreeType-style unscaled loader, so both draw the same segments:
 //! 26.6 fixed-point points, 16.16 fixed-point composite transforms applied before matched-point
 //! anchors, and FreeType's rules for off-curve contour starts. Like FreeType, and unlike Skrifa, an
-//! anchor that names a point not yet placed is refused. Composites nest at most 32 levels deep. CFF
-//! glyphs use read-fonts' charstring evaluator. [`draw_glyph`] emits the raw segments, and
+//! anchor that names a point not yet placed is refused. A glyph nests composites at most 32 levels
+//! deep and places at most 65,535 components and 65,535 points. CFF glyphs use read-fonts'
+//! charstring evaluator. [`draw_glyph`] emits the raw segments, and
 //! [`GlyphOutline`] turns them into the closed quadratic contours `outlineAt()` returns.
 
 use alloc::vec::Vec;
@@ -59,6 +60,7 @@ pub fn draw_glyph(
             points: Vec::new(),
             flags: Vec::new(),
             contour_last_points: Vec::new(),
+            components: 0,
         };
         loader.load(glyph_id, 0)?;
         return loader.to_path(pen);
@@ -86,11 +88,13 @@ struct GlyfLoader<'a> {
     points: Vec<FontPoint<F26Dot6>>,
     flags: Vec<PointFlags>,
     contour_last_points: Vec<usize>,
+    components: usize,
 }
 
 impl GlyfLoader<'_> {
     fn load(&mut self, glyph_id: GlyphId, depth: usize) -> Result<(), OutlineError> {
-        if depth > 32 {
+        self.components += 1;
+        if depth > 32 || self.components > 0xFFFF {
             return Err(OutlineError::InvalidGlyph);
         }
         match self
@@ -108,6 +112,9 @@ impl GlyfLoader<'_> {
         let start = self.points.len();
         let count = glyph.num_points();
         let ends = glyph.end_pts_of_contours();
+        if start + count > 0xFFFF {
+            return Err(OutlineError::InvalidGlyph);
+        }
         self.points
             .try_reserve(count)
             .map_err(|_| OutlineError::OutOfMemory)?;
