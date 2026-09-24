@@ -200,3 +200,74 @@ fn corrupted_outline_tables_fail_or_draw_without_panicking() {
         }
     }
 }
+
+fn nested_composites(leaf: &[u8], depth: u16) -> Vec<u8> {
+    let mut glyf = leaf.to_vec();
+    let mut loca = vec![0, glyf.len() as u32];
+    for glyph_id in 1..=depth {
+        glyf.extend_from_slice(&(-1_i16).to_be_bytes());
+        glyf.extend_from_slice(&[0; 8]);
+        for flags in [0x0022_u16, 0x0002] {
+            glyf.extend_from_slice(&flags.to_be_bytes());
+            glyf.extend_from_slice(&(glyph_id - 1).to_be_bytes());
+            glyf.extend_from_slice(&[0, 0]);
+        }
+        loca.push(glyf.len() as u32);
+    }
+    let mut head = [0; 54];
+    head[18..20].copy_from_slice(&1000_u16.to_be_bytes());
+    head[50..52].copy_from_slice(&1_u16.to_be_bytes());
+    let mut maxp = 0x5000_u32.to_be_bytes().to_vec();
+    maxp.extend_from_slice(&(depth + 1).to_be_bytes());
+    let tables: [(&[u8; 4], Vec<u8>); 4] = [
+        (b"glyf", glyf),
+        (b"head", head.to_vec()),
+        (
+            b"loca",
+            loca.iter()
+                .flat_map(|offset| offset.to_be_bytes())
+                .collect(),
+        ),
+        (b"maxp", maxp),
+    ];
+    let mut font = 0x0001_0000_u32.to_be_bytes().to_vec();
+    font.extend_from_slice(&[0, 4, 0, 0, 0, 0, 0, 0]);
+    let mut offset = 12 + 16 * tables.len();
+    for (tag, data) in &tables {
+        font.extend_from_slice(*tag);
+        font.extend_from_slice(&[0; 4]);
+        font.extend_from_slice(&(offset as u32).to_be_bytes());
+        font.extend_from_slice(&(data.len() as u32).to_be_bytes());
+        offset += data.len().next_multiple_of(4);
+    }
+    for (_, data) in &tables {
+        font.extend_from_slice(data);
+        font.resize(font.len().next_multiple_of(4), 0);
+    }
+    font
+}
+
+#[test]
+fn composites_that_multiply_their_components_are_refused() {
+    let triangle = [
+        0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 1, 1, 1, 0, 0, 0, 100, 255, 206, 0, 0, 0, 0, 0,
+        100,
+    ];
+    let mut segments = Vec::new();
+    draw_glyph(&nested_composites(&triangle, 4), 4, &mut segments).expect("16 triangles");
+    let closes = segments
+        .iter()
+        .filter(|segment| matches!(segment, PathElement::Close))
+        .count();
+    assert_eq!(closes, 16);
+    assert_eq!(
+        draw_glyph(&nested_composites(&triangle, 15), 15, &mut Vec::new()),
+        Err(OutlineError::InvalidGlyph),
+        "98,304 points"
+    );
+    assert_eq!(
+        draw_glyph(&nested_composites(&[], 30), 30, &mut Vec::new()),
+        Err(OutlineError::InvalidGlyph),
+        "a billion components"
+    );
+}
