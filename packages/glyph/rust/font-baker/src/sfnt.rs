@@ -158,7 +158,7 @@ pub(crate) fn build_shaping_payload(
         strikeout_size: os2.y_strikeout_size(),
     };
 
-    let (sfnt, tables) = rebuild_sfnt(&font)?;
+    let (sfnt, tables) = write_sfnt(&font, REQUIRED_TABLES.into_iter().chain(OPTIONAL_TABLES))?;
     let (extents, extents_availability) = collect_extents(&font, glyph_count)?;
     let shaping_fingerprint = shaping_fingerprint(&sfnt, &extents, &extents_availability)?;
     let compressed = compressed_lengths(&sfnt)?;
@@ -213,10 +213,12 @@ fn reject_tables(font: &FontRef<'_>, tags: &[Tag], code: BakeErrorCode) -> Resul
     Ok(())
 }
 
-fn rebuild_sfnt(font: &FontRef<'_>) -> Result<(Vec<u8>, Vec<TablePayloadReport>), BakeError> {
-    let mut tables = REQUIRED_TABLES
+pub(crate) fn write_sfnt(
+    font: &FontRef<'_>,
+    tags: impl IntoIterator<Item = Tag>,
+) -> Result<(Vec<u8>, Vec<TablePayloadReport>), BakeError> {
+    let mut tables = tags
         .into_iter()
-        .chain(OPTIONAL_TABLES)
         .filter_map(|tag| font.table_data(tag).map(|data| (tag, data.as_bytes())))
         .collect::<Vec<_>>();
     tables.sort_unstable_by_key(|(tag, _)| tag.to_be_bytes());

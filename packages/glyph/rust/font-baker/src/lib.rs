@@ -10,6 +10,7 @@ extern crate alloc as std;
 mod abi_contract;
 mod error;
 mod glb;
+mod outline;
 mod report;
 mod sfnt;
 
@@ -22,8 +23,8 @@ mod wasm;
 pub use error::{BakeError, BakeErrorCode};
 pub use report::{
     BakeArtifactV0, BakeDescriptorV0, BakeReportV0, BakeResultV0, BakeWarning,
-    ContainerPayloadReport, FontMetricsV0, ProvenanceV0, ShapingPayloadReportV0,
-    TablePayloadReport, TransportPayloadReport,
+    ContainerPayloadReport, FontMetricsV0, OutlinePayloadReportV0, ProvenanceV0,
+    ShapingPayloadReportV0, TablePayloadReport, TransportPayloadReport,
 };
 #[cfg(feature = "subsetting")]
 pub use source_font::{
@@ -47,8 +48,14 @@ pub fn bake_font(source: &[u8], descriptor: BakeDescriptorV0) -> Result<BakeResu
     let source_fingerprint = fingerprint128(source, SOURCE_FINGERPRINT_V0);
     let shaping = sfnt::build_shaping_payload(source, descriptor.font_face_index)?;
     let shaping_report = shaping.report.clone();
+    let outlines = descriptor
+        .outlines
+        .then(|| outline::build_outline_payload(source, descriptor.font_face_index))
+        .transpose()?;
+    let outline_report = outlines.as_ref().map(|outlines| outlines.report.clone());
     let artifact = glb::build_font_glb(
         &shaping,
+        outlines.as_ref(),
         ProvenanceV0 {
             source_fingerprint,
             font_face_index: descriptor.font_face_index,
@@ -76,6 +83,7 @@ pub fn bake_font(source: &[u8], descriptor: BakeDescriptorV0) -> Result<BakeResu
             },
             shared: report::SharedPayloadReport {
                 shaping: shaping_report,
+                outlines: outline_report,
             },
             rasters: Vec::new(),
             containers: vec![ContainerPayloadReport {
