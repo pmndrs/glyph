@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-09-24-read-glyphs",
+  "created": "2026-09-24",
+  "package": "@pmndrs/glyph",
+  "from": "canaries exposing Text.withGlyphs, including main at 5eccfac5",
+  "to": "canaries exposing Text.readGlyphs",
+  "summary": "Rename the synchronous borrowed glyph read to readGlyphs without changing its callback contract.",
+  "instructions": "./instructions.md",
+  "transform": "./transform.mjs",
+  "changes": [
+    { "kind": "symbol-rename", "from": "withGlyphs", "to": "readGlyphs", "automatic": true },
+    { "kind": "symbol-rename", "from": "_withGlyphs", "to": "_readGlyphs", "automatic": true },
+    {
+      "kind": "manual",
+      "from": "dynamic or untyped withGlyphs accesses",
+      "to": "readGlyphs accesses",
+      "automatic": false
+    }
+  ],
+  "verification": [
+    "mise exec -- pnpm scripts run glyph:read-glyphs:codemod-test",
+    "mise exec -- pnpm --filter @pmndrs/glyph check",
+    "mise exec -- pnpm scripts run docs:check"
+  ]
+}

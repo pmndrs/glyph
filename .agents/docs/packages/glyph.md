@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:48d7c834b3535286bbe36038c945134846c0cb3771f7380160f298746d669c54'
+source_digest: 'sha256:f683f07acca8406465d2723fd6491c1cbafa8657f7a6c3471bbfc90a0a889390'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -118,7 +118,7 @@ sources:
     title: Pinned msdfgen CLI scanline and error-correction configuration
 generated:
   by: openai-codex/gpt-6
-  at: '2026-09-16T22:19:41Z'
+  at: '2026-09-24T20:29:45Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -460,7 +460,11 @@ controller's revision-aware semantic cache without accumulating removal rows, wh
 single parked controller. Scene publication also evicts that slot. This bound permits at most one dormant core
 inspection cache; `Text.glyphs()` still returns freshly copied, caller-owned columns on every call.
 
-`Text.withGlyphs(callback)` is the shared core, Three, and TypeGPU demand-read alternative for callers that need only a
+`Text.readGlyphs(callback)` replaces `withGlyphs` without a compatibility alias. The
+[archived migration](../../skills/codemod/codemods/2026-09-24-read-glyphs/instructions.md) renames typed consumers while
+preserving callback return values, synchronous exceptions, and view lifetime.
+
+`Text.readGlyphs(callback)` is the shared core, Three, and TypeGPU demand-read alternative for callers that need only a
 few glyphs. Its fixed descriptor serializes no per-glyph semantic table; each indexed access copies one retained Rust
 glyph into fixed Wasm scratch, then returns one frozen scalar object in O(selected) work. Full `glyphs()` remains the
 bulk caller-owned copy. The callback must finish synchronously:
@@ -760,7 +764,7 @@ Publication emits no semantic readback by default. A renderer that needs current
 sidecar on the same update; core copies it into the retained text cache before target acceptance, so plan publication and
 bounds cost one Wasm hop. Every semantic mutation invalidates that cache immediately. `Text.measure()` then answers from
 the cache or explicitly measures current desired state, while `Text.glyphs()` similarly requests the positioned
-inspection lane. `Text.withGlyphs()` prepares that same state without emitting the full inspection table and copies only
+inspection lane. `Text.readGlyphs()` prepares that same state without emitting the full inspection table and copies only
 explicitly indexed records. None of these queries traverses matrices, realizes renderer resources, flips publication
 slots, or burns a revision.
 

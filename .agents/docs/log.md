@@ -1,5 +1,13 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-24
+
+- **Renamed borrowed glyph reads to `readGlyphs`** — Updated the shared controller, Three and TypeGPU surfaces, and
+  repository callers from `withGlyphs`. Synchronous callback results, exceptions, selective reads, and expiring views
+  retain their behavior. The [migration recipe](../skills/codemod/codemods/2026-09-24-read-glyphs/instructions.md)
+  covers typed consumers; the package benchmark adapts older canaries outside timed work. See the
+  [package reference](packages/glyph.md).
+
 ## 2026-09-18
 
 - **Added tagged stable publishing alongside canaries** — Extended the existing npm publishing workflow so matching
