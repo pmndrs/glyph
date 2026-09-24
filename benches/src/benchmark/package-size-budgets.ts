@@ -26,7 +26,7 @@ export const packageSizeBudgets = {
   },
   'font-validator-js': {
     // Decoding every baked glyph outline with the text shaper (D-371) brings its bindings into the validator graph:
-    // 757,386 raw / 607,406 minified / 144,479 gzip / 118,688 Brotli, with the shaper Wasm reported as its own entry.
+    // 757,428 raw / 607,448 minified / 144,499 gzip / 118,566 Brotli, with the shaper Wasm reported as its own entry.
     // Keep a small cross-host compression margin without pretending the validator belongs to the runtime closure.
     rawBytes: 765_000,
     minifiedBytes: 614_000,
@@ -49,8 +49,8 @@ export const packageSizeBudgets = {
   },
   // Complete Rust shaping, layout, Codec execution, and command publication. The ceiling keeps less than one percent
   // headroom plus bounded cross-host compression variance; feature attribution lives in the decision log.
-  // With its read-fonts glyph outline decoder (D-371) the shaper measures 1,427,240 raw / 525,413 gzip /
-  // 411,200 Brotli.
+  // With its read-fonts glyph outline decoder (D-371) the shaper measures 1,427,309 raw / 525,388 gzip /
+  // 410,913 Brotli.
   'text-shaper-wasm': {
     rawBytes: 1_440_000,
     minifiedBytes: 1_440_000,
@@ -65,8 +65,8 @@ export const packageSizeBudgets = {
     brotliBytes: 113_000,
   },
   // The React adapter includes Glyph's root and Three integration while React, R3F, and Three remain consumer peers.
-  // With outline decoding in the borrowed glyph view (D-371) the adapter measures 549,167 raw / 536,209 minified /
-  // 134,636 gzip / 111,048 Brotli.
+  // With outline decoding in the borrowed glyph view (D-371) the adapter measures 548,625 raw / 535,671 minified /
+  // 134,496 gzip / 110,881 Brotli.
   'react-runtime-js': {
     rawBytes: 554_000,
     minifiedBytes: 541_000,
@@ -74,8 +74,8 @@ export const packageSizeBudgets = {
     brotliBytes: 112_000,
   },
   // The Vue adapter includes Glyph's root and Three integration while Vue, Tres, and Three remain consumer peers.
-  // With outline decoding in the borrowed glyph view (D-371) the surface measures 546,971 raw / 534,691 minified /
-  // 134,242 gzip / 110,596 Brotli.
+  // With outline decoding in the borrowed glyph view (D-371) the surface measures 546,429 raw / 534,153 minified /
+  // 134,125 gzip / 110,367 Brotli.
   'vue-runtime-js': {
     rawBytes: 552_000,
     minifiedBytes: 540_000,

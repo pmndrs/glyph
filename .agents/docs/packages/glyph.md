@@ -784,7 +784,7 @@ released with the font's engine registration. That copy and the decode can grow 
 reads each glyph record from the current memory, so growth does not expire it. Every integration's Text reaches the
 method through the shared `BorrowedGlyphLayout`.
 
-The decoder adds 64,887 raw bytes (24,702 gzip) to `text-shaper.wasm`; Skrifa's outline drawing measured 97 KB gzip in
+The decoder adds 64,956 raw bytes (24,677 gzip) to `text-shaper.wasm`; Skrifa's outline drawing measured 97 KB gzip in
 the same shaper and cannot be trimmed by feature. `font-baker.wasm` draws no outlines: the bake validator decodes every
 glyph with the runtime decoder, so a bake cannot ship an outline the runtime would refuse. Variation axes and a
 runtime-bake outline option are not implemented.
