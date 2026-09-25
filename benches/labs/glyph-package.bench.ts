@@ -390,3 +390,146 @@ group('retained batching at 1,000 labels @publication', () => {
     root.dispose();
   });
 });
+
+// These are same-call comparisons: older artifacts may return stale/absent intermediate reads.
+// Every iteration includes the final traversal; the untimed snapshot proves fresh committed output.
+const publicationReads = [
+  ['measureGlyphs', (label: ReturnType<typeof createLabels>['labels'][number]) => label.measureGlyphs()?.length ?? 0],
+  ['caretAt', (label: ReturnType<typeof createLabels>['labels'][number]) => label.caretAt(30, 0)?.offset ?? 0],
+  [
+    'selectionRects',
+    (label: ReturnType<typeof createLabels>['labels'][number]) => label.selectionRects(0, 4)?.length ?? 0,
+  ],
+] as const;
+
+for (const count of [100, 1_000]) {
+  group(`public layout reads at ${String(count)} labels @read-publication`, () => {
+    for (const [name, read] of publicationReads) {
+      for (const schedule of ['unchanged', 'writes then reads', 'alternating writes and reads'] as const) {
+        bench(`${name}: ${schedule}`, function* () {
+          const created = createLabels(count);
+          try {
+            for (const label of created.labels) label.text = schedule === 'unchanged' ? 'WWWWWWWWWWWW' : 'iiiiiiii';
+            created.scene.updateMatrixWorld(true);
+            let alternate = false;
+            yield {
+              bench: () => {
+                alternate = !alternate;
+                const text = alternate ? 'WWWWWWWWWWWW' : 'iiiiiiii';
+                let observed = 0;
+                if (schedule === 'writes then reads') {
+                  for (const label of created.labels) label.text = text;
+                }
+                for (const label of created.labels) {
+                  if (schedule === 'alternating writes and reads') label.text = text;
+                  observed += read(label);
+                }
+                // Include deferred work on both artifacts, even when a read did not publish it.
+                if (schedule !== 'unchanged') created.scene.updateMatrixWorld(true);
+                if (created.textGroup.error !== undefined) throw created.textGroup.error;
+                return observed;
+              },
+              snapshot: () => committedReadSnapshot(created, count),
+            };
+          } finally {
+            disposeLabels(created);
+          }
+        });
+      }
+    }
+
+    bench('writes then traversal (no layout reads)', function* () {
+      const created = createLabels(count);
+      try {
+        let alternate = false;
+        yield {
+          bench: () => {
+            alternate = !alternate;
+            for (const label of created.labels) label.text = alternate ? 'WWWWWWWWWWWW' : 'iiiiiiii';
+            created.scene.updateMatrixWorld(true);
+            if (created.textGroup.error !== undefined) throw created.textGroup.error;
+            return created.textGroup.textCount;
+          },
+          snapshot: () => committedReadSnapshot(created, count),
+        };
+      } finally {
+        disposeLabels(created);
+      }
+    });
+
+    for (const schedule of ['mount all then split', 'mount and split each'] as const) {
+      bench(schedule, function* () {
+        // Detect the public behavior outside timing; do not use exception-driven retries in the benchmark.
+        const probe = createLabels(1);
+        let commitsOnRead: boolean;
+        try {
+          probe.labels[0]!.text = 'WWWWWWWWWWWW';
+          probe.labels[0]!.measureGlyphs();
+          commitsOnRead = probe.labels[0]!.commitState().status === 'committed';
+        } finally {
+          disposeLabels(probe);
+        }
+        const copied = yield () => {
+          const root = glyph.handle(
+            `labs:mount:${String(nextHandle++)}`,
+            defineThreeConfig({ capacity: { size: count * 16, policy: 'grow' } }),
+          );
+          const textGroup = root.createTextGroup();
+          const scene = new THREE.Scene();
+          const labels: ReturnType<typeof createLabels>['labels'] = [];
+          let glyphCount = 0;
+          try {
+            scene.add(textGroup);
+            const split = (label: (typeof labels)[number]) => {
+              const [copy, decorations] = label.breakApart();
+              try {
+                glyphCount += copy.count;
+              } finally {
+                copy.dispose();
+                decorations?.dispose();
+              }
+            };
+            for (let index = 0; index < count; index += 1) {
+              const label = root.createText({ font, text: 'WWWWWWWWWWWW', style: { fontSize: 16 } });
+              labels.push(label);
+              textGroup.add(label);
+              if (schedule === 'mount and split each') {
+                if (!commitsOnRead) scene.updateMatrixWorld(true);
+                split(label);
+              }
+            }
+            if (schedule === 'mount all then split') {
+              if (!commitsOnRead) scene.updateMatrixWorld(true);
+              for (const label of labels) split(label);
+            }
+            scene.updateMatrixWorld(true);
+            if (textGroup.error !== undefined) throw textGroup.error;
+            return glyphCount;
+          } finally {
+            textGroup.dispose();
+            for (const label of labels) label.dispose();
+            root.dispose();
+          }
+        };
+        assert.equal(copied, count * 12);
+        return copied;
+      });
+    }
+  });
+}
+
+function committedReadSnapshot(created: ReturnType<typeof createLabels>, count: number) {
+  let glyphs = 0;
+  let endX = 0;
+  let committed = 0;
+  for (const label of created.labels) {
+    if (label.commitState().status === 'committed') committed += 1;
+    const measurements = label.measureGlyphs();
+    glyphs += measurements?.length ?? 0;
+    endX += measurements?.at(-1)?.shapedOrigin.x ?? 0;
+  }
+  assert.equal(glyphs, count * 12);
+  assert.equal(committed, count);
+  assert(endX > 0, 'fresh output must contain positioned glyphs');
+  return { glyphs, endX, committed };
+}

@@ -1,7 +1,7 @@
 /* @workflow {
   "name": "benchmark:labs-package",
   "summary": "Benchmark an installed Glyph package artifact with pmndrs/labs and optionally compare it with a baseline artifact.",
-  "requirements": "Network access for registry specs, or one or two packed @pmndrs/glyph .tgz artifacts. Never builds workspace source.",
+  "requirements": "Network access for registry specs, or one or two packed @pmndrs/glyph .tgz artifacts. Never builds workspace source. Optional --filter selects a Labs name or tag (for example @read-publication).",
   "writes": "Ignored Labs results and an artifact manifest under --output (default .cache/labs-package)."
 } */
 import { createHash } from 'node:crypto';
@@ -15,6 +15,7 @@ interface Options {
   readonly baseline?: string;
   readonly blocks: number;
   readonly candidate: string;
+  readonly filter?: string;
   readonly output: string;
 }
 
@@ -41,8 +42,8 @@ try {
     options.baseline === undefined ? undefined : await installArtifact('baseline', options.baseline, temporaryRoot);
   const candidate = await installArtifact('candidate', options.candidate, temporaryRoot);
 
-  if (baseline !== undefined) await runLabs('baseline', baseline.packageRoot, options.blocks);
-  await runLabs('candidate', candidate.packageRoot, options.blocks);
+  if (baseline !== undefined) await runLabs('baseline', baseline.packageRoot, options.blocks, options.filter);
+  await runLabs('candidate', candidate.packageRoot, options.blocks, options.filter);
 
   let comparison: string | undefined;
   if (baseline !== undefined) {
@@ -67,6 +68,7 @@ try {
         generatedAt: new Date().toISOString(),
         labsVersion: labsPackage.version,
         blocks: options.blocks,
+        filter: options.filter,
         baseline: baseline === undefined ? undefined : artifactIdentity(baseline),
         candidate: artifactIdentity(candidate),
         comparison: comparison === undefined ? 'not requested' : 'comparison.txt',
@@ -96,6 +98,7 @@ async function parseOptions(argv: readonly string[]): Promise<Options> {
     candidate: values.get('candidate') ?? '@pmndrs/glyph@canary',
     blocks,
     output: values.get('output') ?? '.cache/labs-package',
+    ...(values.has('filter') ? { filter: values.get('filter')! } : {}),
     ...(values.has('baseline') ? { baseline: values.get('baseline')! } : {}),
   };
 }
@@ -167,10 +170,16 @@ async function resolveRegistryVersion(requested: string): Promise<string> {
   return version;
 }
 
-async function runLabs(name: string, packageRoot: string, blocks: number): Promise<void> {
-  await run(labsExecutable, ['--name', name, '--force', '--blocks', String(blocks)], benchesRoot, false, {
-    GLYPH_LABS_PACKAGE_ROOT: packageRoot,
-  });
+async function runLabs(name: string, packageRoot: string, blocks: number, filter?: string): Promise<void> {
+  await run(
+    labsExecutable,
+    ['--name', name, '--force', '--blocks', String(blocks), ...(filter === undefined ? [] : [filter])],
+    benchesRoot,
+    false,
+    {
+      GLYPH_LABS_PACKAGE_ROOT: packageRoot,
+    },
+  );
 }
 
 async function preserveInstall(artifact: InstalledArtifact, name: string, destination: string): Promise<void> {

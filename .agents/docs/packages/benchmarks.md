@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:f9e79c1fe6223dc7a1b0926c068e9f6fb2578b820e19f5b2bb7a57443123d947'
+source_digest: 'sha256:ac1890e1ce8760fdacf293729a2e43b141a6e7808546e74c5e6d3f42459dd208'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -246,13 +246,29 @@ builds `@pmndrs/glyph` once, creates one package tarball with `pnpm pack`, and r
 non-blocking performance job. `benchmark:labs-package` installs the candidate tarball and an exact version resolved from
 the current npm canary into isolated temporary consumers, then runs both through `@pmndrs/labs`. It never rebuilds either
 artifact. The retained report includes native Labs JSON, comparison output, exact package manifests and lockfiles, and the
-candidate tarball SHA-256.
+candidate tarball SHA-256. Labs' Git metadata identifies the benchmark checkout, not the installed package's source
+revision; use the artifact manifest to identify the compared packages.
 
 The first package suite measures six public-system workloads: `measure()` and `glyphs()` after equal-size edits, Three
 publication after an edit, column reflow, font-size relayout, and one publication of 128 retained `Text` instances. Each
 case deliberately invalidates the retained state it names instead of timing a cache hit. Eight fresh-process blocks and a
 five-percent minimum effect produce the comparison report. This lane is initially report-only while runner noise and
 false-positive rates are established; browser, GPU, and frame-pacing evidence remains owned by the browser workflows.
+
+The `@read-publication` Labs selection compares public layout reads at 100 and 1,000 scene-attached labels. It covers
+`measureGlyphs()`, `caretAt()`, and `selectionRects()` with unchanged state, all writes before reads, and alternating
+writes/reads, plus a writes-then-traversal control. Mutating iterations include a final traversal on both artifacts;
+untimed snapshots require committed output, the expected glyph count, and matching positioned geometry. These are
+same-call comparisons: older artifacts may return stale or absent intermediate reads, while commit-on-read publishes
+before answering. They establish the cost of changing that contract, not equivalent intermediate-read semantics.
+
+Two additional schedules measure mounting all labels before splitting and mounting/splitting each label in turn.
+An untimed public capability probe selects the explicit traversal needed by older artifacts, so both versions produce
+usable detached glyphs. Timings include construction, publication, detached copying, and disposal; they exclude font
+loading. The suite uses Three host objects in Node, not React callback scheduling, GPU execution, or frame latency.
+Run `mise exec -- pnpm scripts run benchmark:labs-package -- --baseline /absolute/base.tgz --candidate /absolute/head.tgz
+--filter @read-publication --output .cache/read-publication` to retain the comparison and artifact identities. Build and
+pack each revision first; the runner never builds source. The optional filter is recorded in the run manifest.
 
 Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentation are complete
 
