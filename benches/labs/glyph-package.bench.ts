@@ -391,123 +391,299 @@ group('retained batching at 1,000 labels @publication', () => {
   });
 });
 
-// These are same-call comparisons: older artifacts may return stale/absent intermediate reads.
-// Every iteration includes the final traversal; the untimed snapshot proves fresh committed output.
-const publicationReads = [
-  ['measureGlyphs', (label: ReturnType<typeof createLabels>['labels'][number]) => label.measureGlyphs()?.length ?? 0],
-  ['caretAt', (label: ReturnType<typeof createLabels>['labels'][number]) => label.caretAt(30, 0)?.offset ?? 0],
-  [
-    'selectionRects',
-    (label: ReturnType<typeof createLabels>['labels'][number]) => label.selectionRects(0, 4)?.length ?? 0,
-  ],
-] as const;
+// Compare application flows that need fresh layout in scenes with 100 or 1,000 labels.
+// A deferred artifact publishes during a frame. A synchronous artifact publishes on the read.
+// Deferred artifacts batch per-object reads because each read needs a completed frame.
+// Timings include scene traversal but exclude GPU work.
+type Label = ReturnType<typeof createLabels>['labels'][number];
+type LabelScene = Pick<ReturnType<typeof createLabels>, 'root' | 'scene' | 'textGroup'>;
+
+const layoutReadsPublish = probeLayoutReadsPublish();
+
+/** Untimed capability probe: does a layout read publish a pending paragraph without a frame? */
+function probeLayoutReadsPublish(): boolean {
+  const probe = createLabels(1);
+  try {
+    const label = probe.labels[0]!;
+    label.text = 'WWWWWWWWWWWW';
+    label.measureGlyphs();
+    return label.commitState().status === 'committed';
+  } finally {
+    disposeLabels(probe);
+  }
+}
+
+/** Glyph's share of `renderer.render(scene)`: the scene traversal that publishes pending layout. */
+function renderFrame({ scene, textGroup }: LabelScene): void {
+  scene.updateMatrixWorld();
+  if (textGroup.error !== undefined) throw textGroup.error;
+}
+
+/** A deferred caller's wait: render the frame that publishes, then confirm it did before reading. */
+function renderUntilPublished(scene: LabelScene, texts: readonly Label[]): void {
+  renderFrame(scene);
+  for (const text of texts) {
+    if (text.commitState().status !== 'committed') throw new Error('deferred layout was not published by one frame');
+  }
+}
+
+/** Rejects a read that answered for the text before the latest write. */
+function requireFresh(actual: number, expected: number): number {
+  if (actual !== expected) {
+    throw new Error(`layout read answered for stale text (${String(actual)}, not ${String(expected)})`);
+  }
+  return actual;
+}
+
+/**
+ * Writes each object and then reads it, either all writes before the reads or each object in turn, and renders the
+ * result. Returns the sum of the reads.
+ */
+function updateThenRead(
+  scene: LabelScene,
+  objects: readonly Label[],
+  write: (object: Label, index: number) => void,
+  read: (object: Label) => number,
+  eachInTurn: boolean,
+): number {
+  let total = 0;
+  if (layoutReadsPublish && eachInTurn) {
+    for (const [index, object] of objects.entries()) {
+      write(object, index);
+      total += read(object);
+    }
+  } else {
+    for (const [index, object] of objects.entries()) write(object, index);
+    if (!layoutReadsPublish) renderUntilPublished(scene, objects);
+    for (const object of objects) total += read(object);
+  }
+  renderFrame(scene);
+  return total;
+}
+
+/** Spawns and breaks apart each string, then renders and returns the glyph count and cleanup. */
+function spawnAndBreakApart(scene: LabelScene, texts: readonly string[], eachInTurn: boolean) {
+  const spawned = texts.map((text) => scene.root.createText({ font, text, style: { fontSize: 16 } }));
+  const copies: ReturnType<Label['breakApart']>[0][] = [];
+  const copied = updateThenRead(
+    scene,
+    spawned,
+    (object) => {
+      scene.textGroup.add(object);
+    },
+    (object) => {
+      const [glyphs, decorations] = object.breakApart();
+      decorations?.dispose();
+      object.visible = false;
+      scene.scene.add(glyphs);
+      copies.push(glyphs);
+      return requireFresh(glyphs.count, object.text.length);
+    },
+    eachInTurn,
+  );
+  return {
+    copied,
+    unmount() {
+      for (const copy of copies) {
+        copy.removeFromParent();
+        copy.dispose();
+      }
+      for (const object of spawned) {
+        object.removeFromParent();
+        object.dispose();
+      }
+    },
+  };
+}
+
+/** Untimed outcome check: every object is committed and measures the glyphs of its current text. */
+function freshSnapshot(objects: readonly Label[]) {
+  let fresh = 0;
+  for (const object of objects) {
+    if (object.commitState().status === 'committed' && object.measureGlyphs()?.length === object.text.length) {
+      fresh += 1;
+    }
+  }
+  assert.equal(fresh, objects.length);
+  return fresh;
+}
 
 for (const count of [100, 1_000]) {
-  group(`public layout reads at ${String(count)} labels @read-publication`, () => {
-    for (const [name, read] of publicationReads) {
-      for (const schedule of ['unchanged', 'writes then reads', 'alternating writes and reads'] as const) {
-        bench(`${name}: ${schedule}`, function* () {
-          const created = createLabels(count);
-          try {
-            for (const label of created.labels) label.text = schedule === 'unchanged' ? 'WWWWWWWWWWWW' : 'iiiiiiii';
-            created.scene.updateMatrixWorld(true);
-            let alternate = false;
-            yield {
-              bench: () => {
-                alternate = !alternate;
-                const text = alternate ? 'WWWWWWWWWWWW' : 'iiiiiiii';
-                let observed = 0;
-                if (schedule === 'writes then reads') {
-                  for (const label of created.labels) label.text = text;
-                }
-                for (const label of created.labels) {
-                  if (schedule === 'alternating writes and reads') label.text = text;
-                  observed += read(label);
-                }
-                // Include deferred work on both artifacts, even when a read did not publish it.
-                if (schedule !== 'unchanged') created.scene.updateMatrixWorld(true);
-                if (created.textGroup.error !== undefined) throw created.textGroup.error;
-                return observed;
-              },
-              snapshot: () => committedReadSnapshot(created, count),
-            };
-          } finally {
-            disposeLabels(created);
-          }
-        });
-      }
-    }
-
-    bench('writes then traversal (no layout reads)', function* () {
+  group(`in a scene of ${String(count)} labels @read-publication`, () => {
+    bench('break a title into letters', function* () {
       const created = createLabels(count);
+      let copied = 0;
       try {
-        let alternate = false;
         yield {
           bench: () => {
-            alternate = !alternate;
-            for (const label of created.labels) label.text = alternate ? 'WWWWWWWWWWWW' : 'iiiiiiii';
-            created.scene.updateMatrixWorld(true);
-            if (created.textGroup.error !== undefined) throw created.textGroup.error;
-            return created.textGroup.textCount;
+            const title = spawnAndBreakApart(created, ['Glyph'], false);
+            copied = title.copied;
+            title.unmount();
+            return copied;
           },
-          snapshot: () => committedReadSnapshot(created, count),
+          snapshot: () => copied,
         };
       } finally {
         disposeLabels(created);
       }
     });
 
-    for (const schedule of ['mount all then split', 'mount and split each'] as const) {
-      bench(schedule, function* () {
-        // Detect the public behavior outside timing; do not use exception-driven retries in the benchmark.
-        const probe = createLabels(1);
-        let commitsOnRead: boolean;
+    bench('type in a text field', function* () {
+      const created = createLabels(count);
+      const field = created.root.createText({ font, text: 'Search: glyph', style: { fontSize: 16 } });
+      created.textGroup.add(field);
+      renderFrame(created);
+      let typed = false;
+      let selection = 0;
+      try {
+        yield {
+          bench: () => {
+            typed = !typed;
+            return updateThenRead(
+              created,
+              [field],
+              (object) => {
+                object.text = typed ? 'Search: glyphs' : 'Search: glyph';
+              },
+              (object) => {
+                const caret = requireFresh(object.caretAt(10_000, 0)?.offset ?? -1, object.text.length);
+                selection = object.selectionRects(8, object.text.length)?.length ?? 0;
+                return caret + selection;
+              },
+              false,
+            );
+          },
+          snapshot: () => selection,
+        };
+      } finally {
+        field.dispose();
+        disposeLabels(created);
+      }
+    });
+
+    bench('click to place the caret', function* () {
+      const created = createLabels(count);
+      const field = created.root.createText({ font, text: 'Search: glyph', style: { fontSize: 16 } });
+      created.textGroup.add(field);
+      renderFrame(created);
+      let pointer = 0;
+      try {
+        yield {
+          bench: () => {
+            pointer = (pointer + 7) % 120;
+            const caret = field.caretAt(pointer, 0)?.offset ?? -1;
+            renderFrame(created);
+            return caret;
+          },
+          snapshot: () => field.caretAt(10_000, 0)?.offset,
+        };
+      } finally {
+        field.dispose();
+        disposeLabels(created);
+      }
+    });
+
+    for (const [schedule, eachInTurn] of [
+      ['all, then read each', false],
+      ['each in turn', true],
+    ] as const) {
+      bench(`floating combat text, 30 numbers: ${schedule}`, function* () {
+        const created = createLabels(count);
+        const damage = Array.from({ length: 30 }, (_, hit) => String(1_000 + hit * 37));
+        let copied = 0;
         try {
-          probe.labels[0]!.text = 'WWWWWWWWWWWW';
-          probe.labels[0]!.measureGlyphs();
-          commitsOnRead = probe.labels[0]!.commitState().status === 'committed';
+          yield {
+            bench: () => {
+              const burst = spawnAndBreakApart(created, damage, eachInTurn);
+              copied = burst.copied;
+              // The numbers expire, so every burst spawns into the same scene.
+              burst.unmount();
+              return copied;
+            },
+            snapshot: () => copied,
+          };
         } finally {
-          disposeLabels(probe);
+          disposeLabels(created);
         }
+      });
+
+      bench(`edit 50 lines and place carets: ${schedule}`, function* () {
+        const created = createLabels(count);
+        const lines = Array.from({ length: 50 }, (_, line) =>
+          created.root.createText({ font, text: `let item${String(line)} = 0`, style: { fontSize: 16 } }),
+        );
+        created.textGroup.add(...lines);
+        renderFrame(created);
+        let typed = false;
+        try {
+          yield {
+            bench: () => {
+              typed = !typed;
+              return updateThenRead(
+                created,
+                lines,
+                (line, index) => {
+                  line.text = `let item${String(index)} = 0${typed ? ';' : ''}`;
+                },
+                (line) => {
+                  const caret = requireFresh(line.caretAt(10_000, 0)?.offset ?? -1, line.text.length);
+                  return caret + (line.selectionRects(line.text.length - 2, line.text.length)?.length ?? 0);
+                },
+                eachInTurn,
+              );
+            },
+            snapshot: () => lines.map((line) => line.caretAt(10_000, 0)?.offset === line.text.length),
+          };
+        } finally {
+          for (const line of lines) line.dispose();
+          disposeLabels(created);
+        }
+      });
+
+      bench(`dashboard, 100 tickers rolling digits: ${schedule}`, function* () {
+        const created = createLabels(count);
+        const tickers = created.labels.slice(0, 100);
+        for (const ticker of tickers) ticker.text = '12,345';
+        renderFrame(created);
+        let tick = false;
+        try {
+          yield {
+            bench: () => {
+              tick = !tick;
+              const value = tick ? '123,456' : '12,345';
+              return updateThenRead(
+                created,
+                tickers,
+                (ticker) => {
+                  ticker.text = value;
+                },
+                (ticker) => requireFresh(ticker.measureGlyphs()?.length ?? 0, value.length),
+                eachInTurn,
+              );
+            },
+            snapshot: () => freshSnapshot(tickers),
+          };
+        } finally {
+          disposeLabels(created);
+        }
+      });
+
+      bench(`load the scene and break every label apart: ${schedule}`, function* () {
+        const texts = Array.from({ length: count }, () => 'WWWWWWWWWWWW');
         const copied = yield () => {
           const root = glyph.handle(
-            `labs:mount:${String(nextHandle++)}`,
+            `labs:load:${String(nextHandle++)}`,
             defineThreeConfig({ capacity: { size: count * 16, policy: 'grow' } }),
           );
           const textGroup = root.createTextGroup();
           const scene = new THREE.Scene();
-          const labels: ReturnType<typeof createLabels>['labels'] = [];
-          let glyphCount = 0;
+          scene.add(textGroup);
           try {
-            scene.add(textGroup);
-            const split = (label: (typeof labels)[number]) => {
-              const [copy, decorations] = label.breakApart();
-              try {
-                glyphCount += copy.count;
-              } finally {
-                copy.dispose();
-                decorations?.dispose();
-              }
-            };
-            for (let index = 0; index < count; index += 1) {
-              const label = root.createText({ font, text: 'WWWWWWWWWWWW', style: { fontSize: 16 } });
-              labels.push(label);
-              textGroup.add(label);
-              if (schedule === 'mount and split each') {
-                if (!commitsOnRead) scene.updateMatrixWorld(true);
-                split(label);
-              }
-            }
-            if (schedule === 'mount all then split') {
-              if (!commitsOnRead) scene.updateMatrixWorld(true);
-              for (const label of labels) split(label);
-            }
-            scene.updateMatrixWorld(true);
-            if (textGroup.error !== undefined) throw textGroup.error;
-            return glyphCount;
+            const loaded = spawnAndBreakApart({ root, scene, textGroup }, texts, eachInTurn);
+            loaded.unmount();
+            return loaded.copied;
           } finally {
             textGroup.dispose();
-            for (const label of labels) label.dispose();
             root.dispose();
           }
         };
@@ -515,21 +691,26 @@ for (const count of [100, 1_000]) {
         return copied;
       });
     }
-  });
-}
 
-function committedReadSnapshot(created: ReturnType<typeof createLabels>, count: number) {
-  let glyphs = 0;
-  let endX = 0;
-  let committed = 0;
-  for (const label of created.labels) {
-    if (label.commitState().status === 'committed') committed += 1;
-    const measurements = label.measureGlyphs();
-    glyphs += measurements?.length ?? 0;
-    endX += measurements?.at(-1)?.shapedOrigin.x ?? 0;
-  }
-  assert.equal(glyphs, count * 12);
-  assert.equal(committed, count);
-  assert(endX > 0, 'fresh output must contain positioned glyphs');
-  return { glyphs, endX, committed };
+    bench('dashboard, 100 tickers without reading layout', function* () {
+      const created = createLabels(count);
+      const tickers = created.labels.slice(0, 100);
+      for (const ticker of tickers) ticker.text = '12,345';
+      renderFrame(created);
+      let tick = false;
+      try {
+        yield {
+          bench: () => {
+            tick = !tick;
+            for (const ticker of tickers) ticker.text = tick ? '123,456' : '12,345';
+            renderFrame(created);
+            return tickers.length;
+          },
+          snapshot: () => freshSnapshot(tickers),
+        };
+      } finally {
+        disposeLabels(created);
+      }
+    });
+  });
 }

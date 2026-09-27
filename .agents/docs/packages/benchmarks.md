@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:ac1890e1ce8760fdacf293729a2e43b141a6e7808546e74c5e6d3f42459dd208'
+source_digest: 'sha256:83f1935806b343943da09589121ddd15772245c6b70669dff17631883cfd8fd7'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -255,17 +255,21 @@ case deliberately invalidates the retained state it names instead of timing a ca
 five-percent minimum effect produce the comparison report. This lane is initially report-only while runner noise and
 false-positive rates are established; browser, GPU, and frame-pacing evidence remains owned by the browser workflows.
 
-The `@read-publication` Labs selection compares public layout reads at 100 and 1,000 scene-attached labels. It covers
-`measureGlyphs()`, `caretAt()`, and `selectionRects()` with unchanged state, all writes before reads, and alternating
-writes/reads, plus a writes-then-traversal control. Mutating iterations include a final traversal on both artifacts;
-untimed snapshots require committed output, the expected glyph count, and matching positioned geometry. These are
-same-call comparisons: older artifacts may return stale or absent intermediate reads, while commit-on-read publishes
-before answering. They establish the cost of changing that contract, not equivalent intermediate-read semantics.
+The `@read-publication` Labs selection measures what deferred versus synchronous layout (D-369) costs an application in
+common use cases, without assuming a framework. Each scene holds 100 or 1,000 labels in one root, as an application's
+other text shares its root. The use cases are breaking a title into letters, typing in a text field, clicking to place
+the caret, spawning 30 floating combat numbers that break apart, editing 50 lines and placing a caret and selection in
+each, 100 dashboard tickers that measure their glyphs to roll digits, the same tickers without reading layout, and loading the
+scene with every label broken apart. Use cases that touch several objects run twice: all updates before the reads, and
+each object updated and read in turn, as per-object update code does.
 
-Two additional schedules measure mounting all labels before splitting and mounting/splitting each label in turn.
-An untimed public capability probe selects the explicit traversal needed by older artifacts, so both versions produce
-usable detached glyphs. Timings include construction, publication, detached copying, and disposal; they exclude font
-loading. The suite uses Three host objects in Node, not React callback scheduling, GPU execution, or frame latency.
+Each use case reaches the same outcome on both artifacts, written the way that artifact's API requires; an untimed public
+capability probe selects the code. On a deferred artifact the use case renders a frame, confirms the commit, reads, and
+renders the result in a second frame. On a synchronous artifact it reads at once and renders one frame, so its result
+appears one frame sooner. A deferred artifact cannot read an object before a frame publishes it, so its "each in turn"
+schedule runs the batched code. Every read checks that it answered for the latest text, and untimed snapshots require
+identical outcomes on both artifacts. A frame is the scene traversal `renderer.render()` performs; timings exclude GPU
+execution and font loading.
 Run `mise exec -- pnpm scripts run benchmark:labs-package -- --baseline /absolute/base.tgz --candidate /absolute/head.tgz
 --filter @read-publication --output .cache/read-publication` to retain the comparison and artifact identities. Build and
 pack each revision first; the runner never builds source. The optional filter is recorded in the run manifest.
