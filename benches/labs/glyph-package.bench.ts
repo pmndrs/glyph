@@ -512,72 +512,63 @@ group('one label in a small scene @read-publication @one-label', () => {
   bench('mount a label and read its glyphs before the first frame', function* () {
     const created = createLabels(1);
     let measured = 0;
-    try {
-      yield {
-        bench: () => {
-          const label = created.root.createText({ font, text: 'Ready', style: { fontSize: 16 } });
-          try {
-            measured = updateThenRead(
-              created,
-              [label],
-              (object) => created.textGroup.add(object),
-              (object) => requireFresh(object.measureGlyphs()?.length ?? -1, object.text.length),
-              false,
-            );
-            return measured;
-          } finally {
-            label.dispose();
-          }
-        },
-        snapshot: () => measured,
-      };
-    } finally {
-      disposeLabels(created);
-    }
+    yield {
+      bench: () => {
+        const label = created.root.createText({ font, text: 'Ready', style: { fontSize: 16 } });
+        try {
+          measured = updateThenRead(
+            created,
+            [label],
+            (object) => created.textGroup.add(object),
+            (object) => requireFresh(object.measureGlyphs()?.length ?? -1, object.text.length),
+            false,
+          );
+          return measured;
+        } finally {
+          label.dispose();
+        }
+      },
+      snapshot: () => measured,
+    };
+    disposeLabels(created);
   });
 
   bench('edit a label and read its glyphs', function* () {
     const created = createLabels(1);
     const label = created.labels[0]!;
     let alternate = false;
-    try {
-      yield {
-        bench: () => {
-          alternate = !alternate;
-          return updateThenRead(
-            created,
-            [label],
-            (object) => {
-              object.text = alternate ? 'Ready' : 'Paused';
-            },
-            (object) => requireFresh(object.measureGlyphs()?.length ?? -1, object.text.length),
-            false,
-          );
-        },
-        snapshot: () => freshSnapshot([label]),
-      };
-    } finally {
-      disposeLabels(created);
-    }
+    yield {
+      bench: () => {
+        alternate = !alternate;
+        return updateThenRead(
+          created,
+          [label],
+          (object) => {
+            object.text = alternate ? 'Ready' : 'Paused';
+          },
+          (object) => requireFresh(object.measureGlyphs()?.length ?? -1, object.text.length),
+          false,
+        );
+      },
+      snapshot: () => freshSnapshot([label]),
+    };
+    disposeLabels(created);
   });
 
   bench('edit a label and draw without reading layout', function* () {
     const created = createLabels(1);
     const label = created.labels[0]!;
     let alternate = false;
-    try {
-      yield {
-        bench: () => {
-          alternate = !alternate;
-          label.text = alternate ? 'Ready' : 'Paused';
-          renderFrame(created);
-          return label.text.length;
-        },
-        snapshot: () => freshSnapshot([label]),
-      };
-    } finally {
-      disposeLabels(created);
-    }
+    yield {
+      bench: () => {
+        alternate = !alternate;
+        label.text = alternate ? 'Ready' : 'Paused';
+        renderFrame(created);
+        return label.text.length;
+      },
+      snapshot: () => freshSnapshot([label]),
+    };
+    disposeLabels(created);
   });
 });
 
@@ -586,19 +577,16 @@ for (const count of [1, 100, 1_000]) {
     bench(`break a title into letters${count === 1 ? ' @small-scene' : ''}`, function* () {
       const created = createLabels(count);
       let copied = 0;
-      try {
-        yield {
-          bench: () => {
-            const title = spawnAndBreakApart(created, ['Glyph'], false);
-            copied = title.copied;
-            title.unmount();
-            return copied;
-          },
-          snapshot: () => copied,
-        };
-      } finally {
-        disposeLabels(created);
-      }
+      yield {
+        bench: () => {
+          const title = spawnAndBreakApart(created, ['Glyph'], false);
+          copied = title.copied;
+          title.unmount();
+          return copied;
+        },
+        snapshot: () => copied,
+      };
+      disposeLabels(created);
     });
 
     bench(`type in a text field${count === 1 ? ' @small-scene' : ''}`, function* () {
@@ -608,30 +596,27 @@ for (const count of [1, 100, 1_000]) {
       renderFrame(created);
       let typed = false;
       let selection = 0;
-      try {
-        yield {
-          bench: () => {
-            typed = !typed;
-            return updateThenRead(
-              created,
-              [field],
-              (object) => {
-                object.text = typed ? 'Search: glyphs' : 'Search: glyph';
-              },
-              (object) => {
-                const caret = requireFresh(object.caretAt(10_000, 0)?.offset ?? -1, object.text.length);
-                selection = object.selectionRects(8, object.text.length)?.length ?? 0;
-                return caret + selection;
-              },
-              false,
-            );
-          },
-          snapshot: () => selection,
-        };
-      } finally {
-        field.dispose();
-        disposeLabels(created);
-      }
+      yield {
+        bench: () => {
+          typed = !typed;
+          return updateThenRead(
+            created,
+            [field],
+            (object) => {
+              object.text = typed ? 'Search: glyphs' : 'Search: glyph';
+            },
+            (object) => {
+              const caret = requireFresh(object.caretAt(10_000, 0)?.offset ?? -1, object.text.length);
+              selection = object.selectionRects(8, object.text.length)?.length ?? 0;
+              return caret + selection;
+            },
+            false,
+          );
+        },
+        snapshot: () => selection,
+      };
+      field.dispose();
+      disposeLabels(created);
     });
 
     bench(`click to place the caret${count === 1 ? ' @small-scene' : ''}`, function* () {
@@ -640,20 +625,17 @@ for (const count of [1, 100, 1_000]) {
       created.textGroup.add(field);
       renderFrame(created);
       let pointer = 0;
-      try {
-        yield {
-          bench: () => {
-            pointer = (pointer + 7) % 120;
-            const caret = field.caretAt(pointer, 0)?.offset ?? -1;
-            renderFrame(created);
-            return caret;
-          },
-          snapshot: () => field.caretAt(10_000, 0)?.offset,
-        };
-      } finally {
-        field.dispose();
-        disposeLabels(created);
-      }
+      yield {
+        bench: () => {
+          pointer = (pointer + 7) % 120;
+          const caret = field.caretAt(pointer, 0)?.offset ?? -1;
+          renderFrame(created);
+          return caret;
+        },
+        snapshot: () => field.caretAt(10_000, 0)?.offset,
+      };
+      field.dispose();
+      disposeLabels(created);
     });
 
     if (count === 1) return;
@@ -666,20 +648,17 @@ for (const count of [1, 100, 1_000]) {
         const created = createLabels(count);
         const damage = Array.from({ length: 30 }, (_, hit) => String(1_000 + hit * 37));
         let copied = 0;
-        try {
-          yield {
-            bench: () => {
-              const burst = spawnAndBreakApart(created, damage, eachInTurn);
-              copied = burst.copied;
-              // The numbers expire, so every burst spawns into the same scene.
-              burst.unmount();
-              return copied;
-            },
-            snapshot: () => copied,
-          };
-        } finally {
-          disposeLabels(created);
-        }
+        yield {
+          bench: () => {
+            const burst = spawnAndBreakApart(created, damage, eachInTurn);
+            copied = burst.copied;
+            // The numbers expire, so every burst spawns into the same scene.
+            burst.unmount();
+            return copied;
+          },
+          snapshot: () => copied,
+        };
+        disposeLabels(created);
       });
 
       bench(`edit 50 lines and place carets: ${schedule}`, function* () {
@@ -690,29 +669,26 @@ for (const count of [1, 100, 1_000]) {
         created.textGroup.add(...lines);
         renderFrame(created);
         let typed = false;
-        try {
-          yield {
-            bench: () => {
-              typed = !typed;
-              return updateThenRead(
-                created,
-                lines,
-                (line, index) => {
-                  line.text = `let item${String(index)} = 0${typed ? ';' : ''}`;
-                },
-                (line) => {
-                  const caret = requireFresh(line.caretAt(10_000, 0)?.offset ?? -1, line.text.length);
-                  return caret + (line.selectionRects(line.text.length - 2, line.text.length)?.length ?? 0);
-                },
-                eachInTurn,
-              );
-            },
-            snapshot: () => lines.map((line) => line.caretAt(10_000, 0)?.offset === line.text.length),
-          };
-        } finally {
-          for (const line of lines) line.dispose();
-          disposeLabels(created);
-        }
+        yield {
+          bench: () => {
+            typed = !typed;
+            return updateThenRead(
+              created,
+              lines,
+              (line, index) => {
+                line.text = `let item${String(index)} = 0${typed ? ';' : ''}`;
+              },
+              (line) => {
+                const caret = requireFresh(line.caretAt(10_000, 0)?.offset ?? -1, line.text.length);
+                return caret + (line.selectionRects(line.text.length - 2, line.text.length)?.length ?? 0);
+              },
+              eachInTurn,
+            );
+          },
+          snapshot: () => lines.map((line) => line.caretAt(10_000, 0)?.offset === line.text.length),
+        };
+        for (const line of lines) line.dispose();
+        disposeLabels(created);
       });
 
       bench(`dashboard, 100 tickers rolling digits: ${schedule}`, function* () {
@@ -721,26 +697,23 @@ for (const count of [1, 100, 1_000]) {
         for (const ticker of tickers) ticker.text = '12,345';
         renderFrame(created);
         let tick = false;
-        try {
-          yield {
-            bench: () => {
-              tick = !tick;
-              const value = tick ? '123,456' : '12,345';
-              return updateThenRead(
-                created,
-                tickers,
-                (ticker) => {
-                  ticker.text = value;
-                },
-                (ticker) => requireFresh(ticker.measureGlyphs()?.length ?? 0, value.length),
-                eachInTurn,
-              );
-            },
-            snapshot: () => freshSnapshot(tickers),
-          };
-        } finally {
-          disposeLabels(created);
-        }
+        yield {
+          bench: () => {
+            tick = !tick;
+            const value = tick ? '123,456' : '12,345';
+            return updateThenRead(
+              created,
+              tickers,
+              (ticker) => {
+                ticker.text = value;
+              },
+              (ticker) => requireFresh(ticker.measureGlyphs()?.length ?? 0, value.length),
+              eachInTurn,
+            );
+          },
+          snapshot: () => freshSnapshot(tickers),
+        };
+        disposeLabels(created);
       });
 
       bench(`load the scene and break every label apart: ${schedule}`, function* () {
@@ -773,19 +746,16 @@ for (const count of [1, 100, 1_000]) {
       for (const ticker of tickers) ticker.text = '12,345';
       renderFrame(created);
       let tick = false;
-      try {
-        yield {
-          bench: () => {
-            tick = !tick;
-            for (const ticker of tickers) ticker.text = tick ? '123,456' : '12,345';
-            renderFrame(created);
-            return tickers.length;
-          },
-          snapshot: () => freshSnapshot(tickers),
-        };
-      } finally {
-        disposeLabels(created);
-      }
+      yield {
+        bench: () => {
+          tick = !tick;
+          for (const ticker of tickers) ticker.text = tick ? '123,456' : '12,345';
+          renderFrame(created);
+          return tickers.length;
+        },
+        snapshot: () => freshSnapshot(tickers),
+      };
+      disposeLabels(created);
     });
   });
 }
