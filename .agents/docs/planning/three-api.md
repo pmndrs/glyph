@@ -413,7 +413,9 @@ owned, already-shaped object whose existing per-glyph matrices can be manipulate
 owned groups. The copy is synchronous and returns a frozen two-entry tuple whose decoration slot is `undefined` when the
 paragraph has no decoration draws. A `pending` paragraph inside a Scene commits first through the ordinary engine-wide
 `glyph.shape()` batch, so a callback ref can break a paragraph apart as it mounts (D-369); a paragraph outside any Scene or
-one whose commit failed throws.
+one whose commit failed throws. Moving a committed paragraph to another group, or changing its root/group material,
+snapping, or order, republishes it at the next read in the same way. Once its root is disposed, the reads answer
+`undefined` and `breakApart()` throws.
 
 Failures during a read-triggered commit propagate from the read. An unchanged rejected paragraph is not retried; explicit
 changes to the text or its root/group presentation allow the next read to retry without a draw. Reading the same failure

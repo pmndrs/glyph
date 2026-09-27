@@ -910,7 +910,10 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     const state = this.commitState();
     if (
       nearestScene(this) !== undefined &&
-      (state.status === 'pending' || (state.status === 'failed' && this.#root.needsPublication()))
+      !this.#root.disposed &&
+      (state.status === 'pending' ||
+        (state.status === 'committed' && this.#binding?.presentationPublished(this.#root.member(this)) === false) ||
+        (state.status === 'failed' && this.#root.needsPublication()))
     ) {
       this.#root.commit();
     }
@@ -1219,6 +1222,8 @@ interface BoundTextEntry {
   stagedOrderRank: number;
   stagedPresentation: TextPresentation;
   committedRevision: number;
+  committedOrderRank: number | undefined;
+  committedPresentation: TextPresentation | undefined;
 }
 
 interface DetachedQueryEntry {
@@ -1248,7 +1253,7 @@ class ThreeRootPublication {
   readonly #materialBindings = new ThreeMaterialBindingCache();
   #capacity: GlyphBufferCapacity;
   #rendererUpdateRejected = false;
-  // Layout queries can reconcile a repair before it is published; keep that pending work separate from rejection.
+  // A staged repair still needs renderer publication after a layout query.
   #publicationPending = true;
   #capacityExceeded: { readonly required: number; readonly size: number } | undefined;
   #materialInvalidated = false;
@@ -1328,6 +1333,17 @@ class ThreeRootPublication {
   needsReconcile(texts: readonly Text<RasterFormatMetadata>[]): boolean {
     this.#assertActive();
     return this.#detachedQueryCache !== undefined || this.#needsActiveReconcile(texts);
+  }
+
+  /** Whether the published draws still carry this Text's current group, material, snapping, and draw order. */
+  presentationPublished(text: Text<RasterFormatMetadata>): boolean {
+    const entry = this.#entries.get(text);
+    if (entry?.committedPresentation === undefined) return false;
+    const presentation = resolveTextPresentation(text);
+    return (
+      sameTextPresentation(entry.committedPresentation, presentation) &&
+      Object.is(entry.committedOrderRank, presentation.group === undefined ? 0 : paragraphOrderRank(text))
+    );
   }
 
   needsPublication(texts: readonly Text<RasterFormatMetadata>[]): boolean {
@@ -1562,6 +1578,8 @@ class ThreeRootPublication {
     this.#inspections.clear();
     for (const [text, entry] of this.#entries) {
       entry.committedRevision = entry.stagedRevision;
+      entry.committedOrderRank = entry.stagedOrderRank;
+      entry.committedPresentation = entry.stagedPresentation;
       reconciler.markCommitted(text);
     }
     for (const text of this.#pendingMeasurements) {
@@ -1619,13 +1637,8 @@ class ThreeRootPublication {
     presentation: TextPresentation,
   ): void {
     const previous = this.#entries.get(text);
-    const state = coreTextState(
-      desired,
-      text,
-      presentation,
-      this.#root,
-      order,
-      (material, pixelSnapping, renderOrder) => this.#materialBindings.get(material, pixelSnapping, renderOrder),
+    const state = coreTextState(desired, text, presentation, order, (material, pixelSnapping, renderOrder) =>
+      this.#materialBindings.get(material, pixelSnapping, renderOrder),
     );
     if (previous === undefined) {
       const handle = this.#services.createText(state);
@@ -1638,6 +1651,8 @@ class ThreeRootPublication {
         stagedOrderRank: orderRank,
         stagedPresentation: presentation,
         committedRevision: -1,
+        committedOrderRank: undefined,
+        committedPresentation: undefined,
       });
     } else {
       const scopedOrderChanged =
@@ -1680,7 +1695,6 @@ function coreTextState(
   desired: DesiredTextState<RasterFormatMetadata>,
   transform: THREE.Object3D,
   presentation: TextPresentation,
-  root: ThreeRootHost,
   order: number,
   materialBinding: (
     material: ThreeTextMaterial | undefined,
@@ -1689,11 +1703,7 @@ function coreTextState(
   ) => ThreeMaterialBinding,
 ) {
   const { pixelSnapping, renderOrder } = presentation;
-  const material = materialBinding(
-    desired.material ?? presentation.material ?? root.material,
-    pixelSnapping,
-    renderOrder,
-  );
+  const material = materialBinding(desired.material ?? presentation.material, pixelSnapping, renderOrder);
   const spans = desired.spans.map((span) => {
     const spanMaterial: ThreeMaterialBinding | undefined =
       span.material === undefined ? undefined : materialBinding(span.material, pixelSnapping, renderOrder);
@@ -1972,7 +1982,7 @@ function resolveTextPresentation(text: Text<RasterFormatMetadata>): TextPresenta
   }
   const resolved: TextPresentation = {
     group,
-    material,
+    material: material ?? root.material,
     pixelSnapping: pixelSnapping ?? text.pixelSnapping,
     // Inside a group the child's renderOrder is a Rust paragraph rank, never a
     // Three material/draw key. An entirely unstated group shares Three's default 0.

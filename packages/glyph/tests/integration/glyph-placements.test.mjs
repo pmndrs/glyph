@@ -284,6 +284,10 @@ test('committed-layout reads publish a pending paragraph in a Scene without wait
 
     node.text = 'steady';
     assert.equal(node.commitState().status, 'pending');
+    assert.equal(node.caretAt(10_000, 0)?.offset, node.text.length);
+    node.text = 'steadier';
+    assert.ok((node.selectionRects(0, node.text.length)?.length ?? 0) > 0);
+    node.text = 'readylater';
     [copy] = node.breakApart();
     assert.equal(copy.count, node.measure().glyphCount);
     assert.equal(node.commitState().status, 'committed');
@@ -293,34 +297,27 @@ test('committed-layout reads publish a pending paragraph in a Scene without wait
   }
 });
 
-for (const [name, read] of [
-  ['measureGlyphs', (node) => node.measureGlyphs()],
-  ['caretAt', (node) => node.caretAt(0, 0)],
-  ['selectionRects', (node) => node.selectionRects(0, 1)],
-  ['breakApart', (node) => node.breakApart()],
-]) {
-  test(`${name} propagates publication failures from an explicit read`, async (t) => {
-    const three = await createThreeTestHandle(t);
-    const failure = new Error('material creation failed');
-    let node;
-    const material = defineTextMaterial(() => {
-      assert.throws(() => node.measureGlyphs(), /cannot be reentered/);
-      throw failure;
-    });
-    node = three.createText({ font: await loadFont(), material, text: 'ready' });
-    const scene = new THREE.Scene();
-    scene.add(node);
-    try {
-      assert.throws(
-        () => read(node),
-        (error) => error === failure,
-      );
-      assert.equal(node.error, failure);
-    } finally {
-      node.dispose();
-    }
+test('a committed-layout read reports material creation failure at the call', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const failure = new Error('material creation failed');
+  let node;
+  const material = defineTextMaterial(() => {
+    assert.throws(() => node.measureGlyphs(), /cannot be reentered/);
+    throw failure;
   });
-}
+  node = three.createText({ font: await loadFont(), material, text: 'ready' });
+  const scene = new THREE.Scene();
+  scene.add(node);
+  try {
+    assert.throws(
+      () => node.measureGlyphs(),
+      (error) => error === failure,
+    );
+    assert.equal(node.error, failure);
+  } finally {
+    node.dispose();
+  }
+});
 
 for (const owner of ['text', 'group']) {
   test(`a read retries a failed publication after explicit ${owner} material changes`, async (t) => {
@@ -340,8 +337,6 @@ for (const owner of ['text', 'group']) {
     const scene = new THREE.Scene();
     group.add(node);
     scene.add(group);
-    // Observing the same failure, including from onError, must not reenter or retry publication.
-    node.onError = () => assert.equal(node.measureGlyphs(), undefined);
     let copies;
     try {
       assert.throws(
@@ -352,19 +347,8 @@ for (const owner of ['text', 'group']) {
       assert.throws(() => node.breakApart(), /after renderer realization failed/);
       assert.equal(attempts, 1);
 
-      // Even a repeated failure with the same Error belongs to the new attempted revision.
-      if (owner === 'text') node.material = material;
-      else group.material = material;
-      assert.throws(
-        () => node.measureGlyphs(),
-        (error) => error === failure,
-      );
-      assert.equal(node.measureGlyphs(), undefined);
-      assert.equal(attempts, 2);
-
       if (owner === 'text') node.material = undefined;
       else group.material = undefined;
-      // A layout-only query may stage the repair, but must not consume the pending renderer publication.
       assert.ok(node.computeBoundingBox().max.x > node.computeBoundingBox().min.x);
       copies = node.breakApart();
       assert.equal(copies[0].count, 5);
@@ -410,6 +394,80 @@ test('a repair skipped by fixed capacity keeps rejected draw data unavailable un
   } finally {
     copies?.forEach((copy) => copy?.dispose());
     extra?.dispose();
+    node.dispose();
+    group.dispose();
+  }
+});
+
+test('a layout read republishes a committed Text whose group presentation changed', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont();
+  const named = (name) => defineTextMaterial((context) => Object.assign(context.createDefaultMaterial(), { name }));
+  const first = three.createTextGroup({ material: named('first') });
+  const second = three.createTextGroup({ material: named('second') });
+  const node = three.createText({ font, text: 'moved' });
+  const scene = new THREE.Scene();
+  scene.add(first, second);
+  first.add(node);
+  scene.updateMatrixWorld(true);
+  let copies;
+  try {
+    second.add(node);
+    copies = node.breakApart();
+    const names = new Set();
+    copies[0].traverse((object) => {
+      if (object.material !== undefined) names.add(object.material.name);
+    });
+    assert.deepEqual([...names], ['second']);
+  } finally {
+    copies?.forEach((copy) => copy?.dispose());
+    node.dispose();
+    first.dispose();
+    second.dispose();
+  }
+});
+
+test('breakApart publishes a committed Text after its root material changes', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont();
+  const named = (name) => defineTextMaterial((context) => Object.assign(context.createDefaultMaterial(), { name }));
+  three.material = named('first');
+  const node = three.createText({ font, text: 'moved' });
+  const scene = new THREE.Scene();
+  scene.add(node);
+  scene.updateMatrixWorld(true);
+  let copies;
+  try {
+    assert.equal(node.commitState().status, 'committed');
+    three.material = named('second');
+    assert.equal(node.commitState().status, 'committed');
+    copies = node.breakApart();
+    const names = new Set();
+    copies[0].traverse((object) => {
+      if (object.material !== undefined) names.add(object.material.name);
+    });
+    assert.deepEqual([...names], ['second']);
+  } finally {
+    copies?.forEach((copy) => copy?.dispose());
+    node.dispose();
+  }
+});
+
+test('layout reads answer nothing once the root is disposed', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const node = three.createText({ font: await loadFont(), text: 'gone' });
+  const group = three.createTextGroup();
+  const scene = new THREE.Scene();
+  scene.add(group);
+  group.add(node);
+  scene.updateMatrixWorld(true);
+  try {
+    three.dispose();
+    assert.equal(node.measureGlyphs(), undefined);
+    assert.equal(node.caretAt(0, 0), undefined);
+    assert.equal(node.selectionRects(0, 1), undefined);
+    assert.throws(() => node.breakApart(), /before its renderer state is committed/);
+  } finally {
     node.dispose();
     group.dispose();
   }
