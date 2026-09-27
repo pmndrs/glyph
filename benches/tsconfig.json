@@ -10,7 +10,7 @@
     "jsx": "react-jsx",
     "lib": ["DOM", "DOM.Iterable", "ES2025"],
     "paths": { "@/*": ["./src/*"] },
-    "types": ["vite/client", "vitest/globals"]
+    "types": ["vite/client", "vitest/globals", "node"]
   },
   "include": ["src", "vite.config.ts", "vitest.config.ts", "vitexec"]
 }
