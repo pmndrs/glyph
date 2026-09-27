@@ -508,9 +508,82 @@ function freshSnapshot(objects: readonly Label[]) {
   return fresh;
 }
 
-for (const count of [100, 1_000]) {
-  group(`in a scene of ${String(count)} labels @read-publication`, () => {
-    bench('break a title into letters', function* () {
+group('one label in a small scene @read-publication @one-label', () => {
+  bench('mount a label and read its glyphs before the first frame', function* () {
+    const created = createLabels(1);
+    let measured = 0;
+    try {
+      yield {
+        bench: () => {
+          const label = created.root.createText({ font, text: 'Ready', style: { fontSize: 16 } });
+          try {
+            measured = updateThenRead(
+              created,
+              [label],
+              (object) => created.textGroup.add(object),
+              (object) => requireFresh(object.measureGlyphs()?.length ?? -1, object.text.length),
+              false,
+            );
+            return measured;
+          } finally {
+            label.dispose();
+          }
+        },
+        snapshot: () => measured,
+      };
+    } finally {
+      disposeLabels(created);
+    }
+  });
+
+  bench('edit a label and read its glyphs', function* () {
+    const created = createLabels(1);
+    const label = created.labels[0]!;
+    let alternate = false;
+    try {
+      yield {
+        bench: () => {
+          alternate = !alternate;
+          return updateThenRead(
+            created,
+            [label],
+            (object) => {
+              object.text = alternate ? 'Ready' : 'Paused';
+            },
+            (object) => requireFresh(object.measureGlyphs()?.length ?? -1, object.text.length),
+            false,
+          );
+        },
+        snapshot: () => freshSnapshot([label]),
+      };
+    } finally {
+      disposeLabels(created);
+    }
+  });
+
+  bench('edit a label and draw without reading layout', function* () {
+    const created = createLabels(1);
+    const label = created.labels[0]!;
+    let alternate = false;
+    try {
+      yield {
+        bench: () => {
+          alternate = !alternate;
+          label.text = alternate ? 'Ready' : 'Paused';
+          renderFrame(created);
+          return label.text.length;
+        },
+        snapshot: () => freshSnapshot([label]),
+      };
+    } finally {
+      disposeLabels(created);
+    }
+  });
+});
+
+for (const count of [1, 100, 1_000]) {
+  group(`in a scene of ${String(count)} label${count === 1 ? '' : 's'} @read-publication`, () => {
+    bench(`break a title into letters${count === 1 ? ' @small-scene' : ''}`, function* () {
       const created = createLabels(count);
       let copied = 0;
       try {
@@ -528,7 +601,7 @@ for (const count of [100, 1_000]) {
       }
     });
 
-    bench('type in a text field', function* () {
+    bench(`type in a text field${count === 1 ? ' @small-scene' : ''}`, function* () {
       const created = createLabels(count);
       const field = created.root.createText({ font, text: 'Search: glyph', style: { fontSize: 16 } });
       created.textGroup.add(field);
@@ -561,7 +634,7 @@ for (const count of [100, 1_000]) {
       }
     });
 
-    bench('click to place the caret', function* () {
+    bench(`click to place the caret${count === 1 ? ' @small-scene' : ''}`, function* () {
       const created = createLabels(count);
       const field = created.root.createText({ font, text: 'Search: glyph', style: { fontSize: 16 } });
       created.textGroup.add(field);
@@ -582,6 +655,8 @@ for (const count of [100, 1_000]) {
         disposeLabels(created);
       }
     });
+
+    if (count === 1) return;
 
     for (const [schedule, eachInTurn] of [
       ['all, then read each', false],

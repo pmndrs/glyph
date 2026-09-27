@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:83f1935806b343943da09589121ddd15772245c6b70669dff17631883cfd8fd7'
+source_digest: 'sha256:cac9b84dfa214001fcb9dc208a30f1c650cf4745aa16f0e0a53f831bbb58c6e1'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -256,12 +256,15 @@ five-percent minimum effect produce the comparison report. This lane is initiall
 false-positive rates are established; browser, GPU, and frame-pacing evidence remains owned by the browser workflows.
 
 The `@read-publication` Labs selection measures what deferred versus synchronous layout (D-369) costs an application in
-common use cases, without assuming a framework. Each scene holds 100 or 1,000 labels in one root, as an application's
-other text shares its root. The use cases are breaking a title into letters, typing in a text field, clicking to place
-the caret, spawning 30 floating combat numbers that break apart, editing 50 lines and placing a caret and selection in
-each, 100 dashboard tickers that measure their glyphs to roll digits, the same tickers without reading layout, and loading the
-scene with every label broken apart. Use cases that touch several objects run twice: all updates before the reads, and
-each object updated and read in turn, as per-object update code does.
+common use cases, without assuming a framework. A small scene with one existing label covers mounting another label
+and reading it before the first frame, editing one label and reading its glyphs, editing one label with only a draw,
+breaking a title into letters, typing in a text field, and clicking to place the caret. Larger scenes hold 100 or 1,000
+labels in one root, as an application's other text shares its root. They also cover the title, field, and caret cases,
+plus spawning 30 floating combat numbers that break apart, editing 50 lines and placing a caret and selection in each,
+100 dashboard tickers that measure their glyphs to roll digits, the same tickers without reading layout, and loading the
+scene with every label broken apart.
+Use cases that touch several objects run twice: all updates before the reads, and each object updated and read in turn,
+as per-object update code does.
 
 Each use case reaches the same outcome on both artifacts, written the way that artifact's API requires; an untimed public
 capability probe selects the code. On a deferred artifact the use case renders a frame, confirms the commit, reads, and
@@ -270,6 +273,9 @@ appears one frame sooner. A deferred artifact cannot read an object before a fra
 schedule runs the batched code. Every read checks that it answered for the latest text, and untimed snapshots require
 identical outcomes on both artifacts. A frame is the scene traversal `renderer.render()` performs; timings exclude GPU
 execution and font loading.
+The `@one-label` tag selects the three label lifecycle cases, and `@small-scene` selects the title, field, and caret cases
+in the one-label scene. Eight-block packed-artifact runs matched all six outcomes on baseline and candidate. The label
+lifecycle, title, and field cases were neutral at the measured resolution; caret placement was 85.4% faster (p < .001).
 Run `mise exec -- pnpm scripts run benchmark:labs-package -- --baseline /absolute/base.tgz --candidate /absolute/head.tgz
 --filter @read-publication --output .cache/read-publication` to retain the comparison and artifact identities. Build and
 pack each revision first; the runner never builds source. The optional filter is recorded in the run manifest.

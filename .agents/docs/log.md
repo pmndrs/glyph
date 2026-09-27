@@ -2,6 +2,13 @@
 
 ## 2026-09-26
 
+- **Added small-scene read-publication benchmarks** — The `@one-label` selection covers mounting and reading a label
+  before its first frame, editing one label and reading its glyphs, and editing one label with only a draw. Title
+  splitting, text-field typing, and caret placement now also run in a small scene. Bulk scene workloads remain for
+  stress evidence. Eight-block runs of packed baseline `504ffbdf` and candidate `97ca2a85` matched all six outcomes.
+  The three `@one-label` cases, title splitting, and field typing were neutral at the measured resolution. Caret
+  placement in the small scene was 85.4% faster (p < .001). Timings include scene traversal but exclude GPU work. See
+  [benchmark ownership](packages/benchmarks.md).
 - **Fixed stale and throwing layout reads after presentation changes and root disposal** — A committed `Text` moved to
   another group, or its root/group material, snapping, or draw order changed. Its reads answered from the
   previous publication, so `breakApart()` copied the old material. Each entry now records the presentation, including
