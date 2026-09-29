@@ -1,6 +1,6 @@
 import { assert, bench, group } from '@pmndrs/labs';
 
-import { createLabels, createNestedTextBatch, disposeLabels, disposeNestedTextBatch, inspectDraws } from './fixture.ts';
+import { createLabels, createGroupedLabels, disposeLabels, disposeGroupedLabels, inspectDraws } from './fixture.ts';
 
 group('batched text operations @batch @publication', () => {
   bench('edit and measure one of 100 retained labels @layout @measure', function* () {
@@ -17,8 +17,8 @@ group('batched text operations @batch @publication', () => {
   });
 
   for (const count of [64, 128, 256, 512]) {
-    bench(`publish changes to ${String(count)} nested Text instances @batch @publication`, function* () {
-      const created = createNestedTextBatch(count);
+    bench(`rewrite ${String(count)} labels in one group @batch @publication`, function* () {
+      const created = createGroupedLabels(count);
       const initial = inspectDraws(created.scene);
       assert.equal(initial.draws, 1);
       let alternate = false;
@@ -34,7 +34,7 @@ group('batched text operations @batch @publication', () => {
       };
       assert.equal(Math.floor(result / 1_000_000), initial.draws);
       assert.equal(result % 1_000_000, initial.glyphs);
-      disposeNestedTextBatch(created);
+      disposeGroupedLabels(created);
     });
   }
 });

@@ -120,9 +120,10 @@ export function createTextBatch(count: number) {
   return { root, textGroup, texts };
 }
 
-export function createNestedTextBatch(count: number) {
+/** `count` labels under a nested TextGroup inside one top-level TextGroup, so every label shares one draw boundary. */
+export function createGroupedLabels(count: number) {
   const root = glyph.handle(
-    `labs:nested-batch:${String(nextHandle++)}`,
+    `labs:grouped-labels:${String(nextHandle++)}`,
     defineThreeConfig({ capacity: { size: count * 16, policy: 'grow' } }),
   );
   const group = root.createTextGroup();
@@ -156,7 +157,7 @@ export function disposeTextBatch(created: ReturnType<typeof createTextBatch>): v
   created.root.dispose();
 }
 
-export function disposeNestedTextBatch(created: ReturnType<typeof createNestedTextBatch>): void {
+export function disposeGroupedLabels(created: ReturnType<typeof createGroupedLabels>): void {
   created.group.dispose();
   created.nestedGroup.dispose();
   for (const text of created.texts) text.dispose();
