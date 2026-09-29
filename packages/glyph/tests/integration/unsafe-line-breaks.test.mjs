@@ -5,6 +5,8 @@ import test from 'node:test';
 import { bitmap, createFontStack, glyph } from '@pmndrs/glyph';
 import { defineThreeConfig } from '@pmndrs/glyph/three';
 
+import * as THREE from 'three/webgpu';
+
 import { loadFont } from '../../dist/loader.js';
 
 const fredokaUrl = new URL(
@@ -284,4 +286,57 @@ test('equal-length incremental edits use the same exact unsafe fit as a cold par
   assert.deepEqual(warmMeasurement, coldMeasurement);
   assert.deepEqual(Array.from(warm.glyphs().lineTextStarts), Array.from(cold.glyphs().lineTextStarts));
   assert.deepEqual(Array.from(warm.glyphs().lineTextEnds), Array.from(cold.glyphs().lineTextEnds));
+});
+
+test('an equal-length edit inside an unsafe boundary island draws the edited glyphs', async (t) => {
+  await glyph.init();
+  const font = await loadBitmapFont(fredokaUrl);
+  const warmRoot = glyph.handle(
+    'three:integration:unsafe-line-breaks:island-edit',
+    defineThreeConfig({ capacity: { size: 256, policy: 'grow' } }),
+  );
+  const coldRoot = glyph.handle(
+    'three:integration:unsafe-line-breaks:island-edit-cold',
+    defineThreeConfig({ capacity: { size: 256, policy: 'grow' } }),
+  );
+  // Both first lines end in "a ", so the line-final word sits inside the unsafe boundary island at each break.
+  const before = 'Reveals one grapheme at a time over a duration. Layout stays put and a trigger fires at the end.';
+  const after = 'Reveals one grapheme at a time over o duration. Layout stays put and o trigger fires at the end.';
+  const properties = {
+    font,
+    style: { fontSize: 24 },
+    layout: { wrap: 'word' },
+    constraints: { width: { mode: 'exact', size: 420 } },
+  };
+  const warm = warmRoot.createText({ ...properties, text: before });
+  const scene = new THREE.Scene();
+  const group = warmRoot.createTextGroup();
+  group.add(warm);
+  scene.add(group);
+  t.after(() => {
+    group.dispose();
+    warm.dispose();
+    warmRoot.dispose();
+    coldRoot.dispose();
+    font.dispose();
+  });
+
+  // Materialize and publish the corrected boundary glyphs for the original text.
+  warm.glyphs();
+  scene.updateMatrixWorld(true);
+  assert.equal(group.error, undefined);
+
+  warm.text = after;
+  scene.updateMatrixWorld(true);
+  assert.equal(group.error, undefined);
+  const edited = warm.glyphs();
+
+  const cold = coldRoot.createText({ ...properties, text: after });
+  t.after(() => cold.dispose());
+  const fresh = cold.glyphs();
+
+  assert.deepEqual(Array.from(edited.lineTextEnds), Array.from(fresh.lineTextEnds), 'the edit keeps the line breaks');
+  assert.deepEqual(Array.from(edited.glyphIds), Array.from(fresh.glyphIds), 'edited boundary glyphs must be drawn');
+  assert.deepEqual(Array.from(edited.x), Array.from(fresh.x));
+  assert.deepEqual(Array.from(edited.glyphAdvances), Array.from(fresh.glyphAdvances));
 });
