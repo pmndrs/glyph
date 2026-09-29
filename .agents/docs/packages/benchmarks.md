@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:2cb1ca42a5dc608076a62e6e3897976d181b6895a63a4678d2cc71b699510d37'
+source_digest: 'sha256:d124895aa9a66d5b35e1b7ea7995811c9fb26514720c9b0624df92b97e13dbf7'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -278,20 +278,10 @@ change, exact-width reflow, paint-only style publication, and font-size relayout
 inspection and high-scale stress work. Four fresh-process blocks are the smallest Labs comparison that can reach the
 configured five-percent significance threshold, keeping the pull-request signal concise. A pull request runs `smoke`
 unless it carries one `benchmark:<suite>` label. `benchmark:full` overrides focused labels; otherwise multiple focused
-benchmark labels are rejected as ambiguous. A push to `main` runs `full` on the candidate alone: the canary release
-published for that same push would otherwise be installed as its own baseline. Manual dispatch exposes the same suite
-choice and compares with the canary. Available focused suites are `layout`, `measure`, `glyphs`, `publication`,
-`batch`, `style`, `reflow`, `stress`, and `cold`.
+benchmark labels are rejected as ambiguous. A push to `main` runs `full`, and manual dispatch exposes the same suite
+choice. Available focused suites are `layout`, `measure`, `glyphs`, `publication`, `batch`, `style`, `reflow`, and
+`stress`.
 `full` does not run browser observations, native/Worker profiles, or correctness and release gates.
-
-Each suite holds workloads that time alike. Labs decides per run whether to batch iterations or time single calls from
-the cost of the first calls, so a workload whose first call is first-time work can be timed differently on each side
-of a comparison, and the delta then measures the timing mode rather than the package. Steady workloads therefore
-perform their operation once during setup, and every workload whose timed call pays a first-time cost on freshly
-mounted state lives in the `cold` suite. The comparison still reports any workload timed in different modes on the two
-sides as not comparable instead of printing its delta. A candidate must pass every benchmark check; a baseline may
-fail checks that guard behavior it predates, and those workloads are reported as not comparable rather than aborting
-the comparison. Both lists are recorded in the retained manifest.
 
 Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentation are complete
 
