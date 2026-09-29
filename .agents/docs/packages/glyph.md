@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:3792ebe0fb4506d7196cf0f31414d9e6ad7c9a0eb7a11001890172c16a8a5848'
+source_digest: 'sha256:01c34eb80c09e9de760c5a226f8f586aa1d67742fb00411e412ed2efba5fd508'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1063,9 +1063,12 @@ instrumented builds, and runs over real ordered, stable, and mixed planner outpu
 checked size arithmetic and destination bounds.
 
 The TypeScript request compiler likewise owns one checked, monotonic allocation stream for fixed tables and variable
-payloads. Its product test pins every table, text, language, feature, and polygon range as disjoint and in bounds. Rust
-therefore borrows each individual slice with checked offset, count, alignment, and work limits, but does not compare those
-immutable slices pairwise or quadratically after the package has constructed them. Maintainers can build a deliberately
+payloads. Production prepares those offsets and writes directly into the retained Wasm request arena instead of allocating
+an intermediate wire `Uint8Array` and copying it. The owned compiler is a convenience wrapper over the same writer, while
+independent ABI fixtures pin every table, text, language, feature, and polygon range. A focused product test writes at a
+nonzero arena offset, proves the bytes match the wrapper, and proves bytes outside the target slice remain untouched. Rust therefore borrows each individual
+slice with checked offset, count, alignment, and work limits, but does not compare those immutable slices pairwise or
+quadratically after the package has constructed them. Maintainers can build a deliberately
 instrumented shaper with Cargo feature `debug-validation`; tests enable the publication oracle automatically, while the
 shipping `--release --no-default-features` Wasm build does not contain it.
 

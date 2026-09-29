@@ -26,11 +26,11 @@ import {
   normalizedColumns,
 } from '../engine-encoding.js';
 import {
-  compilePlannerFrameUpdate,
   MAX_TEXT_ENGINE_OUTPUT_BYTES,
   type PlannerConstraint,
   type PlannerExclusion,
   type PlannerFrameLimits,
+  type PlannerFrameUpdate,
   type PlannerInlineObject,
   type PlannerParagraphMutation,
   type PlannerParagraphOrderMutation,
@@ -972,7 +972,7 @@ class RenderPlannerImpl {
     return this.#transport.measureParagraph(request, state.paragraphId, this.#limits.maxOutputBytes);
   }
 
-  #queryTextRequest(state: RetainedTextState, semanticViewMask: number): Uint8Array {
+  #queryTextRequest(state: RetainedTextState, semanticViewMask: number): PlannerFrameUpdate {
     const styles = compileStyles(this.#handleState, state);
     const styleMutations: PlannerStyleMutation[] = [...styles];
     for (let index = styles.length + 1; index <= state.publishedStyleCount; index += 1) {
@@ -984,7 +984,7 @@ class RenderPlannerImpl {
     }
     const geometry = compileGeometry(this.#handleState, state, 0, 0);
     const textChanged = !state.published || state.publishedText !== state.desired.text;
-    return compilePlannerFrameUpdate({
+    return {
       rootId: this.#transport.handle,
       codecHandle: this.#codec.handle,
       ...(this.#capabilitySet === undefined ? {} : { capabilitySet: this.#capabilitySet }),
@@ -1010,10 +1010,10 @@ class RenderPlannerImpl {
       regions: geometry.regions,
       exclusions: geometry.exclusions,
       inlineObjects: compileInlineObjects(this.#handleState, state),
-    });
+    };
   }
 
-  #compileFrame(options: NormalizedPublishOptions, checkpointGeneration: number): Uint8Array {
+  #compileFrame(options: NormalizedPublishOptions, checkpointGeneration: number): PlannerFrameUpdate {
     this.#assertUniqueBaseOrders();
     const paragraphMutations = [
       ...[...this.#removed].map((state) => ({ opcode: 'remove' as const, paragraphId: state.paragraphId })),
@@ -1065,7 +1065,7 @@ class RenderPlannerImpl {
         inlineObjects.push(...compileInlineObjects(this.#handleState, state));
       }
     }
-    return compilePlannerFrameUpdate({
+    return {
       rootId: this.#transport.handle,
       codecHandle: this.#codec.handle,
       ...(this.#capabilitySet === undefined ? {} : { capabilitySet: this.#capabilitySet }),
@@ -1085,7 +1085,7 @@ class RenderPlannerImpl {
       regions,
       exclusions,
       inlineObjects,
-    });
+    };
   }
 
   #validateAggregateLimits(candidate: RetainedTextLimitState, replacing?: RetainedTextState): void {
