@@ -17,12 +17,15 @@ group('common text operations @core', () => {
   bench('publish after text change @layout @publication @smoke', function* () {
     const created = createParagraph();
     let iteration = 0;
-    const textCount = yield () => {
+    const publishEdit = () => {
       created.paragraph.text = editedText(iteration++);
       created.textGroup.updateMatrixWorld(true);
       if (created.textGroup.error !== undefined) throw created.textGroup.error;
       return created.textGroup.textCount;
     };
+    // The first edit of a mounted Text is first-time work, measured in the cold suite; this workload times later edits.
+    publishEdit();
+    const textCount = yield publishEdit;
     assert.equal(textCount, 1);
     disposeParagraph(created);
   });

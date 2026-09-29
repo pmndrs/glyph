@@ -8,9 +8,9 @@ import { fileURLToPath } from 'node:url';
 
 import { forwardedWorkflowArguments, workflowCommandArguments } from './workflow-arguments.mts';
 import { hasVitexecFailure } from './workflow-output.mts';
-import { assertLabsResultHasNoErrors } from './support/labs-result.mts';
+import { acceptLabsResult, assertLabsResultHasNoErrors, timingModeMismatches } from './support/labs-result.mts';
 import { LOOPBACK_HOST, selectLoopbackPort } from './support/loopback-port.mts';
-import { selectPackageLabsSuite } from './support/package-labs-suite.mts';
+import { packageLabsComparesWithCanary, selectPackageLabsSuite } from './support/package-labs-suite.mts';
 import { packedArchiveDependency } from './support/packed-archive.mts';
 
 const execute = promisify(execFile);
@@ -62,12 +62,53 @@ test('rejects benchmark-body errors even when Labs exits successfully', () => {
   assert.throws(() => assertLabsResultHasNoErrors({ files: [] }), /did not contain any benchmark runs/u);
 });
 
+test('lets a baseline fail checks for behavior it predates, but never the candidate', () => {
+  const result = {
+    files: [
+      {
+        file: 'adapter.bench.ts',
+        benchmarks: [
+          { alias: 'reuse', runs: [{ name: 'reuse snapshots', error: { message: 'expected 1000 but got 0' } }] },
+          { alias: 'healthy', runs: [{ name: 'healthy' }] },
+        ],
+      },
+    ],
+  };
+
+  assert.deepEqual(acceptLabsResult(result, 'baseline'), [
+    'adapter.bench.ts / reuse / reuse snapshots: expected 1000 but got 0',
+  ]);
+  assert.throws(() => acceptLabsResult(result, 'candidate'), /adapter\.bench\.ts \/ reuse \/ reuse snapshots/u);
+  assert.throws(() => acceptLabsResult({ files: [] }, 'baseline'), /did not contain any benchmark runs/u);
+});
+
+test('reports workloads whose baseline and candidate were timed in different modes', () => {
+  const timed = (batch: boolean) => ({
+    files: [
+      {
+        file: 'common.bench.ts',
+        benchmarks: [
+          { alias: 'publish', runs: [{ name: 'publish after text change', stats: { plan: { batch } } }] },
+          { alias: 'measure', runs: [{ name: 'measure after text change', stats: { plan: { batch: true } } }] },
+          { alias: 'skipped', runs: [{ name: 'baseline failure', error: { message: 'predates' } }] },
+        ],
+      },
+    ],
+  });
+
+  assert.deepEqual(timingModeMismatches(timed(true), timed(true)), []);
+  assert.deepEqual(timingModeMismatches(timed(true), timed(false)), [
+    'common.bench.ts / publish / publish after text change: baseline batched, candidate single-call',
+  ]);
+});
+
 test('routes package Labs by event and one explicit pull-request label', () => {
   assert.equal(selectPackageLabsSuite({ eventName: 'pull_request' }), 'smoke');
   assert.equal(
     selectPackageLabsSuite({ eventName: 'pull_request', labels: ['documentation', 'benchmark:layout'] }),
     'layout',
   );
+  assert.equal(selectPackageLabsSuite({ eventName: 'pull_request', labels: ['benchmark:cold'] }), 'cold');
   assert.equal(
     selectPackageLabsSuite({
       eventName: 'pull_request',
@@ -93,6 +134,12 @@ test('routes package Labs by event and one explicit pull-request label', () => {
     () => selectPackageLabsSuite({ eventName: 'pull_request', labels: ['benchmark:typo'] }),
     /Unknown Package Labs suite/u,
   );
+});
+
+test('measures a main push alone instead of against the canary released for that push', () => {
+  assert.equal(packageLabsComparesWithCanary({ eventName: 'push' }), false);
+  assert.equal(packageLabsComparesWithCanary({ eventName: 'pull_request' }), true);
+  assert.equal(packageLabsComparesWithCanary({ eventName: 'workflow_dispatch' }), true);
 });
 
 test('forwards runner options in the position each runner parses', () => {

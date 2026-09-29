@@ -1,6 +1,6 @@
 import { appendFile, readFile } from 'node:fs/promises';
 
-import { selectPackageLabsSuite } from './support/package-labs-suite.mts';
+import { packageLabsComparesWithCanary, selectPackageLabsSuite } from './support/package-labs-suite.mts';
 
 const eventName = requireEnvironment('GITHUB_EVENT_NAME');
 const eventPath = requireEnvironment('GITHUB_EVENT_PATH');
@@ -15,8 +15,12 @@ const suite = selectPackageLabsSuite({
   ...(requestedSuite === undefined ? {} : { requestedSuite }),
 });
 
-await appendFile(outputPath, `suite=${suite}\n`);
-process.stdout.write(`Selected Package Labs suite: ${suite}\n`);
+const baselineArguments = packageLabsComparesWithCanary({ eventName }) ? '--baseline @pmndrs/glyph@canary' : '';
+
+await appendFile(outputPath, `suite=${suite}\nbaseline_arguments=${baselineArguments}\n`);
+process.stdout.write(
+  `Selected Package Labs suite: ${suite} (${baselineArguments === '' ? 'candidate only' : 'compared with canary'})\n`,
+);
 
 function pullRequestLabels(eventPayload: unknown): readonly string[] | undefined {
   if (!isNonArrayObject(eventPayload) || !isNonArrayObject(eventPayload.pull_request)) return undefined;

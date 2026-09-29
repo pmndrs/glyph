@@ -8,6 +8,7 @@ export const PACKAGE_LABS_SUITES = [
   'style',
   'reflow',
   'stress',
+  'cold',
   'full',
 ] as const;
 
@@ -42,6 +43,14 @@ export function selectPackageLabsSuite(event: PackageLabsEvent): PackageLabsSuit
     );
   }
   return unique[0]!;
+}
+
+/**
+ * A push to main is measured alone: the canary release published for that same push would otherwise be installed as
+ * its own baseline. Pull requests and manual runs compare against the published canary.
+ */
+export function packageLabsComparesWithCanary(event: Pick<PackageLabsEvent, 'eventName'>): boolean {
+  return event.eventName !== 'push';
 }
 
 export function requirePackageLabsSuite(value: string | undefined): PackageLabsSuite {

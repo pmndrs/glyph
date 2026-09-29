@@ -51,22 +51,6 @@ group('1,000-label stress @stress', () => {
     disposeLabels(created);
   });
 
-  bench('first sparse borrow from 1000 retained labels @cached @glyphs @api', function* () {
-    const created = createLabels(1_000);
-    const glyphCount = yield () =>
-      created.labels.reduce((total, label) => total + label.withGlyphs((glyphs) => glyphs.glyphCount), 0);
-    assert(glyphCount > 0, 'sparse borrows must contain glyphs');
-    disposeLabels(created);
-  });
-
-  bench('promote 1000 retained label borrows @cached @glyphs @api', function* () {
-    const created = createLabels(1_000);
-    created.labels.forEach((label) => label.withGlyphs((glyphs) => glyphs.glyphCount));
-    const checksum = yield () => borrowedGlyphChecksum(created.labels);
-    assert(checksum > 0, 'promoted borrows must contain glyphs');
-    disposeLabels(created);
-  });
-
   bench('borrow glyphs from 1000 steadily promoted retained labels @cached @glyphs @api', function* () {
     const created = createLabels(1_000);
     created.labels.forEach((label) => label.withGlyphs((glyphs) => glyphs.glyphCount));

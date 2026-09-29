@@ -23,6 +23,7 @@ on:
           - style
           - reflow
           - stress
+          - cold
           - full
 
 permissions:
@@ -370,10 +371,10 @@ jobs:
         id: suite
         run: node benches/scripts/select-package-labs-suite.mts
 
-      - name: Compare installed-package performance
+      - name: Measure installed-package performance
         run: >-
           pnpm scripts run benchmark:labs-package --
-          --baseline @pmndrs/glyph@canary
+          ${{ steps.suite.outputs.baseline_arguments }}
           --candidate .cache/labs-candidate
           --suite ${{ steps.suite.outputs.suite }}
           --output .cache/labs-package

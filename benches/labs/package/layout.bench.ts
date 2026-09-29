@@ -5,18 +5,6 @@ import { createParagraph, disposeParagraph, paragraphTextForGlyphs } from './fix
 const text = paragraphTextForGlyphs(22_000);
 
 group('public paragraph layout at 22k glyphs @layout @exhaustive', () => {
-  bench('cold publication @cold @publication', function* () {
-    const textCount = yield () => {
-      const created = createParagraph(text);
-      created.textGroup.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
-      const result = created.textGroup.textCount;
-      disposeParagraph(created);
-      return result;
-    };
-    assert.equal(textCount, 1);
-  });
-
   bench('cached measurement @cached @measure', function* () {
     const created = createParagraph(text);
     const expected = created.paragraph.measure().glyphCount;

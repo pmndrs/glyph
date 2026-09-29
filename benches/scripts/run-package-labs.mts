@@ -1,7 +1,7 @@
 /* @workflow {
   "name": "benchmark:labs-package",
   "summary": "Benchmark common installed-package workflows by default, or select a focused/full pmndrs/labs suite.",
-  "requirements": "Network access for registry specs, or one or two packed @pmndrs/glyph .tgz artifacts. Never builds workspace source. Accepts --suite smoke|layout|measure|glyphs|publication|style|reflow|stress|full.",
+  "requirements": "Network access for registry specs, or one or two packed @pmndrs/glyph .tgz artifacts. Never builds workspace source. Accepts --suite smoke|layout|measure|glyphs|publication|batch|style|reflow|stress|cold|full.",
   "writes": "Ignored Labs results and an artifact manifest under --output (default .cache/labs-package)."
 } */
 import { createHash } from 'node:crypto';
@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { assertLabsResultSucceeded } from './support/labs-result.mts';
+import { acceptLabsResult, type LabsResultRole, readLabsResult, timingModeMismatches } from './support/labs-result.mts';
 import { type PackageLabsSuite, requirePackageLabsSuite } from './support/package-labs-suite.mts';
 
 interface Options {
@@ -47,15 +47,26 @@ try {
   const baselineRunName = baseline === undefined ? undefined : artifactRunName('baseline', baseline);
   const candidateRunName = artifactRunName('candidate', candidate);
 
-  if (baseline !== undefined && baselineRunName !== undefined) {
-    await runLabs(baselineRunName, baseline.packageRoot, options.blocks, options.suite);
-  }
-  await runLabs(candidateRunName, candidate.packageRoot, options.blocks, options.suite);
+  const baselineRun =
+    baseline === undefined || baselineRunName === undefined
+      ? undefined
+      : await runLabs(baselineRunName, baseline.packageRoot, options.blocks, options.suite, 'baseline');
+  const candidateRun = await runLabs(
+    candidateRunName,
+    candidate.packageRoot,
+    options.blocks,
+    options.suite,
+    'candidate',
+  );
 
   let comparison: string | undefined;
-  if (baselineRunName !== undefined) {
+  const timingMismatches =
+    baselineRun === undefined ? [] : timingModeMismatches(baselineRun.result, candidateRun.result);
+  if (baselineRunName !== undefined && baselineRun !== undefined) {
     await run(labsExecutable, ['baseline', baselineRunName], benchesRoot);
-    comparison = await run(labsExecutable, ['compare', candidateRunName], benchesRoot, true);
+    comparison =
+      (await run(labsExecutable, ['compare', candidateRunName], benchesRoot, true)) +
+      notComparableReport(baselineRun.notComparable, timingMismatches);
     await writeFile(resolve(output, 'comparison.txt'), comparison);
   }
 
@@ -80,6 +91,10 @@ try {
         baseline: baseline === undefined ? undefined : artifactIdentity(baseline),
         candidate: artifactIdentity(candidate),
         comparison: comparison === undefined ? 'not requested' : 'comparison.txt',
+        notComparable: {
+          baselineCheckFailures: baselineRun?.notComparable ?? [],
+          timingModeMismatches: timingMismatches,
+        },
       },
       null,
       2,
@@ -179,12 +194,54 @@ async function resolveRegistryVersion(requested: string): Promise<string> {
   return version;
 }
 
-async function runLabs(name: string, packageRoot: string, blocks: number, suite: PackageLabsSuite): Promise<void> {
+/**
+ * Labs exits non-zero when any benchmark check fails, after saving the result. A candidate must pass every check; a
+ * baseline may fail checks for behavior it predates, and those workloads are reported as not comparable.
+ */
+async function runLabs(
+  name: string,
+  packageRoot: string,
+  blocks: number,
+  suite: PackageLabsSuite,
+  role: LabsResultRole,
+): Promise<{ readonly notComparable: readonly string[]; readonly result: unknown }> {
   const selection = suite === 'full' ? [] : [`@${suite}`];
-  await run(labsExecutable, [...selection, '--name', name, '--force', '--blocks', String(blocks)], benchesRoot, false, {
-    GLYPH_LABS_PACKAGE_ROOT: packageRoot,
-  });
-  await assertLabsResultSucceeded(resolve(labsResults, `${name}.json`));
+  const resultPath = resolve(labsResults, `${name}.json`);
+  // A result left by an earlier run under this name must never stand in for this one.
+  await rm(resultPath, { force: true });
+  try {
+    await run(
+      labsExecutable,
+      [...selection, '--name', name, '--force', '--blocks', String(blocks)],
+      benchesRoot,
+      false,
+      {
+        GLYPH_LABS_PACKAGE_ROOT: packageRoot,
+      },
+    );
+  } catch (error) {
+    if (role === 'candidate' || !(await exists(resultPath))) throw error;
+  }
+  const result = await readLabsResult(resultPath);
+  return { notComparable: acceptLabsResult(result, role), result };
+}
+
+function notComparableReport(baselineFailures: readonly string[], timingMismatches: readonly string[]): string {
+  const sections = [
+    ['Baseline failed checks for behavior it predates', baselineFailures],
+    ['Timed in different modes, so the delta measures the mode rather than the package', timingMismatches],
+  ] as const;
+  return sections
+    .filter(([, lines]) => lines.length !== 0)
+    .map(([title, lines]) => `\nNot comparable: ${title}\n${lines.map((line) => `  · ${line}`).join('\n')}\n`)
+    .join('');
+}
+
+async function exists(path: string): Promise<boolean> {
+  return await stat(path).then(
+    () => true,
+    () => false,
+  );
 }
 
 async function preserveInstall(artifact: InstalledArtifact, name: string, destination: string): Promise<void> {
