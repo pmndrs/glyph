@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:091e9fd684e8978aa1a1fe378235da9a9a052bf5cd24eb6b31703184cbfb60e7'
+source_digest: 'sha256:e39193700f0d4a3488245a077fe36a63956285761515ed9348360804126bf048'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -282,6 +282,16 @@ benchmark labels are rejected as ambiguous. A push to `main` runs `full`, and ma
 choice. Available focused suites are `layout`, `measure`, `glyphs`, `publication`, `batch`, `style`, `reflow`, and
 `stress`.
 `full` does not run browser observations, native/Worker profiles, or correctness and release gates.
+
+The main package suite measures public-system edits, measurement and glyph access, Three publication, column reflow,
+font-size relayout, retained batches, and 1,000-label order changes. Each mutation case deliberately invalidates the state
+it names instead of timing an accidental cache hit. The focused adapter-publication suite adds three countermeasures:
+1,000 normalized-equal retained Three updates, the complete cold lifecycle of a fresh 1,000-label root, and 1,000 direct
+TypeGPU position-only updates. The isolated package consumers install the pinned optional TypeGPU peer so the last case
+exercises the packed `/typegpu` entry rather than workspace source. Browser `startupMs` remains the end-to-end cold-start
+measure across module, asset, renderer, and scene activation. Fresh-process blocks and a five-percent minimum effect
+produce the comparison report. This lane is report-only while runner noise and false-positive rates are established;
+browser, GPU, and frame-pacing evidence remains owned by the browser workflows.
 
 Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentation are complete
 

@@ -138,7 +138,7 @@ async function installArtifact(name: string, requested: string, root: string): P
         name: `glyph-labs-${name}`,
         private: true,
         type: 'module',
-        dependencies: { '@pmndrs/glyph': normalized.spec, three: '0.185.1' },
+        dependencies: { '@pmndrs/glyph': normalized.spec, three: '0.185.1', typegpu: '0.12.5' },
       },
       null,
       2,
@@ -216,6 +216,7 @@ async function runLabs(
       benchesRoot,
       false,
       {
+        GLYPH_LABS_ARTIFACT_ROLE: role,
         GLYPH_LABS_PACKAGE_ROOT: packageRoot,
       },
     );
