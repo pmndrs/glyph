@@ -10,6 +10,26 @@
 
 ## 2026-09-20
 
+- **Centralized framework normalization** — React and Vue now pass complete desired state through Three's canonical
+  framework-update path instead of retaining caller-owned applied-state mirrors. Three reuses equal package-owned property
+  and span snapshots and reports whether the accepted revision changed. Vue retains only the detached snapshots required
+  for in-place reactive proxies, which Three adopts without another merge or clone. Focused
+  tests cover presentation-only React/Vue changes, equivalent PropertyList shapes, malformed property input, a Vue reuse
+  hit followed by a nested mutation, React root and nested-span caller mutations followed by valid immutable updates,
+  enforced deep-freeze ownership, and PropertyList enumerable-key parity. A 16-block
+  packed-artifact Labs comparison improves 1,000 unchanged plain-record Vue snapshot
+  calls from `0.651 ms` to `0.281 ms` p50 (-56.8%); normalized Three publication, TypeGPU position updates, and the cold
+  1,000-label lifecycle remain below the five-percent effect threshold. A focused 8-block comparison of fresh but
+  equivalent formatted updates improves from `35.78 ms` to `3.08 ms` p50 (-91.4%); all four neighboring workloads remain
+  neutral. An adversarial-review follow-up made equal flow descriptions reuse the accepted canonical flow, removed an
+  allocation from the all-reused span path, and strengthened the shared React/Vue behavior tests around accepted flow and
+  measurement identity. The packed-artifact formatted-flow lane improves from `49.69 ms` to `10.03 ms` p50 (-79.8%);
+  the new cold styled-flow lane remains statistically neutral, although the candidate run was clock-confounded and the
+  cold confidence interval is correspondingly wide. This is a patch-level correctness and performance fix with no public
+  API change; React now follows immutable-prop semantics instead of observing unsupported in-place prop mutation. A fresh
+  full-build size report keeps core effectively flat (`-17 B` Brotli), reduces React by `72 B`
+  Brotli, and adds `231 B` to Vue and `216 B` to Three for canonical span/flow reuse and the shared framework-update seam.
+
 - **Kept direct TypeGPU position updates out of semantic publication** — `TypeGpuText.update({ position })` now writes
   only its retained uniform; it does not merge desired text, stage a controller update, enter Wasm, or publish renderer
   commands. A packed-artifact Labs comparison improves 1,000 moving labels from `4.85 ms` to `0.363 ms` p50 (-92.5%),

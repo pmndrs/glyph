@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:e39193700f0d4a3488245a077fe36a63956285761515ed9348360804126bf048'
+source_digest: 'sha256:730eddd07f9937d24079e8231457e36f999824a89d74cb319939e229d9f59e64'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -285,9 +285,12 @@ choice. Available focused suites are `layout`, `measure`, `glyphs`, `publication
 
 The main package suite measures public-system edits, measurement and glyph access, Three publication, column reflow,
 font-size relayout, retained batches, and 1,000-label order changes. Each mutation case deliberately invalidates the state
-it names instead of timing an accidental cache hit. The focused adapter-publication suite adds three countermeasures:
-1,000 normalized-equal retained Three updates, the complete cold lifecycle of a fresh 1,000-label root, and 1,000 direct
-TypeGPU position-only updates. The isolated package consumers install the pinned optional TypeGPU peer so the last case
+it names instead of timing an accidental cache hit. The focused adapter-publication suite adds four countermeasures:
+1,000 normalized-equal retained Three updates, 1,000 unchanged plain-record Vue snapshot-helper calls, the complete cold
+lifecycle of a fresh 1,000-label root, and 1,000 direct TypeGPU position-only updates. The Vue helper case requires the
+candidate to reuse every immutable normalized snapshot while the historical baseline is allowed to allocate replacements;
+it isolates snapshot comparison cost and does not claim to measure Vue proxy traps or a framework render. The isolated
+package consumers install the pinned optional TypeGPU peer so the last case
 exercises the packed `/typegpu` entry rather than workspace source. Browser `startupMs` remains the end-to-end cold-start
 measure across module, asset, renderer, and scene activation. Fresh-process blocks and a five-percent minimum effect
 produce the comparison report. This lane is report-only while runner noise and false-positive rates are established;

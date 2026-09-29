@@ -35,7 +35,11 @@ import {
 } from '../text-properties.js';
 import { assertTextEffectsSupported, normalizedColumns, replacedContent } from '../engine-encoding.js';
 import type { GlyphCopy, GlyphRoot, GlyphRootServices, GlyphTextController } from '../config/glyph.js';
-import { reuseOrCreateTextPropertySnapshot } from '../config/text-property.js';
+import {
+  equalTextPropertySnapshots,
+  isOwnedTextPropertySnapshot,
+  reuseOrCreateTextPropertySnapshot,
+} from '../config/text-property.js';
 import { ThreeCommandBufferRenderer } from './command-buffer-renderer.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import type { ThreeBindings, ThreeMaterialBinding } from './schema.js';
@@ -118,6 +122,7 @@ const emptyTextSpans: readonly never[] = Object.freeze([]);
 interface TextReconciler {
   desired<Format extends RasterFormatMetadata>(text: Text<Format>): DesiredTextState<Format>;
   desiredRevision(text: Text<RasterFormatMetadata>): number;
+  update<Format extends RasterFormatMetadata>(text: Text<Format>, update: TextUpdate<Format>): boolean;
   root(text: Text<RasterFormatMetadata>): ThreeRootHost;
   markCommitted(text: Text<RasterFormatMetadata>): void;
   publishMeasurement(text: Text<RasterFormatMetadata>, measurement: ParagraphLayoutSummary): void;
@@ -699,6 +704,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     reconciler = {
       desired: (text) => text.#desired,
       desiredRevision: (text) => text.#desiredRevision,
+      update: (text, update) => text.#applyUpdate(update, false),
       root: (text) => text.#root,
       markCommitted: (text) => text.#markCommitted(),
       publishMeasurement: (text, measurement) => text.#setBoundingBox(measurement),
@@ -823,13 +829,17 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   }
 
   set(update: TextUpdate<Format>): void {
+    this.#applyUpdate(update, true);
+  }
+
+  #applyUpdate(update: TextUpdate<Format>, preserveExplicitPublication: boolean): boolean {
     this.#assertActive();
     if (typeof update !== 'object' || update === null || Array.isArray(update)) {
       throw new TypeError('Text update must be an object');
     }
     assertNoRawSpans(update, 'Text update');
     const updateKeys = Reflect.ownKeys(update);
-    if (updateKeys.length === 0) return;
+    if (updateKeys.length === 0) return false;
     if (
       updateKeys.length === 1 &&
       updateKeys[0] === 'text' &&
@@ -837,18 +847,17 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       this.#desired.spans.length === 0 &&
       update.text === this.#desired.text
     ) {
-      return;
+      return false;
     }
     const next =
       updateKeys.length === 1 && updateKeys[0] === 'text' && typeof update.text === 'string'
         ? replaceDesiredString(this.#desired, update.text)
         : normalizeDesired({ ...this.#desired, ...replacedContent(update) } as TextProperties<Format>, this.#desired);
     if (
-      !Object.hasOwn(update, 'font') &&
-      !Object.hasOwn(update, 'material') &&
+      (!preserveExplicitPublication || (!Object.hasOwn(update, 'font') && !Object.hasOwn(update, 'material'))) &&
       sameDesiredTextState(this.#desired, next)
     ) {
-      return;
+      return false;
     }
     const nextRevision = checkedNextRevision(this.#desiredRevision);
     this.#binding?.stageUpdate(this.#root.member(this), next, nextRevision);
@@ -856,6 +865,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     this.#desiredRevision = nextRevision;
     this.#boundingBox.makeEmpty();
     this.#boundingBoxCurrent = false;
+    return true;
   }
 
   /** Measures current desired text without scene attachment or matrix traversal; a cache miss may synchronously incur font/measure lookup work. */
@@ -1056,6 +1066,14 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   #assertActive(): void {
     if (this.#disposed) throw new Error('Text has been disposed');
   }
+}
+
+/** @internal Apply framework state through Three's canonical normalization and report whether it changed. */
+export function updateTextFromFramework<Format extends RasterFormatMetadata>(
+  text: Text<Format>,
+  update: TextUpdate<Format>,
+): boolean {
+  return reconciler.update(text, update);
 }
 
 interface TextGroupRenderOrderState {
@@ -1720,19 +1738,35 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
   const layoutReused = previous !== undefined && properties.layout === previous.layout;
   const constraintsReused = previous !== undefined && properties.constraints === previous.constraints;
   const flowReused = previous !== undefined && properties.flow === previous.flow;
-  const style = styleReused ? previous.style : mergePropertyList(properties.style, 'Text style');
-  const layout = layoutReused ? previous.layout : mergePropertyList(properties.layout, 'Text layout');
+  const style = styleReused
+    ? previous.style
+    : isOwnedTextPropertySnapshot(properties.style)
+      ? (properties.style as TextStyle)
+      : mergePropertyList(properties.style, 'Text style');
+  const layout = layoutReused
+    ? previous.layout
+    : isOwnedTextPropertySnapshot(properties.layout)
+      ? (properties.layout as ParagraphLayout)
+      : mergePropertyList(properties.layout, 'Text layout');
   const constraints = constraintsReused
     ? previous.constraints
-    : mergePropertyList(properties.constraints, 'Text constraints');
+    : isOwnedTextPropertySnapshot(properties.constraints)
+      ? (properties.constraints as Constraints)
+      : mergePropertyList(properties.constraints, 'Text constraints');
   if (!styleReused) assertTextStyle(style, 'Text style');
   if (!layoutReused) assertParagraphLayout(layout, 'Text layout');
   if (!constraintsReused) assertConstraints(constraints, 'Text constraints');
-  const flow = flowReused
+  const normalizedFlow = flowReused
     ? previous.flow
     : properties.flow === undefined
       ? undefined
       : normalizeTextFlow(properties.flow, 'Text flow');
+  const flow =
+    !flowReused && previous?.flow !== undefined && normalizedFlow !== undefined
+      ? equalTextPropertySnapshots(previous.flow, normalizedFlow)
+        ? previous.flow
+        : normalizedFlow
+      : normalizedFlow;
   if (!layoutReused || !constraintsReused) normalizedColumns(layout, constraints);
   const formatted = typeof properties.text === 'string' ? undefined : properties.text;
   if (formatted !== undefined && !isFormattedText(formatted)) throw new TypeError('Text content is invalid');
@@ -1747,8 +1781,7 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
     previous !== undefined && previous.text === text && previous.spans === stated
       ? stated
       : alignSpansToClusters(text, assertSpanRanges(text, stated));
-  const spans =
-    resolved === previous?.spans ? previous.spans : Object.freeze(resolved.map((span) => Object.freeze({ ...span })));
+  const spans = resolved === previous?.spans ? previous.spans : reuseOrCreateTextSpans(previous?.spans, resolved);
   const rootTechniques = immutableFontSelectionFonts(properties.font).map((font) => font.raster);
   const inheritedTechniques = [
     ...rootTechniques,
@@ -1809,9 +1842,37 @@ function sameDesiredTextState<Format extends RasterFormatMetadata>(
     previous.layout === next.layout &&
     previous.constraints === next.constraints &&
     previous.flow === next.flow &&
-    Object.is(previous.rasterPixelRatio, next.rasterPixelRatio) &&
+    Object.is(previous.rasterPixelRatio ?? 1, next.rasterPixelRatio ?? 1) &&
     previous.material === next.material
   );
+}
+
+function reuseOrCreateTextSpans<Format extends RasterFormatMetadata>(
+  previous: readonly TextSpan<Format>[] | undefined,
+  spans: readonly TextSpan<Format>[],
+): readonly TextSpan<Format>[] {
+  let snapshot: TextSpan<Format>[] | undefined = previous?.length === spans.length ? undefined : [];
+  for (const [index, span] of spans.entries()) {
+    const prior = previous?.[index];
+    const style =
+      span.style === undefined
+        ? undefined
+        : reuseOrCreateTextPropertySnapshot(prior?.style, span.style, `Text span ${index} style`);
+    if (
+      prior !== undefined &&
+      prior.start === span.start &&
+      prior.end === span.end &&
+      prior.font === span.font &&
+      prior.material === span.material &&
+      prior.style === style
+    ) {
+      snapshot?.push(prior);
+      continue;
+    }
+    if (snapshot === undefined) snapshot = previous!.slice(0, index);
+    snapshot.push(Object.freeze({ ...span, ...(style === undefined ? {} : { style }) }));
+  }
+  return snapshot === undefined ? previous! : Object.freeze(snapshot);
 }
 
 function assertNoRawSpans(value: object, subject: string): void {

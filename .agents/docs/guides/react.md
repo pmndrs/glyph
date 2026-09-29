@@ -31,11 +31,11 @@ React supports three coexisting ways to select a font. They all declare or consu
 none creates another byte, decoded-font, shaping, or renderer-resource cache. Choose the form by ownership and naming
 needs, not by renderer capability.[^font-face][^react-adapter]
 
-| Path | Use it when | Declaration owner | Mounted Font lease |
-| --- | --- | --- | --- |
-| Direct `FontFace` | Application code already owns a reusable declaration or exact format selection. | Caller | `<Text>` |
-| `useFont` or a format hook | A component wants React to own declaration and mounted lifetime. | Hook cache | Hook |
-| `GlyphProvider.fontFaces` | A subtree should resolve short family aliases such as `"Inter"`. | Provider for shorthand entries; caller for passed FontFaces | `<Text>` |
+| Path                       | Use it when                                                                     | Declaration owner                                           | Mounted Font lease |
+| -------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------ |
+| Direct `FontFace`          | Application code already owns a reusable declaration or exact format selection. | Caller                                                      | `<Text>`           |
+| `useFont` or a format hook | A component wants React to own declaration and mounted lifetime.                | Hook cache                                                  | Hook               |
+| `GlyphProvider.fontFaces`  | A subtree should resolve short family aliases such as `"Inter"`.                | Provider for shorthand entries; caller for passed FontFaces | `<Text>`           |
 
 ## Pass a caller-owned FontFace directly
 
@@ -151,8 +151,9 @@ renderer, scene, or canvas.
 ## Cache and ownership rules
 
 Paragraph props describe complete desired state. Removing `style`, `layout`, `constraints`, `flow`, `material`, or
-`rasterPixelRatio` restores its default. Replace property objects through normal React updates; the adapter keeps
-detached snapshots for comparison and requests a frame after applying the update on a demand-rendered Canvas.
+`rasterPixelRatio` restores its default. Replace property objects through normal React updates; the adapter submits fresh
+props to Three's canonical normalizer, which reports whether the accepted revision changed, and requests a frame only for
+a real change on a demand-rendered Canvas. Caller-owned prop objects are never retained as accepted engine state.
 
 - The Glyph FontFace graph is the sole semantic cache for source bytes, decoded formats, dependencies, and renderer
   resources.
@@ -164,7 +165,11 @@ detached snapshots for comparison and requests a frame after applying the update
 - `loadFont`, `createFontLibrary`, `FontLibrary`, and a public font-library subpath are not part of the React or root API.
 
 [^react-adapter]: The adapter defines direct selection suspension, hook caches, provider aliases, selective error handling, and mounted cleanup.
+
 [^react-format-hooks]: The three format leaves delegate to `useFont` while preserving each RasterFormat's option and return types.
+
 [^font-face]: FontFace loading owns canonical source, decoded-format, dependency, retry, and declaration lifetimes.
+
 [^react-contract]: The compile-only contract proves accepted provider entries, hook return inference, and rejected handle props.
+
 [^react-lifecycle]: Integration coverage proves mounted leases survive declaration cleanup and are released at unmount.
