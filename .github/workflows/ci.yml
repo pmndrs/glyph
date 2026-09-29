@@ -24,6 +24,7 @@ on:
           - reflow
           - stress
           - cold
+          - read-publication
           - full
 
 permissions:

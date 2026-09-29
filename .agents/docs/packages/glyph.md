@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:fc166c0fbaad1a1fc87749ee4ee9487b73ee9b242d85bcdc30849a933fbb7ac2'
+source_digest: 'sha256:8b8aa61c08269547d54e8ac1fcd13986277588809610e253d8a95dc46aeb2af1'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -810,10 +810,19 @@ The semantic values preserve information useful to callers:
 
 ## Root-assisted detached glyph copies
 
-Public `Text.breakApart()` requests committed glyph and decoration subsets through its owning root. Rust compacts the
-selected paragraph records through the installed Codec into complete checkpoints; it does not expose buffer offsets or
-private planning objects for each renderer to reconstruct. Root services synchronously decode each detached copy into its
-destination renderer. The query does not advance the source root's revision or publication generation.
+Public `Text.breakApart()` requests committed glyph and decoration subsets through its owning root. A `pending`
+paragraph inside a Scene first runs its root's ordinary commit through the engine-wide `glyph.shape()` batch, as
+`measureGlyphs()`, `caretAt()`, and `selectionRects()` also do, so none of them depends on a draw having happened
+(D-369). A committed paragraph whose group, root/group material, pixel snapping, or draw order changed since its last
+publication republishes the same way, so a copy never carries the previous material or group's draws. The check reads
+the root material and walks the Text's ancestors, not the root's members. Once the root is disposed, these reads answer
+`undefined` and `breakApart()` throws.
+Rust compacts the selected paragraph records through the installed Codec into complete checkpoints; it does not expose
+buffer offsets or private planning objects for each renderer to reconstruct. Root services synchronously decode each
+detached copy into its destination renderer. Copying does not advance the source root's revision or publication
+generation; the preceding commit may publish pending changes. A read-triggered publication failure throws from that
+read. Reading an unchanged rejected paragraph does not retry it, including inside `onError`; explicit text changes or
+root/group presentation changes allow the next read to publish again. Successful publication clears the retained errors.
 
 Three's `Text.breakApart()` uses both planner requests and returns the frozen tuple
 `[Glyphs, Decorations | undefined]`. It preserves the source transform, Codec-defined batching, fallback raster formats,

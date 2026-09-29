@@ -64,7 +64,7 @@ This separation lets callers keep, replace, animate, or omit decoration renderin
 
 ## Three.js surface
 
-`Text.breakApart()` is available only after the source renderer state is committed. It synchronously returns the frozen tuple `[Glyphs, Decorations | undefined]`. Both groups use the ordinary Three render-plan executor; the operation does not create one `Text`, mesh, or material per glyph. If decoration import fails, Three disposes the already-created glyph branch before rethrowing, so the call is atomic from the caller's perspective.
+`Text.breakApart()` copies committed source renderer state; a `pending` source inside a Scene commits first through the ordinary `glyph.shape()` batch (D-369). It synchronously returns the frozen tuple `[Glyphs, Decorations | undefined]`. Both groups use the ordinary Three render-plan executor; the operation does not create one `Text`, mesh, or material per glyph. If decoration import fails, Three disposes the already-created glyph branch before rethrowing, so the call is atomic from the caller's perspective.
 
 ```ts
 const [glyphs, decorations] = text.breakApart();

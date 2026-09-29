@@ -1,5 +1,67 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-29
+
+- **Placed the read-publication benchmarks in the Labs suites** — The workloads from `glyph-package.bench.ts` moved into
+  `benches/labs/package/read-publication.bench.ts` with shared helpers in `read-publication.ts`, unchanged. Cases that
+  repeat work on mounted labels run in the new `read-publication` suite; cases whose every call mounts new text run in
+  the `cold` suite, so each suite times alike. The package runner's `--suite` replaces the earlier `--filter` option.
+  See [benchmark ownership](packages/benchmarks.md).
+
+## 2026-09-26
+
+- **Added small-scene read-publication benchmarks** — The `@one-label` selection covers mounting and reading a label
+  before its first frame, editing one label and reading its glyphs, and editing one label with only a draw. Title
+  splitting, text-field typing, and caret placement now also run in a small scene. Bulk scene workloads remain for
+  stress evidence. Eight-block runs of packed baseline `504ffbdf` and candidate `97ca2a85` matched all six outcomes.
+  The three `@one-label` cases, title splitting, and field typing were neutral at the measured resolution. Caret
+  placement in the small scene was 85.4% faster (p < .001). Timings include scene traversal but exclude GPU work. See
+  [benchmark ownership](packages/benchmarks.md).
+- **Fixed stale and throwing layout reads after presentation changes and root disposal** — A committed `Text` moved to
+  another group, or its root/group material, snapping, or draw order changed. Its reads answered from the
+  previous publication, so `breakApart()` copied the old material. Each entry now records the presentation, including
+  its root material fallback, and order rank it was published with; a read republishes when the presentation differs.
+  The check reads root material and walks the Text's ancestors without scanning other root members. Reads on a Text
+  whose root was disposed threw from the read-triggered commit;
+  they again answer `undefined`, and `breakApart()` throws its uncommitted error, as before D-369. Regression tests
+  cover both. See [the package reference](packages/glyph.md).
+- **Measured deferred versus synchronous layout in common use cases** — The `@read-publication` selection now runs
+  framework-neutral use cases in scenes of 100 and 1,000 labels sharing one root: breaking a title into letters, typing
+  in a field, clicking to place a caret, 30 floating combat numbers that break apart, a 50-line edit with caret reads,
+  100 dashboard tickers with and without glyph reads, and loading a scene with every label broken apart. Each produces
+  the same checked outcome on both artifacts, written the way each API requires. Multi-object use cases run with all
+  updates before the reads and with each object updated and read in turn. An eight-block run of base `5eccfac5` against
+  `d2e914a4` at matched clocks matched all 24 outputs. At 1,000 labels every single-object and batched use case was
+  neutral, and the synchronous build shows each result one frame sooner; at 100 labels the title and the batched
+  50-line edit were 8% and 6% slower (p = .021). Updating and reading each object in turn publishes the root once
+  per object: at 1,000 labels the 50-line edit took 126 ms against 8.7 ms deferred, the tickers 362 ms against
+  11.8 ms, the combat burst 135 ms against 52 ms, and the scene load 2.48 s against 1.18 s. See
+  [benchmark ownership](packages/benchmarks.md).
+
+## 2026-09-25
+
+- **Added public read/publication tradeoff benchmarks** — The `@read-publication` Labs selection covers unchanged,
+  batched, and interleaved `measureGlyphs`, `caretAt`, and `selectionRects` calls at 100 and 1,000 labels, a no-read
+  publication control, and bulk versus incremental mount-and-split lifecycles. Final committed-layout snapshots prevent
+  deferred work from masquerading as an optimization; legacy split callers receive the explicit traversal they require.
+  The packed-artifact runner accepts and records `--filter`. An initial two-block run of base `5eccfac5` against
+  `d2e914a4` passed all 24 output checks on both artifacts, with matching snapshots. At 1,000 labels, the candidate's
+  median of block medians was 3,303.6 ms for alternating writes/`measureGlyphs`, versus 63.2 ms for writes before reads;
+  the baseline's alternating case was 19.4 ms but did not guarantee fresh intermediate reads. These are exploratory
+  observations, not significance verdicts: two blocks cannot meet Labs' 0.05 threshold, and candidate CPU frequency
+  drifted 6.2%. Default eight-block reruns remain available. See [benchmark ownership](packages/benchmarks.md).
+
+## 2026-09-24
+
+- **Made committed-layout reads answer without a draw** — A Three `Text` that is pending inside a Scene now commits
+  itself when `breakApart()`, `measureGlyphs()`, `caretAt()`, or `selectionRects()` needs its layout, through the same
+  engine-wide `glyph.shape()` batch a traversal runs, so a caller no longer polls `commitState()` from a frame
+  callback. The R3F `Text` and `TextGroup` refs follow React 19: a callback ref sees only the mounted host, and a
+  cleanup it returns runs on detach, so a callback ref can break a paragraph apart on attach. Read-triggered publication
+  failures throw at the read; explicit text or group changes permit recovery while unchanged failures do not retry.
+  Regression tests cover error propagation, reentry rejection, unchanged failure observation, and recovery. See
+  [D-369](planning/decision-register.md) and [the package reference](packages/glyph.md).
+
 ## 2026-09-22
 
 - **Routed package performance by intent** — Pull requests now run only the concise installed-package smoke comparison by

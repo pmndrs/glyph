@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:2cb1ca42a5dc608076a62e6e3897976d181b6895a63a4678d2cc71b699510d37'
+source_digest: 'sha256:f209898821cf8e2ba7727d610b992bd2e02ba03fa0cf08af997cd56ad17f73c1'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -271,7 +271,8 @@ Package performance is measured from installable artifacts rather than workspace
 performance job. `benchmark:labs-package` installs the candidate tarball and an exact version resolved from the current
 npm canary into isolated temporary consumers, then runs both through `@pmndrs/labs`. It never rebuilds either artifact.
 The retained report includes native Labs JSON, comparison output, exact package manifests and lockfiles, and the candidate
-tarball SHA-256.
+tarball SHA-256. Labs' Git metadata identifies the benchmark checkout, not the installed package's source
+revision; use the artifact manifest to identify the compared packages.
 
 The default package suite is a common-use smoke comparison: cached `measure()`, measurement and publication after a text
 change, exact-width reflow, paint-only style publication, and font-size relayout. It deliberately excludes per-glyph
@@ -292,6 +293,34 @@ mounted state lives in the `cold` suite. The comparison still reports any worklo
 sides as not comparable instead of printing its delta. A candidate must pass every benchmark check; a baseline may
 fail checks that guard behavior it predates, and those workloads are reported as not comparable rather than aborting
 the comparison. Both lists are recorded in the retained manifest.
+
+The read-publication workloads measure what deferred versus synchronous layout (D-369) costs an application in common
+use cases, without assuming a framework. Cases that repeat work on mounted labels run in the `read-publication` suite;
+cases whose every call mounts new text (mounting and reading a label, breaking a title apart, combat numbers, and loading
+the scene) run in the `cold` suite, so each suite times alike. A small scene with one existing label covers mounting another label
+and reading it before the first frame, editing one label and reading its glyphs, editing one label with only a draw,
+breaking a title into letters, typing in a text field, and clicking to place the caret. Larger scenes hold 100 or 1,000
+labels in one root, as an application's other text shares its root. They also cover the title, field, and caret cases,
+plus spawning 30 floating combat numbers that break apart, editing 50 lines and placing a caret and selection in each,
+100 dashboard tickers that measure their glyphs to roll digits, the same tickers without reading layout, and loading the
+scene with every label broken apart.
+Use cases that touch several objects run twice: all updates before the reads, and each object updated and read in turn,
+as per-object update code does.
+
+Each use case reaches the same outcome on both artifacts, written the way that artifact's API requires; an untimed public
+capability probe selects the code. On a deferred artifact the use case renders a frame, confirms the commit, reads, and
+renders the result in a second frame. On a synchronous artifact it reads at once and renders one frame, so its result
+appears one frame sooner. A deferred artifact cannot read an object before a frame publishes it, so its "each in turn"
+schedule runs the batched code. Every read checks that it answered for the latest text, and untimed snapshots require
+identical outcomes on both artifacts. A frame is the scene traversal `renderer.render()` performs; timings exclude GPU
+execution and font loading.
+Within either suite, the `@one-label` tag selects the label lifecycle cases, and `@small-scene` selects the title, field,
+and caret cases in the one-label scene. Eight-block packed-artifact runs matched all six outcomes on baseline and candidate. The label
+lifecycle, title, and field cases were neutral at the measured resolution; caret placement was 85.4% faster (p < .001).
+Run `mise exec -- pnpm scripts run benchmark:labs-package -- --baseline /absolute/base.tgz --candidate /absolute/head.tgz
+--suite read-publication --output .cache/read-publication`, and again with `--suite cold`, to retain the comparison and
+artifact identities. Build and pack each revision first; the runner never builds source. The suite is recorded in the run
+manifest.
 
 Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentation are complete
 
