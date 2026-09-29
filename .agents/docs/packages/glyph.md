@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:9aa6c29732e5b18449aa578a6f950bc1b8db3653dc21d3765c33b3418a3f3b71'
+source_digest: 'sha256:8b8aa61c08269547d54e8ac1fcd13986277588809610e253d8a95dc46aeb2af1'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1247,7 +1247,7 @@ transaction and raster-format-specific command-buffer publication; GPU submissio
 
 The migration comparison is checked evidence rather than a reconstructed recollection. Commit `90964be0`, the exact
 `feat/three-api` base, was rebuilt in an isolated worktree using its own lockfile and original
-`glyph:layout-benchmark` workflow on this Darwin arm64 host. At the same eight-warmup/31-sample cadence its retained
+now-retired `glyph:layout-benchmark` workflow on this Darwin arm64 host. At the same eight-warmup/31-sample cadence its retained
 TypeScript path measured 58.32/12.09/9.15/39.61 ms for cold/font-size/width/suffix-edit medians. The current Bitmap,
 MTSDF, and Slug records all use one byte-identical optimized shaper Wasm and the complete `pmndrs_glyph_engine_update` plus
 raster-format-specific Rust command-buffer publication. The base reports 25,515 positioned glyphs; the current publication reports 21,805
