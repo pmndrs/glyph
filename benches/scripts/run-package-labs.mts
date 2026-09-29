@@ -1,7 +1,7 @@
 /* @workflow {
   "name": "benchmark:labs-package",
   "summary": "Benchmark common installed-package workflows by default, or select a focused/full pmndrs/labs suite.",
-  "requirements": "Network access for registry specs, or one or two packed @pmndrs/glyph .tgz artifacts. Never builds workspace source. Accepts --suite smoke|layout|measure|glyphs|publication|batch|style|reflow|stress|cold|full.",
+  "requirements": "Network access for registry specs, or one or two packed @pmndrs/glyph .tgz artifacts. Never builds workspace source. Accepts --suite smoke|layout|measure|glyphs|publication|batch|style|reflow|stress|cold|read-publication|full.",
   "writes": "Ignored Labs results and an artifact manifest under --output (default .cache/labs-package)."
 } */
 import { createHash } from 'node:crypto';

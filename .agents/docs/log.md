@@ -1,5 +1,13 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-29
+
+- **Placed the read-publication benchmarks in the Labs suites** — The workloads from `glyph-package.bench.ts` moved into
+  `benches/labs/package/read-publication.bench.ts` with shared helpers in `read-publication.ts`, unchanged. Cases that
+  repeat work on mounted labels run in the new `read-publication` suite; cases whose every call mounts new text run in
+  the `cold` suite, so each suite times alike. The package runner's `--suite` replaces the earlier `--filter` option.
+  See [benchmark ownership](packages/benchmarks.md).
+
 ## 2026-09-26
 
 - **Added small-scene read-publication benchmarks** — The `@one-label` selection covers mounting and reading a label

@@ -110,6 +110,10 @@ test('routes package Labs by event and one explicit pull-request label', () => {
   );
   assert.equal(selectPackageLabsSuite({ eventName: 'pull_request', labels: ['benchmark:cold'] }), 'cold');
   assert.equal(
+    selectPackageLabsSuite({ eventName: 'pull_request', labels: ['benchmark:read-publication'] }),
+    'read-publication',
+  );
+  assert.equal(
     selectPackageLabsSuite({
       eventName: 'pull_request',
       labels: ['benchmark:measure', 'benchmark:full', 'benchmark:stress'],

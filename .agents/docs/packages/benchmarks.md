@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:bc5e4e564d8998a2587f51614c42ba5a2394785d2cf1a228642ff6ab3d92db3c'
+source_digest: 'sha256:f209898821cf8e2ba7727d610b992bd2e02ba03fa0cf08af997cd56ad17f73c1'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -294,8 +294,10 @@ sides as not comparable instead of printing its delta. A candidate must pass eve
 fail checks that guard behavior it predates, and those workloads are reported as not comparable rather than aborting
 the comparison. Both lists are recorded in the retained manifest.
 
-The `@read-publication` Labs selection measures what deferred versus synchronous layout (D-369) costs an application in
-common use cases, without assuming a framework. A small scene with one existing label covers mounting another label
+The read-publication workloads measure what deferred versus synchronous layout (D-369) costs an application in common
+use cases, without assuming a framework. Cases that repeat work on mounted labels run in the `read-publication` suite;
+cases whose every call mounts new text (mounting and reading a label, breaking a title apart, combat numbers, and loading
+the scene) run in the `cold` suite, so each suite times alike. A small scene with one existing label covers mounting another label
 and reading it before the first frame, editing one label and reading its glyphs, editing one label with only a draw,
 breaking a title into letters, typing in a text field, and clicking to place the caret. Larger scenes hold 100 or 1,000
 labels in one root, as an application's other text shares its root. They also cover the title, field, and caret cases,
@@ -312,12 +314,13 @@ appears one frame sooner. A deferred artifact cannot read an object before a fra
 schedule runs the batched code. Every read checks that it answered for the latest text, and untimed snapshots require
 identical outcomes on both artifacts. A frame is the scene traversal `renderer.render()` performs; timings exclude GPU
 execution and font loading.
-The `@one-label` tag selects the three label lifecycle cases, and `@small-scene` selects the title, field, and caret cases
-in the one-label scene. Eight-block packed-artifact runs matched all six outcomes on baseline and candidate. The label
+Within either suite, the `@one-label` tag selects the label lifecycle cases, and `@small-scene` selects the title, field,
+and caret cases in the one-label scene. Eight-block packed-artifact runs matched all six outcomes on baseline and candidate. The label
 lifecycle, title, and field cases were neutral at the measured resolution; caret placement was 85.4% faster (p < .001).
 Run `mise exec -- pnpm scripts run benchmark:labs-package -- --baseline /absolute/base.tgz --candidate /absolute/head.tgz
---filter @read-publication --output .cache/read-publication` to retain the comparison and artifact identities. Build and
-pack each revision first; the runner never builds source. The optional filter is recorded in the run manifest.
+--suite read-publication --output .cache/read-publication`, and again with `--suite cold`, to retain the comparison and
+artifact identities. Build and pack each revision first; the runner never builds source. The suite is recorded in the run
+manifest.
 
 Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentation are complete
 
