@@ -23,6 +23,17 @@ const typeGpuPackage = (await import(
 const corePackage = (await import(
   pathToFileURL(resolve(packageRoot, 'dist/core.js')).href
 )) as typeof import('@pmndrs/glyph/core');
+interface FormattedTextInternals {
+  inheritClusterAlignedSpans?<Span extends Readonly<{ start: number; end: number }>>(
+    text: string,
+    source: readonly Readonly<{ start: number; end: number }>[],
+    spans: readonly Span[],
+  ): readonly Span[];
+}
+const formattedTextPath = resolve(packageRoot, 'dist/formatted-text.js');
+const formattedTextPackage = (
+  existsSync(formattedTextPath) ? await import(pathToFileURL(formattedTextPath).href) : {}
+) as FormattedTextInternals;
 interface ReactiveSnapshotPackage {
   snapshotReactivePropertyList<Value extends object>(value: unknown, label: string, previous?: Value): Value;
 }
@@ -42,7 +53,11 @@ const { bitmap, glyph, span, txt } = glyphPackage;
 const { defineThreeConfig } = threePackage;
 const { defineTypeGpuConfig } = typeGpuPackage;
 const { resourceLease } = corePackage;
+const { inheritClusterAlignedSpans } = formattedTextPackage;
 const { snapshotReactivePropertyList } = reactiveSnapshotPackage;
+if (process.env.GLYPH_LABS_ARTIFACT_ROLE === 'candidate' && inheritClusterAlignedSpans === undefined) {
+  throw new Error('candidate package does not expose the cluster-provenance helper exercised by @frameworks');
+}
 const fontBytes = await readFile(new URL('../fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url));
 
 await glyph.init();
@@ -55,6 +70,31 @@ let nextHandle = 1;
 
 function formattedLabel(text: string) {
   return txt`${span({ color: '#ffffff', decoration: { underline: true } })`${text.slice(0, 5)}`}${text.slice(5)}`;
+}
+
+function bindFrameworkLabel(flattened: ReturnType<typeof formattedLabel>): ReturnType<typeof formattedLabel> {
+  const spans = flattened.spans.map((entry) => Object.freeze({ ...entry }));
+  return Object.freeze({
+    ...flattened,
+    spans:
+      inheritClusterAlignedSpans === undefined
+        ? Object.freeze(spans)
+        : inheritClusterAlignedSpans(flattened.text, flattened.spans, spans),
+  });
+}
+
+function trailingSpanLabel(text: string, trailingColor: string): ReturnType<typeof formattedLabel> {
+  const content = `${text} alpha beta gamma delta epsilon`;
+  const literal = formattedLabel(content);
+  const spanCount = 8;
+  return {
+    ...literal,
+    spans: Array.from({ length: spanCount }, (_, index) => ({
+      start: Math.floor((content.length * index) / spanCount),
+      end: Math.floor((content.length * (index + 1)) / spanCount),
+      style: { color: index === spanCount - 1 ? trailingColor : '#ffffff' },
+    })),
+  };
 }
 
 function createLabels(count: number, content: 'plain' | 'styled-flow' = 'plain') {
@@ -221,6 +261,62 @@ group('allocation-light adapter publication @publication', () => {
         },
       })),
     );
+    let selected = 0;
+
+    const textCount = yield () => {
+      selected = selected === 0 ? 1 : 0;
+      const next = desired[selected]!;
+      for (let index = 0; index < created.labels.length; index++) {
+        created.labels[index]!.set(next[index]!);
+      }
+      created.scene.updateMatrixWorld(true);
+      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      return created.textGroup.textCount;
+    };
+    assert.equal(textCount, count);
+
+    disposeLabels(created);
+  });
+
+  bench('bind and normalize 1000 framework-shaped formatted flow updates @frameworks', function* () {
+    const count = 1_000;
+    const created = createLabels(count);
+    const flattened = [0, 1].map(() => created.labels.map((label) => formattedLabel(label.text)));
+    let selected = 0;
+
+    const textCount = yield () => {
+      selected = selected === 0 ? 1 : 0;
+      const next = flattened[selected]!;
+      for (let index = 0; index < created.labels.length; index++) {
+        created.labels[index]!.set({
+          text: bindFrameworkLabel(next[index]!),
+          style: { fontSize: 16 },
+          layout: { wrap: 'word' as const },
+          constraints: { width: { mode: 'exact' as const, size: 160 } },
+          flow: {
+            regions: [{ key: 'main', shape: { kind: 'rectangle' as const, bounds: [0, 0, 160, 64] as const } }],
+          },
+        });
+      }
+      created.scene.updateMatrixWorld(true);
+      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      return created.textGroup.textCount;
+    };
+    assert.equal(textCount, count);
+
+    disposeLabels(created);
+  });
+
+  bench('mutate one trailing span across 1000 formatted labels @spans', function* () {
+    const count = 1_000;
+    const created = createLabels(count);
+    const desired = ['#ff2f00', '#2f7fff'].map((trailingColor) =>
+      created.labels.map((label) => ({ text: trailingSpanLabel(label.text, trailingColor) })),
+    );
+    for (let index = 0; index < created.labels.length; index++) {
+      created.labels[index]!.set(desired[0]![index]!);
+    }
+    created.scene.updateMatrixWorld(true);
     let selected = 0;
 
     const textCount = yield () => {

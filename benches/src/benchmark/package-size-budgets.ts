@@ -62,17 +62,19 @@ export const packageSizeBudgets = {
     brotliBytes: 113_000,
   },
   // The React adapter includes Glyph's root and Three integration while React, R3F, and Three remain consumer peers.
+  // Cluster-alignment provenance and stable font-selection ownership measure
+  // 549,012 raw / 536,047 minified / 134,787 gzip / 110,901 Brotli bytes.
   'react-runtime-js': {
-    rawBytes: 548_000,
-    minifiedBytes: 535_000,
+    rawBytes: 550_000,
+    minifiedBytes: 537_000,
     gzipBytes: 136_000,
     brotliBytes: 112_000,
   },
   // The Vue adapter includes Glyph's root and Three integration while Vue, Tres, and Three remain consumer peers.
-  // Canonical framework normalization measures 546,451 raw / 534,209 minified / 134,166 gzip / 110,348 Brotli bytes.
+  // Cluster-alignment provenance measures 547,980 raw / 535,719 minified / 134,645 gzip / 110,800 Brotli bytes.
   'vue-runtime-js': {
-    rawBytes: 547_000,
-    minifiedBytes: 535_000,
+    rawBytes: 549_000,
+    minifiedBytes: 536_000,
     gzipBytes: 136_000,
     brotliBytes: 112_000,
   },

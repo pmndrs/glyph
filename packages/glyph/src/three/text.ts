@@ -1,6 +1,12 @@
 import * as THREE from 'three/webgpu';
 
-import { alignSpansToClusters, type FormattedText, type ParagraphSpan, type TextInput } from '../formatted-text.js';
+import {
+  alignSpansToClusters,
+  areOwnedSpansClusterAligned,
+  type FormattedText,
+  type ParagraphSpan,
+  type TextInput,
+} from '../formatted-text.js';
 import type { Font } from '../font.js';
 import { isFontFaceSelection, resolveFontFace, type FontFaceSelection, type FontFaceRasterOf } from '../font-face.js';
 import { createGlyphPlacements, type GlyphCaret, type GlyphPlacements } from '../glyph-placement.js';
@@ -1777,11 +1783,16 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
     (formatted?.spans as readonly TextSpan<Format>[] | undefined) ??
     (properties as DesiredTextState<Format>).spans ??
     [];
-  const resolved =
-    previous !== undefined && previous.text === text && previous.spans === stated
-      ? stated
-      : alignSpansToClusters(text, assertSpanRanges(text, stated));
-  const spans = resolved === previous?.spans ? previous.spans : reuseOrCreateTextSpans(previous?.spans, resolved);
+  let spans: readonly TextSpan<Format>[];
+  if (previous !== undefined && previous.text === text && previous.spans === stated) {
+    spans = stated;
+  } else {
+    const checked = assertSpanRanges(text, stated);
+    // Glyph's text compilers hand off package-owned arrays already normalized to this text's cluster grid. Raw caller
+    // arrays still take the exact shared Unicode path; the provenance marker is only a redundant-work fast path.
+    const aligned = areOwnedSpansClusterAligned(text, checked) ? checked : alignSpansToClusters(text, checked);
+    spans = reuseOrCreateTextSpans(previous?.spans, aligned);
+  }
   const rootTechniques = immutableFontSelectionFonts(properties.font).map((font) => font.raster);
   const inheritedTechniques = [
     ...rootTechniques,
