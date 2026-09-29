@@ -46,6 +46,7 @@ export function sameSnapshot(left: unknown, right: unknown): boolean {
 
 /** Committed group props are complete desired state; `renderOrder` and `material` reset to Three's defaults when omitted. */
 export interface DesiredTextGroupOptions {
+  readonly batching?: TextGroup['batching'] | undefined;
   readonly material?: TextGroup['material'] | undefined;
   readonly renderOrder?: number | undefined;
 }
@@ -53,6 +54,11 @@ export interface DesiredTextGroupOptions {
 /** Apply committed group props to the retained Three group; returns whether anything changed and a frame is due. */
 export function applyTextGroupOptions(group: TextGroup, options: DesiredTextGroupOptions): boolean {
   let changed = false;
+  const batching = options.batching ?? 'auto';
+  if (group.batching !== batching) {
+    group.batching = batching;
+    changed = true;
+  }
   if (group.material !== options.material) {
     group.material = options.material;
     changed = true;

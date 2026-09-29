@@ -779,6 +779,7 @@ export const TextGroup: TextGroupComponent = defineComponent({
   name: 'GlyphTextGroup',
   inheritAttrs: false,
   props: {
+    batching: { type: String as PropType<TextGroupOptions['batching']>, required: false },
     renderOrder: { type: Number, required: false },
     material: { type: null as unknown as PropType<ThreeTextMaterial>, required: false },
     pixelSnapping: { type: null as unknown as PropType<boolean>, required: false },
@@ -816,6 +817,7 @@ export const TextGroup: TextGroupComponent = defineComponent({
           args: [
             threeTextConstructionToken,
             {
+              ...(props.batching === undefined ? {} : { batching: props.batching }),
               ...(props.renderOrder === undefined ? {} : { renderOrder: props.renderOrder }),
               ...(props.material === undefined ? {} : { material: props.material }),
               ...(props.pixelSnapping === undefined ? {} : { pixelSnapping: props.pixelSnapping }),
