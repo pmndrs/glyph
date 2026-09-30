@@ -242,6 +242,7 @@ impl<C: BreakCorrections> LineFit<'_, C> {
 
     /// Whether `[line_start, end)` fits: base sums (`hanging` the base terminating space
     /// run) with the seed and `charge` on top; with none, exactly main's test.
+    #[inline(never)]
     fn fits(&self, end: usize, base: Base, hanging: i64, charge: EndCharge) -> bool {
         let charged = self.charged(end, charge);
         let hung = charged.hung(hanging);
@@ -267,7 +268,16 @@ impl<C: BreakCorrections> LineFit<'_, C> {
     /// Rule 2: whether `end` overflows. Only the FIRST overflowing candidate of a line, at
     /// a corrected boundary, is re-tested with its correction charged (greedy, as CSS wraps).
     fn overflows(&mut self, end: usize, base: Base, hanging: i64) -> Result<bool, EngineError> {
-        if self.fits(end, base, hanging, EndCharge::NONE) {
+        // Without a seed or a charge the test is main's own, through the seeded twin.
+        let fits = if self.seed == Correction::ZERO {
+            self.fits_seeded(
+                base.advance.saturating_sub(hanging),
+                base.space.saturating_sub(hanging),
+            )
+        } else {
+            self.fits(end, base, hanging, EndCharge::NONE)
+        };
+        if fits {
             return Ok(false);
         }
         if self.rescued || !self.corrected(end) {

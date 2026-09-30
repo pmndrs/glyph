@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:862dc718e488fb94f07bb68e1b5b2a510b9bf8388a5fb71777ecdaa70feac62f'
+source_digest: 'sha256:95c1be9407c76c71d98e713c9a2e839f689e7411a1380e2c458ff6add951521d'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1412,14 +1412,14 @@ UAX #29 extended grapheme, and intersects the result with HarfRust unsafe-to-bre
 no dictionary segmentation, language-specific hyphenation, or locale tailoring. A Unicode-legal break that HarfRust
 marks unsafe stays allowed within one run, binding, and font, as in browser line breaking: the line fitter prices it
 from boundary-local shaping corrections, computed lazily per boundary and stored in a cluster lane, so line layout is
-exact at the breaks it takes (D-372). Min-content reads the paragraph shaping's word widths uncorrected, like Blink's fast
+exact at the breaks it takes (D-372). A break no space precedes is dropped when its island shaped alone substitutes glyphs (a ligature or contextual unit), so Glyph never splits such a unit, unlike Chromium; a positioning-only difference keeps the break. Min-content reads the paragraph shaping's word widths uncorrected, like Blink's fast
 min-content path, so it never prices every corrected boundary. A line that starts at such a corrected boundary draws the glyphs of the island it opens shaped alone, in
 the same pass that prices it (`line_edge_record`, a boundary-shape record beside the ellipsis one), so it matches the
 line shaped by itself. A line that ends at one, unless a space ends it, draws the island it closes shaped alone too
 (`line_edge_record` with `tail`, `FlowFragment::tail_index`), as Blink reshapes a line end that no breakable space
-precedes; a hanging space keeps the paragraph's glyphs, as browsers keep the terminating space in the shaping run.
+precedes (so only at positioning-only breaks); a hanging space keeps the paragraph's glyphs, as browsers keep the terminating space in the shaping run. Extra glyphs an edge record draws beyond its cluster's paragraph glyphs keep the stable ids of the previous layout's record (`BoundaryShapeArena::source_glyph_id`).
 Edge records lay out cluster by cluster, so spans that split only paint or decoration keep their own extents and
-justification. Lines with nontrivial bidi keep paragraph glyphs while their widths stay corrected (known limitation until visual-order lead replacement exists). Optional language-resource imports,
+justification. A paragraph with a right-to-left or overridden run marks no unsafe break as correctable, as on main, so its widths and drawn glyphs cannot disagree (known limitation until edge records follow visual order). Optional language-resource imports,
 including a versioned linear-memory ABI that can move language tables out of the default Wasm payload, are tracked in
 [#163](https://github.com/pmndrs/glyph/issues/163); no renderer adapter may become a second layout implementation.
 

@@ -7,13 +7,13 @@ import { defineThreeConfig } from '@pmndrs/glyph/three';
 
 import { loadFont } from '../../dist/loader.js';
 
-// CrossSpace2 substitutes `hyphen' k -> hyphen.alt`: the context crosses the break a line takes after a hyphen.
+// CrossSpace2 substitutes `hyphen' k -> hyphen.alt`: the context crosses a break after a hyphen, and Glyph never
+// splits such a unit (unlike Chromium, which draws the hyphen alone at the line end).
 const fixture = new URL('../../../../benches/fixtures/rendering/cross-space-2-bitmap-16.font.glb', import.meta.url);
-const HYPHEN = 502;
 const HYPHEN_ALT = 1466;
 const text = 'a well-known half-knit sweater and the bad-kick snow-kitten at the dark-king lake';
 
-test('a line ending at a corrected boundary that no space follows draws its end shaped alone', async (t) => {
+test('no line ends at a corrected boundary that no space follows when shaping substitutes across it', async (t) => {
   await glyph.init();
   const font = await loadFont({ baked: { bytes: await readFile(fixture) } }, bitmap({ strikes: [16] }));
   const root = glyph.handle('three:integration:unsafe-line-end', defineThreeConfig());
@@ -33,20 +33,14 @@ test('a line ending at a corrected boundary that no space follows draws its end 
     });
     t.after(() => paragraph.dispose());
     const glyphs = paragraph.glyphs();
-    for (const [line, start] of glyphs.lineTextStarts.entries()) {
+    for (const line of glyphs.lineTextStarts.keys()) {
       const end = glyphs.lineTextEnds[line];
       const first = glyphs.lineGlyphStarts[line];
       const ids = Array.from(glyphs.glyphIds.slice(first, first + glyphs.lineGlyphCounts[line]));
-      if (text.slice(end - 1, end + 1) === '-k') {
-        ends += 1;
-        assert.equal(
-          ids.at(-1),
-          HYPHEN,
-          `"${text.slice(start, end)}" ends with the hyphen it draws alone, as Chromium does`,
-        );
-      }
+      if (text.slice(end - 1, end + 1) === '-k') ends += 1;
       inside += ids.filter((id) => id === HYPHEN_ALT).length;
     }
   }
-  assert.equal(ends > 0 && inside > 0, true, 'the fixture breaks after a hyphen and keeps it inside other lines');
+  assert.equal(ends, 0, 'the substituted hyphen never ends a line');
+  assert.equal(inside > 0, true, 'the fixture keeps the substituted hyphen inside its lines');
 });

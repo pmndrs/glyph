@@ -281,6 +281,10 @@ pub(crate) struct ClusterArena {
     pub(super) unsafe_before: Vec<u8>,
     /// `[L, R]` corrections (#216) for the boundary after each cluster, filled lazily by the fitter.
     pub(super) break_corrections: Vec<[Cell<Option<Correction>>; 2]>,
+    /// Corrected breaks not after a space, awaiting the check that drops those shaping substitutes glyphs across.
+    pub(super) substitution_checks: Vec<usize>,
+    /// No run is right-to-left or overridden: only then do line edges shape alone, so only then are breaks corrected.
+    pub(super) ltr: bool,
     pub(super) layout_runs: LayoutRunArena,
     pub(super) run_local: RunLocalArena,
 }
@@ -363,6 +367,9 @@ impl ClusterArena {
             shape,
         } = input;
         self.clear();
+        self.ltr = runs
+            .iter()
+            .all(|run| run.bidi_level & 1 == 0 && !run.style.bidi_override);
         if text.len() != text_unit_ids.len() || text_unit_ids.contains(&0) {
             return Err(EngineError::InvalidRequest);
         }
@@ -416,7 +423,6 @@ impl ClusterArena {
             self.glyph_counts.push(0);
             self.shaped.push(0);
             self.unsafe_before.push(0);
-            self.break_corrections.push(Default::default());
         }
         self.build_index(text.len())?;
         self.aggregate_shape(runs, shape, metrics_for)?;
@@ -495,6 +501,9 @@ impl ClusterArena {
             return Ok(None);
         }
         self.copy_from(previous)?;
+        self.ltr = runs
+            .iter()
+            .all(|run| run.bidi_level & 1 == 0 && !run.style.bidi_override);
         for cluster in cluster_start..cluster_end {
             let start = self.starts[cluster];
             let end = self.ends[cluster];
@@ -942,6 +951,7 @@ impl ClusterArena {
         copy_lane!(shaped);
         copy_lane!(unsafe_before);
         copy_lane!(break_corrections);
+        self.ltr = source.ltr;
         self.layout_runs.reserve(source.layout_runs.runs.len())?;
         self.layout_runs
             .runs
@@ -1220,6 +1230,7 @@ impl ClusterArena {
         self.shaped.clear();
         self.unsafe_before.clear();
         self.break_corrections.clear();
+        self.substitution_checks.clear();
         self.layout_runs.clear();
         self.run_local.clear();
     }
@@ -1745,8 +1756,14 @@ impl ClusterArena {
     fn mark_optional_break(&mut self, preceding: usize) {
         if self.boundary_is_shaping_safe(preceding) {
             self.flags[preceding] |= CLUSTER_ALLOWED_BREAK;
-        } else if self.same_owner(preceding, preceding + 1) {
+        } else if self.ltr && self.same_owner(preceding, preceding + 1) {
             self.flags[preceding] |= CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION;
+            // The correction lane exists only for paragraphs that have a correctable boundary.
+            self.break_corrections
+                .resize_with(self.starts.len(), Default::default);
+            if self.flags[preceding] & CLUSTER_SPACE == 0 {
+                self.substitution_checks.push(preceding);
+            }
         }
     }
 
@@ -3223,6 +3240,10 @@ mod tests {
         };
         let mut previous = ClusterArena::default();
         previous.build(input(&shape), metrics).unwrap();
+        // A paragraph without a correctable boundary keeps no lane; size one as pricing would.
+        previous
+            .break_corrections
+            .resize_with(previous.starts.len(), Default::default);
         let marker = Correction {
             advance: 7,
             space: 0,

@@ -28,9 +28,7 @@ use super::{
     line_composition::{BreakCorrections, Correction},
     placement_slot_arena::{PlacementSlotArena, PlacementSlotError},
     placement_state::{GlyphSource, LayoutRunOwner, PlacementIdentity, PlacementSegment},
-    positioning::{
-        PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT, is_trivially_ltr,
-    },
+    positioning::{PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT},
     render_plan::RenderPlanView,
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
     semantic_wire::RecordSpan,
@@ -4050,10 +4048,7 @@ impl ParagraphState {
             next_glyph_id,
         )?;
         // Every fragment, retained or composed, gets its line start shaped alone (or none).
-        let (geometry, ltr) = (
-            self.geometry.active(),
-            is_trivially_ltr(self.bidi.active(), self.shaping_runs.active().runs()),
-        );
+        let geometry = self.geometry.active();
         let shaper = RefCell::new(shaper);
         let mut corrections = ShapedBreakCorrections {
             shaper: &shaper,
@@ -4064,12 +4059,43 @@ impl ParagraphState {
         };
         attach_line_edges(
             &mut corrections,
-            (geometry, ltr),
+            geometry,
             self.flow_layout.pending_mut(),
-            &mut self.pending_boundary_shape,
+            (&mut self.pending_boundary_shape, &self.boundary_shape),
             &mut self.boundary_shape_scratch,
             next_glyph_id,
         )?;
+        Ok(())
+    }
+
+    /// Makes every legal break that is not after a space, and whose island shaped alone substitutes glyphs,
+    /// a non-break: Glyph does not split what the font shapes as one unit (Chromium does).
+    fn drop_substituting_breaks(&mut self, shaper: &mut ShaperRegistry) -> Result<(), EngineError> {
+        let mut checks = core::mem::take(&mut self.clusters.active_mut().substitution_checks);
+        let shaper = RefCell::new(shaper);
+        let mut corrections = ShapedBreakCorrections {
+            shaper: &shaper,
+            text: self.text.active().units.as_slice(),
+            runs: self.shaping_runs.active().runs(),
+            styles: &self.styles.active().arena,
+            clusters: self.clusters.active(),
+        };
+        let mut dropped = 0;
+        for index in 0..checks.len() {
+            if corrections.substitutes(checks[index] + 1)? {
+                checks[dropped] = checks[index];
+                dropped += 1;
+            }
+        }
+        let clusters = self.clusters.active_mut();
+        for &preceding in &checks[..dropped] {
+            clusters.flags[preceding] &= !(CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION);
+        }
+        if dropped > 0 {
+            clusters.refresh_layout_units()?;
+        }
+        checks.clear();
+        clusters.substitution_checks = checks;
         Ok(())
     }
 
@@ -4090,6 +4116,7 @@ impl ParagraphState {
         // unrepresentable rather than something each caller has to remember to repair.
         self.abort_positioned();
         self.pending_boundary_shape.clear();
+        self.drop_substituting_breaks(shaper)?;
         self.clusters.active_mut().ensure_word_breaks()?;
         self.clusters
             .active_mut()
@@ -4300,7 +4327,7 @@ impl ParagraphState {
             append_boundary_source_ids(
                 &mut self.pending_boundary_shape.stable_ids,
                 source_shape,
-                clusters,
+                (clusters, &self.boundary_shape),
                 next_glyph_id,
             )?;
             let previous = self
@@ -4430,12 +4457,9 @@ impl ParagraphState {
         self.intrinsic_boundary_shape.clear();
         attach_line_edges(
             &mut corrections,
-            (
-                &self.intrinsic_geometry_scratch,
-                is_trivially_ltr(self.bidi.active(), self.shaping_runs.active().runs()),
-            ),
+            &self.intrinsic_geometry_scratch,
             &mut self.intrinsic_flow_layout_scratch,
-            &mut self.intrinsic_boundary_shape,
+            (&mut self.intrinsic_boundary_shape, &self.boundary_shape),
             &mut self.boundary_shape_scratch,
             &mut (1 << 30),
         )
@@ -5010,14 +5034,34 @@ impl ShapedBreakCorrections<'_, '_> {
         Ok(correction)
     }
 
+    /// Whether the island before `boundary` shaped alone as a line end draws other glyphs than the paragraph
+    /// shaped for it, as a ligature or contextual form does across the break.
+    fn substitutes(&mut self, boundary: usize) -> Result<bool, EngineError> {
+        let c = self.clusters;
+        let start = c.island(boundary).0;
+        let first = c.glyph_starts[start] as usize;
+        let paragraph = &c.glyph_ids
+            [first..(c.glyph_starts[boundary - 1] + c.glyph_counts[boundary - 1]) as usize];
+        let mut differs = false;
+        self.shape_range((start, boundary), (false, true), &mut |shaped| {
+            let alone = shaped.glyph_infos();
+            differs = alone.len() != paragraph.len()
+                || alone
+                    .iter()
+                    .any(|info| !paragraph.iter().any(|&id| u32::from(id) == info.glyph_id));
+            Ok(())
+        })?;
+        Ok(differs)
+    }
+
     /// Shapes clusters `[start, end)` and hands the glyphs to `consume`. `lead`/`trail` say the
     /// range begins/ends its line; any other edge shapes with [`SHAPING_CONTEXT`] clusters of context.
-    fn shape_range<T>(
+    fn shape_range(
         &mut self,
         (start, end): (usize, usize),
         (lead, trail): (bool, bool),
-        consume: impl FnOnce(&harfrust::GlyphBuffer) -> Result<T, u32>,
-    ) -> Result<T, EngineError> {
+        consume: &mut dyn FnMut(&harfrust::GlyphBuffer) -> Result<(), u32>,
+    ) -> Result<(), EngineError> {
         let c = self.clusters;
         let run = self.runs[c.source_runs[start] as usize];
         let (item_start, item_end) = (c.starts[start], c.ends[end - 1]);
@@ -5060,7 +5104,7 @@ impl ShapedBreakCorrections<'_, '_> {
         &mut self,
         fragment: FlowFragment,
         (flow_thread_id, tail): (u32, bool),
-        out: &mut BoundaryShapeArena,
+        (out, previous): (&mut BoundaryShapeArena, &BoundaryShapeArena),
         scratch: &mut ShapeArena,
         next_glyph_id: &mut u32,
     ) -> Result<u32, EngineError> {
@@ -5114,7 +5158,7 @@ impl ShapedBreakCorrections<'_, '_> {
         );
         let text_end = c.ends[end - 1];
         scratch.clear();
-        self.shape_range((start, end), edges, |shaped| {
+        self.shape_range((start, end), edges, &mut |shaped| {
             scratch.append(
                 source_run as usize,
                 font,
@@ -5125,7 +5169,7 @@ impl ShapedBreakCorrections<'_, '_> {
             )
         })?;
         let (glyph_start, glyph_count) = out.shape.append_from(scratch, 0)?;
-        append_boundary_source_ids(&mut out.stable_ids, scratch, c, next_glyph_id)?;
+        append_boundary_source_ids(&mut out.stable_ids, scratch, (c, previous), next_glyph_id)?;
         let record = u32::try_from(out.records.len()).map_err(|_| EngineError::ResultTooLarge)?;
         out.records.push(BoundaryShape {
             flow_thread_id,
@@ -5163,7 +5207,7 @@ impl ShapedBreakCorrections<'_, '_> {
                 f64::from(style.letter_spacing + if space { style.word_spacing } else { 0.0 })
             })
             .collect();
-        self.shape_range((start, end), edges, |shaped| {
+        self.shape_range((start, end), edges, &mut |shaped| {
             for (info, at) in shaped.glyph_infos().iter().zip(shaped.glyph_positions()) {
                 let owner = c.starts.partition_point(|s| *s <= info.cluster) - 1;
                 advances[owner - start] += f64::from(at.x_advance.unsigned_abs()) * scale;
@@ -5216,14 +5260,18 @@ impl BreakCorrections for ShapedBreakCorrections<'_, '_> {
 /// so the ordinary and the intrinsic flow draw the same edge glyphs.
 fn attach_line_edges(
     corrections: &mut ShapedBreakCorrections<'_, '_>,
-    (geometry, ltr): (&FlowGeometryArena, bool),
+    geometry: &FlowGeometryArena,
     flow: &mut FlowLayoutArena,
-    out: &mut BoundaryShapeArena,
+    out: (&mut BoundaryShapeArena, &BoundaryShapeArena),
     scratch: &mut ShapeArena,
     next_glyph_id: &mut u32,
 ) -> Result<(), EngineError> {
-    for line in flow.lines.clone() {
-        let words = ltr
+    let (out, previous) = out;
+    // A paragraph with no correctable boundary has no edge to shape.
+    let corrected = !corrections.clusters.break_corrections.is_empty();
+    for line_index in 0..flow.lines.len() {
+        let line = flow.lines[line_index];
+        let words = corrected
             && geometry.constraints.iter().any(|constraint| {
                 constraint.flow_thread_id == line.flow_thread_id && constraint.wrap == WRAP_WORD
             });
@@ -5236,7 +5284,7 @@ fn attach_line_edges(
                     return Ok(NO_BOUNDARY);
                 }
                 let id = (line.flow_thread_id, tail);
-                corrections.line_edge_record(current, id, out, scratch, next_glyph_id)
+                corrections.line_edge_record(current, id, (out, previous), scratch, next_glyph_id)
             };
             (fragment.lead_index, fragment.tail_index) = (edge(false)?, edge(true)?);
         }
@@ -5247,7 +5295,7 @@ fn attach_line_edges(
 fn append_boundary_source_ids(
     output: &mut Vec<u32>,
     source: &ShapeArena,
-    clusters: &ClusterArena,
+    (clusters, previous): (&ClusterArena, &BoundaryShapeArena),
     next_glyph_id: &mut u32,
 ) -> Result<(), EngineError> {
     let mut previous_cluster = None;
@@ -5271,6 +5319,7 @@ fn append_boundary_source_ids(
                     .flatten()
             })
             .filter(|id| *id != 0)
+            .or_else(|| previous.source_glyph_id(text_cluster, ordinal))
             .map_or_else(|| allocate_glyph_id(next_glyph_id), Ok)?;
         output.push(stable_id);
     }

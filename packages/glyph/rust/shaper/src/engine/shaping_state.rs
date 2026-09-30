@@ -508,6 +508,23 @@ impl BoundaryShapeArena {
             .and_then(|index| self.records.get(index))
             .copied()
     }
+
+    /// The stable id this arena gave the `ordinal`th source glyph shaped for `text_cluster`, if any.
+    pub(crate) fn source_glyph_id(&self, text_cluster: u32, ordinal: usize) -> Option<u32> {
+        self.records.iter().find_map(|record| {
+            let start = usize::try_from(record.source_glyph_start).ok()?;
+            let end = start.checked_add(usize::try_from(record.source_glyph_count).ok()?)?;
+            let offset = (self.shape.clusters.get(start..end)?.iter())
+                .enumerate()
+                .filter(|(_, cluster)| **cluster == text_cluster)
+                .nth(ordinal)?
+                .0;
+            self.stable_ids
+                .get(start + offset)
+                .copied()
+                .filter(|id| *id != 0)
+        })
+    }
 }
 
 fn reserve_vec<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
