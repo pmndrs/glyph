@@ -73,6 +73,7 @@ test('application values and types stay at root while integration construction l
     'raster/bitmap.d.ts': ['bitmapSchema', 'bitmapCodec', 'selectBitmapStrikePpem'],
     'raster/msdf.d.ts': ['msdfSchema', 'msdfCodec'],
     'raster/slug.d.ts': ['slugSchema', 'slugCodec'],
+    'glyph-placement.d.ts': ['createGlyphPlacements'],
   };
   const config = await import('@pmndrs/glyph/core');
   for (const [path, names] of Object.entries(leaves)) {

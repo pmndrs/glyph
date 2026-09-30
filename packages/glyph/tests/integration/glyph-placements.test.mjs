@@ -117,6 +117,16 @@ test('caret and selection helpers resolve clusters without exposing a mutable sn
     const whole = mounted.node.selectionRects(0, mounted.node.text.length);
     assert.equal(whole?.length, 1);
     assert.equal(whole?.[0].height, line.lineHeight);
+
+    const atStart = mounted.node.caretForOffset(0);
+    assert.deepEqual(atStart, start, 'the caret before the first cluster matches the caret at the line start');
+    const atEnd = mounted.node.caretForOffset(mounted.node.text.length);
+    assert.deepEqual(atEnd, end, 'the caret after the last cluster matches the caret at the line end');
+    const inside = mounted.node.caretForOffset(3);
+    assert.equal(inside?.offset, 3);
+    assert.equal(inside?.leading, true);
+    assert.equal(inside?.rect.x, mounted.node.caretAt(inside.rect.x, line.baseline)?.rect.x);
+    assert.throws(() => mounted.node.caretForOffset(mounted.node.text.length + 1), RangeError);
   } finally {
     unmount(mounted);
   }
