@@ -35,6 +35,11 @@ pub(crate) trait BreakCorrections {
     /// The total for the line `[start, end)` when its head and tail islands overlap, so
     /// `R(start) + L(end)` is not additive (rule 6); `None` when they are independent.
     fn whole_line(&mut self, start: usize, end: usize) -> Result<Option<Correction>, EngineError>;
+    /// Whether the corrected `boundary`, already priced by `left`, is no break opportunity: the font shapes it as
+    /// one unit, so a line ended there would draw other glyphs than the paragraph (Glyph does not split a ligature).
+    fn refused(&self, _boundary: usize) -> bool {
+        false
+    }
 }
 
 /// Every boundary keeps its base width, as on main.
@@ -157,20 +162,24 @@ fn is_corrected(clusters: &ClusterArena, word_wrap: bool, boundary: usize) -> bo
 }
 
 /// The charge for a line `[start, end)` ending at a corrected boundary: its whole-line total
-/// when the head and tail islands overlap, else `L(end)`.
+/// when the head and tail islands overlap, else `L(end)`; none when the font refuses the break.
 fn end_charge(
     clusters: &ClusterArena,
     word_wrap: bool,
     corrections: &mut impl BreakCorrections,
     start: usize,
     end: usize,
-) -> Result<EndCharge, EngineError> {
+) -> Result<Option<EndCharge>, EngineError> {
+    let left = corrections.left(end)?;
+    if corrections.refused(end) {
+        return Ok(None);
+    }
     if is_corrected(clusters, word_wrap, start)
         && let Some(whole) = corrections.whole_line(start, end)?
     {
-        return Ok(EndCharge::Whole(whole));
+        return Ok(Some(EndCharge::Whole(whole)));
     }
-    Ok(EndCharge::Left(corrections.left(end)?))
+    Ok(Some(EndCharge::Left(left)))
 }
 
 /// One line's fit, shared by the scalar, chunk-64, and indexed kernels, which differ only
@@ -255,7 +264,7 @@ impl<C: BreakCorrections> LineFit<'_, C> {
         self.max_width_units.is_none_or(|units| width <= units)
     }
 
-    fn end_charge(&mut self, end: usize) -> Result<EndCharge, EngineError> {
+    fn end_charge(&mut self, end: usize) -> Result<Option<EndCharge>, EngineError> {
         end_charge(
             self.clusters,
             self.word_wrap,
@@ -280,34 +289,47 @@ impl<C: BreakCorrections> LineFit<'_, C> {
         if fits {
             return Ok(false);
         }
+        // Once rescued, the line ends at the rescued candidate whichever later one overflows.
         if self.rescued || !self.corrected(end) {
             return Ok(true);
         }
-        let charge = self.end_charge(end)?;
+        // A refused break is no candidate, so it neither overflows nor spends the rescue.
+        let Some(charge) = self.end_charge(end)? else {
+            return Ok(false);
+        };
         self.rescued = self.fits(end, base, hanging, charge);
         Ok(!self.rescued)
     }
 
     /// Rule 3: the selected candidate must fit with its end charged, else it steps back
     /// through the accepted candidates via `step_back` (an uncorrected one fits as it
-    /// stands). Yields the end, base advance, charge, and fit; when none fit, the earliest.
+    /// stands; a refused one never does). Yields the end, base advance, charge, and fit; when none fit, the
+    /// earliest, and nothing when that is refused.
     fn settle(
         &mut self,
         first: (usize, Base),
         mut step_back: impl FnMut((usize, Base)) -> Option<(usize, Base)>,
-    ) -> Result<(usize, i64, EndCharge, bool), EngineError> {
+    ) -> Result<Option<(usize, i64, EndCharge, bool)>, EngineError> {
         let (mut end, mut base) = first;
         loop {
-            let mut charge = EndCharge::NONE;
-            let mut fits = true;
-            if self.corrected(end) {
-                charge = self.end_charge(end)?;
-                let hanging = trailing_space_units(self.clusters, self.line_start, end);
-                fits = self.fits(end, base, hanging, charge);
-            }
+            let corrected = self.corrected(end);
+            let charge = if corrected {
+                self.end_charge(end)?
+            } else {
+                Some(EndCharge::NONE)
+            };
+            let fits = charge.is_some_and(|charge| {
+                !corrected
+                    || self.fits(
+                        end,
+                        base,
+                        trailing_space_units(self.clusters, self.line_start, end),
+                        charge,
+                    )
+            });
             match (!fits).then(|| step_back((end, base))).flatten() {
                 Some(previous) => (end, base) = previous,
-                None => return Ok((end, base.advance, charge, fits)),
+                None => return Ok(charge.map(|charge| (end, base.advance, charge, fits))),
             }
         }
     }
@@ -814,7 +836,8 @@ fn layout_next_line_integer_scalar<C: BreakCorrections>(
                     .filter(|end| *end > line_start)
                     .map(|end| (end, last_allowed_base)))
                 .map(|first| fit.settle(first, step_back))
-                .transpose()?;
+                .transpose()?
+                .flatten();
             let (end, break_advance, break_charge) =
                 if let Some((end, break_advance, break_charge, true)) = settled {
                     (end, break_advance, break_charge)
@@ -836,8 +859,9 @@ fn layout_next_line_integer_scalar<C: BreakCorrections>(
                         continue;
                     }
                     // With no earlier legal fallback, keep the first complete word intact.
-                    let (end, break_advance, break_charge, _) =
-                        fit.settle((index + 1, base), |_| None)?;
+                    let (end, break_advance, break_charge, _) = fit
+                        .settle((index + 1, base), |_| None)?
+                        .ok_or(EngineError::InvalidRequest)?;
                     (end, break_advance, break_charge)
                 };
             selected_end = end;
@@ -915,7 +939,7 @@ fn layout_next_word_line_indexed<C: BreakCorrections>(
                 return Ok(None);
             };
             // Rule 3 retracts a selection one record at a time.
-            let (end, advance, charge, fits) = fit.settle((end, base), |(_, base)| {
+            let Some((end, advance, charge, true)) = fit.settle((end, base), |(_, base)| {
                 (index > first_break).then(|| {
                     let record = clusters.word_breaks[index];
                     index -= 1;
@@ -925,10 +949,10 @@ fn layout_next_word_line_indexed<C: BreakCorrections>(
                     );
                     (clusters.word_breaks[index].cluster_end as usize, base)
                 })
-            })?;
-            if !fits {
+            })?
+            else {
                 return Ok(None);
-            }
+            };
             return fit.compose(cursor, end, advance, charge);
         }
         base = next;

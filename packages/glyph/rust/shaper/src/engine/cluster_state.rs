@@ -45,6 +45,9 @@ pub(crate) struct IntrinsicWidths {
 
 const NO_SOURCE_RUN: u32 = u32::MAX;
 pub(super) const SHAPING_CONTEXT: usize = 5;
+/// The most clusters an island may span and still be reshaped: real ones (a ligature, a contextual arrow) cover a
+/// few, so a longer chain is a font that flags every boundary unsafe, and its breaks stay uncorrected, as on main.
+pub(super) const ISLAND_CAP: usize = 32;
 /// Cluster count per chunk summary (D-245).
 pub(crate) const LAYOUT_CHUNK: usize = 64;
 
@@ -279,10 +282,9 @@ pub(crate) struct ClusterArena {
     pub index_at: Vec<u32>,
     pub(super) shaped: Vec<u8>,
     pub(super) unsafe_before: Vec<u8>,
-    /// `[L, R]` corrections (#216) for the boundary after each cluster, filled lazily by the fitter.
-    pub(super) break_corrections: Vec<[Cell<Option<Correction>>; 2]>,
-    /// Corrected breaks not after a space, awaiting the check that drops those shaping substitutes glyphs across.
-    pub(super) substitution_checks: Vec<usize>,
+    /// `[L, R, S]` for the boundary after each cluster, filled lazily by the fitter: the corrections (#216), and `S`
+    /// set when L's shaping drew other glyphs than the paragraph, so the font shapes the break as one unit.
+    pub(super) break_corrections: Vec<[Cell<Option<Correction>>; 3]>,
     /// No run is right-to-left or overridden: only then do line edges shape alone, so only then are breaks corrected.
     pub(super) ltr: bool,
     pub(super) layout_runs: LayoutRunArena,
@@ -296,6 +298,11 @@ pub(crate) struct ClusterBuildInput<'a> {
     pub styles: &'a [StyleSegment],
     pub runs: &'a [ShapingRun],
     pub shape: &'a ShapeArena,
+}
+
+fn all_ltr(runs: &[ShapingRun]) -> bool {
+    runs.iter()
+        .all(|run| run.bidi_level & 1 == 0 && !run.style.bidi_override)
 }
 
 impl ClusterArena {
@@ -337,14 +344,25 @@ impl ClusterArena {
     /// The clusters `[start, end)` around `boundary` between shaping-safe boundaries and font owners.
     pub(super) fn island(&self, boundary: usize) -> (usize, usize) {
         let (mut start, mut end) = (boundary, boundary + 1);
+        // Each walk stops one cluster past the cap, which is all it takes to see an island is too long.
+        let (lowest, highest) = (
+            boundary.saturating_sub(ISLAND_CAP + 1),
+            (boundary + ISLAND_CAP + 1).min(self.starts.len()),
+        );
         let unsafe_before = |i: usize| self.flags[i] & CLUSTER_SAFE_BEFORE == 0;
-        while start > 0 && self.same_owner(start - 1, boundary) && unsafe_before(start) {
+        while start > lowest && self.same_owner(start - 1, boundary) && unsafe_before(start) {
             start -= 1;
         }
-        while end < self.starts.len() && self.same_owner(end, boundary) && unsafe_before(end) {
+        while end < highest && self.same_owner(end, boundary) && unsafe_before(end) {
             end += 1;
         }
         (start, end)
+    }
+
+    /// The island around `boundary`, unless it is too long to reshape.
+    pub(super) fn reshapable_island(&self, boundary: usize) -> Option<(usize, usize)> {
+        let (start, end) = self.island(boundary);
+        (end - start <= ISLAND_CAP).then_some((start, end))
     }
 
     fn reset_break_corrections(&self, start: usize, end: usize) {
@@ -367,9 +385,7 @@ impl ClusterArena {
             shape,
         } = input;
         self.clear();
-        self.ltr = runs
-            .iter()
-            .all(|run| run.bidi_level & 1 == 0 && !run.style.bidi_override);
+        self.ltr = all_ltr(runs);
         if text.len() != text_unit_ids.len() || text_unit_ids.contains(&0) {
             return Err(EngineError::InvalidRequest);
         }
@@ -501,9 +517,7 @@ impl ClusterArena {
             return Ok(None);
         }
         self.copy_from(previous)?;
-        self.ltr = runs
-            .iter()
-            .all(|run| run.bidi_level & 1 == 0 && !run.style.bidi_override);
+        self.ltr = all_ltr(runs);
         for cluster in cluster_start..cluster_end {
             let start = self.starts[cluster];
             let end = self.ends[cluster];
@@ -889,8 +903,13 @@ impl ClusterArena {
             } else {
                 0.0
             };
+            // An unsafe break no space precedes may be refused by the fitter, so it is no opportunity here.
             let can_break_after = match wrap {
-                WRAP_WORD => flags & CLUSTER_ALLOWED_BREAK != 0,
+                WRAP_WORD => {
+                    flags & CLUSTER_ALLOWED_BREAK != 0
+                        && flags & (CLUSTER_BREAK_CORRECTION | CLUSTER_SPACE)
+                            != CLUSTER_BREAK_CORRECTION
+                }
                 WRAP_CHARACTER => {
                     index + 1 == self.starts.len()
                         || self.flags[index + 1] & CLUSTER_SAFE_BEFORE != 0
@@ -1230,7 +1249,6 @@ impl ClusterArena {
         self.shaped.clear();
         self.unsafe_before.clear();
         self.break_corrections.clear();
-        self.substitution_checks.clear();
         self.layout_runs.clear();
         self.run_local.clear();
     }
@@ -1761,9 +1779,6 @@ impl ClusterArena {
             // The correction lane exists only for paragraphs that have a correctable boundary.
             self.break_corrections
                 .resize_with(self.starts.len(), Default::default);
-            if self.flags[preceding] & CLUSTER_SPACE == 0 {
-                self.substitution_checks.push(preceding);
-            }
         }
     }
 

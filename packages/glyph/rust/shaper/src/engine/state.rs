@@ -396,6 +396,8 @@ struct ParagraphState {
     intrinsic_boundary_shape: BoundaryShapeArena,
     intrinsic_identity_scratch: IdentityIndex,
     boundary_shape: BoundaryShapeArena,
+    /// The committed boundary glyphs' stable ids, indexed for the flow being prepared.
+    previous_edge_ids: Vec<EdgeId>,
     pending_boundary_shape: BoundaryShapeArena,
     boundary_shape_scratch: ShapeArena,
     ellipsis_shape_scratch: ShapeArena,
@@ -4047,7 +4049,7 @@ impl ParagraphState {
             max_slots_per_band,
             next_glyph_id,
         )?;
-        // Every fragment, retained or composed, gets its line start shaped alone (or none).
+        // Every fragment, retained or composed, gets its line edges shaped alone (or none).
         let geometry = self.geometry.active();
         let shaper = RefCell::new(shaper);
         let mut corrections = ShapedBreakCorrections {
@@ -4061,41 +4063,10 @@ impl ParagraphState {
             &mut corrections,
             geometry,
             self.flow_layout.pending_mut(),
-            (&mut self.pending_boundary_shape, &self.boundary_shape),
+            (&mut self.pending_boundary_shape, &self.previous_edge_ids),
             &mut self.boundary_shape_scratch,
             next_glyph_id,
         )?;
-        Ok(())
-    }
-
-    /// Makes every legal break that is not after a space, and whose island shaped alone substitutes glyphs,
-    /// a non-break: Glyph does not split what the font shapes as one unit (Chromium does).
-    fn drop_substituting_breaks(&mut self, shaper: &mut ShaperRegistry) -> Result<(), EngineError> {
-        let mut checks = core::mem::take(&mut self.clusters.active_mut().substitution_checks);
-        let shaper = RefCell::new(shaper);
-        let mut corrections = ShapedBreakCorrections {
-            shaper: &shaper,
-            text: self.text.active().units.as_slice(),
-            runs: self.shaping_runs.active().runs(),
-            styles: &self.styles.active().arena,
-            clusters: self.clusters.active(),
-        };
-        let mut dropped = 0;
-        for index in 0..checks.len() {
-            if corrections.substitutes(checks[index] + 1)? {
-                checks[dropped] = checks[index];
-                dropped += 1;
-            }
-        }
-        let clusters = self.clusters.active_mut();
-        for &preceding in &checks[..dropped] {
-            clusters.flags[preceding] &= !(CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION);
-        }
-        if dropped > 0 {
-            clusters.refresh_layout_units()?;
-        }
-        checks.clear();
-        clusters.substitution_checks = checks;
         Ok(())
     }
 
@@ -4116,7 +4087,11 @@ impl ParagraphState {
         // unrepresentable rather than something each caller has to remember to repair.
         self.abort_positioned();
         self.pending_boundary_shape.clear();
-        self.drop_substituting_breaks(shaper)?;
+        previous_edge_ids(
+            &mut self.previous_edge_ids,
+            self.clusters.committed(),
+            &self.boundary_shape,
+        );
         self.clusters.active_mut().ensure_word_breaks()?;
         self.clusters
             .active_mut()
@@ -4327,7 +4302,7 @@ impl ParagraphState {
             append_boundary_source_ids(
                 &mut self.pending_boundary_shape.stable_ids,
                 source_shape,
-                (clusters, &self.boundary_shape),
+                (clusters, &self.previous_edge_ids),
                 next_glyph_id,
             )?;
             let previous = self
@@ -4459,7 +4434,7 @@ impl ParagraphState {
             &mut corrections,
             &self.intrinsic_geometry_scratch,
             &mut self.intrinsic_flow_layout_scratch,
-            (&mut self.intrinsic_boundary_shape, &self.boundary_shape),
+            (&mut self.intrinsic_boundary_shape, &[]),
             &mut self.boundary_shape_scratch,
             &mut (1 << 30),
         )
@@ -5015,43 +4990,33 @@ pub(super) struct ShapedBreakCorrections<'a, 'b> {
 
 impl ShapedBreakCorrections<'_, '_> {
     /// The correction on `side` (0 = L, 1 = R) of `boundary`, zero unless it needs one, priced on first use.
+    /// An island too long to reshape is never corrected, as on main.
     fn correction(&mut self, boundary: usize, side: usize) -> Result<Correction, EngineError> {
         const CORRECTED: u8 = CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION;
         let c = self.clusters;
         if boundary == 0 || c.flags[boundary - 1] & CORRECTED != CORRECTED {
             return Ok(Correction::ZERO);
         }
-        let slot = &c.break_corrections[boundary - 1][side];
-        if let Some(correction) = slot.get() {
+        let slots = &c.break_corrections[boundary - 1];
+        if let Some(correction) = slots[side].get() {
             return Ok(correction);
         }
-        let (start, end) = c.island(boundary);
-        let correction = match side {
-            0 => self.delta((start, boundary), (false, true))?,
-            _ => self.delta((boundary, end), (true, false))?,
+        let Some((start, end)) = c.reshapable_island(boundary) else {
+            // Too long to reshape: uncorrected, and refused as a break.
+            slots[2].set(Some(Correction::ZERO));
+            return Ok(Correction::ZERO);
         };
-        slot.set(Some(correction));
+        let range = if side == 0 {
+            (start, boundary)
+        } else {
+            (boundary, end)
+        };
+        let (correction, drawn_alone) = self.delta(range, (side != 0, side == 0))?;
+        slots[side].set(Some(correction));
+        if side == 0 && !drawn_alone {
+            slots[2].set(Some(Correction::ZERO));
+        }
         Ok(correction)
-    }
-
-    /// Whether the island before `boundary` shaped alone as a line end draws other glyphs than the paragraph
-    /// shaped for it, as a ligature or contextual form does across the break.
-    fn substitutes(&mut self, boundary: usize) -> Result<bool, EngineError> {
-        let c = self.clusters;
-        let start = c.island(boundary).0;
-        let first = c.glyph_starts[start] as usize;
-        let paragraph = &c.glyph_ids
-            [first..(c.glyph_starts[boundary - 1] + c.glyph_counts[boundary - 1]) as usize];
-        let mut differs = false;
-        self.shape_range((start, boundary), (false, true), &mut |shaped| {
-            let alone = shaped.glyph_infos();
-            differs = alone.len() != paragraph.len()
-                || alone
-                    .iter()
-                    .any(|info| !paragraph.iter().any(|&id| u32::from(id) == info.glyph_id));
-            Ok(())
-        })?;
-        Ok(differs)
     }
 
     /// Shapes clusters `[start, end)` and hands the glyphs to `consume`. `lead`/`trail` say the
@@ -5104,7 +5069,7 @@ impl ShapedBreakCorrections<'_, '_> {
         &mut self,
         fragment: FlowFragment,
         (flow_thread_id, tail): (u32, bool),
-        (out, previous): (&mut BoundaryShapeArena, &BoundaryShapeArena),
+        (out, previous): (&mut BoundaryShapeArena, &[EdgeId]),
         scratch: &mut ShapeArena,
         next_glyph_id: &mut u32,
     ) -> Result<u32, EngineError> {
@@ -5116,18 +5081,20 @@ impl ShapedBreakCorrections<'_, '_> {
             index(fragment.line.cluster_start)?,
             index(fragment.line.cluster_end)?,
         );
-        let corrected =
-            |boundary: usize| boundary > 0 && c.flags[boundary - 1] & CORRECTED == CORRECTED;
+        // The island a line edge at `boundary` reshapes, when that boundary is a corrected break.
+        let island = |boundary: usize| {
+            let corrected = boundary > 0 && c.flags[boundary - 1] & CORRECTED == CORRECTED;
+            corrected.then(|| c.reshapable_island(boundary)).flatten()
+        };
         if line_start >= c.starts.len() {
             return Ok(NO_BOUNDARY);
         }
         let cut = out.record(fragment.boundary_index);
-        let closes = line_end < c.starts.len()
-            && corrected(line_end)
-            && c.flags[line_end - 1] & CLUSTER_SPACE == 0
-            && cut.is_none();
-        let island_end = corrected(line_start).then(|| c.island(line_start).1);
-        let tail_start = closes.then(|| c.island(line_end).0.max(line_start));
+        let island_end = island(line_start).map(|(_, end)| end);
+        // As Chromium reshapes line ends, a space ends the line as is.
+        let tail_start = island(line_end)
+            .filter(|_| c.flags[line_end - 1] & CLUSTER_SPACE == 0 && cut.is_none())
+            .map(|(start, _)| start.max(line_start));
         let whole = island_end
             .zip(tail_start)
             .is_some_and(|(lead, tail)| lead > tail);
@@ -5190,16 +5157,19 @@ impl ShapedBreakCorrections<'_, '_> {
         Ok(record)
     }
 
-    /// How far reshaping clusters `[start, end)` moves their base sums.
+    /// How far reshaping clusters `[start, end)` moves their base sums, and whether the paragraph's glyphs
+    /// there are the ones it draws.
     fn delta(
         &mut self,
         (start, end): (usize, usize),
         edges: (bool, bool),
-    ) -> Result<Correction, EngineError> {
+    ) -> Result<(Correction, bool), EngineError> {
         let trail = edges.1;
         let c = self.clusters;
         let style = self.runs[c.source_runs[start] as usize].style;
         let scale = f64::from(style.font_size) / c.units_per_em[start];
+        let paragraph = &c.glyph_ids[c.glyph_starts[start] as usize
+            ..(c.glyph_starts[end - 1] + c.glyph_counts[end - 1]) as usize];
         // Spacing first, then glyphs in order, as the arena sums: unchanged shapes correct by zero.
         let mut advances: Vec<f64> = (start..end)
             .map(|i| {
@@ -5207,8 +5177,11 @@ impl ShapedBreakCorrections<'_, '_> {
                 f64::from(style.letter_spacing + if space { style.word_spacing } else { 0.0 })
             })
             .collect();
+        let mut same = true;
         self.shape_range((start, end), edges, &mut |shaped| {
-            for (info, at) in shaped.glyph_infos().iter().zip(shaped.glyph_positions()) {
+            let (infos, positions) = (shaped.glyph_infos(), shaped.glyph_positions());
+            same = same_glyphs(infos.iter().map(|info| info.glyph_id), paragraph);
+            for (info, at) in infos.iter().zip(positions) {
                 let owner = c.starts.partition_point(|s| *s <= info.cluster) - 1;
                 advances[owner - start] += f64::from(at.x_advance.unsigned_abs()) * scale;
             }
@@ -5225,11 +5198,12 @@ impl ShapedBreakCorrections<'_, '_> {
             space += change * i64::from(!hung && is_space);
         }
         let unit = |value: i64| i32::try_from(value).map_err(|_| EngineError::ResultTooLarge);
-        Ok(Correction {
+        let correction = Correction {
             advance: unit(advance)?,
             space: unit(space)?,
             trailing: 0,
-        })
+        };
+        Ok((correction, same))
     }
 }
 
@@ -5245,15 +5219,35 @@ impl BreakCorrections for ShapedBreakCorrections<'_, '_> {
     fn whole_line(&mut self, start: usize, end: usize) -> Result<Option<Correction>, EngineError> {
         let c = self.clusters;
         let tail = if end < c.starts.len() {
-            c.island(end).0
+            c.reshapable_island(end)
         } else {
-            end
+            Some((end, end))
         };
-        if c.island(start).1 <= tail {
-            return Ok(None);
+        // Only islands that meet, and each short enough to reshape.
+        match (c.reshapable_island(start), tail) {
+            (Some(head), Some(tail)) if head.1 > tail.0 => self
+                .delta((start, end), (true, true))
+                .map(|(whole, _)| Some(whole)),
+            _ => Ok(None),
         }
-        self.delta((start, end), (true, true)).map(Some)
     }
+
+    /// A corrected break not after a space that the font shapes as one unit, or whose island is too long to
+    /// tell: `left` found the paragraph's glyphs there differ from those the island draws as a line end.
+    fn refused(&self, boundary: usize) -> bool {
+        let c = self.clusters;
+        c.flags[boundary - 1] & CLUSTER_SPACE == 0
+            && c.break_corrections[boundary - 1][2].get().is_some()
+    }
+}
+
+/// Whether the glyphs `alone` draws are the `paragraph` ones, in order: a ligature or a contextual form
+/// changes the ids, and a reorder or a repeat changes the sequence while keeping every id present.
+fn same_glyphs(alone: impl ExactSizeIterator<Item = u32>, paragraph: &[u16]) -> bool {
+    alone.len() == paragraph.len()
+        && alone
+            .zip(paragraph)
+            .all(|(id, &drawn)| id == u32::from(drawn))
 }
 
 /// Gives every fragment of `flow` the records shaping its corrected line start and end alone (or none),
@@ -5262,7 +5256,7 @@ fn attach_line_edges(
     corrections: &mut ShapedBreakCorrections<'_, '_>,
     geometry: &FlowGeometryArena,
     flow: &mut FlowLayoutArena,
-    out: (&mut BoundaryShapeArena, &BoundaryShapeArena),
+    out: (&mut BoundaryShapeArena, &[EdgeId]),
     scratch: &mut ShapeArena,
     next_glyph_id: &mut u32,
 ) -> Result<(), EngineError> {
@@ -5292,14 +5286,38 @@ fn attach_line_edges(
     Ok(())
 }
 
+/// A previous layout's boundary glyph id under `pack2(text unit of its cluster, glyph index)`: an edit moves
+/// offsets but leaves a retained unit's id, so an offset is no key. A unit's glyphs sort in ordinal order.
+type EdgeId = (u64, u32);
+
+fn previous_edge_ids(
+    ids: &mut Vec<EdgeId>,
+    clusters: &ClusterArena,
+    previous: &BoundaryShapeArena,
+) {
+    ids.clear();
+    for record in &previous.records {
+        let glyphs =
+            record.source_glyph_start..record.source_glyph_start + record.source_glyph_count;
+        for glyph in glyphs {
+            let offset = previous.shape.clusters[glyph as usize];
+            if let Ok(cluster) = clusters.starts.binary_search(&offset) {
+                let key = sort::pack2(clusters.stable_ids[cluster], glyph);
+                ids.push((key, previous.stable_ids[glyph as usize]));
+            }
+        }
+    }
+    sort::sort_pairs(ids);
+}
+
 fn append_boundary_source_ids(
     output: &mut Vec<u32>,
     source: &ShapeArena,
-    (clusters, previous): (&ClusterArena, &BoundaryShapeArena),
+    (clusters, previous): (&ClusterArena, &[EdgeId]),
     next_glyph_id: &mut u32,
 ) -> Result<(), EngineError> {
     let mut previous_cluster = None;
-    let mut ordinal = 0usize;
+    let mut ordinal = 0u32;
     for &text_cluster in &source.clusters {
         if previous_cluster == Some(text_cluster) {
             ordinal += 1;
@@ -5312,14 +5330,21 @@ fn append_boundary_source_ids(
             .binary_search(&text_cluster)
             .ok()
             .and_then(|cluster| {
-                let start = usize::try_from(*clusters.glyph_starts.get(cluster)?).ok()?;
-                let count = usize::try_from(*clusters.glyph_counts.get(cluster)?).ok()?;
-                (ordinal < count)
-                    .then(|| clusters.glyph_stable_ids.get(start + ordinal).copied())
-                    .flatten()
+                let (start, count) = (
+                    clusters.glyph_starts[cluster],
+                    clusters.glyph_counts[cluster],
+                );
+                let own = (ordinal < count)
+                    .then(|| clusters.glyph_stable_ids.get((start + ordinal) as usize))
+                    .flatten();
+                own.copied().filter(|id| *id != 0).or_else(|| {
+                    let unit = clusters.stable_ids[cluster];
+                    let at = previous.partition_point(|id| id.0 < sort::pack2(unit, 0));
+                    let id = previous.get(at + ordinal as usize)?;
+                    (id.0 >> 32 == u64::from(unit)).then_some(id.1)
+                })
             })
             .filter(|id| *id != 0)
-            .or_else(|| previous.source_glyph_id(text_cluster, ordinal))
             .map_or_else(|| allocate_glyph_id(next_glyph_id), Ok)?;
         output.push(stable_id);
     }
@@ -5622,6 +5647,9 @@ fn gather_error(error: GatherError) -> EngineError {
         | GatherError::SourceFieldMissing => EngineError::InvalidRequest,
     }
 }
+
+#[cfg(test)]
+mod unsafe_break_tests;
 
 #[cfg(test)]
 mod tests {

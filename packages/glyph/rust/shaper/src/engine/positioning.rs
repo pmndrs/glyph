@@ -1600,7 +1600,6 @@ impl PositionedGlyphArena {
                 styles,
                 boundary_shape,
                 metrics_for,
-                extents_for,
                 retained.as_deref_mut(),
                 (justify, &mut state),
             )?;
@@ -1795,7 +1794,6 @@ impl PositionedGlyphArena {
                 styles,
                 boundary_shape,
                 metrics_for,
-                extents_for,
                 retained,
                 (justify, &mut state),
             )?;
@@ -2330,7 +2328,6 @@ impl PositionedGlyphArena {
         styles: &[StyleSegment],
         arena: &BoundaryShapeArena,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
-        extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
         mut retained: Option<&mut RetainedInstanceCursor>,
         (justify, state): (JustifyDistribution, &mut FragmentPositionState),
     ) -> Result<f64, EngineError> {
@@ -2382,7 +2379,6 @@ impl PositionedGlyphArena {
                 cursor = self.position_boundary_span(
                     line,
                     cursor,
-                    baseline,
                     piece_start,
                     glyph - piece_start,
                     boundary.source_binding_handle,
@@ -2395,20 +2391,25 @@ impl PositionedGlyphArena {
                     clusters,
                     styles,
                     metrics_for,
-                    extents_for,
                     Some(occurrence),
                     retained.as_deref_mut(),
                 )?;
                 pieces += 1;
             }
             if split {
+                let style = boundary_cluster_style(styles, clusters, cluster)?;
+                if glyph == piece_start {
+                    // A cluster owning no glyph (a ligature's later component) still advances by its
+                    // spacing, as the paragraph and the correction price it.
+                    cursor += clusters.advances[cluster];
+                }
                 state.cursor = cursor;
                 self.finish_positioned_cluster(
                     line,
                     cluster,
                     clusters,
                     PositionedCluster {
-                        style: boundary_cluster_style(styles, clusters, cluster)?,
+                        style,
                         font_handle: boundary.source_font_handle,
                         cluster_origin: piece_origin,
                     },
@@ -2438,7 +2439,6 @@ impl PositionedGlyphArena {
         self.position_boundary_span(
             line,
             cursor,
-            baseline,
             boundary.ellipsis_glyph_start,
             boundary.ellipsis_glyph_count,
             boundary.ellipsis_binding_handle,
@@ -2451,7 +2451,6 @@ impl PositionedGlyphArena {
             clusters,
             styles,
             metrics_for,
-            extents_for,
             replacement_occurrence,
             retained,
         )
@@ -2638,7 +2637,6 @@ impl PositionedGlyphArena {
         &mut self,
         line: FlowLine,
         mut cursor: f64,
-        _baseline: f64,
         glyph_start: u32,
         glyph_count: u32,
         binding_handle: u32,
@@ -2651,7 +2649,6 @@ impl PositionedGlyphArena {
         clusters: &ClusterArena,
         styles: &[StyleSegment],
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
-        _extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
         occurrence: Option<PlacementOccurrence>,
         mut retained: Option<&mut RetainedInstanceCursor>,
     ) -> Result<f64, EngineError> {
