@@ -11,10 +11,12 @@ use super::{
     frame::{
         ALIGN_JUSTIFY, ALIGN_START, AXIS_AT_MOST, AXIS_EXACT, DROP_CAP_ALIGN_BASELINE,
         DROP_CAP_ALIGN_TEXT_TOP, DROP_CAP_SIDE_INLINE_START, EXCLUSION_WRAP_INLINE_END,
-        EXCLUSION_WRAP_INLINE_START, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, WRITING_HORIZONTAL_TB,
+        EXCLUSION_WRAP_INLINE_START, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, WRAP_WORD,
+        WRITING_HORIZONTAL_TB,
     },
     line_composition::{
-        ComposedLine, Correction, LineCursor, NoCorrections, layout_next_line_integer,
+        BreakCorrections, ComposedLine, Correction, LineCursor, NoCorrections,
+        layout_next_line_integer,
     },
     semantic_wire::FlowConstraint,
     shaping_state::ShapingRun,
@@ -489,6 +491,7 @@ impl FlowLayoutArena {
             max_slots_per_band,
             metrics_for,
             first_font_for_stack,
+            &mut NoCorrections,
         )
     }
 
@@ -505,6 +508,7 @@ impl FlowLayoutArena {
         max_slots_per_band: usize,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
+        corrections: &mut impl BreakCorrections,
     ) -> Result<(), EngineError> {
         self.clear();
         if clusters.starts.is_empty() || geometry.constraints.is_empty() {
@@ -550,6 +554,9 @@ impl FlowLayoutArena {
                 cluster_for_offset(clusters, constraint.resume_cluster)?
             };
             let mut cursor = LineCursor::at_cluster(resume);
+            if constraint.wrap == WRAP_WORD {
+                cursor.start_correction = corrections.right(resume)?;
+            }
             let constraint_line_limit = if constraint.max_lines == 0 {
                 max_lines
             } else {
@@ -631,6 +638,7 @@ impl FlowLayoutArena {
                         max_slots_per_band,
                         metrics_for,
                         first_font_for_stack,
+                        corrections,
                     )? {
                         Some(height) => {
                             if self.lines.len() == thread_line_start + 1
@@ -774,6 +782,7 @@ impl FlowLayoutArena {
         max_slots_per_band: usize,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
+        corrections: &mut impl BreakCorrections,
     ) -> Result<bool, EngineError> {
         self.clear();
         if !Self::supports_local_convergence(previous, max_lines, max_slots_per_band)
@@ -860,6 +869,9 @@ impl FlowLayoutArena {
             self.append_retained_line(previous, prefix)?;
         }
         let mut cursor = LineCursor::at_cluster(cluster_start);
+        if constraint.wrap == WRAP_WORD {
+            cursor.start_correction = corrections.right(cluster_start)?;
+        }
         for candidate in line_index..previous.lines.len() {
             let old_line = previous.lines[candidate];
             let old_fragments = line_fragments(previous, old_line)?;
@@ -913,6 +925,7 @@ impl FlowLayoutArena {
                 max_slots_per_band,
                 metrics_for,
                 first_font_for_stack,
+                corrections,
             )?
             else {
                 self.clear();
@@ -954,7 +967,16 @@ impl FlowLayoutArena {
             } else {
                 false
             };
-            if metrics_stable && cursor.cluster() == old_cluster_end && !next_cap_affected {
+            let old_start = previous_clusters
+                .break_corrections
+                .get(old_cluster_end.wrapping_sub(1));
+            let unmoved =
+                cursor.start_correction == old_start.and_then(|s| s[1].get()).unwrap_or_default();
+            if metrics_stable
+                && cursor.cluster() == old_cluster_end
+                && unmoved
+                && !next_cap_affected
+            {
                 self.append_converged_suffix(
                     previous,
                     geometry,
@@ -1006,6 +1028,7 @@ impl FlowLayoutArena {
         max_slots_per_band: usize,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
+        corrections: &mut impl BreakCorrections,
     ) -> Result<bool, EngineError> {
         self.clear();
         if !Self::supports_local_convergence(previous, max_lines, max_slots_per_band) {
@@ -1106,6 +1129,9 @@ impl FlowLayoutArena {
             }
         };
         let mut cursor = LineCursor::at_cluster(cursor_start);
+        if constraint.wrap == WRAP_WORD {
+            cursor.start_correction = corrections.right(cursor_start)?;
+        }
         let mut block = if prefix_end > region_line_start {
             let line = previous.lines[prefix_end - 1];
             line.block_start + line.height
@@ -1184,6 +1210,7 @@ impl FlowLayoutArena {
                 max_slots_per_band,
                 metrics_for,
                 first_font_for_stack,
+                corrections,
             )?
             else {
                 block += estimate.height();
@@ -1266,6 +1293,7 @@ impl FlowLayoutArena {
         max_slots: usize,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
+        corrections: &mut impl BreakCorrections,
     ) -> Result<Option<f64>, EngineError> {
         let saved_cursor = *cursor;
         let fragment_start = self.fragments.len();
@@ -1321,7 +1349,7 @@ impl FlowLayoutArena {
                     )),
                     wrap,
                     word_space_shrink,
-                    &mut NoCorrections,
+                    &mut *corrections,
                 )?
                 else {
                     break;
@@ -2207,6 +2235,7 @@ mod tests {
                 4,
                 fixture_metrics,
                 |_| Some(1),
+                &mut NoCorrections,
             )
             .unwrap();
 
@@ -2375,6 +2404,7 @@ mod tests {
                 4,
                 fixture_metrics,
                 |_| Some(1),
+                &mut NoCorrections,
             )
             .unwrap();
         assert_eq!(combined.drop_caps.len(), 1);
@@ -3072,6 +3102,7 @@ mod tests {
                     1,
                     metrics,
                     |_| Some(1),
+                    &mut NoCorrections,
                 )
                 .unwrap()
         );
@@ -3170,6 +3201,7 @@ mod tests {
                     4,
                     fixture_metrics,
                     |_| Some(1),
+                    &mut NoCorrections,
                 )
                 .unwrap();
             layout
@@ -3193,6 +3225,7 @@ mod tests {
                     4,
                     fixture_metrics,
                     |_| Some(1),
+                    &mut NoCorrections,
                 )
                 .unwrap()
         );
@@ -3298,6 +3331,7 @@ mod tests {
                     1,
                     metrics,
                     |_| Some(1),
+                    &mut NoCorrections,
                 )
                 .unwrap()
         );
@@ -3391,6 +3425,7 @@ mod tests {
                     1,
                     metrics,
                     |_| Some(1),
+                    &mut NoCorrections,
                 )
                 .unwrap()
         );
@@ -3490,6 +3525,7 @@ mod tests {
                     4,
                     metrics,
                     |_| Some(1),
+                    &mut NoCorrections,
                 )
                 .unwrap()
         );
@@ -3580,6 +3616,7 @@ mod tests {
                 4,
                 fixture_metrics,
                 |_| Some(1),
+                &mut NoCorrections,
             )
             .unwrap();
             flow
@@ -3601,6 +3638,7 @@ mod tests {
                 4,
                 fixture_metrics,
                 |_| Some(1),
+                &mut NoCorrections,
             )
             .unwrap();
         assert!(

@@ -58,7 +58,7 @@ pub(crate) struct LineCursor {
     cluster: usize,
     trailing_empty: bool,
     /// `R(cluster)` for the line about to compose (rule 1); zero after an uncorrected end.
-    start_correction: Correction,
+    pub(crate) start_correction: Correction,
 }
 
 impl LineCursor {

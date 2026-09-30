@@ -1,5 +1,5 @@
 use alloc::{collections::BTreeMap, vec::Vec};
-use core::num::NonZeroU32;
+use core::{cell::RefCell, num::NonZeroU32};
 
 use crate::{
     STATUS_RESULT_TOO_LARGE, ShapeRangeRef, ShapeRunRef, ShaperRegistry,
@@ -8,7 +8,10 @@ use crate::{
 };
 
 use super::{
-    cluster_state::{ClusterArena, ClusterBuildInput, LayoutRunSourceKind, RunCanonicalInput},
+    cluster_state::{
+        CLUSTER_ALLOWED_BREAK, CLUSTER_BREAK_CORRECTION, CLUSTER_SPACE, ClusterArena,
+        ClusterBuildInput, LayoutRunSourceKind, RunCanonicalInput, SHAPING_CONTEXT,
+    },
     codec::{CapabilitySetId, ValidatedCodec},
     codec_gather::{
         CodecGatherWorkspace, DEFAULT_GATHER_RECORD_CAPACITY, GatherError, LayoutPlanInput,
@@ -22,6 +25,7 @@ use super::{
         PreparedUpdate, RootRevision, UpdateRequest,
     },
     identity_index::IdentityIndex,
+    line_composition::{BreakCorrections, Correction},
     placement_slot_arena::{PlacementSlotArena, PlacementSlotError},
     placement_state::{GlyphSource, LayoutRunOwner, PlacementIdentity, PlacementSegment},
     positioning::{PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT},
@@ -4067,7 +4071,15 @@ impl ParagraphState {
             .first()
             .copied()
             .unwrap_or(0);
-        let metrics_for = |handle| shaper.font_metrics(handle);
+        let shaper_cell = RefCell::new(&mut *shaper);
+        let metrics_for = |handle| shaper_cell.borrow().font_metrics(handle);
+        let mut corrections = ShapedBreakCorrections {
+            shaper: &shaper_cell,
+            text,
+            runs,
+            styles: style_storage,
+            clusters,
+        };
         let first_font_for_stack = |stack_handle| {
             font_stacks
                 .binary_search_by_key(&stack_handle, |stack| stack.handle)
@@ -4104,6 +4116,7 @@ impl ParagraphState {
                     max_slots_per_band,
                     metrics_for,
                     first_font_for_stack,
+                    &mut corrections,
                 )?
             }
         {
@@ -4136,6 +4149,7 @@ impl ParagraphState {
                     max_slots_per_band,
                     metrics_for,
                     first_font_for_stack,
+                    &mut corrections,
                 )?
             }
         {
@@ -4153,6 +4167,7 @@ impl ParagraphState {
             max_slots_per_band,
             metrics_for,
             first_font_for_stack,
+            &mut corrections,
         )?;
         let mut ellipsis_index = 0usize;
         while ellipsis_index < self.flow_layout.pending_mut().ellipsis_threads().len() {
@@ -4892,6 +4907,131 @@ fn prepare_boundary_candidate(
         source_advance,
         ellipsis_advance,
     })
+}
+
+pub(super) struct ShapedBreakCorrections<'a, 'b> {
+    shaper: &'a RefCell<&'b mut ShaperRegistry>,
+    text: &'a [u16],
+    runs: &'a [ShapingRun],
+    styles: &'a StyleArena,
+    clusters: &'a ClusterArena,
+}
+
+impl ShapedBreakCorrections<'_, '_> {
+    /// The correction on `side` (0 = L, 1 = R) of `boundary`, zero unless it needs one, priced on first use.
+    fn correction(&mut self, boundary: usize, side: usize) -> Result<Correction, EngineError> {
+        const CORRECTED: u8 = CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION;
+        let c = self.clusters;
+        if boundary == 0 || c.flags[boundary - 1] & CORRECTED != CORRECTED {
+            return Ok(Correction::ZERO);
+        }
+        let slot = &c.break_corrections[boundary - 1][side];
+        if let Some(correction) = slot.get() {
+            return Ok(correction);
+        }
+        let (start, end) = c.island(boundary);
+        let correction = match side {
+            0 => self.delta((start, boundary), (false, true))?,
+            _ => self.delta((boundary, end), (true, false))?,
+        };
+        slot.set(Some(correction));
+        Ok(correction)
+    }
+
+    /// How far reshaping clusters `[start, end)` moves their base sums. `lead`/`trail` say the
+    /// range begins/ends its line; any other edge shapes with [`SHAPING_CONTEXT`] clusters of context.
+    fn delta(
+        &mut self,
+        (start, end): (usize, usize),
+        (lead, trail): (bool, bool),
+    ) -> Result<Correction, EngineError> {
+        let c = self.clusters;
+        let run = self.runs[c.source_runs[start] as usize];
+        let (item_start, item_end) = (c.starts[start], c.ends[end - 1]);
+        let before = c.starts[start.saturating_sub(SHAPING_CONTEXT)].max(run.text_start);
+        let after = c.ends[(end + SHAPING_CONTEXT).min(c.starts.len()) - 1].min(run.text_end);
+        let scale = f64::from(run.style.font_size) / c.units_per_em[start];
+        // Spacing first, then glyphs in order, as the arena sums: unchanged shapes correct by zero.
+        let style = run.style;
+        let mut advances: Vec<f64> = (start..end)
+            .map(|i| {
+                let space = c.flags[i] & CLUSTER_SPACE != 0;
+                f64::from(style.letter_spacing + if space { style.word_spacing } else { 0.0 })
+            })
+            .collect();
+        self.shaper
+            .borrow_mut()
+            .with_shaped_range(
+                c.font_handles[start],
+                self.text,
+                ShapeRunRef {
+                    text_start: run.text_start,
+                    text_end: run.text_end,
+                    script: run.script,
+                    language: self.styles.resolved_language(run.style),
+                    features: self.styles.resolved_features(run.style),
+                    direction: run.direction,
+                    cluster_level: 0,
+                    flags: 0x40,
+                },
+                ShapeRangeRef {
+                    item_start,
+                    item_end,
+                    context_start: if lead { item_start } else { before },
+                    context_end: if trail { item_end } else { after },
+                    flags: 0x40
+                        | u32::from(lead || start == 0)
+                        | (u32::from(trail || end == c.starts.len()) << 1),
+                },
+                |shaped| {
+                    for (info, at) in shaped.glyph_infos().iter().zip(shaped.glyph_positions()) {
+                        let owner = c.starts.partition_point(|s| *s <= info.cluster) - 1;
+                        advances[owner - start] += f64::from(at.x_advance.unsigned_abs()) * scale;
+                    }
+                    Ok(())
+                },
+            )
+            .map_err(shaper_error)?;
+        // Terminating spaces hang, laid at base width until shaping substitutes glyphs: skipped.
+        let (mut advance, mut space, mut hung) = (0_i64, 0_i64, trail);
+        for (i, shaped) in (start..end).zip(&advances).rev() {
+            let is_space = c.flags[i] & CLUSTER_SPACE != 0;
+            hung &= is_space;
+            let change =
+                super::layout_units::layout_units_from_scaled(*shaped) - c.advance_units[i];
+            advance += change * i64::from(!hung);
+            space += change * i64::from(!hung && is_space);
+        }
+        let unit = |value: i64| i32::try_from(value).map_err(|_| EngineError::ResultTooLarge);
+        Ok(Correction {
+            advance: unit(advance)?,
+            space: unit(space)?,
+            trailing: 0,
+        })
+    }
+}
+
+impl BreakCorrections for ShapedBreakCorrections<'_, '_> {
+    fn left(&mut self, boundary: usize) -> Result<Correction, EngineError> {
+        self.correction(boundary, 0)
+    }
+
+    fn right(&mut self, boundary: usize) -> Result<Correction, EngineError> {
+        self.correction(boundary, 1)
+    }
+
+    fn whole_line(&mut self, start: usize, end: usize) -> Result<Option<Correction>, EngineError> {
+        let c = self.clusters;
+        let tail = if end < c.starts.len() {
+            c.island(end).0
+        } else {
+            end
+        };
+        if c.island(start).1 <= tail {
+            return Ok(None);
+        }
+        self.delta((start, end), (true, true)).map(Some)
+    }
 }
 
 fn append_boundary_source_ids(

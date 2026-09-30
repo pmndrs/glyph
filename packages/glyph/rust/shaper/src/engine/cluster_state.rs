@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use core::num::NonZeroU32;
+use core::{cell::Cell, num::NonZeroU32};
 
 use crate::{FontGlyphExtents, FontMetrics, unicode::UnicodeAnalysis};
 
@@ -7,6 +7,7 @@ use super::{
     EngineError, FrameFault,
     frame::{WRAP_CHARACTER, WRAP_NONE, WRAP_WORD},
     identity_index::{IdentityIndex, IdentityIndexError},
+    line_composition::Correction,
     run_local::{NumericBlockSpan, RunLocalArena},
     shaping_state::{ShapeArena, ShapingRun},
     style_state::{ResolvedStyle, StyleArena, StyleSegment},
@@ -43,6 +44,7 @@ pub(crate) struct IntrinsicWidths {
 }
 
 const NO_SOURCE_RUN: u32 = u32::MAX;
+pub(super) const SHAPING_CONTEXT: usize = 5;
 /// Cluster count per chunk summary (D-245).
 pub(crate) const LAYOUT_CHUNK: usize = 64;
 
@@ -277,6 +279,8 @@ pub(crate) struct ClusterArena {
     pub index_at: Vec<u32>,
     pub(super) shaped: Vec<u8>,
     pub(super) unsafe_before: Vec<u8>,
+    /// `[L, R]` corrections (#216) for the boundary after each cluster, filled lazily by the fitter.
+    pub(super) break_corrections: Vec<[Cell<Option<Correction>>; 2]>,
     pub(super) layout_runs: LayoutRunArena,
     pub(super) run_local: RunLocalArena,
 }
@@ -316,7 +320,33 @@ impl ClusterArena {
         reserve(&mut self.index_at, capacity.saturating_add(1))?;
         reserve(&mut self.shaped, capacity)?;
         reserve(&mut self.unsafe_before, capacity)?;
+        reserve(&mut self.break_corrections, capacity)?;
         Ok(())
+    }
+
+    fn same_owner(&self, a: usize, b: usize) -> bool {
+        [&self.source_runs, &self.binding_handles, &self.font_handles]
+            .iter()
+            .all(|lane| lane[a] == lane[b])
+    }
+
+    /// The clusters `[start, end)` around `boundary` between shaping-safe boundaries and font owners.
+    pub(super) fn island(&self, boundary: usize) -> (usize, usize) {
+        let (mut start, mut end) = (boundary, boundary + 1);
+        let unsafe_before = |i: usize| self.flags[i] & CLUSTER_SAFE_BEFORE == 0;
+        while start > 0 && self.same_owner(start - 1, boundary) && unsafe_before(start) {
+            start -= 1;
+        }
+        while end < self.starts.len() && self.same_owner(end, boundary) && unsafe_before(end) {
+            end += 1;
+        }
+        (start, end)
+    }
+
+    fn reset_break_corrections(&self, start: usize, end: usize) {
+        let end = end.min(self.break_corrections.len());
+        let slots = self.break_corrections[start.min(end)..end].iter();
+        slots.flatten().for_each(|slot| slot.set(None));
     }
 
     pub(crate) fn build(
@@ -386,6 +416,7 @@ impl ClusterArena {
             self.glyph_counts.push(0);
             self.shaped.push(0);
             self.unsafe_before.push(0);
+            self.break_corrections.push(Default::default());
         }
         self.build_index(text.len())?;
         self.aggregate_shape(runs, shape, metrics_for)?;
@@ -617,6 +648,13 @@ impl ClusterArena {
                 self.mark_optional_break(preceding, line_break.position);
             }
         }
+        // A correction reshapes an island plus SHAPING_CONTEXT clusters either side of its boundary.
+        let first = self.island(cluster_start.max(1) - 1).0;
+        let last = self.island(cluster_end.min(self.starts.len() - 1)).1;
+        self.reset_break_corrections(
+            first.saturating_sub(SHAPING_CONTEXT),
+            last + SHAPING_CONTEXT,
+        );
         self.refresh_layout_units()?;
         Ok(Some((cluster_start, cluster_end)))
     }
@@ -899,6 +937,7 @@ impl ClusterArena {
         copy_lane!(index_at);
         copy_lane!(shaped);
         copy_lane!(unsafe_before);
+        copy_lane!(break_corrections);
         self.layout_runs.reserve(source.layout_runs.runs.len())?;
         self.layout_runs
             .runs
@@ -973,6 +1012,7 @@ impl ClusterArena {
             }
             self.advances[cluster] = advance;
         }
+        self.reset_break_corrections(0, self.starts.len());
         self.refresh_layout_units()?;
         Ok(Some(()))
     }
@@ -1175,6 +1215,7 @@ impl ClusterArena {
         self.index_at.clear();
         self.shaped.clear();
         self.unsafe_before.clear();
+        self.break_corrections.clear();
         self.layout_runs.clear();
         self.run_local.clear();
     }
@@ -1700,13 +1741,13 @@ impl ClusterArena {
     /// Records a UAX #14 optional opportunity that ends cluster `preceding` at text offset
     /// `position`. A shaping-safe boundary is an allowed break outright. An unsafe boundary
     /// is still a legal break — dropping it produces the short lines of #216 — so it is
-    /// marked for correction; it becomes allowed once the fitter can charge that
-    /// correction, and until then the layout is unchanged.
+    /// allowed with a correction the fitter charges, provided one font owns both sides so
+    /// the island can be reshaped; across owners it is dropped.
     fn mark_optional_break(&mut self, preceding: usize, position: u32) {
         if self.boundary_is_shaping_safe(position) {
             self.flags[preceding] |= CLUSTER_ALLOWED_BREAK;
-        } else {
-            self.flags[preceding] |= CLUSTER_BREAK_CORRECTION;
+        } else if self.same_owner(preceding, preceding + 1) {
+            self.flags[preceding] |= CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION;
         }
     }
 
@@ -2759,16 +2800,20 @@ mod tests {
                 clusters.index_at.capacity(),
             )
         );
-        // The legal opportunity after the space survives as a correction-bearing boundary
-        // (#216) instead of an allowed break; the fitter still cannot break there.
+        // The legal opportunity after the space is an allowed break that carries a correction
+        // (#216) when both sides share a font owner.
         assert_eq!(
             clusters.flags[1],
-            CLUSTER_SAFE_BEFORE | CLUSTER_SPACE | CLUSTER_BREAK_CORRECTION
+            CLUSTER_SAFE_BEFORE | CLUSTER_SPACE | CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION
         );
         assert_eq!(clusters.flags[2], 0);
         assert_eq!(
             clusters.chunk_flags_or,
-            [CLUSTER_SAFE_BEFORE | CLUSTER_SPACE | CLUSTER_HARD_BREAK | CLUSTER_REQUIRED_BREAK],
+            [CLUSTER_SAFE_BEFORE
+                | CLUSTER_SPACE
+                | CLUSTER_HARD_BREAK
+                | CLUSTER_REQUIRED_BREAK
+                | CLUSTER_ALLOWED_BREAK],
             "chunk summaries never fold the correction marker"
         );
     }
@@ -3113,6 +3158,122 @@ mod tests {
         assert_eq!(clusters.glyph_counts, [1]);
         assert_eq!(clusters.glyph_ids, [42]);
         assert_eq!(clusters.source_runs, [0]);
+    }
+
+    #[test]
+    fn source_run_rebuild_resets_break_corrections_only_near_the_rebuilt_run() {
+        let text: Vec<u16> = "a".repeat(20).encode_utf16().collect();
+        let mut unicode = UnicodeAnalysis::default();
+        unicode.analyze(&text).unwrap();
+        let style = ResolvedStyle::test_typography(16.0, 1.0, 0.0);
+        let styles = [StyleSegment {
+            text_start: 0,
+            text_end: 20,
+            style,
+        }];
+        let run = |text_start, text_end| ShapingRun {
+            text_start,
+            text_end,
+            script: u32::from_be_bytes(*b"Latn"),
+            direction: 4,
+            bidi_level: 0,
+            style,
+        };
+        let runs = [run(0, 2), run(2, 20)];
+        let shaped = |source_run, text_start, text_end, glyph_start| ShapedRun {
+            source_run,
+            binding_handle: 19,
+            font_handle: 9,
+            text_start,
+            text_end,
+            glyph_start,
+            glyph_count: text_end - text_start,
+        };
+        let make_shape = |first_glyph| ShapeArena {
+            runs: vec![shaped(0, 0, 2, 0), shaped(1, 2, 20, 2)],
+            glyph_ids: std::iter::once(first_glyph).chain([1; 19]).collect(),
+            clusters: (0..20).collect(),
+            x_advances: vec![500; 20],
+            y_advances: vec![0; 20],
+            x_offsets: vec![0; 20],
+            y_offsets: vec![0; 20],
+            glyph_flags: vec![0; 20],
+        };
+        let metrics = |_| {
+            Some(FontMetrics {
+                units_per_em: 1_000,
+                ascender: 800,
+                cap_height: 700,
+                descender: -200,
+                line_gap: 0,
+                underline_position: -100,
+                underline_thickness: 50,
+                strikeout_position: 300,
+                strikeout_size: 50,
+            })
+        };
+        let ids: Vec<u32> = (1..=20).collect();
+        let shape = make_shape(1);
+        let input = |shape| ClusterBuildInput {
+            text: &text,
+            text_unit_ids: &ids,
+            unicode: &unicode,
+            styles: &styles,
+            runs: &runs,
+            shape,
+        };
+        let mut previous = ClusterArena::default();
+        previous.build(input(&shape), metrics).unwrap();
+        let marker = Correction {
+            advance: 7,
+            space: 0,
+            trailing: 0,
+        };
+        for slot in previous.break_corrections.iter().flatten() {
+            slot.set(Some(marker));
+        }
+        let mut copy = ClusterArena::default();
+        copy.copy_from(&previous).unwrap();
+        assert!(
+            copy.break_corrections
+                .iter()
+                .flatten()
+                .all(|slot| slot.get().is_some())
+        );
+
+        let mut retained = ClusterArena::default();
+        retained
+            .rebuild_source_run_if_topology_is_stable(&previous, input(&shape), 0, metrics)
+            .unwrap()
+            .unwrap();
+        // Run 0 is clusters 0..2; the island after it plus 5 clusters of context reach slot 8.
+        let kept: Vec<bool> = retained
+            .break_corrections
+            .iter()
+            .map(|slot| slot[1].get().is_some())
+            .collect();
+        assert!(
+            kept[..8].iter().all(|kept| !kept),
+            "inside the rebuilt run and its context"
+        );
+        assert!(
+            kept[8..].iter().all(|kept| *kept),
+            "beyond the context survives"
+        );
+        assert_eq!(retained.island(9), (9, 10));
+
+        let mut restyled = ClusterArena::default();
+        restyled
+            .refresh_scales_from_stream(&previous, &styles)
+            .unwrap()
+            .unwrap();
+        assert!(
+            restyled
+                .break_corrections
+                .iter()
+                .flatten()
+                .all(|slot| slot.get().is_none())
+        );
     }
 
     #[test]
