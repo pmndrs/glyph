@@ -349,6 +349,46 @@ impl ClusterArena {
         slots.flatten().for_each(|slot| slot.set(None));
     }
 
+    /// Carries corrections across a text edit that changed the cluster count: a slot survives when
+    /// both clusters around its boundary keep their stable ids and the edit is out of reshaping reach.
+    pub(super) fn carry_break_corrections(
+        &self,
+        previous: &Self,
+        (old_start, old_end, new_end): (usize, usize, usize),
+    ) {
+        let flagged = CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION;
+        for boundary in 0..self.starts.len().saturating_sub(1) {
+            let end = self.ends[boundary] as usize;
+            let old_position = match end {
+                _ if self.flags[boundary] & flagged != flagged => continue,
+                end if end <= old_start => end,
+                end if end >= new_end => end - new_end + old_end,
+                _ => continue,
+            };
+            let Ok(old) = previous.ends.binary_search(&(old_position as u32)) else {
+                continue;
+            };
+            if previous.stable_ids.get(old..old + 2) != self.stable_ids.get(boundary..boundary + 2)
+            {
+                continue;
+            }
+            let (first, last) = self.island(boundary);
+            let reach = first.saturating_sub(SHAPING_CONTEXT)
+                ..(last + SHAPING_CONTEXT).min(self.starts.len());
+            if (self.starts[reach.start] as usize) < new_end
+                && (self.ends[reach.end - 1] as usize) > old_start
+            {
+                continue;
+            }
+            for (slot, kept) in self.break_corrections[boundary]
+                .iter()
+                .zip(&previous.break_corrections[old])
+            {
+                slot.set(kept.get());
+            }
+        }
+    }
+
     pub(crate) fn build(
         &mut self,
         input: ClusterBuildInput<'_>,
@@ -3158,6 +3198,60 @@ mod tests {
         assert_eq!(clusters.glyph_counts, [1]);
         assert_eq!(clusters.glyph_ids, [42]);
         assert_eq!(clusters.source_runs, [0]);
+    }
+
+    #[test]
+    fn carry_break_corrections_keeps_slots_outside_the_edit_reach() {
+        let build = |ids: Vec<u32>| {
+            let text = vec![97_u16; ids.len()];
+            let style = ResolvedStyle::test_typography(16.0, 1.0, 0.0);
+            let mut arena = canonical_fixture(&text, &ids, &vec![0; ids.len()], style).arena;
+            arena
+                .flags
+                .fill(CLUSTER_SAFE_BEFORE | CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION);
+            arena
+                .break_corrections
+                .resize_with(ids.len(), Default::default);
+            arena
+        };
+        let previous = build((0..40).collect());
+        for (index, slot) in previous.break_corrections.iter().enumerate() {
+            let advance = index as i32 + 1;
+            slot[0].set(Some(Correction {
+                advance,
+                space: 0,
+                trailing: 0,
+            }));
+            slot[1].set(Some(Correction {
+                advance: -advance,
+                space: 0,
+                trailing: 0,
+            }));
+        }
+        // One character inserted at text offset 20.
+        let mut ids: Vec<u32> = (0..20).collect();
+        ids.push(100);
+        ids.extend(20..40);
+        let mut current = build(ids);
+        // Boundary 3 has a foreign right neighbour; it must not be carried.
+        current.stable_ids[4] = 200;
+        current.carry_break_corrections(&previous, (20, 20, 21));
+        let carried = |i: usize| current.break_corrections[i][0].get().map(|c| c.advance);
+        assert_eq!(carried(2), Some(3), "before the edit");
+        assert_eq!(carried(3), None, "stable id differs");
+        assert_eq!(
+            current.break_corrections[2][1].get().map(|c| c.advance),
+            Some(-3)
+        );
+        assert_eq!(
+            carried(14),
+            Some(15),
+            "last slot clear of the 5-cluster reach"
+        );
+        assert!((15..=25).all(|i| carried(i).is_none()), "reach of the edit");
+        assert_eq!(carried(26), Some(26), "first slot clear after the edit");
+        assert_eq!(carried(38), Some(38), "after the edit");
+        assert_eq!(carried(40), None, "final cluster has no boundary");
     }
 
     #[test]

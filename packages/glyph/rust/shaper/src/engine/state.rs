@@ -3915,6 +3915,10 @@ impl ParagraphState {
             .pending_mut()
             .build(build_input(), |handle| shaper.font_metrics(handle))?;
         let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
+        if let Some(edit) = self.text_edit {
+            let span = (edit.old_start, edit.old_end, edit.new_end);
+            pending_clusters.carry_break_corrections(committed_clusters, span);
+        }
         if let Err(error) = pending_clusters.assign_stable_glyph_ids(
             committed_clusters,
             &mut self.glyph_identity_index,
