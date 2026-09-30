@@ -929,7 +929,8 @@ impl ClusterArena {
                         space_tail += advance;
                     }
                 }
-                min_content = min_content.max(min_run - space_tail);
+                let corrected = segment_correction(segment_start, index + 1)?;
+                min_content = min_content.max(min_run - space_tail + corrected);
                 max_content = max_content.max(max_run - space_tail);
                 min_run = 0.0;
                 max_run = 0.0;
@@ -3826,6 +3827,20 @@ mod tests {
         let widths = clusters.intrinsic_widths(WRAP_WORD, &mut table).unwrap();
         assert_eq!(widths.min_content_width, 29.0);
         assert_eq!(widths.max_content_width, 36.0);
+    }
+
+    #[test]
+    fn min_content_includes_the_correction_at_a_forced_break_segment_end() {
+        let mut clusters = intrinsic_fixture();
+        clusters.flags[2] |= CLUSTER_BREAK_CORRECTION;
+        clusters.flags[4] |= CLUSTER_HARD_BREAK | CLUSTER_REQUIRED_BREAK;
+        let unit = |advance| Correction {
+            advance,
+            ..Correction::ZERO
+        };
+        let mut table = Table(vec![(3, unit(65_536), unit(20 * 65_536))]);
+        let widths = clusters.intrinsic_widths(WRAP_WORD, &mut table).unwrap();
+        assert_eq!(widths.min_content_width, 29.0);
     }
 
     #[test]

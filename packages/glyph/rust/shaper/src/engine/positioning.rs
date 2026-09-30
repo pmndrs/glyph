@@ -1596,6 +1596,7 @@ impl PositionedGlyphArena {
                 metrics_for,
                 extents_for,
                 retained.as_deref_mut(),
+                Some((justify, &mut state.space_ordinal, &mut state.gap_ordinal)),
             )?;
             let style = boundary_cluster_style(styles, clusters, cluster_start)?;
             if style.decoration_flags != 0 {
@@ -1605,10 +1606,6 @@ impl PositionedGlyphArena {
                     start: pen_origin,
                     end: state.cursor,
                 });
-            }
-            for cluster in cluster_start..body_start {
-                let (space, gap) = (&mut state.space_ordinal, &mut state.gap_ordinal);
-                apply_justification(cluster, clusters, justify, &mut state.cursor, space, gap);
             }
         }
         let layout_run_order = visually_ltr && paragraph_level & 1 == 0;
@@ -1806,6 +1803,7 @@ impl PositionedGlyphArena {
                 metrics_for,
                 extents_for,
                 retained,
+                None,
             )?;
         }
         Ok(indent
@@ -2337,6 +2335,7 @@ impl PositionedGlyphArena {
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
         mut retained: Option<&mut RetainedInstanceCursor>,
+        mut justify: Option<(JustifyDistribution, &mut i64, &mut i64)>,
     ) -> Result<f64, EngineError> {
         let bidi_level = runs
             .get(usize::try_from(boundary.source_run).map_err(|_| EngineError::InvalidRequest)?)
@@ -2349,50 +2348,74 @@ impl PositionedGlyphArena {
             .saturating_sub(1)
             .max(source_cluster)
             .min(clusters.starts.len().saturating_sub(1));
-        let source_occurrence = (boundary.source_glyph_count != 0)
-            .then(|| {
-                self.record_boundary_slice(
+        let source_end = boundary
+            .source_glyph_start
+            .checked_add(boundary.source_glyph_count)
+            .ok_or(EngineError::ResultTooLarge)?;
+        // A justified lead lays out cluster by cluster so each expansion lands after its own cluster.
+        let split = justify.as_ref().is_some_and(|(j, ..)| !j.is_zero());
+        let last = if split {
+            boundary.cluster_end as usize
+        } else {
+            source_cluster + 1
+        };
+        let mut pieces = 0;
+        let mut glyph = boundary.source_glyph_start;
+        for cluster in source_cluster..last {
+            let piece_start = glyph;
+            if split {
+                let start = clusters.starts[cluster];
+                while glyph < source_end && arena.shape.clusters[glyph as usize] == start {
+                    glyph += 1;
+                }
+            } else {
+                glyph = source_end;
+            }
+            if glyph > piece_start {
+                let occurrence = self.record_boundary_slice(
                     _boundary_index,
                     boundary.flow_thread_id,
                     BoundaryRunRole::BoundarySource,
-                    source_cluster.min(clusters.starts.len().saturating_sub(1)),
-                    boundary.source_glyph_start,
-                    boundary.source_glyph_count,
+                    (cluster.min(clusters.starts.len().saturating_sub(1)), pieces),
+                    (piece_start, glyph - piece_start),
                     cursor,
                     baseline,
                     clusters,
-                )
-            })
-            .transpose()?;
-        cursor = self.position_boundary_span(
-            line,
-            cursor,
-            baseline,
-            boundary.source_glyph_start,
-            boundary.source_glyph_count,
-            boundary.source_binding_handle,
-            boundary.source_font_handle,
-            bidi_level,
-            None,
-            source_cluster,
-            arena,
-            text,
-            clusters,
-            styles,
-            metrics_for,
-            extents_for,
-            source_occurrence,
-            retained.as_deref_mut(),
-        )?;
+                )?;
+                cursor = self.position_boundary_span(
+                    line,
+                    cursor,
+                    baseline,
+                    piece_start,
+                    glyph - piece_start,
+                    boundary.source_binding_handle,
+                    boundary.source_font_handle,
+                    bidi_level,
+                    None,
+                    cluster,
+                    arena,
+                    text,
+                    clusters,
+                    styles,
+                    metrics_for,
+                    extents_for,
+                    Some(occurrence),
+                    retained.as_deref_mut(),
+                )?;
+                pieces += 1;
+            }
+            if let Some((justify, space, gap)) = justify.as_mut() {
+                apply_justification(cluster, clusters, *justify, &mut cursor, space, gap);
+            }
+        }
         let replacement_occurrence = (boundary.ellipsis_glyph_count != 0)
             .then(|| {
                 self.record_boundary_slice(
                     _boundary_index,
                     boundary.flow_thread_id,
                     BoundaryRunRole::Ellipsis,
-                    ellipsis_cluster,
-                    boundary.ellipsis_glyph_start,
-                    boundary.ellipsis_glyph_count,
+                    (ellipsis_cluster, 0),
+                    (boundary.ellipsis_glyph_start, boundary.ellipsis_glyph_count),
                     cursor,
                     baseline,
                     clusters,
@@ -2427,9 +2450,8 @@ impl PositionedGlyphArena {
         boundary_index: u32,
         flow_thread_id: u32,
         run_role: BoundaryRunRole,
-        owner_cluster: usize,
-        glyph_start: u32,
-        glyph_count: u32,
+        (owner_cluster, ordinal): (usize, u32),
+        (glyph_start, glyph_count): (u32, u32),
         cursor: f64,
         baseline: f64,
         clusters: &ClusterArena,
@@ -2450,10 +2472,13 @@ impl PositionedGlyphArena {
                     }
             })
             .ok_or(EngineError::InvalidRequest)?;
-        if run.glyph_start != glyph_start || run.glyph_count != glyph_count {
+        let whole = glyph_count == run.glyph_count;
+        if glyph_start < run.glyph_start
+            || glyph_start - run.glyph_start + glyph_count > run.glyph_count
+        {
             return Err(EngineError::InvalidRequest);
         }
-        let block_lane = usize::try_from(run.numeric_blocks.cluster_start)
+        let block_lane = usize::try_from(run.numeric_blocks.cluster_start + ordinal)
             .map_err(|_| EngineError::InvalidRequest)?;
         let block_index = *self
             .replacement_run_local
@@ -2491,10 +2516,14 @@ impl PositionedGlyphArena {
                     .checked_sub(run.numeric_blocks.start)
                     .filter(|ordinal| *ordinal < run.numeric_blocks.count)
                     .ok_or(EngineError::InvalidRequest)?,
-                run_cluster_start: 0,
-                run_cluster_count: run.numeric_blocks.cluster_count,
+                run_cluster_start: ordinal,
+                run_cluster_count: if whole {
+                    run.numeric_blocks.cluster_count
+                } else {
+                    1
+                },
                 glyph_source: GlyphSource::Boundary,
-                source_glyph_start: 0,
+                source_glyph_start: glyph_start - run.glyph_start,
                 source_glyph_count: glyph_count,
             },
             translation,

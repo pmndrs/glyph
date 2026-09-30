@@ -395,6 +395,7 @@ struct ParagraphState {
     intrinsic_flow_layout_scratch: FlowLayoutArena,
     intrinsic_flow_slot_scratch: super::flow_geometry::InlineSlotArena,
     intrinsic_positioned_scratch: PositionedGlyphArena,
+    intrinsic_boundary_shape: BoundaryShapeArena,
     intrinsic_identity_scratch: IdentityIndex,
     boundary_shape: BoundaryShapeArena,
     pending_boundary_shape: BoundaryShapeArena,
@@ -2906,6 +2907,7 @@ impl ParagraphState {
         self.intrinsic_geometry_scratch.clear();
         self.intrinsic_flow_layout_scratch.clear();
         self.intrinsic_positioned_scratch.clear();
+        self.intrinsic_boundary_shape.clear();
         self.boundary_shape.clear();
         self.pending_boundary_shape.clear();
         self.boundary_shape_scratch.clear();
@@ -3936,7 +3938,14 @@ impl ParagraphState {
             .pending_mut()
             .build(build_input(), |handle| shaper.font_metrics(handle))?;
         let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
-        if let Some(edit) = self.text_edit {
+        let (styles, committed_styles) = (self.styles.active(), self.styles.committed());
+        if let Some(edit) = self.text_edit
+            && !committed_styles.resolved.shaping_content_changed(
+                &committed_styles.arena,
+                &styles.resolved,
+                &styles.arena,
+            )
+        {
             let span = (edit.old_start, edit.old_end, edit.new_end);
             pending_clusters.carry_break_corrections(committed_clusters, span);
         }
@@ -4082,28 +4091,14 @@ impl ParagraphState {
             styles: &self.styles.active().arena,
             clusters: self.clusters.active(),
         };
-        let flow = self.flow_layout.pending_mut();
-        for line in flow.lines.clone() {
-            let words = ltr
-                && geometry.constraints.iter().any(|constraint| {
-                    constraint.flow_thread_id == line.flow_thread_id && constraint.wrap == WRAP_WORD
-                });
-            let start =
-                usize::try_from(line.fragment_start).map_err(|_| EngineError::InvalidRequest)?;
-            for fragment in &mut flow.fragments[start..start + usize::from(line.fragment_count)] {
-                fragment.lead_index = if words {
-                    corrections.line_start_record(
-                        *fragment,
-                        line.flow_thread_id,
-                        &mut self.pending_boundary_shape,
-                        &mut self.boundary_shape_scratch,
-                        next_glyph_id,
-                    )?
-                } else {
-                    NO_BOUNDARY
-                };
-            }
-        }
+        attach_line_leads(
+            &mut corrections,
+            (geometry, ltr),
+            self.flow_layout.pending_mut(),
+            &mut self.pending_boundary_shape,
+            &mut self.boundary_shape_scratch,
+            next_glyph_id,
+        )?;
         Ok(())
     }
 
@@ -4459,7 +4454,20 @@ impl ParagraphState {
                         })
                 },
                 &mut corrections,
-            )
+            )?;
+        // Throwaway identities for the unpublished inspection flow.
+        self.intrinsic_boundary_shape.clear();
+        attach_line_leads(
+            &mut corrections,
+            (
+                &self.intrinsic_geometry_scratch,
+                is_trivially_ltr(self.bidi.active(), self.shaping_runs.active().runs()),
+            ),
+            &mut self.intrinsic_flow_layout_scratch,
+            &mut self.intrinsic_boundary_shape,
+            &mut self.boundary_shape_scratch,
+            &mut (1 << 30),
+        )
     }
 
     fn prepare_intrinsic_positioned(&mut self, shaper: &ShaperRegistry) -> Result<(), EngineError> {
@@ -4471,7 +4479,7 @@ impl ParagraphState {
         let previous = self.positioned.active();
         let mut next_content_revision = 1;
         let mut next_run_canonical_revision = 1;
-        let boundary_shape = BoundaryShapeArena::default();
+        let boundary_shape = &self.intrinsic_boundary_shape;
         let geometry = &self.intrinsic_geometry_scratch;
         self.intrinsic_positioned_scratch.build(
             previous,
@@ -4481,8 +4489,8 @@ impl ParagraphState {
             clusters,
             runs,
             runs,
-            &boundary_shape,
-            &boundary_shape,
+            boundary_shape,
+            boundary_shape,
             styles,
             bidi,
             &mut self.intrinsic_identity_scratch,
@@ -5089,6 +5097,9 @@ impl ShapedBreakCorrections<'_, '_> {
         let index =
             |cluster: u32| usize::try_from(cluster).map_err(|_| EngineError::InvalidRequest);
         let start = index(fragment.line.cluster_start)?;
+        if start >= c.starts.len() {
+            return Ok(NO_BOUNDARY);
+        }
         let island_end = c.island(start).1;
         let cut = out.record(fragment.boundary_index);
         let end = island_end.min(match cut {
@@ -5201,6 +5212,40 @@ impl BreakCorrections for ShapedBreakCorrections<'_, '_> {
         }
         self.delta((start, end), (true, true)).map(Some)
     }
+}
+
+/// Gives every fragment of `flow` the record shaping its corrected line start alone (or none), so
+/// the ordinary and the intrinsic flow draw the same lead glyphs.
+fn attach_line_leads(
+    corrections: &mut ShapedBreakCorrections<'_, '_>,
+    (geometry, ltr): (&FlowGeometryArena, bool),
+    flow: &mut FlowLayoutArena,
+    out: &mut BoundaryShapeArena,
+    scratch: &mut ShapeArena,
+    next_glyph_id: &mut u32,
+) -> Result<(), EngineError> {
+    for line in flow.lines.clone() {
+        let words = ltr
+            && geometry.constraints.iter().any(|constraint| {
+                constraint.flow_thread_id == line.flow_thread_id && constraint.wrap == WRAP_WORD
+            });
+        let start =
+            usize::try_from(line.fragment_start).map_err(|_| EngineError::InvalidRequest)?;
+        for fragment in &mut flow.fragments[start..start + usize::from(line.fragment_count)] {
+            fragment.lead_index = if words {
+                corrections.line_start_record(
+                    *fragment,
+                    line.flow_thread_id,
+                    out,
+                    scratch,
+                    next_glyph_id,
+                )?
+            } else {
+                NO_BOUNDARY
+            };
+        }
+    }
+    Ok(())
 }
 
 fn append_boundary_source_ids(

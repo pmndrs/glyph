@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:10e2e1a30159228403a2119c8e3305ef6cedd969725ba537daf0bfaf5c78b30a'
+source_digest: 'sha256:2b107f45f12f5fce5c9782c3251fc0a3bb688a83bcbbcfca690cc23efca59da8'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1415,7 +1415,7 @@ from boundary-local shaping corrections, computed lazily per boundary, stored in
 edits (D-372). A line that starts at such a corrected boundary draws the glyphs of the island it opens shaped alone, in
 the same pass that prices it (`line_start_record`, a boundary-shape record beside the ellipsis one), so it matches the
 line shaped by itself; the hanging end keeps the paragraph's glyphs, as browsers keep the terminating space in the
-shaping run. Lines with nontrivial bidi keep paragraph glyphs. Optional language-resource imports,
+shaping run. Lines with nontrivial bidi keep paragraph glyphs while their widths stay corrected (known limitation until visual-order lead replacement exists). Optional language-resource imports,
 including a versioned linear-memory ABI that can move language tables out of the default Wasm payload, are tracked in
 [#163](https://github.com/pmndrs/glyph/issues/163); no renderer adapter may become a second layout implementation.
 
