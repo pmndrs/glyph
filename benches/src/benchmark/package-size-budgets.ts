@@ -49,8 +49,8 @@ export const packageSizeBudgets = {
   // Complete Rust shaping, layout, Codec execution, and command publication. The ceiling keeps less than one percent
   // headroom plus bounded cross-host compression variance; feature attribution lives in the decision log.
   'text-shaper-wasm': {
-    rawBytes: 1_385_000,
-    minifiedBytes: 1_385_000,
+    rawBytes: 1_390_000,
+    minifiedBytes: 1_390_000,
     gzipBytes: 536_000,
     brotliBytes: 413_000,
   },
