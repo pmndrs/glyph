@@ -13,7 +13,9 @@ use super::{
         DROP_CAP_ALIGN_TEXT_TOP, DROP_CAP_SIDE_INLINE_START, EXCLUSION_WRAP_INLINE_END,
         EXCLUSION_WRAP_INLINE_START, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, WRITING_HORIZONTAL_TB,
     },
-    line_composition::{ComposedLine, LineCursor, layout_next_line_integer},
+    line_composition::{
+        ComposedLine, Correction, LineCursor, NoCorrections, layout_next_line_integer,
+    },
     semantic_wire::FlowConstraint,
     shaping_state::ShapingRun,
     style_state::StyleSegment,
@@ -285,6 +287,8 @@ fn prepare_drop_cap(
             advance: envelope.advance,
             hung_advance: 0.0,
             hard_break: false,
+            start_correction: Correction::ZERO,
+            end_correction: Correction::ZERO,
         },
         slot_start: pen,
         slot_end: pen + envelope.advance,
@@ -1317,6 +1321,7 @@ impl FlowLayoutArena {
                     )),
                     wrap,
                     word_space_shrink,
+                    &mut NoCorrections,
                 )?
                 else {
                     break;
@@ -2005,6 +2010,8 @@ mod tests {
             advance: 0.0,
             hung_advance: 0.0,
             hard_break: false,
+            start_correction: Correction::ZERO,
+            end_correction: Correction::ZERO,
         }
     }
 
@@ -3638,6 +3645,8 @@ mod tests {
                     advance: 6.0,
                     hung_advance: 3.0,
                     hard_break: false,
+                    start_correction: Correction::ZERO,
+                    end_correction: Correction::ZERO,
                 },
                 slot_start: 0.0,
                 slot_end: 10.0,

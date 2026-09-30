@@ -22,6 +22,15 @@ pub(crate) const CLUSTER_ALLOWED_BREAK: u8 = 1 << 3;
 pub(crate) const CLUSTER_SPACE: u8 = 1 << 4;
 /// Chunk-summary marker for a negative advance, packed above the cluster flag domain.
 pub(crate) const CHUNK_NEGATIVE_ADVANCE: u8 = 1 << 5;
+/// A UAX #14 optional break opportunity that ends this cluster but is not shaping-safe:
+/// the glyphs on either side kern or ligate across it (#216). A line that breaks here needs
+/// the boundary reshaped, so the fitter charges a break correction to lines ending or
+/// starting at this cluster boundary instead of dropping the opportunity. The chunk
+/// summaries exclude this bit; corrections are paid only where a break is evaluated.
+pub(crate) const CLUSTER_BREAK_CORRECTION: u8 = 1 << 6;
+/// The cluster flag bits a chunk summary folds; summary-only markers and the correction
+/// marker live outside it.
+const CHUNK_SUMMARY_FLAGS: u8 = !(CHUNK_NEGATIVE_ADVANCE | CLUSTER_BREAK_CORRECTION);
 
 use super::shaping_state::GLYPH_FLAG_UNSAFE_TO_BREAK as GLYPH_UNSAFE_TO_BREAK;
 
@@ -159,7 +168,7 @@ fn summarize_unit_chunks(
         for (advance, flag) in advances.iter().zip(flags) {
             space_sum =
                 space_sum.saturating_add(*advance & -i64::from((*flag & CLUSTER_SPACE) >> 4));
-            flags_or |= *flag;
+            flags_or |= *flag & CHUNK_SUMMARY_FLAGS;
             flags_or |= CHUNK_NEGATIVE_ADVANCE * u8::from(*advance < 0);
         }
         // Flags tag this auxiliary as a space sum or a negative space-free maximum prefix;
@@ -592,7 +601,7 @@ impl ClusterArena {
         }
         self.rebuild_layout_runs_for_shaping(runs)?;
         if cluster_start > 0 {
-            self.flags[cluster_start - 1] &= !CLUSTER_ALLOWED_BREAK;
+            self.flags[cluster_start - 1] &= !(CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION);
         }
         for line_break in unicode.line_breaks() {
             let Some(preceding) = self.break_target(line_break.position, line_break.required)
@@ -605,15 +614,7 @@ impl ClusterArena {
             if line_break.required {
                 self.flags[preceding] |= CLUSTER_REQUIRED_BREAK;
             } else {
-                let safe = line_break.position == self.ends.last().copied().unwrap_or(0)
-                    || self
-                        .starts
-                        .binary_search(&line_break.position)
-                        .ok()
-                        .is_some_and(|next| self.flags[next] & CLUSTER_SAFE_BEFORE != 0);
-                if safe {
-                    self.flags[preceding] |= CLUSTER_ALLOWED_BREAK;
-                }
+                self.mark_optional_break(preceding, line_break.position);
             }
         }
         self.refresh_layout_units()?;
@@ -1679,17 +1680,34 @@ impl ClusterArena {
                 self.flags[preceding] |= CLUSTER_REQUIRED_BREAK;
                 continue;
             }
-            let safe = end == self.ends.last().copied().unwrap_or(0)
-                || self
-                    .starts
-                    .binary_search(&end)
-                    .ok()
-                    .is_some_and(|next| self.flags[next] & CLUSTER_SAFE_BEFORE != 0);
-            if safe {
-                self.flags[preceding] |= CLUSTER_ALLOWED_BREAK;
-            }
+            self.mark_optional_break(preceding, end);
         }
         Ok(())
+    }
+
+    /// Whether a line may break at text offset `position` without reshaping: the offset is
+    /// the end of the text, or the cluster starting there shaped with no glyph flagged
+    /// unsafe-to-break against its predecessor.
+    fn boundary_is_shaping_safe(&self, position: u32) -> bool {
+        position == self.ends.last().copied().unwrap_or(0)
+            || self
+                .starts
+                .binary_search(&position)
+                .ok()
+                .is_some_and(|next| self.flags[next] & CLUSTER_SAFE_BEFORE != 0)
+    }
+
+    /// Records a UAX #14 optional opportunity that ends cluster `preceding` at text offset
+    /// `position`. A shaping-safe boundary is an allowed break outright. An unsafe boundary
+    /// is still a legal break — dropping it produces the short lines of #216 — so it is
+    /// marked for correction; it becomes allowed once the fitter can charge that
+    /// correction, and until then the layout is unchanged.
+    fn mark_optional_break(&mut self, preceding: usize, position: u32) {
+        if self.boundary_is_shaping_safe(position) {
+            self.flags[preceding] |= CLUSTER_ALLOWED_BREAK;
+        } else {
+            self.flags[preceding] |= CLUSTER_BREAK_CORRECTION;
+        }
     }
 
     /// Resolve a UAX #14 opportunity to the cluster it can act on, or discard it.
@@ -2741,8 +2759,18 @@ mod tests {
                 clusters.index_at.capacity(),
             )
         );
-        assert_eq!(clusters.flags[1], CLUSTER_SAFE_BEFORE | CLUSTER_SPACE);
+        // The legal opportunity after the space survives as a correction-bearing boundary
+        // (#216) instead of an allowed break; the fitter still cannot break there.
+        assert_eq!(
+            clusters.flags[1],
+            CLUSTER_SAFE_BEFORE | CLUSTER_SPACE | CLUSTER_BREAK_CORRECTION
+        );
         assert_eq!(clusters.flags[2], 0);
+        assert_eq!(
+            clusters.chunk_flags_or,
+            [CLUSTER_SAFE_BEFORE | CLUSTER_SPACE | CLUSTER_HARD_BREAK | CLUSTER_REQUIRED_BREAK],
+            "chunk summaries never fold the correction marker"
+        );
     }
 
     /// A style boundary interior to an extended grapheme cluster still rejects the frame -- one
