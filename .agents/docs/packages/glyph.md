@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:2dffdf4f60df560fd7d939b25242ea22b25f6b3961a490a18668fad5a6294977'
+source_digest: 'sha256:862dc718e488fb94f07bb68e1b5b2a510b9bf8388a5fb71777ecdaa70feac62f'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1414,9 +1414,12 @@ marks unsafe stays allowed within one run, binding, and font, as in browser line
 from boundary-local shaping corrections, computed lazily per boundary and stored in a cluster lane, so line layout is
 exact at the breaks it takes (D-372). Min-content reads the paragraph shaping's word widths uncorrected, like Blink's fast
 min-content path, so it never prices every corrected boundary. A line that starts at such a corrected boundary draws the glyphs of the island it opens shaped alone, in
-the same pass that prices it (`line_start_record`, a boundary-shape record beside the ellipsis one), so it matches the
-line shaped by itself; the hanging end keeps the paragraph's glyphs, as browsers keep the terminating space in the
-shaping run. Lines with nontrivial bidi keep paragraph glyphs while their widths stay corrected (known limitation until visual-order lead replacement exists). Optional language-resource imports,
+the same pass that prices it (`line_edge_record`, a boundary-shape record beside the ellipsis one), so it matches the
+line shaped by itself. A line that ends at one, unless a space ends it, draws the island it closes shaped alone too
+(`line_edge_record` with `tail`, `FlowFragment::tail_index`), as Blink reshapes a line end that no breakable space
+precedes; a hanging space keeps the paragraph's glyphs, as browsers keep the terminating space in the shaping run.
+Edge records lay out cluster by cluster, so spans that split only paint or decoration keep their own extents and
+justification. Lines with nontrivial bidi keep paragraph glyphs while their widths stay corrected (known limitation until visual-order lead replacement exists). Optional language-resource imports,
 including a versioned linear-memory ABI that can move language tables out of the default Wasm payload, are tracked in
 [#163](https://github.com/pmndrs/glyph/issues/163); no renderer adapter may become a second layout implementation.
 

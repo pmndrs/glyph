@@ -4062,7 +4062,7 @@ impl ParagraphState {
             styles: &self.styles.active().arena,
             clusters: self.clusters.active(),
         };
-        attach_line_leads(
+        attach_line_edges(
             &mut corrections,
             (geometry, ltr),
             self.flow_layout.pending_mut(),
@@ -4428,7 +4428,7 @@ impl ParagraphState {
             )?;
         // Throwaway identities for the unpublished inspection flow.
         self.intrinsic_boundary_shape.clear();
-        attach_line_leads(
+        attach_line_edges(
             &mut corrections,
             (
                 &self.intrinsic_geometry_scratch,
@@ -5052,13 +5052,14 @@ impl ShapedBreakCorrections<'_, '_> {
             .map_err(shaper_error)
     }
 
-    /// The record shaping the island a corrected line start opens, alone as [`Self::delta`] priced it,
-    /// so the line draws what it would shaped by itself; `NO_BOUNDARY` when the start is uncorrected.
-    /// An ellipsis keeps only the clusters before its cut.
-    fn line_start_record(
+    /// The record shaping the island a corrected line opens (`tail` false) or closes (`tail` true), alone
+    /// as [`Self::delta`] priced it, so the line draws what it would shaped by itself; `NO_BOUNDARY` when
+    /// that edge is uncorrected. As Chromium reshapes line ends, a space ending the line leaves its end as is,
+    /// and islands that meet shape the whole line once. An ellipsis keeps only the clusters before its cut.
+    fn line_edge_record(
         &mut self,
         fragment: FlowFragment,
-        flow_thread_id: u32,
+        (flow_thread_id, tail): (u32, bool),
         out: &mut BoundaryShapeArena,
         scratch: &mut ShapeArena,
         next_glyph_id: &mut u32,
@@ -5067,17 +5068,43 @@ impl ShapedBreakCorrections<'_, '_> {
         let c = self.clusters;
         let index =
             |cluster: u32| usize::try_from(cluster).map_err(|_| EngineError::InvalidRequest);
-        let start = index(fragment.line.cluster_start)?;
-        if start >= c.starts.len() {
+        let (line_start, line_end) = (
+            index(fragment.line.cluster_start)?,
+            index(fragment.line.cluster_end)?,
+        );
+        let corrected =
+            |boundary: usize| boundary > 0 && c.flags[boundary - 1] & CORRECTED == CORRECTED;
+        if line_start >= c.starts.len() {
             return Ok(NO_BOUNDARY);
         }
-        let island_end = c.island(start).1;
         let cut = out.record(fragment.boundary_index);
-        let end = island_end.min(match cut {
-            Some(cut) => index(cut.cluster_start)?,
-            None => index(fragment.line.cluster_end)?,
-        });
-        if start == 0 || c.flags[start - 1] & CORRECTED != CORRECTED || end <= start {
+        let closes = line_end < c.starts.len()
+            && corrected(line_end)
+            && c.flags[line_end - 1] & CLUSTER_SPACE == 0
+            && cut.is_none();
+        let island_end = corrected(line_start).then(|| c.island(line_start).1);
+        let tail_start = closes.then(|| c.island(line_end).0.max(line_start));
+        let whole = island_end
+            .zip(tail_start)
+            .is_some_and(|(lead, tail)| lead > tail);
+        let (start, end, edges) = if tail {
+            match tail_start.filter(|_| !whole) {
+                Some(tail_start) => (tail_start, line_end, (false, true)),
+                None => return Ok(NO_BOUNDARY),
+            }
+        } else {
+            let Some(island_end) = island_end else {
+                return Ok(NO_BOUNDARY);
+            };
+            let cut_end = cut.map_or(Ok(line_end), |cut| index(cut.cluster_start))?;
+            let end = if whole {
+                line_end
+            } else {
+                island_end.min(cut_end)
+            };
+            (line_start, end, (true, whole || end < island_end))
+        };
+        if end <= start {
             return Ok(NO_BOUNDARY);
         }
         let (source_run, binding, font) = (
@@ -5087,7 +5114,7 @@ impl ShapedBreakCorrections<'_, '_> {
         );
         let text_end = c.ends[end - 1];
         scratch.clear();
-        self.shape_range((start, end), (true, end < island_end), |shaped| {
+        self.shape_range((start, end), edges, |shaped| {
             scratch.append(
                 source_run as usize,
                 font,
@@ -5103,7 +5130,7 @@ impl ShapedBreakCorrections<'_, '_> {
         out.records.push(BoundaryShape {
             flow_thread_id,
             source_run,
-            cluster_start: fragment.line.cluster_start,
+            cluster_start: u32::try_from(start).map_err(|_| EngineError::ResultTooLarge)?,
             cluster_end: u32::try_from(end).map_err(|_| EngineError::ResultTooLarge)?,
             text_end,
             source_binding_handle: binding,
@@ -5185,9 +5212,9 @@ impl BreakCorrections for ShapedBreakCorrections<'_, '_> {
     }
 }
 
-/// Gives every fragment of `flow` the record shaping its corrected line start alone (or none), so
-/// the ordinary and the intrinsic flow draw the same lead glyphs.
-fn attach_line_leads(
+/// Gives every fragment of `flow` the records shaping its corrected line start and end alone (or none),
+/// so the ordinary and the intrinsic flow draw the same edge glyphs.
+fn attach_line_edges(
     corrections: &mut ShapedBreakCorrections<'_, '_>,
     (geometry, ltr): (&FlowGeometryArena, bool),
     flow: &mut FlowLayoutArena,
@@ -5203,17 +5230,15 @@ fn attach_line_leads(
         let start =
             usize::try_from(line.fragment_start).map_err(|_| EngineError::InvalidRequest)?;
         for fragment in &mut flow.fragments[start..start + usize::from(line.fragment_count)] {
-            fragment.lead_index = if words {
-                corrections.line_start_record(
-                    *fragment,
-                    line.flow_thread_id,
-                    out,
-                    scratch,
-                    next_glyph_id,
-                )?
-            } else {
-                NO_BOUNDARY
+            let current = *fragment;
+            let mut edge = |tail| {
+                if !words {
+                    return Ok(NO_BOUNDARY);
+                }
+                let id = (line.flow_thread_id, tail);
+                corrections.line_edge_record(current, id, out, scratch, next_glyph_id)
             };
+            (fragment.lead_index, fragment.tail_index) = (edge(false)?, edge(true)?);
         }
     }
     Ok(())

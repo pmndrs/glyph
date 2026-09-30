@@ -214,12 +214,13 @@ pub(crate) fn visible_glyph_counts(
                     })
                     .transpose()
             };
-            let (boundary, lead) = (
+            let (boundary, lead, tail) = (
                 record(fragment.boundary_index)?,
                 record(fragment.lead_index)?,
+                record(fragment.tail_index)?,
             );
             let body_start = lead.map_or(cluster_start, |lead| lead.cluster_end as usize);
-            let retained_end = boundary.map_or(cluster_end, |boundary| {
+            let retained_end = boundary.or(tail).map_or(cluster_end, |boundary| {
                 usize::try_from(boundary.cluster_start).unwrap_or(usize::MAX)
             });
             if retained_end > cluster_end {
@@ -244,7 +245,7 @@ pub(crate) fn visible_glyph_counts(
                     .ok_or(EngineError::ResultTooLarge)?;
                 missing += zeros;
             }
-            for boundary in lead.into_iter().chain(boundary) {
+            for boundary in lead.into_iter().chain(boundary).chain(tail) {
                 for (start, count) in [
                     (boundary.source_glyph_start, boundary.source_glyph_count),
                     (boundary.ellipsis_glyph_start, boundary.ellipsis_glyph_count),
@@ -701,6 +702,7 @@ mod tests {
                 flexible_end: false,
                 boundary_index: NO_BOUNDARY,
                 lead_index: NO_BOUNDARY,
+                tail_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
         };
@@ -767,6 +769,7 @@ mod tests {
                 flexible_end: false,
                 boundary_index: NO_BOUNDARY,
                 lead_index: NO_BOUNDARY,
+                tail_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
         };
@@ -876,6 +879,7 @@ mod tests {
                 flexible_end: false,
                 boundary_index: NO_BOUNDARY,
                 lead_index: NO_BOUNDARY,
+                tail_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
         };
@@ -947,6 +951,7 @@ mod tests {
                 flexible_end: false,
                 boundary_index: NO_BOUNDARY,
                 lead_index: NO_BOUNDARY,
+                tail_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
         };
@@ -1103,6 +1108,7 @@ mod tests {
                 flexible_end: false,
                 boundary_index: NO_BOUNDARY,
                 lead_index: NO_BOUNDARY,
+                tail_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
         };
@@ -1201,6 +1207,7 @@ mod tests {
                 flexible_end: false,
                 boundary_index: NO_BOUNDARY,
                 lead_index: NO_BOUNDARY,
+                tail_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
         };

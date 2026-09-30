@@ -1473,12 +1473,18 @@ impl PositionedGlyphArena {
             .map_err(|_| EngineError::InvalidRequest)?;
         let cluster_end =
             usize::try_from(fragment.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
-        let boundary = if fragment.boundary_index == super::flow_composition::NO_BOUNDARY {
+        // An ellipsis cut or a corrected line end: either way the paragraph's clusters stop at the record.
+        let cut_index = if fragment.boundary_index == super::flow_composition::NO_BOUNDARY {
+            fragment.tail_index
+        } else {
+            fragment.boundary_index
+        };
+        let boundary = if cut_index == super::flow_composition::NO_BOUNDARY {
             None
         } else {
             Some(
                 boundary_shape
-                    .record(fragment.boundary_index)
+                    .record(cut_index)
                     .ok_or(EngineError::InvalidRequest)?,
             )
         };
@@ -1596,17 +1602,8 @@ impl PositionedGlyphArena {
                 metrics_for,
                 extents_for,
                 retained.as_deref_mut(),
-                Some((justify, &mut state.space_ordinal, &mut state.gap_ordinal)),
+                (justify, &mut state),
             )?;
-            let style = boundary_cluster_style(styles, clusters, cluster_start)?;
-            if style.decoration_flags != 0 {
-                state.decorated_run = Some(DecoratedRun {
-                    style,
-                    font_handle: lead.source_font_handle,
-                    start: pen_origin,
-                    end: state.cursor,
-                });
-            }
         }
         let layout_run_order = visually_ltr && paragraph_level & 1 == 0;
         if layout_run_order {
@@ -1785,13 +1782,10 @@ impl PositionedGlyphArena {
                 }
             }
         }
-        if state.decorated_run.is_some() {
-            self.flush_decorated_run(&mut state.decorated_run, line, metrics_for)?;
-        }
         if let Some(boundary) = boundary {
             let _ = self.position_boundary(
                 line,
-                fragment.boundary_index,
+                cut_index,
                 boundary,
                 state.cursor,
                 baseline,
@@ -1803,8 +1797,11 @@ impl PositionedGlyphArena {
                 metrics_for,
                 extents_for,
                 retained,
-                None,
+                (justify, &mut state),
             )?;
+        }
+        if state.decorated_run.is_some() {
+            self.flush_decorated_run(&mut state.decorated_run, line, metrics_for)?;
         }
         Ok(indent
             + fragment.line.advance
@@ -2335,7 +2332,7 @@ impl PositionedGlyphArena {
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
         mut retained: Option<&mut RetainedInstanceCursor>,
-        mut justify: Option<(JustifyDistribution, &mut i64, &mut i64)>,
+        (justify, state): (JustifyDistribution, &mut FragmentPositionState),
     ) -> Result<f64, EngineError> {
         let bidi_level = runs
             .get(usize::try_from(boundary.source_run).map_err(|_| EngineError::InvalidRequest)?)
@@ -2352,8 +2349,8 @@ impl PositionedGlyphArena {
             .source_glyph_start
             .checked_add(boundary.source_glyph_count)
             .ok_or(EngineError::ResultTooLarge)?;
-        // A justified lead lays out cluster by cluster so each expansion lands after its own cluster.
-        let split = justify.as_ref().is_some_and(|(j, ..)| !j.is_zero());
+        // A corrected line edge lays out cluster by cluster, so each cluster keeps its own decoration and expansion.
+        let split = boundary.line_start;
         let last = if split {
             boundary.cluster_end as usize
         } else {
@@ -2362,7 +2359,7 @@ impl PositionedGlyphArena {
         let mut pieces = 0;
         let mut glyph = boundary.source_glyph_start;
         for cluster in source_cluster..last {
-            let piece_start = glyph;
+            let (piece_start, piece_origin) = (glyph, cursor);
             if split {
                 let start = clusters.starts[cluster];
                 while glyph < source_end && arena.shape.clusters[glyph as usize] == start {
@@ -2404,8 +2401,24 @@ impl PositionedGlyphArena {
                 )?;
                 pieces += 1;
             }
-            if let Some((justify, space, gap)) = justify.as_mut() {
-                apply_justification(cluster, clusters, *justify, &mut cursor, space, gap);
+            if split {
+                state.cursor = cursor;
+                self.finish_positioned_cluster(
+                    line,
+                    cluster,
+                    clusters,
+                    PositionedCluster {
+                        style: boundary_cluster_style(styles, clusters, cluster)?,
+                        font_handle: boundary.source_font_handle,
+                        cluster_origin: piece_origin,
+                    },
+                    justify,
+                    true,
+                    state,
+                    metrics_for,
+                    retained.is_none(),
+                )?;
+                cursor = state.cursor;
             }
         }
         let replacement_occurrence = (boundary.ellipsis_glyph_count != 0)
@@ -3549,6 +3562,8 @@ fn equivalent_retained_line(
                 && old.boundary_index == super::flow_composition::NO_BOUNDARY
                 && next.lead_index == super::flow_composition::NO_BOUNDARY
                 && old.lead_index == super::flow_composition::NO_BOUNDARY
+                && next.tail_index == super::flow_composition::NO_BOUNDARY
+                && old.tail_index == super::flow_composition::NO_BOUNDARY
                 && inputs(line, next, typography, final_line)
                     == inputs(previous_line, old, previous_typography, previous_final_line)
         });
@@ -3813,6 +3828,8 @@ pub(crate) fn flow_positioning_equivalent(
                 || previous_fragment.boundary_index != super::flow_composition::NO_BOUNDARY
                 || fragment.lead_index != super::flow_composition::NO_BOUNDARY
                 || previous_fragment.lead_index != super::flow_composition::NO_BOUNDARY
+                || fragment.tail_index != super::flow_composition::NO_BOUNDARY
+                || previous_fragment.tail_index != super::flow_composition::NO_BOUNDARY
             {
                 return Ok(false);
             }
@@ -4246,6 +4263,7 @@ mod tests {
                 flexible_end: false,
                 boundary_index: NO_BOUNDARY,
                 lead_index: NO_BOUNDARY,
+                tail_index: NO_BOUNDARY,
             })
             .collect();
         FlowLayoutArena {
@@ -4731,6 +4749,7 @@ mod tests {
             flexible_end: false,
             boundary_index: NO_BOUNDARY,
             lead_index: NO_BOUNDARY,
+            tail_index: NO_BOUNDARY,
         };
         let extents = |_: u32, glyph_id: u32| {
             Some(FontGlyphExtents {
@@ -4904,6 +4923,7 @@ mod tests {
             flexible_end: false,
             boundary_index: NO_BOUNDARY,
             lead_index: NO_BOUNDARY,
+            tail_index: NO_BOUNDARY,
         };
         let mut positioned = PositionedGlyphArena::default();
         positioned.placement.clear();
@@ -4988,6 +5008,7 @@ mod tests {
                 flexible_end: false,
                 boundary_index: 0,
                 lead_index: NO_BOUNDARY,
+                tail_index: NO_BOUNDARY,
             };
             let clusters = ClusterArena::default();
             let (justify, origin) = fragment_pen(
@@ -5497,6 +5518,7 @@ mod tests {
             flexible_end: false,
             boundary_index: NO_BOUNDARY,
             lead_index: NO_BOUNDARY,
+            tail_index: NO_BOUNDARY,
         };
         (text, clusters, line, fragment)
     }
@@ -5679,6 +5701,7 @@ mod tests {
                 flexible_end: false,
                 boundary_index: NO_BOUNDARY,
                 lead_index: NO_BOUNDARY,
+                tail_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
         };
@@ -5829,6 +5852,7 @@ mod tests {
                 flexible_end: false,
                 boundary_index: NO_BOUNDARY,
                 lead_index: NO_BOUNDARY,
+                tail_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
         };
@@ -6108,6 +6132,7 @@ mod tests {
                     flexible_end: false,
                     boundary_index: 0,
                     lead_index: NO_BOUNDARY,
+                    tail_index: NO_BOUNDARY,
                 },
                 FlowFragment {
                     line: ComposedLine {
@@ -6126,6 +6151,7 @@ mod tests {
                     flexible_end: false,
                     boundary_index: NO_BOUNDARY,
                     lead_index: NO_BOUNDARY,
+                    tail_index: NO_BOUNDARY,
                 },
             ],
             ..FlowLayoutArena::default()
@@ -6229,6 +6255,7 @@ mod tests {
                 flexible_end: false,
                 boundary_index: 0,
                 lead_index: NO_BOUNDARY,
+                tail_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
         };
@@ -6373,6 +6400,7 @@ mod tests {
                 flexible_end: false,
                 boundary_index: NO_BOUNDARY,
                 lead_index: NO_BOUNDARY,
+                tail_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
         };

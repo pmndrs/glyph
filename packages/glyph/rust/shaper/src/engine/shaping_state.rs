@@ -79,7 +79,7 @@ pub(crate) struct BoundaryShape {
     pub source_glyph_count: u32,
     pub ellipsis_glyph_start: u32,
     pub ellipsis_glyph_count: u32,
-    /// The source span replaces a corrected line's opening island; there is no ellipsis.
+    /// The source span replaces a corrected line's opening or closing island; there is no ellipsis.
     pub line_start: bool,
 }
 
