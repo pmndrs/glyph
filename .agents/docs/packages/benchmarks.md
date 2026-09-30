@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:a928df3d355b5d53d14b18a11ebe8d03a06c8ace00d24fef716da007008cbcaa'
+source_digest: 'sha256:b7ecab0a87cb57f40ef302fc912a2327c723c24530affa5589a5fd628f27879b'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -281,7 +281,7 @@ unless it carries one `benchmark:<suite>` label. `benchmark:full` overrides focu
 benchmark labels are rejected as ambiguous. A push to `main` runs `full` on the candidate alone: the canary release
 published for that same push would otherwise be installed as its own baseline. Manual dispatch exposes the same suite
 choice and compares with the canary. Available focused suites are `layout`, `measure`, `glyphs`, `publication`,
-`batch`, `style`, `reflow`, `stress`, and `cold`.
+`batch`, `style`, `reflow`, `stress`, `cold`, and `edit`; `edit` types one character into a long Inter or Fredoka paragraph and measures it or publishes a frame.
 `full` does not run browser observations, native/Worker profiles, or correctness and release gates.
 
 Each suite holds workloads that time alike. Labs decides per run whether to batch iterations or time single calls from
@@ -725,14 +725,14 @@ host initialization, initialized-plus-corpus work, and retained-generator corpus
 Browser frame, GPU, and input-latency observations remain Vitexec or Playwright workflows, while package size and
 conformance remain deterministic gates rather than timing benchmarks.
 
-| Need                                  | Command                                                                                                   |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Common installed-package signal       | `pnpm scripts run benchmark:labs-package -- --candidate <package-or-tgz>`                                 |
-| Focused/full installed-package signal | add `--suite layout`, `measure`, `glyphs`, `publication`, `batch`, `style`, `reflow`, `stress`, or `full` |
-| Raw retained-engine signal            | `pnpm scripts run benchmark:labs-internal -- --suite <engine-case>`                                       |
-| Kernel signal                         | build with `glyph:kernel-lab-build`, then select `kernel`, `pack`, `break`, or `bidi`                     |
-| Generator signal                      | `pnpm scripts run benchmark:labs-internal -- --suite mtsdf-generator`                                     |
-| Browser/GPU/frame signal              | select the maintained `benchmark:*` or `glyph:kernel-lab-browser` workflow from the index                 |
+| Need                                  | Command                                                                                                                   |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Common installed-package signal       | `pnpm scripts run benchmark:labs-package -- --candidate <package-or-tgz>`                                                 |
+| Focused/full installed-package signal | add `--suite layout`, `measure`, `glyphs`, `publication`, `batch`, `style`, `reflow`, `stress`, `cold`, `edit`, or `full` |
+| Raw retained-engine signal            | `pnpm scripts run benchmark:labs-internal -- --suite <engine-case>`                                                       |
+| Kernel signal                         | build with `glyph:kernel-lab-build`, then select `kernel`, `pack`, `break`, or `bidi`                                     |
+| Generator signal                      | `pnpm scripts run benchmark:labs-internal -- --suite mtsdf-generator`                                                     |
+| Browser/GPU/frame signal              | select the maintained `benchmark:*` or `glyph:kernel-lab-browser` workflow from the index                                 |
 
 Both Labs runners inspect the saved result and fail on an empty selection or any recorded benchmark-body error; Labs
 0.9.0 can otherwise print such an error and still exit zero. Generator fixture scripts may print elapsed progress while
@@ -742,7 +742,7 @@ callback cannot represent faithfully.
 
 CI routes the installed-package lane by event. Pull requests default to the four-block `smoke` suite. One
 `benchmark:layout`, `benchmark:measure`, `benchmark:glyphs`, `benchmark:publication`, `benchmark:style`,
-`benchmark:batch`, `benchmark:reflow`, or `benchmark:stress` label selects that focused eight-block suite;
+`benchmark:batch`, `benchmark:reflow`, `benchmark:stress`, `benchmark:cold`, or `benchmark:edit` label selects that focused eight-block suite;
 `benchmark:full` selects the complete matrix and overrides focused labels. Pushes to `main` always run `full`. Manual
 dispatch accepts the same suite names. This routing changes only the installed-package timing report; correctness,
 browser, payload, and conformance lanes retain their own workflows.
