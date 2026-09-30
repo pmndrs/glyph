@@ -45,6 +45,8 @@ pub(crate) struct FlowFragment {
     /// thread's chosen inline end after every line has composed.
     pub flexible_end: bool,
     pub boundary_index: u32,
+    /// The record shaping the island this fragment starts, when a break correction moved its glyphs.
+    pub lead_index: u32,
 }
 
 pub(crate) const NO_BOUNDARY: u32 = u32::MAX;
@@ -295,6 +297,7 @@ fn prepare_drop_cap(
         slot_end: pen + envelope.advance,
         flexible_end: false,
         boundary_index: NO_BOUNDARY,
+        lead_index: NO_BOUNDARY,
     };
     Ok(Some(FlowDropCap {
         body_resume_cluster: fragment.line.cluster_end,
@@ -1368,6 +1371,7 @@ impl FlowLayoutArena {
                     slot_end: slot.end,
                     flexible_end: flexible_width && slot.end == region_inline_end,
                     boundary_index: NO_BOUNDARY,
+                    lead_index: NO_BOUNDARY,
                 });
                 composed = true;
                 if line.hard_break || cursor.is_complete(clusters.starts.len()) {
@@ -3691,6 +3695,7 @@ mod tests {
                 slot_end: 10.0,
                 flexible_end: false,
                 boundary_index: NO_BOUNDARY,
+                lead_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
         };

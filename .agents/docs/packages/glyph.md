@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:e85a428e0f43ec5e439365532b45ffc58e29bf145fe7bee1a34fa1f09dc6304d'
+source_digest: 'sha256:10e2e1a30159228403a2119c8e3305ef6cedd969725ba537daf0bfaf5c78b30a'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1412,7 +1412,10 @@ UAX #29 extended grapheme, and intersects the result with HarfRust unsafe-to-bre
 no dictionary segmentation, language-specific hyphenation, or locale tailoring. A Unicode-legal break that HarfRust
 marks unsafe stays allowed within one run, binding, and font, as in browser line breaking: the line fitter prices it
 from boundary-local shaping corrections, computed lazily per boundary, stored in a cluster lane, and carried across
-edits (D-372). Optional language-resource imports,
+edits (D-372). A line that starts at such a corrected boundary draws the glyphs of the island it opens shaped alone, in
+the same pass that prices it (`line_start_record`, a boundary-shape record beside the ellipsis one), so it matches the
+line shaped by itself; the hanging end keeps the paragraph's glyphs, as browsers keep the terminating space in the
+shaping run. Lines with nontrivial bidi keep paragraph glyphs. Optional language-resource imports,
 including a versioned linear-memory ABI that can move language tables out of the default Wasm payload, are tracked in
 [#163](https://github.com/pmndrs/glyph/issues/163); no renderer adapter may become a second layout implementation.
 

@@ -43,11 +43,11 @@
       "label": "Shaper Wasm",
       "status": "measured",
       "format": "wasm",
-      "sha256": "6d38e8e5f758ed6e60fa6e985ee9c71869a0f4ae7ca76e4cb7b1f40212ddf5d4",
-      "rawBytes": 1378759,
-      "minifiedBytes": 1378759,
-      "gzipBytes": 508292,
-      "brotliBytes": 397311
+      "sha256": "5c24f231cceffdfd3d2ae41fe28964a9af9592c18094095f6aba3faaec2296d4",
+      "rawBytes": 1383594,
+      "minifiedBytes": 1383594,
+      "gzipBytes": 510452,
+      "brotliBytes": 399136
     },
     {
       "id": "three-runtime-js",
@@ -98,22 +98,22 @@
       "label": "R3F hello-world app JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "09fc933e09bb38113f52126a89664ca667abfdae59950b385dacd9940057f5ae",
+      "sha256": "783117e0ef48f09433fe5759ccb8b6582a6b4a2a53b88d8e0bfc1e494a2c5b36",
       "rawBytes": 2624388,
       "minifiedBytes": 2624388,
-      "gzipBytes": 739969,
-      "brotliBytes": 562378
+      "gzipBytes": 739974,
+      "brotliBytes": 562361
     },
     {
       "id": "tres-playground-production-js",
       "label": "Tres playground app JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "385731276a8c6e00097410f75e34dcf2d843fecf02993331036a87526bc5f1fc",
+      "sha256": "5b01d8aada48e89bfe3ad7948eec00d0bea67de6559e9e5e520a0f2efb05c0cd",
       "rawBytes": 2019758,
       "minifiedBytes": 2019758,
-      "gzipBytes": 564649,
-      "brotliBytes": 452038
+      "gzipBytes": 564646,
+      "brotliBytes": 452258
     },
     {
       "id": "font-inter-bitmap-16-32",

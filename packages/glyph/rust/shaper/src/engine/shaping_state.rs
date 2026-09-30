@@ -79,6 +79,8 @@ pub(crate) struct BoundaryShape {
     pub source_glyph_count: u32,
     pub ellipsis_glyph_start: u32,
     pub ellipsis_glyph_count: u32,
+    /// The source span replaces a corrected line's opening island; there is no ellipsis.
+    pub line_start: bool,
 }
 
 #[derive(Default)]
@@ -494,6 +496,10 @@ impl BoundaryShapeArena {
         reserve_vec(&mut self.records, glyph_capacity.min(16))?;
         self.shape.reserve(glyph_capacity)?;
         reserve_vec(&mut self.stable_ids, glyph_capacity)
+    }
+
+    pub(crate) fn has_ellipsis(&self) -> bool {
+        self.records.iter().any(|record| !record.line_start)
     }
 
     pub(crate) fn record(&self, index: u32) -> Option<BoundaryShape> {
