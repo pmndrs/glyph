@@ -3934,9 +3934,7 @@ impl ParagraphState {
             .pending_mut()
             .build(build_input(), |handle| shaper.font_metrics(handle))?;
         let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
-        if let Some(edit) = self.text_edit
-            && !self.style_invalidation.shaping
-        {
+        if let Some(edit) = self.text_edit {
             let span = (edit.old_start, edit.old_end, edit.new_end);
             pending_clusters.carry_break_corrections(committed_clusters, span);
         }

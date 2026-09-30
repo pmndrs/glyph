@@ -43,11 +43,11 @@
       "label": "Shaper Wasm",
       "status": "measured",
       "format": "wasm",
-      "sha256": "73420af30f24c3357782758a04cf8500700e19f603faec21f54733ff97fd4b2a",
-      "rawBytes": 1378770,
-      "minifiedBytes": 1378770,
-      "gzipBytes": 508301,
-      "brotliBytes": 397625
+      "sha256": "6d38e8e5f758ed6e60fa6e985ee9c71869a0f4ae7ca76e4cb7b1f40212ddf5d4",
+      "rawBytes": 1378759,
+      "minifiedBytes": 1378759,
+      "gzipBytes": 508292,
+      "brotliBytes": 397311
     },
     {
       "id": "three-runtime-js",
