@@ -28,15 +28,6 @@ impl Correction {
         space: 0,
         trailing: 0,
     };
-
-    /// The remainder of `self` once `other` has already been charged.
-    const fn minus(self, other: Self) -> Self {
-        Self {
-            advance: self.advance.saturating_sub(other.advance),
-            space: self.space.saturating_sub(other.space),
-            trailing: self.trailing.saturating_sub(other.trailing),
-        }
-    }
 }
 
 /// Source of break corrections for boundaries carrying both [`CLUSTER_ALLOWED_BREAK`]
@@ -121,12 +112,14 @@ pub(crate) struct ComposedLine {
     /// has to discount them or every glyph shifts by their width.
     pub hung_advance: f64,
     pub hard_break: bool,
-    /// `R(cluster_start)` charged to this line, zero unless the line starts at a corrected
-    /// boundary.
+    /// `R(cluster_start)` charged to this line: zero unless the line starts at a corrected
+    /// boundary, and zero again when a whole-line total replaced it (rule 6).
     pub start_correction: Correction,
-    /// The correction charged at `cluster_end` beyond `start_correction`: `L(cluster_end)`,
-    /// or the whole-line remainder when the islands overlap (rule 6). Zero unless the line
-    /// ends at a corrected boundary.
+    /// The correction charged at `cluster_end`: `L(cluster_end)` on top of
+    /// `start_correction`, or the whole-line total when the islands overlap (rule 6), in
+    /// which case it is the line's only correction. Zero unless the line ends at a
+    /// corrected boundary. `start_correction + end_correction` is always what the line
+    /// charged beyond its base widths.
     pub end_correction: Correction,
 }
 
@@ -137,23 +130,32 @@ fn corrected_boundary(clusters: &ClusterArena, boundary: usize) -> bool {
     boundary > 0 && clusters.flags[boundary - 1] & CORRECTED == CORRECTED
 }
 
-/// The correction a line `[line_start, end)` pays at `end` beyond the `start_correction`
-/// it was seeded with: `L(end)`, unless the line also starts at a corrected boundary and
-/// the two islands overlap, in which case the whole-line total replaces the sum (rule 6).
+/// What a corrected end charges: `L(end)` on top of the line's seed, or — when the line
+/// also starts at a corrected boundary and the two islands overlap — the whole-line
+/// total, which REPLACES both the seed and `L` (rule 6).
+#[derive(Clone, Copy)]
+enum EndCharge {
+    Left(Correction),
+    Whole(Correction),
+}
+
+impl EndCharge {
+    const NONE: Self = Self::Left(Correction::ZERO);
+}
+
 #[inline]
-fn end_correction(
+fn end_charge(
     corrections: &mut impl BreakCorrections,
     clusters: &ClusterArena,
     line_start: usize,
-    start_correction: Correction,
     end: usize,
-) -> Result<Correction, EngineError> {
+) -> Result<EndCharge, EngineError> {
     if corrected_boundary(clusters, line_start)
         && let Some(whole) = corrections.whole_line(line_start, end)?
     {
-        return Ok(whole.minus(start_correction));
+        return Ok(EndCharge::Whole(whole));
     }
-    corrections.left(end)
+    Ok(EndCharge::Left(corrections.left(end)?))
 }
 
 /// The width a word-wrap candidate charges against the measure: the accumulated advance
@@ -167,39 +169,150 @@ fn effective_units(advance: i64, space: i64, hanging: i64, word_space_shrink: f6
     ))
 }
 
-/// [`effective_units`] with a boundary correction charged.
-#[inline]
-fn corrected_effective_units(
+/// The running sums at a candidate end, seed included: `hanging` is the terminating
+/// space run, carrying the seed's trailing delta only while the line is that run.
+#[derive(Clone, Copy)]
+struct LineSums {
     advance: i64,
     space: i64,
     hanging: i64,
-    correction: Correction,
-    word_space_shrink: f64,
-) -> i64 {
-    effective_units(
-        advance.saturating_add(i64::from(correction.advance)),
-        space.saturating_add(i64::from(correction.space)),
-        hanging.saturating_add(i64::from(correction.trailing)),
-        word_space_shrink,
-    )
 }
 
-/// The width of the space run terminating `[start, end)` (a trailing hard break is
-/// skipped), carrying `seed` — the start correction's trailing delta — only when the
-/// whole line is that run.
-fn line_trailing_units(clusters: &ClusterArena, start: usize, mut end: usize, seed: i64) -> i64 {
+/// The terminating space run of `[start, end)`, a trailing hard break skipped.
+struct TrailingRun {
+    units: i64,
+    /// The line is nothing but the run (or empty), so a seed trailing delta hangs with it.
+    only_spaces: bool,
+    /// The line's last visible cluster is a space, so a whole-line trailing delta hangs.
+    ends_in_space: bool,
+}
+
+fn trailing_run(clusters: &ClusterArena, start: usize, mut end: usize) -> TrailingRun {
     if end > start && clusters.flags[end - 1] & CLUSTER_HARD_BREAK != 0 {
         end -= 1;
     }
-    let mut trailing = 0_i64;
+    let ends_in_space = end > start && clusters.flags[end - 1] & CLUSTER_SPACE != 0;
+    let mut units = 0_i64;
     while end > start && clusters.flags[end - 1] & CLUSTER_SPACE != 0 {
-        trailing = trailing.saturating_add(clusters.advance_units[end - 1]);
+        units = units.saturating_add(clusters.advance_units[end - 1]);
         end -= 1;
     }
-    if end == start {
-        seed.saturating_add(trailing)
+    TrailingRun {
+        units,
+        only_spaces: end == start,
+        ends_in_space,
+    }
+}
+
+/// The width of the terminating run of `[start, end)` with `seed` — the start
+/// correction's trailing delta — carried only when the whole line is that run.
+fn line_trailing_units(clusters: &ClusterArena, start: usize, end: usize, seed: i64) -> i64 {
+    let run = trailing_run(clusters, start, end);
+    if run.only_spaces {
+        seed.saturating_add(run.units)
     } else {
-        trailing
+        run.units
+    }
+}
+
+/// [`effective_units`] with an end charge applied to the running sums. A whole-line total
+/// is priced from the base sums directly (the seed removed), its trailing delta hung only
+/// when the line ends in hung space.
+#[inline]
+fn charged_effective_units(
+    clusters: &ClusterArena,
+    line_start: usize,
+    end: usize,
+    seed: Correction,
+    sums: LineSums,
+    charge: EndCharge,
+    word_space_shrink: f64,
+) -> i64 {
+    match charge {
+        EndCharge::Left(left) => effective_units(
+            sums.advance.saturating_add(i64::from(left.advance)),
+            sums.space.saturating_add(i64::from(left.space)),
+            sums.hanging.saturating_add(i64::from(left.trailing)),
+            word_space_shrink,
+        ),
+        EndCharge::Whole(whole) => {
+            let run = trailing_run(clusters, line_start, end);
+            let hanging = if run.ends_in_space {
+                run.units.saturating_add(i64::from(whole.trailing))
+            } else {
+                run.units
+            };
+            effective_units(
+                sums.advance
+                    .saturating_sub(i64::from(seed.advance))
+                    .saturating_add(i64::from(whole.advance)),
+                sums.space
+                    .saturating_sub(i64::from(seed.space))
+                    .saturating_add(i64::from(whole.space)),
+                hanging,
+                word_space_shrink,
+            )
+        }
+    }
+}
+
+/// A composed line's final widths and the corrections it reports.
+struct LineWidths {
+    advance: i64,
+    hung: i64,
+    start_correction: Correction,
+    end_correction: Correction,
+}
+
+/// Prices the selected line `[line_start, end)` from `full_advance` (the base advance
+/// with the seed included) under its end charge: the terminating run hangs, the
+/// seed's trailing delta hangs only when the line is that run, and a whole-line total
+/// replaces the seed outright.
+fn line_widths(
+    clusters: &ClusterArena,
+    line_start: usize,
+    end: usize,
+    seed: Correction,
+    full_advance: i64,
+    charge: EndCharge,
+) -> LineWidths {
+    let run = trailing_run(clusters, line_start, end);
+    match charge {
+        EndCharge::Left(left) => {
+            let seeded = if run.only_spaces {
+                i64::from(seed.trailing)
+            } else {
+                0
+            };
+            let hung = run
+                .units
+                .saturating_add(seeded)
+                .saturating_add(i64::from(left.trailing));
+            LineWidths {
+                advance: full_advance
+                    .saturating_add(i64::from(left.advance))
+                    .saturating_sub(hung),
+                hung,
+                start_correction: seed,
+                end_correction: left,
+            }
+        }
+        EndCharge::Whole(whole) => {
+            let hung = if run.ends_in_space {
+                run.units.saturating_add(i64::from(whole.trailing))
+            } else {
+                run.units
+            };
+            LineWidths {
+                advance: full_advance
+                    .saturating_sub(i64::from(seed.advance))
+                    .saturating_add(i64::from(whole.advance))
+                    .saturating_sub(hung),
+                hung,
+                start_correction: Correction::ZERO,
+                end_correction: whole,
+            }
+        }
     }
 }
 
@@ -213,11 +326,11 @@ struct Selection {
 
 /// The outcome of settling a word-wrap selection against its end correction (rule 3).
 enum Settled {
-    /// The candidate fits: its base prefix sums and the correction it charges.
+    /// The candidate fits: its base prefix sums and the charge it owes.
     Fits {
         end: usize,
         advance: i64,
-        correction: Correction,
+        charge: EndCharge,
     },
     /// No allowed candidate fits once corrected; `end` is the earliest one, which
     /// overflows least.
@@ -246,24 +359,35 @@ fn settle_selection(
             return Ok(Settled::Fits {
                 end,
                 advance,
-                correction: Correction::ZERO,
+                charge: EndCharge::NONE,
             });
         }
-        let correction = end_correction(corrections, clusters, line_start, start_correction, end)?;
-        let hanging = line_trailing_units(
-            clusters,
-            line_start,
-            end,
-            i64::from(start_correction.trailing),
-        );
+        let charge = end_charge(corrections, clusters, line_start, end)?;
+        let sums = LineSums {
+            advance,
+            space,
+            hanging: line_trailing_units(
+                clusters,
+                line_start,
+                end,
+                i64::from(start_correction.trailing),
+            ),
+        };
         if max_width_units.is_none_or(|units| {
-            corrected_effective_units(advance, space, hanging, correction, word_space_shrink)
-                <= units
+            charged_effective_units(
+                clusters,
+                line_start,
+                end,
+                start_correction,
+                sums,
+                charge,
+                word_space_shrink,
+            ) <= units
         }) {
             return Ok(Settled::Fits {
                 end,
                 advance,
-                correction,
+                charge,
             });
         }
         let (earliest_end, earliest_advance) = (end, advance);
@@ -621,6 +745,8 @@ fn layout_next_line_integer_scalar(
         && clusters.chunk_auxiliary_sums.len() == clusters.chunk_flags_or.len();
     let mut pending_allowed: Option<(usize, i64, i64)> = None;
     let mut pending_safe: Option<(usize, i64)> = None;
+    // Rule 2 is spent once a corrected candidate has been admitted on this line.
+    let mut rescued = false;
 
     let mut index = line_start;
     while index < count {
@@ -753,25 +879,27 @@ fn layout_next_line_integer_scalar(
                     .saturating_sub(apply_ratio(visible_space_units, word_space_shrink))
                     > units
             });
-        if overflows && wrap == WRAP_WORD && corrected_boundary(clusters, index + 1) {
-            // Rule 2: the first overflowing candidate pays its correction once; if the
-            // corrected line fits, the candidate is accepted and the scan goes on.
-            let correction = end_correction(
-                corrections,
-                clusters,
-                line_start,
-                start_correction,
-                index + 1,
-            )?;
+        if overflows && wrap == WRAP_WORD && !rescued && corrected_boundary(clusters, index + 1) {
+            // Rule 2: only the FIRST overflowing candidate pays its correction; if the
+            // corrected line fits, the candidate is accepted and the scan goes on, and
+            // no later candidate on this line is rescued.
+            let charge = end_charge(corrections, clusters, line_start, index + 1)?;
             overflows = max_width_units.is_some_and(|units| {
-                corrected_effective_units(
-                    next_advance,
-                    next_space_units,
-                    hanging_units,
-                    correction,
+                charged_effective_units(
+                    clusters,
+                    line_start,
+                    index + 1,
+                    start_correction,
+                    LineSums {
+                        advance: next_advance,
+                        space: next_space_units,
+                        hanging: hanging_units,
+                    },
+                    charge,
                     word_space_shrink,
                 ) > units
             });
+            rescued = !overflows;
         }
         if overflows {
             // A pending chunk candidate is always later than any recorded scalar
@@ -854,7 +982,7 @@ fn layout_next_line_integer_scalar(
         selected_advance = advance;
     }
 
-    let mut end_correction = Correction::ZERO;
+    let mut charge = EndCharge::NONE;
     if settle && wrap == WRAP_WORD {
         match settle_selection(
             corrections,
@@ -872,11 +1000,11 @@ fn layout_next_line_integer_scalar(
             Settled::Fits {
                 end,
                 advance,
-                correction,
+                charge: settled,
             } => {
                 selected_end = end;
                 selected_advance = advance;
-                end_correction = correction;
+                charge = settled;
             }
             Settled::Exhausted { end, advance } => {
                 // No allowed candidate fits once corrected: main's safe chain, then the
@@ -895,13 +1023,7 @@ fn layout_next_line_integer_scalar(
                 } else {
                     selected_end = end;
                     selected_advance = advance;
-                    end_correction = end_correction_for(
-                        corrections,
-                        clusters,
-                        line_start,
-                        start_correction,
-                        end,
-                    )?;
+                    charge = end_charge_for(corrections, clusters, line_start, end)?;
                 }
             }
         }
@@ -913,31 +1035,17 @@ fn layout_next_line_integer_scalar(
     }
     // The line still CONTAINS its terminating spaces -- they keep their clusters and
     // their text range -- but they contribute no width, exactly as `justifiable_span`
-    // assumes when it trims them before distributing a deficit. Trimming here rather
+    // assumes when it trims them before distributing a deficit. Pricing here rather
     // than during accumulation covers every selection path at once: scalar, resolved
     // chunk candidate, forced overflow, and end of text.
-    let mut visible_end = selected_end;
-    if visible_end > line_start && clusters.flags[visible_end - 1] & CLUSTER_HARD_BREAK != 0 {
-        visible_end -= 1;
-    }
-    let mut hung_units = 0_i64;
-    while visible_end > line_start && clusters.flags[visible_end - 1] & CLUSTER_SPACE != 0 {
-        let trimmed = clusters.advance_units[visible_end - 1];
-        selected_advance = selected_advance.saturating_sub(trimmed);
-        hung_units = hung_units.saturating_add(trimmed);
-        visible_end -= 1;
-    }
-    if visible_end == line_start {
-        // The whole line is its terminating run, so the start correction's trailing
-        // delta hangs with it.
-        let seeded = i64::from(start_correction.trailing);
-        selected_advance = selected_advance.saturating_sub(seeded);
-        hung_units = hung_units.saturating_add(seeded);
-    }
-    let hung_units = hung_units.saturating_add(i64::from(end_correction.trailing));
-    let selected_advance = selected_advance
-        .saturating_add(i64::from(end_correction.advance))
-        .saturating_sub(i64::from(end_correction.trailing));
+    let widths = line_widths(
+        clusters,
+        line_start,
+        selected_end,
+        start_correction,
+        selected_advance,
+        charge,
+    );
     let last = selected_end - 1;
     let hard_break = clusters.flags[last] & CLUSTER_HARD_BREAK != 0;
     let text_start = clusters.starts[line_start];
@@ -958,28 +1066,27 @@ fn layout_next_line_integer_scalar(
         cluster_end: u32::try_from(selected_end).map_err(|_| EngineError::ResultTooLarge)?,
         text_start,
         text_end,
-        advance: scaled_from_layout_units(selected_advance),
-        hung_advance: scaled_from_layout_units(hung_units),
+        advance: scaled_from_layout_units(widths.advance),
+        hung_advance: scaled_from_layout_units(widths.hung),
         hard_break,
-        start_correction,
-        end_correction,
+        start_correction: widths.start_correction,
+        end_correction: widths.end_correction,
     }))
 }
 
-/// The correction a forced, overflowing selection at a corrected boundary still charges:
-/// the line reshapes there whether or not it fits.
+/// The charge a forced, overflowing selection at a corrected boundary still owes: the
+/// line reshapes there whether or not it fits.
 #[inline]
-fn end_correction_for(
+fn end_charge_for(
     corrections: &mut impl BreakCorrections,
     clusters: &ClusterArena,
     line_start: usize,
-    start_correction: Correction,
     end: usize,
-) -> Result<Correction, EngineError> {
+) -> Result<EndCharge, EngineError> {
     if corrected_boundary(clusters, end) {
-        end_correction(corrections, clusters, line_start, start_correction, end)
+        end_charge(corrections, clusters, line_start, end)
     } else {
-        Ok(Correction::ZERO)
+        Ok(EndCharge::NONE)
     }
 }
 
@@ -1048,6 +1155,8 @@ fn layout_next_word_line_indexed(
     // Only a selection forced by overflow owes rule 3; a required break or the end of
     // the text ends the line where it stands, as in the scalar fit.
     let mut settle = false;
+    // Rule 2 is spent once a corrected record has been admitted on this line.
+    let mut rescued = false;
     for index in first_break..clusters.word_breaks.len() {
         let record = clusters.word_breaks[index];
         let end = usize::try_from(record.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
@@ -1057,19 +1166,25 @@ fn layout_next_word_line_indexed(
         let mut overflows = max_width_units.is_some_and(|width| {
             effective_units(next_advance, next_spaces, trailing, word_space_shrink) > width
         });
-        if overflows && corrected_boundary(clusters, end) {
-            // Rule 2, as in the scalar fit.
-            let correction =
-                end_correction(corrections, clusters, line_start, start_correction, end)?;
+        if overflows && !rescued && corrected_boundary(clusters, end) {
+            // Rule 2, once per line, as in the scalar fit.
+            let charge = end_charge(corrections, clusters, line_start, end)?;
             overflows = max_width_units.is_some_and(|width| {
-                corrected_effective_units(
-                    next_advance,
-                    next_spaces,
-                    trailing,
-                    correction,
+                charged_effective_units(
+                    clusters,
+                    line_start,
+                    end,
+                    start_correction,
+                    LineSums {
+                        advance: next_advance,
+                        space: next_spaces,
+                        hanging: trailing,
+                    },
+                    charge,
                     word_space_shrink,
                 ) > width
             });
+            rescued = !overflows;
         }
         if overflows {
             if index == first_break {
@@ -1098,24 +1213,30 @@ fn layout_next_word_line_indexed(
         selected.ok_or(EngineError::InvalidRequest)?;
     // Rule 3 over the records: each earlier record was accepted by the scan, so the
     // selection steps back only past corrected ends that no longer fit.
-    let end_correction = loop {
+    let charge = loop {
         let record = clusters.word_breaks[selected_index];
         let end = usize::try_from(record.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
         if !settle || !corrected_boundary(clusters, end) {
-            break Correction::ZERO;
+            break EndCharge::NONE;
         }
-        let correction = end_correction(corrections, clusters, line_start, start_correction, end)?;
-        let trailing = line_trailing_units(clusters, line_start, end, seed_trailing);
+        let charge = end_charge(corrections, clusters, line_start, end)?;
+        let sums = LineSums {
+            advance: full_advance,
+            space: full_spaces,
+            hanging: line_trailing_units(clusters, line_start, end, seed_trailing),
+        };
         if max_width_units.is_none_or(|width| {
-            corrected_effective_units(
-                full_advance,
-                full_spaces,
-                trailing,
-                correction,
+            charged_effective_units(
+                clusters,
+                line_start,
+                end,
+                start_correction,
+                sums,
+                charge,
                 word_space_shrink,
             ) <= width
         }) {
-            break correction;
+            break charge;
         }
         if selected_index == first_break {
             return layout_next_line_integer_scalar(
@@ -1139,11 +1260,14 @@ fn layout_next_word_line_indexed(
     }
     let last = selected_end - 1;
     let hard_break = clusters.flags[last] & CLUSTER_HARD_BREAK != 0;
-    let hung_units = line_trailing_units(clusters, line_start, selected_end, seed_trailing)
-        .saturating_add(i64::from(end_correction.trailing));
-    let selected_advance = full_advance
-        .saturating_add(i64::from(end_correction.advance))
-        .saturating_sub(hung_units);
+    let widths = line_widths(
+        clusters,
+        line_start,
+        selected_end,
+        start_correction,
+        full_advance,
+        charge,
+    );
     let text_start = clusters.starts[line_start];
     let text_end = if hard_break {
         clusters.starts[last]
@@ -1158,11 +1282,11 @@ fn layout_next_word_line_indexed(
         cluster_end: record.cluster_end,
         text_start,
         text_end,
-        advance: scaled_from_layout_units(selected_advance),
-        hung_advance: scaled_from_layout_units(hung_units),
+        advance: scaled_from_layout_units(widths.advance),
+        hung_advance: scaled_from_layout_units(widths.hung),
         hard_break,
-        start_correction,
-        end_correction,
+        start_correction: widths.start_correction,
+        end_correction: widths.end_correction,
     }))
 }
 
@@ -2215,13 +2339,6 @@ mod tests {
         end > 0 && clusters.flags[end - 1] & BOTH == BOTH
     }
 
-    /// The brute-force word fit the three kernels must reproduce: every candidate is
-    /// evaluated from scratch on explicit prefix sums, with the plan's rules applied
-    /// literally — seed with `R(start)`, first-overflow greedy with a corrected re-test
-    /// at a corrected boundary, settle the selection against its own correction by
-    /// stepping back through accepted candidates, and charge the earliest candidate when
-    /// none fits. The corpus must carry no shaping-safe flags, so main's safe chain
-    /// never engages.
     #[derive(Debug, Default, PartialEq, Eq)]
     struct ReferenceStats {
         /// Rule 2: first-overflowing candidates admitted by their own correction.
@@ -2230,8 +2347,44 @@ mod tests {
         step_backs: usize,
         /// Rule 3 exhausted: no candidate fit; the earliest was charged.
         exhausted: usize,
+        /// Lines priced from a whole-line total (rule 6).
+        whole_lines: usize,
     }
 
+    /// Which correction a candidate's width was computed with.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum Charge {
+        Plain,
+        Left(Correction),
+        Whole(Correction),
+    }
+
+    /// One candidate line `[start, end)` priced from first principles: base cluster
+    /// sums plus the seed `R(start)` plus `L(end)`, or base plus the whole-line total
+    /// when both islands overlap (the total REPLACES seed and `L`). The hung width is
+    /// the terminating space run; the seed's trailing delta counts only while the line
+    /// is nothing but that run, the whole-line trailing delta only when the line ends
+    /// in hung space.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    struct CandidateWidth {
+        /// Total advance including corrections.
+        total: i64,
+        /// Hung terminating width including corrections.
+        hung: i64,
+        /// Width charged against the measure.
+        effective: i64,
+        start_correction: Correction,
+        end_correction: Correction,
+    }
+
+    /// The brute-force word fit the three kernels must reproduce. It shares no helper
+    /// with the fitter: every candidate is priced from scratch, and the plan's greedy
+    /// rules are applied literally — seed with `R(start)`; test on base widths; at the
+    /// FIRST overflowing candidate, and at most once per line, re-test a corrected
+    /// boundary with its correction and accept it if that fits; the selected candidate
+    /// must fit with its correction or the selection steps back through the accepted
+    /// candidates; when none fits, the earliest is charged. The corpus must carry no
+    /// shaping-safe flags, so main's safe chain never engages.
     fn reference_word_lines(
         clusters: &ClusterArena,
         max_width_units: Option<i64>,
@@ -2246,79 +2399,111 @@ mod tests {
             "the reference models no safe chain"
         );
         let count = clusters.starts.len();
-        let advance_at = |index: usize| clusters.advance_units[index];
-        let is_space = |index: usize| clusters.flags[index] & CLUSTER_SPACE != 0;
-        // Base trailing run of `[start, end)`, with the seed only when the run is the line.
-        let trailing_of = |start: usize, end: usize, seed: i64| {
-            let mut end = end;
-            if end > start && clusters.flags[end - 1] & CLUSTER_HARD_BREAK != 0 {
-                end -= 1;
-            }
-            let mut run = 0_i64;
-            while end > start && is_space(end - 1) {
-                run += advance_at(end - 1);
-                end -= 1;
-            }
-            if end == start { run + seed } else { run }
-        };
-        let effective = |advance: i64, space: i64, hanging: i64, correction: Correction| {
-            let advance = advance + i64::from(correction.advance);
-            let space = space + i64::from(correction.space);
-            let hanging = hanging + i64::from(correction.trailing);
-            advance - hanging - apply_ratio(space - hanging, shrink)
+        let flagged = |index: usize, flag: u8| clusters.flags[index] & flag != 0;
+        let corrected = |end: usize| {
+            end > 0
+                && flagged(end - 1, CLUSTER_ALLOWED_BREAK)
+                && flagged(end - 1, CLUSTER_BREAK_CORRECTION)
         };
         let overflows = |width: i64| max_width_units.is_some_and(|units| width > units);
-        let end_correction_of = |start: usize, end: usize, seed: Correction| {
-            if is_corrected(clusters, start)
+
+        // Price `[start, end)` under one charge.
+        let price = |start: usize, end: usize, seed: Correction, charge: Charge| {
+            let mut base_advance = 0_i64;
+            let mut base_space = 0_i64;
+            for index in start..end {
+                base_advance += clusters.advance_units[index];
+                if flagged(index, CLUSTER_SPACE) {
+                    base_space += clusters.advance_units[index];
+                }
+            }
+            let mut visible_end = end;
+            if visible_end > start && flagged(visible_end - 1, CLUSTER_HARD_BREAK) {
+                visible_end -= 1;
+            }
+            let ends_in_space = visible_end > start && flagged(visible_end - 1, CLUSTER_SPACE);
+            let mut base_trailing = 0_i64;
+            while visible_end > start && flagged(visible_end - 1, CLUSTER_SPACE) {
+                base_trailing += clusters.advance_units[visible_end - 1];
+                visible_end -= 1;
+            }
+            let only_spaces = visible_end == start;
+            let seed_trailing = if only_spaces {
+                i64::from(seed.trailing)
+            } else {
+                0
+            };
+            let (total, space, hung, start_correction, end_correction) = match charge {
+                Charge::Plain => (
+                    base_advance + i64::from(seed.advance),
+                    base_space + i64::from(seed.space),
+                    base_trailing + seed_trailing,
+                    seed,
+                    Correction::ZERO,
+                ),
+                Charge::Left(left) => (
+                    base_advance + i64::from(seed.advance) + i64::from(left.advance),
+                    base_space + i64::from(seed.space) + i64::from(left.space),
+                    base_trailing + seed_trailing + i64::from(left.trailing),
+                    seed,
+                    left,
+                ),
+                Charge::Whole(whole) => (
+                    base_advance + i64::from(whole.advance),
+                    base_space + i64::from(whole.space),
+                    base_trailing
+                        + if ends_in_space {
+                            i64::from(whole.trailing)
+                        } else {
+                            0
+                        },
+                    Correction::ZERO,
+                    whole,
+                ),
+            };
+            CandidateWidth {
+                total,
+                hung,
+                effective: total - hung - apply_ratio(space - hung, shrink),
+                start_correction,
+                end_correction,
+            }
+        };
+        // The charge a corrected end owes on a line from `start`.
+        let charge_of = |start: usize, end: usize| {
+            if corrected(start)
                 && let Some(whole) = table.whole.get(&(start, end))
             {
-                return whole.minus(seed);
+                Charge::Whole(*whole)
+            } else {
+                Charge::Left(table.left.get(&end).copied().unwrap_or_default())
             }
-            table.left.get(&end).copied().unwrap_or_default()
         };
 
         let mut lines = alloc::vec::Vec::new();
         let mut stats = ReferenceStats::default();
         let mut start = 0_usize;
         let mut seed = Correction::ZERO;
-        loop {
-            if start == count {
-                break;
-            }
-            // Prefix sums over the line: (end, advance, space) for every end in (start, count].
-            let mut prefix = alloc::vec::Vec::with_capacity(count - start + 1);
-            let mut advance = i64::from(seed.advance);
-            let mut space = i64::from(seed.space);
-            prefix.push((advance, space));
-            for index in start..count {
-                advance += advance_at(index);
-                if is_space(index) {
-                    space += advance_at(index);
-                }
-                prefix.push((advance, space));
-            }
-            let sums = |end: usize| prefix[end - start];
-
-            // Scan: accepted candidates in order; selection and whether it settles.
+        while start < count {
             let mut accepted: alloc::vec::Vec<usize> = alloc::vec::Vec::new();
+            let mut rescued = false;
             let mut selection = None;
             let mut settle = false;
             for index in start..count {
-                let flags = clusters.flags[index];
                 let end = index + 1;
-                let required = flags & CLUSTER_REQUIRED_BREAK != 0;
-                let allowed = flags & CLUSTER_ALLOWED_BREAK != 0;
-                if allowed || required || end == count {
-                    let (advance, space) = sums(end);
-                    let hanging = trailing_of(start, end, i64::from(seed.trailing));
-                    let mut over = index > start
-                        && overflows(effective(advance, space, hanging, Correction::ZERO));
-                    if over && is_corrected(clusters, end) {
-                        let correction = end_correction_of(start, end, seed);
-                        over = overflows(effective(advance, space, hanging, correction));
-                        stats.rescues += usize::from(!over);
-                    }
-                    if over {
+                let required = flagged(index, CLUSTER_REQUIRED_BREAK);
+                let allowed = flagged(index, CLUSTER_ALLOWED_BREAK);
+                if (allowed || required || end == count)
+                    && index > start
+                    && overflows(price(start, end, seed, Charge::Plain).effective)
+                {
+                    let rescue = !rescued
+                        && corrected(end)
+                        && !overflows(price(start, end, seed, charge_of(start, end)).effective);
+                    if rescue {
+                        rescued = true;
+                        stats.rescues += 1;
+                    } else {
                         selection = Some(accepted.last().copied().unwrap_or(end));
                         settle = true;
                         break;
@@ -2336,38 +2521,33 @@ mod tests {
                 }
             }
             let mut end = selection.expect("every line selects an end");
-            let mut end_correction = Correction::ZERO;
+            let mut charge = Charge::Plain;
             if settle {
-                let position = accepted.iter().position(|candidate| *candidate == end);
-                let mut remaining = position.map_or(0, |at| at + 1);
-                loop {
-                    if !is_corrected(clusters, end) {
-                        break;
-                    }
-                    let correction = end_correction_of(start, end, seed);
-                    let (advance, space) = sums(end);
-                    let hanging = trailing_of(start, end, i64::from(seed.trailing));
-                    if !overflows(effective(advance, space, hanging, correction)) {
-                        end_correction = correction;
+                let mut remaining = accepted
+                    .iter()
+                    .position(|candidate| *candidate == end)
+                    .map_or(0, |at| at + 1);
+                let first = end;
+                while corrected(end) {
+                    charge = charge_of(start, end);
+                    if !overflows(price(start, end, seed, charge).effective) {
                         break;
                     }
                     if remaining <= 1 {
-                        // Exhausted: the earliest candidate, its correction still charged.
-                        end_correction = correction;
                         stats.exhausted += 1;
                         break;
                     }
-                    stats.step_backs += usize::from(remaining == position.unwrap() + 1);
+                    stats.step_backs += usize::from(end == first);
                     remaining -= 1;
                     end = accepted[remaining - 1];
+                    charge = Charge::Plain;
                 }
             }
+            stats.whole_lines += usize::from(matches!(charge, Charge::Whole(_)));
 
-            let (full_advance, _) = sums(end);
-            let hung = trailing_of(start, end, i64::from(seed.trailing))
-                + i64::from(end_correction.trailing);
+            let width = price(start, end, seed, charge);
             let last = end - 1;
-            let hard_break = clusters.flags[last] & CLUSTER_HARD_BREAK != 0;
+            let hard_break = flagged(last, CLUSTER_HARD_BREAK);
             lines.push(ComposedLine {
                 cluster_start: start as u32,
                 cluster_end: end as u32,
@@ -2377,15 +2557,13 @@ mod tests {
                 } else {
                     clusters.ends[last]
                 },
-                advance: scaled_from_layout_units(
-                    full_advance + i64::from(end_correction.advance) - hung,
-                ),
-                hung_advance: scaled_from_layout_units(hung),
+                advance: scaled_from_layout_units(width.total - width.hung),
+                hung_advance: scaled_from_layout_units(width.hung),
                 hard_break,
-                start_correction: seed,
-                end_correction,
+                start_correction: width.start_correction,
+                end_correction: width.end_correction,
             });
-            seed = if is_corrected(clusters, end) {
+            seed = if corrected(end) {
                 table.right.get(&end).copied().unwrap_or_default()
             } else {
                 Correction::ZERO
@@ -2496,9 +2674,14 @@ mod tests {
         for (position, &start) in corrected.iter().enumerate() {
             for &end in corrected.iter().skip(position + 1).take(3) {
                 if random.below(2) == 0 {
-                    table
-                        .whole
-                        .insert((start, end), units(random.signed(4 * 65_536), 0, 0));
+                    table.whole.insert(
+                        (start, end),
+                        units(
+                            random.signed(4 * 65_536),
+                            random.signed(65_536),
+                            random.signed(65_536 / 2),
+                        ),
+                    );
                 }
             }
         }
@@ -2586,6 +2769,7 @@ mod tests {
                         total.rescues += stats.rescues;
                         total.step_backs += stats.step_backs;
                         total.exhausted += stats.exhausted;
+                        total.whole_lines += stats.whole_lines;
                     }
                 }
             }
@@ -2598,6 +2782,10 @@ mod tests {
         assert!(
             total.exhausted > 0,
             "rule 3 never exhausted a line: {total:?}"
+        );
+        assert!(
+            total.whole_lines > 0,
+            "rule 6 never priced a line: {total:?}"
         );
         // Unconstrained width composes one line per paragraph, uncorrected.
         let (advances, flags) = corrected_corpus(13, 8 * chunk);
@@ -2804,16 +2992,16 @@ mod tests {
         let right = units(65_536, 0, 0);
         let measure = 3 * 65_536;
 
-        // `L(9)` alone would overflow; the whole-line total for (3, 9) fits, and its
-        // remainder beyond `R(3)` is what the line charges.
+        // `L(9)` alone would overflow; the whole-line total for (3, 9) fits.
         let mut table = TableCorrections::default();
         table.right.insert(3, right);
         table.left.insert(9, units(65_536, 0, 0));
         table.whole.insert((3, 9), units(-2 * 65_536, 0, 0));
         let lines = fit_all_corrected(&clusters, Some(measure), 0.0, &mut table);
         assert_eq!(ends(&lines), [3, 9, 12], "whole-line total fits: {lines:?}");
-        assert_eq!(lines[1].start_correction, right);
-        assert_eq!(lines[1].end_correction, units(-3 * 65_536, 0, 0));
+        // The total replaces both the seed and `L`, so the line reports it alone.
+        assert_eq!(lines[1].start_correction, Correction::ZERO);
+        assert_eq!(lines[1].end_correction, units(-2 * 65_536, 0, 0));
         assert_eq!(lines[1].advance, 2.5);
 
         // `L(9)` alone would fit; the whole-line total overflows, so the line breaks at
@@ -2833,5 +3021,138 @@ mod tests {
         assert_eq!(lines[2].start_correction, Correction::ZERO);
         assert_eq!(lines[2].end_correction, units(-3 * 65_536, 0, 0));
         assert_eq!(lines[2].advance, scaled_from_layout_units(-65_536));
+    }
+
+    /// Four 2-unit segments at a 3-unit measure; boundaries 2 and 3 are corrected with
+    /// `L(2) = -1` and `L(3) = -3`. Boundary 2 is the first base overflow and is rescued;
+    /// boundary 3 overflows too and would also fit with its correction, but rule 2 is
+    /// spent, so the line stops at 2. The sparse twin (three-cluster words of the same
+    /// widths, padded past one chunk) drives the indexed kernel.
+    #[test]
+    fn rule_two_rescues_only_the_first_overflowing_candidate() {
+        let ends = |lines: &[ComposedLine], take: usize| {
+            lines
+                .iter()
+                .take(take)
+                .map(|line| line.cluster_end)
+                .collect::<alloc::vec::Vec<_>>()
+        };
+        let flags = [
+            CLUSTER_ALLOWED_BREAK,
+            CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION,
+            CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION,
+            CLUSTER_ALLOWED_BREAK,
+        ];
+        let clusters = make_quantized_clusters(&[2.0 * UNIT; 4], &flags);
+        let mut table = TableCorrections::default();
+        table.left.insert(2, units(-1, 0, 0));
+        table.left.insert(3, units(-3, 0, 0));
+        let lines = fit_all_corrected(&clusters, Some(3), 0.0, &mut table);
+        assert_eq!(ends(&lines, 3), [2, 3, 4], "scalar: {lines:?}");
+        assert_eq!(lines[0].end_correction, units(-1, 0, 0));
+
+        let words = super::super::cluster_state::LAYOUT_CHUNK / 3 + 4;
+        let mut advances = alloc::vec::Vec::new();
+        let mut flags = alloc::vec::Vec::new();
+        for word in 0..words {
+            advances.extend([UNIT, UNIT, 0.0]);
+            let corrected = if word == 1 || word == 2 {
+                CLUSTER_BREAK_CORRECTION
+            } else {
+                0
+            };
+            flags.extend([0, 0, CLUSTER_ALLOWED_BREAK | corrected]);
+        }
+        let indexed = make_quantized_clusters(&advances, &flags);
+        assert!(!indexed.word_breaks.is_empty());
+        let mut scalar = make_quantized_clusters(&advances, &flags);
+        scalar.word_breaks.clear();
+        for (kernel, name) in [(&indexed, "indexed"), (&scalar, "scalar")] {
+            let mut table = TableCorrections::default();
+            table.left.insert(6, units(-1, 0, 0));
+            table.left.insert(9, units(-3, 0, 0));
+            let lines = fit_all_corrected(kernel, Some(3), 0.0, &mut table);
+            assert_eq!(ends(&lines, 3), [6, 9, 12], "{name}: {lines:?}");
+            assert_eq!(
+                lines,
+                reference_word_lines(kernel, Some(3), 0.0, &table).0,
+                "{name} against the reference"
+            );
+        }
+    }
+
+    /// A corrected-start line `[space, letter, space]` seeded `R = (1, 1, 1)` whose end
+    /// carries the whole-line total `(2, 2, 2)`: the total replaces the seed, and its
+    /// trailing delta hangs because the line ends in hung space, so the visible width is
+    /// (3 + 2) - (1 + 2) = 2 and the candidate fits a 2-unit measure.
+    #[test]
+    fn a_whole_line_total_replaces_the_seed_and_hangs_its_trailing_delta() {
+        let flags = [
+            CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION,
+            CLUSTER_SPACE,
+            0,
+            CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE | CLUSTER_BREAK_CORRECTION,
+            CLUSTER_ALLOWED_BREAK,
+            CLUSTER_ALLOWED_BREAK,
+        ];
+        let clusters = make_quantized_clusters(&[UNIT; 6], &flags);
+        let mut table = TableCorrections::default();
+        table.right.insert(1, units(1, 1, 1));
+        table.whole.insert((1, 4), units(2, 2, 2));
+        let lines = fit_all_corrected(&clusters, Some(2), 0.0, &mut table);
+        assert_eq!(
+            lines
+                .iter()
+                .map(|line| line.cluster_end)
+                .collect::<alloc::vec::Vec<_>>(),
+            [1, 4, 6],
+            "{lines:?}"
+        );
+        assert_eq!(lines[1].advance, scaled_from_layout_units(2));
+        assert_eq!(lines[1].hung_advance, scaled_from_layout_units(3));
+        assert_eq!(lines[1].start_correction, Correction::ZERO);
+        assert_eq!(lines[1].end_correction, units(2, 2, 2));
+        assert_eq!(
+            lines,
+            reference_word_lines(&clusters, Some(2), 0.0, &table).0
+        );
+    }
+
+    /// A whole-line total is charged as-is in `i64`; it is never differenced against
+    /// the seed, so extreme `i32` values cannot saturate. The seed `i32::MAX` overflows
+    /// the base test; the total `i32::MIN` replaces it and the line prices at
+    /// 3 + `i32::MIN`, not at the saturated 3 - 1.
+    #[test]
+    fn a_whole_line_total_is_charged_without_i32_saturation() {
+        let flags = [
+            CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION,
+            0,
+            0,
+            CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION,
+            CLUSTER_ALLOWED_BREAK,
+            CLUSTER_ALLOWED_BREAK,
+        ];
+        let clusters = make_quantized_clusters(&[UNIT; 6], &flags);
+        let mut table = TableCorrections::default();
+        table.right.insert(1, units(i32::MAX, 0, 0));
+        table.whole.insert((1, 4), units(i32::MIN, 0, 0));
+        let lines = fit_all_corrected(&clusters, Some(2), 0.0, &mut table);
+        assert_eq!(
+            lines
+                .iter()
+                .map(|line| line.cluster_end)
+                .collect::<alloc::vec::Vec<_>>(),
+            [1, 4, 6],
+            "{lines:?}"
+        );
+        assert_eq!(
+            lines[1].advance,
+            scaled_from_layout_units(3 + i64::from(i32::MIN))
+        );
+        assert_eq!(lines[1].end_correction, units(i32::MIN, 0, 0));
+        assert_eq!(
+            lines,
+            reference_word_lines(&clusters, Some(2), 0.0, &table).0
+        );
     }
 }
