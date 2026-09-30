@@ -15,8 +15,7 @@ use super::{
         WRITING_HORIZONTAL_TB,
     },
     line_composition::{
-        BreakCorrections, ComposedLine, Correction, LineCursor, NoCorrections,
-        layout_next_line_integer,
+        BreakCorrections, ComposedLine, Correction, LineCursor, layout_next_line_integer,
     },
     semantic_wire::FlowConstraint,
     shaping_state::ShapingRun,
@@ -468,6 +467,7 @@ impl FlowLayoutArena {
         Ok(())
     }
 
+    #[cfg(test)]
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn build(
         &mut self,
@@ -491,7 +491,7 @@ impl FlowLayoutArena {
             max_slots_per_band,
             metrics_for,
             first_font_for_stack,
-            &mut NoCorrections,
+            &mut super::line_composition::NoCorrections,
         )
     }
 
@@ -1949,6 +1949,7 @@ fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), EngineError>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::line_composition::NoCorrections;
     use crate::engine::{
         cluster_state::{CLUSTER_SAFE_BEFORE, ClusterBuildInput},
         flow_geometry::{LocalizedGeometryChange, RetainedExclusion, RetainedRegion},

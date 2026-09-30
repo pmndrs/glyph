@@ -1,5 +1,13 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-30
+
+- **Broke lines at unsafe legal boundaries with shaped corrections** — Unicode-legal breaks that HarfRust marks unsafe
+  are now allowed within one run, binding, and font and priced from lazily shaped, edit-carried boundary corrections,
+  including in min-content width. Added the `edit` package Labs suite for keystroke cost. See D-372 in
+  [the decision register](planning/decision-register.md), [the package reference](packages/glyph.md), and
+  [the benchmark package reference](packages/benchmarks.md).
+
 ## 2026-09-22
 
 - **Routed package performance by intent** — Pull requests now run only the concise installed-package smoke comparison by

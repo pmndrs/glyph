@@ -150,6 +150,52 @@ fn add(sum: i64, term: i32) -> i64 {
     sum.saturating_add(i64::from(term))
 }
 
+/// A boundary the fitter may break at only by charging its correction.
+fn is_corrected(clusters: &ClusterArena, word_wrap: bool, boundary: usize) -> bool {
+    const CORRECTED: u8 = CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION;
+    word_wrap && boundary > 0 && clusters.flags[boundary - 1] & CORRECTED == CORRECTED
+}
+
+/// The charge for a line `[start, end)` ending at a corrected boundary: its whole-line total
+/// when the head and tail islands overlap, else `L(end)`.
+fn end_charge(
+    clusters: &ClusterArena,
+    word_wrap: bool,
+    corrections: &mut impl BreakCorrections,
+    start: usize,
+    end: usize,
+) -> Result<EndCharge, EngineError> {
+    if is_corrected(clusters, word_wrap, start)
+        && let Some(whole) = corrections.whole_line(start, end)?
+    {
+        return Ok(EndCharge::Whole(whole));
+    }
+    Ok(EndCharge::Left(corrections.left(end)?))
+}
+
+/// The advance the fitter adds to a line `[start, end)`: `R(start)` and the end charge.
+pub(crate) fn line_correction_advance(
+    clusters: &ClusterArena,
+    word_wrap: bool,
+    corrections: &mut impl BreakCorrections,
+    start: usize,
+    end: usize,
+) -> Result<i64, EngineError> {
+    let seed = if is_corrected(clusters, word_wrap, start) {
+        corrections.right(start)?
+    } else {
+        Correction::ZERO
+    };
+    Ok(if is_corrected(clusters, word_wrap, end) {
+        match end_charge(clusters, word_wrap, corrections, start, end)? {
+            EndCharge::Whole(whole) => i64::from(whole.advance),
+            EndCharge::Left(left) => i64::from(seed.advance) + i64::from(left.advance),
+        }
+    } else {
+        i64::from(seed.advance)
+    })
+}
+
 /// One line's fit, shared by the scalar, chunk-64, and indexed kernels, which differ only
 /// in how they accumulate base sums. Corrections (#216) enter at the seed (rule 1), the
 /// first overflow (rule 2), and the settled end (rule 3); without any, it fits as on main.
@@ -168,10 +214,8 @@ struct LineFit<'a, C> {
 }
 
 impl<C: BreakCorrections> LineFit<'_, C> {
-    /// A boundary the fitter may break at only by charging its correction.
     fn corrected(&self, boundary: usize) -> bool {
-        const CORRECTED: u8 = CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION;
-        self.word_wrap && boundary > 0 && self.clusters.flags[boundary - 1] & CORRECTED == CORRECTED
+        is_corrected(self.clusters, self.word_wrap, boundary)
     }
 
     /// The end of `[line_start, end)` with a trailing hard break skipped.
@@ -234,12 +278,13 @@ impl<C: BreakCorrections> LineFit<'_, C> {
     }
 
     fn end_charge(&mut self, end: usize) -> Result<EndCharge, EngineError> {
-        if self.corrected(self.line_start)
-            && let Some(whole) = self.corrections.whole_line(self.line_start, end)?
-        {
-            return Ok(EndCharge::Whole(whole));
-        }
-        Ok(EndCharge::Left(self.corrections.left(end)?))
+        end_charge(
+            self.clusters,
+            self.word_wrap,
+            self.corrections,
+            self.line_start,
+            end,
+        )
     }
 
     /// Rule 2: whether `end` overflows. Only the FIRST overflowing candidate of a line, at

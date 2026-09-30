@@ -25,7 +25,7 @@ use super::{
         PreparedUpdate, RootRevision, UpdateRequest,
     },
     identity_index::IdentityIndex,
-    line_composition::{BreakCorrections, Correction},
+    line_composition::{BreakCorrections, Correction, NoCorrections},
     placement_slot_arena::{PlacementSlotArena, PlacementSlotError},
     placement_state::{GlyphSource, LayoutRunOwner, PlacementIdentity, PlacementSegment},
     positioning::{PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT},
@@ -1268,7 +1268,7 @@ impl TextEngine {
                         .ok_or(EngineError::InvalidRequest)?
                         .state,
                     paragraph_id,
-                    shaper.as_deref(),
+                    shaper.as_deref_mut(),
                     font_stacks,
                     font_bindings,
                     request.limits,
@@ -1693,7 +1693,7 @@ impl TextEngine {
                             &mut records,
                             &mut paragraph.state,
                             paragraph_id,
-                            shaper.as_deref(),
+                            shaper.as_deref_mut(),
                             font_stacks,
                             font_bindings,
                             request.limits,
@@ -1937,7 +1937,7 @@ fn append_paragraph_measurement(
     records: &mut Vec<super::semantic_view::SemanticRecord>,
     state: &mut ParagraphState,
     paragraph_id: u32,
-    shaper: Option<&ShaperRegistry>,
+    mut shaper: Option<&mut ShaperRegistry>,
     font_stacks: &[RegisteredFontStack],
     font_bindings: &[RegisteredFontBinding],
     limits: super::frame::UpdateLimits,
@@ -1974,11 +1974,29 @@ fn append_paragraph_measurement(
     // arena, mirroring the breaker's wrap decisions (see `ClusterArena::
     // intrinsic_widths`), so hosts never re-measure at zero width to size a
     // flex item.
-    let intrinsics = state.clusters.active().intrinsic_widths(constraint.wrap);
+    let intrinsics = match shaper.as_deref_mut() {
+        Some(shaper) => {
+            let shaper = RefCell::new(shaper);
+            state.clusters.active().intrinsic_widths(
+                constraint.wrap,
+                &mut ShapedBreakCorrections {
+                    shaper: &shaper,
+                    text: state.text.active().units.as_slice(),
+                    runs: state.shaping_runs.active().runs(),
+                    styles: &state.styles.active().arena,
+                    clusters: state.clusters.active(),
+                },
+            )?
+        }
+        None => state
+            .clusters
+            .active()
+            .intrinsic_widths(constraint.wrap, &mut NoCorrections)?,
+    };
     let needs_intrinsic = visible_extents.consumed_clusters < cluster_count || has_ellipsis;
     if needs_intrinsic {
         state.prepare_intrinsic_flow_layout(
-            shaper.ok_or(EngineError::InvalidRequest)?,
+            shaper.as_deref_mut().ok_or(EngineError::InvalidRequest)?,
             font_stacks,
             font_bindings,
             limits.max_lines,
@@ -1991,7 +2009,8 @@ fn append_paragraph_measurement(
     let inspect_full_clipped_layout =
         needs_intrinsic && constraint.overflow == OVERFLOW_CLIP && !max_lines_truncated;
     if inspect_full_clipped_layout {
-        state.prepare_intrinsic_positioned(shaper.ok_or(EngineError::InvalidRequest)?)?;
+        state
+            .prepare_intrinsic_positioned(shaper.as_deref().ok_or(EngineError::InvalidRequest)?)?;
     }
     let text = &state.text.active().units;
     let clusters = state.clusters.active();
@@ -3915,7 +3934,9 @@ impl ParagraphState {
             .pending_mut()
             .build(build_input(), |handle| shaper.font_metrics(handle))?;
         let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
-        if let Some(edit) = self.text_edit {
+        if let Some(edit) = self.text_edit
+            && !self.style_invalidation.shaping
+        {
             let span = (edit.old_start, edit.old_end, edit.new_end);
             pending_clusters.carry_break_corrections(committed_clusters, span);
         }
@@ -4313,7 +4334,7 @@ impl ParagraphState {
 
     fn prepare_intrinsic_flow_layout(
         &mut self,
-        shaper: &ShaperRegistry,
+        shaper: &mut ShaperRegistry,
         font_stacks: &[RegisteredFontStack],
         font_bindings: &[RegisteredFontBinding],
         max_lines: u32,
@@ -4350,27 +4371,39 @@ impl ParagraphState {
 
         let clusters = self.clusters.active();
         let styles = self.styles.active().resolved.segments();
-        self.intrinsic_flow_layout_scratch.build(
-            &self.intrinsic_geometry_scratch,
+        let shaper = RefCell::new(shaper);
+        let mut corrections = ShapedBreakCorrections {
+            shaper: &shaper,
+            text: self.text.active().units.as_slice(),
+            runs: self.shaping_runs.active().runs(),
+            styles: &self.styles.active().arena,
             clusters,
-            styles,
-            &mut self.intrinsic_flow_slot_scratch,
-            usize::try_from(max_lines).map_err(|_| EngineError::ResultTooLarge)?,
-            usize::try_from(max_slots_per_band).map_err(|_| EngineError::ResultTooLarge)?,
-            |handle| shaper.font_metrics(handle),
-            |stack_handle| {
-                font_stacks
-                    .binary_search_by_key(&stack_handle, |stack| stack.handle)
-                    .ok()
-                    .and_then(|index| font_stacks[index].fonts.first().copied())
-                    .and_then(|handle| {
-                        font_bindings
-                            .iter()
-                            .find(|binding| binding.handle == handle)
-                            .map(|binding| binding.shaping_handle)
-                    })
-            },
-        )
+        };
+        self.intrinsic_flow_layout_scratch
+            .build_with_drop_cap_context(
+                &self.intrinsic_geometry_scratch,
+                clusters,
+                &[],
+                styles,
+                &mut self.intrinsic_flow_slot_scratch,
+                0,
+                usize::try_from(max_lines).map_err(|_| EngineError::ResultTooLarge)?,
+                usize::try_from(max_slots_per_band).map_err(|_| EngineError::ResultTooLarge)?,
+                |handle| shaper.borrow().font_metrics(handle),
+                |stack_handle| {
+                    font_stacks
+                        .binary_search_by_key(&stack_handle, |stack| stack.handle)
+                        .ok()
+                        .and_then(|index| font_stacks[index].fonts.first().copied())
+                        .and_then(|handle| {
+                            font_bindings
+                                .iter()
+                                .find(|binding| binding.handle == handle)
+                                .map(|binding| binding.shaping_handle)
+                        })
+                },
+                &mut corrections,
+            )
     }
 
     fn prepare_intrinsic_positioned(&mut self, shaper: &ShaperRegistry) -> Result<(), EngineError> {

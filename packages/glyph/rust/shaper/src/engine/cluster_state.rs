@@ -7,7 +7,8 @@ use super::{
     EngineError, FrameFault,
     frame::{WRAP_CHARACTER, WRAP_NONE, WRAP_WORD},
     identity_index::{IdentityIndex, IdentityIndexError},
-    line_composition::Correction,
+    layout_units::scaled_from_layout_units,
+    line_composition::{BreakCorrections, Correction, line_correction_advance},
     run_local::{NumericBlockSpan, RunLocalArena},
     shaping_state::{ShapeArena, ShapingRun},
     style_state::{ResolvedStyle, StyleArena, StyleSegment},
@@ -349,8 +350,22 @@ impl ClusterArena {
         slots.flatten().for_each(|slot| slot.set(None));
     }
 
+    /// Whether both clusters at `boundary` keep the font, binding, style, scale and base advance
+    /// they had at `old` in `previous`, so a stored correction still prices the same pair.
+    fn same_typography(&self, previous: &Self, boundary: usize, old: usize) -> bool {
+        (0..2).all(|side| {
+            let (now, then) = (boundary + side, old + side);
+            self.font_handles[now] == previous.font_handles[then]
+                && self.binding_handles[now] == previous.binding_handles[then]
+                && self.style_indexes[now] == previous.style_indexes[then]
+                && self.units_per_em[now] == previous.units_per_em[then]
+                && self.advance_units[now] == previous.advance_units[then]
+        })
+    }
+
     /// Carries corrections across a text edit that changed the cluster count: a slot survives when
-    /// both clusters around its boundary keep their stable ids and the edit is out of reshaping reach.
+    /// both clusters around its boundary keep their stable ids and typography and the edit is out
+    /// of reshaping reach.
     pub(super) fn carry_break_corrections(
         &self,
         previous: &Self,
@@ -369,6 +384,7 @@ impl ClusterArena {
                 continue;
             };
             if previous.stable_ids.get(old..old + 2) != self.stable_ids.get(boundary..boundary + 2)
+                || !self.same_typography(previous, boundary, old)
             {
                 continue;
             }
@@ -881,7 +897,19 @@ impl ClusterArena {
     /// - `min_content_width`: the widest run that remains when soft breaks are also
     ///   taken under `wrap`: after clusters flagged `ALLOWED_BREAK` for word wrap,
     ///   before every `SAFE_BEFORE` boundary for character wrap, never under none.
-    pub(crate) fn intrinsic_widths(&self, wrap: u8) -> IntrinsicWidths {
+    pub(crate) fn intrinsic_widths(
+        &self,
+        wrap: u8,
+        corrections: &mut impl BreakCorrections,
+    ) -> Result<IntrinsicWidths, EngineError> {
+        let mut segment_correction = |start: usize, end: usize| {
+            if start >= end {
+                return Ok(0.0);
+            }
+            line_correction_advance(self, wrap == WRAP_WORD, corrections, start, end)
+                .map(scaled_from_layout_units)
+        };
+        let mut segment_start = 0;
         let mut min_run = 0.0_f64;
         let mut max_run = 0.0_f64;
         let mut space_tail = 0.0_f64;
@@ -906,6 +934,7 @@ impl ClusterArena {
                 min_run = 0.0;
                 max_run = 0.0;
                 space_tail = 0.0;
+                segment_start = index + 1;
                 continue;
             }
             let advance = self.advances[index];
@@ -926,17 +955,20 @@ impl ClusterArena {
                 _ => false,
             };
             if can_break_after {
-                min_content = min_content.max(min_run - space_tail);
+                let corrected = segment_correction(segment_start, index + 1)?;
+                min_content = min_content.max(min_run - space_tail + corrected);
                 min_run = 0.0;
                 space_tail = 0.0;
+                segment_start = index + 1;
             }
         }
-        min_content = min_content.max(min_run - space_tail);
+        let corrected = segment_correction(segment_start, self.starts.len())?;
+        min_content = min_content.max(min_run - space_tail + corrected);
         max_content = max_content.max(max_run - space_tail);
-        IntrinsicWidths {
+        Ok(IntrinsicWidths {
             min_content_width: min_content.max(0.0),
             max_content_width: max_content.max(0.0),
-        }
+        })
     }
 
     fn copy_from(&mut self, source: &Self) -> Result<(), EngineError> {
@@ -2228,6 +2260,7 @@ fn identity_index_error(error: IdentityIndexError) -> EngineError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::line_composition::NoCorrections;
     use crate::engine::{
         shaping_state::{ShapedRun, ShapingRun},
         style_state::{ResolvedStyle, StyleSegment},
@@ -3255,6 +3288,41 @@ mod tests {
     }
 
     #[test]
+    fn carry_break_corrections_drops_slots_whose_typography_changed() {
+        let build = |units: i64| {
+            let ids: Vec<u32> = (0..40).collect();
+            let text = [97_u16; 40];
+            let style = ResolvedStyle::test_typography(16.0, 1.0, 0.0);
+            let mut arena = canonical_fixture(&text, &ids, &[0; 40], style).arena;
+            arena
+                .flags
+                .fill(CLUSTER_SAFE_BEFORE | CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION);
+            arena.advance_units.fill(units);
+            arena.break_corrections.resize_with(40, Default::default);
+            arena
+        };
+        let previous = build(65_536);
+        for slot in &previous.break_corrections {
+            slot[0].set(Some(Correction::ZERO));
+        }
+        let carried = |current: &ClusterArena| {
+            current.carry_break_corrections(&previous, (0, 1, 1));
+            (10..30)
+                .filter(|&i| current.break_corrections[i][0].get().is_some())
+                .count()
+        };
+        assert!(carried(&build(65_536)) > 0, "same typography carries");
+        let scaled = build(131_072);
+        assert_eq!(carried(&scaled), 0, "scale changed");
+        let mut rebound = build(65_536);
+        rebound.font_handles.fill(77);
+        assert_eq!(carried(&rebound), 0, "font changed");
+        let mut restyled = build(65_536);
+        restyled.style_indexes.fill(3);
+        assert_eq!(carried(&restyled), 0, "style changed");
+    }
+
+    #[test]
     fn source_run_rebuild_resets_break_corrections_only_near_the_rebuilt_run() {
         let text: Vec<u16> = "a".repeat(20).encode_utf16().collect();
         let mut unicode = UnicodeAnalysis::default();
@@ -3714,9 +3782,49 @@ mod tests {
     #[test]
     fn intrinsic_widths_mirror_the_word_wrap_break_decisions() {
         let clusters = intrinsic_fixture();
-        let widths = clusters.intrinsic_widths(WRAP_WORD);
+        let widths = clusters
+            .intrinsic_widths(WRAP_WORD, &mut NoCorrections)
+            .unwrap();
         // Word runs: "ax" (15), "b y" (9), "c" (6); separating spaces trim off.
         assert_eq!(widths.min_content_width, 15.0);
+        assert_eq!(widths.max_content_width, 36.0);
+    }
+
+    /// A fixed table: `L`/`R` per boundary, no whole-line totals.
+    struct Table(Vec<(usize, Correction, Correction)>);
+
+    impl BreakCorrections for Table {
+        fn left(&mut self, b: usize) -> Result<Correction, EngineError> {
+            Ok(self
+                .0
+                .iter()
+                .find(|e| e.0 == b)
+                .map_or(Correction::ZERO, |e| e.1))
+        }
+        fn right(&mut self, b: usize) -> Result<Correction, EngineError> {
+            Ok(self
+                .0
+                .iter()
+                .find(|e| e.0 == b)
+                .map_or(Correction::ZERO, |e| e.2))
+        }
+        fn whole_line(&mut self, _: usize, _: usize) -> Result<Option<Correction>, EngineError> {
+            Ok(None)
+        }
+    }
+
+    #[test]
+    fn min_content_includes_the_corrections_at_its_segment_ends() {
+        let mut clusters = intrinsic_fixture();
+        clusters.flags[2] |= CLUSTER_BREAK_CORRECTION;
+        let unit = |advance| Correction {
+            advance,
+            ..Correction::ZERO
+        };
+        // Boundary 3 follows the corrected space: "by" (9) starts with R = +20 layout units.
+        let mut table = Table(vec![(3, unit(65_536), unit(20 * 65_536))]);
+        let widths = clusters.intrinsic_widths(WRAP_WORD, &mut table).unwrap();
+        assert_eq!(widths.min_content_width, 29.0);
         assert_eq!(widths.max_content_width, 36.0);
     }
 
@@ -3725,7 +3833,9 @@ mod tests {
         let mut clusters = intrinsic_fixture();
         clusters.advances[0] = 10.0;
         clusters.advances[1] = -4.0;
-        let widths = clusters.intrinsic_widths(WRAP_WORD);
+        let widths = clusters
+            .intrinsic_widths(WRAP_WORD, &mut NoCorrections)
+            .unwrap();
         assert_eq!(widths.min_content_width, 9.0);
         assert_eq!(widths.max_content_width, 27.0);
     }
@@ -3736,9 +3846,13 @@ mod tests {
         for flag in clusters.flags.iter_mut() {
             *flag |= CLUSTER_SAFE_BEFORE;
         }
-        let character = clusters.intrinsic_widths(WRAP_CHARACTER);
+        let character = clusters
+            .intrinsic_widths(WRAP_CHARACTER, &mut NoCorrections)
+            .unwrap();
         assert_eq!(character.min_content_width, 10.0);
-        let none = clusters.intrinsic_widths(WRAP_NONE);
+        let none = clusters
+            .intrinsic_widths(WRAP_NONE, &mut NoCorrections)
+            .unwrap();
         assert_eq!(none.min_content_width, 36.0);
         assert_eq!(none.max_content_width, 36.0);
     }
@@ -3747,7 +3861,9 @@ mod tests {
     fn forced_breaks_terminate_intrinsic_segments() {
         let mut clusters = intrinsic_fixture();
         clusters.flags[4] |= CLUSTER_HARD_BREAK | CLUSTER_REQUIRED_BREAK;
-        let widths = clusters.intrinsic_widths(WRAP_NONE);
+        let widths = clusters
+            .intrinsic_widths(WRAP_NONE, &mut NoCorrections)
+            .unwrap();
         // "ax b y" ends at the forced break (27); the trailing " c" run closes at
         // the end of text (9). No soft breaks exist under none, so both agree.
         assert_eq!(widths.max_content_width, 27.0);

@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:cb461ea34157befa8394d30cf7ea51ed2fe84b271d3137061e875f70d32cbf1e'
+source_digest: 'sha256:db02f478c4a84ad068e961a1a90d57cb78f77a6c0e62b63e457e8bf95052df86'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1409,7 +1409,10 @@ or split a previously shaped word.
 
 The legal stream begins with Unicode 17 UAX #14 opportunities, discards any optional opportunity that falls inside a
 UAX #29 extended grapheme, and intersects the result with HarfRust unsafe-to-break shaping boundaries. The default has
-no dictionary segmentation, language-specific hyphenation, or locale tailoring. Optional language-resource imports,
+no dictionary segmentation, language-specific hyphenation, or locale tailoring. A Unicode-legal break that HarfRust
+marks unsafe stays allowed within one run, binding, and font, as in browser line breaking: the line fitter prices it
+from boundary-local shaping corrections, computed lazily per boundary, stored in a cluster lane, and carried across
+edits (D-372). Optional language-resource imports,
 including a versioned linear-memory ABI that can move language tables out of the default Wasm payload, are tracked in
 [#163](https://github.com/pmndrs/glyph/issues/163); no renderer adapter may become a second layout implementation.
 
