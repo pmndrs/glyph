@@ -66,7 +66,7 @@ test('a legal unsafe boundary reshapes the selected lines without disabling kern
   assert.equal(
     measurement.minContentWidth < measurement.maxContentWidth,
     true,
-    'legal unsafe opportunities must contribute exact min-content segments instead of joining the whole paragraph',
+    'legal unsafe opportunities must remain min-content break opportunities instead of joining the whole paragraph',
   );
 
   const glyphs = paragraph.glyphs();

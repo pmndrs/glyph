@@ -25,7 +25,7 @@ use super::{
         PreparedUpdate, RootRevision, UpdateRequest, WRAP_WORD,
     },
     identity_index::IdentityIndex,
-    line_composition::{BreakCorrections, Correction, NoCorrections},
+    line_composition::{BreakCorrections, Correction},
     placement_slot_arena::{PlacementSlotArena, PlacementSlotError},
     placement_state::{GlyphSource, LayoutRunOwner, PlacementIdentity, PlacementSegment},
     positioning::{
@@ -1977,25 +1977,7 @@ fn append_paragraph_measurement(
     // arena, mirroring the breaker's wrap decisions (see `ClusterArena::
     // intrinsic_widths`), so hosts never re-measure at zero width to size a
     // flex item.
-    let intrinsics = match shaper.as_deref_mut() {
-        Some(shaper) => {
-            let shaper = RefCell::new(shaper);
-            state.clusters.active().intrinsic_widths(
-                constraint.wrap,
-                &mut ShapedBreakCorrections {
-                    shaper: &shaper,
-                    text: state.text.active().units.as_slice(),
-                    runs: state.shaping_runs.active().runs(),
-                    styles: &state.styles.active().arena,
-                    clusters: state.clusters.active(),
-                },
-            )?
-        }
-        None => state
-            .clusters
-            .active()
-            .intrinsic_widths(constraint.wrap, &mut NoCorrections)?,
-    };
+    let intrinsics = state.clusters.active().intrinsic_widths(constraint.wrap);
     let needs_intrinsic = visible_extents.consumed_clusters < cluster_count || has_ellipsis;
     if needs_intrinsic {
         state.prepare_intrinsic_flow_layout(
@@ -3938,17 +3920,6 @@ impl ParagraphState {
             .pending_mut()
             .build(build_input(), |handle| shaper.font_metrics(handle))?;
         let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
-        let (styles, committed_styles) = (self.styles.active(), self.styles.committed());
-        if let Some(edit) = self.text_edit
-            && !committed_styles.resolved.shaping_content_changed(
-                &committed_styles.arena,
-                &styles.resolved,
-                &styles.arena,
-            )
-        {
-            let span = (edit.old_start, edit.old_end, edit.new_end);
-            pending_clusters.carry_break_corrections(committed_clusters, span);
-        }
         if let Err(error) = pending_clusters.assign_stable_glyph_ids(
             committed_clusters,
             &mut self.glyph_identity_index,

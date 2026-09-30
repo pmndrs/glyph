@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:2b107f45f12f5fce5c9782c3251fc0a3bb688a83bcbbcfca690cc23efca59da8'
+source_digest: 'sha256:2dffdf4f60df560fd7d939b25242ea22b25f6b3961a490a18668fad5a6294977'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1411,8 +1411,9 @@ The legal stream begins with Unicode 17 UAX #14 opportunities, discards any opti
 UAX #29 extended grapheme, and intersects the result with HarfRust unsafe-to-break shaping boundaries. The default has
 no dictionary segmentation, language-specific hyphenation, or locale tailoring. A Unicode-legal break that HarfRust
 marks unsafe stays allowed within one run, binding, and font, as in browser line breaking: the line fitter prices it
-from boundary-local shaping corrections, computed lazily per boundary, stored in a cluster lane, and carried across
-edits (D-372). A line that starts at such a corrected boundary draws the glyphs of the island it opens shaped alone, in
+from boundary-local shaping corrections, computed lazily per boundary and stored in a cluster lane, so line layout is
+exact at the breaks it takes (D-372). Min-content reads the paragraph shaping's word widths uncorrected, like Blink's fast
+min-content path, so it never prices every corrected boundary. A line that starts at such a corrected boundary draws the glyphs of the island it opens shaped alone, in
 the same pass that prices it (`line_start_record`, a boundary-shape record beside the ellipsis one), so it matches the
 line shaped by itself; the hanging end keeps the paragraph's glyphs, as browsers keep the terminating space in the
 shaping run. Lines with nontrivial bidi keep paragraph glyphs while their widths stay corrected (known limitation until visual-order lead replacement exists). Optional language-resource imports,

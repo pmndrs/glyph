@@ -173,29 +173,6 @@ fn end_charge(
     Ok(EndCharge::Left(corrections.left(end)?))
 }
 
-/// The advance the fitter adds to a line `[start, end)`: `R(start)` and the end charge.
-pub(crate) fn line_correction_advance(
-    clusters: &ClusterArena,
-    word_wrap: bool,
-    corrections: &mut impl BreakCorrections,
-    start: usize,
-    end: usize,
-) -> Result<i64, EngineError> {
-    let seed = if is_corrected(clusters, word_wrap, start) {
-        corrections.right(start)?
-    } else {
-        Correction::ZERO
-    };
-    Ok(if is_corrected(clusters, word_wrap, end) {
-        match end_charge(clusters, word_wrap, corrections, start, end)? {
-            EndCharge::Whole(whole) => i64::from(whole.advance),
-            EndCharge::Left(left) => i64::from(seed.advance) + i64::from(left.advance),
-        }
-    } else {
-        i64::from(seed.advance)
-    })
-}
-
 /// One line's fit, shared by the scalar, chunk-64, and indexed kernels, which differ only
 /// in how they accumulate base sums. Corrections (#216) enter at the seed (rule 1), the
 /// first overflow (rule 2), and the settled end (rule 3); without any, it fits as on main.

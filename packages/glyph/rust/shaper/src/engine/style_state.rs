@@ -214,31 +214,6 @@ impl ResolvedStyleArena {
         &self.segments
     }
 
-    /// Whether any segment's shaping content (bidi, font stack, language, features) differs,
-    /// ignoring the text ranges a text edit shifts; a different segment count counts as changed.
-    pub(crate) fn shaping_content_changed(
-        &self,
-        previous_storage: &StyleArena,
-        next: &Self,
-        next_storage: &StyleArena,
-    ) -> bool {
-        self.segments.len() != next.segments.len()
-            || self
-                .segments
-                .iter()
-                .zip(&next.segments)
-                .any(|(previous, next)| {
-                    let (old, new) = (previous.style, next.style);
-                    old.direction != new.direction
-                        || old.bidi_override != new.bidi_override
-                        || old.font_stack_handle != new.font_stack_handle
-                        || previous_storage.resolved_language(old)
-                            != next_storage.resolved_language(new)
-                        || previous_storage.resolved_features(old)
-                            != next_storage.resolved_features(new)
-                })
-    }
-
     pub(crate) fn invalidation_against(
         &self,
         previous_storage: &StyleArena,
@@ -994,29 +969,6 @@ mod tests {
                 positioning: true,
             },
         );
-    }
-
-    #[test]
-    fn shaping_content_ignores_shifted_ranges_but_not_shaping_fields() {
-        let storage = StyleArena::default();
-        let previous = resolved(ResolvedStyle::default());
-        let mut shifted = resolved(ResolvedStyle::default());
-        shifted.segments[0].text_end = 9;
-        assert!(!previous.shaping_content_changed(&storage, &shifted, &storage));
-        let stack = ResolvedStyle {
-            font_stack_handle: 3,
-            ..ResolvedStyle::default()
-        };
-        assert!(previous.shaping_content_changed(&storage, &resolved(stack), &storage));
-        let size = ResolvedStyle {
-            font_size: 24.0,
-            ..ResolvedStyle::default()
-        };
-        assert!(!previous.shaping_content_changed(&storage, &resolved(size), &storage));
-        let split = ResolvedStyleArena {
-            segments: vec![shifted.segments[0]; 2],
-        };
-        assert!(previous.shaping_content_changed(&storage, &split, &storage));
     }
 
     /// Every caller-actionable style rejection reports its own status and names the style id the
