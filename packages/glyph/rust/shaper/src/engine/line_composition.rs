@@ -273,7 +273,7 @@ impl<C: BreakCorrections> LineFit<'_, C> {
                 let hanging = trailing_space_units(self.clusters, self.line_start, end);
                 fits = self.fits(end, base, hanging, charge);
             }
-            match step_back((end, base)).filter(|_| !fits) {
+            match (!fits).then(|| step_back((end, base))).flatten() {
                 Some(previous) => (end, base) = previous,
                 None => return Ok((end, base.advance, charge, fits)),
             }
