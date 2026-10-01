@@ -2,7 +2,7 @@
   "name": "benchmark:labs-package",
   "summary": "Benchmark common installed-package workflows by default, or select a focused/full pmndrs/labs suite.",
   "requirements": "Network access for registry specs, or one or two packed @pmndrs/glyph .tgz artifacts. Never builds workspace source. Accepts --suite smoke|layout|measure|glyphs|publication|batch|style|reflow|stress|cold|full.",
-  "writes": "Ignored Labs results and an artifact manifest under --output (default .cache/labs-package)."
+  "writes": "Ignored Labs results, an artifact manifest, and a Markdown summary.md (also appended to $GITHUB_STEP_SUMMARY when set) under --output (default .cache/labs-package)."
 } */
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
@@ -11,7 +11,14 @@ import { tmpdir } from 'node:os';
 import { basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { acceptLabsResult, type LabsResultRole, readLabsResult, timingModeMismatches } from './support/labs-result.mts';
+import {
+  acceptLabsResult,
+  labsRunNames,
+  type LabsResultRole,
+  readLabsResult,
+  timingModeMismatches,
+} from './support/labs-result.mts';
+import { parseLabsComparison, renderLabsSummary, writeLabsSummary } from './support/labs-summary.mts';
 import { type PackageLabsSuite, requirePackageLabsSuite } from './support/package-labs-suite.mts';
 
 interface Options {
@@ -100,9 +107,36 @@ try {
       2,
     )}\n`,
   );
+  if (comparison !== undefined && baseline !== undefined) {
+    await publishSummary(comparison, candidateRun.result, baseline, candidate);
+  }
   process.stdout.write(`Labs artifacts: ${output}\n`);
 } finally {
   await rm(temporaryRoot, { recursive: true, force: true });
+}
+
+/** The summary is a convenience view of finished results, so a failure here warns instead of failing the benchmark. */
+async function publishSummary(
+  comparison: string,
+  candidateResult: unknown,
+  baseline: InstalledArtifact,
+  candidate: InstalledArtifact,
+): Promise<void> {
+  try {
+    const markdown = renderLabsSummary({
+      suite: options.suite,
+      baseline: artifactLabel(baseline),
+      candidate: artifactLabel(candidate),
+      comparison: parseLabsComparison(comparison, labsRunNames(candidateResult)),
+    });
+    await writeLabsSummary(markdown, output, process.env);
+  } catch (error) {
+    process.stdout.write(`::warning::Labs job summary was not written: ${String(error)}\n`);
+  }
+}
+
+function artifactLabel(artifact: InstalledArtifact): string {
+  return artifact.sha256 === undefined ? artifact.version : `${artifact.version} (${artifact.sha256.slice(0, 8)})`;
 }
 
 async function parseOptions(argv: readonly string[]): Promise<Options> {

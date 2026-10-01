@@ -1,0 +1,25 @@
+
+[1m[36m━━ compare[0m [2mbaseline-0.1.0-4041877b (bbf0c06) -> candidate-0.1.0-7c06e52f (bbf0c06)[0m
+[2mApple M2 Pro[0m
+[2mMann-Whitney U on block medians  α=0.05  minΔ=5%[0m
+
+[33m⚠ baseline CPU clock drifted 31.4% during its run[0m
+[33m⚠ CPU clock speeds differ between runs (2.80 GHz vs 3.22 GHz — 14.0% apart)[0m
+
+[1m[36medit.bench.ts[0m
+[38;5;248m  bench                                    baseline  candidate    Δp50    Δp99     p       Δ 95% CI[0m
+[38;5;248m---------------------------------------------------------------------------------------------------[0m
+  • typing into a long paragraph
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [32m▲[0m [37mtype one character into a long para…[0m [38;5;248m    3.74ms[0m [38;5;248m    3.36ms[0m [32m -10.3%[0m [32m -46.1%[0m [37m<.001[0m [37m  -13.2..-8.1%[0m
+                                         [36m▁█▄▂▁▁▁▁▁▁[0m [35m▇█▁▁▁▁▁▁▁▁[0m
+
+
+[33mskipped (2)[0m
+  [33mclock-confounded[0m
+  [2m· type one character into a long Fred…[0m  [33mfaster→neutral · 2.68→2.93[0m
+  [2m· type one character into a long para…[0m  [33mfaster→neutral · 2.76→2.86[0m
+
+[1msummary[0m  [32m1 faster[0m  [33m2 skipped[0m
+[2mcompared: 1  matched: 3[0m
+
