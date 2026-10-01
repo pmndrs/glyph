@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:2cb1ca42a5dc608076a62e6e3897976d181b6895a63a4678d2cc71b699510d37'
+source_digest: 'sha256:f11f98950db3918996fcc77f788a5e2762ce703eb986360a119adb6ae4e146d7'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -227,6 +227,9 @@ sources:
   - id: labs-internal-workflow
     resource: ../../../benches/scripts/run-internal-labs.mts
     title: Workspace-only Labs benchmark workflow
+  - id: labs-summary
+    resource: ../../../benches/scripts/support/labs-summary.mts
+    title: Labs comparison Markdown job summary
   - id: labs-result-validator
     resource: ../../../benches/scripts/support/labs-result.mts
     title: Saved Labs result failure validator
@@ -272,6 +275,11 @@ performance job. `benchmark:labs-package` installs the candidate tarball and an 
 npm canary into isolated temporary consumers, then runs both through `@pmndrs/labs`. It never rebuilds either artifact.
 The retained report includes native Labs JSON, comparison output, exact package manifests and lockfiles, and the candidate
 tarball SHA-256.
+
+The runner also renders the comparison as Markdown (`summary.md` under the output directory, appended to
+`$GITHUB_STEP_SUMMARY` when set): counts, a slower-first table of non-neutral benches with full names, a Mermaid bar
+chart of their Δ p50, and the neutral and skipped rows folded in `<details>`. It is parsed from the `labs compare` text,
+with names restored from the candidate result, and a failure to write it only warns.
 
 The default package suite is a common-use smoke comparison: cached `measure()`, measurement and publication after a text
 change, exact-width reflow, paint-only style publication, and font-size relayout. It deliberately excludes per-glyph
