@@ -1,5 +1,8 @@
 use alloc::vec::Vec;
-use core::{cell::Cell, num::NonZeroU32};
+use core::{
+    cell::{Cell, RefCell},
+    num::NonZeroU32,
+};
 
 use crate::{FontGlyphExtents, FontMetrics, unicode::UnicodeAnalysis};
 
@@ -236,6 +239,15 @@ fn sum_advance_units(advances: &[i64]) -> i64 {
     advances.iter().sum()
 }
 
+/// One run of `shape` per boundary side that was shaped: `slots[boundary - 1]` holds the `[L, R]` run index + 1, or 0.
+#[derive(Default)]
+pub(super) struct IslandShapes {
+    pub(super) shape: ShapeArena,
+    /// The island of a range that is no boundary's own, shaped for one use.
+    pub(super) once: ShapeArena,
+    pub(super) slots: Vec<[u32; 2]>,
+}
+
 #[derive(Default)]
 pub(crate) struct ClusterArena {
     pub starts: Vec<u32>,
@@ -285,6 +297,9 @@ pub(crate) struct ClusterArena {
     /// `[L, R, S]` for the boundary after each cluster, filled lazily by the fitter: the corrections (#216), and `S`
     /// set when L's shaping drew other glyphs than the paragraph, so the font shapes the break as one unit.
     pub(super) break_corrections: Vec<[Cell<Option<Correction>>; 3]>,
+    /// The glyphs the islands behind `break_corrections` shape alone, kept for the line edges that draw them. Like
+    /// the corrections it is a cache, but only a build or a derived copy empties it, so a relayout shapes nothing.
+    pub(super) islands: RefCell<IslandShapes>,
     /// No run is right-to-left or overridden: only then do line edges shape alone, so only then are breaks corrected.
     pub(super) ltr: bool,
     pub(super) layout_runs: LayoutRunArena,
@@ -1218,6 +1233,7 @@ impl ClusterArena {
             .ok_or(EngineError::InvalidRequest)
     }
 
+    #[inline(never)]
     pub(crate) fn clear(&mut self) {
         self.starts.clear();
         self.ends.clear();
@@ -1249,6 +1265,10 @@ impl ClusterArena {
         self.shaped.clear();
         self.unsafe_before.clear();
         self.break_corrections.clear();
+        let islands = self.islands.get_mut();
+        islands.shape.clear();
+        islands.once.clear();
+        islands.slots.clear();
         self.layout_runs.clear();
         self.run_local.clear();
     }

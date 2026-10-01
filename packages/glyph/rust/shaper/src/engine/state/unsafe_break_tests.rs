@@ -135,3 +135,141 @@ fn islands_compare_as_ordered_glyph_sequences() {
     assert!(!drawn(&[7], &[7, 9]));
     assert!(!drawn(&[7, 9, 9], &[7, 9]));
 }
+
+/// Inter, registered as font 1 with empty extents: enough to shape islands for real.
+fn inter() -> ShaperRegistry {
+    const INTER: &[u8] =
+        include_bytes!("../../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
+    let mut registry = ShaperRegistry::default();
+    let extents = vec![0u8; 2937 * 8];
+    let availability = vec![0u8; 2937usize.div_ceil(8)];
+    assert_eq!(
+        registry.register_font(1, INTER, &extents, &availability, 0, 0),
+        0
+    );
+    registry
+}
+
+/// `text` in font 1, a cluster per unit, a corrected break after each space.
+fn text_arena(text: &[u16]) -> ClusterArena {
+    let mut c = corrected_arena(text.len());
+    for (i, unit) in text.iter().enumerate() {
+        c.units_per_em.push(1000.0);
+        c.glyph_starts.push(i as u32);
+        c.glyph_counts.push(1);
+        c.glyph_ids.push(0);
+        c.stable_ids.push(i as u32 + 1);
+        // Words break after a space, and only there.
+        if *unit == 0x20 {
+            c.flags[i] |= CLUSTER_SPACE;
+        } else {
+            c.flags[i] &= !(CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION);
+        }
+        // Only the cluster after a space is unsafe to break before, so each island is a space and its neighbour.
+        if i == 0 || text[i - 1] != 0x20 {
+            c.flags[i] |= CLUSTER_SAFE_BEFORE;
+        }
+    }
+    c
+}
+
+/// Lays `clusters` out in lines `width` units wide and gives each line its edge records, as a layout does.
+fn lay_out(
+    clusters: &ClusterArena,
+    text: &[u16],
+    width: i64,
+    registry: &mut ShaperRegistry,
+) -> BoundaryShapeArena {
+    let styles = StyleArena::default();
+    let run = ShapingRun {
+        text_start: 0,
+        text_end: text.len() as u32,
+        script: u32::from_be_bytes(*b"Latn"),
+        direction: 0,
+        bidi_level: 0,
+        style: Default::default(),
+    };
+    let shaper = RefCell::new(registry);
+    let mut corrections = ShapedBreakCorrections {
+        shaper: &shaper,
+        text,
+        runs: &[run],
+        styles: &styles,
+        clusters,
+    };
+    let mut cursor = LineCursor::at_cluster(0);
+    let mut out = BoundaryShapeArena::default();
+    let mut next_glyph_id = 1;
+    while let Some(line) = layout_next_line_integer(
+        clusters,
+        &mut cursor,
+        Some(width * UNIT),
+        WRAP_WORD,
+        0.0,
+        &mut corrections,
+    )
+    .unwrap()
+    {
+        let fragment = FlowFragment {
+            line,
+            slot_start: 0.0,
+            slot_end: 0.0,
+            flexible_end: false,
+            boundary_index: NO_BOUNDARY,
+            lead_index: NO_BOUNDARY,
+            tail_index: NO_BOUNDARY,
+        };
+        corrections
+            .line_edge_records(fragment, 0, (&mut out, &[]), &mut next_glyph_id)
+            .unwrap();
+    }
+    out
+}
+
+fn shapings() -> usize {
+    crate::SHAPINGS.with(Cell::get)
+}
+
+fn drawn(out: &BoundaryShapeArena) -> (Vec<u16>, Vec<u32>, Vec<i32>) {
+    let s = &out.shape;
+    (
+        s.glyph_ids.clone(),
+        s.clusters.clone(),
+        s.x_advances.clone(),
+    )
+}
+
+#[test]
+fn a_geometry_only_relayout_shapes_no_island() {
+    let text: Vec<u16> = "Reveals one grapheme at a time".encode_utf16().collect();
+    let (clusters, mut registry) = (text_arena(&text), inter());
+    let before = shapings();
+    let first = lay_out(&clusters, &text, 14, &mut registry);
+    assert!(shapings() > before, "a cold layout shapes its islands");
+    assert!(!first.records.is_empty(), "the layout drew line edges");
+    // The same clusters laid out again, as a width change does: pricing and edge records reuse the islands.
+    let before = shapings();
+    let again = lay_out(&clusters, &text, 15, &mut registry);
+    assert_eq!(shapings() - before, 0, "a relayout reshaped an island");
+    assert_eq!(drawn(&again), drawn(&first));
+}
+
+#[test]
+fn a_cluster_rebuild_empties_the_island_cache_and_draws_what_a_cold_build_does() {
+    let text: Vec<u16> = "Reveals one grapheme at a time".encode_utf16().collect();
+    let edited: Vec<u16> = "Reveals ONE grapheme at a time".encode_utf16().collect();
+    let (mut clusters, mut registry) = (text_arena(&text), inter());
+    lay_out(&clusters, &text, 14, &mut registry);
+    assert!(!clusters.islands.borrow().shape.runs.is_empty());
+    // The cluster stage clears the arena before it rebuilds it.
+    clusters.clear();
+    assert!(clusters.islands.borrow().shape.runs.is_empty());
+    assert!(clusters.islands.borrow().slots.is_empty());
+    let rebuilt = text_arena(&edited);
+    let before = shapings();
+    let warm = lay_out(&rebuilt, &edited, 14, &mut registry);
+    assert!(shapings() > before, "an edit reshapes its islands");
+    // Nothing stale: a cold arena over the edited text draws the same glyphs.
+    let cold = lay_out(&text_arena(&edited), &edited, 14, &mut registry);
+    assert_eq!(drawn(&warm), drawn(&cold));
+}

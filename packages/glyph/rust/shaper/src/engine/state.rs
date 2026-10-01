@@ -4064,7 +4064,6 @@ impl ParagraphState {
             geometry,
             self.flow_layout.pending_mut(),
             (&mut self.pending_boundary_shape, &self.previous_edge_ids),
-            &mut self.boundary_shape_scratch,
             next_glyph_id,
         )?;
         Ok(())
@@ -4301,7 +4300,7 @@ impl ParagraphState {
                 .append_from(ellipsis_shape, 0)?;
             append_boundary_source_ids(
                 &mut self.pending_boundary_shape.stable_ids,
-                source_shape,
+                &source_shape.clusters,
                 (clusters, &self.previous_edge_ids),
                 next_glyph_id,
             )?;
@@ -4435,7 +4434,6 @@ impl ParagraphState {
             &self.intrinsic_geometry_scratch,
             &mut self.intrinsic_flow_layout_scratch,
             (&mut self.intrinsic_boundary_shape, &[]),
-            &mut self.boundary_shape_scratch,
             &mut (1 << 30),
         )
     }
@@ -5011,7 +5009,8 @@ impl ShapedBreakCorrections<'_, '_> {
         } else {
             (boundary, end)
         };
-        let (correction, drawn_alone) = self.delta(range, (side != 0, side == 0))?;
+        let (correction, drawn_alone) =
+            self.delta(range, (side != 0, side == 0), Some((boundary, side)))?;
         slots[side].set(Some(correction));
         if side == 0 && !drawn_alone {
             slots[2].set(Some(Correction::ZERO));
@@ -5061,18 +5060,65 @@ impl ShapedBreakCorrections<'_, '_> {
             .map_err(shaper_error)
     }
 
-    /// The record shaping the island a corrected line opens (`tail` false) or closes (`tail` true), alone
-    /// as [`Self::delta`] priced it, so the line draws what it would shaped by itself; `NO_BOUNDARY` when
-    /// that edge is uncorrected. As Chromium reshapes line ends, a space ending the line leaves its end as is,
-    /// and islands that meet shape the whole line once. An ellipsis keeps only the clusters before its cut.
-    fn line_edge_record(
+    /// Hands `consume` the arena and run holding clusters `[start, end)` shaped alone with `edges`. A corrected
+    /// boundary's own island, `slot` = (boundary, side), is shaped once per cluster build and kept, so the fitter
+    /// that prices it and every line edge that draws it, on any relayout, share one shaping.
+    fn with_island(
+        &mut self,
+        (start, end): (usize, usize),
+        edges: (bool, bool),
+        slot: Option<(usize, usize)>,
+        consume: &mut dyn FnMut(&ShapeArena, usize) -> Result<(), EngineError>,
+    ) -> Result<(), EngineError> {
+        let c = self.clusters;
+        let mut islands = c.islands.borrow_mut();
+        let islands = &mut *islands;
+        let kept =
+            slot.and_then(|(boundary, side)| islands.slots.get(boundary - 1)?[side].checked_sub(1));
+        if let Some(run) = kept {
+            return consume(&islands.shape, run as usize);
+        }
+        let arena = if slot.is_some() {
+            &mut islands.shape
+        } else {
+            islands.once.clear();
+            &mut islands.once
+        };
+        let run = arena.runs.len();
+        let (source_run, binding, font) = (
+            c.source_runs[start],
+            c.binding_handles[start],
+            c.font_handles[start],
+        );
+        self.shape_range((start, end), edges, &mut |shaped| {
+            arena.append(
+                source_run as usize,
+                font,
+                binding,
+                c.starts[start],
+                c.ends[end - 1],
+                shaped,
+            )
+        })?;
+        if let Some((boundary, side)) = slot {
+            islands.slots.resize(c.starts.len(), [0; 2]);
+            islands.slots[boundary - 1][side] =
+                u32::try_from(run + 1).map_err(|_| EngineError::ResultTooLarge)?;
+        }
+        consume(arena, run)
+    }
+
+    /// The records shaping the islands a corrected line opens and closes (`NO_BOUNDARY` when that edge is
+    /// uncorrected), alone as [`Self::delta`] priced them, so the line draws what it would shaped by itself.
+    /// As Chromium reshapes line ends, a space ending the line leaves its end as is, and islands that meet
+    /// shape the whole line once. An ellipsis keeps only the clusters before its cut.
+    fn line_edge_records(
         &mut self,
         fragment: FlowFragment,
-        (flow_thread_id, tail): (u32, bool),
+        flow_thread_id: u32,
         (out, previous): (&mut BoundaryShapeArena, &[EdgeId]),
-        scratch: &mut ShapeArena,
         next_glyph_id: &mut u32,
-    ) -> Result<u32, EngineError> {
+    ) -> Result<(u32, u32), EngineError> {
         const CORRECTED: u8 = CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION;
         let c = self.clusters;
         let index =
@@ -5087,74 +5133,88 @@ impl ShapedBreakCorrections<'_, '_> {
             corrected.then(|| c.reshapable_island(boundary)).flatten()
         };
         if line_start >= c.starts.len() {
-            return Ok(NO_BOUNDARY);
+            return Ok((NO_BOUNDARY, NO_BOUNDARY));
         }
         let cut = out.record(fragment.boundary_index);
         let island_end = island(line_start).map(|(_, end)| end);
         // As Chromium reshapes line ends, a space ends the line as is.
-        let tail_start = island(line_end)
-            .filter(|_| c.flags[line_end - 1] & CLUSTER_SPACE == 0 && cut.is_none())
-            .map(|(start, _)| start.max(line_start));
+        let tail_island = island(line_end)
+            .filter(|_| c.flags[line_end - 1] & CLUSTER_SPACE == 0 && cut.is_none());
+        let tail_start = tail_island.map(|(start, _)| start.max(line_start));
         let whole = island_end
             .zip(tail_start)
             .is_some_and(|(lead, tail)| lead > tail);
-        let (start, end, edges) = if tail {
-            match tail_start.filter(|_| !whole) {
-                Some(tail_start) => (tail_start, line_end, (false, true)),
-                None => return Ok(NO_BOUNDARY),
+        // Each edge: its clusters, how it shapes, and the boundary side whose island it is exactly, which that
+        // boundary's pricing already shaped.
+        let lead = match island_end {
+            Some(island_end) => {
+                let cut_end = cut.map_or(Ok(line_end), |cut| index(cut.cluster_start))?;
+                let end = if whole {
+                    line_end
+                } else {
+                    island_end.min(cut_end)
+                };
+                let edges = (true, whole || end < island_end);
+                Some((
+                    (line_start, end),
+                    edges,
+                    (!edges.1).then_some((line_start, 1)),
+                ))
             }
-        } else {
-            let Some(island_end) = island_end else {
+            None => None,
+        };
+        let tail = tail_start.filter(|_| !whole).map(|start| {
+            let exact = tail_island.is_some_and(|(first, _)| first == start);
+            (
+                (start, line_end),
+                (false, true),
+                exact.then_some((line_end, 0)),
+            )
+        });
+        let mut record = |edge: Option<LineEdge>| {
+            let Some(((start, end), edges, slot)) = edge.filter(|edge| edge.0.0 < edge.0.1) else {
                 return Ok(NO_BOUNDARY);
             };
-            let cut_end = cut.map_or(Ok(line_end), |cut| index(cut.cluster_start))?;
-            let end = if whole {
-                line_end
-            } else {
-                island_end.min(cut_end)
-            };
-            (line_start, end, (true, whole || end < island_end))
-        };
-        if end <= start {
-            return Ok(NO_BOUNDARY);
-        }
-        let (source_run, binding, font) = (
-            c.source_runs[start],
-            c.binding_handles[start],
-            c.font_handles[start],
-        );
-        let text_end = c.ends[end - 1];
-        scratch.clear();
-        self.shape_range((start, end), edges, &mut |shaped| {
-            scratch.append(
-                source_run as usize,
-                font,
-                binding,
-                c.starts[start],
+            let (source_run, binding, font) = (
+                c.source_runs[start],
+                c.binding_handles[start],
+                c.font_handles[start],
+            );
+            let text_end = c.ends[end - 1];
+            let mut glyphs = (0, 0);
+            self.with_island((start, end), edges, slot, &mut |shaped, run| {
+                glyphs = out.shape.append_from(shaped, run)?;
+                let run = shaped.runs[run];
+                let range = run.glyph_start as usize..(run.glyph_start + run.glyph_count) as usize;
+                append_boundary_source_ids(
+                    &mut out.stable_ids,
+                    &shaped.clusters[range],
+                    (c, previous),
+                    next_glyph_id,
+                )
+            })?;
+            let (glyph_start, glyph_count) = glyphs;
+            let record =
+                u32::try_from(out.records.len()).map_err(|_| EngineError::ResultTooLarge)?;
+            out.records.push(BoundaryShape {
+                flow_thread_id,
+                source_run,
+                cluster_start: u32::try_from(start).map_err(|_| EngineError::ResultTooLarge)?,
+                cluster_end: u32::try_from(end).map_err(|_| EngineError::ResultTooLarge)?,
                 text_end,
-                shaped,
-            )
-        })?;
-        let (glyph_start, glyph_count) = out.shape.append_from(scratch, 0)?;
-        append_boundary_source_ids(&mut out.stable_ids, scratch, (c, previous), next_glyph_id)?;
-        let record = u32::try_from(out.records.len()).map_err(|_| EngineError::ResultTooLarge)?;
-        out.records.push(BoundaryShape {
-            flow_thread_id,
-            source_run,
-            cluster_start: u32::try_from(start).map_err(|_| EngineError::ResultTooLarge)?,
-            cluster_end: u32::try_from(end).map_err(|_| EngineError::ResultTooLarge)?,
-            text_end,
-            source_binding_handle: binding,
-            source_font_handle: font,
-            ellipsis_binding_handle: binding,
-            ellipsis_font_handle: font,
-            source_glyph_start: glyph_start,
-            source_glyph_count: glyph_count,
-            ellipsis_glyph_start: glyph_start + glyph_count,
-            ellipsis_glyph_count: 0,
-            line_start: true,
-        });
-        Ok(record)
+                source_binding_handle: binding,
+                source_font_handle: font,
+                ellipsis_binding_handle: binding,
+                ellipsis_font_handle: font,
+                source_glyph_start: glyph_start,
+                source_glyph_count: glyph_count,
+                ellipsis_glyph_start: glyph_start + glyph_count,
+                ellipsis_glyph_count: 0,
+                line_start: true,
+            });
+            Ok::<_, EngineError>(record)
+        };
+        Ok((record(lead)?, record(tail)?))
     }
 
     /// How far reshaping clusters `[start, end)` moves their base sums, and whether the paragraph's glyphs
@@ -5163,6 +5223,7 @@ impl ShapedBreakCorrections<'_, '_> {
         &mut self,
         (start, end): (usize, usize),
         edges: (bool, bool),
+        slot: Option<(usize, usize)>,
     ) -> Result<(Correction, bool), EngineError> {
         let trail = edges.1;
         let c = self.clusters;
@@ -5178,12 +5239,17 @@ impl ShapedBreakCorrections<'_, '_> {
             })
             .collect();
         let mut same = true;
-        self.shape_range((start, end), edges, &mut |shaped| {
-            let (infos, positions) = (shaped.glyph_infos(), shaped.glyph_positions());
-            same = same_glyphs(infos.iter().map(|info| info.glyph_id), paragraph);
-            for (info, at) in infos.iter().zip(positions) {
-                let owner = c.starts.partition_point(|s| *s <= info.cluster) - 1;
-                advances[owner - start] += f64::from(at.x_advance.unsigned_abs()) * scale;
+        self.with_island((start, end), edges, slot, &mut |shaped, run| {
+            let run = shaped.runs[run];
+            let glyphs = run.glyph_start as usize..(run.glyph_start + run.glyph_count) as usize;
+            let ids = &shaped.glyph_ids[glyphs.clone()];
+            same = same_glyphs(ids.iter().map(|id| u32::from(*id)), paragraph);
+            for (cluster, advance) in shaped.clusters[glyphs.clone()]
+                .iter()
+                .zip(&shaped.x_advances[glyphs])
+            {
+                let owner = c.starts.partition_point(|s| *s <= *cluster) - 1;
+                advances[owner - start] += f64::from(advance.unsigned_abs()) * scale;
             }
             Ok(())
         })?;
@@ -5226,7 +5292,7 @@ impl BreakCorrections for ShapedBreakCorrections<'_, '_> {
         // Only islands that meet, and each short enough to reshape.
         match (c.reshapable_island(start), tail) {
             (Some(head), Some(tail)) if head.1 > tail.0 => self
-                .delta((start, end), (true, true))
+                .delta((start, end), (true, true), None)
                 .map(|(whole, _)| Some(whole)),
             _ => Ok(None),
         }
@@ -5257,7 +5323,6 @@ fn attach_line_edges(
     geometry: &FlowGeometryArena,
     flow: &mut FlowLayoutArena,
     out: (&mut BoundaryShapeArena, &[EdgeId]),
-    scratch: &mut ShapeArena,
     next_glyph_id: &mut u32,
 ) -> Result<(), EngineError> {
     let (out, previous) = out;
@@ -5272,19 +5337,24 @@ fn attach_line_edges(
         let start =
             usize::try_from(line.fragment_start).map_err(|_| EngineError::InvalidRequest)?;
         for fragment in &mut flow.fragments[start..start + usize::from(line.fragment_count)] {
+            if !words {
+                (fragment.lead_index, fragment.tail_index) = (NO_BOUNDARY, NO_BOUNDARY);
+                continue;
+            }
             let current = *fragment;
-            let mut edge = |tail| {
-                if !words {
-                    return Ok(NO_BOUNDARY);
-                }
-                let id = (line.flow_thread_id, tail);
-                corrections.line_edge_record(current, id, (out, previous), scratch, next_glyph_id)
-            };
-            (fragment.lead_index, fragment.tail_index) = (edge(false)?, edge(true)?);
+            (fragment.lead_index, fragment.tail_index) = corrections.line_edge_records(
+                current,
+                line.flow_thread_id,
+                (out, previous),
+                next_glyph_id,
+            )?;
         }
     }
     Ok(())
 }
+
+/// A line edge's clusters, how they shape, and the boundary side whose island they are exactly, if any.
+type LineEdge = ((usize, usize), (bool, bool), Option<(usize, usize)>);
 
 /// A previous layout's boundary glyph id under `pack2(text unit of its cluster, glyph index)`: an edit moves
 /// offsets but leaves a retained unit's id, so an offset is no key. A unit's glyphs sort in ordinal order.
@@ -5312,13 +5382,13 @@ fn previous_edge_ids(
 
 fn append_boundary_source_ids(
     output: &mut Vec<u32>,
-    source: &ShapeArena,
+    source_clusters: &[u32],
     (clusters, previous): (&ClusterArena, &[EdgeId]),
     next_glyph_id: &mut u32,
 ) -> Result<(), EngineError> {
     let mut previous_cluster = None;
     let mut ordinal = 0u32;
-    for &text_cluster in &source.clusters {
+    for &text_cluster in source_clusters {
         if previous_cluster == Some(text_cluster) {
             ordinal += 1;
         } else {

@@ -277,8 +277,8 @@ impl<C: BreakCorrections> LineFit<'_, C> {
     /// Rule 2: whether `end` overflows. Only the FIRST overflowing candidate of a line, at
     /// a corrected boundary, is re-tested with its correction charged (greedy, as CSS wraps).
     fn overflows(&mut self, end: usize, base: Base, hanging: i64) -> Result<bool, EngineError> {
-        // Without a seed or a charge the test is main's own, through the seeded twin.
-        let fits = if self.seed == Correction::ZERO {
+        // With no charge and no hung seed the test is main's own plus the seed, through the seeded twin.
+        let fits = if self.seed.trailing == 0 {
             self.fits_seeded(
                 base.advance.saturating_sub(hanging),
                 base.space.saturating_sub(hanging),
