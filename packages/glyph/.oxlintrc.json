@@ -27,7 +27,7 @@
       "error",
       {
         "paths": ["three", "@react-three/fiber"],
-        "patterns": ["three/src/*", "three/addons/*", "three/examples/*"]
+        "patterns": ["typegpu/*", "three/src/*", "three/addons/*", "three/examples/*"]
       }
     ],
     "react-you-might-not-need-an-effect/no-derived-state": "error",
@@ -50,6 +50,7 @@
           {
             "paths": ["three", "@react-three/fiber"],
             "patterns": [
+              "typegpu/*",
               "three/src/*",
               "three/addons/*",
               "three/examples/*",
@@ -69,7 +70,14 @@
           "error",
           {
             "paths": ["three", "@react-three/fiber"],
-            "patterns": ["three/src/*", "three/addons/*", "three/examples/*", "**/generated/**", "**/core/**"]
+            "patterns": [
+              "typegpu/*",
+              "three/src/*",
+              "three/addons/*",
+              "three/examples/*",
+              "**/generated/**",
+              "**/core/**"
+            ]
           }
         ]
       }
@@ -82,6 +90,7 @@
           {
             "paths": ["three"],
             "patterns": [
+              "typegpu/*",
               "three/src/*",
               "three/addons/*",
               "three/examples/*",
@@ -103,6 +112,7 @@
           {
             "paths": ["three", "@react-three/fiber", "@react-three/fiber/webgpu", "react"],
             "patterns": [
+              "typegpu/*",
               "three/src/*",
               "three/addons/*",
               "three/examples/*",
@@ -122,6 +132,7 @@
           {
             "paths": ["three", "@react-three/fiber"],
             "patterns": [
+              "typegpu/*",
               "three/src/*",
               "three/addons/*",
               "three/examples/*",
@@ -143,6 +154,7 @@
           {
             "paths": ["three", "@react-three/fiber"],
             "patterns": [
+              "typegpu/*",
               "three/src/*",
               "three/addons/*",
               "three/examples/*",
@@ -163,6 +175,7 @@
           {
             "paths": ["three", "@react-three/fiber"],
             "patterns": [
+              "typegpu/*",
               "three/src/*",
               "three/addons/*",
               "three/examples/*",
