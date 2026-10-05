@@ -1,295 +1,177 @@
 #!/usr/bin/env node
 
-import { execFile } from 'node:child_process';
-import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { promisify } from 'node:util';
 
+import { auditDocs, git, pullRequestAttestations, short } from './attestations.mjs';
 import { validateOkf } from './validate-okf.mjs';
-import { excludedDirectories, workspacePackages } from './workspace-packages.mjs';
 
-const execFileAsync = promisify(execFile);
+/**
+ * Advisory docs reports. None of them fails anything: they show contributors and reviewers what intent
+ * is attested, what is missing, and the one command that fixes each item.
+ */
 
 /** Marks the single issue the drift workflow rewrites; never change it without migrating that issue. */
 export const driftIssueMarker = '<!-- okf-docs-drift -->';
 /** Marks the single pull-request comment the docs report rewrites. */
 export const docsReportMarker = '<!-- okf-docs-report -->';
 
-const checkCommand = '`mise exec -- pnpm scripts run docs:check`';
-const logCommand = '`mise exec -- pnpm scripts run docs:new -- log <slug> <title>`';
+const run = (name) => `\`mise exec -- pnpm scripts run ${name}\``;
+const listedLimit = 40;
 
-const listedCommitLimit = 40;
-const listedFileLimit = 60;
-
-/**
- * Reports, per workspace package, the commits that changed package source after its concept was last
- * committed. The baseline is git history rather than a stored pin, so concurrent pull requests never
- * conflict over it; any commit that edits the concept is the review that clears its drift.
- */
-export async function measureDocsDrift(workspaceRoot = '.', options = {}) {
-  const root = path.resolve(workspaceRoot);
-  const bundle = path.resolve(root, options.bundle ?? '.agents/docs');
-  const concepts = await packageConcepts(bundle);
-  const report = [];
-  for (const [workspacePackage, packageRoot] of await workspacePackages(root)) {
-    const concept = concepts.get(workspacePackage);
-    // A package without a concept is the validator's error to report, not drift.
-    if (concept === undefined) continue;
-    const conceptPath = relativePath(root, concept);
-    const sourcePath = relativePath(root, packageRoot);
-    const baseline = await lastCommit(root, conceptPath);
-    const pathspecs = sourcePathspecs(sourcePath);
-    const range = baseline === undefined ? ['HEAD'] : [`${baseline.sha}..HEAD`];
-    const commits = parseCommits(
-      await git(root, ['log', '--no-merges', '--format=%h%x09%cs%x09%s', ...range, '--', ...pathspecs]),
-    );
-    const files =
-      commits.length === 0 || baseline === undefined
-        ? []
-        : lines(await git(root, ['diff', '--name-only', baseline.sha, 'HEAD', '--', ...pathspecs]));
-    report.push({ workspacePackage, concept: conceptPath, source: sourcePath, baseline, commits, files });
-  }
-  return report;
-}
-
-/**
- * Packages whose changed files include package source but not their concept. Shared by the pull-request
- * report (changed since the merge base) and the commit report (staged), so both judge the same way.
- */
-export async function conceptsToReview(workspaceRoot, changedPaths) {
-  const root = path.resolve(workspaceRoot);
-  const changed = new Set(changedPaths);
-  const concepts = await packageConcepts(path.resolve(root, '.agents/docs'));
-  const review = [];
-  for (const [workspacePackage, packageRoot] of await workspacePackages(root)) {
-    const concept = concepts.get(workspacePackage);
-    if (concept === undefined) continue;
-    const conceptPath = relativePath(root, concept);
-    const source = `${relativePath(root, packageRoot)}/`;
-    const files = changedPaths.filter((file) => file.startsWith(source) && !isBuildOutput(file.slice(source.length)));
-    if (files.length > 0 && !changed.has(conceptPath)) review.push({ workspacePackage, concept: conceptPath, files });
-  }
-  return review;
-}
-
-/** Packages whose source this pull request changes without touching their concept, from the merge base. */
-export async function measurePullRequestDocs(workspaceRoot, base) {
-  const root = path.resolve(workspaceRoot);
-  const mergeBase = (await git(root, ['merge-base', base, 'HEAD'])).trim();
-  return conceptsToReview(root, lines(await git(root, ['diff', '--name-only', mergeBase, 'HEAD'])));
-}
-
-function isBuildOutput(packageRelativePath) {
-  return packageRelativePath
-    .split('/')
-    .slice(0, -1)
-    .some((directory) => excludedDirectories.includes(directory));
-}
-
-/**
- * The commit-time report an agent reads as it commits: which concepts to review against the staged change
- * and how, plus validation findings. Empty when there is nothing to say; it never blocks the commit.
- */
-export function renderCommitReport({ review, findings }) {
-  if (review.length === 0 && findings.length === 0) return '';
-  const out = ['docs: advisory report for this commit (it does not block; act on it before you push)'];
-  if (review.length > 0) {
-    out.push('', 'Review these concepts against your staged source changes now:');
-    for (const entry of review) {
-      out.push(
-        `  ${entry.concept}  (${entry.workspacePackage}: ${entry.files.length} staged ${entry.files.length === 1 ? 'file' : 'files'})`,
-      );
-    }
-    out.push(
-      '  Correct anything the concept now gets wrong; if it is still accurate, update its generated.at.',
-      '  Stage the concept, and record the change with',
-      `  ${logCommand.replaceAll('`', '')}`,
-    );
-  }
-  if (findings.length > 0) {
-    out.push('', `Validation findings (reproduce with ${checkCommand.replaceAll('`', '')}):`);
-    out.push(...findings.slice(0, listedFileLimit).map((finding) => `  ${finding}`));
-    if (findings.length > listedFileLimit) out.push(`  …and ${findings.length - listedFileLimit} more`);
-  }
-  return `${out.join('\n')}\n`;
-}
-
-/** Validation findings with bundle-relative paths, ready to show a contributor. */
+/** Validation findings with repository-relative paths, ready to show a contributor. */
 export async function docsFindings(workspaceRoot) {
   const root = path.resolve(workspaceRoot);
   const result = await validateOkf(path.join(root, '.agents/docs'), { workspaceRoot: root });
   return [...result.conformance, ...result.profile].map((finding) => finding.replaceAll(`${root}${path.sep}`, ''));
 }
 
-/** Renders the advisory pull-request comment: what to review, what is invalid, and the command for each. */
-export function renderDocsReport({ review, findings, base }) {
+/** The pull-request comment: one row per changed package, attested at this head or not, plus findings. */
+export function renderDocsReport({ rows, findings, base }) {
   const out = [docsReportMarker, '## Docs report 📚', ''];
-  if (review.length === 0 && findings.length === 0) {
+  const open = rows.filter((row) => row.status !== 'attested');
+  if (rows.length === 0 && findings.length === 0) {
     out.push(
-      `Nothing to do: every concept this pull request affects was updated, and the bundle validates against \`${base}\`.`,
+      `Nothing to do: this pull request changes no package source, and the bundle validates against \`${base}\`.`,
     );
     return `${out.join('\n')}\n`;
   }
   out.push(
-    'Advisory only — this never blocks merging. A maintainer may merge as is; anything left unresolved moves to the',
-    '`Sync agent docs` issue for a later maintenance pull request.',
+    open.length === 0 && findings.length === 0
+      ? 'Every changed package is attested at this head. A reviewer verifies each claim after merge.'
+      : 'Advisory only — this never blocks merging. Anything left open is tracked in the `Sync agent docs` issue and verified after merge.',
   );
-  if (review.length > 0) {
-    out.push(
-      '',
-      '### Concepts to review',
-      '',
-      'This pull request changes package source without touching its concept. Correct anything the concept now gets',
-      'wrong; when it is still accurate, update its `generated.at` to record the review.',
-      '',
-      '| Package | Concept | Changed files |',
-      '| --- | --- | ---: |',
-      ...review.map((entry) => `| \`${entry.workspacePackage}\` | \`${entry.concept}\` | ${entry.files.length} |`),
-    );
+  if (rows.length > 0) {
+    out.push('', '| Package | Concept | Attestation | Status |', '| --- | --- | --- | --- |');
+    for (const row of rows) {
+      const claim =
+        row.attestation === undefined ? 'none' : `${row.attestation.author}: ${clip(row.attestation.note, 120)}`;
+      const status = {
+        attested: '✅ attested at this head',
+        stale: `⚠️ stale: made at \`${short(row.attestation?.source)}\`, source is now \`${short(row.current)}\``,
+        unattested: '⚠️ unattested',
+      }[row.status];
+      out.push(`| \`${row.package}\` | ${row.conceptEdited ? 'edited' : 'not edited'} | ${claim} | ${status} |`);
+    }
+    if (open.length > 0) {
+      out.push(
+        '',
+        'After your last source change, update the concept if it is now wrong, then record what you changed and checked:',
+        '',
+        ...open.map((row) => `- ${run(`docs:attest -- ${row.package} "<what you changed and checked>"`)}`),
+      );
+    }
   }
   if (findings.length > 0) {
-    out.push(
-      '',
-      '### Validation findings',
-      '',
-      `Run ${checkCommand} locally to reproduce. Record new log entries and decisions with`,
-      `${logCommand} (or \`-- decision\`) instead of editing a shared file or the frozen register.`,
-      '',
-      ...findings.slice(0, listedFileLimit).map((finding) => `- ${finding}`),
-    );
-    if (findings.length > listedFileLimit) out.push(`- …and ${findings.length - listedFileLimit} more`);
+    out.push('', '### Validation findings', '', `Reproduce with ${run('docs:check')}.`, '');
+    out.push(...findings.slice(0, listedLimit).map((finding) => `- ${finding}`));
+    if (findings.length > listedLimit) out.push(`- …and ${findings.length - listedLimit} more`);
   }
   return `${out.join('\n')}\n`;
 }
 
-/** Renders the drift report as the body of the single tracking issue. */
-export function renderDriftIssue(report, options = {}) {
-  const drifted = report.filter((entry) => entry.commits.length > 0);
+/** The main-branch issue: per package, pending attestations and gaps for the reviewer, plus findings. */
+export function renderDriftIssue(audit, options = {}) {
   const findings = options.findings ?? [];
   const head = options.head === undefined ? '' : ` at \`${options.head}\``;
-  const out = [driftIssueMarker, ''];
-  if (drifted.length === 0 && findings.length === 0) {
+  const open = audit.filter((entry) => entry.status !== 'current');
+  const clean = open.length === 0 && findings.length === 0;
+  // The workflow closes or reopens the issue from this line, never from the prose around it.
+  const out = [driftIssueMarker, `<!-- okf-docs-status: ${clean ? 'clean' : 'open'} -->`, ''];
+  if (clean) {
     out.push(
-      `Every workspace package concept is current and the bundle validates${head}. This issue reopens when either changes.`,
+      `Every workspace package concept is verified current and the bundle validates${head}. This issue reopens when either changes.`,
     );
     return `${out.join('\n')}\n`;
   }
+  const pending = open.reduce((sum, entry) => sum + entry.pending.length, 0);
+  const gaps = open.reduce((sum, entry) => sum + entry.gaps.length, 0);
   out.push(
-    `${drifted.length} of ${report.length} workspace package concepts trail their source${head}, and the bundle has ` +
-      `${findings.length} validation ${findings.length === 1 ? 'finding' : 'findings'}. ` +
-      'This issue is rewritten on every push to `main`; edit the docs, not this issue.',
-  );
-  if (findings.length > 0) {
-    out.push('', '## Validation findings', '', `Reproduce with ${checkCommand}.`, '');
-    out.push(...findings.slice(0, listedFileLimit).map((finding) => `- ${finding}`));
-    if (findings.length > listedFileLimit) out.push(`- …and ${findings.length - listedFileLimit} more`);
-  }
-  if (drifted.length === 0) return `${out.join('\n')}\n`;
-  out.push(
-    '',
-    '## Drifted concepts',
-    '',
-    '| Package | Concept | Commits since review | Changed files |',
-    '| --- | --- | ---: | ---: |',
-  );
-  for (const entry of drifted) {
-    out.push(
-      `| \`${entry.workspacePackage}\` | \`${entry.concept}\` | ${entry.commits.length} | ${entry.files.length} |`,
-    );
-  }
-  out.push(
+    `${open.length} of ${audit.length} packages need verification${head}: ${pending} pending ${plural(pending, 'attestation')}, ` +
+      `${gaps} ${plural(gaps, 'gap')} (merged without an attestation), ${findings.length} validation ${plural(findings.length, 'finding')}. ` +
+      'This issue is rewritten on every push to `main`; fix the docs, not this issue.',
     '',
     '## Resolve',
     '',
-    'For each package below, read the listed changes against its concept and correct anything the concept now',
-    'gets wrong: ownership, boundaries, public surface, evidence, sources. When the concept is already right, record',
-    'the review by updating its `generated.at` timestamp. Either edit clears that package, because drift is measured',
-    `from the last commit that touched the concept. Add one log entry with ${logCommand}, run`,
-    `${checkCommand}, and open one pull request for the whole issue.`,
+    "1. For each attestation, check its claim against that pull request's diff and correct the concept where the claim is",
+    '   wrong or incomplete. For each gap, review that change and bring the concept up to date from it.',
+    `2. Run ${run('docs:verify -- <slug>')}. It writes one verification log entry and removes the consumed attestations.`,
+    '3. In that entry, set each `verdict` (`confirmed` or `corrected` for an attestation, `documented` or `no-change` for a',
+    `   gap) and replace the summary, then run ${run('docs:check')} and open one pull request.`,
   );
-  for (const entry of drifted) {
-    const since =
-      entry.baseline === undefined ? 'never committed' : `\`${entry.baseline.sha}\` (${entry.baseline.date})`;
-    out.push('', `### \`${entry.workspacePackage}\``, '', `Concept \`${entry.concept}\`, last reviewed ${since}.`, '');
+  for (const entry of open) {
+    const baseline =
+      entry.verified === undefined
+        ? 'never verified'
+        : `verified at \`${short(entry.verified)}\` in \`${entry.verification}\``;
     out.push(
-      ...entry.commits
-        .slice(0, listedCommitLimit)
-        .map((commit) => `- \`${commit.sha}\` ${commit.date} ${commit.subject}`),
+      '',
+      `### \`${entry.package}\``,
+      '',
+      `Concept \`${entry.concept}\`; ${baseline}; source now \`${short(entry.current)}\`.`,
     );
-    if (entry.commits.length > listedCommitLimit) out.push(`- …and ${entry.commits.length - listedCommitLimit} more`);
-    if (entry.files.length > 0) {
-      out.push('', '<details><summary>Changed files</summary>', '');
-      out.push(...entry.files.slice(0, listedFileLimit).map((file) => `- \`${file}\``));
-      if (entry.files.length > listedFileLimit) out.push(`- …and ${entry.files.length - listedFileLimit} more`);
-      out.push('', '</details>');
+    if (entry.pending.length > 0) {
+      out.push('', '| Attestation | Pull request | Claim |', '| --- | --- | --- |');
+      for (const record of entry.pending.slice(0, listedLimit)) {
+        out.push(
+          `| \`${record.file}\` | ${record.pr ? `#${record.pr}` : (record.commit ?? 'unmerged')} | ${clip(record.note, 160)} |`,
+        );
+      }
     }
+    if (entry.gaps.length > 0) {
+      out.push('', '| Gap | Commit | Subject |', '| --- | --- | --- |');
+      for (const gap of entry.gaps.slice(0, listedLimit)) {
+        out.push(`| ${gap.pr ? `#${gap.pr}` : 'direct push'} | \`${gap.short}\` | ${clip(gap.subject, 120)} |`);
+      }
+      if (entry.gaps.length > listedLimit) out.push(`| … | | ${entry.gaps.length - listedLimit} more |`);
+    }
+  }
+  if (findings.length > 0) {
+    out.push('', '## Validation findings', '', `Reproduce with ${run('docs:check')}.`, '');
+    out.push(...findings.slice(0, listedLimit).map((finding) => `- ${finding}`));
+    if (findings.length > listedLimit) out.push(`- …and ${findings.length - listedLimit} more`);
   }
   return `${out.join('\n')}\n`;
 }
 
-async function packageConcepts(bundle) {
-  const concepts = new Map();
-  for (const file of await markdownFiles(bundle)) {
-    const text = await readFile(file, 'utf8');
-    const frontmatter = /^---\n([\s\S]*?)\n---/u.exec(text)?.[1];
-    const workspacePackage = frontmatter && /^workspace_package:\s*['"]?([^'"\n]+?)['"]?\s*$/mu.exec(frontmatter)?.[1];
-    if (workspacePackage !== undefined && workspacePackage !== '') concepts.set(workspacePackage, file);
+/**
+ * The commit-time reminder, shown once per package per branch so an agent is told what to do without
+ * being nagged into a loop. Empty when there is nothing new to say; it never blocks the commit.
+ */
+export function renderCommitReport({ packages, findings }) {
+  if (packages.length === 0 && findings.length === 0) return '';
+  const out = ['docs: advisory report (never blocks; shown once per package per branch)'];
+  if (packages.length > 0) {
+    out.push('', 'You changed package source. Before you push, after your last source change:');
+    for (const entry of packages) {
+      out.push(
+        `  ${entry.name}: update ${entry.concept} if it is now wrong, then`,
+        `    mise exec -- pnpm scripts run docs:attest -- ${entry.name} "<what you changed and checked>"`,
+      );
+    }
   }
-  return concepts;
-}
-
-async function markdownFiles(directory) {
-  const files = [];
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
-    const absolutePath = path.join(directory, entry.name);
-    if (entry.isDirectory()) files.push(...(await markdownFiles(absolutePath)));
-    else if (entry.isFile() && entry.name.endsWith('.md')) files.push(absolutePath);
+  if (findings.length > 0) {
+    out.push('', 'Validation findings (reproduce with mise exec -- pnpm scripts run docs:check):');
+    out.push(...findings.slice(0, listedLimit).map((finding) => `  ${finding}`));
+    if (findings.length > listedLimit) out.push(`  …and ${findings.length - listedLimit} more`);
   }
-  return files.sort();
+  return `${out.join('\n')}\n`;
 }
 
-async function lastCommit(root, file) {
-  const [sha, date] = (await git(root, ['log', '-1', '--format=%h%x09%cs', '--', file])).trim().split('\t');
-  return sha === undefined || sha === '' ? undefined : { sha, date };
+function clip(text, length) {
+  const flat = String(text ?? '')
+    .replace(/\s+/gu, ' ')
+    .replaceAll('|', '\\|')
+    .trim();
+  return flat.length <= length ? flat : `${flat.slice(0, length - 1)}…`;
 }
 
-/** Package source as git pathspecs, with the same build and dependency output excluded everywhere. */
-function sourcePathspecs(sourcePath) {
-  return [
-    sourcePath,
-    ...excludedDirectories.flatMap((directory) => [
-      `:(glob,exclude)${sourcePath}/${directory}/**`,
-      `:(glob,exclude)${sourcePath}/**/${directory}/**`,
-    ]),
-  ];
+function plural(count, word) {
+  return count === 1 ? word : `${word}s`;
 }
 
-function parseCommits(output) {
-  return lines(output).map((line) => {
-    const [sha, date, ...subject] = line.split('\t');
-    return { sha, date, subject: subject.join('\t') };
-  });
-}
-
-function lines(output) {
-  return output.split('\n').filter(Boolean);
-}
-
-function relativePath(root, absolutePath) {
-  return path.relative(root, absolutePath).split(path.sep).join('/');
-}
-
-async function git(cwd, arguments_) {
-  const { stdout } = await execFileAsync('git', arguments_, { cwd, maxBuffer: 64 * 1024 * 1024 });
-  return stdout;
-}
-
-function isMainModule(url) {
-  return process.argv[1] !== undefined && url === pathToFileURL(path.resolve(process.argv[1])).href;
-}
-
-if (isMainModule(import.meta.url)) {
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const [workspaceRoot = '.', ...flags] = process.argv.slice(2);
   const option = (name) => {
     const index = flags.indexOf(name);
@@ -299,23 +181,24 @@ if (isMainModule(import.meta.url)) {
     return value;
   };
   try {
+    const root = path.resolve(workspaceRoot);
     const markdownPath = option('--markdown');
     const base = option('--pr');
-    const findings = await docsFindings(workspaceRoot);
+    const findings = await docsFindings(root);
     if (base !== undefined) {
-      // Pull-request mode: report only what this pull request introduces, never fail.
-      const review = await measurePullRequestDocs(workspaceRoot, base);
-      const body = renderDocsReport({ review, findings, base });
+      // Pull-request mode, judged at the pull request's own head (`--head`), never a merge preview.
+      const rows = await pullRequestAttestations(root, base, option('--head') ?? 'HEAD');
+      const body = renderDocsReport({ rows, findings, base });
       if (markdownPath !== undefined) await writeFile(markdownPath, body);
       process.stdout.write(body);
     } else {
-      const report = await measureDocsDrift(workspaceRoot);
-      const head = (await git(path.resolve(workspaceRoot), ['rev-parse', '--short', 'HEAD'])).trim();
-      if (markdownPath !== undefined) await writeFile(markdownPath, renderDriftIssue(report, { head, findings }));
-      for (const entry of report) {
-        const count = entry.commits.length;
-        const status = count === 0 ? 'current' : `${count} ${count === 1 ? 'commit' : 'commits'} since review`;
-        process.stdout.write(`${entry.workspacePackage}\t${status}\t${entry.concept}\n`);
+      const audit = await auditDocs(root);
+      const head = (await git(root, ['rev-parse', '--short', 'HEAD'])).trim();
+      if (markdownPath !== undefined) await writeFile(markdownPath, renderDriftIssue(audit, { head, findings }));
+      for (const entry of audit) {
+        process.stdout.write(
+          `${entry.package}\t${entry.status}\tpending ${entry.pending.length}\tgaps ${entry.gaps.length}\n`,
+        );
       }
       for (const finding of findings) process.stdout.write(`finding\t${finding}\n`);
     }

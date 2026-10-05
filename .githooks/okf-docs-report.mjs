@@ -1,20 +1,18 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { appendFile, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import {
-  conceptsToReview,
-  docsFindings,
-  renderCommitReport,
-} from '../.agents/skills/open-knowledge-format/scripts/docs-drift.mjs';
+import { changedPackages, packageInventory } from '../.agents/skills/open-knowledge-format/scripts/attestations.mjs';
+import { docsFindings, renderCommitReport } from '../.agents/skills/open-knowledge-format/scripts/docs-drift.mjs';
 
-// Docs upkeep never blocks a commit. The hook exists to tell whoever is committing, usually an agent,
-// which concepts to review against the staged change and which command records it, at the moment the
-// change is fresh in mind. Every outcome, including a failure of the report itself, exits 0.
+// Docs upkeep never blocks a commit. The hook tells whoever is committing, usually an agent, which
+// packages to attest, once per package per branch: repeating it on every commit would push an agent into
+// a loop, and the pull-request report checks the final state anyway. Every outcome exits 0.
 const watchedRoots = ['.agents/docs/', 'apps/', 'benches/', 'packages/'];
+// Every tracked root the docs link to, or links would read as missing in the staged snapshot.
 const snapshotRoots = ['.agents', '.github', 'README.md', 'RESEARCH.md', 'apps', 'benches', 'packages'];
 
 async function runHook() {
@@ -23,17 +21,28 @@ async function runHook() {
   const staged = gitBuffer(['diff', '--cached', '--name-only', '-z']).toString('utf8').split('\0').filter(Boolean);
   if (!staged.some((filePath) => watchedRoots.some((root) => filePath.startsWith(root)))) return;
 
+  // symbolic-ref also names an unborn branch, so the first commit of a repository is covered too.
+  let branch = 'detached';
+  try {
+    branch = git(['symbolic-ref', '--short', '-q', 'HEAD']).trim() || branch;
+  } catch {
+    // Detached HEAD: reminders are still recorded, under one shared key.
+  }
+  const ledger = path.resolve(git(['rev-parse', '--git-common-dir']).trim(), 'okf-docs-reminded');
+  const reminded = new Set((await readFile(ledger, 'utf8').catch(() => '')).split('\n').filter(Boolean));
+
   // Judge the staged snapshot, not the working tree, so unstaged edits neither hide nor invent findings.
   const snapshot = await mkdtemp(path.join(tmpdir(), 'glyph-okf-index-'));
   try {
-    // Include every tracked root the docs link to, or its links would read as missing.
     const files = gitBuffer(['ls-files', '-z', '--', ...snapshotRoots]);
     gitBuffer(['checkout-index', `--prefix=${snapshot}${path.sep}`, '-z', '--stdin'], files);
-    const report = renderCommitReport({
-      review: await conceptsToReview(snapshot, staged),
-      findings: await docsFindings(snapshot),
-    });
-    process.stderr.write(report);
+    const packages = changedPackages(await packageInventory(snapshot), staged).filter(
+      (entry) => !reminded.has(`${branch}\t${entry.name}`),
+    );
+    process.stderr.write(renderCommitReport({ packages, findings: await docsFindings(snapshot) }));
+    if (packages.length > 0) {
+      await appendFile(ledger, packages.map((entry) => `${branch}\t${entry.name}\n`).join(''));
+    }
   } finally {
     await rm(snapshot, { recursive: true, force: true });
   }

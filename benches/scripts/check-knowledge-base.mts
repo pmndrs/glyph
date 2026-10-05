@@ -5,6 +5,8 @@
 /* @workflow { "name": "docs:search", "args": ["--query", "search"], "summary": "Find docs without reading whole files: `-- <terms…>` prints each matching paragraph under `path › Heading › Sub  [start-end]`; read that range next.", "requirements": "The repository-pinned Node.js runtime.", "writes": "stdout" } */
 /* @workflow { "name": "docs:outline", "args": ["--query", "outline"], "summary": "Heading tree with [start-end] line ranges: `-- <path>` for a file or directory, `-- <path>:<line>` for the sections containing that line.", "requirements": "The repository-pinned Node.js runtime.", "writes": "stdout" } */
 /* @workflow { "name": "docs:decision", "args": ["--query", "decision"], "summary": "Print one decision without loading the register: `-- D-123` or `-- <decision-slug>`.", "requirements": "The repository-pinned Node.js runtime.", "writes": "stdout" } */
+/* @workflow { "name": "docs:attest", "args": ["--attest", "attest"], "summary": "After your last source change to a package, record what you changed and checked in its docs: `-- <package> \"<note>\"`. Writes one new attestation file to commit with the change.", "requirements": "The repository-pinned Node.js runtime.", "writes": "One new file under .agents/docs/attestations/" } */
+/* @workflow { "name": "docs:verify", "args": ["--attest", "verify"], "summary": "Reviewer step for the Sync agent docs issue: after correcting the docs, `-- <slug>` writes one verification log entry for every pending attestation and gap and removes the consumed attestations.", "requirements": "The repository-pinned Node.js runtime and full git history.", "writes": "One new log entry; deletes consumed files under .agents/docs/attestations/" } */
 import { isMainModule, run } from './support/command-cli.mts';
 
 const skillScripts = '../.agents/skills/open-knowledge-format/scripts';
@@ -12,6 +14,7 @@ const validator = `${skillScripts}/validate-okf.mjs`;
 const drift = `${skillScripts}/docs-drift.mjs`;
 const records = `${skillScripts}/records.mjs`;
 const query = `${skillScripts}/docs-query.mjs`;
+const attestations = `${skillScripts}/attestations.mjs`;
 
 /** Validates the OKF bundle, including one Workspace Package concept per package. */
 export async function runKnowledgeBaseCheck(): Promise<void> {
@@ -36,6 +39,11 @@ export async function runDocsQuery(arguments_: readonly string[]): Promise<void>
   await run(process.execPath, [query, '../.agents/docs', ...arguments_]);
 }
 
+/** Attests a package or verifies pending intent; both write new files only, so they never conflict. */
+export async function runDocsAttestations(arguments_: readonly string[]): Promise<void> {
+  await run(process.execPath, [attestations, '..', ...arguments_]);
+}
+
 if (isMainModule(import.meta.url)) {
   const [mode, ...rest] = process.argv.slice(2);
   const task =
@@ -45,7 +53,9 @@ if (isMainModule(import.meta.url)) {
         ? runDocsRecords(rest)
         : mode === '--query'
           ? runDocsQuery(rest)
-          : runKnowledgeBaseCheck();
+          : mode === '--attest'
+            ? runDocsAttestations(rest)
+            : runKnowledgeBaseCheck();
   task.catch((error: unknown) => {
     process.exitCode = 1;
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);

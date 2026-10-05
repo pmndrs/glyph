@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 
 import yaml from 'js-yaml';
 
+import { attestationErrors, verificationErrors } from './attestations.mjs';
 import { decisionErrors, frozenRegisterErrors, logEntryErrors } from './records.mjs';
 import { workspacePackages } from './workspace-packages.mjs';
 
@@ -166,6 +167,8 @@ export async function validateOkf(bundleRoot = '.', options = {}) {
 
     if (data.type === 'Decision') profile.push(...decisionErrors(filePath, data, body));
     if (data.type === 'Log Entry') profile.push(...logEntryErrors(filePath, data, body));
+    if (data.type === 'Log Entry') profile.push(...verificationErrors(filePath, data));
+    if (data.type === 'Attestation') profile.push(...attestationErrors(filePath, data, text));
     profile.push(...frozenRegisterErrors(filePath, data, body));
 
     if (typeof data.title !== 'string' || data.title.length === 0) warnings.push(`${filePath}: missing title`);

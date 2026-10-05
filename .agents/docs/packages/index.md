@@ -7,4 +7,4 @@
 - [`@pmndrs/glyph-typegpu-hello-world`](typegpu-hello-world.md) — editable text using the high-level TypeGPU integration.
 - [`@pmndrs/glyph-tres-playground`](tres-playground.md) — Vue adapter playground rendering every raster format inside a TresJS canvas.
 
-Repository validation requires exactly one concept per workspace package. Freshness is measured from history rather than a stored pin: a concept drifts when package source commits land after the last commit that touched it. `docs:drift` reports that drift, and the `Docs drift` workflow keeps one `Sync agent docs` issue in step with `main` for the maintenance agent; see [advisory docs](../planning/decisions/concept-drift-issue.md). Neither drift nor validation findings block a merge; each pull request gets an advisory `Docs report` comment.
+Repository validation requires exactly one concept per workspace package. Freshness is attested by contributors and verified after merge rather than stored in the concept; see [attested docs intent](../planning/decisions/attested-docs-intent.md).

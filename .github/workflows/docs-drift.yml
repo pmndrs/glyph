@@ -1,6 +1,6 @@
 name: Docs drift
 
-# Package concept freshness and bundle validity are maintenance work, not merge gates. This workflow keeps exactly one
+# Docs intent and bundle validity are verified after merge, never gated. This workflow keeps exactly one
 # `Sync agent docs` issue, labelled `agents`, in step with `main`: it rewrites the body after every push, reopens it when a
 # concept falls behind its source, and closes it once every concept is current again. A scheduled
 # maintenance agent resolves the open issue in one pull request.
@@ -36,7 +36,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Drift is measured from history: the last commit that touched each concept.
+          # The audit walks merges since the last verification, so it needs full history.
           fetch-depth: 0
 
       - name: Install canonical toolchain
@@ -56,7 +56,7 @@ jobs:
             --jq "map(select(.title == \"$DRIFT_TITLE\")) | .[0] // empty | \"\(.number) \(.state)\"")
           number=${issue%% *}
           state=${issue#* }
-          if grep -q 'Every workspace package concept is current' "$RUNNER_TEMP/docs-drift.md"; then
+          if grep -q '^<!-- okf-docs-status: clean -->$' "$RUNNER_TEMP/docs-drift.md"; then
             if [ -n "$issue" ]; then
               gh issue edit "$number" --body-file "$RUNNER_TEMP/docs-drift.md"
               if [ "$state" = OPEN ]; then gh issue close "$number" --reason completed; fi

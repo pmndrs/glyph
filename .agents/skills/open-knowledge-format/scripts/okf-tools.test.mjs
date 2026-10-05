@@ -10,15 +10,8 @@ import { afterEach, test } from 'node:test';
 import { migrateV01ToV02 } from './migrate-v01-to-v02.mjs';
 import { decision, outline, search } from './docs-query.mjs';
 import { createRecord, listRecords, placeholder } from './records.mjs';
-import {
-  docsFindings,
-  docsReportMarker,
-  driftIssueMarker,
-  measureDocsDrift,
-  measurePullRequestDocs,
-  renderDocsReport,
-  renderDriftIssue,
-} from './docs-drift.mjs';
+import { attest, pullRequestAttestations } from './attestations.mjs';
+import { docsFindings, docsReportMarker, renderDocsReport } from './docs-drift.mjs';
 import { validateOkf } from './validate-okf.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -69,39 +62,6 @@ test('validator requires one concept per workspace package and rejects a retired
     (await validateOkf(docs, { workspaceRoot: root })).profile.includes(
       'workspace package @pmndrs/glyph: missing OKF Workspace Package concept',
     ),
-  );
-});
-
-test('drift lists source commits after the concept was last committed and ignores build output', async () => {
-  const root = await workspaceFixture('okf-drift-');
-  await commitFixture(root);
-  assert.deepEqual(await driftCommits(root), []);
-
-  await writeFile(path.join(root, 'packages/glyph/src/index.ts'), 'changed\n');
-  await git(root, ['commit', '-qam', 'feat(glyph): change source']);
-  await mkdir(path.join(root, 'packages/glyph/dist'), { recursive: true });
-  await writeFile(path.join(root, 'packages/glyph/dist/index.js'), 'built\n');
-  await git(root, ['add', '-f', 'packages/glyph/dist/index.js']);
-  await git(root, ['commit', '-qm', 'chore(glyph): commit build output']);
-
-  const [entry] = await measureDocsDrift(root);
-  assert.deepEqual(
-    entry.commits.map((commit) => commit.subject),
-    ['feat(glyph): change source'],
-  );
-  assert.deepEqual(entry.files, ['packages/glyph/src/index.ts']);
-  const body = renderDriftIssue([entry], { head: 'abc1234' });
-  assert.ok(body.startsWith(driftIssueMarker));
-  assert.match(body, /1 of 1 workspace package concepts trail their source at `abc1234`/u);
-  assert.match(body, /feat\(glyph\): change source/u);
-
-  await writeFile(conceptPath(root), glyphConcept({ at: '2026-10-05T00:00:00Z' }));
-  await git(root, ['commit', '-qam', 'docs(glyph): review concept']);
-  assert.deepEqual(await driftCommits(root), []);
-  assert.match(renderDriftIssue(await measureDocsDrift(root)), /Every workspace package concept is current/u);
-  assert.match(
-    renderDriftIssue(await measureDocsDrift(root), { findings: ['.agents/docs/x.md: broken'] }),
-    /## Validation findings\n\nReproduce with/u,
   );
 });
 
@@ -164,7 +124,7 @@ test('records are named by subject and the frozen register accepts no new rows',
   );
 });
 
-test('the pull-request docs report names unreviewed concepts and findings, and clears when they are fixed', async () => {
+test('the pull-request docs report shows attestation status per changed package and validation findings', async () => {
   const root = await workspaceFixture('okf-pr-report-');
   await commitFixture(root);
   await git(root, ['branch', 'base']);
@@ -177,34 +137,37 @@ test('the pull-request docs report names unreviewed concepts and findings, and c
   await git(root, ['add', '.']);
   await git(root, ['commit', '-qm', 'feat(glyph): change source']);
 
-  const review = await measurePullRequestDocs(root, 'base');
-  assert.deepEqual(review, [
-    {
-      workspacePackage: '@pmndrs/glyph',
-      concept: '.agents/docs/packages/glyph.md',
-      files: ['packages/glyph/src/index.ts'],
-    },
-  ]);
+  const rows = await pullRequestAttestations(root, 'base');
+  assert.deepEqual(
+    rows.map((row) => [row.package, row.status, row.conceptEdited]),
+    [['@pmndrs/glyph', 'unattested', false]],
+  );
   const findings = await docsFindings(root);
   assert.deepEqual(findings, [
     '.agents/docs/log.md: this bundle records changes as log/ entries; use docs:new -- log instead',
   ]);
-  const body = renderDocsReport({ review, findings, base: 'base' });
+  const body = renderDocsReport({ rows, findings, base: 'base' });
   assert.ok(body.startsWith(docsReportMarker));
   assert.match(body, /Advisory only — this never blocks merging/u);
-  assert.match(body, /\| `@pmndrs\/glyph` \| `\.agents\/docs\/packages\/glyph\.md` \| 1 \|/u);
+  assert.match(body, /\| `@pmndrs\/glyph` \| not edited \| none \| ⚠️ unattested \|/u);
+  assert.match(body, /docs:attest -- @pmndrs\/glyph "<what you changed and checked>"/u);
   assert.match(body, /docs:check/u);
 
-  await writeFile(conceptPath(root), glyphConcept({ at: '2026-10-05T00:00:00Z' }));
   await rm(path.join(root, '.agents/docs/log.md'));
   await git(root, ['add', '-A']);
-  await git(root, ['commit', '-qm', 'docs(glyph): review concept']);
+  await attest(root, 'glyph', 'Changed index; concept still accurate.', { date: '2026-10-05' });
+  await git(root, ['add', '-A']);
+  await git(root, ['commit', '-qm', 'docs(glyph): attest']);
   const clean = renderDocsReport({
-    review: await measurePullRequestDocs(root, 'base'),
+    rows: await pullRequestAttestations(root, 'base'),
     findings: await docsFindings(root),
     base: 'base',
   });
-  assert.match(clean, /^Nothing to do/mu);
+  assert.match(clean, /Every changed package is attested at this head/u);
+  assert.match(
+    clean,
+    /\| `@pmndrs\/glyph` \| not edited \| Test: Changed index; concept still accurate\. \| ✅ attested at this head \|/u,
+  );
 });
 
 test('outline and search locate every answer as path › heading trail with line ranges', async () => {
@@ -335,7 +298,7 @@ test('log listings filter by date and mentioned text', async () => {
   ]);
 });
 
-test('the pre-commit report tells the committer which concept to review, from the staged snapshot', async () => {
+test('the pre-commit report names packages to attest once per branch, from the staged snapshot', async () => {
   const root = await workspaceFixture('okf-hook-');
   // Docs link outside the package roots; the staged snapshot must carry those targets too.
   await writeFile(path.join(root, 'README.md'), '# Readme\n');
@@ -346,19 +309,21 @@ test('the pre-commit report tells the committer which concept to review, from th
   await commitFixture(root);
   await writeFile(path.join(root, 'packages/glyph/src/index.ts'), 'staged\n');
   await git(root, ['add', 'packages/glyph/src/index.ts']);
-  await writeFile(conceptPath(root), glyphConcept({ at: '2026-10-05T00:00:00Z' }));
   const staged = await git(root, ['write-tree']);
 
-  const unreviewed = await execFileAsync(process.execPath, [hookPath()], { cwd: root });
-  assert.match(unreviewed.stderr, /Review these concepts against your staged source changes now:/u);
-  assert.doesNotMatch(unreviewed.stderr, /Validation findings/u);
-  assert.match(unreviewed.stderr, /\.agents\/docs\/packages\/glyph\.md {2}\(@pmndrs\/glyph: 1 staged file\)/u);
-  assert.match(unreviewed.stderr, /docs:new -- log <slug> <title>/u);
+  const first = await execFileAsync(process.execPath, [hookPath()], { cwd: root });
+  assert.match(first.stderr, /You changed package source\. Before you push, after your last source change:/u);
+  assert.match(first.stderr, /@pmndrs\/glyph: update \.agents\/docs\/packages\/glyph\.md if it is now wrong, then/u);
+  assert.match(first.stderr, /docs:attest -- @pmndrs\/glyph "<what you changed and checked>"/u);
+  assert.doesNotMatch(first.stderr, /Validation findings/u);
   assert.equal(await git(root, ['write-tree']), staged);
 
-  await git(root, ['add', conceptPath(root)]);
-  const reviewed = await execFileAsync(process.execPath, [hookPath()], { cwd: root });
-  assert.equal(reviewed.stderr, '');
+  // Shown once per package per branch, so a reminder can never become a loop.
+  const second = await execFileAsync(process.execPath, [hookPath()], { cwd: root });
+  assert.equal(second.stderr, '');
+  await git(root, ['switch', '-q', '-c', 'other']);
+  const otherBranch = await execFileAsync(process.execPath, [hookPath()], { cwd: root });
+  assert.match(otherBranch.stderr, /@pmndrs\/glyph: update/u);
 });
 
 test('the pre-commit report lists invalid staged docs and never blocks the commit', async () => {
@@ -406,6 +371,7 @@ async function workspaceFixture(prefix) {
   await git(root, ['init', '-q']);
   await git(root, ['config', 'user.email', 'test@example.test']);
   await git(root, ['config', 'user.name', 'Test']);
+  await git(root, ['config', 'commit.gpgsign', 'false']);
   await mkdir(path.join(root, 'packages/glyph/src'), { recursive: true });
   await mkdir(path.join(root, '.agents/docs/packages'), { recursive: true });
   await writeFile(path.join(root, 'packages/glyph/package.json'), '{"name":"@pmndrs/glyph"}\n');
@@ -421,10 +387,6 @@ async function workspaceFixture(prefix) {
 async function commitFixture(root) {
   await git(root, ['add', '.']);
   await git(root, ['commit', '-qm', 'fixture']);
-}
-
-async function driftCommits(root) {
-  return (await measureDocsDrift(root)).flatMap((entry) => entry.commits);
 }
 
 async function recordBundle(prefix) {

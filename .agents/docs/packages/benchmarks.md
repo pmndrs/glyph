@@ -260,9 +260,9 @@ Node workflows continue to exercise built package exports.
 | Browser observation   | Vitexec or Playwright Chromium | Browser V8, DOM, RAF/frame pacing, WebGPU/WebGL2, GPU timestamps, and input-to-visible latency  | The maintained browser workload and probe selectors                                                                         |
 | Native/Worker profile | Dedicated profilers            | External-process builds, native-versus-Wasm phases, Worker startup, peak memory, and long bakes | Explicit profile case flags; never part of the default pull-request timing run                                              |
 
-Correctness, deterministic artifact authentication, package size, and conformance are gates, not performance lanes. They
-remain under their focused checks because a byte mismatch, pixel mismatch, or size ceiling is an exact fact rather than a
-timing distribution. The CPU migration retires hand-rolled Node timers only after their Labs replacement has produced a
+Correctness, deterministic artifact authentication, and conformance are gates, not performance lanes. They remain under
+their focused checks because a byte or pixel mismatch is an exact fact rather than a timing distribution. Package size
+is neither: it is pull-request review evidence from the size comparison and never fails a change. The CPU migration retires hand-rolled Node timers only after their Labs replacement has produced a
 valid record; browser and native/Worker workflows are not renamed into Labs benchmarks they cannot faithfully become.
 
 Package performance is measured from installable artifacts rather than workspace source. The `check` job builds
