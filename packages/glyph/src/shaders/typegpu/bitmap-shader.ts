@@ -4,9 +4,9 @@ import tgpu, {
   type TgpuFn,
   type TgpuLayoutTexture,
   type TgpuSlot,
+  d,
+  std,
 } from 'typegpu';
-import * as d from 'typegpu/data';
-import * as std from 'typegpu/std';
 
 /** One glyph instance's canonical Bitmap fields, as a typed GPU schema; Core owns field meaning, the program owns how it's addressed (buffer, attribute, or uniform). */
 export const TypeGpuBitmapInstance: d.WgslStruct<{

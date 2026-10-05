@@ -40,6 +40,7 @@ This standard is the canonical code-quality policy for `pmndrs/glyph`. It suppor
 - Retain typed semantic state until the presentation edge. Never recover state by parsing labels, messages, class names, or other display strings.
 - Use classes only for identity, lifecycle, cleanup, encapsulated mutation, or stateful caches. Prefer data and functions otherwise; do not introduce inheritance for variant modeling.
 - Optimize measured repeated work. Preserve behavior with independent invariants and oracles, not snapshots derived only from the implementation being changed.
+
 ## Share durable knowledge, not coincidental mechanics
 
 - Deduplicate stable domain rules and safety invariants that would be dangerous to let drift.
@@ -105,18 +106,19 @@ This standard is the canonical code-quality policy for `pmndrs/glyph`. It suppor
 
 Use this decision matrix before adding, retaining, or testing a runtime check:
 
-| Value authority | Runtime treatment | Authoritative proof |
-| --------------- | ----------------- | ------------------- |
-| Public JavaScript input whose invalid state is expressible | Validate cheaply at the exported call; prefer types that make it unrepresentable | Call the reachable public API with a realistic invalid value |
-| Third-party config, plugin, Codec, resolver, or renderer callback result | Validate or normalize once when the callback returns | Exercise the callback through its exported integration helper |
-| Fetched, persisted, or externally posted bytes/messages | Check the envelope and the ranges needed for safe consumption; avoid whole-document validation when a package baker/schema already owns correctness | Parser/decoder tests, authenticated artifacts, fuzzing, and corruption cases at that external entry |
-| Package-owned TypeScript, Rust, baker, serializer, projection, or Worker output | Trust it; consume directly without a second semantic validation pass | Test the producer's complete output, cross-language ABI agreement, and real caller path |
-| Raw pointer, length, capacity, allocation request, or caller-selectable work limit | Retain checked arithmetic and memory-safety/work bounds | Boundary/fuzz tests for overflow, forged ranges, exhaustion, and recovery |
-| Live handle, lease, generation, disposal, or publication state | Retain constant-time lifecycle/ownership guards where misuse is reachable | Public lifecycle tests and state-transition tests |
+| Value authority                                                                    | Runtime treatment                                                                                                                                   | Authoritative proof                                                                                 |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Public JavaScript input whose invalid state is expressible                         | Validate cheaply at the exported call; prefer types that make it unrepresentable                                                                    | Call the reachable public API with a realistic invalid value                                        |
+| Third-party config, plugin, Codec, resolver, or renderer callback result           | Validate or normalize once when the callback returns                                                                                                | Exercise the callback through its exported integration helper                                       |
+| Fetched, persisted, or externally posted bytes/messages                            | Check the envelope and the ranges needed for safe consumption; avoid whole-document validation when a package baker/schema already owns correctness | Parser/decoder tests, authenticated artifacts, fuzzing, and corruption cases at that external entry |
+| Package-owned TypeScript, Rust, baker, serializer, projection, or Worker output    | Trust it; consume directly without a second semantic validation pass                                                                                | Test the producer's complete output, cross-language ABI agreement, and real caller path             |
+| Raw pointer, length, capacity, allocation request, or caller-selectable work limit | Retain checked arithmetic and memory-safety/work bounds                                                                                             | Boundary/fuzz tests for overflow, forged ranges, exhaustion, and recovery                           |
+| Live handle, lease, generation, disposal, or publication state                     | Retain constant-time lifecycle/ownership guards where misuse is reachable                                                                           | Public lifecycle tests and state-transition tests                                                   |
 
 Before writing a negative test, prove a production caller can reach the tested state. If only a test can forge the value,
 delete the proposed runtime guard and test the package-owned producer instead. An internal source file is not a caller
 boundary merely because a test can import it.
+
 - Treat a renderer-side reconciliation state machine as an architecture review trigger. It must be either a measured host-resource cache or evidence that the command buffer/display list is missing canonical hierarchy, ordering, or lifetime data. Changes at that boundary require focused correctness tests and before/after performance evidence.
 - Renderer integrations implement the public `GlyphConfig` contract; do not give a built-in renderer a second core API. Package-owned companion entries such as React may use one explicit private construction or identity bridge into that renderer when they must create the same host objects. Keep the bridge package-private, and do not expose internal state or add forwarding modules merely to satisfy directory-layer linting.
 - Begin cleanup scope before the first resource acquisition. Track each successful allocation, listener, Worker, handle, or publication independently and release it after any later failure. Either make initialization transactional or make cleanup safe for partial initialization.
@@ -153,7 +155,7 @@ boundary merely because a test can import it.
 - Review generated outputs through their generator, inputs, provenance, deterministic regeneration check, and conformance suite. Do not hand-style generated source.
 - Prefer names and types that make ordinary code self-explanatory. Add comments for non-obvious ownership, safety, protocol, performance, or mathematical invariants; match surrounding comment density instead of applying a blanket comment rule.
 - Give every public TypeScript declaration concise TSDoc that states its contract and any non-obvious cost or lifetime behavior.
-- Keep line-level mechanics in code. Put durable package ownership and constraints in package reference, decisions in the decision register, milestone status in the checkbox roadmap, and chronology in the OKF log.
+- Keep line-level mechanics in code. Put durable package ownership and constraints in package reference, decisions as one decision file each (`docs:new -- decision`), milestone status in the checkbox roadmap, and chronology in the OKF log.
 - Update affected canonical documentation with source changes. Do not create shadow plans, duplicate package histories, or a second copy of this standard.
 - Keep configured lint and formatting checks in the root `pnpm check` lane so local and CI verification enforce the same React, TypeScript, and presentation rules.
 - Preserve public signatures unless correctness, measured performance, or a seriously misleading name supplies strong evidence for a change.

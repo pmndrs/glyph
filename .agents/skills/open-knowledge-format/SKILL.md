@@ -61,7 +61,7 @@ For every concept authored or meaningfully changed with this skill:
 2. Update facts and relationships without deleting unknown fields.
 3. Refresh `generated.by` and `generated.at` for meaningful content edits.
 4. Update `sources` and claim footnotes when provenance changes.
-5. Update relevant indexes and add a newest-first log entry.
+5. Update relevant indexes and record the change as one new Log Entry (see [Record changes and decisions](#record-changes-and-decisions)).
 6. Reverify affected links, sources, and fragments.
 7. Validate and report hard errors, producer-profile errors, and warnings separately.
 
@@ -69,8 +69,12 @@ For every concept authored or meaningfully changed with this skill:
 
 1. Start at the root `index.md`, otherwise inventory paths and frontmatter.
 2. Use type, title, description, tags, sources, status, trust, lifecycle, and links to select concepts.
-3. Read only the bodies required to answer.
-4. Cite concept paths used and distinguish bundle facts from inference.
+3. Locate before reading. `node scripts/docs-query.mjs <bundle> search <terms…>` prints each matching paragraph under
+   `path › Heading › Subheading  [start-end]`; a single path-like term (`src/three/text.ts`) also lists the concepts
+   that cite or link that file. `outline <path>` prints the heading tree with line ranges, `outline <path>:<line>`
+   the sections containing a line, and `decision <D-n|slug>` one decision. Then read only the reported range.
+4. Read only the bodies required to answer.
+5. Cite concept paths used and distinguish bundle facts from inference.
 
 ### Validate
 
@@ -84,10 +88,11 @@ For a repository that maintains `Workspace Package` concepts, require complete p
 
 ```sh
 node scripts/validate-okf.mjs /path/to/bundle --workspace-root /path/to/repository
-node scripts/generate-package-digests.mjs /path/to/repository
+node scripts/docs-drift.mjs /path/to/repository --markdown drift.md          # repository-wide drift issue body
+node scripts/docs-drift.mjs /path/to/repository --pr origin/main --markdown r.md  # advisory pull-request report
 ```
 
-The validator discovers `apps/*/package.json`, `benches/package.json`, and `packages/*/package.json`. Each manifest requires exactly one `type: Workspace Package` concept whose `workspace_package`, `resource`, and deterministic `source_digest` match. Digests include source and configuration while excluding `.cache`, `node_modules`, `dist`, `target`, `coverage`, `.DS_Store`, and TypeScript build-info files. A digest mismatch forces package documentation review in the same change as source edits.
+The validator discovers `apps/*/package.json`, `benches/package.json`, and `packages/*/package.json`. Each manifest requires exactly one `type: Workspace Package` concept whose `workspace_package` and `resource` match; a retired `source_digest` field is a producer-profile error. Freshness is not stored in a concept, because a stored source hash conflicts on every concurrent change to the same package. Instead `attestations.mjs` records intent and verification as new files: `attest <package> <note>` writes an `Attestation` naming the package source as a SHA-256 over git blob IDs; `verify <slug>` writes a verification `Log Entry` with `verified_sources` and a `reviews` row (kind `attestation` or `gap`, verdict `confirmed`, `corrected`, `documented`, or `no-change`) and removes the consumed attestations; `audit` lists pending attestations and gaps since the last verification. `docs-drift.mjs` renders the advisory pull-request report (`--pr <base> --head <sha>`) and the tracking-issue body. Audits need full git history and refuse a shallow clone.
 
 Report:
 
@@ -95,11 +100,30 @@ Report:
 - **Producer-profile errors:** legacy v0.1 fields, missing or malformed `generated`, malformed source families, invalid or unverified links/sources, or unjustified trust fields.
 - **Warnings:** missing recommended metadata, weak navigation, orphan concepts, indirect sources, or potentially stale claims.
 
+## Record changes and decisions
+
+Records are append-only and never share a file, so concurrent changes cannot conflict over them. Create each one with
+the scaffolder, which refuses to overwrite an existing subject, then replace every `TODO(docs:new)`; validation rejects
+leftover scaffold text.
+
+```sh
+node scripts/records.mjs <bundle> new log <slug> <title…>
+node scripts/records.mjs <bundle> new decision <slug> <title…>
+node scripts/records.mjs <bundle> list log [--since YYYY-MM-DD] [--mentions <text>] [--limit n | --all]
+node scripts/records.mjs <bundle> list decision
+```
+
+- A `Log Entry` concept lives at `log/YYYY-MM-DD-<slug>.md`: `title` and `generated` in frontmatter, flat prose in the body, no headings.
+- A `Decision` concept lives at `…/decisions/<slug>.md`, named by its subject with no number prefix. It carries `decision_status` (Proposed, Experiment, Deferred, Accepted, or Superseded), a quoted `decided` date, optional `supersedes` (register IDs or decision slugs), and its rule under `## Decision`, followed by `## Why` and `## Consequences`.
+- Never number a record from a shared counter, and never add to a shared index; `list` derives the newest-first view.
+- A legacy register that declares `frozen_after: D-<n>` accepts no row numbered above it. Existing rows keep their IDs and may still change status.
+- A bundle that records changes as `Log Entry` files has no `log.md`; validation flags one that reappears.
+
 ## Handle reserved files
 
 - Root `index.md` may contain only `okf_version: "0.2"` in frontmatter.
 - Nested indexes have no frontmatter and provide concise navigation.
-- Logs have one H1 title and newest-first `## YYYY-MM-DD` sections with flat prose entries.
+- Logs have one H1 title and newest-first `## YYYY-MM-DD` sections with flat prose entries. A bundle may instead record each change as a `Log Entry` file under `log/` and omit `log.md`.
 - Never treat `index.md` or `log.md` as concepts.
 
 ## Handle provenance and trust

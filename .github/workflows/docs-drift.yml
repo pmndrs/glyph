@@ -1,0 +1,69 @@
+name: Docs drift
+
+# Docs intent and bundle validity are verified after merge, never gated. This workflow keeps exactly one
+# `Sync agent docs` issue, labelled `agents`, in step with `main`: it rewrites the body after every push, reopens it when a
+# concept falls behind its source, and closes it once every concept is current again. A scheduled
+# maintenance agent resolves the open issue in one pull request.
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: docs-drift
+  cancel-in-progress: true
+
+jobs:
+  report:
+    name: Rewrite the docs drift issue
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CI: true
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      DRIFT_LABEL: agents
+      DRIFT_TITLE: Sync agent docs
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The audit walks merges since the last verification, so it needs full history.
+          fetch-depth: 0
+
+      - name: Install canonical toolchain
+        uses: jdx/mise-action@9e7f7633ff6f6d6048a9418a68d48f288f50eb14 # v4.2.3
+        with:
+          version: 2026.7.13
+          cache: true
+
+      - name: Measure concept drift
+        run: pnpm scripts run docs:drift -- --markdown "$RUNNER_TEMP/docs-drift.md"
+
+      - name: Rewrite the drift issue
+        run: |
+          # Create the label only when missing; never overwrite an existing label's colour or description.
+          gh label create "$DRIFT_LABEL" --color 5319E7 --description 'Work for maintenance agents' 2>/dev/null || true
+          issue=$(gh issue list --label "$DRIFT_LABEL" --state all --limit 200 --json number,state,title \
+            --jq "map(select(.title == \"$DRIFT_TITLE\")) | .[0] // empty | \"\(.number) \(.state)\"")
+          number=${issue%% *}
+          state=${issue#* }
+          if grep -q '^<!-- okf-docs-status: clean -->$' "$RUNNER_TEMP/docs-drift.md"; then
+            if [ -n "$issue" ]; then
+              gh issue edit "$number" --body-file "$RUNNER_TEMP/docs-drift.md"
+              if [ "$state" = OPEN ]; then gh issue close "$number" --reason completed; fi
+            fi
+          elif [ -z "$issue" ]; then
+            gh issue create --title "$DRIFT_TITLE" --label "$DRIFT_LABEL" --body-file "$RUNNER_TEMP/docs-drift.md"
+          else
+            gh issue edit "$number" --body-file "$RUNNER_TEMP/docs-drift.md"
+            if [ "$state" = CLOSED ]; then gh issue reopen "$number"; fi
+          fi

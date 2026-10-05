@@ -22,6 +22,8 @@ interface IndexedWorkflow extends Workflow {
 
 const workspaceRoot = fileURLToPath(new URL('../..', import.meta.url));
 const roots = [
+  '.agents/scripts',
+  '.agents/skills/open-knowledge-format/scripts',
   '.githooks',
   'benches/scripts',
   'benches/vitexec',
