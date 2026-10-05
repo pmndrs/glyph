@@ -75,7 +75,7 @@ export function renderDriftIssue(report, options = {}) {
     'For each package below, read the listed changes against its concept and correct anything the concept now',
     'gets wrong: ownership, boundaries, public surface, evidence, sources. When the concept is already right, record',
     'the review by updating its `generated.at` timestamp. Either edit clears that package, because drift is measured',
-    'from the last commit that touched the concept. Add a `.agents/docs/log.md` entry, run',
+    'from the last commit that touched the concept. Add one log entry with `mise exec -- pnpm scripts run docs:new -- log <slug> <title>`, run',
     '`mise exec -- pnpm scripts run docs:check`, and open one pull request for the whole issue.',
   );
   for (const entry of drifted) {

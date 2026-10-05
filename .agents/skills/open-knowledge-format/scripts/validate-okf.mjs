@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 
 import yaml from 'js-yaml';
 
+import { decisionErrors, frozenRegisterErrors, logEntryErrors } from './records.mjs';
 import { workspacePackages } from './workspace-packages.mjs';
 
 const actorPattern = /^(?:[^/:\s]+\/[^\s]+|human:[^\s]+|process:[^\s]+)$/u;
@@ -163,8 +164,13 @@ export async function validateOkf(bundleRoot = '.', options = {}) {
       }
     }
 
+    if (data.type === 'Decision') profile.push(...decisionErrors(filePath, data, body));
+    if (data.type === 'Log Entry') profile.push(...logEntryErrors(filePath, data, body));
+    profile.push(...frozenRegisterErrors(filePath, data, body));
+
     if (typeof data.title !== 'string' || data.title.length === 0) warnings.push(`${filePath}: missing title`);
-    if (typeof data.description !== 'string' || data.description.length === 0) {
+    // A Log Entry's prose is its description; a separate one-line summary would only repeat it.
+    if (data.type !== 'Log Entry' && (typeof data.description !== 'string' || data.description.length === 0)) {
       warnings.push(`${filePath}: missing description`);
     }
   }

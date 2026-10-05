@@ -43,8 +43,8 @@ sources:
     resource: '../../../benches/src/benchmark/fixture-contracts.test.ts'
     title: 'Checked-in result fixture contracts'
   - id: package-size-report
-    resource: '../../../benches/src/benchmark/package-size-report.ts'
-    title: 'Package size same-host and foreign-host gates'
+    resource: '../../../benches/scripts/measure-package-sizes.mts'
+    title: 'Package size measurement; its former same-host and foreign-host gates are retired'
   - id: ci
     resource: '../../../.github/workflows/ci.yml'
     title: 'Repository CI workflow'
@@ -271,7 +271,7 @@ Where a bench protects a structural property rather than a duration — emitted 
 
 Labs refuses to compare across hardware. CPU model, architecture, and runtime must match exactly or the comparison is denied outright. A saved result is therefore **only meaningful against another result from the same machine**, and a baseline committed from a maintainer's M4 Pro is worthless to a Linux CI runner and vice versa.
 
-This kills the obvious design — commit a blessed baseline JSON, compare every run against it — and it kills it for a good reason rather than an inconvenient one. It is the same lesson the package-size lane already learned the hard way: [`package-size-report.ts`](../../../benches/src/benchmark/package-size-report.ts) does exact identity comparison on the recording host and budget ceilings everywhere else, because the Linux toolchain emits equal-length but byte-different Wasm.
+This kills the obvious design — commit a blessed baseline JSON, compare every run against it — and it kills it for a good reason rather than an inconvenient one. It is the same lesson the package-size lane already learned the hard way: its former gate compared exact identity on the recording host and budget ceilings everywhere else, because the Linux toolchain emits equal-length but byte-different Wasm. That gate is now retired in favour of the pull-request size comparison, which measures head and base on the same runner; see [package-size review evidence](decisions/package-size-review-evidence.md).
 
 ### Two baselines, for two different jobs
 

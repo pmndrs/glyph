@@ -67,7 +67,8 @@ jobs:
             .claude/settings.json \
             .claude/tsconfig.json \
             package.json \
-            .agents/docs/log.md
+            .agents/docs/log.md \
+            .agents/docs/log
 
       - name: Check benchmark formatting
         working-directory: benches

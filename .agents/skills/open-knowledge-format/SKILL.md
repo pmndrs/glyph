@@ -61,7 +61,7 @@ For every concept authored or meaningfully changed with this skill:
 2. Update facts and relationships without deleting unknown fields.
 3. Refresh `generated.by` and `generated.at` for meaningful content edits.
 4. Update `sources` and claim footnotes when provenance changes.
-5. Update relevant indexes and add a newest-first log entry.
+5. Update relevant indexes and record the change as one new Log Entry (see [Record changes and decisions](#record-changes-and-decisions)).
 6. Reverify affected links, sources, and fragments.
 7. Validate and report hard errors, producer-profile errors, and warnings separately.
 
@@ -95,11 +95,28 @@ Report:
 - **Producer-profile errors:** legacy v0.1 fields, missing or malformed `generated`, malformed source families, invalid or unverified links/sources, or unjustified trust fields.
 - **Warnings:** missing recommended metadata, weak navigation, orphan concepts, indirect sources, or potentially stale claims.
 
+## Record changes and decisions
+
+Records are append-only and never share a file, so concurrent changes cannot conflict over them. Create each one with
+the scaffolder, which refuses to overwrite an existing subject, then replace every `TODO(docs:new)`; validation rejects
+leftover scaffold text.
+
+```sh
+node scripts/records.mjs <bundle> new log <slug> <title…>
+node scripts/records.mjs <bundle> new decision <slug> <title…>
+node scripts/records.mjs <bundle> list log        # or: list decision
+```
+
+- A `Log Entry` concept lives at `log/YYYY-MM-DD-<slug>.md`: `title` and `generated` in frontmatter, flat prose in the body, no headings.
+- A `Decision` concept lives at `…/decisions/<slug>.md`, named by its subject with no number prefix. It carries `decision_status` (Proposed, Experiment, Deferred, Accepted, or Superseded), a quoted `decided` date, optional `supersedes` (register IDs or decision slugs), and its rule under `## Decision`, followed by `## Why` and `## Consequences`.
+- Never number a record from a shared counter, and never add to a shared index; `list` derives the newest-first view.
+- A legacy register that declares `frozen_after: D-<n>` accepts no row numbered above it. Existing rows keep their IDs and may still change status.
+
 ## Handle reserved files
 
 - Root `index.md` may contain only `okf_version: "0.2"` in frontmatter.
 - Nested indexes have no frontmatter and provide concise navigation.
-- Logs have one H1 title and newest-first `## YYYY-MM-DD` sections with flat prose entries.
+- Logs have one H1 title and newest-first `## YYYY-MM-DD` sections with flat prose entries. A bundle that records changes as `Log Entry` files keeps `log.md` as frozen history and adds no new sections to it.
 - Never treat `index.md` or `log.md` as concepts.
 
 ## Handle provenance and trust

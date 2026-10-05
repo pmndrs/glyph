@@ -1,13 +1,9 @@
 # pmndrs/glyph documentation update log
 
-## 2026-10-05
-
-- **Replaced concept digest pins with a drift issue** — Package concepts no longer store a `source_digest`, which
-  conflicted on every concurrent pull request touching the same package and was re-pinned automatically at commit time.
-  Validation keeps one-concept-per-package coverage and rejects the retired field. The new `docs:drift` workflow reports,
-  from git history, which concepts trail their source, and the `Docs drift` GitHub workflow keeps one `docs-drift` issue
-  current for the scheduled maintenance agent. The commit hook now only validates the staged bundle. See D-373 in
-  [the decision register](planning/decision-register.md) and [the package index](packages/index.md).
+This file is frozen history through 2026-09-30. Record each new change as its own file in [log/](log/) with
+`mise exec -- pnpm scripts run docs:new -- log <slug> <title>`, and read entries newest first with
+`mise exec -- pnpm scripts run docs:list -- log`. One shared file conflicted on every concurrent pull request; see
+[append-only knowledge records](planning/decisions/append-only-knowledge-records.md).
 
 ## 2026-09-30
 

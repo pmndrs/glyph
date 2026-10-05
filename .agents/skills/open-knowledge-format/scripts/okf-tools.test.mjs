@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import { afterEach, test } from 'node:test';
 
 import { migrateV01ToV02 } from './migrate-v01-to-v02.mjs';
+import { createRecord, listRecords, placeholder } from './records.mjs';
 import { driftIssueMarker, measureDocsDrift, renderDriftIssue } from './docs-drift.mjs';
 import { validateOkf } from './validate-okf.mjs';
 
@@ -91,6 +92,65 @@ test('drift lists source commits after the concept was last committed and ignore
   assert.match(renderDriftIssue(await measureDocsDrift(root)), /Every workspace package concept is current/u);
 });
 
+test('scaffolded records fail validation until written and never overwrite a subject', async () => {
+  const bundle = await recordBundle('okf-records-');
+  const log = await createRecord(bundle, 'log', 'first-change', 'First change', { date: '2026-10-04' });
+  const decision = await createRecord(bundle, 'decision', 'one-file-per-record', 'One file per record', {
+    date: '2026-10-04',
+  });
+  const scaffolded = (await validateOkf(bundle)).profile;
+  assert.ok(scaffolded.includes(`${log}: replace the ${placeholder} scaffold text`));
+  assert.ok(scaffolded.includes(`${decision}: replace the ${placeholder} scaffold text`));
+  await assert.rejects(createRecord(bundle, 'log', 'first-change', 'Again', { date: '2026-10-04' }), /EEXIST/u);
+
+  await writeFile(log, (await readFile(log, 'utf8')).replace(/TODO\(docs:new\).*/u, 'Wrote the first change.'));
+  await writeFile(decision, (await readFile(decision, 'utf8')).replaceAll(/TODO\(docs:new\) ?/gu, ''));
+  assert.deepEqual((await validateOkf(bundle)).profile, []);
+
+  await createRecord(bundle, 'log', 'second-change', 'Second change', { date: '2026-10-05' });
+  assert.deepEqual(
+    (await listRecords(bundle, 'log')).map((record) => record.path),
+    ['log/2026-10-05-second-change.md', 'log/2026-10-04-first-change.md'],
+  );
+  assert.deepEqual(await listRecords(bundle, 'decision'), [
+    {
+      date: '2026-10-04',
+      status: 'Proposed',
+      title: 'One file per record',
+      path: 'planning/decisions/one-file-per-record.md',
+    },
+  ]);
+});
+
+test('records are named by subject and the frozen register accepts no new rows', async () => {
+  const bundle = await recordBundle('okf-record-names-');
+  const decisions = path.join(bundle, 'planning/decisions');
+  const numbered = await createRecord(bundle, 'decision', 'subject', 'Subject', { date: '2026-10-04' });
+  await writeFile(
+    path.join(decisions, '0005-subject.md'),
+    (await readFile(numbered, 'utf8')).replaceAll(/TODO\(docs:new\) ?/gu, ''),
+  );
+  await rm(numbered);
+  await writeFile(
+    path.join(bundle, 'planning/register.md'),
+    "---\ntype: Decision Register\ntitle: Register\ndescription: Frozen.\nfrozen_after: D-002\ngenerated:\n  by: process:test\n  at: '2026-09-17T00:00:00Z'\n---\n\n# Register\n\n| ID | Decision |\n| --- | --- |\n| D-002 | Kept. |\n| D-003 | Added late. |\n",
+  );
+  await mkdir(path.join(bundle, 'log'), { recursive: true });
+  await writeFile(
+    path.join(bundle, 'log/october-change.md'),
+    "---\ntype: Log Entry\ntitle: Undated\ngenerated:\n  by: process:test\n  at: '2026-09-17T00:00:00Z'\n---\n\n## Heading\n",
+  );
+  assert.deepEqual(
+    (await validateOkf(bundle)).profile.sort(),
+    [
+      `${path.join(bundle, 'log/october-change.md')}: a Log Entry is flat prose; its title lives in frontmatter`,
+      `${path.join(bundle, 'log/october-change.md')}: name a Log Entry YYYY-MM-DD-<slug>.md`,
+      `${path.join(bundle, 'planning/register.md')}: D-003 is past the frozen register; record it as a decision file with docs:new instead`,
+      `${path.join(decisions, '0005-subject.md')}: name a Decision by its subject slug (lowercase words, no number prefix)`,
+    ].sort(),
+  );
+});
+
 test('pre-commit validation reads the staged snapshot and never rewrites the index', async () => {
   const root = await workspaceFixture('okf-hook-');
   await commitFixture(root);
@@ -172,4 +232,10 @@ async function commitFixture(root) {
 
 async function driftCommits(root) {
   return (await measureDocsDrift(root)).flatMap((entry) => entry.commits);
+}
+
+async function recordBundle(prefix) {
+  const bundle = await temporaryDirectory(prefix);
+  await writeFile(path.join(bundle, 'index.md'), '---\nokf_version: "0.2"\n---\n\n# Index\n');
+  return bundle;
 }

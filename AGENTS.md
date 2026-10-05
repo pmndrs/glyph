@@ -26,9 +26,15 @@ Consult the repository-local `evidence-first` skill as the default style guidanc
 Start at `.agents/docs/index.md` and follow its linked indexes for self-discovery. Use these canonical sources instead of creating shadow plans or duplicate status prose:
 
 - `.agents/docs/roadmap/roadmap.md` for milestone order and checkbox status;
-- `.agents/docs/planning/decision-register.md` for architectural decisions;
+- `.agents/docs/planning/decisions/` for architectural decisions, one file each (D-001–D-372 stay in the frozen `decision-register.md`);
 - `.agents/docs/packages/*.md` for current package ownership, boundaries, and evidence;
-- `.agents/docs/log.md` for knowledge-bundle chronology.
+- `.agents/docs/log/` for knowledge-bundle chronology, one file per change (history through 2026-09-30 stays in the frozen `log.md`).
+
+Never edit a shared record to add to it. Create a log entry with `mise exec -- pnpm scripts run docs:new -- log <slug> <title>`
+and a decision with `mise exec -- pnpm scripts run docs:new -- decision <slug> <title>`, then replace every `TODO(docs:new)`;
+validation rejects leftover scaffold text and new rows in the frozen register. Name records by their subject, never by a
+number. Package size is review evidence from CI's size comment: do not commit `benches/src/generated/package-sizes.json`
+from a feature branch; only `release:size:generate` refreshes it during release preparation.
 
 Update affected canonical documentation in the same change as source, and verify the bundle with `mise exec -- pnpm scripts run docs:check`. Package concepts carry no stored source pin: `mise exec -- pnpm scripts run docs:drift` reports, from git history, which concepts trail their package source, and the `Docs drift` workflow keeps that report in one `docs-drift` issue for the scheduled maintenance agent. When resolving that issue, correct each listed concept or, when it is already right, record the review by updating its `generated.at`; any commit that touches a concept clears its drift.
 
