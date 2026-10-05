@@ -5,7 +5,6 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:25acd936f673391b3c6abf836c828ecedcba7984472da6b0da9215bc91e1f107'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -897,7 +896,9 @@ Renderer-facing types that applications can encounter publish from root `@pmndrs
 such as `defineGlyphConfig`, Codec authoring, schema binding, raster-format definition, and resource leases live on
 `@pmndrs/glyph/core`. D-306 and D-308 retired D-249's engine-driving layer; the current `/core` contains only the integration construction contract. Internal projection,
 identity mapping, planning, settlement, and Wasm transport are package machinery rather than an application or integrator
-API. The explicit `/shaders/tsl` and `/shaders/typegpu` subpaths own raster-format shader realizations and no scene, runtime, or root.
+API. `/core` also exports `createGlyphPlacements` and its types, the frozen placement snapshot whose `caretAt`,
+`caretForOffset`, and `selectionRects` let a custom renderer place carets and selections without reconstructing
+cluster boundaries; the Three `Text` mirrors those three queries. The explicit `/shaders/tsl` and `/shaders/typegpu` subpaths own raster-format shader realizations and no scene, runtime, or root.
 
 The raw borrowed Rust publication and its typed command tree never cross the integration boundary. The engine projects
 that trusted wire data through the integration's schema and resource resolver, then calls
@@ -1409,7 +1410,17 @@ or split a previously shaped word.
 
 The legal stream begins with Unicode 17 UAX #14 opportunities, discards any optional opportunity that falls inside a
 UAX #29 extended grapheme, and intersects the result with HarfRust unsafe-to-break shaping boundaries. The default has
-no dictionary segmentation, language-specific hyphenation, or locale tailoring. Optional language-resource imports,
+no dictionary segmentation, language-specific hyphenation, or locale tailoring. A Unicode-legal break that HarfRust
+marks unsafe stays allowed within one run, binding, and font, as in browser line breaking: the line fitter prices it
+from boundary-local shaping corrections, computed lazily per boundary and stored in a cluster lane, so line layout is
+exact at the breaks it takes (D-372). A break no space precedes is refused when its island shaped alone draws other glyph ids than the paragraph (a ligature or contextual unit), so Glyph never splits such a unit, unlike Chromium; a positioning-only difference keeps the break. The check is lazy: it rides the `L` pricing shaping at the breaks the fitter evaluates, and an island longer than `ISLAND_CAP` clusters is never reshaped and stays a non-break. Min-content reads the paragraph shaping's word widths uncorrected, like Blink's fast
+min-content path, so it never prices every corrected boundary. A line that starts at such a corrected boundary draws the glyphs of the island it opens shaped alone, in
+the same pass that prices it (`line_edge_records`, boundary-shape records beside the ellipsis one), so it matches the
+line shaped by itself. A line that ends at one, unless a space ends it, draws the island it closes shaped alone too
+(the tail record, `FlowFragment::tail_index`), as Blink reshapes a line end that no breakable space
+precedes (so only at positioning-only breaks); a hanging space keeps the paragraph's glyphs, as browsers keep the terminating space in the shaping run. Extra glyphs an edge record draws beyond its cluster's paragraph glyphs keep the stable ids of the previous layout's records, found by the text unit of their cluster and their ordinal (`previous_edge_ids`), so an edit that moves offsets keeps them. An island a boundary prices is the island its line edge draws, so one shaping serves both and is kept with the cluster arena (`ClusterArena::islands`): a relayout over the same clusters, such as a width change, shapes nothing, and an edit rebuilds the arena empty.
+Edge records lay out cluster by cluster, so spans that split only paint or decoration keep their own extents and
+justification. A paragraph with a right-to-left or overridden run marks no unsafe break as correctable, as on main, so its widths and drawn glyphs cannot disagree (known limitation until edge records follow visual order). Optional language-resource imports,
 including a versioned linear-memory ABI that can move language tables out of the default Wasm payload, are tracked in
 [#163](https://github.com/pmndrs/glyph/issues/163); no renderer adapter may become a second layout implementation.
 

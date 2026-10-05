@@ -1,7 +1,6 @@
 /// <reference types="@webgpu/types" />
 
-import tgpu from 'typegpu';
-import * as d from 'typegpu/data';
+import tgpu, { d } from 'typegpu';
 
 import type { CommandBufferView, PortableGeometryPayload } from '@pmndrs/glyph';
 import {
