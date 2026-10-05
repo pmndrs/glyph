@@ -183,7 +183,7 @@ function forestPlot(rows: readonly LabsRow[]): readonly string[] {
   ].join('');
   const body = rows.map((row, index) => {
     const [low, high] = intervals[index]!;
-    const track = Array.from({ length: plotWidth }, (_, at) => (at === zero ? '┊' : ' '));
+    const track: string[] = Array.from({ length: plotWidth }, (_, at) => (at === zero ? '┊' : ' '));
     const from = column(low);
     const to = column(high);
     for (let at = from; at <= to; at += 1) track[at] = at === zero ? '┼' : '─';
