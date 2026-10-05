@@ -37,7 +37,7 @@ function runHook() {
   if (fixable.length > 0) git(['add', '--', ...fixable]);
   if (lintStatus !== 0) throw new Error('lint still reports diagnostics after applying safe fixes');
 
-  execFileSync(process.execPath, [path.join(repositoryRoot, '.githooks/okf-digests.mjs')], {
+  execFileSync(process.execPath, [path.join(repositoryRoot, '.githooks/okf-docs-report.mjs')], {
     cwd: repositoryRoot,
     stdio: 'inherit',
   });

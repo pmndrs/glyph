@@ -31,6 +31,13 @@ export const font = glyph.fontFace(new Blob([new Uint8Array(fontBytes)], { type:
   format: bitmap({ strikes: [16] }),
 });
 await font.load();
+const fredokaBytes = await readFile(
+  new URL('../../fixtures/rendering/fredoka-issue-216-bitmap-16.font.glb', import.meta.url),
+);
+export const fredokaFont = glyph.fontFace(new Blob([new Uint8Array(fredokaBytes)], { type: 'model/gltf-binary' }), {
+  format: bitmap({ strikes: [16] }),
+});
+await fredokaFont.load();
 
 const paragraphSource = [
   'Typography is a moving system. AVATAR To Wa Yo repeat familiar kerning pairs while a responsive panel changes the space around them.',
@@ -46,14 +53,14 @@ export function paragraphTextForGlyphs(target: number): string {
   return Array.from({ length: copies }, () => paragraphSource).join('\n');
 }
 
-export function createParagraph(text = paragraphText, width = 600) {
+export function createParagraph(text = paragraphText, width = 600, fontFace = font) {
   const root = glyph.handle(
     `labs:package:${String(nextHandle++)}`,
     defineThreeConfig({ capacity: { size: 8192, policy: 'grow' } }),
   );
   const textGroup = root.createTextGroup();
   const paragraph = root.createText({
-    font,
+    font: fontFace,
     text,
     style: { fontSize: 24 },
     layout: { wrap: 'word' },
@@ -63,6 +70,13 @@ export function createParagraph(text = paragraphText, width = 600) {
   textGroup.updateMatrixWorld(true);
   if (textGroup.error !== undefined) throw textGroup.error;
   return { paragraph, root, textGroup };
+}
+
+/** Parents a text group to a scene, so a scene traversal publishes its texts. */
+export function attachToScene(textGroup: ReturnType<typeof createParagraph>['textGroup']) {
+  const scene = new THREE.Scene();
+  scene.add(textGroup);
+  return scene;
 }
 
 export function disposeParagraph(created: ReturnType<typeof createParagraph>): void {

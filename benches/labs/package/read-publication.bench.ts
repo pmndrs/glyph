@@ -3,7 +3,7 @@ import { assert, bench, group } from '@pmndrs/labs';
 import { createLabels, createLabelScene, disposeLabels, font } from './fixture.ts';
 import { freshSnapshot, renderFrame, requireFresh, spawnAndBreakApart, updateThenRead } from './read-publication.ts';
 
-// Application flows that read fresh layout, in scenes of 1, 100, or 1,000 labels (D-369). Workloads that repeat work on
+// Application flows that read fresh layout, in scenes of 1, 100, or 1,000 labels (.agents/docs/planning/decisions/commit-on-read.md). Workloads that repeat work on
 // mounted labels time as steady state under @read-publication; workloads whose every call mounts new text pay a
 // first-time cost and time under @cold.
 
