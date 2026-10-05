@@ -295,7 +295,7 @@ test('log listings filter by date and mentioned text', async () => {
   ]);
 });
 
-test('the pre-commit report names packages to attest once per branch, from the staged snapshot', async () => {
+test('the pre-commit report repeats until the package is attested at the staged source', async () => {
   const root = await workspaceFixture('okf-hook-');
   // Docs link outside the package roots; the staged snapshot must carry those targets too.
   await writeFile(path.join(root, 'README.md'), '# Readme\n');
@@ -304,23 +304,44 @@ test('the pre-commit report names packages to attest once per branch, from the s
     '---\nokf_version: "0.2"\n---\n\n# Index\n\n- [Glyph](packages/glyph.md)\n- [Readme](../../README.md)\n',
   );
   await commitFixture(root);
+  await git(root, ['branch', '-M', 'main']);
+  await git(root, ['switch', '-q', '-c', 'feature']);
+  const hook = async () => (await execFileAsync(process.execPath, [hookPath()], { cwd: root })).stderr;
+
   await writeFile(path.join(root, 'packages/glyph/src/index.ts'), 'staged\n');
   await git(root, ['add', 'packages/glyph/src/index.ts']);
   const staged = await git(root, ['write-tree']);
+  const first = await hook();
+  assert.match(first, /After your last source change, update each concept if it is now wrong, then attest:/u);
+  assert.match(first, /❌ missing {2}@pmndrs\/glyph \(\.agents\/docs\/packages\/glyph\.md\)/u);
+  assert.match(first, /docs:attest -- @pmndrs\/glyph "<what you changed and checked>"/u);
+  assert.doesNotMatch(first, /Validation findings/u);
+  assert.equal(await git(root, ['write-tree']), staged, 'the hook never rewrites the index');
 
-  const first = await execFileAsync(process.execPath, [hookPath()], { cwd: root });
-  assert.match(first.stderr, /You changed package source\. Before you push, after your last source change:/u);
-  assert.match(first.stderr, /@pmndrs\/glyph: update \.agents\/docs\/packages\/glyph\.md if it is now wrong, then/u);
-  assert.match(first.stderr, /docs:attest -- @pmndrs\/glyph "<what you changed and checked>"/u);
-  assert.doesNotMatch(first.stderr, /Validation findings/u);
-  assert.equal(await git(root, ['write-tree']), staged);
+  // Still missing on the next commit, even one that only touches docs: the branch changed the package.
+  await git(root, ['commit', '-qm', 'feat(glyph): change']);
+  await writeFile(
+    path.join(root, '.agents/docs/index.md'),
+    (await readFile(path.join(root, '.agents/docs/index.md'), 'utf8')) + '\n',
+  );
+  await git(root, ['add', '.agents/docs/index.md']);
+  assert.match(await hook(), /❌ missing {2}@pmndrs\/glyph/u);
+  // And on a commit that stages nothing under docs or packages at all.
+  await git(root, ['commit', '-qm', 'docs: index']);
+  await writeFile(path.join(root, 'README.md'), '# Readme, revised\n');
+  await git(root, ['add', 'README.md']);
+  assert.match(await hook(), /❌ missing {2}@pmndrs\/glyph/u);
 
-  // Shown once per package per branch, so a reminder can never become a loop.
-  const second = await execFileAsync(process.execPath, [hookPath()], { cwd: root });
-  assert.equal(second.stderr, '');
-  await git(root, ['switch', '-q', '-c', 'other']);
-  const otherBranch = await execFileAsync(process.execPath, [hookPath()], { cwd: root });
-  assert.match(otherBranch.stderr, /@pmndrs\/glyph: update/u);
+  // Attesting the staged source silences it.
+  await attest(root, 'glyph', 'Changed index; concept still accurate.', { date: '2026-10-05' });
+  await git(root, ['add', '-A']);
+  assert.equal(await hook(), '');
+  await git(root, ['commit', '-qm', 'docs(glyph): attest']);
+
+  // A later source change makes the attestation stale until it is attested again.
+  await writeFile(path.join(root, 'packages/glyph/src/index.ts'), 'changed again\n');
+  await git(root, ['add', 'packages/glyph/src/index.ts']);
+  assert.match(await hook(), /⚠️ stale {2}@pmndrs\/glyph/u);
 });
 
 test('the pre-commit report lists invalid staged docs and never blocks the commit', async () => {

@@ -55,7 +55,7 @@ export function renderDocsReport({ rows, findings, base }) {
       const icon = { attested: '✅', stale: '⚠️', unattested: '❌' }[row.status];
       out.push(`| \`${row.package}\` | ${row.conceptEdited ? 'edited' : 'not edited'} | ${claim}${stale} | ${icon} |`);
     }
-    out.push('', '✅ attested at this head · ⚠️ stale: source changed after attesting · ❌ unattested');
+    out.push('', '✅ attested · ⚠️ stale · ❌ missing');
     if (open.length > 0) {
       out.push(
         '',
@@ -138,17 +138,19 @@ export function renderDriftIssue(audit, options = {}) {
 }
 
 /**
- * The commit-time reminder, shown once per package per branch so an agent is told what to do without
- * being nagged into a loop. Empty when there is nothing new to say; it never blocks the commit.
+ * The commit-time reminder, repeated on every commit until each package the branch changed is attested
+ * at the source about to be committed. Attesting after the last source change silences it, so the
+ * reminder can never trap an agent in a loop. Empty when there is nothing to say; it never blocks.
  */
 export function renderCommitReport({ packages, findings }) {
   if (packages.length === 0 && findings.length === 0) return '';
-  const out = ['docs: advisory report (never blocks; shown once per package per branch)'];
+  const out = ['docs: advisory report (never blocks; repeats until each changed package is attested)'];
   if (packages.length > 0) {
-    out.push('', 'You changed package source. Before you push, after your last source change:');
+    out.push('', 'After your last source change, update each concept if it is now wrong, then attest:');
     for (const entry of packages) {
+      const icon = entry.status === 'stale' ? '⚠️ stale' : '❌ missing';
       out.push(
-        `  ${entry.name}: update ${entry.concept} if it is now wrong, then`,
+        `  ${icon}  ${entry.name} (${entry.concept})`,
         `    mise exec -- pnpm scripts run docs:attest -- ${entry.name} "<what you changed and checked>"`,
       );
     }

@@ -19,9 +19,11 @@ Docs upkeep is audited, not gated. Concepts store no source pin; the retired `so
   last source change, runs `docs:attest -- <package> "<what changed and was checked>"`. That writes one new
   `attestations/<date>-<package>-<digest>.md` naming the package source it covers as a SHA-256 over git blob IDs, which
   is identical in every checkout with or without Git LFS content. The committing identity is the attester.
-- **Show.** The commit hook names each package to attest once per package per branch, so it cannot become a loop. CI's
-  `Docs report` judges the pull request at its own head and shows, per changed package, whether the concept was
-  edited and whether an attestation matches that head (attested, stale, or unattested), with the command to fix each.
+- **Show.** On every commit until each package the branch changed is attested at the source about to be committed,
+  the hook names it as missing or stale with the command to fix it; attesting after the last source change silences
+  it, so the reminder always has an exit. CI's `Docs report` judges the pull request at its own head and shows, per
+  changed package, whether the concept was edited and an icon for its attestation: ✅ attested, ⚠️ stale, or ❌
+  missing, with the command to fix each.
 - **Verify.** The `Sync agent docs` issue (label `agents`), rewritten on every push to `main` and daily, lists per
   package the attestations still pending and the gaps: merges since the last verification that changed the package
   without attesting it, named by pull request. A reviewer checks each claim against its pull request's diff, corrects
