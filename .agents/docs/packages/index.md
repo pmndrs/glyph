@@ -7,4 +7,4 @@
 - [`@pmndrs/glyph-typegpu-hello-world`](typegpu-hello-world.md) — editable text using the high-level TypeGPU integration.
 - [`@pmndrs/glyph-tres-playground`](tres-playground.md) — Vue adapter playground rendering every raster format inside a TresJS canvas.
 
-Each package concept carries a deterministic `source_digest`. Repository validation fails when package source changes without a corresponding concept review and digest refresh.
+Repository validation requires exactly one concept per workspace package. Freshness is attested by contributors and verified after merge rather than stored in the concept; see [attested docs intent](../planning/decisions/attested-docs-intent.md).

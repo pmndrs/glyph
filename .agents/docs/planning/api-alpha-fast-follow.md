@@ -146,7 +146,7 @@ with Glyph, declaration/type fixtures, Three/R3F twins, example renderer, benchm
 Fallow, package size, docs:check, and CI green. Push through gh stack.
 
 When every accepted item is complete, delete this implementation brief, remove its planning-index link, update affected
-canonical OKF concepts and the log, run docs:update and docs:check, and commit the deletion with the final evidence.
+canonical OKF concepts and the log, run docs:check, and commit the deletion with the final evidence.
 ```
 
 ## Exit condition

@@ -1,5 +1,8 @@
 use alloc::vec::Vec;
-use core::num::NonZeroU32;
+use core::{
+    cell::{Cell, RefCell},
+    num::NonZeroU32,
+};
 
 use crate::{FontGlyphExtents, FontMetrics, unicode::UnicodeAnalysis};
 
@@ -7,6 +10,7 @@ use super::{
     EngineError, FrameFault,
     frame::{WRAP_CHARACTER, WRAP_NONE, WRAP_WORD},
     identity_index::{IdentityIndex, IdentityIndexError},
+    line_composition::Correction,
     run_local::{NumericBlockSpan, RunLocalArena},
     shaping_state::{ShapeArena, ShapingRun},
     style_state::{ResolvedStyle, StyleArena, StyleSegment},
@@ -22,6 +26,15 @@ pub(crate) const CLUSTER_ALLOWED_BREAK: u8 = 1 << 3;
 pub(crate) const CLUSTER_SPACE: u8 = 1 << 4;
 /// Chunk-summary marker for a negative advance, packed above the cluster flag domain.
 pub(crate) const CHUNK_NEGATIVE_ADVANCE: u8 = 1 << 5;
+/// A UAX #14 optional break opportunity that ends this cluster but is not shaping-safe:
+/// the glyphs on either side kern or ligate across it (#216). A line that breaks here needs
+/// the boundary reshaped, so the fitter charges a break correction to lines ending or
+/// starting at this cluster boundary instead of dropping the opportunity. The chunk
+/// summaries exclude this bit; corrections are paid only where a break is evaluated.
+pub(crate) const CLUSTER_BREAK_CORRECTION: u8 = 1 << 6;
+/// The cluster flag bits a chunk summary folds; summary-only markers and the correction
+/// marker live outside it.
+const CHUNK_SUMMARY_FLAGS: u8 = !(CHUNK_NEGATIVE_ADVANCE | CLUSTER_BREAK_CORRECTION);
 
 use super::shaping_state::GLYPH_FLAG_UNSAFE_TO_BREAK as GLYPH_UNSAFE_TO_BREAK;
 
@@ -34,6 +47,10 @@ pub(crate) struct IntrinsicWidths {
 }
 
 const NO_SOURCE_RUN: u32 = u32::MAX;
+pub(super) const SHAPING_CONTEXT: usize = 5;
+/// The most clusters an island may span and still be reshaped: real ones (a ligature, a contextual arrow) cover a
+/// few, so a longer chain is a font that flags every boundary unsafe, and its breaks stay uncorrected, as on main.
+pub(super) const ISLAND_CAP: usize = 32;
 /// Cluster count per chunk summary (D-245).
 pub(crate) const LAYOUT_CHUNK: usize = 64;
 
@@ -159,7 +176,7 @@ fn summarize_unit_chunks(
         for (advance, flag) in advances.iter().zip(flags) {
             space_sum =
                 space_sum.saturating_add(*advance & -i64::from((*flag & CLUSTER_SPACE) >> 4));
-            flags_or |= *flag;
+            flags_or |= *flag & CHUNK_SUMMARY_FLAGS;
             flags_or |= CHUNK_NEGATIVE_ADVANCE * u8::from(*advance < 0);
         }
         // Flags tag this auxiliary as a space sum or a negative space-free maximum prefix;
@@ -222,6 +239,15 @@ fn sum_advance_units(advances: &[i64]) -> i64 {
     advances.iter().sum()
 }
 
+/// One run of `shape` per boundary side that was shaped: `slots[boundary - 1]` holds the `[L, R]` run index + 1, or 0.
+#[derive(Default)]
+pub(super) struct IslandShapes {
+    pub(super) shape: ShapeArena,
+    /// The island of a range that is no boundary's own, shaped for one use.
+    pub(super) once: ShapeArena,
+    pub(super) slots: Vec<[u32; 2]>,
+}
+
 #[derive(Default)]
 pub(crate) struct ClusterArena {
     pub starts: Vec<u32>,
@@ -268,6 +294,14 @@ pub(crate) struct ClusterArena {
     pub index_at: Vec<u32>,
     pub(super) shaped: Vec<u8>,
     pub(super) unsafe_before: Vec<u8>,
+    /// `[L, R, S]` for the boundary after each cluster, filled lazily by the fitter: the corrections (#216), and `S`
+    /// set when L's shaping drew other glyphs than the paragraph, so the font shapes the break as one unit.
+    pub(super) break_corrections: Vec<[Cell<Option<Correction>>; 3]>,
+    /// The glyphs the islands behind `break_corrections` shape alone, kept for the line edges that draw them. Like
+    /// the corrections it is a cache, but only a build or a derived copy empties it, so a relayout shapes nothing.
+    pub(super) islands: RefCell<IslandShapes>,
+    /// No run is right-to-left or overridden: only then do line edges shape alone, so only then are breaks corrected.
+    pub(super) ltr: bool,
     pub(super) layout_runs: LayoutRunArena,
     pub(super) run_local: RunLocalArena,
 }
@@ -279,6 +313,11 @@ pub(crate) struct ClusterBuildInput<'a> {
     pub styles: &'a [StyleSegment],
     pub runs: &'a [ShapingRun],
     pub shape: &'a ShapeArena,
+}
+
+fn all_ltr(runs: &[ShapingRun]) -> bool {
+    runs.iter()
+        .all(|run| run.bidi_level & 1 == 0 && !run.style.bidi_override)
 }
 
 impl ClusterArena {
@@ -307,7 +346,44 @@ impl ClusterArena {
         reserve(&mut self.index_at, capacity.saturating_add(1))?;
         reserve(&mut self.shaped, capacity)?;
         reserve(&mut self.unsafe_before, capacity)?;
+        reserve(&mut self.break_corrections, capacity)?;
         Ok(())
+    }
+
+    fn same_owner(&self, a: usize, b: usize) -> bool {
+        [&self.source_runs, &self.binding_handles, &self.font_handles]
+            .iter()
+            .all(|lane| lane[a] == lane[b])
+    }
+
+    /// The clusters `[start, end)` around `boundary` between shaping-safe boundaries and font owners.
+    pub(super) fn island(&self, boundary: usize) -> (usize, usize) {
+        let (mut start, mut end) = (boundary, boundary + 1);
+        // Each walk stops one cluster past the cap, which is all it takes to see an island is too long.
+        let (lowest, highest) = (
+            boundary.saturating_sub(ISLAND_CAP + 1),
+            (boundary + ISLAND_CAP + 1).min(self.starts.len()),
+        );
+        let unsafe_before = |i: usize| self.flags[i] & CLUSTER_SAFE_BEFORE == 0;
+        while start > lowest && self.same_owner(start - 1, boundary) && unsafe_before(start) {
+            start -= 1;
+        }
+        while end < highest && self.same_owner(end, boundary) && unsafe_before(end) {
+            end += 1;
+        }
+        (start, end)
+    }
+
+    /// The island around `boundary`, unless it is too long to reshape.
+    pub(super) fn reshapable_island(&self, boundary: usize) -> Option<(usize, usize)> {
+        let (start, end) = self.island(boundary);
+        (end - start <= ISLAND_CAP).then_some((start, end))
+    }
+
+    fn reset_break_corrections(&self, start: usize, end: usize) {
+        let end = end.min(self.break_corrections.len());
+        let slots = self.break_corrections[start.min(end)..end].iter();
+        slots.flatten().for_each(|slot| slot.set(None));
     }
 
     pub(crate) fn build(
@@ -324,6 +400,7 @@ impl ClusterArena {
             shape,
         } = input;
         self.clear();
+        self.ltr = all_ltr(runs);
         if text.len() != text_unit_ids.len() || text_unit_ids.contains(&0) {
             return Err(EngineError::InvalidRequest);
         }
@@ -455,6 +532,7 @@ impl ClusterArena {
             return Ok(None);
         }
         self.copy_from(previous)?;
+        self.ltr = all_ltr(runs);
         for cluster in cluster_start..cluster_end {
             let start = self.starts[cluster];
             let end = self.ends[cluster];
@@ -592,7 +670,7 @@ impl ClusterArena {
         }
         self.rebuild_layout_runs_for_shaping(runs)?;
         if cluster_start > 0 {
-            self.flags[cluster_start - 1] &= !CLUSTER_ALLOWED_BREAK;
+            self.flags[cluster_start - 1] &= !(CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION);
         }
         for line_break in unicode.line_breaks() {
             let Some(preceding) = self.break_target(line_break.position, line_break.required)
@@ -605,17 +683,16 @@ impl ClusterArena {
             if line_break.required {
                 self.flags[preceding] |= CLUSTER_REQUIRED_BREAK;
             } else {
-                let safe = line_break.position == self.ends.last().copied().unwrap_or(0)
-                    || self
-                        .starts
-                        .binary_search(&line_break.position)
-                        .ok()
-                        .is_some_and(|next| self.flags[next] & CLUSTER_SAFE_BEFORE != 0);
-                if safe {
-                    self.flags[preceding] |= CLUSTER_ALLOWED_BREAK;
-                }
+                self.mark_optional_break(preceding);
             }
         }
+        // A correction reshapes an island plus SHAPING_CONTEXT clusters either side of its boundary.
+        let first = self.island(cluster_start.max(1) - 1).0;
+        let last = self.island(cluster_end.min(self.starts.len() - 1)).1;
+        self.reset_break_corrections(
+            first.saturating_sub(SHAPING_CONTEXT),
+            last + SHAPING_CONTEXT,
+        );
         self.refresh_layout_units()?;
         Ok(Some((cluster_start, cluster_end)))
     }
@@ -802,6 +879,10 @@ impl ClusterArena {
     /// - `min_content_width`: the widest run that remains when soft breaks are also
     ///   taken under `wrap`: after clusters flagged `ALLOWED_BREAK` for word wrap,
     ///   before every `SAFE_BEFORE` boundary for character wrap, never under none.
+    ///
+    /// Widths come from the paragraph shaping, uncorrected at unsafe-to-break
+    /// boundaries, like Blink's fast min-content path; line layout is exact at the
+    /// breaks it takes.
     pub(crate) fn intrinsic_widths(&self, wrap: u8) -> IntrinsicWidths {
         let mut min_run = 0.0_f64;
         let mut max_run = 0.0_f64;
@@ -837,8 +918,13 @@ impl ClusterArena {
             } else {
                 0.0
             };
+            // An unsafe break no space precedes may be refused by the fitter, so it is no opportunity here.
             let can_break_after = match wrap {
-                WRAP_WORD => flags & CLUSTER_ALLOWED_BREAK != 0,
+                WRAP_WORD => {
+                    flags & CLUSTER_ALLOWED_BREAK != 0
+                        && flags & (CLUSTER_BREAK_CORRECTION | CLUSTER_SPACE)
+                            != CLUSTER_BREAK_CORRECTION
+                }
                 WRAP_CHARACTER => {
                     index + 1 == self.starts.len()
                         || self.flags[index + 1] & CLUSTER_SAFE_BEFORE != 0
@@ -898,6 +984,8 @@ impl ClusterArena {
         copy_lane!(index_at);
         copy_lane!(shaped);
         copy_lane!(unsafe_before);
+        copy_lane!(break_corrections);
+        self.ltr = source.ltr;
         self.layout_runs.reserve(source.layout_runs.runs.len())?;
         self.layout_runs
             .runs
@@ -972,6 +1060,7 @@ impl ClusterArena {
             }
             self.advances[cluster] = advance;
         }
+        self.reset_break_corrections(0, self.starts.len());
         self.refresh_layout_units()?;
         Ok(Some(()))
     }
@@ -1144,6 +1233,7 @@ impl ClusterArena {
             .ok_or(EngineError::InvalidRequest)
     }
 
+    #[inline(never)]
     pub(crate) fn clear(&mut self) {
         self.starts.clear();
         self.ends.clear();
@@ -1174,6 +1264,11 @@ impl ClusterArena {
         self.index_at.clear();
         self.shaped.clear();
         self.unsafe_before.clear();
+        self.break_corrections.clear();
+        let islands = self.islands.get_mut();
+        islands.shape.clear();
+        islands.once.clear();
+        islands.slots.clear();
         self.layout_runs.clear();
         self.run_local.clear();
     }
@@ -1679,17 +1774,32 @@ impl ClusterArena {
                 self.flags[preceding] |= CLUSTER_REQUIRED_BREAK;
                 continue;
             }
-            let safe = end == self.ends.last().copied().unwrap_or(0)
-                || self
-                    .starts
-                    .binary_search(&end)
-                    .ok()
-                    .is_some_and(|next| self.flags[next] & CLUSTER_SAFE_BEFORE != 0);
-            if safe {
-                self.flags[preceding] |= CLUSTER_ALLOWED_BREAK;
-            }
+            self.mark_optional_break(preceding);
         }
         Ok(())
+    }
+
+    /// Whether a line may break after cluster `preceding` without reshaping: it is the last
+    /// cluster, or its successor shaped with no glyph flagged unsafe-to-break against it.
+    fn boundary_is_shaping_safe(&self, preceding: usize) -> bool {
+        self.flags
+            .get(preceding + 1)
+            .is_none_or(|flags| flags & CLUSTER_SAFE_BEFORE != 0)
+    }
+
+    /// Records a UAX #14 optional opportunity that ends cluster `preceding`. A shaping-safe boundary is an allowed break outright. An unsafe boundary
+    /// is still a legal break — dropping it produces the short lines of #216 — so it is
+    /// allowed with a correction the fitter charges, provided one font owns both sides so
+    /// the island can be reshaped; across owners it is dropped.
+    fn mark_optional_break(&mut self, preceding: usize) {
+        if self.boundary_is_shaping_safe(preceding) {
+            self.flags[preceding] |= CLUSTER_ALLOWED_BREAK;
+        } else if self.ltr && self.same_owner(preceding, preceding + 1) {
+            self.flags[preceding] |= CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION;
+            // The correction lane exists only for paragraphs that have a correctable boundary.
+            self.break_corrections
+                .resize_with(self.starts.len(), Default::default);
+        }
     }
 
     /// Resolve a UAX #14 opportunity to the cluster it can act on, or discard it.
@@ -2741,8 +2851,22 @@ mod tests {
                 clusters.index_at.capacity(),
             )
         );
-        assert_eq!(clusters.flags[1], CLUSTER_SAFE_BEFORE | CLUSTER_SPACE);
+        // The legal opportunity after the space is an allowed break that carries a correction
+        // (#216) when both sides share a font owner.
+        assert_eq!(
+            clusters.flags[1],
+            CLUSTER_SAFE_BEFORE | CLUSTER_SPACE | CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION
+        );
         assert_eq!(clusters.flags[2], 0);
+        assert_eq!(
+            clusters.chunk_flags_or,
+            [CLUSTER_SAFE_BEFORE
+                | CLUSTER_SPACE
+                | CLUSTER_HARD_BREAK
+                | CLUSTER_REQUIRED_BREAK
+                | CLUSTER_ALLOWED_BREAK],
+            "chunk summaries never fold the correction marker"
+        );
     }
 
     /// A style boundary interior to an extended grapheme cluster still rejects the frame -- one
@@ -3085,6 +3209,126 @@ mod tests {
         assert_eq!(clusters.glyph_counts, [1]);
         assert_eq!(clusters.glyph_ids, [42]);
         assert_eq!(clusters.source_runs, [0]);
+    }
+
+    #[test]
+    fn source_run_rebuild_resets_break_corrections_only_near_the_rebuilt_run() {
+        let text: Vec<u16> = "a".repeat(20).encode_utf16().collect();
+        let mut unicode = UnicodeAnalysis::default();
+        unicode.analyze(&text).unwrap();
+        let style = ResolvedStyle::test_typography(16.0, 1.0, 0.0);
+        let styles = [StyleSegment {
+            text_start: 0,
+            text_end: 20,
+            style,
+        }];
+        let run = |text_start, text_end| ShapingRun {
+            text_start,
+            text_end,
+            script: u32::from_be_bytes(*b"Latn"),
+            direction: 4,
+            bidi_level: 0,
+            style,
+        };
+        let runs = [run(0, 2), run(2, 20)];
+        let shaped = |source_run, text_start, text_end, glyph_start| ShapedRun {
+            source_run,
+            binding_handle: 19,
+            font_handle: 9,
+            text_start,
+            text_end,
+            glyph_start,
+            glyph_count: text_end - text_start,
+        };
+        let make_shape = |first_glyph| ShapeArena {
+            runs: vec![shaped(0, 0, 2, 0), shaped(1, 2, 20, 2)],
+            glyph_ids: std::iter::once(first_glyph).chain([1; 19]).collect(),
+            clusters: (0..20).collect(),
+            x_advances: vec![500; 20],
+            y_advances: vec![0; 20],
+            x_offsets: vec![0; 20],
+            y_offsets: vec![0; 20],
+            glyph_flags: vec![0; 20],
+        };
+        let metrics = |_| {
+            Some(FontMetrics {
+                units_per_em: 1_000,
+                ascender: 800,
+                cap_height: 700,
+                descender: -200,
+                line_gap: 0,
+                underline_position: -100,
+                underline_thickness: 50,
+                strikeout_position: 300,
+                strikeout_size: 50,
+            })
+        };
+        let ids: Vec<u32> = (1..=20).collect();
+        let shape = make_shape(1);
+        let input = |shape| ClusterBuildInput {
+            text: &text,
+            text_unit_ids: &ids,
+            unicode: &unicode,
+            styles: &styles,
+            runs: &runs,
+            shape,
+        };
+        let mut previous = ClusterArena::default();
+        previous.build(input(&shape), metrics).unwrap();
+        // A paragraph without a correctable boundary keeps no lane; size one as pricing would.
+        previous
+            .break_corrections
+            .resize_with(previous.starts.len(), Default::default);
+        let marker = Correction {
+            advance: 7,
+            space: 0,
+            trailing: 0,
+        };
+        for slot in previous.break_corrections.iter().flatten() {
+            slot.set(Some(marker));
+        }
+        let mut copy = ClusterArena::default();
+        copy.copy_from(&previous).unwrap();
+        assert!(
+            copy.break_corrections
+                .iter()
+                .flatten()
+                .all(|slot| slot.get().is_some())
+        );
+
+        let mut retained = ClusterArena::default();
+        retained
+            .rebuild_source_run_if_topology_is_stable(&previous, input(&shape), 0, metrics)
+            .unwrap()
+            .unwrap();
+        // Run 0 is clusters 0..2; the island after it plus 5 clusters of context reach slot 8.
+        let kept: Vec<bool> = retained
+            .break_corrections
+            .iter()
+            .map(|slot| slot[1].get().is_some())
+            .collect();
+        assert!(
+            kept[..8].iter().all(|kept| !kept),
+            "inside the rebuilt run and its context"
+        );
+        assert!(
+            kept[8..].iter().all(|kept| *kept),
+            "beyond the context survives"
+        );
+        assert_eq!(retained.island(9), (9, 10));
+
+        let mut restyled = ClusterArena::default();
+        restyled
+            .refresh_scales_from_stream(&previous, &styles)
+            .unwrap()
+            .unwrap();
+        assert!(
+            restyled
+                .break_corrections
+                .iter()
+                .flatten()
+                .all(|slot| slot.get().is_none())
+        );
     }
 
     #[test]
