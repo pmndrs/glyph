@@ -19,6 +19,22 @@ export const driftIssueMarker = '<!-- okf-docs-drift -->';
 export const docsReportMarker = '<!-- okf-docs-report -->';
 
 const run = (name) => `\`mise exec -- pnpm scripts run ${name}\``;
+
+/** The review agent's instructions, the one procedure for resolving the tracking issue. */
+const reviewPrompt = [
+  'Resolve the open "Sync agent docs" issue in pmndrs/glyph with one pull request from a branch off main.',
+  'Use full git history (git fetch --unshallow if the clone is shallow). Do not change package source.',
+  '1. Run `mise exec -- pnpm scripts run docs:drift` to list the packages that need verification.',
+  "2. For each pending attestation, read its claim and that pull request's diff (gh pr diff <number> or",
+  '   git show <commit>), then correct the package concept wherever the claim or the concept is wrong or',
+  '   incomplete. Find the sections to check with docs:outline and docs:search instead of reading whole files.',
+  '3. For each gap, review that change the same way and bring its package concept up to date.',
+  '4. Run `mise exec -- pnpm scripts run docs:verify -- verify-<YYYY-MM-DD>`. In the log entry it writes, set',
+  '   every verdict (confirmed or corrected for an attestation, documented or no-change for a gap) and replace',
+  '   the summary with what you checked and changed. Do not edit or restore the attestations it removes.',
+  '5. Run `mise exec -- pnpm scripts run docs:check` until it reports 0 errors, commit with a Conventional',
+  '   Commit message, and open the pull request titled "docs: verify agent docs".',
+];
 const listedLimit = 40;
 
 /** Validation findings with repository-relative paths, ready to show a contributor. */
@@ -94,13 +110,13 @@ export function renderDriftIssue(audit, options = {}) {
       `${gaps} ${plural(gaps, 'gap')} (merged without an attestation), ${findings.length} validation ${plural(findings.length, 'finding')}. ` +
       'This issue is rewritten on every push to `main`; fix the docs, not this issue.',
     '',
-    '## Resolve',
+    '## Agent prompt',
     '',
-    "1. For each attestation, check its claim against that pull request's diff and correct the concept where the claim is",
-    '   wrong or incomplete. For each gap, review that change and bring the concept up to date from it.',
-    `2. Run ${run('docs:verify -- <slug>')}. It writes one verification log entry and removes the consumed attestations.`,
-    '3. In that entry, set each `verdict` (`confirmed` or `corrected` for an attestation, `documented` or `no-change` for a',
-    `   gap) and replace the summary, then run ${run('docs:check')} and open one pull request.`,
+    'Copy this to the review agent; it covers every item listed below.',
+    '',
+    '```text',
+    ...reviewPrompt,
+    '```',
   );
   for (const entry of open) {
     const baseline =

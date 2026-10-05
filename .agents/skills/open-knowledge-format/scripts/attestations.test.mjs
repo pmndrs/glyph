@@ -96,6 +96,11 @@ test('attest, review, and verify across merges without a single conflict', async
   const issue = renderDriftIssue(audit);
   assert.match(issue, /2 of 2 packages need verification: 3 pending attestations, 1 gap/u);
   assert.match(issue, /^<!-- okf-docs-status: open -->$/mu);
+  assert.match(
+    issue,
+    /## Agent prompt\n\n.*\n\n```text\nResolve the open "Sync agent docs" issue[\s\S]*docs:verify -- verify-<YYYY-MM-DD>[\s\S]*```/u,
+  );
+  assert.doesNotMatch(renderDriftIssue([]), /Agent prompt/u);
   assert.match(issue, /\| #3 \| `[0-9a-f]+` \| feat\(raster\): add c \(#3\) \|/u);
 
   // A reviewer branch verifies while pull request #4 attests raster concurrently; both merge cleanly.
