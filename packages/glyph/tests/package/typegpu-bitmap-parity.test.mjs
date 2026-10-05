@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import * as d from 'typegpu/data';
-import tgpu from 'typegpu';
+import tgpu, { d } from 'typegpu';
 
 import { extractBitmapTslShader } from '../support/extract-bitmap-tsl-shader.mjs';
 import {

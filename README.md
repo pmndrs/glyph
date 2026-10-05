@@ -78,6 +78,8 @@ useSlug.preload('/fonts/Inter.font.glb');
 
 A `GlyphProvider` can be used to load and map fonts to a string name allowing you to refer to the font by name anywhere under the provider. The provider also acts as an optional Suspense and Error boundary to handle glyph errors or suspend while loading fonts.
 
+Check out the [React Three Fiber playground](apps/r3f-playground/README.md) example for more details.
+
 ## TypeGPU
 
 You can use TypeGPU over TSL in three.js by importing the `ThreeConfig` from `@pmndrs/glyph/three/typegpu`.
@@ -109,6 +111,38 @@ handle.draw(pass, { width: canvas.clientWidth, height: canvas.clientHeight });
 ```
 
 See the [TypeGPU hello world](apps/typegpu-hello-world/README.md) example for more details.
+
+## TresJS (Vue)
+
+Use `@pmndrs/glyph/vue` for [TresJS](https://tresjs.org) integration.
+
+Pass a `WebGPURenderer` factory to `TresCanvas` through its `renderer` prop; Glyph does not support the classic `WebGLRenderer`.
+
+```vue
+<script setup lang="ts">
+import { GlyphProvider, Text } from '@pmndrs/glyph/vue';
+import { preloadSlug } from '@pmndrs/glyph/vue/slug';
+import { TresCanvas, type TresRendererSetupContext } from '@tresjs/core';
+import { WebGPURenderer } from 'three/webgpu';
+import { toValue } from 'vue';
+
+preloadSlug('/fonts/Inter.font.glb');
+
+const createRenderer = (context: TresRendererSetupContext) => new WebGPURenderer({ canvas: toValue(context.canvas) });
+</script>
+
+<template>
+  <TresCanvas :renderer="createRenderer">
+    <GlyphProvider handle="hud" :font-faces="{ Inter: '/fonts/Inter.font.glb' }">
+      <Text font="Inter">Hello, HUD</Text>
+    </GlyphProvider>
+  </TresCanvas>
+</template>
+```
+
+A `Text` renders once its fonts load, and load failures arrive through `@error`. To load a font inside a component, use `useSlug`, `useMsdf`, or `useBitmap` from `@pmndrs/glyph/vue/*`. Each returns a `ready` promise you can await under `<Suspense>`.
+
+See the [TresJS playground](apps/tres-playground/README.md) example for more details.
 
 ## Integrate with a custom renderer
 
@@ -167,28 +201,31 @@ import { bitmapFragment, bitmapVertexSnapped } from '@pmndrs/glyph/shaders/typeg
 
 Glyph is pre-release and its features may change with time. **✅ Stable** is the supported baseline, **🟡 Partial** has the gaps listed below, and **🧪 Experimental** is available but still being evaluated.
 
-| Feature                              | Status          | Support and limitations                                                                                                          |
-| ------------------------------------ | --------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Fonts and rich-text styles           | ✅ Stable       | Mixed-font spans, font fallback, size, color, and spacing.                                                                       |
-| Unicode shaping                      | ✅ Stable       | Complex scripts, ligatures, bidirectional text, and grapheme-aware boundaries.                                                   |
-| Alignment and justification          | ✅ Stable       | Paragraph alignment, word spacing, first-line indent, and paragraph spacing.                                                     |
-| Word wrap and box constraints        | ✅ Stable       | Unicode line breaking, width/height constraints, clipping, and ellipsis. Language-specific breaking is future work.              |
-| Text measurement                     | ✅ Stable       | Text bounds, font metrics, and per-glyph layout queries.                                                                         |
-| Editorial flow and polygon cut-outs  | ✅ Stable       | Authored regions and exclusions, projected 3D contours, and drop caps.                                                           |
-| Icon fonts                           | ✅ Stable       | Font-based icons, raster subsetting, and glyph-name maps.                                                                        |
-| Break-apart glyphs                   | ✅ Stable       | Detached glyph and decoration copies with independent transforms. Copies do not follow later source-text edits.                  |
-| Bitmap rendering                     | ✅ Stable       | Baked size-specific strikes. No outline or shadow effects.                                                                       |
-| MSDF rendering                       | ✅ Stable       | MTSDF atlases with outline and hard-shadow effects.                                                                              |
-| Slug rendering                       | ✅ Stable       | Vector-outline rendering. No outline or shadow effects.                                                                          |
-| Three.js, React Three Fiber, and TSL | ✅ Stable       | WebGPU and WebGL2 through `WebGPURenderer`. Standalone TSL shaders are also available. Classic `WebGLRenderer` is not supported. |
-| Custom renderer integration          | ✅ Stable       | Renderer-neutral `GlyphConfig` API and custom raster/baker extensions.                                                           |
-| Wasm engine and SIMD kernels         | ✅ Stable       | HarfRust shaping and retained Rust layout with SIMD-optimized kernels.                                                           |
-| Runtime and offline font baking      | ✅ Stable       | Node API/CLI baking and browser Worker baking for Bitmap, MSDF, and Slug.                                                        |
-| Editorial columns                    | 🟡 Partial      | Sequential column flow. Automatic column balancing is not implemented.                                                           |
-| Text decorations                     | 🟡 Partial      | Solid underline, overline, and strikethrough. Double, dotted, dashed, and wavy styles are not implemented.                       |
-| CJK                                  | 🟡 Partial      | Horizontal shaping and layout. Large-coverage paging and vertical writing are future work.                                       |
-| Direct TypeGPU rendering and shaders | 🧪 Experimental | Bitmap, MSDF, and Slug in caller-owned WebGPU render passes, plus standalone shader exports.                                     |
-| TypeGPU shaders in Three.js          | 🧪 Experimental | WebGPU and WebGL2 adapters. Full visual parity with the native TSL path is not yet established.                                  |
+| Feature                              | Status          | Support and limitations                                                                                             |
+| ------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Fonts and rich-text styles           | ✅ Stable       | Mixed-font spans, font fallback, size, color, and spacing.                                                          |
+| Unicode shaping                      | ✅ Stable       | Complex scripts, ligatures, bidirectional text, and grapheme-aware boundaries.                                      |
+| Alignment and justification          | ✅ Stable       | Paragraph alignment, word spacing, first-line indent, and paragraph spacing.                                        |
+| Word wrap and box constraints        | ✅ Stable       | Unicode line breaking, width/height constraints, clipping, and ellipsis. Language-specific breaking is future work. |
+| Text measurement                     | ✅ Stable       | Text bounds, font metrics, and per-glyph layout queries.                                                            |
+| Editorial flow and polygon cut-outs  | ✅ Stable       | Authored regions and exclusions, projected 3D contours, and drop caps.                                              |
+| Icon fonts                           | ✅ Stable       | Font-based icons, raster subsetting, and glyph-name maps.                                                           |
+| Break-apart glyphs                   | ✅ Stable       | Detached glyph and decoration copies with independent transforms. Copies do not follow later source-text edits.     |
+| Bitmap rendering                     | ✅ Stable       | Baked size-specific strikes. No outline or shadow effects.                                                          |
+| MSDF rendering                       | ✅ Stable       | MTSDF atlases with outline and hard-shadow effects.                                                                 |
+| Slug rendering                       | ✅ Stable       | Vector-outline rendering. No outline or shadow effects.                                                             |
+| Three.js                             | ✅ Stable       | WebGPU and WebGL2 through `WebGPURenderer`. Classic `WebGLRenderer` is not supported.                               |
+| React Three Fiber                    | ✅ Stable       | React components and font-loading hooks.                                                                            |
+| TresJS                               | ✅ Stable       | Vue components and font-loading composables.                                                                        |
+| TSL shaders                          | ✅ Stable       | Standalone Bitmap, MSDF, and Slug shaders that work without the Three.js integration.                               |
+| Custom renderer integration          | ✅ Stable       | Renderer-neutral `GlyphConfig` API and custom raster/baker extensions.                                              |
+| Wasm engine and SIMD kernels         | ✅ Stable       | HarfRust shaping and retained Rust layout with SIMD-optimized kernels.                                              |
+| Runtime and offline font baking      | ✅ Stable       | Node API/CLI baking and browser Worker baking for Bitmap, MSDF, and Slug.                                           |
+| Editorial columns                    | 🟡 Partial      | Sequential column flow. Automatic column balancing is not implemented.                                              |
+| Text decorations                     | 🟡 Partial      | Solid underline, overline, and strikethrough. Double, dotted, dashed, and wavy styles are not implemented.          |
+| CJK                                  | 🟡 Partial      | Horizontal shaping and layout. Large-coverage paging and vertical writing are future work.                          |
+| Direct TypeGPU rendering and shaders | 🧪 Experimental | Bitmap, MSDF, and Slug in caller-owned WebGPU render passes, plus standalone shader exports.                        |
+| TypeGPU shaders in Three.js          | 🧪 Experimental | WebGPU and WebGL2 adapters. Full visual parity with the native TSL path is not yet established.                     |
 
 ## Roadmap
 
@@ -218,7 +255,7 @@ mise exec -- pnpm dev
 
 The hook installer writes only the native `pre-commit` dispatcher in Git's shared common directory. Every worktree in the
 clone therefore uses the same hook without `core.hooksPath` or Lefthook configuration. The hook auto-formats and applies
-safe lint fixes to fully staged source files, re-stages those fixes, and then validates documentation digests. Existing
+safe lint fixes to fully staged source files, re-stages those fixes, and then shows the package docs to attest. Existing
 Git LFS hooks such as `pre-push`, `post-checkout`, `post-commit`, and `post-merge` are not changed.
 
 The benchmark application lives in [`benches/`](benches/). `pnpm dev` opens its interactive harness;

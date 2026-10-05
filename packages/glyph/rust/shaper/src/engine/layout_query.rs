@@ -205,16 +205,22 @@ pub(crate) fn visible_glyph_counts(
                 .map_err(|_| EngineError::InvalidRequest)?;
             let cluster_end = usize::try_from(fragment.line.cluster_end)
                 .map_err(|_| EngineError::InvalidRequest)?;
-            let boundary = if fragment.boundary_index == NO_BOUNDARY {
-                None
-            } else {
-                Some(
-                    boundary_shape
-                        .record(fragment.boundary_index)
-                        .ok_or(EngineError::InvalidRequest)?,
-                )
+            let record = |index: u32| {
+                (index != NO_BOUNDARY)
+                    .then(|| {
+                        boundary_shape
+                            .record(index)
+                            .ok_or(EngineError::InvalidRequest)
+                    })
+                    .transpose()
             };
-            let retained_end = boundary.map_or(cluster_end, |boundary| {
+            let (boundary, lead, tail) = (
+                record(fragment.boundary_index)?,
+                record(fragment.lead_index)?,
+                record(fragment.tail_index)?,
+            );
+            let body_start = lead.map_or(cluster_start, |lead| lead.cluster_end as usize);
+            let retained_end = boundary.or(tail).map_or(cluster_end, |boundary| {
                 usize::try_from(boundary.cluster_start).unwrap_or(usize::MAX)
             });
             if retained_end > cluster_end {
@@ -223,7 +229,7 @@ pub(crate) fn visible_glyph_counts(
             // A boundary cutting at or before the fragment start leaves an
             // empty retained range — positioning walks the same empty range
             // without erroring, and the count mirrors that.
-            for cluster in cluster_start..retained_end {
+            for cluster in body_start..retained_end {
                 // Positioning skips hard-break clusters before its glyph walk;
                 // the count mirrors that exactly.
                 if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
@@ -239,7 +245,7 @@ pub(crate) fn visible_glyph_counts(
                     .ok_or(EngineError::ResultTooLarge)?;
                 missing += zeros;
             }
-            if let Some(boundary) = boundary {
+            for boundary in lead.into_iter().chain(boundary).chain(tail) {
                 for (start, count) in [
                     (boundary.source_glyph_start, boundary.source_glyph_count),
                     (boundary.ellipsis_glyph_start, boundary.ellipsis_glyph_count),
@@ -653,7 +659,7 @@ mod tests {
     use super::*;
     use crate::engine::{
         flow_composition::{FlowFragment, FlowLine, NO_BOUNDARY},
-        line_composition::ComposedLine,
+        line_composition::{ComposedLine, Correction},
         semantic_wire::FlowConstraint,
     };
 
@@ -688,11 +694,15 @@ mod tests {
                     advance: 7.0,
                     hung_advance: 0.0,
                     hard_break: false,
+                    start_correction: Correction::ZERO,
+                    end_correction: Correction::ZERO,
                 },
                 slot_start: 0.0,
                 slot_end: 20.0,
                 flexible_end: false,
                 boundary_index: NO_BOUNDARY,
+                lead_index: NO_BOUNDARY,
+                tail_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
         };
@@ -751,11 +761,15 @@ mod tests {
                     advance: 7.0,
                     hung_advance: 0.0,
                     hard_break: false,
+                    start_correction: Correction::ZERO,
+                    end_correction: Correction::ZERO,
                 },
                 slot_start: 0.0,
                 slot_end: 20.0,
                 flexible_end: false,
                 boundary_index: NO_BOUNDARY,
+                lead_index: NO_BOUNDARY,
+                tail_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
         };
@@ -857,11 +871,15 @@ mod tests {
                     advance: 7.0,
                     hung_advance: 0.0,
                     hard_break: false,
+                    start_correction: Correction::ZERO,
+                    end_correction: Correction::ZERO,
                 },
                 slot_start: 0.0,
                 slot_end: 6.0,
                 flexible_end: false,
                 boundary_index: NO_BOUNDARY,
+                lead_index: NO_BOUNDARY,
+                tail_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
         };
@@ -925,11 +943,15 @@ mod tests {
                     advance: 140.64,
                     hung_advance: 0.0,
                     hard_break: false,
+                    start_correction: Correction::ZERO,
+                    end_correction: Correction::ZERO,
                 },
                 slot_start: 0.0,
                 slot_end: 140.64,
                 flexible_end: false,
                 boundary_index: NO_BOUNDARY,
+                lead_index: NO_BOUNDARY,
+                tail_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
         };
@@ -1078,11 +1100,15 @@ mod tests {
                     advance: 7.0,
                     hung_advance: 0.0,
                     hard_break: false,
+                    start_correction: Correction::ZERO,
+                    end_correction: Correction::ZERO,
                 },
                 slot_start: 0.0,
                 slot_end: 20.0,
                 flexible_end: false,
                 boundary_index: NO_BOUNDARY,
+                lead_index: NO_BOUNDARY,
+                tail_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
         };
@@ -1173,11 +1199,15 @@ mod tests {
                     advance: 7.0,
                     hung_advance: 0.0,
                     hard_break: false,
+                    start_correction: Correction::ZERO,
+                    end_correction: Correction::ZERO,
                 },
                 slot_start: 0.0,
                 slot_end: 20.0,
                 flexible_end: false,
                 boundary_index: NO_BOUNDARY,
+                lead_index: NO_BOUNDARY,
+                tail_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
         };
