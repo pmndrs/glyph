@@ -278,7 +278,10 @@ tarball SHA-256.
 The runner also renders the comparison as Markdown (`summary.md` under the output directory, appended to
 `$GITHUB_STEP_SUMMARY` when set): counts, a slower-first table of non-neutral benches with full names, a Mermaid bar
 chart of their Δ p50, and the neutral and skipped rows folded in `<details>`. It is parsed from the `labs compare` text,
-with names restored from the candidate result, and a failure to write it only warns.
+with names restored from the candidate result, and a failure to write it only warns. On a pull request, CI also keeps
+one PR comment current with the same Markdown, found by its `<!-- glyph-labs-report -->` marker, like the size and docs
+reports. Fork pull requests get a read-only token, so for them the comment step may fail and the job summary carries
+the report.
 
 The default package suite is a common-use smoke comparison: cached `measure()`, measurement and publication after a text
 change, exact-width reflow, paint-only style publication, and font-size relayout. It deliberately excludes per-glyph
