@@ -1,12 +1,31 @@
 import { assert, bench, group } from '@pmndrs/labs';
 
-import { createLabels, createParagraph, disposeLabels, disposeParagraph, paragraphTextForGlyphs } from './fixture.ts';
+import {
+  createLabels,
+  createParagraph,
+  disposeLabels,
+  disposeParagraph,
+  paragraphTextForGlyphs,
+  shaperModule,
+} from './fixture.ts';
 
 const paragraphText = paragraphTextForGlyphs(22_000);
 
 // Every timed call pays a first-time cost on freshly mounted state, so these workloads time alike on every build and
 // stay out of the steady-state suites, whose workloads repeat work that setup has already performed once.
 group('first-time operations @cold', () => {
+  // Startup cost of the default shaper asset: whatever the build ships (raw, or gzip decoded on load), then compile,
+  // instantiate, and initialize. A compressed asset trades this time for transfer bytes, which the size report shows.
+  bench('initialize the default text shaper', function* () {
+    const memoryBytes = yield async () => {
+      const shaper = await shaperModule.createRuntimeShaper();
+      const bytes = shaper.memoryReport().wasmMemoryBytes;
+      shaper.dispose();
+      return bytes;
+    };
+    assert(memoryBytes > 0, 'an initialized shaper owns Wasm memory');
+  });
+
   bench('mount and publish a 22k-glyph paragraph @exhaustive', function* () {
     const textCount = yield () => {
       const created = createParagraph(paragraphText);

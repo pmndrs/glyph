@@ -290,7 +290,9 @@ Each suite holds workloads that time alike. Labs decides per run whether to batc
 the cost of the first calls, so a workload whose first call is first-time work can be timed differently on each side
 of a comparison, and the delta then measures the timing mode rather than the package. Steady workloads therefore
 perform their operation once during setup, and every workload whose timed call pays a first-time cost on freshly
-mounted state lives in the `cold` suite. The comparison still reports any workload timed in different modes on the two
+mounted state lives in the `cold` suite. The `cold` suite also times default text-shaper startup through the installed
+build's own `createRuntimeShaper()`: read the shipped asset, decode it if it is compressed, then compile, instantiate,
+and initialize. That is the startup cost a compressed asset trades for its smaller transfer. The comparison still reports any workload timed in different modes on the two
 sides as not comparable instead of printing its delta. A candidate must pass every benchmark check; a baseline may
 fail checks that guard behavior it predates, and those workloads are reported as not comparable rather than aborting
 the comparison. Both lists are recorded in the retained manifest.

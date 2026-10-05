@@ -22,6 +22,15 @@ const threePackage = (await import(
   pathToFileURL(resolve(packageRoot, 'dist/three.js')).href
 )) as typeof import('@pmndrs/glyph/three');
 
+/**
+ * The shaper module of the installed build, imported by file like the entries above. `createRuntimeShaper()` with no
+ * source runs the package's own default asset path: read the shipped Wasm, decode it if compressed, compile, and
+ * initialize. Every build since 0.1.0 ships this module, so baseline and candidate time the same call.
+ */
+export const shaperModule = (await import(pathToFileURL(resolve(packageRoot, 'dist/shaper.js')).href)) as {
+  createRuntimeShaper(): Promise<{ memoryReport(): { readonly wasmMemoryBytes: number }; dispose(): void }>;
+};
+
 const { bitmap, glyph } = glyphPackage;
 const { defineThreeConfig } = threePackage;
 const fontBytes = await readFile(new URL('../../fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url));
