@@ -354,6 +354,40 @@ test('the pre-commit report repeats until the package is attested at the staged 
   assert.match(await hook(), /⚠️ stale {2}@pmndrs\/glyph/u);
 });
 
+test('merging main into a branch reports only the branch, not what main brought in', async () => {
+  const root = await workspaceFixture('okf-hook-merge-');
+  await mkdir(path.join(root, 'packages/raster/src'), { recursive: true });
+  await writeFile(path.join(root, 'packages/raster/package.json'), '{"name":"@pmndrs/raster"}\n');
+  await writeFile(path.join(root, 'packages/raster/src/index.ts'), 'initial\n');
+  await writeFile(
+    path.join(root, '.agents/docs/packages/raster.md'),
+    glyphConcept()
+      .replace('title: Glyph', 'title: Raster')
+      .replace("'@pmndrs/glyph'", "'@pmndrs/raster'")
+      .replace('packages/glyph', 'packages/raster'),
+  );
+  await writeFile(
+    path.join(root, '.agents/docs/index.md'),
+    '---\nokf_version: "0.2"\n---\n\n# Index\n\n- [Glyph](packages/glyph.md)\n- [Raster](packages/raster.md)\n',
+  );
+  await commitFixture(root);
+  await git(root, ['branch', '-M', 'main']);
+  await git(root, ['switch', '-q', '-c', 'feature']);
+  await writeFile(path.join(root, 'packages/glyph/src/index.ts'), 'feature\n');
+  await git(root, ['add', '-A']);
+  await attest(root, 'glyph', 'Changed index; concept still accurate.', { date: '2026-10-05' });
+  await git(root, ['add', '-A']);
+  await git(root, ['commit', '-qm', 'feat(glyph): change']);
+  await git(root, ['switch', '-q', 'main']);
+  await writeFile(path.join(root, 'packages/raster/src/index.ts'), 'main moved\n');
+  await git(root, ['commit', '-qam', 'feat(raster): change on main']);
+  await git(root, ['switch', '-q', 'feature']);
+
+  await git(root, ['merge', '-q', '--no-commit', '--no-ff', 'main']);
+  const result = await execFileAsync(process.execPath, [hookPath()], { cwd: root });
+  assert.equal(result.stderr, '', 'raster changed on main, not on this branch');
+});
+
 test('the pre-commit report lists invalid staged docs and never blocks the commit', async () => {
   const root = await temporaryDirectory('okf-hook-invalid-');
   await git(root, ['init', '-q']);
