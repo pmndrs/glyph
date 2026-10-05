@@ -11,6 +11,6 @@ packages/glyph/.cache/
 
 # AGENTS.md is the only instruction file; ignore CLAUDE.md shims older clones generated.
 **/CLAUDE.md
-# Claude skill links, generated from .agents/skills by the SessionStart hook.
+# Harness skill links created by .agents/scripts/link-skills.mjs.
 .claude/skills/
 .cache/

@@ -9,7 +9,7 @@
     "dev": "pnpm --filter @pmndrs/glyph-benchmarks dev",
     "build": "pnpm --filter './packages/*' build && pnpm --filter './apps/*' build && pnpm --filter @pmndrs/glyph-benchmarks build",
     "test": "pnpm --filter './packages/*' --if-present test && pnpm --filter './apps/*' --if-present test && pnpm --filter @pmndrs/glyph-benchmarks test --runtime-packages-ready",
-    "check": "tsc -p .claude/tsconfig.json && node --test .claude/hooks/sync-agent-config.test.ts .agents/skills/open-knowledge-format/scripts/okf-tools.test.mjs && pnpm --filter './packages/*' check && pnpm --workspace-concurrency=1 --filter './apps/*' check && pnpm --filter @pmndrs/glyph-benchmarks check --runtime-packages-ready && oxfmt --check .claude/hooks .claude/settings.json .claude/tsconfig.json package.json .agents/docs/log.md .agents/skills/open-knowledge-format/scripts && node .agents/skills/open-knowledge-format/scripts/validate-okf.mjs .agents/docs --workspace-root .",
+    "check": "node --test .agents/scripts/link-skills.test.mjs .agents/skills/open-knowledge-format/scripts/okf-tools.test.mjs && pnpm --filter './packages/*' check && pnpm --workspace-concurrency=1 --filter './apps/*' check && pnpm --filter @pmndrs/glyph-benchmarks check --runtime-packages-ready && oxfmt --check .agents/scripts package.json .agents/docs/log.md .agents/skills/open-knowledge-format/scripts && node .agents/skills/open-knowledge-format/scripts/validate-okf.mjs .agents/docs --workspace-root .",
     "scripts": "node benches/scripts/workflows.mts"
   },
   "devDependencies": {

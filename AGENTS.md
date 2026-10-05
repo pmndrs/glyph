@@ -2,9 +2,10 @@
 
 `pmndrs/glyph` is an ESM-only monorepo for portable font baking, universal shaping, paragraph layout, and optional raster renderers. The benchmark application lives at `benches/`. Other packages and applications belong under `packages/` or `apps/`.
 
-Repository skills live in `.agents/skills`; Claude Code discovers them through links in `.claude/skills` that its startup
-hook creates. When that hook did not run (Claude Desktop, a resumed session, or after adding a skill), run
-`node .claude/hooks/sync-agent-config.ts` to create them.
+Repository skills live in `.agents/skills/<name>/SKILL.md`. If your harness does not list them, link them into the
+directory it reads skills from with `node .agents/scripts/link-skills.mjs <skills-dir>` (Claude Code reads
+`.claude/skills`), then reload skills. The command is safe to repeat; rerun it after a skill is added, renamed, or
+removed, and add any new in-repository link directory to `.gitignore`.
 
 Before writing or reviewing Rust, TypeScript, React, Wasm boundaries, or tests, read the canonical [engineering standard](.agents/docs/engineering/code-style.md). Use the repository-local `maintainability-review` skill for a deliberate cleanup, pre-release review, or milestone-wide audit; the skill owns the procedure, while the engineering standard owns the rules.
 

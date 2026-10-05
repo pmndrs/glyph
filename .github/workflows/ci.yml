@@ -63,9 +63,7 @@ jobs:
       - name: Check repository formatting
         run: |
           pnpm exec oxfmt --check \
-            .claude/hooks \
-            .claude/settings.json \
-            .claude/tsconfig.json \
+            .agents/scripts \
             package.json \
             .agents/docs/log.md \
             .agents/docs/log
@@ -78,11 +76,8 @@ jobs:
         working-directory: benches
         run: pnpm exec oxlint --deny-warnings .
 
-      - name: Check repository tooling types
-        run: pnpm exec tsc -p .claude/tsconfig.json
-
-      - name: Check repository tooling synchronization
-        run: node .claude/hooks/sync-agent-config.test.ts
+      - name: Check skill linking
+        run: node --test .agents/scripts/link-skills.test.mjs
 
       - name: Check OKF tooling
         run: node --test .agents/skills/open-knowledge-format/scripts/okf-tools.test.mjs
