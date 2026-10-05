@@ -276,10 +276,12 @@ The retained report includes native Labs JSON, comparison output, exact package 
 tarball SHA-256.
 
 The runner also renders the comparison as Markdown (`summary.md` under the output directory, appended to
-`$GITHUB_STEP_SUMMARY` when set): counts, a slower-first table of non-neutral benches with full names, a Mermaid bar
-chart of the size of each Δ p50 from zero (red slower, green faster, grey neutral when the suite is small enough
-to fit, the sign in each label), and the neutral and skipped rows folded in `<details>`. It is parsed from the `labs compare` text,
-with names restored from the candidate result, and a failure to write it only warns. On a pull request, CI also keeps
+`$GITHUB_STEP_SUMMARY` when set): counts; a forest plot in a `diff` block, with each bench's Δ p50 inside its 95%
+confidence interval against a zero line, plus p and Labs' baseline and candidate distribution sparklines (GitHub
+colours slower `-` rows red and faster `+` rows green, while neutral rows stay plain; the axis caps at ±50% and draws an
+arrow past it); a slower-first table of non-neutral benches with full names; and the neutral and skipped rows folded
+in `<details>`. It is parsed from the `labs compare` text, with names restored from the candidate result, and a
+failure to write it only warns. On a pull request, CI also keeps
 one PR comment current with the same Markdown, found by its `<!-- glyph-labs-report -->` marker, like the size and docs
 reports. Fork pull requests get a read-only token, so for them the comment step may fail and the job summary carries
 the report.

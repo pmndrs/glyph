@@ -12,6 +12,9 @@ export interface LabsRow {
   readonly delta: number;
   readonly p: string;
   readonly ci: string;
+  /** Labs' block-median distribution sparklines, when the report printed them under the row. */
+  readonly baselineSpark?: string;
+  readonly candidateSpark?: string;
 }
 
 export interface LabsSkipped {
@@ -35,6 +38,7 @@ export interface LabsSummaryInput {
 const ansi = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'gu');
 const rowPattern = /^ {2}([▲▼■]) (.+?)\s+(\S+)\s+(\S+)\s+([+-]?[\d.]+)%\s+[+-]?[\d.]+%\s+(\S+)\s+(\S+%)$/u;
 const skippedPattern = /^ {2}· (.+?) {2}(.+)$/u;
+const sparkPattern = /^\s+([▁▂▃▄▅▆▇█]+) ([▁▂▃▄▅▆▇█]+)/u;
 const statusOf = { '▲': 'faster', '▼': 'slower', '■': 'neutral' } as const;
 
 /**
@@ -49,7 +53,7 @@ export function parseLabsComparison(report: string, runNames: readonly string[])
     const index = unused.findIndex((name) => name.startsWith(prefix));
     return index === -1 ? printed : unused.splice(index, 1)[0]!;
   };
-  const rows: LabsRow[] = [];
+  const rows: { -readonly [Key in keyof LabsRow]: LabsRow[Key] }[] = [];
   const skipped: LabsSkipped[] = [];
   const warnings: string[] = [];
   let inSkipped = false;
@@ -65,6 +69,13 @@ export function parseLabsComparison(report: string, runNames: readonly string[])
       continue;
     }
     if (line.startsWith('⚠') && !line.startsWith('⚠ Limited resolution')) warnings.push(line.slice(1).trim());
+    const spark = sparkPattern.exec(line);
+    const last = rows.at(-1);
+    if (spark !== null && last !== undefined && last.baselineSpark === undefined) {
+      last.baselineSpark = spark[1]!;
+      last.candidateSpark = spark[2]!;
+      continue;
+    }
     const match = rowPattern.exec(line);
     if (match === null) continue;
     rows.push({
@@ -100,11 +111,11 @@ export function renderLabsSummary({ suite, baseline, candidate, comparison }: La
     ...warnings.map((warning) => `> ⚠ ${warning}`),
     ...(warnings.length === 0 ? [] : ['']),
   ];
+  if (rows.length > 0) lines.push(...forestPlot([...changed, ...[...neutral].sort((a, b) => b.delta - a.delta)]), '');
   if (changed.length === 0) {
     lines.push(`All ${rows.length} compared benches are neutral.`, '');
   } else {
     lines.push(...table(changed.map((row) => cells(row, row.status === 'slower' ? '🔴 slower' : '🟢 faster'))), '');
-    lines.push(...chart(suite, changed, neutral), '');
   }
   const rest = [
     ...neutral.map((row) => cells(row, 'neutral')),
@@ -136,81 +147,97 @@ function table(body: readonly (readonly string[])[]): readonly string[] {
   return [row(header), row(header.map(() => '---')), ...body.map(row)];
 }
 
-/** Bar colours by status, in the order their series are drawn: GitHub's danger, success, and muted greys. */
-const chartColors: Readonly<Record<LabsRowStatus, string>> = {
-  slower: '#cf222e',
-  faster: '#1a7f37',
-  neutral: '#8c959f',
-};
-/** Beyond this many benches the chart keeps only the ones that moved, so it still fits a viewport. */
-const chartRowLimit = 24;
-const chartLabelLength = 32;
+const plotWidth = 31;
+/** The name column fits the longest name between these bounds; longer names are shortened in the middle. */
+const plotNameWidths = { min: 24, max: 60 } as const;
+/** The axis never reaches past this, so one noisy bench cannot flatten the others; its interval ends in an arrow. */
+const plotLimitCap = 50;
+/** GitHub colours `-` lines red and `+` lines green inside a diff block, so the prefix carries the verdict. */
+const plotPrefix: Readonly<Record<LabsRowStatus, string>> = { slower: '-', faster: '+', neutral: ' ' };
 
 /**
- * Mermaid's xychart draws every bar from the axis minimum and colours by series, not by bar. So the chart plots
- * |Δ p50| from 0, gives each status its own series (zero elsewhere) for a red/green/grey bar, and carries the sign
- * in the label. Width and height follow the bar count, so the chart stays compact.
+ * A forest plot in a `diff` block, like the Labs terminal report: each bench's Δ p50 (●) inside its 95% confidence
+ * interval (├─┤), against a zero line, with p and Labs' baseline and candidate sparklines. GitHub renders slower rows
+ * red and faster rows green; neutral rows stay plain. Plain text, so it renders for fork pull requests too.
  */
-function chart(suite: string, changed: readonly LabsRow[], neutral: readonly LabsRow[]): readonly string[] {
-  const plotted =
-    changed.length + neutral.length <= chartRowLimit
-      ? [...changed, ...[...neutral].sort((a, b) => b.delta - a.delta)]
-      : changed;
-  const limit = Math.max(5, Math.ceil(Math.max(...plotted.map((row) => Math.abs(row.delta))) / 5) * 5);
-  const seen = new Set<string>();
-  const labels = plotted.map((row) => {
-    const value = signedNumber(row.delta);
-    const base = mermaidLabel(row.name, chartLabelLength - value.length - 1);
-    let name = base;
-    for (let n = 2; seen.has(name); n += 1) name = `${base.slice(0, base.length - String(n).length - 1)}~${String(n)}`;
-    seen.add(name);
-    return `"${name} ${value}"`;
+function forestPlot(rows: readonly LabsRow[]): readonly string[] {
+  const intervals = rows.map((row) => interval(row));
+  const extent = Math.max(...intervals.flatMap(([low, high], index) => [low, high, rows[index]!.delta].map(Math.abs)));
+  const limit = Math.max(5, Math.ceil(Math.min(extent, plotLimitCap) / 5) * 5);
+  const column = (value: number) =>
+    Math.round(((Math.max(-limit, Math.min(limit, value)) + limit) / (2 * limit)) * (plotWidth - 1));
+  const zero = column(0);
+  const sparks = rows.some((row) => row.baselineSpark !== undefined);
+  const sparkWidth = Math.max(8, ...rows.map((row) => row.baselineSpark?.length ?? 0));
+  const prefix = sharedWordPrefix(rows.map((row) => row.name));
+  const label = (name: string) => (prefix === '' ? name : `…${name.slice(prefix.length)}`);
+  const nameWidth = Math.min(
+    plotNameWidths.max,
+    Math.max(plotNameWidths.min, ...rows.map((row) => label(row.name).replace(/\s+/gu, ' ').trim().length)),
+  );
+  const indent = ' '.repeat(nameWidth + 2);
+  const header = [
+    `  ${indent}${'faster ◀'.padEnd(zero)}┊${'▶ slower'.padStart(plotWidth - zero - 1)}`,
+    '    Δ p50      p',
+    ...(sparks ? [`  ${'baseline'.padEnd(sparkWidth)} candidate`] : []),
+  ].join('');
+  const body = rows.map((row, index) => {
+    const [low, high] = intervals[index]!;
+    const track = Array.from({ length: plotWidth }, (_, at) => (at === zero ? '┊' : ' '));
+    const from = column(low);
+    const to = column(high);
+    for (let at = from; at <= to; at += 1) track[at] = at === zero ? '┼' : '─';
+    // Anything past the capped axis draws as an arrow at that edge, so it never reads as the edge value.
+    if (low >= -limit && low <= limit) track[from] = '├';
+    if (high >= -limit && high <= limit) track[to] = '┤';
+    if (low < -limit) track[0] = '◀';
+    if (high > limit) track[plotWidth - 1] = '▶';
+    if (Math.abs(row.delta) <= limit) track[column(row.delta)] = '●';
+    const distribution = sparks ? `  ${(row.baselineSpark ?? '').padEnd(sparkWidth)} ${row.candidateSpark ?? ''}` : '';
+    return `${plotPrefix[row.status]} ${fit(label(row.name), nameWidth)}  ${track.join('')}  ${signed(row.delta).padStart(7)}  ${row.p.padStart(5)}${distribution}`.trimEnd();
   });
-  const statuses = (['slower', 'faster', 'neutral'] as const).filter((status) =>
-    plotted.some((row) => row.status === status),
+  const axis = Array.from({ length: plotWidth }, (_, at) =>
+    at === 0 ? '└' : at === plotWidth - 1 ? '┘' : at === zero ? '┴' : '─',
   );
-  const series = statuses.map(
-    (status) =>
-      `  bar [${plotted.map((row) => (row.status === status ? String(Math.abs(row.delta)) : '0')).join(', ')}]`,
-  );
+  const ticks = `${`-${String(limit)}%`.padEnd(zero)}0${`+${String(limit)}%`.padStart(plotWidth - zero - 1)}`;
   return [
-    '```mermaid',
-    '---',
-    'config:',
-    '  xyChart:',
-    '    width: 640',
-    `    height: ${String(Math.max(140, 64 + 26 * plotted.length))}`,
-    '    titleFontSize: 14',
-    '    xAxis:',
-    '      labelFontSize: 12',
-    '    yAxis:',
-    '      labelFontSize: 11',
-    '      titleFontSize: 12',
-    '  themeVariables:',
-    '    xyChart:',
-    `      plotColorPalette: "${statuses.map((status) => chartColors[status]).join(', ')}"`,
-    '---',
-    'xychart-beta horizontal',
-    `  title "${mermaidLabel(suite, 64)} suite: Δ p50 vs baseline"`,
-    `  x-axis [${labels.join(', ')}]`,
-    `  y-axis "size of Δ p50 in %, red slower, green faster, grey neutral" 0 --> ${String(limit)}`,
-    ...series,
+    ...(prefix === '' ? [] : [`Every bench below starts with “${prefix.trimEnd()}”.`, '']),
+    '```diff',
+    header,
+    ...body,
+    `  ${indent}${axis.join('')}`,
+    `  ${indent}${ticks}`,
     '```',
   ];
 }
 
-/** A signed one-decimal number with no `%`, which Mermaid labels cannot carry. */
-function signedNumber(delta: number): string {
-  return `${delta > 0 ? '+' : ''}${delta.toFixed(1)}`;
+/** The 95% CI as numbers, from Labs' `-13.2..-8.1%` form; a missing or unreadable interval collapses to the point. */
+function interval(row: LabsRow): readonly [number, number] {
+  const match = /^([+-]?[\d.]+)\.\.([+-]?[\d.]+)%$/u.exec(row.ci);
+  if (match === null) return [row.delta, row.delta];
+  const low = Number(match[1]);
+  const high = Number(match[2]);
+  return Number.isFinite(low) && Number.isFinite(high)
+    ? [Math.min(low, high), Math.max(low, high)]
+    : [row.delta, row.delta];
 }
 
-/** Quotes, brackets, and separators end a Mermaid string or list early, so they never reach the chart. */
-function mermaidLabel(name: string, max = 32): string {
-  const clean = name
-    .replace(/["'`[\](){}|\\,;#%]/gu, '')
-    .replace(/\s+/gu, ' ')
-    .trim();
-  return clean.length > max ? `${clean.slice(0, max - 1).trimEnd()}…` : clean;
+/** The leading whole words every name shares, when there are several names and the words are worth hoisting. */
+function sharedWordPrefix(names: readonly string[]): string {
+  if (names.length < 2) return '';
+  const words = names.map((name) => name.split(' '));
+  let shared = 0;
+  while (words.every((list) => list.length > shared + 1 && list[shared] === words[0]![shared])) shared += 1;
+  const prefix = words[0]!.slice(0, shared).join(' ');
+  return prefix.length >= 12 ? `${prefix} ` : '';
+}
+
+/** Bench names often share a long prefix, so a long name keeps its start and its distinguishing end. */
+function fit(name: string, width: number): string {
+  const flat = name.replace(/\s+/gu, ' ').trim();
+  if (flat.length <= width) return flat.padEnd(width);
+  const head = Math.ceil((width - 1) * 0.55);
+  return `${flat.slice(0, head).trimEnd()}…${flat.slice(flat.length - (width - 1 - head)).trimStart()}`.padEnd(width);
 }
 
 function escapeCell(value: string): string {

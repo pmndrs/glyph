@@ -218,15 +218,15 @@ test('restores full names and statuses from a real Labs comparison', async () =>
   assert.deepEqual(slower.warnings, ['candidate CPU clock drifted 8.4% during its run']);
 });
 
-test('renders slower-first table, chart, and details from mixed results', () => {
-  const row = (status: 'faster' | 'slower' | 'neutral', name: string, delta: number) => ({
+test('renders a forest plot, slower-first table, and details from mixed results', () => {
+  const row = (status: 'faster' | 'slower' | 'neutral', name: string, delta: number, ci: string) => ({
     status,
     name,
     baseline: '1.00ms',
     candidate: '1.10ms',
     delta,
     p: '.002',
-    ci: '+1.0..+9.0%',
+    ci,
   });
   const markdown = renderLabsSummary({
     suite: 'edit',
@@ -234,10 +234,10 @@ test('renders slower-first table, chart, and details from mixed results', () => 
     candidate: '0.1.1 (bbbbbbbb)',
     comparison: {
       rows: [
-        row('faster', 'quick', -10.3),
-        row('neutral', 'same | pipe', 1.2),
-        row('slower', 'slow', 12),
-        row('slower', 'slowest', 31),
+        row('faster', 'quick', -10.3, '-14.0..-6.0%'),
+        row('neutral', 'same | pipe', 8, '-6.0..+20.0%'),
+        row('slower', 'slow', 12, '+7.0..+18.0%'),
+        row('slower', 'slowest', 31, '+20.0..+44.0%'),
       ],
       skipped: [{ name: 'noisy', reason: 'clock-confounded: faster→neutral · 2.68→2.93' }],
       warnings: [],
@@ -248,49 +248,104 @@ test('renders slower-first table, chart, and details from mixed results', () => 
   assert.equal(lines[2], '1 faster · 2 slower · 1 neutral · 1 skipped');
   const order = lines.filter((line) => /^\| (🔴|🟢)/u.test(line)).map((line) => line.split(' | ')[1]);
   assert.deepEqual(order, ['slowest', 'slow', 'quick']);
-  // Mermaid draws bars from the axis minimum and colours by series: sizes from 0, one series per status, sign in the label.
-  assert.ok(markdown.includes('  x-axis ["slowest +31.0", "slow +12.0", "quick -10.3", "same pipe +1.2"]'));
-  assert.ok(markdown.includes(' 0 --> 35'));
-  assert.ok(markdown.includes('  bar [31, 12, 0, 0]\n  bar [0, 0, 10.3, 0]\n  bar [0, 0, 0, 1.2]'));
-  assert.ok(markdown.includes('plotColorPalette: "#cf222e, #1a7f37, #8c959f"'));
-  assert.ok(markdown.includes('    height: 168'));
+
+  // A diff block colours `-` rows red and `+` rows green on GitHub; neutral rows stay plain.
+  const plot = plotLines(markdown);
+  assert.deepEqual(
+    plot.slice(1, 5).map((line) => [line[0], line.slice(2, 13).trim()]),
+    [
+      ['-', 'slowest'],
+      ['-', 'slow'],
+      ['+', 'quick'],
+      [' ', 'same | pipe'],
+    ],
+  );
+  assert.match(plot[0]!, /faster ◀ +┊ +▶ slower +Δ p50 +p$/u);
+  assert.match(plot[1]!, /├─+●─+┤ +\+31\.0% +\.002$/u);
+  assert.match(plot[4]!, /├─*┼─*●─*┤/u, 'an interval across zero keeps the zero line');
+  assert.equal(plot.at(-1)!.trim(), '-45%           0           +45%');
   assert.ok(markdown.includes('<details><summary>1 neutral, 1 skipped</summary>'));
   assert.ok(markdown.includes('same \\| pipe'));
   assert.ok(markdown.includes('skipped: clock-confounded: faster→neutral · 2.68→2.93'));
 });
 
-test('omits the chart when every bench is neutral', async () => {
+test('plots neutral-only results and carries Labs sparklines', async () => {
   const comparison = parseLabsComparison(await fixture('neutral'), [longParagraph, longFredoka, longPublish]);
+  assert.deepEqual(
+    comparison.rows.map((row) => [row.baselineSpark, row.candidateSpark]),
+    [
+      ['▂█▅▁▁▁▁▁▁▁', '▁▆█▃▂▂▁▁▁▁'],
+      ['▂█▇▄▃▁▁▁▁▁', '▁▆█▆▄▃▁▁▁▁'],
+      ['▃██▄▂▁▁▁▁▁', '▃██▅▂▁▁▁▁▁'],
+    ],
+  );
   const markdown = renderLabsSummary({ suite: 'edit', baseline: 'a', candidate: 'b', comparison });
   assert.ok(markdown.includes('All 3 compared benches are neutral.'));
-  assert.ok(!markdown.includes('mermaid'));
   assert.ok(markdown.includes('<details><summary>3 neutral, 0 skipped</summary>'));
+  const plot = plotLines(markdown);
+  assert.ok(
+    plot.slice(1, 4).every((line) => line.startsWith('  ')),
+    'neutral rows are never coloured',
+  );
+  assert.match(plot[0]!, /baseline +candidate$/u);
+  assert.match(plot[1]!, /▂█▅▁▁▁▁▁▁▁ ▁▆█▃▂▂▁▁▁▁$/u);
 });
 
-test('keeps Mermaid labels short, unique, and free of quote-breaking characters', () => {
-  const slow = (name: string) => ({
+test('hoists a shared name prefix, shortens long names in the middle, and caps the axis', () => {
+  const slow = (name: string, delta: number, ci: string) => ({
     status: 'slower' as const,
     name,
     baseline: '1ms',
     candidate: '2ms',
-    delta: 100,
+    delta,
     p: '.001',
-    ci: '+1..+2%',
+    ci,
   });
-  const long = 'layout "wide" [rtl], mixed {scripts} paragraph with many words';
-  const markdown = renderLabsSummary({
+  const shared = renderLabsSummary({
     suite: 'edit',
     baseline: 'a',
     candidate: 'b',
-    comparison: { rows: [slow(long), slow(long), slow('x')], skipped: [], warnings: [] },
+    comparison: {
+      rows: [slow(longParagraph, 12, '+8.0..+16.0%'), slow(longFredoka, 9, '+6.0..+12.0%')],
+      skipped: [],
+      warnings: [],
+    },
   });
-  const axis = markdown.split('\n').find((line) => line.startsWith('  x-axis '))!;
-  const labels = [...axis.matchAll(/"([^"]*)"/gu)].map((match) => match[1]!);
-  assert.equal(labels.length, 3);
-  assert.equal(new Set(labels).size, 3);
-  for (const label of labels) assert.ok(label.length <= 32 && !/[[\],]/u.test(label));
-  assert.ok(markdown.includes('--> 100'));
+  assert.ok(shared.includes('Every bench below starts with “type one character into a long”.'));
+  assert.deepEqual(
+    plotLines(shared)
+      .slice(1, 3)
+      .map((line) => line.slice(2, 32).trimEnd()),
+    ['…paragraph and measure', '…Fredoka paragraph and measure'],
+  );
+
+  const long =
+    'layout across a very long mixed-script paragraph with many words, spans, and runs, and a distinct ending';
+  const noisy = renderLabsSummary({
+    suite: 'edit',
+    baseline: 'a',
+    candidate: 'b',
+    comparison: {
+      rows: [slow(long, 140, '+60.0..+300.0%'), slow('x', 4, '+1.0..+7.0%')],
+      skipped: [],
+      warnings: [],
+    },
+  });
+  const plot = plotLines(noisy);
+  const name = plot[1]!.slice(2, 62);
+  assert.equal(name.length, 60);
+  assert.ok(name.startsWith('layout across') && name.trimEnd().endsWith('distinct ending') && name.includes('…'));
+  assert.ok(plot[1]!.includes('┊              ▶'), 'a bench past the capped axis draws as an arrow at its edge');
+  assert.ok(!plot[1]!.includes('●') && !plot[1]!.includes('├'));
+  assert.equal(plot.at(-1)!.trim(), '-50%           0           +50%');
 });
+
+/** The lines inside the summary's ```diff block, header first and the tick labels last. */
+function plotLines(markdown: string): string[] {
+  const lines = markdown.split('\n');
+  const start = lines.indexOf('```diff');
+  return lines.slice(start + 1, lines.indexOf('```', start + 1));
+}
 
 test('appends to the Actions job summary only when it is configured', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'labs-summary-'));
