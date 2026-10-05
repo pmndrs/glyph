@@ -50,7 +50,8 @@ okf_version: '0.2'
 - [Bitmap hinting research](planning/bitmap-hinting-research.md) — hinted grayscale strikes and four-phase coverage packing without distance fields or LCD rendering.
 - [MTSDF generation research](planning/mtsdf-generation-research.md) — primary literature, open implementations and licenses, repository ownership, and scalar/SIMD evidence gates.
 - [Research bibliography](../../RESEARCH.md) — attributed external sources and extracted findings.
-- [Decision register](planning/decision-register.md) — proposed and settled architectural choices.
+- [Decisions](planning/decisions/) — one file per decision since D-372; list with `docs:list -- decision`.
+- [Decision register](planning/decision-register.md) — frozen D-001–D-372 architectural choices.
 - [Open questions](planning/open-questions.md) — unresolved blockers and required prototypes.
 - [Planning index](planning/index.md) — complete planning-document inventory.
-- [Knowledge bundle log](log.md) — newest-first record of knowledge-bundle changes.
+- [Knowledge bundle log](log/) — one file per change; list newest first with `docs:list -- log`.
