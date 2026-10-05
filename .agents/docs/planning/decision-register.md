@@ -3,6 +3,7 @@ type: Decision Register
 title: Decision register
 description: Tracks proposed architectural choices and the decisions required before implementation begins.
 tags: [decisions, governance]
+frozen_after: D-372
 sources:
   - id: 'citation-1'
     resource: 'benchmark-plan.md'
@@ -54,7 +55,13 @@ generated:
 
 # Decision register
 
-Status: mixed; accepted choices and remaining proposals are recorded per row
+Status: frozen at D-372; accepted choices and remaining proposals are recorded per row
+
+**New decisions are not added here.** Record each new decision as its own file in [decisions/](decisions/), named by its
+subject, with `mise exec -- pnpm scripts run docs:new -- decision <slug> <title>`, and list them with
+`mise exec -- pnpm scripts run docs:list -- decision`. Shared numbering and one shared table made every concurrent pull
+request conflict; see [append-only knowledge records](decisions/append-only-knowledge-records.md). Rows here keep their
+IDs, may still change status, and are superseded by naming their ID in a decision file's `supersedes`.
 
 This register records choices, not their full rationale. The linked API, architecture, data contracts, roadmap, and research are authoritative for detail. Accepted choices are grouped into four durable records with the exact decision, alternatives, consequences, and date:
 
