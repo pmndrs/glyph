@@ -5,7 +5,6 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:13aca77be7acc1db5f581141bd3c5852a8f46073fc0b2b9fd66aadd18ef34442'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -1242,7 +1241,7 @@ transaction and raster-format-specific command-buffer publication; GPU submissio
 
 The migration comparison is checked evidence rather than a reconstructed recollection. Commit `90964be0`, the exact
 `feat/three-api` base, was rebuilt in an isolated worktree using its own lockfile and original
-`glyph:layout-benchmark` workflow on this Darwin arm64 host. At the same eight-warmup/31-sample cadence its retained
+now-retired `glyph:layout-benchmark` workflow on this Darwin arm64 host. At the same eight-warmup/31-sample cadence its retained
 TypeScript path measured 58.32/12.09/9.15/39.61 ms for cold/font-size/width/suffix-edit medians. The current Bitmap,
 MTSDF, and Slug records all use one byte-identical optimized shaper Wasm and the complete `pmndrs_glyph_engine_update` plus
 raster-format-specific Rust command-buffer publication. The base reports 25,515 positioned glyphs; the current publication reports 21,805
@@ -1413,7 +1412,17 @@ or split a previously shaped word.
 
 The legal stream begins with Unicode 17 UAX #14 opportunities, discards any optional opportunity that falls inside a
 UAX #29 extended grapheme, and intersects the result with HarfRust unsafe-to-break shaping boundaries. The default has
-no dictionary segmentation, language-specific hyphenation, or locale tailoring. Optional language-resource imports,
+no dictionary segmentation, language-specific hyphenation, or locale tailoring. A Unicode-legal break that HarfRust
+marks unsafe stays allowed within one run, binding, and font, as in browser line breaking: the line fitter prices it
+from boundary-local shaping corrections, computed lazily per boundary and stored in a cluster lane, so line layout is
+exact at the breaks it takes (D-372). A break no space precedes is refused when its island shaped alone draws other glyph ids than the paragraph (a ligature or contextual unit), so Glyph never splits such a unit, unlike Chromium; a positioning-only difference keeps the break. The check is lazy: it rides the `L` pricing shaping at the breaks the fitter evaluates, and an island longer than `ISLAND_CAP` clusters is never reshaped and stays a non-break. Min-content reads the paragraph shaping's word widths uncorrected, like Blink's fast
+min-content path, so it never prices every corrected boundary. A line that starts at such a corrected boundary draws the glyphs of the island it opens shaped alone, in
+the same pass that prices it (`line_edge_records`, boundary-shape records beside the ellipsis one), so it matches the
+line shaped by itself. A line that ends at one, unless a space ends it, draws the island it closes shaped alone too
+(the tail record, `FlowFragment::tail_index`), as Blink reshapes a line end that no breakable space
+precedes (so only at positioning-only breaks); a hanging space keeps the paragraph's glyphs, as browsers keep the terminating space in the shaping run. Extra glyphs an edge record draws beyond its cluster's paragraph glyphs keep the stable ids of the previous layout's records, found by the text unit of their cluster and their ordinal (`previous_edge_ids`), so an edit that moves offsets keeps them. An island a boundary prices is the island its line edge draws, so one shaping serves both and is kept with the cluster arena (`ClusterArena::islands`): a relayout over the same clusters, such as a width change, shapes nothing, and an edit rebuilds the arena empty.
+Edge records lay out cluster by cluster, so spans that split only paint or decoration keep their own extents and
+justification. A paragraph with a right-to-left or overridden run marks no unsafe break as correctable, as on main, so its widths and drawn glyphs cannot disagree (known limitation until edge records follow visual order). Optional language-resource imports,
 including a versioned linear-memory ABI that can move language tables out of the default Wasm payload, are tracked in
 [#163](https://github.com/pmndrs/glyph/issues/163); no renderer adapter may become a second layout implementation.
 

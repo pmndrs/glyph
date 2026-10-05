@@ -6,7 +6,7 @@ import * as stableThree from '@pmndrs/glyph/three';
 import * as experimentalThree from '@pmndrs/glyph/three/typegpu';
 import { createThreeTestHandle } from '../support/three-handle.mjs';
 
-import * as d from 'typegpu/data';
+import { d } from 'typegpu';
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { msdfPosition } from '../../dist/shaders/typegpu/msdf-shader.js';
