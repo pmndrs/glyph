@@ -110,3 +110,8 @@ function displayError(value: unknown): string {
   if (isRecord(value) && typeof value.message === 'string') return value.message;
   return typeof value === 'string' ? value : JSON.stringify(value);
 }
+
+/** Run names in result order, the full text behind the truncated labels `labs compare` prints. */
+export function labsRunNames(result: unknown): readonly string[] {
+  return labeledRuns(result).map(({ run }) => displayName(run.name, '<unknown run>'));
+}
