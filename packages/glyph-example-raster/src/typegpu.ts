@@ -1,6 +1,4 @@
-import tgpu, { type TgpuFn } from 'typegpu';
-import * as d from 'typegpu/data';
-import * as std from 'typegpu/std';
+import tgpu, { type TgpuFn, d, std } from 'typegpu';
 
 import { glyphExampleShaderContract, type GlyphExampleShaderVariant } from './shader-contract.js';
 import './portable.js';
