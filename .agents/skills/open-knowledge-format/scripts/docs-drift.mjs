@@ -71,8 +71,8 @@ export function renderDocsReport({ rows, findings, base, links }) {
   if (rows.length > 0) {
     out.push('', '| Package | Concept | Attestation | Status |', '| --- | --- | --- | --- |');
     for (const row of rows) {
-      const claim =
-        row.attestation === undefined ? 'none' : `${row.attestation.author}: ${clip(row.attestation.note, 120)}`;
+      // The pull request already carries authorship, so the claim is the note alone.
+      const claim = row.attestation === undefined ? 'none' : clip(row.attestation.note, 120);
       const stale =
         row.status === 'stale'
           ? ` (made at \`${short(row.attestation.source)}\`, source now \`${short(row.current)}\`)`

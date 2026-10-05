@@ -18,7 +18,7 @@ Docs upkeep is audited, not gated. Concepts store no source pin; the retired `so
 - **Attest.** A contributor that changes a package's source updates its concept where it is now wrong, then, after the
   last source change, runs `docs:attest -- <package> "<what changed and was checked>"`. That writes one new
   `attestations/<date>-<package>-<digest>.md` naming the package source it covers as a SHA-256 over git blob IDs, which
-  is identical in every checkout with or without Git LFS content. The committing identity is the attester.
+  is identical in every checkout with or without Git LFS content. The pull request it lands in carries its authorship.
 - **Show.** On every commit until each package the branch changed is attested at the source about to be committed,
   the hook names it as missing or stale with the command to fix it; attesting after the last source change silences
   it, so the reminder always has an exit. CI's `Docs report` judges the pull request at its own head and shows, per

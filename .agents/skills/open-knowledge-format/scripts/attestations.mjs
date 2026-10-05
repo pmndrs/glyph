@@ -166,9 +166,7 @@ export async function pullRequestAttestations(root, base, head = 'HEAD') {
   );
   const attestations = [];
   for (const file of added) {
-    const record = parseAttestation(file, await git(root, ['show', `${head}:${file}`]));
-    record.author = (await git(root, ['log', '-1', '--format=%an', `${mergeBase}..${head}`, '--', file])).trim();
-    attestations.push(record);
+    attestations.push(parseAttestation(file, await git(root, ['show', `${head}:${file}`])));
   }
   const rows = [];
   for (const entry of changedPackages(await packageInventory(root), changed)) {

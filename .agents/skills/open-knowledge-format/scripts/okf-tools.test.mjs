@@ -172,7 +172,7 @@ test('the pull-request docs report shows attestation status per changed package 
   assert.match(clean, /Every changed package is attested at this head/u);
   assert.match(
     clean,
-    /\| `@pmndrs\/glyph` \| `packages\/glyph\.md` · not edited \| Test: Changed index; concept still accurate\. \| ✅ \|/u,
+    /\| `@pmndrs\/glyph` \| `packages\/glyph\.md` · not edited \| Changed index; concept still accurate\. \| ✅ \|/u,
   );
   assert.equal(renderAnnotations({ rows: await pullRequestAttestations(root, 'base'), findings: [] }), '');
 });
