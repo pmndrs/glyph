@@ -50,7 +50,7 @@ test('attest, review, and verify across merges without a single conflict', async
   assert.equal(rows[0].status, 'stale');
   assert.match(
     renderDocsReport({ rows, findings: [], base: 'main' }),
-    /⚠️ stale.*\n[\s\S]*docs:attest -- @test\/glyph/u,
+    /\(made at `[0-9a-f]{8}`, source now `[0-9a-f]{8}`\) \| ⚠️ \|\n[\s\S]*docs:attest -- @test\/glyph/u,
   );
   await attest(root, 'glyph', 'Revised a; concept still accurate.', { date: '2026-10-01' });
   await commitAll(root, 'docs(glyph): attest revised a');

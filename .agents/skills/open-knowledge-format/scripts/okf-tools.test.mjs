@@ -149,7 +149,7 @@ test('the pull-request docs report shows attestation status per changed package 
   const body = renderDocsReport({ rows, findings, base: 'base' });
   assert.ok(body.startsWith(docsReportMarker));
   assert.match(body, /Advisory only — this never blocks merging/u);
-  assert.match(body, /\| `@pmndrs\/glyph` \| not edited \| none \| ⚠️ unattested \|/u);
+  assert.match(body, /\| `@pmndrs\/glyph` \| not edited \| none \| ❌ \|/u);
   assert.match(body, /docs:attest -- @pmndrs\/glyph "<what you changed and checked>"/u);
   assert.match(body, /docs:check/u);
 
@@ -164,10 +164,7 @@ test('the pull-request docs report shows attestation status per changed package 
     base: 'base',
   });
   assert.match(clean, /Every changed package is attested at this head/u);
-  assert.match(
-    clean,
-    /\| `@pmndrs\/glyph` \| not edited \| Test: Changed index; concept still accurate\. \| ✅ attested at this head \|/u,
-  );
+  assert.match(clean, /\| `@pmndrs\/glyph` \| not edited \| Test: Changed index; concept still accurate\. \| ✅ \|/u);
 });
 
 test('outline and search locate every answer as path › heading trail with line ranges', async () => {

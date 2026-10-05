@@ -47,13 +47,14 @@ export function renderDocsReport({ rows, findings, base }) {
     for (const row of rows) {
       const claim =
         row.attestation === undefined ? 'none' : `${row.attestation.author}: ${clip(row.attestation.note, 120)}`;
-      const status = {
-        attested: '✅ attested at this head',
-        stale: `⚠️ stale: made at \`${short(row.attestation?.source)}\`, source is now \`${short(row.current)}\``,
-        unattested: '⚠️ unattested',
-      }[row.status];
-      out.push(`| \`${row.package}\` | ${row.conceptEdited ? 'edited' : 'not edited'} | ${claim} | ${status} |`);
+      const stale =
+        row.status === 'stale'
+          ? ` (made at \`${short(row.attestation.source)}\`, source now \`${short(row.current)}\`)`
+          : '';
+      const icon = { attested: '✅', stale: '⚠️', unattested: '❌' }[row.status];
+      out.push(`| \`${row.package}\` | ${row.conceptEdited ? 'edited' : 'not edited'} | ${claim}${stale} | ${icon} |`);
     }
+    out.push('', '✅ attested at this head · ⚠️ stale: source changed after attesting · ❌ unattested');
     if (open.length > 0) {
       out.push(
         '',
