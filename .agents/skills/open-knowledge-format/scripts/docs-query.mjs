@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+/* @workflow {"name": "docs:search", "args": [".agents/docs", "search"], "summary": "Find docs without reading whole files: `-- <terms…>` prints each matching paragraph under `path › Heading › Sub  [start-end]`; read that range next.", "requirements": "The repository-pinned Node.js runtime.", "writes": "stdout"} */
+/* @workflow {"name": "docs:outline", "args": [".agents/docs", "outline"], "summary": "Heading tree with [start-end] line ranges: `-- <path>` for a file or directory, `-- <path>:<line>` for the sections containing that line.", "requirements": "The repository-pinned Node.js runtime.", "writes": "stdout"} */
+/* @workflow {"name": "docs:decision", "args": [".agents/docs", "decision"], "summary": "Print one decision without loading the register: `-- D-123` or `-- <decision-slug>`.", "requirements": "The repository-pinned Node.js runtime.", "writes": "stdout"} */
 
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';

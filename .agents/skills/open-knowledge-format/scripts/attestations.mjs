@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+/* @workflow {"name": "docs:attest", "args": [".", "attest"], "summary": "After your last source change to a package, record what you changed and checked in its docs: `-- <package> \"<note>\"`. Writes one new attestation file to commit with the change.", "requirements": "The repository-pinned Node.js runtime.", "writes": "One new file under .agents/docs/attestations/"} */
+/* @workflow {"name": "docs:verify", "args": [".", "verify"], "summary": "Reviewer step for the Sync agent docs issue: after correcting the docs, `-- <slug>` writes one verification log entry for every pending attestation and gap and removes the consumed attestations.", "requirements": "The repository-pinned Node.js runtime and full git history.", "writes": "One new log entry; deletes consumed files under .agents/docs/attestations/"} */
 
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';

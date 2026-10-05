@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+/* @workflow {"name": "docs:new", "args": [".agents/docs", "new"], "summary": "Scaffold one append-only record: `-- log <slug> <title>` for a log entry or `-- decision <slug> <title>` for a decision file.", "requirements": "The repository-pinned Node.js runtime.", "writes": "One new file under .agents/docs/log/ or .agents/docs/planning/decisions/"} */
+/* @workflow {"name": "docs:list", "args": [".agents/docs", "list"], "summary": "List records newest first, 20 by default: `-- log [--since YYYY-MM-DD] [--mentions <text>] [--limit n | --all]` or `-- decision`.", "requirements": "The repository-pinned Node.js runtime.", "writes": "stdout"} */
 
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';

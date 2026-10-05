@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* @workflow {"name": "docs:check", "args": [".agents/docs", "--workspace-root", "."], "summary": "Validate the Open Knowledge Format agent archive under .agents/docs, including one concept per workspace package.", "requirements": "The repository-pinned Node.js runtime.", "writes": "stdout"} */
 
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';

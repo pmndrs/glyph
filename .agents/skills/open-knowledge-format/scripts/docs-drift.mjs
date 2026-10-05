@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* @workflow {"name": "docs:drift", "args": ["."], "summary": "Audit docs intent and validity: with no flags, the per-package status behind the Sync agent docs issue; `-- --markdown <file>` writes that issue body; `-- --pr <base> [--head <sha>]` prints the advisory pull-request report.", "requirements": "The repository-pinned Node.js runtime and full git history.", "writes": "stdout and the optional --markdown file"} */
 
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
