@@ -3,6 +3,6 @@
 # it, which is the consent boundary for everything declared here:
 #   git config set include.path ../.gitconfig
 # Verify with: git hook list --show-scope pre-commit
-[hook "okf-digests"]
+[hook "okf-docs-report"]
 	event = pre-commit
-	command = node .githooks/okf-digests.mjs
+	command = node .githooks/okf-docs-report.mjs

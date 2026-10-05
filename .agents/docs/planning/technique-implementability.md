@@ -253,7 +253,7 @@ Keep the integrated history atomic and green in dependency order:
 4. renderer-neutral example device plus the real font/bake/non-empty-draw acceptance path;
 5. Bitmap/MSDF/Slug portable resource migration, README/archive/report/decision-register updates, benchmark proof, and generated digests.
 
-Each commit must pass its focused checks before the next commit is integrated; the final branch must pass every affected package check, `docs:check`, and the repository check. Use `gh stack` for the single PR branch and never merge to `main`. If the base moves, rebase with `git rebase --onto <new-base> <old-base> <branch>`; never use `--skip`. Resolve generated `source_digest` conflicts only with `mise exec -- pnpm scripts run docs:update`.
+Each commit must pass its focused checks before the next commit is integrated; the final branch must pass every affected package check, `docs:check`, and the repository check. Use `gh stack` for the single PR branch and never merge to `main`. If the base moves, rebase with `git rebase --onto <new-base> <old-base> <branch>`; never use `--skip`.
 
 ## Review gates before implementation
 
