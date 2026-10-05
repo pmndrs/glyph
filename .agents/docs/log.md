@@ -1,5 +1,14 @@
 # pmndrs/glyph documentation update log
 
+## 2026-10-05
+
+- **Replaced concept digest pins with a drift issue** — Package concepts no longer store a `source_digest`, which
+  conflicted on every concurrent pull request touching the same package and was re-pinned automatically at commit time.
+  Validation keeps one-concept-per-package coverage and rejects the retired field. The new `docs:drift` workflow reports,
+  from git history, which concepts trail their source, and the `Docs drift` GitHub workflow keeps one `docs-drift` issue
+  current for the scheduled maintenance agent. The commit hook now only validates the staged bundle. See D-373 in
+  [the decision register](planning/decision-register.md) and [the package index](packages/index.md).
+
 ## 2026-09-30
 
 - **Broke lines at unsafe legal boundaries with shaped corrections** — Unicode-legal breaks that HarfRust marks unsafe

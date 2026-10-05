@@ -396,6 +396,6 @@ Stated plainly, because a benchmark suite that is trusted beyond its evidence is
 3. Land benches 4a/4b, 5, 6, and 8, including the exact-equality teardown assertions.
 4. Build the CI gate over `blocks.medians` and run it non-blocking on pull requests for long enough to measure its false-positive rate on no-op changes. Do not make it required before that number is known.
 5. Execute the retirement table; record each replacement in the decision register. The public layout, retained-batch, raw Rust, and Node kernel timers are retired.
-6. Re-pin the affected package concepts and run `docs:update` / `docs:check`.
+6. Review the affected package concepts and run `docs:check`.
 
 Step 4 is not optional. A gate whose false-positive rate is unknown will be disabled by the first person it blocks unfairly, and the repository will be back where it started — with benchmarks nobody trusts.

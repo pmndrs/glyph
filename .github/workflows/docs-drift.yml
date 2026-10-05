@@ -1,0 +1,69 @@
+name: Docs drift
+
+# Package concept freshness is maintenance work, not a merge gate. This workflow keeps exactly one
+# `docs-drift` issue in step with `main`: it rewrites the body after every push, reopens it when a
+# concept falls behind its source, and closes it once every concept is current again. A scheduled
+# maintenance agent resolves the open issue in one pull request.
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: docs-drift
+  cancel-in-progress: true
+
+jobs:
+  report:
+    name: Rewrite the docs drift issue
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CI: true
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      DRIFT_LABEL: docs-drift
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Drift is measured from history: the last commit that touched each concept.
+          fetch-depth: 0
+
+      - name: Install canonical toolchain
+        uses: jdx/mise-action@9e7f7633ff6f6d6048a9418a68d48f288f50eb14 # v4.2.3
+        with:
+          version: 2026.7.13
+          cache: true
+
+      - name: Measure concept drift
+        run: pnpm scripts run docs:drift -- --markdown "$RUNNER_TEMP/docs-drift.md"
+
+      - name: Rewrite the drift issue
+        run: |
+          gh label create "$DRIFT_LABEL" --color FBCA04 \
+            --description 'Package concepts trail their source; resolved by the docs maintenance agent' --force
+          issue=$(gh issue list --label "$DRIFT_LABEL" --state all --limit 1 --json number,state \
+            --jq '.[0] // empty | "\(.number) \(.state)"')
+          number=${issue%% *}
+          state=${issue#* }
+          if grep -q 'Every workspace package concept is current' "$RUNNER_TEMP/docs-drift.md"; then
+            if [ -n "$issue" ]; then
+              gh issue edit "$number" --body-file "$RUNNER_TEMP/docs-drift.md"
+              if [ "$state" = OPEN ]; then gh issue close "$number" --reason completed; fi
+            fi
+          elif [ -z "$issue" ]; then
+            gh issue create --title 'Docs drift: package concepts trail their source' \
+              --label "$DRIFT_LABEL" --body-file "$RUNNER_TEMP/docs-drift.md"
+          else
+            gh issue edit "$number" --body-file "$RUNNER_TEMP/docs-drift.md"
+            if [ "$state" = CLOSED ]; then gh issue reopen "$number"; fi
+          fi

@@ -84,10 +84,10 @@ For a repository that maintains `Workspace Package` concepts, require complete p
 
 ```sh
 node scripts/validate-okf.mjs /path/to/bundle --workspace-root /path/to/repository
-node scripts/generate-package-digests.mjs /path/to/repository
+node scripts/docs-drift.mjs /path/to/repository --markdown drift.md
 ```
 
-The validator discovers `apps/*/package.json`, `benches/package.json`, and `packages/*/package.json`. Each manifest requires exactly one `type: Workspace Package` concept whose `workspace_package`, `resource`, and deterministic `source_digest` match. Digests include source and configuration while excluding `.cache`, `node_modules`, `dist`, `target`, `coverage`, `.DS_Store`, and TypeScript build-info files. A digest mismatch forces package documentation review in the same change as source edits.
+The validator discovers `apps/*/package.json`, `benches/package.json`, and `packages/*/package.json`. Each manifest requires exactly one `type: Workspace Package` concept whose `workspace_package` and `resource` match; a retired `source_digest` field is a producer-profile error. Freshness is not stored in the bundle, because a stored source hash conflicts on every concurrent change to the same package. `docs-drift.mjs` instead lists, per package, the non-merge commits that changed package source (excluding `.cache`, `node_modules`, `dist`, `target`, and `coverage`) after the last commit that touched its concept, and renders them as one tracking-issue body. Editing a concept, including only its `generated.at` after a review that found it current, clears that package. Drift measurement needs full git history.
 
 Report:
 

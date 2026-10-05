@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 import { afterEach, test } from 'node:test';
 
 import { migrateV01ToV02 } from './migrate-v01-to-v02.mjs';
-import { packageDigest } from './package-digest.mjs';
+import { driftIssueMarker, measureDocsDrift, renderDriftIssue } from './docs-drift.mjs';
 import { validateOkf } from './validate-okf.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -16,19 +16,6 @@ const temporaryDirectories = [];
 
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
-});
-
-test('package digests are deterministic and ignore build output', async () => {
-  const root = await temporaryDirectory('okf-digest-');
-  await mkdir(path.join(root, 'src'), { recursive: true });
-  await mkdir(path.join(root, 'dist'), { recursive: true });
-  await writeFile(path.join(root, 'src', 'index.ts'), 'export const value = 1;\n');
-  await writeFile(path.join(root, 'dist', 'index.js'), 'ignored\n');
-  const before = await packageDigest(root);
-  await writeFile(path.join(root, 'dist', 'index.js'), 'still ignored\n');
-  assert.equal(await packageDigest(root), before);
-  await writeFile(path.join(root, 'src', 'index.ts'), 'export const value = 2;\n');
-  assert.notEqual(await packageDigest(root), before);
 });
 
 test('validator separates conformance and producer-profile failures', async () => {
@@ -57,85 +44,65 @@ test('migration preserves concepts while replacing v0.1 metadata and citations',
   assert.match(await readFile(path.join(root, 'index.md'), 'utf8'), /okf_version: "0\.2"/u);
 });
 
-test('pre-commit digest updates hash staged content without staging unrelated working-tree edits', async () => {
-  const root = await temporaryDirectory('okf-hook-');
-  await git(root, ['init', '-q']);
-  await git(root, ['config', 'user.email', 'test@example.test']);
-  await git(root, ['config', 'user.name', 'Test']);
-  await mkdir(path.join(root, 'packages/glyph/src'), { recursive: true });
-  await mkdir(path.join(root, '.agents/docs/packages'), { recursive: true });
-  await writeFile(path.join(root, 'packages/glyph/package.json'), '{"name":"@pmndrs/glyph"}\n');
-  await writeFile(path.join(root, 'packages/glyph/src/index.ts'), 'initial\n');
-  const initialDigest = await packageDigest(path.join(root, 'packages/glyph'));
-  const conceptPath = path.join(root, '.agents/docs/packages/glyph.md');
-  await writeFile(
-    conceptPath,
-    `---\ntype: Workspace Package\ntitle: Glyph\ndescription: Test package.\ndocumentation_type: reference\nworkspace_package: '@pmndrs/glyph'\nresource: ../../../packages/glyph\nsource_digest: '${initialDigest}'\ngenerated:\n  by: process:test\n  at: '2026-09-17T00:00:00Z'\n---\n\n# Glyph\n`,
-  );
-  await writeFile(path.join(root, '.agents/docs/index.md'), '---\nokf_version: "0.2"\n---\n\n# Index\n');
-  await git(root, ['add', '.']);
-  await git(root, ['commit', '-qm', 'fixture']);
+test('validator requires one concept per workspace package and rejects a retired source_digest', async () => {
+  const root = await workspaceFixture('okf-coverage-');
+  const docs = path.join(root, '.agents/docs');
+  assert.deepEqual((await validateOkf(docs, { workspaceRoot: root })).profile, []);
 
-  const sourcePath = path.join(root, 'packages/glyph/src/index.ts');
-  await writeFile(sourcePath, 'staged\n');
-  await git(root, ['add', 'packages/glyph/src/index.ts']);
-  await writeFile(sourcePath, 'unstaged\n');
-  await writeFile(conceptPath, (await readFile(conceptPath, 'utf8')).replace('title: Glyph', 'title: Unstaged Glyph'));
+  await writeFile(conceptPath(root), glyphConcept({ extra: "source_digest: 'sha256:00'\n" }));
+  assert.deepEqual((await validateOkf(docs, { workspaceRoot: root })).profile, [
+    `${conceptPath(root)}: source_digest is retired; remove it (drift is reported from git history)`,
+  ]);
 
-  const hookResult = await execFileAsync(process.execPath, [hookPath()], { cwd: root });
-  assert.doesNotMatch(hookResult.stderr, /digest pins left to CI/u);
-
-  const indexConcept = await git(root, ['show', ':.agents/docs/packages/glyph.md']);
-  const workingConcept = await readFile(conceptPath, 'utf8');
-  assert.match(indexConcept, /title: Glyph/u);
-  assert.doesNotMatch(indexConcept, /title: Unstaged Glyph/u);
-  assert.match(workingConcept, /title: Unstaged Glyph/u);
-
-  const stagedRoot = await temporaryDirectory('okf-hook-stage-');
-  await mkdir(path.join(stagedRoot, 'src'), { recursive: true });
-  await writeFile(path.join(stagedRoot, 'package.json'), '{"name":"@pmndrs/glyph"}\n');
-  await writeFile(path.join(stagedRoot, 'src/index.ts'), 'staged\n');
-  assert.match(indexConcept, new RegExp(`source_digest: '${await packageDigest(stagedRoot)}'`, 'u'));
-  assert.equal(
-    await git(root, ['diff', '--cached', '--name-only']),
-    '.agents/docs/packages/glyph.md\npackages/glyph/src/index.ts\n',
+  await rm(conceptPath(root));
+  assert.ok(
+    (await validateOkf(docs, { workspaceRoot: root })).profile.includes(
+      'workspace package @pmndrs/glyph: missing OKF Workspace Package concept',
+    ),
   );
 });
 
-test('pre-commit digest hashes checkout-filtered bytes rather than Git object bytes', async () => {
-  const root = await temporaryDirectory('okf-hook-filter-');
-  await git(root, ['init', '-q']);
-  const uppercaseFilter = path.join(root, 'uppercase-filter.mjs');
-  const passthroughFilter = path.join(root, 'passthrough-filter.mjs');
-  await writeFile(
-    uppercaseFilter,
-    "let input = ''; process.stdin.setEncoding('utf8'); process.stdin.on('data', (chunk) => (input += chunk)); process.stdin.on('end', () => process.stdout.write(input.toUpperCase()));\n",
-  );
-  await writeFile(passthroughFilter, 'process.stdin.pipe(process.stdout);\n');
-  await git(root, ['config', 'filter.test-smudge.smudge', filterCommand(process.execPath, uppercaseFilter)]);
-  await git(root, ['config', 'filter.test-smudge.clean', filterCommand(process.execPath, passthroughFilter)]);
-  await mkdir(path.join(root, 'packages/glyph/src'), { recursive: true });
-  await mkdir(path.join(root, '.agents/docs/packages'), { recursive: true });
-  await writeFile(path.join(root, '.gitattributes'), 'packages/glyph/src/filtered.asset filter=test-smudge\n');
-  await writeFile(path.join(root, 'packages/glyph/package.json'), '{"name":"@pmndrs/glyph"}\n');
-  await writeFile(path.join(root, 'packages/glyph/src/filtered.asset'), 'lowercase asset\n');
-  await writeFile(
-    path.join(root, '.agents/docs/packages/glyph.md'),
-    "---\ntype: Workspace Package\ntitle: Glyph\ndescription: Test package.\ndocumentation_type: reference\nworkspace_package: '@pmndrs/glyph'\nresource: ../../../packages/glyph\nsource_digest: 'sha256:0000000000000000000000000000000000000000000000000000000000000000'\ngenerated:\n  by: process:test\n  at: '2026-09-17T00:00:00Z'\n---\n\n# Glyph\n",
-  );
-  await writeFile(path.join(root, '.agents/docs/index.md'), '---\nokf_version: "0.2"\n---\n\n# Index\n');
-  await git(root, ['add', '.gitattributes', '.agents', 'packages']);
+test('drift lists source commits after the concept was last committed and ignores build output', async () => {
+  const root = await workspaceFixture('okf-drift-');
+  await commitFixture(root);
+  assert.deepEqual(await driftCommits(root), []);
 
-  await execFileAsync(process.execPath, [hookPath()], { cwd: root });
+  await writeFile(path.join(root, 'packages/glyph/src/index.ts'), 'changed\n');
+  await git(root, ['commit', '-qam', 'feat(glyph): change source']);
+  await mkdir(path.join(root, 'packages/glyph/dist'), { recursive: true });
+  await writeFile(path.join(root, 'packages/glyph/dist/index.js'), 'built\n');
+  await git(root, ['add', '-f', 'packages/glyph/dist/index.js']);
+  await git(root, ['commit', '-qm', 'chore(glyph): commit build output']);
 
-  const expectedRoot = await temporaryDirectory('okf-filter-expected-');
-  await mkdir(path.join(expectedRoot, 'src'), { recursive: true });
-  await writeFile(path.join(expectedRoot, 'package.json'), '{"name":"@pmndrs/glyph"}\n');
-  await writeFile(path.join(expectedRoot, 'src/filtered.asset'), 'LOWERCASE ASSET\n');
-  assert.match(
-    await git(root, ['show', ':.agents/docs/packages/glyph.md']),
-    new RegExp(`source_digest: '${await packageDigest(expectedRoot)}'`, 'u'),
+  const [entry] = await measureDocsDrift(root);
+  assert.deepEqual(
+    entry.commits.map((commit) => commit.subject),
+    ['feat(glyph): change source'],
   );
+  assert.deepEqual(entry.files, ['packages/glyph/src/index.ts']);
+  const body = renderDriftIssue([entry], { head: 'abc1234' });
+  assert.ok(body.startsWith(driftIssueMarker));
+  assert.match(body, /1 of 1 workspace package concepts trail their source at `abc1234`/u);
+  assert.match(body, /feat\(glyph\): change source/u);
+
+  await writeFile(conceptPath(root), glyphConcept({ at: '2026-10-05T00:00:00Z' }));
+  await git(root, ['commit', '-qam', 'docs(glyph): review concept']);
+  assert.deepEqual(await driftCommits(root), []);
+  assert.match(renderDriftIssue(await measureDocsDrift(root)), /Every workspace package concept is current/u);
+});
+
+test('pre-commit validation reads the staged snapshot and never rewrites the index', async () => {
+  const root = await workspaceFixture('okf-hook-');
+  await commitFixture(root);
+  await writeFile(path.join(root, 'packages/glyph/src/index.ts'), 'staged\n');
+  await writeFile(conceptPath(root), glyphConcept({ at: '2026-10-05T00:00:00Z' }));
+  await git(root, ['add', '.']);
+  await writeFile(conceptPath(root), 'unstaged and invalid\n');
+  const staged = await git(root, ['write-tree']);
+
+  const hookResult = await execFileAsync(process.execPath, [hookPath()], { cwd: root });
+  assert.match(hookResult.stdout, /Producer-profile errors: 0/u);
+  assert.equal(await git(root, ['write-tree']), staged);
 });
 
 test('pre-commit validation failure blocks the commit', async () => {
@@ -169,9 +136,40 @@ async function git(directory, arguments_) {
 }
 
 function hookPath() {
-  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../.githooks/okf-digests.mjs');
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../.githooks/okf-validate.mjs');
 }
 
-function filterCommand(executable, script) {
-  return `${JSON.stringify(executable)} ${JSON.stringify(script)}`;
+function conceptPath(root) {
+  return path.join(root, '.agents/docs/packages/glyph.md');
+}
+
+function glyphConcept({ at = '2026-09-17T00:00:00Z', extra = '' } = {}) {
+  return `---\ntype: Workspace Package\ntitle: Glyph\ndescription: Test package.\ndocumentation_type: reference\nworkspace_package: '@pmndrs/glyph'\nresource: ../../../packages/glyph\n${extra}generated:\n  by: process:test\n  at: '${at}'\n---\n\n# Glyph\n`;
+}
+
+/** One workspace package with its concept, as a git repository whose fixture is not yet committed. */
+async function workspaceFixture(prefix) {
+  const root = await temporaryDirectory(prefix);
+  await git(root, ['init', '-q']);
+  await git(root, ['config', 'user.email', 'test@example.test']);
+  await git(root, ['config', 'user.name', 'Test']);
+  await mkdir(path.join(root, 'packages/glyph/src'), { recursive: true });
+  await mkdir(path.join(root, '.agents/docs/packages'), { recursive: true });
+  await writeFile(path.join(root, 'packages/glyph/package.json'), '{"name":"@pmndrs/glyph"}\n');
+  await writeFile(path.join(root, 'packages/glyph/src/index.ts'), 'initial\n');
+  await writeFile(
+    path.join(root, '.agents/docs/index.md'),
+    '---\nokf_version: "0.2"\n---\n\n# Index\n\n- [Glyph](packages/glyph.md)\n',
+  );
+  await writeFile(conceptPath(root), glyphConcept());
+  return root;
+}
+
+async function commitFixture(root) {
+  await git(root, ['add', '.']);
+  await git(root, ['commit', '-qm', 'fixture']);
+}
+
+async function driftCommits(root) {
+  return (await measureDocsDrift(root)).flatMap((entry) => entry.commits);
 }

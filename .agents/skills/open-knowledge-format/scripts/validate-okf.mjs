@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 
 import yaml from 'js-yaml';
 
-import { packageDigest, workspacePackages } from './package-digest.mjs';
+import { workspacePackages } from './workspace-packages.mjs';
 
 const actorPattern = /^(?:[^/:\s]+\/[^\s]+|human:[^\s]+|process:[^\s]+)$/u;
 const datePattern = /^(\d{4})-(\d{2})-(\d{2})$/u;
@@ -196,9 +196,10 @@ export async function validateOkf(bundleRoot = '.', options = {}) {
       if (data.resource !== expectedResource) {
         profile.push(`${conceptPath}: resource must identify ${expectedResource}`);
       }
-      const expectedDigest = await packageDigest(packageRoot);
-      if (data.source_digest !== expectedDigest) {
-        profile.push(`${conceptPath}: stale source_digest; expected ${expectedDigest}`);
+      // Freshness is measured from history by docs-drift.mjs. A stored pin conflicted on every
+      // concurrent pull request that touched the same package, so the field is retired.
+      if (Object.hasOwn(data, 'source_digest')) {
+        profile.push(`${conceptPath}: source_digest is retired; remove it (drift is reported from git history)`);
       }
     }
     for (const [name, entries] of packageConcepts) {
