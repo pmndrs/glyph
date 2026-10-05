@@ -1,7 +1,7 @@
 ---
 type: Decision
-title: 'Concept freshness is a drift issue, not a stored pin'
-description: 'Workspace Package concepts store no source pin; drift is measured from git history and tracked in one rewritten issue.'
+title: 'Docs freshness and validity are advisory, not merge gates'
+description: 'Concepts store no source pin; a pull-request comment reports what to review and fix, and one rewritten issue carries anything merged unresolved.'
 decision_status: Accepted
 decided: '2026-10-05'
 generated:
@@ -9,7 +9,7 @@ generated:
   at: '2026-10-05T16:45:27Z'
 ---
 
-# Concept freshness is a drift issue, not a stored pin
+# Docs freshness and validity are advisory, not merge gates
 
 ## Decision
 
@@ -21,6 +21,12 @@ the last commit that touched the concept. `docs:drift` reports that drift, and t
 current. A scheduled maintenance agent resolves the open issue in one pull request; a review that finds a concept
 already correct is recorded by updating its `generated.at`.
 
+Docs checks never fail CI. On each pull request the `Docs report` job runs `docs:drift -- --pr <base>`: it lists the
+packages whose source the pull request changes without touching their concept, plus every validation finding, each
+with the command that fixes it, in the job summary and in one comment it rewrites (posted only once there is something
+to say). A maintainer may merge with items open; the `docs-drift` issue also lists validation findings on `main`, so
+the maintenance agent resolves drift and invalid docs together.
+
 ## Why
 
 The stored digest hashed the whole package tree, so any two pull requests that touched the same package conflicted on
@@ -30,7 +36,8 @@ since, so freshness can be measured without storing anything that concurrent cha
 
 ## Consequences
 
-Pull requests stop conflicting on concept pins and no longer fail on concept freshness. Documentation still belongs
+Pull requests stop conflicting on concept pins and no longer fail on concept freshness or bundle validity, so
+documentation upkeep never stands between a reviewed change and its merge. Documentation still belongs
 in the same change as source where an author knows it is affected; the drift issue catches what was missed. The
 pre-commit hook only validates the staged bundle. `docs:update` and `generate-package-digests.mjs` are removed.
 Drift measurement needs full git history.

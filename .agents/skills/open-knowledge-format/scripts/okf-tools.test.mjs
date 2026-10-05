@@ -9,7 +9,15 @@ import { afterEach, test } from 'node:test';
 
 import { migrateV01ToV02 } from './migrate-v01-to-v02.mjs';
 import { createRecord, listRecords, placeholder } from './records.mjs';
-import { driftIssueMarker, measureDocsDrift, renderDriftIssue } from './docs-drift.mjs';
+import {
+  docsFindings,
+  docsReportMarker,
+  driftIssueMarker,
+  measureDocsDrift,
+  measurePullRequestDocs,
+  renderDocsReport,
+  renderDriftIssue,
+} from './docs-drift.mjs';
 import { validateOkf } from './validate-okf.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -90,6 +98,10 @@ test('drift lists source commits after the concept was last committed and ignore
   await git(root, ['commit', '-qam', 'docs(glyph): review concept']);
   assert.deepEqual(await driftCommits(root), []);
   assert.match(renderDriftIssue(await measureDocsDrift(root)), /Every workspace package concept is current/u);
+  assert.match(
+    renderDriftIssue(await measureDocsDrift(root), { findings: ['.agents/docs/x.md: broken'] }),
+    /## Validation findings\n\nReproduce with/u,
+  );
 });
 
 test('scaffolded records fail validation until written and never overwrite a subject', async () => {
@@ -149,6 +161,50 @@ test('records are named by subject and the frozen register accepts no new rows',
       `${path.join(decisions, '0005-subject.md')}: name a Decision by its subject slug (lowercase words, no number prefix)`,
     ].sort(),
   );
+});
+
+test('the pull-request docs report names unreviewed concepts and findings, and clears when they are fixed', async () => {
+  const root = await workspaceFixture('okf-pr-report-');
+  await commitFixture(root);
+  await git(root, ['branch', 'base']);
+  await writeFile(path.join(root, 'packages/glyph/src/index.ts'), 'changed\n');
+  await writeFile(
+    path.join(root, '.agents/docs/log.md'),
+    '# Log\n\nThis file is frozen history through 2026-09-30.\n\n## 2026-10-06\n\n- Hand-written.\n\n## 2026-09-30\n\n- Kept.\n',
+  );
+  await git(root, ['add', '.']);
+  await git(root, ['commit', '-qm', 'feat(glyph): change source']);
+
+  const review = await measurePullRequestDocs(root, 'base');
+  assert.deepEqual(review, [
+    {
+      workspacePackage: '@pmndrs/glyph',
+      concept: '.agents/docs/packages/glyph.md',
+      files: ['packages/glyph/src/index.ts'],
+    },
+  ]);
+  const findings = await docsFindings(root);
+  assert.deepEqual(findings, [
+    '.agents/docs/log.md: 2026-10-06 is past the frozen log; record it with docs:new -- log instead',
+  ]);
+  const body = renderDocsReport({ review, findings, base: 'base' });
+  assert.ok(body.startsWith(docsReportMarker));
+  assert.match(body, /Advisory only — this never blocks merging/u);
+  assert.match(body, /\| `@pmndrs\/glyph` \| `\.agents\/docs\/packages\/glyph\.md` \| 1 \|/u);
+  assert.match(body, /docs:check/u);
+
+  await writeFile(conceptPath(root), glyphConcept({ at: '2026-10-05T00:00:00Z' }));
+  await writeFile(
+    path.join(root, '.agents/docs/log.md'),
+    '# Log\n\nThis file is frozen history through 2026-09-30.\n\n## 2026-09-30\n\n- Kept.\n',
+  );
+  await git(root, ['commit', '-qam', 'docs(glyph): review concept']);
+  const clean = renderDocsReport({
+    review: await measurePullRequestDocs(root, 'base'),
+    findings: await docsFindings(root),
+    base: 'base',
+  });
+  assert.match(clean, /^Nothing to do/mu);
 });
 
 test('pre-commit validation reads the staged snapshot and never rewrites the index', async () => {

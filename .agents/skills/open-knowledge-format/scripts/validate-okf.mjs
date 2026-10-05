@@ -256,6 +256,11 @@ export async function validateOkf(bundleRoot = '.', options = {}) {
       conformance.push(`${filePath}: log dates must be newest-first`);
     }
     if (/^# \d{4}-\d{2}-\d{2}$/mu.test(text)) conformance.push(`${filePath}: date sections must use H2`);
+    // A log that declares itself frozen accepts no later sections; new changes are Log Entry files.
+    const frozenThrough = /frozen history through (\d{4}-\d{2}-\d{2})/u.exec(text)?.[1];
+    for (const date of frozenThrough === undefined ? [] : dates.filter((candidate) => candidate > frozenThrough)) {
+      profile.push(`${filePath}: ${date} is past the frozen log; record it with docs:new -- log instead`);
+    }
   }
 
   for (const filePath of await markdownFiles(root)) {

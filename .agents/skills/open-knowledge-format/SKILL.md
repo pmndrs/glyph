@@ -84,10 +84,11 @@ For a repository that maintains `Workspace Package` concepts, require complete p
 
 ```sh
 node scripts/validate-okf.mjs /path/to/bundle --workspace-root /path/to/repository
-node scripts/docs-drift.mjs /path/to/repository --markdown drift.md
+node scripts/docs-drift.mjs /path/to/repository --markdown drift.md          # repository-wide drift issue body
+node scripts/docs-drift.mjs /path/to/repository --pr origin/main --markdown r.md  # advisory pull-request report
 ```
 
-The validator discovers `apps/*/package.json`, `benches/package.json`, and `packages/*/package.json`. Each manifest requires exactly one `type: Workspace Package` concept whose `workspace_package` and `resource` match; a retired `source_digest` field is a producer-profile error. Freshness is not stored in the bundle, because a stored source hash conflicts on every concurrent change to the same package. `docs-drift.mjs` instead lists, per package, the non-merge commits that changed package source (excluding `.cache`, `node_modules`, `dist`, `target`, and `coverage`) after the last commit that touched its concept, and renders them as one tracking-issue body. Editing a concept, including only its `generated.at` after a review that found it current, clears that package. Drift measurement needs full git history.
+The validator discovers `apps/*/package.json`, `benches/package.json`, and `packages/*/package.json`. Each manifest requires exactly one `type: Workspace Package` concept whose `workspace_package` and `resource` match; a retired `source_digest` field is a producer-profile error. Freshness is not stored in the bundle, because a stored source hash conflicts on every concurrent change to the same package. `docs-drift.mjs` instead lists, per package, the non-merge commits that changed package source (excluding `.cache`, `node_modules`, `dist`, `target`, and `coverage`) after the last commit that touched its concept, and renders them as one tracking-issue body. Editing a concept, including only its `generated.at` after a review that found it current, clears that package. Both reports include validation findings and exit successfully: they inform review and maintenance rather than gate merges. Drift measurement needs full git history.
 
 Report:
 
@@ -111,6 +112,7 @@ node scripts/records.mjs <bundle> list log        # or: list decision
 - A `Decision` concept lives at `…/decisions/<slug>.md`, named by its subject with no number prefix. It carries `decision_status` (Proposed, Experiment, Deferred, Accepted, or Superseded), a quoted `decided` date, optional `supersedes` (register IDs or decision slugs), and its rule under `## Decision`, followed by `## Why` and `## Consequences`.
 - Never number a record from a shared counter, and never add to a shared index; `list` derives the newest-first view.
 - A legacy register that declares `frozen_after: D-<n>` accepts no row numbered above it. Existing rows keep their IDs and may still change status.
+- A `log.md` that states `frozen history through YYYY-MM-DD` accepts no later date section.
 
 ## Handle reserved files
 

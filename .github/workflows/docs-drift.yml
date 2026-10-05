@@ -1,6 +1,6 @@
 name: Docs drift
 
-# Package concept freshness is maintenance work, not a merge gate. This workflow keeps exactly one
+# Package concept freshness and bundle validity are maintenance work, not merge gates. This workflow keeps exactly one
 # `docs-drift` issue in step with `main`: it rewrites the body after every push, reopens it when a
 # concept falls behind its source, and closes it once every concept is current again. A scheduled
 # maintenance agent resolves the open issue in one pull request.
