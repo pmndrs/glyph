@@ -109,8 +109,10 @@ jobs:
 
       - name: Report docs to review
         run: |
+          # Warnings annotate the concept files and mark this check without failing it.
           pnpm scripts run docs:drift -- --pr "origin/${{ github.base_ref }}" \
-            --head "${{ github.event.pull_request.head.sha }}" --markdown "$RUNNER_TEMP/docs-report.md"
+            --head "${{ github.event.pull_request.head.sha }}" --repository "$GITHUB_REPOSITORY" \
+            --annotations --markdown "$RUNNER_TEMP/docs-report.md"
           cat "$RUNNER_TEMP/docs-report.md" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish docs report comment

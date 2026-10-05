@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* @workflow {"name": "docs:drift", "args": ["."], "summary": "Audit docs intent and validity: with no flags, the per-package status behind the Sync agent docs issue; `-- --markdown <file>` writes that issue body; `-- --pr <base> [--head <sha>]` prints the advisory pull-request report.", "requirements": "The repository-pinned Node.js runtime and full git history.", "writes": "stdout and the optional --markdown file"} */
+/* @workflow {"name": "docs:drift", "args": ["."], "summary": "Audit docs intent and validity: with no flags, the per-package status behind the Sync agent docs issue; `-- --markdown <file>` writes that issue body; `-- --pr <base> [--head <sha>] [--repository <owner/name>] [--annotations]` prints the advisory pull-request report, or GitHub warning annotations for it.", "requirements": "The repository-pinned Node.js runtime and full git history.", "writes": "stdout and the optional --markdown file"} */
 
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -44,8 +44,17 @@ export async function docsFindings(workspaceRoot) {
   return [...result.conformance, ...result.profile].map((finding) => finding.replaceAll(`${root}${path.sep}`, ''));
 }
 
-/** The pull-request comment: one row per changed package, attested at this head or not, plus findings. */
-export function renderDocsReport({ rows, findings, base }) {
+/**
+ * The pull-request comment: one row per changed package, attested at this head or not, plus findings.
+ * With `links` ({ repository, ref }), each concept links to its file at the pull request's head.
+ */
+export function renderDocsReport({ rows, findings, base, links }) {
+  const concept = (row) => {
+    const name = `\`${row.concept.replace(/^\.agents\/docs\//u, '')}\``;
+    return links === undefined
+      ? name
+      : `[${name}](https://github.com/${links.repository}/blob/${links.ref}/${row.concept})`;
+  };
   const out = [docsReportMarker, '## Docs report 📚', ''];
   const open = rows.filter((row) => row.status !== 'attested');
   if (rows.length === 0 && findings.length === 0) {
@@ -69,15 +78,19 @@ export function renderDocsReport({ rows, findings, base }) {
           ? ` (made at \`${short(row.attestation.source)}\`, source now \`${short(row.current)}\`)`
           : '';
       const icon = { attested: '✅', stale: '⚠️', unattested: '❌' }[row.status];
-      out.push(`| \`${row.package}\` | ${row.conceptEdited ? 'edited' : 'not edited'} | ${claim}${stale} | ${icon} |`);
+      out.push(
+        `| \`${row.package}\` | ${concept(row)} · ${row.conceptEdited ? 'edited' : 'not edited'} | ${claim}${stale} | ${icon} |`,
+      );
     }
     out.push('', '✅ attested · ⚠️ stale · ❌ missing');
     if (open.length > 0) {
       out.push(
         '',
-        'After your last source change, update the concept if it is now wrong, then record what you changed and checked:',
+        'After your last source change, update each concept if it is now wrong, then record what you changed and checked:',
         '',
-        ...open.map((row) => `- ${run(`docs:attest -- ${row.package} "<what you changed and checked>"`)}`),
+        ...open.map(
+          (row) => `- ${concept(row)}: ${run(`docs:attest -- ${row.package} "<what you changed and checked>"`)}`,
+        ),
       );
     }
   }
@@ -87,6 +100,33 @@ export function renderDocsReport({ rows, findings, base }) {
     if (findings.length > listedLimit) out.push(`- …and ${findings.length - listedLimit} more`);
   }
   return `${out.join('\n')}\n`;
+}
+
+/**
+ * GitHub workflow commands for the same findings: each missing or stale attestation and each validation
+ * finding becomes a warning annotation on its file. Warnings mark the check without failing it, so the
+ * pull request stays mergeable while the call-out is visible in the checks list and the run summary.
+ */
+export function renderAnnotations({ rows, findings }) {
+  const property = (value) => escapeCommand(value).replaceAll(':', '%3A').replaceAll(',', '%2C');
+  const lines = [];
+  for (const row of rows.filter((candidate) => candidate.status !== 'attested')) {
+    const title = row.status === 'stale' ? 'Docs attestation stale' : 'Docs attestation missing';
+    const message =
+      `${row.package} changed ${row.status === 'stale' ? 'after its attestation' : 'without an attestation'}. ` +
+      `Update this concept if it is now wrong, then run: mise exec -- pnpm scripts run docs:attest -- ${row.package} "<what you changed and checked>"`;
+    lines.push(`::warning file=${property(row.concept)},title=${property(title)}::${escapeCommand(message)}`);
+  }
+  for (const finding of findings) {
+    const [file, ...rest] = finding.split(': ');
+    const message = `${rest.join(': ')} (reproduce with mise exec -- pnpm scripts run docs:check)`;
+    lines.push(`::warning file=${property(file)},title=${property('Docs validation')}::${escapeCommand(message)}`);
+  }
+  return lines.length === 0 ? '' : `${lines.join('\n')}\n`;
+}
+
+function escapeCommand(value) {
+  return String(value).replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
 }
 
 /** The main-branch issue: per package, pending attestations and gaps for the reviewer, plus findings. */
@@ -207,10 +247,13 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(path.reso
     const findings = await docsFindings(root);
     if (base !== undefined) {
       // Pull-request mode, judged at the pull request's own head (`--head`), never a merge preview.
-      const rows = await pullRequestAttestations(root, base, option('--head') ?? 'HEAD');
-      const body = renderDocsReport({ rows, findings, base });
+      const head = option('--head') ?? 'HEAD';
+      const rows = await pullRequestAttestations(root, base, head);
+      const repository = option('--repository');
+      const body = renderDocsReport({ rows, findings, base, links: repository && { repository, ref: head } });
       if (markdownPath !== undefined) await writeFile(markdownPath, body);
-      process.stdout.write(body);
+      // In CI, stdout carries workflow commands that GitHub turns into warning annotations.
+      process.stdout.write(flags.includes('--annotations') ? renderAnnotations({ rows, findings }) : body);
     } else {
       const audit = await auditDocs(root);
       const head = (await git(root, ['rev-parse', '--short', 'HEAD'])).trim();

@@ -11,7 +11,7 @@ import { migrateV01ToV02 } from './migrate-v01-to-v02.mjs';
 import { decision, outline, search } from './docs-query.mjs';
 import { createRecord, listRecords, placeholder } from './records.mjs';
 import { attest, pullRequestAttestations } from './attestations.mjs';
-import { docsFindings, docsReportMarker, renderDocsReport } from './docs-drift.mjs';
+import { docsFindings, docsReportMarker, renderAnnotations, renderDocsReport } from './docs-drift.mjs';
 import { validateOkf } from './validate-okf.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -146,10 +146,16 @@ test('the pull-request docs report shows attestation status per changed package 
   assert.deepEqual(findings, [
     '.agents/docs/log.md: this bundle records changes as log/ entries; use docs:new -- log instead',
   ]);
-  const body = renderDocsReport({ rows, findings, base: 'base' });
+  const body = renderDocsReport({ rows, findings, base: 'base', links: { repository: 'pmndrs/glyph', ref: 'abc123' } });
+  const link = '[`packages/glyph.md`](https://github.com/pmndrs/glyph/blob/abc123/.agents/docs/packages/glyph.md)';
+  assert.ok(body.includes(`| \`@pmndrs/glyph\` | ${link} · not edited | none | ❌ |`));
+  assert.ok(body.includes(`- ${link}: \`mise exec -- pnpm scripts run docs:attest -- @pmndrs/glyph`));
+  assert.deepEqual(renderAnnotations({ rows, findings }).trimEnd().split('\n'), [
+    '::warning file=.agents/docs/packages/glyph.md,title=Docs attestation missing::@pmndrs/glyph changed without an attestation. Update this concept if it is now wrong, then run: mise exec -- pnpm scripts run docs:attest -- @pmndrs/glyph "<what you changed and checked>"',
+    '::warning file=.agents/docs/log.md,title=Docs validation::this bundle records changes as log/ entries; use docs:new -- log instead (reproduce with mise exec -- pnpm scripts run docs:check)',
+  ]);
   assert.ok(body.startsWith(docsReportMarker));
   assert.match(body, /Advisory only — this never blocks merging/u);
-  assert.match(body, /\| `@pmndrs\/glyph` \| not edited \| none \| ❌ \|/u);
   assert.match(body, /docs:attest -- @pmndrs\/glyph "<what you changed and checked>"/u);
   assert.match(body, /docs:check/u);
 
@@ -164,7 +170,11 @@ test('the pull-request docs report shows attestation status per changed package 
     base: 'base',
   });
   assert.match(clean, /Every changed package is attested at this head/u);
-  assert.match(clean, /\| `@pmndrs\/glyph` \| not edited \| Test: Changed index; concept still accurate\. \| ✅ \|/u);
+  assert.match(
+    clean,
+    /\| `@pmndrs\/glyph` \| `packages\/glyph\.md` · not edited \| Test: Changed index; concept still accurate\. \| ✅ \|/u,
+  );
+  assert.equal(renderAnnotations({ rows: await pullRequestAttestations(root, 'base'), findings: [] }), '');
 });
 
 test('outline and search locate every answer as path › heading trail with line ranges', async () => {

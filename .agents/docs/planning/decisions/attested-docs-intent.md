@@ -23,7 +23,8 @@ Docs upkeep is audited, not gated. Concepts store no source pin; the retired `so
   the hook names it as missing or stale with the command to fix it; attesting after the last source change silences
   it, so the reminder always has an exit. CI's `Docs report` judges the pull request at its own head and shows, per
   changed package, whether the concept was edited and an icon for its attestation: ✅ attested, ⚠️ stale, or ❌
-  missing, with the command to fix each.
+  missing, with a link to the concept and the command to fix each. Each missing or stale attestation and each
+  validation finding is also a warning annotation on its file, which marks the check without failing it.
 - **Verify.** The `Sync agent docs` issue (label `agents`), rewritten on every push to `main` and daily, lists per
   package the attestations still pending and the gaps: merges since the last verification that changed the package
   without attesting it, named by pull request. A reviewer checks each claim against its pull request's diff, corrects
