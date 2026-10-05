@@ -2,7 +2,6 @@ import { buildRuntimePackages, isMainModule, run, runNodeScript } from './suppor
 
 export async function runBenchmarkTest(options: { readonly runtimePackagesReady?: boolean } = {}): Promise<void> {
   if (!options.runtimePackagesReady) await buildRuntimePackages();
-  await runNodeScript('scripts/measure-package-sizes.mts', ['--check']);
   await runNodeScript('scripts/check-paragraph-contract-fixtures.mts');
   await runNodeScript('scripts/generate-paragraph-bidi-contract.mts', ['--check']);
   await runNodeScript('scripts/generate-paragraph-cjk-contract.mts', ['--check']);

@@ -9,6 +9,7 @@ export const PACKAGE_LABS_SUITES = [
   'reflow',
   'stress',
   'cold',
+  'edit',
   'full',
 ] as const;
 
