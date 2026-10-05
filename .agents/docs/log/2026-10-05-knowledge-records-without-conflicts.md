@@ -7,7 +7,7 @@ generated:
 ---
 
 Package concepts no longer store a `source_digest`: `docs:drift` measures freshness from git history and the
-`Docs drift` workflow keeps one `docs-drift` issue current for a scheduled maintenance agent, while a
+`Docs drift` workflow keeps one `Sync agent docs` issue (label `agents`) current for a scheduled maintenance agent, while a
 `Docs report` pull-request comment lists what to review and fix without ever failing CI
 ([advisory docs](../planning/decisions/concept-drift-issue.md)). Log entries and decisions are now one file each,
 named by subject and created with `docs:new`; `log.md` and the D-numbered register are frozen, and validation rejects

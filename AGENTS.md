@@ -41,7 +41,7 @@ validation rejects leftover scaffold text and new rows in the frozen register. N
 number. Package size is review evidence from CI's size comment: do not commit `benches/src/generated/package-sizes.json`
 from a feature branch; only `release:size:generate` refreshes it during release preparation.
 
-Update affected canonical documentation in the same change as source, and verify the bundle with `mise exec -- pnpm scripts run docs:check`. Docs checks never block a merge: CI's `Docs report` comment lists the concepts a pull request should review and any validation findings, each with its fix command, and a maintainer may merge with items open because the `docs-drift` issue carries them to a later maintenance pull request. Package concepts carry no stored source pin: `mise exec -- pnpm scripts run docs:drift` reports, from git history, which concepts trail their package source, and the `Docs drift` workflow keeps that report in one `docs-drift` issue for the scheduled maintenance agent. When resolving that issue, correct each listed concept or, when it is already right, record the review by updating its `generated.at`; any commit that touches a concept clears its drift.
+Update affected canonical documentation in the same change as source, and verify the bundle with `mise exec -- pnpm scripts run docs:check`. Docs checks never block a merge: CI's `Docs report` comment lists the concepts a pull request should review and any validation findings, each with its fix command, and a maintainer may merge with items open because the `Sync agent docs` issue (label `agents`) carries them to a later maintenance pull request. Package concepts carry no stored source pin: `mise exec -- pnpm scripts run docs:drift` reports, from git history, which concepts trail their package source, and the `Docs drift` workflow keeps that report in one `Sync agent docs` issue, labelled `agents`, for the scheduled maintenance agent. When resolving that issue, correct each listed concept or, when it is already right, record the review by updating its `generated.at`; any commit that touches a concept clears its drift.
 
 Use the exact root toolchain pins through mise. Agent commands must enter that environment explicitly with `mise exec -- pnpm ...` or `mise exec -- <tool> ...`; do not depend on `mise activate` surviving across non-interactive commands. Mise owns tool selection, while pnpm remains the only repository workflow surface. Install workload-scoped mise tools only when their documented pnpm workflow requires them. The dated nightly under `packages/glyph/rust/font-baker-fuzz` is isolated to cargo-fuzz. Verify narrowly first, then run the relevant package and repository checks. Keep tests deterministic; do not use sleeps, timer cushions, arbitrary retries, or regenerated goldens as correctness mechanisms.
 
@@ -52,8 +52,10 @@ Before searching for or inventing a specialized maintenance command, run `mise e
 Run `mise exec -- pnpm scripts run repo:hooks:install` once per clone. It installs the repository's native pre-commit
 dispatcher in `git rev-parse --git-common-dir/hooks`, so every worktree shares it without `core.hooksPath` or a hook
 manager. The installer preserves every existing Git LFS hook. The pre-commit hook auto-formats and applies safe lint fixes
-to fully staged source files, then runs the staged OKF digest and validation gate; it refuses partially staged source files
-instead of accidentally staging unrelated edits.
+to fully staged source files and refuses partially staged source files instead of accidentally staging unrelated edits.
+It then prints an advisory docs report for the staged change and never blocks on it: when the report names a concept,
+review it against your staged change now, correct it or update its `generated.at`, stage it, and record the change with
+`docs:new -- log` before you push.
 
 TypeScript checks use the repository-pinned compiler and the patched `@types/three` declaration graph. For TSL typing changes, begin with the focused regression fixture before running a package or application project.
 

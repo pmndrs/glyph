@@ -207,21 +207,33 @@ test('the pull-request docs report names unreviewed concepts and findings, and c
   assert.match(clean, /^Nothing to do/mu);
 });
 
-test('pre-commit validation reads the staged snapshot and never rewrites the index', async () => {
+test('the pre-commit report tells the committer which concept to review, from the staged snapshot', async () => {
   const root = await workspaceFixture('okf-hook-');
+  // Docs link outside the package roots; the staged snapshot must carry those targets too.
+  await writeFile(path.join(root, 'README.md'), '# Readme\n');
+  await writeFile(
+    path.join(root, '.agents/docs/index.md'),
+    '---\nokf_version: "0.2"\n---\n\n# Index\n\n- [Glyph](packages/glyph.md)\n- [Readme](../../README.md)\n',
+  );
   await commitFixture(root);
   await writeFile(path.join(root, 'packages/glyph/src/index.ts'), 'staged\n');
+  await git(root, ['add', 'packages/glyph/src/index.ts']);
   await writeFile(conceptPath(root), glyphConcept({ at: '2026-10-05T00:00:00Z' }));
-  await git(root, ['add', '.']);
-  await writeFile(conceptPath(root), 'unstaged and invalid\n');
   const staged = await git(root, ['write-tree']);
 
-  const hookResult = await execFileAsync(process.execPath, [hookPath()], { cwd: root });
-  assert.match(hookResult.stdout, /Producer-profile errors: 0/u);
+  const unreviewed = await execFileAsync(process.execPath, [hookPath()], { cwd: root });
+  assert.match(unreviewed.stderr, /Review these concepts against your staged source changes now:/u);
+  assert.doesNotMatch(unreviewed.stderr, /Validation findings/u);
+  assert.match(unreviewed.stderr, /\.agents\/docs\/packages\/glyph\.md {2}\(@pmndrs\/glyph: 1 staged file\)/u);
+  assert.match(unreviewed.stderr, /docs:new -- log <slug> <title>/u);
   assert.equal(await git(root, ['write-tree']), staged);
+
+  await git(root, ['add', conceptPath(root)]);
+  const reviewed = await execFileAsync(process.execPath, [hookPath()], { cwd: root });
+  assert.equal(reviewed.stderr, '');
 });
 
-test('pre-commit validation failure blocks the commit', async () => {
+test('the pre-commit report lists invalid staged docs and never blocks the commit', async () => {
   const root = await temporaryDirectory('okf-hook-invalid-');
   await git(root, ['init', '-q']);
   await mkdir(path.join(root, '.agents/docs'), { recursive: true });
@@ -232,12 +244,9 @@ test('pre-commit validation failure blocks the commit', async () => {
   );
   await git(root, ['add', '.agents/docs']);
 
-  await assert.rejects(execFileAsync(process.execPath, [hookPath()], { cwd: root }), (error) => {
-    assert.equal(error.code, 1);
-    assert.match(error.stdout, /Conformance errors: 1/u);
-    assert.match(error.stderr, /staged OKF validation failed/u);
-    return true;
-  });
+  const result = await execFileAsync(process.execPath, [hookPath()], { cwd: root });
+  assert.match(result.stderr, /Validation findings \(reproduce with mise exec -- pnpm scripts run docs:check\):/u);
+  assert.match(result.stderr, /\.agents\/docs\/invalid\.md: missing non-empty type/u);
 });
 
 async function temporaryDirectory(prefix) {
@@ -252,7 +261,7 @@ async function git(directory, arguments_) {
 }
 
 function hookPath() {
-  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../.githooks/okf-validate.mjs');
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../.githooks/okf-docs-report.mjs');
 }
 
 function conceptPath(root) {

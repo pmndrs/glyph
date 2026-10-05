@@ -54,34 +54,65 @@ export async function measureDocsDrift(workspaceRoot = '.', options = {}) {
 }
 
 /**
- * Packages whose source this pull request changes without touching their concept, measured from the
- * merge base so the answer depends only on the pull request's own commits.
+ * Packages whose changed files include package source but not their concept. Shared by the pull-request
+ * report (changed since the merge base) and the commit report (staged), so both judge the same way.
  */
-export async function measurePullRequestDocs(workspaceRoot, base) {
+export async function conceptsToReview(workspaceRoot, changedPaths) {
   const root = path.resolve(workspaceRoot);
-  const mergeBase = (await git(root, ['merge-base', base, 'HEAD'])).trim();
+  const changed = new Set(changedPaths);
   const concepts = await packageConcepts(path.resolve(root, '.agents/docs'));
   const review = [];
   for (const [workspacePackage, packageRoot] of await workspacePackages(root)) {
     const concept = concepts.get(workspacePackage);
     if (concept === undefined) continue;
     const conceptPath = relativePath(root, concept);
-    const files = lines(
-      await git(root, [
-        'diff',
-        '--name-only',
-        mergeBase,
-        'HEAD',
-        '--',
-        ...sourcePathspecs(relativePath(root, packageRoot)),
-      ]),
-    );
-    if (files.length === 0) continue;
-    const conceptChanged =
-      lines(await git(root, ['diff', '--name-only', mergeBase, 'HEAD', '--', conceptPath])).length > 0;
-    if (!conceptChanged) review.push({ workspacePackage, concept: conceptPath, files });
+    const source = `${relativePath(root, packageRoot)}/`;
+    const files = changedPaths.filter((file) => file.startsWith(source) && !isBuildOutput(file.slice(source.length)));
+    if (files.length > 0 && !changed.has(conceptPath)) review.push({ workspacePackage, concept: conceptPath, files });
   }
   return review;
+}
+
+/** Packages whose source this pull request changes without touching their concept, from the merge base. */
+export async function measurePullRequestDocs(workspaceRoot, base) {
+  const root = path.resolve(workspaceRoot);
+  const mergeBase = (await git(root, ['merge-base', base, 'HEAD'])).trim();
+  return conceptsToReview(root, lines(await git(root, ['diff', '--name-only', mergeBase, 'HEAD'])));
+}
+
+function isBuildOutput(packageRelativePath) {
+  return packageRelativePath
+    .split('/')
+    .slice(0, -1)
+    .some((directory) => excludedDirectories.includes(directory));
+}
+
+/**
+ * The commit-time report an agent reads as it commits: which concepts to review against the staged change
+ * and how, plus validation findings. Empty when there is nothing to say; it never blocks the commit.
+ */
+export function renderCommitReport({ review, findings }) {
+  if (review.length === 0 && findings.length === 0) return '';
+  const out = ['docs: advisory report for this commit (it does not block; act on it before you push)'];
+  if (review.length > 0) {
+    out.push('', 'Review these concepts against your staged source changes now:');
+    for (const entry of review) {
+      out.push(
+        `  ${entry.concept}  (${entry.workspacePackage}: ${entry.files.length} staged ${entry.files.length === 1 ? 'file' : 'files'})`,
+      );
+    }
+    out.push(
+      '  Correct anything the concept now gets wrong; if it is still accurate, update its generated.at.',
+      '  Stage the concept, and record the change with',
+      `  ${logCommand.replaceAll('`', '')}`,
+    );
+  }
+  if (findings.length > 0) {
+    out.push('', `Validation findings (reproduce with ${checkCommand.replaceAll('`', '')}):`);
+    out.push(...findings.slice(0, listedFileLimit).map((finding) => `  ${finding}`));
+    if (findings.length > listedFileLimit) out.push(`  …and ${findings.length - listedFileLimit} more`);
+  }
+  return `${out.join('\n')}\n`;
 }
 
 /** Validation findings with bundle-relative paths, ready to show a contributor. */
@@ -102,7 +133,7 @@ export function renderDocsReport({ review, findings, base }) {
   }
   out.push(
     'Advisory only — this never blocks merging. A maintainer may merge as is; anything left unresolved moves to the',
-    '`docs-drift` issue for a later maintenance pull request.',
+    '`Sync agent docs` issue for a later maintenance pull request.',
   );
   if (review.length > 0) {
     out.push(

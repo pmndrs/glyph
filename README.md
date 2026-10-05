@@ -254,7 +254,7 @@ mise exec -- pnpm dev
 
 The hook installer writes only the native `pre-commit` dispatcher in Git's shared common directory. Every worktree in the
 clone therefore uses the same hook without `core.hooksPath` or Lefthook configuration. The hook auto-formats and applies
-safe lint fixes to fully staged source files, re-stages those fixes, and then validates the staged documentation bundle. Existing
+safe lint fixes to fully staged source files, re-stages those fixes, and then prints an advisory report naming any package concept the staged change should review. Existing
 Git LFS hooks such as `pre-push`, `post-checkout`, `post-commit`, and `post-merge` are not changed.
 
 The benchmark application lives in [`benches/`](benches/). `pnpm dev` opens its interactive harness;

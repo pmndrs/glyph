@@ -1,7 +1,7 @@
 name: Docs drift
 
 # Package concept freshness and bundle validity are maintenance work, not merge gates. This workflow keeps exactly one
-# `docs-drift` issue in step with `main`: it rewrites the body after every push, reopens it when a
+# `Sync agent docs` issue, labelled `agents`, in step with `main`: it rewrites the body after every push, reopens it when a
 # concept falls behind its source, and closes it once every concept is current again. A scheduled
 # maintenance agent resolves the open issue in one pull request.
 on:
@@ -29,7 +29,8 @@ jobs:
       CI: true
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      DRIFT_LABEL: docs-drift
+      DRIFT_LABEL: agents
+      DRIFT_TITLE: Sync agent docs
 
     steps:
       - name: Check out repository
@@ -49,10 +50,10 @@ jobs:
 
       - name: Rewrite the drift issue
         run: |
-          gh label create "$DRIFT_LABEL" --color FBCA04 \
-            --description 'Package concepts trail their source; resolved by the docs maintenance agent' --force
-          issue=$(gh issue list --label "$DRIFT_LABEL" --state all --limit 1 --json number,state \
-            --jq '.[0] // empty | "\(.number) \(.state)"')
+          # Create the label only when missing; never overwrite an existing label's colour or description.
+          gh label create "$DRIFT_LABEL" --color 5319E7 --description 'Work for maintenance agents' 2>/dev/null || true
+          issue=$(gh issue list --label "$DRIFT_LABEL" --state all --limit 200 --json number,state,title \
+            --jq "map(select(.title == \"$DRIFT_TITLE\")) | .[0] // empty | \"\(.number) \(.state)\"")
           number=${issue%% *}
           state=${issue#* }
           if grep -q 'Every workspace package concept is current' "$RUNNER_TEMP/docs-drift.md"; then
@@ -61,8 +62,7 @@ jobs:
               if [ "$state" = OPEN ]; then gh issue close "$number" --reason completed; fi
             fi
           elif [ -z "$issue" ]; then
-            gh issue create --title 'Docs drift: package concepts trail their source' \
-              --label "$DRIFT_LABEL" --body-file "$RUNNER_TEMP/docs-drift.md"
+            gh issue create --title "$DRIFT_TITLE" --label "$DRIFT_LABEL" --body-file "$RUNNER_TEMP/docs-drift.md"
           else
             gh issue edit "$number" --body-file "$RUNNER_TEMP/docs-drift.md"
             if [ "$state" = CLOSED ]; then gh issue reopen "$number"; fi

@@ -85,7 +85,7 @@ jobs:
   docs:
     name: Docs report
     # Advisory review evidence like the size report: it comments what to fix and never fails, so a
-    # maintainer can merge and leave cleanup to the docs-drift issue.
+    # maintainer can merge and leave cleanup to the Sync agent docs issue.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
