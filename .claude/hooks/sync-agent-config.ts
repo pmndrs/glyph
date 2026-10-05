@@ -1,21 +1,15 @@
-import { lstat, mkdir, opendir, readFile, readlink, realpath, symlink, unlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, opendir, readlink, realpath, symlink, unlink } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const CLAUDE_IMPORT = '@AGENTS.md';
 const SKIPPED_DIRECTORIES = new Set(['.git', '.claude', 'coverage', 'dist', 'node_modules', 'target']);
 
+// Claude Code reads AGENTS.md natively, so only skills need bridging: it discovers them in
+// .claude/skills, while the repository keeps the cross-tool sources in .agents/skills.
 export type SyncResult = {
-  createdClaudeFiles: string[];
-  updatedClaudeFiles: string[];
   createdSkillLinks: string[];
   repairedSkillLinks: string[];
   removedSkillLinks: string[];
-};
-
-type ProjectInventory = {
-  agentsFiles: string[];
-  skillRoots: string[];
 };
 
 type SyncOptions = {
@@ -31,16 +25,10 @@ export class ClaudeSyncConflict extends Error {
 
 function emptyResult(): SyncResult {
   return {
-    createdClaudeFiles: [],
-    updatedClaudeFiles: [],
     createdSkillLinks: [],
     repairedSkillLinks: [],
     removedSkillLinks: [],
   };
-}
-
-function hasAgentsImport(contents: string): boolean {
-  return contents.split(/\r?\n/u).some((line) => /^\s*@(?:\.\/)?AGENTS\.md\s*$/u.test(line));
 }
 
 function isWithin(parent: string, child: string): boolean {
@@ -64,8 +52,8 @@ async function pathKind(path: string): Promise<'missing' | 'symlink' | 'director
   }
 }
 
-async function discoverProject(root: string): Promise<ProjectInventory> {
-  const inventory: ProjectInventory = { agentsFiles: [], skillRoots: [] };
+async function discoverSkillRoots(root: string): Promise<string[]> {
+  const skillRoots: string[] = [];
 
   async function visit(directory: string): Promise<void> {
     const entries = [];
@@ -74,53 +62,17 @@ async function discoverProject(root: string): Promise<ProjectInventory> {
 
     for (const entry of entries) {
       const path = join(directory, entry.name);
-      if (entry.isFile() && entry.name === 'AGENTS.md') inventory.agentsFiles.push(path);
       if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
       if (entry.name === '.agents') {
         const skills = join(path, 'skills');
-        if ((await pathKind(skills)) === 'directory') inventory.skillRoots.push(skills);
+        if ((await pathKind(skills)) === 'directory') skillRoots.push(skills);
       }
       if (!SKIPPED_DIRECTORIES.has(entry.name)) await visit(path);
     }
   }
 
   await visit(root);
-  return inventory;
-}
-
-async function synchronizeClaudeFile(agentsPath: string, result: SyncResult): Promise<void> {
-  const claudePath = join(dirname(agentsPath), 'CLAUDE.md');
-  const kind = await pathKind(claudePath);
-
-  if (kind === 'missing') {
-    await writeFile(claudePath, `${CLAUDE_IMPORT}\n`, 'utf8');
-    result.createdClaudeFiles.push(claudePath);
-    return;
-  }
-
-  if (kind === 'symlink') {
-    const linkedPath = resolve(dirname(claudePath), await readlink(claudePath));
-    if (linkedPath === agentsPath) return;
-    throw new ClaudeSyncConflict(claudePath, 'the existing symlink does not target the sibling AGENTS.md');
-  }
-
-  if (kind !== 'file') throw new ClaudeSyncConflict(claudePath, 'the path must be a regular file or AGENTS.md symlink');
-
-  const contents = await readFile(claudePath, 'utf8');
-  if (hasAgentsImport(contents)) return;
-  await writeFile(claudePath, contents.length === 0 ? `${CLAUDE_IMPORT}\n` : `${CLAUDE_IMPORT}\n${contents}`, 'utf8');
-  result.updatedClaudeFiles.push(claudePath);
-}
-
-async function verifyRootClaudeFile(projectRoot: string): Promise<void> {
-  const claudePath = join(projectRoot, 'CLAUDE.md');
-  if ((await pathKind(claudePath)) !== 'file') {
-    throw new ClaudeSyncConflict(claudePath, 'the checked-in root bootstrap must be a regular file');
-  }
-  const contents = await readFile(claudePath, 'utf8');
-  if (!hasAgentsImport(contents)) {
-    throw new ClaudeSyncConflict(claudePath, 'the checked-in root bootstrap must import @AGENTS.md');
-  }
+  return skillRoots;
 }
 
 async function directSkillDirectories(skillRoot: string): Promise<string[]> {
@@ -188,26 +140,14 @@ async function synchronizeSkillRoot(skillRoot: string, result: SyncResult, platf
 
 export async function synchronizeClaudeProject(root: string, options: SyncOptions = {}): Promise<SyncResult> {
   const projectRoot = await realpath(root);
-  const inventory = await discoverProject(projectRoot);
   const result = emptyResult();
-
-  await verifyRootClaudeFile(projectRoot);
-  for (const agentsPath of inventory.agentsFiles) {
-    if (dirname(agentsPath) !== projectRoot) await synchronizeClaudeFile(agentsPath, result);
-  }
-  for (const skillRoot of inventory.skillRoots)
+  for (const skillRoot of await discoverSkillRoots(projectRoot))
     await synchronizeSkillRoot(skillRoot, result, options.platform ?? process.platform);
   return result;
 }
 
 function changedPaths(result: SyncResult): string[] {
-  return [
-    ...result.createdClaudeFiles,
-    ...result.updatedClaudeFiles,
-    ...result.createdSkillLinks,
-    ...result.repairedSkillLinks,
-    ...result.removedSkillLinks,
-  ];
+  return [...result.createdSkillLinks, ...result.repairedSkillLinks, ...result.removedSkillLinks];
 }
 
 async function main(): Promise<void> {
@@ -215,9 +155,7 @@ async function main(): Promise<void> {
   const result = await synchronizeClaudeProject(projectRoot);
   if (process.argv.includes('--verbose')) {
     const paths = changedPaths(result).map((path) => relative(projectRoot, path));
-    process.stdout.write(
-      paths.length === 0 ? 'Claude agent compatibility is synchronized.\n' : `${paths.join('\n')}\n`,
-    );
+    process.stdout.write(paths.length === 0 ? 'Claude skill links are synchronized.\n' : `${paths.join('\n')}\n`);
   }
 }
 

@@ -9,8 +9,8 @@ coverage/
 benches/.cache/
 packages/glyph/.cache/
 
-# Claude sync on SessionStart hook
+# AGENTS.md is the only instruction file; ignore CLAUDE.md shims older clones generated.
 **/CLAUDE.md
-!/CLAUDE.md
+# Claude skill links, generated from .agents/skills by the SessionStart hook.
 .claude/skills/
 .cache/
