@@ -104,7 +104,7 @@ export function renderLabsSummary({ suite, baseline, candidate, comparison }: La
     lines.push(`All ${rows.length} compared benches are neutral.`, '');
   } else {
     lines.push(...table(changed.map((row) => cells(row, row.status === 'slower' ? '🔴 slower' : '🟢 faster'))), '');
-    lines.push(...chart(suite, changed), '');
+    lines.push(...chart(suite, changed, neutral), '');
   }
   const rest = [
     ...neutral.map((row) => cells(row, 'neutral')),
@@ -136,25 +136,72 @@ function table(body: readonly (readonly string[])[]): readonly string[] {
   return [row(header), row(header.map(() => '---')), ...body.map(row)];
 }
 
-function chart(suite: string, changed: readonly LabsRow[]): readonly string[] {
-  const limit = Math.max(25, Math.ceil(Math.max(...changed.map((row) => Math.abs(row.delta))) / 5) * 5);
+/** Bar colours by status, in the order their series are drawn: GitHub's danger, success, and muted greys. */
+const chartColors: Readonly<Record<LabsRowStatus, string>> = {
+  slower: '#cf222e',
+  faster: '#1a7f37',
+  neutral: '#8c959f',
+};
+/** Beyond this many benches the chart keeps only the ones that moved, so it still fits a viewport. */
+const chartRowLimit = 24;
+const chartLabelLength = 32;
+
+/**
+ * Mermaid's xychart draws every bar from the axis minimum and colours by series, not by bar. So the chart plots
+ * |Δ p50| from 0, gives each status its own series (zero elsewhere) for a red/green/grey bar, and carries the sign
+ * in the label. Width and height follow the bar count, so the chart stays compact.
+ */
+function chart(suite: string, changed: readonly LabsRow[], neutral: readonly LabsRow[]): readonly string[] {
+  const plotted =
+    changed.length + neutral.length <= chartRowLimit
+      ? [...changed, ...[...neutral].sort((a, b) => b.delta - a.delta)]
+      : changed;
+  const limit = Math.max(5, Math.ceil(Math.max(...plotted.map((row) => Math.abs(row.delta))) / 5) * 5);
   const seen = new Set<string>();
-  const labels = changed.map((row) => {
-    const base = mermaidLabel(row.name);
-    let label = base;
-    for (let n = 2; seen.has(label); n += 1) label = `${base.slice(0, 32 - String(n).length - 1)}~${String(n)}`;
-    seen.add(label);
-    return `"${label}"`;
+  const labels = plotted.map((row) => {
+    const value = signedNumber(row.delta);
+    const base = mermaidLabel(row.name, chartLabelLength - value.length - 1);
+    let name = base;
+    for (let n = 2; seen.has(name); n += 1) name = `${base.slice(0, base.length - String(n).length - 1)}~${String(n)}`;
+    seen.add(name);
+    return `"${name} ${value}"`;
   });
+  const statuses = (['slower', 'faster', 'neutral'] as const).filter((status) =>
+    plotted.some((row) => row.status === status),
+  );
+  const series = statuses.map(
+    (status) =>
+      `  bar [${plotted.map((row) => (row.status === status ? String(Math.abs(row.delta)) : '0')).join(', ')}]`,
+  );
   return [
     '```mermaid',
+    '---',
+    'config:',
+    '  xyChart:',
+    '    width: 640',
+    `    height: ${String(Math.max(140, 64 + 26 * plotted.length))}`,
+    '    titleFontSize: 14',
+    '    xAxis:',
+    '      labelFontSize: 12',
+    '    yAxis:',
+    '      labelFontSize: 11',
+    '      titleFontSize: 12',
+    '  themeVariables:',
+    '    xyChart:',
+    `      plotColorPalette: "${statuses.map((status) => chartColors[status]).join(', ')}"`,
+    '---',
     'xychart-beta horizontal',
-    `  title "${mermaidLabel(suite, 64)} suite — Δ p50 % vs baseline"`,
+    `  title "${mermaidLabel(suite, 64)} suite: Δ p50 vs baseline"`,
     `  x-axis [${labels.join(', ')}]`,
-    `  y-axis "% vs baseline (positive = slower)" ${String(-limit)} --> ${String(limit)}`,
-    `  bar [${changed.map((row) => String(row.delta)).join(', ')}]`,
+    `  y-axis "size of Δ p50 in %, red slower, green faster, grey neutral" 0 --> ${String(limit)}`,
+    ...series,
     '```',
   ];
+}
+
+/** A signed one-decimal number with no `%`, which Mermaid labels cannot carry. */
+function signedNumber(delta: number): string {
+  return `${delta > 0 ? '+' : ''}${delta.toFixed(1)}`;
 }
 
 /** Quotes, brackets, and separators end a Mermaid string or list early, so they never reach the chart. */

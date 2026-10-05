@@ -248,9 +248,12 @@ test('renders slower-first table, chart, and details from mixed results', () => 
   assert.equal(lines[2], '1 faster · 2 slower · 1 neutral · 1 skipped');
   const order = lines.filter((line) => /^\| (🔴|🟢)/u.test(line)).map((line) => line.split(' | ')[1]);
   assert.deepEqual(order, ['slowest', 'slow', 'quick']);
-  assert.ok(markdown.includes('  x-axis ["slowest", "slow", "quick"]'));
-  assert.ok(markdown.includes('  y-axis "% vs baseline (positive = slower)" -35 --> 35'));
-  assert.ok(markdown.includes('  bar [31, 12, -10.3]'));
+  // Mermaid draws bars from the axis minimum and colours by series: sizes from 0, one series per status, sign in the label.
+  assert.ok(markdown.includes('  x-axis ["slowest +31.0", "slow +12.0", "quick -10.3", "same pipe +1.2"]'));
+  assert.ok(markdown.includes(' 0 --> 35'));
+  assert.ok(markdown.includes('  bar [31, 12, 0, 0]\n  bar [0, 0, 10.3, 0]\n  bar [0, 0, 0, 1.2]'));
+  assert.ok(markdown.includes('plotColorPalette: "#cf222e, #1a7f37, #8c959f"'));
+  assert.ok(markdown.includes('    height: 168'));
   assert.ok(markdown.includes('<details><summary>1 neutral, 1 skipped</summary>'));
   assert.ok(markdown.includes('same \\| pipe'));
   assert.ok(markdown.includes('skipped: clock-confounded: faster→neutral · 2.68→2.93'));
