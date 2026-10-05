@@ -5,7 +5,6 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../benches
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:eb478c67c0827d07fc688996c637395789cd1a3f0115ad9296aeef99ddc1243c'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: packed-consumer
@@ -216,11 +215,23 @@ sources:
     resource: ../../../benches/labs.config.ts
     title: Packaged public API benchmark configuration
   - id: labs-package-suite
-    resource: ../../../benches/labs/glyph-package.bench.ts
-    title: Packaged public API benchmark suite
+    resource: ../../../benches/labs/package
+    title: Packaged public API benchmark suites
   - id: labs-package-workflow
     resource: ../../../benches/scripts/run-package-labs.mts
     title: Installed package artifact benchmark workflow
+  - id: labs-internal-config
+    resource: ../../../benches/labs-internal/labs.config.ts
+    title: Workspace-only Labs benchmark configuration
+  - id: labs-internal-suite
+    resource: ../../../benches/labs-internal
+    title: Workspace-only engine, kernel, and generator benchmark suites
+  - id: labs-internal-workflow
+    resource: ../../../benches/scripts/run-internal-labs.mts
+    title: Workspace-only Labs benchmark workflow
+  - id: labs-result-validator
+    resource: ../../../benches/scripts/support/labs-result.mts
+    title: Saved Labs result failure validator
   - id: raster-technique-compare-probe
     resource: ../../../benches/vitexec/raster-technique-compare.probe.ts
     title: Realtime comparison product probe
@@ -244,18 +255,45 @@ The Vite and TypeScript configurations opt into the workspace packages' custom `
 build, and typecheck therefore consume current TypeScript sources without requiring a package rebuild; release-oriented
 Node workflows continue to exercise built package exports.
 
-Package performance is measured from installable artifacts rather than workspace source. The pull-request `check` job
-builds `@pmndrs/glyph` once, creates one package tarball with `pnpm pack`, and retains that tarball for the separate
-non-blocking performance job. `benchmark:labs-package` installs the candidate tarball and an exact version resolved from
-the current npm canary into isolated temporary consumers, then runs both through `@pmndrs/labs`. It never rebuilds either
-artifact. The retained report includes native Labs JSON, comparison output, exact package manifests and lockfiles, and the
-candidate tarball SHA-256.
+## Approved performance lanes
 
-The first package suite measures six public-system workloads: `measure()` and `glyphs()` after equal-size edits, Three
-publication after an edit, column reflow, font-size relayout, and one publication of 128 retained `Text` instances. Each
-case deliberately invalidates the retained state it names instead of timing a cache hit. Eight fresh-process blocks and a
-five-percent minimum effect produce the comparison report. This lane is initially report-only while runner noise and
-false-positive rates are established; browser, GPU, and frame-pacing evidence remains owned by the browser workflows.
+| Lane                  | Runner                         | Owns                                                                                            | Selection                                                                                                                   |
+| --------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| CPU comparison        | `@pmndrs/labs`                 | Deterministic in-process Node work, including public package, retained engine, and Wasm kernels | Bench files plus shared `@smoke`, `@layout`, `@measure`, `@glyphs`, `@publication`, `@batch`, `@kernel`, and `@stress` tags |
+| Browser observation   | Vitexec or Playwright Chromium | Browser V8, DOM, RAF/frame pacing, WebGPU/WebGL2, GPU timestamps, and input-to-visible latency  | The maintained browser workload and probe selectors                                                                         |
+| Native/Worker profile | Dedicated profilers            | External-process builds, native-versus-Wasm phases, Worker startup, peak memory, and long bakes | Explicit profile case flags; never part of the default pull-request timing run                                              |
+
+Correctness, deterministic artifact authentication, and conformance are gates, not performance lanes. They remain under
+their focused checks because a byte or pixel mismatch is an exact fact rather than a timing distribution. Package size
+is neither: it is pull-request review evidence from the size comparison and never fails a change. The CPU migration retires hand-rolled Node timers only after their Labs replacement has produced a
+valid record; browser and native/Worker workflows are not renamed into Labs benchmarks they cannot faithfully become.
+
+Package performance is measured from installable artifacts rather than workspace source. The `check` job builds
+`@pmndrs/glyph` once, creates one package tarball with `pnpm pack`, and retains that tarball for the separate non-blocking
+performance job. `benchmark:labs-package` installs the candidate tarball and an exact version resolved from the current
+npm canary into isolated temporary consumers, then runs both through `@pmndrs/labs`. It never rebuilds either artifact.
+The retained report includes native Labs JSON, comparison output, exact package manifests and lockfiles, and the candidate
+tarball SHA-256.
+
+The default package suite is a common-use smoke comparison: cached `measure()`, measurement and publication after a text
+change, exact-width reflow, paint-only style publication, and font-size relayout. It deliberately excludes per-glyph
+inspection and high-scale stress work. Four fresh-process blocks are the smallest Labs comparison that can reach the
+configured five-percent significance threshold, keeping the pull-request signal concise. A pull request runs `smoke`
+unless it carries one `benchmark:<suite>` label. `benchmark:full` overrides focused labels; otherwise multiple focused
+benchmark labels are rejected as ambiguous. A push to `main` runs `full` on the candidate alone: the canary release
+published for that same push would otherwise be installed as its own baseline. Manual dispatch exposes the same suite
+choice and compares with the canary. Available focused suites are `layout`, `measure`, `glyphs`, `publication`,
+`batch`, `style`, `reflow`, `stress`, `cold`, and `edit`; `edit` types one character into a long Inter or Fredoka paragraph and measures it or publishes a frame.
+`full` does not run browser observations, native/Worker profiles, or correctness and release gates.
+
+Each suite holds workloads that time alike. Labs decides per run whether to batch iterations or time single calls from
+the cost of the first calls, so a workload whose first call is first-time work can be timed differently on each side
+of a comparison, and the delta then measures the timing mode rather than the package. Steady workloads therefore
+perform their operation once during setup, and every workload whose timed call pays a first-time cost on freshly
+mounted state lives in the `cold` suite. The comparison still reports any workload timed in different modes on the two
+sides as not comparable instead of printing its delta. A candidate must pass every benchmark check; a baseline may
+fail checks that guard behavior it predates, and those workloads are reported as not comparable rather than aborting
+the comparison. Both lists are recorded in the retained manifest.
 
 Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentation are complete
 
@@ -402,11 +440,12 @@ Font delivery is an explicit benchmark axis. **Baked asset** exercises the norma
 
 The benchmark manifest exposes only `build`, `dev`, `test`, `check`, and the package-owned `size` producer. Specialized maintenance files declare their own names, requirements, write behavior, arguments, and runner; the root `pnpm scripts` command validates and indexes that metadata. The runner removes pnpm's one conventional `--` delimiter and places forwarded Vitexec options before its injected module, while ordinary Node workflows retain script-first argv order.[^workflow-arguments] Vitexec can exit zero after an injected module or page failure, so the runner forwards and inspects its captured output and rejects `[error]` or `[page error]` records; focused negative controls prove both markers while ordinary logs remain accepted.[^workflow-runner][^workflow-output] An ordinary build consumes the checked-in canonical package-size record without rewriting it for the current host. `release:size:generate` is the sole reviewed repository writer, while the package `size` command refreshes the benchmark-owned record during scoped development; the test gate measures the current host read-only and enforces the reviewed absolute and cumulative ceilings. `benchmark:presentation` runs every sequential workload through Bitmap, MTSDF, and Slug on WebGPU and forced WebGL2 using stable `/three`; `--workload`, `--technique`, and `--backend` select one maintained cell, while `--typegpu` exercises experimental `/three/typegpu`. `benchmark:demo` runs the timed sequence; `benchmark:raster-comparison` owns finite-job recovery; `benchmark:presentation-performance` records the current complete cadence sweep; and `benchmark:presentation-fresh-scene-performance` gives selected workloads independent renderer and telemetry lifecycles for release A/B captures. Closed milestone experiments and technique-specific performance matrices are retained as results, not executable product gates. Authenticated HarfBuzz bundles are checked into Git LFS for Linux x64 and macOS arm64, so ordinary verification only runs `pnpm scripts run fixture:harfbuzz:provision` before `pnpm scripts run fixture:japanese-showcase:check`; Meson, Ninja, and GLib remain regeneration-only dependencies. React Doctor remains a manual review tool rather than a package or CI script; when requested, run `mise exec -- pnpm --dir benches dlx react-doctor@0.7.2 . --scope full --blocking warning --verbose --no-supply-chain --no-color`.[^presentation-framerate-sweep][^presentation-fresh-scene-performance]
 
-`glyph:rust-layout-benchmark` keeps measurement, positioning, and publication attribution reproducible. `position-query`
-adds the positioning tail to measurement without gathering or publishing. `adopt-position-query` first prepares that
-borrowed layout, then times only adoption, retained gather, plan compilation, and publication; every active-width sample
-must emit a nonempty patch. `adopt-measure-query` remains the combined positioning-plus-publication counterpart because a
-measurement-only speculative transaction deliberately does not position glyphs.
+The internal Labs `engine` suite keeps measurement, positioning, and publication attribution reproducible.
+`position-query` adds the positioning tail to measurement without gathering or publishing. `adopt-position-query` first
+prepares that borrowed layout, then measures adoption, retained gather, plan compilation, and publication; every
+active-width sample must emit a nonempty patch. `adopt-measure-query` remains the combined
+positioning-plus-publication counterpart because a measurement-only speculative transaction deliberately does not
+position glyphs.
 
 `pnpm scripts run benchmark:demo` exercises the complete 60-second timed sequence through a focused control on WebGPU and forced WebGL. Off-axis / 3D and Icon Grid each receive two seconds before Paint & Effects begins at second four; the more visual Zoom Text and returning Icon Grid scenes receive longer holds than Dynamic Layout. Advanced Shaping resets to CJK and reveals one complete five-case cycle at 180 grapheme units per second. Playing case transitions begin the next script at its first grapheme; a font-changing handoff deliberately blanks the live line until that generation commits instead of showing mismatched old-script state. Zoom Text pre-shapes all 16 fixed-Inter, language-tagged words during cold scene preparation and retains one node per word; animation performs only scale, opacity, and visibility changes, so it continues its normal word cycle without an animation-time readiness boundary and cuts after three complete default-speed drops. Text Ladder receives the derived 7.2 seconds required for its default-speed vertical travel and 1024 px marquee to pass completely through the left edge before the nine-second Icon Grid return. A final 8.016-second Off-axis / 3D scene supplies the closing frame. The probe requires window-capture Space handling, exact workload defaults after preload, advancing telemetry, a retained canvas, exactly one renderer, both Icon Grid entries, the configured backend throughout, and the final Off-axis / 3D scene.
 
@@ -486,7 +525,7 @@ Every measured call receives its actual zero-based sample index; warmups remain 
 
 GitHub CI uses the Ubuntu runner's rolling system Chromium as a deliberate compatibility canary instead of downloading Playwright's pinned browser. The workflow discovers an executable, prints its version, fails if none exists, and exports only `PMNDRS_GLYPH_CHROMIUM_EXECUTABLE_PATH`. One shared launcher conditionally supplies that exact path to all five direct Playwright launch sites; without the variable, local commands retain Playwright's managed executable. Every launch reports `browser.version()` to stderr, and headless benchmark summaries retain that exact value as `browserVersion` beside the browser-provided user-agent string, whose Chromium minor/build components may be reduced. The packed-tarball consumer declares a data-URL favicon so its synthetic document makes no browser-implicit network request; browser error diagnostics retain console source locations and failed HTTP status, resource type, and URL. Historical fixture filenames and goldens remain tied to their recorded captures rather than being relabeled by this rolling lane.
 
-The canonical package-size lane measures the initial public JavaScript graph, lazy font validator, runtime Worker boundary, baker and shaper JavaScript/Wasm, and representative font artifacts without zero-byte placeholders. Static entry closures and dynamic chunks are separated from Rollup metadata rather than conflated; Core, Three, and React adapter measurements externalize the package's declared Three.js, React, and R3F peers, and package-owned Wasm URLs are externalized from JavaScript measurements regardless of their owning package. The production R3F hello-world row separately sums every JavaScript chunk emitted by the existing application build, including its consumer-owned React, R3F, and Three graph; each independently delivered chunk is compressed independently. This catches package changes that duplicate a peer entry graph while keeping adapter-only attribution honest. The graph gate also requires runtime baking and explicit FontFace transfer reconstruction to remain dynamically reachable while excluding both implementations from the initial Core, Three, and React closures. The detailed record retains its measurement platform, architecture, SHA-256 payload identities, and reviewed raw/minified/gzip/Brotli ceilings because those fields enforce reproducibility and detect internal regressions. The human summary is deliberately smaller: the benchmark UI and Size Limit pull-request comment use one fail-closed projection containing only gzip for Core JS, Shaper Wasm, Three.js adapter JS, React adapter JS, the production R3F hello-world application, Inter plus Font Awesome across Bitmap, MTSDF, and Slug, and each optional validator, runtime-bake, font-baker, and raster-baker JS/Wasm payload. It publishes neither arithmetic runtime/delivery totals nor alternate compression columns. This keeps each displayed number attributable to one emitted payload and avoids presenting external peers or a chosen font combination as a universal application total. The pinned Size Limit action still owns checkout, base/head execution, budget failure, and its machine-readable two-column input. Its fixed renderer cannot author the desired compact layout, so a staged formatter records those same two result arrays and replaces the action's comment with one balanced `Surface | gzip | Surface | gzip` table; every summary surface appears exactly once. The inspector's runtime and resource cards remain separate workload telemetry rather than inputs to the pull-request size summary.
+The canonical package-size lane measures the initial public JavaScript graph, lazy font validator, runtime Worker boundary, baker and shaper JavaScript/Wasm, and representative font artifacts without zero-byte placeholders. Static entry closures and dynamic chunks are separated from Rollup metadata rather than conflated; Core, Three, and React adapter measurements externalize the package's declared Three.js, React, and R3F peers, and package-owned Wasm URLs are externalized from JavaScript measurements regardless of their owning package. The production R3F hello-world row separately sums every JavaScript chunk emitted by the existing application build, including its consumer-owned React, R3F, and Three graph; each independently delivered chunk is compressed independently. This catches package changes that duplicate a peer entry graph while keeping adapter-only attribution honest. The graph gate also requires runtime baking and explicit FontFace transfer reconstruction to remain dynamically reachable while excluding both implementations from the initial Core, Three, and React closures. The detailed record retains its measurement platform, architecture, SHA-256 payload identities, and raw/minified/gzip/Brotli measurements. Package size is pull-request review evidence rather than a gate: no byte budget or committed-report freshness check fails a change, `pnpm size` prints without writing, and the committed `src/generated/package-sizes.json` is the harness's display snapshot, refreshed only by `release:size:generate` during release preparation ([package-size review evidence](../planning/decisions/package-size-review-evidence.md)). The human summary is deliberately smaller: the benchmark UI and Size Limit pull-request comment use one fail-closed projection containing only gzip for Core JS, Shaper Wasm, Three.js adapter JS, React adapter JS, the production R3F hello-world application, Inter plus Font Awesome across Bitmap, MTSDF, and Slug, and each optional validator, runtime-bake, font-baker, and raster-baker JS/Wasm payload. It publishes neither arithmetic runtime/delivery totals nor alternate compression columns. This keeps each displayed number attributable to one emitted payload and avoids presenting external peers or a chosen font combination as a universal application total. The pinned Size Limit action still owns checkout, same-runner base/head execution, and its machine-readable two-column input; no size limit is configured, so it reports and never fails on growth. Its fixed renderer cannot author the desired compact layout, so a staged formatter records those same two result arrays and replaces the action's comment with one balanced `Surface | gzip | Surface | gzip` table; every summary surface appears exactly once. The inspector's runtime and resource cards remain separate workload telemetry rather than inputs to the pull-request size summary.
 
 The current Darwin arm64 record reports a 318,898 minified / 80,416 gzip / 67,065 Brotli peer-externalized browser graph. The validator, runtime-bake host, runtime-bake Worker, font-baker host, font-baker Wasm, and shaper Wasm report 584,223 minified, 13,994 minified, 47,571 minified, 8,274 minified, 1,073,628 raw, and 1,195,483 raw bytes respectively. Their gzip sizes are 137,957, 6,089, 13,242, 2,610, 386,250, and 465,801 bytes. A fresh same-host exact-main comparison puts the candidate browser core at +0.60% raw/+0.87% gzip, shaper Wasm at +0.93% raw/+1.18% gzip, and Three adapter at +0.51% raw/+0.72% gzip. Those three release-facing payloads remain inside their reviewed ceilings, but the positive deltas are reported rather than called free. Several small optional host graphs move by larger percentages: the runtime-bake Worker is +6.71% raw/+7.61% gzip and the Slug baker host is +5.34%/+6.32%; their absolute deltas and ceilings remain independently visible in the generated record. Bitmap, MTSDF, and Slug baker hosts measure 4,876, 5,597, and 4,411 gzip bytes; their Wasm modules measure 231,072, 215,539, and 183,643 gzip bytes. Static Node project discovery is excluded from the direct font-baker host graph, and dynamic raster modules are excluded from the initial Worker graph because each has its own independently visible row. Bitmap-only and MTSDF-only size entries inspect their initial module closures and fail if Slug runtime, shader, baker, or runtime-baker modules enter either graph. Paragraph layout hashes and the Codec composite hash share one implementation over the actual normalized layouts; the generator, benchmark target, unit tests, and Vitexec probes no longer maintain parallel digest logic.
 
@@ -646,7 +685,7 @@ still fails generation.
 
 The separate live performance observation runs the human WebGPU surface at explicit 1× DPR on Chromium 149 and an Apple `metal-3` adapter. Each paragraph-scale script lane must settle its exact authored state with zero missing glyphs and then publish twelve causal FPS and GPU-report intervals; there are no sleeps or timing thresholds. The refreshed run observed 119.46–120.16 FPS, 0.2–0.3 ms median CPU submission, 0.3–0.5 ms CPU P95, 0.679–3.457 ms median GPU time, and 3.261–5.033 ms GPU P95 across 112–278 glyphs and one to fifteen draws. Initial public `Text` readiness was 7.2–22.0 ms and total startup 17.0–122.9 ms; the first cold Inter fetch dominates the high end. `Text.ready` includes shaping, paragraph layout, and bitmap-batch publication, so it is not mislabeled as a pure shape call; the dedicated HarfRust target owns that narrower metric. These machine observations are authenticated evidence, not cross-device budgets.
 
-The package-size lane measures the item 8.1 MTSDF kernel separately from the coverage-capable item 8.6 baker and every initial browser or unrelated raster graph. The validated generator host is 11,543 raw, 8,466 minified, 2,658 gzip, and 2,364 Brotli bytes; the corrected optimized scalar kernel is 52,633 raw, 23,115 gzip, and 19,660 Brotli bytes. The complete MTSDF baker adds Fontations, bounded face-resolved coverage, and artifact packaging behind the optional subpath and measures 552,025 raw, 215,030 gzip, and 168,758 Brotli Wasm bytes plus a 26,940 raw / 19,117 minified / 5,530 gzip / 4,908 Brotli host. The Bitmap baker with the same coverage contract measures 626,940 raw, 234,735 gzip, and 180,503 Brotli Wasm bytes. The private TypeScript diagnostic entry is neither packed nor reachable from production graphs, and Rust profiling remains a non-default feature; the size lane rejects diagnostic code in shipped baker graphs and profiling/timing Wasm boundaries. The complete recovered batching branch moves exact remote main's browser-core graph from 326,939 / 318,913 / 80,421 / 67,034 to 330,873 raw / 322,816 minified / 81,361 gzip / 67,647 Brotli bytes. Three's complete adapter moves from 503,418 / 492,138 / 124,178 / 102,105 to 509,077 / 497,748 / 125,445 / 102,981. The shaper Wasm moves from 1,195,483 raw / 465,801 gzip / 363,306 Brotli to 1,197,589 / 466,385 / 362,294. Baker hosts and Wasm artifacts remain byte-identical. A separate pre-coverage regression table bounds the accepted growth of browser core, both optional hosts and runtimes, and both baker Wasm modules in every measured representation. Complete reviewed ceilings apply on foreign hosts, while same-host regeneration must remain byte-exact. `pnpm scripts run glyph:mtsdf-generator-profile` additionally reports compile, initialization, cold-corpus, and warm-corpus observations only after all seven independent oracle hashes pass; it is generator evidence, not frame-rendering performance. Rejected SIMD variant reports remain historical decision evidence rather than maintained browser capture workflows.
+The package-size lane measures the item 8.1 MTSDF kernel separately from the coverage-capable item 8.6 baker and every initial browser or unrelated raster graph. The validated generator host is 11,543 raw, 8,466 minified, 2,658 gzip, and 2,364 Brotli bytes; the corrected optimized scalar kernel is 52,633 raw, 23,115 gzip, and 19,660 Brotli bytes. The complete MTSDF baker adds Fontations, bounded face-resolved coverage, and artifact packaging behind the optional subpath and measures 552,025 raw, 215,030 gzip, and 168,758 Brotli Wasm bytes plus a 26,940 raw / 19,117 minified / 5,530 gzip / 4,908 Brotli host. The Bitmap baker with the same coverage contract measures 626,940 raw, 234,735 gzip, and 180,503 Brotli Wasm bytes. The private TypeScript diagnostic entry is neither packed nor reachable from production graphs, and Rust profiling remains a non-default feature; the size lane rejects diagnostic code in shipped baker graphs and profiling/timing Wasm boundaries. The complete recovered batching branch moves exact remote main's browser-core graph from 326,939 / 318,913 / 80,421 / 67,034 to 330,873 raw / 322,816 minified / 81,361 gzip / 67,647 Brotli bytes. Three's complete adapter moves from 503,418 / 492,138 / 124,178 / 102,105 to 509,077 / 497,748 / 125,445 / 102,981. The shaper Wasm moves from 1,195,483 raw / 465,801 gzip / 363,306 Brotli to 1,197,589 / 466,385 / 362,294. Baker hosts and Wasm artifacts remain byte-identical. A separate pre-coverage regression table bounds the accepted growth of browser core, both optional hosts and runtimes, and both baker Wasm modules in every measured representation. Complete reviewed ceilings apply on foreign hosts, while same-host regeneration must remain byte-exact. The internal Labs `mtsdf-generator` suite reports compile, initialization, initialized-plus-corpus, and retained-generator observations only after all seven independent oracle hashes pass; it is generator evidence, not frame-rendering performance. Rejected SIMD variant reports remain historical decision evidence rather than maintained browser capture workflows.
 
 Inter and Amiri retain their established roles. A pinned static Noto Sans Devanagari face adds the Indic lane without weakening the baker's explicit variable-font rejection. Advanced Shaping recommends a script-appropriate font for each case but exposes every baked fixture so a human can inspect coverage failures instead of having the selection silently locked. The CJK default is a reproducible HarfBuzz 13 subset of the authored Noto Sans CJK JP case; DotGothic16 remains available and explicitly labeled as pixel style. The subset is showcase evidence, not an answer to complete CJK distribution: the full 65,535-glyph Noto face remains the authoritative shaping/paragraph oracle and Milestone 13 owns chunked raster paging.
 
@@ -677,6 +716,39 @@ A successful baked Presentation preload retains one application-lifetime `Font` 
 
 Run `pnpm scripts list benchmark` from the workspace root to discover current benchmark maintenance workflows.
 
+CPU comparisons use two fresh-process `@pmndrs/labs` lanes. `benchmark:labs-package` installs packed or registry
+artifacts and measures the public API; its default smoke suite covers common layout, measurement, style, and retained
+publication work. `benchmark:labs-internal` is reserved for workspace-only implementation experiments that cannot ship in
+the package artifact. Its `engine` suite preserves the raw retained-engine invalidation classes across selectable Bitmap,
+MTSDF, and Slug artifacts and Latin, bidi, and CJK corpora. Its `kernel` suite measures the scalar,
+compiler-vectorized, and explicit-SIMD artifacts at 22k and 86k target scales, preserving exact output-hash and
+no-warm-memory-growth checks outside the timed region. Its `mtsdf-generator` suite separately measures Wasm compilation,
+host initialization, initialized-plus-corpus work, and retained-generator corpus work while preserving every oracle hash.
+Browser frame, GPU, and input-latency observations remain Vitexec or Playwright workflows, while package size and
+conformance remain deterministic gates rather than timing benchmarks.
+
+| Need                                  | Command                                                                                                                   |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Common installed-package signal       | `pnpm scripts run benchmark:labs-package -- --candidate <package-or-tgz>`                                                 |
+| Focused/full installed-package signal | add `--suite layout`, `measure`, `glyphs`, `publication`, `batch`, `style`, `reflow`, `stress`, `cold`, `edit`, or `full` |
+| Raw retained-engine signal            | `pnpm scripts run benchmark:labs-internal -- --suite <engine-case>`                                                       |
+| Kernel signal                         | build with `glyph:kernel-lab-build`, then select `kernel`, `pack`, `break`, or `bidi`                                     |
+| Generator signal                      | `pnpm scripts run benchmark:labs-internal -- --suite mtsdf-generator`                                                     |
+| Browser/GPU/frame signal              | select the maintained `benchmark:*` or `glyph:kernel-lab-browser` workflow from the index                                 |
+
+Both Labs runners inspect the saved result and fail on an empty selection or any recorded benchmark-body error; Labs
+0.9.0 can otherwise print such an error and still exit zero. Generator fixture scripts may print elapsed progress while
+writing authenticated fixtures, but those wall-clock messages are not comparison benchmarks. The MTSDF baker profiler
+remains separate because it compares native, direct Wasm, Worker transfer, and peak-memory phases that an in-process Labs
+callback cannot represent faithfully.
+
+CI routes the installed-package lane by event. Pull requests default to the four-block `smoke` suite. One
+`benchmark:layout`, `benchmark:measure`, `benchmark:glyphs`, `benchmark:publication`, `benchmark:style`,
+`benchmark:batch`, `benchmark:reflow`, `benchmark:stress`, `benchmark:cold`, or `benchmark:edit` label selects that focused eight-block suite;
+`benchmark:full` selects the complete matrix and overrides focused labels. Pushes to `main` always run `full`. Manual
+dispatch accepts the same suite names. This routing changes only the installed-package timing report; correctness,
+browser, payload, and conformance lanes retain their own workflows.
+
 The 0.1.0 export cleanup removes raw ABI re-exports from the baker size entries. The regenerated package-size report
 records the supported consumer surface, including the root format move. Relative to the original pre-cleanup build,
 core grows by 217 gzip bytes, while the TypeGPU integrations shrink by 2,003 and 3,074 bytes. Wasm artifacts are
@@ -703,8 +775,8 @@ ms versus 0.0625 ms scalar for chunk summaries, 0.009375 versus 0.053125 ms for 
 ms for bidi masks. The same run executes the production validated-policy interpreter over a representative 17-operation
 program and includes its F32×4, U32, and U16 buffers in the scalar/auto/SIMD byte-identity gate. At 25,515 glyphs,
 explicit SIMD measures 0.438 ms p95 versus 1.113 ms scalar; at 100,602 it measures 1.750 versus 4.350 ms. Browser timer
-quantization is visible in those figures, so Node retains the finer candidate ranking while Chromium supplies the
-independent engine-admission check.
+quantization is visible in those figures, so the internal Labs kernel suite supplies finer fresh-process candidate
+ranking while Chromium supplies the independent engine-admission check.
 
 The bidi transition-scan lane records three named inputs. `transitionScanX*` uses the captured resolved levels, but the
 current captured corpus is pure LTR Latin and therefore resolves to the same all-zero levels as the explicit
