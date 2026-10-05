@@ -154,7 +154,7 @@ export function renderDocsReport({ review, findings, base }) {
       '### Validation findings',
       '',
       `Run ${checkCommand} locally to reproduce. Record new log entries and decisions with`,
-      `${logCommand} (or \`-- decision\`) instead of editing \`log.md\` or the frozen register.`,
+      `${logCommand} (or \`-- decision\`) instead of editing a shared file or the frozen register.`,
       '',
       ...findings.slice(0, listedFileLimit).map((finding) => `- ${finding}`),
     );

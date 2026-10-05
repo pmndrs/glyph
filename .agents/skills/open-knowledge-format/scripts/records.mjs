@@ -14,6 +14,8 @@ import yaml from 'js-yaml';
 
 /** Scaffolded text the author must replace; the validator rejects any record that still contains it. */
 export const placeholder = 'TODO(docs:new)';
+/** Default number of records a listing prints. */
+const listLimit = 20;
 export const decisionStatuses = Object.freeze(['Proposed', 'Experiment', 'Deferred', 'Accepted', 'Superseded']);
 
 const slugPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
@@ -137,17 +139,23 @@ ${placeholder} What it changes, what it supersedes (by D-ID or decision slug), a
 `;
 }
 
-/** Newest-first listings: the readable chronology and decision index, derived instead of maintained. */
-export async function listRecords(bundle, kind) {
+/**
+ * Newest-first listings: the readable chronology and decision index, derived instead of maintained.
+ * Log listings filter by `since` (inclusive date) and `mentions` (case-insensitive text in title or body);
+ * to find the commits that changed a file, `git log -- <path>` is exact.
+ */
+export async function listRecords(bundle, kind, options = {}) {
   if (kind === 'log') {
     const directory = path.join(bundle, 'log');
-    const files = (await markdownNames(directory)).sort().reverse();
-    return Promise.all(
-      files.map(async (file) => {
-        const data = frontmatter(await readFile(path.join(directory, file), 'utf8'));
-        return { date: file.slice(0, 10), title: String(data.title ?? ''), path: `log/${file}` };
-      }),
-    );
+    const records = [];
+    for (const file of (await markdownNames(directory)).sort().reverse()) {
+      const date = file.slice(0, 10);
+      if (options.since !== undefined && date < options.since) break;
+      const text = await readFile(path.join(directory, file), 'utf8');
+      if (options.mentions !== undefined && !text.toLowerCase().includes(options.mentions.toLowerCase())) continue;
+      records.push({ date, title: String(frontmatter(text).title ?? ''), path: `log/${file}` });
+    }
+    return records;
   }
   if (kind === 'decision') {
     const directory = path.join(bundle, 'planning', 'decisions');
@@ -210,9 +218,30 @@ if (isMainModule(import.meta.url)) {
       const target = await createRecord(root, kind, slug, title.join(' '));
       process.stdout.write(`created ${path.relative(process.cwd(), target)}; replace every ${placeholder}\n`);
     } else if (operation === 'list') {
-      for (const record of await listRecords(root, kind)) {
+      const option = (name) => {
+        const index = rest.indexOf(name);
+        return index === -1 ? undefined : rest[index + 1];
+      };
+      const since = option('--since');
+      if (since !== undefined && !isIsoDate(since)) throw new Error('--since needs YYYY-MM-DD');
+      // Capped by default so a listing never floods the reader; --all or --limit widen it.
+      const limit = rest.includes('--all') ? Infinity : Number(option('--limit') ?? listLimit);
+      if (!(limit > 0)) throw new Error('--limit needs a positive number');
+      const records = await listRecords(root, kind, { since, mentions: option('--mentions') });
+      for (const record of records.slice(0, limit)) {
         const status = record.status === undefined ? '' : `${record.status}\t`;
         process.stdout.write(`${record.date}\t${status}${record.title}\t${record.path}\n`);
+      }
+      const mentions = option('--mentions');
+      if (records.length === 0 && mentions !== undefined && /\//u.test(mentions)) {
+        process.stdout.write(
+          `no log entries mention ${mentions}; \`git log --oneline -- ${mentions}\` lists the commits that changed it\n`,
+        );
+      }
+      if (records.length > limit) {
+        process.stdout.write(
+          `… ${records.length - limit} older; narrow with --since or --mentions, or pass --limit <n> or --all\n`,
+        );
       }
     } else {
       throw new Error(usage);

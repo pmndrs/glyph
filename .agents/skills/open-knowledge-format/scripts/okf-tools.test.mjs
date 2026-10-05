@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import { afterEach, test } from 'node:test';
 
 import { migrateV01ToV02 } from './migrate-v01-to-v02.mjs';
+import { decision, outline, search } from './docs-query.mjs';
 import { createRecord, listRecords, placeholder } from './records.mjs';
 import {
   docsFindings,
@@ -168,10 +169,11 @@ test('the pull-request docs report names unreviewed concepts and findings, and c
   await commitFixture(root);
   await git(root, ['branch', 'base']);
   await writeFile(path.join(root, 'packages/glyph/src/index.ts'), 'changed\n');
-  await writeFile(
-    path.join(root, '.agents/docs/log.md'),
-    '# Log\n\nThis file is frozen history through 2026-09-30.\n\n## 2026-10-06\n\n- Hand-written.\n\n## 2026-09-30\n\n- Kept.\n',
-  );
+  // The bundle records changes as Log Entry files, so a recreated log.md is a finding.
+  await createRecord(path.join(root, '.agents/docs'), 'log', 'kept', 'Kept', { date: '2026-09-30' });
+  const entry = path.join(root, '.agents/docs/log/2026-09-30-kept.md');
+  await writeFile(entry, (await readFile(entry, 'utf8')).replace(/TODO\(docs:new\).*/u, 'Kept.'));
+  await writeFile(path.join(root, '.agents/docs/log.md'), '# Log\n\n## 2026-10-06\n\n- Hand-written.\n');
   await git(root, ['add', '.']);
   await git(root, ['commit', '-qm', 'feat(glyph): change source']);
 
@@ -185,7 +187,7 @@ test('the pull-request docs report names unreviewed concepts and findings, and c
   ]);
   const findings = await docsFindings(root);
   assert.deepEqual(findings, [
-    '.agents/docs/log.md: 2026-10-06 is past the frozen log; record it with docs:new -- log instead',
+    '.agents/docs/log.md: this bundle records changes as log/ entries; use docs:new -- log instead',
   ]);
   const body = renderDocsReport({ review, findings, base: 'base' });
   assert.ok(body.startsWith(docsReportMarker));
@@ -194,17 +196,143 @@ test('the pull-request docs report names unreviewed concepts and findings, and c
   assert.match(body, /docs:check/u);
 
   await writeFile(conceptPath(root), glyphConcept({ at: '2026-10-05T00:00:00Z' }));
-  await writeFile(
-    path.join(root, '.agents/docs/log.md'),
-    '# Log\n\nThis file is frozen history through 2026-09-30.\n\n## 2026-09-30\n\n- Kept.\n',
-  );
-  await git(root, ['commit', '-qam', 'docs(glyph): review concept']);
+  await rm(path.join(root, '.agents/docs/log.md'));
+  await git(root, ['add', '-A']);
+  await git(root, ['commit', '-qm', 'docs(glyph): review concept']);
   const clean = renderDocsReport({
     review: await measurePullRequestDocs(root, 'base'),
     findings: await docsFindings(root),
     base: 'base',
   });
   assert.match(clean, /^Nothing to do/mu);
+});
+
+test('outline and search locate every answer as path › heading trail with line ranges', async () => {
+  const bundle = await recordBundle('okf-query-');
+  await mkdir(path.join(bundle, 'packages'), { recursive: true });
+  await writeFile(
+    path.join(bundle, 'packages/glyph.md'),
+    [
+      '---',
+      'type: Workspace Package',
+      'title: Glyph',
+      'description: Shapes text.',
+      'generated:',
+      '  by: process:test',
+      "  at: '2026-09-17T00:00:00Z'",
+      '---',
+      '',
+      '# Glyph',
+      '',
+      '## Shaping',
+      '',
+      'HarfRust shapes every run.',
+      'Unsafe breaks are corrected here.',
+      '',
+      '```md',
+      '# not a heading',
+      '```',
+      '',
+      '### Fallback',
+      '',
+      'Fallback fonts shape unsafe runs too.',
+      '',
+      '## Layout',
+      '',
+      'Lines are fitted.',
+      '',
+    ].join('\n'),
+  );
+
+  assert.deepEqual(await outline(bundle, 'packages/glyph.md'), [
+    'packages/glyph.md  Glyph (28 lines)',
+    '  Shapes text.',
+    'Glyph  [10-28]',
+    '  Shaping  [12-24]',
+    '    Fallback  [21-24]',
+    '  Layout  [25-28]',
+  ]);
+  assert.deepEqual(await outline(bundle, 'packages/glyph.md:23'), [
+    'Glyph  [10-28]',
+    '  Shaping  [12-24]',
+    '    Fallback  [21-24]',
+  ]);
+  assert.deepEqual(await search(bundle, ['UNSAFE']), [
+    'packages/glyph.md › Glyph › Shaping  [12-24]',
+    '  [14-15] HarfRust shapes every run. Unsafe breaks are corrected here.',
+    'packages/glyph.md › Glyph › Shaping › Fallback  [21-24]',
+    '  [23-23] Fallback fonts shape unsafe runs too.',
+  ]);
+  assert.deepEqual(await search(bundle, ['shapes', 'text']), [
+    'Concepts:',
+    '  packages/glyph.md  Glyph — Shapes text.',
+    '',
+  ]);
+  assert.deepEqual(
+    (await search(bundle, ['unsafe'], { limit: 1 })).at(-1),
+    '… 1 more sections; add a term or pass --limit <n>',
+  );
+});
+
+test('a path query finds the concepts that cite or link a source file, and table rows are their own hits', async () => {
+  const root = await workspaceFixture('okf-query-paths-');
+  const docs = path.join(root, '.agents/docs');
+  await writeFile(
+    path.join(docs, 'packages/notes.md'),
+    "---\ntype: Note\ntitle: Notes\ndescription: Notes.\nsources:\n  - resource: '../../../packages/glyph/src/index.ts'\ngenerated:\n  by: process:test\n  at: '2026-09-17T00:00:00Z'\n---\n\n# Notes\n\nSee [the entry](../../../packages/glyph/src/index.ts) for details.\n\n| ID | Decision |\n| --- | --- |\n| D-001 | First. |\n| D-002 | Second. |\n",
+  );
+
+  const rows = await search(docs, ['glyph/src/index.ts']);
+  assert.deepEqual(rows.slice(0, 2), [
+    'Cited as a source by:',
+    '  packages/notes.md  Notes (cites packages/glyph/src/index.ts)',
+  ]);
+  assert.ok(rows.includes('  [14-14] See [the entry](../../../packages/glyph/src/index.ts) for details.'));
+  assert.deepEqual(await search(docs, ['D-002']), [
+    'packages/notes.md › Notes  [12-20]',
+    '  [19-19] | D-002 | Second. |',
+  ]);
+});
+
+test('a decision prints one register row with its section and any superseding file', async () => {
+  const bundle = await recordBundle('okf-decision-');
+  await mkdir(path.join(bundle, 'planning'), { recursive: true });
+  await writeFile(
+    path.join(bundle, 'planning/decision-register.md'),
+    '# Decision register\n\n## Shaping\n\n| ID | Decision | Status |\n| --- | --- | --- |\n| D-001 | One shaper serves every raster.   | Accepted |\n',
+  );
+  const replacement = await createRecord(bundle, 'decision', 'two-shapers', 'Two shapers', { date: '2026-10-04' });
+  await writeFile(
+    replacement,
+    (await readFile(replacement, 'utf8')).replace(
+      'decision_status: Proposed',
+      'decision_status: Accepted\nsupersedes: [D-001]',
+    ),
+  );
+
+  assert.deepEqual(await decision(bundle, 'D-001'), [
+    'planning/decision-register.md › Decision register › Shaping  [7] D-001 — Accepted',
+    'One shaper serves every raster.',
+    'superseded by planning/decisions/two-shapers.md',
+  ]);
+  await assert.rejects(decision(bundle, 'D-002'), /D-002 is not in the decision register/u);
+});
+
+test('log listings filter by date and mentioned text', async () => {
+  const bundle = await recordBundle('okf-log-list-');
+  for (const [date, slug, title] of [
+    ['2026-09-01', 'old-raster', 'Old raster change'],
+    ['2026-09-20', 'shaper', 'Shaper change'],
+    ['2026-10-01', 'new-raster', 'New raster change'],
+  ]) {
+    await createRecord(bundle, 'log', slug, title, { date });
+  }
+  const paths = async (options) => (await listRecords(bundle, 'log', options)).map((record) => record.path);
+  assert.deepEqual(await paths({ since: '2026-09-20' }), ['log/2026-10-01-new-raster.md', 'log/2026-09-20-shaper.md']);
+  assert.deepEqual(await paths({ mentions: 'RASTER' }), [
+    'log/2026-10-01-new-raster.md',
+    'log/2026-09-01-old-raster.md',
+  ]);
 });
 
 test('the pre-commit report tells the committer which concept to review, from the staged snapshot', async () => {

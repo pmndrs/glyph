@@ -65,7 +65,6 @@ jobs:
           pnpm exec oxfmt --check \
             .agents/scripts \
             package.json \
-            .agents/docs/log.md \
             .agents/docs/log
 
       - name: Check benchmark formatting

@@ -55,4 +55,3 @@ okf_version: '0.2'
 - [Open questions](planning/open-questions.md) — unresolved blockers and required prototypes.
 - [Planning index](planning/index.md) — complete planning-document inventory.
 - [Knowledge bundle log](log/) — one file per change; list newest first with `docs:list -- log`.
-- [Frozen log history](log.md) — knowledge-bundle changes through 2026-09-30.

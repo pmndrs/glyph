@@ -1,0 +1,9 @@
+---
+type: Log Entry
+title: 'Boundary reshaping was redundant by construction'
+generated:
+  by: process:okf-log-split
+  at: '2026-10-05T17:40:00Z'
+---
+
+The largest single cost left in a warm update turned out to be work that could not change its own output. Each reshape range supplied `contextStart: run.start, contextEnd: run.end`, which is exactly the context the retained paragraph shape was produced with, so the shaper returned the glyphs it had already returned — on roughly every line, on every layout. The buffer's beginning- and end-of-text flags did not rescue it either: they describe the buffer edge, and the surrounding text shipped as context overrides them. Three independent lines of evidence agree. The mechanism above; a measurement over 640 ranges and 20,280 glyphs across Latin word wrap, Arabic word wrap, and Arabic character wrap narrow enough to force breaks inside joined words, where every reshaped glyph matched the retained shape; and the pinned natural, wide, and narrow layout hashes plus the entire alignment, clipping, max-lines, ellipsis, and justification contract, all unchanged with it removed. An early attempt to measure this by disabling the range emission alone was wrong and briefly looked like proof that reshaping mattered: clearing the ranges while leaving the fragments flagged made positioning look for a result that no longer existed. `ReshapeRange` stays, because a narrowed context is a real future need — a truncated line whose last letter should take its final form, or a line composed as an isolated unit for per-line widths — and the contract tests now assert zero crossings so reintroducing one is deliberate rather than silent. Against the pre-optimization commit on an identical workload at 25,515 glyphs, a reflow now lays out in 8.09ms against 110.40ms, inside the 8.33ms budget at 120Hz; a resize in 10.59ms against 103.54ms; a text edit in 33.62ms against 109.66ms.

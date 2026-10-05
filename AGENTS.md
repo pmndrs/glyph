@@ -2,10 +2,8 @@
 
 `pmndrs/glyph` is an ESM-only monorepo for portable font baking, universal shaping, paragraph layout, and optional raster renderers. The benchmark application lives at `benches/`. Other packages and applications belong under `packages/` or `apps/`.
 
-Repository skills live in `.agents/skills/<name>/SKILL.md`. If your harness does not list them, link them into the
-directory it reads skills from with `node .agents/scripts/link-skills.mjs <skills-dir>` (Claude Code reads
-`.claude/skills`), then reload skills. The command is safe to repeat; rerun it after a skill is added, renamed, or
-removed, and add any new in-repository link directory to `.gitignore`.
+Repository skills live in `.agents/skills`. If your harness does not list them, run
+`node .agents/scripts/link-skills.mjs <your-skills-dir>` (Claude Code: `.claude/skills`) and reload.
 
 Before writing or reviewing Rust, TypeScript, React, Wasm boundaries, or tests, read the canonical [engineering standard](.agents/docs/engineering/code-style.md). Use the repository-local `maintainability-review` skill for a deliberate cleanup, pre-release review, or milestone-wide audit; the skill owns the procedure, while the engineering standard owns the rules.
 
@@ -28,20 +26,23 @@ not substitutes.
 
 Consult the repository-local `evidence-first` skill as the default style guidance for human-facing engineering communication, including chat updates and final answers, reports, reviews, handoffs, PR and issue prose, READMEs, and technical documentation. It offers situational cues rather than a fixed template. Domain skills still determine the work and valid evidence, `open-knowledge-format` governs bundle structure and provenance, and `diataxis-docs` governs the purpose and top-level structure of reader-facing documentation.
 
-Start at `.agents/docs/index.md` and follow its linked indexes for self-discovery. Use these canonical sources instead of creating shadow plans or duplicate status prose:
+Start at `.agents/docs/index.md`. Never read a whole doc to find something; run these as
+`mise exec -- pnpm scripts run <name>`: `docs:search -- <terms or path>` and
+`docs:outline -- <path>[:line]` print `path › Heading  [start-end]` with the matching paragraph; read only that range.
+`docs:decision -- D-123` prints one decision and `docs:list -- log --since <date>` lists recent changes. Canonical
+sources, used instead of shadow plans or duplicate status prose:
 
 - `.agents/docs/roadmap/roadmap.md` for milestone order and checkbox status;
-- `.agents/docs/planning/decisions/` for architectural decisions, one file each (D-001–D-372 stay in the frozen `decision-register.md`);
+- `.agents/docs/planning/decisions/` for decisions, one file each (D-001–D-372 are the frozen `decision-register.md`);
 - `.agents/docs/packages/*.md` for current package ownership, boundaries, and evidence;
-- `.agents/docs/log/` for knowledge-bundle chronology, one file per change (history through 2026-09-30 stays in the frozen `log.md`).
+- `.agents/docs/log/` for knowledge-bundle chronology, one file per change.
 
-Never edit a shared record to add to it. Create a log entry with `mise exec -- pnpm scripts run docs:new -- log <slug> <title>`
-and a decision with `mise exec -- pnpm scripts run docs:new -- decision <slug> <title>`, then replace every `TODO(docs:new)`;
-validation rejects leftover scaffold text and new rows in the frozen register. Name records by their subject, never by a
-number. Package size is review evidence from CI's size comment: do not commit `benches/src/generated/package-sizes.json`
-from a feature branch; only `release:size:generate` refreshes it during release preparation.
-
-Update affected canonical documentation in the same change as source, and verify the bundle with `mise exec -- pnpm scripts run docs:check`. Docs checks never block a merge: CI's `Docs report` comment lists the concepts a pull request should review and any validation findings, each with its fix command, and a maintainer may merge with items open because the `Sync agent docs` issue (label `agents`) carries them to a later maintenance pull request. Package concepts carry no stored source pin: `mise exec -- pnpm scripts run docs:drift` reports, from git history, which concepts trail their package source, and the `Docs drift` workflow keeps that report in one `Sync agent docs` issue, labelled `agents`, for the scheduled maintenance agent. When resolving that issue, correct each listed concept or, when it is already right, record the review by updating its `generated.at`; any commit that touches a concept clears its drift.
+Update affected docs in the same change as source. Record changes and decisions with
+`docs:new -- log|decision <slug> <title>` and replace every `TODO(docs:new)`; never add to a shared record or number
+one. Docs checks never block a merge: the pre-commit hook and CI's `Docs report` name concepts to review, and the
+`Sync agent docs` issue (label `agents`) collects what merged unresolved. Review a named concept against the change,
+then correct it or update its `generated.at`. Package size is review evidence from CI's size comment; never commit
+`package-sizes.json` from a feature branch.
 
 Use the exact root toolchain pins through mise. Agent commands must enter that environment explicitly with `mise exec -- pnpm ...` or `mise exec -- <tool> ...`; do not depend on `mise activate` surviving across non-interactive commands. Mise owns tool selection, while pnpm remains the only repository workflow surface. Install workload-scoped mise tools only when their documented pnpm workflow requires them. The dated nightly under `packages/glyph/rust/font-baker-fuzz` is isolated to cargo-fuzz. Verify narrowly first, then run the relevant package and repository checks. Keep tests deterministic; do not use sleeps, timer cushions, arbitrary retries, or regenerated goldens as correctness mechanisms.
 
@@ -52,10 +53,8 @@ Before searching for or inventing a specialized maintenance command, run `mise e
 Run `mise exec -- pnpm scripts run repo:hooks:install` once per clone. It installs the repository's native pre-commit
 dispatcher in `git rev-parse --git-common-dir/hooks`, so every worktree shares it without `core.hooksPath` or a hook
 manager. The installer preserves every existing Git LFS hook. The pre-commit hook auto-formats and applies safe lint fixes
-to fully staged source files and refuses partially staged source files instead of accidentally staging unrelated edits.
-It then prints an advisory docs report for the staged change and never blocks on it: when the report names a concept,
-review it against your staged change now, correct it or update its `generated.at`, stage it, and record the change with
-`docs:new -- log` before you push.
+to fully staged source files, refuses partially staged source files instead of accidentally staging unrelated edits,
+and prints the advisory docs report.
 
 TypeScript checks use the repository-pinned compiler and the patched `@types/three` declaration graph. For TSL typing changes, begin with the focused regression fixture before running a package or application project.
 

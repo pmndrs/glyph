@@ -13,13 +13,14 @@ generated:
 
 ## Decision
 
-Record knowledge-bundle chronology as one file per change in `.agents/docs/log/`, named `YYYY-MM-DD-<slug>.md`, with
-one H1 title and flat prose. Record each new decision as one file in `.agents/docs/planning/decisions/`, named by its
+Record knowledge-bundle chronology as one file per change in `.agents/docs/log/`, named `YYYY-MM-DD-<slug>.md`, typed
+`Log Entry` with its title in frontmatter and flat prose. Record each new decision as one file in `.agents/docs/planning/decisions/`, named by its
 subject slug with no number prefix, typed `Decision`, with a `decision_status` of Proposed, Experiment, Deferred,
 Accepted, or Superseded, a quoted `decided` date, optional `supersedes` naming D-IDs or slugs, and its rule under
 `## Decision`. Create both with `mise exec -- pnpm scripts run docs:new`; read them newest first with `docs:list`.
-`log.md` and the D-numbered decision register are frozen history: the register declares `frozen_after: D-372`, and
-validation rejects any row past it.
+The D-numbered decision register is frozen history: it declares `frozen_after: D-372`, and validation flags any row past
+it. The former `log.md` was split into one `Log Entry` per entry, text preserved exactly, and removed; validation flags
+a `log.md` that reappears beside `log/`.
 
 ## Why
 

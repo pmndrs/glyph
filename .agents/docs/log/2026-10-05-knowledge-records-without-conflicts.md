@@ -10,7 +10,8 @@ Package concepts no longer store a `source_digest`: `docs:drift` measures freshn
 `Docs drift` workflow keeps one `Sync agent docs` issue (label `agents`) current for a scheduled maintenance agent, while a
 `Docs report` pull-request comment lists what to review and fix without ever failing CI
 ([advisory docs](../planning/decisions/concept-drift-issue.md)). Log entries and decisions are now one file each,
-named by subject and created with `docs:new`; `log.md` and the D-numbered register are frozen, and validation rejects
+named by subject and created with `docs:new`; the 644 `log.md` entries became one file each, the D-numbered register is
+frozen, and validation rejects
 new register rows and unfinished scaffolds ([append-only knowledge records](../planning/decisions/append-only-knowledge-records.md)).
 Package size is pull-request review evidence only: the committed-report freshness check and byte budgets are removed,
 and `package-sizes.json` is a harness display snapshot refreshed at release
