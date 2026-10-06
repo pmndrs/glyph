@@ -38,6 +38,46 @@ export const SOFTWARE_FLAGS = [
   '--enable-unsafe-swiftshader',
 ];
 const GPU_FLAGS = ['--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu'];
+
+/**
+ * Launches the browser for a capture. An explicit `PMNDRS_GLYPH_CHROMIUM_EXECUTABLE_PATH` wins. Otherwise a GPU
+ * capture uses the locally installed Google Chrome (Playwright's `chrome` channel), which runs on the machine's real
+ * GPU. Playwright's own Chromium is the fallback, and also the default for `--software` runs.
+ */
+async function launchBrowser(chromium, { headed, software }) {
+  const args = [...GPU_FLAGS, ...(software ? SOFTWARE_FLAGS : [])];
+  const headless = !headed;
+  const executablePath = process.env.PMNDRS_GLYPH_CHROMIUM_EXECUTABLE_PATH || undefined;
+  if (executablePath !== undefined) {
+    const browser = await chromium.launch({ headless, executablePath, args });
+    browser.tourSource = `${browser.version()} via ${executablePath}`;
+    return browser;
+  }
+  const attempts = software ? ['managed', 'chrome'] : ['chrome', 'managed'];
+  const failures = [];
+  for (const attempt of attempts) {
+    try {
+      const browser =
+        attempt === 'chrome'
+          ? await chromium.launch({ headless, channel: 'chrome', args })
+          : await chromium.launch({ headless, args });
+      browser.tourSource = `${browser.version()} via ${attempt === 'chrome' ? 'installed Google Chrome' : 'Playwright-managed Chromium'}`;
+      return browser;
+    } catch (error) {
+      failures.push(`${attempt}: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`);
+    }
+  }
+  throw new Error(
+    [
+      'no browser could be launched for the capture.',
+      ...failures,
+      'Fix one of these:',
+      '  install Google Chrome (used automatically), or',
+      '  pass --chromium "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", or',
+      '  run `pnpm --filter @pmndrs/glyph-benchmarks exec playwright install chromium` once.',
+    ].join('\n'),
+  );
+}
 /** The clock starts here when the driver takes it over, so both builds see identical absolute timestamps. */
 const FROZEN_EPOCH_MS = 10_000_000;
 
@@ -149,13 +189,8 @@ async function main(argv) {
   let browser;
   try {
     if (address === null || typeof address !== 'object') throw new Error('Vite did not publish a TCP address');
-    const executablePath = process.env.PMNDRS_GLYPH_CHROMIUM_EXECUTABLE_PATH || undefined;
-    browser = await chromium.launch({
-      headless: !headed,
-      ...(executablePath === undefined ? {} : { executablePath }),
-      args: [...GPU_FLAGS, ...(software ? SOFTWARE_FLAGS : [])],
-    });
-    manifest.browser = `${browser.version()} via ${executablePath ?? 'Playwright-managed executable'}`;
+    browser = await launchBrowser(chromium, { headed, software });
+    manifest.browser = browser.tourSource;
     const page = await browser.newPage({ viewport: { width: 1_280, height: 720 }, deviceScaleFactor: dpr });
     page.on('pageerror', (error) => manifest.pageErrors.push(error.message));
     page.on('console', (message) => {

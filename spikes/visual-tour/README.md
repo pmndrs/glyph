@@ -60,9 +60,11 @@ The rest are estimates for a laptop with a GPU and have not been measured.
   `rustup toolchain install 1.97.1 --target wasm32-unknown-unknown`.
 - Git LFS: `git lfs install`. The benchmark fixtures are LFS objects, and each worktree runs `git lfs pull`. Objects
   are shared through the main `.git/lfs`, so only the first pull downloads them.
-- Chrome or Chromium with WebGPU. By default the Playwright-managed Chromium from `benches/node_modules` is used; run
-  `mise exec -- pnpm --filter @pmndrs/glyph-benchmarks exec playwright install chromium` if it is missing. To use
-  another browser, pass `--chromium <path>`, or set `PMNDRS_GLYPH_CHROMIUM_EXECUTABLE_PATH` (the probe honours it too).
+- Google Chrome with WebGPU. Captures use your installed Chrome by default (Playwright's `chrome` channel), so they
+  run on the machine's real GPU. If Chrome isn't installed, the Playwright-managed Chromium is the fallback; download it
+  once with `mise exec -- pnpm --filter @pmndrs/glyph-benchmarks exec playwright install chromium`. `--software` runs
+  prefer the managed Chromium. To use another browser, pass `--chromium <path>` or set
+  `PMNDRS_GLYPH_CHROMIUM_EXECUTABLE_PATH` (the stock probe honours it too).
   Check WebGPU once with `mise exec -- pnpm scripts run benchmark:presentation -- --technique slug --backend webgpu --workload text-ladder`.
 
 ### 2. Sync, build and tour
