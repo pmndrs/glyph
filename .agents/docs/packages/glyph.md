@@ -768,20 +768,38 @@ Outlines cost about what the face's own outline tables do: 0.46 to 0.94 times th
 Inter adds 226 KB to a 412 KB font, and Noto Sans CJK JP adds 15.5 MB to 16.5 MB. The decoded-quadratic payload this
 replaced added 3 to 12 times the source file and could not bake Noto Sans CJK JP within the 64 MiB response limit.
 
-A Text's borrowed glyph view decodes outlines on request: inside `text.withGlyphs((glyphs) => ...)`,
-`glyphs.outlineAt(index)` decodes the glyph `glyphs.glyphAt(index)` describes, from the font that shaped it, so a
-fallback glyph decodes from its fallback font and callers never handle raw glyph IDs or `Font` objects. The shaper
-decodes with read-fonts, which HarfRust already links: TrueType simple and composite glyphs follow Skrifa's
-FreeType-style unscaled loader, and CFF uses read-fonts' charstring evaluator. A TrueType glyph nests composites at most
-32 levels deep and places at most 65,535 components and 65,535 points, so a crafted font cannot make one decode
-unbounded. Contours are caller-owned `[x0, y0, x1, y1, x2, y2]` quadratic curves in the glyph's paragraph space, scaled
-to its font size and placed at its origin with y down, so they line up with its ink box; they keep the source order and
-winding for nonzero filling, and blank glyphs return `[]`. TrueType outlines are exact, and each CFF cubic becomes four
-equal-parameter quadratics through Slug's shared split. The call throws for a glyph whose font was baked without
-outlines and after its callback returns. The first decode for a font copies its outline SFNT into the shaper's memory,
-released with the font's engine registration. That copy and the decode can grow Wasm memory, and a Wasm-backed borrow
-reads each glyph record from the current memory, so growth does not expire it. Every integration's Text reaches the
-method through the shared `BorrowedGlyphLayout`.
+Outlines are read through the same two paths as the rest of the layout, and both describe a glyph in em units (1 is
+its font size) with y down and the origin at its pen position on the baseline, like every box the layout publishes. A
+caller places a point with `x = glyph.x + ex * glyph.fontSize` and `y = glyph.y + ey * glyph.fontSize`. An outline is
+the shape of a glyph ID in a font, not of one placement, so equal `fontHandle` and `glyphId` mean equal outlines and a
+caller can cache one shape per key. Each glyph decodes from the font that shaped it, so a fallback glyph decodes from
+its fallback font and callers never handle `Font` objects.
+
+- **Borrowed:** inside `text.withGlyphs((glyphs) => ...)`, `glyphs.outlineAt(index, target?)` returns a plain
+  `GlyphOutlineView` of `fontHandle`, `glyphId`, and three typed-array views over the shaper's decode result:
+  endpoint-shared `points` (segment `s` of contour `c` uses points `2s + c`, `2s + c + 1`, and `2s + c + 2`),
+  `contourEnds` (each contour's exclusive end as a segment index), and `segmentLines` (`1` for a line, `0` for a
+  quadratic). There is no reader object and there are no helper methods. A caller-supplied `target` is refilled and
+  returned, which saves only the holder; the views are new on every call. They are valid only inside the callback,
+  until the next `outlineAt()` or other engine call.
+- **Owned:** `text.glyphs().outlineAt(index)` returns caller-owned `GlyphOutlineContour[]` of
+  `[x0, y0, cx, cy, x1, y1, isLine]` tuples, built in JavaScript from the same view, so both paths agree exactly. It is
+  a non-enumerable method on the copied inspection, so the columns still spread, compare, and structured-clone as plain
+  data, and it throws `RangeError` for an index outside the layout.
+
+A line keeps its midpoint as its control point in both paths, so code that ignores the flag still draws it. Contours
+keep the source order and winding for nonzero filling, and blank glyphs return no contours. The shaper decodes with
+read-fonts, which HarfRust already links: TrueType simple and composite glyphs follow Skrifa's FreeType-style unscaled
+loader, and CFF uses read-fonts' charstring evaluator. A TrueType glyph nests composites at most 32 levels deep and
+places at most 65,535 components and 65,535 points, so a crafted font cannot make one decode unbounded. TrueType
+outlines are exact, and each CFF cubic becomes four equal-parameter quadratics through Slug's shared split. The decoder
+writes em-space `f32` points (font units divided by `unitsPerEm`, y negated) with the contour ends and line flags into
+one word-aligned result, and the host creates the views over it. Both calls throw for a glyph whose font was baked
+without outlines, and the borrowed call throws after its callback returns. The first decode for a font copies its
+outline SFNT into the shaper's memory, released with the font's engine registration. That copy and the decode can grow
+Wasm memory, and a Wasm-backed borrow reads each glyph record from the current memory, so growth does not expire it.
+Every integration's Text reaches the borrowed method through the shared `BorrowedGlyphLayout` and the owned one through
+the shared `GlyphLayoutInspection`.
 
 The decoder adds 64,956 raw bytes (24,677 gzip) to `text-shaper.wasm`; Skrifa's outline drawing measured 97 KB gzip in
 the same shaper and cannot be trimmed by feature. `font-baker.wasm` draws no outlines: the bake validator decodes every
@@ -789,10 +807,14 @@ glyph with the runtime decoder, so a bake cannot ship an outline the runtime wou
 runtime-bake outline option are not implemented.
 
 Rust tests compare every glyph of all nine fixture faces, TrueType and CFF, segment for segment with Skrifa, as well as
-composites rewritten to use matched-point anchors and scaled offsets. Composites that multiply their components or
-points past the bounds are refused, and corrupted `glyf`, `loca`, and `CFF ` tables fail without panicking. The
-validator rejects an outline SFNT that is out of profile, misidentified, or undecodable. Three Text tests check every
-TrueType glyph's control box against the ink box the layout reports and every CFF on-curve point against it, decode a
+composites rewritten to use matched-point anchors and scaled offsets, and check every decoded glyph of Inter, Font
+Awesome, and Dancing Script against Skrifa's segments for the endpoint-shared layout, contour ends, line flags and
+midpoint controls, and em-space, y-down points. Composites that multiply their components or points past the bounds are
+refused, and corrupted `glyf`, `loca`, and `CFF ` tables fail without panicking. The validator rejects an outline SFNT
+that is out of profile, misidentified, or undecodable. Three Text tests place every TrueType glyph's outline at its pen
+position and size and check its control box against the ink box the layout reports, check every CFF on-curve point
+against it, check that `H` sits on the baseline in em units at two font sizes, check the borrowed view's layout
+invariants, target refill, and a line's midpoint control, compare owned tuples with the borrowed views, decode a
 font-stack fallback glyph from its own font, read the same Text through its Wasm-backed and then its inspection-backed
 borrow with Wasm memory grown between decodes, and read identical outlines from Bitmap and Slug.
 

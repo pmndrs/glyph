@@ -18,10 +18,15 @@ Glyph outlines are optional core-font data that every raster technique shares, n
 SFNT beside `head` and `maxp`, stored as one `PMNDRS_font.outlines` buffer view; the object's presence is the flag, and
 bakes without it are unchanged. `PMNDRS_font` version 1 marks a font that carries outlines; a bake without them still
 writes version 0, byte-identical to earlier bakes, and readers accept both.
-`text.withGlyphs((glyphs) => glyphs.outlineAt(index))` decodes one laid-out glyph in the text shaper from the font that
-shaped it, placed in paragraph space at its size and origin, through read-fonts, which HarfRust already links: TrueType
-follows Skrifa's FreeType-style unscaled loader, CFF uses read-fonts' charstring evaluator, and each cubic becomes four
-equal-parameter quadratics through Slug's split.
+The text shaper decodes one laid-out glyph from the font that shaped it through read-fonts, which HarfRust already
+links: TrueType follows Skrifa's FreeType-style unscaled loader, CFF uses read-fonts' charstring evaluator, and each
+cubic becomes four equal-parameter quadratics through Slug's split. Outlines are in em units with y down and the origin
+at the glyph's pen position on the baseline, so equal font and glyph IDs give equal outlines; a caller places them with
+the layout's `x`, `y`, and `fontSize`. `text.withGlyphs((glyphs) => glyphs.outlineAt(index, target?))` returns a plain
+`GlyphOutlineView` of endpoint-shared `points`, `contourEnds`, and `segmentLines` views that expire with the callback,
+and `text.glyphs().outlineAt(index)` returns caller-owned `[x0, y0, cx, cy, x1, y1, isLine]` contours. A line keeps its
+midpoint control in both. This API was agreed on the pull request on 2026-10-06 and replaced a paragraph-space,
+tuple-only `outlineAt()` before release.
 
 ## Why
 
