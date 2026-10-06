@@ -1,9 +1,10 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { GlyphOutlineContour } from '../glyph-outline.js';
+import type { GlyphOutlineView } from '../glyph-outline.js';
 import type { BorrowedGlyph, BorrowedGlyphLayout, GlyphLayoutInspection } from '../layout.js';
 import type { BorrowedLayoutPublication, PlanTransport } from './handle-state.js';
 
-type OutlineDecoder = (glyph: BorrowedGlyph) => GlyphOutlineContour[];
+/** Decodes one glyph's outline into views that the next decode replaces. */
+export type OutlineDecoder = (fontHandle: number, glyphId: number, target?: GlyphOutlineView) => GlyphOutlineView;
 
 export function createBorrowedGlyphLayout(
   transport: PlanTransport,
@@ -20,6 +21,13 @@ export function createInspectionBorrowedGlyphLayout(
   decodeOutline: OutlineDecoder,
 ): BorrowedGlyphLayout {
   return Object.freeze(new InspectionBorrowedGlyphLayoutView(inspection, assertActive, decodeOutline));
+}
+
+/** The font handle of glyph `index`, which the layout stores once per font slot. */
+function fontHandleAt(layout: GlyphLayoutInspection, index: number): number {
+  const fontHandle = layout.fontHandles[layout.glyphFontSlots[index]!];
+  if (fontHandle === undefined) throw new RangeError('borrowed layout glyph references a missing font slot');
+  return fontHandle;
 }
 
 function assertGlyphIndex(index: number, glyphCount: number): void {
@@ -51,8 +59,11 @@ class BorrowedGlyphLayoutView implements BorrowedGlyphLayout {
     return this.#publication.glyphCount;
   }
 
-  outlineAt(index: number): GlyphOutlineContour[] {
-    return this.#decodeOutline(this.glyphAt(index));
+  outlineAt(index: number, target?: GlyphOutlineView): GlyphOutlineView {
+    this.#assertActive();
+    const view = this.#transport.borrowParagraphGlyph(this.#publication, index);
+    const layout = textShaperAbi.layouts.borrowedGlyph;
+    return this.#decodeOutline(view.getUint32(layout.fontHandle, true), view.getUint16(layout.glyphId, true), target);
   }
 
   glyphAt(index: number): BorrowedGlyph {
@@ -91,8 +102,11 @@ class InspectionBorrowedGlyphLayoutView implements BorrowedGlyphLayout {
     this.#decodeOutline = decodeOutline;
   }
 
-  outlineAt(index: number): GlyphOutlineContour[] {
-    return this.#decodeOutline(this.glyphAt(index));
+  outlineAt(index: number, target?: GlyphOutlineView): GlyphOutlineView {
+    this.#assertActive();
+    const layout = this.#inspection;
+    assertGlyphIndex(index, layout.glyphCount);
+    return this.#decodeOutline(fontHandleAt(layout, index), layout.glyphIds[index]!, target);
   }
 
   get glyphCount(): number {
@@ -104,12 +118,9 @@ class InspectionBorrowedGlyphLayoutView implements BorrowedGlyphLayout {
     this.#assertActive();
     const layout = this.#inspection;
     assertGlyphIndex(index, layout.glyphCount);
-    const fontSlot = layout.glyphFontSlots[index]!;
-    const fontHandle = layout.fontHandles[fontSlot];
-    if (fontHandle === undefined) throw new RangeError('borrowed layout glyph references a missing font slot');
     return Object.freeze({
       stableId: layout.glyphStableIds[index]!,
-      fontHandle,
+      fontHandle: fontHandleAt(layout, index),
       glyphId: layout.glyphIds[index]!,
       cluster: layout.clusters[index]!,
       bidiLevel: layout.glyphBidiLevels[index]!,

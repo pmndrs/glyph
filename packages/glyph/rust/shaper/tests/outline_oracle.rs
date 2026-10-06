@@ -271,3 +271,129 @@ fn composites_that_multiply_their_components_are_refused() {
         "a billion components"
     );
 }
+
+/// Checks one decoded glyph against Skrifa's segments for it: segment `s` of contour `c` starts at
+/// point `2s + c`, a line is flagged and keeps its midpoint control, a cubic becomes four flagged
+/// quadratics, and every point Skrifa names is font units over `unitsPerEm` with y negated.
+fn assert_decoded_layout(label: &str, outline: &GlyphOutline, segments: &[PathElement], upem: f32) {
+    let em = |x: f32, y: f32| (x / upem, (0.0 - y) / upem);
+    let (points, lines, ends) = (
+        outline.points(),
+        outline.segment_lines(),
+        outline.contour_ends(),
+    );
+    assert_eq!(
+        points.len(),
+        2 * lines.len() + ends.len(),
+        "{label}: point count"
+    );
+    assert_eq!(
+        ends.last().map_or(0, |&end| end as usize),
+        lines.len(),
+        "{label}: last contour end"
+    );
+    let point = |index: usize| (points[index].x, points[index].y);
+    let (mut segment, mut contour, mut contour_start) = (0_usize, 0_usize, 0_usize);
+    let (mut start, mut current) = ((0.0, 0.0), (0.0, 0.0));
+    // (segment, contour, expected control if Skrifa names one, expected end, is a line)
+    let mut expected = Vec::new();
+    for element in segments {
+        match *element {
+            PathElement::MoveTo { x, y } => {
+                start = em(x, y);
+                current = start;
+                contour_start = segment;
+                if contour < ends.len() {
+                    assert_eq!(
+                        point(2 * segment + contour),
+                        start,
+                        "{label}: contour start"
+                    );
+                }
+            }
+            PathElement::LineTo { x, y } => {
+                current = em(x, y);
+                expected.push((segment, contour, None, current, true));
+                segment += 1;
+            }
+            PathElement::QuadTo { cx0, cy0, x, y } => {
+                current = em(x, y);
+                expected.push((segment, contour, Some(em(cx0, cy0)), current, false));
+                segment += 1;
+            }
+            PathElement::CurveTo { x, y, .. } => {
+                current = em(x, y);
+                for _ in 0..3 {
+                    assert_eq!(lines[segment], 0, "{label}: cubic piece");
+                    segment += 1;
+                }
+                expected.push((segment, contour, None, current, false));
+                segment += 1;
+            }
+            PathElement::Close => {
+                if current != start {
+                    expected.push((segment, contour, None, start, true));
+                    segment += 1;
+                }
+                if segment == contour_start {
+                    continue;
+                }
+                assert_eq!(ends[contour] as usize, segment, "{label}: contour end");
+                contour += 1;
+            }
+        }
+    }
+    assert_eq!(contour, ends.len(), "{label}: contour count");
+    for (segment, contour, control, end, line) in expected {
+        let at = 2 * segment + contour;
+        assert_eq!(
+            lines[segment],
+            u8::from(line),
+            "{label}: segment {segment} line flag"
+        );
+        assert_eq!(point(at + 2), end, "{label}: segment {segment} end");
+        if let Some(control) = control {
+            assert_eq!(point(at + 1), control, "{label}: segment {segment} control");
+        }
+        if line {
+            let ((x0, y0), (cx, cy)) = (point(at), point(at + 1));
+            assert!(
+                (cx - (x0 + end.0) * 0.5).abs() <= 1e-6 && (cy - (y0 + end.1) * 0.5).abs() <= 1e-6,
+                "{label}: segment {segment} line control is not its midpoint"
+            );
+        }
+    }
+}
+
+#[test]
+fn decoded_outlines_share_endpoints_flag_lines_and_use_em_units_y_down() {
+    for path in [
+        "inter-v4.1/Inter-Regular.ttf",
+        "font-awesome-free-6.7.2/fa-solid-900.ttf",
+        "dancing-script-3.000/DancingScript-Regular.otf",
+    ] {
+        let bytes = face(path);
+        let font = FontRef::new(&bytes).unwrap();
+        let upem = f32::from(font.head().unwrap().units_per_em());
+        let mut outline = GlyphOutline::default();
+        let (mut lines, mut curves) = (0, 0);
+        for glyph_id in 0..u32::from(font.maxp().unwrap().num_glyphs()) {
+            let label = format!("{path} glyph {glyph_id}");
+            outline
+                .decode(&bytes, glyph_id)
+                .unwrap_or_else(|error| panic!("{label}: {error:?}"));
+            assert_decoded_layout(&label, &outline, &skrifa_segments(&font, glyph_id), upem);
+            let glyph_lines = outline
+                .segment_lines()
+                .iter()
+                .filter(|&&line| line == 1)
+                .count();
+            lines += glyph_lines;
+            curves += outline.segment_lines().len() - glyph_lines;
+        }
+        assert!(
+            lines > 100 && curves > 100,
+            "{path}: {lines} lines, {curves} curves"
+        );
+    }
+}

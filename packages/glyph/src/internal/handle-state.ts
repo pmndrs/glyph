@@ -1,8 +1,7 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { GlyphEngineStatusError, setGlyphEngineStatusErrorDetails, type GlyphEngineFault } from '../engine-error.js';
 import type { Font } from '../font.js';
-import type { GlyphOutlineContour } from '../glyph-outline.js';
-import type { BorrowedGlyph } from '../layout.js';
+import type { GlyphOutlineView } from '../glyph-outline.js';
 import type { FontHandle } from '../identity.js';
 import { immutableFontStackFonts, type FontStack } from '../loaded-font.js';
 import type { RasterFormatMetadata } from '../config/raster-format.js';
@@ -324,10 +323,10 @@ export class GlyphHandleState {
     this.#enterEngineBorrow = enterEngineBorrow;
   }
 
-  /** @internal */
-  _glyphOutline(glyph: BorrowedGlyph): GlyphOutlineContour[] {
+  /** @internal Decodes one glyph's outline as views that the next decode or engine call replaces. */
+  _glyphOutline(fontHandle: number, glyphId: number, target?: GlyphOutlineView): GlyphOutlineView {
     if (this.#disposed) throw new Error('Glyph handle state is disposed');
-    return this.#shaper.glyphOutline(glyph);
+    return this.#shaper.glyphOutline(fontHandle, glyphId, target);
   }
 
   /** @internal Derive one branded ID retained until its registration or this handle is disposed. */

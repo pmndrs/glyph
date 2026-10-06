@@ -1,8 +1,7 @@
 import type { RegisteredFont } from './font.js';
 import type { FontHandle } from './identity.js';
 import { getRegisteredFontData } from './internal/registered-font.js';
-import { readGlyphOutline, type GlyphOutlineContour } from './glyph-outline.js';
-import type { BorrowedGlyph } from './layout.js';
+import { viewGlyphOutline, type GlyphOutlineView } from './glyph-outline.js';
 import { FontRegistry } from './loader.js';
 import {
   checkedMemoryView,
@@ -39,8 +38,8 @@ export interface RuntimeShaper {
   readonly registry: RuntimeShaperFontRegistry;
   registerFont(font: RegisteredFont): void;
   disposeFont(font: RegisteredFont): void;
-  /** @internal */
-  glyphOutline(glyph: BorrowedGlyph): GlyphOutlineContour[];
+  /** @internal Decodes one glyph into `target` as views over shaper memory that the next decode replaces. */
+  glyphOutline(fontHandle: number, glyphId: number, target?: GlyphOutlineView): GlyphOutlineView;
   memoryReport(): RuntimeShaperMemoryReport;
   dispose(): void;
 }
@@ -136,9 +135,10 @@ class RuntimeShaperImpl implements RuntimeShaper {
     if (this.#registered.get(font.handle) === font) this.#disposeHandle(font.handle);
   }
 
-  glyphOutline(glyph: BorrowedGlyph): GlyphOutlineContour[] {
+  glyphOutline(fontHandle: number, glyphId: number, target?: GlyphOutlineView): GlyphOutlineView {
     this.#assertActive();
-    const font = this.registry.getByHandle(glyph.fontHandle as FontHandle)!;
+    const font = this.registry.getByHandle(fontHandle as FontHandle);
+    if (font === undefined) throw new Error(`the font of glyph ${glyphId} has been disposed`);
     let sfnt = this.#outlineSfnts.get(font.handle);
     if (sfnt === undefined) {
       const bytes = getRegisteredFontData(font).glyphOutlines;
@@ -150,14 +150,26 @@ class RuntimeShaperImpl implements RuntimeShaper {
       sfnt = copyIntoWasm(this.#exports, bytes);
       this.#outlineSfnts.set(font.handle, sfnt);
     }
-    const status = this.#exports.glyphOutline(sfnt.pointer, sfnt.length, glyph.glyphId);
-    if (status !== 0) throw outlineStatusError(status, glyph.glyphId);
-    const encoded = checkedMemoryView(
+    const status = this.#exports.glyphOutline(sfnt.pointer, sfnt.length, glyphId);
+    if (status !== 0) throw outlineStatusError(status, glyphId);
+    const result = checkedMemoryView(
       this.#exports.memory,
       this.#exports.glyphOutlinePointer(),
       this.#exports.glyphOutlineLength(),
     );
-    return readGlyphOutline(encoded, font.metrics.unitsPerEm, glyph);
+    return viewGlyphOutline(
+      result.buffer,
+      result.byteOffset,
+      fontHandle,
+      glyphId,
+      target ?? {
+        fontHandle,
+        glyphId,
+        points: new Float32Array(0),
+        contourEnds: new Uint32Array(0),
+        segmentLines: new Uint8Array(0),
+      },
+    );
   }
 
   #releaseOutlineSfnt(handle: FontHandle): void {
