@@ -241,6 +241,14 @@ per-curve coverage and antialiasing weight, band header and reference bit layout
 weighted blend, and row-based vertex dilation are expressed once. A vertical band is the horizontal band in the
 transposed frame with the opposite winding sense, so both axes share one curve evaluator and quadratic solver.
 
+Slug quads are the glyph's ink box, and coverage reaches zero half a pixel past a straight edge, so vertex dilation
+moves each corner half a pixel across both adjacent edges, as Lengyel's `SlugDilate` does for a `(±1, ±1)` corner
+normal. The TypeGPU core, the native TSL `/shaders/tsl` graph, and the CPU reference mirror use only the sign of the
+outward normal they receive. `tests/package/slug-dilation.test.mjs` runs the TypeGPU functions and the mirror on the CPU
+and checks the half-pixel margin on both axes for wide, short and tall, narrow quads; it also checks that no pixel with
+nonzero core coverage falls outside the dilated quad. The native TSL graph cannot run on the CPU, so only review keeps it
+in step with the TypeGPU core.
+
 The neighboring TypeGPU modules own page texture reads, grid addressing, band traversal, and the sorted-reference
 terminator. The experimental `/three/typegpu` host supplies textures and node-valued glyph fields through `@typegpu/three`, while retaining
 native TSL only for the writable inter-stage varying and the matrix-compatible dilation path. A device-free package test
