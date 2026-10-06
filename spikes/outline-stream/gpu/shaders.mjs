@@ -68,7 +68,9 @@ struct VertexOutput {
 };
 
 fn slugDilate(position: vec2f, outwardNormal: vec2f, texCoord: vec2f, inverseScale: f32) -> vec4f {
-  let normal = normalize(outwardNormal);
+  // Half a pixel across each edge, as in Lengyel's SlugDilate and pmndrs/glyph#256.
+  let corner = sign(outwardNormal);
+  let normal = normalize(corner);
   let homogeneousW = dot(u.row3.xy, position) + u.row3.w;
   let wGradient = dot(u.row3.xy, normal);
   let projectedX = (homogeneousW * dot(u.row0.xy, normal) - wGradient * (dot(u.row0.xy, position) + u.row0.w)) * u.viewport.x;
@@ -77,7 +79,7 @@ fn slugDilate(position: vec2f, outwardNormal: vec2f, texCoord: vec2f, inverseSca
   let lengthSquared = projectedX * projectedX + projectedY * projectedY;
   let denominator = lengthSquared - squaredW * wGradient * wGradient;
   let distance = (squaredW * (homogeneousW * wGradient + sqrt(lengthSquared))) / denominator;
-  let offset = distance * normal;
+  let offset = distance * corner;
   return vec4f(position + offset, texCoord + inverseScale * offset);
 }
 
@@ -300,7 +302,9 @@ flat out vec4 vBand;
 flat out uvec4 vGlyph;
 
 vec4 slugDilate(vec2 position, vec2 outwardNormal, vec2 texCoord, float inverseScale) {
-  vec2 normal = normalize(outwardNormal);
+  // Half a pixel across each edge, as in Lengyel's SlugDilate and pmndrs/glyph#256.
+  vec2 corner = sign(outwardNormal);
+  vec2 normal = normalize(corner);
   float homogeneousW = dot(uRow3.xy, position) + uRow3.w;
   float wGradient = dot(uRow3.xy, normal);
   float projectedX = (homogeneousW * dot(uRow0.xy, normal) - wGradient * (dot(uRow0.xy, position) + uRow0.w)) * uViewport.x;
@@ -309,7 +313,7 @@ vec4 slugDilate(vec2 position, vec2 outwardNormal, vec2 texCoord, float inverseS
   float lengthSquared = projectedX * projectedX + projectedY * projectedY;
   float denominator = lengthSquared - squaredW * wGradient * wGradient;
   float distance = (squaredW * (homogeneousW * wGradient + sqrt(lengthSquared))) / denominator;
-  vec2 offset = distance * normal;
+  vec2 offset = distance * corner;
   return vec4(position + offset, texCoord + inverseScale * offset);
 }
 
