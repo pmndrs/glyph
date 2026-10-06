@@ -1,4 +1,5 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
+import { compileWasmResponse } from './compile-wasm-response.js';
 import { textShaperWasmUrl } from './shaper-wasm-url.js';
 import {
   emptyGlyphOutlineView,
@@ -92,18 +93,18 @@ export interface ShaperModule {
   readonly exports: ShaperExports;
 }
 
-export async function fetchDefaultWasm(): Promise<ArrayBuffer> {
+export async function compileDefaultWasm(): Promise<WebAssembly.Module> {
   const url = textShaperWasmUrl();
   if (url.protocol === 'file:' && typeof process !== 'undefined' && typeof process.getBuiltinModule === 'function') {
     const fileSystem = process.getBuiltinModule('node:fs') as typeof import('node:fs');
     const bytes = fileSystem.readFileSync(url);
-    return Uint8Array.from(bytes).buffer;
+    return WebAssembly.compile(Uint8Array.from(bytes));
   }
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`text shaper Wasm request failed with HTTP ${response.status}`);
   }
-  return response.arrayBuffer();
+  return compileWasmResponse(response);
 }
 
 export function readModule(instance: WebAssembly.Instance): ShaperModule {
@@ -241,12 +242,10 @@ export function shareShaperModule(module: WebAssembly.Module): void {
 let defaultModulePromise: Promise<WebAssembly.Module> | undefined;
 
 function defaultModule(): Promise<WebAssembly.Module> {
-  defaultModulePromise ??= fetchDefaultWasm()
-    .then((bytes) => WebAssembly.compile(bytes))
-    .catch((error: unknown) => {
-      defaultModulePromise = undefined;
-      throw error;
-    });
+  defaultModulePromise ??= compileDefaultWasm().catch((error: unknown) => {
+    defaultModulePromise = undefined;
+    throw error;
+  });
   return defaultModulePromise;
 }
 
