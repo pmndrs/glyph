@@ -1,0 +1,4 @@
+out/
+target/
+*.wasm
+gpu/test/*.png

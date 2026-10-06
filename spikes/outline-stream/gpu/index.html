@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Outline stream GPU spike</title>
+    <link rel="icon" href="data:," />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #fafafa;
+        --fg: #1b1b1b;
+        --muted: #666;
+        --line: #ccc;
+        --warn: #8a5a00;
+        --error: #b00020;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #141414;
+          --fg: #e8e8e8;
+          --muted: #999;
+          --line: #333;
+          --warn: #e0b050;
+          --error: #ff6b80;
+        }
+      }
+      body {
+        margin: 0;
+        padding: 16px;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          14px/1.4 system-ui,
+          sans-serif;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 8px;
+      }
+      fieldset {
+        border: 1px solid var(--line);
+        margin: 0 0 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 16px;
+        align-items: center;
+      }
+      legend {
+        color: var(--muted);
+      }
+      input[type='number'] {
+        width: 6em;
+      }
+      .views {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 12px 0;
+      }
+      figure {
+        margin: 0;
+      }
+      figcaption {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      canvas,
+      img {
+        display: block;
+        width: min(512px, 90vw);
+        aspect-ratio: auto;
+        background: #000;
+        image-rendering: pixelated;
+      }
+      table {
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+      }
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 2px 8px;
+        text-align: right;
+        white-space: nowrap;
+      }
+      th:nth-child(-n + 5),
+      td:nth-child(-n + 5) {
+        text-align: left;
+      }
+      #status {
+        font-weight: 600;
+        margin: 8px 0;
+      }
+      #log {
+        font:
+          12px ui-monospace,
+          monospace;
+        max-height: 12em;
+        overflow: auto;
+      }
+      #log .warn {
+        color: var(--warn);
+      }
+      #log .error {
+        color: var(--error);
+      }
+      pre {
+        white-space: pre-wrap;
+        word-break: break-all;
+        font-size: 11px;
+        max-height: 16em;
+        overflow: auto;
+        border: 1px solid var(--line);
+        padding: 8px;
+      }
+      .scroll {
+        overflow-x: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Outline stream GPU spike: Slug curve fetch A vs B</h1>
+    <p>
+      A reads two RGBA16F curve texels (em units); B reads three i16 points (font units) with the implied-on-curve rule.
+      Everything else is shared. See <code>spikes/outline-stream/README.md</code>.
+    </p>
+
+    <fieldset>
+      <legend>Asset</legend>
+      <label
+        >Font
+        <select id="font"></select
+      ></label>
+      <label
+        >Glyph set
+        <select id="set"></select
+      ></label>
+      <label
+        >Magnified glyph
+        <select id="glyph"></select
+      ></label>
+      <span id="assetInfo"></span>
+    </fieldset>
+
+    <fieldset>
+      <legend>Run all</legend>
+      <span id="cases"></span>
+      <label
+        >Canvas <input id="width" type="number" value="2048" min="16" /> ×
+        <input id="height" type="number" value="2048" min="16"
+      /></label>
+      <label>Frames <input id="frames" type="number" value="100" min="1" max="2048" /></label>
+      <label>Warm-up <input id="warmup" type="number" value="10" min="0" /></label>
+      <label>Rounds <input id="rounds" type="number" value="4" min="1" /></label>
+      <label>Draws per frame <input id="draws" type="number" value="1" min="1" /></label>
+    </fieldset>
+    <fieldset>
+      <legend>Backends and variants</legend>
+      <span id="backendList"></span>
+      <span id="variantList"></span>
+      <button id="runAll">Run all</button>
+    </fieldset>
+    <fieldset>
+      <legend>View one case</legend>
+      <select id="viewBackend"></select>
+      <select id="viewCase"></select>
+      <select id="viewVariant"></select>
+      <button id="view">Render</button>
+    </fieldset>
+
+    <div id="status">Loading…</div>
+    <div id="log"></div>
+
+    <div class="views">
+      <figure>
+        <canvas id="gpuCanvas" width="256" height="256"></canvas>
+        <figcaption>WebGPU (last frame rendered)</figcaption>
+      </figure>
+      <figure>
+        <canvas id="glCanvas" width="256" height="256"></canvas>
+        <figcaption>WebGL2 (last frame rendered)</figcaption>
+      </figure>
+      <figure>
+        <img id="diffImage" alt="diff image" />
+        <figcaption>
+          Diff: <span id="diffCaption">none yet</span>. A dimmed; red where B is darker, blue where brighter, ×16.
+        </figcaption>
+      </figure>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>backend</th>
+            <th>case</th>
+            <th>glyphs</th>
+            <th>variant</th>
+            <th>timer</th>
+            <th>median ms</th>
+            <th>p90 ms</th>
+            <th>pipelined ms/frame</th>
+            <th>median / A</th>
+            <th>max Δ (/255)</th>
+            <th>mean Δ (/255)</th>
+            <th>px &gt; 1/255</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="results"></tbody>
+      </table>
+    </div>
+
+    <p><button id="copyJson">Copy JSON</button> (also printed to the console)</p>
+    <pre id="json"></pre>
+
+    <script type="module" src="./main.mjs"></script>
+  </body>
+</html>
