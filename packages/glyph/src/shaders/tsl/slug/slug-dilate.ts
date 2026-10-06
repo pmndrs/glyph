@@ -1,13 +1,17 @@
 /** Adapted from three-flatland Slug at 2935a89f (MIT). */
 import type { Node } from 'three/webgpu';
-import { add, div, dot, mul, normalize, sqrt, sub, vec2, vec4 } from 'three/tsl';
+import { add, div, dot, mul, normalize, sign, sqrt, sub, vec2, vec4 } from 'three/tsl';
 
 export interface SlugDilationNodes {
   readonly position: Node<'vec2'>;
   readonly textureCoordinate: Node<'vec2'>;
 }
 
-/** Expand one glyph-quad vertex by a half-pixel antialiasing footprint. */
+/**
+ * Expand one glyph-quad corner by half a pixel along each quad axis, as Lengyel's `SlugDilate` does for a `(±1, ±1)`
+ * corner normal. Only the sign of each `outwardNormal` component is used, so the corner offset from the quad centre and
+ * `(±1, ±1)` are equivalent.
+ */
 export function slugDilate(
   position: Node<'vec2'>,
   outwardNormal: Node<'vec2'>,
@@ -18,12 +22,13 @@ export function slugDilate(
   mvpRow3: Node<'vec4'>,
   viewport: Node<'vec2'>,
 ): SlugDilationNodes {
-  const normal = normalize(outwardNormal).toVar('slugDilateNormal');
+  const corner = sign(outwardNormal).toVar('slugDilateCorner');
+  const normal = normalize(corner).toVar('slugDilateNormal');
   const homogeneousW = add(dot(mvpRow3.xy, position), mvpRow3.w).toVar('slugDilateW');
   const wGradient = dot(mvpRow3.xy, normal).toVar('slugDilateWGradient');
   return dilateFromProjection(
     position,
-    normal,
+    corner,
     textureCoordinate,
     inverseScale,
     homogeneousW,
@@ -43,12 +48,13 @@ export function slugDilateMatrix(
   modelViewProjection: Node<'mat4'>,
   viewport: Node<'vec2'>,
 ): SlugDilationNodes {
-  const normal = normalize(outwardNormal).toVar('slugDilateNormal');
+  const corner = sign(outwardNormal).toVar('slugDilateCorner');
+  const normal = normalize(corner).toVar('slugDilateNormal');
   const clipPosition = modelViewProjection.mul(vec4(position, 0, 1)).toVar('slugDilateClipPosition');
   const clipNormal = modelViewProjection.mul(vec4(normal, 0, 0)).toVar('slugDilateClipNormal');
   return dilateFromProjection(
     position,
-    normal,
+    corner,
     textureCoordinate,
     inverseScale,
     clipPosition.w,
@@ -59,9 +65,11 @@ export function slugDilateMatrix(
   );
 }
 
+// `distance` is the object-space step along the unit normal that covers half a pixel on screen; scaling the unnormalized
+// `(±1, ±1)` corner by it covers half a pixel across each edge rather than along the diagonal.
 function dilateFromProjection(
   position: Node<'vec2'>,
-  normal: Node<'vec2'>,
+  corner: Node<'vec2'>,
   textureCoordinate: Node<'vec2'>,
   inverseScale: Node<'float'>,
   homogeneousW: Node<'float'>,
@@ -79,8 +87,8 @@ function dilateFromProjection(
   );
   const denominator = sub(projectedLengthSquared, mul(squaredW, wGradient, wGradient));
   const distance = div(mul(squaredW, add(wTimesGradient, sqrt(projectedLengthSquared))), denominator);
-  const dx = mul(normal.x, distance);
-  const dy = mul(normal.y, distance);
+  const dx = mul(corner.x, distance);
+  const dy = mul(corner.y, distance);
 
   return {
     position: vec2(add(position.x, dx), add(position.y, dy)),
