@@ -1,0 +1,13 @@
+[package]
+name = "bandtool"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+pmndrs-glyph-slug-core = { path = "/home/user/glyph/packages/glyph/rust/slug-core" }
+
+[profile.release]
+opt-level = 3
+
+[workspace]

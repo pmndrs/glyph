@@ -1,0 +1,30 @@
+[package]
+name = "outline-decoders"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[features]
+default = ["varint", "triplet", "bp16", "stencil", "bands"]
+varint = []
+triplet = []
+bp16 = []
+stencil = []
+bands = ["dep:pmndrs-glyph-slug-core"]
+
+[dependencies]
+pmndrs-glyph-slug-core = { path = "/home/user/glyph/packages/glyph/rust/slug-core", default-features = false, optional = true }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+strip = true
+
+[workspace]
