@@ -292,6 +292,8 @@ The full scalar and SIMD tables for every step are in `out/bench-*.json` and are
 
 ---
 
+> **Corrected 2026-10-06:** the Q6 claim that conservative bands are correct used a stored-key condition. Today's shader exits on each curve's instanced maximum, and under that rule conservative bands in bake order are wrong. See the [variable-font band study](outline-stream-variable-font-bands-study.md).
+
 ## Q6. Slug bands under variation
 
 **Tool:** slug-core's own `build_bands`, `Bounds::from_curves` and `line_to_quadratic`, called natively (`varfont/bandtool`, depending on `packages/glyph/rust/slug-core`). This is the real function, not a reimplementation.

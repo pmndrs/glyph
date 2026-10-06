@@ -227,8 +227,11 @@ Deltas apply before rotation. On/off flags never vary, so the GPU slot-to-point 
 **Slug bands:**
 
 - Bands built for the default instance alone are wrong at every other instance.
-- Bands built against conservative bounds across all regions are correct, at 1.6–3.1× the references per band.
-- Bands conservative over only the animated axes cost far less (Roboto Flex, wght only: 6.0 against 13.9 references per band).
+- **Corrected (2026-10-06):** bands sorted by conservative bounds are **not** correct with today's shader, whose early exit compares each curve's instanced maximum. They need a re-sort per change, a stored-key exit, or no early exit.
+- **Recommended:** the [variable-font band study](outline-stream-variable-font-bands-study.md) recommends an exact per-instance rebuild, lazy per glyph, with an order-hinted builder.
+  - Zero extra bytes, and shader cost equal to static bands.
+  - 0.62–1.39 ms per 200 glyphs per axis change in scalar Wasm, 2.5–3.7× faster than `slug-core::build_bands`.
+  - Pre-bakes cost 1.16× to more than 30× the static band bytes, for little gain.
 - The study recommends building these bands at load for variable fonts. For static fonts the maintainer kept baked, packed bands as the default; which rule applies to variable fonts is not decided.
 
 **Shaping:** the tables shaping must keep (`fvar`, `avar`, `HVAR`/`VVAR`, `MVAR`, the GDEF ItemVariationStore, GSUB FeatureVariations) belong to the shaping payload (#99), not the outline stream.

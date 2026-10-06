@@ -1,0 +1,19 @@
+[package]
+name = "bandlab"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+pmndrs-glyph-slug-core = { path = "../../../../../packages/glyph/rust/slug-core" }
+
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = true
+panic = "abort"
+
+[workspace]

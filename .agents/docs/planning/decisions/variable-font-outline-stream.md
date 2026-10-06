@@ -43,7 +43,10 @@ This is being measured; it is not settled.
 
 - **TrueType wire:** the base triplet stream plus sparse, gvar-aligned delta streams (triplets with a zero-pair flag `0x80` and "previous delta" prediction, region-major), a region table and an axis table. Phantom points dropped while `HVAR` carries metrics.
 - **CFF2:** convert all masters at once with compatible cu2qu, using real masters at each region peak ("basis B"), and code deltas point-major against the default master. One delta layout shared with TrueType is a gate.
-- **Slug bands:** build bands against conservative bounds over the axes the application animates. This differs from the static-font default of shipping baked bands ([Slug reads the shared outline points](slug-shared-outline-points.md)); which applies to variable fonts is not decided, nor how an application names its animated axes.
+- **Slug bands:** the [variable-font band study](../outline-stream-variable-font-bands-study.md) recommends an exact rebuild per instance: lazy per glyph, on every axis change, with the order-hinted builder.
+  - It ships no extra bytes, matches the shader cost of static bands, and costs 0.62–1.39 ms per 200-glyph set per change in scalar Wasm.
+  - For an animated wght on large fonts, the fallback is conservative-over-wght bands re-sorted on each change.
+  - Not yet decided.
 
 ## Why
 
@@ -55,7 +58,13 @@ This is being measured; it is not settled.
 
 **CFF2:** compatible conversion failed on 0 of 66,999 glyphs (1,464 Source Serif, 65,535 Noto CJK), at tolerances 1, 0.5 and 0.25.
 
-**Slug bands:** default-instance bands miss references at other instances (Inter full at wght 900: 97,240 missing references, 2,899 of 2,911 glyphs affected). Conservative bands are correct at every tested location but hold 1.6× (Inter) to 3.1× (Roboto Flex) the references per band; wght-only bands cut Roboto Flex from 13.9 to 6.0.
+**Slug bands:** default-instance bands miss references at other instances (Inter full at wght 900: 97,240 missing references, 2,899 of 2,911 glyphs affected). The variable-font study reported conservative bands as correct. **That result does not hold for today's shader** (correction, 2026-10-06).
+
+- The shader exits a band at the first curve whose _instanced_ maximum is half a pixel behind the sample (`slug-band.ts:102`, `core/band.ts:88–90`). It never reads a stored key.
+- Lists sorted by conservative key are therefore out of order at most instances. Inter full shows 3.75 M adjacent inversions and 22,799 mismatched emulated-shader samples.
+- The study's checker tested the stored-key condition instead.
+- Conservative bands become correct only with one of: a re-sort on each change, a shader that exits on a stored key, or no early exit.
+- See the [variable-font band study](../outline-stream-variable-font-bands-study.md).
 
 ## Consequences
 

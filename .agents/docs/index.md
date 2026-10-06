@@ -49,7 +49,7 @@ okf_version: '0.2'
 - [Shaping compilation research](planning/shaping-compilation-research.md) — static shaping, semantic bytecode, per-font specialization, MLIR, and WebGPU hypotheses and gates.
 - [Bitmap hinting research](planning/bitmap-hinting-research.md) — hinted grayscale strikes and four-phase coverage packing without distance fields or LCD rendering.
 - [MTSDF generation research](planning/mtsdf-generation-research.md) — primary literature, open implementations and licenses, repository ownership, and scalar/SIMD evidence gates.
-- [Outline stream research](planning/outline-stream-research.md) — measured outline storage, decoder, GPU point layout, Slug sharing and variable fonts; links the [encoding study](planning/outline-stream-encoding-study.md), [variable-font study](planning/outline-stream-variable-font-study.md) and [GPU spike plan](planning/outline-stream-spike.md).
+- [Outline stream research](planning/outline-stream-research.md) — measured outline storage, decoder, GPU point layout, Slug sharing and variable fonts; links the [encoding study](planning/outline-stream-encoding-study.md), [variable-font study](planning/outline-stream-variable-font-study.md), [variable-font band study](planning/outline-stream-variable-font-bands-study.md) and [GPU spike plan](planning/outline-stream-spike.md).
 - [Research bibliography](../../RESEARCH.md) — attributed external sources and extracted findings.
 - [Decisions](planning/decisions/) — one file per decision since D-372; list with `docs:list -- decision`.
 - [Decision register](planning/decision-register.md) — frozen D-001–D-372 architectural choices.
