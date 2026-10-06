@@ -226,6 +226,9 @@ sources:
   - id: labs-internal-workflow
     resource: ../../../benches/scripts/run-internal-labs.mts
     title: Workspace-only Labs benchmark workflow
+  - id: labs-summary
+    resource: ../../../benches/scripts/support/labs-summary.mts
+    title: Labs comparison Markdown job summary
   - id: labs-result-validator
     resource: ../../../benches/scripts/support/labs-result.mts
     title: Saved Labs result failure validator
@@ -272,6 +275,17 @@ npm canary into isolated temporary consumers, then runs both through `@pmndrs/la
 The retained report includes native Labs JSON, comparison output, exact package manifests and lockfiles, and the candidate
 tarball SHA-256. Labs' Git metadata identifies the benchmark checkout, not the installed package's source
 revision; use the artifact manifest to identify the compared packages.
+
+The runner also renders the comparison as Markdown (`summary.md` under the output directory, appended to
+`$GITHUB_STEP_SUMMARY` when set): counts; a forest plot in a `diff` block, with each bench's Δ p50 inside its 95%
+confidence interval against a zero line, plus p and Labs' baseline and candidate distribution sparklines (GitHub
+colours slower `-` rows red and faster `+` rows green, while neutral rows stay plain; the axis caps at ±50% and draws an
+arrow past it); a slower-first table of non-neutral benches with full names; and the neutral and skipped rows folded
+in `<details>`. It is parsed from the `labs compare` text, with names restored from the candidate result, and a
+failure to write it only warns. On a pull request, CI also keeps
+one PR comment current with the same Markdown, found by its `<!-- glyph-labs-report -->` marker, like the size and docs
+reports. Fork pull requests get a read-only token, so for them the comment step may fail and the job summary carries
+the report.
 
 The default package suite is a common-use smoke comparison: cached `measure()`, measurement and publication after a text
 change, exact-width reflow, paint-only style publication, and font-size relayout. It deliberately excludes per-glyph

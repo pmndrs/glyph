@@ -156,10 +156,12 @@ export function referenceSlugDilate(
   mvpRow3: readonly [number, number, number, number],
   viewport: readonly [number, number],
 ): SlugDilationResult {
-  const normalLength = Math.hypot(outwardNormal[0], outwardNormal[1]);
-  if (normalLength === 0) return { position, textureCoordinate };
-  const nx = outwardNormal[0] / normalLength;
-  const ny = outwardNormal[1] / normalLength;
+  const cornerX = Math.sign(outwardNormal[0]);
+  const cornerY = Math.sign(outwardNormal[1]);
+  const cornerLength = Math.hypot(cornerX, cornerY);
+  if (cornerLength === 0) return { position, textureCoordinate };
+  const nx = cornerX / cornerLength;
+  const ny = cornerY / cornerLength;
   const homogeneousW = mvpRow3[0] * position[0] + mvpRow3[1] * position[1] + mvpRow3[3];
   const wGradient = mvpRow3[0] * nx + mvpRow3[1] * ny;
   const projectedX =
@@ -176,8 +178,8 @@ export function referenceSlugDilate(
   const denominator = projectedLengthSquared - squaredW * wGradient * wGradient;
   const distance =
     denominator === 0 ? 0 : (squaredW * (wTimesGradient + Math.sqrt(projectedLengthSquared))) / denominator;
-  const dx = nx * distance;
-  const dy = ny * distance;
+  const dx = cornerX * distance;
+  const dy = cornerY * distance;
   return {
     position: [position[0] + dx, position[1] + dy],
     textureCoordinate: [textureCoordinate[0] + dx * inverseScale, textureCoordinate[1] + dy * inverseScale],
