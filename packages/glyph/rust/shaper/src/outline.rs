@@ -325,17 +325,27 @@ impl<C: PointCoord> Pending<C> {
     }
 }
 
-/// One glyph as closed quadratic contours in font units, reused across calls.
+/// One glyph as closed quadratic contours in em units, y down, reused across calls.
 ///
-/// A contour of `n` curves holds `2n + 1` points, `start, control, end, control, end, ...`, and its
-/// last point repeats its first. A line becomes the quadratic whose control is its midpoint, and a
-/// cubic becomes four equal-parameter quadratics.
+/// Points are endpoint-shared: a contour of `n` segments holds `2n + 1` points, `start, control,
+/// end, control, end, ...`, and its last point repeats its first, so segment `s` of contour `c` uses
+/// points `2s + c`, `2s + c + 1`, and `2s + c + 2`. A line becomes the quadratic whose control is its
+/// midpoint and is flagged in [`GlyphOutline::segment_lines`]; a cubic becomes four equal-parameter
+/// quadratics. Coordinates are font units divided by `unitsPerEm` with y negated, so the origin is
+/// the glyph's pen position on the baseline.
 #[derive(Default)]
 pub struct GlyphOutline {
     points: Vec<Point>,
     contour_ends: Vec<u32>,
-    open_contour_start: Option<usize>,
+    segment_lines: Vec<u8>,
+    open_contour: Option<OpenContour>,
     failure: Option<OutlineError>,
+}
+
+#[derive(Clone, Copy)]
+struct OpenContour {
+    first_point: usize,
+    first_segment: usize,
 }
 
 impl GlyphOutline {
@@ -343,68 +353,110 @@ impl GlyphOutline {
     pub fn decode(&mut self, font: &[u8], glyph_id: u32) -> Result<(), OutlineError> {
         self.points.clear();
         self.contour_ends.clear();
-        self.open_contour_start = None;
+        self.segment_lines.clear();
+        self.open_contour = None;
         self.failure = None;
+        let units_per_em = FontRef::new(font)
+            .and_then(|font| font.head())
+            .map_err(|_| OutlineError::InvalidFont)?
+            .units_per_em();
+        if units_per_em == 0 {
+            return Err(OutlineError::InvalidFont);
+        }
         let drawn = draw_glyph(font, glyph_id, self);
-        if self.open_contour_start.is_some() {
+        if self.open_contour.is_some() {
             self.close();
         }
         drawn?;
-        match self.failure.take() {
-            Some(error) => Err(error),
-            None => Ok(()),
+        if let Some(error) = self.failure.take() {
+            return Err(error);
         }
-    }
-
-    /// Replaces `out` with the wire form the host reads: little-endian `u32` contour count, then
-    /// each contour's exclusive end point index as `u32`, then every point as `f32` `x, y`.
-    pub fn encode(&self, out: &mut Vec<u8>) -> Result<(), OutlineError> {
-        let contours =
-            u32::try_from(self.contour_ends.len()).map_err(|_| OutlineError::OutOfMemory)?;
-        let length = 4 + self.contour_ends.len() * 4 + self.points.len() * 8;
-        out.clear();
-        out.try_reserve_exact(length)
-            .map_err(|_| OutlineError::OutOfMemory)?;
-        out.extend_from_slice(&contours.to_le_bytes());
-        for end in &self.contour_ends {
-            out.extend_from_slice(&end.to_le_bytes());
-        }
-        for point in &self.points {
-            out.extend_from_slice(&point.x.to_le_bytes());
-            out.extend_from_slice(&point.y.to_le_bytes());
+        let units_per_em = f32::from(units_per_em);
+        for point in &mut self.points {
+            // `0.0 - y` keeps a baseline point at +0 rather than -0.
+            *point = Point::new(point.x / units_per_em, (0.0 - point.y) / units_per_em);
         }
         Ok(())
     }
 
+    /// Replaces `out` with the little-endian words the host reads: contour count, segment count,
+    /// each contour's exclusive end segment, every point as `f32` `x, y`, then one byte per segment
+    /// (`1` for a line) padded to a whole word. The point count is `2 * segments + contours`.
+    pub fn encode(&self, out: &mut Vec<u32>) -> Result<(), OutlineError> {
+        let contours =
+            u32::try_from(self.contour_ends.len()).map_err(|_| OutlineError::OutOfMemory)?;
+        let segments =
+            u32::try_from(self.segment_lines.len()).map_err(|_| OutlineError::OutOfMemory)?;
+        let line_words = self.segment_lines.len().div_ceil(4);
+        let length = 2 + self.contour_ends.len() + self.points.len() * 2 + line_words;
+        out.clear();
+        out.try_reserve_exact(length)
+            .map_err(|_| OutlineError::OutOfMemory)?;
+        out.extend_from_slice(&[contours, segments]);
+        out.extend_from_slice(&self.contour_ends);
+        for point in &self.points {
+            out.extend_from_slice(&[point.x.to_bits(), point.y.to_bits()]);
+        }
+        for lines in self.segment_lines.chunks(4) {
+            let mut word = [0; 4];
+            word[..lines.len()].copy_from_slice(lines);
+            out.push(u32::from_le_bytes(word));
+        }
+        Ok(())
+    }
+
+    /// Endpoint-shared points, `2 * segments + contours` of them.
     pub fn points(&self) -> &[Point] {
         &self.points
     }
 
+    /// Exclusive end of each contour, as a segment index.
     pub fn contour_ends(&self) -> &[u32] {
         &self.contour_ends
     }
 
+    /// One entry per segment: `1` for a line, `0` for a quadratic.
+    pub fn segment_lines(&self) -> &[u8] {
+        &self.segment_lines
+    }
+
     fn current(&mut self) -> Option<Point> {
-        if self.open_contour_start.is_none() {
+        if self.open_contour.is_none() {
             self.fail(OutlineError::InvalidGlyph);
             return None;
         }
         self.points.last().copied()
     }
 
-    fn push(&mut self, points: &[Point]) {
+    fn push_point(&mut self, point: Point) {
         if self.failure.is_some() {
             return;
         }
-        if points
+        if !point.x.is_finite() || !point.y.is_finite() {
+            self.fail(OutlineError::InvalidGlyph);
+        } else if self.points.try_reserve(1).is_err() {
+            self.fail(OutlineError::OutOfMemory);
+        } else {
+            self.points.push(point);
+        }
+    }
+
+    /// Appends one segment from the current point through `control` to `end`.
+    fn push_segment(&mut self, control: Point, end: Point, line: bool) {
+        if self.failure.is_some() {
+            return;
+        }
+        if [control, end]
             .iter()
             .any(|point| !point.x.is_finite() || !point.y.is_finite())
         {
             self.fail(OutlineError::InvalidGlyph);
-        } else if self.points.try_reserve(points.len()).is_err() {
+        } else if self.points.try_reserve(2).is_err() || self.segment_lines.try_reserve(1).is_err()
+        {
             self.fail(OutlineError::OutOfMemory);
         } else {
-            self.points.extend_from_slice(points);
+            self.points.extend_from_slice(&[control, end]);
+            self.segment_lines.push(u8::from(line));
         }
     }
 
@@ -415,24 +467,27 @@ impl GlyphOutline {
 
 impl OutlinePen for GlyphOutline {
     fn move_to(&mut self, x: f32, y: f32) {
-        if self.open_contour_start.is_some() {
+        if self.open_contour.is_some() {
             self.close();
         }
-        self.open_contour_start = Some(self.points.len());
-        self.push(&[Point::new(x, y)]);
+        self.open_contour = Some(OpenContour {
+            first_point: self.points.len(),
+            first_segment: self.segment_lines.len(),
+        });
+        self.push_point(Point::new(x, y));
     }
 
     fn line_to(&mut self, x: f32, y: f32) {
         let Some(start) = self.current() else { return };
         let end = Point::new(x, y);
-        self.push(&[line_control(start, end), end]);
+        self.push_segment(line_control(start, end), end, true);
     }
 
     fn quad_to(&mut self, control_x: f32, control_y: f32, x: f32, y: f32) {
         if self.current().is_none() {
             return;
         }
-        self.push(&[Point::new(control_x, control_y), Point::new(x, y)]);
+        self.push_segment(Point::new(control_x, control_y), Point::new(x, y), false);
     }
 
     fn curve_to(
@@ -461,31 +516,32 @@ impl OutlinePen for GlyphOutline {
             &mut quadratics,
         );
         for quadratic in &quadratics[..count] {
-            self.push(&[quadratic.p1, quadratic.p2]);
+            self.push_segment(quadratic.p1, quadratic.p2, false);
         }
     }
 
     fn close(&mut self) {
-        let Some(start) = self.open_contour_start.take() else {
+        let Some(open) = self.open_contour.take() else {
             self.fail(OutlineError::InvalidGlyph);
             return;
         };
         if self.failure.is_some() {
             return;
         }
-        let first = self.points[start];
+        let first = self.points[open.first_point];
         let last = self.points[self.points.len() - 1];
         if last != first {
-            self.push(&[line_control(last, first), first]);
+            self.push_segment(line_control(last, first), first, true);
         }
-        if self.points.len() - start < 3 {
-            self.points.truncate(start);
+        if self.segment_lines.len() == open.first_segment {
+            // A contour without a segment is a lone move; dropping its point keeps every contour at
+            // `2n + 1` points.
+            self.points.truncate(open.first_point);
             return;
         }
-        match u32::try_from(self.points.len()) {
+        match u32::try_from(self.segment_lines.len()) {
             Ok(end) if self.contour_ends.try_reserve(1).is_ok() => self.contour_ends.push(end),
-            Ok(_) => self.fail(OutlineError::OutOfMemory),
-            Err(_) => self.fail(OutlineError::OutOfMemory),
+            Ok(_) | Err(_) => self.fail(OutlineError::OutOfMemory),
         }
     }
 }

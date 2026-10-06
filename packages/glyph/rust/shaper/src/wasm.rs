@@ -1088,8 +1088,8 @@ pub extern "C" fn pmndrs_glyph_engine_borrow_paragraph_glyph(
     })
 }
 
-/// Decodes one glyph from an outline SFNT in an owned allocation. The encoded result stays readable
-/// through the pointer and length exports until the next decode.
+/// Decodes one glyph from an outline SFNT in an owned allocation. The encoded words, aligned to 4
+/// bytes, stay readable through the pointer and byte-length exports until the next decode.
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_glyph_shaper_glyph_outline(
     sfnt_pointer: u32,
@@ -1125,7 +1125,9 @@ pub extern "C" fn pmndrs_glyph_shaper_glyph_outline_ptr() -> u32 {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_glyph_shaper_glyph_outline_len() -> u32 {
-    with_state(|state| u32::try_from(state.outline_result.len()).unwrap_or(0))
+    with_state(|state| {
+        u32::try_from(core::mem::size_of_val(state.outline_result.as_slice())).unwrap_or(0)
+    })
 }
 
 #[derive(Default)]
@@ -1139,7 +1141,7 @@ struct WasmState {
     borrowed_layout: BorrowedLayoutDescriptor,
     borrowed_glyph: crate::engine::SemanticGlyph,
     outline: GlyphOutline,
-    outline_result: Vec<u8>,
+    outline_result: Vec<u32>,
 }
 
 struct Allocation {

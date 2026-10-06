@@ -4,7 +4,6 @@ import { GlyphError } from '../glyph-error.js';
 import { GlyphEngineStatusError } from '../engine-error.js';
 import {
   copyGlyphLayoutInspection,
-  type BorrowedGlyph,
   type BorrowedGlyphLayout,
   type GlyphLayoutInspection,
   type ParagraphLayoutSummary,
@@ -51,7 +50,11 @@ import type {
 } from './handle-state.js';
 import { RenderPlanView, type RenderPlanTable } from './plan-view.js';
 import { measurementFromLayoutInspection, readPlannerLayouts, readPlannerMeasurements } from './layout-query-view.js';
-import { createBorrowedGlyphLayout, createInspectionBorrowedGlyphLayout } from './borrowed-layout-view.js';
+import {
+  createBorrowedGlyphLayout,
+  createInspectionBorrowedGlyphLayout,
+  type OutlineDecoder,
+} from './borrowed-layout-view.js';
 import type { PortableResource } from '../config/resources.js';
 import { reuseOrCreateTextPropertySnapshot } from '../config/text-property.js';
 import type { ParagraphId, ResourceHandle } from './glyph-id.js';
@@ -726,7 +729,8 @@ class RenderPlannerImpl {
     const assertActive = (): void => {
       if (!active) throw new Error('borrowed glyph layout has expired');
     };
-    const decodeOutline = (glyph: BorrowedGlyph) => this.#handleState._glyphOutline(glyph);
+    const decodeOutline: OutlineDecoder = (fontHandle, glyphId, target) =>
+      this.#handleState._glyphOutline(fontHandle, glyphId, target);
     if (inspection !== undefined) {
       glyphs = createInspectionBorrowedGlyphLayout(inspection, assertActive, decodeOutline);
     } else {
