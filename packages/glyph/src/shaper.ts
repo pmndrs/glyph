@@ -1,5 +1,6 @@
 import type { RegisteredFont } from './font.js';
 import { textShaperAbi } from './generated/text-shaper-abi.js';
+import { compileWasmResponse } from './internal/compile-wasm-response.js';
 import { textShaperWasmUrl } from './internal/shaper-wasm-url.js';
 import type { FontHandle } from './identity.js';
 import { getRegisteredFontData } from './internal/registered-font.js';
@@ -122,7 +123,7 @@ interface ShaperModule {
 }
 
 export async function createRuntimeShaper(options: RuntimeShaperOptions = {}): Promise<RuntimeShaper> {
-  const source = options.wasm ?? (await fetchDefaultWasm());
+  const source = options.wasm ?? (await compileDefaultWasm());
   const module = source instanceof WebAssembly.Module ? source : await WebAssembly.compile(source);
   const instance = await WebAssembly.instantiate(module, {});
   const resolved = readModule(instance);
@@ -240,18 +241,18 @@ class RuntimeShaperImpl implements RuntimeShaper {
   }
 }
 
-async function fetchDefaultWasm(): Promise<ArrayBuffer> {
+async function compileDefaultWasm(): Promise<WebAssembly.Module> {
   const url = textShaperWasmUrl();
   if (url.protocol === 'file:' && typeof process !== 'undefined' && typeof process.getBuiltinModule === 'function') {
     const fileSystem = process.getBuiltinModule('node:fs') as typeof import('node:fs');
     const bytes = fileSystem.readFileSync(url);
-    return Uint8Array.from(bytes).buffer;
+    return WebAssembly.compile(Uint8Array.from(bytes));
   }
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`text shaper Wasm request failed with HTTP ${response.status}`);
   }
-  return response.arrayBuffer();
+  return compileWasmResponse(response);
 }
 
 function readModule(instance: WebAssembly.Instance): ShaperModule {

@@ -390,7 +390,10 @@ that bridge does not create another runtime or an alternate renderer integration
 
 Glyph initialization retains one settled `Promise<void>` forever, whether it fulfills or rejects: concurrent and later
 `glyph.init()` calls receive the same object. Initialization failure is fatal for that module lifetime, so an error path
-cannot repeatedly allocate large Wasm memories; a full page or module replacement is the retry boundary. Vite HMR carries
+cannot repeatedly allocate large Wasm memories; a full page or module replacement is the retry boundary. In browsers the
+default `dist/text-shaper.wasm` asset is fetched and, when it is served exactly as `application/wasm`, streamed into
+`WebAssembly.compileStreaming`, so compilation overlaps the download and HTTP compression is decoded by the network
+stack; any other content type is buffered and compiled instead. Node reads the file directly. Vite HMR carries
 the process-local Glyph runtime through replacement data instead of instantiating a second engine. React still checks
 synchronous initialized and loaded state first, so ready renders do not enter Suspense or cross a microtask. Pending font
 loads use `suspend-react` only as React's stable suspension cache; Glyph's FontFace resource graph remains the semantic
