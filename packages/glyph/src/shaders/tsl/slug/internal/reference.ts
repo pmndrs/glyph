@@ -169,17 +169,18 @@ export function referenceSlugDilate(
     (homogeneousW * mvpRow0[1] - clipX * mvpRow3[1]) * viewport[0],
     (homogeneousW * mvpRow1[1] - clipY * mvpRow3[1]) * viewport[1],
   ] as const;
-  const xLength = Math.hypot(...xTangent);
-  const yLength = Math.hypot(...yTangent);
+  // Coverage's fringe past an edge is 0.5·L1/L2 of its screen direction, so the steps use L1 norms; see `slugDilate`.
+  const xTangentL1 = Math.abs(xTangent[0]) + Math.abs(xTangent[1]);
+  const yTangentL1 = Math.abs(yTangent[0]) + Math.abs(yTangent[1]);
   const area = Math.abs(xTangent[0] * yTangent[1] - xTangent[1] * yTangent[0]);
   const squaredW = homogeneousW * homogeneousW;
   const denominator = Math.max(
-    area - homogeneousW * (cornerX * mvpRow3[0] * yLength + cornerY * mvpRow3[1] * xLength),
+    area - homogeneousW * (cornerX * mvpRow3[0] * yTangentL1 + cornerY * mvpRow3[1] * xTangentL1),
     area * 0.5,
     1e-30,
   );
-  const xStep = (yLength * squaredW) / denominator;
-  const yStep = (xLength * squaredW) / denominator;
+  const xStep = (yTangentL1 * squaredW) / denominator;
+  const yStep = (xTangentL1 * squaredW) / denominator;
   const dx = cornerX * xStep;
   const dy = cornerY * yStep;
   return {

@@ -2,11 +2,13 @@
 import { d, std } from 'typegpu';
 
 /**
- * Expand one glyph-quad corner so the quad reaches half a pixel past both adjacent edges on screen.
+ * Expand one glyph-quad corner so the quad covers the whole antialiasing fringe past both adjacent edges on screen.
  *
- * Coverage reaches zero half a pixel past a straight edge, and the fragment shader measures that per axis, so each
- * axis needs its own half-pixel margin. One step shared by both axes, as Lengyel's `SlugDilate` takes along the
- * `(±1, ±1)` corner, gives that only under uniform scale: a stretched or tilted plane leaves one edge short.
+ * The fragment shader takes each em axis's pixel scale from `fwidth`, the sum of the coordinate's absolute screen
+ * derivatives, so coverage reaches zero `0.5 · (|t.x| + |t.y|) / |t|` pixels past an edge whose screen direction is
+ * `t`: half a pixel when the edge is axis-aligned on screen, up to 0.707 px at 45°. Each axis therefore gets its own
+ * step. One step shared by both, as Lengyel's `SlugDilate` takes along the `(±1, ±1)` corner, falls short on a
+ * stretched or tilted plane, and a half-pixel target falls short on a rotated one.
  *
  * `outwardNormal` points out of the quad at this corner; only the sign of each component is used, so the corner
  * offset from the quad centre and `(±1, ±1)` are equivalent.
@@ -39,20 +41,21 @@ export function slugDilate(
     (homogeneousW * mvpRow0.y - clipX * mvpRow3.y) * viewport.x,
     (homogeneousW * mvpRow1.y - clipY * mvpRow3.y) * viewport.y,
   );
-  const xLength = std.length(xTangent);
-  const yLength = std.length(yTangent);
+  const xTangentL1 = std.abs(xTangent.x) + std.abs(xTangent.y);
+  const yTangentL1 = std.abs(yTangent.x) + std.abs(yTangent.y);
   const area = std.abs(xTangent.x * yTangent.y - xTangent.y * yTangent.x);
   const squaredW = homogeneousW * homogeneousW;
   // Stepping `(mx, my)` along the quad axes puts the corner at m·area / (2w·|tangent|·w') pixels outside the edge each
-  // axis crosses, where `|tangent|` is the other edge's and w' is w at the dilated corner; solving both for half a
-  // pixel gives the shared denominator. Towards the horizon the exact steps grow without bound, so the denominator is
-  // held at half the area (at most twice the affine steps); the floor keeps a plane seen exactly edge-on finite.
+  // axis crosses, where `tangent` is the other edge's and w' is w at the dilated corner. Setting that to the fringe,
+  // 0.5·L1/L2 of the same tangent, cancels its length, so both steps need only L1 norms and share one denominator.
+  // Towards the horizon the exact steps grow without bound, so the denominator is held at half the area (at most twice
+  // the affine steps); the floor keeps a plane seen exactly edge-on finite.
   const denominator = std.max(
-    std.max(area - homogeneousW * (corner.x * mvpRow3.x * yLength + corner.y * mvpRow3.y * xLength), area * 0.5),
+    std.max(area - homogeneousW * (corner.x * mvpRow3.x * yTangentL1 + corner.y * mvpRow3.y * xTangentL1), area * 0.5),
     1e-30,
   );
-  const xStep = (yLength * squaredW) / denominator;
-  const yStep = (xLength * squaredW) / denominator;
+  const xStep = (yTangentL1 * squaredW) / denominator;
+  const yStep = (xTangentL1 * squaredW) / denominator;
   const offset = d.vec2f(corner.x * xStep, corner.y * yStep);
 
   return d.vec4f(std.add(position, offset), std.add(textureCoordinate, std.mul(inverseScale, offset)));
