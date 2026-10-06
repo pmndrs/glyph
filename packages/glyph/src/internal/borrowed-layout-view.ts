@@ -1,6 +1,6 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { GlyphOutlineView } from '../glyph-outline.js';
-import type { BorrowedGlyph, BorrowedGlyphLayout, GlyphLayoutInspection } from '../layout.js';
+import type { BorrowedGlyph, BorrowedGlyphLayout, GlyphLayoutColumns } from '../layout.js';
 import type { BorrowedLayoutPublication, PlanTransport } from './handle-state.js';
 
 /** Decodes one glyph's outline into views that the next decode replaces. */
@@ -16,7 +16,7 @@ export function createBorrowedGlyphLayout(
 }
 
 export function createInspectionBorrowedGlyphLayout(
-  inspection: GlyphLayoutInspection,
+  inspection: GlyphLayoutColumns,
   assertActive: () => void,
   decodeOutline: OutlineDecoder,
 ): BorrowedGlyphLayout {
@@ -24,7 +24,7 @@ export function createInspectionBorrowedGlyphLayout(
 }
 
 /** The font handle of glyph `index`, which the layout stores once per font slot. */
-function fontHandleAt(layout: GlyphLayoutInspection, index: number): number {
+export function fontHandleAt(layout: GlyphLayoutColumns, index: number): number {
   const fontHandle = layout.fontHandles[layout.glyphFontSlots[index]!];
   if (fontHandle === undefined) throw new RangeError('borrowed layout glyph references a missing font slot');
   return fontHandle;
@@ -92,11 +92,11 @@ class BorrowedGlyphLayoutView implements BorrowedGlyphLayout {
 }
 
 class InspectionBorrowedGlyphLayoutView implements BorrowedGlyphLayout {
-  readonly #inspection: GlyphLayoutInspection;
+  readonly #inspection: GlyphLayoutColumns;
   readonly #assertActive: () => void;
   readonly #decodeOutline: OutlineDecoder;
 
-  constructor(inspection: GlyphLayoutInspection, assertActive: () => void, decodeOutline: OutlineDecoder) {
+  constructor(inspection: GlyphLayoutColumns, assertActive: () => void, decodeOutline: OutlineDecoder) {
     this.#inspection = inspection;
     this.#assertActive = assertActive;
     this.#decodeOutline = decodeOutline;

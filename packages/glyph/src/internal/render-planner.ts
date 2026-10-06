@@ -5,6 +5,7 @@ import { GlyphEngineStatusError } from '../engine-error.js';
 import {
   copyGlyphLayoutInspection,
   type BorrowedGlyphLayout,
+  type GlyphLayoutColumns,
   type GlyphLayoutInspection,
   type ParagraphLayoutSummary,
 } from '../layout.js';
@@ -53,8 +54,10 @@ import { measurementFromLayoutInspection, readPlannerLayouts, readPlannerMeasure
 import {
   createBorrowedGlyphLayout,
   createInspectionBorrowedGlyphLayout,
+  fontHandleAt,
   type OutlineDecoder,
 } from './borrowed-layout-view.js';
+import { glyphOutlineContours } from '../glyph-outline.js';
 import type { PortableResource } from '../config/resources.js';
 import { reuseOrCreateTextPropertySnapshot } from '../config/text-property.js';
 import type { ParagraphId, ResourceHandle } from './glyph-id.js';
@@ -362,7 +365,7 @@ interface RetainedTextState {
   desiredReleased: boolean;
   committed: ResolvedTextOptions | undefined;
   measurement: ParagraphLayoutSummary | undefined;
-  inspection: GlyphLayoutInspection | undefined;
+  inspection: GlyphLayoutColumns | undefined;
   inspectionBorrowMode: 'sparse-first' | 'promotion-ready' | 'sparse-only';
 }
 
@@ -706,9 +709,10 @@ class RenderPlannerImpl {
   /** @internal */
   _inspectText(state: RetainedTextState): GlyphLayoutInspection {
     this.#assertTextQueryable(state);
-    const cached = state.inspection;
-    if (cached !== undefined) return copyGlyphLayoutInspection(cached);
-    return copyGlyphLayoutInspection(this.#queryInspection(state));
+    const layout = state.inspection ?? this.#queryInspection(state);
+    return copyGlyphLayoutInspection(layout, (index) =>
+      glyphOutlineContours(this.#handleState._glyphOutline(fontHandleAt(layout, index), layout.glyphIds[index]!)),
+    );
   }
 
   /** @internal */
@@ -959,7 +963,7 @@ class RenderPlannerImpl {
     return measurement;
   }
 
-  #queryInspection(state: RetainedTextState): GlyphLayoutInspection {
+  #queryInspection(state: RetainedTextState): GlyphLayoutColumns {
     this.#assertTextQueryable(state);
     const publication = this.#queryTextPublication(state, textShaperAbi.engine.semanticViewMasks.layoutInspection);
     const layout = readPlannerLayouts(publication).get(state.paragraphId);
