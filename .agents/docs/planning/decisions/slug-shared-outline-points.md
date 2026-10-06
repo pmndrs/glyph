@@ -29,6 +29,11 @@ The root solve, coverage and dilation stay the same. **Its RGBA16F em-space curv
 - **Option, derive at load** with `slug-core::build_glyph_geometry`, which already takes quadratics and contour starts: 8–31 µs per glyph and +9.3 KB gzip of Wasm. Latin is 2–5 ms per font; CJK 2.004 takes 2.0 s eagerly, so it must be lazy per glyph.
 - **Option, runtime re-bake** through the Slug baker from the stream's curves. This is not wired: `bake_slug` takes the source font bytes and checks the source fingerprint (`packages/glyph/rust/slug-baker/src/artifact.rs`), so it needs a curves-in entry point.
 
+**Provisional parts** (maintainer, 2026-10-06):
+
+- Baked, packed bands by default, and the optional WebGPU compute decoder, are provisional until the spike's numbers are in.
+- **A WebGL2 path is mandatory, even if it runs on the CPU.** No runtime decoder ships without one. WebGL2 therefore gets the Wasm decode plus an integer-texture upload, and compute is only ever an extra on WebGPU.
+
 ## Why
 
 **Wire size:** outlines plus Slug halve with bands shipped (Inter Latin: 59.0 → 28.6 KB brotli; Inter full: 454 → 233 KB). Deriving bands at load would take Inter Latin to 8.2 KB.

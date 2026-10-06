@@ -31,6 +31,14 @@ This records decision 8 on #244. The maintainer: "Answering how we solve variabl
 - **The slot map.** On/off flags never vary between instances, so contour rotation and the map from each GPU slot to its source point are instance-invariant. Build the map once at load. GPU-side instancing gathers through it, and a wrap slot copies its source point's delta. Applying stream-order deltas straight to GPU slots without the map corrupts 46–49% of slots on Inter full and 31–48% on Roboto Flex full.
 - **Shaping tables stay out of the outline stream.** The variation tables shaping needs (`fvar`, `avar`, `HVAR`/`VVAR`, `MVAR`, the GDEF ItemVariationStore, GSUB FeatureVariations) belong to the shaping payload, #99.
 
+**Slug bands for variable fonts** (maintainer, 2026-10-06):
+
+- Try the build-at-load path first.
+- Project how much data pre-baking variations would need.
+- Look for a partial pre-bake that speeds up load and stays fully dynamic.
+
+This is being measured; it is not settled.
+
 **Direction from the study, not yet fixed** (each is still a gate or a recommendation):
 
 - **TrueType wire:** the base triplet stream plus sparse, gvar-aligned delta streams (triplets with a zero-pair flag `0x80` and "previous delta" prediction, region-major), a region table and an axis table. Phantom points dropped while `HVAR` carries metrics.

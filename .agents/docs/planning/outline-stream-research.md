@@ -256,6 +256,44 @@ Deltas apply before rotation. On/off flags never vary, so the GPU slot-to-point 
 
 All three need a raster identity rule for bakes made from the stream.
 
+## GPU outline effects without an SDF
+
+The maintainer's requirement (2026-10-06): the decoded point buffer should be usable on the GPU for outline-based effects.
+
+- **Today:** glows and shadows exist only through MTSDF's distance field.
+- **Open question:** can outlines and shadows be drawn for fonts that carry no SDF (Slug, bitmap)? [Slug outline architecture](slug-outline-research.md) records the earlier rejected exact-distance outline and its gate.
+- **How the point buffer helps:** it gives every font exact curves on the GPU.
+  - The implicit form (`A·x + B·y + C)² − (D·x + E·y + F)`, with the A/B sign fix above) gives a sign and an approximate distance per curve.
+  - The band structure bounds which curves a pixel must test.
+- **Status:** an approximate-distance effect over the band's curves is the candidate to research. It is not measured.
+
+## Interaction with johncomposed/glyph#1 (pinned variable-font instances)
+
+The draft PR [johncomposed/glyph#1](https://github.com/johncomposed/glyph/pull/1) bakes a variable font at one pinned instance.
+
+**What it does:**
+
+- `variation: { axes: { wght: 700 } }` is normalized once through `fvar`/`avar` and stored as `PMNDRS_font.variation`.
+- The shaping payload keeps `fvar`, `avar`, `HVAR`, `VVAR` and `MVAR`, and drops `gvar`/`cvar`. Fonts without `HVAR` are rejected.
+- The shaper builds one HarfRust instance at the recorded coordinates. Extents and every raster baker draw at the same coordinates.
+- The coordinates enter `shaping.fingerprint`, so a different instance is a different font.
+
+**How it relates to this research:**
+
+- **Shaping:** complementary. It implements the shaping half the variable-font study assigns to the shaping payload (#99), and dynamic variation would reuse its HarfRust-at-coordinates path.
+- **Identity:** in tension with dynamic variation. With runtime axes the coordinates leave the fingerprint and become runtime state, and the artifact's identity is the variable font itself. The PR's "a different instance is a different font" fits pinned bakes only.
+- **Outlines:** #235 copies `glyf`, which is the default instance. A pinned wght 700 font would shape and rasterize at 700 but return default-instance outlines from `outlineAt()`.
+  - With the stream format, the pinned case draws outlines at the pinned location straight into triplets.
+  - The dynamic case adds delta streams.
+
+**What it needs to land:**
+
+1. A rebase onto current `main`. It still edits the retired `log.md` and the frozen `decision-register.md`; those edits become OKF log entries and decision files.
+2. Resolution of its conflicts with #235 and the open stack.
+3. Outlines drawn at the pinned instance.
+4. A decision record stating that pinned instances are the first step and that the fingerprint rule is revisited for dynamic axes.
+5. CI and benchmarks on the rebased head.
+
 ## Corrections to earlier write-ups
 
 The full reports below reproduce the study agents' reports as written. These later findings replace what they, or the #244 comments, first said:
