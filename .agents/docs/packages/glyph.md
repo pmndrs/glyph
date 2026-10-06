@@ -242,12 +242,15 @@ weighted blend, and row-based vertex dilation are expressed once. A vertical ban
 transposed frame with the opposite winding sense, so both axes share one curve evaluator and quadratic solver.
 
 Slug quads are the glyph's ink box, and coverage reaches zero half a pixel past a straight edge, so vertex dilation
-moves each corner half a pixel across both adjacent edges, as Lengyel's `SlugDilate` does for a `(±1, ±1)` corner
-normal. The TypeGPU core, the native TSL `/shaders/tsl` graph, and the CPU reference mirror use only the sign of the
-outward normal they receive. `tests/package/slug-dilation.test.mjs` runs the TypeGPU functions and the mirror on the CPU
-and checks the half-pixel margin on both axes for wide, short and tall, narrow quads; it also checks that no pixel with
-nonzero core coverage falls outside the dilated quad. The native TSL graph cannot run on the CPU, so only review keeps it
-in step with the TypeGPU core.
+moves each corner half a pixel across both adjacent edges on screen. Each axis gets its own step, solved from the
+corner's screen tangents and the w row, because one step shared by both axes, as Lengyel's `SlugDilate` takes along the
+`(±1, ±1)` corner, leaves the short screen edge of a stretched, sheared, or tilted plane under half a pixel. The solve is
+exact under any projective transform; towards the horizon each step is held at twice its affine value. The TypeGPU
+core, the native TSL `/shaders/tsl` graph, and the CPU reference mirror use only the sign of the outward normal they
+receive. `tests/package/slug-dilation.test.mjs` runs the TypeGPU functions and the mirror on the CPU and checks the
+half-pixel margin on both axes for wide, short and tall, narrow quads under uniform, rotated, stretched, sheared, and
+perspective transforms; it also checks that no pixel with nonzero core coverage falls outside the dilated quad. The
+native TSL graph cannot run on the CPU, so only review keeps it in step with the TypeGPU core.
 
 The neighboring TypeGPU modules own page texture reads, grid addressing, band traversal, and the sorted-reference
 terminator. The experimental `/three/typegpu` host supplies textures and node-valued glyph fields through `@typegpu/three`, while retaining
