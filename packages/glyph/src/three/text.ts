@@ -1464,7 +1464,7 @@ class ThreeRootPublication {
     if (layout === undefined) return undefined;
     const drawn = this.#target.snapshotGlyphOrigins(layout.glyphStableIds, layout.x, layout.y);
     const placements = createGlyphPlacements(
-      copyGlyphLayoutInspection(layout),
+      copyGlyphLayoutInspection(layout, (index) => layout.outlineAt(index)),
       text.text,
       drawn.drawnX,
       drawn.drawnY,

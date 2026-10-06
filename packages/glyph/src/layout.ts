@@ -1,4 +1,4 @@
-import type { GlyphOutlineView } from './glyph-outline.js';
+import type { GlyphOutlineContour, GlyphOutlineView } from './glyph-outline.js';
 import type { FontHandle } from './identity.js';
 import { textShaperAbi } from './generated/text-shaper-abi.js';
 
@@ -120,7 +120,20 @@ export interface GlyphLayout extends ParagraphMeasurement {
 /** One positioned paragraph: measurement plus every per-glyph/line column, with stable identities — what `Text.glyphs()` copies from Wasm. A second query after `measure()`, not a bigger copy: per-glyph records cost more than a size probe wants to pay. See `measure()`/`Text.measure()`. */
 export interface GlyphLayoutInspection extends GlyphLayout, ParagraphLayoutSummary, ParagraphIntrinsicWidths {
   readonly glyphStableIds: Uint32Array;
+  /**
+   * Decodes glyph `index`'s outline, from a font baked with `--outlines`, into caller-owned closed contours of
+   * `[x0, y0, cx, cy, x1, y1, isLine]` tuples in em units with y down and the origin at the glyph's pen position on the
+   * baseline; place a point at `x[index] + x * glyphFontSizes[index]`, `y[index] + y * glyphFontSizes[index]`. Equal
+   * font and glyph IDs give equal outlines. Contours keep the font's winding for nonzero filling, a blank glyph returns
+   * `[]`, and each CFF cubic becomes four quadratics. Allocates on every call, and replaces the views any earlier
+   * borrowed `outlineAt()` returned. Throws for an index outside the layout, a font baked without outlines, or a font
+   * that has been disposed.
+   */
+  outlineAt(index: number): GlyphOutlineContour[];
 }
+
+/** @internal An inspection's columns before an integration attaches its outline read. */
+export type GlyphLayoutColumns = Omit<GlyphLayoutInspection, 'outlineAt'>;
 
 /** One caller-owned scalar glyph record read from a borrowed layout. */
 export interface BorrowedGlyph {
@@ -149,15 +162,29 @@ export interface BorrowedGlyphLayout {
    * `--outlines`), and returns it as views in em units with y down and the origin at the glyph's pen position on the
    * baseline; see `GlyphOutlineView` for the point layout and placement. Fills and returns `target` when given, which
    * saves only the holder object: the typed arrays are new views on every call. The views are valid only inside this
-   * callback, until the next `outlineAt()` or other engine call; copy them to keep the outline. Throws when the
-   * glyph's font was baked without outlines.
+   * callback, until the next `outlineAt()` or other engine call; copy them to keep the outline, or use
+   * `Text.glyphs().outlineAt()` for caller-owned tuples. Throws when the glyph's font was baked without outlines.
    */
   outlineAt(index: number, target?: GlyphOutlineView): GlyphOutlineView;
 }
 
-/** @internal Returns caller-owned columns while an integration keeps its canonical cached copy private. */
-export function copyGlyphLayoutInspection(layout: GlyphLayoutInspection): GlyphLayoutInspection {
-  return Object.freeze({
+function assertGlyphIndex(index: number, glyphCount: number): void {
+  if (!Number.isSafeInteger(index) || index < 0 || index >= glyphCount) {
+    throw new RangeError('layout glyph index is outside its range');
+  }
+}
+
+/**
+ * @internal Returns caller-owned columns while an integration keeps its canonical cached copy private. `readOutline`
+ * answers `outlineAt()` for an index already checked against the layout. `outlineAt` is not enumerable, so the copy
+ * still spreads, compares, and structured-clones as plain columns.
+ */
+export function copyGlyphLayoutInspection(
+  layout: GlyphLayoutColumns,
+  readOutline: (index: number) => GlyphOutlineContour[],
+): GlyphLayoutInspection {
+  const glyphCount = layout.glyphCount;
+  const copy = {
     ...layout,
     fontHandles: layout.fontHandles.slice(),
     glyphStableIds: layout.glyphStableIds.slice(),
@@ -180,7 +207,14 @@ export function copyGlyphLayoutInspection(layout: GlyphLayoutInspection): GlyphL
     lineGlyphCounts: layout.lineGlyphCounts.slice(),
     lineBaselines: layout.lineBaselines.slice(),
     lineAdvances: layout.lineAdvances.slice(),
+  };
+  Object.defineProperty(copy, 'outlineAt', {
+    value(index: number): GlyphOutlineContour[] {
+      assertGlyphIndex(index, glyphCount);
+      return readOutline(index);
+    },
   });
+  return Object.freeze(copy as GlyphLayoutColumns as GlyphLayoutInspection);
 }
 
 export interface FontSlotRecord {

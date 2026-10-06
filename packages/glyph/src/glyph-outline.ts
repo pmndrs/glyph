@@ -64,3 +64,26 @@ export function viewGlyphOutline(
   target.segmentLines = new Uint8Array(memory, pointsOffset + pointCount * 8, segmentCount);
   return target;
 }
+
+/** @internal Copies a view into caller-owned curve tuples. */
+export function glyphOutlineContours({ points, contourEnds, segmentLines }: GlyphOutlineView): GlyphOutlineContour[] {
+  const contours: GlyphOutlineContour[] = [];
+  let segment = 0;
+  for (let contour = 0; contour < contourEnds.length; contour += 1) {
+    const curves: GlyphOutlineCurve[] = [];
+    for (const end = contourEnds[contour]!; segment < end; segment += 1) {
+      const at = 2 * (2 * segment + contour);
+      curves.push([
+        points[at]!,
+        points[at + 1]!,
+        points[at + 2]!,
+        points[at + 3]!,
+        points[at + 4]!,
+        points[at + 5]!,
+        segmentLines[segment] === 1,
+      ]);
+    }
+    contours.push(curves);
+  }
+  return contours;
+}

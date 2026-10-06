@@ -265,6 +265,30 @@ test('a target is refilled with new views and returned', async (t) => {
   font.dispose();
 });
 
+test('owned outlines from glyphs() equal the borrowed views as curve tuples', async (t) => {
+  const three = await createHandle(t);
+  const [latin, icon, script] = await Promise.all([load(bakes.inter), load(bakes.icons), load(bakes.dancingScript)]);
+  const texts = [
+    three.createText({ font: createFontStack(latin, icon), text: `Owned I ${String.fromCodePoint(0xf0ac)} 8` }),
+    three.createText({ font: script, text: 'Script curves' }),
+  ];
+  for (const text of texts) {
+    const borrowed = readOutlines(text);
+    const layout = text.glyphs();
+    assert.equal(layout.glyphCount, borrowed.length);
+    borrowed.forEach(({ outline }, index) => assert.deepEqual(layout.outlineAt(index), outline, `glyph ${index}`));
+    assert.notEqual(layout.outlineAt(0), layout.outlineAt(0), 'each call returns a new caller-owned copy');
+    assert.equal(Object.keys(layout).includes('outlineAt'), false, 'the columns stay plain data');
+    assert.deepEqual(structuredClone(layout).glyphIds, layout.glyphIds);
+    assert.throws(() => layout.outlineAt(layout.glyphCount), RangeError);
+    assert.throws(() => layout.outlineAt(-1), RangeError);
+    text.dispose();
+  }
+  latin.dispose();
+  icon.dispose();
+  script.dispose();
+});
+
 test('every CFF curve ends inside the glyph ink box', async (t) => {
   const three = await createHandle(t);
   const font = await load(bakes.dancingScript);
@@ -342,6 +366,7 @@ test('a glyph whose font was baked without outlines throws at the call', async (
   const text = three.createText({ font, text: 'Plain' });
   const message = /baked without outlines; outlines need a font prebaked with glyph bake --outlines/;
   assert.throws(() => text.withGlyphs((glyphs) => glyphs.outlineAt(0)), message);
+  assert.throws(() => text.glyphs().outlineAt(0), message);
   text.dispose();
   font.dispose();
 });
