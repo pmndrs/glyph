@@ -9,11 +9,22 @@ sources:
     title: Outline stream research summary
 generated:
   by: anthropic/claude-code
-  at: '2026-10-06T05:56:00Z'
+  at: '2026-10-06T14:00:00Z'
 status: draft
 ---
 
 # Glyph outline encodings: a measured study
+
+> **Status of this report (reviewed 2026-10-06).** This is the study agent's report as written, before the maintainer's decisions. Measurements stand; read these parts with the corrections in [outline stream research](outline-stream-research.md#corrections-to-earlier-write-ups):
+>
+> - **GPU resident memory:** the two GPU columns of the "Today vs proposed" table compare padded Slug pages today with unpadded proposed data. Unpadded on both sides, total resident Slug memory drops only 12–13% (Inter full 1.81 → 1.57 MB; Inter Latin 156 → 138 KB). It does not halve.
+> - **Decoder delivery:** the recommendation of a decoder "loaded only with outlined artifacts" is superseded. The decoder is required and lives in the core shaper Wasm ([decision](decisions/outline-decoder-in-core.md)).
+> - **Decoder size:** the 0.56 KB triplet decoder covers decomposed glyphs only; full composite expansion is unmeasured (the JS expander only approximates nested transforms).
+> - **Decode speed:** "0.17–0.86 µs/glyph" uses the slowest of three CJK 2.004 runs. The medians in the decode table give 0.17–0.64.
+> - **`outlineAt()` space:** finding 7 says `outlineAt()` multiplies by `fontSize/upm`, as #235 did (paragraph space). The accepted API is em space, y down: points divided by `unitsPerEm`, y negated ([decision](decisions/outline-stream-format.md)).
+> - **Bands:** building bands at load is an option. The maintainer kept baked, packed bands as the default.
+> - **SIMD:** this study timed scalar decoders only. The later variable-font study found SIMD gives no gain on triplet decoding ([decision](decisions/outline-simd-scope.md)).
+> - **Terminology:** "stencil" here means the three-point neighbourhood read `p[i-1]`, `p[i]`, `p[i+1]`, not the GPU stencil buffer.
 
 **Scope and method:**
 
@@ -622,7 +633,7 @@ All under `OE/` = `spikes/outline-stream/research/encoding/`. Run Python with `p
 
 ## Why Slug stores f16 em coordinates
 
-**Where the layout comes from:** the reference Slug shaders (`EricLengyel/Slug` at be3c13eb, MIT).
+**Where the layout comes from:** the reference Slug shaders by Eric Lengyel (`EricLengyel/Slug` at be3c13eb). The repository's license today is MIT or Apache-2.0, and its README asks for credit in distributed software.
 
 - The README specifies a curve texture with "four 16-bit floating-point channels", holding endpoint-shared control points in em space, and a two-channel 16-bit unsigned band texture.
 - The pixel shader subtracts the em-space sample coordinate directly from the fetched points (`SlugPixelShader.hlsl`, the `p12` and `p3` loads).

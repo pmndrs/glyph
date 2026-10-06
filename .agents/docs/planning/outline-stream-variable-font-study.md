@@ -9,11 +9,19 @@ sources:
     title: Outline stream research summary
 generated:
   by: anthropic/claude-code
-  at: '2026-10-06T07:30:00Z'
+  at: '2026-10-06T14:00:00Z'
 status: draft
 ---
 
 # Variable fonts in the triplet outline stream: a measured study
+
+> **Status of this report (reviewed 2026-10-06).** This is the study agent's report as written. Measurements stand; read these parts with the decisions in mind:
+>
+> - **Precision:** the recommendation of exact f64 instancing is superseded. The maintainer accepted f32 ([outline SIMD scope](decisions/outline-simd-scope.md)).
+> - **SIMD:** the finding that SIMD does not speed up triplet decoding revised decision 3 on #244: the triplet decoder stays scalar, and SIMD goes to instancing, composite expansion and ink bounds.
+> - **Slug bands:** "build bands at load" is this study's recommendation for variable fonts. For static fonts the maintainer kept baked, packed bands as the default; the rule for variable fonts is not decided ([variable fonts in the outline stream](decisions/variable-font-outline-stream.md)).
+> - **Timings named "re-instancing"** in the summary are the instancing step alone. With composite expansion and ink bounds, which every instance needs, Inter full takes 0.26 / 0.41 ms (f32 / exact), as in the Q5 table.
+> - **Slot corruption without the map:** recomputed from `logs/pointorder-*.txt`, it is 46–49% on Inter full and 31–48% on Roboto Flex full, not 47–49% on both. The Q3 table's Roboto Flex maximum is 14,213, not 14,133.
 
 The outline format holds up for variable fonts, and the recommendation is to adopt it for TrueType now and for CFF2 with the point-major delta layout. Two things decide the design. First, the deltas are 75–97% of the bytes, so the delta layout matters far more than the base points. Second, exact parity with `fontTools.varLib.instancer` needs sparse deltas, IUP done at load, and f64 arithmetic. Nothing here touched the repo, and no GPU was available, so every GPU number is an estimate.
 
@@ -28,11 +36,11 @@ The outline format holds up for variable fonts, and the recommendation is to ado
   - 0 mismatched coordinates at 34 axis locations across 4 sets, composites expanded and ink bounds included. This holds in scalar f64 and in f64x2 SIMD.
   - Variant (a), IUP expanded and rounded at bake, is lossy: 1 unit off on up to 0.13% of coordinates. It is also no smaller.
   - Recommendation: ship sparse.
-- **Speed (Node 22, Wasm SIMD128):** re-instancing Inter full takes 0.13 ms (f32) or 0.30 ms (exact f64x2); Roboto Flex full takes 0.35 / 0.70 ms.
+- **Speed (Node 22, Wasm SIMD128):** the instancing step for Inter full takes 0.13 ms (f32) or 0.30 ms (exact f64x2); Roboto Flex full takes 0.35 / 0.70 ms. With composite expansion and ink bounds, a re-instance is 0.26 / 0.41 ms and 0.43 / 0.72 ms.
   - The whole load (decode plus IUP) is 2.6 ms for Inter full and 9.3 ms for Roboto Flex full.
-  - SIMD gives 1.6–5.1× on instancing, but about 1× on triplet decoding. The two SIMD triplet decoders run at 0.62–1.23× scalar, so the scalar decoder should stay.
+  - SIMD gives 1.6–5.1× on instancing, but about 1× on triplet decoding. The better of the two SIMD triplet decoders runs at 0.62–1.23× scalar per step (individual variants fell to 0.41×), so the scalar decoder should stay.
 - **Composites:** kept on the wire and expanded per instance, exactly. 1,882 of Inter's 2,933 glyphs are composites (1,694 have nonzero offset deltas); Roboto Flex has 517 of 948 (463).
-- **Point order:** apply deltas in stream order, then build the GPU stencil. No fixture contour needs rotation; the only shift comes from the wrap points. Applying deltas to stencil slots without the index map corrupts 47–49% of slots.
+- **Point order:** apply deltas in stream order, then build the GPU stencil. No fixture contour needs rotation; the only shift comes from the wrap points. Applying deltas to stencil slots without the index map corrupts 46–49% of slots on Inter full and 31–48% on Roboto Flex full.
 
 **CFF2: compatible conversion never failed.**
 
@@ -179,14 +187,14 @@ All downloaded 2026-10-06 from the default or release branch heads (mutable URLs
 
 **Measurements:**
 
-| Check                                                                                                             | Inter full                                 | Roboto Flex full       |
-| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ---------------------- |
-| Contours needing rotation                                                                                         | 0 of 7,011 decomposed                      | 0 of 2,103             |
-| All-off-curve contours                                                                                            | 0                                          | 0                      |
-| Wrap points (one per contour)                                                                                     | 7,011                                      | 2,103                  |
-| IUP rotation-invariant (contour tuples tested; max \|diff\|)                                                      | 9,030; 0.0                                 | 16,080; 0.0            |
-| Stencil of the Wasm instance via a map built once from the default, against the stencil of the fontTools instance | 2,911/2,911 glyphs equal at every location | 939/939                |
-| Stream-order deltas applied to stencil slots without the map                                                      | 49,927–52,429 of 107,453 slots wrong       | 9,267–14,133 of 29,866 |
+| Check                                                                                                             | Inter full                                    | Roboto Flex full                |
+| ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------- |
+| Contours needing rotation                                                                                         | 0 of 7,011 decomposed                         | 0 of 2,103                      |
+| All-off-curve contours                                                                                            | 0                                             | 0                               |
+| Wrap points (one per contour)                                                                                     | 7,011                                         | 2,103                           |
+| IUP rotation-invariant (contour tuples tested; max \|diff\|)                                                      | 9,030; 0.0                                    | 16,080; 0.0                     |
+| Stencil of the Wasm instance via a map built once from the default, against the stencil of the fontTools instance | 2,911/2,911 glyphs equal at every location    | 939/939                         |
+| Stream-order deltas applied to stencil slots without the map (non-default locations)                              | 49,927–52,429 of 107,453 slots wrong (46–49%) | 9,267–14,213 of 29,866 (31–48%) |
 
 - **Why the map is fixed:** on/off flags never vary, so the rotation and the slot→point map are instance-invariant and can be built once at load.
 - **GPU-side instancing:** gather through that map, with the wrap slot duplicating its source's delta.
@@ -217,6 +225,8 @@ All downloaded 2026-10-06 from the default or release branch heads (mutable URLs
 | CJK full, tol 0.25 half-unit                      | 0        | +41.5% / +33.1%                             | 0.50 / 0.33 / 0.16                                      | 0.57 / 0.25                         | 7,571 + 7,939 KB               |
 
 CJK errors are on a 20,000-cubic sample; Serif full covers all 12,991 cubics. CFF2 coordinates were all integers (0 fractional).
+
+**Point-growth basis:** the compatible figures count cubic points after dropping redundant closing points (5,282 in Serif full, 64,829 in CJK full). Against the raw cubic point counts in `logs/cff2-*-B.log`, compatible growth is +3.0% (tol 1) and +34.6% (tol 0.25, half-unit) for Serif full, and +10.5% and +40.0% for CJK full. The default-only figures here do not reproduce exactly from those logs (Serif full logs: +3.5%, +11.0%, +23.0%), so treat that column as approximate.
 
 **Bytes against the CFF2 table (brotli):**
 

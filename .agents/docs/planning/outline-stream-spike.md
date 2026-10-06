@@ -15,7 +15,7 @@ sources:
     title: Outline stream format
 generated:
   by: anthropic/claude-code
-  at: '2026-10-06T08:30:00Z'
+  at: '2026-10-06T14:00:00Z'
 status: draft
 ---
 
@@ -25,7 +25,7 @@ status: draft
 
 [Slug reads the shared outline points](decisions/slug-shared-outline-points.md) stays Proposed until the shader shows speed parity. That shader is the three-point read from the i16 point buffer, compared against Slug's RGBA16F curve texture on WebGPU and WebGL2. No GPU was available while the [research](outline-stream-research.md) ran.
 
-This spike measures the gate on a maintainer's machine. It is temporary code under `spikes/outline-stream/`:
+The maintainer asked for a draft branch to run on a local GPU, "comparing main vs new algo", with temporary spike code preferred over a full implementation. This spike measures the gate on a maintainer's machine. It is temporary code under `spikes/outline-stream/`:
 
 - outside the pnpm workspace;
 - with no package exports and no CI wiring;
@@ -38,6 +38,8 @@ This spike measures the gate on a maintainer's machine. It is temporary code und
 | **A, today's layout** | RGBA16F endpoint-shared curve texels in em units, as `PMNDRS_font_slug` V0 stores them | u16 texel offsets from the glyph's curve base | Two texel loads per curve, as in the reference `SlugPixelShader.hlsl` |
 | **B, shared points**  | i16 point words in font units: `(x << 1) \| offCurve`, `y`                             | u16 point offsets from the glyph's point base | Three point loads per curve plus the implied-on-curve rule            |
 | **main** (optional)   | The real `.slug.glb` baked by today's CLI                                              | V0 records                                    | Same as A                                                             |
+
+**Main against the new algorithm:** A models main's curve layout and fetch so that only the fetch differs from B. The main variant is the check that A times and renders like today's real bake; run it whenever `prepare` can bake the font.
 
 **Same everything else:** A and B share one band partition, curve set, sort order, glyph grid, coverage and dilation code. Only the curve fetch differs, so the timing difference is the cost of the read rule and the integer fetch.
 

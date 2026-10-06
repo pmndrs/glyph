@@ -42,7 +42,7 @@ sources:
     title: Full variable-font study report
 generated:
   by: anthropic/claude-code
-  at: '2026-10-06T08:00:00Z'
+  at: '2026-10-06T14:00:00Z'
 status: draft
 ---
 
@@ -52,6 +52,8 @@ This page summarizes two measured studies and the decisions taken from them.
 
 - **Full reports:** the [encoding study](outline-stream-encoding-study.md) and the [variable-font study](outline-stream-variable-font-study.md) hold every table and the reproduction steps.
 - **Format specification:** the issue comment [outline format decisions](https://github.com/pmndrs/glyph/issues/244#issuecomment-6011804243) is the implementation reference. The decision files linked below record the same choices in this bundle.
+  - **Exception:** decision 3 in that comment (a SIMD triplet decoder) was revised after the variable-font study. [Outline SIMD scope](decisions/outline-simd-scope.md) holds the revision; the comment had not been updated when this page was written.
+- **Terminology:** "stencil" in the studies and on #244 means the fixed three-point neighbourhood the shader reads (`p[i-1]`, `p[i]`, `p[i+1]`), in the numerical sense. It is not the GPU stencil buffer. The decision files call it the three-point read.
 - **Code:** research scripts are in `spikes/outline-stream/research/`, and the GPU spike that tests the open gates is in `spikes/outline-stream/` ([spike plan](outline-stream-spike.md)).
 
 ## Question
@@ -108,13 +110,13 @@ No GPU was available, so every shader number is either an estimate or unmeasured
 - **Control-point prediction:** parallelogram prediction was worse after compression, and tangent prediction was within 1%.
 - **meshopt:** worse than byte varints after compression, with a 7.7 KB decoder.
 - **Splitting x and y planes:** neutral.
-- **Dropping hinting** alone saves about 30% on hinted TrueType fonts.
+- **Dropping hinting** alone saves about 31% on Inter, the one hinted TrueType font in the corpus (116.0 → 80.5 KB gzip full).
 
 ### Decoder
 
-**Size:** the scalar no_std triplet decoder is 0.57 KB gzip, or 1.11 KB with the GPU point-layout emitter. It replaces read-fonts' +24.7 KB. Composite expansion with full transform support is not in that number.
+**Size:** the scalar no_std triplet decoder is 0.56 KB gzip, or 1.09 KB with the GPU point-layout emitter (the study log's headerless gzip; gzip -9 of the same `.wasm` files with the file name in the header gives the 0.57 and 1.11 KB quoted on #244). It replaces read-fonts' +24.7 KB. Composite expansion with full transform support is not in that number; it was benchmarked on decomposed glyphs.
 
-**Speed:** 0.17–0.86 µs per glyph, once at load. #235 pays 1.2–10.5 µs on every `outlineAt()` call.
+**Speed:** 0.17–0.64 µs per glyph (medians of three runs), once at load. #235 pays 1.2–10.5 µs on every `outlineAt()` call. Earlier write-ups, including the #244 study comment, give 0.86 µs as the upper bound; that is the slowest of the three CJK 2.004 runs.
 
 | Font           | Whole-font decode at load |
 | -------------- | ------------------------: |
@@ -127,16 +129,19 @@ No GPU was available, so every shader number is either an estimate or unmeasured
 
 The GPU layout is absolute i16 points in font units.
 
-- **Word layout:** x is stored as `(x << 1) | offCurve`.
-- **Contours:** each one is rotated to start on an on-curve point and gets one wrap point.
-- **Read rule:** the shader rebuilds each quadratic from `p[i-1]`, `p[i]`, `p[i+1]` with the TrueType implied-on-curve rule.
+- **Word layout:** one 32-bit word per point. x is an i16 holding `(x << 1) | offCurve`, so `|x| < 16384` font units (half that on a half-unit grid); y is a full-range i16.
+- **Rotation:** each contour is rotated to start on an on-curve point, so the first curve starts on a real stored point and every off-curve point has a previous neighbour.
+- **Wrap point:** a copy of the first point is appended to each contour, so the last curve's next neighbour exists and the shader needs no wrap-around index logic.
+- **All-off-curve contours** (legal in TrueType) get a synthesized on-curve start at the midpoint of the last and first points. The study encoder floors it to an integer, which is lossy when the sum is odd; this is an open gate.
+- **Read rule:** the shader rebuilds each quadratic from `p[i-1]`, `p[i]`, `p[i+1]` with the TrueType implied-on-curve rule. [Outline stream format](decisions/outline-stream-format.md) has the rule table and a worked example.
 - **Cost:** 5.1–6.2 bytes per curve, against Slug's 8.2–8.7, and exact in font units.
 
 Slug's f16 em-space curves are lossy.
 
 - They lose up to 2.0 units on Inter, and 0.83% of coordinates are off by at least 0.5 units.
 - The cause is f16's 11 significant bits: at 1 em the step is 2^-10 em, about 2 units at 2,048 units per em.
-- Slug inherited the layout from the official reference shaders through the Three Flatland uikit fork. No decision compared it with integer units.
+- Slug inherited the layout from the official reference shaders, [EricLengyel/Slug](https://github.com/EricLengyel/Slug) by Eric Lengyel (patent dedicated to the public domain; code MIT or Apache-2.0, credit required when distributed), through the Three Flatland uikit fork. The reference README specifies four 16-bit float channels of em-space points. No decision compared it with integer units.
+- Integer font units cost nothing per curve: scale the sample coordinate by `unitsPerEm` once in the vertex shader, then fetch i16 points from an integer texture.
 
 ### Slug sharing
 
@@ -151,13 +156,13 @@ When Slug reads the shared point buffer, its curve texture disappears.
 **GPU memory:**
 
 - Curve data shrinks 35–40%.
-- Total resident Slug memory, compared unpadded on both sides, drops only 12–13%, because band tables dominate (Inter full: 1.81 → 1.57 MB).
+- Total resident Slug memory, compared unpadded on both sides, drops only 12–13%, because band tables dominate (Inter full: 1.81 → 1.57 MB). The encoding study's own table compares padded pages today with unpadded proposed data (Inter full 3,154 vs 1,572 KB); that comparison was the source of an early "GPU memory roughly halves" claim, since corrected.
 
 **Deriving bands at load** with `slug-core` costs 8–31 µs per glyph and +9.3 KB gzip of Wasm. CJK takes 2.0 s if done eagerly.
 
 ### Implicit form
 
-The implicit coefficients posted on #244 have one sign error. With `A = 2·y1 − y0 − y2` and `B = x0 − 2·x1 + x2`, F vanishes on the curve; C, D, E and F are correct as posted.
+The implicit coefficients posted on #244 have one sign error: A and B must be negated. With `A = 2·y1 − y0 − y2` and `B = x0 − 2·x1 + x2`, F vanishes on the curve; C, D, E and F are correct as posted.
 
 | Check (`research/implicit/`)                      | Result              |
 | ------------------------------------------------- | ------------------- |
@@ -186,34 +191,36 @@ Keeping cubics would be exact and smaller, but nothing on the GPU path reads cub
 
 - The format is the base triplet stream plus sparse, gvar-aligned delta streams, a region table and an axis table.
 - It matched `fontTools.varLib.instancer` with 0 mismatched coordinates at 34 axis locations, composites and ink bounds included.
-- Exact parity needs IUP (interpolation of untouched points) at load and f64. f32 is 1 unit off on at most 13 of 637,680 coordinates, and was accepted.
+- Exact parity needs IUP (interpolation of untouched points) at load and f64. f32 is 1 unit off on 13 of 637,680 stored coordinates on Inter full (10 axis locations; 24 of 2,008,840 decomposed), and the maintainer accepted it.
 - Total size is 69–76% of `gvar` + `glyf` + `loca` (brotli): Inter full 193 vs 281 KB, Roboto Flex full 549 vs 739 KB. Deltas are 75–97% of the bytes.
 
 **Speed:**
 
-| Font             | Re-instance (f32 / exact) | Full load |
-| ---------------- | ------------------------- | --------: |
-| Inter full       | 0.13 / 0.30 ms            |    2.6 ms |
-| Roboto Flex full | 0.35 / 0.70 ms            |    9.3 ms |
+| Font             | Instancing step (f32 / exact) | Re-instance with expansion and bounds (f32 / exact) | Full load |
+| ---------------- | ----------------------------- | --------------------------------------------------- | --------: |
+| Inter full       | 0.13 / 0.30 ms                | 0.26 / 0.41 ms                                      |    2.6 ms |
+| Roboto Flex full | 0.35 / 0.70 ms                | 0.43 / 0.72 ms                                      |    9.3 ms |
+
+The #244 variable-font comment calls the first column "re-instancing". Composites are expanded per instance, so the second column is the per-instance cost the GPU layout needs.
 
 **SIMD:**
 
-| Step                | SIMD speedup over scalar |
-| ------------------- | ------------------------ |
-| Instancing          | 1.6–5.1×                 |
-| Composite expansion | 1.9–3.6×                 |
-| Ink bounds          | 2.1–3.7×                 |
-| Triplet decoding    | 0.62–1.23×               |
+| Step                | SIMD speedup over scalar                       |
+| ------------------- | ---------------------------------------------- |
+| Instancing          | 1.6–5.1×                                       |
+| Composite expansion | 1.9–3.6×                                       |
+| Ink bounds          | 2.1–3.7×                                       |
+| Triplet decoding    | 0.62–1.23× (best of two SIMD designs per step) |
 
 **Order of operations:**
 
-1. Decode, in glyf order.
-2. Run IUP.
+1. Decode base points and deltas, in glyf order.
+2. Run IUP per tuple, in the original contour order, before any wrap point.
 3. Instance.
-4. Expand composites.
-5. Build the GPU layout.
+4. Expand composites with rounded instanced offsets.
+5. Build the GPU layout: rotation, wrap points, synthesized midpoints (from instanced points), x tags.
 
-The GPU slot-to-point map is instance-invariant and built once. Applying deltas to GPU slots without it corrupts 47–49% of slots.
+Deltas apply before rotation. On/off flags never vary, so the GPU slot-to-point map is instance-invariant and built once at load. Applying deltas to GPU slots without it corrupts 46–49% of slots on Inter full and 31–48% on Roboto Flex full.
 
 **CFF2:** compatible cu2qu across real peak masters failed on 0 glyphs (all 1,464 Source Serif glyphs and all 65,535 CJK glyphs). Multi-region fonts need a point-major delta layout.
 
@@ -221,7 +228,8 @@ The GPU slot-to-point map is instance-invariant and built once. Applying deltas 
 
 - Bands built for the default instance alone are wrong at every other instance.
 - Bands built against conservative bounds across all regions are correct, at 1.6–3.1× the references per band.
-- Bands conservative over only the animated axes cost far less.
+- Bands conservative over only the animated axes cost far less (Roboto Flex, wght only: 6.0 against 13.9 references per band).
+- The study recommends building these bands at load for variable fonts. For static fonts the maintainer kept baked, packed bands as the default; which rule applies to variable fonts is not decided.
 
 **Shaping:** the tables shaping must keep (`fvar`, `avar`, `HVAR`/`VVAR`, `MVAR`, the GDEF ItemVariationStore, GSUB FeatureVariations) belong to the shaping payload (#99), not the outline stream.
 
@@ -230,6 +238,7 @@ The GPU slot-to-point map is instance-invariant and built once. Applying deltas 
 **Hinting:** dropping it changes nothing today.
 
 - The bitmap baker draws unhinted (`DrawSettings::unhinted`), and Slug and MTSDF are resolution-independent.
+- Hinted grayscale bitmap strikes are already framed as a gated experiment ([bitmap hinting research](bitmap-hinting-research.md), D-054). That hinting would run at bake time from the source font, so the stream never needs instructions; skrifa's autohinter also works from outlines alone.
 - A TrueType bytecode interpreter on the GPU is not practical.
 - GPU-friendly alternatives:
   - font-size snapping to the cap height;
@@ -237,7 +246,7 @@ The GPU slot-to-point map is instance-invariant and built once. Applying deltas 
   - hinted outlines for small sizes only;
   - stem darkening as a presentation adjustment.
 
-**Runtime re-bakes from the stream** are within reach but not wired.
+**Runtime re-bakes from the stream** are within reach but not wired. The first #244 study comment said the Slug and bitmap bakers could already bake from curves; that was corrected.
 
 | Generator | State                                                                                      |
 | --------- | ------------------------------------------------------------------------------------------ |
@@ -247,13 +256,30 @@ The GPU slot-to-point map is instance-invariant and built once. Applying deltas 
 
 All three need a raster identity rule for bakes made from the stream.
 
+## Corrections to earlier write-ups
+
+The full reports below reproduce the study agents' reports as written. These later findings replace what they, or the #244 comments, first said:
+
+| Earlier claim                                              | Now                                                                                                       | Where corrected                         |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| GPU memory roughly halves (Inter full 3.2 → 1.6 MB)        | Unpadded on both sides, total resident Slug memory drops 12–13% (1.81 → 1.57 MB); curve data drops 35–40% | #244 study comment, edited              |
+| The Slug and bitmap bakers can already re-bake from curves | Not wired: Slug and bitmap need curves-in entry points; only MTSDF is curve-fed                           | #244 study comment, edited              |
+| The 0.56 KB decoder covers outlines                        | It covers decomposed glyphs only; a full composite expander is unmeasured                                 | Session review, then #244 decisions     |
+| Decoder loaded only with outlined artifacts (opt-in)       | Required, in the core shaper Wasm                                                                         | Maintainer, decision 1                  |
+| A SIMD triplet decoder is the speed target                 | SIMD measured no gain on triplets; SIMD goes to instancing, expansion and bounds                          | Variable-font study, decision 3 revised |
+| Exact f64 instancing recommended                           | f32 accepted                                                                                              | Maintainer                              |
+| Re-instancing Inter full takes 0.13 ms                     | That is the instancing step; with composite expansion and bounds it is 0.26 ms                            | This page                               |
+| Slot corruption without the map is 47–49%                  | 46–49% on Inter full, 31–48% on Roboto Flex full                                                          | This page, from the study logs          |
+
 ## Decisions
 
-- [Outline stream format](decisions/outline-stream-format.md): the wire format, the GPU point layout and the em-space `outlineAt()` reader.
-- [Outline decoder in the core shaper](decisions/outline-decoder-in-core.md).
-- [Outline SIMD scope](decisions/outline-simd-scope.md): SIMD for instancing, expansion and bounds; scalar wire decoding; f32 instancing.
-- [Slug reads the shared outline points](decisions/slug-shared-outline-points.md): bands stay baked by default; compute decode is optional.
-- [Variable fonts in the outline stream](decisions/variable-font-outline-stream.md).
+| Decision                                                                          | Status   | #244 decisions | Summary                                                                                                              |
+| --------------------------------------------------------------------------------- | -------- | -------------- | -------------------------------------------------------------------------------------------------------------------- |
+| [Outline stream format](decisions/outline-stream-format.md)                       | Accepted | 2, 4, 9        | The wire format, the GPU point layout and the em-space, y-down `outlineAt()` reader.                                 |
+| [Outline decoder in the core shaper](decisions/outline-decoder-in-core.md)        | Accepted | 1, 7           | Required and always loaded; a WebGPU compute decoder is optional.                                                    |
+| [Outline SIMD scope](decisions/outline-simd-scope.md)                             | Accepted | 3 (revised)    | SIMD for instancing, expansion and bounds; scalar wire decoding; f32 instancing.                                     |
+| [Slug reads the shared outline points](decisions/slug-shared-outline-points.md)   | Proposed | 5, 6           | Gated on GPU shader speed parity. Baked, packed bands as the default is settled.                                     |
+| [Variable fonts in the outline stream](decisions/variable-font-outline-stream.md) | Accepted | 8              | In scope; order of operations and slot map fixed; delta layout, CFF2 method and variable-font bands still direction. |
 
 ## Open gates
 
@@ -266,7 +292,7 @@ All three need a raster identity rule for bakes made from the stream.
 - Line encoding in Slug: a midpoint control, or the reference's duplicated endpoint.
 - Whether u16 band references to point indices fit, and lazy band derivation for CJK.
 - Curves-in entry points for the Slug and bitmap bakers.
-- Browser timings.
+- Browser timings (all timings are Node 22).
 - One delta layout for TrueType and CFF2, and keeping phantom points for fonts without `HVAR`.
 - GPU instancing on real hardware.
 - avar2, VARC, and transformed or nested components.
