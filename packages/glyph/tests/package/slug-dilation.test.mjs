@@ -34,15 +34,73 @@ const CORNERS = [
 function orthographicRows(angle) {
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
+  return affineRows([
+    [cos, -sin],
+    [sin, cos],
+  ]);
+}
+
+/** Object space maps to pixels through the 2×2 `matrix`, projected orthographically. */
+function affineRows([[a, b], [c, e]]) {
   return {
-    row0: [(2 * cos) / VIEWPORT[0], (-2 * sin) / VIEWPORT[0], 0, 0],
-    row1: [(2 * sin) / VIEWPORT[1], (2 * cos) / VIEWPORT[1], 0, 0],
+    row0: [(2 * a) / VIEWPORT[0], (2 * b) / VIEWPORT[0], 0, 0],
+    row1: [(2 * c) / VIEWPORT[1], (2 * e) / VIEWPORT[1], 0, 0],
     row3: [0, 0, 0, 1],
   };
 }
 
-function toPixels([x, y], { row0, row1 }) {
-  return [((row0[0] * x + row0[1] * y) * VIEWPORT[0]) / 2, ((row1[0] * x + row1[1] * y) * VIEWPORT[1]) / 2];
+/**
+ * A plane of pixel units tilted by `angle` about the screen x axis, then turned by `turn` in its own plane, seen by a
+ * pinhole camera `distance` pixels away; w grows along both quad axes.
+ */
+function perspectiveRows(angle, turn, distance) {
+  const cos = Math.cos(turn);
+  const sin = Math.sin(turn);
+  const tilt = Math.cos(angle);
+  const depth = Math.sin(angle) / distance;
+  return {
+    row0: [(2 * cos) / VIEWPORT[0], (-2 * sin) / VIEWPORT[0], 0, 0],
+    row1: [(2 * sin * tilt) / VIEWPORT[1], (2 * cos * tilt) / VIEWPORT[1], 0, 0],
+    row3: [sin * depth, cos * depth, 0, 1],
+  };
+}
+
+const TRANSFORMS = [
+  { name: 'uniform', rows: orthographicRows(0) },
+  { name: 'uniform, rotated 30°', rows: orthographicRows(Math.PI / 6) },
+  {
+    name: 'stretched 4× along x',
+    rows: affineRows([
+      [4, 0],
+      [0, 1],
+    ]),
+  },
+  {
+    name: 'stretched 4× along y and sheared',
+    rows: affineRows([
+      [1, 0.75],
+      [0, 4],
+    ]),
+  },
+  { name: 'tilted 70°, turned 20°, in perspective', rows: perspectiveRows((7 * Math.PI) / 18, Math.PI / 9, 400) },
+];
+
+function toPixels([x, y], { row0, row1, row3 }) {
+  const w = row3[0] * x + row3[1] * y + row3[3];
+  return [
+    ((row0[0] * x + row0[1] * y + row0[3]) * VIEWPORT[0]) / (2 * w),
+    ((row1[0] * x + row1[1] * y + row1[3]) * VIEWPORT[1]) / (2 * w),
+  ];
+}
+
+/** Screen distance of `point` outside the projected line through `start` along object-space `direction`. */
+function distanceOutside(point, start, direction, outward, rows) {
+  const [sx, sy] = toPixels(start, rows);
+  const [ex, ey] = toPixels([start[0] + direction[0], start[1] + direction[1]], rows);
+  const [ox, oy] = toPixels([start[0] + outward[0], start[1] + outward[1]], rows);
+  const [px, py] = toPixels(point, rows);
+  const cross = (x, y) => (ex - sx) * (y - sy) - (ey - sy) * (x - sx);
+  return (Math.sign(cross(ox, oy)) * cross(px, py)) / Math.hypot(ex - sx, ey - sy);
 }
 
 /** The normal production callers pass: the corner's offset from the quad centre. */
@@ -82,32 +140,42 @@ const implementations = {
     referenceSlugDilate(position, normal, coordinate, inverseScale, rows.row0, rows.row1, rows.row3, VIEWPORT),
 };
 
-test('every corner moves exactly half a pixel past both adjacent edges, whatever the quad aspect', () => {
+test('every corner moves half a pixel past both adjacent edges, whatever the quad aspect or transform', () => {
   for (const [implementation, dilate] of Object.entries(implementations)) {
-    for (const angle of [0, Math.PI / 6]) {
-      const rows = orthographicRows(angle);
+    for (const { name, rows } of TRANSFORMS) {
       for (const box of INK_BOXES) {
         for (const pixelsPerEm of PIXELS_PER_EM) {
           const width = box.width * pixelsPerEm;
           const height = box.height * pixelsPerEm;
           for (const corner of CORNERS) {
             const position = [corner[0] * width, corner[1] * height];
-            const dilated = dilate(position, cornerNormal(corner, width, height), [0, 0], 1, rows);
-            // The quad's own axes, in pixels: displacement along each is the margin past the edge it crosses.
-            const offset = toPixels([dilated.position[0] - position[0], dilated.position[1] - position[1]], rows);
-            const xAxis = toPixels([1, 0], rows).map((value) => value / Math.hypot(...toPixels([1, 0], rows)));
-            const yAxis = toPixels([0, 1], rows).map((value) => value / Math.hypot(...toPixels([0, 1], rows)));
+            const outward = [corner[0] === 0 ? -1 : 1, corner[1] === 0 ? -1 : 1];
+            const dilated = dilate(position, cornerNormal(corner, width, height), [0, 0], 1, rows).position;
+            // A dilated quad edge is the screen segment between two dilated corners, so it clears the ink edge by at
+            // least the smaller of their two distances outside it.
             const margins = [
-              (offset[0] * xAxis[0] + offset[1] * xAxis[1]) * (corner[0] === 0 ? -1 : 1),
-              (offset[0] * yAxis[0] + offset[1] * yAxis[1]) * (corner[1] === 0 ? -1 : 1),
+              distanceOutside(dilated, position, [0, 1], [outward[0], 0], rows),
+              distanceOutside(dilated, position, [1, 0], [0, outward[1]], rows),
             ];
-            const label = `${implementation}, ${box.name} at ${pixelsPerEm} px/em, corner ${corner}, angle ${angle}`;
+            const label = `${implementation}, ${name}, ${box.name} at ${pixelsPerEm} px/em, corner ${corner}`;
             assert.ok(Math.abs(margins[0] - HALF_PIXEL) < TOLERANCE, `${label}: x margin ${margins[0]} px`);
             assert.ok(Math.abs(margins[1] - HALF_PIXEL) < TOLERANCE, `${label}: y margin ${margins[1]} px`);
           }
         }
       }
     }
+  }
+});
+
+test('an edge-on plane dilates by a finite amount', () => {
+  const rows = affineRows([
+    [1, 0],
+    [0, 0],
+  ]);
+  for (const [implementation, dilate] of Object.entries(implementations)) {
+    const { position, textureCoordinate } = dilate([8, 8], [1, 1], [0, 0], 1, rows);
+    for (const value of [...position, ...textureCoordinate])
+      assert.ok(Number.isFinite(value), `${implementation}: ${value}`);
   }
 });
 

@@ -2,13 +2,14 @@
 import { d, std } from 'typegpu';
 
 /**
- * Expand one glyph-quad corner by half a pixel along each quad axis, as Lengyel's
- * `SlugDilate` does for a `(±1, ±1)` corner normal.
+ * Expand one glyph-quad corner so the quad reaches half a pixel past both adjacent edges on screen.
  *
- * `outwardNormal` points out of the quad at this corner; only the sign of each
- * component is used, so the corner offset from the quad centre and `(±1, ±1)` are
- * equivalent. Coverage reaches zero half a pixel past a straight edge, so a smaller
- * margin on either axis clips antialiased edge pixels.
+ * Coverage reaches zero half a pixel past a straight edge, and the fragment shader measures that per axis, so each
+ * axis needs its own half-pixel margin. One step shared by both axes, as Lengyel's `SlugDilate` takes along the
+ * `(±1, ±1)` corner, gives that only under uniform scale: a stretched or tilted plane leaves one edge short.
+ *
+ * `outwardNormal` points out of the quad at this corner; only the sign of each component is used, so the corner
+ * offset from the quad centre and `(±1, ±1)` are equivalent.
  *
  * `xy` is the dilated plane position and `zw` the dilated glyph-em coordinate;
  * one vector keeps the whole vertex adjustment behind a single call.
@@ -26,20 +27,33 @@ export function slugDilate(
   'use gpu';
 
   const corner = std.sign(outwardNormal);
-  const normal = std.normalize(corner);
   const homogeneousW = std.dot(mvpRow3.xy, position) + mvpRow3.w;
-  const wGradient = std.dot(mvpRow3.xy, normal);
-  const projectedX =
-    (homogeneousW * std.dot(mvpRow0.xy, normal) - wGradient * (std.dot(mvpRow0.xy, position) + mvpRow0.w)) * viewport.x;
-  const projectedY =
-    (homogeneousW * std.dot(mvpRow1.xy, normal) - wGradient * (std.dot(mvpRow1.xy, position) + mvpRow1.w)) * viewport.y;
+  const clipX = std.dot(mvpRow0.xy, position) + mvpRow0.w;
+  const clipY = std.dot(mvpRow1.xy, position) + mvpRow1.w;
+  // Screen tangents of the quad's x and y edges at this corner, in pixels scaled by 2w².
+  const xTangent = d.vec2f(
+    (homogeneousW * mvpRow0.x - clipX * mvpRow3.x) * viewport.x,
+    (homogeneousW * mvpRow1.x - clipY * mvpRow3.x) * viewport.y,
+  );
+  const yTangent = d.vec2f(
+    (homogeneousW * mvpRow0.y - clipX * mvpRow3.y) * viewport.x,
+    (homogeneousW * mvpRow1.y - clipY * mvpRow3.y) * viewport.y,
+  );
+  const xLength = std.length(xTangent);
+  const yLength = std.length(yTangent);
+  const area = std.abs(xTangent.x * yTangent.y - xTangent.y * yTangent.x);
   const squaredW = homogeneousW * homogeneousW;
-  const projectedLengthSquared = projectedX * projectedX + projectedY * projectedY;
-  const denominator = projectedLengthSquared - squaredW * wGradient * wGradient;
-  // `distance` is the object-space step along the unit `normal` that covers half a pixel on screen; scaling the
-  // unnormalized `corner` by it gives half a pixel across each edge rather than along the diagonal.
-  const distance = (squaredW * (homogeneousW * wGradient + std.sqrt(projectedLengthSquared))) / denominator;
-  const offset = std.mul(distance, corner);
+  // Stepping `(mx, my)` along the quad axes puts the corner at m·area / (2w·|tangent|·w') pixels outside the edge each
+  // axis crosses, where `|tangent|` is the other edge's and w' is w at the dilated corner; solving both for half a
+  // pixel gives the shared denominator. Towards the horizon the exact steps grow without bound, so the denominator is
+  // held at half the area (at most twice the affine steps); the floor keeps a plane seen exactly edge-on finite.
+  const denominator = std.max(
+    std.max(area - homogeneousW * (corner.x * mvpRow3.x * yLength + corner.y * mvpRow3.y * xLength), area * 0.5),
+    1e-30,
+  );
+  const xStep = (yLength * squaredW) / denominator;
+  const yStep = (xLength * squaredW) / denominator;
+  const offset = d.vec2f(corner.x * xStep, corner.y * yStep);
 
   return d.vec4f(std.add(position, offset), std.add(textureCoordinate, std.mul(inverseScale, offset)));
 }
