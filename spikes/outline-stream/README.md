@@ -42,12 +42,21 @@ root solver and coverage. Only the curve fetch differs:
 From the repository root:
 
 ```sh
-node spikes/outline-stream/prepare.mjs          # writes spikes/outline-stream/out/ and out/index.json
+node spikes/outline-stream/prepare.mjs          # all three fixtures; --no-main skips the CLI Slug bake; or pass font paths
 node spikes/outline-stream/serve.mjs            # prints http://localhost:5178/gpu/ (PORT overrides)
-node spikes/outline-stream/cpu-bench.mjs        # CPU decode comparison
+node spikes/outline-stream/cpu-bench.mjs        # Inter by default; --font <path> --reps <n>; writes out/cpu/cpu-bench.json
 ```
 
-<!-- TODO(encoder agent): confirm the cpu-bench.mjs command line and flags; it did not exist when this was written. -->
+The encoder can also run alone:
+
+```sh
+(cd spikes/outline-stream/encoder && cargo +1.97.1 build --release)
+spikes/outline-stream/encoder/target/release/encoder <font> <out-prefix> [--unicodes U+0020-007E,U+00A0-00FF] [--triplet]
+```
+
+`prepare` writes `out/<name>.spike.{bin,json}` (full set), `out/<name>-latin.spike.*`, the main bake
+`out/<name>.glb` plus `out/<name>.slug.glb`, and `out/index.json`. Section offsets are in `meta.sections`, and the
+encoder's self-verify results are in each asset's `verify` field.
 
 Open the printed URL in Chrome (WebGPU and WebGL2), Safari (WebGL2, plus WebGPU where enabled) and Firefox (WebGL2,
 plus WebGPU where enabled). Pick a font and glyph set (`latin` is the Latin set the plan asks for) and press **Run

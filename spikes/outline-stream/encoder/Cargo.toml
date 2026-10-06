@@ -1,0 +1,23 @@
+[package]
+name = "outline-stream-encoder"
+description = "Temporary GPU spike asset encoder: Slug f16 curve texels (A) and i16 outline points (B) over one band set"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97.1"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "encoder"
+path = "src/main.rs"
+
+[dependencies]
+pmndrs-glyph-slug-core = { path = "../../../packages/glyph/rust/slug-core" }
+skrifa = { version = "=0.45.1", features = ["std"] }
+serde_json = "1.0.145"
+
+[profile.release]
+codegen-units = 1
+
+# Standalone: not a member of any repository workspace.
+[workspace]
