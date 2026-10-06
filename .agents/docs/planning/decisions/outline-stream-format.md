@@ -1,7 +1,7 @@
 ---
 type: Decision
 title: 'Outline stream format'
-description: 'Glyph outlines are stored as WOFF2-style triplet-coded TrueType-model points, decoded once into an i16 point buffer read three points at a time, and exposed through an em-space outlineAt() reader.'
+description: 'Glyph outlines are stored as WOFF2-style triplet-coded TrueType-model points, decoded once into an i16 point buffer read three points at a time, and exposed as em-space outlineAt() views (borrowed) and curve tuples (owned).'
 decision_status: Accepted
 decided: '2026-10-06'
 generated:
@@ -89,14 +89,17 @@ Earlier comments call this read "the stencil", in the numerical sense of a fixed
 
 ### `outlineAt()` API
 
-The em-space reader proposed in the [#235 API comment](https://github.com/pmndrs/glyph/pull/235#issuecomment-6009755243):
+Revised with the maintainer on 2026-10-06; the [#235 API comment](https://github.com/pmndrs/glyph/pull/235#issuecomment-6009755243) has the full proposal. There is **no reader object**. `withGlyphs` is written as `readGlyphs`, following #238.
 
 - **Coordinates:** em units (1.0 is the font size), origin at the glyph's pen position on the baseline, y down, like every other box the layout publishes. Place a point with `x = glyph.x + ex · glyph.fontSize` and `y = glyph.y + ey · glyph.fontSize`.
-- **Call:** `outlineAt(index, target?)` returns a `GlyphOutlineReader`. `createGlyphOutlineReader()` makes a caller-owned reader to reuse.
-- **Reader:** `fontHandle` and `glyphId` (equal keys mean identical outlines); typed-array views `points`, `contourEnds` and `segmentLines`; `contourCount`, `segmentCount`; `curveAt(segment, target?)` returning `[x0, y0, cx, cy, x1, y1]`; `isLine(segment)`; `copy()` for an owned outline. A line keeps a midpoint control in `points`, so code that ignores `segmentLines` still draws it.
-- **Scratch targets:** passing a reader and a curve makes the calls allocation-free, the same pattern as `Glyphs.getMatrixAt(index, target)`. Without a target, `outlineAt()` creates one small reader and copies no outline data.
-- **Lifetime:** a borrowed reader is valid inside the `withGlyphs()` callback until the next engine call. One reader holds one glyph.
-- **The stored format stays private.** The reader is filled from the decoded GPU points (divided by `unitsPerEm`, y negated), so this API doesn't change if the stored format does.
+- **Borrowed path:** `readGlyphs((glyphs) => glyphs.outlineAt(index, target?))` returns a plain `GlyphOutlineView`.
+  - Fields: `fontHandle`, `glyphId`, and typed-array views `points`, `contourEnds` and `segmentLines`. Equal keys mean identical outlines.
+  - The optional `target` is refilled, which saves only the holder allocation. The typed-array views are created on every call.
+  - There are no helper methods; callers read `segmentLines[s] === 1` for lines.
+  - The views expire with the callback, or at the next engine call.
+- **Owned path:** `text.glyphs().outlineAt(index)` returns caller-owned `GlyphOutlineContour[]`. Each curve is a `GlyphOutlineCurve` tuple `[x0, y0, cx, cy, x1, y1, isLine]`, so loops can branch on `isLine` without importing anything.
+- **Lines:** a line keeps its midpoint control in `points` and in the tuple, so code that ignores the line flag still draws it.
+- **The stored format stays private.** Both paths are filled from the decoded GPU points (divided by `unitsPerEm`, y negated), so this API doesn't change if the stored format does.
 
 **Points are stored exactly as the font stores them.**
 

@@ -27,7 +27,7 @@ sources:
     title: Bit-packed quadratic format proposal (pull-request comment)
   - id: api-comment
     resource: https://github.com/pmndrs/glyph/pull/235#issuecomment-6009755243
-    title: outlineAt() em-space reader proposal (pull-request comment)
+    title: outlineAt() em-space views and tuples proposal (pull-request comment)
   - id: slug-reference
     resource: https://github.com/EricLengyel/Slug
     title: Official Slug reference shaders (patent dedicated to the public domain; MIT or Apache-2.0)
@@ -314,13 +314,13 @@ The full reports below reproduce the study agents' reports as written. These lat
 
 ## Decisions
 
-| Decision                                                                          | Status   | #244 decisions | Summary                                                                                                              |
-| --------------------------------------------------------------------------------- | -------- | -------------- | -------------------------------------------------------------------------------------------------------------------- |
-| [Outline stream format](decisions/outline-stream-format.md)                       | Accepted | 2, 4, 9        | The wire format, the GPU point layout and the em-space, y-down `outlineAt()` reader.                                 |
-| [Outline decoder in the core shaper](decisions/outline-decoder-in-core.md)        | Accepted | 1, 7           | Required and always loaded; a WebGPU compute decoder is optional.                                                    |
-| [Outline SIMD scope](decisions/outline-simd-scope.md)                             | Accepted | 3 (revised)    | SIMD for instancing, expansion and bounds; scalar wire decoding; f32 instancing.                                     |
-| [Slug reads the shared outline points](decisions/slug-shared-outline-points.md)   | Proposed | 5, 6           | Gated on GPU shader speed parity. Baked, packed bands as the default is settled.                                     |
-| [Variable fonts in the outline stream](decisions/variable-font-outline-stream.md) | Accepted | 8              | In scope; order of operations and slot map fixed; delta layout, CFF2 method and variable-font bands still direction. |
+| Decision                                                                          | Status   | #244 decisions | Summary                                                                                                                   |
+| --------------------------------------------------------------------------------- | -------- | -------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| [Outline stream format](decisions/outline-stream-format.md)                       | Accepted | 2, 4, 9        | The wire format, the GPU point layout, and em-space, y-down `outlineAt()`: borrowed views and owned tuples with `isLine`. |
+| [Outline decoder in the core shaper](decisions/outline-decoder-in-core.md)        | Accepted | 1, 7           | Required and always loaded; a WebGPU compute decoder is optional.                                                         |
+| [Outline SIMD scope](decisions/outline-simd-scope.md)                             | Accepted | 3 (revised)    | SIMD for instancing, expansion and bounds; scalar wire decoding; f32 instancing.                                          |
+| [Slug reads the shared outline points](decisions/slug-shared-outline-points.md)   | Proposed | 5, 6           | Gated on GPU shader speed parity. Baked, packed bands as the default is settled.                                          |
+| [Variable fonts in the outline stream](decisions/variable-font-outline-stream.md) | Accepted | 8              | In scope; order of operations and slot map fixed; delta layout, CFF2 method and variable-font bands still direction.      |
 
 ## Open gates
 
