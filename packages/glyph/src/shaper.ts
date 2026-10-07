@@ -2,9 +2,8 @@ import type { RegisteredFont } from './font.js';
 import type { FontHandle } from './identity.js';
 import { getRegisteredFontData } from './internal/registered-font.js';
 import {
-  missingGlyphOutlinesError,
+  missingGlyphOutlinesMessage,
   viewStoredGlyphOutline,
-  type GlyphOutlineAbsence,
   type GlyphOutlineStore,
   type GlyphOutlineView,
 } from './glyph-outline.js';
@@ -45,8 +44,8 @@ export interface RuntimeShaper {
   disposeFont(font: RegisteredFont): void;
   /** @internal Fills `target` with views over the outline its font decoded when it loaded. */
   glyphOutline(fontHandle: number, glyphId: number, target?: GlyphOutlineView): GlyphOutlineView;
-  /** @internal The outlines the font behind `fontHandle` decoded when it loaded, or why it has none. */
-  glyphOutlineStore(fontHandle: number): GlyphOutlineStore | GlyphOutlineAbsence;
+  /** @internal The outlines the font behind `fontHandle` decoded when it loaded, if it was baked with them. */
+  glyphOutlineStore(fontHandle: number): GlyphOutlineStore | undefined;
   memoryReport(): RuntimeShaperMemoryReport;
   dispose(): void;
 }
@@ -141,20 +140,18 @@ class RuntimeShaperImpl implements RuntimeShaper {
     if (this.#registered.get(font.handle) === font) this.#disposeHandle(font.handle);
   }
 
-  glyphOutlineStore(fontHandle: number): GlyphOutlineStore | GlyphOutlineAbsence {
+  glyphOutlineStore(fontHandle: number): GlyphOutlineStore | undefined {
     this.#assertActive();
     const font = this.registry.getByHandle(fontHandle as FontHandle);
-    if (font === undefined) return 'unbaked';
-    const data = getRegisteredFontData(font);
-    return data.glyphOutlines ?? (data.glyphOutlinesSkipped === true ? 'skipped' : 'unbaked');
+    return font === undefined ? undefined : getRegisteredFontData(font).glyphOutlines;
   }
 
   glyphOutline(fontHandle: number, glyphId: number, target?: GlyphOutlineView): GlyphOutlineView {
     this.#assertActive();
     const font = this.registry.getByHandle(fontHandle as FontHandle);
     if (font === undefined) throw new Error(`the font of glyph ${glyphId} has been disposed`);
-    const store = this.glyphOutlineStore(fontHandle);
-    if (typeof store === 'string') throw missingGlyphOutlinesError(store);
+    const store = getRegisteredFontData(font).glyphOutlines;
+    if (store === undefined) throw new TypeError(missingGlyphOutlinesMessage);
     return viewStoredGlyphOutline(
       store,
       fontHandle,

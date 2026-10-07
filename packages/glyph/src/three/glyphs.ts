@@ -299,7 +299,7 @@ export class Glyphs extends THREE.Object3D {
    * them when it loaded. So this is a plain read: it makes no engine call, still returns the same contours after
    * the source `Text` re-lays out or changes text, and, like `glyphAt`, still reads after the font or this object is
    * disposed. Throws `RangeError` outside `0 <= index < count`, and `TypeError` when the glyph's font has no outlines
-   * because it was baked without them (or its load skipped them): outlines are optional.
+   * because it was baked without them: outlines are optional today and are planned to become required.
    */
   outlineAt(index: number): GlyphOutlineContour[] {
     this.#assertIndex(index);

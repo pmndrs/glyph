@@ -9,12 +9,7 @@ import {
   type GlyphLayoutInspection,
   type ParagraphLayoutSummary,
 } from '../layout.js';
-import {
-  missingGlyphOutlinesError,
-  storedGlyphOutline,
-  type GlyphOutlineAbsence,
-  type GlyphOutlineStore,
-} from '../glyph-outline.js';
+import { missingGlyphOutlinesMessage, storedGlyphOutline, type GlyphOutlineStore } from '../glyph-outline.js';
 import {
   assertConstraints,
   assertParagraphLayout,
@@ -717,12 +712,12 @@ class RenderPlannerImpl {
     this.#assertTextQueryable(state);
     const layout = state.inspection ?? this.#queryInspection(state);
     // The copy keeps each font's decoded outlines, so it reads them as data after the font or this handle is gone.
-    const stores = new Map<number, GlyphOutlineStore | GlyphOutlineAbsence>();
+    const stores = new Map<number, GlyphOutlineStore | undefined>();
     for (const fontHandle of layout.fontHandles)
       stores.set(fontHandle, this.#handleState._glyphOutlineStore(fontHandle));
     return copyGlyphLayoutInspection(layout, (index) => {
-      const store = stores.get(fontHandleAt(layout, index))!;
-      if (typeof store === 'string') throw missingGlyphOutlinesError(store);
+      const store = stores.get(fontHandleAt(layout, index));
+      if (store === undefined) throw new TypeError(missingGlyphOutlinesMessage);
       return storedGlyphOutline(store, layout.glyphIds[index]!).slice();
     });
   }

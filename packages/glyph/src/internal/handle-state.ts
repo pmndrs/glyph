@@ -1,7 +1,7 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { GlyphEngineStatusError, setGlyphEngineStatusErrorDetails, type GlyphEngineFault } from '../engine-error.js';
 import type { Font } from '../font.js';
-import type { GlyphOutlineAbsence, GlyphOutlineStore, GlyphOutlineView } from '../glyph-outline.js';
+import type { GlyphOutlineStore, GlyphOutlineView } from '../glyph-outline.js';
 import type { FontHandle } from '../identity.js';
 import { immutableFontStackFonts, type FontStack } from '../loaded-font.js';
 import type { RasterFormatMetadata } from '../config/raster-format.js';
@@ -329,8 +329,8 @@ export class GlyphHandleState {
     return this.#shaper.glyphOutline(fontHandle, glyphId, target);
   }
 
-  /** @internal The outlines the font behind `fontHandle` decoded when it loaded, or why it has none. */
-  _glyphOutlineStore(fontHandle: number): GlyphOutlineStore | GlyphOutlineAbsence {
+  /** @internal The outlines the font behind `fontHandle` decoded when it loaded, if it was baked with them. */
+  _glyphOutlineStore(fontHandle: number): GlyphOutlineStore | undefined {
     if (this.#disposed) throw new Error('Glyph handle state is disposed');
     return this.#shaper.glyphOutlineStore(fontHandle);
   }
