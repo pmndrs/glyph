@@ -28,14 +28,18 @@ export type RuntimeControlsProps = Omit<
   | 'onPaintOpacityPercent'
   | 'onPaintShadowEnabled'
   | 'onPaintStrokePercent'
+  | 'onShowColliders'
   | 'onShowGrid'
   | 'onShowLayoutBounds'
+  | 'onShowOutlines'
   | 'onWorkloadAmount'
   | 'paintOpacityPercent'
   | 'paintShadowEnabled'
   | 'paintStrokePercent'
+  | 'showColliders'
   | 'showGrid'
   | 'showLayoutBounds'
+  | 'showOutlines'
   | 'workloadAmount'
 > & {
   readonly onBeforeShowGrid: () => void;
@@ -112,7 +116,9 @@ export function RuntimeControls({ onBeforeShowGrid, onRuntimeControl, ...props }
         onBeforeShowGrid();
         changed(() => world.set(RuntimeViewControls, { showGrid }));
       }}
+      onShowColliders={(showColliders) => changed(() => world.set(RuntimeViewControls, { showColliders }))}
       onShowLayoutBounds={(showLayoutBounds) => changed(() => world.set(RuntimeViewControls, { showLayoutBounds }))}
+      onShowOutlines={(showOutlines) => changed(() => world.set(RuntimeViewControls, { showOutlines }))}
       onWorkloadAmount={debouncedWorkloadAmount}
     />
   );

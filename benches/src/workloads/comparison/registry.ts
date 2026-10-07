@@ -1,6 +1,7 @@
 import { billboardLabelsWorkload } from '../billboard-labels/scene';
 import { dynamicLayoutWorkload } from '../dynamic-layout/scene';
 import { editorialWorkload } from '../editorial/scene';
+import { glyphPhysicsWorkload } from '../glyph-physics/scene';
 import { iconGridWorkload } from '../icon-grid/scene';
 import { offAxis3dWorkload } from '../off-axis-3d/scene';
 import { paintEffectsWorkload } from '../paint-effects/scene';
@@ -22,6 +23,7 @@ export const COMPARISON_WORKLOADS = {
   'paint-effects': paintEffectsWorkload,
   'rich-text': richTextWorkload,
   editorial: editorialWorkload,
+  'glyph-physics': glyphPhysicsWorkload,
 } satisfies Record<ComparisonWorkloadId, ComparisonWorkloadDefinition>;
 
 export const COMPARISON_WORKLOAD_IDS = Object.freeze(

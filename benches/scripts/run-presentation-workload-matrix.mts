@@ -5,6 +5,7 @@ const selectedBackend = selectedArgument('--backend', ['webgpu', 'webgl2'] as co
 const selectedTechnique = selectedArgument('--technique', ['bitmap', 'mtsdf', 'slug'] as const);
 const workload = selectedArgument('--workload', [
   'editorial',
+  'glyph-physics',
   'text-ladder',
   'zoom-text',
   'icon-grid',

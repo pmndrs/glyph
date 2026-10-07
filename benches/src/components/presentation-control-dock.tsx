@@ -2,11 +2,13 @@ import type { ReactNode } from 'react';
 import {
   AlignHorizontalDistributeCenter,
   BoxSelect,
+  Boxes,
   CircleGauge,
   Droplets,
   Gauge,
   ListFilter,
   MoveHorizontal,
+  PenLine,
   Paintbrush,
   Pause,
   Play,
@@ -45,7 +47,9 @@ export interface PresentationControlDockProps {
   readonly paintStrokePercent: number;
   readonly showcaseFrame: AdvancedShapingFrame;
   readonly showcaseState: AdvancedShapingState;
+  readonly showColliders: boolean;
   readonly showLayoutBounds: boolean;
+  readonly showOutlines: boolean;
   readonly technique: RasterFormatName;
   readonly webgpu: boolean;
   readonly workload: string;
@@ -60,7 +64,9 @@ export interface PresentationControlDockProps {
   readonly onPaintShadowEnabled: (value: boolean) => void;
   readonly onPaintStrokePercent: (value: number) => void;
   readonly onShowcase: (command: AdvancedShapingCommand) => void;
+  readonly onShowColliders: (value: boolean) => void;
   readonly onShowLayoutBounds: (value: boolean) => void;
+  readonly onShowOutlines: (value: boolean) => void;
   readonly onWorkloadAmount: (value: number) => void;
 }
 
@@ -147,6 +153,24 @@ function WorkloadControls(props: PresentationControlDockProps) {
         key="layout-bounds"
         label="Layout bounds"
         onChange={props.onShowLayoutBounds}
+      />,
+    );
+  }
+  if (props.workload === 'glyph-physics') {
+    controls.push(
+      <ToggleControl
+        checked={props.showColliders}
+        icon={<Boxes />}
+        key="colliders"
+        label="Colliders"
+        onChange={props.onShowColliders}
+      />,
+      <ToggleControl
+        checked={props.showOutlines}
+        icon={<PenLine />}
+        key="outlines"
+        label="Outlines"
+        onChange={props.onShowOutlines}
       />,
     );
   }
@@ -524,6 +548,7 @@ function workloadHasLayoutWidth(workload: string): boolean {
     workload === 'dynamic-layout' ||
     workload === 'off-axis-3d' ||
     workload === 'paint-effects' ||
+    workload === 'glyph-physics' ||
     workload === 'paragraph-stress' ||
     workload === 'rich-text'
   );
@@ -542,6 +567,7 @@ function workloadHasAnimation(workload: string): boolean {
     workload === 'zoom-text' ||
     workload === 'text-ladder' ||
     workload === 'dynamic-layout' ||
+    workload === 'glyph-physics' ||
     workload === 'paragraph-stress' ||
     workload === 'rich-text'
   );
@@ -551,6 +577,8 @@ function workloadAmountLabel(workload: string): string | undefined {
   switch (workload) {
     case 'billboard-labels':
       return 'Label density';
+    case 'glyph-physics':
+      return 'Glyph count';
     case 'off-axis-3d':
       return 'Perspective intensity';
     case 'dynamic-layout':

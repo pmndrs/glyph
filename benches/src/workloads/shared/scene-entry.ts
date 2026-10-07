@@ -33,6 +33,12 @@ export interface ComparisonWorkloadEntry {
   readonly role: 'primary' | 'secondary';
   virtualIconIndex?: number;
   disposed?: boolean;
+  /** Releases resources the entry owns beyond its Text and layout bounds; the host calls it before disposing the Text. */
+  readonly dispose?: () => void;
+  /** A subtree holding draws the entry created itself, such as detached `Glyphs`, which the host counts with the realized draws. */
+  readonly detachedRoot?: THREE.Object3D;
+  /** Live simulation counters, for an entry that runs a physics world. */
+  readonly physics?: { readonly bodyCount: number; readonly stepCount: number };
   readonly alignment?: 'start' | 'center' | 'end';
   readonly animationPhase?: number;
   lastPaintFrame?: number;

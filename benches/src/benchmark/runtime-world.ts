@@ -11,8 +11,10 @@ import type { HarnessLayout } from './url-state';
 export type RuntimeLiveStats = BitmapTextLiveStats | MtsdfTextLiveStats | SlugTextLiveStats;
 
 export const RuntimeViewControls = trait({
+  showColliders: false,
   showGrid: true,
   showLayoutBounds: true,
+  showOutlines: false,
 });
 
 export const RuntimeLayoutControls = trait({
@@ -62,8 +64,10 @@ export function defaultRuntimeWorkloadAmountForWorkload(workload: string): numbe
 export function resetRuntimeControlsForWorkload(world: World, workload: string, layout: HarnessLayout): void {
   const defaults = runtimeDefaultsForWorkload(workload, layout);
   world.set(RuntimeViewControls, {
+    showColliders: defaults.showColliders,
     showGrid: defaults.showGrid,
     showLayoutBounds: defaults.showLayoutBounds,
+    showOutlines: defaults.showOutlines,
   });
   world.set(RuntimeLayoutControls, {
     fontSize: defaults.fontSize,

@@ -126,7 +126,11 @@ export type ComparisonWorkloadStats = RuntimeLiveStats & {
   readonly appliedPaintOpacity: number;
   readonly appliedPaintShadowEnabled: boolean;
   readonly appliedPaintStrokeWidth: number;
+  readonly appliedShowColliders: boolean;
   readonly appliedShowLayoutBounds: boolean;
+  readonly appliedShowOutlines: boolean;
+  readonly physicsBodyCount: number;
+  readonly physicsStepCount: number;
   readonly reflowCount: number;
   readonly lastReflowMs: number;
   readonly reflowTimings: TextUpdateTimingSummary;
@@ -177,8 +181,10 @@ export interface ComparisonWorkloadPersistentSceneOptions {
   readonly paintOpacity: number;
   readonly paintShadowEnabled: boolean;
   readonly paintStrokeWidth: number;
+  readonly showColliders: boolean;
   readonly showGrid: boolean;
   readonly showLayoutBounds: boolean;
+  readonly showOutlines: boolean;
   readonly textLadderExitEnabled: boolean;
   readonly slugBakedArtifact?: BakedSlugArtifactSource;
   readonly technique: RasterFormatName;
@@ -204,6 +210,8 @@ interface MutableVisibleEntryMetrics {
   layoutWidth: number;
   lineCount: number;
   missingGlyphCount: number;
+  physicsBodyCount: number;
+  physicsStepCount: number;
   sourceTextLength: number;
 }
 
@@ -387,6 +395,8 @@ async function createComparisonWorkloadRuntime(
     layoutWidth: 0,
     lineCount: 0,
     missingGlyphCount: 0,
+    physicsBodyCount: 0,
+    physicsStepCount: 0,
     sourceTextLength: 0,
   };
   const visibleGeometryScratch = new Set<THREE.InstancedBufferGeometry>();
@@ -586,6 +596,7 @@ async function createComparisonWorkloadRuntime(
       const workloadChanged = next.workload !== configuration.workload;
       const nextCamera = workloadChanged ? createWorkloadCamera(next.workload, width, height) : camera;
       const nextCompanionFonts = await ensureCompanionFonts(next.workload);
+      await comparisonWorkloadDefinition(next.workload).prepare?.();
       const commitRevision = ++revision;
       const readyStarted = performance.now();
       const nextIconGridInstance =
@@ -1011,7 +1022,11 @@ async function createComparisonWorkloadRuntime(
           appliedPaintOpacity: configuration.paintOpacity,
           appliedPaintShadowEnabled: technique === 'mtsdf' && configuration.paintShadowEnabled,
           appliedPaintStrokeWidth: technique === 'mtsdf' ? configuration.paintStrokeWidth : 0,
+          appliedShowColliders: configuration.showColliders,
           appliedShowLayoutBounds: configuration.showLayoutBounds,
+          appliedShowOutlines: configuration.showOutlines,
+          physicsBodyCount: visibleEntryMetrics.physicsBodyCount,
+          physicsStepCount: visibleEntryMetrics.physicsStepCount,
           reflowCount,
           lastReflowMs,
           reflowTimings: reflowTelemetry.summary(),
@@ -1626,6 +1641,9 @@ function validateConfiguration(configuration: ComparisonWorkloadConfiguration): 
   if (typeof configuration.showLayoutBounds !== 'boolean') {
     throw new TypeError('comparison workload layout-bounds visibility must be boolean');
   }
+  if (typeof configuration.showColliders !== 'boolean' || typeof configuration.showOutlines !== 'boolean') {
+    throw new TypeError('comparison workload collider overlay visibility must be boolean');
+  }
   if (typeof configuration.showGrid !== 'boolean') {
     throw new TypeError('comparison workload canvas-grid visibility must be boolean');
   }
@@ -1638,6 +1656,7 @@ function validateConfiguration(configuration: ComparisonWorkloadConfiguration): 
 function disposeEntries(entries: readonly WorkloadEntry[]): void {
   for (const entry of entries) {
     entry.disposed = true;
+    entry.dispose?.();
     entry.text.dispose();
     entry.labelText?.dispose();
     entry.bounds?.geometry.dispose();
@@ -1665,12 +1684,19 @@ function measureVisibleEntries(
   metrics.layoutWidth = 0;
   metrics.lineCount = 0;
   metrics.missingGlyphCount = 0;
+  metrics.physicsBodyCount = 0;
+  metrics.physicsStepCount = 0;
   metrics.sourceTextLength = 0;
   geometries.clear();
   // Renderer-owned draws are siblings of the authored Text/TextGroup tree beneath the Glyph root's draw object.
   // Traverse that realized tree once; the authored batch root intentionally contains no renderer meshes.
   measureVisibleObject(drawRoot, metrics, geometries);
   for (const entry of entries) {
+    if (entry.detachedRoot !== undefined) measureVisibleObject(entry.detachedRoot, metrics, geometries);
+    if (entry.physics !== undefined) {
+      metrics.physicsBodyCount += entry.physics.bodyCount;
+      metrics.physicsStepCount += entry.physics.stepCount;
+    }
     if (!entry.node.visible) continue;
     measureVisibleLayout(committedTextMetrics(entry.text), zoomScale, metrics);
     if (entry.labelText !== undefined) measureVisibleLayout(committedTextMetrics(entry.labelText), zoomScale, metrics);
@@ -1690,6 +1716,8 @@ function measureIconGridRenderMetrics(
   metrics.layoutWidth = 0;
   metrics.lineCount = 0;
   metrics.missingGlyphCount = 0;
+  metrics.physicsBodyCount = 0;
+  metrics.physicsStepCount = 0;
   metrics.sourceTextLength = 0;
   geometries.clear();
   measureVisibleObject(drawRoot, metrics, geometries);

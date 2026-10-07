@@ -34,7 +34,9 @@ export interface ComparisonWorkloadViewportProps {
   readonly paintShadowEnabled: boolean;
   readonly paintStrokeWidth: number;
   readonly presentationPreset: PresentationPreset | undefined;
+  readonly showColliders: boolean;
   readonly showLayoutBounds: boolean;
+  readonly showOutlines: boolean;
   readonly suppressLoading: boolean;
   readonly stats: ComparisonWorkloadStats | undefined;
   readonly surfaceAnchorRef: RefObject<HTMLDivElement | null>;
@@ -87,7 +89,7 @@ function comparisonViewportEvidence({
     'data-layout-width': stats?.layoutWidth,
     'data-content-inset': BENCHMARK_CONTENT_INSET,
     'data-content-min-width':
-      workload === 'text-ladder' || workload === 'icon-grid' || workload === 'zoom-text'
+      workload === 'text-ladder' || workload === 'icon-grid' || workload === 'zoom-text' || workload === 'glyph-physics'
         ? undefined
         : (workload === 'dynamic-layout' ? 1_000 : BENCHMARK_CONTENT_MINIMUM_VIEWPORT_WIDTH) * layoutWidthRatio,
     'data-content-policy':
@@ -138,6 +140,10 @@ function comparisonViewportEvidence({
         stats.appliedFontFixture !== requestedFontFixture),
     'data-layout-bounds-visible':
       stats?.workload === 'dynamic-layout' ? String(stats.appliedShowLayoutBounds) : undefined,
+    'data-colliders-visible': stats?.workload === 'glyph-physics' ? String(stats.appliedShowColliders) : undefined,
+    'data-outlines-visible': stats?.workload === 'glyph-physics' ? String(stats.appliedShowOutlines) : undefined,
+    'data-physics-bodies': stats?.workload === 'glyph-physics' ? stats.physicsBodyCount : undefined,
+    'data-physics-steps': stats?.workload === 'glyph-physics' ? stats.physicsStepCount : undefined,
     'data-reflow-count': stats?.reflowCount,
     'data-reflow-ms': stats?.lastReflowMs,
     'data-reflow-median-ms': stats?.reflowTimings.medianTotalMs,
@@ -202,7 +208,9 @@ export function ComparisonWorkloadViewport({
   paintShadowEnabled,
   paintStrokeWidth,
   presentationPreset,
+  showColliders,
   showLayoutBounds,
+  showOutlines,
   suppressLoading,
   stats,
   surfaceAnchorRef,
@@ -249,8 +257,10 @@ export function ComparisonWorkloadViewport({
       paintOpacity,
       paintShadowEnabled,
       paintStrokeWidth,
+      showColliders,
       showGrid: grid,
       showLayoutBounds,
+      showOutlines,
       textLadderExitEnabled: demoMode && workload === 'text-ladder',
       workload,
     }),
@@ -342,7 +352,9 @@ export function ComparisonWorkloadViewport({
     paintStrokeWidth,
     presentationPreset,
     grid,
+    showColliders,
     showLayoutBounds,
+    showOutlines,
     workload,
   ]);
 

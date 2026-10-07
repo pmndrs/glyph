@@ -16,6 +16,12 @@ const backend = presentationBackend(process.env.PRESENTATION_BACKEND);
 const shaders = presentationShaders(process.env.PRESENTATION_SHADERS);
 const shaderQuery = shaders === 'typegpu' ? '&shaders=typegpu' : '';
 const screenshotDirectory = process.env.PRESENTATION_SCREENSHOT_DIR;
+const physicsOverlay = presentationPhysicsOverlay(process.env.PRESENTATION_PHYSICS_OVERLAY);
+/** Simulated steps after which the dropped paragraph has landed and settled, so a frozen frame is reproducible. */
+const physicsSettledSteps = Number(process.env.PRESENTATION_PHYSICS_STEPS ?? 330);
+/** Optional review scale: the rendered size in CSS px and the glyph-count percentage the frozen frame is taken at. */
+const physicsFontSize = optionalNumber(process.env.PRESENTATION_PHYSICS_FONT_SIZE);
+const physicsGlyphPercent = optionalNumber(process.env.PRESENTATION_PHYSICS_GLYPHS);
 if (screenshotDirectory !== undefined) await mkdir(screenshotDirectory, { recursive: true });
 const server = await createServer({ root, server: { host: LOOPBACK_HOST, port: await selectLoopbackPort() } });
 await server.listen();
@@ -83,6 +89,14 @@ const allWorkloads = [
     fontSize: 26,
     layoutWidthRatio: 0.82,
     amount: 50,
+    camera: 'orthographic',
+  },
+  {
+    id: 'glyph-physics',
+    label: 'Glyph physics',
+    fontSize: 28,
+    layoutWidthRatio: 0.82,
+    amount: 30,
     camera: 'orthographic',
   },
 ] as const;
@@ -204,6 +218,7 @@ try {
       console.log('presentation-workload-reflow', workload.id, JSON.stringify(reflow));
     }
     await waitForSettledWorkload(page, workload, backend, true);
+    if (workload.id === 'glyph-physics') await assertGlyphPhysicsSimulating(page);
     const retainedCanvas = await page.evaluate(() => {
       const scope = globalThis as typeof globalThis & { presentationProbeCanvas: Element | undefined };
       return scope.presentationProbeCanvas === document.querySelector('canvas[data-configured-renderer-active="true"]');
@@ -213,6 +228,7 @@ try {
       throw new Error(`${workload.id} did not retain exactly one configured renderer`);
     }
     if (screenshotDirectory !== undefined) {
+      if (workload.id === 'glyph-physics') await freezeGlyphPhysics(page, physicsOverlay);
       if (workload.id === 'editorial') {
         await page.getByRole('button', { name: 'Animation: ON', exact: true }).click();
         const animation = page.getByRole('switch', { name: 'Animate', exact: true });
@@ -225,12 +241,16 @@ try {
         await page.getByRole('switch', { name: 'Animate', exact: true }).waitFor({ state: 'hidden' });
       }
       await page.screenshot({
-        path: resolvePath(screenshotDirectory, `${backend}-${technique}-${workload.id}.png`),
+        path: resolvePath(
+          screenshotDirectory,
+          `${backend}-${technique}-${workload.id}${workload.id === 'glyph-physics' ? `-${physicsOverlay}` : ''}.png`,
+        ),
       });
       if (workload.id === 'editorial') {
         await page.getByRole('button', { name: 'Animation: OFF', exact: true }).click();
         await page.getByRole('switch', { name: 'Animate', exact: true }).click();
       }
+      if (workload.id === 'glyph-physics') await resumeGlyphPhysics(page);
     }
   }
   if (technique === 'bitmap') {
@@ -381,6 +401,95 @@ async function assertCanvasHandoff(page: Page, label: string, expectedBackend: P
   }
 }
 
+type PhysicsOverlay = 'off' | 'colliders' | 'outlines' | 'both';
+
+function presentationPhysicsOverlay(value: string | undefined): PhysicsOverlay {
+  if (value === undefined || value === 'off') return 'off';
+  if (value === 'colliders' || value === 'outlines' || value === 'both') return value;
+  throw new RangeError(`PRESENTATION_PHYSICS_OVERLAY must be off, colliders, outlines, or both; received ${value}`);
+}
+
+/** The simulation advanced real physics steps over real bodies, as reported by the workload itself. */
+async function assertGlyphPhysicsSimulating(page: Page): Promise<void> {
+  await page.waitForFunction(() => {
+    const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
+    return Number(viewport?.dataset.physicsBodies) > 0 && Number(viewport?.dataset.physicsSteps) > 0;
+  });
+}
+
+/** Waits for the settled step count, pauses the simulation there, and applies the requested wireframe overlays. */
+async function freezeGlyphPhysics(page: Page, overlay: PhysicsOverlay): Promise<void> {
+  if (physicsFontSize !== undefined) await setDockSlider(page, 'Rendered size', 8, physicsFontSize);
+  if (physicsGlyphPercent !== undefined) await setDockSlider(page, 'Glyph count', 0, physicsGlyphPercent);
+  // A rebuilt scene restarts its step counter, so the settled-step wait below counts from the review configuration.
+  await page.waitForFunction(
+    ({ size, percent }) => {
+      const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
+      return (
+        viewport?.dataset.presentationPending === 'false' &&
+        (size === undefined || Number(viewport.dataset.appliedFontSize) === size) &&
+        (percent === undefined || Number(viewport.dataset.appliedWorkloadAmount) === percent)
+      );
+    },
+    { percent: physicsGlyphPercent, size: physicsFontSize },
+  );
+  await page.waitForFunction(
+    (steps) =>
+      Number(document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]')?.dataset.physicsSteps) >=
+      steps,
+    physicsSettledSteps,
+  );
+  await toggleDockSwitch(page, 'Animation: ON', 'Animate');
+  await page.waitForFunction(() => {
+    const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
+    return viewport?.dataset.animationEnabled === 'false' && viewport.dataset.presentationPending === 'false';
+  });
+  const wantColliders = overlay === 'colliders' || overlay === 'both';
+  const wantOutlines = overlay === 'outlines' || overlay === 'both';
+  if (wantColliders) await toggleDockSwitch(page, 'Colliders: OFF', 'Colliders');
+  if (wantOutlines) await toggleDockSwitch(page, 'Outlines: OFF', 'Outlines');
+  await page.waitForFunction(
+    ({ colliders, outlines }) => {
+      const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
+      return (
+        viewport?.dataset.collidersVisible === String(colliders) &&
+        viewport.dataset.outlinesVisible === String(outlines)
+      );
+    },
+    { colliders: wantColliders, outlines: wantOutlines },
+  );
+}
+
+async function resumeGlyphPhysics(page: Page): Promise<void> {
+  await toggleDockSwitch(page, 'Animation: OFF', 'Animate');
+}
+
+function optionalNumber(value: string | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) throw new RangeError(`expected a number, received ${value}`);
+  return parsed;
+}
+
+/** Sets a dock range control by keyboard: Home to its minimum, then one step per arrow press. */
+async function setDockSlider(page: Page, label: string, minimum: number, value: number): Promise<void> {
+  await page.getByRole('button', { name: new RegExp(`^${label}: `) }).click();
+  const slider = page.locator('[data-slot="slider-thumb"] input[type="range"]');
+  await slider.focus();
+  await page.keyboard.press('Home');
+  for (let step = minimum; step < value; step += 1) await page.keyboard.press('ArrowRight');
+  await page.mouse.click(1_200, 680);
+  await slider.waitFor({ state: 'hidden' });
+}
+
+/** Opens one dock popover, flips its switch, and closes it again by clicking empty canvas. */
+async function toggleDockSwitch(page: Page, triggerName: string, switchName: string): Promise<void> {
+  await page.getByRole('button', { name: triggerName, exact: true }).click();
+  await page.getByRole('switch', { name: switchName, exact: true }).click();
+  await page.mouse.click(1_200, 680);
+  await page.getByRole('switch', { name: switchName, exact: true }).waitFor({ state: 'hidden' });
+}
+
 function presentationFormat(value: string | undefined): 'bitmap' | 'mtsdf' | 'slug' {
   if (value === undefined || value === 'mtsdf') return 'mtsdf';
   if (value === 'bitmap' || value === 'slug') return value;
@@ -462,7 +571,9 @@ async function assertPresentationRemainsVisible(
   // Full-page capture can perturb a hardware-composited canvas on some Chromium/macOS combinations. Keep cadence
   // monitoring capture-free, then take one bounded headless proof after the workload has survived the interval.
   const screenshot = await page.screenshot();
-  const visibleInkPixels = await visiblePresentationInkPixels(page, screenshot.toString('base64'));
+  // Glyph physics ends each drop as a pile along the floor, below the text workloads' crop.
+  const crop = workload === 'glyph-physics' ? ([112, 480, 900, 200] as const) : ([112, 88, 680, 540] as const);
+  const visibleInkPixels = await visiblePresentationInkPixels(page, screenshot.toString('base64'), crop);
   if (visibleInkPixels < minimumRequiredInkPixels) {
     throw new Error(`${workload} rendered only ${String(visibleInkPixels)} visible foreground pixels`);
   }
@@ -487,24 +598,31 @@ interface CanvasEvidence {
 
 type PresentationBackend = 'webgpu' | 'webgl2';
 
-async function visiblePresentationInkPixels(page: Page, screenshotBase64: string): Promise<number> {
-  return page.evaluate(async (encoded) => {
-    const image = new Image();
-    image.src = `data:image/png;base64,${encoded}`;
-    await image.decode();
-    const canvas = document.createElement('canvas');
-    canvas.width = image.width;
-    canvas.height = image.height;
-    const context = canvas.getContext('2d');
-    if (context === null) throw new Error('Presentation screenshot did not expose a 2D pixel context');
-    context.drawImage(image, 0, 0);
-    const crop = context.getImageData(112, 88, 680, 540).data;
-    let visibleInkPixels = 0;
-    for (let offset = 0; offset < crop.length; offset += 4) {
-      if (Math.max(crop[offset] ?? 0, crop[offset + 1] ?? 0, crop[offset + 2] ?? 0) >= 110) {
-        visibleInkPixels += 1;
+async function visiblePresentationInkPixels(
+  page: Page,
+  screenshotBase64: string,
+  crop: readonly [x: number, y: number, width: number, height: number],
+): Promise<number> {
+  return page.evaluate(
+    async ({ cropRegion, encoded }) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${encoded}`;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext('2d');
+      if (context === null) throw new Error('Presentation screenshot did not expose a 2D pixel context');
+      context.drawImage(image, 0, 0);
+      const pixels = context.getImageData(...cropRegion).data;
+      let visibleInkPixels = 0;
+      for (let offset = 0; offset < pixels.length; offset += 4) {
+        if (Math.max(pixels[offset] ?? 0, pixels[offset + 1] ?? 0, pixels[offset + 2] ?? 0) >= 110) {
+          visibleInkPixels += 1;
+        }
       }
-    }
-    return visibleInkPixels;
-  }, screenshotBase64);
+      return visibleInkPixels;
+    },
+    { cropRegion: crop, encoded: screenshotBase64 },
+  );
 }

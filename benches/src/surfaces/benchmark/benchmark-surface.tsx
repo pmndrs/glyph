@@ -32,7 +32,9 @@ export interface BenchmarkSurfaceProps {
   readonly paintStrokePercent: number;
   readonly presentation: 'main' | 'presentation';
   readonly presentationPreset: PresentationPreset | undefined;
+  readonly showColliders: boolean;
   readonly showLayoutBounds: boolean;
+  readonly showOutlines: boolean;
   readonly workloadAmount: number;
   readonly showcaseFrame: AdvancedShapingFrame;
   readonly stats: RuntimeLiveStats | undefined;
@@ -57,7 +59,9 @@ export function BenchmarkSurface({
   paintStrokePercent,
   presentation,
   presentationPreset,
+  showColliders,
   showLayoutBounds,
+  showOutlines,
   workloadAmount,
   showcaseFrame,
   stats,
@@ -102,7 +106,9 @@ export function BenchmarkSurface({
         paintShadowEnabled={paintShadowEnabled}
         paintStrokeWidth={paintStrokePercent / 100}
         presentationPreset={presentationPreset}
+        showColliders={showColliders}
         showLayoutBounds={showLayoutBounds}
+        showOutlines={showOutlines}
         stats={comparisonStats}
         technique={technique}
         workload={comparisonWorkload}

@@ -47,6 +47,8 @@ function workloadAmountLabel(workload: string, amount: number): string | undefin
       return `Perspective intensity · ${amount}%`;
     case 'dynamic-layout':
       return `Reflow amplitude · ${amount}%`;
+    case 'glyph-physics':
+      return `Glyph count · ${amount}%`;
     case 'paragraph-stress':
       return `Text volume · ${amount}%`;
     case 'paint-effects':
@@ -62,6 +64,7 @@ function workloadHasLayoutWidth(workload: string): boolean {
   switch (workload) {
     case 'benchmark-ipsum':
     case 'dynamic-layout':
+    case 'glyph-physics':
     case 'off-axis-3d':
     case 'paint-effects':
     case 'paragraph-stress':
@@ -150,8 +153,10 @@ export interface ControlsProps {
   readonly samples: number;
   readonly showcaseFrame: AdvancedShapingFrame;
   readonly showcaseState: AdvancedShapingState;
+  readonly showColliders: boolean;
   readonly showGrid: boolean;
   readonly showLayoutBounds: boolean;
+  readonly showOutlines: boolean;
   readonly warmup: number;
   readonly webgpu: boolean;
   readonly onBackend: (backend: GraphicsBackend) => void;
@@ -172,8 +177,10 @@ export interface ControlsProps {
   readonly onWorkloadAmount: (value: number) => void;
   readonly onSamples: (value: number) => void;
   readonly onShowcase: (command: AdvancedShapingCommand) => void;
+  readonly onShowColliders: (value: boolean) => void;
   readonly onShowGrid: (value: boolean) => void;
   readonly onShowLayoutBounds: (value: boolean) => void;
+  readonly onShowOutlines: (value: boolean) => void;
   readonly onWarmup: (value: number) => void;
 }
 
@@ -192,7 +199,9 @@ export function Controls(props: ControlsProps) {
         paintStrokePercent={props.paintStrokePercent}
         showcaseFrame={props.showcaseFrame}
         showcaseState={props.showcaseState}
+        showColliders={props.showColliders}
         showLayoutBounds={props.showLayoutBounds}
+        showOutlines={props.showOutlines}
         technique={props.technique}
         webgpu={props.webgpu}
         workload={props.workload}
@@ -207,7 +216,9 @@ export function Controls(props: ControlsProps) {
         onPaintShadowEnabled={props.onPaintShadowEnabled}
         onPaintStrokePercent={props.onPaintStrokePercent}
         onShowcase={props.onShowcase}
+        onShowColliders={props.onShowColliders}
         onShowLayoutBounds={props.onShowLayoutBounds}
+        onShowOutlines={props.onShowOutlines}
         onWorkloadAmount={props.onWorkloadAmount}
       />
     );
@@ -240,7 +251,9 @@ function StandardControls(props: ControlsProps) {
           paintOpacityPercent={props.paintOpacityPercent}
           paintShadowEnabled={props.paintShadowEnabled}
           paintStrokePercent={props.paintStrokePercent}
+          showColliders={props.showColliders}
           showLayoutBounds={props.showLayoutBounds}
+          showOutlines={props.showOutlines}
           technique={props.technique}
           workload={props.workload}
           workloadAmount={props.workloadAmount}
@@ -251,7 +264,9 @@ function StandardControls(props: ControlsProps) {
           onPaintOpacityPercent={props.onPaintOpacityPercent}
           onPaintShadowEnabled={props.onPaintShadowEnabled}
           onPaintStrokePercent={props.onPaintStrokePercent}
+          onShowColliders={props.onShowColliders}
           onShowLayoutBounds={props.onShowLayoutBounds}
+          onShowOutlines={props.onShowOutlines}
           onWorkloadAmount={props.onWorkloadAmount}
         />
       )}
@@ -456,7 +471,9 @@ function LiveWorkloadControls({
   paintOpacityPercent,
   paintShadowEnabled,
   paintStrokePercent,
+  showColliders,
   showLayoutBounds,
+  showOutlines,
   technique,
   workload,
   workloadAmount,
@@ -467,7 +484,9 @@ function LiveWorkloadControls({
   onPaintOpacityPercent,
   onPaintShadowEnabled,
   onPaintStrokePercent,
+  onShowColliders,
   onShowLayoutBounds,
+  onShowOutlines,
   onWorkloadAmount,
 }: {
   readonly animationEnabled: boolean;
@@ -477,7 +496,9 @@ function LiveWorkloadControls({
   readonly paintOpacityPercent: number;
   readonly paintShadowEnabled: boolean;
   readonly paintStrokePercent: number;
+  readonly showColliders: boolean;
   readonly showLayoutBounds: boolean;
+  readonly showOutlines: boolean;
   readonly technique: RasterFormatName;
   readonly workload: string;
   readonly workloadAmount: number;
@@ -488,7 +509,9 @@ function LiveWorkloadControls({
   readonly onPaintOpacityPercent: (value: number) => void;
   readonly onPaintShadowEnabled: (value: boolean) => void;
   readonly onPaintStrokePercent: (value: number) => void;
+  readonly onShowColliders: (value: boolean) => void;
   readonly onShowLayoutBounds: (value: boolean) => void;
+  readonly onShowOutlines: (value: boolean) => void;
   readonly onWorkloadAmount: (value: number) => void;
 }) {
   const amountLabel = workloadAmountLabel(workload, workloadAmount);
@@ -539,6 +562,7 @@ function LiveWorkloadControls({
         workload === 'zoom-text' ||
         workload === 'text-ladder' ||
         workload === 'dynamic-layout' ||
+        workload === 'glyph-physics' ||
         workload === 'paragraph-stress' ||
         workload === 'rich-text') && (
         <>
@@ -556,6 +580,12 @@ function LiveWorkloadControls({
       )}
       {workload === 'dynamic-layout' && (
         <Toggle checked={showLayoutBounds} label="Show layout bounds" onChange={onShowLayoutBounds} />
+      )}
+      {workload === 'glyph-physics' && (
+        <>
+          <Toggle checked={showColliders} label="Show collider wireframes" onChange={onShowColliders} />
+          <Toggle checked={showOutlines} label="Show source outlines" onChange={onShowOutlines} />
+        </>
       )}
       {(workload === 'paint-effects' || workload === 'rich-text') && (
         <>

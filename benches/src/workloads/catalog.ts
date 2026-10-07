@@ -4,6 +4,7 @@ import { billboardLabelsDefinition } from './billboard-labels/definition';
 import type { ComparisonWorkloadId } from './comparison/contracts';
 import { dynamicLayoutDefinition } from './dynamic-layout/definition';
 import { editorialDefinition } from './editorial/definition';
+import { glyphPhysicsDefinition } from './glyph-physics/definition';
 import { iconGridDefinition } from './icon-grid/definition';
 import { offAxis3dDefinition } from './off-axis-3d/definition';
 import { paintEffectsDefinition } from './paint-effects/definition';
@@ -42,6 +43,7 @@ export const BENCHMARK_WORKLOADS = {
   'paint-effects': paintEffectsDefinition,
   'rich-text': richTextDefinition,
   editorial: editorialDefinition,
+  'glyph-physics': glyphPhysicsDefinition,
 } as const satisfies Record<BenchmarkWorkloadId, BenchmarkWorkloadDefinition>;
 
 export const BENCHMARK_WORKLOAD_IDS = Object.freeze(Object.keys(BENCHMARK_WORKLOADS) as readonly BenchmarkWorkloadId[]);

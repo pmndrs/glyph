@@ -16,7 +16,8 @@ export type ComparisonWorkloadId =
   | 'paragraph-stress'
   | 'paint-effects'
   | 'rich-text'
-  | 'editorial';
+  | 'editorial'
+  | 'glyph-physics';
 
 export type IconGridView = 'alternate' | 'origin';
 
@@ -31,8 +32,10 @@ export interface ComparisonWorkloadConfiguration {
   readonly paintOpacity: number;
   readonly paintShadowEnabled: boolean;
   readonly paintStrokeWidth: number;
+  readonly showColliders: boolean;
   readonly showGrid: boolean;
   readonly showLayoutBounds: boolean;
+  readonly showOutlines: boolean;
   readonly textLadderExitEnabled: boolean;
   readonly workload: ComparisonWorkloadId;
 }
@@ -85,6 +88,8 @@ export interface ComparisonWorkloadDefinition {
   readonly contentWidth: 'none' | { readonly maximumWidth?: number; readonly multiplier?: number };
   readonly id: ComparisonWorkloadId;
   readonly suspendsIconWindow: boolean;
+  /** Loads whatever asynchronous resources `create` needs, such as a WebAssembly module, before it runs. */
+  prepare?(): Promise<void>;
   create(context: ComparisonWorkloadCreateContext): readonly ComparisonWorkloadEntry[];
   layout(entries: readonly ComparisonWorkloadEntry[], context: ComparisonWorkloadLayoutContext): void;
   animate(

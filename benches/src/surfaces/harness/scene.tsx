@@ -83,7 +83,7 @@ export function Scene({
   readonly onConformanceZoom: (zoom: number) => void;
   readonly onLiveStats: (stats: RuntimeLiveStats) => void;
 }) {
-  const { showGrid: grid, showLayoutBounds } = useRuntimeViewControls();
+  const { showColliders, showGrid: grid, showLayoutBounds, showOutlines } = useRuntimeViewControls();
   const { fontSize, layoutWidthPercent, workloadAmount } = useRuntimeLayoutControls();
   const { animationEnabled, animationSpeed } = useRuntimeAnimationControls();
   const { paintOpacityPercent, paintShadowEnabled, paintStrokePercent } = useRuntimePaintControls();
@@ -117,7 +117,9 @@ export function Scene({
         paintStrokePercent={paintStrokePercent}
         presentation={presentation}
         presentationPreset={presentationPreset}
+        showColliders={showColliders}
         showLayoutBounds={showLayoutBounds}
+        showOutlines={showOutlines}
         workloadAmount={workloadAmount}
         showcaseFrame={showcaseFrame}
         stats={liveStats}

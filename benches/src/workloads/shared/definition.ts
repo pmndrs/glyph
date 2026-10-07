@@ -26,6 +26,7 @@ export interface WorkloadControls {
   readonly animation: boolean;
   readonly amount: WorkloadRange | undefined;
   readonly fontSize: WorkloadRange | undefined;
+  readonly colliders: boolean;
   readonly layoutBounds: boolean;
   readonly layoutWidth: WorkloadRange | undefined;
   readonly paint: WorkloadPaintControls | undefined;
@@ -44,8 +45,10 @@ export interface WorkloadRuntimeDefaults {
   readonly paintOpacityPercent: number;
   readonly paintShadowEnabled: boolean;
   readonly paintStrokePercent: number;
+  readonly showColliders: boolean;
   readonly showGrid: boolean;
   readonly showLayoutBounds: boolean;
+  readonly showOutlines: boolean;
   readonly workloadAmount: number;
 }
 
@@ -56,7 +59,11 @@ export type WorkloadFontPolicy =
       readonly defaultFixture: SelectableFontFixture;
       readonly kind: 'composed';
     }
-  | { readonly defaultFixture: SelectableFontFixture; readonly kind: 'fixed' }
+  | {
+      readonly companionFixtures?: readonly [BenchmarkFontFixture, ...BenchmarkFontFixture[]];
+      readonly defaultFixture: SelectableFontFixture;
+      readonly kind: 'fixed';
+    }
   | {
       readonly iconFixture: typeof ICON_GRID_FONT_FIXTURE;
       readonly kind: 'icon-grid';
@@ -70,6 +77,7 @@ const NO_COMPANION_FIXTURES: readonly BenchmarkFontFixture[] = Object.freeze([])
 export function workloadCompanionFontFixtures(policy: WorkloadFontPolicy): readonly BenchmarkFontFixture[] {
   if (policy.kind === 'icon-grid') return [policy.iconFixture];
   if (policy.kind === 'composed') return policy.companionFixtures;
+  if (policy.kind === 'fixed' && policy.companionFixtures !== undefined) return policy.companionFixtures;
   return NO_COMPANION_FIXTURES;
 }
 
@@ -100,8 +108,10 @@ const standardRuntimeDefaults = {
   paintOpacityPercent: 100,
   paintShadowEnabled: false,
   paintStrokePercent: 0,
+  showColliders: false,
   showGrid: true,
   showLayoutBounds: true,
+  showOutlines: false,
   workloadAmount: 50,
 } as const;
 
@@ -197,6 +207,7 @@ export const paintControls = {
 export const noControls = {
   animation: false,
   amount: undefined,
+  colliders: false,
   fontSize: undefined,
   layoutBounds: false,
   layoutWidth: undefined,
