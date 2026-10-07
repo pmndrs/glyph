@@ -1,7 +1,7 @@
 import type { RegisteredFont } from './font.js';
 import type { FontHandle } from './identity.js';
 import { getRegisteredFontData } from './internal/registered-font.js';
-import { viewGlyphOutline, type GlyphOutlineView } from './glyph-outline.js';
+import { missingGlyphOutlinesMessage, viewGlyphOutline, type GlyphOutlineView } from './glyph-outline.js';
 import { FontRegistry } from './loader.js';
 import {
   checkedMemoryView,
@@ -40,6 +40,8 @@ export interface RuntimeShaper {
   disposeFont(font: RegisteredFont): void;
   /** @internal Decodes one glyph into `target` as views over shaper memory that the next decode replaces. */
   glyphOutline(fontHandle: number, glyphId: number, target?: GlyphOutlineView): GlyphOutlineView;
+  /** Whether the registered font behind `fontHandle` was baked with outlines. */
+  hasGlyphOutlines(fontHandle: number): boolean;
   memoryReport(): RuntimeShaperMemoryReport;
   dispose(): void;
 }
@@ -135,6 +137,12 @@ class RuntimeShaperImpl implements RuntimeShaper {
     if (this.#registered.get(font.handle) === font) this.#disposeHandle(font.handle);
   }
 
+  hasGlyphOutlines(fontHandle: number): boolean {
+    this.#assertActive();
+    const font = this.registry.getByHandle(fontHandle as FontHandle);
+    return font !== undefined && getRegisteredFontData(font).glyphOutlines !== undefined;
+  }
+
   glyphOutline(fontHandle: number, glyphId: number, target?: GlyphOutlineView): GlyphOutlineView {
     this.#assertActive();
     const font = this.registry.getByHandle(fontHandle as FontHandle);
@@ -142,11 +150,7 @@ class RuntimeShaperImpl implements RuntimeShaper {
     let sfnt = this.#outlineSfnts.get(font.handle);
     if (sfnt === undefined) {
       const bytes = getRegisteredFontData(font).glyphOutlines;
-      if (bytes === undefined) {
-        throw new TypeError(
-          'font was baked without outlines; outlines need a font prebaked with glyph bake --outlines',
-        );
-      }
+      if (bytes === undefined) throw new TypeError(missingGlyphOutlinesMessage);
       sfnt = copyIntoWasm(this.#exports, bytes);
       this.#outlineSfnts.set(font.handle, sfnt);
     }

@@ -8,7 +8,8 @@ import { bitmap, createFontStack, glyph, slug } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import { bitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
 import { slugBaker } from '@pmndrs/glyph/bakers/slug';
-import { ThreeConfig } from '@pmndrs/glyph/three';
+import { defineTextMaterial, ThreeConfig } from '@pmndrs/glyph/three';
+import * as THREE from 'three/webgpu';
 
 import { loadFont } from '../../dist/loader.js';
 
@@ -277,11 +278,20 @@ test('owned outlines from glyphs() equal the borrowed views as curve tuples', as
     const layout = text.glyphs();
     assert.equal(layout.glyphCount, borrowed.length);
     borrowed.forEach(({ outline }, index) => assert.deepEqual(layout.outlineAt(index), outline, `glyph ${index}`));
-    assert.notEqual(layout.outlineAt(0), layout.outlineAt(0), 'each call returns a new caller-owned copy');
+    assert.notEqual(layout.outlineAt(0), layout.outlineAt(0), 'each call returns a new outer array');
+    const [first] = layout.outlineAt(0);
+    if (first !== undefined) {
+      assert.equal(layout.outlineAt(0)[0], first, 'equal glyphs share one frozen contour');
+      assert.ok(Object.isFrozen(first) && Object.isFrozen(first[0]), 'shared contours and curves are frozen');
+    }
     assert.equal(Object.keys(layout).includes('outlineAt'), false, 'the columns stay plain data');
     assert.deepEqual(structuredClone(layout).glyphIds, layout.glyphIds);
     assert.throws(() => layout.outlineAt(layout.glyphCount), RangeError);
     assert.throws(() => layout.outlineAt(-1), RangeError);
+    text.withGlyphs((glyphs) => {
+      assert.throws(() => glyphs.outlineAt(glyphs.glyphCount), RangeError);
+      assert.throws(() => glyphs.outlineAt(-1), RangeError);
+    });
     text.dispose();
   }
   latin.dispose();
@@ -369,4 +379,35 @@ test('a glyph whose font was baked without outlines throws at the call', async (
   assert.throws(() => text.glyphs().outlineAt(0), message);
   text.dispose();
   font.dispose();
+});
+
+test('owned outlines are data: they read inside a render plan, after it, and after their font is disposed', async (t) => {
+  const three = await createHandle(t);
+  const [outlined, drawnFont] = await Promise.all([load(bakes.inter), load(bakes.interPlain)]);
+  const probe = three.createText({ font: outlined, text: 'Owned' });
+  const layout = probe.glyphs();
+  const expected = layout.outlineAt(0);
+  let duringPlan;
+  const material = defineTextMaterial((context) => {
+    try {
+      duringPlan = layout.outlineAt(0);
+    } catch (error) {
+      duringPlan = error;
+    }
+    return context.createDefaultMaterial();
+  });
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const label = three.createText({ font: drawnFont, material, text: 'Drawn' });
+  group.add(label);
+  scene.add(group);
+  scene.updateMatrixWorld();
+  assert.equal(group.error, undefined);
+  assert.deepEqual(duringPlan, expected, 'a read inside a material callback makes no engine call');
+  assert.deepEqual(layout.outlineAt(0), expected, 'the copy reads after a render pass releases unused fonts');
+  probe.dispose();
+  outlined.dispose();
+  assert.deepEqual(layout.outlineAt(0), expected, 'the copy reads after its Text and font are disposed');
+  label.dispose();
+  drawnFont.dispose();
 });

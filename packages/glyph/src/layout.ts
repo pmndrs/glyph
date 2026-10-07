@@ -125,9 +125,11 @@ export interface GlyphLayoutInspection extends GlyphLayout, ParagraphLayoutSumma
    * `[x0, y0, cx, cy, x1, y1, isLine]` tuples in em units with y down and the origin at the glyph's pen position on the
    * baseline; place a point at `x[index] + x * glyphFontSizes[index]`, `y[index] + y * glyphFontSizes[index]`. Equal
    * font and glyph IDs give equal outlines. Contours keep the font's winding for nonzero filling, a blank glyph returns
-   * `[]`, and each CFF cubic becomes four quadratics. Allocates on every call, and replaces the views any earlier
-   * borrowed `outlineAt()` returned. Throws for an index outside the layout, a font baked without outlines, or a font
-   * that has been disposed.
+   * `[]`, and each CFF cubic becomes four quadratics. The copy carries its outlines as data: the first `glyphs()` for a
+   * layout decodes each distinct outlined glyph once, so this call makes no engine call and still reads after the
+   * `Text`, its font, or its handle is disposed, and inside any borrow. Each call returns a new array of frozen contours
+   * that glyphs with the same font and glyph ID share. Throws for an index outside the layout or a glyph whose font was
+   * baked without outlines.
    */
   outlineAt(index: number): GlyphOutlineContour[];
 }

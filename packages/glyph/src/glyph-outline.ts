@@ -65,6 +65,17 @@ export function viewGlyphOutline(
   return target;
 }
 
+/** @internal The error a glyph read reports when its font was baked without outlines. */
+export const missingGlyphOutlinesMessage =
+  'font was baked without outlines; outlines need a font prebaked with glyph bake --outlines';
+
+/** @internal Copies a view into frozen curve tuples that every holder of the same glyph can share. */
+export function frozenGlyphOutline(view: GlyphOutlineView): readonly GlyphOutlineContour[] {
+  return Object.freeze(
+    glyphOutlineContours(view).map((contour) => Object.freeze(contour.map((curve) => Object.freeze(curve)))),
+  );
+}
+
 /** @internal Copies a view into caller-owned curve tuples. */
 export function glyphOutlineContours({ points, contourEnds, segmentLines }: GlyphOutlineView): GlyphOutlineContour[] {
   const contours: GlyphOutlineContour[] = [];

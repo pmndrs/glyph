@@ -799,14 +799,20 @@ its fallback font and callers never handle `Font` objects.
 - **Owned:** `text.glyphs().outlineAt(index)` returns caller-owned `GlyphOutlineContour[]` of
   `[x0, y0, cx, cy, x1, y1, isLine]` tuples, built in JavaScript from the same view, so both paths agree exactly. It is
   a non-enumerable method on the copied inspection, so the columns still spread, compare, and structured-clone as plain
-  data, and it throws `RangeError` for an index outside the layout.
+  data, and it throws `RangeError` for an index outside the layout. The copy carries its outlines as data: the first
+  `glyphs()` for a layout decodes each distinct glyph of an outlined font once and caches the frozen contours with that
+  layout, so reading one makes no engine call, survives the font's engine registration, and is safe inside any borrow.
+  Each call returns a new outer array over contours shared by equal font and glyph IDs. Fonts without outlines cost one
+  presence check each, and their glyphs throw at the call. The `@glyphs` Labs suite times `glyphs()` on an outlined
+  font against the same paragraph on a plain one.
 
 A line keeps its midpoint as its control point in both paths, so code that ignores the flag still draws it. Contours
 keep the source order and winding for nonzero filling, and blank glyphs return no contours. The shaper decodes with
 read-fonts, which HarfRust already links: TrueType simple and composite glyphs follow Skrifa's FreeType-style unscaled
 loader, and CFF uses read-fonts' charstring evaluator. A TrueType glyph nests composites at most 32 levels deep and
 places at most 65,535 components and 65,535 points, so a crafted font cannot make one decode unbounded. TrueType
-outlines are exact, and each CFF cubic becomes four equal-parameter quadratics through Slug's shared split. The decoder
+outlines are exact, and each CFF cubic becomes Slug's `DEFAULT_CUBIC_SUBDIVISIONS` (four) equal-parameter quadratics
+through its shared split, within about 1.15 font units on the CFF fixtures. The decoder
 writes em-space `f32` points (font units divided by `unitsPerEm`, y negated) with the contour ends and line flags into
 one word-aligned result, and the host creates the views over it. Both calls throw for a glyph whose font was baked
 without outlines, and the borrowed call throws after its callback returns. The first decode for a font copies its
