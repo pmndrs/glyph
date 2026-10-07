@@ -769,7 +769,7 @@ raster programs that opt in.
 
 ## Glyph outlines
 
-Glyph geometry for colliders, extrusion, or other CPU consumers is core-font data, not raster data (D-371).
+Glyph geometry for colliders, extrusion, or other CPU consumers is core-font data, not raster data ([glyph outlines](../planning/decisions/glyph-outlines.md)).
 `glyph bake --outlines` and Node `bakeFont({ font: { outlines: true } })` keep the face's own outline tables, `glyf`
 with `loca` or `CFF `, unchanged in a small SFNT beside `head` and `maxp`, stored as one optional `PMNDRS_font.outlines`
 buffer view. The object's presence is the flag, bakes without it are unchanged, and the CLI's up-to-date check treats a
