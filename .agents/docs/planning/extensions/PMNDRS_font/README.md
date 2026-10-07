@@ -149,9 +149,14 @@ table alignment, zero padding, table checksums, and a valid `head.checkSumAdjust
 `maxp.numGlyphs` MUST equal the serialized metrics. A baker MUST NOT write `outlines` for a face without an outline
 table, and every glyph MUST decode. Consumers decode one glyph at a time.
 
+`format` selects the encoding. A later encoding is a new `format` value within version 1, not a new version, so the
+`version` stays the flag that outlines may be present. A consumer that does not recognise `format` SHOULD treat the font
+as having no outlines rather than reject it. The reference runtime accepts only artifacts from its own baker version, so
+it only ever meets the format that version writes.
+
 Consumers draw the unhinted outline at the default instance. The reference consumer returns closed quadratic contours:
-TrueType quadratics exactly, a line as the quadratic whose control is its midpoint, and each CFF cubic as four
-equal-parameter quadratics. This version does not define CFF2 outlines.
+TrueType quadratics exactly, a line as the quadratic whose control is its midpoint and that is flagged as a line, and
+each CFF cubic as four equal-parameter quadratics. This version does not define CFF2 outlines.
 
 The outline view is a core view, distinct from the shaping views and from every raster's views. It is not part of
 `shaping.fingerprint`: baking outlines changes neither the shaping identity nor any raster's compatibility.
