@@ -947,6 +947,8 @@ callers update the detached root once, invert its world matrix once, convert eac
 root-relative resource leases belong to each detached object,
 so the pair may outlive the source `Text`, font, and loader without sharing mutable presentation state. The source `Text`
 stays live and may continue publishing while detached objects remain unchanged.
+`Glyphs.outlineAt(index)` reads a split glyph's outline by the same dense index, from the owned inspection `breakApart()`
+retained ([Glyph outlines](#glyph-outlines)).
 
 Decoration passes are not glyph records and retain an independent object and lifetime; tuple slot two is `undefined`
 when the committed paragraph has no decoration draws. Three coordinates both roots' draw ranges so underline/overline
