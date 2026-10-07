@@ -241,16 +241,19 @@ per-curve coverage and antialiasing weight, band header and reference bit layout
 weighted blend, and row-based vertex dilation are expressed once. A vertical band is the horizontal band in the
 transposed frame with the opposite winding sense, so both axes share one curve evaluator and quadratic solver.
 
-Slug quads are the glyph's ink box, and coverage reaches zero half a pixel past a straight edge, so vertex dilation
-moves each corner half a pixel across both adjacent edges on screen. Each axis gets its own step, solved from the
-corner's screen tangents and the w row, because one step shared by both axes, as Lengyel's `SlugDilate` takes along the
-`(±1, ±1)` corner, leaves the short screen edge of a stretched, sheared, or tilted plane under half a pixel. The solve is
-exact under any projective transform; towards the horizon each step is held at twice its affine value. The TypeGPU
-core, the native TSL `/shaders/tsl` graph, and the CPU reference mirror use only the sign of the outward normal they
-receive. `tests/package/slug-dilation.test.mjs` runs the TypeGPU functions and the mirror on the CPU and checks the
-half-pixel margin on both axes for wide, short and tall, narrow quads under uniform, rotated, stretched, sheared, and
-perspective transforms; it also checks that no pixel with nonzero core coverage falls outside the dilated quad. The
-native TSL graph cannot run on the CPU, so only review keeps it in step with the TypeGPU core.
+Slug quads are the glyph's ink box. Coverage takes each em axis's pixel scale from `fwidth`, the sum of the
+coordinate's absolute screen derivatives, so it reaches zero `0.5 · (|t.x| + |t.y|) / |t|` pixels past an edge whose
+screen direction is `t`: half a pixel for an edge axis-aligned on screen, 0.683 px at 30°, up to 0.707 px at 45°.
+Vertex dilation moves each corner exactly that far across both adjacent edges. Each axis gets its own step, solved from
+the corner's screen tangents and the w row; one step shared by both axes, as Lengyel's `SlugDilate` takes along the
+`(±1, ±1)` corner, falls short on a stretched, sheared, or tilted plane, and a half-pixel target falls short on a
+rotated one. The solve is exact under any projective transform; towards the horizon each step is held at twice its
+affine value. The TypeGPU core, the native TSL `/shaders/tsl` graph, and the CPU reference mirror use only the sign of
+the outward normal they receive. `tests/package/slug-dilation.test.mjs` runs the TypeGPU functions and the mirror on the
+CPU and checks both margins against that fringe for wide, short and tall, narrow quads under uniform, rotated,
+stretched, sheared, stretched-and-rotated, and perspective transforms. It also evaluates the package core with
+`fwidth`-derived pixel scales under every affine case and checks that no pixel with nonzero coverage falls outside the
+dilated quad. The native TSL graph cannot run on the CPU, so only review keeps it in step with the TypeGPU core.
 
 The neighboring TypeGPU modules own page texture reads, grid addressing, band traversal, and the sorted-reference
 terminator. The experimental `/three/typegpu` host supplies textures and node-valued glyph fields through `@typegpu/three`, while retaining
