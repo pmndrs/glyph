@@ -215,12 +215,21 @@ importers:
       '@typegpu/three':
         specifier: catalog:renderer
         version: 0.12.1(@typegpu/gl@0.12.4(typegpu@0.12.5))(three@0.185.1)(typegpu@0.12.5)
+      box3d.js:
+        specifier: 0.1.1
+        version: 0.1.1
       class-variance-authority:
         specifier: 0.7.1
         version: 0.7.1
+      clipper2-ts:
+        specifier: 2.0.1-18
+        version: 2.0.1-18
       clsx:
         specifier: 2.1.1
         version: 2.1.1
+      earcut:
+        specifier: 3.2.4
+        version: 3.2.4
       koota:
         specifier: 0.6.6
         version: 0.6.6(@types/react@19.2.14)(react@19.2.8)
@@ -2600,6 +2609,9 @@ packages:
     resolution: {integrity: sha512-2cGmJupaNgg+QUwVLAucDuWuoMZ6EX9iHDRswZ5lsNYEmwPaRknMPCLZz07yTzVq/83p4o/wzbDZbBrTvGGTIw==}
     engines: {node: '>=18'}
 
+  box3d.js@0.1.1:
+    resolution: {integrity: sha512-N3jkFuCpj5WxW3gmJDj/ai9Ticq6bIMMRk/tIJBkeOw4VZviHv6pAQEDFQczRwQQEtIo32Iy6OyhyxPxhzdF6w==}
+
   brace-expansion@5.0.12:
     resolution: {integrity: sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==}
     engines: {node: 20 || >=22}
@@ -2665,6 +2677,10 @@ packages:
   cli-spinners@2.9.2:
     resolution: {integrity: sha512-ywqV+5MmyL4E7ybXgKys4DugZbX0FC6LnwrhjuykIjnK9k8OQacQ7axGKnjDXWNhns0xot3bZI5h55H8yo9cJg==}
     engines: {node: '>=6'}
+
+  clipper2-ts@2.0.1-18:
+    resolution: {integrity: sha512-WuRO1ZHzyYTVHY78r4wVWVydvQ+1lx9qZ+DeZa/8zhvrxIgCVzElJ6lwSMGtUUKFPefhvfJsHZ5C9RNkgisCOQ==}
+    engines: {node: '>=14.0.0'}
 
   clsx@2.1.1:
     resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==}
@@ -2819,6 +2835,9 @@ packages:
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
     engines: {node: '>= 0.4'}
+
+  earcut@3.2.4:
+    resolution: {integrity: sha512-FHc6yNpnTORB0tM5kmZ03iD2mDuNakDE2lvf4Hw1XkfxtEHIGVi01B/GqUSwx+NcC1WGjidAfpTXzeALtPtfpg==}
 
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
@@ -6211,6 +6230,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  box3d.js@0.1.1: {}
+
   brace-expansion@5.0.12:
     dependencies:
       balanced-match: 4.0.4
@@ -6277,6 +6298,8 @@ snapshots:
       restore-cursor: 5.1.0
 
   cli-spinners@2.9.2: {}
+
+  clipper2-ts@2.0.1-18: {}
 
   clsx@2.1.1: {}
 
@@ -6387,6 +6410,8 @@ snapshots:
       call-bind-apply-helpers: 1.0.2
       es-errors: 1.3.0
       gopd: 1.2.0
+
+  earcut@3.2.4: {}
 
   ee-first@1.1.1: {}
 
