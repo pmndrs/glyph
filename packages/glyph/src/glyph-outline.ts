@@ -65,9 +65,20 @@ export function viewGlyphOutline(
   return target;
 }
 
-/** @internal The error a glyph read reports when its font was baked without outlines. */
-export const missingGlyphOutlinesMessage =
-  'font was baked without outlines; outlines need a font prebaked with glyph bake --outlines';
+/**
+ * @internal Why a font has no decoded outlines to read: its artifact carries none, or its load skipped decoding the
+ * ones it carries (`outlines: 'skip'`).
+ */
+export type GlyphOutlineAbsence = 'unbaked' | 'skipped';
+
+/** @internal The error a glyph read reports when its font has no decoded outlines. Outlines are optional. */
+export function missingGlyphOutlinesError(absence: GlyphOutlineAbsence): TypeError {
+  return new TypeError(
+    absence === 'skipped'
+      ? "font outlines were skipped when it loaded; load it with outlines: 'auto' or 'require' to read them"
+      : 'font was baked without outlines; outlines need a font prebaked with glyph bake --outlines',
+  );
+}
 
 /**
  * @internal Every glyph outline of one font, decoded once when the font loads: the columns of every glyph's

@@ -54,6 +54,8 @@ export interface RegisteredFontData {
   readonly glyphExtentsAvailability: Uint8Array;
   /** Every glyph outline, decoded once when the font loaded; a later outlined bake of the same font adds it. */
   glyphOutlines?: GlyphOutlineStore;
+  /** True while the font has no store because a load skipped outlines its artifact carried; a later decode clears it. */
+  glyphOutlinesSkipped?: true;
   readonly rasterSources: Map<string, RegisteredRasterSourceData>;
   /** Authenticated external resources shared by every raster through canonical content identity. */
   readonly resources: Map<string, RegisteredRasterResourceData>;
