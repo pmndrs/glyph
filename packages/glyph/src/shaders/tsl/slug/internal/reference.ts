@@ -158,28 +158,31 @@ export function referenceSlugDilate(
 ): SlugDilationResult {
   const cornerX = Math.sign(outwardNormal[0]);
   const cornerY = Math.sign(outwardNormal[1]);
-  const cornerLength = Math.hypot(cornerX, cornerY);
-  if (cornerLength === 0) return { position, textureCoordinate };
-  const nx = cornerX / cornerLength;
-  const ny = cornerY / cornerLength;
   const homogeneousW = mvpRow3[0] * position[0] + mvpRow3[1] * position[1] + mvpRow3[3];
-  const wGradient = mvpRow3[0] * nx + mvpRow3[1] * ny;
-  const projectedX =
-    (homogeneousW * (mvpRow0[0] * nx + mvpRow0[1] * ny) -
-      wGradient * (mvpRow0[0] * position[0] + mvpRow0[1] * position[1] + mvpRow0[3])) *
-    viewport[0];
-  const projectedY =
-    (homogeneousW * (mvpRow1[0] * nx + mvpRow1[1] * ny) -
-      wGradient * (mvpRow1[0] * position[0] + mvpRow1[1] * position[1] + mvpRow1[3])) *
-    viewport[1];
+  const clipX = mvpRow0[0] * position[0] + mvpRow0[1] * position[1] + mvpRow0[3];
+  const clipY = mvpRow1[0] * position[0] + mvpRow1[1] * position[1] + mvpRow1[3];
+  const xTangent = [
+    (homogeneousW * mvpRow0[0] - clipX * mvpRow3[0]) * viewport[0],
+    (homogeneousW * mvpRow1[0] - clipY * mvpRow3[0]) * viewport[1],
+  ] as const;
+  const yTangent = [
+    (homogeneousW * mvpRow0[1] - clipX * mvpRow3[1]) * viewport[0],
+    (homogeneousW * mvpRow1[1] - clipY * mvpRow3[1]) * viewport[1],
+  ] as const;
+  // Coverage's fringe past an edge is 0.5·L1/L2 of its screen direction, so the steps use L1 norms; see `slugDilate`.
+  const xTangentL1 = Math.abs(xTangent[0]) + Math.abs(xTangent[1]);
+  const yTangentL1 = Math.abs(yTangent[0]) + Math.abs(yTangent[1]);
+  const area = Math.abs(xTangent[0] * yTangent[1] - xTangent[1] * yTangent[0]);
   const squaredW = homogeneousW * homogeneousW;
-  const wTimesGradient = homogeneousW * wGradient;
-  const projectedLengthSquared = projectedX * projectedX + projectedY * projectedY;
-  const denominator = projectedLengthSquared - squaredW * wGradient * wGradient;
-  const distance =
-    denominator === 0 ? 0 : (squaredW * (wTimesGradient + Math.sqrt(projectedLengthSquared))) / denominator;
-  const dx = cornerX * distance;
-  const dy = cornerY * distance;
+  const denominator = Math.max(
+    area - homogeneousW * (cornerX * mvpRow3[0] * yTangentL1 + cornerY * mvpRow3[1] * xTangentL1),
+    area * 0.5,
+    1e-30,
+  );
+  const xStep = (yTangentL1 * squaredW) / denominator;
+  const yStep = (xTangentL1 * squaredW) / denominator;
+  const dx = cornerX * xStep;
+  const dy = cornerY * yStep;
   return {
     position: [position[0] + dx, position[1] + dy],
     textureCoordinate: [textureCoordinate[0] + dx * inverseScale, textureCoordinate[1] + dy * inverseScale],
