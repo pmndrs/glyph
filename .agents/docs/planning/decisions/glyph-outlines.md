@@ -31,6 +31,18 @@ and `text.glyphs().outlineAt(index)` returns caller-owned `[x0, y0, cx, cy, x1, 
 midpoint control in both. This API was agreed on the pull request on 2026-10-06 and replaced a paragraph-space,
 tuple-only `outlineAt()` before release.
 
+A split glyph reads its outline through `Glyphs.outlineAt(index)` and nowhere else on the Three side. `breakApart()`
+already holds the owned inspection the placements came from, so `Glyphs` keeps it, takes the dense `DetachedGlyph.index`
+that `setMatrixAt` takes, and returns the owned contours of the layout glyph at that glyph's `sourceIndex`. It is data
+like `glyphAt`, so it reads after the source re-lays out and after the font or the `Glyphs` object is disposed.
+
+A missing outline at read time is by design: outlines are optional, so every read of a font without them throws, and
+the message says whether the font was baked without outlines or its load skipped them. A caller that needs outlines
+asks at load time with `FontLoadOptions.outlines`: `'auto'` (default) decodes them when present, `'skip'` decodes and
+retains nothing, and `'require'` rejects with the new `GlyphFontError` reason `FONT_OUTLINES_UNAVAILABLE`. Outlines are
+only ever added to a font across loads: a later `'auto'` or `'require'` attaches them to a font an earlier `'skip'`
+left without, and a later `'skip'` removes nothing.
+
 ## Why
 
 Source tables replaced a decoded-quadratic payload that added 3 to 12 times the source font and could not bake Noto
@@ -45,7 +57,10 @@ memory growth inside a borrow.
 ## Consequences
 
 The bake validator decodes every glyph with that runtime decoder, so the baker carries no outline drawing. Outlines
-stay outside `shaping.fingerprint`. CFF2, variation axes, and a runtime-bake outline option are deferred.
+stay outside `shaping.fingerprint`. CFF2, variation axes, and a runtime-bake outline option are deferred, so a runtime
+bake never has outlines and `'require'` rejects for it. `FontFace` loads with the default mode; the option exists on
+`loadFont` and `FontLibrary.loadFont`, which are not a public subpath, so an application reaches `'skip'` and
+`'require'` only when `FontFace` gains the option.
 
 Recorded in pull request #235 as register row D-371; the register froze at D-372 before it merged, so the decision lives
 here instead.

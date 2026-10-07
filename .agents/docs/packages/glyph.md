@@ -803,6 +803,15 @@ its fallback font and callers never handle `Font` objects.
   reading one makes no engine call, survives the font's and the handle's disposal, and is safe inside any borrow. Each
   glyph's frozen tuples are built on its first owned read and shared by every later one, and each call returns a new
   outer array over them. Glyphs of fonts without outlines throw at the call.
+- **Detached:** `Glyphs.outlineAt(index)` is the path for a split glyph. `breakApart()` already holds the owned
+  inspection its placements came from, so `Glyphs` keeps it and answers `outlineAt(index)` with the same
+  `GlyphOutlineContour[]` as `text.glyphs().outlineAt(sourceIndex)`. The index is the dense `DetachedGlyph.index` that
+  `glyphAt` and `setMatrixAt` take, not `sourceIndex`: blank glyphs have no record, so the two differ after the first
+  one. Coordinates are em units, y down, origin at the glyph's pen origin, which is the pivot of `setMatrixAt`'s matrix;
+  a caller scales by `DetachedGlyph.fontSize` and negates y to get the local frame that matrix places. It is data like
+  `glyphAt`: it reads after the source text re-lays out, after the font is disposed, and after the `Glyphs` object is
+  disposed, and it throws `RangeError` for an index that is not a glyph of the object. No other detached or
+  Three-side object reads outlines.
 
 A line keeps its midpoint as its control point in both paths, so code that ignores the flag still draws it. Contours
 keep the source order and winding for nonzero filling, and blank glyphs return no contours. The shaper decodes with
@@ -812,15 +821,34 @@ places at most 65,535 components and 65,535 points, so a crafted font cannot mak
 outlines are exact, and each CFF cubic becomes Slug's `DEFAULT_CUBIC_SUBDIVISIONS` (four) equal-parameter quadratics
 through its shared split, within about 1.15 font units on the CFF fixtures. The decoder
 writes em-space `f32` points (font units divided by `unitsPerEm`, y negated) with the contour ends and line flags into
-one word-aligned result. Both calls throw for a glyph whose font was baked without outlines, and the borrowed call
-throws after its callback returns.
+one word-aligned result. Every read throws for a glyph whose font has no outlines, and the borrowed call throws after
+its callback returns. That is by design: outlines are optional, so a read cannot assume them, and a caller that needs
+them says so at load time (below). The message tells the two causes apart: a font baked without outlines, and a font
+whose load skipped them.
 
 **Outlines decode when the font loads.** The loader decodes every glyph behind the load promise, where the artifact
 fetch already dominates, into one store the font owns: the columns of every glyph's view back to back plus a per-glyph
-offset table. Both read paths are then reads, with no decode and no engine memory involved, and a later outlined bake of
+offset table. Every read path is then a read, with no decode and no engine memory involved, and a later outlined bake of
 a font that first loaded without outlines adds its store to the deduplicated font. The decode runs in a fresh shaper
 instance compiled from the module the engine shared, so a caller-supplied `glyph.init({ wasm })` decodes too, or from
-the default module when a font loads before the engine starts; the instance is released afterwards. Measured natively
+the default module when a font loads before the engine starts; the instance is released afterwards.
+
+`FontLoadOptions.outlines` sets what one load does about them, named for the bake's `font.outlines` and validated once
+at the load call (any other value is a `TypeError` naming the three):
+
+- `'auto'` (the default) decodes them when the artifact has them and loads without them otherwise.
+- `'skip'` neither decodes nor retains them, for a caller that never reads an outline. Reads then throw the skipped
+  message, not the baked-without one.
+- `'require'` rejects with `GlyphFontError` reason `FONT_OUTLINES_UNAVAILABLE` when the font has none. It is a new
+  reason because no existing one fits: `INVALID_FONT_ASSET` means a malformed artifact, and this artifact is valid. It
+  follows `FONT_FACE_FORMAT_UNAVAILABLE`, which also reports a capability the caller required and the font lacks, and
+  it is not a warning because the caller asked for a hard requirement. A baked URL without outlines reports it as
+  itself, not as `BAKED_FONT_INVALID`, and a runtime bake makes no outlines, so `'require'` rejects there.
+
+Loads that differ only in this option are separate loads of one font, which the font library merges by content:
+outlines are only ever added. A later `'auto'` or `'require'` attaches outlines to a font an earlier `'skip'` left
+without them, so reads through the earlier `Font` work too, and a later `'skip'` removes nothing. `FontFace` loads
+with the default; only `loadFont` and `FontLibrary.loadFont` take the option. Measured natively
 over every glyph: Inter 2,937 glyphs in 3.6 ms to 1.37 MB, Source Serif 4 2.1 ms to 0.85 MB, Font Awesome 3.9 ms to
 1.62 MB, Amiri 6,710 glyphs in 13.3 ms to 5.06 MB, and Noto Sans CJK JP 65,535 glyphs in 757 ms to 129 MB. Outlines
 are opt-in and a subset bake shrinks a large face; the planned triplet stream (#244) replaces this decode with a faster
@@ -843,7 +871,11 @@ position and size and check its control box against the ink box the layout repor
 against it, check that `H` sits on the baseline in em units at two font sizes, check the borrowed view's layout
 invariants, target refill, and a line's midpoint control, compare owned tuples with the borrowed views, decode a
 font-stack fallback glyph from its own font, read the same Text through its Wasm-backed and then its inspection-backed
-borrow with Wasm memory grown between decodes, and read identical outlines from Bitmap and Slug.
+borrow with Wasm memory grown between decodes, and read identical outlines from Bitmap and Slug. A detached `Glyphs`
+object's outlines equal the source's at `sourceIndex` for every glyph of a paragraph that starts with blanks, survive a
+re-layout and the font's disposal, and reject indices outside the object. Load tests cover every mode with and without
+outlines, `'require'` through bytes and a baked URL, skip-then-auto, auto-then-skip, and concurrent loads in both orders
+converging on one font with outlines, and an invalid value.
 
 ## Semantic queries
 
