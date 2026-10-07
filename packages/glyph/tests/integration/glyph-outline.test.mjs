@@ -411,3 +411,109 @@ test('owned outlines are data: they read inside a render plan, after it, and aft
   label.dispose();
   drawnFont.dispose();
 });
+
+/** Mounts `text` so its layout commits, then splits it; the caller disposes the returned pieces. */
+function breakApartMounted(three, font, content) {
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const text = three.createText({ font, text: content });
+  scene.add(group);
+  group.add(text);
+  scene.updateMatrixWorld(true);
+  const [glyphs] = text.breakApart();
+  return { group, text, glyphs };
+}
+
+function dispose({ group, text, glyphs }) {
+  glyphs.dispose();
+  text.dispose();
+  group.dispose();
+}
+
+test('Glyphs.outlineAt takes the dense index and equals the source outline at sourceIndex', async (t) => {
+  const three = await createHandle(t);
+  const [latin, icon] = await Promise.all([load(bakes.inter), load(bakes.icons)]);
+  const mounted = breakApartMounted(three, createFontStack(latin, icon), `  A b${String.fromCodePoint(0xf0ac)} I`);
+  try {
+    const { glyphs, text } = mounted;
+    const layout = text.glyphs();
+    assert.ok(glyphs.count > 0 && glyphs.count < layout.glyphCount, 'blank glyphs are not drawable records');
+    let shifted = 0;
+    for (let index = 0; index < glyphs.count; index += 1) {
+      const detached = glyphs.glyphAt(index);
+      if (detached.index !== detached.sourceIndex) shifted += 1;
+      const outline = glyphs.outlineAt(detached.index);
+      assert.deepEqual(outline, layout.outlineAt(detached.sourceIndex), `glyph ${index}`);
+      assert.ok(outline.length > 0, `drawable glyph ${index} has ink`);
+    }
+    assert.ok(shifted > 0, 'a dense index must differ from its source index for the test to mean anything');
+    assert.notEqual(glyphs.outlineAt(0), glyphs.outlineAt(0), 'each call returns a new outer array');
+  } finally {
+    dispose(mounted);
+    latin.dispose();
+    icon.dispose();
+  }
+});
+
+test('Glyphs.outlineAt keeps reading after the source re-lays out and after the font is disposed', async (t) => {
+  const three = await createHandle(t);
+  const font = await load(bakes.inter);
+  const mounted = breakApartMounted(three, font, ' Hi o');
+  try {
+    const { glyphs, text } = mounted;
+    const captured = Array.from({ length: glyphs.count }, (_, index) => glyphs.outlineAt(index));
+    text.text = 'Wxyz Q';
+    text.parent.parent.updateMatrixWorld(true);
+    assert.notEqual(text.glyphs().glyphCount, glyphs.count);
+    assert.deepEqual(
+      Array.from({ length: glyphs.count }, (_, index) => glyphs.outlineAt(index)),
+      captured,
+      'a re-layout of the source does not change a detached glyph',
+    );
+    font.dispose();
+    assert.deepEqual(
+      Array.from({ length: glyphs.count }, (_, index) => glyphs.outlineAt(index)),
+      captured,
+      'the font is not needed to read an outline',
+    );
+    const count = glyphs.count;
+    glyphs.dispose();
+    assert.deepEqual(
+      glyphs.outlineAt(count - 1),
+      captured.at(-1),
+      'a disposed Glyphs object still reads, like glyphAt',
+    );
+  } finally {
+    dispose(mounted);
+  }
+});
+
+test('Glyphs.outlineAt rejects an index that is not a glyph of the object', async (t) => {
+  const three = await createHandle(t);
+  const font = await load(bakes.inter);
+  const mounted = breakApartMounted(three, font, ' Hi');
+  try {
+    const { glyphs } = mounted;
+    for (const index of [-1, glyphs.count, glyphs.count + 1, 0.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      assert.throws(() => glyphs.outlineAt(index), RangeError, String(index));
+    }
+  } finally {
+    dispose(mounted);
+    font.dispose();
+  }
+});
+
+test('Glyphs.outlineAt throws the missing-outline error for a font without outlines', async (t) => {
+  const three = await createHandle(t);
+  const font = await load(bakes.interPlain);
+  const mounted = breakApartMounted(three, font, ' Plain');
+  try {
+    assert.throws(
+      () => mounted.glyphs.outlineAt(0),
+      new TypeError('font was baked without outlines; outlines need a font prebaked with glyph bake --outlines'),
+    );
+  } finally {
+    dispose(mounted);
+    font.dispose();
+  }
+});

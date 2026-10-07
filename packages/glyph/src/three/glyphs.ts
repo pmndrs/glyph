@@ -1,6 +1,8 @@
 import * as THREE from 'three/webgpu';
 
 import type { GlyphCopy } from '../config/glyph.js';
+import type { GlyphOutlineContour } from '../glyph-outline.js';
+import type { GlyphLayoutInspection } from '../layout.js';
 import type { GlyphPlacement, GlyphPlacements } from '../glyph-placement.js';
 import { ThreeCommandBufferRenderer, type ThreeRendererHost } from './command-buffer-renderer.js';
 import type { ThreeGlyphGeometrySource, ThreeGlyphMeasurement } from './glyph-measurement.js';
@@ -94,6 +96,7 @@ export class Glyphs extends THREE.Object3D {
   readonly #target: ThreeCommandBufferRenderer;
   readonly #copy: GlyphCopy<void>;
   readonly #owner: ThreeRendererHost;
+  readonly #layout: GlyphLayoutInspection;
   readonly #placements: readonly GlyphPlacement[];
   readonly #glyphs: readonly DetachedGlyph[];
   readonly #measurements: readonly ThreeGlyphMeasurement[];
@@ -119,6 +122,8 @@ export class Glyphs extends THREE.Object3D {
     let target: ThreeCommandBufferRenderer | undefined;
     let copy: GlyphCopy<void> | undefined;
     try {
+      // The owned snapshot the placements describe: it keeps its fonts' decoded outlines, so `outlineAt` stays plain data.
+      this.#layout = options.placements.layout;
       const incomplete = new Set(options.placements.incomplete);
       this.#placements = Object.freeze(options.placements.glyphs.filter((_, index) => !incomplete.has(index)));
       this.#glyphs = Object.freeze(
@@ -271,6 +276,27 @@ export class Glyphs extends THREE.Object3D {
 
   glyphAt(index: number): DetachedGlyph | undefined {
     return this.#glyphs[index];
+  }
+
+  /**
+   * Reads the outline of glyph `index`, the dense `DetachedGlyph.index` that `glyphAt` and `setMatrixAt` take (not
+   * `sourceIndex`), as caller-owned closed contours of `[x0, y0, cx, cy, x1, y1, isLine]` curves. Coordinates are em
+   * units with y down and the origin at the glyph's pen origin, the pivot of the matrix `setMatrixAt` places. To
+   * draw the glyph where this object draws it, scale each coordinate by `DetachedGlyph.fontSize`, negate y (this
+   * object's local space is y up), and place the result with the glyph's matrix. A blank glyph returns `[]`. Each
+   * call returns a new outer array whose frozen contours are shared by every glyph of the same font and glyph ID.
+   *
+   * The outlines were captured with the source paragraph's layout when `breakApart()` ran, and the font decoded
+   * them when it loaded. So this is a plain read: it makes no engine call, still returns the same contours after
+   * the source `Text` re-lays out or changes text, and, like `glyphAt`, still reads after the font or this object is
+   * disposed. Throws `RangeError` for an index that is not a glyph of this object, and `TypeError` when the glyph's
+   * font has no outlines because it was baked without them (or its load skipped them): outlines are optional.
+   */
+  outlineAt(index: number): GlyphOutlineContour[] {
+    if (!Number.isInteger(index) || index < 0 || index >= this.#placements.length) {
+      throw new RangeError(`glyph index ${index} is out of range`);
+    }
+    return this.#layout.outlineAt(this.#placements[index]!.index);
   }
 
   dispose(): void {

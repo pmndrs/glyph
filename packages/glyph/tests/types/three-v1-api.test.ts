@@ -8,6 +8,7 @@ import {
   type Font,
   type FontFaceTransfer,
   type BorrowedGlyph,
+  type GlyphOutlineContour,
   type SerializedFontFace,
 } from '../../src/index.js';
 import { bitmap } from '../../src/raster/bitmap.js';
@@ -208,6 +209,7 @@ labels.add(three.createText({ font: mtsdfFont, text: 'Mixed technique' }));
 const [detachedGlyphs, detachedDecorations] = label.breakApart();
 detachedGlyphs satisfies Glyphs;
 detachedDecorations satisfies Decorations | undefined;
+detachedGlyphs.outlineAt(0) satisfies GlyphOutlineContour[];
 void detachedGlyphs;
 void detachedDecorations;
 // @ts-expect-error Detached glyph branches are created only by Text.breakApart().
