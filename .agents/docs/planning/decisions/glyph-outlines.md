@@ -32,9 +32,12 @@ midpoint control in both. This API was agreed on the pull request on 2026-10-06 
 tuple-only `outlineAt()` before release.
 
 A split glyph reads its outline through `Glyphs.outlineAt(index)` and nowhere else on the Three side. `breakApart()`
-already holds the owned inspection the placements came from, so `Glyphs` keeps it, takes the dense `DetachedGlyph.index`
-that `setMatrixAt` takes, and returns the owned contours of the layout glyph at that glyph's `sourceIndex`. It is data
-like `glyphAt`, so it reads after the source re-lays out and after the font or the `Glyphs` object is disposed.
+already holds the owned inspection the placements came from, so `Glyphs` keeps it and returns
+`text.glyphs().outlineAt(index)`. `Glyphs` uses one index, the layout glyph index (`text.glyphs()`, `withGlyphs`,
+`GlyphPlacement.index`), and every per-glyph datum is a parallel array at it (user directive, 2026-10-07): `count` is
+the layout's glyph count, blank glyphs stay in the index space with `drawn: false`, and `DetachedGlyph.sourceIndex` and
+`ThreeGlyphMeasurement.sourceIndex` are removed because they would only name the same number. The outline is data like
+`glyphAt`, so it reads after the source re-lays out and after the font or the `Glyphs` object is disposed.
 
 A missing outline at read time is by design: outlines are optional, so every read of a font without them throws, and
 the message says whether the font was baked without outlines or its load skipped them. A caller that needs outlines

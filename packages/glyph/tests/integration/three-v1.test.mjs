@@ -1146,7 +1146,6 @@ test('same-source drop caps compose through an explicit multi-line flow region',
       bodySelection: selection(2, source.length),
       measurements: text.measureGlyphs()?.map((placement) => ({
         index: placement.index,
-        sourceIndex: placement.sourceIndex,
         shapedOrigin: placement.shapedOrigin.toArray(),
         drawnOrigin: placement.drawnOrigin.toArray(),
         matrix: placement.originalMatrix.toArray(),
@@ -1222,7 +1221,11 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
     label.visible = false;
 
     assert.ok(detached.count > 0);
-    assert.ok(detached.count < label.glyphs().glyphCount, 'the non-drawing space remains semantic-only');
+    assert.equal(detached.count, label.glyphs().glyphCount, 'the non-drawing space keeps its index');
+    assert.ok(
+      Array.from({ length: detached.count }, (_, index) => detached.glyphAt(index)).some((entry) => !entry.drawn),
+      'the non-drawing space is present and undrawn',
+    );
     assert.ok(
       detached.children.some((child) => child.isMesh),
       'the copied checkpoint must realize Three draws',
@@ -1293,12 +1296,22 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
       identity.elements,
       'the detached root transform must realize as exact identity without an inverse round trip',
     );
+    const entries = Array.from({ length: detached.count }, (_, index) => detached.glyphAt(index));
+    assert.equal(detached.count, label.glyphs().glyphCount, 'count is the layout glyph count');
+    assert.deepEqual(
+      entries.map((entry) => entry.index),
+      entries.map((_, index) => index),
+      'an index is the layout index',
+    );
     assert.ok(
-      Array.from({ length: detached.count }, (_, index) => detached.glyphAt(index)).some(
-        (entry) => entry.sourceIndex > entry.index,
-      ),
+      entries.some((entry) => !entry.drawn),
+      'the semantic-only space stays in the index space, undrawn',
+    );
+    assert.ok(
+      entries.findIndex((entry) => !entry.drawn) < entries.findLastIndex((entry) => entry.drawn),
       'the fixture must include drawable glyphs after a semantic-only space',
     );
+    assert.ok(entries.every((entry) => !('sourceIndex' in entry)));
     let comparedRecords = 0;
     for (let detachedRecord = 0; detachedRecord < detachedStableIds.count; detachedRecord += 1) {
       const stableId = detachedStableIds.getX(detachedRecord);
@@ -1328,7 +1341,7 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
       );
       comparedRecords += 1;
     }
-    assert.equal(comparedRecords, detached.count);
+    assert.equal(comparedRecords, entries.filter((entry) => entry.drawn).length, 'every drawn glyph owns one record');
     assert.notEqual(draw.material, sourceDraw.material, 'the detached branch owns independent material state');
     const sourceOpacity = sourceDraw.material.opacity;
     detached.materials[0].opacity = 0.35;
@@ -1347,7 +1360,7 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
     assert.deepEqual(Array.from(detachedStableIds.array), detachedStableIdsBeforeSourceEdit);
     assert.deepEqual(Array.from(detachedOrigins.array), detachedOriginsBeforeSourceEdit);
     const transforms = draw.geometry.getAttribute('_pmndrsGlyphInstanceTransforms');
-    assert.ok(transforms.count / 4 >= detached.count, 'storage covers the copied plan physical record capacity');
+    assert.ok(transforms.count / 4 >= comparedRecords, 'storage covers the copied plan physical record capacity');
     const pbo = { needsUpdate: false };
     transforms.pbo = pbo;
     const version = transforms.version;

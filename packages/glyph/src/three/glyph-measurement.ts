@@ -27,10 +27,8 @@ export interface ThreeGlyphGeometrySource {
 
 export interface ThreeGlyphMeasurement {
   readonly key: GlyphKey;
-  /** Dense index in the collection that returned this measurement. */
+  /** The glyph's layout index, the same index `text.glyphs()` and `Glyphs` use. */
   readonly index: number;
-  /** Original visual-order index in the committed source paragraph. */
-  readonly sourceIndex: number;
   readonly shapedOrigin: THREE.Vector3;
   readonly drawnOrigin: THREE.Vector3;
   /** Caller-owned glyph-transform snapshot in the source Text's local space. */
@@ -137,7 +135,6 @@ function measureGlyph(
   return Object.freeze({
     key: placement.key,
     index: placement.index,
-    sourceIndex: placement.index,
     shapedOrigin,
     drawnOrigin,
     originalMatrix,

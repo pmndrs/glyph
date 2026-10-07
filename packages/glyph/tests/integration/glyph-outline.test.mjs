@@ -430,24 +430,31 @@ function dispose({ group, text, glyphs }) {
   group.dispose();
 }
 
-test('Glyphs.outlineAt takes the dense index and equals the source outline at sourceIndex', async (t) => {
+test('Glyphs.outlineAt takes the layout index, equals the source outline at every index, and blanks are present', async (t) => {
   const three = await createHandle(t);
   const [latin, icon] = await Promise.all([load(bakes.inter), load(bakes.icons)]);
   const mounted = breakApartMounted(three, createFontStack(latin, icon), `  A b${String.fromCodePoint(0xf0ac)} I`);
   try {
     const { glyphs, text } = mounted;
     const layout = text.glyphs();
-    assert.ok(glyphs.count > 0 && glyphs.count < layout.glyphCount, 'blank glyphs are not drawable records');
-    let shifted = 0;
+    assert.equal(glyphs.count, layout.glyphCount, 'blank glyphs stay in the index space');
+    let blanks = 0;
     for (let index = 0; index < glyphs.count; index += 1) {
       const detached = glyphs.glyphAt(index);
-      if (detached.index !== detached.sourceIndex) shifted += 1;
-      const outline = glyphs.outlineAt(detached.index);
-      assert.deepEqual(outline, layout.outlineAt(detached.sourceIndex), `glyph ${index}`);
-      assert.ok(outline.length > 0, `drawable glyph ${index} has ink`);
+      assert.equal(detached.index, index);
+      assert.equal('sourceIndex' in detached, false);
+      const outline = glyphs.outlineAt(index);
+      assert.deepEqual(outline, layout.outlineAt(index), `glyph ${index}`);
+      if (!detached.drawn) {
+        blanks += 1;
+        assert.deepEqual(outline, [], `blank glyph ${index} has no contours`);
+      } else {
+        assert.ok(outline.length > 0, `drawn glyph ${index} has ink`);
+      }
     }
-    assert.ok(shifted > 0, 'a dense index must differ from its source index for the test to mean anything');
-    assert.notEqual(glyphs.outlineAt(0), glyphs.outlineAt(0), 'each call returns a new outer array');
+    assert.ok(blanks >= 3, 'the fixture starts with blanks, so a layout index is not a count of drawn glyphs');
+    assert.equal(glyphs.glyphAt(0).drawn, false);
+    assert.notEqual(glyphs.outlineAt(2), glyphs.outlineAt(2), 'each call returns a new outer array');
   } finally {
     dispose(mounted);
     latin.dispose();
@@ -496,6 +503,9 @@ test('Glyphs.outlineAt rejects an index that is not a glyph of the object', asyn
     const { glyphs } = mounted;
     for (const index of [-1, glyphs.count, glyphs.count + 1, 0.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       assert.throws(() => glyphs.outlineAt(index), RangeError, String(index));
+      assert.throws(() => glyphs.glyphAt(index), RangeError, `glyphAt ${String(index)}`);
+      assert.throws(() => glyphs.getMatrixAt(index, new THREE.Matrix4()), RangeError, `getMatrixAt ${String(index)}`);
+      assert.throws(() => glyphs.setMatrixAt(index, new THREE.Matrix4()), RangeError, `setMatrixAt ${String(index)}`);
     }
   } finally {
     dispose(mounted);
@@ -512,6 +522,38 @@ test('Glyphs.outlineAt throws the missing-outline error for a font without outli
       () => mounted.glyphs.outlineAt(0),
       new TypeError('font was baked without outlines; outlines need a font prebaked with glyph bake --outlines'),
     );
+  } finally {
+    dispose(mounted);
+    font.dispose();
+  }
+});
+
+test('a blank glyph keeps a matrix at its layout index and draws nothing', async (t) => {
+  const three = await createHandle(t);
+  const font = await load(bakes.inter);
+  const mounted = breakApartMounted(three, font, ' H');
+  try {
+    const { glyphs } = mounted;
+    const [blank, drawn] = [glyphs.glyphAt(0), glyphs.glyphAt(1)];
+    assert.deepEqual([blank.drawn, drawn.drawn], [false, true]);
+    const rest = new THREE.Matrix4();
+    glyphs.getMatrixAt(0, rest);
+    const measured = glyphs.measurements[0];
+    assert.equal(measured.index, 0);
+    assert.deepEqual(rest.elements, measured.originalMatrix.elements, 'a blank glyph rests at its pen origin');
+    const draw = glyphs.children.find((child) => child.isMesh);
+    const transforms = draw.geometry.getAttribute('_pmndrsGlyphInstanceTransforms');
+    const version = transforms.version;
+    const moved = new THREE.Matrix4().makeTranslation(5, 6, 7);
+    glyphs.setMatrixAt(0, moved);
+    const read = new THREE.Matrix4();
+    glyphs.getMatrixAt(0, read);
+    assert.deepEqual(read.elements, moved.elements, 'the blank matrix is stored');
+    assert.equal(transforms.version, version, 'no shader transform is written for a glyph without a record');
+    glyphs.setMatrixAt(1, moved);
+    assert.ok(transforms.version > version, 'a drawn glyph writes its record');
+    glyphs.getMatrixAt(0, read);
+    assert.deepEqual(read.elements, moved.elements, 'writes do not cross between glyphs');
   } finally {
     dispose(mounted);
     font.dispose();

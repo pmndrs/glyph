@@ -210,6 +210,9 @@ const [detachedGlyphs, detachedDecorations] = label.breakApart();
 detachedGlyphs satisfies Glyphs;
 detachedDecorations satisfies Decorations | undefined;
 detachedGlyphs.outlineAt(0) satisfies GlyphOutlineContour[];
+detachedGlyphs.glyphAt(0).drawn satisfies boolean;
+// @ts-expect-error A detached glyph is addressed by its layout index only.
+void detachedGlyphs.glyphAt(0).sourceIndex;
 void detachedGlyphs;
 void detachedDecorations;
 // @ts-expect-error Detached glyph branches are created only by Text.breakApart().

@@ -804,13 +804,14 @@ its fallback font and callers never handle `Font` objects.
   glyph's frozen tuples are built on its first owned read and shared by every later one, and each call returns a new
   outer array over them. Glyphs of fonts without outlines throw at the call.
 - **Detached:** `Glyphs.outlineAt(index)` is the path for a split glyph. `breakApart()` already holds the owned
-  inspection its placements came from, so `Glyphs` keeps it and answers `outlineAt(index)` with the same
-  `GlyphOutlineContour[]` as `text.glyphs().outlineAt(sourceIndex)`. The index is the dense `DetachedGlyph.index` that
-  `glyphAt` and `setMatrixAt` take, not `sourceIndex`: blank glyphs have no record, so the two differ after the first
-  one. Coordinates are em units, y down, origin at the glyph's pen origin, which is the pivot of `setMatrixAt`'s matrix;
-  a caller scales by `DetachedGlyph.fontSize` and negates y to get the local frame that matrix places. It is data like
-  `glyphAt`: it reads after the source text re-lays out, after the font is disposed, and after the `Glyphs` object is
-  disposed, and it throws `RangeError` for an index that is not a glyph of the object. No other detached or
+  inspection its placements came from, so `Glyphs` keeps it and answers `outlineAt(index)` with exactly
+  `text.glyphs().outlineAt(index)`. `Glyphs` has one index, the layout glyph index of `text.glyphs()`, `withGlyphs`, and
+  `GlyphPlacement.index`: `count` is the layout's glyph count, and `glyphAt`, `measurements`, `outlineAt`, and the
+  matrix methods are parallel arrays at it. Blank glyphs stay in the index space with `DetachedGlyph.drawn: false` and
+  an outline of `[]`. Coordinates are em units, y down, origin at the glyph's pen origin, which is the pivot of
+  `setMatrixAt`'s matrix; a caller scales by `DetachedGlyph.fontSize` and negates y to get the local frame that matrix
+  places. It is data like `glyphAt`: it reads after the source text re-lays out, after the font is disposed, and after
+  the `Glyphs` object is disposed, and it throws `RangeError` outside `0 <= index < count`. No other detached or
   Three-side object reads outlines.
 
 A line keeps its midpoint as its control point in both paths, so code that ignores the flag still draws it. Contours
@@ -877,8 +878,8 @@ against it, check that `H` sits on the baseline in em units at two font sizes, c
 invariants, target refill, and a line's midpoint control, compare owned tuples with the borrowed views, decode a
 font-stack fallback glyph from its own font, read the same Text through its Wasm-backed and then its inspection-backed
 borrow with Wasm memory grown between decodes, and read identical outlines from Bitmap and Slug. A detached `Glyphs`
-object's outlines equal the source's at `sourceIndex` for every glyph of a paragraph that starts with blanks, survive a
-re-layout and the font's disposal, and reject indices outside the object. Load tests cover every mode with and without
+object's outlines equal the source's at the same index for every glyph of a paragraph that starts with blanks (blanks
+return `[]`), survive a re-layout and the font's disposal, and reject indices outside the object. Load tests cover every mode with and without
 outlines, `'require'` through bytes and a baked URL, skip-then-auto, auto-then-skip, and concurrent loads in both orders
 converging on one font with outlines, and an invalid value.
 
@@ -952,7 +953,12 @@ callers update the detached root once, invert its world matrix once, convert eac
 root-relative resource leases belong to each detached object,
 so the pair may outlive the source `Text`, font, and loader without sharing mutable presentation state. The source `Text`
 stays live and may continue publishing while detached objects remain unchanged.
-`Glyphs.outlineAt(index)` reads a split glyph's outline by the same dense index, from the owned inspection `breakApart()`
+`Glyphs` has one index, the layout glyph index `text.glyphs()` uses: `count` is the layout's glyph count, blank glyphs
+stay in the index space with `DetachedGlyph.drawn: false`, and `glyphAt`, `measurements`, `outlineAt`, and the matrix
+methods are parallel arrays at it, throwing `RangeError` outside `0 <= index < count`. Matrices and pivots are flat
+per-glyph arrays (`count * 16` and `count * 2`) and a dense `Int32Array` maps a glyph to its physical record, `-1` for
+none. A blank glyph's matrix rests at its pen origin, `setMatrixAt` stores it, and no shader transform is written for a
+glyph without a record. `Glyphs.outlineAt(index)` reads a split glyph's outline from the owned inspection `breakApart()`
 retained ([Glyph outlines](#glyph-outlines)).
 
 Decoration passes are not glyph records and retain an independent object and lifetime; tuple slot two is `undefined`
