@@ -3,7 +3,7 @@ import {
   FONT_FORMAT_VERSION as CORE_FORMAT_VERSION,
 } from './font-baker/contract.js';
 
-import type { Font, FontBytesInput, FontInput, FontMetrics, RegisteredFont } from './font.js';
+import type { Font, FontBytesInput, FontInput, FontMetrics, FontOutlineMode, RegisteredFont } from './font.js';
 import type { GlyphOutlineStore } from './glyph-outline.js';
 import { GlyphError } from './glyph-error.js';
 import {
@@ -73,30 +73,11 @@ let nextObjectIdentity = 1;
 let defaultRuntimeBakePromise: Promise<RuntimeFontBake> | undefined;
 const objectIdentities = new WeakMap<object, number>();
 
-/**
- * How one load treats a font's glyph outlines, which are optional data a font carries only when it was baked with
- * `glyph bake --outlines`:
- *
- * - `'auto'` decodes them when the font has them and loads without them otherwise.
- * - `'require'` decodes them and rejects with `FONT_OUTLINES_UNAVAILABLE` when the font has none.
- * - `'skip'` neither decodes nor retains them, which avoids their decode time and memory for a caller that never
- *   reads an outline.
- */
-export type FontOutlineMode = 'auto' | 'require' | 'skip';
-
 const fontOutlineModes: readonly FontOutlineMode[] = ['auto', 'require', 'skip'];
 
-/** Options accepted by one font load. */
+/** Cancellation accepted by one font load. */
 export interface FontLoadOptions {
-  /** Cancels the load. */
   readonly signal?: AbortSignal;
-  /**
-   * Whether this load decodes the font's glyph outlines. Defaults to `'auto'`. A font loaded again, even with another
-   * mode, is one font: a later `'auto'` or `'require'` load adds outlines to a font an earlier `'skip'` load left
-   * without them, and a later `'skip'` never removes outlines the font already has. A read of a font without
-   * outlines throws, so `'require'` is the way to find out at load time.
-   */
-  readonly outlines?: FontOutlineMode;
 }
 
 export interface FontLoadDiagnostic {
@@ -113,6 +94,8 @@ export type LoadFontInput =
       readonly source: string | URL | FontBytesInput;
       readonly runtimeBake: RuntimeFontBake;
       readonly unicodeRanges?: readonly RuntimeBakeUnicodeRange[];
+      /** A runtime bake makes no outlines, so only `'skip'` and `'auto'` can succeed. */
+      readonly outlines?: FontOutlineMode;
     };
 
 /** Nonempty raster-input tuple used by one multi-raster font load. */
@@ -579,14 +562,14 @@ export class FontLoader {
   load(input: FontInput, options: FontLoadOptions = {}): Promise<RegisteredFont> {
     options.signal?.throwIfAborted();
     const request = resolveFontRequest(input, this.#baseUrl);
-    const outlines = options.outlines ?? 'auto';
-    // Loads that treat outlines differently are separate loads of one font, which the registry then merges.
-    const key = `${requestKey(request)}:outlines:${outlines}`;
-    const shared = this.#sharedLoad(request, key, outlines);
+    // The request key includes the outline mode: loads that differ in it are separate loads of one font, which the
+    // registry then merges.
+    const key = requestKey(request);
+    const shared = this.#sharedLoad(request, key);
     const active = consumeSharedLoad(shared, options.signal).then((font) => {
       if (this.registry.get(font.key) === font) return font;
       if (this.#loads.get(key) === shared) this.#loads.delete(key);
-      return consumeSharedLoad(this.#sharedLoad(request, key, outlines), options.signal);
+      return consumeSharedLoad(this.#sharedLoad(request, key), options.signal);
     });
     return active;
   }
@@ -594,7 +577,7 @@ export class FontLoader {
   /** @internal Return a currently registered load without crossing a Promise boundary. */
   _peek(input: FontInput): RegisteredFont | undefined {
     const request = resolveFontRequest(input, this.#baseUrl);
-    const key = `${requestKey(request)}:outlines:auto`;
+    const key = requestKey(request);
     const shared = this.#loads.get(key);
     const font = shared?.value;
     if (font === undefined) return undefined;
@@ -603,7 +586,7 @@ export class FontLoader {
     return undefined;
   }
 
-  #sharedLoad(request: ResolvedFontRequest, key: string, outlines: FontOutlineMode): SharedFontLoad {
+  #sharedLoad(request: ResolvedFontRequest, key: string): SharedFontLoad {
     let shared = this.#loads.get(key);
     if (shared?.controller.signal.aborted === true) {
       this.#loads.delete(key);
@@ -612,7 +595,7 @@ export class FontLoader {
     if (shared === undefined) {
       const controller = new AbortController();
       let created!: SharedFontLoad;
-      const promise = this.#load(request, controller.signal, outlines).then(
+      const promise = this.#load(request, controller.signal).then(
         (font) => {
           created.settled = true;
           created.value = font;
@@ -641,7 +624,8 @@ export class FontLoader {
     return this.registry.attachRaster(font, bytes);
   }
 
-  async #load(request: ResolvedFontRequest, signal: AbortSignal, outlines: FontOutlineMode): Promise<RegisteredFont> {
+  async #load(request: ResolvedFontRequest, signal: AbortSignal): Promise<RegisteredFont> {
+    const { outlines } = request;
     if (request.bakedBytes !== undefined) {
       signal.throwIfAborted();
       return this.registry._registerAsset(
@@ -833,7 +817,6 @@ interface PreparedFontFaceSourceRequest {
   readonly runtimeBake?: RuntimeFontBake;
   readonly unicodeRanges?: readonly RuntimeBakeUnicodeRange[];
   readonly initialRasters: readonly PreparedRasterRequest[];
-  readonly outlines: FontOutlineMode;
   readonly key: string;
 }
 
@@ -987,9 +970,9 @@ class FontLibraryImpl implements FontLibrary {
     options: FontLoadOptions = {},
   ): Promise<FontFaceSourceLease> {
     this.#assertActive();
-    const { signal, outlines } = readFontLoadOptions(options, loadOptionKeys);
+    const signal = fontLoadSignal(options);
     signal?.throwIfAborted();
-    const prepared = prepareFontFaceSourceRequest(input, initialRasters, this.#config, outlines);
+    const prepared = prepareFontFaceSourceRequest(input, initialRasters, this.#config);
     let shared = this.#fontFaceSources.get(prepared.key);
     if (shared === undefined || shared.controller.signal.aborted) {
       const owned = ownPreparedFontFaceSourceBytes(prepared);
@@ -1011,7 +994,10 @@ class FontLibraryImpl implements FontLibrary {
     const signal = fontLoadSignal(options);
     signal?.throwIfAborted();
     const existing = this.#fontFaceContent.get(serialized.artifactFingerprint);
-    if (existing !== undefined && existing.contains(serialized)) return existing.acquire();
+    // Adoption decodes outlines ('auto'), so a shared font that an earlier load skipped them for is loaded and merged.
+    if (existing !== undefined && existing.contains(serialized) && existing.outlines() !== 'skipped') {
+      return existing.acquire();
+    }
     const { loadSerializedFontFaceSource } = await import('./internal/font-face-transfer-runtime.js');
     const candidate = await loadSerializedFontFaceSource(serialized, this.#config, signal);
     try {
@@ -1220,6 +1206,13 @@ class FontFaceSourceNode {
 
   get leaseCount(): number {
     return this.#leases;
+  }
+
+  /** Whether this font holds decoded outlines, has none to hold, or skipped ones its artifact carries. */
+  outlines(): 'present' | 'absent' | 'skipped' {
+    const data = getRegisteredFontData(this.#font);
+    if (data.glyphOutlines !== undefined) return 'present';
+    return data.glyphOutlinesSkipped === true ? 'skipped' : 'absent';
   }
 
   mergeAcquisition(candidate: RegisteredFont): void {
@@ -1466,7 +1459,7 @@ async function loadFontFaceSourceFont(
     ...(config.onDiagnostic === undefined ? {} : { onDiagnostic: config.onDiagnostic }),
     ...(config.onWarning === undefined ? {} : { onWarning: config.onWarning }),
   });
-  const font = await loader.load(prepared.input, { signal, outlines: prepared.outlines });
+  const font = await loader.load(prepared.input, { signal });
   signal.throwIfAborted();
   return font;
 }
@@ -1596,7 +1589,6 @@ function prepareFontFaceSourceRequest(
   input: LoadFontInput,
   initialRasters: readonly (RasterFormatMetadata | RasterFormatRequestMetadata)[],
   config: ImmutableLoaderConfig,
-  outlines: FontOutlineMode,
 ): PreparedFontFaceSourceRequest {
   if (!Array.isArray(initialRasters)) throw new TypeError('FontFace initial formats must be an array');
   const rasters = initialRasters.map((raster, index) => prepareRasterRequest(raster, index));
@@ -1612,8 +1604,7 @@ function prepareFontFaceSourceRequest(
     ...(normalizedInput.runtimeBake === undefined ? {} : { runtimeBake: normalizedInput.runtimeBake }),
     ...(normalizedInput.unicodeRanges === undefined ? {} : { unicodeRanges: normalizedInput.unicodeRanges }),
     initialRasters: rasters,
-    outlines,
-    key: `${requestKey(resolved)}:outlines:${outlines}:runtime:${functionIdentity(normalizedInput.runtimeBake ?? config.runtimeBake)}:ranges:${canonicalJson(
+    key: `${requestKey(resolved)}:runtime:${functionIdentity(normalizedInput.runtimeBake ?? config.runtimeBake)}:ranges:${canonicalJson(
       normalizedInput.unicodeRanges?.map(({ start, end }) => ({ start, end })) ?? null,
     )}:font-face-source`,
   };
@@ -1632,10 +1623,12 @@ function ownFontInputBytes(input: FontInput): FontInput {
       ownership: 'transfer',
     };
   };
-  if (value.source === undefined) return { baked: own(value.baked!) };
+  const outlines = value.outlines === 'auto' ? {} : { outlines: value.outlines };
+  if (value.source === undefined) return { baked: own(value.baked!), ...outlines };
   return {
     source: own(value.source),
     ...(value.baked === undefined ? {} : { baked: value.baked === null ? null : own(value.baked) }),
+    ...outlines,
   };
 }
 
@@ -1651,8 +1644,9 @@ function prepareLoadInput(value: unknown): {
     if (source === undefined) throw new TypeError('runtime-baked font request requires a source');
     const unicodeRanges =
       value.unicodeRanges === undefined ? undefined : normalizeUnicodeRangeInput(value.unicodeRanges);
+    const outlines = fontOutlineMode(value.outlines);
     return {
-      input: { source, baked: null },
+      input: { source, baked: null, ...(outlines === 'auto' ? {} : { outlines }) },
       runtimeBake,
       ...(unicodeRanges === undefined ? {} : { unicodeRanges }),
     };
@@ -1743,6 +1737,7 @@ async function loadDefaultRuntimeBake(sourceUrl: string): Promise<RuntimeFontBak
 }
 
 interface ResolvedFontRequest {
+  readonly outlines: FontOutlineMode;
   readonly sourceUrl?: string;
   readonly sourceBytes?: FontBytesInput;
   readonly bakedUrl?: string;
@@ -2345,6 +2340,13 @@ function rasterSource(value: Record<string, unknown>, path: string): RasterRefer
 
 function resolveFontRequest(input: FontInput, baseUrl: URL | undefined): ResolvedFontRequest {
   const value = normalizeFontInput(input);
+  return { outlines: value.outlines, ...resolveFontLocations(value, baseUrl) };
+}
+
+function resolveFontLocations(
+  value: ReturnType<typeof normalizeFontInput>,
+  baseUrl: URL | undefined,
+): Omit<ResolvedFontRequest, 'outlines'> {
   if (value.source === undefined) {
     if (isFontBytesInput(value.baked)) return { bakedBytes: value.baked };
     return { bakedUrl: normalizeUrl(value.baked!, baseUrl) };
@@ -2373,8 +2375,9 @@ function resolveFontRequest(input: FontInput, baseUrl: URL | undefined): Resolve
 function normalizeFontInput(input: unknown): {
   source?: string | URL | FontBytesInput;
   baked?: string | URL | FontBytesInput | null;
+  outlines: FontOutlineMode;
 } {
-  if (typeof input === 'string' || input instanceof URL) return { source: input };
+  if (typeof input === 'string' || input instanceof URL) return { source: input, outlines: 'auto' };
   if (typeof input !== 'object' || input === null) {
     throw new GlyphFontError('INVALID_FONT_INPUT', 'font input must be a URL or source object');
   }
@@ -2387,13 +2390,18 @@ function normalizeFontInput(input: unknown): {
   return {
     ...(source === undefined ? {} : { source }),
     ...(baked === undefined ? {} : { baked }),
+    outlines: fontOutlineMode(Reflect.get(input, 'outlines')),
   };
 }
 
-function validatedFontInput(input: unknown): FontInput {
+/** @internal Validates a caller-authored font source object once, where it enters. */
+export function validatedFontInput(input: unknown): FontInput {
   const value = normalizeFontInput(input);
-  if (value.source === undefined) return { baked: value.baked! };
-  return value.baked === undefined ? { source: value.source } : { source: value.source, baked: value.baked };
+  const outlines = value.outlines === 'auto' ? {} : { outlines: value.outlines };
+  if (value.source === undefined) return { baked: value.baked!, ...outlines };
+  return value.baked === undefined
+    ? { source: value.source, ...outlines }
+    : { source: value.source, baked: value.baked, ...outlines };
 }
 
 function normalizeUrl(value: string | URL, baseUrl: URL | undefined): string {
@@ -2435,7 +2443,7 @@ function resolveBaseUrl(value: string | URL | undefined): URL | undefined {
 }
 
 function requestKey(request: ResolvedFontRequest): string {
-  return `font:${CORE_FORMAT_VERSION}:${CORE_BAKER_VERSION}:${request.sourceUrl ?? byteInputKey(request.sourceBytes)}:${request.bakedUrl ?? byteInputKey(request.bakedBytes)}`;
+  return `font:${CORE_FORMAT_VERSION}:${CORE_BAKER_VERSION}:outlines:${request.outlines}:${request.sourceUrl ?? byteInputKey(request.sourceBytes)}:${request.bakedUrl ?? byteInputKey(request.bakedBytes)}`;
 }
 
 function isHierarchical(url: URL): boolean {
@@ -2604,33 +2612,28 @@ function byteInputKey(input: FontBytesInput | undefined): string {
   return `bytes:${objectIdentity(input.bytes.buffer)}:${input.bytes.byteOffset}:${input.bytes.byteLength}:${input.ownership ?? 'copy'}`;
 }
 
-const loadOptionKeys = ['signal', 'outlines'] as const;
-
-/** Validates caller-authored font-load options once, where they enter, accepting only `keys`. */
-function readFontLoadOptions(
-  options: unknown,
-  keys: readonly (typeof loadOptionKeys)[number][],
-): { readonly signal: AbortSignal | undefined; readonly outlines: FontOutlineMode } {
+/** @internal Validate font-load options at an adapter call boundary. */
+export function fontLoadSignal(options: unknown): AbortSignal | undefined {
   if (!isNonArrayObject(options)) throw new TypeError('font load options must be an object');
-  if (Object.keys(options).some((key) => !(keys as readonly string[]).includes(key))) {
-    throw new TypeError(`font load options only accept ${keys.join(' and ')}`);
+  if (Object.keys(options).some((key) => key !== 'signal')) {
+    throw new TypeError('font load options only accept signal');
   }
   const signal = options.signal;
   if (signal !== undefined && !(signal instanceof AbortSignal)) {
     throw new TypeError('font load signal must be an AbortSignal');
   }
-  const outlines = options.outlines === undefined ? 'auto' : options.outlines;
-  if (!fontOutlineModes.includes(outlines as FontOutlineMode)) {
-    throw new TypeError(
-      `font load outlines must be ${fontOutlineModes.map((mode) => `'${mode}'`).join(', ')}; received ${String(outlines)}`,
-    );
-  }
-  return { signal, outlines: outlines as FontOutlineMode };
+  return signal;
 }
 
-/** @internal Validate font-load options at an adapter call boundary that has no other option. */
-export function fontLoadSignal(options: unknown): AbortSignal | undefined {
-  return readFontLoadOptions(options, ['signal']).signal;
+/** @internal Validates a caller-authored outline mode where it enters, defaulting to `'auto'`. */
+export function fontOutlineMode(value: unknown): FontOutlineMode {
+  if (value === undefined) return 'auto';
+  if (!fontOutlineModes.includes(value as FontOutlineMode)) {
+    throw new TypeError(
+      `font outlines must be ${fontOutlineModes.map((mode) => `'${mode}'`).join(', ')}; received ${String(value)}`,
+    );
+  }
+  return value as FontOutlineMode;
 }
 
 function objectIdentity(value: object): number {

@@ -833,8 +833,10 @@ a font that first loaded without outlines adds its store to the deduplicated fon
 instance compiled from the module the engine shared, so a caller-supplied `glyph.init({ wasm })` decodes too, or from
 the default module when a font loads before the engine starts; the instance is released afterwards.
 
-`FontLoadOptions.outlines` sets what one load does about them, named for the bake's `font.outlines` and validated once
-at the load call (any other value is a `TypeError` naming the three):
+`outlines` on the font source object (`FontSourceOverride` and `BakedFontSource`, beside `baked`) sets what one load does
+about them, named for the bake's `font.outlines`. It is a per-font choice like `baked: null`, so it is part of the source
+and of the load's request key, and is validated with the rest of the source (any other value is a `TypeError` naming the
+three). A bare string or URL source means `'auto'`:
 
 - `'auto'` (the default) decodes them when the artifact has them and loads without them otherwise.
 - `'skip'` neither decodes nor retains them, for a caller that never reads an outline. Reads then throw the skipped
@@ -842,13 +844,16 @@ at the load call (any other value is a `TypeError` naming the three):
 - `'require'` rejects with `GlyphFontError` reason `FONT_OUTLINES_UNAVAILABLE` when the font has none. It is a new
   reason because no existing one fits: `INVALID_FONT_ASSET` means a malformed artifact, and this artifact is valid. It
   follows `FONT_FACE_FORMAT_UNAVAILABLE`, which also reports a capability the caller required and the font lacks, and
-  it is not a warning because the caller asked for a hard requirement. A baked URL without outlines reports it as
+  it is not a warning, unlike a missing sibling's `BAKED_FONT_MISSING`, because the caller asked for a hard requirement,
+  and `'auto'` with no outlines is silent because outlines are optional. A baked URL without outlines reports it as
   itself, not as `BAKED_FONT_INVALID`, and a runtime bake makes no outlines, so `'require'` rejects there.
 
 Loads that differ only in this option are separate loads of one font, which the font library merges by content:
 outlines are only ever added. A later `'auto'` or `'require'` attaches outlines to a font an earlier `'skip'` left
-without them, so reads through the earlier `Font` work too, and a later `'skip'` removes nothing. `FontFace` loads
-with the default; only `loadFont` and `FontLibrary.loadFont` take the option. Measured natively
+without them, so reads through the earlier `Font` work too, and a later `'skip'` removes nothing. `glyph.fontFace()`
+accepts only a URL, `Blob`, or `SerializedFontFace` (the canonical source, not the loader's request object), so it
+loads with `'auto'`; the option is reachable through `loadFont` and `FontLibrary.loadFont`, which are not a public
+subpath, until `fontFace` accepts a source object. Measured natively
 over every glyph: Inter 2,937 glyphs in 3.6 ms to 1.37 MB, Source Serif 4 2.1 ms to 0.85 MB, Font Awesome 3.9 ms to
 1.62 MB, Amiri 6,710 glyphs in 13.3 ms to 5.06 MB, and Noto Sans CJK JP 65,535 glyphs in 757 ms to 129 MB. Outlines
 are opt-in and a subset bake shrinks a large face; the planned triplet stream (#244) replaces this decode with a faster

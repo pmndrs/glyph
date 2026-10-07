@@ -8,7 +8,7 @@ generated:
 
 `Text.breakApart()` split glyphs had no way to read their outlines, although the owned inspection their placements came
 from already carries them. `Glyphs.outlineAt(index)` now answers from that retained inspection by the dense
-`DetachedGlyph.index`, and reads after a re-layout of the source or disposal of the font. `FontLoadOptions.outlines`
+`DetachedGlyph.index`, and reads after a re-layout of the source or disposal of the font. `outlines` on the font source, beside `baked`
 (`'auto'`, `'skip'`, `'require'`) lets one load skip decoding outlines or demand them; `'require'` rejects with the new
 `GlyphFontError` reason `FONT_OUTLINES_UNAVAILABLE`, loads that differ only in the mode converge on one font that only
 gains outlines, and a read of a skipped font says so instead of claiming the font was baked without outlines. The

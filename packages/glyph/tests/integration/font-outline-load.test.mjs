@@ -36,7 +36,10 @@ before(async () => {
 
 after(() => rm(root, { recursive: true, force: true }));
 
-const input = (name) => ({ baked: { bytes: bytes[name], ownership: 'copy' } });
+const input = (name, outlines) => ({
+  baked: { bytes: bytes[name], ownership: 'copy' },
+  ...(outlines === undefined ? {} : { outlines }),
+});
 const dataOf = (font) => getRegisteredFontData(immutableFontResources(font).font);
 
 /** What a caller sees: the first glyph's outline, or the error that read throws. */
@@ -71,13 +74,13 @@ test('a default load of a font without outlines succeeds and reads throw the bak
 });
 
 test("outlines: 'auto' is the default", async () => {
-  const font = await loadFont(input('outlined'), raster, { outlines: 'auto' });
+  const font = await loadFont(input('outlined', 'auto'), raster);
   assert.ok(dataOf(font).glyphOutlines !== undefined);
   font.dispose();
 });
 
 test("outlines: 'skip' decodes and retains nothing, and a read says the outlines were skipped", async (t) => {
-  const font = await loadFont(input('outlined'), raster, { outlines: 'skip' });
+  const font = await loadFont(input('outlined', 'skip'), raster);
   assert.equal(dataOf(font).glyphOutlines, undefined);
   const error = await readFirstOutline(t, font);
   assert.ok(error instanceof TypeError);
@@ -86,14 +89,14 @@ test("outlines: 'skip' decodes and retains nothing, and a read says the outlines
 });
 
 test("outlines: 'skip' on a font without outlines keeps the baked-without message", async (t) => {
-  const font = await loadFont(input('plain'), raster, { outlines: 'skip' });
+  const font = await loadFont(input('plain', 'skip'), raster);
   const error = await readFirstOutline(t, font);
   assert.match(error.message, baked);
   font.dispose();
 });
 
 test("outlines: 'require' rejects a font without outlines with FONT_OUTLINES_UNAVAILABLE", async () => {
-  await assert.rejects(loadFont(input('plain'), raster, { outlines: 'require' }), (error) => {
+  await assert.rejects(loadFont(input('plain', 'require'), raster), (error) => {
     assert.ok(error instanceof GlyphFontError);
     assert.equal(error.reason, 'FONT_OUTLINES_UNAVAILABLE');
     assert.equal(error.code, 'resource-unavailable');
@@ -106,7 +109,7 @@ test("outlines: 'require' rejects a baked URL without outlines as itself, not as
     fetch: async () => new Response(Uint8Array.from(bytes.plain)),
   });
   const url = 'https://fonts.test/plain.font.glb';
-  await assert.rejects(library.loadFont({ baked: url }, raster, { outlines: 'require' }), (error) => {
+  await assert.rejects(library.loadFont({ baked: url, outlines: 'require' }, raster), (error) => {
     assert.ok(error instanceof GlyphFontError);
     assert.equal(error.reason, 'FONT_OUTLINES_UNAVAILABLE');
     assert.equal(error.url, url);
@@ -119,7 +122,7 @@ test("outlines: 'require' rejects a baked URL without outlines as itself, not as
 });
 
 test("outlines: 'require' loads a font with outlines", async (t) => {
-  const font = await loadFont(input('outlined'), raster, { outlines: 'require' });
+  const font = await loadFont(input('outlined', 'require'), raster);
   assert.ok(dataOf(font).glyphOutlines !== undefined);
   assert.ok(Array.isArray(await readFirstOutline(t, font)));
   font.dispose();
@@ -127,9 +130,9 @@ test("outlines: 'require' loads a font with outlines", async (t) => {
 
 test("a later 'auto' or 'require' load adds outlines to the font an earlier 'skip' load left without them", async (t) => {
   for (const later of ['auto', 'require']) {
-    const skipped = await loadFont(input('outlined'), raster, { outlines: 'skip' });
+    const skipped = await loadFont(input('outlined', 'skip'), raster);
     assert.match((await readFirstOutline(t, skipped)).message, skippedMessage);
-    const attached = await loadFont(input('outlined'), raster, { outlines: later });
+    const attached = await loadFont(input('outlined', later), raster);
     assert.equal(dataOf(attached), dataOf(skipped), 'one font backs both loads');
     assert.ok(dataOf(skipped).glyphOutlines !== undefined, `${later} attached outlines`);
     assert.equal(dataOf(skipped).glyphOutlinesSkipped, undefined);
@@ -142,7 +145,7 @@ test("a later 'auto' or 'require' load adds outlines to the font an earlier 'ski
 test("a later 'skip' load never removes outlines a font already has", async (t) => {
   const first = await loadFont(input('outlined'), raster);
   const store = dataOf(first).glyphOutlines;
-  const skipping = await loadFont(input('outlined'), raster, { outlines: 'skip' });
+  const skipping = await loadFont(input('outlined', 'skip'), raster);
   assert.equal(dataOf(skipping), dataOf(first));
   assert.equal(dataOf(first).glyphOutlines, store);
   assert.equal(dataOf(first).glyphOutlinesSkipped, undefined);
@@ -156,26 +159,23 @@ test('concurrent loads with different outline modes converge on one font with ou
     ['skip', 'auto'],
     ['auto', 'skip'],
   ]) {
-    const fonts = await Promise.all(modes.map((outlines) => loadFont(input('outlined'), raster, { outlines })));
+    const fonts = await Promise.all(modes.map((outlines) => loadFont(input('outlined', outlines), raster)));
     assert.equal(dataOf(fonts[0]), dataOf(fonts[1]));
     assert.ok(dataOf(fonts[0]).glyphOutlines !== undefined, modes.join(' then '));
     for (const font of fonts) font.dispose();
   }
 });
 
-test('an unknown outlines value or option key is a TypeError naming what is allowed', () => {
+test('an unknown outlines value on the source is a TypeError naming what is allowed', () => {
   for (const outlines of ['always', true, null, 1]) {
     assert.throws(
-      () => loadFont(input('outlined'), raster, { outlines }),
+      () => loadFont(input('outlined', outlines), raster),
       (error) => error instanceof TypeError && /'auto', 'require', 'skip'/.test(error.message),
       String(outlines),
     );
   }
   const library = createFontLibrary();
-  assert.throws(() => library.loadFont(input('outlined'), raster, { outlines: 'nope' }), /'auto', 'require', 'skip'/);
-  assert.throws(
-    () => library.loadFont(input('outlined'), raster, { outline: 'skip' }),
-    /only accept signal and outlines/,
-  );
+  assert.throws(() => library.loadFont(input('outlined', 'nope'), raster), /'auto', 'require', 'skip'/);
+  assert.throws(() => library.loadFont(input('outlined'), raster, { outlines: 'skip' }), /only accept signal/);
   library.dispose();
 });
