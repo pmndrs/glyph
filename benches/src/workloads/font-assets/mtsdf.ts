@@ -9,9 +9,14 @@ import devanagariCompressedFontUrl from '../../../fixtures/rendering/noto-sans-d
 import notoCjkShowcaseCompressedFontUrl from '../../../fixtures/rendering/noto-sans-cjk-showcase-mtsdf.font.glb.gz?url';
 import sourceSerifCompressedFontUrl from '../../../fixtures/rendering/source-serif-4-mtsdf.font.glb.gz?url';
 import showcaseManifest from '../../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json' with { type: 'json' };
-import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
+import {
+  OUTLINED_INTER_FIXTURE,
+  type BenchmarkFontFixture,
+  type ShowcaseFontFixture,
+} from '../../benchmark/font-fixtures';
 import type { BenchmarkFontAsset, BenchmarkFontAssetRequest } from './contracts';
 import { compiledMsdfData } from './compiled-data';
+import { loadOutlinedMtsdfFontAsset, preloadOutlinedFontAsset } from './outlined';
 import {
   createFontDeliveryMetrics,
   loadBakedFont,
@@ -25,7 +30,7 @@ export type { FontDeliveryMetrics } from './contracts';
 
 export type MtsdfFontAsset = Extract<BenchmarkFontAsset, { readonly technique: 'mtsdf' }>;
 
-const compressedFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
+const compressedFontUrls: Readonly<Record<ShowcaseFontFixture, string>> = {
   inter: interCompressedFontUrl,
   amiri: amiriCompressedFontUrl,
   'noto-sans-devanagari': devanagariCompressedFontUrl,
@@ -44,11 +49,13 @@ export async function preloadMtsdfFontAssets(
 ): Promise<void> {
   await Promise.all(
     fixtures.map((fixture) =>
-      preloadBakedFont({
-        artifact: compressedFontUrls[fixture],
-        raster: mtsdfFormat(),
-        ...(signal === undefined ? {} : { signal }),
-      }),
+      fixture === OUTLINED_INTER_FIXTURE
+        ? preloadOutlinedFontAsset('mtsdf', signal)
+        : preloadBakedFont({
+            artifact: compressedFontUrls[fixture],
+            raster: mtsdfFormat(),
+            ...(signal === undefined ? {} : { signal }),
+          }),
     ),
   );
 }
@@ -57,6 +64,7 @@ export async function loadMtsdfFontAsset(
   request: Extract<BenchmarkFontAssetRequest, { readonly technique: 'mtsdf' }>,
 ): Promise<MtsdfFontAsset> {
   const { delivery, fixture, onProgress, signal } = request;
+  if (fixture === OUTLINED_INTER_FIXTURE) return loadOutlinedMtsdfFontAsset(request);
   signal?.throwIfAborted();
   const metrics = createFontDeliveryMetrics(delivery);
   const manifest = fixtureManifests.get(fixture);

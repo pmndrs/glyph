@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ReactNode } from 'react';
 
 import type { BenchmarkSummary } from '../benchmark/contracts';
-import { createPayloadSummary } from '../benchmark/payload-summary';
+import { createPayloadSummary, withOutlinedFixture } from '../benchmark/payload-summary';
 import { useRuntimeTelemetry } from '../benchmark/runtime-world';
 import type { LiveBenchmarkCapture } from '../benchmark/product-result';
 import type { AdvancedShapingFrame } from '../workloads/advanced-shaping/scene';
@@ -22,6 +22,7 @@ import type { HarnessLocation, HarnessMode, RasterFormatName } from '../benchmar
 import bitmapFixtures from '../../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json';
 import mtsdfFixtures from '../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json';
 import slugFixtures from '../../fixtures/rendering/showcase-slug-fixtures-v0.json';
+import outlineFixtures from '../../fixtures/rendering/outline-fixtures-v0.json';
 import packageSizes from '../generated/package-sizes.json';
 import { CompactSheet, CompactWorkloadPanel, MobileNavigation } from './responsive-shell';
 import { ExportPanel } from './export-panel';
@@ -34,6 +35,11 @@ import { TopBar } from './top-bar';
 import { WorkloadRail } from './workload-rail';
 
 const FontNoticesDialog = lazy(() => import('./font-notices-dialog'));
+
+const payloadFixtureManifests = withOutlinedFixture(
+  { bitmap: bitmapFixtures, mtsdf: mtsdfFixtures, slug: slugFixtures },
+  outlineFixtures,
+);
 
 export interface HarnessLayoutProps {
   readonly actionEligible: boolean;
@@ -94,7 +100,7 @@ export function HarnessLayout({
     const presentationDefinition = benchmarkWorkloadDefinition(presentationWorkload);
     const presentationPayload = createPayloadSummary({
       delivery: location.delivery,
-      fixtureManifests: { bitmap: bitmapFixtures, mtsdf: mtsdfFixtures, slug: slugFixtures },
+      fixtureManifests: payloadFixtureManifests,
       fontFixture: activeFontFixture,
       ...(liveStats === undefined ? {} : { liveStats }),
       packageSizes,

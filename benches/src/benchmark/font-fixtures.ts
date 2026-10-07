@@ -6,7 +6,14 @@ export type BenchmarkFontFixture =
   | 'dot-gothic-16'
   | 'font-awesome-free-6.7.2'
   | 'source-serif-4'
-  | 'dancing-script';
+  | 'dancing-script'
+  | OutlinedFontFixture;
+
+/** Inter baked with glyph outlines, for workloads that read `outlineAt()`; baked ahead of time, never at runtime. */
+export const OUTLINED_INTER_FIXTURE = 'inter-outlines' as const;
+export type OutlinedFontFixture = typeof OUTLINED_INTER_FIXTURE;
+/** Every fixture that has an artifact in the showcase manifests. */
+export type ShowcaseFontFixture = Exclude<BenchmarkFontFixture, OutlinedFontFixture>;
 
 export type SelectableFontFixture = 'inter' | 'source-serif-4' | 'dancing-script';
 
@@ -90,6 +97,7 @@ export const BENCHMARK_FONT_LABELS: Readonly<Record<BenchmarkFontFixture, string
   'font-awesome-free-6.7.2': 'Font Awesome Free Solid 6.7.2',
   'source-serif-4': 'Source Serif 4 Regular 4.005',
   'dancing-script': 'Dancing Script Regular 3.000',
+  'inter-outlines': 'Inter Regular 4.1 with outlines',
 };
 
 export function liveWorkloadFontFixtures(workload: string, selected: BenchmarkFontFixture): LiveWorkloadFontFixtures {
@@ -130,6 +138,7 @@ const FONT_AWESOME_ICON_SPECIMEN: RasterConformanceSpecimen = {
 
 const rasterConformanceSpecimens: Readonly<Record<BenchmarkFontFixture, RasterConformanceSpecimen>> = {
   inter: LATIN_RASTER_CONFORMANCE_SPECIMEN,
+  'inter-outlines': LATIN_RASTER_CONFORMANCE_SPECIMEN,
   'source-serif-4': LATIN_RASTER_CONFORMANCE_SPECIMEN,
   'dancing-script': {
     text: 'The quick brown fox jumps over the lazy dog. AVATAR office affine forms flow.',

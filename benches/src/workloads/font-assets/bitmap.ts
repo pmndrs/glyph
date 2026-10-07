@@ -17,8 +17,13 @@ import sourceSerifBitmapFontUrl from '../../../fixtures/rendering/source-serif-4
 import sourceSerifBitmapDensityFontUrl from '../../../fixtures/rendering/source-serif-4-bitmap-16-32.font.glb?url';
 import densityManifest from '../../../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json' with { type: 'json' };
 import conformanceManifest from '../../../fixtures/rendering/showcase-raster-fixtures-v0.json' with { type: 'json' };
-import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
+import {
+  OUTLINED_INTER_FIXTURE,
+  type BenchmarkFontFixture,
+  type ShowcaseFontFixture,
+} from '../../benchmark/font-fixtures';
 import type { BenchmarkFontAsset, BenchmarkFontAssetRequest, BitmapFixtureDensity } from './contracts';
+import { loadOutlinedBitmapFontAsset, preloadOutlinedFontAsset } from './outlined';
 import { compiledBitmapData } from './compiled-data';
 import {
   createFontDeliveryMetrics,
@@ -36,7 +41,7 @@ export type BitmapFontAsset = Extract<BenchmarkFontAsset, { readonly technique: 
 const conformanceStrikes = [16] as const;
 const liveStrikes = [16, 32] as const;
 
-const bitmapFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
+const bitmapFontUrls: Readonly<Record<ShowcaseFontFixture, string>> = {
   inter: interBitmapFontUrl,
   amiri: amiriBitmapFontUrl,
   'noto-sans-devanagari': devanagariBitmapFontUrl,
@@ -47,7 +52,7 @@ const bitmapFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   'dancing-script': dancingScriptBitmapFontUrl,
 };
 
-const bitmapDensityFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
+const bitmapDensityFontUrls: Readonly<Record<ShowcaseFontFixture, string>> = {
   inter: interBitmapDensityFontUrl,
   amiri: amiriBitmapDensityFontUrl,
   'noto-sans-devanagari': devanagariBitmapDensityFontUrl,
@@ -66,23 +71,34 @@ export async function preloadBitmapFontAssets(
   density: BitmapFixtureDensity = 'live',
   signal?: AbortSignal,
 ): Promise<void> {
-  const urls = density === 'live' ? bitmapDensityFontUrls : bitmapFontUrls;
-  const strikes = density === 'live' ? liveStrikes : conformanceStrikes;
   await Promise.all(
     fixtures.map((fixture) =>
-      preloadBakedFont({
-        artifact: urls[fixture],
-        raster: bitmapFormat({ strikes }),
-        ...(signal === undefined ? {} : { signal }),
-      }),
+      fixture === OUTLINED_INTER_FIXTURE
+        ? preloadOutlinedFontAsset('bitmap', signal)
+        : preloadShowcaseBitmapFont(fixture, density, signal),
     ),
   );
+}
+
+async function preloadShowcaseBitmapFont(
+  fixture: ShowcaseFontFixture,
+  density: BitmapFixtureDensity,
+  signal?: AbortSignal,
+): Promise<void> {
+  const urls = density === 'live' ? bitmapDensityFontUrls : bitmapFontUrls;
+  const strikes = density === 'live' ? liveStrikes : conformanceStrikes;
+  await preloadBakedFont({
+    artifact: urls[fixture],
+    raster: bitmapFormat({ strikes }),
+    ...(signal === undefined ? {} : { signal }),
+  });
 }
 
 export async function loadBitmapFontAsset(
   request: Extract<BenchmarkFontAssetRequest, { readonly technique: 'bitmap' }>,
 ): Promise<BitmapFontAsset> {
   const { bitmapDensity, delivery, fixture, onProgress, signal } = request;
+  if (fixture === OUTLINED_INTER_FIXTURE) return loadOutlinedBitmapFontAsset(request);
   signal?.throwIfAborted();
   const metrics = createFontDeliveryMetrics(delivery);
   const strikes = bitmapDensity === 'live' ? liveStrikes : conformanceStrikes;

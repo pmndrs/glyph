@@ -7,7 +7,7 @@ import {
 } from '@pmndrs/glyph';
 
 import type { FontDelivery } from '../../benchmark/url-state';
-import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
+import type { ShowcaseFontFixture } from '../../benchmark/font-fixtures';
 import type { FontDeliveryMetrics } from './contracts';
 import { benchmarkFontLibrary, type RuntimeFontBake, type RuntimeFontBakeRequest } from './library';
 
@@ -20,7 +20,7 @@ import notoCjkSourceUrl from '../../../fixtures/fonts/noto-sans-cjk-showcase-v0/
 import devanagariSourceUrl from '../../../fixtures/fonts/noto-sans-devanagari/NotoSansDevanagari.ttf?url';
 import sourceSerifSourceUrl from '../../../fixtures/fonts/source-serif-4.005/SourceSerif4-Regular.ttf?url';
 
-const sourceUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
+const sourceUrls: Readonly<Record<ShowcaseFontFixture, string>> = {
   inter: interSourceUrl,
   amiri: amiriSourceUrl,
   'noto-sans-devanagari': devanagariSourceUrl,
@@ -39,7 +39,7 @@ if (import.meta.hot !== undefined) {
   });
 }
 
-export function sourceUrlForFixture(fixture: BenchmarkFontFixture): string {
+export function sourceUrlForFixture(fixture: ShowcaseFontFixture): string {
   return sourceUrls[fixture];
 }
 

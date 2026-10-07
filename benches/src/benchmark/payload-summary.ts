@@ -1,4 +1,4 @@
-import { liveWorkloadFontFixtures, type BenchmarkFontFixture } from './font-fixtures';
+import { liveWorkloadFontFixtures, OUTLINED_INTER_FIXTURE, type BenchmarkFontFixture } from './font-fixtures';
 import type { FontDelivery, RasterFormatName } from './url-state';
 import { benchmarkWorkloadDefinition, isBenchmarkWorkloadId } from '../workloads/catalog';
 import { workloadCompanionFontFixtures } from '../workloads/shared/definition';
@@ -52,6 +52,54 @@ export interface PayloadFixtureManifests {
   };
   readonly slug: {
     readonly artifacts: readonly SlugPayloadArtifact[];
+  };
+}
+
+/** The outlined Inter manifest: one artifact per raster format, none of them in the showcase manifests. */
+export interface OutlineFixtureManifest {
+  readonly artifacts: {
+    readonly bitmap: { readonly bytes: number; readonly decodedGpuBytes: number };
+    readonly mtsdf: { readonly basePaddedGpuBytes: number; readonly compressed: { readonly bytes: number } };
+    readonly slug: { readonly compressed: { readonly bytes: number }; readonly decodedGpuBytes: number };
+  };
+}
+
+/** Adds the outlined fixture to the showcase manifests, in each format's own artifact shape, so a route that keeps it resident reports its payload. */
+export function withOutlinedFixture(
+  manifests: PayloadFixtureManifests,
+  { artifacts }: OutlineFixtureManifest,
+): PayloadFixtureManifests {
+  return {
+    bitmap: {
+      artifacts: [
+        ...manifests.bitmap.artifacts,
+        {
+          bytes: artifacts.bitmap.bytes,
+          fontFixture: OUTLINED_INTER_FIXTURE,
+          raster: { decodedGpuBytes: artifacts.bitmap.decodedGpuBytes },
+        },
+      ],
+    },
+    mtsdf: {
+      artifacts: [
+        ...manifests.mtsdf.artifacts,
+        {
+          compressed: { bytes: artifacts.mtsdf.compressed.bytes },
+          fontFixture: OUTLINED_INTER_FIXTURE,
+          raster: { runtimeTextureArray: { basePaddedGpuBytes: artifacts.mtsdf.basePaddedGpuBytes } },
+        },
+      ],
+    },
+    slug: {
+      artifacts: [
+        ...manifests.slug.artifacts,
+        {
+          compressed: { bytes: artifacts.slug.compressed.bytes },
+          fontFixture: OUTLINED_INTER_FIXTURE,
+          raster: { decodedGpuBytes: artifacts.slug.decodedGpuBytes },
+        },
+      ],
+    },
   };
 }
 

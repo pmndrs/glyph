@@ -8,7 +8,11 @@ import devanagariCompressedFontUrl from '../../../fixtures/rendering/noto-sans-d
 import notoCjkShowcaseCompressedFontUrl from '../../../fixtures/rendering/noto-sans-cjk-showcase-slug.font.glb.gz?url';
 import sourceSerifCompressedFontUrl from '../../../fixtures/rendering/source-serif-4-slug.font.glb.gz?url';
 import showcaseManifest from '../../../fixtures/rendering/showcase-slug-fixtures-v0.json' with { type: 'json' };
-import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
+import {
+  OUTLINED_INTER_FIXTURE,
+  type BenchmarkFontFixture,
+  type ShowcaseFontFixture,
+} from '../../benchmark/font-fixtures';
 import type {
   AuthenticatedArtifactSize,
   BakedSlugArtifactSource,
@@ -16,6 +20,7 @@ import type {
   BenchmarkFontAssetRequest,
 } from './contracts';
 import { compiledSlugData } from './compiled-data';
+import { loadOutlinedSlugFontAsset, preloadOutlinedFontAsset } from './outlined';
 import {
   createFontDeliveryMetrics,
   loadBakedFont,
@@ -35,7 +40,7 @@ interface SlugFixtureManifest {
   readonly uncompressed: AuthenticatedArtifactSize;
 }
 
-const compressedFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
+const compressedFontUrls: Readonly<Record<ShowcaseFontFixture, string>> = {
   inter: interCompressedFontUrl,
   amiri: amiriCompressedFontUrl,
   'noto-sans-devanagari': devanagariCompressedFontUrl,
@@ -59,11 +64,13 @@ export async function preloadSlugFontAssets(
 ): Promise<void> {
   await Promise.all(
     fixtures.map((fixture) =>
-      preloadBakedFont({
-        artifact: compressedFontUrls[fixture],
-        raster: slugFormat(),
-        ...(signal === undefined ? {} : { signal }),
-      }),
+      fixture === OUTLINED_INTER_FIXTURE
+        ? preloadOutlinedFontAsset('slug', signal)
+        : preloadBakedFont({
+            artifact: compressedFontUrls[fixture],
+            raster: slugFormat(),
+            ...(signal === undefined ? {} : { signal }),
+          }),
     ),
   );
 }
@@ -72,6 +79,7 @@ export async function loadSlugFontAsset(
   request: Extract<BenchmarkFontAssetRequest, { readonly technique: 'slug' }>,
 ): Promise<SlugFontAsset> {
   const { delivery, fixture, onProgress, signal } = request;
+  if (fixture === OUTLINED_INTER_FIXTURE) return loadOutlinedSlugFontAsset(request);
   signal?.throwIfAborted();
   const metrics = createFontDeliveryMetrics(delivery);
   if (delivery === 'runtime') {
@@ -108,7 +116,7 @@ export async function loadSlugFontAsset(
   };
 }
 
-function fixtureManifestSource(fixture: BenchmarkFontFixture): BakedSlugArtifactSource {
+function fixtureManifestSource(fixture: ShowcaseFontFixture): BakedSlugArtifactSource {
   const manifest = fixtureManifests.get(fixture);
   if (manifest === undefined) throw new RangeError(`Unknown Slug font fixture: ${fixture}`);
   return { url: compressedFontUrls[fixture], compressed: manifest.compressed, uncompressed: manifest.uncompressed };

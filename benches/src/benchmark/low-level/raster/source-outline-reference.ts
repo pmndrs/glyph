@@ -13,6 +13,7 @@ import { compareRgba8Coverage } from './mtsdf-cpu-reference';
 
 const sourceFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   inter: interSourceUrl,
+  'inter-outlines': interSourceUrl,
   'source-serif-4': sourceSerifSourceUrl,
   'dancing-script': dancingScriptSourceUrl,
   amiri: amiriSourceUrl,
