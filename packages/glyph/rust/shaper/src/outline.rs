@@ -11,7 +11,8 @@
 
 use alloc::vec::Vec;
 use pmndrs_glyph_slug_core::{
-    Cubic, MAX_CUBIC_SUBDIVISIONS, Point, Quadratic, cubic_to_quadratics_into,
+    Cubic, DEFAULT_CUBIC_SUBDIVISIONS, MAX_CUBIC_SUBDIVISIONS, Point, Quadratic,
+    cubic_to_quadratics_into,
 };
 use read_fonts::{
     FontRef, TableProvider,
@@ -330,9 +331,10 @@ impl<C: PointCoord> Pending<C> {
 /// Points are endpoint-shared: a contour of `n` segments holds `2n + 1` points, `start, control,
 /// end, control, end, ...`, and its last point repeats its first, so segment `s` of contour `c` uses
 /// points `2s + c`, `2s + c + 1`, and `2s + c + 2`. A line becomes the quadratic whose control is its
-/// midpoint and is flagged in [`GlyphOutline::segment_lines`]; a cubic becomes four equal-parameter
-/// quadratics. Coordinates are font units divided by `unitsPerEm` with y negated, so the origin is
-/// the glyph's pen position on the baseline.
+/// midpoint and is flagged in [`GlyphOutline::segment_lines`]; a cubic becomes Slug's
+/// [`DEFAULT_CUBIC_SUBDIVISIONS`] (four) equal-parameter quadratics, within about 1.15 font units of
+/// the cubic on the CFF fixtures. Coordinates are font units divided by `unitsPerEm` with y negated,
+/// so the origin is the glyph's pen position on the baseline.
 #[derive(Default)]
 pub struct GlyphOutline {
     points: Vec<Point>,
@@ -512,7 +514,7 @@ impl OutlinePen for GlyphOutline {
                 p2: Point::new(second_x, second_y),
                 p3: Point::new(x, y),
             },
-            4,
+            DEFAULT_CUBIC_SUBDIVISIONS,
             &mut quadratics,
         );
         for quadratic in &quadratics[..count] {
