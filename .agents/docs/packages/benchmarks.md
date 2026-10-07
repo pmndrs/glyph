@@ -760,6 +760,12 @@ CI routes the installed-package lane by event. Pull requests default to the four
 dispatch accepts the same suite names. This routing changes only the installed-package timing report; correctness,
 browser, payload, and conformance lanes retain their own workflows.
 
+The `@glyphs` suite also times glyph outlines (`labs/package/outlines.bench.ts`): `glyphs()` after a text change on Inter
+baked with outlines, which includes decoding each distinct glyph once, beside the same paragraph on the plain font in
+`inspection.bench.ts`, and reading every outline from an unchanged copy. The fixture bakes the outlined font with the
+package under test and registers these benches only when that package has `outlineAt()`, so a baseline without
+outlines reports them as missing instead of timing a plain font under their names.
+
 The 0.1.0 export cleanup removes raw ABI re-exports from the baker size entries. The regenerated package-size report
 records the supported consumer surface, including the root format move. Relative to the original pre-cleanup build,
 core grows by 217 gzip bytes, while the TypeGPU integrations shrink by 2,003 and 3,074 bytes. Wasm artifacts are
