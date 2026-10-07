@@ -397,3 +397,105 @@ fn decoded_outlines_share_endpoints_flag_lines_and_use_em_units_y_down() {
         );
     }
 }
+
+/// Rewrites every simple glyph's point flags with `edit`, which must keep the coordinate-size and repeat bits.
+fn with_simple_point_flags(bytes: &[u8], edit: impl Fn(u8) -> u8) -> Vec<u8> {
+    let font = read_fonts::FontRef::new(bytes).unwrap();
+    let loca = font.loca(None).unwrap();
+    let glyf = font
+        .table_directory()
+        .table_records()
+        .iter()
+        .find(|record| record.tag() == Tag::new(b"glyf"))
+        .unwrap()
+        .offset() as usize;
+    let mut edited = bytes.to_vec();
+    let word = |at: usize| u16::from_be_bytes([bytes[at], bytes[at + 1]]) as usize;
+    for glyph_id in 0..loca.len().saturating_sub(1) {
+        let (start, end) = (
+            loca.get_raw(glyph_id).unwrap() as usize,
+            loca.get_raw(glyph_id + 1).unwrap() as usize,
+        );
+        let contours = if end - start < 10 {
+            0
+        } else {
+            word(glyf + start)
+        };
+        if contours == 0 || contours >= 0x8000 {
+            continue;
+        }
+        let ends = glyf + start + 10;
+        let point_count = word(ends + 2 * (contours - 1)) + 1;
+        let mut at = ends + 2 * contours;
+        at += 2 + word(at);
+        let mut points = 0;
+        while points < point_count {
+            let flags = bytes[at];
+            edited[at] = edit(flags);
+            at += 1;
+            points += 1;
+            if flags & 0x08 != 0 {
+                points += usize::from(bytes[at]);
+                at += 1;
+            }
+        }
+    }
+    edited
+}
+
+/// Counts contours that start off-curve and contours with no on-curve point at all.
+fn off_curve_contours(bytes: &[u8]) -> (usize, usize) {
+    let font = read_fonts::FontRef::new(bytes).unwrap();
+    let (glyf, loca) = (font.glyf().unwrap(), font.loca(None).unwrap());
+    let (mut off_start, mut all_off) = (0, 0);
+    for glyph_id in 0..loca.len().saturating_sub(1) {
+        let Ok(Some(Glyph::Simple(glyph))) = loca.get_glyf(GlyphId::new(glyph_id as u32), &glyf)
+        else {
+            continue;
+        };
+        let points: Vec<_> = glyph.points().collect();
+        let mut first = 0;
+        for &last in glyph.end_pts_of_contours() {
+            let contour = &points[first..=usize::from(last.get())];
+            off_start += usize::from(!contour[0].on_curve);
+            all_off += usize::from(contour.iter().all(|point| !point.on_curve));
+            first = usize::from(last.get()) + 1;
+        }
+    }
+    (off_start, all_off)
+}
+
+#[test]
+fn contours_that_start_off_curve_or_have_no_on_curve_point_match_skrifa() {
+    let inter = face("inter-v4.1/Inter-Regular.ttf");
+    for (label, edited) in [
+        (
+            "all off-curve",
+            with_simple_point_flags(&inter, |flags| flags & !0x01),
+        ),
+        (
+            "on-curve flipped",
+            with_simple_point_flags(&inter, |flags| flags ^ 0x01),
+        ),
+    ] {
+        let (off_start, all_off) = off_curve_contours(&edited);
+        assert!(
+            off_start > 1_000,
+            "{label}: {off_start} contours start off-curve"
+        );
+        if label == "all off-curve" {
+            assert_eq!(all_off, off_start, "{label}: every contour is off-curve");
+        }
+        assert!(agrees_with_skrifa(&edited) > 1_000, "{label}");
+        let font = FontRef::new(&edited).unwrap();
+        let upem = f32::from(font.head().unwrap().units_per_em());
+        let mut outline = GlyphOutline::default();
+        for glyph_id in 0..u32::from(font.maxp().unwrap().num_glyphs()) {
+            let name = format!("{label} glyph {glyph_id}");
+            outline
+                .decode(&edited, glyph_id)
+                .unwrap_or_else(|error| panic!("{name}: {error:?}"));
+            assert_decoded_layout(&name, &outline, &skrifa_segments(&font, glyph_id), upem);
+        }
+    }
+}
