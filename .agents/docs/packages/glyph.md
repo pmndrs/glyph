@@ -823,38 +823,16 @@ outlines are exact, and each CFF cubic becomes Slug's `DEFAULT_CUBIC_SUBDIVISION
 through its shared split, within about 1.15 font units on the CFF fixtures. The decoder
 writes em-space `f32` points (font units divided by `unitsPerEm`, y negated) with the contour ends and line flags into
 one word-aligned result. Every read throws for a glyph whose font has no outlines, and the borrowed call throws after
-its callback returns. That is by design: outlines are optional, so a read cannot assume them, and a caller that needs
-them says so at load time (below). The message tells the two causes apart: a font baked without outlines, and a font
-whose load skipped them.
+its callback returns. That is by design for now: outlines are optional today, so a read cannot assume them, and they are
+planned to become required. There is no load option: a font decodes its outlines when it loads if it has them, and a
+read throws when it has none.
 
 **Outlines decode when the font loads.** The loader decodes every glyph behind the load promise, where the artifact
 fetch already dominates, into one store the font owns: the columns of every glyph's view back to back plus a per-glyph
 offset table. Every read path is then a read, with no decode and no engine memory involved, and a later outlined bake of
 a font that first loaded without outlines adds its store to the deduplicated font. The decode runs in a fresh shaper
 instance compiled from the module the engine shared, so a caller-supplied `glyph.init({ wasm })` decodes too, or from
-the default module when a font loads before the engine starts; the instance is released afterwards.
-
-`outlines` on the font source object (`FontSourceOverride` and `BakedFontSource`, beside `baked`) sets what one load does
-about them, named for the bake's `font.outlines`. It is a per-font choice like `baked: null`, so it is part of the source
-and of the load's request key, and is validated with the rest of the source (any other value is a `TypeError` naming the
-three). A bare string or URL source means `'auto'`:
-
-- `'auto'` (the default) decodes them when the artifact has them and loads without them otherwise.
-- `'skip'` neither decodes nor retains them, for a caller that never reads an outline. Reads then throw the skipped
-  message, not the baked-without one.
-- `'require'` rejects with `GlyphFontError` reason `FONT_OUTLINES_UNAVAILABLE` when the font has none. It is a new
-  reason because no existing one fits: `INVALID_FONT_ASSET` means a malformed artifact, and this artifact is valid. It
-  follows `FONT_FACE_FORMAT_UNAVAILABLE`, which also reports a capability the caller required and the font lacks, and
-  it is not a warning, unlike a missing sibling's `BAKED_FONT_MISSING`, because the caller asked for a hard requirement,
-  and `'auto'` with no outlines is silent because outlines are optional. A baked URL without outlines reports it as
-  itself, not as `BAKED_FONT_INVALID`, and a runtime bake makes no outlines, so `'require'` rejects there.
-
-Loads that differ only in this option are separate loads of one font, which the font library merges by content:
-outlines are only ever added. A later `'auto'` or `'require'` attaches outlines to a font an earlier `'skip'` left
-without them, so reads through the earlier `Font` work too, and a later `'skip'` removes nothing. `glyph.fontFace()`
-accepts only a URL, `Blob`, or `SerializedFontFace` (the canonical source, not the loader's request object), so it
-loads with `'auto'`; the option is reachable through `loadFont` and `FontLibrary.loadFont`, which are not a public
-subpath, until `fontFace` accepts a source object. Measured natively
+the default module when a font loads before the engine starts; the instance is released afterwards. Measured natively
 over every glyph: Inter 2,937 glyphs in 3.6 ms to 1.37 MB, Source Serif 4 2.1 ms to 0.85 MB, Font Awesome 3.9 ms to
 1.62 MB, Amiri 6,710 glyphs in 13.3 ms to 5.06 MB, and Noto Sans CJK JP 65,535 glyphs in 757 ms to 129 MB. Outlines
 are opt-in and a subset bake shrinks a large face; the planned triplet stream (#244) replaces this decode with a faster
@@ -879,9 +857,7 @@ invariants, target refill, and a line's midpoint control, compare owned tuples w
 font-stack fallback glyph from its own font, read the same Text through its Wasm-backed and then its inspection-backed
 borrow with Wasm memory grown between decodes, and read identical outlines from Bitmap and Slug. A detached `Glyphs`
 object's outlines equal the source's at the same index for every glyph of a paragraph that starts with blanks (blanks
-return `[]`), survive a re-layout and the font's disposal, and reject indices outside the object. Load tests cover every mode with and without
-outlines, `'require'` through bytes and a baked URL, skip-then-auto, auto-then-skip, and concurrent loads in both orders
-converging on one font with outlines, and an invalid value.
+return `[]`), survive a re-layout and the font's disposal, and reject indices outside the object.
 
 ## Semantic queries
 

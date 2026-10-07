@@ -39,32 +39,15 @@ the layout's glyph count, blank glyphs stay in the index space with `drawn: fals
 `ThreeGlyphMeasurement.sourceIndex` are removed because they would only name the same number. The outline is data like
 `glyphAt`, so it reads after the source re-lays out and after the font or the `Glyphs` object is disposed.
 
-A missing outline at read time is by design: outlines are optional, so every read of a font without them throws, and
-the message says whether the font was baked without outlines or its load skipped them. A caller that needs outlines
-asks at load time with `outlines` on the font source, set beside `baked`: `'auto'` (default) decodes them when present, `'skip'` decodes and
-retains nothing, and `'require'` rejects with the new `GlyphFontError` reason `FONT_OUTLINES_UNAVAILABLE`. Outlines are
-only ever added to a font across loads: a later `'auto'` or `'require'` attaches them to a font an earlier `'skip'`
-left without, and a later `'skip'` removes nothing.
-
-## Why
-
-Source tables replaced a decoded-quadratic payload that added 3 to 12 times the source font and could not bake Noto
-Sans CJK JP within the 64 MiB limit; outlines now add 0.46 to 0.94 times. Skrifa was rejected as the runtime decoder
-because its outline drawing adds 97 KB gzip to the shaper and cannot be trimmed by feature; the read-fonts decoder adds
-24.7 KB gzip.
-
-Implemented with a glyph-by-glyph Skrifa oracle over nine fixture faces and derived composites, composite work-bound
-and corruption tests, validator cases, and Three Text tests against layout ink boxes, font-stack fallback, and Wasm
-memory growth inside a borrow.
+A missing outline at read time is by design for now: outlines are optional today, so every read of a font without them
+throws. There is no load option and none is wanted: a font decodes its outlines when it loads if it has them (user
+directive, 2026-10-07), and outlines are planned to become required.
 
 ## Consequences
 
 The bake validator decodes every glyph with that runtime decoder, so the baker carries no outline drawing. Outlines
 stay outside `shaping.fingerprint`. CFF2, variation axes, and a runtime-bake outline option are deferred, so a runtime
-bake never has outlines and `'require'` rejects for it. `glyph.fontFace()` accepts only the canonical source (URL,
-`Blob`, `SerializedFontFace`), so it loads with `'auto'`; the option is on the source object that `loadFont` and
-`FontLibrary.loadFont` take, which is not a public subpath, so an application reaches `'skip'` and `'require'` only
-when `fontFace` accepts a source object.
+bake never has outlines.
 
 Recorded in pull request #235 as register row D-371; the register froze at D-372 before it merged, so the decision lives
 here instead.
