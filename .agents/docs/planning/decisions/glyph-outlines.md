@@ -18,9 +18,12 @@ Glyph outlines are optional core-font data that every raster technique shares, n
 SFNT beside `head` and `maxp`, stored as one `PMNDRS_font.outlines` buffer view; the object's presence is the flag, and
 bakes without it are unchanged. `PMNDRS_font` version 1 marks a font that carries outlines; a bake without them still
 writes version 0, byte-identical to earlier bakes, and readers accept both.
-The text shaper decodes one laid-out glyph from the font that shaped it through read-fonts, which HarfRust already
-links: TrueType follows Skrifa's FreeType-style unscaled loader, CFF uses read-fonts' charstring evaluator, and each
-cubic becomes four equal-parameter quadratics through Slug's split. Outlines are in em units with y down and the origin
+The loader decodes every glyph when the font loads, behind the load promise where the artifact fetch already dominates,
+into one store the font owns; reads are then plain data. It decodes through the text shaper's read-fonts decoder,
+which HarfRust already links: TrueType follows Skrifa's FreeType-style unscaled loader, CFF uses read-fonts' charstring
+evaluator, and each cubic becomes four equal-parameter quadratics through Slug's split. Decoding when a glyph was first
+read was rejected because a `glyphs()` copy then depended on the font's engine registration and could decode inside a
+borrowed render plan (maintainer, 2026-10-07). Outlines are in em units with y down and the origin
 at the glyph's pen position on the baseline, so equal font and glyph IDs give equal outlines; a caller places them with
 the layout's `x`, `y`, and `fontSize`. `text.withGlyphs((glyphs) => glyphs.outlineAt(index, target?))` returns a plain
 `GlyphOutlineView` of endpoint-shared `points`, `contourEnds`, and `segmentLines` views that expire with the callback,

@@ -1,5 +1,11 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { textShaperWasmUrl } from './shaper-wasm-url.js';
+import {
+  GlyphOutlineStoreBuilder,
+  viewGlyphOutline,
+  type GlyphOutlineStore,
+  type GlyphOutlineView,
+} from '../glyph-outline.js';
 
 /** @internal */
 export interface ShaperExports {
@@ -192,6 +198,39 @@ export async function decodeEveryGlyphOutline(sfnt: Uint8Array, glyphCount: numb
     if (status !== 0) return outlineStatusError(status, glyphId);
   }
   return undefined;
+}
+
+/**
+ * @internal Decodes every glyph of an outline SFNT into one store, in a fresh instance that is released afterwards. It
+ * compiles from the module the engine shared, so a caller-supplied `glyph.init({ wasm })` decodes too, or from the
+ * default module when a font loads before the engine starts. The bake validated every glyph, so a failure here means
+ * the artifact was corrupted after baking.
+ */
+export async function decodeGlyphOutlineStore(sfnt: Uint8Array, glyphCount: number): Promise<GlyphOutlineStore> {
+  const { exports } = readModule(await WebAssembly.instantiate(await (sharedModulePromise ?? defaultModule()), {}));
+  const copied = copyIntoWasm(exports, sfnt);
+  const builder = new GlyphOutlineStoreBuilder(glyphCount);
+  const scratch: GlyphOutlineView = {
+    fontHandle: 0,
+    glyphId: 0,
+    points: new Float32Array(0),
+    contourEnds: new Uint32Array(0),
+    segmentLines: new Uint8Array(0),
+  };
+  for (let glyphId = 0; glyphId < glyphCount; glyphId += 1) {
+    const status = exports.glyphOutline(copied.pointer, copied.length, glyphId);
+    if (status !== 0) throw outlineStatusError(status, glyphId);
+    const result = checkedMemoryView(exports.memory, exports.glyphOutlinePointer(), exports.glyphOutlineLength());
+    builder.append(viewGlyphOutline(result.buffer, result.byteOffset, 0, glyphId, scratch));
+  }
+  return builder.finish();
+}
+
+let sharedModulePromise: Promise<WebAssembly.Module> | undefined;
+
+/** @internal Records the module the engine compiled, so outline decoding at font load uses the same Wasm. */
+export function shareShaperModule(module: WebAssembly.Module): void {
+  sharedModulePromise ??= Promise.resolve(module);
 }
 
 let defaultModulePromise: Promise<WebAssembly.Module> | undefined;

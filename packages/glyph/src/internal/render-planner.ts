@@ -9,7 +9,7 @@ import {
   type GlyphLayoutInspection,
   type ParagraphLayoutSummary,
 } from '../layout.js';
-import { missingGlyphOutlinesMessage, type GlyphOutlineContour } from '../glyph-outline.js';
+import { missingGlyphOutlinesMessage, storedGlyphOutline, type GlyphOutlineStore } from '../glyph-outline.js';
 import {
   assertConstraints,
   assertParagraphLayout,
@@ -65,11 +65,6 @@ import { codecCapabilitySetSelectionId, selectCodecCapabilitySet } from './codec
 
 const MAX_U32 = 0xffff_ffff;
 const claimedTargets = new WeakSet<object>();
-
-/** One key per font and glyph: font handles are 32-bit and glyph IDs 16-bit, so the product stays exact. */
-function outlineKey(fontHandle: number, glyphId: number): number {
-  return fontHandle * 0x1_0000 + glyphId;
-}
 
 declare const planOriginBrand: unique symbol;
 /** Unforgeable identity of the plan that produced a plan candidate. */
@@ -463,7 +458,6 @@ class RenderPlannerImpl {
   readonly #texts = new Set<RetainedTextState>();
   readonly #removed = new Set<RetainedTextState>();
   readonly #measured = new Map<RetainedTextState, ResolvedTextOptions>();
-  readonly #layoutOutlines = new WeakMap<GlyphLayoutColumns, ReadonlyMap<number, readonly GlyphOutlineContour[]>>();
   #baseOrderValidationPending = false;
   #liveTextCount = 0;
   #liveStyleCount = 0;
@@ -717,35 +711,15 @@ class RenderPlannerImpl {
   _inspectText(state: RetainedTextState): GlyphLayoutInspection {
     this.#assertTextQueryable(state);
     const layout = state.inspection ?? this.#queryInspection(state);
-    let outlines = this.#layoutOutlines.get(layout);
-    if (outlines === undefined) {
-      outlines = this.#decodeLayoutOutlines(layout);
-      this.#layoutOutlines.set(layout, outlines);
-    }
+    // The copy keeps each font's decoded outlines, so it reads them as data after the font or this handle is gone.
+    const stores = new Map<number, GlyphOutlineStore | undefined>();
+    for (const fontHandle of layout.fontHandles)
+      stores.set(fontHandle, this.#handleState._glyphOutlineStore(fontHandle));
     return copyGlyphLayoutInspection(layout, (index) => {
-      const outline = outlines.get(outlineKey(fontHandleAt(layout, index), layout.glyphIds[index]!));
-      if (outline === undefined) throw new TypeError(missingGlyphOutlinesMessage);
-      return outline.slice();
+      const store = stores.get(fontHandleAt(layout, index));
+      if (store === undefined) throw new TypeError(missingGlyphOutlinesMessage);
+      return storedGlyphOutline(store, layout.glyphIds[index]!).slice();
     });
-  }
-
-  /**
-   * Decodes every distinct glyph in `layout` whose font carries outlines, once, so a `glyphs()` copy holds its outlines
-   * as data: reading one later makes no engine call, survives the font's engine registration, and is safe inside any
-   * borrow. Fonts without outlines cost one presence check each.
-   */
-  #decodeLayoutOutlines(layout: GlyphLayoutColumns): ReadonlyMap<number, readonly GlyphOutlineContour[]> {
-    const outlines = new Map<number, readonly GlyphOutlineContour[]>();
-    const missing = new Set<number>();
-    for (let index = 0; index < layout.glyphCount; index += 1) {
-      const fontHandle = fontHandleAt(layout, index);
-      const key = outlineKey(fontHandle, layout.glyphIds[index]!);
-      if (missing.has(fontHandle) || outlines.has(key)) continue;
-      const outline = this.#handleState._frozenGlyphOutline(fontHandle, layout.glyphIds[index]!);
-      if (outline === undefined) missing.add(fontHandle);
-      else outlines.set(key, outline);
-    }
-    return outlines;
   }
 
   /** @internal */

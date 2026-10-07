@@ -1,14 +1,18 @@
 import type { RegisteredFont } from './font.js';
 import type { FontHandle } from './identity.js';
 import { getRegisteredFontData } from './internal/registered-font.js';
-import { missingGlyphOutlinesMessage, viewGlyphOutline, type GlyphOutlineView } from './glyph-outline.js';
+import {
+  missingGlyphOutlinesMessage,
+  viewStoredGlyphOutline,
+  type GlyphOutlineStore,
+  type GlyphOutlineView,
+} from './glyph-outline.js';
 import { FontRegistry } from './loader.js';
 import {
-  checkedMemoryView,
   copyIntoWasm,
   fetchDefaultWasm,
-  outlineStatusError,
   readModule,
+  shareShaperModule,
   shaperStatusError,
   type ShaperExports,
   type ShaperModule,
@@ -38,10 +42,10 @@ export interface RuntimeShaper {
   readonly registry: RuntimeShaperFontRegistry;
   registerFont(font: RegisteredFont): void;
   disposeFont(font: RegisteredFont): void;
-  /** @internal Decodes one glyph into `target` as views over shaper memory that the next decode replaces. */
+  /** @internal Fills `target` with views over the outline its font decoded when it loaded. */
   glyphOutline(fontHandle: number, glyphId: number, target?: GlyphOutlineView): GlyphOutlineView;
-  /** Whether the registered font behind `fontHandle` was baked with outlines. */
-  hasGlyphOutlines(fontHandle: number): boolean;
+  /** @internal The outlines the font behind `fontHandle` decoded when it loaded, if it was baked with them. */
+  glyphOutlineStore(fontHandle: number): GlyphOutlineStore | undefined;
   memoryReport(): RuntimeShaperMemoryReport;
   dispose(): void;
 }
@@ -56,6 +60,7 @@ export function runtimeShaperEngineExports(shaper: RuntimeShaper): ShaperExports
 export async function createRuntimeShaper(options: RuntimeShaperOptions = {}): Promise<RuntimeShaper> {
   const source = options.wasm ?? (await fetchDefaultWasm());
   const module = source instanceof WebAssembly.Module ? source : await WebAssembly.compile(source);
+  shareShaperModule(module);
   const instance = await WebAssembly.instantiate(module, {});
   const resolved = readModule(instance);
   return new RuntimeShaperImpl(options.registry ?? new FontRegistry(), resolved);
@@ -65,7 +70,6 @@ class RuntimeShaperImpl implements RuntimeShaper {
   readonly registry: RuntimeShaperFontRegistry;
   readonly #exports: ShaperExports;
   readonly #registered = new Map<FontHandle, RegisteredFont | undefined>();
-  readonly #outlineSfnts = new Map<FontHandle, { readonly pointer: number; readonly length: number }>();
   readonly #unsubscribe: () => void;
   #disposed = false;
 
@@ -73,7 +77,6 @@ class RuntimeShaperImpl implements RuntimeShaper {
     this.registry = registry;
     this.#exports = module.exports;
     this.#unsubscribe = registry._onFontDispose((font) => {
-      this.#releaseOutlineSfnt(font.handle);
       this.#disposeHandle(font.handle);
     });
   }
@@ -137,33 +140,20 @@ class RuntimeShaperImpl implements RuntimeShaper {
     if (this.#registered.get(font.handle) === font) this.#disposeHandle(font.handle);
   }
 
-  hasGlyphOutlines(fontHandle: number): boolean {
+  glyphOutlineStore(fontHandle: number): GlyphOutlineStore | undefined {
     this.#assertActive();
     const font = this.registry.getByHandle(fontHandle as FontHandle);
-    return font !== undefined && getRegisteredFontData(font).glyphOutlines !== undefined;
+    return font === undefined ? undefined : getRegisteredFontData(font).glyphOutlines;
   }
 
   glyphOutline(fontHandle: number, glyphId: number, target?: GlyphOutlineView): GlyphOutlineView {
     this.#assertActive();
     const font = this.registry.getByHandle(fontHandle as FontHandle);
     if (font === undefined) throw new Error(`the font of glyph ${glyphId} has been disposed`);
-    let sfnt = this.#outlineSfnts.get(font.handle);
-    if (sfnt === undefined) {
-      const bytes = getRegisteredFontData(font).glyphOutlines;
-      if (bytes === undefined) throw new TypeError(missingGlyphOutlinesMessage);
-      sfnt = copyIntoWasm(this.#exports, bytes);
-      this.#outlineSfnts.set(font.handle, sfnt);
-    }
-    const status = this.#exports.glyphOutline(sfnt.pointer, sfnt.length, glyphId);
-    if (status !== 0) throw outlineStatusError(status, glyphId);
-    const result = checkedMemoryView(
-      this.#exports.memory,
-      this.#exports.glyphOutlinePointer(),
-      this.#exports.glyphOutlineLength(),
-    );
-    return viewGlyphOutline(
-      result.buffer,
-      result.byteOffset,
+    const store = getRegisteredFontData(font).glyphOutlines;
+    if (store === undefined) throw new TypeError(missingGlyphOutlinesMessage);
+    return viewStoredGlyphOutline(
+      store,
       fontHandle,
       glyphId,
       target ?? {
@@ -174,13 +164,6 @@ class RuntimeShaperImpl implements RuntimeShaper {
         segmentLines: new Uint8Array(0),
       },
     );
-  }
-
-  #releaseOutlineSfnt(handle: FontHandle): void {
-    const sfnt = this.#outlineSfnts.get(handle);
-    if (sfnt === undefined) return;
-    this.#outlineSfnts.delete(handle);
-    this.#exports.deallocate(sfnt.pointer, sfnt.length);
   }
 
   memoryReport(): RuntimeShaperMemoryReport {
@@ -196,7 +179,6 @@ class RuntimeShaperImpl implements RuntimeShaper {
   dispose(): void {
     if (this.#disposed) return;
     this.#unsubscribe();
-    for (const handle of [...this.#outlineSfnts.keys()]) this.#releaseOutlineSfnt(handle);
     for (const handle of [...this.#registered.keys()]) this.#disposeHandle(handle);
     this.#disposed = true;
   }

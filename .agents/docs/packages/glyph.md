@@ -790,21 +790,19 @@ caller can cache one shape per key. Each glyph decodes from the font that shaped
 its fallback font and callers never handle `Font` objects.
 
 - **Borrowed:** inside `text.withGlyphs((glyphs) => ...)`, `glyphs.outlineAt(index, target?)` returns a plain
-  `GlyphOutlineView` of `fontHandle`, `glyphId`, and three typed-array views over the shaper's decode result:
+  `GlyphOutlineView` of `fontHandle`, `glyphId`, and three typed-array views over the font's decoded outlines:
   endpoint-shared `points` (segment `s` of contour `c` uses points `2s + c`, `2s + c + 1`, and `2s + c + 2`),
   `contourEnds` (each contour's exclusive end as a segment index), and `segmentLines` (`1` for a line, `0` for a
   quadratic). There is no reader object and there are no helper methods. A caller-supplied `target` is refilled and
-  returned, which saves only the holder; the views are new on every call. They are valid only inside the callback,
-  until the next `outlineAt()` or other engine call.
+  returned, which saves only the holder; the views are new on every call. They are documented as valid only inside
+  the callback, which keeps the freedom to back them with engine memory again.
 - **Owned:** `text.glyphs().outlineAt(index)` returns caller-owned `GlyphOutlineContour[]` of
   `[x0, y0, cx, cy, x1, y1, isLine]` tuples, built in JavaScript from the same view, so both paths agree exactly. It is
   a non-enumerable method on the copied inspection, so the columns still spread, compare, and structured-clone as plain
-  data, and it throws `RangeError` for an index outside the layout. The copy carries its outlines as data: the first
-  `glyphs()` for a layout decodes each distinct glyph of an outlined font once and caches the frozen contours with that
-  layout, so reading one makes no engine call, survives the font's engine registration, and is safe inside any borrow.
-  Each call returns a new outer array over contours shared by equal font and glyph IDs. Fonts without outlines cost one
-  presence check each, and their glyphs throw at the call. The `@glyphs` Labs suite times `glyphs()` on an outlined
-  font against the same paragraph on a plain one.
+  data, and it throws `RangeError` for an index outside the layout. The copy keeps its fonts' decoded outlines, so
+  reading one makes no engine call, survives the font's and the handle's disposal, and is safe inside any borrow. Each
+  glyph's frozen tuples are built on its first owned read and shared by every later one, and each call returns a new
+  outer array over them. Glyphs of fonts without outlines throw at the call.
 
 A line keeps its midpoint as its control point in both paths, so code that ignores the flag still draws it. Contours
 keep the source order and winding for nonzero filling, and blank glyphs return no contours. The shaper decodes with
@@ -814,10 +812,19 @@ places at most 65,535 components and 65,535 points, so a crafted font cannot mak
 outlines are exact, and each CFF cubic becomes Slug's `DEFAULT_CUBIC_SUBDIVISIONS` (four) equal-parameter quadratics
 through its shared split, within about 1.15 font units on the CFF fixtures. The decoder
 writes em-space `f32` points (font units divided by `unitsPerEm`, y negated) with the contour ends and line flags into
-one word-aligned result, and the host creates the views over it. Both calls throw for a glyph whose font was baked
-without outlines, and the borrowed call throws after its callback returns. The first decode for a font copies its
-outline SFNT into the shaper's memory, released with the font's engine registration. That copy and the decode can grow
-Wasm memory, and a Wasm-backed borrow reads each glyph record from the current memory, so growth does not expire it.
+one word-aligned result. Both calls throw for a glyph whose font was baked without outlines, and the borrowed call
+throws after its callback returns.
+
+**Outlines decode when the font loads.** The loader decodes every glyph behind the load promise, where the artifact
+fetch already dominates, into one store the font owns: the columns of every glyph's view back to back plus a per-glyph
+offset table. Both read paths are then reads, with no decode and no engine memory involved, and a later outlined bake of
+a font that first loaded without outlines adds its store to the deduplicated font. The decode runs in a fresh shaper
+instance compiled from the module the engine shared, so a caller-supplied `glyph.init({ wasm })` decodes too, or from
+the default module when a font loads before the engine starts; the instance is released afterwards. Measured natively
+over every glyph: Inter 2,937 glyphs in 3.6 ms to 1.37 MB, Source Serif 4 2.1 ms to 0.85 MB, Font Awesome 3.9 ms to
+1.62 MB, Amiri 6,710 glyphs in 13.3 ms to 5.06 MB, and Noto Sans CJK JP 65,535 glyphs in 757 ms to 129 MB. Outlines
+are opt-in and a subset bake shrinks a large face; the planned triplet stream (#244) replaces this decode with a faster
+one into a smaller i16 store.
 Every integration's Text reaches the borrowed method through the shared `BorrowedGlyphLayout` and the owned one through
 the shared `GlyphLayoutInspection`.
 

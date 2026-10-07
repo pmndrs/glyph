@@ -1,7 +1,7 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { GlyphEngineStatusError, setGlyphEngineStatusErrorDetails, type GlyphEngineFault } from '../engine-error.js';
 import type { Font } from '../font.js';
-import { frozenGlyphOutline, type GlyphOutlineContour, type GlyphOutlineView } from '../glyph-outline.js';
+import type { GlyphOutlineStore, GlyphOutlineView } from '../glyph-outline.js';
 import type { FontHandle } from '../identity.js';
 import { immutableFontStackFonts, type FontStack } from '../loaded-font.js';
 import type { RasterFormatMetadata } from '../config/raster-format.js';
@@ -323,24 +323,16 @@ export class GlyphHandleState {
     this.#enterEngineBorrow = enterEngineBorrow;
   }
 
-  /**
-   * @internal Decodes one glyph's outline as views that the next decode or engine call replaces. Only a borrowed glyph
-   * layout calls it: that borrow already holds the engine, so this checks disposal and not reentry.
-   */
+  /** @internal Fills `target` with views over the outline its font decoded when it loaded. */
   _glyphOutline(fontHandle: number, glyphId: number, target?: GlyphOutlineView): GlyphOutlineView {
     if (this.#disposed) throw new Error('Glyph handle state is disposed');
     return this.#shaper.glyphOutline(fontHandle, glyphId, target);
   }
 
-  /**
-   * @internal Decodes one glyph's outline into frozen tuples for the outlines a `glyphs()` copy carries, or returns
-   * `undefined` when its font was baked without outlines. An ordinary engine call, refused while a borrowed render
-   * plan is active, because a first decode can grow engine memory under that plan.
-   */
-  _frozenGlyphOutline(fontHandle: number, glyphId: number): readonly GlyphOutlineContour[] | undefined {
-    this.#assertActive();
-    if (!this.#shaper.hasGlyphOutlines(fontHandle)) return undefined;
-    return frozenGlyphOutline(this.#shaper.glyphOutline(fontHandle, glyphId));
+  /** @internal The outlines the font behind `fontHandle` decoded when it loaded, if it was baked with them. */
+  _glyphOutlineStore(fontHandle: number): GlyphOutlineStore | undefined {
+    if (this.#disposed) throw new Error('Glyph handle state is disposed');
+    return this.#shaper.glyphOutlineStore(fontHandle);
   }
 
   /** @internal Derive one branded ID retained until its registration or this handle is disposed. */

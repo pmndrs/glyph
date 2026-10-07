@@ -4,8 +4,8 @@
  * `glyph.y + y * glyph.fontSize`. Outlines with equal `fontHandle` and `glyphId` are identical, so a caller can cache
  * one shape per key and reuse it at every placement and size.
  *
- * From `withGlyphs`, the typed arrays are views over engine memory: they are valid only inside that callback, until the
- * next `outlineAt()` or other engine call. Copy them (`points.slice()` and so on) to keep an outline.
+ * A font decodes every outline once, when it loads. From `withGlyphs`, the typed arrays are views over that decoded
+ * data: treat them as valid only inside that callback, and copy them (`points.slice()` and so on) to keep an outline.
  */
 export interface GlyphOutlineView {
   /** The font that shaped the glyph. */
@@ -69,11 +69,113 @@ export function viewGlyphOutline(
 export const missingGlyphOutlinesMessage =
   'font was baked without outlines; outlines need a font prebaked with glyph bake --outlines';
 
-/** @internal Copies a view into frozen curve tuples that every holder of the same glyph can share. */
-export function frozenGlyphOutline(view: GlyphOutlineView): readonly GlyphOutlineContour[] {
-  return Object.freeze(
-    glyphOutlineContours(view).map((contour) => Object.freeze(contour.map((curve) => Object.freeze(curve)))),
-  );
+/**
+ * @internal Every glyph outline of one font, decoded once when the font loads: the columns of every glyph's
+ * `GlyphOutlineView` back to back, and per glyph its first point, first contour, contour count, first segment, and
+ * segment count. Owned reads build each glyph's frozen tuples once and share them.
+ */
+export interface GlyphOutlineStore {
+  readonly points: Float32Array;
+  readonly contourEnds: Uint32Array;
+  readonly segmentLines: Uint8Array;
+  readonly glyphs: Uint32Array;
+  readonly contours: (readonly GlyphOutlineContour[] | undefined)[];
+}
+
+const glyphRecordWords = 5;
+
+/** @internal Appends decoded glyph outlines, in glyph ID order, into one `GlyphOutlineStore`. */
+export class GlyphOutlineStoreBuilder {
+  readonly #glyphs: Uint32Array;
+  #points = new Float32Array(1024);
+  #contourEnds = new Uint32Array(256);
+  #segmentLines = new Uint8Array(512);
+  #pointCount = 0;
+  #contourCount = 0;
+  #segmentCount = 0;
+  #glyphCount = 0;
+
+  constructor(glyphCount: number) {
+    this.#glyphs = new Uint32Array(glyphCount * glyphRecordWords);
+  }
+
+  append({ points, contourEnds, segmentLines }: GlyphOutlineView): void {
+    const record = this.#glyphCount++ * glyphRecordWords;
+    this.#glyphs[record] = this.#pointCount;
+    this.#glyphs[record + 1] = this.#contourCount;
+    this.#glyphs[record + 2] = contourEnds.length;
+    this.#glyphs[record + 3] = this.#segmentCount;
+    this.#glyphs[record + 4] = segmentLines.length;
+    this.#points = grown(this.#points, 2 * this.#pointCount + points.length);
+    this.#points.set(points, 2 * this.#pointCount);
+    this.#pointCount += points.length / 2;
+    this.#contourEnds = grown(this.#contourEnds, this.#contourCount + contourEnds.length);
+    this.#contourEnds.set(contourEnds, this.#contourCount);
+    this.#contourCount += contourEnds.length;
+    this.#segmentLines = grown(this.#segmentLines, this.#segmentCount + segmentLines.length);
+    this.#segmentLines.set(segmentLines, this.#segmentCount);
+    this.#segmentCount += segmentLines.length;
+  }
+
+  finish(): GlyphOutlineStore {
+    return {
+      points: this.#points.slice(0, 2 * this.#pointCount),
+      contourEnds: this.#contourEnds.slice(0, this.#contourCount),
+      segmentLines: this.#segmentLines.slice(0, this.#segmentCount),
+      glyphs: this.#glyphs,
+      contours: new Array<readonly GlyphOutlineContour[] | undefined>(this.#glyphCount),
+    };
+  }
+}
+
+function grown<Column extends Float32Array | Uint32Array | Uint8Array>(column: Column, length: number): Column {
+  if (length <= column.length) return column;
+  const next = new (column.constructor as new (length: number) => Column)(Math.max(length, 2 * column.length));
+  next.set(column);
+  return next;
+}
+
+/** @internal Fills `target` with views over glyph `glyphId`'s slice of `store`. */
+export function viewStoredGlyphOutline(
+  store: GlyphOutlineStore,
+  fontHandle: number,
+  glyphId: number,
+  target: GlyphOutlineView,
+): GlyphOutlineView {
+  const record = glyphId * glyphRecordWords;
+  const glyphs = store.glyphs;
+  const [point, contour, contours, segment, segments] = [
+    glyphs[record]!,
+    glyphs[record + 1]!,
+    glyphs[record + 2]!,
+    glyphs[record + 3]!,
+    glyphs[record + 4]!,
+  ];
+  target.fontHandle = fontHandle;
+  target.glyphId = glyphId;
+  target.points = store.points.subarray(2 * point, 2 * (point + 2 * segments + contours));
+  target.contourEnds = store.contourEnds.subarray(contour, contour + contours);
+  target.segmentLines = store.segmentLines.subarray(segment, segment + segments);
+  return target;
+}
+
+/** @internal Glyph `glyphId`'s frozen curve tuples, built on first read and shared by every later one. */
+export function storedGlyphOutline(store: GlyphOutlineStore, glyphId: number): readonly GlyphOutlineContour[] {
+  let contours = store.contours[glyphId];
+  if (contours === undefined) {
+    const view = viewStoredGlyphOutline(store, 0, glyphId, {
+      fontHandle: 0,
+      glyphId,
+      points: store.points,
+      contourEnds: store.contourEnds,
+      segmentLines: store.segmentLines,
+    });
+    contours = Object.freeze(
+      glyphOutlineContours(view).map((curves) => Object.freeze(curves.map((curve) => Object.freeze(curve)))),
+    );
+    store.contours[glyphId] = contours;
+  }
+  return contours;
 }
 
 /** @internal Copies a view into caller-owned curve tuples. */

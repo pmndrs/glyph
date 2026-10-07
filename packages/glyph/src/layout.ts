@@ -125,11 +125,11 @@ export interface GlyphLayoutInspection extends GlyphLayout, ParagraphLayoutSumma
    * `[x0, y0, cx, cy, x1, y1, isLine]` tuples in em units with y down and the origin at the glyph's pen position on the
    * baseline; place a point at `x[index] + x * glyphFontSizes[index]`, `y[index] + y * glyphFontSizes[index]`. Equal
    * font and glyph IDs give equal outlines. Contours keep the font's winding for nonzero filling, a blank glyph returns
-   * `[]`, and each CFF cubic becomes four quadratics. The copy carries its outlines as data: the first `glyphs()` for a
-   * layout decodes each distinct outlined glyph once, so this call makes no engine call and still reads after the
-   * `Text`, its font, or its handle is disposed, and inside any borrow. Each call returns a new array of frozen contours
-   * that glyphs with the same font and glyph ID share. Throws for an index outside the layout or a glyph whose font was
-   * baked without outlines.
+   * `[]`, and each CFF cubic becomes four quadratics. The font decoded every outline when it loaded, and the copy keeps
+   * its fonts' decoded outlines, so this call makes no engine call and still reads after the `Text`, its font, or its
+   * handle is disposed, and inside any borrow. Each call returns a new array of frozen contours that every glyph with
+   * the same font and glyph ID shares. Throws for an index outside the layout or a glyph whose font was baked without
+   * outlines.
    */
   outlineAt(index: number): GlyphOutlineContour[];
 }
@@ -160,12 +160,13 @@ export interface BorrowedGlyphLayout {
   readonly glyphCount: number;
   glyphAt(index: number): BorrowedGlyph;
   /**
-   * Decodes the outline of the glyph `glyphAt(index)` describes, from the font that shaped it (baked with
-   * `--outlines`), and returns it as views in em units with y down and the origin at the glyph's pen position on the
-   * baseline; see `GlyphOutlineView` for the point layout and placement. Fills and returns `target` when given, which
-   * saves only the holder object: the typed arrays are new views on every call. The views are valid only inside this
-   * callback, until the next `outlineAt()` or other engine call; copy them to keep the outline, or use
-   * `Text.glyphs().outlineAt()` for caller-owned tuples. Throws when the glyph's font was baked without outlines.
+   * Returns the outline of the glyph `glyphAt(index)` describes, from the font that shaped it (baked with
+   * `--outlines`), as views in em units with y down and the origin at the glyph's pen position on the baseline; see
+   * `GlyphOutlineView` for the point layout and placement. The font decoded every outline when it loaded, so this is
+   * a read, not a decode. Fills and returns `target` when given, which saves only the holder object: the typed arrays
+   * are new views on every call. Treat the views as valid only inside this callback; copy them to keep the outline,
+   * or use `Text.glyphs().outlineAt()` for caller-owned tuples. Throws when the glyph's font was baked without
+   * outlines.
    */
   outlineAt(index: number, target?: GlyphOutlineView): GlyphOutlineView;
 }
