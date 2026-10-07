@@ -150,9 +150,9 @@ table alignment, zero padding, table checksums, and a valid `head.checkSumAdjust
 table, and every glyph MUST decode. Consumers decode one glyph at a time.
 
 `format` selects the encoding. A later encoding is a new `format` value within version 1, not a new version, so the
-`version` stays the flag that outlines may be present. A consumer that does not recognise `format` SHOULD treat the font
-as having no outlines rather than reject it. The reference runtime accepts only artifacts from its own baker version, so
-it only ever meets the format that version writes.
+`version` stays the flag that outlines may be present. A consumer MUST NOT decode an outline `format` it does not
+recognise; it MAY reject the font. The reference runtime rejects it, and because it accepts only artifacts from its own
+baker version, it only ever meets the format that version writes.
 
 Consumers draw the unhinted outline at the default instance. The reference consumer returns closed quadratic contours:
 TrueType quadratics exactly, a line as the quadratic whose control is its midpoint and that is flagged as a line, and
