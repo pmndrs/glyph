@@ -44,7 +44,7 @@ Written against the glTF 2.0 specification.
 
 ## Overview
 
-`PMNDRS_font` stores one baked font face for runtime text shaping. It owns a canonical static OpenType shaping payload, authoritative font metrics, deterministic provenance, optional decoded glyph outlines, and a directory of renderer-specific rasters. Glyph IDs are local to this face and are shared by all attached rasters.
+`PMNDRS_font` stores one baked font face for runtime text shaping. It owns a canonical static OpenType shaping payload, authoritative font metrics, deterministic provenance, optional glyph outlines (the source face's own outline tables), and a directory of renderer-specific rasters. Glyph IDs are local to this face and are shared by all attached rasters.
 
 The extension separates shaping from drawing. Shaping yields glyph IDs, UTF-16 clusters, advances, offsets, and flags. Raster packages draw those glyph IDs without duplicating advances or kerning. Bitmap, MTSDF-backed MSDF, and Slug are the companion extensions currently specified by this project, not an exhaustive registry.
 
