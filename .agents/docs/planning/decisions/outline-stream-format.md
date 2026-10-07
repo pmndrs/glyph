@@ -89,14 +89,15 @@ Earlier comments call this read "the stencil", in the numerical sense of a fixed
 
 ### `outlineAt()` API
 
-Revised with the maintainer on 2026-10-06; the [#235 API comment](https://github.com/pmndrs/glyph/pull/235#issuecomment-6009755243) has the full proposal. There is **no reader object**. `withGlyphs` is written as `readGlyphs`, following #238.
+Revised with the maintainer on 2026-10-06 and implemented on #235 (`820e76c8..7a3606d4`); the [#235 API comment](https://github.com/pmndrs/glyph/pull/235#issuecomment-6009755243) has the full proposal. There is **no reader object**. #235 ships the borrowed path on today's `withGlyphs`; #238 renames it to `readGlyphs` after #235 merges.
 
 - **Coordinates:** em units (1.0 is the font size), origin at the glyph's pen position on the baseline, y down, like every other box the layout publishes. Place a point with `x = glyph.x + ex · glyph.fontSize` and `y = glyph.y + ey · glyph.fontSize`.
-- **Borrowed path:** `readGlyphs((glyphs) => glyphs.outlineAt(index, target?))` returns a plain `GlyphOutlineView`.
+- **Borrowed path:** `withGlyphs((glyphs) => glyphs.outlineAt(index, target?))` (`readGlyphs` after #238) returns a plain `GlyphOutlineView`.
   - Fields: `fontHandle`, `glyphId`, and typed-array views `points`, `contourEnds` and `segmentLines`. Equal keys mean identical outlines.
   - The optional `target` is refilled, which saves only the holder allocation. The typed-array views are created on every call.
   - There are no helper methods; callers read `segmentLines[s] === 1` for lines.
   - The views expire with the callback, or at the next engine call.
+  - **Cache key:** `fontHandle:glyphId` from the view; from `glyphs()`, `fontHandles[glyphFontSlots[index]]:glyphIds[index]`, because `fontHandles` is indexed by font slot, not by glyph.
 - **Owned path:** `text.glyphs().outlineAt(index)` returns caller-owned `GlyphOutlineContour[]`. Each curve is a `GlyphOutlineCurve` tuple `[x0, y0, cx, cy, x1, y1, isLine]`, so loops can branch on `isLine` without importing anything.
 - **Lines:** a line keeps its midpoint control in `points` and in the tuple, so code that ignores the line flag still draws it.
 - **The stored format stays private.** Both paths are filled from the decoded GPU points (divided by `unitsPerEm`, y negated), so this API doesn't change if the stored format does.
