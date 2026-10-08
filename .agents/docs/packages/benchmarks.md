@@ -232,12 +232,15 @@ sources:
   - id: labs-result-validator
     resource: ../../../benches/scripts/support/labs-result.mts
     title: Saved Labs result failure validator
+  - id: pr-240-full-labs-run
+    resource: https://github.com/pmndrs/glyph/actions/runs/37785945860/job/113346825511
+    title: PR 240 full installed-package performance job
   - id: raster-technique-compare-probe
     resource: ../../../benches/vitexec/raster-technique-compare.probe.ts
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-6
-  at: '2026-09-24T20:41:15Z'
+  at: '2026-10-08T17:48:50Z'
 ---
 
 # Package reference: `@pmndrs/glyph-benchmarks`
@@ -336,8 +339,17 @@ lifecycle, title, and field cases were neutral at the measured resolution; caret
 The 2026-10-06 PR #240 CI comparison also found large regressions in the multi-label "each in turn" schedules:
 100 rolling tickers in a 1,000-label root increased from 34.22 ms to 976.23 ms, and 50 edited lines from 27.21 ms to
 385.94 ms. Batched writes followed by reads remained neutral. This is repeated root publication, not a cold-start
-measurement; #247 tracks edit-sized publication as a release gate. These measurements predate the update onto merged
-#235 and #255 and need a fresh CI comparison.
+measurement; #247 tracks edit-sized publication as a release gate.
+
+The 2026-10-08 full PR #240 job compared the exact published canary
+`0.1.0-canary-2324d74f-20261008` with candidate package SHA-256 `37fc98ed…c11a` built from `961c852…`.
+Dependency installation and artifact preparation completed in seconds, and every earlier benchmark file completed.
+The baseline `read-publication.bench.ts` file alone took 28 minutes 24 seconds; its two 1,000-label load-and-detach
+workloads averaged 3.15 and 3.11 seconds and allocated about 393 MB per iteration. The candidate then remained in that
+file for more than 41 minutes 59 seconds until the 90-minute job limit canceled it, before Labs emitted the file result
+or any comparison report. Runner clocks stayed between about 3.10 and 3.17 GHz across the run. This localizes the job
+bottleneck to the 30-case read-publication matrix and its high-scale cold-copy work, rather than checkout, installation,
+or artifact setup, but it does not establish a candidate delta because the candidate file did not finish.[^pr-240-full-labs-run]
 Run `mise exec -- pnpm scripts run benchmark:labs-package -- --baseline /absolute/base.tgz --candidate /absolute/head.tgz
 --suite read-publication --output .cache/read-publication`, and again with `--suite cold`, to retain the comparison and
 artifact identities. Build and pack each revision first; the runner never builds source. The suite is recorded in the run
