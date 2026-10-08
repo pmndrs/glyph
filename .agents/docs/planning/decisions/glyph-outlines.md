@@ -39,6 +39,12 @@ the layout's glyph count, blank glyphs stay in the index space with `drawn: fals
 `ThreeGlyphMeasurement.sourceIndex` are removed because they would only name the same number. The outline is data like
 `glyphAt`, so it reads after the source re-lays out and after the font or the `Glyphs` object is disposed.
 
+A detached glyph names its shape with `fontId` and `glyphId` (user directive, 2026-10-08), read from the retained layout
+at the same index. The three identities are distinct: `index` is the position in this layout, `key` is the same
+occurrence across reflow (a shipped 0.1.0 contract, unchanged), and `fontId` plus `glyphId` are the same shape. The id
+is a plain number, named `fontId` rather than `fontHandle` so it does not read as a ref-counted handle; it retains
+nothing, and no public font-by-id lookup, `ThreeGlyphMeasurement` field, or `GlyphPlacement` field is added.
+
 A missing outline at read time is by design for now: outlines are optional today, so every read of a font without them
 throws. There is no load option and none is wanted: a font decodes its outlines when it loads if it has them (user
 directive, 2026-10-07), and outlines are planned to become required.

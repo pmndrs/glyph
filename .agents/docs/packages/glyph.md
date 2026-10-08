@@ -934,7 +934,12 @@ stay in the index space with `DetachedGlyph.drawn: false`, and `glyphAt`, `measu
 methods are parallel arrays at it, throwing `RangeError` outside `0 <= index < count`. Matrices and pivots are flat
 per-glyph arrays (`count * 16` and `count * 2`) and a dense `Int32Array` maps a glyph to its physical record, `-1` for
 none. A blank glyph's matrix rests at its pen origin, `setMatrixAt` stores it, and no shader transform is written for a
-glyph without a record. `Glyphs.outlineAt(index)` reads a split glyph's outline from the owned inspection `breakApart()`
+glyph without a record. A `DetachedGlyph` carries three identities: `index` is its position in this layout, `key` is the
+same occurrence across a reflow (the shipped contract, unchanged), and `fontId` plus `glyphId` are the same shape: the
+plain-number id of the font that shaped it (never reused, not a lease, equal to
+`text.glyphs().fontHandles[glyphFontSlots[index]]`) and its index in that font, filled for every index from the retained
+layout. Equal pairs mean an equal outline, so a shape built once serves every occurrence. There is no public lookup of
+a font by id. `Glyphs.outlineAt(index)` reads a split glyph's outline from the owned inspection `breakApart()`
 retained ([Glyph outlines](#glyph-outlines)).
 
 Decoration passes are not glyph records and retain an independent object and lifetime; tuple slot two is `undefined`
