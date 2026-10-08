@@ -23,6 +23,15 @@ const threePackage = (await import(
   pathToFileURL(resolve(packageRoot, 'dist/three.js')).href
 )) as typeof import('@pmndrs/glyph/three');
 
+// Adapt older installed canaries once, outside every timed workload.
+const textPrototype: {
+  split?: (typeof threePackage.Text.prototype)['split'];
+  breakApart?: (typeof threePackage.Text.prototype)['split'];
+} = threePackage.Text.prototype;
+if (textPrototype.split === undefined && textPrototype.breakApart !== undefined) {
+  textPrototype.split = textPrototype.breakApart;
+}
+
 const { bitmap, glyph } = glyphPackage;
 const { defineThreeConfig } = threePackage;
 const fontBytes = await readFile(new URL('../../fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url));

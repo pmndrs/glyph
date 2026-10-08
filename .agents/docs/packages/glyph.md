@@ -894,7 +894,7 @@ The semantic values preserve information useful to callers:
 
 ## Root-assisted detached glyph copies
 
-`Text.split()` replaces `Text.split()` without a deprecated alias. Existing callers can use the
+`Text.split()` replaces `Text.breakApart()` without a deprecated alias. Existing callers can use the
 [archived migration](../../skills/codemod/codemods/2026-09-24-text-split/instructions.md).
 The rename preserves the tuple result, committed-state requirement, source independence, and disposal ownership.
 
