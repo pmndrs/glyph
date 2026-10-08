@@ -19,6 +19,7 @@ import {
   timingModeMismatches,
 } from './support/labs-result.mts';
 import { parseLabsComparison, renderLabsSummary, writeLabsSummary } from './support/labs-summary.mts';
+import { installedPackageDependencies } from './support/package-labs-dependencies.mts';
 import { type PackageLabsSuite, requirePackageLabsSuite } from './support/package-labs-suite.mts';
 
 interface Options {
@@ -172,7 +173,7 @@ async function installArtifact(name: string, requested: string, root: string): P
         name: `glyph-labs-${name}`,
         private: true,
         type: 'module',
-        dependencies: { '@pmndrs/glyph': normalized.spec, three: '0.185.1' },
+        dependencies: installedPackageDependencies(normalized.spec),
       },
       null,
       2,

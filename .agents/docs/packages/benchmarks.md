@@ -275,6 +275,8 @@ Package performance is measured from installable artifacts rather than workspace
 `@pmndrs/glyph` once, creates one package tarball with `pnpm pack`, and retains that tarball for the separate non-blocking
 performance job. `benchmark:labs-package` installs the candidate tarball and an exact version resolved from the current
 npm canary into isolated temporary consumers, then runs both through `@pmndrs/labs`. It never rebuilds either artifact.
+Those consumers install the optional Three and TypeGPU peers exercised by the package workloads instead of relying on
+the benchmark workspace's dependency graph.
 The retained report includes native Labs JSON, comparison output, exact package manifests and lockfiles, and the candidate
 tarball SHA-256.
 
