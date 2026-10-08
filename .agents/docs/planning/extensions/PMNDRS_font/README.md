@@ -138,21 +138,15 @@ physics colliders or extrusion.
 
 ```json
 "outlines": {
-  "format": "opentype-sfnt-outlines-v0",
   "bufferView": 3
 }
 ```
 
-`bufferView` holds an SFNT with the face's `head` and `maxp` and exactly one outline source: `glyf` with `loca`, or
+`bufferView` holds the one outline encoding, an SFNT with the face's `head` and `maxp` and exactly one outline source: `glyf` with `loca`, or
 `CFF `, copied unchanged from the source face. It follows the shaping payload's canonical layout: sorted tags, 4-byte
 table alignment, zero padding, table checksums, and a valid `head.checkSumAdjustment`. `head.unitsPerEm` and
 `maxp.numGlyphs` MUST equal the serialized metrics. A baker MUST NOT write `outlines` for a face without an outline
 table, and every glyph MUST decode. Consumers decode one glyph at a time.
-
-`format` selects the encoding. A later encoding is a new `format` value within version 1, not a new version, so the
-`version` stays the flag that outlines may be present. A consumer MUST NOT decode an outline `format` it does not
-recognise; it MAY reject the font. The reference runtime rejects it, and because it accepts only artifacts from its own
-baker version, it only ever meets the format that version writes.
 
 Consumers draw the unhinted outline at the default instance. The reference consumer returns closed quadratic contours:
 TrueType quadratics exactly, a line as the quadratic whose control is its midpoint and that is flagged as a line, and

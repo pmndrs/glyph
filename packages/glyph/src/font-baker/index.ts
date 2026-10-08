@@ -95,7 +95,6 @@ export interface ShapingPayloadReport {
 }
 
 export interface OutlinePayloadReport {
-  readonly format: 'opentype-sfnt-outlines-v0';
   readonly sourceFormat: 'truetype' | 'cff';
   readonly sfntDirectoryBytes: number;
   readonly tables: readonly {

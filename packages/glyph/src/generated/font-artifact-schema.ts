@@ -34,7 +34,6 @@ export type PmndrsFontExtension = {
     readonly unicodeVersion: string;
   };
   readonly outlines?: {
-    readonly format: "opentype-sfnt-outlines-v0";
     readonly bufferView: number;
   };
   readonly rasters: readonly ({

@@ -118,7 +118,6 @@ pub struct ShapingPayloadReportV0 {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OutlinePayloadReportV0 {
-    pub format: String,
     /// `truetype` or `cff`.
     pub source_format: String,
     pub sfnt_directory_bytes: usize,

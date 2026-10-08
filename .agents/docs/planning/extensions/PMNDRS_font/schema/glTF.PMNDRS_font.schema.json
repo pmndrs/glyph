@@ -194,12 +194,6 @@
         }
       ],
       "properties": {
-        "format": {
-          "type": "string",
-          "enum": [
-            "opentype-sfnt-outlines-v0"
-          ]
-        },
         "bufferView": {
           "description": "The outline SFNT: head, maxp, and either glyf with loca or CFF.",
           "type": "integer",
@@ -207,7 +201,6 @@
         }
       },
       "required": [
-        "format",
         "bufferView"
       ]
     },

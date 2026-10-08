@@ -47,7 +47,6 @@ pub(crate) fn build_outline_payload(
     let (sfnt, tables) = sfnt::write_sfnt(&font, tables.iter().map(|tag| Tag::new(tag)))?;
     Ok(OutlinePayload {
         report: OutlinePayloadReportV0 {
-            format: "opentype-sfnt-outlines-v0".to_owned(),
             source_format: source_format.to_owned(),
             sfnt_directory_bytes: 12 + 16 * tables.len(),
             tables,

@@ -39,7 +39,6 @@ export function readRuntimeFontArtifact(bytes: Uint8Array): RuntimeFontArtifact 
   if (
     (extension.version !== 0 && extension.version !== 1) ||
     extension.shaping?.format !== 'opentype-sfnt-harfrust-v0' ||
-    (extension.outlines !== undefined && extension.outlines.format !== 'opentype-sfnt-outlines-v0') ||
     extension.metrics?.glyphIdWidth !== 16 ||
     extension.provenance?.bakerVersion !== FONT_BAKER_VERSION ||
     extension.provenance?.harfrustVersion !== '0.12.0' ||
