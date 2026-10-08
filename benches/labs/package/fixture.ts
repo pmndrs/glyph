@@ -24,16 +24,22 @@ const threePackage = (await import(
 )) as typeof import('@pmndrs/glyph/three');
 
 // Adapt older installed canaries once, outside every timed workload.
-const textPrototype: {
-  split?: (typeof threePackage.Text.prototype)['split'];
-  breakApart?: (typeof threePackage.Text.prototype)['split'];
-} = threePackage.Text.prototype;
+const { bitmap, glyph } = glyphPackage;
+const { defineThreeConfig } = threePackage;
+// Older comparison canaries expose the same borrowed-read method under its former name.
 if (textPrototype.split === undefined && textPrototype.breakApart !== undefined) {
   textPrototype.split = textPrototype.breakApart;
 }
+const textPrototype: {
+  readGlyphs?: (typeof threePackage.Text.prototype)['readGlyphs'];
+  withGlyphs?: (typeof threePackage.Text.prototype)['readGlyphs'];
+  split?: (typeof threePackage.Text.prototype)['split'];
+  breakApart?: (typeof threePackage.Text.prototype)['split'];
+} = threePackage.Text.prototype;
+if (textPrototype.readGlyphs === undefined && textPrototype.withGlyphs !== undefined) {
+  textPrototype.readGlyphs = textPrototype.withGlyphs;
+}
 
-const { bitmap, glyph } = glyphPackage;
-const { defineThreeConfig } = threePackage;
 const fontBytes = await readFile(new URL('../../fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url));
 
 await glyph.init();
@@ -239,7 +245,7 @@ export function borrowedGlyphChecksum(labels: ReturnType<typeof createLabels>['l
   return labels.reduce(
     (total, label) =>
       total +
-      label.withGlyphs((glyphs) => {
+      label.readGlyphs((glyphs) => {
         let checksum = glyphs.glyphCount;
         for (let index = 0; index < glyphs.glyphCount; index += 1) {
           const record = glyphs.glyphAt(index);

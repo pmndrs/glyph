@@ -3,7 +3,7 @@
  * position on the baseline. Place a point at `glyph.x + x * glyph.fontSize`, `glyph.y + y * glyph.fontSize`. Outlines
  * with equal `fontHandle` and `glyphId` are identical, so a caller can cache one shape per key.
  *
- * From `withGlyphs`, the typed arrays are views over the font's decoded outlines: valid only inside that callback, so
+ * From `readGlyphs`, the typed arrays are views over the font's decoded outlines: valid only inside that callback, so
  * copy them (`points.slice()`) to keep an outline.
  */
 export interface GlyphOutlineView {
