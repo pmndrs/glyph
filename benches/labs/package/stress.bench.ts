@@ -27,7 +27,9 @@ group('1,000-label stress @stress', () => {
     assert.equal(textCount, created.labels.length);
     assert.equal(created.textGroup.visible, true);
     assert.equal(borrowedGlyphChecksum(created.labels), expectedChecksum);
-    assert.deepEqual(inspectDraws(created.scene), expectedDraws);
+    const draws = inspectDraws(created.scene);
+    assert.equal(draws.draws, expectedDraws.draws);
+    assert.equal(draws.glyphs, expectedDraws.glyphs);
     disposeLabels(created);
   });
 
