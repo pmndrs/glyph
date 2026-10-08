@@ -723,7 +723,10 @@ and textures under one retained identity; groups cannot nest, geometry cannot re
 the primary render resource used by the command-buffer primitive. Bitmap repeated strikes, MSDF atlas/range companions, and Slug
 repeated page groups all compile through this contract. Capability profiles contain capabilities only;
 `compileCodec()` assigns their nonzero wire IDs by descriptor order, and ordinary single-profile frames omit the
-selector.
+selector. Codec registration rejects a selected program when its declared buffers exceed the capability set's
+`maxBuffersPerDraw`: glyph selection prefers an exact set binding over the wildcard for the same technique and variant,
+while decoration selection retains declaration-order first-match behavior. Raster program assembly reports the same
+limit as a `RangeError` and names the system buffers included in the count.
 
 `RasterResourceId` is the authoritative identity of one renderer resource realization. Reusing an ID means the format,
 schema role, companion set, metadata, and bytes are unchanged; a Codec must mint a new ID when any of those change. The

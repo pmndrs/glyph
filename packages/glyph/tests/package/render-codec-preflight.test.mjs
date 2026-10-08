@@ -15,6 +15,7 @@ const F32_BUFFER_ID = id.buffer('test.codec-preflight/f32');
 const U16_BUFFER_ID = id.buffer('test.codec-preflight/u16');
 const U32_BUFFER_ID = id.buffer('test.codec-preflight/u32');
 const SECONDARY_BUFFER_ID = id.buffer('test.codec-preflight/secondary-u32');
+const OVERRIDE_BUFFER_ID = id.buffer('test.codec-preflight/override-u32');
 const UNKNOWN_BUFFER_ID = id.buffer('test.codec-preflight/unknown');
 
 function capabilitySet(overrides = {}) {
@@ -119,6 +120,26 @@ function fullDescriptor() {
 function compileDecoded(descriptor) {
   const bytes = compileCodec(descriptor);
   return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+}
+
+function oneBufferProgram(programId, overrides = {}) {
+  return {
+    ...structuredClone(fullDescriptor().programs[1]),
+    programId,
+    ...overrides,
+  };
+}
+
+function twoBufferProgram(programId, overrides = {}) {
+  const program = oneBufferProgram(programId, overrides);
+  program.u32InputCount = 2;
+  program.inputs.push({ scope: 'glyph', field: 201 });
+  program.buffers.push({ id: OVERRIDE_BUFFER_ID, scalar: 'u32', vectorWidth: 1 });
+  program.operations.push(
+    { opcode: opcodes.loadU32, target: 1, operand0: 1 },
+    { opcode: opcodes.storeU32, operand0: 1, operand1: 0, immediate0: OVERRIDE_BUFFER_ID },
+  );
+  return program;
 }
 
 test('a fully specified codec retains every serialized value exactly', () => {
@@ -450,6 +471,48 @@ test('preflight rejects a repeated technique, capability set, and variant', () =
     variant: 0xffff,
   });
   assert.throws(() => compileCodec(descriptor), /repeats a technique, capability set, and program variant/);
+});
+
+test('preflight checks each glyph program only against capability sets that resolve to it', () => {
+  const narrow = capabilitySet({ maxBuffersPerDraw: 1 });
+  const wide = capabilitySet({ maxBuffersPerDraw: 2 });
+  const wildcard = twoBufferProgram(PRIMARY_PROGRAM_ID);
+  const narrowOverride = oneBufferProgram(SECONDARY_PROGRAM_ID, { capabilitySet: narrow });
+  assert.doesNotThrow(() => compileCodec({ capabilitySets: [narrow, wide], programs: [wildcard, narrowOverride] }));
+
+  const narrowProgram = oneBufferProgram(PRIMARY_PROGRAM_ID, { capabilitySet: narrow });
+  const wideProgram = twoBufferProgram(SECONDARY_PROGRAM_ID, { capabilitySet: wide });
+  assert.doesNotThrow(() => compileCodec({ capabilitySets: [narrow, wide], programs: [narrowProgram, wideProgram] }));
+
+  const overLimitWildcard = twoBufferProgram(PRIMARY_PROGRAM_ID);
+  assert.throws(
+    () => compileCodec({ capabilitySets: [narrow, wide], programs: [overLimitWildcard] }),
+    /declares 2 buffers but codec capability set 0 binds at most 1 per draw/,
+  );
+
+  const fallback = oneBufferProgram(PRIMARY_PROGRAM_ID);
+  const overLimitSpecific = twoBufferProgram(SECONDARY_PROGRAM_ID, { capabilitySet: narrow });
+  assert.throws(
+    () => compileCodec({ capabilitySets: [narrow, wide], programs: [fallback, overLimitSpecific] }),
+    /declares 2 buffers but codec capability set 0 binds at most 1 per draw/,
+  );
+});
+
+test('preflight follows first-match decoration selection order', () => {
+  const narrow = capabilitySet({ maxBuffersPerDraw: 1 });
+  const wide = capabilitySet({ maxBuffersPerDraw: 2 });
+  const wildcard = twoBufferProgram(PRIMARY_PROGRAM_ID, { primitiveKind: 'decoration', resourceKindMask: 0 });
+  const narrowProgram = oneBufferProgram(SECONDARY_PROGRAM_ID, {
+    capabilitySet: narrow,
+    primitiveKind: 'decoration',
+    resourceKindMask: 0,
+  });
+
+  assert.throws(
+    () => compileCodec({ capabilitySets: [narrow, wide], programs: [wildcard, narrowProgram] }),
+    /declares 2 buffers but codec capability set 0 binds at most 1 per draw/,
+  );
+  assert.doesNotThrow(() => compileCodec({ capabilitySets: [narrow, wide], programs: [narrowProgram, wildcard] }));
 });
 
 /** Each case mirrors one CodecError from the shaper's Rust validators. */

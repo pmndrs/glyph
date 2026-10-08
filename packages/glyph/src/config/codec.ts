@@ -328,6 +328,8 @@ export function compileCodec(descriptor: CodecDescriptor): Uint8Array {
     variants.add(key);
   }
 
+  preflightProgramBufferLimits(programs, capabilitySets, programCapabilityIds);
+
   // Every declared capability set must be reachable by some program; a wildcard
   // (unset) program reference covers all of them.
   for (const [index] of capabilitySets.entries()) {
@@ -644,13 +646,57 @@ function preflightProgramSemantics(
     if (!set.capabilities.includes('ordered-direct')) {
       throw new RangeError(`codec capability set ${index} lacks direct ordered allocation for ${label}`);
     }
-    // Every buffer a program declares binds to each of its draws.
-    if (program.buffers.length > set.maxBuffersPerDraw) {
-      throw new RangeError(
-        `${label} declares ${program.buffers.length} buffers but codec capability set ${index} binds at most ${set.maxBuffersPerDraw} per draw`,
-      );
+  }
+}
+
+function preflightProgramBufferLimits(
+  programs: readonly CodecProgram[],
+  capabilitySets: readonly CodecCapabilitySet[],
+  capabilitySetIds: readonly number[],
+): void {
+  for (const [capabilityIndex, set] of capabilitySets.entries()) {
+    const capabilitySetId = capabilityIndex + 1;
+    for (const [programIndex, program] of programs.entries()) {
+      if (
+        programServesCapabilitySet(programs, capabilitySetIds, programIndex, capabilitySetId) &&
+        program.buffers.length > set.maxBuffersPerDraw
+      ) {
+        throw new RangeError(
+          `codec program ${program.programId} declares ${program.buffers.length} buffers but codec capability set ${capabilityIndex} binds at most ${set.maxBuffersPerDraw} per draw`,
+        );
+      }
     }
   }
+}
+
+function programServesCapabilitySet(
+  programs: readonly CodecProgram[],
+  capabilitySetIds: readonly number[],
+  programIndex: number,
+  capabilitySetId: number,
+): boolean {
+  const program = programs[programIndex];
+  if (program === undefined) return false;
+  if ((program.primitiveKind ?? 'glyph') === 'decoration') {
+    return (
+      programs.findIndex(
+        (candidate, index) =>
+          (candidate.primitiveKind ?? 'glyph') === 'decoration' &&
+          (capabilitySetIds[index] === 0 || capabilitySetIds[index] === capabilitySetId),
+      ) === programIndex
+    );
+  }
+
+  const matchesProgram = (candidate: CodecProgram): boolean =>
+    candidate.techniqueId === program.techniqueId && (candidate.variant ?? 0) === (program.variant ?? 0);
+  const exactIndex = programs.findIndex(
+    (candidate, index) => capabilitySetIds[index] === capabilitySetId && matchesProgram(candidate),
+  );
+  const selectedIndex =
+    exactIndex === -1
+      ? programs.findIndex((candidate, index) => capabilitySetIds[index] === 0 && matchesProgram(candidate))
+      : exactIndex;
+  return selectedIndex === programIndex;
 }
 
 function resolveCapabilitySetId(

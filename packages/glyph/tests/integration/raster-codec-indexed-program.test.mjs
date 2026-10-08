@@ -57,13 +57,13 @@ test('createRasterCodecProgram rejects a capability set that cannot bind every b
   const directBuffers = BITMAP_TECHNIQUE_BUFFERS + 2;
   assert.doesNotThrow(() => createRasterCodecProgram(bitmapCodec, programOptions('direct', directBuffers)));
   assert.throws(() => createRasterCodecProgram(bitmapCodec, programOptions('direct', directBuffers - 1)), {
-    name: 'TypeError',
+    name: 'RangeError',
     message:
       /needs 8 buffers per draw \(6 technique buffers plus stableGlyphId, placementSlot\) but the capability set binds at most 7/,
   });
   assert.doesNotThrow(() => createRasterCodecProgram(bitmapCodec, programOptions('indexed', directBuffers + 1)));
   assert.throws(() => createRasterCodecProgram(bitmapCodec, programOptions('indexed', directBuffers)), {
-    name: 'TypeError',
+    name: 'RangeError',
     message:
       /needs 9 buffers per draw \(6 technique buffers plus stableGlyphId, placementSlot, transformIndex\) but the capability set binds at most 8/,
   });
