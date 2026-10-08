@@ -1293,7 +1293,10 @@ exports, calls, branches, and clock reads are now absent from the package source
 workload markers and the direct Wasm timer remain outside the shipped library.
 
 After the final plan-application lifecycle audit, Three sizes indexed transforms from live paragraph IDs instead of
-scanning every glyph record in JavaScript. A renderer preparation failure discards its candidate, retains the last
+scanning every glyph record in JavaScript. Patch-only publications retain the transform table and its index instead of
+preparing and uploading them again; the ordinary synchronizer still applies transforms and visibility changed in that
+frame. Replacement publications prepare fresh transform ownership and resolve visibility through the application scene.
+A renderer preparation failure discards its candidate, retains the last
 accepted plan fence and error, and waits for explicit renderer-relevant invalidation to request a checkpoint. Dirty upload
 ranges accumulate across presentation restoration and Rust patches; buffer/resource generations dispose only their exact
 dependent materials; and direct materials survive indexed transform-table growth. A loaded font owns one
