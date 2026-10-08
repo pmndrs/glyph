@@ -34,7 +34,6 @@ test('an application/wasm response streams into the compiler', async () => {
 });
 
 test('a response the engine declines to stream is buffered and compiled', async () => {
-  // Streaming compile rejects these before reading the body, so the same response still compiles.
   for (const headers of [{ 'content-type': 'application/octet-stream' }, { 'content-type': 'application/wasm;' }, {}]) {
     const { module, outcomes } = await compileCountingStreams(new Response(emptyModule, { headers }));
     assert.ok(module instanceof WebAssembly.Module);
@@ -57,6 +56,21 @@ test('compiles buffered bytes when streaming compilation is unavailable', async 
   try {
     const module = await compileWasmResponse(new Response(emptyModule));
     assert.ok(module instanceof WebAssembly.Module);
+  } finally {
+    WebAssembly.compileStreaming = streaming;
+  }
+});
+
+test('a correctly typed streaming failure propagates without a buffered retry', async () => {
+  const streaming = WebAssembly.compileStreaming;
+  const failure = new WebAssembly.CompileError('WebAssembly compilation disallowed by CSP');
+  const response = new Response(emptyModule, { headers: { 'content-type': 'application/wasm' } });
+  WebAssembly.compileStreaming = async () => {
+    throw failure;
+  };
+  try {
+    await assert.rejects(compileWasmResponse(response), (error) => error === failure);
+    assert.equal(response.bodyUsed, false);
   } finally {
     WebAssembly.compileStreaming = streaming;
   }
