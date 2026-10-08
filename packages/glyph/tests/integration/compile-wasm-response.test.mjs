@@ -50,3 +50,31 @@ test('invalid bytes reject with a compile error whether or not they streamed', a
     );
   }
 });
+
+test('compiles buffered bytes when streaming compilation is unavailable', async () => {
+  const streaming = WebAssembly.compileStreaming;
+  WebAssembly.compileStreaming = undefined;
+  try {
+    const module = await compileWasmResponse(new Response(emptyModule));
+    assert.ok(module instanceof WebAssembly.Module);
+  } finally {
+    WebAssembly.compileStreaming = streaming;
+  }
+});
+
+test('a stream failure propagates without buffering the consumed response again', async () => {
+  const failure = new Error('Wasm transport failed');
+  const response = new Response(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(emptyModule.slice(0, 4));
+      },
+      pull(controller) {
+        controller.error(failure);
+      },
+    }),
+    { headers: { 'content-type': 'application/wasm' } },
+  );
+  await assert.rejects(compileWasmResponse(response), (error) => error === failure);
+  assert.equal(response.bodyUsed, true);
+});
