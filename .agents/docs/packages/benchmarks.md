@@ -300,6 +300,10 @@ choice and compares with the canary. Available focused suites are `layout`, `mea
 `batch`, `style`, `reflow`, `stress`, `cold`, and `edit`; `edit` types one character into a long Inter or Fredoka paragraph and measures it or publishes a frame.
 `full` does not run browser observations, native/Worker profiles, or correctness and release gates.
 
+The `publication` suite includes 1,000 retained labels receiving equivalent style, layout, and constraint snapshots.
+It uses the installed package's Three instance through the shared fixture, warms the update before timing, and checks
+glyph identities/positions and realized draw counts afterward.
+
 Each suite holds workloads that time alike. Labs decides per run whether to batch iterations or time single calls from
 the cost of the first calls, so a workload whose first call is first-time work can be timed differently on each side
 of a comparison, and the delta then measures the timing mode rather than the package. Steady workloads therefore
