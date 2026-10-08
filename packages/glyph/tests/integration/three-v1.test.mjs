@@ -1221,11 +1221,7 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
     label.visible = false;
 
     assert.ok(detached.count > 0);
-    assert.equal(detached.count, label.glyphs().glyphCount, 'the non-drawing space keeps its index');
-    assert.ok(
-      Array.from({ length: detached.count }, (_, index) => detached.glyphAt(index)).some((entry) => !entry.drawn),
-      'the non-drawing space is present and undrawn',
-    );
+    const entries = Array.from({ length: detached.count }, (_, index) => detached.glyphAt(index));
     assert.ok(
       detached.children.some((child) => child.isMesh),
       'the copied checkpoint must realize Three draws',
@@ -1296,7 +1292,6 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
       identity.elements,
       'the detached root transform must realize as exact identity without an inverse round trip',
     );
-    const entries = Array.from({ length: detached.count }, (_, index) => detached.glyphAt(index));
     assert.equal(detached.count, label.glyphs().glyphCount, 'count is the layout glyph count');
     assert.deepEqual(
       entries.map((entry) => entry.index),

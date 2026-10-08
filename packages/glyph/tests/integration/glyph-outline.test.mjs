@@ -412,6 +412,8 @@ test('owned outlines are data: they read inside a render plan, after it, and aft
   drawnFont.dispose();
 });
 
+const outlinesOf = (glyphs) => Array.from({ length: glyphs.count }, (_, index) => glyphs.outlineAt(index));
+
 /** Mounts `text` so its layout commits, then splits it; the caller disposes the returned pieces. */
 function breakApartMounted(three, font, content) {
   const scene = new THREE.Scene();
@@ -468,21 +470,13 @@ test('Glyphs.outlineAt keeps reading after the source re-lays out and after the 
   const mounted = breakApartMounted(three, font, ' Hi o');
   try {
     const { glyphs, text } = mounted;
-    const captured = Array.from({ length: glyphs.count }, (_, index) => glyphs.outlineAt(index));
+    const captured = outlinesOf(glyphs);
     text.text = 'Wxyz Q';
     text.parent.parent.updateMatrixWorld(true);
     assert.notEqual(text.glyphs().glyphCount, glyphs.count);
-    assert.deepEqual(
-      Array.from({ length: glyphs.count }, (_, index) => glyphs.outlineAt(index)),
-      captured,
-      'a re-layout of the source does not change a detached glyph',
-    );
+    assert.deepEqual(outlinesOf(glyphs), captured, 'a re-layout of the source does not change a detached glyph');
     font.dispose();
-    assert.deepEqual(
-      Array.from({ length: glyphs.count }, (_, index) => glyphs.outlineAt(index)),
-      captured,
-      'the font is not needed to read an outline',
-    );
+    assert.deepEqual(outlinesOf(glyphs), captured, 'the font is not needed to read an outline');
     const count = glyphs.count;
     glyphs.dispose();
     assert.deepEqual(
