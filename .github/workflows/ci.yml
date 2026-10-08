@@ -360,7 +360,7 @@ jobs:
         run: pnpm --dir benches build -- --runtime-packages-ready
 
       - name: Check Three and React Three Fiber examples
-        run: pnpm --filter @pmndrs/glyph-examples check
+        run: pnpm scripts run benchmark:with-browser -- pnpm --filter @pmndrs/glyph-examples check
 
       - name: Check Japanese showcase fixture
         run: pnpm scripts run fixture:japanese-showcase:check
@@ -421,6 +421,27 @@ jobs:
           --candidate .cache/labs-candidate
           --suite ${{ steps.suite.outputs.suite }}
           --output .cache/labs-package
+
+      - name: Publish performance report comment
+        # The job summary already carries the report; this keeps one PR comment current, like the
+        # size and docs reports. Fork pull requests receive a read-only token, so this step may fail.
+        if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          summary=benches/.cache/labs-package/summary.md
+          [ -f "$summary" ] || { echo "No Labs summary to publish"; exit 0; }
+          body="$RUNNER_TEMP/labs-report.md"
+          { echo '<!-- glyph-labs-report -->'; cat "$summary"; } > "$body"
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            --jq '.[] | select(.body | startswith("<!-- glyph-labs-report -->")) | .id' | head -n 1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F "body=@$body" > /dev/null
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F "body=@$body" > /dev/null
+          fi
 
       - name: Retain Labs performance report
         if: always()

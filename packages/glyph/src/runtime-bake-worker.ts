@@ -22,6 +22,7 @@ import {
   type RuntimeBakeFailure,
   type RuntimeBakeSuccess,
 } from './internal/runtime-bake-protocol.js';
+import { compileWasmResponse } from './internal/compile-wasm-response.js';
 import { cacheSuccessfulPromise } from './internal/successful-promise-cache.js';
 import { bakeProgressMessage } from './internal/bake-progress-protocol.js';
 import { SLUG_GENERATOR_VERSION, slugDescriptor, type SlugDescriptor } from './internal/slug-contract.js';
@@ -36,7 +37,7 @@ const loadCore = cacheSuccessfulPromise<FontBakeCore>(async () => {
   if (!response.ok) {
     throw new Error(`font baker Wasm request failed with HTTP ${response.status}`);
   }
-  return createFontBaker(await response.arrayBuffer());
+  return createFontBaker(await compileWasmResponse(response));
 });
 let pending = Promise.resolve();
 

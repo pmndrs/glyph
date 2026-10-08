@@ -1,5 +1,5 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { LayoutBox, GlyphLayoutInspection, ParagraphLayoutSummary, ParagraphLineMetrics } from '../layout.js';
+import type { LayoutBox, GlyphLayoutColumns, ParagraphLayoutSummary, ParagraphLineMetrics } from '../layout.js';
 import type { PlanPublication } from './handle-state.js';
 
 /** Reads the ink box off one semantic record, or reports its absence via a flag bit — not a sentinel extent, since a zero-extent ink box (a paragraph of spaces) is a legitimate answer. */
@@ -97,7 +97,7 @@ export function readPlannerMeasurements(publication: PlanPublication): ReadonlyM
 }
 
 /** Keeps the private per-glyph columns of a canonical inspection out of the public measurement cache. */
-export function measurementFromLayoutInspection(layout: GlyphLayoutInspection): ParagraphLayoutSummary {
+export function measurementFromLayoutInspection(layout: GlyphLayoutColumns): ParagraphLayoutSummary {
   return Object.freeze({
     width: layout.width,
     height: layout.height,
@@ -120,13 +120,13 @@ export function measurementFromLayoutInspection(layout: GlyphLayoutInspection): 
 }
 
 /** Copies one explicitly requested retained layout out of borrowed Wasm publication memory. */
-export function readPlannerLayouts(publication: PlanPublication): ReadonlyMap<number, GlyphLayoutInspection> {
+export function readPlannerLayouts(publication: PlanPublication): ReadonlyMap<number, GlyphLayoutColumns> {
   const view = new SemanticViewReader(publication);
   const table = view.table();
   const recordLayout = textShaperAbi.layouts.engineSemanticView;
   const kinds = textShaperAbi.engine.semanticKinds;
   const measurements = readPlannerMeasurements(publication);
-  const layouts = new Map<number, GlyphLayoutInspection>();
+  const layouts = new Map<number, GlyphLayoutColumns>();
   for (let index = 0; index < table.count; index += 1) {
     const summary = view.record(table, index);
     if (view.u16(summary + recordLayout.kind) !== kinds.paragraphMeasurement) continue;

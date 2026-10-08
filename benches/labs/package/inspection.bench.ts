@@ -31,7 +31,7 @@ group('per-glyph inspection @glyphs @api', () => {
 
   bench('borrow per-glyph metrics from 100 promoted labels @cached @glyphs @api', function* () {
     const created = createLabels();
-    created.labels.forEach((label) => label.withGlyphs((glyphs) => glyphs.glyphCount));
+    created.labels.forEach((label) => label.readGlyphs((glyphs) => glyphs.glyphCount));
     const readGlyphs = () => borrowedGlyphChecksum(created.labels);
     const expectedChecksum = readGlyphs();
     const checksum = yield readGlyphs;

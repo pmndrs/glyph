@@ -8,6 +8,7 @@ import {
   type Font,
   type FontFaceTransfer,
   type BorrowedGlyph,
+  type GlyphOutlineContour,
   type SerializedFontFace,
 } from '../../src/index.js';
 import { bitmap } from '../../src/raster/bitmap.js';
@@ -196,7 +197,7 @@ label.text = txt`${green`Updated`}`;
 label.constraints = [constraints.card, constraints.naturalHeight];
 const measurement = label.measure();
 void measurement.contentWidth;
-const borrowedGlyphId: number = label.withGlyphs((layout) => {
+const borrowedGlyphId: number = label.readGlyphs((layout) => {
   layout satisfies ThreeApi.BorrowedGlyphLayout;
   layout.glyphAt(0) satisfies BorrowedGlyph;
   return layout.glyphAt(0).glyphId;
@@ -205,17 +206,26 @@ void borrowedGlyphId;
 
 labels.add(three.createText({ font: mtsdfFont, text: 'Mixed technique' }));
 
-const [detachedGlyphs, detachedDecorations] = label.breakApart();
+const [detachedGlyphs, detachedDecorations] = label.split();
 detachedGlyphs satisfies Glyphs;
 detachedDecorations satisfies Decorations | undefined;
+detachedGlyphs.outlineAt(0) satisfies GlyphOutlineContour[];
+// @ts-expect-error Renderer record state is private.
+void detachedGlyphs.glyphAt(0).drawn;
+detachedGlyphs.glyphAt(0).fontHandle satisfies number;
+detachedGlyphs.glyphAt(0).glyphId satisfies number;
+// @ts-expect-error The font id is a plain number, not a branded FontHandle.
+detachedGlyphs.glyphAt(0).fontHandle satisfies import('../../src/identity.js').FontHandle;
+// @ts-expect-error Detached source-layout mapping stays private.
+void detachedGlyphs.glyphAt(0).sourceIndex;
 void detachedGlyphs;
 void detachedDecorations;
-// @ts-expect-error Detached glyph branches are created only by Text.breakApart().
+// @ts-expect-error Detached glyph branches are created only by Text.split().
 const invalidGlyphs = new Glyphs();
 void invalidGlyphs;
 // @ts-expect-error No source-condition-only factory may leak through the public class.
 Glyphs.create({});
-// @ts-expect-error Detached decoration branches are created only by Text.breakApart().
+// @ts-expect-error Detached decoration branches are created only by Text.split().
 const invalidDecorations = new Decorations();
 void invalidDecorations;
 // @ts-expect-error No source-condition-only factory may leak through the public class.

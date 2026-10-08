@@ -53,7 +53,7 @@ group('1,000-label stress @stress', () => {
 
   bench('borrow glyphs from 1000 steadily promoted retained labels @cached @glyphs @api', function* () {
     const created = createLabels(1_000);
-    created.labels.forEach((label) => label.withGlyphs((glyphs) => glyphs.glyphCount));
+    created.labels.forEach((label) => label.readGlyphs((glyphs) => glyphs.glyphCount));
     const expectedChecksum = borrowedGlyphChecksum(created.labels);
     const checksum = yield () => borrowedGlyphChecksum(created.labels);
     assert.equal(checksum, expectedChecksum);
@@ -76,13 +76,13 @@ group('1,000-label stress @stress', () => {
   bench('edit and sparsely borrow one of 1000 retained labels @layout @glyphs @api', function* () {
     const created = createLabels(1_000);
     const target = created.labels[0]!;
-    target.withGlyphs((glyphs) => glyphs.glyphCount);
-    target.withGlyphs((glyphs) => glyphs.glyphCount);
+    target.readGlyphs((glyphs) => glyphs.glyphCount);
+    target.readGlyphs((glyphs) => glyphs.glyphCount);
     let alternate = false;
     const glyphId = yield () => {
       alternate = !alternate;
       target.text = alternate ? 'edited alpha' : 'edited bravo';
-      return target.withGlyphs((glyphs) => glyphs.glyphAt(0).glyphId);
+      return target.readGlyphs((glyphs) => glyphs.glyphAt(0).glyphId);
     };
     assert(glyphId > 0, 'edited sparse borrow must contain glyphs');
     disposeLabels(created);

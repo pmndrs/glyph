@@ -1146,7 +1146,6 @@ test('same-source drop caps compose through an explicit multi-line flow region',
       bodySelection: selection(2, source.length),
       measurements: text.measureGlyphs()?.map((placement) => ({
         index: placement.index,
-        sourceIndex: placement.sourceIndex,
         shapedOrigin: placement.shapedOrigin.toArray(),
         drawnOrigin: placement.drawnOrigin.toArray(),
         matrix: placement.originalMatrix.toArray(),
@@ -1189,7 +1188,7 @@ test('detached matrix helpers round-trip aliased and independent targets with a 
   }
 });
 
-test('Text.breakApart imports a planner-assisted copy with exact world alignment and full matrices', async (t) => {
+test('Text.split imports a planner-assisted copy with exact world alignment and full matrices', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
@@ -1206,12 +1205,12 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
   label.position.x += 2;
   assert.ok(
     label.matrix.equals(traversedSourceMatrix),
-    'the fixture must leave the source local matrix stale before breakApart',
+    'the fixture must leave the source local matrix stale before split',
   );
 
   let detached;
   try {
-    [detached] = label.breakApart();
+    [detached] = label.split();
     assert.deepEqual(
       detached.matrix.elements,
       label.matrix.elements,
@@ -1222,7 +1221,7 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
     label.visible = false;
 
     assert.ok(detached.count > 0);
-    assert.ok(detached.count < label.glyphs().glyphCount, 'the non-drawing space remains semantic-only');
+    const entries = Array.from({ length: detached.count }, (_, index) => detached.glyphAt(index));
     assert.ok(
       detached.children.some((child) => child.isMesh),
       'the copied checkpoint must realize Three draws',
@@ -1293,12 +1292,17 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
       identity.elements,
       'the detached root transform must realize as exact identity without an inverse round trip',
     );
-    assert.ok(
-      Array.from({ length: detached.count }, (_, index) => detached.glyphAt(index)).some(
-        (entry) => entry.sourceIndex > entry.index,
-      ),
-      'the fixture must include drawable glyphs after a semantic-only space',
+    assert.ok(detached.count < label.glyphs().glyphCount, 'count excludes semantic-only spaces');
+    assert.deepEqual(
+      entries.map((entry) => entry.index),
+      entries.map((_, index) => index),
+      'indices are dense over drawable glyphs',
     );
+    assert.ok(
+      detached.measurements.every(({ localInkBounds }) => localInkBounds.max.x > localInkBounds.min.x),
+      'every detached entry in this fixture has visible ink',
+    );
+    assert.ok(entries.every((entry) => !('sourceIndex' in entry)));
     let comparedRecords = 0;
     for (let detachedRecord = 0; detachedRecord < detachedStableIds.count; detachedRecord += 1) {
       const stableId = detachedStableIds.getX(detachedRecord);
@@ -1328,7 +1332,7 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
       );
       comparedRecords += 1;
     }
-    assert.equal(comparedRecords, detached.count);
+    assert.equal(comparedRecords, detached.count, 'every detached glyph owns one record');
     assert.notEqual(draw.material, sourceDraw.material, 'the detached branch owns independent material state');
     const sourceOpacity = sourceDraw.material.opacity;
     detached.materials[0].opacity = 0.35;
@@ -1347,7 +1351,7 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
     assert.deepEqual(Array.from(detachedStableIds.array), detachedStableIdsBeforeSourceEdit);
     assert.deepEqual(Array.from(detachedOrigins.array), detachedOriginsBeforeSourceEdit);
     const transforms = draw.geometry.getAttribute('_pmndrsGlyphInstanceTransforms');
-    assert.ok(transforms.count / 4 >= detached.count, 'storage covers the copied plan physical record capacity');
+    assert.ok(transforms.count / 4 >= comparedRecords, 'storage covers the copied plan physical record capacity');
     const pbo = { needsUpdate: false };
     transforms.pbo = pbo;
     const version = transforms.version;
@@ -1393,7 +1397,7 @@ test('detached glyphs retain their engine domain after the source and font owner
   const label = three.createText({ font, text: 'outlives source', style: { fontSize: 16 } });
   scene.add(label);
   scene.updateMatrixWorld(true);
-  const [detached] = label.breakApart();
+  const [detached] = label.split();
   scene.add(detached);
   label.dispose();
   font.dispose();
@@ -1406,7 +1410,7 @@ test('detached glyphs retain their engine domain after the source and font owner
   }
 });
 
-test('Text.breakApart returns a paragraph-scoped independent decoration plan when one exists', async (t) => {
+test('Text.split returns a paragraph-scoped independent decoration plan when one exists', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
@@ -1423,7 +1427,7 @@ test('Text.breakApart returns a paragraph-scoped independent decoration plan whe
   let plain;
   let plainGlyphs;
   try {
-    [detached, decorations] = label.breakApart();
+    [detached, decorations] = label.split();
     assert.ok(decorations, 'the tuple includes decorations when the committed paragraph draws them');
     scene.add(decorations);
     scene.updateMatrixWorld();
@@ -1473,7 +1477,7 @@ test('Text.breakApart returns a paragraph-scoped independent decoration plan whe
     plain = three.createText({ font, text: 'plain text', style: { fontSize: 16 } });
     scene.add(plain);
     scene.updateMatrixWorld(true);
-    const plainParts = plain.breakApart();
+    const plainParts = plain.split();
     assert.equal(plainParts.length, 2);
     assert.ok(Object.isFrozen(plainParts));
     [plainGlyphs] = plainParts;
@@ -1488,7 +1492,7 @@ test('Text.breakApart returns a paragraph-scoped independent decoration plan whe
   }
 });
 
-test('Text.breakApart preserves TextGroup paint order across detached roots', async (t) => {
+test('Text.split preserves TextGroup paint order across detached roots', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
@@ -1513,7 +1517,7 @@ test('Text.breakApart preserves TextGroup paint order across detached roots', as
   let glyphs;
   let decorations;
   try {
-    [glyphs, decorations] = label.breakApart();
+    [glyphs, decorations] = label.split();
     assert.ok(decorations);
     group.add(glyphs, decorations);
     assert.equal(glyphs.isGroup, undefined, 'the detached root must not create a Three group-order bucket');
@@ -1560,7 +1564,7 @@ test('Text.breakApart preserves TextGroup paint order across detached roots', as
   }
 });
 
-test('Text.breakApart preserves per-span material routing with independently owned instances', async (t) => {
+test('Text.split preserves per-span material routing with independently owned instances', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const namedMaterial = (name) =>
@@ -1585,7 +1589,7 @@ test('Text.breakApart preserves per-span material routing with independently own
   try {
     const sourceNames = new Set(rootDraws(scene).map((draw) => draw.material.name));
     assert.deepEqual(sourceNames, new Set(['detached-base', 'detached-accent']));
-    [detached] = label.breakApart();
+    [detached] = label.split();
     scene.add(detached);
     scene.updateMatrixWorld(true);
     assert.deepEqual(
@@ -2095,7 +2099,7 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
     'drawn measurements are unavailable while renderer realization failed',
   );
   assert.throws(
-    () => label.breakApart(),
+    () => label.split(),
     /after renderer realization failed/,
     'a failed renderer publication cannot be presented as a committed detached copy',
   );
@@ -2343,7 +2347,7 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async (t)
     `Slug needs ${String(slugStorageBindings.length)} WebGPU vertex storage buffers`,
   );
 
-  const [detached] = label.breakApart();
+  const [detached] = label.split();
   scene.add(detached);
   label.visible = false;
   scene.updateMatrixWorld(true);
@@ -2732,7 +2736,7 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
 
   const rightStableIdsBeforeCopy = Array.from(right.glyphs().glyphStableIds);
   const rightLocalMatricesBeforeCopy = right.measureGlyphs()?.map((measurement) => measurement.originalMatrix.clone());
-  const [leftDetached] = left.breakApart();
+  const [leftDetached] = left.split();
   group.add(leftDetached);
   const moved = new THREE.Matrix4();
   leftDetached.getMatrixAt(0, moved);
@@ -3173,7 +3177,7 @@ test('Text.measure retains unpublished lifecycle but skips published paragraph u
   font.dispose();
 });
 
-test('Text.withGlyphs demand-reads scalar records only inside one synchronous borrow', async (t) => {
+test('Text.readGlyphs demand-reads scalar records only inside one synchronous borrow', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const label = three.createText({ font, text: 'Borrowed glyph records wrap across two lines' });
@@ -3183,7 +3187,7 @@ test('Text.withGlyphs demand-reads scalar records only inside one synchronous bo
   let glyphCount = 0;
   const selected = [];
   const answer = Object.freeze({ answer: 42 });
-  const returned = label.withGlyphs((layout) => {
+  const returned = label.readGlyphs((layout) => {
     escaped = layout;
     glyphCount = layout.glyphCount;
     for (const index of [0, glyphCount - 1]) {
@@ -3225,14 +3229,14 @@ test('Text.withGlyphs demand-reads scalar records only inside one synchronous bo
   let thrownView;
   assert.throws(
     () =>
-      label.withGlyphs((layout) => {
+      label.readGlyphs((layout) => {
         thrownView = layout;
         throw new Error('borrow callback failed');
       }),
     /borrow callback failed/,
   );
   assert.throws(() => thrownView.glyphCount, /expired/);
-  assert.throws(() => label.withGlyphs(async () => 42), /must answer synchronously/);
+  assert.throws(() => label.readGlyphs(async () => 42), /must answer synchronously/);
   label.text = 'mutation succeeds after borrow release';
   assert.equal(label.measure().glyphCount, 38);
 
@@ -3240,7 +3244,7 @@ test('Text.withGlyphs demand-reads scalar records only inside one synchronous bo
   font.dispose();
 });
 
-test('Text.withGlyphs promotes repeated reads to a cached callback-scoped inspection', async (t) => {
+test('Text.readGlyphs promotes repeated reads to a cached callback-scoped inspection', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
@@ -3252,15 +3256,15 @@ test('Text.withGlyphs promotes repeated reads to a cached callback-scoped inspec
   glyph.shape();
 
   instrumentedGlyph.reset();
-  const firstGlyphId = label.withGlyphs((layout) => layout.glyphAt(0).glyphId);
-  const secondGlyphId = label.withGlyphs((layout) => layout.glyphAt(0).glyphId);
+  const firstGlyphId = label.readGlyphs((layout) => layout.glyphAt(0).glyphId);
+  const secondGlyphId = label.readGlyphs((layout) => layout.glyphAt(0).glyphId);
   assert.equal(firstGlyphId, secondGlyphId);
   assert.equal(instrumentedGlyph.measureCrossings, 2, 'the second borrow promotes one canonical inspection');
   assert.equal(instrumentedGlyph.borrowedGlyphReads, 1, 'the promoted borrow reads its scalar from cached columns');
 
   instrumentedGlyph.reset();
   assert.equal(
-    label.withGlyphs((layout) => layout.glyphAt(0).glyphId),
+    label.readGlyphs((layout) => layout.glyphAt(0).glyphId),
     firstGlyphId,
   );
   assert.equal(instrumentedGlyph.measureCrossings, 0, 'unchanged promoted borrows stay inside JS');
@@ -3269,17 +3273,17 @@ test('Text.withGlyphs promotes repeated reads to a cached callback-scoped inspec
   label.text = 'Dirty';
   instrumentedGlyph.reset();
   assert.equal(
-    label.withGlyphs((layout) => layout.glyphCount),
+    label.readGlyphs((layout) => layout.glyphCount),
     5,
   );
   assert.equal(instrumentedGlyph.measureCrossings, 1, 'the first borrow after an edit remains sparse');
   assert.equal(
-    label.withGlyphs((layout) => layout.glyphCount),
+    label.readGlyphs((layout) => layout.glyphCount),
     5,
   );
   assert.equal(instrumentedGlyph.measureCrossings, 2, 'the second unchanged borrow promotes the new revision');
   assert.equal(
-    label.withGlyphs((layout) => layout.glyphCount),
+    label.readGlyphs((layout) => layout.glyphCount),
     5,
   );
   assert.equal(instrumentedGlyph.measureCrossings, 2, 'the promoted revision stays cached');
@@ -3291,7 +3295,7 @@ test('Text.withGlyphs promotes repeated reads to a cached callback-scoped inspec
   label.renderOrder = 7;
   instrumentedGlyph.reset();
   assert.equal(
-    label.withGlyphs((layout) => layout.glyphCount),
+    label.readGlyphs((layout) => layout.glyphCount),
     5,
   );
   assert.equal(instrumentedGlyph.measureCrossings, 0, 'order-only changes preserve positioned glyph columns');
@@ -3301,7 +3305,7 @@ test('Text.withGlyphs promotes repeated reads to a cached callback-scoped inspec
   font.dispose();
 });
 
-test('Text.withGlyphs keeps sparse borrowing when canonical inspection exceeds the output limit', async (t) => {
+test('Text.readGlyphs keeps sparse borrowing when canonical inspection exceeds the output limit', async (t) => {
   const three = await createThreeTestHandle(t, {
     ...ThreeConfig,
     commands: {
@@ -3313,9 +3317,9 @@ test('Text.withGlyphs keeps sparse borrowing when canonical inspection exceeds t
   const label = three.createText({ font, text: 'capacity '.repeat(512) });
 
   instrumentedGlyph.reset();
-  const first = label.withGlyphs((layout) => layout.glyphAt(0).glyphId);
-  const second = label.withGlyphs((layout) => layout.glyphAt(0).glyphId);
-  const third = label.withGlyphs((layout) => layout.glyphAt(0).glyphId);
+  const first = label.readGlyphs((layout) => layout.glyphAt(0).glyphId);
+  const second = label.readGlyphs((layout) => layout.glyphAt(0).glyphId);
+  const third = label.readGlyphs((layout) => layout.glyphAt(0).glyphId);
   assert.equal(first, second);
   assert.equal(second, third);
   assert.equal(

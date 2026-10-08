@@ -488,9 +488,9 @@ export class ThreeRootHost {
   }
 
   /** @internal Borrow one root member's positioned layout for a synchronous callback. */
-  withGlyphs<Result>(text: THREE.Object3D, read: (glyphs: BorrowedGlyphLayout) => Result): Result {
+  readGlyphs<Result>(text: THREE.Object3D, read: (glyphs: BorrowedGlyphLayout) => Result): Result {
     this.#assertMember(text);
-    return this.#rootBinding().withGlyphs(text, read);
+    return this.#rootBinding().readGlyphs(text, read);
   }
 
   /** @internal Return the publication-facing view after authenticating root membership. */
@@ -869,10 +869,10 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return inspection;
   }
 
-  /** Reads selected positioned glyphs without copying the complete layout. */
-  withGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result {
+  /** Synchronously reads selected positioned glyphs and returns the callback's result. The view expires when the callback exits; the full layout is not copied. */
+  readGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result {
     this.#assertActive();
-    return this.#root.withGlyphs(this, read);
+    return this.#root.readGlyphs(this, read);
   }
 
   commitState(): TextCommitState {
@@ -902,14 +902,14 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return measureGlyphPlacements(placements, this.#glyphGeometry(placements));
   }
 
-  /** Copies the committed glyphs and optional decorations into independently rendered Three objects. */
-  breakApart(): readonly [glyphs: Glyphs, decorations: Decorations | undefined] {
+  /** Copies drawable committed glyphs and optional decorations into independently rendered Three objects; blank glyphs are excluded. */
+  split(): readonly [glyphs: Glyphs, decorations: Decorations | undefined] {
     this.#assertActive();
-    this.#assertDetachedCopyAvailable('break apart');
+    this.#assertDetachedCopyAvailable('split');
     const placements = this.#glyphPlacements();
-    if (placements === undefined) throw new Error('cannot break apart text before a committed layout is available');
+    if (placements === undefined) throw new Error('cannot split text before a committed layout is available');
     const binding = this.#binding;
-    if (binding === undefined) throw new Error('cannot break apart an unbound text paragraph');
+    if (binding === undefined) throw new Error('cannot split an unbound text paragraph');
     const incomplete = new Set(placements.incomplete);
     const drawable = placements.glyphs.filter((placement) => !incomplete.has(placement.index));
     const stableIds = new Uint32Array(drawable.length);
@@ -918,7 +918,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       if (stableId === undefined) throw new Error(`drawable glyph ${placement.index} has no stable id`);
       stableIds[index] = stableId;
     }
-    if (stableIds.length === 0) throw new Error('cannot break apart text with no drawable glyphs');
+    if (stableIds.length === 0) throw new Error('cannot split text with no drawable glyphs');
     const source = this.#root.member(this);
     const glyphRenderOrderBase = binding.glyphRenderOrderBase(source, stableIds);
     const glyphs = createGlyphs({
@@ -1389,10 +1389,10 @@ class ThreeRootPublication {
     return inspection;
   }
 
-  withGlyphs<Result>(text: Text<RasterFormatMetadata>, read: (glyphs: BorrowedGlyphLayout) => Result): Result {
+  readGlyphs<Result>(text: Text<RasterFormatMetadata>, read: (glyphs: BorrowedGlyphLayout) => Result): Result {
     this.#assertActive();
     const entry = this.#queryEntry(text);
-    const result = entry.handle.withGlyphs(read);
+    const result = entry.handle.readGlyphs(read);
     this.#detachedQuery = nearestScene(text) === undefined ? text : undefined;
     return result;
   }
@@ -1464,7 +1464,7 @@ class ThreeRootPublication {
     if (layout === undefined) return undefined;
     const drawn = this.#target.snapshotGlyphOrigins(layout.glyphStableIds, layout.x, layout.y);
     const placements = createGlyphPlacements(
-      copyGlyphLayoutInspection(layout),
+      copyGlyphLayoutInspection(layout, (index) => layout.outlineAt(index)),
       text.text,
       drawn.drawnX,
       drawn.drawnY,

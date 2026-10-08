@@ -20,8 +20,8 @@ sources:
     resource: ../../../packages/glyph/tests/integration/three-v1.test.mjs
     title: Detached-plan integration regressions
 generated:
-  by: openai-codex/gpt-5.6
-  at: '2026-08-30T00:00:00Z'
+  by: openai-codex/gpt-6
+  at: '2026-09-24T20:41:15Z'
 ---
 
 # Planner-assisted detached glyph slices
@@ -58,16 +58,16 @@ The emitted checkpoint is complete rather than a patch. Buffer capacities and re
 
 ## Decorations
 
-Decorations are not glyph records and do not silently ride `RetainedText.copyGlyphs()`. `RetainedText.copyDecorations(target)` emits the committed paragraph's under/over decoration passes as a separate complete checkpoint. Three coordinates both planner requests in `Text.breakApart()` and returns the decoration import as an independently owned `Decorations` object when the committed paragraph actually has decoration draws. Glyph and decoration objects retain separate engine-domain, material, and disposal ownership.
+Decorations are not glyph records and do not silently ride `RetainedText.copyGlyphs()`. `RetainedText.copyDecorations(target)` emits the committed paragraph's under/over decoration passes as a separate complete checkpoint. Three coordinates both planner requests in `Text.split()` and returns the decoration import as an independently owned `Decorations` object when the committed paragraph actually has decoration draws. Glyph and decoration objects retain separate engine-domain, material, and disposal ownership.
 
 This separation lets callers keep, replace, animate, or omit decoration rendering without coupling decoration lifetime to glyph physics.
 
 ## Three.js surface
 
-`Text.breakApart()` is available only after the source renderer state is committed. It synchronously returns the frozen tuple `[Glyphs, Decorations | undefined]`. Both groups use the ordinary Three render-plan executor; the operation does not create one `Text`, mesh, or material per glyph. If decoration import fails, Three disposes the already-created glyph branch before rethrowing, so the call is atomic from the caller's perspective.
+`Text.split()` is available only after the source renderer state is committed. It synchronously returns the frozen tuple `[Glyphs, Decorations | undefined]`. Both groups use the ordinary Three render-plan executor; the operation does not create one `Text`, mesh, or material per glyph. If decoration import fails, Three disposes the already-created glyph branch before rethrowing, so the call is atomic from the caller's perspective.
 
 ```ts
-const [glyphs, decorations] = text.breakApart();
+const [glyphs, decorations] = text.split();
 text.parent!.add(glyphs); // add as a sibling to preserve the source transform exactly
 if (decorations !== undefined) text.parent!.add(decorations);
 text.visible = false;
@@ -113,7 +113,7 @@ Physics adapters consume `ThreeGlyphMeasurement` and choose their own Box, spher
 
 ## Required evidence
 
-- A source edit after `breakApart()` cannot replace or mutate detached draw records.
+- A source edit after `split()` cannot replace or mutate detached draw records.
 - A detached material edit cannot mutate the live source material.
 - A paragraph containing semantic-only whitespace copies the correct later drawable records.
 - Nested translated, rotated, and scaled parents preserve exact first-frame world alignment.

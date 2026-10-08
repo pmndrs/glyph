@@ -1,6 +1,8 @@
 import * as THREE from 'three/webgpu';
 
 import type { GlyphCopy } from '../config/glyph.js';
+import type { GlyphOutlineContour } from '../glyph-outline.js';
+import type { GlyphLayoutInspection } from '../layout.js';
 import type { GlyphPlacement, GlyphPlacements } from '../glyph-placement.js';
 import { ThreeCommandBufferRenderer, type ThreeRendererHost } from './command-buffer-renderer.js';
 import type { ThreeGlyphGeometrySource, ThreeGlyphMeasurement } from './glyph-measurement.js';
@@ -34,7 +36,7 @@ export function localToWorldMatrix(
   return target.copy(glyphsMatrixWorld).multiply(matrixLocal);
 }
 
-/** @internal Constructed only by `Text.breakApart()`. */
+/** @internal Constructed only by `Text.split()`. */
 interface GlyphsOptions {
   readonly source: DetachedTextSource;
   readonly placements: GlyphPlacements;
@@ -62,13 +64,15 @@ export function setGlyphDrawOrder(glyphs: Glyphs, start: number): number {
   return configureGlyphDrawOrder(glyphs, start);
 }
 
-/** Immutable identity and grouping metadata for one drawable record in a detached `Glyphs` object. */
+/** Immutable identity and grouping metadata for one glyph of a detached `Glyphs` object. */
 export interface DetachedGlyph {
-  /** Dense index accepted by every `Glyphs` matrix method. */
+  /** Dense drawable index accepted by every `Glyphs` method. */
   readonly index: number;
-  /** Original visual-order index in the committed source paragraph. */
-  readonly sourceIndex: number;
   readonly key: GlyphPlacement['key'];
+  /** The font that shaped this glyph: a plain number, never reused, that retains nothing. Matches the corresponding glyph in the captured source layout. */
+  readonly fontHandle: number;
+  /** The glyph index in that font, not a Unicode code point or a layout index. Equal `fontHandle` and `glyphId` mean an equal outline. */
+  readonly glyphId: number;
   readonly cluster: number;
   readonly line: number;
   readonly word: number;
@@ -77,27 +81,31 @@ export interface DetachedGlyph {
 }
 
 interface DetachedGlyphStorage {
-  /** Shader matrix already composed with the inverse rest pivot. */
+  /** Shader matrix already composed with the inverse rest pivot, one per physical record. */
   readonly transforms: THREE.StorageInstancedBufferAttribute;
-  /** Public matrices retain the user-facing pivot-relative contract. */
-  readonly matrices: Float32Array;
-  readonly pivots: Float32Array;
 }
 
-interface DetachedGlyphRecordAddress {
-  readonly storageKey: string;
-  readonly index: number;
-}
-
-/** A detached render-plan branch from `Text.breakApart()`: imports the planner's compacted publication into the normal renderer without child Text objects; per-glyph matrices are Three-side only and never reach the live paragraph. */
+/**
+ * A detached render-plan branch from `Text.split()`: imports the planner's compacted publication into the normal renderer without child Text objects; per-glyph matrices are Three-side only and never reach the live paragraph.
+ *
+ * Only glyphs with render records are included. Per-glyph data and matrices share a dense drawable index;
+ * the mapping back to the source layout stays private.
+ */
 export class Glyphs extends THREE.Object3D {
   readonly #target: ThreeCommandBufferRenderer;
   readonly #copy: GlyphCopy<void>;
   readonly #owner: ThreeRendererHost;
-  readonly #placements: readonly GlyphPlacement[];
+  readonly #layout: GlyphLayoutInspection;
+  readonly #sourceIndices: Uint32Array;
   readonly #glyphs: readonly DetachedGlyph[];
   readonly #measurements: readonly ThreeGlyphMeasurement[];
-  readonly #recordAddresses: readonly DetachedGlyphRecordAddress[];
+  /** Public matrices, 16 per glyph, keep the user-facing pivot-relative contract. */
+  readonly #matrices: Float32Array;
+  /** Each glyph's drawn pen origin, 2 per glyph. */
+  readonly #pivots: Float32Array;
+  /** Physical record of each glyph in its storage, or -1 when the glyph draws nothing. */
+  readonly #records: Int32Array;
+  readonly #recordStorages: (DetachedGlyphStorage | undefined)[];
   readonly #storages = new Map<string, DetachedGlyphStorage>();
   readonly #worldLocal = new THREE.Matrix4();
   readonly #worldInverse = new THREE.Matrix4();
@@ -115,17 +123,21 @@ export class Glyphs extends THREE.Object3D {
 
   private constructor(token: typeof glyphsConstructorToken, options: GlyphsOptions) {
     super();
-    if (token !== glyphsConstructorToken) throw new TypeError('Glyphs objects are created by Text.breakApart()');
+    if (token !== glyphsConstructorToken) throw new TypeError('Glyphs objects are created by Text.split()');
     let target: ThreeCommandBufferRenderer | undefined;
     let copy: GlyphCopy<void> | undefined;
     try {
+      const layout = options.placements.layout;
+      this.#layout = layout;
       const incomplete = new Set(options.placements.incomplete);
-      this.#placements = Object.freeze(options.placements.glyphs.filter((_, index) => !incomplete.has(index)));
+      const placements = options.placements.glyphs.filter((placement) => !incomplete.has(placement.index));
+      this.#sourceIndices = Uint32Array.from(placements, (placement) => placement.index);
       this.#glyphs = Object.freeze(
-        this.#placements.map((placement, index) =>
+        placements.map((placement, index) =>
           Object.freeze({
             index,
-            sourceIndex: placement.index,
+            fontHandle: layout.fontHandles[layout.glyphFontSlots[placement.index]!]!,
+            glyphId: layout.glyphIds[placement.index]!,
             key: placement.key,
             cluster: placement.cluster,
             line: placement.line,
@@ -135,11 +147,14 @@ export class Glyphs extends THREE.Object3D {
           }),
         ),
       );
+      const measurements = measureGlyphPlacements(options.placements, options.geometry);
       this.#measurements = Object.freeze(
-        measureGlyphPlacements(options.placements, options.geometry)
-          .filter((_, index) => !incomplete.has(index))
-          .map((measurement, index) => Object.freeze({ ...measurement, index })),
+        placements.map((placement, index) => Object.freeze({ ...measurements[placement.index]!, index })),
       );
+      this.#matrices = new Float32Array(placements.length * 16);
+      this.#pivots = new Float32Array(placements.length * 2);
+      this.#records = new Int32Array(placements.length).fill(-1);
+      this.#recordStorages = new Array<DetachedGlyphStorage | undefined>(placements.length).fill(undefined);
       copyCurrentLocalTransform(options.source, this);
       // A Glyphs object may receive world-space instance writes in the first useFrame after it is
       // attached, before the renderer has traversed the scene once.
@@ -164,11 +179,7 @@ export class Glyphs extends THREE.Object3D {
           const capacity = Math.max(1, capacityRecords);
           const transforms = new THREE.StorageInstancedBufferAttribute(new Float32Array(capacity * 16), 4);
           transforms.setUsage(THREE.DynamicDrawUsage);
-          owner.#storages.set(storageKey, {
-            transforms,
-            matrices: new Float32Array(capacity * 16),
-            pivots: new Float32Array(capacity * 2),
-          });
+          owner.#storages.set(storageKey, { transforms });
         },
         glyphStorage(storageKey) {
           return owner.#storages.get(storageKey);
@@ -186,26 +197,23 @@ export class Glyphs extends THREE.Object3D {
       if (this.#storages.size === 0) {
         throw new Error('detached glyph copy produced no drawable record storage');
       }
-      this.#recordAddresses = Object.freeze(
-        this.#placements.map((placement) => {
-          const stableId = options.placements.layout.glyphStableIds[placement.index];
-          if (stableId === undefined) throw new Error(`detached glyph ${placement.index} has no stable id`);
-          const address = this.#target.glyphRecord(stableId);
-          if (address === undefined)
-            throw new Error(`detached glyph ${placement.index} is missing from the planner slice`);
-          const storage = this.#storages.get(address.storageKey);
-          if (storage === undefined) {
-            throw new Error(`detached glyph ${placement.index} references unknown physical record storage`);
-          }
-          if (address.index < 0 || address.index >= storage.transforms.count / 4) {
-            throw new RangeError(
-              `detached glyph ${placement.index} exceeds the copied plan's physical record capacity`,
-            );
-          }
-          return address;
-        }),
-      );
-      this.#initializeTransforms();
+      for (const [index, placement] of placements.entries()) {
+        const stableId = layout.glyphStableIds[placement.index];
+        if (stableId === undefined) throw new Error(`detached glyph ${placement.index} has no stable id`);
+        const address = this.#target.glyphRecord(stableId);
+        if (address === undefined)
+          throw new Error(`detached glyph ${placement.index} is missing from the planner slice`);
+        const storage = this.#storages.get(address.storageKey);
+        if (storage === undefined) {
+          throw new Error(`detached glyph ${placement.index} references unknown physical record storage`);
+        }
+        if (address.index < 0 || address.index >= storage.transforms.count / 4) {
+          throw new RangeError(`detached glyph ${placement.index} exceeds the copied plan's physical record capacity`);
+        }
+        this.#records[index] = address.index;
+        this.#recordStorages[index] = storage;
+      }
+      this.#initializeTransforms(placements);
       // Command-buffer realization visits the root before it is attached and consumes the initial dirty flag.
       // Re-dirty it so the first scene traversal composes this exact local matrix with its real parent.
       this.matrixWorldNeedsUpdate = true;
@@ -220,10 +228,12 @@ export class Glyphs extends THREE.Object3D {
     }
   }
 
+  /** Number of drawable glyphs; blank layout glyphs are excluded. */
   get count(): number {
-    return this.#placements.length;
+    return this.#glyphs.length;
   }
 
+  /** One measurement per glyph, at the glyph's index. */
   get measurements(): readonly ThreeGlyphMeasurement[] {
     return this.#measurements;
   }
@@ -234,20 +244,24 @@ export class Glyphs extends THREE.Object3D {
     return this.#target.materials;
   }
 
+  /** Reads drawable glyph `index`'s matrix; its rest value translates to the glyph's pen origin. */
   getMatrixAt(index: number, target: THREE.Matrix4): void {
     this.#assertActive();
-    const { storage, index: record } = this.#record(index);
-    target.fromArray(storage.matrices, record * 16);
+    this.#assertIndex(index);
+    target.fromArray(this.#matrices, index * 16);
   }
 
+  /** Writes drawable glyph `index`'s matrix. */
   setMatrixAt(index: number, matrix: THREE.Matrix4): void {
     this.#assertActive();
-    const { storage, index: record } = this.#record(index);
-    const offset = record * 16;
-    storage.matrices.set(matrix.elements, offset);
-    const pivotOffset = record * 2;
-    this.#inversePivot.makeTranslation(-storage.pivots[pivotOffset]!, -storage.pivots[pivotOffset + 1]!, 0);
+    this.#assertIndex(index);
+    this.#matrices.set(matrix.elements, index * 16);
+    const storage = this.#recordStorages[index];
+    if (storage === undefined) return;
+    const pivotOffset = index * 2;
+    this.#inversePivot.makeTranslation(-this.#pivots[pivotOffset]!, -this.#pivots[pivotOffset + 1]!, 0);
     this.#composed.copy(matrix).multiply(this.#inversePivot);
+    const offset = this.#records[index]! * 16;
     storage.transforms.array.set(this.#composed.elements, offset);
     markStorageAttributeUpdated(storage.transforms, offset, 16);
   }
@@ -269,8 +283,26 @@ export class Glyphs extends THREE.Object3D {
     localToWorldMatrix(this.matrixWorld, target, target);
   }
 
-  glyphAt(index: number): DetachedGlyph | undefined {
-    return this.#glyphs[index];
+  /** Drawable glyph `index`'s identity and grouping. Throws `RangeError` outside `0 <= index < count`. */
+  glyphAt(index: number): DetachedGlyph {
+    this.#assertIndex(index);
+    return this.#glyphs[index]!;
+  }
+
+  /**
+   * Reads drawable glyph `index`'s outline from its captured source-layout index: closed contours of
+   * `[x0, y0, cx, cy, x1, y1, isLine]` curves in em units, y down, origin at the glyph's pen origin, the pivot of the
+   * matrix `setMatrixAt` places. To draw the glyph where this object draws it, scale each coordinate by
+   * `DetachedGlyph.fontSize`, negate y (this object's local space is y up), and place the result with the glyph's
+   * matrix. Blank layout glyphs are excluded from this object.
+   *
+   * The outlines were captured when `split()` ran, so, like `glyphAt`, this still reads after the source `Text`
+   * re-lays out and after the font or this object is disposed. Throws `RangeError` outside `0 <= index < count`, and
+   * `TypeError` when the glyph's font was baked without outlines.
+   */
+  outlineAt(index: number): GlyphOutlineContour[] {
+    this.#assertIndex(index);
+    return this.#layout.outlineAt(this.#sourceIndices[index]!);
   }
 
   dispose(): void {
@@ -294,33 +326,26 @@ export class Glyphs extends THREE.Object3D {
     if (failure !== undefined) throw failure;
   }
 
-  #initializeTransforms(): void {
-    for (const [index, placement] of this.#placements.entries()) {
-      const address = this.#recordAddresses[index]!;
-      const storage = this.#storages.get(address.storageKey);
-      if (storage === undefined) throw new Error(`detached glyph ${index} lost its physical record storage`);
-      const transforms = storage.transforms.array as Float32Array;
-      const record = address.index;
+  #initializeTransforms(placements: readonly GlyphPlacement[]): void {
+    for (const [index, placement] of placements.entries()) {
       const x = placement.x;
       const y = -placement.y;
-      storage.pivots.set([x, y], record * 2);
+      this.#pivots.set([x, y], index * 2);
       this.#composed.makeTranslation(x, y, 0);
-      this.#composed.toArray(storage.matrices, record * 16);
-      this.#composed.identity().toArray(transforms, record * 16);
+      this.#composed.toArray(this.#matrices, index * 16);
+      const storage = this.#recordStorages[index];
+      if (storage === undefined) continue;
+      this.#composed.identity().toArray(storage.transforms.array as Float32Array, this.#records[index]! * 16);
     }
     for (const storage of this.#storages.values()) {
       storage.transforms.needsUpdate = true;
     }
   }
 
-  #record(index: number): Readonly<{ storage: DetachedGlyphStorage; index: number }> {
-    if (!Number.isInteger(index) || index < 0 || index >= this.#recordAddresses.length) {
+  #assertIndex(index: number): void {
+    if (!Number.isInteger(index) || index < 0 || index >= this.#glyphs.length) {
       throw new RangeError(`glyph index ${index} is out of range`);
     }
-    const address = this.#recordAddresses[index]!;
-    const storage = this.#storages.get(address.storageKey);
-    if (storage === undefined) throw new Error(`glyph ${index} has no physical record storage`);
-    return { storage, index: address.index };
   }
 
   #assertActive(): void {
