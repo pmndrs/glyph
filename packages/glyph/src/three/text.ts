@@ -1750,6 +1750,9 @@ interface ThreeMaterialBindingVariants {
 class ThreeMaterialBindingCache {
   readonly #shared = createMaterialBindingVariants();
   readonly #scoped = new WeakMap<TextGroup, ThreeMaterialBindingVariants>();
+  // Reconciliation stages sibling Texts contiguously; retain the hot variants without retaining their group.
+  #recentGroup: WeakRef<TextGroup> | undefined;
+  #recentScoped: ThreeMaterialBindingVariants | undefined;
 
   get(
     material: ThreeTextMaterial | undefined,
@@ -1759,8 +1762,15 @@ class ThreeMaterialBindingCache {
   ): ThreeMaterialBinding {
     let bindings = this.#shared;
     if (batchGroup !== undefined) {
-      bindings = this.#scoped.get(batchGroup) ?? createMaterialBindingVariants();
-      this.#scoped.set(batchGroup, bindings);
+      const recent = this.#recentScoped;
+      if (recent !== undefined && this.#recentGroup?.deref() === batchGroup) {
+        bindings = recent;
+      } else {
+        bindings = this.#scoped.get(batchGroup) ?? createMaterialBindingVariants();
+        this.#scoped.set(batchGroup, bindings);
+        this.#recentGroup = new WeakRef(batchGroup);
+        this.#recentScoped = bindings;
+      }
     }
     let variants: Map<string, ThreeMaterialBinding>;
     if (material === undefined) {
