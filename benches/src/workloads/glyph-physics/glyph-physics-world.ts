@@ -12,6 +12,12 @@ const SUB_STEPS = 4;
 const GRAVITY = 40;
 /** Prism depth along z in em units. Every piece is extruded to this thickness, centred on the glyph's plane. */
 export const COLLIDER_DEPTH_EM = 0.25;
+/**
+ * Fastest a body may move, in metres per second. Dynamic bodies are not swept against each other, so a fall long enough
+ * to outrun a thin stem's width in one step (0.1 em at 28 px is 0.14 m) would pass glyphs through one another; at this
+ * cap a step moves a body at most 0.1 m, less than any stem.
+ */
+const MAXIMUM_SPEED = 6;
 /** Static bodies are this thick in metres, so nothing tunnels through the floor or a wall. */
 const STATIC_THICKNESS = 2;
 const FRICTION = 0.6;
@@ -98,11 +104,13 @@ export class GlyphPhysicsWorld {
   #boundaryBody: b3BodyId | undefined;
   #disposed = false;
   #skippedPieces = 0;
+  #hullCount = 0;
 
   constructor(b3: Box3DModule) {
     this.#b3 = b3;
     const definition = b3.b3DefaultWorldDef();
     definition.gravity = [0, -GRAVITY, 0];
+    definition.maximumLinearSpeed = MAXIMUM_SPEED;
     this.#world = b3.b3CreateWorld(definition);
   }
 
@@ -113,6 +121,11 @@ export class GlyphPhysicsWorld {
   /** Pieces that Box3D could not turn into a hull and the world therefore does not collide with. */
   get skippedPieces(): number {
     return this.#skippedPieces;
+  }
+
+  /** Convex hull shapes the world holds on dynamic bodies, counting each body's own copy of a shared glyph's hulls. */
+  get hullCount(): number {
+    return this.#hullCount;
   }
 
   get awakeBodyCount(): number {
@@ -172,6 +185,7 @@ export class GlyphPhysicsWorld {
     shape.baseMaterial.friction = FRICTION;
     shape.baseMaterial.restitution = RESTITUTION;
     for (const hull of hulls) b3.b3CreateHullShape(body, shape, hull);
+    this.#hullCount += hulls.length;
     const launch: Launch = {
       drift: (this.#random() * 2 - 1) * MAX_LAUNCH_DRIFT,
       penX,

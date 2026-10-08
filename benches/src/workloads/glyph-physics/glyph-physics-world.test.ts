@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Box3DModule } from 'box3d.js';
 
-import { buildGlyphCollider, type GlyphCollider } from './glyph-colliders';
+import { buildGlyphCollider, emToWorld, type EmPolyline, type GlyphCollider } from './glyph-colliders';
+import { wallSpan } from './glyph-physics-scene';
 import { GlyphPhysicsWorld, loadBox3d, PIXELS_PER_METER, STEP_SECONDS, type BodyPose } from './glyph-physics-world';
 import { breakApartParagraph } from './test-support/outlined-paragraph';
 
@@ -123,7 +124,10 @@ describe('Box3D colliders built from glyph outlines', () => {
       const { glyphs } = paragraph;
       for (let index = 0; index < glyphs.count; index += 1) {
         if (!glyphs.glyphAt(index).drawn) continue;
+        const before = physics.hullCount;
         physics.addGlyph(buildGlyphCollider(glyphs.outlineAt(index), 0.2 / 24), 24, index * 30, 0);
+        // Thin straight glyphs (l, i, I, |) are one rectangle each; none may end up with no hull at all.
+        expect(physics.hullCount - before, `glyph ${String(index)} has no hull`).toBeGreaterThanOrEqual(1);
       }
       // Contextual ligatures can fuse neighbours, so the body count is the shaped glyph count, not the character count.
       expect(physics.bodyCount).toBe(glyphs.count);
@@ -181,4 +185,107 @@ describe('Box3D colliders built from glyph outlines', () => {
     expect(pose.y).toBeCloseTo(-3, 3);
     expect(pose.angle).toBeCloseTo(0, 6);
   });
+});
+
+/**
+ * What a settled pile may overlap by, in em. Box3D leaves a residue from the landing impact that its solver does not
+ * push back out: about 0.02 em measured, several times Box3D's 5 mm contact slop (0.1 px), against 2.6 px (0.09 em) before the
+ * fall speed was capped.
+ */
+const SETTLED_OVERLAP_EM = 0.03;
+
+/** A convex piece in world pixels (y up) after the body's pose. */
+function worldPiece(piece: EmPolyline, fontSize: number, pose: BodyPose): number[] {
+  const point = { x: 0, y: 0 };
+  const cos = Math.cos(pose.angle);
+  const sin = Math.sin(pose.angle);
+  const corners: number[] = [];
+  for (let index = 0; index < piece.length; index += 2) {
+    emToWorld(piece[index]!, piece[index + 1]!, fontSize, point);
+    corners.push(pose.x + point.x * cos - point.y * sin, pose.y + point.x * sin + point.y * cos);
+  }
+  return corners;
+}
+
+/** Penetration depth of two convex polygons by the separating axis theorem: zero when they are apart or touching. */
+function penetration(a: readonly number[], b: readonly number[]): number {
+  let depth = Infinity;
+  for (const polygon of [a, b]) {
+    for (let index = 0; index < polygon.length; index += 2) {
+      const next = (index + 2) % polygon.length;
+      const nx = polygon[next + 1]! - polygon[index + 1]!;
+      const ny = polygon[index]! - polygon[next]!;
+      const length = Math.hypot(nx, ny);
+      if (length === 0) continue;
+      const project = (points: readonly number[]): [number, number] => {
+        let low = Infinity;
+        let high = -Infinity;
+        for (let vertex = 0; vertex < points.length; vertex += 2) {
+          const value = (points[vertex]! * nx + points[vertex + 1]! * ny) / length;
+          low = Math.min(low, value);
+          high = Math.max(high, value);
+        }
+        return [low, high];
+      };
+      const [aLow, aHigh] = project(a);
+      const [bLow, bHigh] = project(b);
+      const overlap = Math.min(aHigh, bHigh) - Math.max(aLow, bLow);
+      if (overlap <= 0) return 0;
+      depth = Math.min(depth, overlap);
+    }
+  }
+  return depth;
+}
+
+/** The deepest overlap between any two bodies' pieces, in pixels. */
+function deepestOverlap(colliders: readonly GlyphCollider[], poses: readonly BodyPose[], fontSize: number): number {
+  const bodies = colliders.map((collider, index) =>
+    collider.pieces.map((piece) => worldPiece(piece, fontSize, poses[index]!)),
+  );
+  let worst = 0;
+  for (let first = 0; first < bodies.length; first += 1) {
+    for (let second = first + 1; second < bodies.length; second += 1) {
+      const gap = Math.hypot(poses[first]!.x - poses[second]!.x, poses[first]!.y - poses[second]!.y);
+      if (gap > 4 * fontSize) continue;
+      for (const a of bodies[first]!) for (const b of bodies[second]!) worst = Math.max(worst, penetration(a, b));
+    }
+  }
+  return worst;
+}
+
+describe('a settled pile', () => {
+  it('has no two bodies overlapping by more than the settled allowance', async () => {
+    const fontSize = 28;
+    const source =
+      'Typography is the craft of giving language a body. Every letter here is a rigid body whose collider is its own outline, ' +
+      'so counters catch their neighbours, curves roll, and the whole paragraph settles into a pile.';
+    const { left, right } = wallSpan(1280);
+    const paragraph = await breakApartParagraph('inter', source, fontSize, (right - left) * 0.5);
+    try {
+      const { glyphs } = paragraph;
+      const physics = world();
+      physics.setBounds({ floorY: -480, left: 0, right: right - left }, 8);
+      const dropHeight = 320;
+      const colliders: GlyphCollider[] = [];
+      for (let index = 0; index < glyphs.count; index += 1) {
+        if (!glyphs.glyphAt(index).drawn) continue;
+        const collider = buildGlyphCollider(glyphs.outlineAt(index), 0.2 / fontSize);
+        const pen = glyphs.measurements[index]!.drawnOrigin;
+        physics.addGlyph(collider, fontSize, pen.x + 24, pen.y + dropHeight);
+        colliders.push(collider);
+      }
+      const poses = colliders.map(() => ({ angle: 0, x: 0, y: 0 }));
+      const measure = (): number => {
+        colliders.forEach((_, index) => physics.pose(index, poses[index]!));
+        return deepestOverlap(colliders, poses, fontSize);
+      };
+      expect(measure()).toBe(0);
+      for (let step = 0; step < 12 / STEP_SECONDS; step += 1) physics.step();
+      const deepest = measure();
+      expect(physics.awakeBodyCount).toBe(0);
+      expect(deepest).toBeLessThanOrEqual(SETTLED_OVERLAP_EM * fontSize);
+    } finally {
+      paragraph.dispose();
+    }
+  }, 60_000);
 });
