@@ -2,22 +2,13 @@ import * as THREE from 'three/webgpu';
 import type { Box3DModule } from 'box3d.js';
 
 import type { WorkloadText } from '../shared/scene-entry';
+import { FrameStepper } from './frame-stepper';
 import { ColliderOverlay, type OverlayVisibility } from './collider-overlay';
 import { flattenToleranceEm, buildParagraphColliders } from './glyph-colliders';
-import {
-  COLLIDER_DEPTH_EM,
-  GlyphPhysicsWorld,
-  STEP_SECONDS,
-  type BodyPose,
-  type WorldBounds,
-} from './glyph-physics-world';
+import { COLLIDER_DEPTH_EM, GlyphPhysicsWorld, type BodyPose, type WorldBounds } from './glyph-physics-world';
 
 /** Simulated seconds in one drop: long enough to land, settle, and rest on screen before the glyphs launch again. */
 const CYCLE_STEPS = 720;
-/** Most steps one rendered frame may run; a longer stall drops simulated time rather than spiralling. */
-const MAX_STEPS_PER_FRAME = 8;
-/** Largest wall-clock gap one frame may feed the simulation, in milliseconds. */
-const MAX_FRAME_MS = 100;
 /** Gap between the floor and the bottom of the viewport, in pixels: clears the Presentation payload pills. */
 export const FLOOR_MARGIN = 100;
 /** Gap between the left wall and the viewport's left edge, in pixels: clears the Presentation control dock. */
@@ -53,7 +44,7 @@ export class GlyphPhysicsScene {
   #overlay: ColliderOverlay | undefined;
   /** The glyph index each body drives: body `b` writes glyph `#glyphIndices[b]`. */
   readonly #glyphIndices: number[] = [];
-  #pending = 0;
+  readonly #stepper = new FrameStepper();
   #lastElapsedMs: number | undefined;
   #stepCount = 0;
 
@@ -146,17 +137,11 @@ export class GlyphPhysicsScene {
     const previous = this.#lastElapsedMs ?? elapsedMs;
     this.#lastElapsedMs = elapsedMs;
     if (!enabled) return;
-    this.#pending += Math.min(MAX_FRAME_MS, Math.max(0, elapsedMs - previous)) * speed;
-    const stepMs = STEP_SECONDS * 1000;
-    let steps = 0;
-    while (this.#pending >= stepMs && steps < MAX_STEPS_PER_FRAME) {
-      this.#pending -= stepMs;
+    const steps = this.#stepper.advance(elapsedMs - previous, speed, () => {
       world.step();
       this.#stepCount += 1;
-      steps += 1;
       if (this.#stepCount % CYCLE_STEPS === 0) world.restart();
-    }
-    this.#pending = Math.min(this.#pending, stepMs);
+    });
     if (steps === 0) return;
     for (let index = 0; index < world.bodyCount; index += 1) {
       world.pose(index, this.#pose);
