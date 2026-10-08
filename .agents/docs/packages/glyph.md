@@ -478,7 +478,11 @@ controller's revision-aware semantic cache without accumulating removal rows, wh
 single parked controller. Scene publication also evicts that slot. This bound permits at most one dormant core
 inspection cache; `Text.glyphs()` still returns freshly copied, caller-owned columns on every call.
 
-`Text.withGlyphs(callback)` is the shared core, Three, and TypeGPU demand-read alternative for callers that need only a
+`Text.readGlyphs(callback)` replaces `withGlyphs` without a compatibility alias. The
+[archived migration](../../skills/codemod/codemods/2026-09-24-read-glyphs/instructions.md) preserves callback return values,
+synchronous exceptions and view lifetime.
+
+`Text.readGlyphs(callback)` is the shared core, Three, and TypeGPU demand-read alternative for callers that need only a
 few glyphs. Its fixed descriptor serializes no per-glyph semantic table; each indexed access copies one retained Rust
 glyph into fixed Wasm scratch, then returns one frozen scalar object in O(selected) work. Full `glyphs()` remains the
 bulk caller-owned copy. The callback must finish synchronously:
@@ -790,7 +794,7 @@ origin at the pen position on the baseline, like every box the layout publishes.
 a caller can cache one shape per key. A fallback glyph reads from the font that shaped it. Every read path throws a
 `TypeError` for a glyph whose font has no outlines; outlines are optional today and planned to become required.
 
-- **Borrowed:** `text.withGlyphs((glyphs) => glyphs.outlineAt(index, target?))` returns a `GlyphOutlineView` of
+- **Borrowed:** `text.readGlyphs((glyphs) => glyphs.outlineAt(index, target?))` returns a `GlyphOutlineView` of
   `fontHandle`, `glyphId`, and typed-array views over the font's decoded store: endpoint-shared `points` (segment `s` of
   contour `c` uses points `2s + c` through `2s + c + 2`), `contourEnds` (exclusive end of each contour, as a segment
   index), and `segmentLines` (`1` for a line, `0` for a quadratic). A `target` is refilled and returned, which saves only
@@ -844,7 +848,7 @@ Publication emits no semantic readback by default. A renderer that needs current
 sidecar on the same update; core copies it into the retained text cache before target acceptance, so plan publication and
 bounds cost one Wasm hop. Every semantic mutation invalidates that cache immediately. `Text.measure()` then answers from
 the cache or explicitly measures current desired state, while `Text.glyphs()` similarly requests the positioned
-inspection lane. `Text.withGlyphs()` prepares that same state without emitting the full inspection table and copies only
+inspection lane. `Text.readGlyphs()` prepares that same state without emitting the full inspection table and copies only
 explicitly indexed records. None of these queries traverses matrices, realizes renderer resources, flips publication
 slots, or burns a revision.
 

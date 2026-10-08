@@ -81,7 +81,7 @@ function curvesOf(view) {
 
 /** Copies every glyph record and borrowed outline view while the callback is live. */
 function readOutlines(text) {
-  return text.withGlyphs((glyphs) =>
+  return text.readGlyphs((glyphs) =>
     Array.from({ length: glyphs.glyphCount }, (_, index) => {
       const view = glyphs.outlineAt(index);
       return {
@@ -243,7 +243,7 @@ test('a target is refilled with new views and returned', async (t) => {
   const three = await createHandle(t);
   const font = await load(bakes.inter);
   const text = three.createText({ font, text: 'Ho' });
-  text.withGlyphs((glyphs) => {
+  text.readGlyphs((glyphs) => {
     const target = {
       fontHandle: 0,
       glyphId: 0,
@@ -288,7 +288,7 @@ test('owned outlines from glyphs() equal the borrowed views as curve tuples', as
     assert.deepEqual(structuredClone(layout).glyphIds, layout.glyphIds);
     assert.throws(() => layout.outlineAt(layout.glyphCount), RangeError);
     assert.throws(() => layout.outlineAt(-1), RangeError);
-    text.withGlyphs((glyphs) => {
+    text.readGlyphs((glyphs) => {
       assert.throws(() => glyphs.outlineAt(glyphs.glyphCount), RangeError);
       assert.throws(() => glyphs.outlineAt(-1), RangeError);
     });
@@ -340,7 +340,7 @@ test('a repeated read returns the same outlines, even when a decode grows engine
   const three = await createHandle(t);
   const font = await load(bakes.inter);
   const text = three.createText({ font, text: 'Growing memory' });
-  const first = text.withGlyphs((glyphs) =>
+  const first = text.readGlyphs((glyphs) =>
     Array.from({ length: glyphs.glyphCount }, (_, index) => {
       const outline = curvesOf(glyphs.outlineAt(index));
       engineMemory.grow(1);
@@ -375,7 +375,7 @@ test('a glyph whose font was baked without outlines throws at the call', async (
   const font = await load(bakes.interPlain);
   const text = three.createText({ font, text: 'Plain' });
   const message = /baked without outlines; outlines need a font prebaked with glyph bake --outlines/;
-  assert.throws(() => text.withGlyphs((glyphs) => glyphs.outlineAt(0)), message);
+  assert.throws(() => text.readGlyphs((glyphs) => glyphs.outlineAt(0)), message);
   assert.throws(() => text.glyphs().outlineAt(0), message);
   text.dispose();
   font.dispose();

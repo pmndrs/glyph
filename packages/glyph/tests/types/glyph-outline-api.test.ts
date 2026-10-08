@@ -13,11 +13,11 @@ const target: GlyphOutlineView = {
   segmentLines: new Uint8Array(0),
 };
 const views: GlyphOutlineView[] = [bitmapText, slugText].map((text) =>
-  text.withGlyphs((glyphs) => glyphs.outlineAt(0, target)),
+  text.readGlyphs((glyphs) => glyphs.outlineAt(0, target)),
 );
 const points: Float32Array | undefined = views[0]?.points;
 // @ts-expect-error A borrowed outline is a view, not owned contours.
-const borrowedContours: GlyphOutlineContour[] = bitmapText.withGlyphs((glyphs) => glyphs.outlineAt(0));
+const borrowedContours: GlyphOutlineContour[] = bitmapText.readGlyphs((glyphs) => glyphs.outlineAt(0));
 
 const owned: GlyphOutlineContour[] = slugText.glyphs().outlineAt(0);
 const curve: GlyphOutlineCurve | undefined = owned[0]?.[0];

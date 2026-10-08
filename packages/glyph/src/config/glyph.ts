@@ -449,8 +449,8 @@ export interface GlyphTextController<Format extends RasterFormatMetadata, Materi
   /** Returns aggregate metrics after positioning glyphs so ink bounds are authoritative. */
   measureInk(): ParagraphLayoutSummary;
   inspect(): GlyphLayoutInspection;
-  /** Reads indexed glyph data through a callback-scoped view; repeated unchanged reads may retain one private canonical snapshot. */
-  withGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result;
+  /** Synchronously reads indexed glyph data and returns the callback's result. The view expires when the callback exits; repeated unchanged reads may retain one private canonical snapshot. */
+  readGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result;
   dispose(): void;
 }
 
