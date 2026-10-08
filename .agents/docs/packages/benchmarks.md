@@ -16,6 +16,12 @@ sources:
   - id: benchmark-plan
     resource: ../planning/benchmark-plan.md
     title: Benchmark plan
+  - id: glyph-physics-colliders
+    resource: ../../../benches/src/workloads/glyph-physics/glyph-colliders.ts
+    title: Glyph outline to convex collider pipeline
+  - id: glyph-physics-colliders-bench
+    resource: ../../../benches/labs/package/glyph-colliders.bench.ts
+    title: Collider build Labs benchmark
   - id: benchmark-ipsum
     resource: ../../../benches/src/workloads/benchmark-ipsum/scene.ts
     title: Canonical benchmark ipsum corpus
@@ -627,6 +633,20 @@ reflows. TSL median end-to-end reflow spans 0.950–1.580 ms and its p95 spans 1
 not portable budgets. A refreshed run with the authored cap contour passes all twelve cells and retains the same three
 draws through every 64-sample reflow sequence; its stdout timing is evidence for this host rather than a portable budget.
 The obstacle mesh and material are disposed with the workload generation.
+
+Glyph physics drops one paragraph as rigid bodies, in 2D. `breakApart()` supplies one `Glyphs` object whose single layout
+glyph index addresses `glyphAt(i)`, `outlineAt(i)`, `measurements[i]`, and `setMatrixAt(i)`. Colliders are built once per
+`(fontId, glyphId)` and shared by every occurrence, with `colliders[i]` kept parallel to `Glyphs` so a body writes its pose
+to glyph `i`; blanks (`drawn === false`) have no collider. Each outline is flattened to a fixed chord tolerance, resolved
+under the nonzero rule with a Clipper2 union, triangulated with earcut, and merged into convex pieces with Hertel-Mehlhorn;
+each piece becomes a Box3D prism hull on one dynamic body with z and x/y rotation locked, so the motion is planar. The
+world steps at a fixed 1/60 s with seeded launch spin, caps body travel at 0.07 em per step so thin stems are not tunnelled,
+and keeps the floor and walls inset from the control dock and the payload pills while a narrower paragraph starts above the
+viewport so the glyphs heap up. The Colliders toggle draws each convex piece on top of the text in a deep cyan, because the pale cyan it
+first used has no contrast against white glyph fill and made thin straight stems look as if they had no collider; Outlines
+draws the flattened source contour. The `glyph-physics` tests check outline fidelity, that every printable ASCII glyph
+yields a hull, shared colliders, determinism, and that a settled pile overlaps by less than 0.03 em. The `glyph collider
+build` Labs bench times one glyph and a 2,000-glyph paragraph with dedupe on and off.
 
 Paint & Effects is one live paragraph whose per-word hue advances continuously; opacity is shared, bounded white outline and hard shadow are MTSDF-only, and Bitmap plus Slug disable both controls. Paragraph Stress treats text volume as a topology change: moving its volume control immediately rebuilds the repeated corpus, while controls that only alter retained animation or paint state avoid replacement layouts. Dynamic Layout derives its initial three phase-offset widths from the same elapsed animation clock as subsequent frames, awaits every paragraph layout, and publishes the trio atomically; the first visible frame therefore continues directly into animation instead of flashing a uniform-width staging layout. One benchmark-owned interaction component gives navigable live canvases mouse drag and two-finger touch pan; Off-axis additionally enables pinch and wheel zoom. It translates gestures into renderer-neutral view commands and does not put DOM listeners in `@pmndrs/glyph`. Workloads are deliberately not React Activities. They are framework-neutral retained scenes behind the route-owned render host, so a swap releases the old scene's text and font/raster residency without replacing the host canvas, renderer, timestamp timer, or telemetry history. Only the Benchmark and Conformance modes retain React state as Activities. The shared multi-technique workload implementation remains a dynamic chunk; Benchmark schedules a cancellable no-timeout idle import, while pointer hover or keyboard focus warms it immediately. Unsupported idle-callback hosts simply retain interaction warming, so the chunk never enters the initial graph and ordinary Benchmark startup never waits for it. The host serializes scene activation and retains the current scene until its replacement is ready, preventing an asynchronously initialized workload from publishing partial text or inheriting the prior workload's configuration. Renderer-published configuration revisions make product probes causal rather than reflections of React props. Dynamic layout separately reports one completed three-paragraph reflow cost and count instead of hiding reshape work inside the CPU-submit graph. The MTSDF base-level scene and sampling paths require deterministic pixels within each renderer invocation, authenticated artifacts and resource counts, and bounded error against the independent scalar reconstruction. Hardware Apple Metal and headless SwiftShader framebuffer hashes remain labeled observations because filtered analytic coverage is not byte-portable across drivers. The current SwiftShader comparison reports `0.0957/255` mean absolute error, maximum error `10`, and 3,233 pixels above its threshold, all inside the reviewed `0.25/255`, `48`, and 2% envelopes. The current direct WebGPU observation reports framebuffer hash `4da56d…`, 14,400 changed pixels, 2,420 colors, and a 6,798,412-byte compressed artifact; its scalar comparison reports mean absolute error `0.0184937`, maximum error `1`, and zero threshold error pixels. The gate names base-level behavior rather than the removed generated-mip path.
 
