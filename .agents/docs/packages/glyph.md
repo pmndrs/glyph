@@ -409,7 +409,9 @@ every default Wasm asset (the text shaper, the runtime-bake worker's font baker,
 is fetched and handed to `WebAssembly.compileStreaming`, so compilation overlaps the download and HTTP compression is
 decoded by the network stack. Streaming is attempted before inspecting response MIME or type. Following wasm-bindgen's
 loader policy, a streaming rejection falls back to buffered compilation for a basic, CORS or default response whose
-MIME is not `application/wasm`; other streaming errors propagate. The same response is used without cloning or
+MIME is not a case-insensitive match for `application/wasm`; other streaming errors propagate. MIME parameters remain
+invalid for streaming, including `application/wasm;`. A mixed-case Wasm header preserves a consumed-body compile error
+instead of retrying the body. The same response is used without cloning or
 refetching. Node reads the packaged files directly. Vite HMR carries
 the process-local Glyph runtime through replacement data instead of instantiating a second engine. React still checks
 synchronous initialized and loaded state first, so ready renders do not enter Suspense or cross a microtask. Pending font
