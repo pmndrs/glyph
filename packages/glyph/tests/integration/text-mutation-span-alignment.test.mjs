@@ -96,6 +96,16 @@ test('span provenance inheritance realigns unproven and changed-text sources', (
   );
   assert.deepEqual(ranges({ spans: fromChangedBoundaries }), [[2, 3]]);
   assert.equal(areOwnedRangesClusterAligned(text, fromChangedBoundaries), true);
+
+  const [brand] = Object.getOwnPropertySymbols(alignedSource);
+  assert.ok(brand);
+  const forged = [{ start: 2, end: 3 }];
+  Object.defineProperty(forged, brand, { value: true });
+  assert.equal(
+    areOwnedRangesClusterAligned(text, Object.freeze(forged)),
+    false,
+    'the private brand needs WeakMap proof',
+  );
 });
 
 test('malformed UTF-16 is never marked as cluster aligned', () => {

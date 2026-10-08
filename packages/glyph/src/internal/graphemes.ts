@@ -1,6 +1,11 @@
 import { graphemeSegments } from 'unicode-segmenter/grapheme';
 
 const clusterAlignedTextByRanges = new WeakMap<object, string>();
+const clusterAlignedRangesBrand: unique symbol = Symbol('pmndrs.glyph.cluster-aligned-ranges');
+
+interface ClusterAlignedRangesBrand {
+  readonly [clusterAlignedRangesBrand]?: true;
+}
 
 /** Extended grapheme cluster boundaries (UTF-16 units), pinned to the same Unicode version as the Rust shaper's `cluster_state.rs` segmenter. Use this, not `Intl.Segmenter`, wherever boundaries must agree with the engine's grid — host ICU versions drift. */
 export function findGraphemeBoundaries(text: string): Uint32Array {
@@ -71,10 +76,7 @@ export function ownClusterAlignedRanges<Range extends ClusterAlignableRange>(
 ): readonly Range[] {
   freezeRanges(ranges);
   if (!text.isWellFormed()) return Object.freeze(ranges);
-  const aligned = Object.freeze(resolveRangesToClusters(text, ranges));
-  freezeRanges(aligned);
-  clusterAlignedTextByRanges.set(aligned, text);
-  return aligned;
+  return markOwnedRangesClusterAligned(text, resolveRangesToClusters(text, ranges));
 }
 
 /** Transfers proven alignment from one package-owned range array to a derived array whose boundaries are unchanged.
@@ -85,22 +87,28 @@ export function inheritClusterAlignedRanges<Range extends ClusterAlignableRange>
   ranges: readonly Range[],
 ): readonly Range[] {
   return areOwnedRangesClusterAligned(text, source) && haveEqualBoundaries(source, ranges)
-    ? markOwnedRangesClusterAligned(text, Object.freeze(ranges))
+    ? markOwnedRangesClusterAligned(text, ranges)
     : ownClusterAlignedRanges(text, ranges);
 }
 
 /** True only for an exact package-owned range array normalized against the same text. */
 export function areOwnedRangesClusterAligned(text: string, ranges: readonly ClusterAlignableRange[]): boolean {
-  return Object.isFrozen(ranges) && clusterAlignedTextByRanges.get(ranges) === text;
+  return (
+    (ranges as readonly ClusterAlignableRange[] & ClusterAlignedRangesBrand)[clusterAlignedRangesBrand] === true &&
+    clusterAlignedTextByRanges.get(ranges) === text
+  );
 }
 
 function markOwnedRangesClusterAligned<Range extends ClusterAlignableRange>(
   text: string,
   ranges: readonly Range[],
 ): readonly Range[] {
-  freezeRanges(ranges);
-  clusterAlignedTextByRanges.set(ranges, text);
-  return ranges;
+  const owned = Object.isExtensible(ranges) ? ranges : [...ranges];
+  freezeRanges(owned);
+  Object.defineProperty(owned, clusterAlignedRangesBrand, { value: true });
+  Object.freeze(owned);
+  clusterAlignedTextByRanges.set(owned, text);
+  return owned;
 }
 
 function haveEqualBoundaries(
