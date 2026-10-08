@@ -74,6 +74,16 @@ export interface DetachedGlyph {
   /** Whether this glyph has a render record. A blank glyph does not: its matrix is stored and nothing is drawn. */
   readonly drawn: boolean;
   readonly key: GlyphPlacement['key'];
+  /**
+   * The id of the font this glyph was shaped with: a plain number, unique for the life of the page and never reused.
+   * It is not a lease and retains nothing. Equals `text.glyphs().fontHandles[glyphFontSlots[index]]`.
+   */
+  readonly fontId: number;
+  /**
+   * The glyph's index in that font. Equal `fontId` and `glyphId` mean an equal outline, so a shape built once can be
+   * reused for every occurrence.
+   */
+  readonly glyphId: number;
   readonly cluster: number;
   readonly line: number;
   readonly word: number;
@@ -129,7 +139,8 @@ export class Glyphs extends THREE.Object3D {
     let copy: GlyphCopy<void> | undefined;
     try {
       // The owned snapshot the placements describe: it keeps its fonts' decoded outlines, so `outlineAt` stays plain data.
-      this.#layout = options.placements.layout;
+      const layout = options.placements.layout;
+      this.#layout = layout;
       const incomplete = new Set(options.placements.incomplete);
       const placements = options.placements.glyphs;
       this.#glyphs = Object.freeze(
@@ -137,6 +148,8 @@ export class Glyphs extends THREE.Object3D {
           Object.freeze({
             index,
             drawn: !incomplete.has(index),
+            fontId: layout.fontHandles[layout.glyphFontSlots[index]!]!,
+            glyphId: layout.glyphIds[index]!,
             key: placement.key,
             cluster: placement.cluster,
             line: placement.line,

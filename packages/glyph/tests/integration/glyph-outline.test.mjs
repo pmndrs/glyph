@@ -559,3 +559,34 @@ test('a blank glyph keeps a matrix at its layout index and draws nothing', async
     font.dispose();
   }
 });
+
+test('a detached glyph names its shape by fontId and glyphId, apart from its index and key', async (t) => {
+  const three = await createHandle(t);
+  const [latin, icon] = await Promise.all([load(bakes.inter), load(bakes.icons)]);
+  const globe = String.fromCodePoint(0xf0ac);
+  const mounted = breakApartMounted(three, createFontStack(latin, icon), ` a b a ${globe}`);
+  try {
+    const { glyphs, text } = mounted;
+    const layout = text.glyphs();
+    const at = (index) => glyphs.glyphAt(index);
+    for (let index = 0; index < glyphs.count; index += 1) {
+      assert.equal(typeof at(index).fontId, 'number');
+      assert.equal(at(index).fontId, layout.fontHandles[layout.glyphFontSlots[index]], `fontId ${index}`);
+      assert.equal(at(index).glyphId, layout.glyphIds[index], `glyphId ${index}`);
+    }
+    const letters = [...' a b a '].map((_, index) => at(index)).filter((_, index) => ' a b a '[index] !== ' ');
+    const [firstA, b, secondA] = letters;
+    assert.equal(firstA.fontId, secondA.fontId);
+    assert.equal(firstA.glyphId, secondA.glyphId);
+    assert.notEqual(firstA.key, secondA.key, 'one shape, two occurrences');
+    assert.notEqual(firstA.glyphId, b.glyphId, 'different letters are different shapes');
+    assert.deepEqual(glyphs.outlineAt(firstA.index), glyphs.outlineAt(secondA.index), 'one shape, one outline');
+    const globeGlyph = at(glyphs.count - 1);
+    assert.notEqual(globeGlyph.fontId, firstA.fontId, 'a fallback glyph comes from another font');
+    assert.ok(Object.isFrozen(firstA) && !('fontHandle' in firstA));
+  } finally {
+    dispose(mounted);
+    latin.dispose();
+    icon.dispose();
+  }
+});
