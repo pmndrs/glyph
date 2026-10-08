@@ -80,13 +80,13 @@ test('callback refs attach a usable paragraph once and run their returned cleanu
     calls.push(object === null ? 'group:null' : 'group:attach');
     return () => calls.push('group:cleanup');
   };
-  // No frame is rendered: breaking apart on attach commits the pending paragraph on demand.
+  // No frame is rendered: splitting on attach commits the pending paragraph on demand.
   const textRef = (object) => {
     if (object === null) {
       calls.push('text:null');
       return;
     }
-    const [glyphs, decorations] = object.breakApart();
+    const [glyphs, decorations] = object.split();
     calls.push(`text:attach:${glyphs.count}`);
     return () => {
       decorations?.dispose();
