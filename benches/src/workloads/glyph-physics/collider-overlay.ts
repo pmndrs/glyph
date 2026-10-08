@@ -5,7 +5,11 @@ import { COLLIDER_DEPTH_EM } from './glyph-physics-world';
 
 /** Draws above every glyph draw, whatever the glyph renderer's own ordering. */
 const OVERLAY_RENDER_ORDER = 1_000_000;
-const COLLIDER_COLOR = 0x2bf0ff;
+/**
+ * A deep cyan, not a bright one: the glyph fill is white, and the edges of a thin straight stroke lie on the fill's own
+ * edge, so a pale cyan (0x2bf0ff) has almost no contrast against it and the stroke reads as having no collider at all.
+ */
+const COLLIDER_COLOR = 0x0096c7;
 const OUTLINE_COLOR = 0xff3da6;
 
 export interface OverlayVisibility {
@@ -73,7 +77,7 @@ function overlayMaterial(color: number): THREE.LineBasicNodeMaterial {
     color,
     depthTest: false,
     depthWrite: false,
-    opacity: 0.95,
+    opacity: 1,
     transparent: true,
   });
 }
