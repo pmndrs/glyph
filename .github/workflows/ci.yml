@@ -361,7 +361,7 @@ jobs:
         run: pnpm --dir benches build -- --runtime-packages-ready
 
       - name: Check Three and React Three Fiber examples
-        run: pnpm --filter @pmndrs/glyph-examples check
+        run: pnpm scripts run benchmark:with-browser -- pnpm --filter @pmndrs/glyph-examples check
 
       - name: Check Japanese showcase fixture
         run: pnpm scripts run fixture:japanese-showcase:check

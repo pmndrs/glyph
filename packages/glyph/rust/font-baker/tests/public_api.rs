@@ -38,6 +38,7 @@ fn public_api_rejects_an_unknown_descriptor_version_before_font_parsing() {
         BakeDescriptorV0 {
             format_version: 1,
             font_face_index: 0,
+            outlines: false,
         },
     )
     .expect_err("descriptor version 1 must be rejected");
@@ -113,6 +114,67 @@ fn public_api_selects_one_collection_face_and_rejects_an_unknown_index() {
             .code,
         BakeErrorCode::InvalidFont,
     );
+}
+
+#[test]
+fn only_a_bake_with_outlines_writes_the_outlined_format_version() {
+    let plain = bake_font(INTER, BakeDescriptorV0::new(0)).expect("plain Inter");
+    let outlined = bake_font(INTER, outlined_descriptor()).expect("outlined Inter");
+    let plain = font_extension(&plain.artifacts[0].bytes);
+    let outlined = font_extension(&outlined.artifacts[0].bytes);
+
+    assert_eq!(plain["version"], 0);
+    assert!(plain.get("outlines").is_none());
+    assert_eq!(outlined["version"], 1);
+    assert!(outlined["outlines"].is_object());
+}
+
+#[test]
+fn public_api_refuses_outlines_for_a_face_that_draws_none() {
+    let mut without_outlines = INTER.to_vec();
+    for (tag, renamed) in [(*b"glyf", *b"glyg"), (*b"loca", *b"locb")] {
+        let record = table_record(&without_outlines, tag);
+        without_outlines[record..record + 4].copy_from_slice(&renamed);
+    }
+    bake_font(&without_outlines, BakeDescriptorV0::new(0)).expect("the face still shapes");
+    assert_eq!(
+        bake_font(&without_outlines, outlined_descriptor())
+            .expect_err("a face without outlines has none to store")
+            .code,
+        BakeErrorCode::MissingTable,
+    );
+}
+
+#[test]
+fn outlines_cost_about_the_face_outline_tables() {
+    let plain = bake_font(INTER, BakeDescriptorV0::new(0)).expect("plain Inter");
+    let outlined = bake_font(INTER, outlined_descriptor()).expect("outlined Inter");
+    let added = outlined.artifacts[0].bytes.len() - plain.artifacts[0].bytes.len();
+    let outline_tables: usize = [*b"glyf", *b"loca"]
+        .into_iter()
+        .map(|tag| {
+            let record = table_record(INTER, tag);
+            u32::from_be_bytes(INTER[record + 12..record + 16].try_into().expect("length")) as usize
+        })
+        .sum();
+    assert!(
+        added < outline_tables + 1_024,
+        "{added} bytes for {outline_tables} bytes of outline tables"
+    );
+}
+
+fn outlined_descriptor() -> BakeDescriptorV0 {
+    BakeDescriptorV0 {
+        outlines: true,
+        ..BakeDescriptorV0::new(0)
+    }
+}
+
+fn font_extension(glb: &[u8]) -> serde_json::Value {
+    let json_length = u32::from_le_bytes(glb[12..16].try_into().expect("chunk length")) as usize;
+    let mut document: serde_json::Value =
+        serde_json::from_slice(&glb[20..20 + json_length]).expect("GLB JSON chunk");
+    document["extensions"]["PMNDRS_font"].take()
 }
 
 fn table_record(font: &[u8], wanted: [u8; 4]) -> usize {

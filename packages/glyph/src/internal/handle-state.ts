@@ -1,6 +1,7 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { GlyphEngineStatusError, setGlyphEngineStatusErrorDetails, type GlyphEngineFault } from '../engine-error.js';
 import type { Font } from '../font.js';
+import type { GlyphOutlineStore, GlyphOutlineView } from '../glyph-outline.js';
 import type { FontHandle } from '../identity.js';
 import { immutableFontStackFonts, type FontStack } from '../loaded-font.js';
 import type { RasterFormatMetadata } from '../config/raster-format.js';
@@ -127,7 +128,6 @@ export interface PlanPublication {
 /** @internal Fixed-size lease for demand reads from one retained positioned paragraph. */
 export interface BorrowedLayoutPublication {
   readonly publication: PlanPublication;
-  readonly memoryBuffer: ArrayBuffer;
   readonly rootId: PlannerHandle;
   readonly paragraphId: ParagraphId;
   readonly generation: number;
@@ -260,6 +260,7 @@ const handleOpaqueBindings = new WeakMap<
 export class GlyphHandleState {
   readonly integration: string;
   readonly #identityNamespace: string;
+  readonly #shaper: RuntimeShaper;
   readonly #wireIdentities = new CodecIdScope();
   readonly #ids = new GlyphIdScope();
   readonly #exports;
@@ -313,12 +314,25 @@ export class GlyphHandleState {
     }
     this.integration = options.integration;
     this.#identityNamespace = identityNamespace ?? options.integration;
+    this.#shaper = shaper;
     this.#exports = runtimeShaperEngineExports(shaper);
     this.#owners = ownersFor(this.#exports);
     this.#onDispose = onDispose;
     this.#bindEngineFont = bindEngineFont;
     this.#assertEngineAvailable = assertEngineAvailable;
     this.#enterEngineBorrow = enterEngineBorrow;
+  }
+
+  /** @internal Fills `target` with views over the outline its font decoded when it loaded. */
+  _glyphOutline(fontHandle: number, glyphId: number, target?: GlyphOutlineView): GlyphOutlineView {
+    if (this.#disposed) throw new Error('Glyph handle state is disposed');
+    return this.#shaper.glyphOutline(fontHandle, glyphId, target);
+  }
+
+  /** @internal The outlines the font behind `fontHandle` decoded when it loaded, if it was baked with them. */
+  _glyphOutlineStore(fontHandle: number): GlyphOutlineStore | undefined {
+    if (this.#disposed) throw new Error('Glyph handle state is disposed');
+    return this.#shaper.glyphOutlineStore(fontHandle);
   }
 
   /** @internal Derive one branded ID retained until its registration or this handle is disposed. */
@@ -1390,7 +1404,6 @@ export class PlanTransport {
     }
     return Object.freeze({
       publication,
-      memoryBuffer,
       rootId,
       paragraphId: describedParagraph,
       generation: uint32Handle(view.getUint32(layout.generation, true), 'borrowed layout generation'),
@@ -1398,8 +1411,8 @@ export class PlanTransport {
     });
   }
 
-  /** @internal Returns one fixed scratch glyph record during an active layout borrow. */
-  borrowParagraphGlyph(layout: BorrowedLayoutPublication, index: number): number {
+  /** @internal Returns one fixed scratch glyph record during an active layout borrow, over current Wasm memory. */
+  borrowParagraphGlyph(layout: BorrowedLayoutPublication, index: number): DataView {
     return this.#borrowParagraphRecord(layout, index);
   }
 
@@ -1491,8 +1504,8 @@ export class PlanTransport {
     return this.#decodeResult(header, resultPointer, memoryBuffer, initialMemoryBuffer);
   }
 
-  #borrowParagraphRecord(layout: BorrowedLayoutPublication, index: number): number {
-    if (layout.rootId !== this.#handle || this.isExpired(layout.publication)) {
+  #borrowParagraphRecord(layout: BorrowedLayoutPublication, index: number): DataView {
+    if (layout.rootId !== this.#handle || this.#disposed || this.#issued.get(layout.publication) !== this.#epoch) {
       throw new Error('borrowed glyph layout has expired');
     }
     if (!Number.isSafeInteger(index) || index < 0 || index >= layout.glyphCount) {
@@ -1502,7 +1515,7 @@ export class PlanTransport {
     const memoryBuffer = this.#exports.memory.buffer;
     const record = textShaperAbi.layouts.borrowedGlyph;
     this.#assertBorrowedRange(pointer, record.size, record.alignment, memoryBuffer, 'borrowed glyph record');
-    return pointer;
+    return new DataView(memoryBuffer, pointer, record.size);
   }
 
   #assertBorrowedRange(

@@ -928,8 +928,8 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   }
 
   /**
-   * Copies the committed glyphs and optional decorations into independently rendered Three objects. A pending Text in a
-   * Scene commits first, through the same engine-wide `glyph.shape()` a draw runs.
+   * Copies drawable committed glyphs and optional decorations into independently rendered Three objects; blank glyphs
+   * are excluded. A pending Text in a Scene commits first, through the same engine-wide `glyph.shape()` a draw runs.
    */
   breakApart(): readonly [glyphs: Glyphs, decorations: Decorations | undefined] {
     this.#assertActive();
@@ -1516,7 +1516,7 @@ class ThreeRootPublication {
     if (layout === undefined) return undefined;
     const drawn = this.#target.snapshotGlyphOrigins(layout.glyphStableIds, layout.x, layout.y);
     const placements = createGlyphPlacements(
-      copyGlyphLayoutInspection(layout),
+      copyGlyphLayoutInspection(layout, (index) => layout.outlineAt(index)),
       text.text,
       drawn.drawnX,
       drawn.drawnY,

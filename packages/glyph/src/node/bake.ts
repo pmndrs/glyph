@@ -187,6 +187,7 @@ async function bakeFontWithResolvedPlans<const Rasters extends readonly object[]
     fontBaker,
     source: originalSource,
     fontFaceIndex: options.font.fontFaceIndex,
+    ...(options.font.outlines === undefined ? {} : { outlines: options.font.outlines }),
     ...(options.unicodeRanges === undefined ? {} : { unicodeRanges: options.unicodeRanges }),
     rasters,
     validateArtifact: validateFontArtifact,
@@ -463,6 +464,8 @@ export async function fontIsUpToDate(request: {
   readonly output: string;
   readonly input: string;
   readonly fontFaceIndex: number;
+  /** Whether the bake also keeps glyph outlines. Defaults to `false`. */
+  readonly outlines?: boolean;
   readonly unicodeRanges?: readonly UnicodeRange[];
   readonly rasters: readonly { readonly rasterKey: string; readonly kind: string; readonly version: number }[];
   /** A split bake writes companions beside the core, so the same rasters are a different result. */
@@ -506,6 +509,12 @@ export async function fontIsUpToDate(request: {
   }
   if (font.provenance?.bakerVersion !== FONT_BAKER_VERSION) {
     return { fresh: false, reason: 'a different core baker produced this font' };
+  }
+  if ((font.outlines !== undefined) !== (request.outlines === true)) {
+    return {
+      fresh: false,
+      reason: request.outlines === true ? 'the font has no outlines' : 'the font carries outlines',
+    };
   }
 
   // Raster keys describe requests; carried fingerprints also prove the written format.
