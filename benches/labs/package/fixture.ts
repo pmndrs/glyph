@@ -242,7 +242,7 @@ export function inspectDraws(renderObject: ThreeTypes.Object3D): Readonly<{ draw
   return { draws, glyphs };
 }
 
-export function borrowedGlyphChecksum(labels: ReturnType<typeof createLabels>['labels']): number {
+export function borrowedChecksum(labels: ReturnType<typeof createLabels>['labels']): number {
   return labels.reduce(
     (total, label) =>
       total +
@@ -257,6 +257,8 @@ export function borrowedGlyphChecksum(labels: ReturnType<typeof createLabels>['l
     0,
   );
 }
+
+export const borrowedGlyphChecksum = borrowedChecksum;
 
 export function editedText(iteration: number): string {
   const leading = String.fromCharCode(65 + (iteration % 26));

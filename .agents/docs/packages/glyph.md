@@ -595,6 +595,12 @@ paragraph sections:
 - transform and visibility changes update Three's renderer-local sidecar without calling Wasm;
 - an empty or normalized-equal update sends nothing.
 
+Formatted-text compilers resolve cluster boundaries once and freeze their span arrays. A package-private WeakMap records
+the exact array and text value, so React and Vue may preserve that proof while replacing span records to bind fonts and
+Three may skip duplicate Unicode segmentation. The proof transfers only when every boundary is unchanged. Raw caller
+arrays, changed text or boundaries, malformed UTF-16, and arrays produced by another package copy still take the normal
+validation and cluster-alignment path.
+
 Three's ordinary scene traversal owns world-matrix composition. The root observes Text membership and ancestor state,
 publishes semantic changes once at its renderer-owned draw node, and patches root-relative transforms through a separate
 engine-free side path. Camera motion does not republish text. Text, nested `TextGroup`, and other ancestor motion,
