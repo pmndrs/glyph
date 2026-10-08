@@ -4,6 +4,7 @@ import type { Box3DModule } from 'box3d.js';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
 import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
+  committedTextMetrics,
   exactWidth,
   paintColor,
   publishWorkloadTexts,
@@ -31,6 +32,8 @@ const WALL_PADDING = 24;
  * How far above the viewport's top edge the paragraph starts, as a fraction of the viewport height. The lines fall from
  * above the screen onto the floor, so they land on top of one another and the glyphs pile instead of lying in one row.
  */
+/** The share of the wall-to-wall width the paragraph's measure takes at the full width control. */
+const MEASURE_SHARE = 0.5;
 const DROP_HEIGHT_RATIO = 0.15;
 
 /** Maps the shared 0..100 amount control onto a character count of the paragraph, repeating it if it must grow. */
@@ -40,10 +43,13 @@ export function glyphPhysicsText(amount: number): string {
   return GLYPH_PHYSICS_TEXT.slice(0, characters).trimEnd();
 }
 
-/** The paragraph's measure: a fraction of the space between the walls, less their padding, so it starts between them. */
+/**
+ * The paragraph's measure: a fraction of the space between the walls, less their padding, and narrower than the pile's
+ * floor so that the lines land on one another and the glyphs stack rather than spread into one row.
+ */
 export function glyphPhysicsContentWidth(viewportWidth: number, layoutWidthRatio: number): number {
   const { left, right } = wallSpan(viewportWidth);
-  return Math.max(MINIMUM_CONTENT_WIDTH, (right - left - WALL_PADDING * 2) * layoutWidthRatio);
+  return Math.max(MINIMUM_CONTENT_WIDTH, (right - left - WALL_PADDING * 2) * layoutWidthRatio * MEASURE_SHARE);
 }
 
 let readyBox3d: Box3DModule | undefined;
@@ -141,7 +147,9 @@ export const glyphPhysicsWorkload = {
         simulation.resize({ height: viewportHeight, width: viewportWidth });
         continue;
       }
-      entry.text.position.set(wallSpan(viewportWidth).left + WALL_PADDING, viewportHeight * DROP_HEIGHT_RATIO, 0);
+      const { left, right } = wallSpan(viewportWidth);
+      const layout = committedTextMetrics(entry.text);
+      entry.text.position.set(left + (right - left - layout.width) / 2, viewportHeight * DROP_HEIGHT_RATIO, 0);
     }
   },
   async prepare() {
