@@ -7,6 +7,7 @@ import type {
 } from '../bake.js';
 import { createDirectRasterBakerFromInstance, instantiateWasm } from '../internal/raster-baker-wasm.js';
 import { bitmapBakerAbi } from '../generated/bitmap-baker-abi.js';
+import { compileWasmResponse } from '../internal/compile-wasm-response.js';
 import { cacheSuccessfulPromise } from '../internal/successful-promise-cache.js';
 import {
   BITMAP_EXTENSION,
@@ -124,16 +125,16 @@ export function bitmapBakerFromCore(
 
 async function loadDefaultBitmapBaker(): Promise<ReturnType<typeof bitmapBakerFromCore>> {
   const wasmUrl = new URL('../../dist/bitmap-baker.wasm', import.meta.url);
-  let bytes: BufferSource;
+  let source: BufferSource | WebAssembly.Module;
   if (wasmUrl.protocol === 'file:') {
     const { readFile } = await import('node:fs/promises');
-    bytes = await readFile(wasmUrl);
+    source = await readFile(wasmUrl);
   } else {
     const response = await fetch(wasmUrl);
     if (!response.ok) throw new Error(`Unable to load bitmap baker Wasm (${response.status})`);
-    bytes = await response.arrayBuffer();
+    source = await compileWasmResponse(response);
   }
-  return bitmapBakerFromCore(await createBitmapBaker(bytes));
+  return bitmapBakerFromCore(await createBitmapBaker(source));
 }
 
 const defaultBitmapBaker = cacheSuccessfulPromise(loadDefaultBitmapBaker);
