@@ -404,17 +404,17 @@ resources declared by the active Three Codec.
 The accepted D-356 design for an attached, index-addressed `Text.transformGlyphs()` mutation is deferred and is not part
 of the current Three API; `Text` exposes neither `transformGlyphs()` nor `clearGlyphTransforms()` and carries no attached
 matrix storage. A later, separately scoped implementation must prove Three and TypeGPU lifecycle, storage,
-interaction-geometry, and performance behavior together. Use `breakApart()` when the caller wants an independently
+interaction-geometry, and performance behavior together. Use `split()` when the caller wants an independently
 owned, already-shaped object whose existing per-glyph matrices can be manipulated outside the source Text lifecycle.
 
 ## Break committed glyphs into an independent object
 
-`breakApart()` copies the source paragraph's committed drawable records and any committed decoration draws into independently
+`split()` copies the source paragraph's committed drawable records and any committed decoration draws into independently
 owned groups. The copy is synchronous, is available only when `commitState().status === 'committed'`, and returns a frozen
 two-entry tuple whose decoration slot is `undefined` when the paragraph has no decoration draws.
 
 ```ts
-const [glyphs, decorations] = label.breakApart();
+const [glyphs, decorations] = label.split();
 label.parent!.add(glyphs); // sibling attachment preserves the source transform
 if (decorations !== undefined) label.parent!.add(decorations);
 label.visible = false;
@@ -463,7 +463,7 @@ result separately in tuple slot two. The detached roots keep Three's default gro
 the source boundary's under-decoration, glyph, then line-through paint order:
 
 ```ts
-const [glyphs, decorations] = label.breakApart();
+const [glyphs, decorations] = label.split();
 if (decorations !== undefined) {
   label.parent!.add(decorations);
   decorations.materials[0].opacity = 0.5;

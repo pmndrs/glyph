@@ -415,14 +415,14 @@ test('owned outlines are data: they read inside a render plan, after it, and aft
 const outlinesOf = (glyphs) => Array.from({ length: glyphs.count }, (_, index) => glyphs.outlineAt(index));
 
 /** Mounts `text` so its layout commits, then splits it; the caller disposes the returned pieces. */
-function breakApartMounted(three, font, content) {
+function splitMounted(three, font, content) {
   const scene = new THREE.Scene();
   const group = three.createTextGroup();
   const text = three.createText({ font, text: content });
   scene.add(group);
   group.add(text);
   scene.updateMatrixWorld(true);
-  const [glyphs] = text.breakApart();
+  const [glyphs] = text.split();
   return { group, text, glyphs };
 }
 
@@ -435,7 +435,7 @@ function dispose({ group, text, glyphs }) {
 test('Glyphs uses dense drawable indices and skips blanks while preserving source outlines', async (t) => {
   const three = await createHandle(t);
   const [latin, icon] = await Promise.all([load(bakes.inter), load(bakes.icons)]);
-  const mounted = breakApartMounted(three, createFontStack(latin, icon), `  A b${String.fromCodePoint(0xf0ac)} I`);
+  const mounted = splitMounted(three, createFontStack(latin, icon), `  A b${String.fromCodePoint(0xf0ac)} I`);
   try {
     const { glyphs, text } = mounted;
     const layout = text.glyphs();
@@ -468,7 +468,7 @@ test('Glyphs uses dense drawable indices and skips blanks while preserving sourc
 test('Glyphs.outlineAt keeps reading after the source re-lays out and after the font is disposed', async (t) => {
   const three = await createHandle(t);
   const font = await load(bakes.inter);
-  const mounted = breakApartMounted(three, font, ' Hi o');
+  const mounted = splitMounted(three, font, ' Hi o');
   try {
     const { glyphs, text } = mounted;
     const captured = outlinesOf(glyphs);
@@ -493,7 +493,7 @@ test('Glyphs.outlineAt keeps reading after the source re-lays out and after the 
 test('Glyphs.outlineAt rejects an index that is not a glyph of the object', async (t) => {
   const three = await createHandle(t);
   const font = await load(bakes.inter);
-  const mounted = breakApartMounted(three, font, ' Hi');
+  const mounted = splitMounted(three, font, ' Hi');
   try {
     const { glyphs } = mounted;
     for (const index of [-1, glyphs.count, glyphs.count + 1, 0.5, Number.NaN, Number.POSITIVE_INFINITY]) {
@@ -511,7 +511,7 @@ test('Glyphs.outlineAt rejects an index that is not a glyph of the object', asyn
 test('Glyphs.outlineAt throws the missing-outline error for a font without outlines', async (t) => {
   const three = await createHandle(t);
   const font = await load(bakes.interPlain);
-  const mounted = breakApartMounted(three, font, ' Plain');
+  const mounted = splitMounted(three, font, ' Plain');
   try {
     assert.throws(
       () => mounted.glyphs.outlineAt(0),
@@ -526,7 +526,7 @@ test('Glyphs.outlineAt throws the missing-outline error for a font without outli
 test('a leading space is skipped and dense matrix index zero moves the following drawable glyph', async (t) => {
   const three = await createHandle(t);
   const font = await load(bakes.inter);
-  const mounted = breakApartMounted(three, font, ' H');
+  const mounted = splitMounted(three, font, ' H');
   try {
     const { glyphs, text } = mounted;
     assert.equal(glyphs.count, 1);
@@ -556,7 +556,7 @@ test('a detached glyph names its shape by fontHandle and glyphId, apart from its
   const three = await createHandle(t);
   const [latin, icon] = await Promise.all([load(bakes.inter), load(bakes.icons)]);
   const globe = String.fromCodePoint(0xf0ac);
-  const mounted = breakApartMounted(three, createFontStack(latin, icon), ` a b a ${globe}`);
+  const mounted = splitMounted(three, createFontStack(latin, icon), ` a b a ${globe}`);
   try {
     const { glyphs, text } = mounted;
     const layout = text.glyphs();

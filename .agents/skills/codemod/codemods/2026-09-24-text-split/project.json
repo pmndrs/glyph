@@ -1,0 +1,18 @@
+{
+  "extends": "../../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "customConditions": ["source"],
+    "jsx": "react-jsx",
+    "noEmit": true
+  },
+  "include": [
+    "../../../../../packages/glyph/src/**/*.ts",
+    "../../../../../packages/glyph/tests/types/**/*.ts",
+    "../../../../../packages/glyph/tests/types/**/*.tsx",
+    "../../../../../benches/src/v1-detached-proof.ts",
+    "../../../../../packages/glyph/tests/integration/**/*.mjs",
+    "../../../../../benches/labs/package/**/*.ts"
+  ],
+  "exclude": ["../../../../../**/dist/**", "../../../../../**/node_modules/**"]
+}
