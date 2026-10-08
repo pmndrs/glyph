@@ -563,8 +563,8 @@ test('patch-only publications refresh a standalone Text added after the publicat
 
   try {
     for (const transformMode of ['indexed', 'direct']) {
-      await t.test(transformMode, async (t) => {
-        const three = await createThreeTestHandle(t, defineThreeConfig({ transformMode }));
+      await t.test(transformMode, async (subtest) => {
+        const three = await createThreeTestHandle(subtest, defineThreeConfig({ transformMode }));
         const scene = new THREE.Scene();
         const first = three.createText({ font, text: 'A' });
         scene.add(first);
