@@ -52,6 +52,15 @@ sources:
   - id: handle-state
     resource: ../../../packages/glyph/src/internal/handle-state.ts
     title: Internal Glyph handle state and Wasm command transport
+  - id: native-ktx-reader
+    resource: ../../../packages/glyph/src/internal/raster-ktx.ts
+    title: Bounded native KTX2 reader and validation policy
+  - id: native-ktx-writer
+    resource: ../../../packages/glyph/rust/raster-artifact/src/ktx.rs
+    title: Package-owned native KTX2 writer
+  - id: native-ktx-tests
+    resource: ../../../packages/glyph/tests/package/raster-ktx.test.mjs
+    title: Native KTX2 reader oracle and corruption tests
   - id: tsl-shaders
     resource: ../../../packages/glyph/src/shaders/tsl/index.ts
     title: Raster-format shader library layer
@@ -801,6 +810,12 @@ shadow; Bitmap and Slug currently support neither. Three and root-configured int
 the selected font formats at the call that accepts a style, so an unsupported effect cannot become a malformed or
 silently degraded command buffer. The semantic ABI carries effect color, width, offset, and inherited opacity only for
 raster programs that opt in.
+
+Built-in raster pages use a package-owned KTX2 reader limited to the native formats the Bitmap, MSDF, and Slug contracts
+admit. It checks the identifier, header, level index, safe 64-bit section coordinates, declared byte ranges, one basic
+data-format descriptor, exact dimensions and payload size, channel semantics, and the absence of supercompression or
+auxiliary metadata. The level payload remains a view into the source bytes. The general `ktx-parse` package is a
+development-only independent oracle for these checks; it is not a production dependency or a shipped runtime module.
 
 ## Glyph outlines
 

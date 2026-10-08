@@ -4,7 +4,7 @@ import {
   KHR_DF_CHANNEL_RGBSDA_GREEN,
   KHR_DF_CHANNEL_RGBSDA_RED,
   VK_FORMAT_R16G16B16A16_SFLOAT,
-} from 'ktx-parse';
+} from '../../internal/ktx2-constants.js';
 
 import type { RasterDecodeFont } from '../../font.js';
 import { jsonArray, jsonObject, nonnegativeSafeInteger, positiveSafeInteger } from '../../internal/raster-atlas.js';

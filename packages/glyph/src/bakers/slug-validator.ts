@@ -13,7 +13,7 @@ import {
   KHR_DF_CHANNEL_RGBSDA_GREEN,
   KHR_DF_CHANNEL_RGBSDA_RED,
   VK_FORMAT_R16G16B16A16_SFLOAT,
-} from 'ktx-parse';
+} from '../internal/ktx2-constants.js';
 
 import binaryResourceSchema from './schemas/binaryResource.PMNDRS_font.schema.json' with { type: 'json' };
 import slugSchema from './schemas/glTF.PMNDRS_font_slug.schema.json' with { type: 'json' };

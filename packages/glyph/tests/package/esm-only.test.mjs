@@ -25,6 +25,8 @@ test('the published contract is ESM-only', async () => {
     registry: 'https://registry.npmjs.org/',
   });
   assert.deepEqual(manifest.bin, { glyph: './bin/glyph.js' });
+  assert.equal(manifest.dependencies['ktx-parse'], undefined);
+  assert.equal(manifest.devDependencies['ktx-parse'], '1.1.0');
   assert.deepEqual(manifest.sideEffects, [
     './src/raster/bitmap.ts',
     './src/raster/msdf.ts',

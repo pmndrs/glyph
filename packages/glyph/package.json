@@ -221,7 +221,6 @@
   "dependencies": {
     "ajv": "6.15.0",
     "gltf-validator": "2.0.0-dev.3.10",
-    "ktx-parse": "1.1.0",
     "oxc-parser": "0.150.0",
     "oxc-resolver": "11.24.2",
     "oxc-walker": "1.1.1",
@@ -243,6 +242,7 @@
     "binaryen": "129.0.0",
     "eslint-plugin-react-you-might-not-need-an-effect": "1.0.1",
     "happy-dom": "20.14.0",
+    "ktx-parse": "1.1.0",
     "oxfmt": "0.35.0",
     "oxlint": "1.75.0",
     "react": "catalog:renderer",

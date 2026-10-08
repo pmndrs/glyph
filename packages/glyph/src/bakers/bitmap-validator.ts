@@ -8,12 +8,12 @@ import {
 } from '../font-baker/validator.js';
 import { GlyphError } from '../glyph-error.js';
 import {
+  KHR_DF_CHANNEL_RGBSDA_RED,
   VK_FORMAT_ASTC_4x4_UNORM_BLOCK,
   VK_FORMAT_BC4_UNORM_BLOCK,
   VK_FORMAT_EAC_R11_UNORM_BLOCK,
   VK_FORMAT_R8_UNORM,
-  KHR_DF_CHANNEL_RGBSDA_RED,
-} from 'ktx-parse';
+} from '../internal/ktx2-constants.js';
 
 import bitmapSchema from './schemas/glTF.PMNDRS_font_bitmap.schema.json' with { type: 'json' };
 import sourceSchema from './schemas/resourceSource.PMNDRS_font.schema.json' with { type: 'json' };

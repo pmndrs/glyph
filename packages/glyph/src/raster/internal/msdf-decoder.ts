@@ -4,7 +4,7 @@ import {
   KHR_DF_CHANNEL_RGBSDA_GREEN,
   KHR_DF_CHANNEL_RGBSDA_RED,
   VK_FORMAT_R8G8B8A8_UNORM,
-} from 'ktx-parse';
+} from '../../internal/ktx2-constants.js';
 
 import type { RasterDecodeFont } from '../../font.js';
 import {
