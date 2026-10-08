@@ -761,11 +761,10 @@ dispatch accepts the same suite names. This routing changes only the installed-p
 browser, payload, and conformance lanes retain their own workflows.
 
 The `@glyphs` suite also times glyph outlines (`labs/package/outlines.bench.ts`): `glyphs()` after a text change on Inter
-baked with outlines, beside the same paragraph on the plain font in `inspection.bench.ts`, and reading every outline
-from an unchanged copy. Outlines decode when the font loads; Labs times synchronous work only, so that load cost is
-recorded in the package reference rather than here. The fixture bakes the outlined font with the
-package under test and registers these benches only when that package has `outlineAt()`, so a baseline without
-outlines reports them as missing instead of timing a plain font under their names.
+baked with outlines, beside the same paragraph on the plain font in `inspection.bench.ts`, and reading every outline from
+an unchanged copy. Labs times synchronous work only, so the decode at font load is recorded in the package reference. The
+fixture registers these benches only when the package under test has `outlineAt()`, so a baseline without outlines
+reports them as missing instead of timing a plain font under their names.
 
 The 0.1.0 export cleanup removes raw ABI re-exports from the baker size entries. The regenerated package-size report
 records the supported consumer surface, including the root format move. Relative to the original pre-cleanup build,
