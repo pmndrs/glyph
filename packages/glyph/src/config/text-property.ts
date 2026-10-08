@@ -2,26 +2,38 @@
 // package-owned snapshots lets that seam retain them without a second deep clone.
 const ownedTextPropertySnapshots = new WeakSet<object>();
 
+/** @internal Mark one deeply frozen package-created text-property snapshot for zero-copy adoption. */
+export function ownTextPropertySnapshot<Value extends object>(value: Value): Value {
+  deepFreeze(value);
+  ownedTextPropertySnapshots.add(value);
+  return value;
+}
+
+/** @internal Whether a text-property record is already a deeply frozen package-created snapshot. */
+export function isOwnedTextPropertySnapshot(value: unknown): value is object {
+  return typeof value === 'object' && value !== null && ownedTextPropertySnapshots.has(value);
+}
+
 /** @internal Snapshot one text-property record or retain an equal owned snapshot. */
 export function reuseOrCreateTextPropertySnapshot<Value extends object>(
   previous: Value | undefined,
   value: Value,
   label: string,
 ): Value {
-  if (previous === value || ownedTextPropertySnapshots.has(value)) return value;
-  if (previous !== undefined && equalTextProperty(previous, value)) return previous;
+  if (previous === value) return value;
+  if (previous !== undefined && equalTextPropertySnapshots(previous, value)) return previous;
+  if (isOwnedTextPropertySnapshot(value)) return value;
   let snapshot: Value;
   try {
     snapshot = structuredClone(value);
   } catch (cause) {
     throw new TypeError(`${label} must contain cloneable data`, { cause });
   }
-  deepFreeze(snapshot);
-  ownedTextPropertySnapshots.add(snapshot);
-  return snapshot;
+  return ownTextPropertySnapshot(snapshot);
 }
 
-function equalTextProperty(previous: unknown, next: unknown): boolean {
+/** @internal Structural equality for canonical package-owned text state. */
+export function equalTextPropertySnapshots(previous: unknown, next: unknown): boolean {
   if (Object.is(previous, next)) return true;
   if (typeof previous !== 'object' || previous === null || typeof next !== 'object' || next === null) return false;
   return equalTextPropertyObjects(previous, next, new WeakMap(), new WeakMap());

@@ -27,6 +27,7 @@ const threePackage = (await import(
 const { bitmap, glyph } = glyphPackage;
 const { defineThreeConfig } = threePackage;
 export { font, glyph };
+export const { span, txt } = glyphPackage;
 const textPrototype: {
   readGlyphs?: (typeof threePackage.Text.prototype)['readGlyphs'];
   withGlyphs?: (typeof threePackage.Text.prototype)['readGlyphs'];

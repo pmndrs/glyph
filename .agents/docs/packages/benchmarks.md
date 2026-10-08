@@ -306,7 +306,9 @@ The `publication` suite includes 1,000 retained labels receiving equivalent styl
 It uses the installed package's Three instance through the shared fixture, warms the update before timing, and checks
 glyph identities/positions and realized draw counts afterward. It also measures position-only updates of 1,000 TypeGPU
 labels through a recording host: CPU adapter and publication work, not GPU execution. Artifact role is passed to the
-workloads so older canaries may publish while the candidate must keep semantic publication idle.
+workloads so older canaries may publish while the candidate must keep semantic publication idle. Framework workloads
+measure equivalent formatted flow updates at the shared Three normalization boundary and Vue's installed snapshot
+helper; they do not time React component rendering. Warm setup and untimed glyph checks guard the formatted flow case.
 
 Each suite holds workloads that time alike. Labs decides per run whether to batch iterations or time single calls from
 the cost of the first calls, so a workload whose first call is first-time work can be timed differently on each side
