@@ -27,7 +27,7 @@ export interface ThreeGlyphGeometrySource {
 
 export interface ThreeGlyphMeasurement {
   readonly key: GlyphKey;
-  /** The glyph's layout index, the same index `text.glyphs()` and `Glyphs` use. */
+  /** Index in the returned measurement array; dense drawable index for a detached `Glyphs` object. */
   readonly index: number;
   readonly shapedOrigin: THREE.Vector3;
   readonly drawnOrigin: THREE.Vector3;

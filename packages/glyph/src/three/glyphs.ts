@@ -66,10 +66,10 @@ export function setGlyphDrawOrder(glyphs: Glyphs, start: number): number {
 
 /** Immutable identity and grouping metadata for one glyph of a detached `Glyphs` object. */
 export interface DetachedGlyph {
-  /** The glyph's layout index, the one `text.glyphs()`, `text.withGlyphs()`, `GlyphPlacement.index`, and every `Glyphs` method use. */
+  /** Dense drawable index accepted by every `Glyphs` method. */
   readonly index: number;
   readonly key: GlyphPlacement['key'];
-  /** The font that shaped this glyph: a plain number, never reused, that retains nothing. Equals `text.glyphs().fontHandles[glyphFontSlots[index]]`. */
+  /** The font that shaped this glyph: a plain number, never reused, that retains nothing. Matches the corresponding glyph in the captured source layout. */
   readonly fontHandle: number;
   /** The glyph index in that font, not a Unicode code point or a layout index. Equal `fontHandle` and `glyphId` mean an equal outline. */
   readonly glyphId: number;
@@ -88,14 +88,15 @@ interface DetachedGlyphStorage {
 /**
  * A detached render-plan branch from `Text.breakApart()`: imports the planner's compacted publication into the normal renderer without child Text objects; per-glyph matrices are Three-side only and never reach the live paragraph.
  *
- * Every per-glyph datum is indexed by the layout glyph index of `text.glyphs()`. Blank glyphs keep their index and
- * matrix but have no render record.
+ * Only glyphs with render records are included. Per-glyph data and matrices share a dense drawable index;
+ * the mapping back to the source layout stays private.
  */
 export class Glyphs extends THREE.Object3D {
   readonly #target: ThreeCommandBufferRenderer;
   readonly #copy: GlyphCopy<void>;
   readonly #owner: ThreeRendererHost;
   readonly #layout: GlyphLayoutInspection;
+  readonly #sourceIndices: Uint32Array;
   readonly #glyphs: readonly DetachedGlyph[];
   readonly #measurements: readonly ThreeGlyphMeasurement[];
   /** Public matrices, 16 per glyph, keep the user-facing pivot-relative contract. */
@@ -129,13 +130,14 @@ export class Glyphs extends THREE.Object3D {
       const layout = options.placements.layout;
       this.#layout = layout;
       const incomplete = new Set(options.placements.incomplete);
-      const placements = options.placements.glyphs;
+      const placements = options.placements.glyphs.filter((placement) => !incomplete.has(placement.index));
+      this.#sourceIndices = Uint32Array.from(placements, (placement) => placement.index);
       this.#glyphs = Object.freeze(
         placements.map((placement, index) =>
           Object.freeze({
             index,
-            fontHandle: layout.fontHandles[layout.glyphFontSlots[index]!]!,
-            glyphId: layout.glyphIds[index]!,
+            fontHandle: layout.fontHandles[layout.glyphFontSlots[placement.index]!]!,
+            glyphId: layout.glyphIds[placement.index]!,
             key: placement.key,
             cluster: placement.cluster,
             line: placement.line,
@@ -145,7 +147,10 @@ export class Glyphs extends THREE.Object3D {
           }),
         ),
       );
-      this.#measurements = measureGlyphPlacements(options.placements, options.geometry);
+      const measurements = measureGlyphPlacements(options.placements, options.geometry);
+      this.#measurements = Object.freeze(
+        placements.map((placement, index) => Object.freeze({ ...measurements[placement.index]!, index })),
+      );
       this.#matrices = new Float32Array(placements.length * 16);
       this.#pivots = new Float32Array(placements.length * 2);
       this.#records = new Int32Array(placements.length).fill(-1);
@@ -193,8 +198,7 @@ export class Glyphs extends THREE.Object3D {
         throw new Error('detached glyph copy produced no drawable record storage');
       }
       for (const [index, placement] of placements.entries()) {
-        if (incomplete.has(index)) continue;
-        const stableId = layout.glyphStableIds[index];
+        const stableId = layout.glyphStableIds[placement.index];
         if (stableId === undefined) throw new Error(`detached glyph ${placement.index} has no stable id`);
         const address = this.#target.glyphRecord(stableId);
         if (address === undefined)
@@ -224,7 +228,7 @@ export class Glyphs extends THREE.Object3D {
     }
   }
 
-  /** The layout's glyph count, drawn or not: every index below it is valid. */
+  /** Number of drawable glyphs; blank layout glyphs are excluded. */
   get count(): number {
     return this.#glyphs.length;
   }
@@ -240,14 +244,14 @@ export class Glyphs extends THREE.Object3D {
     return this.#target.materials;
   }
 
-  /** Reads glyph `index`'s matrix, a blank glyph's included: its rest value is a translation to its pen origin. */
+  /** Reads drawable glyph `index`'s matrix; its rest value translates to the glyph's pen origin. */
   getMatrixAt(index: number, target: THREE.Matrix4): void {
     this.#assertActive();
     this.#assertIndex(index);
     target.fromArray(this.#matrices, index * 16);
   }
 
-  /** Writes glyph `index`'s matrix. A blank glyph stores it and draws nothing. */
+  /** Writes drawable glyph `index`'s matrix. */
   setMatrixAt(index: number, matrix: THREE.Matrix4): void {
     this.#assertActive();
     this.#assertIndex(index);
@@ -279,18 +283,18 @@ export class Glyphs extends THREE.Object3D {
     localToWorldMatrix(this.matrixWorld, target, target);
   }
 
-  /** Glyph `index`'s identity, grouping, and whether it draws. Throws `RangeError` outside `0 <= index < count`. */
+  /** Drawable glyph `index`'s identity and grouping. Throws `RangeError` outside `0 <= index < count`. */
   glyphAt(index: number): DetachedGlyph {
     this.#assertIndex(index);
     return this.#glyphs[index]!;
   }
 
   /**
-   * Reads glyph `index`'s outline as `text.glyphs().outlineAt(index)` does: closed contours of
+   * Reads drawable glyph `index`'s outline from its captured source-layout index: closed contours of
    * `[x0, y0, cx, cy, x1, y1, isLine]` curves in em units, y down, origin at the glyph's pen origin, the pivot of the
    * matrix `setMatrixAt` places. To draw the glyph where this object draws it, scale each coordinate by
    * `DetachedGlyph.fontSize`, negate y (this object's local space is y up), and place the result with the glyph's
-   * matrix. A blank glyph returns `[]`.
+   * matrix. Blank layout glyphs are excluded from this object.
    *
    * The outlines were captured when `breakApart()` ran, so, like `glyphAt`, this still reads after the source `Text`
    * re-lays out and after the font or this object is disposed. Throws `RangeError` outside `0 <= index < count`, and
@@ -298,7 +302,7 @@ export class Glyphs extends THREE.Object3D {
    */
   outlineAt(index: number): GlyphOutlineContour[] {
     this.#assertIndex(index);
-    return this.#layout.outlineAt(index);
+    return this.#layout.outlineAt(this.#sourceIndices[index]!);
   }
 
   dispose(): void {

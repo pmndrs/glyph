@@ -216,7 +216,7 @@ detachedGlyphs.glyphAt(0).fontHandle satisfies number;
 detachedGlyphs.glyphAt(0).glyphId satisfies number;
 // @ts-expect-error The font id is a plain number, not a branded FontHandle.
 detachedGlyphs.glyphAt(0).fontHandle satisfies import('../../src/identity.js').FontHandle;
-// @ts-expect-error A detached glyph is addressed by its layout index only.
+// @ts-expect-error Detached source-layout mapping stays private.
 void detachedGlyphs.glyphAt(0).sourceIndex;
 void detachedGlyphs;
 void detachedDecorations;

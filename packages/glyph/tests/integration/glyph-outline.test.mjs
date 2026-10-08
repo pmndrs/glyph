@@ -432,32 +432,32 @@ function dispose({ group, text, glyphs }) {
   group.dispose();
 }
 
-test('Glyphs.outlineAt takes the layout index, equals the source outline at every index, and blanks are present', async (t) => {
+test('Glyphs uses dense drawable indices and skips blanks while preserving source outlines', async (t) => {
   const three = await createHandle(t);
   const [latin, icon] = await Promise.all([load(bakes.inter), load(bakes.icons)]);
   const mounted = breakApartMounted(three, createFontStack(latin, icon), `  A b${String.fromCodePoint(0xf0ac)} I`);
   try {
     const { glyphs, text } = mounted;
     const layout = text.glyphs();
-    assert.equal(glyphs.count, layout.glyphCount, 'blank glyphs stay in the index space');
-    let blanks = 0;
+    const sourceIndices = Array.from({ length: layout.glyphCount }, (_, index) => index).filter(
+      (index) => layout.outlineAt(index).length > 0,
+    );
+    assert.equal(glyphs.count, 4, 'only the four visible glyphs are detached');
+    assert.ok(glyphs.count < layout.glyphCount, 'blank source glyphs are excluded');
+    assert.equal(glyphs.measurements.length, glyphs.count);
     for (let index = 0; index < glyphs.count; index += 1) {
       const detached = glyphs.glyphAt(index);
+      const sourceIndex = sourceIndices[index];
       assert.equal(detached.index, index);
+      assert.equal(glyphs.measurements[index].index, index);
       assert.equal('sourceIndex' in detached, false);
-      const outline = glyphs.outlineAt(index);
-      assert.deepEqual(outline, layout.outlineAt(index), `glyph ${index}`);
-      if (layout.outlineAt(index).length === 0) {
-        blanks += 1;
-        assert.deepEqual(outline, [], `blank glyph ${index} has no contours`);
-      } else {
-        assert.ok(outline.length > 0, `drawn glyph ${index} has ink`);
-      }
+      assert.equal('drawn' in detached, false);
+      assert.deepEqual(glyphs.outlineAt(index), layout.outlineAt(sourceIndex), `drawable glyph ${index}`);
+      assert.ok(glyphs.outlineAt(index).length > 0);
+      assert.equal(detached.glyphId, layout.glyphIds[sourceIndex]);
+      assert.equal(detached.fontHandle, layout.fontHandles[layout.glyphFontSlots[sourceIndex]]);
     }
-    assert.ok(blanks >= 3, 'the fixture starts with blanks, so a layout index is not a count of drawn glyphs');
-    assert.equal('drawn' in glyphs.glyphAt(0), false);
-    assert.deepEqual(glyphs.outlineAt(0), []);
-    assert.notEqual(glyphs.outlineAt(2), glyphs.outlineAt(2), 'each call returns a new outer array');
+    assert.notEqual(glyphs.outlineAt(0), glyphs.outlineAt(0), 'each call returns a new outer array');
   } finally {
     dispose(mounted);
     latin.dispose();
@@ -523,19 +523,19 @@ test('Glyphs.outlineAt throws the missing-outline error for a font without outli
   }
 });
 
-test('a blank glyph keeps a matrix at its layout index and draws nothing', async (t) => {
+test('a leading space is skipped and dense matrix index zero moves the following drawable glyph', async (t) => {
   const three = await createHandle(t);
   const font = await load(bakes.inter);
   const mounted = breakApartMounted(three, font, ' H');
   try {
-    const { glyphs } = mounted;
-    assert.deepEqual(glyphs.outlineAt(0), []);
-    assert.ok(glyphs.outlineAt(1).length > 0);
+    const { glyphs, text } = mounted;
+    assert.equal(glyphs.count, 1);
+    assert.ok(glyphs.outlineAt(0).length > 0);
     const rest = new THREE.Matrix4();
     glyphs.getMatrixAt(0, rest);
-    const measured = glyphs.measurements[0];
-    assert.equal(measured.index, 0);
-    assert.deepEqual(rest.elements, measured.originalMatrix.elements, 'a blank glyph rests at its pen origin');
+    assert.equal(glyphs.measurements[0].index, 0);
+    assert.equal(glyphs.glyphAt(0).cluster, 1, 'the only detached glyph is the H after the space');
+    assert.deepEqual(rest.elements, text.measureGlyphs()[1].originalMatrix.elements);
     const draw = glyphs.children.find((child) => child.isMesh);
     const transforms = draw.geometry.getAttribute('_pmndrsGlyphInstanceTransforms');
     const version = transforms.version;
@@ -543,12 +543,9 @@ test('a blank glyph keeps a matrix at its layout index and draws nothing', async
     glyphs.setMatrixAt(0, moved);
     const read = new THREE.Matrix4();
     glyphs.getMatrixAt(0, read);
-    assert.deepEqual(read.elements, moved.elements, 'the blank matrix is stored');
-    assert.equal(transforms.version, version, 'no shader transform is written for a glyph without a record');
-    glyphs.setMatrixAt(1, moved);
-    assert.ok(transforms.version > version, 'a drawn glyph writes its record');
-    glyphs.getMatrixAt(0, read);
-    assert.deepEqual(read.elements, moved.elements, 'writes do not cross between glyphs');
+    assert.deepEqual(read.elements, moved.elements);
+    assert.ok(transforms.version > version, 'dense index zero updates the H render record');
+    assert.throws(() => glyphs.setMatrixAt(1, moved), RangeError);
   } finally {
     dispose(mounted);
     font.dispose();
@@ -564,13 +561,15 @@ test('a detached glyph names its shape by fontHandle and glyphId, apart from its
     const { glyphs, text } = mounted;
     const layout = text.glyphs();
     const at = (index) => glyphs.glyphAt(index);
+    const sourceIndices = [1, 3, 5, 7];
+    assert.equal(glyphs.count, sourceIndices.length);
     for (let index = 0; index < glyphs.count; index += 1) {
+      const sourceIndex = sourceIndices[index];
       assert.equal(typeof at(index).fontHandle, 'number');
-      assert.equal(at(index).fontHandle, layout.fontHandles[layout.glyphFontSlots[index]], `fontHandle ${index}`);
-      assert.equal(at(index).glyphId, layout.glyphIds[index], `glyphId ${index}`);
+      assert.equal(at(index).fontHandle, layout.fontHandles[layout.glyphFontSlots[sourceIndex]], `fontHandle ${index}`);
+      assert.equal(at(index).glyphId, layout.glyphIds[sourceIndex], `glyphId ${index}`);
     }
-    const letters = [...' a b a '].map((_, index) => at(index)).filter((_, index) => ' a b a '[index] !== ' ');
-    const [firstA, b, secondA] = letters;
+    const [firstA, b, secondA] = [at(0), at(1), at(2)];
     assert.equal(firstA.fontHandle, secondA.fontHandle);
     assert.equal(firstA.glyphId, secondA.glyphId);
     assert.notEqual(firstA.key, secondA.key, 'one shape, two occurrences');

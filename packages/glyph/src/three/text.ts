@@ -902,7 +902,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return measureGlyphPlacements(placements, this.#glyphGeometry(placements));
   }
 
-  /** Copies the committed glyphs and optional decorations into independently rendered Three objects. */
+  /** Copies drawable committed glyphs and optional decorations into independently rendered Three objects; blank glyphs are excluded. */
   breakApart(): readonly [glyphs: Glyphs, decorations: Decorations | undefined] {
     this.#assertActive();
     this.#assertDetachedCopyAvailable('break apart');

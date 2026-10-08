@@ -1292,20 +1292,15 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
       identity.elements,
       'the detached root transform must realize as exact identity without an inverse round trip',
     );
-    assert.equal(detached.count, label.glyphs().glyphCount, 'count is the layout glyph count');
+    assert.ok(detached.count < label.glyphs().glyphCount, 'count excludes semantic-only spaces');
     assert.deepEqual(
       entries.map((entry) => entry.index),
       entries.map((_, index) => index),
-      'an index is the layout index',
-    );
-    const hasInk = detached.measurements.map(({ localInkBounds }) => localInkBounds.max.x > localInkBounds.min.x);
-    assert.ok(
-      hasInk.some((ink) => !ink),
-      'the semantic-only space stays in the index space, undrawn',
+      'indices are dense over drawable glyphs',
     );
     assert.ok(
-      hasInk.findIndex((ink) => !ink) < hasInk.findLastIndex((ink) => ink),
-      'the fixture must include drawable glyphs after a semantic-only space',
+      detached.measurements.every(({ localInkBounds }) => localInkBounds.max.x > localInkBounds.min.x),
+      'every detached entry in this fixture has visible ink',
     );
     assert.ok(entries.every((entry) => !('sourceIndex' in entry)));
     let comparedRecords = 0;
@@ -1337,7 +1332,7 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
       );
       comparedRecords += 1;
     }
-    assert.equal(comparedRecords, hasInk.filter(Boolean).length, 'every glyph with ink owns one record');
+    assert.equal(comparedRecords, detached.count, 'every detached glyph owns one record');
     assert.notEqual(draw.material, sourceDraw.material, 'the detached branch owns independent material state');
     const sourceOpacity = sourceDraw.material.opacity;
     detached.materials[0].opacity = 0.35;

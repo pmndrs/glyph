@@ -28,11 +28,12 @@ writes version 0, and readers accept both. The format, read paths, and decoder a
   `GlyphOutlineView` and owned reads return `[x0, y0, cx, cy, x1, y1, isLine]` contours (agreed on the pull request,
   2026-10-06). The view names its font `fontHandle`, matching `BorrowedGlyph.fontHandle` and `glyphs().fontHandles`;
   `DetachedGlyph` uses the same `fontHandle` name.
-- **One detached index.** A split glyph reads its outline through `Glyphs.outlineAt(index)` and nowhere else on the
-  Three side. `Glyphs` uses the layout glyph index of `text.glyphs()`, `withGlyphs`, and `GlyphPlacement.index`, with every
-  per-glyph datum a parallel array at it and blank glyphs kept at their layout indices (user directive, 2026-10-07). A second
-  `sourceIndex` would only name the same number, so `DetachedGlyph` and `ThreeGlyphMeasurement` do not carry one.
-- **Three identities.** `index` is the position in this layout, `key` is the same occurrence across reflow (the shipped
+- **Drawable detached indices.** `Text.breakApart()` returns only glyphs with render records, excluding spaces and
+  other blank layout glyphs (user directive, 2026-10-08). `Glyphs` indices are dense over the drawable subset:
+  `count`, `glyphAt`, `measurements`, `outlineAt`, and matrix methods all use that index. A private mapping preserves
+  the original layout index for outline reads; no public `sourceIndex` or `drawn` flag is needed. Full layout inspection
+  continues to include blank glyphs for shaping and layout.
+- **Three identities.** `index` is the position in the detached drawable subset, `key` is the same occurrence across reflow (the shipped
   0.1.0 contract), and `fontHandle` plus `glyphId` are the same shape (user directive, 2026-10-08). `fontHandle` is a plain number
   consistent with the other glyph views; it retains nothing, and no public font-by-handle lookup is added.
 
