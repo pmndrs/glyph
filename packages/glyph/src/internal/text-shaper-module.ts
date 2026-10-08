@@ -1,10 +1,10 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { textShaperWasmUrl } from './shaper-wasm-url.js';
 import {
+  emptyGlyphOutlineView,
   GlyphOutlineStoreBuilder,
   viewGlyphOutline,
   type GlyphOutlineStore,
-  type GlyphOutlineView,
 } from '../glyph-outline.js';
 
 /** @internal */
@@ -169,11 +169,7 @@ export function copyIntoWasm(
   return { pointer, length };
 }
 
-export function checkedMemoryView(
-  memory: WebAssembly.Memory,
-  pointer: number,
-  length: number,
-): Uint8Array<ArrayBuffer> {
+function checkedMemoryView(memory: WebAssembly.Memory, pointer: number, length: number): Uint8Array<ArrayBuffer> {
   uint32(pointer, 'Wasm pointer');
   uint32(length, 'Wasm length');
   if (pointer + length > memory.buffer.byteLength) {
@@ -189,46 +185,55 @@ function uint32(value: number, label: string): number {
   return value;
 }
 
-/** @internal */
-export async function decodeEveryGlyphOutline(sfnt: Uint8Array, glyphCount: number): Promise<Error | undefined> {
-  const { exports } = readModule(await WebAssembly.instantiate(await defaultModule(), {}));
+/**
+ * Decodes glyphs `0..glyphCount` of an outline SFNT in a fresh instance, handing each result to `visit`, and returns the
+ * first decode failure.
+ */
+async function decodeGlyphOutlines(
+  module: Promise<WebAssembly.Module>,
+  sfnt: Uint8Array,
+  glyphCount: number,
+  visit: (exports: ShaperExports, glyphId: number) => void,
+): Promise<Error | undefined> {
+  const { exports } = readModule(await WebAssembly.instantiate(await module, {}));
   const copied = copyIntoWasm(exports, sfnt);
   for (let glyphId = 0; glyphId < glyphCount; glyphId += 1) {
     const status = exports.glyphOutline(copied.pointer, copied.length, glyphId);
     if (status !== 0) return outlineStatusError(status, glyphId);
+    visit(exports, glyphId);
   }
   return undefined;
 }
 
+/** @internal Returns the error of the first glyph of an outline SFNT that the runtime decoder refuses, if any. */
+export function decodeEveryGlyphOutline(sfnt: Uint8Array, glyphCount: number): Promise<Error | undefined> {
+  return decodeGlyphOutlines(defaultModule(), sfnt, glyphCount, () => {});
+}
+
 /**
- * @internal Decodes every glyph of an outline SFNT into one store, in a fresh instance that is released afterwards. It
- * compiles from the module the engine shared, so a caller-supplied `glyph.init({ wasm })` decodes too, or from the
- * default module when a font loads before the engine starts. The bake validated every glyph, so a failure here means
- * the artifact was corrupted after baking.
+ * @internal Decodes every glyph of an outline SFNT into one store. It compiles from the module the engine shared, so a
+ * caller-supplied `glyph.init({ wasm })` decodes too, or from the default module when a font loads before the engine
+ * starts. The bake validated every glyph, so a failure here means the artifact was corrupted after baking.
  */
 export async function decodeGlyphOutlineStore(sfnt: Uint8Array, glyphCount: number): Promise<GlyphOutlineStore> {
-  const { exports } = readModule(await WebAssembly.instantiate(await (sharedModulePromise ?? defaultModule()), {}));
-  const copied = copyIntoWasm(exports, sfnt);
   const builder = new GlyphOutlineStoreBuilder(glyphCount);
-  const scratch: GlyphOutlineView = {
-    fontHandle: 0,
-    glyphId: 0,
-    points: new Float32Array(0),
-    contourEnds: new Uint32Array(0),
-    segmentLines: new Uint8Array(0),
-  };
-  for (let glyphId = 0; glyphId < glyphCount; glyphId += 1) {
-    const status = exports.glyphOutline(copied.pointer, copied.length, glyphId);
-    if (status !== 0) throw outlineStatusError(status, glyphId);
-    const result = checkedMemoryView(exports.memory, exports.glyphOutlinePointer(), exports.glyphOutlineLength());
-    builder.append(viewGlyphOutline(result.buffer, result.byteOffset, 0, glyphId, scratch));
-  }
+  const scratch = emptyGlyphOutlineView();
+  const failure = await decodeGlyphOutlines(
+    sharedModulePromise ?? defaultModule(),
+    sfnt,
+    glyphCount,
+    (exports, glyphId) => {
+      const result = checkedMemoryView(exports.memory, exports.glyphOutlinePointer(), exports.glyphOutlineLength());
+      builder.append(viewGlyphOutline(result.buffer, result.byteOffset, 0, glyphId, scratch));
+    },
+  );
+  if (failure !== undefined) throw failure;
   return builder.finish();
 }
 
 let sharedModulePromise: Promise<WebAssembly.Module> | undefined;
 
-/** @internal Records the module the engine compiled, so outline decoding at font load uses the same Wasm. */
+/** @internal Records the module the engine compiled, so decoding at font load uses the same Wasm. */
 export function shareShaperModule(module: WebAssembly.Module): void {
   sharedModulePromise ??= Promise.resolve(module);
 }
@@ -245,7 +250,7 @@ function defaultModule(): Promise<WebAssembly.Module> {
   return defaultModulePromise;
 }
 
-export function outlineStatusError(status: number, glyphId: number): Error {
+function outlineStatusError(status: number, glyphId: number): Error {
   const labels: Record<number, string> = {
     2: 'its outline data is malformed',
     7: 'its outline exceeds available memory',

@@ -1,11 +1,10 @@
 /**
  * One glyph's outline as raw columns, in em units (1 is the font size) with y down and the origin at the glyph's pen
- * position on the baseline, like every box the layout publishes. Place a point at `glyph.x + x * glyph.fontSize`,
- * `glyph.y + y * glyph.fontSize`. Outlines with equal `fontHandle` and `glyphId` are identical, so a caller can cache
- * one shape per key and reuse it at every placement and size.
+ * position on the baseline. Place a point at `glyph.x + x * glyph.fontSize`, `glyph.y + y * glyph.fontSize`. Outlines
+ * with equal `fontHandle` and `glyphId` are identical, so a caller can cache one shape per key.
  *
- * A font decodes every outline once, when it loads. From `withGlyphs`, the typed arrays are views over that decoded
- * data: treat them as valid only inside that callback, and copy them (`points.slice()` and so on) to keep an outline.
+ * From `withGlyphs`, the typed arrays are views over the font's decoded outlines: valid only inside that callback, so
+ * copy them (`points.slice()`) to keep an outline.
  */
 export interface GlyphOutlineView {
   /** The font that shaped the glyph. */
@@ -24,10 +23,7 @@ export interface GlyphOutlineView {
   segmentLines: Uint8Array;
 }
 
-/**
- * One segment in em units, y down, origin at the glyph's pen position on the baseline: start, control, end, and
- * whether it is a straight line, whose control is then its midpoint.
- */
+/** One segment in em units: start, control, end, and whether it is a line, whose control is then its midpoint. */
 export type GlyphOutlineCurve = readonly [
   x0: number,
   y0: number,
@@ -65,14 +61,29 @@ export function viewGlyphOutline(
   return target;
 }
 
-/** @internal The error a glyph read reports when its font was baked without outlines. */
-export const missingGlyphOutlinesMessage =
-  'font was baked without outlines; outlines need a font prebaked with glyph bake --outlines';
+/** @internal An empty holder for `viewGlyphOutline` and `viewStoredGlyphOutline` to fill. */
+export function emptyGlyphOutlineView(fontHandle = 0, glyphId = 0): GlyphOutlineView {
+  return {
+    fontHandle,
+    glyphId,
+    points: new Float32Array(0),
+    contourEnds: new Uint32Array(0),
+    segmentLines: new Uint8Array(0),
+  };
+}
+
+/** @internal Throws the error a glyph read reports when its font was baked without outlines. */
+export function requireGlyphOutlineStore(store: GlyphOutlineStore | undefined): GlyphOutlineStore {
+  if (store === undefined) {
+    throw new TypeError('font was baked without outlines; outlines need a font prebaked with glyph bake --outlines');
+  }
+  return store;
+}
 
 /**
- * @internal Every glyph outline of one font, decoded once when the font loads: the columns of every glyph's
+ * @internal Every glyph outline of one font, decoded when the font loads: the columns of every glyph's
  * `GlyphOutlineView` back to back, and per glyph its first point, first contour, contour count, first segment, and
- * segment count. Owned reads build each glyph's frozen tuples once and share them.
+ * segment count. `contours` caches each glyph's frozen tuples.
  */
 export interface GlyphOutlineStore {
   readonly points: Float32Array;
@@ -163,13 +174,7 @@ export function viewStoredGlyphOutline(
 export function storedGlyphOutline(store: GlyphOutlineStore, glyphId: number): readonly GlyphOutlineContour[] {
   let contours = store.contours[glyphId];
   if (contours === undefined) {
-    const view = viewStoredGlyphOutline(store, 0, glyphId, {
-      fontHandle: 0,
-      glyphId,
-      points: store.points,
-      contourEnds: store.contourEnds,
-      segmentLines: store.segmentLines,
-    });
+    const view = viewStoredGlyphOutline(store, 0, glyphId, emptyGlyphOutlineView());
     contours = Object.freeze(
       glyphOutlineContours(view).map((curves) => Object.freeze(curves.map((curve) => Object.freeze(curve)))),
     );
@@ -178,8 +183,8 @@ export function storedGlyphOutline(store: GlyphOutlineStore, glyphId: number): r
   return contours;
 }
 
-/** @internal Copies a view into caller-owned curve tuples. */
-export function glyphOutlineContours({ points, contourEnds, segmentLines }: GlyphOutlineView): GlyphOutlineContour[] {
+/** Copies a view into caller-owned curve tuples. */
+function glyphOutlineContours({ points, contourEnds, segmentLines }: GlyphOutlineView): GlyphOutlineContour[] {
   const contours: GlyphOutlineContour[] = [];
   let segment = 0;
   for (let contour = 0; contour < contourEnds.length; contour += 1) {

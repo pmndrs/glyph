@@ -2,7 +2,8 @@ import type { RegisteredFont } from './font.js';
 import type { FontHandle } from './identity.js';
 import { getRegisteredFontData } from './internal/registered-font.js';
 import {
-  missingGlyphOutlinesMessage,
+  emptyGlyphOutlineView,
+  requireGlyphOutlineStore,
   viewStoredGlyphOutline,
   type GlyphOutlineStore,
   type GlyphOutlineView,
@@ -76,9 +77,7 @@ class RuntimeShaperImpl implements RuntimeShaper {
   constructor(registry: RuntimeShaperFontRegistry, module: ShaperModule) {
     this.registry = registry;
     this.#exports = module.exports;
-    this.#unsubscribe = registry._onFontDispose((font) => {
-      this.#disposeHandle(font.handle);
-    });
+    this.#unsubscribe = registry._onFontDispose((font) => this.#disposeHandle(font.handle));
   }
 
   registerFont(font: RegisteredFont): void {
@@ -150,19 +149,11 @@ class RuntimeShaperImpl implements RuntimeShaper {
     this.#assertActive();
     const font = this.registry.getByHandle(fontHandle as FontHandle);
     if (font === undefined) throw new Error(`the font of glyph ${glyphId} has been disposed`);
-    const store = getRegisteredFontData(font).glyphOutlines;
-    if (store === undefined) throw new TypeError(missingGlyphOutlinesMessage);
     return viewStoredGlyphOutline(
-      store,
+      requireGlyphOutlineStore(getRegisteredFontData(font).glyphOutlines),
       fontHandle,
       glyphId,
-      target ?? {
-        fontHandle,
-        glyphId,
-        points: new Float32Array(0),
-        contourEnds: new Uint32Array(0),
-        segmentLines: new Uint8Array(0),
-      },
+      target ?? emptyGlyphOutlineView(fontHandle, glyphId),
     );
   }
 

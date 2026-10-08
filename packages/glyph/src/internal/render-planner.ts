@@ -9,7 +9,7 @@ import {
   type GlyphLayoutInspection,
   type ParagraphLayoutSummary,
 } from '../layout.js';
-import { missingGlyphOutlinesMessage, storedGlyphOutline, type GlyphOutlineStore } from '../glyph-outline.js';
+import { requireGlyphOutlineStore, storedGlyphOutline, type GlyphOutlineStore } from '../glyph-outline.js';
 import {
   assertConstraints,
   assertParagraphLayout,
@@ -68,7 +68,6 @@ const claimedTargets = new WeakSet<object>();
 
 declare const planOriginBrand: unique symbol;
 /** Unforgeable identity of the plan that produced a plan candidate. */
-
 export interface PlanOrigin {
   readonly [planOriginBrand]: true;
 }
@@ -711,15 +710,16 @@ class RenderPlannerImpl {
   _inspectText(state: RetainedTextState): GlyphLayoutInspection {
     this.#assertTextQueryable(state);
     const layout = state.inspection ?? this.#queryInspection(state);
-    // The copy keeps each font's decoded outlines, so it reads them as data after the font or this handle is gone.
+    // The copy holds each font's store, so it reads after the font or this handle is gone.
     const stores = new Map<number, GlyphOutlineStore | undefined>();
     for (const fontHandle of layout.fontHandles)
       stores.set(fontHandle, this.#handleState._glyphOutlineStore(fontHandle));
-    return copyGlyphLayoutInspection(layout, (index) => {
-      const store = stores.get(fontHandleAt(layout, index));
-      if (store === undefined) throw new TypeError(missingGlyphOutlinesMessage);
-      return storedGlyphOutline(store, layout.glyphIds[index]!).slice();
-    });
+    return copyGlyphLayoutInspection(layout, (index) =>
+      storedGlyphOutline(
+        requireGlyphOutlineStore(stores.get(fontHandleAt(layout, index))),
+        layout.glyphIds[index]!,
+      ).slice(),
+    );
   }
 
   /** @internal */
