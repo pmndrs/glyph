@@ -13,11 +13,11 @@ const GRAVITY = 40;
 /** Prism depth along z in em units. Every piece is extruded to this thickness, centred on the glyph's plane. */
 export const COLLIDER_DEPTH_EM = 0.25;
 /**
- * Fastest a body may move, in metres per second. Dynamic bodies are not swept against each other, so a fall long enough
- * to outrun a thin stem's width in one step (0.1 em at 28 px is 0.14 m) would pass glyphs through one another; at this
- * cap a step moves a body at most 0.1 m, less than any stem.
+ * Farthest a body may move in one step, in em. Dynamic bodies are not swept against each other, so a body that travels
+ * more than a thin stem's width (about 0.1 em) in one step can pass through its neighbours; a faster fall measured a 2.6 px
+ * overlap in a settled pile. The speed cap is this distance over the step, scaled to the font size.
  */
-const MAXIMUM_SPEED = 6;
+const MAXIMUM_STEP_EM = 0.07;
 /** Static bodies are this thick in metres, so nothing tunnels through the floor or a wall. */
 const STATIC_THICKNESS = 2;
 const FRICTION = 0.6;
@@ -106,11 +106,11 @@ export class GlyphPhysicsWorld {
   #skippedPieces = 0;
   #hullCount = 0;
 
-  constructor(b3: Box3DModule) {
+  constructor(b3: Box3DModule, fontSize: number) {
     this.#b3 = b3;
     const definition = b3.b3DefaultWorldDef();
     definition.gravity = [0, -GRAVITY, 0];
-    definition.maximumLinearSpeed = MAXIMUM_SPEED;
+    definition.maximumLinearSpeed = (MAXIMUM_STEP_EM * fontSize) / PIXELS_PER_METER / STEP_SECONDS;
     this.#world = b3.b3CreateWorld(definition);
   }
 

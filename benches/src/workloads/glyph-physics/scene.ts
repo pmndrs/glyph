@@ -31,7 +31,7 @@ const WALL_PADDING = 24;
  * How far above the viewport's top edge the paragraph starts, as a fraction of the viewport height. The lines fall from
  * above the screen onto the floor, so they land on top of one another and the glyphs pile instead of lying in one row.
  */
-const DROP_HEIGHT_RATIO = 0.45;
+const DROP_HEIGHT_RATIO = 0.15;
 
 /** Maps the shared 0..100 amount control onto a character count of the paragraph, repeating it if it must grow. */
 export function glyphPhysicsText(amount: number): string {

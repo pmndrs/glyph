@@ -55,8 +55,8 @@ function crossings(segments: Specimen['segments'], y: number): number[] {
   return xs.sort((left, right) => left - right);
 }
 
-function world(): GlyphPhysicsWorld {
-  const created = new GlyphPhysicsWorld(b3);
+function world(fontSize = FONT_SIZE): GlyphPhysicsWorld {
+  const created = new GlyphPhysicsWorld(b3, fontSize);
   worlds.push(created);
   return created;
 }
@@ -190,7 +190,7 @@ describe('Box3D colliders built from glyph outlines', () => {
 /**
  * What a settled pile may overlap by, in em. Box3D leaves a residue from the landing impact that its solver does not
  * push back out: about 0.02 em measured, several times Box3D's 5 mm contact slop (0.1 px), against 2.6 px (0.09 em) before the
- * fall speed was capped.
+ * fall speed was capped, with the drop height the workload uses.
  */
 const SETTLED_OVERLAP_EM = 0.03;
 
@@ -263,9 +263,9 @@ describe('a settled pile', () => {
     const paragraph = await breakApartParagraph('inter', source, fontSize, (right - left) * 0.5);
     try {
       const { glyphs } = paragraph;
-      const physics = world();
+      const physics = world(fontSize);
       physics.setBounds({ floorY: -480, left: 0, right: right - left }, 8);
-      const dropHeight = 320;
+      const dropHeight = 108;
       const colliders: GlyphCollider[] = [];
       for (let index = 0; index < glyphs.count; index += 1) {
         if (!glyphs.glyphAt(index).drawn) continue;

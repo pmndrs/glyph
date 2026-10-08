@@ -13,7 +13,7 @@ import {
 } from './glyph-physics-world';
 
 /** Simulated seconds in one drop: long enough to land, settle, and rest on screen before the glyphs launch again. */
-const CYCLE_STEPS = 480;
+const CYCLE_STEPS = 720;
 /** Most steps one rendered frame may run; a longer stall drops simulated time rather than spiralling. */
 const MAX_STEPS_PER_FRAME = 8;
 /** Largest wall-clock gap one frame may feed the simulation, in milliseconds. */
@@ -95,7 +95,7 @@ export class GlyphPhysicsScene {
     this.#glyphs = glyphs;
     this.#node.add(glyphs);
     this.#text.visible = false;
-    const world = new GlyphPhysicsWorld(this.#b3);
+    const world = new GlyphPhysicsWorld(this.#b3, this.#fontSize);
     const overlay = new ColliderOverlay(this.#fontSize);
     const { colliders } = buildParagraphColliders(glyphs, flattenToleranceEm(this.#fontSize));
     this.#world = world;
