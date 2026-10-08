@@ -157,7 +157,7 @@ test('a root textStyle list reaches the Three Text as a list', async () => {
   }
 });
 
-test('a reactive style change applies through exactly one set call', async () => {
+test('a reactive style change reaches canonical state and reuses an equal snapshot', async () => {
   const fixture = await loadFixture();
   const style = shallowRef({ fontSize: 16 });
   const text = capture();
@@ -166,20 +166,14 @@ test('a reactive style change applies through exactly one set call', async () =>
   );
   try {
     const object = text.instance;
-    let calls = 0;
-    const originalSet = object.set;
-    object.set = function countedSet(...args) {
-      calls += 1;
-      return Reflect.apply(originalSet, this, args);
-    };
     style.value = { fontSize: 24 };
     await nextTick();
-    assert.equal(calls, 1);
     assert.deepEqual(object.style, { fontSize: 24 });
+    const accepted = object.style;
     // An identical snapshot must not republish.
     style.value = { fontSize: 24 };
     await nextTick();
-    assert.equal(calls, 1);
+    assert.equal(object.style, accepted);
   } finally {
     await host.unmount();
     fixture.dispose();

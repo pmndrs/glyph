@@ -9,7 +9,7 @@ export async function compileWasmResponse(response: Response): Promise<WebAssemb
       return await WebAssembly.compileStreaming(response);
     } catch (error) {
       const readable = response.type === 'basic' || response.type === 'cors' || response.type === 'default';
-      if (!readable || response.headers.get('Content-Type') === 'application/wasm') throw error;
+      if (!readable || response.headers.get('Content-Type')?.toLowerCase() === 'application/wasm') throw error;
     }
   }
   return WebAssembly.compile(await response.arrayBuffer());

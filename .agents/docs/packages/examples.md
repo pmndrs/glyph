@@ -41,7 +41,9 @@ Module-scoped `useBitmap.preload()`, `useMsdf.preload()`, and `useSlug.preload()
 the matching hooks consume those stable operations, suspend only while unresolved, and own their mounted immutable Font
 leases. Each hook declares through `glyph.fontFace()` rather than introducing another loader. Three React `Activity`
 branches retain the raster-format variants; nested `Text` chooses the matching icon font, and a `TextGroup` batches the
-control labels.
+control labels. That authored group owns a draw boundary under the default `auto` batching policy, so the R3F live probe
+expects its Slug labels to remain one draw while the three selected Latin/icon paragraphs contribute six additional
+resource-partitioned draws.
 
 The checked-in Inter asset covers Basic Latin `U+0020–U+007E`; the Font Awesome asset contains only six globe/earth PUA
 scalars. Each GLB embeds Bitmap, MSDF, and Slug resources. The manifest invokes the published baker CLI and verifies

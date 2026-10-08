@@ -1,12 +1,12 @@
 import { Comment, Fragment, Text as TextVNode, isVNode, type VNode, type VNodeArrayChildren } from 'vue';
 
 import type { FontFaceSelection } from '../../font-face.js';
-import { resolveRangesToClusters } from '../../formatted-text.js';
+import { ownClusterAlignedSpans } from '../../formatted-text.js';
 import type { FontSelection } from '../../loaded-font.js';
-import { snapshotPropertyList } from '../../internal/desired-text.js';
 import type { PropertyList, TextStyle } from '../../text-properties.js';
 import type { RasterFormatMetadata } from '../../config/raster-format.js';
 import type { ThreeTextMaterial } from '../../three/material.js';
+import { snapshotReactivePropertyList } from './property-snapshot.js';
 
 export type VueFontSelectionInput = FontSelection<RasterFormatMetadata> | FontFaceSelection | string;
 
@@ -49,7 +49,7 @@ const VNODE_BOOKKEEPING = new Set(['key', 'ref', 'ref_for', 'ref_key']);
 // Nested Text accepts `textStyle`, never `style`: Vue normalizes a `style` prop into one object before the walker runs.
 const INLINE_TEXT_PROPERTIES = new Set(['font', 'material', 'textStyle']);
 
-/** Boundaries are JOIN offsets in the concatenated text; when a JOIN fuses a grapheme cluster across children, `resolveRangesToClusters` gives the fused cluster the earlier child's style. */
+/** Boundaries are JOIN offsets in the concatenated text; when a JOIN fuses a grapheme cluster across children, the shared cluster alignment gives the fused cluster the earlier child's style. */
 export function flattenVueText(
   children: VNodeArrayChildren | string | number | undefined | null,
   options: FlattenVueTextOptions,
@@ -107,7 +107,7 @@ export function flattenVueText(
   const text = chunks.join('');
   return Object.freeze({
     text,
-    spans: Object.freeze(resolveRangesToClusters(text, spans)),
+    spans: ownClusterAlignedSpans(text, spans),
     fontFaces: Object.freeze(fontFaces),
   });
 }
@@ -143,7 +143,7 @@ function camelize(key: string): string {
 }
 
 function inlineProperties(properties: StatedInlineProperties, inherited: InlineProperties): InlineProperties {
-  const statedStyle = snapshotPropertyList(properties.textStyle, 'nested Text textStyle');
+  const statedStyle = snapshotReactivePropertyList(properties.textStyle, 'nested Text textStyle');
   const style =
     Object.keys(statedStyle).length === 0 ? inherited.style : Object.freeze({ ...inherited.style, ...statedStyle });
   const font = properties.font ?? inherited.font;

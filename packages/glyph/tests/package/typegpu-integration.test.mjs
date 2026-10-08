@@ -36,7 +36,7 @@ function recordingHost() {
   const allocations = new Set();
   const recorded = [];
   const uploads = [];
-  const stats = { allocations: 0, preparations: 0, reject: false };
+  const stats = { allocations: 0, preparations: 0, publications: 0, uniformWrites: 0, reject: false };
   function buffer(size, usage = 0) {
     const value = {
       bytes: new Uint8Array(size),
@@ -57,6 +57,7 @@ function recordingHost() {
         buffer: allocation,
         value: [0, 0],
         write(value) {
+          stats.uniformWrites++;
           this.value = [...value];
         },
       };
@@ -79,6 +80,7 @@ function recordingHost() {
     ...base,
     renderer: ({ defaultRenderer }) => ({
       decode(frame) {
+        stats.publications++;
         const prepared = defaultRenderer.decode(frame);
         if (stats.reject) {
           prepared.discard();
@@ -342,13 +344,37 @@ test('TypeGPU roots consume real engine output, retain idle draws and isolate na
     overlay.draw({}, { width: 640, height: 240 });
     assert.deepEqual(host.recorded[0].position, [100, 80]);
     host.recorded.length = 0;
+    const publicationCount = host.stats.publications;
+    const uniformWriteCount = host.stats.uniformWrites;
+    host.stats.reject = true;
+    text.update({ position: [36, 48] });
+    assert.equal(host.stats.uniformWrites, uniformWriteCount + 1);
+    text.update({ position: [36, 48] });
+    text.update({});
+    assert.equal(host.stats.uniformWrites, uniformWriteCount + 1, 'unchanged positions do not touch the uniform');
+    assert.doesNotThrow(() => glyph.shape(), 'position-only updates must not enter semantic publication');
+    assert.equal(host.stats.publications, publicationCount, 'position-only updates leave the semantic root idle');
+    handle.draw({}, { width: 640, height: 240 });
+    assert.deepEqual(host.recorded[0].position, [36, 48]);
+    const moved = host.recorded.splice(0);
+    host.stats.reject = false;
     glyph.shape();
     handle.draw({}, { width: 640, height: 240 });
-    assert.deepEqual(host.recorded.splice(0), first);
+    assert.deepEqual(host.recorded.splice(0), moved);
+    const writesBeforeRejectedUpdate = host.stats.uniformWrites;
+    assert.throws(
+      () => text.update({ constraints: { width: { mode: 'at-most', size: NaN } }, position: [72, 96] }),
+      /width/i,
+    );
+    assert.equal(
+      host.stats.uniformWrites,
+      writesBeforeRejectedUpdate,
+      'failed semantic updates cannot move accepted text',
+    );
     assert.throws(() => text.update({ constraints: { width: { mode: 'at-most', size: NaN } } }), /width/i);
     assert.throws(() => text.update({ position: [NaN, 0] }), /position/);
     handle.draw({}, { width: 640, height: 240 });
-    assert.deepEqual(host.recorded.splice(0), first, 'rejected caller input preserves the accepted frame');
+    assert.deepEqual(host.recorded.splice(0), moved, 'rejected caller input preserves the accepted frame');
     text.update({ text: 'Updated', position: [36, 48] });
     glyph.shape();
     handle.draw({}, { width: 640, height: 240 });

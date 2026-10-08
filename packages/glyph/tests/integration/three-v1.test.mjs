@@ -351,6 +351,8 @@ test('Text renderOrder ranks grouped paragraphs while standalone Text keeps Thre
   };
 
   const authored = groupedSequence();
+  const transforms = rootDraws(scene)[0].geometry.getAttribute('_pmndrsGlyphTransforms');
+  const transformVersion = transforms.version;
   const minimum = labels[0].boundingBox.min;
   const setMinimum = minimum.set;
   let boundingBoxPublications = 0;
@@ -375,6 +377,11 @@ test('Text renderOrder ranks grouped paragraphs while standalone Text keeps Thre
   );
   assert.equal(instrumentedGlyph.measureCrossings, 0, 'order-only publication reuses measurements');
   assert.equal(boundingBoxPublications, 0, 'order-only publication does not republish cached bounds');
+  assert.equal(
+    transforms.version,
+    transformVersion,
+    'order-only publication leaves the retained transform storage untouched',
+  );
   assert.deepEqual(
     instrumentedGlyph.latestParagraphMutations(),
     [],
@@ -395,6 +402,8 @@ test('Text renderOrder ranks grouped paragraphs while standalone Text keeps Thre
   labels[0].renderOrder = 0;
   labels[1].renderOrder = 1;
   labels[2].renderOrder = 2;
+  labels[0].position.x = 7;
+  const transformVersionBeforeMixedUpdate = transforms.version;
   instrumentedGlyph.reset();
   scene.updateMatrixWorld(true);
   assert.deepEqual(groupedSequence(), authored, 'the aggregate draw survives a reverse-order round trip');
@@ -402,6 +411,16 @@ test('Text renderOrder ranks grouped paragraphs while standalone Text keeps Thre
     instrumentedGlyph.latestPlanCounts(),
     { buffers: 0, draws: 0, patches: 9, primitives: 0, resources: 0, retirements: 0 },
     'the reverse-order round trip also stays patch-only',
+  );
+  assert.equal(
+    transforms.version,
+    transformVersionBeforeMixedUpdate + 1,
+    'the ordinary transform synchronizer uploads one mixed transform-and-order frame',
+  );
+  assert.equal(
+    transforms.array[authored[0] * 16 + 12],
+    7,
+    'the order-only publication does not suppress a transform changed in the same frame',
   );
 
   const loose = three.createText({ font, text: 'D' });
@@ -500,6 +519,137 @@ test('rank-only updates republish bindings for direct paragraph transforms', asy
   }
 });
 
+test('patch-only publications retain direct transform synchronization', async (t) => {
+  const three = await createThreeTestHandle(t, defineThreeConfig({ transformMode: 'direct' }));
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const label = three.createText({
+    constraints: { width: { mode: 'exact', size: 200 } },
+    font,
+    layout: { wrap: 'word' },
+    text: 'one two three four',
+  });
+  scene.add(label);
+  scene.updateMatrixWorld(true);
+
+  try {
+    const draw = rootDraws(scene)[0];
+    label.position.x = 42;
+    label.constraints = { ...label.constraints, width: { mode: 'exact', size: 60 } };
+    instrumentedGlyph.reset();
+    scene.updateMatrixWorld(true);
+    assert.equal(rootDraws(scene)[0], draw, 'a width-only reflow keeps the direct draw');
+    assert.equal(instrumentedGlyph.latestPlanCounts().draws, 0, 'the width-only reflow remains patch-only');
+    assert.equal(draw.matrix.elements[12], 42, 'the direct draw receives the transform changed in the same frame');
+
+    label.visible = false;
+    label.constraints = { ...label.constraints, width: { mode: 'exact', size: 80 } };
+    instrumentedGlyph.reset();
+    scene.updateMatrixWorld(true);
+    assert.equal(
+      instrumentedGlyph.latestPlanCounts().draws,
+      0,
+      'visibility with a width-only reflow remains patch-only',
+    );
+    assert.equal(draw.visible, false, 'the retained direct draw receives visibility changed in the same frame');
+  } finally {
+    label.dispose();
+    font.dispose();
+  }
+});
+
+test('patch-only publications refresh a standalone Text added after the publication root', async (t) => {
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+
+  try {
+    for (const transformMode of ['indexed', 'direct']) {
+      await t.test(transformMode, async (subtest) => {
+        const three = await createThreeTestHandle(subtest, defineThreeConfig({ transformMode }));
+        const scene = new THREE.Scene();
+        const first = three.createText({ font, text: 'A' });
+        scene.add(first);
+        scene.updateMatrixWorld(true);
+
+        const late = three.createText({
+          constraints: { width: { mode: 'exact', size: 200 } },
+          font,
+          layout: { wrap: 'word' },
+          text: 'one two three four',
+        });
+        late.position.x = 7;
+        scene.add(late);
+        scene.updateMatrixWorld(true);
+
+        try {
+          const draws = rootDraws(scene);
+          let visibleX;
+          if (transformMode === 'direct') {
+            const draw = draws.find((candidate) => candidate.matrix.elements[12] === 7);
+            assert.ok(draw, 'the late Text owns one direct draw at its accepted transform');
+            visibleX = () => draw.matrix.elements[12];
+          } else {
+            const transforms = draws[0].geometry.getAttribute('_pmndrsGlyphTransforms');
+            const transformId = Array.from({ length: transforms.array.length / 16 }, (_, index) => index).find(
+              (index) => transforms.array[index * 16 + 12] === 7,
+            );
+            assert.notEqual(
+              transformId,
+              undefined,
+              'the late Text owns one indexed transform at its accepted position',
+            );
+            visibleX = () => transforms.array[transformId * 16 + 12];
+          }
+
+          late.position.x = 42;
+          late.constraints = { ...late.constraints, width: { mode: 'exact', size: 60 } };
+          instrumentedGlyph.reset();
+          scene.updateMatrixWorld(true);
+
+          assert.equal(instrumentedGlyph.latestPlanCounts().draws, 0, 'the width-only reflow remains patch-only');
+          assert.equal(visibleX(), 42, 'the late Text transform becomes visible in the accepting scene traversal');
+        } finally {
+          late.dispose();
+          first.dispose();
+        }
+      });
+    }
+  } finally {
+    font.dispose();
+  }
+});
+
+test('manual shaping preserves sibling Text transforms during draw replacement', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const label = three.createText({ font, text: 'A' });
+  scene.add(label);
+  scene.updateMatrixWorld(true);
+
+  try {
+    scene.matrixWorldAutoUpdate = false;
+    label.position.x = 11;
+    label.updateMatrix();
+    label.updateWorldMatrix(true, false);
+    label.text = 'A much longer replacement paragraph';
+    instrumentedGlyph.reset();
+    glyph.shape();
+    assert.ok(instrumentedGlyph.latestPlanCounts().draws > 0, 'the edit replaces the draw publication');
+    const draw = rootDraws(scene)[0];
+    const transformIndices = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id));
+    const transformId = transformIndices.getX(draw.userData.pmndrsGlyphRunStart);
+    const transforms = draw.geometry.getAttribute('_pmndrsGlyphTransforms');
+    assert.equal(
+      transforms.array[transformId * 16 + 12],
+      11,
+      'manual publication resolves visibility through the application scene rather than the private draw root',
+    );
+  } finally {
+    label.dispose();
+    font.dispose();
+  }
+});
+
 test('an unstated TextGroup keeps child paragraph ranks out of Three material keys', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
@@ -527,8 +677,8 @@ test('Rust ranks interleaved TextGroup scopes only within their stable root slot
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
-  const firstGroup = three.createTextGroup({ renderOrder: 4 });
-  const secondGroup = three.createTextGroup({ renderOrder: 4 });
+  const firstGroup = three.createTextGroup({ batching: 'shared', renderOrder: 4 });
+  const secondGroup = three.createTextGroup({ batching: 'shared', renderOrder: 4 });
   const firstA = three.createText({ font, text: 'A' });
   const secondA = three.createText({ font, text: 'B' });
   const firstB = three.createText({ font, text: 'C' });
@@ -611,6 +761,169 @@ test('Rust ranks interleaved TextGroup scopes only within their stable root slot
   firstGroup.dispose();
   secondGroup.dispose();
   font.dispose();
+});
+
+test('automatic sibling TextGroups own draws while shared siblings recover 0.1.0 coalescing', async (t) => {
+  const three = await createThreeTestHandle(t);
+  assert.throws(
+    () => three.createTextGroup({ batching: 'isolated' }),
+    /TextGroup batching must be "auto", "shared", or "group"/,
+  );
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const first = three.createTextGroup();
+  const second = three.createTextGroup();
+  const firstLabel = three.createText({ font, text: 'A' });
+  const secondLabel = three.createText({ font, text: 'B' });
+  first.add(firstLabel);
+  second.add(secondLabel);
+  scene.add(first, second);
+  scene.updateMatrixWorld(true);
+
+  try {
+    const automaticDraws = rootDraws(scene);
+    assert.equal(automaticDraws.length, 2, 'each top-level automatic group owns one compatible draw');
+    assert.deepEqual(
+      automaticDraws.map((draw) => draw.userData.pmndrsGlyphBatchScope),
+      [first, second],
+      'automatic sibling draws preserve authored group order',
+    );
+    assert.equal(automaticDraws[0].material, automaticDraws[1].material, 'split draws reuse one realized material');
+    assert.deepEqual(
+      automaticDraws.map((draw) => draw.renderOrder),
+      [0, 1],
+      'split draws receive stable authored-order submission ranks',
+    );
+
+    first.batching = 'shared';
+    second.batching = 'shared';
+    scene.updateMatrixWorld(true);
+    assert.equal(rootDraws(scene).length, 1, 'shared restores the globally coalesced 0.1.0 draw topology');
+  } finally {
+    firstLabel.dispose();
+    secondLabel.dispose();
+    first.dispose();
+    second.dispose();
+    font.dispose();
+  }
+});
+
+test('TextGroup batching resolves automatic roots, shared structure, and explicit nested boundaries', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const first = three.createTextGroup();
+  const nestedAuto = three.createTextGroup();
+  const nestedGroup = three.createTextGroup({ batching: 'group' });
+  const second = three.createTextGroup();
+  const sharedA = three.createTextGroup({ batching: 'shared' });
+  const sharedB = three.createTextGroup({ batching: 'shared' });
+  const labels = Array.from({ length: 6 }, (_, index) => three.createText({ font, text: String(index) }));
+  nestedAuto.add(labels[1]);
+  nestedGroup.add(labels[2]);
+  first.add(labels[0], nestedAuto, nestedGroup);
+  second.add(labels[3]);
+  sharedA.add(labels[4]);
+  sharedB.add(labels[5]);
+  scene.add(first, second, sharedA, sharedB);
+  scene.updateMatrixWorld(true);
+
+  try {
+    const initialDraws = rootDraws(scene);
+    assert.equal(
+      initialDraws.length,
+      4,
+      'two automatic roots, one explicit nested group, and one implicit shared scope own four draws',
+    );
+    assert.equal(first.batching, 'auto');
+    const firstBoundaryDraws = initialDraws.filter(
+      (draw) => draw.userData.pmndrsGlyphBatchScope === first || draw.userData.pmndrsGlyphBatchScope === nestedGroup,
+    );
+    assert.equal(firstBoundaryDraws.length, 2, 'the automatic root and explicit descendant own separate draw scopes');
+    instrumentedGlyph.reset();
+    first.visible = false;
+    scene.updateMatrixWorld(true);
+    assert.equal(instrumentedGlyph.crossings, 0, 'group visibility does not enter Wasm or rebuild the display list');
+    assert.deepEqual(rootDraws(scene), initialDraws, 'group visibility preserves every realized mesh');
+    assert.ok(
+      firstBoundaryDraws.every((draw) => !draw.visible),
+      'ancestor visibility suppresses owned draw scopes',
+    );
+    assert.equal(
+      rootDraws(scene).filter((draw) => draw.visible).length,
+      2,
+      'hiding an automatic root suppresses its draw and every explicit descendant boundary',
+    );
+    instrumentedGlyph.reset();
+    first.visible = true;
+    scene.updateMatrixWorld(true);
+    assert.equal(instrumentedGlyph.crossings, 0, 'restoring group visibility remains renderer-owned');
+    assert.deepEqual(rootDraws(scene), initialDraws, 'restoring visibility reuses the same meshes and buffers');
+    assert.ok(
+      firstBoundaryDraws.every((draw) => draw.visible),
+      'restoring the ancestor restores each owned draw scope',
+    );
+    nestedGroup.batching = 'shared';
+    scene.updateMatrixWorld(true);
+    assert.equal(rootDraws(scene).length, 3, 'a shared nested group rejoins its automatic root draw scope');
+  } finally {
+    for (const label of labels) label.dispose();
+    for (const group of [nestedAuto, nestedGroup, first, second, sharedA, sharedB]) group.dispose();
+    font.dispose();
+  }
+});
+
+test('a hidden automatic TextGroup never exposes its first realized draw', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const label = three.createText({ font, text: 'hidden' });
+  group.visible = false;
+  group.add(label);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+
+  try {
+    const draws = rootDraws(scene);
+    assert.equal(draws.length, 1);
+    assert.equal(draws[0].userData.pmndrsGlyphBatchScope, group);
+    assert.equal(draws[0].visible, false, 'the first publication observes authored ancestor visibility');
+  } finally {
+    label.dispose();
+    group.dispose();
+    font.dispose();
+  }
+});
+
+test('a reused hidden boundary draw becomes visible after joining the shared pool', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const label = three.createText({ font, text: 'reused' });
+  group.add(label);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+
+  try {
+    const [draw] = rootDraws(scene);
+    assert.ok(draw);
+    group.visible = false;
+    scene.updateMatrixWorld(true);
+    assert.equal(draw.visible, false);
+
+    group.batching = 'shared';
+    group.visible = true;
+    scene.updateMatrixWorld(true);
+    const [reused] = rootDraws(scene);
+    assert.equal(reused, draw, 'changing scope reuses the compatible mesh');
+    assert.equal(reused.visible, true, 'a scope-less reused draw cannot retain hidden boundary state');
+  } finally {
+    label.dispose();
+    group.dispose();
+    font.dispose();
+  }
 });
 
 test('a root releases its renderer publication when its final Text is disposed', async (t) => {
@@ -2555,6 +2868,20 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   assert.equal(left.measure(), initialLeftMeasurement, 'an unchanged plain string must preserve cached measurement');
   scene.updateMatrixWorld();
   assert.equal(instrumented.crossings, 0, 'an unchanged plain string must not cross into Rust');
+
+  instrumented.reset();
+  const unchangedCommit = left.commitState();
+  left.style = { ...left.style };
+  left.layout = { ...left.layout };
+  left.constraints = { ...left.constraints };
+  assert.equal(
+    left.measure(),
+    initialLeftMeasurement,
+    'equivalent normalized properties must preserve cached measurement',
+  );
+  scene.updateMatrixWorld();
+  assert.equal(instrumented.crossings, 0, 'equivalent normalized properties must not cross into Rust');
+  assert.deepEqual(left.commitState(), unchangedCommit, 'a semantic no-op must preserve the committed revision');
 
   // Assigning `text` states the desired string. Publication derives the narrowest scalar-aligned
   // replacement from the last published string, coalescing intermediate desired states.

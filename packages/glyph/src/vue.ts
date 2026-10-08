@@ -29,18 +29,12 @@ import {
   type FontFaceRasterOf,
   type FontFaceSource,
 } from './font-face.js';
-import type { FormattedText } from './formatted-text.js';
+import { inheritClusterAlignedSpans, type FormattedText } from './formatted-text.js';
 import type { Font } from './font.js';
 import { glyph } from './glyph.js';
 import { GlyphFontError } from './loader.js';
 import type { FontSelection, FontStack } from './loaded-font.js';
-import {
-  applyTextGroupOptions,
-  desiredTextUpdate,
-  sameDesiredText,
-  snapshotProperty,
-  snapshotPropertyList,
-} from './internal/desired-text.js';
+import { applyTextGroupOptions, desiredTextUpdate } from './internal/desired-text.js';
 import { fontResourceKey } from './internal/font-resource-key.js';
 import type { Constraints, ParagraphLayout, PropertyList, TextFlow, TextStyle } from './text-properties.js';
 import type { RasterFormatMetadata } from './config/raster-format.js';
@@ -64,6 +58,7 @@ import {
 import {
   threeRootHost,
   threeTextConstructionToken,
+  updateTextFromFramework,
   type TextSpan as ThreeTextSpanRecord,
   type ThreeRootHost,
 } from './three/text.js';
@@ -72,6 +67,7 @@ import {
   type PendingFlattenedVueText,
   type VueFontSelectionInput,
 } from './vue/internal/flatten-slots.js';
+import { snapshotReactiveProperty, snapshotReactivePropertyList } from './vue/internal/property-snapshot.js';
 
 // Private catalogue tags so Tres can `new target(...args)` and `remove()` the retained Three classes; applications
 // use the wrapper components, never the tags.
@@ -616,9 +612,15 @@ function createFontLeases() {
   };
 }
 
-type DesiredVueText = Partial<StandaloneTextProperties<RasterFormatMetadata>> & {
+type DesiredVueText = Omit<
+  Partial<StandaloneTextProperties<RasterFormatMetadata>>,
+  'constraints' | 'layout' | 'style'
+> & {
   readonly font: FontSelection<RasterFormatMetadata>;
   readonly text: FormattedText<RasterFormatMetadata>;
+  readonly constraints: Constraints;
+  readonly layout: ParagraphLayout;
+  readonly style: TextStyle;
 };
 
 type TextConstructorArguments = readonly [
@@ -631,7 +633,6 @@ type TextConstructorArguments = readonly [
 interface TextPublication {
   readonly key: string;
   readonly args: TextConstructorArguments;
-  applied: DesiredVueText;
 }
 
 const textPropDefinitions = {
@@ -669,11 +670,7 @@ export const Text: TextComponent = defineComponent({
     const apply = (): void => {
       const object = instance.value;
       if (object === undefined || publication === undefined || desired === undefined) return;
-      if (!sameDesiredText(publication.applied, desired)) {
-        object.set(desiredTextUpdate(desired));
-        publication.applied = desired;
-        invalidate();
-      }
+      if (updateTextFromFramework(object, desiredTextUpdate(desired))) invalidate();
       leases.prune(desiredSelections);
     };
     onMounted(apply);
@@ -698,7 +695,7 @@ export const Text: TextComponent = defineComponent({
         const loaded = new Map<FontFaceSelection, Font<RasterFormatMetadata>>();
         for (const selection of selections) loaded.set(selection, leases.acquire(handle, selection));
         desiredSelections = new Set(selections);
-        desired = desiredText(props, outerFont, flattened, loaded);
+        desired = desiredText(props, outerFont, flattened, loaded, desired);
 
         const key = `${rootId(root)}:${props.pixelSnapping === true ? 'pixel-snapped' : 'unsnapped'}`;
         if (publication?.key !== key) {
@@ -706,7 +703,6 @@ export const Text: TextComponent = defineComponent({
           publication = {
             key,
             args: [threeTextConstructionToken, desired, [], threeRootHost(root)],
-            applied: desired,
           };
         }
       }
@@ -754,18 +750,22 @@ function desiredText(
   outerFont: FontSelection<RasterFormatMetadata> | FontFaceSelection,
   flattened: PendingFlattenedVueText,
   loaded: ReadonlyMap<FontFaceSelection, Font<RasterFormatMetadata>>,
+  previous?: DesiredVueText,
 ): DesiredVueText {
   const spans = flattened.spans.map((span): ThreeTextSpanRecord<RasterFormatMetadata> => {
     const { font, ...properties } = span;
-    return font === undefined ? properties : Object.freeze({ ...properties, font: loadedFont(font, loaded) });
+    return Object.freeze({ ...properties, ...(font === undefined ? {} : { font: loadedFont(font, loaded) }) });
   });
   return Object.freeze({
     font: loadedFont(outerFont, loaded),
-    text: Object.freeze({ text: flattened.text, spans: Object.freeze(spans) }) as FormattedText<RasterFormatMetadata>,
-    style: snapshotPropertyList(props.textStyle, 'Text style'),
-    layout: snapshotPropertyList(props.layout, 'Text layout'),
-    constraints: snapshotPropertyList(props.constraints, 'Text constraints'),
-    ...(props.flow === undefined ? {} : { flow: snapshotProperty(props.flow) }),
+    text: Object.freeze({
+      text: flattened.text,
+      spans: inheritClusterAlignedSpans(flattened.text, flattened.spans, spans),
+    }) as FormattedText<RasterFormatMetadata>,
+    style: snapshotReactivePropertyList(props.textStyle, 'Text style', previous?.style),
+    layout: snapshotReactivePropertyList(props.layout, 'Text layout', previous?.layout),
+    constraints: snapshotReactivePropertyList(props.constraints, 'Text constraints', previous?.constraints),
+    ...(props.flow === undefined ? {} : { flow: snapshotReactiveProperty(props.flow, previous?.flow) }),
     ...(props.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: props.rasterPixelRatio }),
     ...(props.material === undefined ? {} : { material: props.material }),
     ...(props.pixelSnapping === undefined ? {} : { pixelSnapping: props.pixelSnapping }),
@@ -779,6 +779,7 @@ export const TextGroup: TextGroupComponent = defineComponent({
   name: 'GlyphTextGroup',
   inheritAttrs: false,
   props: {
+    batching: { type: String as PropType<TextGroupOptions['batching']>, required: false },
     renderOrder: { type: Number, required: false },
     material: { type: null as unknown as PropType<ThreeTextMaterial>, required: false },
     pixelSnapping: { type: null as unknown as PropType<boolean>, required: false },
@@ -816,6 +817,7 @@ export const TextGroup: TextGroupComponent = defineComponent({
           args: [
             threeTextConstructionToken,
             {
+              ...(props.batching === undefined ? {} : { batching: props.batching }),
               ...(props.renderOrder === undefined ? {} : { renderOrder: props.renderOrder }),
               ...(props.material === undefined ? {} : { material: props.material }),
               ...(props.pixelSnapping === undefined ? {} : { pixelSnapping: props.pixelSnapping }),
