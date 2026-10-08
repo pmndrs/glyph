@@ -1153,6 +1153,11 @@ Direct TypeGPU text owns its position coordinates separately from semantic text 
 uniform without staging a semantic publication; unchanged coordinates do not write it again. Mixed updates validate
 and stage semantic changes before moving the uniform, so rejected caller input preserves the accepted position.
 
+Planner frames are prepared as validated records and written directly into the retained Wasm request arena, including
+paragraph queries. The writer respects the arena view's byte offset and clears reused storage before encoding. Query
+requests retain minimal text mutations; removal requests include only paragraphs previously published. Output growth
+invalidates prior borrowed results and rewrites the request before retrying, preserving the existing acceptance fence.
+
 ## Legacy-path and duplication audit
 
 The Rust command buffer is the only glyph-packing implementation. Rust is also the production authority for Unicode
