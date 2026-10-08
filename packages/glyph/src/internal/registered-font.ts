@@ -1,4 +1,5 @@
 import type { RegisteredFont } from '../font.js';
+import type { GlyphOutlineStore } from '../glyph-outline.js';
 import type { Fingerprint } from '../identity.js';
 import type { JsonValue, RasterReference, RasterResourceResolver } from '../raster.js';
 
@@ -51,6 +52,8 @@ export interface RegisteredFontData {
   readonly shapingSfnt: Uint8Array;
   readonly glyphExtents: Uint8Array;
   readonly glyphExtentsAvailability: Uint8Array;
+  /** Every glyph outline, decoded once when the font loaded; a later outlined bake of the same font adds it. */
+  glyphOutlines?: GlyphOutlineStore;
   readonly rasterSources: Map<string, RegisteredRasterSourceData>;
   /** Authenticated external resources shared by every raster through canonical content identity. */
   readonly resources: Map<string, RegisteredRasterResourceData>;

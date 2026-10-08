@@ -4,6 +4,7 @@ import {
 } from './font-baker/contract.js';
 
 import type { Font, FontBytesInput, FontInput, FontMetrics, RegisteredFont } from './font.js';
+import type { GlyphOutlineStore } from './glyph-outline.js';
 import { GlyphError } from './glyph-error.js';
 import {
   createImmutableFontBacking,
@@ -282,10 +283,27 @@ export class FontRegistry {
       );
     }
     const shapingFingerprint = artifact.shapingFingerprint;
+    // Registration below stays synchronous, so concurrent loads of one font still register it once.
+    let glyphOutlines: GlyphOutlineStore | undefined;
+    if (artifact.glyphOutlines !== undefined) {
+      try {
+        const { decodeGlyphOutlineStore } = await import('./internal/text-shaper-module.js');
+        glyphOutlines = await decodeGlyphOutlineStore(
+          artifact.glyphOutlines,
+          integer(metricsValue.glyphCount, 'metrics.glyphCount'),
+        );
+      } catch (error) {
+        throw validationError('INVALID_FONT_ASSET', 'font artifact outlines could not be decoded', error);
+      }
+    }
     const existing = this.#fontsByFingerprint.get(shapingFingerprint);
     if (existing !== undefined) {
       existing.assertActive();
       assertMatchingShapingShape(existing, artifact);
+      const existingData = getRegisteredFontData(existing);
+      if (existingData.glyphOutlines === undefined && glyphOutlines !== undefined) {
+        existingData.glyphOutlines = glyphOutlines;
+      }
       mergeRasterSources(existing, binaryBytes, document, views, references, context.artifactUrl, context.fetch);
       mergeSourceContext(existing, sourceFingerprint, context);
       return existing;
@@ -332,6 +350,7 @@ export class FontRegistry {
       shapingSfnt: artifact.shapingSfnt,
       glyphExtents: artifact.glyphExtents,
       glyphExtentsAvailability: artifact.glyphExtentsAvailability,
+      ...(glyphOutlines === undefined ? {} : { glyphOutlines }),
       rasterSources,
       resources: new Map(),
       unicodeVersion: string(provenance.unicodeVersion, 'provenance.unicodeVersion'),

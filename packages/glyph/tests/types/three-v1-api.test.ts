@@ -8,6 +8,7 @@ import {
   type Font,
   type FontFaceTransfer,
   type BorrowedGlyph,
+  type GlyphOutlineContour,
   type SerializedFontFace,
 } from '../../src/index.js';
 import { bitmap } from '../../src/raster/bitmap.js';
@@ -208,6 +209,15 @@ labels.add(three.createText({ font: mtsdfFont, text: 'Mixed technique' }));
 const [detachedGlyphs, detachedDecorations] = label.breakApart();
 detachedGlyphs satisfies Glyphs;
 detachedDecorations satisfies Decorations | undefined;
+detachedGlyphs.outlineAt(0) satisfies GlyphOutlineContour[];
+// @ts-expect-error Renderer record state is private.
+void detachedGlyphs.glyphAt(0).drawn;
+detachedGlyphs.glyphAt(0).fontHandle satisfies number;
+detachedGlyphs.glyphAt(0).glyphId satisfies number;
+// @ts-expect-error The font id is a plain number, not a branded FontHandle.
+detachedGlyphs.glyphAt(0).fontHandle satisfies import('../../src/identity.js').FontHandle;
+// @ts-expect-error Detached source-layout mapping stays private.
+void detachedGlyphs.glyphAt(0).sourceIndex;
 void detachedGlyphs;
 void detachedDecorations;
 // @ts-expect-error Detached glyph branches are created only by Text.breakApart().

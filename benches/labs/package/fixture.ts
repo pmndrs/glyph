@@ -1,6 +1,7 @@
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type * as ThreeTypes from 'three/webgpu';
@@ -38,6 +39,42 @@ export const fredokaFont = glyph.fontFace(new Blob([new Uint8Array(fredokaBytes)
   format: bitmap({ strikes: [16] }),
 });
 await fredokaFont.load();
+
+/**
+ * Inter baked with outlines by the package under test, or `undefined` when that package predates `outlineAt()`, so a
+ * baseline without outlines skips the outline benches instead of timing a plain font under their names.
+ */
+export async function loadOutlinedFont(): Promise<typeof font | undefined> {
+  const probe = createParagraph('Probe');
+  const supported = typeof (probe.paragraph.glyphs() as { outlineAt?: unknown }).outlineAt === 'function';
+  disposeParagraph(probe);
+  if (!supported) return undefined;
+  const [{ bakeFont }, { bitmapBaker }] = await Promise.all([
+    import(pathToFileURL(resolve(packageRoot!, 'dist/node/bake.js')).href) as Promise<
+      typeof import('@pmndrs/glyph/bake')
+    >,
+    import(pathToFileURL(resolve(packageRoot!, 'dist/bakers/bitmap.js')).href) as Promise<
+      typeof import('@pmndrs/glyph/bakers/bitmap')
+    >,
+  ]);
+  const directory = await mkdtemp(join(tmpdir(), 'glyph-labs-outlines-'));
+  try {
+    const output = join(directory, 'inter-outlines.font.glb');
+    await bakeFont({
+      input: new URL('../../fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url),
+      output,
+      font: { fontFaceIndex: 0, outlines: true },
+      rasters: [{ baker: bitmapBaker, packaging: { artifact: 'embedded' }, options: { strikes: [16] } }],
+    });
+    const outlined = glyph.fontFace(new Blob([new Uint8Array(await readFile(output))], { type: 'model/gltf-binary' }), {
+      format: bitmap({ strikes: [16] }),
+    });
+    await outlined.load();
+    return outlined;
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
 
 const paragraphSource = [
   'Typography is a moving system. AVATAR To Wa Yo repeat familiar kerning pairs while a responsive panel changes the space around them.',

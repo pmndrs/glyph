@@ -767,6 +767,72 @@ the selected font formats at the call that accepts a style, so an unsupported ef
 silently degraded command buffer. The semantic ABI carries effect color, width, offset, and inherited opacity only for
 raster programs that opt in.
 
+## Glyph outlines
+
+Glyph geometry for colliders, extrusion, or other CPU consumers is core-font data, not raster data ([glyph outlines](../planning/decisions/glyph-outlines.md)).
+`glyph bake --outlines` and Node `bakeFont({ font: { outlines: true } })` keep the face's own outline tables, `glyf`
+with `loca` or `CFF `, unchanged in a small SFNT beside `head` and `maxp`, stored as one optional `PMNDRS_font.outlines`
+buffer view. The object's presence is the flag, and the CLI's up-to-date check treats a change of flag as stale. The view
+is outside `shaping.fingerprint`, so outlines change no raster's compatibility. Only an outlined bake writes
+`PMNDRS_font` version 1; a bake without outlines still writes version 0, byte-identical to earlier bakes. A face without
+outline tables, such as a bitmap-only face, fails an outline bake with `MISSING_TABLE`, and a CFF2 face fails with
+`UNSUPPORTED_OUTLINE_FORMAT`. Outlines cost about the face's own outline tables: 0.46 to 0.94 times the source file
+across the fixture faces (Inter adds 226 KB to 412 KB; Noto Sans CJK JP adds 15.5 MB to 16.5 MB).
+
+An outline describes a glyph ID of a font, not one placement, in em units (1 is the font size) with y down and the
+origin at the pen position on the baseline, like every box the layout publishes. A caller places a point at
+`glyph.x + ex * glyph.fontSize`, `glyph.y + ey * glyph.fontSize`; equal `fontHandle` and `glyphId` mean equal outlines, so
+a caller can cache one shape per key. A fallback glyph reads from the font that shaped it. Every read path throws a
+`TypeError` for a glyph whose font has no outlines; outlines are optional today and planned to become required.
+
+- **Borrowed:** `text.withGlyphs((glyphs) => glyphs.outlineAt(index, target?))` returns a `GlyphOutlineView` of
+  `fontHandle`, `glyphId`, and typed-array views over the font's decoded store: endpoint-shared `points` (segment `s` of
+  contour `c` uses points `2s + c` through `2s + c + 2`), `contourEnds` (exclusive end of each contour, as a segment
+  index), and `segmentLines` (`1` for a line, `0` for a quadratic). A `target` is refilled and returned, which saves only
+  the holder. The views are documented as valid only inside the callback, which keeps the freedom to back them with engine
+  memory again.
+- **Owned:** `text.glyphs().outlineAt(index)` returns caller-owned `GlyphOutlineContour[]` of
+  `[x0, y0, cx, cy, x1, y1, isLine]` tuples built from the same store, so both paths agree. It is a non-enumerable method
+  on the copied inspection, so the columns still spread, compare, and structured-clone as plain data. The copy keeps its
+  fonts' stores, so a read makes no engine call and survives the font's and the handle's disposal. A glyph's frozen tuples
+  are built on first read and shared by every later one.
+- **Detached:** `Glyphs.outlineAt(index)` answers `text.glyphs().outlineAt(index)` from the inspection `breakApart()`
+  retained ([detached glyph copies](#root-assisted-detached-glyph-copies)).
+
+A line keeps its midpoint as its control point, so code that ignores the flag still draws it. Contours keep the source
+order and winding for nonzero filling, and blank glyphs return no contours.
+
+**Decoding.** The shaper decodes with read-fonts, which HarfRust already links: TrueType simple and composite glyphs
+follow Skrifa's FreeType-style unscaled loader, and CFF uses read-fonts' charstring evaluator. A TrueType glyph nests
+composites at most 32 levels deep and places at most 65,535 components and 65,535 points, so a crafted font cannot make a
+decode unbounded. TrueType outlines are exact; each CFF cubic becomes Slug's `DEFAULT_CUBIC_SUBDIVISIONS` (four)
+equal-parameter quadratics through its shared split, within about 1.15 font units on the CFF fixtures. The decoder writes
+em-space `f32` points with the contour ends and line flags into one word-aligned result. The decoder adds 64,956 raw bytes
+(24,677 gzip) to `text-shaper.wasm`; Skrifa's outline drawing measured 97 KB gzip in the same shaper and cannot be
+trimmed by feature. `font-baker.wasm` draws no outlines: the bake validator decodes every glyph with the runtime decoder,
+so a bake cannot ship an outline the runtime would refuse. Variation axes and a runtime-bake outline option are not
+implemented.
+
+**Loading.** The loader decodes every glyph behind the load promise, where the artifact fetch already dominates, into one
+store the font owns: the columns of every glyph's view back to back plus a per-glyph offset table. A read is then plain
+data with no engine memory, and a later outlined bake of a font that first loaded without outlines adds its store to the
+deduplicated font. The decode runs in a fresh shaper instance compiled from the module the engine shared, so a
+caller-supplied `glyph.init({ wasm })` decodes too, or from the default module when a font loads before the engine
+starts. Natively over every glyph: Inter 2,937 glyphs in 3.6 ms to 1.37 MB, Source Serif 4 2.1 ms to 0.85 MB, Font
+Awesome 3.9 ms to 1.62 MB, Amiri 6,710 glyphs in 13.3 ms to 5.06 MB, and Noto Sans CJK JP 65,535 glyphs in 757 ms to
+129 MB. The planned triplet stream (#244) replaces this with a faster decode into a smaller i16 store.
+
+**Evidence.** Rust tests compare every glyph of all nine fixture faces, TrueType and CFF, segment for segment with
+Skrifa, including composites rewritten to matched-point anchors and scaled offsets and contours that start off-curve, and
+check the endpoint-shared layout, contour ends, line flags, midpoint controls, and em-space y-down points of Inter, Font
+Awesome, and Dancing Script. Composites that multiply their components or points past the bounds are refused, and
+corrupted `glyf`, `loca`, and `CFF ` tables fail without panicking. The validator rejects an outline SFNT that is out of
+profile, misidentified, or undecodable. Three Text tests place every TrueType glyph's outline at its pen position and
+size against the layout's ink box, check every CFF on-curve point against it, check the baseline at two font sizes and the
+view's layout invariants, compare owned tuples with borrowed views, read a font-stack fallback glyph from its own font,
+survive Wasm memory growth, and read identical outlines from Bitmap and Slug. A detached `Glyphs` object's outlines equal
+the source's at every index, survive a re-layout and the font's disposal, and reject indices outside the object.
+
 ## Semantic queries
 
 Publication emits no semantic readback by default. A renderer that needs current local bounds requests the measurement
@@ -837,6 +903,19 @@ callers update the detached root once, invert its world matrix once, convert eac
 root-relative resource leases belong to each detached object,
 so the pair may outlive the source `Text`, font, and loader without sharing mutable presentation state. The source `Text`
 stays live and may continue publishing while detached objects remain unchanged.
+`Glyphs` contains only glyphs with render records; blank glyphs such as spaces are excluded. `count`, `glyphAt`,
+`measurements`, `outlineAt`, and matrix methods use dense drawable indices, throwing `RangeError` outside
+`0 <= index < count`. These indices need not match `text.glyphs()` layout indices. A private source-index column
+preserves the relationship for outline reads, while matrices and pivots remain flat per-drawable arrays (`count * 16`
+and `count * 2`). Each drawable maps to its physical render record. A `DetachedGlyph` carries three identities: `index` is its position in this detached object, `key` is the
+same occurrence across a reflow (the shipped contract, unchanged), and `fontHandle` plus `glyphId` are the same shape: the
+plain-number id of the font that shaped it (never reused, not a lease, equal to
+`text.glyphs().fontHandles[glyphFontSlots[index]]`) and its index in that font, filled for every index from the retained
+layout. Equal pairs mean an equal outline, so a shape built once serves every occurrence. There is no public lookup of
+a font by id. `Glyphs.outlineAt(index)` ([Glyph outlines](#glyph-outlines)) reads from the owned inspection
+`breakApart()` retained, so like `glyphAt` it is data: it reads after the source re-lays out and after the font or the
+`Glyphs` object is disposed. Its origin is the pivot of `setMatrixAt`'s matrix; scale by `DetachedGlyph.fontSize` and
+negate y to get the local frame that matrix places.
 
 Decoration passes are not glyph records and retain an independent object and lifetime; tuple slot two is `undefined`
 when the committed paragraph has no decoration draws. Three coordinates both roots' draw ranges so underline/overline

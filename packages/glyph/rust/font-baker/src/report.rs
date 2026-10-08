@@ -11,6 +11,9 @@ use crate::error::{BakeError, BakeErrorCode};
 pub struct BakeDescriptorV0 {
     pub format_version: u8,
     pub font_face_index: u32,
+    /// Also keep the face's outline tables in the core font.
+    #[serde(default)]
+    pub outlines: bool,
 }
 
 impl BakeDescriptorV0 {
@@ -18,6 +21,7 @@ impl BakeDescriptorV0 {
         Self {
             format_version: 0,
             font_face_index,
+            outlines: false,
         }
     }
 
@@ -111,6 +115,16 @@ pub struct ShapingPayloadReportV0 {
     pub brotli_bytes: Option<usize>,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OutlinePayloadReportV0 {
+    /// `truetype` or `cff`.
+    pub source_format: String,
+    pub sfnt_directory_bytes: usize,
+    pub tables: Vec<TablePayloadReport>,
+    pub total_raw_bytes: usize,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BakeReportV0 {
@@ -129,6 +143,8 @@ pub struct SourcePayloadReport {
 #[derive(Debug, Serialize)]
 pub struct SharedPayloadReport {
     pub shaping: ShapingPayloadReportV0,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outlines: Option<OutlinePayloadReportV0>,
 }
 
 #[derive(Debug, Serialize)]
