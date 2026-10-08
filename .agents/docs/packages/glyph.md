@@ -812,18 +812,22 @@ silently degraded command buffer. The semantic ABI carries effect color, width, 
 raster programs that opt in.
 
 Built-in raster pages use a package-owned KTX2 reader limited to the native formats the Bitmap, MSDF, and Slug contracts
-admit. It checks the identifier, header, level index, safe 64-bit section coordinates, declared byte ranges, one basic
-data-format descriptor, exact dimensions and payload size, channel semantics, and the absence of supercompression or
-auxiliary metadata. The level payload remains a view into the source bytes. The general `ktx-parse` package is a
-development-only independent oracle for these checks; it is not a production dependency or a shipped runtime module.
-Against baseline `2ab37fdac`, the focused production graph for this reader moves from 12,109 raw / 8,791 minified /
-2,666 gzip bytes to 6,613 / 6,502 / 2,234, reductions of 5,496 (45.39%), 2,289 (26.04%), and 432 (16.20%) bytes.
-The complete peer-externalized Three Bitmap and MSDF graphs each remove 5,330 raw / 2,101 minified / 576 gzip bytes;
-Slug removes the same raw and minified bytes and 574 gzip bytes. Their initial graphs retain neither reader and move by
-only 73 raw / 64 minified / 3 gzip bytes because the emitted dynamic-chunk references change. The core root entry does
-not reach a KTX reader in either its initial or complete graph. These JavaScript measurements compile baseline and
-candidate with identical pinned configurations, include every selected dynamic chunk in the complete graph, and exclude
-Wasm and optional peers; they are measured production closures, not install size or a Bundlephobia estimate.
+admit. One pass over the external bytes checks the identifier and restricted header before reading the single admitted
+level index, then validates safe 64-bit section coordinates, declared byte ranges, one basic data-format descriptor in
+place, exact dimensions and payload size, channel semantics, and the absence of supercompression or auxiliary metadata.
+An unsupported level count fails at that variant gate without parsing unused mip indexes. The reader constructs no
+general container, level array, descriptor object, or sample arrays; its only result is a zero-copy view of the validated
+base payload. The general `ktx-parse` package is a development-only independent oracle for these checks; it is not a
+production dependency or a shipped runtime module.
+
+The first native-reader pass at `ee2af476f`, measured at the corrected same source path against baseline `2ab37fdac`,
+moved the focused reader graph from 12,109 raw / 8,791 minified / 2,668 gzip bytes to 6,611 / 6,501 / 2,233, reductions
+of 5,498 (45.40%), 2,290 (26.05%), and 435 (16.30%) bytes. The complete peer-externalized Three Bitmap and MSDF graphs
+each removed 5,422 raw / 2,184 minified / 592 gzip bytes; Slug removed the same raw and minified bytes and 593 gzip
+bytes. The core root entry is byte-identical and does not reach a KTX reader in either its initial or complete graph.
+These JavaScript measurements compile revisions with identical pinned configurations at the same stable path, include
+every selected dynamic chunk in the complete graph, and exclude Wasm and optional peers; they are measured production
+closures, not install size or a Bundlephobia estimate.
 
 ## Glyph outlines
 

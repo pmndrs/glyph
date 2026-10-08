@@ -100,12 +100,9 @@ test('reads every supported native format and retains a zero-copy base-level vie
     const actual = validateNativeKtx2(source, width, height, format);
     const oracle = readKtx2Oracle(source);
 
-    assert.equal(actual.vkFormat, oracle.vkFormat, format.name);
-    assert.equal(actual.typeSize, oracle.typeSize, format.name);
-    assert.deepEqual(actual.dataFormatDescriptor, oracle.dataFormatDescriptor, format.name);
-    assert.equal(actual.levels[0].levelData.buffer, backing.buffer, format.name);
-    assert.equal(actual.levels[0].levelData.byteOffset, oracle.levels[0].levelData.byteOffset, format.name);
-    assert.deepEqual(actual.levels[0].levelData, oracle.levels[0].levelData, format.name);
+    assert.equal(actual.buffer, backing.buffer, format.name);
+    assert.equal(actual.byteOffset, oracle.levels[0].levelData.byteOffset, format.name);
+    assert.deepEqual(actual, oracle.levels[0].levelData, format.name);
   }
 });
 
@@ -172,7 +169,7 @@ test('rejects malformed, truncated, out-of-range, and unsafe section coordinates
     ],
   });
   new DataView(unsafeSecondLevel.buffer).setUint32(108, 0x20_0000, true);
-  assertKtxError(() => validateNativeKtx2(unsafeSecondLevel, 5, 7, format), 'KTX2_INVALID', 'second level');
+  assertKtxError(() => validateNativeKtx2(unsafeSecondLevel, 5, 7, format), 'KTX2_VARIANT', 'second level');
 });
 
 test('separates structural DFD failures from valid but incompatible descriptors', () => {
@@ -186,9 +183,21 @@ test('separates structural DFD failures from valid but incompatible descriptors'
   assertKtxError(() => validateNativeKtx2(malformed, 5, 7, format), 'KTX2_INVALID');
 
   for (const [label, byteOffset] of [
+    ['vendor', dfdByteOffset + 4],
+    ['descriptor type', dfdByteOffset + 6],
+    ['version', dfdByteOffset + 8],
     ['color model', dfdByteOffset + 12],
+    ['color primaries', dfdByteOffset + 13],
     ['transfer function', dfdByteOffset + 14],
+    ['flags', dfdByteOffset + 15],
+    ['texel block dimensions', dfdByteOffset + 16],
+    ['bytes plane', dfdByteOffset + 20],
+    ['sample bit offset', dfdByteOffset + 28],
+    ['sample bit length', dfdByteOffset + 30],
     ['first channel', dfdByteOffset + 31],
+    ['sample position', dfdByteOffset + 32],
+    ['sample lower', dfdByteOffset + 36],
+    ['sample upper', dfdByteOffset + 40],
   ]) {
     const bytes = canonical.slice();
     bytes[byteOffset] ^= 1;

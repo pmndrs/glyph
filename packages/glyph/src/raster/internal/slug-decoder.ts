@@ -101,7 +101,7 @@ async function decodeSlugPage(
     throw new TypeError(`${path} curve does not match the lossless RGBA16F baseline`);
   }
   const curveContainerBytes = await rasterResourceBytes(raster, variant.source, `${path} curve source`, signal);
-  const curveContainer = validateNativeKtx2(curveContainerBytes, curveWidth, curveHeight, {
+  const curveLevel = validateNativeKtx2(curveContainerBytes, curveWidth, curveHeight, {
     vkFormat: VK_FORMAT_R16G16B16A16_SFLOAT,
     typeSize: 2,
     blockWidth: 1,
@@ -114,9 +114,7 @@ async function decodeSlugPage(
       KHR_DF_CHANNEL_RGBSDA_ALPHA,
     ],
   });
-  const curveLevel = curveContainer.levels[0];
-  if (curveLevel === undefined) throw new TypeError(`${path} curve has no base level`);
-  const curveBytes = curveLevel.levelData.slice();
+  const curveBytes = curveLevel.slice();
 
   const headerWidth = textureDimension(page.headerWidth, `${path} header width`);
   const headerHeight = textureDimension(page.headerHeight, `${path} header height`);

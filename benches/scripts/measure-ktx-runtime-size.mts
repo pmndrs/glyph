@@ -68,21 +68,24 @@ await mkdir(dirname(scratch), { recursive: true });
 await mkdir(scratch);
 
 try {
-  const baseline = await compileRevision('baseline', args.baseline);
-  const candidate = await compileRevision('candidate', args.candidate);
+  const baseline = await compileRevision('baseline', args.baseline, false);
+  const baselineGraphs = await measureRevision(baseline, 'baseline');
+  await rm(join(scratch, 'revision'), { recursive: true, force: true });
+
+  const candidate = await compileRevision('candidate', args.candidate, true);
   if (baseline.compileConfigSha256 !== candidate.compileConfigSha256) {
     throw new Error('Baseline and candidate do not share identical TypeScript and tsdown build configurations');
   }
   run(candidate.packageRoot, process.execPath, ['--test', 'tests/package/raster-ktx.test.mjs'], true);
+  const candidateGraphs = await measureRevision(candidate, 'candidate');
 
   const graphs: Record<string, BundleComparison> = {};
   for (const entryId of entryIds) {
     const scopes: readonly Scope[] = entryId === 'ktx-reader' ? ['total'] : ['initial', 'total'];
     for (const scope of scopes) {
       const key = `${entryId}:${scope}`;
-      process.stderr.write(`[ktx-size] measuring ${key}\n`);
-      const before = await measureBundle(baseline.entries[entryId], `${key} baseline`, scope === 'total');
-      const after = await measureBundle(candidate.entries[entryId], `${key} candidate`, scope === 'total');
+      const before = baselineGraphs[key]!;
+      const after = candidateGraphs[key]!;
       assertKtxBoundary(entryId, scope, before, after);
       graphs[key] = compare(before, after);
     }
@@ -128,10 +131,10 @@ try {
   await rm(scratch, { recursive: true, force: true });
 }
 
-async function compileRevision(label: string, revision: string): Promise<Build> {
+async function compileRevision(label: string, revision: string, includeTest: boolean): Promise<Build> {
   const commit = commandOutput('git', ['rev-parse', '--verify', `${revision}^{commit}`], workspace);
-  const root = join(scratch, label);
-  const archive = join(scratch, `${label}.tar`);
+  const root = join(scratch, 'revision');
+  const archive = join(scratch, 'revision.tar');
   run(workspace, 'git', [
     'archive',
     '--format=tar',
@@ -161,7 +164,7 @@ async function compileRevision(label: string, revision: string): Promise<Build> 
   );
   run(packageRoot, tsdown, ['--out-dir', dist, '--no-clean'], true);
 
-  if (label === 'candidate') {
+  if (includeTest) {
     const testPath = join(packageRoot, 'tests/package/raster-ktx.test.mjs');
     await mkdir(dirname(testPath), { recursive: true });
     const testSource = commandOutput(
@@ -182,6 +185,19 @@ async function compileRevision(label: string, revision: string): Promise<Build> 
     packageRoot,
     entries: await writeEntries(packageRoot),
   };
+}
+
+async function measureRevision(build: Build, label: string): Promise<Readonly<Record<string, BundleEvidence>>> {
+  const graphs: Record<string, BundleEvidence> = {};
+  for (const entryId of entryIds) {
+    const scopes: readonly Scope[] = entryId === 'ktx-reader' ? ['total'] : ['initial', 'total'];
+    for (const scope of scopes) {
+      const key = `${entryId}:${scope}`;
+      process.stderr.write(`[ktx-size] measuring ${key} ${label}\n`);
+      graphs[key] = await measureBundle(build.entries[entryId], `${key} ${label}`, scope === 'total');
+    }
+  }
+  return graphs;
 }
 
 async function writeEntries(packageRoot: string): Promise<Readonly<Record<EntryId, string>>> {
@@ -251,8 +267,8 @@ function assertKtxBoundary(entryId: EntryId, scope: Scope, baseline: BundleEvide
   if (candidate.includesKtxParse)
     throw new Error(`${entryId}:${scope} retains ktx-parse in the candidate runtime graph`);
   const expectsKtx = entryId === 'ktx-reader' || (entryId.startsWith('three-') && scope === 'total');
-  if (expectsKtx && !baseline.includesKtxParse) {
-    throw new Error(`${entryId}:${scope} did not include the baseline ktx-parse runtime`);
+  if (expectsKtx && !baseline.includesRasterKtxModule) {
+    throw new Error(`${entryId}:${scope} did not include the baseline KTX reader`);
   }
   if (expectsKtx && !candidate.includesRasterKtxModule) {
     throw new Error(`${entryId}:${scope} did not include the candidate native KTX reader`);
