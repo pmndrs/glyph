@@ -744,7 +744,7 @@ Direct font options:
   --unicodes <set>       Unicode set used to prepare a smaller source font
                         Example: U+0020-007E,U+00A0-00FF,U+4E00-9FFF
                         Selects code points, not raw glyph IDs
-  --outlines             Also keep every glyph's outline, read with outlineAt() on glyphs() or withGlyphs()
+  --outlines             Also keep every glyph's outline, read with outlineAt() on glyphs() or readGlyphs()
 
 Raster options:
   --bitmap <ppem,...>    Embed Bitmap at positive integer ppem strikes (example: 16,32)

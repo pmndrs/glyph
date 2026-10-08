@@ -67,8 +67,8 @@ sources:
     resource: ../roadmap/roadmap.md
     title: Milestone 12 responsive flow-region and mixed-raster goals
 generated:
-  by: openai-codex/gpt-5.6
-  at: '2026-09-13T15:38:33Z'
+  by: openai-codex/gpt-6
+  at: '2026-09-24T20:29:45Z'
 ---
 
 # Fragment-relative retained reflow
@@ -621,7 +621,7 @@ anchor its display run to the first region, exclude the exact selected source ra
 conservative exclusion before composing the remaining clusters.
 
 The cap and body retain one source-coordinate domain. The cap entity records selected UTF-16 range, cluster range,
-display-run ID, body-resume cluster, and source-to-display mapping. Caret, selection, hit testing, `withGlyphs`, and full
+display-run ID, body-resume cluster, and source-to-display mapping. Caret, selection, hit testing, `readGlyphs`, and full
 glyph inspection merge the two realized ranges without duplication or omission. Local edits recompute the safe boundary
 transactionally. The initial model specifies a minimum body-line span, baseline/cap alignment, margin, side, and optional
 caller-authored polygon. Cap alignment uses the initial's actual shaping face and the surrounding first-available font's
@@ -645,12 +645,12 @@ continuity, mixed-raster alignment, and recovery to the original layout after th
 Resolve hit tests as line -> physical fragment -> visual slice -> local cluster/glyph. A run-local prefix/index may be
 built lazily for a queried line, but ordinary rendering and measurement must not allocate it.
 
-`withGlyphs(callback)` remains the zero-whole-copy inspection API. It composes an individual absolute result into the
+`readGlyphs(callback)` remains the zero-whole-copy inspection API. It composes an individual absolute result into the
 existing fixed Wasm scratch from slice placement plus local glyph data. `glyphs()` and `breakApart()` may explicitly
 materialize caller-owned arrays because the caller requested a full copy; they are not resize hot paths. Query results
 must remain synchronous, lifetime-bounded, and invalid after the callback.
 
-Milestone 12 retains `withGlyphs<Result>(callback)` as a generic synchronous read. The distinct
+Milestone 12 retains `readGlyphs<Result>(callback)` as a generic synchronous read. The distinct
 `transformGlyphs(callback)` live deformation boundary described by D-356 is deferred to a separately scoped
 cross-adapter follow-up and is not part of this cleanup implementation. That follow-up must prove exact-length atomic
 validation, logical local/paragraph/world coordinates, renderer-owned dirty ranges, and full Three and TypeGPU lifecycle,
@@ -1010,9 +1010,9 @@ The shadow oracle and final implementation cover:
 - leading/trailing/hanging spaces, hard breaks, empty lines, ellipsis, and boundary replacement;
 - custom `registerThreeRasterProgram` programs using the same run-placement contract as built-ins;
 - continuous and discontinuous under/content/over decorations;
-- measure-before-render, measure-after-render, width no-op, hit testing, `withGlyphs`, full glyph copies, and detached
+- measure-before-render, measure-after-render, width no-op, hit testing, `readGlyphs`, full glyph copies, and detached
   slices;
-- generic read-only `withGlyphs<Result>` callbacks and detached-copy lifecycle independence; the D-356
+- generic read-only `readGlyphs<Result>` callbacks and detached-copy lifecycle independence; the D-356
   transform-returning callback, exact 1:1 validation, local/paragraph/world deformation, physics-frame dirty ranges,
   topology rebinding, and atomic rejection remain explicit follow-up acceptance work;
 - commit, abort, retry, removal, independent exclusion/slot capacity growth, publication acknowledgement, vertex/range
@@ -1115,7 +1115,7 @@ Do not land the design if any of these remain true:
 - Three and TypeGPU need separate run/layout implementations;
 - ordinary shaders branch per glyph on wrap, bidi, raster technique, or justification;
 - bidi/order correctness requires one draw per run or slice, or otherwise increases the existing draw count;
-- `withGlyphs` copies a full paragraph to answer a bounded callback;
+- `readGlyphs` copies a full paragraph to answer a bounded callback;
 - width changes allocate after warmup;
 - the additional GPU offset path misses its adapter gate; or
 - SIMD wins an isolated loop but worsens end-to-end median, p95, code size, or local reasoning.

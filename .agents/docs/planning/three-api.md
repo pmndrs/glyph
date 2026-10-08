@@ -34,8 +34,8 @@ sources:
     resource: https://threejs.org/docs/pages/Object3D.html
     title: Three.js Object3D
 generated:
-  by: openai-codex/gpt-5.6
-  at: '2026-09-16T13:00:04Z'
+  by: openai-codex/gpt-6
+  at: '2026-09-24T20:29:45Z'
 ---
 
 # Three.js text API
@@ -400,7 +400,7 @@ resources declared by the active Three Codec.
 
 ## Attached glyph deformation (unshipped follow-up)
 
-`Text.withGlyphs<Result>()` is the generic synchronous borrowed-layout read boundary and returns the callback's value.
+`Text.readGlyphs<Result>()` is the generic synchronous borrowed-layout read boundary and returns the callback's value.
 The accepted D-356 design for an attached, index-addressed `Text.transformGlyphs()` mutation is deferred and is not part
 of the current Three API; `Text` exposes neither `transformGlyphs()` nor `clearGlyphTransforms()` and carries no attached
 matrix storage. A later, separately scoped implementation must prove Three and TypeGPU lifecycle, storage,

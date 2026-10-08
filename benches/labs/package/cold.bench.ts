@@ -37,7 +37,7 @@ group('first-time operations @cold', () => {
     const glyphCount = yield () => {
       const created = createLabels();
       const result = created.labels.reduce(
-        (total, label) => total + label.withGlyphs((glyphs) => glyphs.glyphCount),
+        (total, label) => total + label.readGlyphs((glyphs) => glyphs.glyphCount),
         0,
       );
       disposeLabels(created);

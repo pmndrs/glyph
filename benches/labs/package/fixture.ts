@@ -25,6 +25,15 @@ const threePackage = (await import(
 
 const { bitmap, glyph } = glyphPackage;
 const { defineThreeConfig } = threePackage;
+// Older comparison canaries expose the same borrowed-read method under its former name.
+const textPrototype: {
+  readGlyphs?: (typeof threePackage.Text.prototype)['readGlyphs'];
+  withGlyphs?: (typeof threePackage.Text.prototype)['readGlyphs'];
+} = threePackage.Text.prototype;
+if (textPrototype.readGlyphs === undefined && textPrototype.withGlyphs !== undefined) {
+  textPrototype.readGlyphs = textPrototype.withGlyphs;
+}
+
 const fontBytes = await readFile(new URL('../../fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url));
 
 await glyph.init();
@@ -242,7 +251,7 @@ export function borrowedGlyphChecksum(labels: ReturnType<typeof createLabels>['l
   return labels.reduce(
     (total, label) =>
       total +
-      label.withGlyphs((glyphs) => {
+      label.readGlyphs((glyphs) => {
         let checksum = glyphs.glyphCount;
         for (let index = 0; index < glyphs.glyphCount; index += 1) {
           const record = glyphs.glyphAt(index);

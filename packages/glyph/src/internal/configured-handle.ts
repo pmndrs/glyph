@@ -885,10 +885,10 @@ class ConfiguredTextController<
     return this.#text.glyphs();
   }
 
-  withGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result {
+  readGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result {
     this.#assertActive();
     this.#services.assertTextCall();
-    return this.#text.withGlyphs(read);
+    return this.#text.readGlyphs(read);
   }
 
   belongsTo(services: object): boolean {

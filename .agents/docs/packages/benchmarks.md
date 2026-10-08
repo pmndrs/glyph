@@ -268,6 +268,9 @@ their focused checks because a byte or pixel mismatch is an exact fact rather th
 is neither: it is pull-request review evidence from the size comparison and never fails a change. The CPU migration retires hand-rolled Node timers only after their Labs replacement has produced a
 valid record; browser and native/Worker workflows are not renamed into Labs benchmarks they cannot faithfully become.
 
+Borrowed-inspection benchmarks call `Text.readGlyphs()`. The shared package fixture aliases an older canary's
+`withGlyphs` method to `readGlyphs` once before timing; the published package keeps no compatibility alias.
+
 Package performance is measured from installable artifacts rather than workspace source. The `check` job builds
 `@pmndrs/glyph` once, creates one package tarball with `pnpm pack`, and retains that tarball for the separate non-blocking
 performance job. `benchmark:labs-package` installs the candidate tarball and an exact version resolved from the current
