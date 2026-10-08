@@ -20,6 +20,7 @@ import { slug } from '../raster/slug.js';
 import type { ThreeTransformMode } from './codec.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
+import { inheritThreeBatchScope } from './internal/batch-scope.js';
 import type { ThreeRoot, ThreeRootOptions } from './text.js';
 
 export interface ThreeProgramBinding {
@@ -116,8 +117,11 @@ export const ThreeFontFormats: ThreeFontFormats = Object.freeze({ bitmap, msdf, 
 export const ThreeSchema: GlyphSchema<ThreeBindings, ThreePublicationBoundary> = defineGlyphSchema({
   program: (_root, program) => Object.freeze({ kind: 'three-program', program }),
   buffer: (_root, input) => Object.freeze({ kind: 'three-buffer', input }),
-  material: (root, binding) =>
-    Object.freeze({ ...binding, material: binding.material ?? root.material, root: root.root }),
+  material: (root, binding) => {
+    const resolved = Object.freeze({ ...binding, material: binding.material ?? root.material, root: root.root });
+    inheritThreeBatchScope(binding, resolved);
+    return resolved;
+  },
   transform: (root, object, recordIndex) => root.objectForTransform?.(recordIndex, object) ?? object,
   batch: (_root, input) => Object.freeze({ kind: 'three-batch', input }),
   instance: (_root, input) => Object.freeze({ kind: 'three-instance', input }),

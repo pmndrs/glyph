@@ -12,6 +12,7 @@ import { threeSystemBuffers } from '../codec.js';
 import { createGeometrySource, realizeGeometry, resolveDrawGeometry } from './geometry.js';
 import { transformAttribute, type RetainedBuffer, type ThreeBufferBindingId } from './host-buffer.js';
 import { glyphOriginBuffer, glyphStorageKey, ThreeMaterialRealizer, transformProgramKey } from './material-realizer.js';
+import { threeBatchScope } from './batch-scope.js';
 import type {
   OriginSegment,
   PreparationContext,
@@ -92,6 +93,7 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
         }
       }
       const draw = child.value.input;
+      const batchScope = threeBatchScope(draw.material);
       const transformId = child.kind === 'instance' ? (transformIds.get(child.transform!) ?? 0) : 0;
       const byCodecId = new Map<ThreeBufferBindingId, RetainedBuffer>();
       for (const binding of draw.buffers) {
@@ -148,6 +150,7 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
         if (reusable !== undefined) {
           reusedUpdates.push({
             mesh: reusable,
+            batchScope,
             recordCount: span.recordCount,
             recordIndex: span.recordIndex,
             transformId,
@@ -172,6 +175,7 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
         if (transform.kind === 'indexed') geometry.setAttribute('_pmndrsGlyphTransforms', context.transformAttribute);
         const mesh = new THREE.Mesh(geometry, material);
         mesh.userData.pmndrsGlyphRunStart = span.recordIndex;
+        mesh.userData.pmndrsGlyphBatchScope = batchScope;
         mesh.userData.pmndrsGlyphTransformId = transformId;
         mesh.userData.pmndrsGlyphPrimitiveKind = decoration ? 'decoration' : 'glyph';
         mesh.userData.pmndrsGlyphDepthKey = draw.depthKey;
