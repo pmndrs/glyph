@@ -78,7 +78,7 @@ for (const count of [1, 100, 1_000]) {
   const small = count === 1 ? ' @small-scene' : '';
 
   group(`${scene} @read-publication`, () => {
-    bench(`type in a text field${small}`, function* () {
+    bench(`scene ${count}: type in a text field${small}`, function* () {
       const created = createLabels(count);
       const field = created.root.createText({ font, text: 'Search: glyph', style: { fontSize: 16 } });
       created.textGroup.add(field);
@@ -108,7 +108,7 @@ for (const count of [1, 100, 1_000]) {
       disposeLabels(created);
     });
 
-    bench(`click to place the caret${small}`, function* () {
+    bench(`scene ${count}: click to place the caret${small}`, function* () {
       const created = createLabels(count);
       const field = created.root.createText({ font, text: 'Search: glyph', style: { fontSize: 16 } });
       created.textGroup.add(field);
@@ -129,11 +129,11 @@ for (const count of [1, 100, 1_000]) {
 
     if (count === 1) return;
 
-    for (const [schedule, eachInTurn] of [
+    for (const [, eachInTurn] of [
       ['all, then read each', false],
       ['each in turn', true],
     ] as const) {
-      bench(`edit 50 lines and place carets: ${schedule}`, function* () {
+      bench(`scene ${count} ${eachInTurn ? 'each' : 'batched'}: edit 50 lines and carets`, function* () {
         const created = createLabels(count);
         const lines = Array.from({ length: 50 }, (_, line) =>
           created.root.createText({ font, text: `let item${String(line)} = 0`, style: { fontSize: 16 } }),
@@ -163,7 +163,7 @@ for (const count of [1, 100, 1_000]) {
         disposeLabels(created);
       });
 
-      bench(`dashboard, 100 tickers rolling digits: ${schedule}`, function* () {
+      bench(`scene ${count} ${eachInTurn ? 'each' : 'batched'}: 100 rolling tickers`, function* () {
         const created = createLabels(count);
         const tickers = created.labels.slice(0, 100);
         for (const ticker of tickers) ticker.text = '12,345';
@@ -189,7 +189,7 @@ for (const count of [1, 100, 1_000]) {
       });
     }
 
-    bench('dashboard, 100 tickers without reading layout', function* () {
+    bench(`scene ${count}: 100 tickers without layout reads`, function* () {
       const created = createLabels(count);
       const tickers = created.labels.slice(0, 100);
       for (const ticker of tickers) ticker.text = '12,345';
@@ -209,7 +209,7 @@ for (const count of [1, 100, 1_000]) {
   });
 
   group(`${scene}, mounting new text @cold`, () => {
-    bench(`break a title into letters${small}`, function* () {
+    bench(`scene ${count}: break a title into letters${small}`, function* () {
       const created = createLabels(count);
       let copied = 0;
       yield {
@@ -226,11 +226,11 @@ for (const count of [1, 100, 1_000]) {
 
     if (count === 1) return;
 
-    for (const [schedule, eachInTurn] of [
+    for (const [, eachInTurn] of [
       ['all, then read each', false],
       ['each in turn', true],
     ] as const) {
-      bench(`floating combat text, 30 numbers: ${schedule}`, function* () {
+      bench(`scene ${count} ${eachInTurn ? 'each' : 'batched'}: 30 floating numbers`, function* () {
         const created = createLabels(count);
         const damage = Array.from({ length: 30 }, (_, hit) => String(1_000 + hit * 37));
         let copied = 0;
@@ -247,7 +247,7 @@ for (const count of [1, 100, 1_000]) {
         disposeLabels(created);
       });
 
-      bench(`load the scene and break every label apart: ${schedule}`, function* () {
+      bench(`scene ${count} ${eachInTurn ? 'each' : 'batched'}: load and detach all labels`, function* () {
         const texts = Array.from({ length: count }, () => 'WWWWWWWWWWWW');
         const copied = yield () => {
           const created = createLabelScene(count);

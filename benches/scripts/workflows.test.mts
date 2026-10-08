@@ -216,10 +216,23 @@ test('restores full names and statuses from a real Labs comparison', async () =>
     [['slower', longFredoka, '2.79ms', '3.13ms', 12, '.002', '+7.6..+25.8%']],
   );
   assert.deepEqual(slower.skipped, [
-    { name: longParagraph, reason: 'clock-confounded: slower→neutral · 2.95→2.73' },
-    { name: longPublish, reason: 'clock-confounded: slower→neutral · 2.94→2.73' },
+    { name: 'type one character into a long para…', reason: 'clock-confounded: slower→neutral · 2.95→2.73' },
+    { name: 'type one character into a long para…', reason: 'clock-confounded: slower→neutral · 2.94→2.73' },
   ]);
   assert.deepEqual(slower.warnings, ['candidate CPU clock drifted 8.4% during its run']);
+});
+
+test('does not guess a workload name when sorted report rows share a truncated prefix', () => {
+  const printed = 'dashboard, 100 tickers rolling digi…';
+  const report = `  ▼ ${printed} 20.61ms 1.06s +5039.4% +5000% <.001 +2891.1..+5940.3%`;
+  const names = [
+    'dashboard, 100 tickers rolling digits: all, then read each',
+    'dashboard, 100 tickers rolling digits: each in turn',
+  ];
+  const comparison = parseLabsComparison(report, names);
+  assert.equal(comparison.rows[0]?.name, printed);
+  assert.equal(comparison.rows[0]?.candidate, '1.06s');
+  assert.equal(parseLabsComparison(report, [...names].reverse()).rows[0]?.name, printed);
 });
 
 test('renders a forest plot, slower-first table, and details from mixed results', () => {

@@ -43,13 +43,16 @@ const statusOf = { '▲': 'faster', '▼': 'slower', '■': 'neutral' } as const
 
 /**
  * Reads the report `labs compare` prints. Labs truncates names to 36 columns, so `runNames` (the candidate result's full
- * run names, in report order) restores each one; a name with no match keeps its printed form.
+ * run names) restores unambiguous names. A missing or ambiguous match keeps its printed form: report sorting means
+ * choosing the first shared prefix can attach another workload's name to a real timing result.
  */
 export function parseLabsComparison(report: string, runNames: readonly string[]): LabsComparison {
   const unused = [...runNames];
   const fullName = (printed: string): string => {
     if (!printed.endsWith('…')) return printed;
     const prefix = printed.slice(0, -1);
+    const matches = new Set(unused.filter((name) => name.startsWith(prefix)));
+    if (matches.size !== 1) return printed;
     const index = unused.findIndex((name) => name.startsWith(prefix));
     return index === -1 ? printed : unused.splice(index, 1)[0]!;
   };

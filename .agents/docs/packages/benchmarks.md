@@ -881,3 +881,7 @@ native `/three`, optional TypeGPU-backed `/three/typegpu`, and direct `/typegpu`
 `/three/typegpu` measures 609,736 raw / 596,546 minified / 136,568 gzip / 112,065 Brotli, while `/typegpu` measures
 221,958 / 219,098 / 41,382 / 35,132. Package and graph tests separately prove every shader barrel resolves,
 tree-shakes, preserves optional peer isolation, and cannot expose private deep implementation paths.
+
+Read-publication Labs names begin with scene count and schedule so truncated terminal names remain distinct.
+The Markdown report restores only unambiguous full names; shared truncated prefixes remain printed rather than being
+assigned by registration order to another workload.
