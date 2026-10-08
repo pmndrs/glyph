@@ -1,235 +1,221 @@
 ---
 type: Engineering Report
-title: Paper Mono support in the Glyph stack
-description: Assesses Paper Mono, its duospace feature, and the boundary between Glyph's current static-font support and future variable-font support.
+title: Paper Mono validation for the variable outline stream
+description: Validates the proposed dynamic outline-stream format and its variable-font design against pinned Paper Mono.
 tags: [glyph, fonts, opentype, variable-fonts, outlines, paper-mono]
 generated:
   by: openai-codex/gpt-5
   at: '2026-10-08T00:00:00Z'
 ---
 
-# Paper Mono support in the Glyph stack
+# Paper Mono validation for the variable outline stream
 
-## Recommendation
+## Decision
 
-Use Paper Mono's supplied static TTF or OTF files with Glyph today. Bake with outlines when outline reads are needed,
-and enable the font's duospace alternates with `features: [{ tag: 'ss02', value: 1 }]`. Duospacing needs no special
-layout engine: it is an ordinary OpenType substitution whose replacement glyphs carry wider advances.
+**Paper Mono is compatible with the proposed dynamic TrueType outline stream.** One encoded base plus sparse `gvar`
+deltas reproduced all 800 glyphs at 19 locations with zero point, topology, decomposed-outline, exact-ink-bound, GPU
+slot, or f32-policy mismatches against independently instantiated HarfBuzz 14.2.0 fonts. The locations include
+`wght` 100, 400, 650 and 800 and the five interior `avar` knots at the knot and ±0.01 user units. This is genuinely one
+reused base-and-delta stream, not 19 statically instantiated fonts serialized back into the candidate format.
 
-For variable-font support, implement **bake-time selection of one immutable instance** before considering live axes.
-That fits Glyph's existing “one asset, one fixed instance” contract and can preserve the current
-`(fontHandle, glyphId)` outline-cache key. Paper Mono is a useful first acceptance font because it has one `wght` axis,
-TrueType `glyf` outlines, `gvar`, `HVAR`, `avar`, and variation data on composite glyphs. It does not exercise CFF2 or
-`VARC`; those need separate capability gates and fixtures. Runtime axis changes are a materially larger format, shaping,
-raster, cache, and publication project and are currently unscheduled.
+The recommendation is therefore to update [#99](https://github.com/pmndrs/glyph/issues/99) to cover coherent live
+variation coordinates and use Paper Mono as its first TrueType acceptance font. Do **not** narrow #99 to fixed baked
+weights. The revised maintainer decision on [#244](https://github.com/pmndrs/glyph/issues/244#issuecomment-6011804243)
+explicitly puts variable fonts in the outline-format scope and supersedes the issue body's older exclusion. The
+[variable-font study](https://github.com/pmndrs/glyph/issues/244#issuecomment-6013252859) and
+[corrected band study](https://github.com/pmndrs/glyph/issues/244#issuecomment-6021011366) are later controlling
+evidence, not optional follow-up.
 
-## Evidence boundary
+This is a design-feasibility and CPU correctness result, not implemented product support. The format, instancer, and
+band work remain on unmerged `spike/outline-stream-gpu`; current `main` still rejects variable input. The experiment
+does not execute a GPU, CFF2, `VARC`, transformed/nested components, or point-matched composites.
 
-This report assesses Glyph `main` at
-[`2ab37fdac6b05f5fd30ce3c165168c2c21176d15`](https://github.com/pmndrs/glyph/commit/2ab37fdac6b05f5fd30ce3c165168c2c21176d15)
-and Paper Mono at
-[`e6eaeceaef02e77e3db997711e07a16378de2bd7`](https://github.com/paper-design/paper-mono/commit/e6eaeceaef02e77e3db997711e07a16378de2bd7),
-both inspected on 2026-10-08. Merged behavior, open pull requests, and planning issues are reported separately. An open
-issue or pull-request description is not counted as implemented support.
+## Authoritative design being tested
 
-Paper Mono's repository supplies source plus eight static TTFs, eight static OTFs, a variable TTF, and webfont builds.
-Its build configuration defines a single `wght` axis with named values 100 through 800 and Regular 400 as the default
-([configuration](https://github.com/paper-design/paper-mono/blob/e6eaeceaef02e77e3db997711e07a16378de2bd7/sources/config.yaml#L1-L35)).
-The project and font files are declared SIL Open Font License 1.1
-([repository license](https://github.com/paper-design/paper-mono/blob/e6eaeceaef02e77e3db997711e07a16378de2bd7/OFL.txt#L1-L26));
-this review used a temporary checkout and did not add or redistribute font binaries.
+At spike commit
+[`dcd04cc`](https://github.com/pmndrs/glyph/commit/dcd04cc70e470a27110bff2602905ceb5e465092), the proposed
+wire format preserves TrueType's point model and original point order, storing `hdr`, contour, component, triplet flag,
+and triplet data planes
+([format lines 18–51](https://github.com/pmndrs/glyph/blob/dcd04cc70e470a27110bff2602905ceb5e465092/.agents/docs/planning/decisions/outline-stream-format.md#L18-L51)).
+That order is essential because `gvar` addresses stored point numbers; explicit on-curve midpoint points must not be
+collapsed merely because the rendered curve would be unchanged
+([format lines 105–110](https://github.com/pmndrs/glyph/blob/dcd04cc70e470a27110bff2602905ceb5e465092/.agents/docs/planning/decisions/outline-stream-format.md#L105-L110)).
 
-A table-level inspection of `PaperMono[wght].ttf` found 800 glyphs, `glyf`/`loca`, `fvar`, `avar`, `gvar`, and `HVAR`.
-Of 800 glyphs, 286 are TrueType composites; 155 composites have `gvar` data. These counts are inspection evidence, not
-a claim made by Paper. They make composite variation processing part of any Paper-compatible arbitrary-instance
-implementation. The variable file contains neither CFF2 nor `VARC`.
+The later variable-font decision specifies the operative pipeline: decode in `glyf` order, perform IUP per tuple over
+the original contour boundaries, instance points, expand composites, and only then rotate/add wrap slots for the GPU.
+It also keeps `fvar`, `avar`, `HVAR`/`VVAR`, `MVAR`, GDEF item variations, and GSUB feature variations in the shaping
+payload rather than the outline stream
+([decision lines 18–32](https://github.com/pmndrs/glyph/blob/dcd04cc70e470a27110bff2602905ceb5e465092/.agents/docs/planning/decisions/variable-font-outline-stream.md#L18-L32)).
+The recommended TrueType wire is base triplets plus region-major sparse `gvar` deltas, the `0x80` zero-pair flag,
+previous-delta prediction, region records, and axis/`avar` records
+([decision lines 42–49](https://github.com/pmndrs/glyph/blob/dcd04cc70e470a27110bff2602905ceb5e465092/.agents/docs/planning/decisions/variable-font-outline-stream.md#L42-L49)).
 
-## What Paper means by duospacing
+The reference spike code is real experimental proof, but not a complete implementation. In particular its composite
+expander says it handles one level because its fixtures have no nesting, and applies translation only
+([instancer lines 718–748](https://github.com/pmndrs/glyph/blob/dcd04cc70e470a27110bff2602905ceb5e465092/spikes/outline-stream/research/varfont/instancer/src/lib.rs#L718-L748)).
+The new Paper validator adapts the specified stream rather than treating prose or benchmark claims as proof.
 
-Paper's specimen calls `ss02` “Duospace glyphs,” alongside `ss01` coding ligatures and `ss03` narrow space
-([Paper Mono specimen](https://paper.design/mono)). The source makes the mechanism precise: `ss02` is a set of
-one-for-one GSUB substitutions from `AE`, `M`, `OE`, `W`, their listed accented forms, and the lowercase equivalents to
-`.ss02` alternates
-([feature source](https://github.com/paper-design/paper-mono/blob/e6eaeceaef02e77e3db997711e07a16378de2bd7/sources/PaperMono.glyphspackage/fontinfo.plist#L1770-L1796)).
-It is not a variation axis and does not require a second layout algorithm.
+## Reproducible Paper experiment
 
-Paper's own QA report records a common advance of 606 font units, while the `ss02` alternates have advance 758; the
-separate `ss03` spaces have advance 454
-([Fontspector report](https://github.com/paper-design/paper-mono/blob/e6eaeceaef02e77e3db997711e07a16378de2bd7/out/fontspector/fontspector-report.md#L36-L78)).
-A local HarfBuzz probe at weights 100, 400, and 800 confirmed that `M W` shape with 606-unit advances normally and
-758-unit advances under `ss02`. Thus “duospace” here means that selected naturally wide letters may use a second,
-wider advance while the font retains its principally monospaced rhythm. It should not be generalized into a guarantee
-that every glyph occupies exactly one or two integer cells: 758/606 is about 1.25, and Paper also ships other deliberate
-width exceptions.
+Run:
 
-Advance width and outline width are different quantities. OpenType stores horizontal advance and left side bearing in
-`hmtx`; the right side bearing is derived from those values and the outline's `xMin`/`xMax`
-([OpenType `hmtx`](https://learn.microsoft.com/en-us/typography/opentype/spec/hmtx)). A narrow outline can sit inside a
-wide advance, and an outline can be offset from the pen origin. Glyph correctly keeps shaped pen movement in
-`glyphAdvances` and ink bounds separately (`packages/glyph/src/layout.ts:91-109`), while `GlyphOutlineView` exposes
-geometry in em units relative to the pen (`packages/glyph/src/glyph-outline.ts:1-24`). With `ss02`, GSUB selects another
-glyph ID; that glyph's advance, ink bounds, and outline then remain coherent without duospace-specific code.
+```sh
+mise exec -- pnpm scripts run glyph:paper-mono-outline-stream-check
+```
 
-## Current support on `main`
+The named workflow downloads only
+[`PaperMono[wght].ttf` at `e6eaecea`](https://github.com/paper-design/paper-mono/blob/e6eaeceaef02e77e3db997711e07a16378de2bd7/fonts/variable/PaperMono%5Bwght%5D.ttf),
+requires SHA-256 `43369c40e211aab9dda29464b0d715c9f20d90118626a56659607108c9c03dfe`, and removes the temporary
+font and oracle instances. The font is available under the project's
+[SIL Open Font License 1.1](https://github.com/paper-design/paper-mono/blob/e6eaeceaef02e77e3db997711e07a16378de2bd7/OFL.txt);
+no font binary is committed or redistributed. The checked-in implementation and complete deterministic result are
+`spikes/outline-stream/research/paper-mono/validate.py` and
+`spikes/outline-stream/research/paper-mono/results.json`.
 
-### Static Paper Mono
+The validator does the following:
 
-Paper's static TTF and OTF builds match the formats the current baker accepts. With `font.outlines`/`--outlines`, Glyph
-retains either `glyf` plus `loca` or CFF1, while explicitly rejecting CFF2
-([outline baker](https://github.com/pmndrs/glyph/blob/2ab37fdac6b05f5fd30ce3c165168c2c21176d15/packages/glyph/rust/font-baker/src/outline.rs#L19-L56)).
-The static Paper files have the same GSUB `ss02` feature, and Glyph already carries caller-supplied OpenType features
-through `TextStyle.features` (`packages/glyph/src/text-properties.ts:133`,
-`packages/glyph/src/font-feature.ts:1-14`). Therefore static Paper Mono plus duospacing and outlines is supported by the
-current contracts.
+1. Copies every simple-glyph point and tag in original stored order and every composite component record; encodes and
+   decodes the proposed five base planes.
+2. Extracts axes, exact F2DOT14 `avar` knots, variation regions, sparse `gvar` point sets and deltas; encodes region-major
+   point-presence, triplet flag, and data planes; then decodes them.
+3. Applies OpenType tuple scalars and independent IUP to untouched points, both with f64 and the accepted f32 policy.
+   IUP follows the axis-wise interpolation rules in the primary [`gvar` specification](https://learn.microsoft.com/en-us/typography/opentype/otspec190/gvar),
+   while user coordinates are normalized and remapped as specified by [`avar`](https://learn.microsoft.com/en-us/typography/opentype/spec/avar).
+4. Expands the decoded components and derives topology, control bounds, exact quadratic ink bounds, GPU point slots,
+   and Slug curves/bands. Oracle ink bounds come independently from fontTools `BoundsPen` over each instantiated font.
+5. Compares each dynamic result with two independently instantiated oracles: HarfBuzz `hb-subset --variations` and
+   `fontTools.varLib.instancer`. Oracle fonts are never inputs to the candidate encoder.
+6. Shapes the Paper `ss02` repertoire off and on with HarfBuzz at every location and checks glyph names and advances
+   against that location's HVAR-instantiated metrics.
 
-The Paper-specific end-to-end bake was not completed in this review: the first invocation entered a shared Rust/Wasm
-build lock while issue #247 timing work was active, so it was stopped rather than contaminating those measurements.
-The conclusion above is based on the inspected font tables, the baker's format gates, and the current feature path; the
-verification plan below retains a direct product test as focused follow-up.
+### Quantitative result
 
-### Outline access after #235
+| Check                                                   |                                                                   Result |
+| ------------------------------------------------------- | -----------------------------------------------------------------------: |
+| Base-stream round-trip                                  |                                        0 mismatched glyphs; 30,491 bytes |
+| Variation-stream round-trip                             |        0 mismatched glyphs; 38,727 delta bytes plus 75 axis/region bytes |
+| Tested locations                                        |                                                                       19 |
+| Dynamic stream vs HarfBuzz, own/decomposed coordinates  |                                        0 / 0 mismatches; maximum error 0 |
+| Dynamic stream vs HarfBuzz, topology/control/ink bounds |                                              0 / 0 / 0 mismatched glyphs |
+| f32-policy stream vs HarfBuzz                           |                0 coordinate, topology, control-, or ink-bound mismatches |
+| fontTools outlines vs HarfBuzz outlines                 |                0 coordinate, topology, control-, or ink-bound mismatches |
+| Tagged-i16 GPU slots                                    |                             429,400 compared; 0 value/tag/range failures |
+| Preserved explicit midpoint points                      |                                                                      310 |
+| `ss02` shaping                                          | 608 glyph results checked; 304 substitutions; 0 glyph/advance mismatches |
+| Exact per-instance Slug bands                           |       486,400 lists; 2,070,327 references; 0 missing; 0 order inversions |
+| Reusing default bands elsewhere, negative control       |                       122,418 missing references; 7,211 order inversions |
 
-[PR #235](https://github.com/pmndrs/glyph/pull/235) is merged into this assessed `main`; it is not merely planned.
-Current behavior is:
+Paper contains 800 glyphs: 509 simple, 286 composite, and 5 empty; 11,229 simple points and 1,257 contours. Its four
+variation regions form 1,222 glyph tuples with 17,550 explicit and 2,539 untouched point deltas. Of 629 glyphs with
+nonzero deltas, 155 are composites. None of Paper's `gvar` tuples changes the four phantom points, so dropping phantom
+outline deltas while retaining HVAR is valid for this font only; fonts without HVAR remain a separate gate.
 
-- `readGlyphs(callback)` gives borrowed, callback-scoped outline views for transient reads. The old `withGlyphs` name
-  has been removed by merged [PR #238](https://github.com/pmndrs/glyph/pull/238).
-- `glyphs()` gives an owned layout snapshot whose `outlineAt(index)` remains readable after the source text/font is
-  disposed (`packages/glyph/src/layout.ts:120-135`).
-- `Text.split()` produces an owned, drawable-only branch, excluding spaces and other non-render records; the old
-  `breakApart` name has been removed by merged [PR #239](https://github.com/pmndrs/glyph/pull/239). This affects
-  enumeration only: blank glyphs still participate in shaping and layout.
-- Every outline identifies the immutable shape by `fontHandle` and `glyphId`, and the public contract explicitly permits
-  caching on that pair (`packages/glyph/src/glyph-outline.ts:1-13`).
+Across all locations, the tagged GPU coordinate range is x `[-1738, 768]`, y `[-265, 975]`, safely inside the proposed
+`(x << 1) | offCurve` i16 restriction (`|x| < 16384`)
+([format lines 57–70](https://github.com/pmndrs/glyph/blob/dcd04cc70e470a27110bff2602905ceb5e465092/.agents/docs/planning/decisions/outline-stream-format.md#L57-L70)).
+Paper has no first-off-curve or all-off-curve contours, so it does not exercise the legal synthesized-start path.
 
-Duospace glyphs work with all three access forms. A substituted `M.ss02` is simply a different glyph ID with its own
-outline and advance. A space selected by `ss03` still will not appear in drawable-only `split()` output, because its
-advance affects layout but it has no render record.
+### Metrics evidence and its limit
 
-### Variable Paper Mono
+Paper's HVAR data leaves advance widths unchanged across weight while changing the left side bearing of as many as 588
+glyphs at a tested location. HarfBuzz- and fontTools-instantiated metrics agree on 30,355 of 30,400 compared values.
+Their 45 disagreements are all one font unit: none at min/default/max, three at `wght=650`, and the rest around the
+tested `avar` knots. This report therefore does not claim bit-identical cross-library HVAR rounding. It does establish
+that HarfBuzz shaping advances agree with its own instantiated HVAR metrics for all 608 `ss02` checks and that the
+corresponding outline and bounds match both outline oracles. Product tests need to choose one normative rounding policy
+and compare the shaping, extents, and raster paths to that same policy.
 
-Raw variable input is unsupported, including its default instance. The shaping baker rejects a font containing any of
-`fvar`, `avar`, `gvar`, `cvar`, `HVAR`, `VVAR`, or `MVAR` before producing the payload
-([current gate](https://github.com/pmndrs/glyph/blob/2ab37fdac6b05f5fd30ce3c165168c2c21176d15/packages/glyph/rust/font-baker/src/sfnt.rs#L42-L49),
-[`build_shaping_payload`](https://github.com/pmndrs/glyph/blob/2ab37fdac6b05f5fd30ce3c165168c2c21176d15/packages/glyph/rust/font-baker/src/sfnt.rs#L72-L93)).
-`FontBakeDescriptor` has only face index and the outlines flag (`packages/glyph/src/font-baker/index.ts:9-18`), and the
-shaping run has script, language, features, direction, cluster level, and flags but no variation coordinates
-(`packages/glyph/rust/shaper/src/lib.rs:171-181`). Raster and extents paths also explicitly request
-`LocationRef::default()`; that is a default-coordinate dependency, not arbitrary-axis support
-(`packages/glyph/rust/font-baker/src/sfnt.rs:285-304`,
-`packages/glyph/rust/bitmap-baker/src/rasterize.rs:169`,
-`packages/glyph/rust/mtsdf-fontations/src/lib.rs:25,69,80`,
-`packages/glyph/rust/slug-fontations/src/lib.rs:45,56`).
+## What duospacing is
 
-OpenType requires a variable font's base tables to describe the default instance, with non-default instances applying
-variation deltas ([variation overview](https://learn.microsoft.com/en-us/typography/opentype/spec/otvaroverview)). That
-does not make Paper's raw default instance supported by Glyph: the deliberate input rejection occurs first. Use the
-supplied static Regular file for today's default appearance.
+Paper's specimen presents `ss02` as “Duospace glyphs” ([Paper Mono specimen](https://paper.design/mono)). In the source,
+it is an ordinary one-to-one GSUB stylistic-set substitution for 16 wide letters and accented forms—`AE`, `M`, `OE`,
+`W`, lowercase equivalents, and variants—to `.ss02` glyphs
+([Paper feature source](https://github.com/paper-design/paper-mono/blob/e6eaeceaef02e77e3db997711e07a16378de2bd7/sources/PaperMono.glyphspackage/fontinfo.plist#L1770-L1796)).
+It is not a variation axis and requires no duospace-specific layout rule.
 
-## Support matrix
+All 16 alternate glyphs survive the candidate stream. At all 19 locations the normal glyphs shape with advance 606 and
+the `ss02` alternates with advance 758. “Duospace” means selected naturally wide glyphs use Paper's second, wider cell;
+it does not mean outline width equals advance width. OpenType stores advance and left side bearing separately in `hmtx`
+([`hmtx` specification](https://learn.microsoft.com/en-us/typography/opentype/spec/hmtx)); the outline may be narrower,
+wider, or offset within its pen advance. GSUB chooses the alternate glyph ID, HVAR supplies instance metrics, and the
+outline stream supplies that ID's instance geometry. Coherence requires all three to use the same normalized location.
 
-| Capability                           | Current shipped/`main`                                                                              | Open work or plan                                                                                                                                 | Assessment for Paper Mono                                                                              |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Static TTF shaping and layout        | Supported                                                                                           | None required                                                                                                                                     | Supported; includes `ss01`/`ss02`/`ss03` through ordinary feature settings.                            |
-| Static TTF outlines                  | Supported with `--outlines`                                                                         | Packed curve stream [#244](https://github.com/pmndrs/glyph/issues/244) is a future representation, not required                                   | Supported; `glyf` and composites decode today.                                                         |
-| Static OTF outlines                  | Supported with `--outlines`; CFF cubics become four quadratics                                      | None required for Paper                                                                                                                           | Supported by the CFF1 path.                                                                            |
-| Paper duospacing                     | Supported as `ss02` GSUB                                                                            | No engine feature needed                                                                                                                          | Supported now; select it in `TextStyle.features`.                                                      |
-| Raw variable TTF, default `wght=400` | Rejected                                                                                            | Variable-font request [#99](https://github.com/pmndrs/glyph/issues/99)                                                                            | Unsupported even though the default is representable by OpenType base tables.                          |
-| Bake one chosen `wght` instance      | No coordinate input; rejected                                                                       | “Static variable-font instances” are a later horizon; [#147](https://github.com/pmndrs/glyph/issues/147) records identity/provenance consequences | Feasible and recommended next milestone; not implemented.                                              |
-| Live arbitrary `wght` changes        | No public/runtime coordinate model                                                                  | Roadmap says runtime axes are not scheduled                                                                                                       | Unsupported and not implied by the static-instance plan.                                               |
-| Cache identity across instances      | One handle per shaping fingerprint; `(fontHandle, glyphId)` is sufficient for current static assets | Coordinates must enter artifact identity                                                                                                          | Safe only if every selected instance receives a distinct immutable fingerprint/handle.                 |
-| TrueType variable composites         | No variable instantiation                                                                           | No merged implementation                                                                                                                          | Required for Paper: 155 inspected composite glyphs carry `gvar` data.                                  |
-| CFF2 / `VARC`                        | CFF2 outline bake rejected; `VARC` excluded                                                         | No merged implementation                                                                                                                          | Not needed by Paper, unknown until tested with separate fonts; must not be claimed from Paper success. |
+## Paper-specific findings versus general format gates
 
-The outline decision explicitly defers CFF2, variation axes, and runtime-bake outlines
-([decision](../planning/decisions/glyph-outlines.md)). The shaping contract says one asset is one fixed instance and
-rejects variable input until outlines, metrics, layout feature variations, and raster data share coordinates
-([contract](../planning/shaping-data-contract.md#static-variation-policy)). The project brief places static instances in
-a later horizon (`.agents/docs/planning/project-brief.md:90-97`), while the roadmap says runtime variation axes are not
-scheduled (`.agents/docs/roadmap/roadmap.md:949`). No open variable-font PR was found on 2026-10-08.
+| Capability or risk                            | Paper result                                                                     | Support conclusion                                                                                        |
+| --------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Original point numbers/topology               | 11,229 points, including 310 explicit midpoints, round-trip exactly              | Supported by the format and proven for Paper                                                              |
+| Sparse `gvar`, IUP, `avar`                    | 19 locations, 0 outline mismatches                                               | Supported and proven for Paper                                                                            |
+| Arbitrary off-named coordinate                | `wght=650`, normalized through `avar`, 0 outline/bound mismatch                  | Supported; not merely named/static instances                                                              |
+| f32 accepted policy                           | 0 Paper mismatches                                                               | Supported for Paper; the broader study's one-unit Inter/Roboto differences still define the policy        |
+| Simple composite offsets and composite `gvar` | 544 components; 155 variable composite glyphs; 0 mismatches                      | Supported and proven for Paper                                                                            |
+| `ROUND_XY_TO_GRID`                            | Present on all 544 Paper components; not stored by the proposed component record | Geometry happens to match because Paper's tested offsets are integral; format fidelity remains incomplete |
+| Transformed, nested, point-matched components | Paper has 0 of each                                                              | Unknown; still a composite gate, not evidence of support                                                  |
+| HVAR advances/side bearings                   | Coherent against HarfBuzz; 45/30,400 one-unit HarfBuzz/fontTools disagreements   | Feasible, with normative rounding still to decide                                                         |
+| `ss02` duospace                               | 16 alternates retained; 608 shape checks, 0 mismatches                           | Supported by normal GSUB + metrics + outline coherence                                                    |
+| Slug bands                                    | Exact rebuild has 0 misses/inversions; default reuse fails                       | CPU proof supports the corrected exact-rebuild design; no GPU claim                                       |
+| CFF2 compatible cu2qu                         | Paper has no CFF2                                                                | Not tested by Paper; retain the separate CFF2 gate                                                        |
+| `VARC`/`avar2`                                | Paper has neither                                                                | Not tested; retain separate gates                                                                         |
+| Tagged-i16 point representation               | 429,400 slots, 0 failures                                                        | Supported for Paper; retain a range check/fallback for other fonts                                        |
 
-The performance stack [#221](https://github.com/pmndrs/glyph/pull/221),
-[#227](https://github.com/pmndrs/glyph/pull/227), [#229](https://github.com/pmndrs/glyph/pull/229),
-[#230](https://github.com/pmndrs/glyph/pull/230), [#231](https://github.com/pmndrs/glyph/pull/231),
-[#232](https://github.com/pmndrs/glyph/pull/232), and [#234](https://github.com/pmndrs/glyph/pull/234) was still open and
-is not in this `main`. Publication-cost [issue #247](https://github.com/pmndrs/glyph/issues/247) is pertinent only to the
-design risk: live axis changes could invalidate shaping, outlines, rasters, and publication repeatedly. It is not
-evidence of variable-font support. Bake-time immutable instances avoid that runtime invalidation path.
+The OpenType [`glyf` specification](https://learn.microsoft.com/en-us/typography/opentype/spec/glyf) defines transformed,
+point-matched, nested, `ROUND_XY_TO_GRID`, and offset-scaling behavior; passing Paper cannot discharge cases it does not
+contain. Likewise, the common variation formats place item variation stores and region scalars outside `gvar`
+([common variation formats](https://learn.microsoft.com/en-us/typography/opentype/spec/otvarcommonformats)).
 
-## Coherence requirements for a selected variable instance
+## Slug bands: corrected rule
 
-“Select weight 650” cannot mean varying outlines alone. After validating and normalizing a coordinate against `fvar`
-and `avar`, the same location must govern:
+The current shader exits when the current curve's **instanced** maximum is behind the sample; it does not compare a
+stored conservative sort key. The corrected study therefore permits only an exact rebuild, a per-change re-sort, a
+stored-key shader change, or removal of the early exit
+([corrected study lines 18–40](https://github.com/pmndrs/glyph/blob/dcd04cc70e470a27110bff2602905ceb5e465092/.agents/docs/planning/outline-stream-variable-font-bands-study.md#L18-L40)).
 
-1. GSUB/GPOS/GDEF feature and item variations used by shaping;
-2. `HVAR`/`VVAR` glyph advances and side bearings plus global `MVAR` metrics when present;
-3. `gvar` TrueType outlines, including component transforms and phantom points for composite glyphs, or CFF2/`VARC`
-   when those formats are admitted; and
-4. bitmap, MTSDF, Slug, retained outline, ink-extents, and shaping artifacts.
+Paper independently confirms the logic. Rebuilding every used glyph's horizontal and vertical bands from its instanced
+curves produced zero missing references and zero adjacent order inversions. Reusing default-instance partitions/order
+at other locations produced 122,418 missing references and 7,211 inversions. This is a structural CPU check against the
+current early-exit precondition, not pixel output and not a GPU execution.
 
-The OpenType common-formats specification describes `gvar` outline deltas, composite component point numbering,
-phantom points, HVAR metrics, and CFF2 variation data
-([OpenType variation common formats](https://learn.microsoft.com/en-us/typography/opentype/spec/otvarcommonformats)).
-HarfBuzz likewise treats variation coordinates as font state set before normal shaping, with unspecified axes using the
-default ([HarfBuzz variable fonts](https://harfbuzz.github.io/fonts-and-faces-variable.html)).
+## Product boundary and minimum changes
 
-The pinned Fontations stack already exposes location-aware metadata, metrics, and outline APIs: Skrifa's
-`MetadataProvider` accepts `LocationRef` for metrics
-([Skrifa 0.45.1](https://docs.rs/skrifa/0.45.1/skrifa/trait.MetadataProvider.html)), and its outline API accepts a
-location in `DrawSettings`
-([outline module](https://docs.rs/skrifa/0.45.1/skrifa/outline/index.html)). It is therefore reasonable to infer that the
-dependency can provide much of the low-level instancing work. Glyph still needs to pass one canonical location through
-every producer and prove the resulting artifact contract; dependency capability is not product support.
+Current `main` support is context, not the answer: raw variable fonts are rejected. `readGlyphs` is the borrowed,
+callback-scoped path, while `glyphs().outlineAt()` is the caller-owned inspection path
+([layout contract](../../../packages/glyph/src/layout.ts#L120-L171)); Three's `split()` captures only committed drawable
+glyphs and excludes blanks ([implementation](../../../packages/glyph/src/three/text.ts#L863-L921)). All three consume
+the same outline identity. `GlyphOutlineView` expressly promises that equal `(fontHandle, glyphId)` keys have identical
+outlines ([outline contract](../../../packages/glyph/src/glyph-outline.ts#L1-L24)). The unmerged
+[`johncomposed/glyph#1`](https://github.com/johncomposed/glyph/pull/1) draft passes one pinned location through shaping,
+metrics, raster, and extents while deliberately excluding runtime axis changes. It is useful shaping-instance work, but
+it neither implements nor disproves the live base-plus-delta stream validated here. PRs
+[#221](https://github.com/pmndrs/glyph/pull/221), [#227](https://github.com/pmndrs/glyph/pull/227),
+[#229](https://github.com/pmndrs/glyph/pull/229), [#230](https://github.com/pmndrs/glyph/pull/230),
+[#231](https://github.com/pmndrs/glyph/pull/231), [#232](https://github.com/pmndrs/glyph/pull/232), and
+[#234](https://github.com/pmndrs/glyph/pull/234) do not implement this format. No performance timing was run, so this
+work does not overlap [#247](https://github.com/pmndrs/glyph/issues/247).
 
-Cache identity is the main public-contract constraint. Today the loader deduplicates and assigns `fontHandle` by
-`shapingFingerprint` (`packages/glyph/src/loader.ts:285-320,359-362`), and equal `(fontHandle, glyphId)` promises equal
-outlines. Two weights can have the same glyph ID but different geometry, advances, bounds, and rasters. Therefore the
-normalized coordinates must participate in the prepared/source/shaping fingerprint, bake descriptor and provenance,
-raster sidecar identity, and loader deduplication. The least disruptive design is one immutable handle per baked
-instance. Mutating coordinates under one handle would make the current outline-cache promise false and would require a
-new public identity dimension.
+The minimum coherent implementation scope is:
 
-## Minimum changes
+1. **Wire fidelity:** land the base triplet and sparse region-major delta planes; preserve original point order and
+   contour boundaries; store the component flags needed for `ROUND_XY_TO_GRID`, point matching, offset scaling,
+   transforms, and nesting instead of silently normalizing them away.
+2. **One canonical location:** validate user coordinates against `fvar`, normalize and apply `avar`, then pass the same
+   canonical location to shaping, HVAR/VVAR/MVAR metrics, outline instancing, extents, every raster backend, and exact
+   Slug-band rebuilds. Default coordinates and arbitrary coordinates are the same pipeline with different inputs.
+3. **Shaping payload:** retain the variation tables listed by the revised decision. Resolve GSUB FeatureVariations and
+   GDEF/GPOS item variations at the same location. Fonts without HVAR need phantom-point metrics or a precise rejection.
+4. **Identity and invalidation:** a mutable location cannot keep the current cache promise that equal
+   `(fontHandle, glyphId)` means equal outlines. Either allocate an immutable instance handle for each canonical
+   coordinate or add an explicit variation-instance/generation identity to outline, raster, bounds, shaping-plan, and
+   band caches. Axis changes must invalidate every coordinate-dependent product together.
+5. **Acceptance gates:** make the pinned Paper workflow a network/downloaded correctness check; add separate fixtures
+   for transformed, nested, point-matched and scaled-offset composites, all-off-curve contours, out-of-range tagged-i16
+   coordinates, no-HVAR metrics, CFF2, `VARC`, and `avar2`. Do not infer those capabilities from Paper.
+6. **GPU proof later:** run the already specified slot-map instancer and Slug path on WebGPU/WebGL2, comparing pixels or
+   coverage to the CPU/oracle instance. The present result proves CPU representation and band preconditions only.
 
-For **one fixed instance per asset**, the minimum coherent addition is:
+## Recommendation for #99
 
-1. Add validated, canonical variation coordinates to CLI and Node bake/prepare descriptors. Resolve omitted axes to
-   defaults, clamp or reject out-of-range values by an explicit policy, and normalize through `avar` once.
-2. Instantiate or reduce all retained shaping tables at that location, not merely strip `fvar`/`gvar`. Resolve layout
-   feature variations and metrics so the emitted shaping payload is a self-contained static instance.
-3. Generate extents, retained outlines, bitmap, MTSDF, and Slug data from the same location. Include composite
-   variation processing in the Paper milestone.
-4. Put canonical coordinates into fingerprints, provenance, artifact/sidecar compatibility checks, and cache keys.
-   Preserve the existing `GlyphOutlineView` by allocating a distinct immutable `fontHandle` per instance.
-5. Keep format diagnostics honest: initially admit Paper's TrueType `glyf`/`gvar` path and continue returning a specific
-   unsupported-format error for CFF2/`VARC` until their own fixtures pass.
-
-For **live axes**, additional public work would be necessary: style-level variation settings, shaping-run coordinates,
-plan/cache keys, font-instance lifecycle, outline and raster regeneration/selection, renderer invalidation, and a policy
-for stable glyph identity while coordinates change. That is beyond the minimum Paper support and should remain a
-separate format revision.
-
-## Feasible verification plan
-
-Use the OFL Paper repository as an external/downloaded fixture or obtain explicit approval for any committed fixture;
-do not add its binaries casually, and use LFS for a newly approved large asset.
-
-1. **Current static acceptance:** bake Paper Regular TTF and OTF with outlines; shape without and with `ss02`; verify
-   `readGlyphs`, `glyphs().outlineAt`, and drawable-only `split()` against the same glyph IDs and advances.
-2. **Independent variable oracle:** for weights 100, 400, 650, and 800, compare Glyph output to HarfBuzz shaping and
-   Fontations/Skrifa outlines and bounds at the same normalized coordinates. Include `M`, `W`, `AE`, `m`, `w`, accented
-   `W`/`w`, and ordinary letters; run with `ss02` off and on.
-3. **Composite coverage:** identify Paper composites with `gvar` data and compare their component transforms, bounds,
-   and rendered pixels at a named and a non-named weight. An accented duospace letter is useful, but the oracle should
-   select from actual composite-variation records rather than assume a glyph's construction.
-4. **Artifact coherence:** assert identical clusters, glyph IDs, advances, positions, ink bounds, outline geometry, and
-   bitmap/MTSDF/Slug instance selection for a coordinate. Reload artifacts and attach sidecars to exercise provenance.
-5. **Identity:** prove two weights receive different shaping fingerprints and handles; prove repeated loads of the same
-   canonical coordinate deduplicate; prove a cached `(fontHandle, glyphId)` outline never changes.
-6. **Format boundaries:** add separate CFF2 and `VARC` fixtures before claiming those formats. Paper cannot verify them.
-7. **Performance later:** after #247 timing is complete, measure bake cost, artifact bytes, outline decode/load memory,
-   and cache cardinality for several static instances. Measure live-axis publication only if live axes become scheduled.
-
-No local performance numbers were collected for this report, and the interrupted build is not evidence. This keeps the
-recommended implementation scoped to correctness first: static Paper files now, one coherent baked variable instance
-next, and no claim of live-axis, CFF2, or `VARC` support.
+Update the existing issue rather than create a parallel plan. Its acceptance statement should be: a single baked
+variable asset can be shaped and outlined at arbitrary canonical coordinates, with synchronized metrics, geometry,
+rasters, bounds and cache identity. Paper Mono is the first TrueType acceptance fixture; CFF2 and advanced composite
+forms remain explicit follow-on gates. The exact issue-ready text is in
+[`2026-10-08-paper-mono-issue-99-proposal.md`](2026-10-08-paper-mono-issue-99-proposal.md).
