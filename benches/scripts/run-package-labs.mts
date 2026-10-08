@@ -251,6 +251,7 @@ async function runLabs(
       false,
       {
         GLYPH_LABS_PACKAGE_ROOT: packageRoot,
+        GLYPH_LABS_ARTIFACT_ROLE: role,
       },
     );
   } catch (error) {
