@@ -26,6 +26,7 @@ const threePackage = (await import(
 // Adapt older installed canaries once, outside every timed workload.
 const { bitmap, glyph } = glyphPackage;
 const { defineThreeConfig } = threePackage;
+export { font, glyph };
 const textPrototype: {
   readGlyphs?: (typeof threePackage.Text.prototype)['readGlyphs'];
   withGlyphs?: (typeof threePackage.Text.prototype)['readGlyphs'];
