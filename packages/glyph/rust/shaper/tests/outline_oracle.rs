@@ -34,6 +34,36 @@ fn skrifa_segments(font: &FontRef<'_>, glyph_id: u32) -> Vec<PathElement> {
     segments
 }
 
+fn glyph_count(font: &FontRef<'_>) -> u32 {
+    u32::from(font.maxp().unwrap().num_glyphs())
+}
+
+fn table_range(font: &FontRef<'_>, tag: [u8; 4]) -> (usize, usize) {
+    let record = font
+        .table_directory()
+        .table_records()
+        .iter()
+        .find(|record| record.tag() == Tag::new(&tag))
+        .unwrap();
+    (record.offset() as usize, record.length() as usize)
+}
+
+/// The byte range in `bytes` of each non-empty `glyf` entry.
+fn glyph_data_ranges(bytes: &[u8]) -> Vec<(usize, usize)> {
+    let font = FontRef::new(bytes).unwrap();
+    let loca = font.loca(None).unwrap();
+    let (glyf, _) = table_range(&font, *b"glyf");
+    (0..loca.len().saturating_sub(1))
+        .map(|glyph_id| {
+            (
+                glyf + loca.get_raw(glyph_id).unwrap() as usize,
+                glyf + loca.get_raw(glyph_id + 1).unwrap() as usize,
+            )
+        })
+        .filter(|(start, end)| end - start >= 10)
+        .collect()
+}
+
 #[test]
 fn every_fixture_glyph_draws_the_same_segments_as_skrifa() {
     for path in [
@@ -49,9 +79,8 @@ fn every_fixture_glyph_draws_the_same_segments_as_skrifa() {
     ] {
         let bytes = face(path);
         let font = FontRef::new(&bytes).unwrap();
-        let glyph_count = u32::from(font.maxp().unwrap().num_glyphs());
         let mut drawn = 0;
-        for glyph_id in 0..glyph_count {
+        for glyph_id in 0..glyph_count(&font) {
             let expected = skrifa_segments(&font, glyph_id);
             let mut actual = Vec::new();
             draw_glyph(&bytes, glyph_id, &mut actual)
@@ -64,26 +93,13 @@ fn every_fixture_glyph_draws_the_same_segments_as_skrifa() {
 }
 
 fn with_component_flags(bytes: &[u8], edit: impl Fn(u16) -> u16) -> Vec<u8> {
-    let font = read_fonts::FontRef::new(bytes).unwrap();
-    let loca = font.loca(None).unwrap();
-    let glyf = font
-        .table_directory()
-        .table_records()
-        .iter()
-        .find(|record| record.tag() == Tag::new(b"glyf"))
-        .unwrap()
-        .offset() as usize;
     let mut edited = bytes.to_vec();
     let word = |data: &[u8], at: usize| u16::from_be_bytes([data[at], data[at + 1]]);
-    for glyph_id in 0..loca.len().saturating_sub(1) {
-        let (start, end) = (
-            loca.get_raw(glyph_id).unwrap() as usize,
-            loca.get_raw(glyph_id + 1).unwrap() as usize,
-        );
-        if end - start < 10 || (word(bytes, glyf + start) as i16) >= 0 {
+    for (start, _) in glyph_data_ranges(bytes) {
+        if (word(bytes, start) as i16) >= 0 {
             continue;
         }
-        let mut at = glyf + start + 10;
+        let mut at = start + 10;
         loop {
             let flags = word(bytes, at);
             edited[at..at + 2].copy_from_slice(&edit(flags).to_be_bytes());
@@ -136,10 +152,9 @@ fn anchors_in_range(glyf: &Glyf<'_>, loca: &Loca<'_>, glyph_id: GlyphId) -> bool
 
 fn agrees_with_skrifa(bytes: &[u8]) -> usize {
     let font = FontRef::new(bytes).unwrap();
-    let tables = read_fonts::FontRef::new(bytes).unwrap();
-    let (glyf, loca) = (tables.glyf().unwrap(), tables.loca(None).unwrap());
+    let (glyf, loca) = (font.glyf().unwrap(), font.loca(None).unwrap());
     let mut drawn = 0;
-    for glyph_id in 0..u32::from(font.maxp().unwrap().num_glyphs()) {
+    for glyph_id in 0..glyph_count(&font) {
         let mut actual = Vec::new();
         let ours = draw_glyph(bytes, glyph_id, &mut actual);
         if !anchors_in_range(&glyf, &loca, GlyphId::new(glyph_id)) {
@@ -174,14 +189,8 @@ fn corrupted_outline_tables_fail_or_draw_without_panicking() {
     let mut outline = GlyphOutline::default();
     for (source, tag) in [(&bytes, *b"glyf"), (&bytes, *b"loca"), (&dancing, *b"CFF ")] {
         let font = FontRef::new(source).unwrap();
-        let record = font
-            .table_directory()
-            .table_records()
-            .iter()
-            .find(|record| record.tag() == Tag::new(&tag))
-            .unwrap();
-        let (offset, length) = (record.offset() as usize, record.length() as usize);
-        let glyph_count = u32::from(font.maxp().unwrap().num_glyphs());
+        let (offset, length) = table_range(&font, tag);
+        let glyph_count = glyph_count(&font);
         let mut state = 0x504d_4e44_u64;
         for _ in 0..64 {
             let mut corrupted = source.to_vec();
@@ -377,7 +386,7 @@ fn decoded_outlines_share_endpoints_flag_lines_and_use_em_units_y_down() {
         let upem = f32::from(font.head().unwrap().units_per_em());
         let mut outline = GlyphOutline::default();
         let (mut lines, mut curves) = (0, 0);
-        for glyph_id in 0..u32::from(font.maxp().unwrap().num_glyphs()) {
+        for glyph_id in 0..glyph_count(&font) {
             let label = format!("{path} glyph {glyph_id}");
             outline
                 .decode(&bytes, glyph_id)
@@ -400,31 +409,14 @@ fn decoded_outlines_share_endpoints_flag_lines_and_use_em_units_y_down() {
 
 /// Rewrites every simple glyph's point flags with `edit`, which must keep the coordinate-size and repeat bits.
 fn with_simple_point_flags(bytes: &[u8], edit: impl Fn(u8) -> u8) -> Vec<u8> {
-    let font = read_fonts::FontRef::new(bytes).unwrap();
-    let loca = font.loca(None).unwrap();
-    let glyf = font
-        .table_directory()
-        .table_records()
-        .iter()
-        .find(|record| record.tag() == Tag::new(b"glyf"))
-        .unwrap()
-        .offset() as usize;
     let mut edited = bytes.to_vec();
     let word = |at: usize| u16::from_be_bytes([bytes[at], bytes[at + 1]]) as usize;
-    for glyph_id in 0..loca.len().saturating_sub(1) {
-        let (start, end) = (
-            loca.get_raw(glyph_id).unwrap() as usize,
-            loca.get_raw(glyph_id + 1).unwrap() as usize,
-        );
-        let contours = if end - start < 10 {
-            0
-        } else {
-            word(glyf + start)
-        };
+    for (start, _) in glyph_data_ranges(bytes) {
+        let contours = word(start);
         if contours == 0 || contours >= 0x8000 {
             continue;
         }
-        let ends = glyf + start + 10;
+        let ends = start + 10;
         let point_count = word(ends + 2 * (contours - 1)) + 1;
         let mut at = ends + 2 * contours;
         at += 2 + word(at);
@@ -445,7 +437,7 @@ fn with_simple_point_flags(bytes: &[u8], edit: impl Fn(u8) -> u8) -> Vec<u8> {
 
 /// Counts contours that start off-curve and contours with no on-curve point at all.
 fn off_curve_contours(bytes: &[u8]) -> (usize, usize) {
-    let font = read_fonts::FontRef::new(bytes).unwrap();
+    let font = FontRef::new(bytes).unwrap();
     let (glyf, loca) = (font.glyf().unwrap(), font.loca(None).unwrap());
     let (mut off_start, mut all_off) = (0, 0);
     for glyph_id in 0..loca.len().saturating_sub(1) {
@@ -490,7 +482,7 @@ fn contours_that_start_off_curve_or_have_no_on_curve_point_match_skrifa() {
         let font = FontRef::new(&edited).unwrap();
         let upem = f32::from(font.head().unwrap().units_per_em());
         let mut outline = GlyphOutline::default();
-        for glyph_id in 0..u32::from(font.maxp().unwrap().num_glyphs()) {
+        for glyph_id in 0..glyph_count(&font) {
             let name = format!("{label} glyph {glyph_id}");
             outline
                 .decode(&edited, glyph_id)

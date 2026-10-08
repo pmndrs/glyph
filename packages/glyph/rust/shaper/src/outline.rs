@@ -434,7 +434,7 @@ impl GlyphOutline {
         if self.failure.is_some() {
             return;
         }
-        if !point.x.is_finite() || !point.y.is_finite() {
+        if !is_finite(point) {
             self.fail(OutlineError::InvalidGlyph);
         } else if self.points.try_reserve(1).is_err() {
             self.fail(OutlineError::OutOfMemory);
@@ -448,10 +448,7 @@ impl GlyphOutline {
         if self.failure.is_some() {
             return;
         }
-        if [control, end]
-            .iter()
-            .any(|point| !point.x.is_finite() || !point.y.is_finite())
-        {
+        if !is_finite(control) || !is_finite(end) {
             self.fail(OutlineError::InvalidGlyph);
         } else if self.points.try_reserve(2).is_err() || self.segment_lines.try_reserve(1).is_err()
         {
@@ -546,6 +543,10 @@ impl OutlinePen for GlyphOutline {
             Ok(_) | Err(_) => self.fail(OutlineError::OutOfMemory),
         }
     }
+}
+
+fn is_finite(point: Point) -> bool {
+    point.x.is_finite() && point.y.is_finite()
 }
 
 fn line_control(start: Point, end: Point) -> Point {
