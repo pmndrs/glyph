@@ -26,16 +26,15 @@ const threePackage = (await import(
 // Adapt older installed canaries once, outside every timed workload.
 const { bitmap, glyph } = glyphPackage;
 const { defineThreeConfig } = threePackage;
-// Older comparison canaries expose the same borrowed-read method under its former name.
-if (textPrototype.split === undefined && textPrototype.breakApart !== undefined) {
-  textPrototype.split = textPrototype.breakApart;
-}
 const textPrototype: {
   readGlyphs?: (typeof threePackage.Text.prototype)['readGlyphs'];
   withGlyphs?: (typeof threePackage.Text.prototype)['readGlyphs'];
   split?: (typeof threePackage.Text.prototype)['split'];
   breakApart?: (typeof threePackage.Text.prototype)['split'];
 } = threePackage.Text.prototype;
+if (textPrototype.split === undefined && textPrototype.breakApart !== undefined) {
+  textPrototype.split = textPrototype.breakApart;
+}
 if (textPrototype.readGlyphs === undefined && textPrototype.withGlyphs !== undefined) {
   textPrototype.readGlyphs = textPrototype.withGlyphs;
 }
