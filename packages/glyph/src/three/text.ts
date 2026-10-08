@@ -49,6 +49,7 @@ import {
 import { ThreeCommandBufferRenderer } from './command-buffer-renderer.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import type { ThreeBindings, ThreeMaterialBinding } from './schema.js';
+import { setThreeBatchScope } from './internal/batch-scope.js';
 import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
 import type { ThreeRendererResources } from './internal/renderer-resources.js';
 import {
@@ -98,11 +99,22 @@ export interface ThreeRootOptions {
 
 /** Construction options for one Three scene-hierarchy parent. */
 export interface TextGroupOptions {
+  /** Physical draw ownership without creating another semantic root or publication stream. Defaults to `auto`. */
+  readonly batching?: TextGroupBatching;
   readonly renderOrder?: number;
   readonly material?: ThreeTextMaterial;
   /** Snap Bitmap vertices to physical pixels. */
   readonly pixelSnapping?: boolean;
 }
+
+/**
+ * Controls where compatible descendant draws may coalesce.
+ *
+ * - `auto`: a top-level authored group owns a boundary; nested automatic groups inherit it.
+ * - `shared`: join the nearest authored boundary, or the implicit root pool when none exists.
+ * - `group`: force this group to own a nested boundary.
+ */
+export type TextGroupBatching = 'auto' | 'shared' | 'group';
 
 /** Observable publication state of one Three text instance. */
 export type TextCommitState =
@@ -1110,6 +1122,7 @@ export class TextGroup extends THREE.Object3D {
   }
   readonly #pixelSnapping: boolean | undefined;
   readonly #root: ThreeRootHost;
+  #batching: TextGroupBatching;
   #material: ThreeTextMaterial | undefined;
   readonly #texts: Text<RasterFormatMetadata>[] = [];
   #disposed = false;
@@ -1134,6 +1147,7 @@ export class TextGroup extends THREE.Object3D {
     this.#pixelSnapping =
       options.pixelSnapping === undefined ? undefined : normalizePixelSnapping(options.pixelSnapping);
     this.#root = host;
+    this.#batching = normalizeTextGroupBatching(options.batching);
     this.#material = options.material;
     if (options.renderOrder !== undefined) {
       if (!Number.isFinite(options.renderOrder)) throw new RangeError('TextGroup renderOrder must be finite');
@@ -1151,6 +1165,16 @@ export class TextGroup extends THREE.Object3D {
   }
   get pixelSnapping(): boolean | undefined {
     return this.#pixelSnapping;
+  }
+  get batching(): TextGroupBatching {
+    return this.#batching;
+  }
+  set batching(value: TextGroupBatching) {
+    this.#assertActive();
+    const batching = normalizeTextGroupBatching(value);
+    if (this.#batching === batching) return;
+    this.#batching = batching;
+    this.#root.invalidateMaterial();
   }
   get disposed(): boolean {
     return this.#disposed;
@@ -1242,6 +1266,7 @@ interface DetachedQueryEntry {
 
 interface TextPresentation {
   readonly group: TextGroup | undefined;
+  readonly batchGroup: TextGroup | undefined;
   readonly material: ThreeTextMaterial | undefined;
   readonly pixelSnapping: boolean;
   /** Three's render order for the draw mesh, stated by the Text or its nearest TextGroup. */
@@ -1626,9 +1651,9 @@ class ThreeRootPublication {
       desired,
       text,
       presentation,
-      this.#root,
       order,
-      (material, pixelSnapping, renderOrder) => this.#materialBindings.get(material, pixelSnapping, renderOrder),
+      (material, pixelSnapping, renderOrder, batchGroup) =>
+        this.#materialBindings.get(material, pixelSnapping, renderOrder, batchGroup),
     );
     if (previous === undefined) {
       const handle = this.#services.createText(state);
@@ -1682,23 +1707,19 @@ function coreTextState(
   desired: DesiredTextState<RasterFormatMetadata>,
   transform: THREE.Object3D,
   presentation: TextPresentation,
-  root: ThreeRootHost,
   order: number,
   materialBinding: (
     material: ThreeTextMaterial | undefined,
     pixelSnapping: boolean,
     renderOrder: number,
+    batchGroup: TextGroup | undefined,
   ) => ThreeMaterialBinding,
 ) {
-  const { pixelSnapping, renderOrder } = presentation;
-  const material = materialBinding(
-    desired.material ?? presentation.material ?? root.material,
-    pixelSnapping,
-    renderOrder,
-  );
+  const { batchGroup, pixelSnapping, renderOrder } = presentation;
+  const material = materialBinding(desired.material ?? presentation.material, pixelSnapping, renderOrder, batchGroup);
   const spans = desired.spans.map((span) => {
     const spanMaterial: ThreeMaterialBinding | undefined =
-      span.material === undefined ? undefined : materialBinding(span.material, pixelSnapping, renderOrder);
+      span.material === undefined ? undefined : materialBinding(span.material, pixelSnapping, renderOrder, batchGroup);
     return Object.freeze({
       start: span.start,
       end: span.end,
@@ -1721,26 +1742,49 @@ function coreTextState(
   };
 }
 
-class ThreeMaterialBindingCache {
-  readonly #default = new Map<string, ThreeMaterialBinding>();
-  readonly #custom = new WeakMap<ThreeTextMaterial, Map<string, ThreeMaterialBinding>>();
+interface ThreeMaterialBindingVariants {
+  readonly default: Map<string, ThreeMaterialBinding>;
+  readonly custom: WeakMap<ThreeTextMaterial, Map<string, ThreeMaterialBinding>>;
+}
 
-  get(material: ThreeTextMaterial | undefined, pixelSnapping: boolean, renderOrder: number): ThreeMaterialBinding {
+class ThreeMaterialBindingCache {
+  readonly #shared = createMaterialBindingVariants();
+  readonly #scoped = new WeakMap<TextGroup, ThreeMaterialBindingVariants>();
+
+  get(
+    material: ThreeTextMaterial | undefined,
+    pixelSnapping: boolean,
+    renderOrder: number,
+    batchGroup: TextGroup | undefined,
+  ): ThreeMaterialBinding {
+    let bindings = this.#shared;
+    if (batchGroup !== undefined) {
+      bindings = this.#scoped.get(batchGroup) ?? createMaterialBindingVariants();
+      this.#scoped.set(batchGroup, bindings);
+    }
     let variants: Map<string, ThreeMaterialBinding>;
     if (material === undefined) {
-      variants = this.#default;
+      variants = bindings.default;
     } else {
-      variants = this.#custom.get(material) ?? new Map();
-      this.#custom.set(material, variants);
+      variants = bindings.custom.get(material) ?? new Map();
+      bindings.custom.set(material, variants);
     }
     const key = `${pixelSnapping ? 1 : 0}:${String(renderOrder)}`;
     let binding = variants.get(key);
     if (binding === undefined) {
       binding = Object.freeze({ material, pixelSnapping, renderOrder });
+      setThreeBatchScope(binding, batchGroup);
       variants.set(key, binding);
     }
     return binding;
   }
+}
+
+function createMaterialBindingVariants(): ThreeMaterialBindingVariants {
+  return {
+    default: new Map(),
+    custom: new WeakMap(),
+  };
 }
 
 function normalizeDesired<Format extends RasterFormatMetadata>(
@@ -1987,6 +2031,12 @@ function normalizePixelSnapping(value: boolean | undefined): boolean {
   throw new TypeError('pixelSnapping must be a boolean');
 }
 
+function normalizeTextGroupBatching(value: TextGroupBatching | undefined): TextGroupBatching {
+  if (value === undefined || value === 'auto') return 'auto';
+  if (value === 'shared' || value === 'group') return value;
+  throw new TypeError('TextGroup batching must be "auto", "shared", or "group"');
+}
+
 function nearestScene(object: THREE.Object3D): THREE.Scene | undefined {
   let current: THREE.Object3D | null = object;
   while (current !== null) {
@@ -2044,6 +2094,8 @@ function paragraphOrderRank(text: Text<RasterFormatMetadata>): number {
 function resolveTextPresentation(text: Text<RasterFormatMetadata>): TextPresentation {
   const root = reconciler.root(text);
   let group: TextGroup | undefined;
+  let explicitBatchGroup: TextGroup | undefined;
+  let outermostGroup: TextGroup | undefined;
   let material: ThreeTextMaterial | undefined;
   let pixelSnapping: boolean | undefined;
   let renderOrder: number | undefined;
@@ -2058,15 +2110,19 @@ function resolveTextPresentation(text: Text<RasterFormatMetadata>): TextPresenta
         throw new TypeError('one Three TextGroup cannot contain Text objects from different Glyph roots');
       }
       group ??= parent;
+      explicitBatchGroup ??= parent.batching === 'group' ? parent : undefined;
+      outermostGroup = parent;
       material ??= parent.material;
       pixelSnapping ??= parent.pixelSnapping;
       renderOrder ??= statedTextGroupRenderOrder(parent);
     }
     parent = parent.parent;
   }
+  const batchGroup = explicitBatchGroup ?? (outermostGroup?.batching === 'auto' ? outermostGroup : undefined);
   const resolved: TextPresentation = {
     group,
-    material,
+    batchGroup,
+    material: material ?? root.material,
     pixelSnapping: pixelSnapping ?? text.pixelSnapping,
     // Inside a group the child's renderOrder is a Rust paragraph rank, never a
     // Three material/draw key. An entirely unstated group shares Three's default 0.
@@ -2102,6 +2158,7 @@ function observeTextGroupRenderOrder(
 function sameTextPresentation(left: TextPresentation, right: TextPresentation): boolean {
   return (
     left.group === right.group &&
+    left.batchGroup === right.batchGroup &&
     left.material === right.material &&
     left.pixelSnapping === right.pixelSnapping &&
     left.renderOrder === right.renderOrder

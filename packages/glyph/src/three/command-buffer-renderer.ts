@@ -696,6 +696,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
 
 function applyReusedDrawUpdate(update: ReusedDrawUpdate): void {
   updateGeometryInstances(update.mesh.geometry, update.recordCount);
+  update.mesh.userData.pmndrsGlyphBatchScope = update.batchScope;
   update.mesh.userData.pmndrsGlyphRunStart = update.recordIndex;
   update.mesh.userData.pmndrsGlyphTransformId = update.transformId;
   update.mesh.userData.pmndrsGlyphPrimitiveKind = update.primitiveKind;

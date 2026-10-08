@@ -754,8 +754,9 @@ Browser frame, GPU, and input-latency observations remain Vitexec or Playwright 
 conformance remain deterministic gates rather than timing benchmarks.
 
 The installed-package publication suite includes warm retained-label normalization, framework-shaped formatted-flow
-updates, Vue snapshot reuse, TypeGPU position-only updates, and raw trailing-span changes. Each
-case warms once before its timed yield and checks its semantic result afterward with package-owned counts, encoded bytes,
+updates, Vue snapshot reuse, TypeGPU position-only updates, and raw trailing-span changes. The batch suite also toggles
+one authored boundary containing 1,000 retained labels. Each case warms once before its timed yield and checks its
+semantic result afterward with package-owned counts, encoded bytes,
 borrowed glyph checksums, or draw topology. Compatibility probes and old-canary adapters run once during fixture setup;
 candidate-only helpers are required before timing begins.
 
