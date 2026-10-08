@@ -984,6 +984,11 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return this.#glyphPlacements()?.caretAt(x, y);
   }
 
+  /** Resolves a UTF-16 offset with the placement snapshot's cluster, bidi-affinity, and line-boundary policy. */
+  caretForOffset(offset: number): GlyphCaret | undefined {
+    return this.#glyphPlacements()?.caretForOffset(offset);
+  }
+
   selectionRects(start: number, end: number): readonly LayoutBox[] | undefined {
     return this.#glyphPlacements()?.selectionRects(start, end);
   }

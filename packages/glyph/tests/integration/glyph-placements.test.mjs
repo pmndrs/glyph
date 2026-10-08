@@ -2,27 +2,33 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
 
-import { glyphFlags, bitmap } from '@pmndrs/glyph';
+import { bitmap, createFontStack, glyphFlags } from '@pmndrs/glyph';
+import { createGlyphPlacements } from '@pmndrs/glyph/core';
 import { loadFont as loadGlyphFont } from '../../dist/loader.js';
 import * as THREE from 'three/webgpu';
 
 import { createThreeTestHandle } from '../support/three-handle.mjs';
 
-const fontUrl = new URL('../../../../benches/fixtures/rendering/inter-bitmap-16-32.font.glb', import.meta.url);
+const fontUrls = {
+  inter: new URL('../../../../benches/fixtures/rendering/inter-bitmap-16-32.font.glb', import.meta.url),
+  amiri: new URL('../../../../benches/fixtures/rendering/amiri-bitmap-16-32.font.glb', import.meta.url),
+};
 
-let loaded;
+const loaded = new Map();
 
-async function loadFont() {
-  if (loaded !== undefined) return loaded;
-  loaded = await loadGlyphFont(
-    { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
+async function loadFont(fixture = 'inter') {
+  const existing = loaded.get(fixture);
+  if (existing !== undefined) return existing;
+  const font = await loadGlyphFont(
+    { baked: { bytes: await readFile(fontUrls[fixture]), ownership: 'copy' } },
     bitmap({ strikes: [16, 32] }),
   );
-  return loaded;
+  loaded.set(fixture, font);
+  return font;
 }
 
 after(() => {
-  loaded?.dispose();
+  for (const font of loaded.values()) font.dispose();
 });
 
 async function mount(testContext, font, text, properties = {}) {
@@ -39,6 +45,19 @@ async function mount(testContext, font, text, properties = {}) {
 function unmount({ group, node }) {
   node.dispose();
   group.dispose();
+}
+
+function placementsOf(node) {
+  const layout = node.glyphs();
+  return createGlyphPlacements(layout, node.text, layout.x, layout.y, []);
+}
+
+function leadingEdgeOf(placements, cluster) {
+  const glyphs = placements.glyphs.filter((glyph) => glyph.cluster === cluster);
+  assert.ok(glyphs.length > 0, `cluster ${String(cluster)} must have a glyph`);
+  const left = Math.min(...glyphs.flatMap((glyph) => [glyph.x, glyph.x + glyph.advance]));
+  const right = Math.max(...glyphs.flatMap((glyph) => [glyph.x, glyph.x + glyph.advance]));
+  return (glyphs[0].bidiLevel & 1) !== 0 ? right : left;
 }
 
 test('measureGlyphs publishes local geometry without traversing world matrices', async (t) => {
@@ -117,6 +136,16 @@ test('caret and selection helpers resolve clusters without exposing a mutable sn
     const whole = mounted.node.selectionRects(0, mounted.node.text.length);
     assert.equal(whole?.length, 1);
     assert.equal(whole?.[0].height, line.lineHeight);
+
+    const atStart = mounted.node.caretForOffset(0);
+    assert.deepEqual(atStart, start, 'the caret before the first cluster matches the caret at the line start');
+    const atEnd = mounted.node.caretForOffset(mounted.node.text.length);
+    assert.deepEqual(atEnd, end, 'the caret after the last cluster matches the caret at the line end');
+    const inside = mounted.node.caretForOffset(3);
+    assert.equal(inside?.offset, 3);
+    assert.equal(inside?.leading, true);
+    assert.equal(inside?.rect.x, mounted.node.caretAt(inside.rect.x, line.baseline)?.rect.x);
+    assert.throws(() => mounted.node.caretForOffset(mounted.node.text.length + 1), RangeError);
   } finally {
     unmount(mounted);
   }
@@ -152,6 +181,149 @@ test('word and caret ranges preserve UTF-16 clusters and bidi direction', async 
     unmount(astral);
     unmount(combining);
     unmount(rtl);
+  }
+});
+
+test('caretForOffset follows logical clusters through RTL and mixed-direction text', async (t) => {
+  const [inter, amiri] = await Promise.all([loadFont(), loadFont('amiri')]);
+  const rtl = await mount(t, amiri, 'سلام', {
+    style: { fontSize: 16, direction: 'rtl', language: 'ar' },
+    constraints: { width: { mode: 'exact', size: 100 } },
+  });
+  const mixed = await mount(t, createFontStack(inter, amiri), 'ab سلام cd', {
+    style: { fontSize: 16, direction: 'ltr', language: 'ar' },
+  });
+  try {
+    const rtlPlacements = placementsOf(rtl.node);
+    const rtlStart = rtlPlacements.caretForOffset(0);
+    const rtlEnd = rtlPlacements.caretForOffset(rtl.node.text.length);
+    assert.equal(rtlStart.offset, 0);
+    assert.equal(rtlStart.leading, true);
+    assert.equal(rtlEnd.offset, rtl.node.text.length);
+    assert.equal(rtlEnd.leading, false);
+    assert.ok(rtlStart.rect.x > rtlEnd.rect.x, 'RTL logical start must draw to the right of its logical end');
+
+    const rtlClusters = [...new Set(rtlPlacements.glyphs.map((glyph) => glyph.cluster))].sort(
+      (left, right) => left - right,
+    );
+    const rtlCarets = rtlClusters.map((cluster) => rtlPlacements.caretForOffset(cluster));
+    assert.deepEqual(
+      rtlCarets.map((caret) => caret.offset),
+      rtlClusters,
+      'each logical RTL cluster must resolve independently of visual glyph order',
+    );
+    assert.equal(
+      new Set(rtlCarets.map((caret) => caret.rect.x)).size,
+      rtlClusters.length,
+      'distinct RTL clusters must not collapse onto one visual caret',
+    );
+
+    const mixedPlacements = placementsOf(mixed.node);
+    const mixedRtlClusters = [
+      ...new Set(mixedPlacements.glyphs.filter((glyph) => (glyph.bidiLevel & 1) !== 0).map((glyph) => glyph.cluster)),
+    ].sort((left, right) => left - right);
+    assert.ok(mixedRtlClusters.length >= 3, 'the real mixed-font fixture must retain a multi-cluster RTL run');
+    const mixedCarets = mixedRtlClusters.map((cluster) => mixedPlacements.caretForOffset(cluster));
+    assert.deepEqual(
+      mixedCarets.map((caret) => caret.offset),
+      mixedRtlClusters,
+      'logical offsets inside an RTL run must remain distinct in an LTR paragraph',
+    );
+    assert.equal(new Set(mixedCarets.map((caret) => caret.rect.x)).size, mixedRtlClusters.length);
+
+    const ambiguous = mixedCarets[0];
+    assert.ok(ambiguous);
+    assert.equal(ambiguous.leading, true, 'an ambiguous bidi boundary uses the owning cluster leading affinity');
+    assert.equal(ambiguous.rect.x, leadingEdgeOf(mixedPlacements, ambiguous.offset));
+    assert.deepEqual(mixed.node.caretForOffset(ambiguous.offset), ambiguous, 'Three Text mirrors the core helper');
+  } finally {
+    unmount(rtl);
+    unmount(mixed);
+  }
+});
+
+test('caretForOffset keeps hard-break gaps on the preceding line and soft wraps on the following line', async (t) => {
+  const font = await loadFont();
+  const newline = await mount(t, font, 'ab\ncd');
+  const crlf = await mount(t, font, 'ab\r\ncd');
+  const trailing = await mount(t, font, 'ab\n');
+  const wrapped = await mount(t, font, 'alpha beta gamma', {
+    constraints: { width: { mode: 'exact', size: 50 } },
+    layout: { wrap: 'word' },
+  });
+  try {
+    const newlinePlacements = placementsOf(newline.node);
+    const newlineEnd = newlinePlacements.caretForOffset(2);
+    assert.equal(newlineEnd.line, 0);
+    assert.equal(newlineEnd.offset, 2);
+    assert.equal(newlineEnd.leading, false);
+    assert.deepEqual(newlineEnd, newlinePlacements.caretAt(1_000, newlinePlacements.lines[0].baseline));
+    assert.equal(newlinePlacements.caretForOffset(3).line, 1, 'the offset after LF starts the following line');
+
+    const crlfPlacements = placementsOf(crlf.node);
+    const crlfEnd = crlfPlacements.caretForOffset(2);
+    assert.equal(crlfEnd.line, 0);
+    assert.deepEqual(
+      crlfPlacements.caretForOffset(3),
+      crlfEnd,
+      'both UTF-16 offsets within a CRLF gap pin to the preceding line end',
+    );
+    assert.equal(crlfPlacements.caretForOffset(4).line, 1, 'the offset after CRLF starts the following line');
+
+    const trailingPlacements = placementsOf(trailing.node);
+    assert.equal(trailingPlacements.caretForOffset(2).line, 0, 'the offset before trailing LF ends the text line');
+    const afterTrailingNewline = trailingPlacements.caretForOffset(3);
+    assert.equal(afterTrailingNewline.line, 1);
+    assert.equal(afterTrailingNewline.offset, 3);
+    assert.equal(afterTrailingNewline.leading, true);
+
+    const wrappedPlacements = placementsOf(wrapped.node);
+    assert.ok(wrappedPlacements.lines.length > 1, 'the real Inter fixture must wrap');
+    const softBoundary = wrappedPlacements.lines[0].textEnd;
+    assert.equal(softBoundary, wrappedPlacements.lines[1].textStart, 'the fixture boundary must be a soft wrap');
+    const softCaret = wrappedPlacements.caretForOffset(softBoundary);
+    assert.equal(softCaret.line, 1);
+    assert.equal(softCaret.offset, softBoundary);
+    assert.equal(softCaret.leading, true);
+  } finally {
+    unmount(newline);
+    unmount(crlf);
+    unmount(trailing);
+    unmount(wrapped);
+  }
+});
+
+test('caretForOffset pins interior UTF-16 offsets to their owning cluster and rejects invalid ranges', async (t) => {
+  const font = await loadFont();
+  const astral = await mount(t, font, 'A😀b');
+  const combining = await mount(t, font, 'e\u0301x');
+  try {
+    const astralPlacements = placementsOf(astral.node);
+    assert.deepEqual(
+      astralPlacements.caretForOffset(2),
+      astralPlacements.caretForOffset(1),
+      'an offset inside a surrogate pair pins to the emoji cluster leading edge',
+    );
+
+    const combiningPlacements = placementsOf(combining.node);
+    assert.deepEqual(
+      combiningPlacements.caretForOffset(1),
+      combiningPlacements.caretForOffset(0),
+      'an offset inside a combining sequence pins to its owning cluster leading edge',
+    );
+
+    for (const offset of [-1, 0.5, astral.node.text.length + 1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      assert.throws(() => astralPlacements.caretForOffset(offset), RangeError);
+    }
+    const astralLayout = astral.node.glyphs();
+    assert.throws(
+      () => createGlyphPlacements(astralLayout, '', astralLayout.x, astralLayout.y, []),
+      /paragraph text does not cover/,
+      'a public caller cannot pair a real inspection with text shorter than its ranges',
+    );
+  } finally {
+    unmount(astral);
+    unmount(combining);
   }
 });
 

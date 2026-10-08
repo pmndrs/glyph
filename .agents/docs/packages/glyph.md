@@ -192,7 +192,8 @@ than a second application or integrator API. A consumer loads a FontFace selecti
 independent immutable Font lease needed by its engine binding. Portable compiled resources remain immutable payload data,
 while each renderer owns physical textures, buffers, geometry, and their device-relative leases.
 
-The `/core` entry contains only renderer-neutral authoring operations. Package registries and identity maps, compiled
+The `/core` entry contains only renderer-neutral integration authoring operations, including construction of placement
+snapshots from package-produced inspection data and renderer-owned drawn origins. Package registries and identity maps, compiled
 Codec-body authentication, system-lane normalization, and Glyph's reserved built-in raster registration path stay under
 `src/internal`; they are neither root exports nor wildcard subpath APIs. Integrators can register their own portable raster
 Codecs through `registerRasterCodec()` and can normalize a renderer-owned capability set explicitly when composing
@@ -203,7 +204,7 @@ config helpers.
 | Subpath                         | Purpose                                                                                                          |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `@pmndrs/glyph`                 | Root runtime, built-in format selection, font/raster types, fallback stacks, text authoring, and layout results. |
-| `@pmndrs/glyph/core`            | Renderer-neutral construction helpers, built-in schemas/codecs, and format interpretation helpers.               |
+| `@pmndrs/glyph/core`            | Renderer-neutral construction helpers, placement snapshots, built-in schemas/codecs, and format interpretation.  |
 | `@pmndrs/glyph/three`           | Three configuration, retained text objects, materials, and renderer registration using native TSL shaders.       |
 | `@pmndrs/glyph/react`           | React provider, text components, and font-loading hooks.                                                         |
 | `@pmndrs/glyph/vue`             | Vue provider, text components, and reactive font-loading composables for TresJS.                                 |
@@ -853,6 +854,14 @@ inspection lane. `Text.readGlyphs()` prepares that same state without emitting t
 explicitly indexed records. None of these queries traverses matrices, realizes renderer resources, flips publication
 slots, or burns a revision.
 
+Integration authors can pass one package-produced `GlyphLayoutInspection`, its source text, and renderer-owned drawn
+origins to `/core`'s `createGlyphPlacements()`. The resulting read-only placement view exposes cluster-aware carets and
+selection geometry without making private modules public or creating a second layout engine. `caretForOffset()` maps a
+UTF-16 selection-collapse offset to the leading edge of its owning shaped cluster: interior surrogate and combining
+offsets pin to the cluster start, and an ambiguous bidi boundary chooses that cluster's leading affinity. A soft-wrap
+boundary starts the following line; offsets in an LF or CRLF gap remain at the preceding line end. Three mirrors the
+same query on `Text`.
+
 A same-build isolation over one 21,805-glyph paragraph measured 0.002 ms for an unchanged publication, 0.174 ms for the
 aggregate measurement sidecar, and 0.582 ms for full glyph inspection. Three requests only aggregate measurement and
 only while it has changed text to publish; an idle synchronization does not enter the engine. Default renderer-neutral
@@ -1001,7 +1010,8 @@ artifact export, preventing Cargo's shared top-level artifact path from silently
 Renderer-facing types that applications can encounter publish from root `@pmndrs/glyph`, including `GlyphConfig`,
 `CommandBufferView`/`DisplayList`, constrained root services, and `GlyphRenderer.decode`. Runtime construction helpers
 such as `defineGlyphConfig`, Codec authoring, schema binding, raster-format definition, and resource leases live on
-`@pmndrs/glyph/core`. D-306 and D-308 retired D-249's engine-driving layer; the current `/core` contains only the integration construction contract. Internal projection,
+`@pmndrs/glyph/core`. D-306 and D-308 retired D-249's engine-driving layer; the current `/core` contains only the
+integration construction and renderer-neutral placement-query contract. Internal projection,
 identity mapping, planning, settlement, and Wasm transport are package machinery rather than an application or integrator
 API. The explicit `/shaders/tsl` and `/shaders/typegpu` subpaths own raster-format shader realizations and no scene, runtime, or root.
 
@@ -1029,7 +1039,7 @@ package-private implementation data; applications receive semantic values at roo
 The validator subpaths likewise had no consumer outside this package. Both sets of modules remain reachable by relative
 path from package-owned tests and scripts where wire-level verification is legitimate.
 
-The 0.1.0 surface has 14 explicit ESM entry points and 149 distinct runtime export names, down from 40 and 239. There are no positive wildcard exports: adding a source file never
+The 0.1.0 surface has 14 explicit ESM entry points and 150 distinct runtime export names, down from 40 and 239. There are no positive wildcard exports: adding a source file never
 publishes it. Renderer construction shares `/core`, portable format values and their options/data types live at the root, and React components and hooks share `/react`; Three helpers have one home on `/three`.
 Shader composition uses one entry per backend, `/shaders/tsl` and `/shaders/typegpu`, with complete stages, their input
 schemas, and resource slots/accessors. TypeGPU also retains MSDF coverage/compositing and Slug dilation for custom

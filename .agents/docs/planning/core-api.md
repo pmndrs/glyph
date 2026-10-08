@@ -37,8 +37,9 @@ generated:
 Applications import the values and types they encounter from `@pmndrs/glyph`. Integration authors import the
 renderer-neutral construction helpers from `@pmndrs/glyph/core`. The engine-driving API formerly published at `/core`
 was removed by D-308 and commit `1990ebf3d`; its low-level ownership model remains private. The current `/core` exposes
-only the supported integration construction contract. This file retains its canonical path for existing documentation
-links and specifies the current root and integration API.
+only the supported integration construction contract, including `createGlyphPlacements()` for combining a
+package-produced inspection with renderer-owned drawn origins. This file retains its canonical path for existing
+documentation links and specifies the current root and integration API.
 
 Three and React are integrations over the same public contract available to third parties. Canvas, scene, GPU device,
 material, pipeline, and render pass remain renderer-owned.
