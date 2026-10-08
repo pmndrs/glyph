@@ -309,6 +309,8 @@ labels through a recording host: CPU adapter and publication work, not GPU execu
 workloads so older canaries may publish while the candidate must keep semantic publication idle. Framework workloads
 measure equivalent formatted flow updates at the shared Three normalization boundary and Vue's installed snapshot
 helper; they do not time React component rendering. Warm setup and untimed glyph checks guard the formatted flow case.
+The `layout` suite also compares single-paragraph, 1,000-paragraph and order-only request-arena encoding from installed
+artifacts, with full encoded-byte equality checked after timing; it measures wire preparation, not engine layout.
 
 Each suite holds workloads that time alike. Labs decides per run whether to batch iterations or time single calls from
 the cost of the first calls, so a workload whose first call is first-time work can be timed differently on each side

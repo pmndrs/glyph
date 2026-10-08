@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { compilePlannerFrameUpdate } from '../../dist/internal/frame-wire.js';
+import {
+  compilePlannerFrameUpdate,
+  preparePlannerFrameUpdate,
+  writePreparedPlannerFrameUpdate,
+} from '../../dist/internal/frame-wire.js';
 import { permanentGlyphId } from '../../dist/internal/glyph-id.js';
 import { engineFrameUpdateBytes } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
@@ -17,6 +21,40 @@ const EXCLUSION_ID = permanentGlyphId('exclusion', 'engine-frame-wire/exclusion'
 const INLINE_OBJECT_ID = permanentGlyphId('inline-object', 'engine-frame-wire/inline-object');
 const MATERIAL_ID = permanentGlyphId('material', 'engine-frame-wire/material');
 const RESOURCE_ID = permanentGlyphId('resource', 'engine-frame-wire/resource');
+
+test('prepared frame writes exact bytes into a nonzero-offset request arena', () => {
+  const frame = {
+    rootId: ROOT_ID,
+    codecHandle: CODEC_ID,
+    expectedEngineRevision: 1,
+    consumedRevision: 2,
+    acknowledgedPublicationGeneration: 3,
+    limits: {
+      maxParagraphs: 2,
+      maxClusters: 32,
+      maxLines: 8,
+      maxRegions: 1,
+      maxExclusions: 1,
+      maxInlineObjects: 1,
+      maxSlotsPerBand: 1,
+      maxOutputBytes: 65_536,
+    },
+    paragraphOrderMutations: [{ paragraphId: PARAGRAPH_ID, orderScope: 4, orderRank: 5 }],
+    textMutations: [{ paragraphId: PARAGRAPH_ID, start: 1, deleteCount: 2, insert: 'A😀B' }],
+  };
+  const expected = compilePlannerFrameUpdate(frame);
+  const prepared = preparePlannerFrameUpdate(frame);
+  const storage = new Uint8Array(prepared.byteLength + 16).fill(0xa5);
+  const arena = storage.subarray(8, 8 + prepared.byteLength);
+
+  writePreparedPlannerFrameUpdate(prepared, arena);
+
+  assert.equal(prepared.byteLength, expected.byteLength);
+  assert.deepEqual(arena, expected);
+  assert.deepEqual(storage.subarray(0, 8), new Uint8Array(8).fill(0xa5));
+  assert.deepEqual(storage.subarray(8 + prepared.byteLength), new Uint8Array(8).fill(0xa5));
+  assert.throws(() => writePreparedPlannerFrameUpdate(prepared, arena.subarray(1)), /exactly/u);
+});
 
 test('production frame compiler preserves the established benchmark request bytes', async () => {
   const abi = textShaperAbi;
