@@ -11,4 +11,6 @@ contract and publishing no old-name alias. The [decision](../planning/decisions/
 Updated the archived recipe project for the split Labs suites and the outline tests added by #235, applied the AST
 migration, and migrated the one untyped test helper explicitly. The shared Labs fixture adapts older installed canaries
 once before timing. Three codemod fixture tests pass and a second migration preview reports no changes. Retired log pins
-and generated size snapshots follow current main; package and CI checks are the remaining verification gates.
+and generated size snapshots follow current main. Package build, source/public declaration types, lint and formatting,
+76 focused integration tests and 277 package tests pass. Fresh CI compares the borrowed-inspection suite; no local speed
+result is claimed for the rename. Pending read-publication work in #240 will receive the same migration when combined.
