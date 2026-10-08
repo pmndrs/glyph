@@ -1,54 +1,52 @@
 # Repository guidance
 
-`pmndrs/glyph` is an ESM-only monorepo for portable font baking, universal shaping, paragraph layout, and optional raster renderers. The benchmark application lives at `benches/`. Other packages and applications belong under `packages/` or `apps/`.
+`pmndrs/glyph` is an ESM-only monorepo for portable font baking, universal shaping, paragraph layout, and optional
+raster renderers. Packages and applications live under `packages/` and `apps/`; the benchmark application is
+`benches/`.
 
-Before writing or reviewing Rust, TypeScript, React, Wasm boundaries, or tests, read the canonical [engineering standard](.agents/docs/engineering/code-style.md). Use the repository-local `maintainability-review` skill for a deliberate cleanup, pre-release review, or milestone-wide audit; the skill owns the procedure, while the engineering standard owns the rules.
+## Commands
 
-Classify validation by who can author the value, not by module, package, Worker, language, or Wasm crossings. Validate
-public caller input, third-party callback results, and genuinely external data once; retain raw memory-safety and work
-bounds. Trust package-owned TypeScript/Rust/baker/serializer/Worker output and prove it at the producer with unit, ABI,
-property, fuzz, and product tests. Never justify a runtime guard with a test that forges an internal value no production
-caller can supply. During validation cleanup, remove one internal check, strengthen its producer proof, run the focused
-test, and then continue.
+Run everything through the pinned toolchain: `mise exec -- pnpm …` or `mise exec -- <tool> …`, never relying on
+`mise activate` across non-interactive commands. Root commands are `glyph`, `dev`, `build`, `test`, `check`, and
+`scripts`; every other workflow is listed by `mise exec -- pnpm scripts list`, inspected with `scripts show <name>`, and
+run with `scripts run <name> -- [arguments]`. When a repeatable workflow is missing, add a package-owned script and
+root alias instead of leaving a shell recipe. Run `scripts run repo:hooks:install` once per clone. Verify narrowly first,
+then run package and repository checks; keep tests deterministic, with no sleeps, timer cushions, retries, or
+regenerated goldens as correctness mechanisms.
 
-Use the repository-local `tsl` skill before implementing or reviewing Three.js Shading Language materials, compute work, post-processing, or GLSL-to-TSL migrations. Verify examples against the repository's installed Three.js version rather than relying on remembered APIs.
+## Skills
 
-Use the repository-local `engine-call-contract` skill before adding, moving, or removing anything on a published entry point, before giving an engine call an error path or a result type, and when deciding whether a failure belongs to the caller or to this package. It carries the two rules the API is built on: a call answers or throws where it was written, and application-encountered values and types live at the root while integrator construction helpers live on `/core`.
+Skills live in `.agents/skills`. If your harness does not list them, run
+`node .agents/scripts/link-skills.mjs <your-skills-dir>` (Claude Code: `.claude/skills`) and reload. Use:
 
-Use the vendored `typegpu` skill from TypeGPU's own maintainers before writing or reviewing TypeGPU shaders, buffers, bind groups, or pipelines, exactly as the `tsl` skill governs Three.js Shading Language work. It was installed with the upstream installer (`skills add software-mansion-labs/skills -s typegpu`) and targets TypeGPU 0.12, matching the pinned dependency. Its `references/` cover shaders, textures, types, pipelines, and the standard library.
+- `engine-call-contract` before changing a published entry point, an engine call's error path or result type, or
+  deciding whether a failure is the caller's;
+- `tsl` for Three.js Shading Language and `typegpu` for TypeGPU work, checked against the installed versions;
+- `gh-stack` for every dependent branch or pull-request chain;
+- `codemod` only for migrations of APIs already on the default branch or released;
+- `maintainability-review` for deliberate cleanups and audits;
+- `evidence-first` for human-facing engineering writing.
 
-Use the repository-local `gh-stack` skill for every dependent branch or pull-request workflow. Root stacks on the remote
-default branch and preserve their state through non-interactive `gh stack` commands; ordinary push and PR commands are
-not substitutes.
+## Code
 
-Consult the repository-local `evidence-first` skill as the default style guidance for human-facing engineering communication, including chat updates and final answers, reports, reviews, handoffs, PR and issue prose, READMEs, and technical documentation. It offers situational cues rather than a fixed template. Domain skills still determine the work and valid evidence, `open-knowledge-format` governs bundle structure and provenance, and `diataxis-docs` governs the purpose and top-level structure of reader-facing documentation.
+Read the [engineering standard](.agents/docs/engineering/code-style.md) before writing or reviewing code or tests.
+Validate by who can author a value: public caller input, third-party callback results, and external data once at the
+boundary; trust package-owned output and prove it at the producer. Never justify a runtime guard with a test that forges
+a value no production caller can supply. For TSL typing changes, start from `packages/glyph/tests/types/tsl-*.test.ts`.
+Create small Conventional Commits, each preserving one invariant, and finish with a clean worktree.
 
-Start at `.agents/docs/index.md` and follow its linked indexes for self-discovery. Use these canonical sources instead of creating shadow plans or duplicate status prose:
+## Docs
 
-- `.agents/docs/roadmap/roadmap.md` for milestone order and checkbox status;
-- `.agents/docs/planning/decision-register.md` for architectural decisions;
-- `.agents/docs/packages/*.md` for current package ownership, boundaries, and evidence;
-- `.agents/docs/log.md` for knowledge-bundle chronology.
+Start at `.agents/docs/index.md` and never read a whole doc to find something: `scripts run docs:search -- <terms or
+path>` and `docs:outline -- <path>[:line]` print `path › Heading  [start-end]` with the matching paragraph, so read
+only that range; `docs:decision -- D-123` prints one decision and `docs:list -- log --since <date>` recent changes.
+Canonical sources: `roadmap/roadmap.md` (milestones), `planning/decisions/` (one file per decision; D-001–D-372 are the
+frozen `decision-register.md`), `packages/*.md` (package ownership and evidence), and `log/` (one file per change).
 
-Update affected canonical documentation in the same change as source. Package source or configuration changes require reviewing the matching package concept, re-pinning its `source_digest` with `mise exec -- pnpm scripts run docs:update`, and verifying with `mise exec -- pnpm scripts run docs:check`.
-
-Use the exact root toolchain pins through mise. Agent commands must enter that environment explicitly with `mise exec -- pnpm ...` or `mise exec -- <tool> ...`; do not depend on `mise activate` surviving across non-interactive commands. Mise owns tool selection, while pnpm remains the only repository workflow surface. Install workload-scoped mise tools only when their documented pnpm workflow requires them. The dated nightly under `packages/glyph/rust/font-baker-fuzz` is isolated to cargo-fuzz. Verify narrowly first, then run the relevant package and repository checks. Keep tests deterministic; do not use sleeps, timer cushions, arbitrary retries, or regenerated goldens as correctness mechanisms.
-
-Exercise repository workflows through named `pnpm` scripts from the workspace root. Prefer a short root alias for a maintainer-facing application workflow. When a repeatable build, test, profile, capture, generation, or development command is missing, add the package-owned script and root alias before running it; do not leave the working procedure as an agent-only shell recipe or temporary probe.
-
-Before searching for or inventing a specialized maintenance command, run `mise exec -- pnpm scripts list`. Use `mise exec -- pnpm scripts show <name>` to inspect its prerequisites and writes, then `mise exec -- pnpm scripts run <name> -- [arguments]` to execute it. Contributor-facing root commands are limited to `glyph`, `dev`, `build`, `test`, `check`, and this `scripts` index; specialized workflows describe themselves in their source metadata instead of expanding package manifests.
-
-Run `mise exec -- pnpm scripts run repo:hooks:install` once per clone. It installs the repository's native pre-commit
-dispatcher in `git rev-parse --git-common-dir/hooks`, so every worktree shares it without `core.hooksPath` or a hook
-manager. The installer preserves every existing Git LFS hook. The pre-commit hook auto-formats and applies safe lint fixes
-to fully staged source files, then runs the staged OKF digest and validation gate; it refuses partially staged source files
-instead of accidentally staging unrelated edits.
-
-TypeScript checks use the repository-pinned compiler and the patched `@types/three` declaration graph. For TSL typing changes, begin with the focused regression fixture before running a package or application project.
-
-Use the repository-local `codemod` skill for TypeScript or TSX migrations only after the changed API has reached the
-remote default branch or external users. Unmerged feature work is edited directly and leaves no migration recipe for an
-API nobody received. Shipped migrations use pinned ts-morph rather than global text replacement; update non-code
-documentation only after the AST migration and residual-use inventory are clean.
-
-Create small Conventional Commits that each preserve one coherent invariant. Finish completed work with a clean worktree.
+When you change a package's source, update its concept if it is now wrong, then, after your last source change, run
+`docs:attest -- <package> "<what you changed and checked>"` and commit the file it writes. Record changes and decisions
+with `docs:new -- log|decision <slug> <title>`, replacing every `TODO(docs:new)`; never edit a shared record or number
+one. Nothing here blocks a merge: the commit hook and CI's `Docs report` show what is unattested, and the
+`Sync agent docs` issue (label `agents`) lists what merged unverified for the reviewer, who corrects the docs and runs
+`docs:verify -- <slug>`. Package size is review evidence from CI's size comment; never commit `package-sizes.json` from
+a feature branch.

@@ -1,5 +1,5 @@
 use alloc::{collections::BTreeMap, vec::Vec};
-use core::num::NonZeroU32;
+use core::{cell::RefCell, num::NonZeroU32};
 
 use crate::{
     STATUS_RESULT_TOO_LARGE, ShapeRangeRef, ShapeRunRef, ShaperRegistry,
@@ -8,20 +8,24 @@ use crate::{
 };
 
 use super::{
-    cluster_state::{ClusterArena, ClusterBuildInput, LayoutRunSourceKind, RunCanonicalInput},
+    cluster_state::{
+        CLUSTER_ALLOWED_BREAK, CLUSTER_BREAK_CORRECTION, CLUSTER_SPACE, ClusterArena,
+        ClusterBuildInput, LayoutRunSourceKind, RunCanonicalInput, SHAPING_CONTEXT,
+    },
     codec::{CapabilitySetId, ValidatedCodec},
     codec_gather::{
         CodecGatherWorkspace, DEFAULT_GATHER_RECORD_CAPACITY, GatherError, LayoutPlanInput,
         RetainedGather,
     },
-    flow_composition::{EllipsisReplacement, FlowLayoutArena},
+    flow_composition::{EllipsisReplacement, FlowFragment, FlowLayoutArena, NO_BOUNDARY},
     flow_geometry::{FlowGeometryArena, LocalizedGeometryChange},
     font_binding::FontRenderBinding,
     frame::{
         CommittedUpdate, MeasuredParagraph, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE,
-        PreparedUpdate, RootRevision, UpdateRequest,
+        PreparedUpdate, RootRevision, UpdateRequest, WRAP_WORD,
     },
     identity_index::IdentityIndex,
+    line_composition::{BreakCorrections, Correction},
     placement_slot_arena::{PlacementSlotArena, PlacementSlotError},
     placement_state::{GlyphSource, LayoutRunOwner, PlacementIdentity, PlacementSegment},
     positioning::{PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT},
@@ -389,8 +393,11 @@ struct ParagraphState {
     intrinsic_flow_layout_scratch: FlowLayoutArena,
     intrinsic_flow_slot_scratch: super::flow_geometry::InlineSlotArena,
     intrinsic_positioned_scratch: PositionedGlyphArena,
+    intrinsic_boundary_shape: BoundaryShapeArena,
     intrinsic_identity_scratch: IdentityIndex,
     boundary_shape: BoundaryShapeArena,
+    /// The committed boundary glyphs' stable ids, indexed for the flow being prepared.
+    previous_edge_ids: Vec<EdgeId>,
     pending_boundary_shape: BoundaryShapeArena,
     boundary_shape_scratch: ShapeArena,
     ellipsis_shape_scratch: ShapeArena,
@@ -1113,8 +1120,12 @@ impl TextEngine {
             return Err(EngineError::RevisionConflict);
         }
         // The lifecycle describes the desired retained plan so creations and replacements can share one
-        // candidate, while semantic mutations still belong only to the queried paragraph.
-        let mut queried_paragraph_present = request.paragraph_mutations.len() == 0;
+        // candidate, while semantic mutations still belong only to the queried paragraph. A paragraph
+        // the committed plan retains stays queryable while the lifecycle removes its siblings.
+        let mut queried_paragraph_present = request.paragraph_mutations.len() == 0
+            || planner
+                .paragraph(paragraph_id)
+                .is_some_and(|paragraph| !paragraph.created);
         for index in 0..request.paragraph_mutations.len() {
             match request
                 .paragraph_mutations
@@ -1125,7 +1136,13 @@ impl TextEngine {
                     paragraph_id: mutated,
                     ..
                 } => queried_paragraph_present |= mutated == paragraph_id,
-                super::semantic_wire::ParagraphMutation::Remove { .. } => {}
+                super::semantic_wire::ParagraphMutation::Remove {
+                    paragraph_id: mutated,
+                } => {
+                    if mutated == paragraph_id {
+                        return Err(EngineError::InvalidRequest);
+                    }
+                }
             }
         }
         if !queried_paragraph_present {
@@ -1264,7 +1281,7 @@ impl TextEngine {
                         .ok_or(EngineError::InvalidRequest)?
                         .state,
                     paragraph_id,
-                    shaper.as_deref(),
+                    shaper.as_deref_mut(),
                     font_stacks,
                     font_bindings,
                     request.limits,
@@ -1689,7 +1706,7 @@ impl TextEngine {
                             &mut records,
                             &mut paragraph.state,
                             paragraph_id,
-                            shaper.as_deref(),
+                            shaper.as_deref_mut(),
                             font_stacks,
                             font_bindings,
                             request.limits,
@@ -1933,7 +1950,7 @@ fn append_paragraph_measurement(
     records: &mut Vec<super::semantic_view::SemanticRecord>,
     state: &mut ParagraphState,
     paragraph_id: u32,
-    shaper: Option<&ShaperRegistry>,
+    mut shaper: Option<&mut ShaperRegistry>,
     font_stacks: &[RegisteredFontStack],
     font_bindings: &[RegisteredFontBinding],
     limits: super::frame::UpdateLimits,
@@ -1974,7 +1991,7 @@ fn append_paragraph_measurement(
     let needs_intrinsic = visible_extents.consumed_clusters < cluster_count || has_ellipsis;
     if needs_intrinsic {
         state.prepare_intrinsic_flow_layout(
-            shaper.ok_or(EngineError::InvalidRequest)?,
+            shaper.as_deref_mut().ok_or(EngineError::InvalidRequest)?,
             font_stacks,
             font_bindings,
             limits.max_lines,
@@ -1987,7 +2004,8 @@ fn append_paragraph_measurement(
     let inspect_full_clipped_layout =
         needs_intrinsic && constraint.overflow == OVERFLOW_CLIP && !max_lines_truncated;
     if inspect_full_clipped_layout {
-        state.prepare_intrinsic_positioned(shaper.ok_or(EngineError::InvalidRequest)?)?;
+        state
+            .prepare_intrinsic_positioned(shaper.as_deref().ok_or(EngineError::InvalidRequest)?)?;
     }
     let text = &state.text.active().units;
     let clusters = state.clusters.active();
@@ -2881,6 +2899,7 @@ impl ParagraphState {
         self.intrinsic_geometry_scratch.clear();
         self.intrinsic_flow_layout_scratch.clear();
         self.intrinsic_positioned_scratch.clear();
+        self.intrinsic_boundary_shape.clear();
         self.boundary_shape.clear();
         self.pending_boundary_shape.clear();
         self.boundary_shape_scratch.clear();
@@ -4032,6 +4051,43 @@ impl ParagraphState {
         max_slots_per_band: u32,
         next_glyph_id: &mut u32,
     ) -> Result<(), EngineError> {
+        self.prepare_flow_lines(
+            shaper,
+            font_stacks,
+            font_bindings,
+            max_lines,
+            max_slots_per_band,
+            next_glyph_id,
+        )?;
+        // Every fragment, retained or composed, gets its line edges shaped alone (or none).
+        let geometry = self.geometry.active();
+        let shaper = RefCell::new(shaper);
+        let mut corrections = ShapedBreakCorrections {
+            shaper: &shaper,
+            text: self.text.active().units.as_slice(),
+            runs: self.shaping_runs.active().runs(),
+            styles: &self.styles.active().arena,
+            clusters: self.clusters.active(),
+        };
+        attach_line_edges(
+            &mut corrections,
+            geometry,
+            self.flow_layout.pending_mut(),
+            (&mut self.pending_boundary_shape, &self.previous_edge_ids),
+            next_glyph_id,
+        )?;
+        Ok(())
+    }
+
+    fn prepare_flow_lines(
+        &mut self,
+        shaper: &mut ShaperRegistry,
+        font_stacks: &[RegisteredFontStack],
+        font_bindings: &[RegisteredFontBinding],
+        max_lines: u32,
+        max_slots_per_band: u32,
+        next_glyph_id: &mut u32,
+    ) -> Result<(), EngineError> {
         self.abort_flow_layout();
         // Positioning is derived from one specific flow: its per-line lanes describe the
         // lines that flow composed. Re-running the flow therefore invalidates any pending
@@ -4040,6 +4096,11 @@ impl ParagraphState {
         // unrepresentable rather than something each caller has to remember to repair.
         self.abort_positioned();
         self.pending_boundary_shape.clear();
+        previous_edge_ids(
+            &mut self.previous_edge_ids,
+            self.clusters.committed(),
+            &self.boundary_shape,
+        );
         self.clusters.active_mut().ensure_word_breaks()?;
         self.clusters
             .active_mut()
@@ -4067,7 +4128,15 @@ impl ParagraphState {
             .first()
             .copied()
             .unwrap_or(0);
-        let metrics_for = |handle| shaper.font_metrics(handle);
+        let shaper_cell = RefCell::new(&mut *shaper);
+        let metrics_for = |handle| shaper_cell.borrow().font_metrics(handle);
+        let mut corrections = ShapedBreakCorrections {
+            shaper: &shaper_cell,
+            text,
+            runs,
+            styles: style_storage,
+            clusters,
+        };
         let first_font_for_stack = |stack_handle| {
             font_stacks
                 .binary_search_by_key(&stack_handle, |stack| stack.handle)
@@ -4083,7 +4152,7 @@ impl ParagraphState {
         if !self.style_invalidation.metrics
             && !self.clusters.is_prepared()
             && self.text_edit.is_none()
-            && self.boundary_shape.records.is_empty()
+            && !self.boundary_shape.has_ellipsis()
             && geometry
                 .constraints
                 .iter()
@@ -4104,6 +4173,7 @@ impl ParagraphState {
                     max_slots_per_band,
                     metrics_for,
                     first_font_for_stack,
+                    &mut corrections,
                 )?
             }
         {
@@ -4112,7 +4182,7 @@ impl ParagraphState {
         }
         if !self.geometry.is_prepared()
             && !self.style_invalidation.metrics
-            && self.boundary_shape.records.is_empty()
+            && !self.boundary_shape.has_ellipsis()
             && geometry
                 .constraints
                 .iter()
@@ -4136,6 +4206,7 @@ impl ParagraphState {
                     max_slots_per_band,
                     metrics_for,
                     first_font_for_stack,
+                    &mut corrections,
                 )?
             }
         {
@@ -4153,6 +4224,7 @@ impl ParagraphState {
             max_slots_per_band,
             metrics_for,
             first_font_for_stack,
+            &mut corrections,
         )?;
         let mut ellipsis_index = 0usize;
         while ellipsis_index < self.flow_layout.pending_mut().ellipsis_threads().len() {
@@ -4238,8 +4310,8 @@ impl ParagraphState {
                 .append_from(ellipsis_shape, 0)?;
             append_boundary_source_ids(
                 &mut self.pending_boundary_shape.stable_ids,
-                source_shape,
-                clusters,
+                &source_shape.clusters,
+                (clusters, &self.previous_edge_ids),
                 next_glyph_id,
             )?;
             let previous = self
@@ -4283,6 +4355,7 @@ impl ParagraphState {
                 source_glyph_count: source_span.1,
                 ellipsis_glyph_start: ellipsis_span.0,
                 ellipsis_glyph_count: ellipsis_span.1,
+                line_start: false,
             });
             self.flow_layout.pending_mut().fragments[fragment_index].boundary_index =
                 boundary_index;
@@ -4294,7 +4367,7 @@ impl ParagraphState {
 
     fn prepare_intrinsic_flow_layout(
         &mut self,
-        shaper: &ShaperRegistry,
+        shaper: &mut ShaperRegistry,
         font_stacks: &[RegisteredFontStack],
         font_bindings: &[RegisteredFontBinding],
         max_lines: u32,
@@ -4331,26 +4404,47 @@ impl ParagraphState {
 
         let clusters = self.clusters.active();
         let styles = self.styles.active().resolved.segments();
-        self.intrinsic_flow_layout_scratch.build(
-            &self.intrinsic_geometry_scratch,
+        let shaper = RefCell::new(shaper);
+        let mut corrections = ShapedBreakCorrections {
+            shaper: &shaper,
+            text: self.text.active().units.as_slice(),
+            runs: self.shaping_runs.active().runs(),
+            styles: &self.styles.active().arena,
             clusters,
-            styles,
-            &mut self.intrinsic_flow_slot_scratch,
-            usize::try_from(max_lines).map_err(|_| EngineError::ResultTooLarge)?,
-            usize::try_from(max_slots_per_band).map_err(|_| EngineError::ResultTooLarge)?,
-            |handle| shaper.font_metrics(handle),
-            |stack_handle| {
-                font_stacks
-                    .binary_search_by_key(&stack_handle, |stack| stack.handle)
-                    .ok()
-                    .and_then(|index| font_stacks[index].fonts.first().copied())
-                    .and_then(|handle| {
-                        font_bindings
-                            .iter()
-                            .find(|binding| binding.handle == handle)
-                            .map(|binding| binding.shaping_handle)
-                    })
-            },
+        };
+        self.intrinsic_flow_layout_scratch
+            .build_with_drop_cap_context(
+                &self.intrinsic_geometry_scratch,
+                clusters,
+                &[],
+                styles,
+                &mut self.intrinsic_flow_slot_scratch,
+                0,
+                usize::try_from(max_lines).map_err(|_| EngineError::ResultTooLarge)?,
+                usize::try_from(max_slots_per_band).map_err(|_| EngineError::ResultTooLarge)?,
+                |handle| shaper.borrow().font_metrics(handle),
+                |stack_handle| {
+                    font_stacks
+                        .binary_search_by_key(&stack_handle, |stack| stack.handle)
+                        .ok()
+                        .and_then(|index| font_stacks[index].fonts.first().copied())
+                        .and_then(|handle| {
+                            font_bindings
+                                .iter()
+                                .find(|binding| binding.handle == handle)
+                                .map(|binding| binding.shaping_handle)
+                        })
+                },
+                &mut corrections,
+            )?;
+        // Throwaway identities for the unpublished inspection flow.
+        self.intrinsic_boundary_shape.clear();
+        attach_line_edges(
+            &mut corrections,
+            &self.intrinsic_geometry_scratch,
+            &mut self.intrinsic_flow_layout_scratch,
+            (&mut self.intrinsic_boundary_shape, &[]),
+            &mut (1 << 30),
         )
     }
 
@@ -4363,7 +4457,7 @@ impl ParagraphState {
         let previous = self.positioned.active();
         let mut next_content_revision = 1;
         let mut next_run_canonical_revision = 1;
-        let boundary_shape = BoundaryShapeArena::default();
+        let boundary_shape = &self.intrinsic_boundary_shape;
         let geometry = &self.intrinsic_geometry_scratch;
         self.intrinsic_positioned_scratch.build(
             previous,
@@ -4373,8 +4467,8 @@ impl ParagraphState {
             clusters,
             runs,
             runs,
-            &boundary_shape,
-            &boundary_shape,
+            boundary_shape,
+            boundary_shape,
             styles,
             bidi,
             &mut self.intrinsic_identity_scratch,
@@ -4894,15 +4988,417 @@ fn prepare_boundary_candidate(
     })
 }
 
+pub(super) struct ShapedBreakCorrections<'a, 'b> {
+    shaper: &'a RefCell<&'b mut ShaperRegistry>,
+    text: &'a [u16],
+    runs: &'a [ShapingRun],
+    styles: &'a StyleArena,
+    clusters: &'a ClusterArena,
+}
+
+impl ShapedBreakCorrections<'_, '_> {
+    /// The correction on `side` (0 = L, 1 = R) of `boundary`, zero unless it needs one, priced on first use.
+    /// An island too long to reshape is never corrected, as on main.
+    fn correction(&mut self, boundary: usize, side: usize) -> Result<Correction, EngineError> {
+        const CORRECTED: u8 = CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION;
+        let c = self.clusters;
+        if boundary == 0 || c.flags[boundary - 1] & CORRECTED != CORRECTED {
+            return Ok(Correction::ZERO);
+        }
+        let slots = &c.break_corrections[boundary - 1];
+        if let Some(correction) = slots[side].get() {
+            return Ok(correction);
+        }
+        let Some((start, end)) = c.reshapable_island(boundary) else {
+            // Too long to reshape: uncorrected, and refused as a break.
+            slots[2].set(Some(Correction::ZERO));
+            return Ok(Correction::ZERO);
+        };
+        let range = if side == 0 {
+            (start, boundary)
+        } else {
+            (boundary, end)
+        };
+        let (correction, drawn_alone) =
+            self.delta(range, (side != 0, side == 0), Some((boundary, side)))?;
+        slots[side].set(Some(correction));
+        if side == 0 && !drawn_alone {
+            slots[2].set(Some(Correction::ZERO));
+        }
+        Ok(correction)
+    }
+
+    /// Shapes clusters `[start, end)` and hands the glyphs to `consume`. `lead`/`trail` say the
+    /// range begins/ends its line; any other edge shapes with [`SHAPING_CONTEXT`] clusters of context.
+    fn shape_range(
+        &mut self,
+        (start, end): (usize, usize),
+        (lead, trail): (bool, bool),
+        consume: &mut dyn FnMut(&harfrust::GlyphBuffer) -> Result<(), u32>,
+    ) -> Result<(), EngineError> {
+        let c = self.clusters;
+        let run = self.runs[c.source_runs[start] as usize];
+        let (item_start, item_end) = (c.starts[start], c.ends[end - 1]);
+        let before = c.starts[start.saturating_sub(SHAPING_CONTEXT)].max(run.text_start);
+        let after = c.ends[(end + SHAPING_CONTEXT).min(c.starts.len()) - 1].min(run.text_end);
+        self.shaper
+            .borrow_mut()
+            .with_shaped_range(
+                c.font_handles[start],
+                self.text,
+                ShapeRunRef {
+                    text_start: run.text_start,
+                    text_end: run.text_end,
+                    script: run.script,
+                    language: self.styles.resolved_language(run.style),
+                    features: self.styles.resolved_features(run.style),
+                    direction: run.direction,
+                    cluster_level: 0,
+                    flags: 0x40,
+                },
+                ShapeRangeRef {
+                    item_start,
+                    item_end,
+                    context_start: if lead { item_start } else { before },
+                    context_end: if trail { item_end } else { after },
+                    flags: 0x40
+                        | u32::from(lead || start == 0)
+                        | (u32::from(trail || end == c.starts.len()) << 1),
+                },
+                consume,
+            )
+            .map_err(shaper_error)
+    }
+
+    /// Hands `consume` the arena and run holding clusters `[start, end)` shaped alone with `edges`. A corrected
+    /// boundary's own island, `slot` = (boundary, side), is shaped once per cluster build and kept, so the fitter
+    /// that prices it and every line edge that draws it, on any relayout, share one shaping.
+    fn with_island(
+        &mut self,
+        (start, end): (usize, usize),
+        edges: (bool, bool),
+        slot: Option<(usize, usize)>,
+        consume: &mut dyn FnMut(&ShapeArena, usize) -> Result<(), EngineError>,
+    ) -> Result<(), EngineError> {
+        let c = self.clusters;
+        let mut islands = c.islands.borrow_mut();
+        let islands = &mut *islands;
+        let kept =
+            slot.and_then(|(boundary, side)| islands.slots.get(boundary - 1)?[side].checked_sub(1));
+        if let Some(run) = kept {
+            return consume(&islands.shape, run as usize);
+        }
+        let arena = if slot.is_some() {
+            &mut islands.shape
+        } else {
+            islands.once.clear();
+            &mut islands.once
+        };
+        let run = arena.runs.len();
+        let (source_run, binding, font) = (
+            c.source_runs[start],
+            c.binding_handles[start],
+            c.font_handles[start],
+        );
+        self.shape_range((start, end), edges, &mut |shaped| {
+            arena.append(
+                source_run as usize,
+                font,
+                binding,
+                c.starts[start],
+                c.ends[end - 1],
+                shaped,
+            )
+        })?;
+        if let Some((boundary, side)) = slot {
+            islands.slots.resize(c.starts.len(), [0; 2]);
+            islands.slots[boundary - 1][side] =
+                u32::try_from(run + 1).map_err(|_| EngineError::ResultTooLarge)?;
+        }
+        consume(arena, run)
+    }
+
+    /// The records shaping the islands a corrected line opens and closes (`NO_BOUNDARY` when that edge is
+    /// uncorrected), alone as [`Self::delta`] priced them, so the line draws what it would shaped by itself.
+    /// As Chromium reshapes line ends, a space ending the line leaves its end as is, and islands that meet
+    /// shape the whole line once. An ellipsis keeps only the clusters before its cut.
+    fn line_edge_records(
+        &mut self,
+        fragment: FlowFragment,
+        flow_thread_id: u32,
+        (out, previous): (&mut BoundaryShapeArena, &[EdgeId]),
+        next_glyph_id: &mut u32,
+    ) -> Result<(u32, u32), EngineError> {
+        const CORRECTED: u8 = CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION;
+        let c = self.clusters;
+        let index =
+            |cluster: u32| usize::try_from(cluster).map_err(|_| EngineError::InvalidRequest);
+        let (line_start, line_end) = (
+            index(fragment.line.cluster_start)?,
+            index(fragment.line.cluster_end)?,
+        );
+        // The island a line edge at `boundary` reshapes, when that boundary is a corrected break.
+        let island = |boundary: usize| {
+            let corrected = boundary > 0 && c.flags[boundary - 1] & CORRECTED == CORRECTED;
+            corrected.then(|| c.reshapable_island(boundary)).flatten()
+        };
+        if line_start >= c.starts.len() {
+            return Ok((NO_BOUNDARY, NO_BOUNDARY));
+        }
+        let cut = out.record(fragment.boundary_index);
+        let island_end = island(line_start).map(|(_, end)| end);
+        // As Chromium reshapes line ends, a space ends the line as is.
+        let tail_island = island(line_end)
+            .filter(|_| c.flags[line_end - 1] & CLUSTER_SPACE == 0 && cut.is_none());
+        let tail_start = tail_island.map(|(start, _)| start.max(line_start));
+        let whole = island_end
+            .zip(tail_start)
+            .is_some_and(|(lead, tail)| lead > tail);
+        // Each edge: its clusters, how it shapes, and the boundary side whose island it is exactly, which that
+        // boundary's pricing already shaped.
+        let lead = match island_end {
+            Some(island_end) => {
+                let cut_end = cut.map_or(Ok(line_end), |cut| index(cut.cluster_start))?;
+                let end = if whole {
+                    line_end
+                } else {
+                    island_end.min(cut_end)
+                };
+                let edges = (true, whole || end < island_end);
+                Some((
+                    (line_start, end),
+                    edges,
+                    (!edges.1).then_some((line_start, 1)),
+                ))
+            }
+            None => None,
+        };
+        let tail = tail_start.filter(|_| !whole).map(|start| {
+            let exact = tail_island.is_some_and(|(first, _)| first == start);
+            (
+                (start, line_end),
+                (false, true),
+                exact.then_some((line_end, 0)),
+            )
+        });
+        let mut record = |edge: Option<LineEdge>| {
+            let Some(((start, end), edges, slot)) = edge.filter(|edge| edge.0.0 < edge.0.1) else {
+                return Ok(NO_BOUNDARY);
+            };
+            let (source_run, binding, font) = (
+                c.source_runs[start],
+                c.binding_handles[start],
+                c.font_handles[start],
+            );
+            let text_end = c.ends[end - 1];
+            let mut glyphs = (0, 0);
+            self.with_island((start, end), edges, slot, &mut |shaped, run| {
+                glyphs = out.shape.append_from(shaped, run)?;
+                let run = shaped.runs[run];
+                let range = run.glyph_start as usize..(run.glyph_start + run.glyph_count) as usize;
+                append_boundary_source_ids(
+                    &mut out.stable_ids,
+                    &shaped.clusters[range],
+                    (c, previous),
+                    next_glyph_id,
+                )
+            })?;
+            let (glyph_start, glyph_count) = glyphs;
+            let record =
+                u32::try_from(out.records.len()).map_err(|_| EngineError::ResultTooLarge)?;
+            out.records.push(BoundaryShape {
+                flow_thread_id,
+                source_run,
+                cluster_start: u32::try_from(start).map_err(|_| EngineError::ResultTooLarge)?,
+                cluster_end: u32::try_from(end).map_err(|_| EngineError::ResultTooLarge)?,
+                text_end,
+                source_binding_handle: binding,
+                source_font_handle: font,
+                ellipsis_binding_handle: binding,
+                ellipsis_font_handle: font,
+                source_glyph_start: glyph_start,
+                source_glyph_count: glyph_count,
+                ellipsis_glyph_start: glyph_start + glyph_count,
+                ellipsis_glyph_count: 0,
+                line_start: true,
+            });
+            Ok::<_, EngineError>(record)
+        };
+        Ok((record(lead)?, record(tail)?))
+    }
+
+    /// How far reshaping clusters `[start, end)` moves their base sums, and whether the paragraph's glyphs
+    /// there are the ones it draws.
+    fn delta(
+        &mut self,
+        (start, end): (usize, usize),
+        edges: (bool, bool),
+        slot: Option<(usize, usize)>,
+    ) -> Result<(Correction, bool), EngineError> {
+        let trail = edges.1;
+        let c = self.clusters;
+        let style = self.runs[c.source_runs[start] as usize].style;
+        let scale = f64::from(style.font_size) / c.units_per_em[start];
+        let paragraph = &c.glyph_ids[c.glyph_starts[start] as usize
+            ..(c.glyph_starts[end - 1] + c.glyph_counts[end - 1]) as usize];
+        // Spacing first, then glyphs in order, as the arena sums: unchanged shapes correct by zero.
+        let mut advances: Vec<f64> = (start..end)
+            .map(|i| {
+                let space = c.flags[i] & CLUSTER_SPACE != 0;
+                f64::from(style.letter_spacing + if space { style.word_spacing } else { 0.0 })
+            })
+            .collect();
+        let mut same = true;
+        self.with_island((start, end), edges, slot, &mut |shaped, run| {
+            let run = shaped.runs[run];
+            let glyphs = run.glyph_start as usize..(run.glyph_start + run.glyph_count) as usize;
+            let ids = &shaped.glyph_ids[glyphs.clone()];
+            same = same_glyphs(ids.iter().map(|id| u32::from(*id)), paragraph);
+            for (cluster, advance) in shaped.clusters[glyphs.clone()]
+                .iter()
+                .zip(&shaped.x_advances[glyphs])
+            {
+                let owner = c.starts.partition_point(|s| *s <= *cluster) - 1;
+                advances[owner - start] += f64::from(advance.unsigned_abs()) * scale;
+            }
+            Ok(())
+        })?;
+        // Terminating spaces hang, laid at base width until shaping substitutes glyphs: skipped.
+        let (mut advance, mut space, mut hung) = (0_i64, 0_i64, trail);
+        for (i, shaped) in (start..end).zip(&advances).rev() {
+            let is_space = c.flags[i] & CLUSTER_SPACE != 0;
+            hung &= is_space;
+            let change =
+                super::layout_units::layout_units_from_scaled(*shaped) - c.advance_units[i];
+            advance += change * i64::from(!hung);
+            space += change * i64::from(!hung && is_space);
+        }
+        let unit = |value: i64| i32::try_from(value).map_err(|_| EngineError::ResultTooLarge);
+        let correction = Correction {
+            advance: unit(advance)?,
+            space: unit(space)?,
+            trailing: 0,
+        };
+        Ok((correction, same))
+    }
+}
+
+impl BreakCorrections for ShapedBreakCorrections<'_, '_> {
+    fn left(&mut self, boundary: usize) -> Result<Correction, EngineError> {
+        self.correction(boundary, 0)
+    }
+
+    fn right(&mut self, boundary: usize) -> Result<Correction, EngineError> {
+        self.correction(boundary, 1)
+    }
+
+    fn whole_line(&mut self, start: usize, end: usize) -> Result<Option<Correction>, EngineError> {
+        let c = self.clusters;
+        let tail = if end < c.starts.len() {
+            c.reshapable_island(end)
+        } else {
+            Some((end, end))
+        };
+        // Only islands that meet, and each short enough to reshape.
+        match (c.reshapable_island(start), tail) {
+            (Some(head), Some(tail)) if head.1 > tail.0 => self
+                .delta((start, end), (true, true), None)
+                .map(|(whole, _)| Some(whole)),
+            _ => Ok(None),
+        }
+    }
+
+    /// A corrected break not after a space that the font shapes as one unit, or whose island is too long to
+    /// tell: `left` found the paragraph's glyphs there differ from those the island draws as a line end.
+    fn refused(&self, boundary: usize) -> bool {
+        let c = self.clusters;
+        c.flags[boundary - 1] & CLUSTER_SPACE == 0
+            && c.break_corrections[boundary - 1][2].get().is_some()
+    }
+}
+
+/// Whether the glyphs `alone` draws are the `paragraph` ones, in order: a ligature or a contextual form
+/// changes the ids, and a reorder or a repeat changes the sequence while keeping every id present.
+fn same_glyphs(alone: impl ExactSizeIterator<Item = u32>, paragraph: &[u16]) -> bool {
+    alone.len() == paragraph.len()
+        && alone
+            .zip(paragraph)
+            .all(|(id, &drawn)| id == u32::from(drawn))
+}
+
+/// Gives every fragment of `flow` the records shaping its corrected line start and end alone (or none),
+/// so the ordinary and the intrinsic flow draw the same edge glyphs.
+fn attach_line_edges(
+    corrections: &mut ShapedBreakCorrections<'_, '_>,
+    geometry: &FlowGeometryArena,
+    flow: &mut FlowLayoutArena,
+    out: (&mut BoundaryShapeArena, &[EdgeId]),
+    next_glyph_id: &mut u32,
+) -> Result<(), EngineError> {
+    let (out, previous) = out;
+    // A paragraph with no correctable boundary has no edge to shape.
+    let corrected = !corrections.clusters.break_corrections.is_empty();
+    for line_index in 0..flow.lines.len() {
+        let line = flow.lines[line_index];
+        let words = corrected
+            && geometry.constraints.iter().any(|constraint| {
+                constraint.flow_thread_id == line.flow_thread_id && constraint.wrap == WRAP_WORD
+            });
+        let start =
+            usize::try_from(line.fragment_start).map_err(|_| EngineError::InvalidRequest)?;
+        for fragment in &mut flow.fragments[start..start + usize::from(line.fragment_count)] {
+            if !words {
+                (fragment.lead_index, fragment.tail_index) = (NO_BOUNDARY, NO_BOUNDARY);
+                continue;
+            }
+            let current = *fragment;
+            (fragment.lead_index, fragment.tail_index) = corrections.line_edge_records(
+                current,
+                line.flow_thread_id,
+                (out, previous),
+                next_glyph_id,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// A line edge's clusters, how they shape, and the boundary side whose island they are exactly, if any.
+type LineEdge = ((usize, usize), (bool, bool), Option<(usize, usize)>);
+
+/// A previous layout's boundary glyph id under `pack2(text unit of its cluster, glyph index)`: an edit moves
+/// offsets but leaves a retained unit's id, so an offset is no key. A unit's glyphs sort in ordinal order.
+type EdgeId = (u64, u32);
+
+fn previous_edge_ids(
+    ids: &mut Vec<EdgeId>,
+    clusters: &ClusterArena,
+    previous: &BoundaryShapeArena,
+) {
+    ids.clear();
+    for record in &previous.records {
+        let glyphs =
+            record.source_glyph_start..record.source_glyph_start + record.source_glyph_count;
+        for glyph in glyphs {
+            let offset = previous.shape.clusters[glyph as usize];
+            if let Ok(cluster) = clusters.starts.binary_search(&offset) {
+                let key = sort::pack2(clusters.stable_ids[cluster], glyph);
+                ids.push((key, previous.stable_ids[glyph as usize]));
+            }
+        }
+    }
+    sort::sort_pairs(ids);
+}
+
 fn append_boundary_source_ids(
     output: &mut Vec<u32>,
-    source: &ShapeArena,
-    clusters: &ClusterArena,
+    source_clusters: &[u32],
+    (clusters, previous): (&ClusterArena, &[EdgeId]),
     next_glyph_id: &mut u32,
 ) -> Result<(), EngineError> {
     let mut previous_cluster = None;
-    let mut ordinal = 0usize;
-    for &text_cluster in &source.clusters {
+    let mut ordinal = 0u32;
+    for &text_cluster in source_clusters {
         if previous_cluster == Some(text_cluster) {
             ordinal += 1;
         } else {
@@ -4914,11 +5410,19 @@ fn append_boundary_source_ids(
             .binary_search(&text_cluster)
             .ok()
             .and_then(|cluster| {
-                let start = usize::try_from(*clusters.glyph_starts.get(cluster)?).ok()?;
-                let count = usize::try_from(*clusters.glyph_counts.get(cluster)?).ok()?;
-                (ordinal < count)
-                    .then(|| clusters.glyph_stable_ids.get(start + ordinal).copied())
-                    .flatten()
+                let (start, count) = (
+                    clusters.glyph_starts[cluster],
+                    clusters.glyph_counts[cluster],
+                );
+                let own = (ordinal < count)
+                    .then(|| clusters.glyph_stable_ids.get((start + ordinal) as usize))
+                    .flatten();
+                own.copied().filter(|id| *id != 0).or_else(|| {
+                    let unit = clusters.stable_ids[cluster];
+                    let at = previous.partition_point(|id| id.0 < sort::pack2(unit, 0));
+                    let id = previous.get(at + ordinal as usize)?;
+                    (id.0 >> 32 == u64::from(unit)).then_some(id.1)
+                })
             })
             .filter(|id| *id != 0)
             .map_or_else(|| allocate_glyph_id(next_glyph_id), Ok)?;
@@ -5223,6 +5727,9 @@ fn gather_error(error: GatherError) -> EngineError {
         | GatherError::SourceFieldMissing => EngineError::InvalidRequest,
     }
 }
+
+#[cfg(test)]
+mod unsafe_break_tests;
 
 #[cfg(test)]
 mod tests {
@@ -6006,6 +6513,94 @@ mod tests {
                 .collect::<Vec<_>>(),
             [1, 3, 4]
         );
+    }
+
+    #[test]
+    fn a_committed_paragraph_measures_while_a_sibling_removal_is_pending() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine.create_root(4).unwrap();
+        engine.reserve_root_text(4, 8).unwrap();
+
+        let initial_bytes = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 1),
+        ]);
+        let mut initial = update(0, 0, 0);
+        initial.limits.max_paragraphs = 2;
+        initial.paragraph_mutations =
+            parse_paragraph_mutations(&initial_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        // The query carries only the sibling's removal: the committed paragraph 1 needs no
+        // upsert to stay queryable.
+        let removal_bytes = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_REMOVE, 2, 0)]);
+        let mut query = update(1, 1, 1);
+        query.limits.max_paragraphs = 2;
+        query.paragraph_mutations =
+            parse_paragraph_mutations(&removal_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        engine.measure_paragraph(query, 1).unwrap();
+        let planner = engine.planners.get(&4).unwrap();
+        assert!(planner.speculative.is_some());
+        assert_eq!(
+            planner
+                .active_order()
+                .iter()
+                .map(|paragraph| paragraph.id)
+                .collect::<Vec<_>>(),
+            [1]
+        );
+
+        // The frame carrying the same removal adopts the transaction and commits it.
+        let mut frame = update(1, 1, 1);
+        frame.limits.max_paragraphs = 2;
+        frame.paragraph_mutations =
+            parse_paragraph_mutations(&removal_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        let prepared = engine.prepare_update(frame, 2).unwrap();
+        engine.commit_update(prepared).unwrap();
+        let planner = engine.planners.get(&4).unwrap();
+        assert!(planner.paragraph(1).is_some());
+        assert!(planner.paragraph(2).is_none());
+    }
+
+    #[test]
+    fn a_query_cannot_measure_the_paragraph_its_lifecycle_removes() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine.create_root(4).unwrap();
+        engine.reserve_root_text(4, 8).unwrap();
+
+        let initial_bytes = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 1),
+        ]);
+        let mut initial = update(0, 0, 0);
+        initial.limits.max_paragraphs = 2;
+        initial.paragraph_mutations =
+            parse_paragraph_mutations(&initial_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let removal_bytes = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_REMOVE, 2, 0)]);
+        let mut query = update(1, 1, 1);
+        query.limits.max_paragraphs = 2;
+        query.paragraph_mutations =
+            parse_paragraph_mutations(&removal_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        assert_eq!(
+            engine.measure_paragraph(query, 2),
+            Err(EngineError::InvalidRequest)
+        );
+        assert!(engine.planners.get(&4).unwrap().paragraph(2).is_some());
     }
 
     #[test]

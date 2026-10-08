@@ -2,9 +2,30 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Installed-package Labs suite
+        required: true
+        default: smoke
+        type: choice
+        options:
+          - smoke
+          - layout
+          - measure
+          - glyphs
+          - publication
+          - batch
+          - style
+          - reflow
+          - stress
+          - cold
+          - edit
+          - full
 
 permissions:
   contents: read
@@ -42,11 +63,9 @@ jobs:
       - name: Check repository formatting
         run: |
           pnpm exec oxfmt --check \
-            .claude/hooks \
-            .claude/settings.json \
-            .claude/tsconfig.json \
+            .agents/scripts \
             package.json \
-            .agents/docs/log.md
+            .agents/docs/log
 
       - name: Check benchmark formatting
         working-directory: benches
@@ -56,17 +75,61 @@ jobs:
         working-directory: benches
         run: pnpm exec oxlint --deny-warnings .
 
-      - name: Check repository tooling types
-        run: pnpm exec tsc -p .claude/tsconfig.json
-
-      - name: Check repository tooling synchronization
-        run: node .claude/hooks/sync-agent-config.test.ts
+      - name: Check skill linking
+        run: node --test .agents/scripts/link-skills.test.mjs
 
       - name: Check OKF tooling
-        run: node --test .agents/skills/open-knowledge-format/scripts/okf-tools.test.mjs
+        run: node --test .agents/skills/open-knowledge-format/scripts/okf-tools.test.mjs .agents/skills/open-knowledge-format/scripts/attestations.test.mjs
 
-      - name: Check knowledge base
-        run: pnpm scripts run docs:check
+  docs:
+    name: Docs report
+    # Advisory review evidence like the size report: it comments what to fix and never fails, so a
+    # maintainer can merge and leave cleanup to the Sync agent docs issue.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CI: true
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The report diffs from the merge base and reads each concept's history.
+          fetch-depth: 0
+
+      - name: Install canonical toolchain
+        uses: jdx/mise-action@9e7f7633ff6f6d6048a9418a68d48f288f50eb14 # v4.2.3
+        with:
+          version: 2026.7.13
+          cache: true
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Report docs to review
+        run: |
+          # Warnings annotate the concept files and mark this check without failing it.
+          pnpm scripts run docs:drift -- --pr "origin/${{ github.base_ref }}" \
+            --head "${{ github.event.pull_request.head.sha }}" --repository "$GITHUB_REPOSITORY" \
+            --annotations --markdown "$RUNNER_TEMP/docs-report.md"
+          cat "$RUNNER_TEMP/docs-report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish docs report comment
+        # Fork pull requests receive a read-only token; the job summary still carries the report.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          body="$RUNNER_TEMP/docs-report.md"
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            --jq '.[] | select(.body | startswith("<!-- okf-docs-report -->")) | .id' | head -n 1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F "body=@$body" > /dev/null
+          elif ! grep -q '^Nothing to do' "$body"; then
+            gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F "body=@$body" > /dev/null
+          fi
 
   size:
     name: Package size report
@@ -225,13 +288,11 @@ jobs:
         run: pnpm --filter @pmndrs/glyph check
 
       - name: Pack candidate package for performance reporting
-        if: github.event_name == 'pull_request'
         run: |
           mkdir -p benches/.cache/labs-candidate
           pnpm --dir packages/glyph pack --pack-destination ../../benches/.cache/labs-candidate
 
       - name: Retain candidate package
-        if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: glyph-candidate-package
@@ -299,7 +360,7 @@ jobs:
         run: pnpm --dir benches build -- --runtime-packages-ready
 
       - name: Check Three and React Three Fiber examples
-        run: pnpm --filter @pmndrs/glyph-examples check
+        run: pnpm scripts run benchmark:with-browser -- pnpm --filter @pmndrs/glyph-examples check
 
       - name: Check Japanese showcase fixture
         run: pnpm scripts run fixture:japanese-showcase:check
@@ -320,11 +381,11 @@ jobs:
 
   performance:
     name: Package performance report
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     needs: check
     continue-on-error: true
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 35
     env:
       CI: true
 
@@ -349,13 +410,38 @@ jobs:
           name: glyph-candidate-package
           path: benches/.cache/labs-candidate
 
-      - name: Compare packaged public API performance
+      - name: Select package performance suite
+        id: suite
+        run: node benches/scripts/select-package-labs-suite.mts
+
+      - name: Measure installed-package performance
         run: >-
           pnpm scripts run benchmark:labs-package --
-          --baseline @pmndrs/glyph@canary
+          ${{ steps.suite.outputs.baseline_arguments }}
           --candidate .cache/labs-candidate
-          --blocks 8
+          --suite ${{ steps.suite.outputs.suite }}
           --output .cache/labs-package
+
+      - name: Publish performance report comment
+        # The job summary already carries the report; this keeps one PR comment current, like the
+        # size and docs reports. Fork pull requests receive a read-only token, so this step may fail.
+        if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          summary=benches/.cache/labs-package/summary.md
+          [ -f "$summary" ] || { echo "No Labs summary to publish"; exit 0; }
+          body="$RUNNER_TEMP/labs-report.md"
+          { echo '<!-- glyph-labs-report -->'; cat "$summary"; } > "$body"
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            --jq '.[] | select(.body | startswith("<!-- glyph-labs-report -->")) | .id' | head -n 1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F "body=@$body" > /dev/null
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F "body=@$body" > /dev/null
+          fi
 
       - name: Retain Labs performance report
         if: always()

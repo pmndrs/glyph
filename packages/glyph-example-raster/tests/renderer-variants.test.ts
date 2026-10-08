@@ -1,6 +1,5 @@
 import { registerThreeRasterProgram } from '@pmndrs/glyph/three';
-import tgpu from 'typegpu';
-import * as d from 'typegpu/data';
+import tgpu, { d } from 'typegpu';
 import { afterAll, expect, test } from 'vitest';
 import { positionLocal, storage, uint, uv } from 'three/tsl';
 import * as THREE from 'three/webgpu';

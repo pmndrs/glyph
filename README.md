@@ -39,7 +39,8 @@ pnpm glyph bake --input Inter-Regular.ttf --output Inter.font.glb --bitmap 32 --
 ```
 
 Subset a font with `--unicodes U+0020-007E` to bake only a fixed range or specific glyphs for smaller font assets.  
-For an icon font, `--glyph-map <path>` outputs a JSON table keyed by the glyph name in an icon font like Font Awesome or Lucide.
+For an icon font, `--glyph-map <path>` outputs a JSON table keyed by the glyph name in an icon font like Font Awesome or Lucide.  
+Add `--outlines` to also keep every glyph's outline, for any raster format and for uses such as physics colliders. `text.glyphs().outlineAt(index)` returns the glyph's closed quadratic contours as `[x0, y0, cx, cy, x1, y1, isLine]` tuples in em units (y down, origin at the pen on the baseline; place them with the glyph's `x`, `y` and `fontSize`). Inside `text.withGlyphs`, `glyphs.outlineAt(index, target?)` returns the same outline as typed-array views. After `text.breakApart()`, blank glyphs are excluded and `glyphs.outlineAt(index)` reads it at the index `setMatrixAt` takes, and `glyphs.glyphAt(index)` gives its `fontHandle` and `glyphId`: equal pairs share one outline, so build a shape once per pair.
 
 ## Measure text
 
@@ -254,7 +255,7 @@ mise exec -- pnpm dev
 
 The hook installer writes only the native `pre-commit` dispatcher in Git's shared common directory. Every worktree in the
 clone therefore uses the same hook without `core.hooksPath` or Lefthook configuration. The hook auto-formats and applies
-safe lint fixes to fully staged source files, re-stages those fixes, and then validates documentation digests. Existing
+safe lint fixes to fully staged source files, re-stages those fixes, and then shows the package docs to attest. Existing
 Git LFS hooks such as `pre-push`, `post-checkout`, `post-commit`, and `post-merge` are not changed.
 
 The benchmark application lives in [`benches/`](benches/). `pnpm dev` opens its interactive harness;

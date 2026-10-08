@@ -9,7 +9,6 @@ import {
   externalizeGlyphWasmPlugin,
   type JavaScriptBundle,
 } from '../src/benchmark/vite-size-bundle.ts';
-import { assertPackageSizeReportFresh, type PackageSizeReport } from '../src/benchmark/package-size-report.ts';
 import {
   measureR3fHelloWorldProductionBundle,
   measureTresPlaygroundProductionBundle,
@@ -421,6 +420,8 @@ const entries: SizeEntry[] = [
     'font-validator-js',
     'Font validator JS',
     new URL('../size-entries/font-validator.ts', import.meta.url),
+    true,
+    true,
   ),
   await measureJavaScript(
     'runtime-baker-host-js',
@@ -543,15 +544,13 @@ const report = {
   },
   entries,
 };
-const output = new URL('../src/generated/package-sizes.json', import.meta.url);
 const serialized = `${JSON.stringify(report, null, 2)}\n`;
-if (process.argv.includes('--check')) {
-  const committed = await readFile(output, 'utf8');
-  assertPackageSizeReportFresh(JSON.parse(committed) as PackageSizeReport, report);
-} else {
+// Sizes are pull-request review evidence: CI compares head against base and comments the delta. The
+// committed report is only the benchmark harness's display snapshot, refreshed at release, so a plain
+// run prints and never rewrites it — a feature branch that rewrote it would conflict with every other.
+if (process.argv.includes('--write')) {
   await mkdir(new URL('../src/generated/', import.meta.url), { recursive: true });
-  await writeFile(output, serialized);
-  process.stdout.write(serialized);
+  await writeFile(new URL('../src/generated/package-sizes.json', import.meta.url), serialized);
 }
-/* @workflow { "name": "release:size:generate", "summary": "Regenerate reviewed package-size evidence.", "requirements": "Built runtime packages, the R3F hello-world production application, and Binaryen.", "writes": "Checked-in package-size evidence." } */
-/* @workflow { "name": "release:size:check", "summary": "Verify package-size identity and reviewed ceilings.", "requirements": "Built runtime packages, the R3F hello-world production application, and Binaryen.", "writes": "Nothing.", "args": ["--check"] } */
+process.stdout.write(serialized);
+/* @workflow { "name": "release:size:generate", "args": ["--write"], "summary": "Refresh the benchmark harness package-size display snapshot during release preparation; feature branches never commit it.", "requirements": "Built runtime packages, the R3F hello-world production application, and Binaryen.", "writes": "benches/src/generated/package-sizes.json and stdout." } */

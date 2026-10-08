@@ -14,6 +14,7 @@ pub enum BakeErrorCode {
     MissingTable,
     InvalidTable,
     InvalidGlyphExtents,
+    UnsupportedOutlineFormat,
     IntegerOverflow,
     SerializationFailed,
     SubsettingFailed,

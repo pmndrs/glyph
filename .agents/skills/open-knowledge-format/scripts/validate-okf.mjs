@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* @workflow {"name": "docs:check", "args": [".agents/docs", "--workspace-root", "."], "summary": "Validate the Open Knowledge Format agent archive under .agents/docs, including one concept per workspace package.", "requirements": "The repository-pinned Node.js runtime.", "writes": "stdout"} */
 
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -6,7 +7,9 @@ import { pathToFileURL } from 'node:url';
 
 import yaml from 'js-yaml';
 
-import { packageDigest, workspacePackages } from './package-digest.mjs';
+import { attestationErrors, verificationErrors } from './attestations.mjs';
+import { decisionErrors, frozenRegisterErrors, logEntryErrors } from './records.mjs';
+import { workspacePackages } from './workspace-packages.mjs';
 
 const actorPattern = /^(?:[^/:\s]+\/[^\s]+|human:[^\s]+|process:[^\s]+)$/u;
 const datePattern = /^(\d{4})-(\d{2})-(\d{2})$/u;
@@ -163,8 +166,15 @@ export async function validateOkf(bundleRoot = '.', options = {}) {
       }
     }
 
+    if (data.type === 'Decision') profile.push(...decisionErrors(filePath, data, body));
+    if (data.type === 'Log Entry') profile.push(...logEntryErrors(filePath, data, body));
+    if (data.type === 'Log Entry') profile.push(...verificationErrors(filePath, data));
+    if (data.type === 'Attestation') profile.push(...attestationErrors(filePath, data, text));
+    profile.push(...frozenRegisterErrors(filePath, data, body));
+
     if (typeof data.title !== 'string' || data.title.length === 0) warnings.push(`${filePath}: missing title`);
-    if (typeof data.description !== 'string' || data.description.length === 0) {
+    // A Log Entry's prose is its description; a separate one-line summary would only repeat it.
+    if (data.type !== 'Log Entry' && (typeof data.description !== 'string' || data.description.length === 0)) {
       warnings.push(`${filePath}: missing description`);
     }
   }
@@ -196,9 +206,10 @@ export async function validateOkf(bundleRoot = '.', options = {}) {
       if (data.resource !== expectedResource) {
         profile.push(`${conceptPath}: resource must identify ${expectedResource}`);
       }
-      const expectedDigest = await packageDigest(packageRoot);
-      if (data.source_digest !== expectedDigest) {
-        profile.push(`${conceptPath}: stale source_digest; expected ${expectedDigest}`);
+      // Freshness is measured from history by docs-drift.mjs. A stored pin conflicted on every
+      // concurrent pull request that touched the same package, so the field is retired.
+      if (Object.hasOwn(data, 'source_digest')) {
+        profile.push(`${conceptPath}: source_digest is retired; remove it (drift is reported from git history)`);
       }
     }
     for (const [name, entries] of packageConcepts) {
@@ -249,6 +260,11 @@ export async function validateOkf(bundleRoot = '.', options = {}) {
       conformance.push(`${filePath}: log dates must be newest-first`);
     }
     if (/^# \d{4}-\d{2}-\d{2}$/mu.test(text)) conformance.push(`${filePath}: date sections must use H2`);
+    // A bundle that records changes as Log Entry files has no log.md; a recreated one means an
+    // agent prepended to it out of habit, so point at the replacement.
+    if (await isDirectory(path.join(path.dirname(filePath), 'log'))) {
+      profile.push(`${filePath}: this bundle records changes as log/ entries; use docs:new -- log instead`);
+    }
   }
 
   for (const filePath of await markdownFiles(root)) {
