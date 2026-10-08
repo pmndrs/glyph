@@ -1,5 +1,5 @@
 import earcut from 'earcut';
-import { Clipper64, ClipType, FillRule, PolyTree64, type Path64, type Paths64, type PolyPath64 } from 'clipper2-ts';
+import { Clipper64, ClipType, FillRule, PolyTree64, type Path64, type Paths64 } from 'clipper2-ts';
 import type { GlyphOutlineContour } from '@pmndrs/glyph';
 import type { DetachedGlyph } from '@pmndrs/glyph/three';
 
@@ -7,8 +7,8 @@ import type { DetachedGlyph } from '@pmndrs/glyph/three';
  * Convex collider pieces built from a glyph outline.
  *
  * Pipeline, once per `(fontId, glyphId)`: flatten every quadratic to a fixed em-space chord tolerance, resolve the
- * contours under the font's nonzero fill rule (Clipper2 union, so holes are holes and overlapping contours merge),
- * triangulate each resolved region with its holes (earcut), then merge adjacent triangles into convex pieces
+ * contours under the font's nonzero fill rule (Clipper2 union, so overlapping contours merge) and keep each region's
+ * outer boundary only, so counters are solid, triangulate it (earcut), then merge adjacent triangles into convex pieces
  * (Hertel-Mehlhorn). Everything stays in the outline's own space: em units, y down, origin at the glyph's pen position.
  * The one flip into a y-up world lives in `emToWorld`.
  */
@@ -25,7 +25,7 @@ const MINIMUM_PIECE_AREA_EM2 = 1e-7;
 export interface GlyphCollider {
   /** The flattened source contours before fill resolution, for comparing the collider against the glyph. */
   readonly contours: readonly EmPolyline[];
-  /** Counter-clockwise (in the outline's y-down numbers) convex polygons whose union is the nonzero-filled outline. */
+  /** Counter-clockwise (in the outline's y-down numbers) convex polygons whose union is the filled outline with its counters filled. */
   readonly pieces: readonly EmPolyline[];
   /** Sum of the piece areas in em^2. The pieces do not overlap. */
   readonly area: number;
@@ -72,19 +72,14 @@ export function flattenOutline(outline: readonly GlyphOutlineContour[], toleranc
   return contours;
 }
 
-/** One connected filled region: an outer boundary and the holes cut from it, as integer Clipper2 paths. */
-interface ResolvedRegion {
-  readonly holes: Path64[];
-  readonly outer: Path64;
-}
-
 /**
- * Resolves contours under the nonzero fill rule: Clipper2 unions every contour with its winding preserved, so a
- * clockwise inner contour inside a counter-clockwise outer one is a hole, two overlapping same-wound contours merge,
- * and an island inside a hole becomes its own region. Hole membership comes from the resulting nesting, never from the
- * sign of a contour's winding.
+ * Resolves contours under the nonzero fill rule (Clipper2 union, winding preserved, so overlapping same-wound contours
+ * merge) and keeps only the outer boundary of each top-level filled region. Counters are not collider geometry: a hole
+ * is dropped, so the region is solid across it, and an island inside a hole is already covered by the outer region
+ * around it. The source outline keeps its counters; only the physics shape ignores them, which makes far fewer, fatter
+ * pieces while the outer edge keeps the full flattening precision.
  */
-function resolveNonZero(contours: readonly EmPolyline[]): ResolvedRegion[] {
+function resolveOuterRegions(contours: readonly EmPolyline[]): Path64[] {
   const subject: Paths64 = contours.map((contour) => {
     const path: Path64 = [];
     for (let index = 0; index < contour.length; index += 2) {
@@ -99,20 +94,11 @@ function resolveNonZero(contours: readonly EmPolyline[]): ResolvedRegion[] {
   clipper.addSubject(subject);
   const tree = new PolyTree64();
   clipper.execute(ClipType.Union, FillRule.NonZero, tree);
-  const regions: ResolvedRegion[] = [];
-  const visit = (node: PolyPath64): void => {
-    const polygon = node.poly;
-    if (polygon !== null && !node.isHole) {
-      const holes: Path64[] = [];
-      for (let index = 0; index < node.count; index += 1) {
-        const hole = node.child(index);
-        if (hole.poly !== null) holes.push(hole.poly);
-      }
-      regions.push({ holes, outer: polygon });
-    }
-    for (let index = 0; index < node.count; index += 1) visit(node.child(index));
-  };
-  visit(tree);
+  const regions: Path64[] = [];
+  for (let index = 0; index < tree.count; index += 1) {
+    const polygon = tree.child(index).poly;
+    if (polygon !== null) regions.push(polygon);
+  }
   return regions;
 }
 
@@ -122,19 +108,11 @@ interface TriangulatedRegion {
   readonly vertices: Float64Array;
 }
 
-function triangulateRegion(region: ResolvedRegion): TriangulatedRegion {
+function triangulateRegion(outer: Path64): TriangulatedRegion {
   const coordinates: number[] = [];
-  const holeStarts: number[] = [];
-  const append = (path: Path64): void => {
-    for (const point of path) coordinates.push(point.x, point.y);
-  };
-  append(region.outer);
-  for (const hole of region.holes) {
-    holeStarts.push(coordinates.length / 2);
-    append(hole);
-  }
+  for (const point of outer) coordinates.push(point.x, point.y);
   const vertices = Float64Array.from(coordinates);
-  const triangles = earcut(vertices, holeStarts, 2);
+  const triangles = earcut(vertices, undefined, 2);
   const oriented: number[] = [];
   for (let index = 0; index < triangles.length; index += 3) {
     const a = triangles[index]!;
@@ -253,7 +231,7 @@ export function buildGlyphCollider(outline: readonly GlyphOutlineContour[], tole
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (const region of resolveNonZero(contours)) {
+  for (const region of resolveOuterRegions(contours)) {
     const triangulated = triangulateRegion(region);
     for (const merged of mergeConvexPieces(triangulated)) {
       const ring = withoutCollinearVertices(triangulated.vertices, merged);

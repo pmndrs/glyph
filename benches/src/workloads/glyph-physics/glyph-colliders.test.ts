@@ -9,6 +9,7 @@ import {
   flattenToleranceEm,
   buildParagraphColliders,
   polygonArea,
+  type EmBounds,
   type GlyphCollider,
 } from './glyph-colliders';
 import { breakApartParagraph, outlinedFont, type OutlinedFontFixture } from './test-support/outlined-paragraph';
@@ -77,6 +78,58 @@ function distanceToBoundary(segments: readonly Segment[], x: number, y: number):
 
 function perimeter(segments: readonly Segment[]): number {
   return segments.reduce((total, { x0, x1, y0, y1 }) => total + Math.hypot(x1 - x0, y1 - y0), 0);
+}
+
+/**
+ * A grid over a glyph's bounds, padded by one cell, classifying every cell as solid or empty under the collider's
+ * contract: filled by the winding rule, or an enclosed counter (unfilled and not connected to the border), which is
+ * filled for physics. `counters` counts the enclosed unfilled regions.
+ */
+function solidGrid(fine: readonly Segment[], bounds: EmBounds, cells: number) {
+  const columns = cells + 2;
+  const pointAt = (column: number, row: number): [number, number] => [
+    bounds.minX + ((column - 0.5) / cells) * (bounds.maxX - bounds.minX),
+    bounds.minY + ((row - 0.5) / cells) * (bounds.maxY - bounds.minY),
+  ];
+  const label = new Int32Array(columns * columns).fill(-1);
+  const unfilled = (column: number, row: number): boolean => {
+    const [x, y] = pointAt(column, row);
+    return windingNumber(fine, x, y) === 0;
+  };
+  let components = 0;
+  const exterior = new Set<number>();
+  for (let start = 0; start < columns * columns; start += 1) {
+    if (label[start] !== -1 || !unfilled(start % columns, Math.floor(start / columns))) continue;
+    const stack = [start];
+    label[start] = components;
+    let touchesBorder = false;
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      const column = current % columns;
+      const row = Math.floor(current / columns);
+      if (column === 0 || row === 0 || column === columns - 1 || row === columns - 1) touchesBorder = true;
+      for (const [dx, dy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ] as const) {
+        const nextColumn = column + dx;
+        const nextRow = row + dy;
+        if (nextColumn < 0 || nextRow < 0 || nextColumn >= columns || nextRow >= columns) continue;
+        const next = nextRow * columns + nextColumn;
+        if (label[next] === -1 && unfilled(nextColumn, nextRow)) {
+          label[next] = components;
+          stack.push(next);
+        }
+      }
+    }
+    if (touchesBorder) exterior.add(components);
+    components += 1;
+  }
+  const solid = (cell: number): boolean => label[cell] === -1 || !exterior.has(label[cell]!);
+  const enclosed = (cell: number): boolean => label[cell] !== -1 && !exterior.has(label[cell]!);
+  return { columns, counters: components - exterior.size, enclosed, pointAt, solid };
 }
 
 function insidePolygon(polygon: Float64Array, x: number, y: number, margin = 0): boolean {
@@ -157,23 +210,22 @@ describe('glyph collider fidelity', () => {
   });
 
   it.each(SPECIMENS)(
-    '%s %s: piece area matches the nonzero-filled outline within the chord tolerance',
+    '%s %s: piece area matches the outline with its counters filled, within the chord tolerance',
     (fixture, character) => {
       const { collider, fine } = specimenOf(fixture, character);
-      // The oracle area is the grid estimate of the winding-number fill; the builder's area comes from its pieces. A
-      // chord deviates from its curve by at most the tolerance, so the two differ by at most tolerance * perimeter.
+      // The oracle area is the grid estimate of the solid fill (winding fill plus enclosed counters); the builder's area
+      // comes from its pieces. A chord deviates from its curve by at most the tolerance, so the two differ by at most
+      // tolerance * perimeter.
       const bounds = collider.bounds!;
       const cells = 200;
+      const grid = solidGrid(fine, bounds, cells);
       const cell = (Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) + 0.1) / cells;
-      const minX = bounds.minX - 0.05;
-      const minY = bounds.minY - 0.05;
       let inside = 0;
-      for (let row = 0; row < cells; row += 1) {
-        for (let column = 0; column < cells; column += 1) {
-          if (windingNumber(fine, minX + (column + 0.5) * cell, minY + (row + 0.5) * cell) !== 0) inside += 1;
-        }
+      for (let row = 1; row <= cells; row += 1) {
+        for (let column = 1; column <= cells; column += 1) if (grid.solid(row * grid.columns + column)) inside += 1;
       }
-      const oracleArea = inside * cell * cell;
+      const gridCell = ((bounds.maxX - bounds.minX) / cells) * ((bounds.maxY - bounds.minY) / cells);
+      const oracleArea = inside * gridCell;
       const allowance = TOLERANCE_EM * perimeter(fine) + 4 * cell * perimeter(fine) * 0.25;
       expect(Math.abs(collider.area - oracleArea)).toBeLessThanOrEqual(allowance);
       // The pieces tile the region without overlap, so their areas sum to the union.
@@ -185,27 +237,24 @@ describe('glyph collider fidelity', () => {
   );
 
   it.each(SPECIMENS)(
-    '%s %s: every sample away from the boundary is classified like the outline',
+    '%s %s: every sample away from the boundary is covered exactly when the outline is solid there',
     (fixture, character) => {
       const { collider, fine } = specimenOf(fixture, character);
-      const bounds = collider.bounds!;
       const cells = 80;
-      const width = bounds.maxX - bounds.minX + 0.1;
-      const height = bounds.maxY - bounds.minY + 0.1;
+      const grid = solidGrid(fine, collider.bounds!, cells);
       let checked = 0;
-      for (let row = 0; row < cells; row += 1) {
-        for (let column = 0; column < cells; column += 1) {
-          const x = bounds.minX - 0.05 + ((column + 0.5) / cells) * width;
-          const y = bounds.minY - 0.05 + ((row + 0.5) / cells) * height;
+      for (let row = 1; row <= cells; row += 1) {
+        for (let column = 1; column <= cells; column += 1) {
+          const [x, y] = grid.pointAt(column, row);
           // Within the tolerance of the boundary either answer is legitimate; everywhere else they must agree.
           if (distanceToBoundary(fine, x, y) <= TOLERANCE_EM * 1.5) continue;
           checked += 1;
           const covering = collider.pieces.filter((piece) => insidePolygon(piece, x, y)).length;
-          const filled = windingNumber(fine, x, y) !== 0;
-          expect(covering, `${fixture} ${character} at ${x.toFixed(4)}, ${y.toFixed(4)}`).toBe(filled ? 1 : 0);
+          const solid = grid.solid(row * grid.columns + column);
+          expect(covering, `${fixture} ${character} at ${x.toFixed(4)}, ${y.toFixed(4)}`).toBe(solid ? 1 : 0);
         }
       }
-      expect(checked).toBeGreaterThan(cells * cells * 0.5);
+      expect(checked).toBeGreaterThan(cells * cells * 0.3);
     },
   );
 
@@ -233,74 +282,39 @@ describe('glyph collider fidelity', () => {
     ['inter', 'i', 0],
     ['dancing-script', '8', 2],
     ['source-serif-4', '&', 2],
-  ] as const)('%s %s: has %i enclosed counters and no piece enters them', (fixture, character, expectedCounters) => {
-    const { collider, fine } = specimenOf(fixture, character);
-    const { maxX, maxY, minX, minY } = collider.bounds!;
-    const cells = 90;
-    const columns = cells + 2;
-    const pointAt = (column: number, row: number): [number, number] => [
-      minX + ((column - 0.5) / cells) * (maxX - minX),
-      minY + ((row - 0.5) / cells) * (maxY - minY),
-    ];
-    // A counter is a connected run of unfilled cells that never reaches the padded border of the grid.
-    const label = new Int32Array(columns * columns).fill(-1);
-    const unfilled = (column: number, row: number): boolean => {
-      const [x, y] = pointAt(column, row);
-      return windingNumber(fine, x, y) === 0;
-    };
-    let components = 0;
-    const exterior = new Set<number>();
-    for (let start = 0; start < columns * columns; start += 1) {
-      const startColumn = start % columns;
-      const startRow = Math.floor(start / columns);
-      if (label[start] !== -1 || !unfilled(startColumn, startRow)) continue;
-      const stack = [start];
-      label[start] = components;
-      let touchesBorder = false;
-      while (stack.length > 0) {
-        const current = stack.pop()!;
-        const column = current % columns;
-        const row = Math.floor(current / columns);
-        if (column === 0 || row === 0 || column === columns - 1 || row === columns - 1) touchesBorder = true;
-        for (const [dx, dy] of [
-          [1, 0],
-          [-1, 0],
-          [0, 1],
-          [0, -1],
-        ] as const) {
-          const nextColumn = column + dx;
-          const nextRow = row + dy;
-          if (nextColumn < 0 || nextRow < 0 || nextColumn >= columns || nextRow >= columns) continue;
-          const next = nextRow * columns + nextColumn;
-          if (label[next] === -1 && unfilled(nextColumn, nextRow)) {
-            label[next] = components;
-            stack.push(next);
-          }
-        }
+  ] as const)(
+    '%s %s: has %i enclosed counters and a piece covers every point of them',
+    (fixture, character, expectedCounters) => {
+      const { collider, fine } = specimenOf(fixture, character);
+      const cells = 90;
+      const grid = solidGrid(fine, collider.bounds!, cells);
+      expect(grid.counters).toBe(expectedCounters);
+      let covered = 0;
+      for (let cell = 0; cell < grid.columns * grid.columns; cell += 1) {
+        if (!grid.enclosed(cell)) continue;
+        const [x, y] = grid.pointAt(cell % grid.columns, Math.floor(cell / grid.columns));
+        if (distanceToBoundary(fine, x, y) <= TOLERANCE_EM * 1.5) continue;
+        expect(collider.pieces.some((piece) => insidePolygon(piece, x, y))).toBe(true);
+        covered += 1;
       }
-      if (touchesBorder) exterior.add(components);
-      components += 1;
-    }
-    const counters = components - exterior.size;
-    expect(counters).toBe(expectedCounters);
-    for (let cell = 0; cell < label.length; cell += 1) {
-      const component = label[cell]!;
-      if (component === -1 || exterior.has(component)) continue;
-      const [x, y] = pointAt(cell % columns, Math.floor(cell / columns));
-      if (distanceToBoundary(fine, x, y) <= TOLERANCE_EM * 1.5) continue;
-      expect(collider.pieces.some((piece) => insidePolygon(piece, x, y))).toBe(false);
-    }
-  });
+      expect(covered > 0).toBe(expectedCounters > 0);
+    },
+  );
 
-  it('leaves the centre of o empty and fills its ring', () => {
+  it('fills the centre of o: its counter is solid', () => {
     const { collider } = specimenOf('inter', 'o');
     const { maxX, maxY, minX, minY } = collider.bounds!;
     const centreX = (minX + maxX) / 2;
     const centreY = (minY + maxY) / 2;
-    expect(collider.pieces.some((piece) => insidePolygon(piece, centreX, centreY))).toBe(false);
+    expect(collider.pieces.some((piece) => insidePolygon(piece, centreX, centreY))).toBe(true);
     // The ring's left and top strokes, a few hundredths of an em inside the outer edge.
     expect(collider.pieces.some((piece) => insidePolygon(piece, minX + 0.03, centreY))).toBe(true);
     expect(collider.pieces.some((piece) => insidePolygon(piece, centreX, minY + 0.03))).toBe(true);
+  });
+
+  it('keeps the true outline, counters included, in `contours`', () => {
+    const { collider } = specimenOf('inter', 'o');
+    expect(collider.contours).toHaveLength(2);
   });
 });
 
@@ -308,7 +322,7 @@ describe('every printable ASCII glyph', () => {
   const printable = Array.from({ length: 95 }, (_, index) => String.fromCodePoint(0x20 + index)).join('');
 
   it.each(['inter', 'dancing-script', 'source-serif-4'] as const)(
-    '%s: pieces are convex, disjoint-by-area, and conserve the nonzero-filled area',
+    '%s: pieces are convex, disjoint-by-area, and conserve the area of the filled outer regions',
     async (fixture) => {
       const paragraph = await breakApartParagraph(fixture, printable, 48);
       try {
@@ -319,8 +333,9 @@ describe('every printable ASCII glyph', () => {
           const outline = glyphs.outlineAt(index);
           if (outline.length === 0) continue;
           const collider = buildGlyphCollider(outline, TOLERANCE_EM);
-          // Clipper's own nonzero union of the same flattened contours: outers count positive, holes negative.
-          const resolved: Paths64 = union(
+          // Clipper's own nonzero union of the same flattened contours: outers are the paths wound like the net fill,
+          // holes the opposite. Only the outers count, merged so an island inside a counter is not counted twice.
+          const unioned: Paths64 = union(
             collider.contours.map((contour) =>
               Array.from({ length: contour.length / 2 }, (_, vertex) => ({
                 x: Math.round(contour[2 * vertex]! * scale),
@@ -329,7 +344,9 @@ describe('every printable ASCII glyph', () => {
             ),
             FillRule.NonZero,
           );
-          const resolvedArea = Math.abs(areaPaths(resolved)) / (scale * scale);
+          const netSign = Math.sign(areaPaths(unioned));
+          const outers = unioned.filter((path) => Math.sign(areaPaths([path])) === netSign);
+          const resolvedArea = Math.abs(areaPaths(union(outers, FillRule.NonZero))) / (scale * scale);
           expect(collider.area, `${fixture} glyph ${String(index)}`).toBeCloseTo(resolvedArea, 6);
           for (const piece of collider.pieces) expect(isConvexCounterClockwise(piece)).toBe(true);
           built += 1;
