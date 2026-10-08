@@ -567,8 +567,18 @@ export class ThreeRootHost {
     worldMatricesCurrent: boolean,
     texts: readonly Text<RasterFormatMetadata>[] = this.#renderMembers(),
   ): void {
-    if (!worldMatricesCurrent) {
-      for (const text of texts) text.updateWorldMatrix(true, false);
+    const traversalParent = worldMatricesCurrent ? this.#renderObject.parent : null;
+    const pendingBranches =
+      traversalParent === null ? undefined : followingSiblingBranches(this.#renderObject, traversalParent);
+    for (const text of texts) {
+      if (
+        !worldMatricesCurrent ||
+        (traversalParent !== null &&
+          pendingBranches !== undefined &&
+          belongsToParentBranch(text, traversalParent, pendingBranches))
+      ) {
+        text.updateWorldMatrix(true, false);
+      }
     }
     this.#renderObject.updateMatrixWorldWithoutCommit(true);
     this.#binding?.syncTransforms(worldMatricesCurrent);
@@ -1912,6 +1922,33 @@ function nearestScene(object: THREE.Object3D): THREE.Scene | undefined {
     current = current.parent;
   }
   return undefined;
+}
+
+function followingSiblingBranches(
+  reference: THREE.Object3D,
+  parent: THREE.Object3D,
+): ReadonlySet<THREE.Object3D> | undefined {
+  const referenceIndex = parent.children.indexOf(reference);
+  if (referenceIndex === -1 || referenceIndex === parent.children.length - 1) return undefined;
+  const branches = new Set<THREE.Object3D>();
+  for (let index = referenceIndex + 1; index < parent.children.length; index += 1) {
+    branches.add(parent.children[index]!);
+  }
+  return branches;
+}
+
+/** Whether an object belongs to a top-level subtree that Three has not visited in the current parent traversal. */
+function belongsToParentBranch(
+  object: THREE.Object3D,
+  parent: THREE.Object3D,
+  branches: ReadonlySet<THREE.Object3D>,
+): boolean {
+  let branch = object;
+  while (branch.parent !== parent) {
+    if (branch.parent === null) return false;
+    branch = branch.parent;
+  }
+  return branches.has(branch);
 }
 
 function collectTextDescendants(group: TextGroup, result: Text<RasterFormatMetadata>[]): Text<RasterFormatMetadata>[] {

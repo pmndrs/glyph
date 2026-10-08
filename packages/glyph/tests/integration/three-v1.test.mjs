@@ -558,6 +558,66 @@ test('patch-only publications retain direct transform synchronization', async (t
   }
 });
 
+test('patch-only publications refresh a standalone Text added after the publication root', async (t) => {
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+
+  try {
+    for (const transformMode of ['indexed', 'direct']) {
+      await t.test(transformMode, async (t) => {
+        const three = await createThreeTestHandle(t, defineThreeConfig({ transformMode }));
+        const scene = new THREE.Scene();
+        const first = three.createText({ font, text: 'A' });
+        scene.add(first);
+        scene.updateMatrixWorld(true);
+
+        const late = three.createText({
+          constraints: { width: { mode: 'exact', size: 200 } },
+          font,
+          layout: { wrap: 'word' },
+          text: 'one two three four',
+        });
+        late.position.x = 7;
+        scene.add(late);
+        scene.updateMatrixWorld(true);
+
+        try {
+          const draws = rootDraws(scene);
+          let visibleX;
+          if (transformMode === 'direct') {
+            const draw = draws.find((candidate) => candidate.matrix.elements[12] === 7);
+            assert.ok(draw, 'the late Text owns one direct draw at its accepted transform');
+            visibleX = () => draw.matrix.elements[12];
+          } else {
+            const transforms = draws[0].geometry.getAttribute('_pmndrsGlyphTransforms');
+            const transformId = Array.from({ length: transforms.array.length / 16 }, (_, index) => index).find(
+              (index) => transforms.array[index * 16 + 12] === 7,
+            );
+            assert.notEqual(
+              transformId,
+              undefined,
+              'the late Text owns one indexed transform at its accepted position',
+            );
+            visibleX = () => transforms.array[transformId * 16 + 12];
+          }
+
+          late.position.x = 42;
+          late.constraints = { ...late.constraints, width: { mode: 'exact', size: 60 } };
+          instrumentedGlyph.reset();
+          scene.updateMatrixWorld(true);
+
+          assert.equal(instrumentedGlyph.latestPlanCounts().draws, 0, 'the width-only reflow remains patch-only');
+          assert.equal(visibleX(), 42, 'the late Text transform becomes visible in the accepting scene traversal');
+        } finally {
+          late.dispose();
+          first.dispose();
+        }
+      });
+    }
+  } finally {
+    font.dispose();
+  }
+});
+
 test('manual shaping preserves sibling Text transforms during draw replacement', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
