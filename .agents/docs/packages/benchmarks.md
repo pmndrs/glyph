@@ -753,6 +753,12 @@ host initialization, initialized-plus-corpus work, and retained-generator corpus
 Browser frame, GPU, and input-latency observations remain Vitexec or Playwright workflows, while package size and
 conformance remain deterministic gates rather than timing benchmarks.
 
+The installed-package publication suite includes warm retained-label normalization, framework-shaped formatted-flow
+updates, Vue snapshot reuse, TypeGPU position-only updates, and raw trailing-span changes. Each
+case warms once before its timed yield and checks its semantic result afterward with package-owned counts, encoded bytes,
+borrowed glyph checksums, or draw topology. Compatibility probes and old-canary adapters run once during fixture setup;
+candidate-only helpers are required before timing begins.
+
 | Need                                  | Command                                                                                                                   |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Common installed-package signal       | `pnpm scripts run benchmark:labs-package -- --candidate <package-or-tgz>`                                                 |
