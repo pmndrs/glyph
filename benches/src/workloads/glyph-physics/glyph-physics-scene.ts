@@ -19,7 +19,16 @@ const MAX_STEPS_PER_FRAME = 8;
 /** Largest wall-clock gap one frame may feed the simulation, in milliseconds. */
 const MAX_FRAME_MS = 100;
 /** Gap between the floor and the bottom of the viewport, in pixels: clears the Presentation payload pills. */
-const FLOOR_MARGIN = 84;
+export const FLOOR_MARGIN = 100;
+/** Gap between the left wall and the viewport's left edge, in pixels: clears the Presentation control dock. */
+export const WALL_LEFT_INSET = 136;
+/** Gap between the right wall and the viewport's right edge, in pixels. */
+export const WALL_RIGHT_INSET = 40;
+
+/** The walls' x positions in viewport pixels, measured from the viewport's left edge. */
+export function wallSpan(viewportWidth: number): { readonly left: number; readonly right: number } {
+  return { left: WALL_LEFT_INSET, right: Math.max(WALL_LEFT_INSET + 1, viewportWidth - WALL_RIGHT_INSET) };
+}
 
 export interface PhysicsViewport {
   readonly height: number;
@@ -112,10 +121,11 @@ export class GlyphPhysicsScene {
   resize(viewport: PhysicsViewport): void {
     const world = this.#world;
     if (world === undefined) return;
+    const { left, right } = wallSpan(viewport.width);
     const bounds: WorldBounds = {
       floorY: -(viewport.height - FLOOR_MARGIN) - this.#text.position.y,
-      left: -this.#text.position.x,
-      right: viewport.width - this.#text.position.x,
+      left: left - this.#text.position.x,
+      right: right - this.#text.position.x,
     };
     world.setBounds(bounds, COLLIDER_DEPTH_EM * this.#fontSize * 2);
     world.wake();

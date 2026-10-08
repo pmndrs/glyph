@@ -2,21 +2,15 @@ import * as THREE from 'three/webgpu';
 import type { Box3DModule } from 'box3d.js';
 
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
+import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
-  BENCHMARK_CONTENT_INSET,
-  LIVE_TEXT_COLOR,
-  LIVE_TEXT_LINE_HEIGHT,
-  liveTextPosition,
-} from '../shared/text-style';
-import {
-  committedTextMetrics,
   exactWidth,
   paintColor,
   publishWorkloadTexts,
   type ComparisonWorkloadEntry,
   type WorkloadTextFactoryContext,
 } from '../shared/scene-entry';
-import { GlyphPhysicsScene } from './glyph-physics-scene';
+import { GlyphPhysicsScene, wallSpan } from './glyph-physics-scene';
 import { loadBox3d } from './glyph-physics-world';
 
 /** The paragraph that falls. The glyph-count control takes a prefix of it, so a smaller scene is a shorter text. */
@@ -31,8 +25,13 @@ export const GLYPH_PHYSICS_TEXT =
 const MINIMUM_CHARACTERS = 24;
 /** The paragraph never gets narrower than this, so a very small viewport still wraps into readable lines. */
 const MINIMUM_CONTENT_WIDTH = 160;
-/** Distance from the viewport's top edge to the first line, in pixels. */
-const TOP_MARGIN = 48;
+/** Gap between each wall and the paragraph's measure, in pixels, so the first line starts clear of the walls. */
+const WALL_PADDING = 24;
+/**
+ * How far above the viewport's top edge the paragraph starts, as a fraction of the viewport height. The lines fall from
+ * above the screen onto the floor, so they land on top of one another and the glyphs pile instead of lying in one row.
+ */
+const DROP_HEIGHT_RATIO = 0.45;
 
 /** Maps the shared 0..100 amount control onto a character count of the paragraph, repeating it if it must grow. */
 export function glyphPhysicsText(amount: number): string {
@@ -41,9 +40,10 @@ export function glyphPhysicsText(amount: number): string {
   return GLYPH_PHYSICS_TEXT.slice(0, characters).trimEnd();
 }
 
-/** The paragraph's measure: a fraction of the viewport inside the shared content inset, always inside the walls. */
+/** The paragraph's measure: a fraction of the space between the walls, less their padding, so it starts between them. */
 export function glyphPhysicsContentWidth(viewportWidth: number, layoutWidthRatio: number): number {
-  return Math.max(MINIMUM_CONTENT_WIDTH, (viewportWidth - BENCHMARK_CONTENT_INSET * 2) * layoutWidthRatio);
+  const { left, right } = wallSpan(viewportWidth);
+  return Math.max(MINIMUM_CONTENT_WIDTH, (right - left - WALL_PADDING * 2) * layoutWidthRatio);
 }
 
 let readyBox3d: Box3DModule | undefined;
@@ -141,9 +141,7 @@ export const glyphPhysicsWorkload = {
         simulation.resize({ height: viewportHeight, width: viewportWidth });
         continue;
       }
-      const layout = committedTextMetrics(entry.text);
-      const [x] = liveTextPosition('top-start', viewportWidth, viewportHeight, layout.width, layout.height);
-      entry.text.position.set(x, -TOP_MARGIN, 0);
+      entry.text.position.set(wallSpan(viewportWidth).left + WALL_PADDING, viewportHeight * DROP_HEIGHT_RATIO, 0);
     }
   },
   async prepare() {
