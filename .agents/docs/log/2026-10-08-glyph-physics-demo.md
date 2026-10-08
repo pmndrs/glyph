@@ -19,3 +19,10 @@ not swept against each other, so the speed cap is now 0.07 em per step. The rema
 28 px), five to six times Box3D's 0.1 px contact slop, and the cause of that residue is not found; the overlap test allows
 0.03 em. The walls are inset from the control dock and the payload pills and the paragraph starts above the viewport so the
 glyphs heap up. See the [benchmarks concept](../packages/benchmarks.md).
+
+Colliders then stopped respecting holes: each is built from the filled outer regions only, at the same 0.2 px flattening, so
+counters are solid and the outer edge still rolls. The Outlines overlay still draws the true contours. For 662 bodies of 28
+px Inter in a 700 px box (33 shapes), pieces per shape fell from 12.2 average and 32 maximum to 7.2 and 21, hull shapes from
+8,490 to 5,494, and the Node-native step from 10.9 to 7.4 ms while falling (steps 0-60) and from 12.4 to 9.0 ms while piling
+(steps 200-400), on this host. The frame loop now runs at most two fixed steps per frame and discards the time it cannot run,
+because a step costing most of a frame made each late frame owe more steps than the last.
