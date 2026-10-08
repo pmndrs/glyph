@@ -907,6 +907,9 @@ detached copy into its destination renderer. Copying does not advance the source
 generation; the preceding commit may publish pending changes. A read-triggered publication failure throws from that
 read. Reading an unchanged rejected paragraph does not retry it, including inside `onError`; explicit text changes or
 root/group presentation changes allow the next read to publish again. Successful publication clears the retained errors.
+Write several labels before reading their layouts when possible. Alternating a write and a committed-layout read for
+each label publishes the shared root once per label; the next draw does not batch those already completed publications.
+Edit-sized publication is tracked in #247 as a 0.2.0 release gate.
 
 Three's `Text.breakApart()` uses both planner requests and returns the frozen tuple
 `[Glyphs, Decorations | undefined]`. It preserves the source transform, Codec-defined batching, fallback raster formats,

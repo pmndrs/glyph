@@ -330,6 +330,11 @@ execution and font loading.
 Within either suite, the `@one-label` tag selects the label lifecycle cases, and `@small-scene` selects the title, field,
 and caret cases in the one-label scene. Eight-block packed-artifact runs matched all six outcomes on baseline and candidate. The label
 lifecycle, title, and field cases were neutral at the measured resolution; caret placement was 85.4% faster (p < .001).
+The 2026-10-06 PR #240 CI comparison also found large regressions in the multi-label "each in turn" schedules:
+100 rolling tickers in a 1,000-label root increased from 34.22 ms to 976.23 ms, and 50 edited lines from 27.21 ms to
+385.94 ms. Batched writes followed by reads remained neutral. This is repeated root publication, not a cold-start
+measurement; #247 tracks edit-sized publication as a release gate. These measurements predate the update onto merged
+#235 and #255 and need a fresh CI comparison.
 Run `mise exec -- pnpm scripts run benchmark:labs-package -- --baseline /absolute/base.tgz --candidate /absolute/head.tgz
 --suite read-publication --output .cache/read-publication`, and again with `--suite cold`, to retain the comparison and
 artifact identities. Build and pack each revision first; the runner never builds source. The suite is recorded in the run
