@@ -115,6 +115,24 @@ export function externalizeGlyphWasmPlugin(): Plugin {
   };
 }
 
+/** Keeps consumer-installed optional peers outside package-attributed JavaScript closures. */
+export function isGlyphPeerDependency(id: string): boolean {
+  return (
+    id === 'three' ||
+    id.startsWith('three/') ||
+    id === 'react' ||
+    id.startsWith('@react-three/fiber') ||
+    // TypeGPU keys its identity to one consumer-installed instance. Its resolver
+    // internals remain peer-attributed for the same reason as Three and React.
+    id === 'typegpu' ||
+    id.startsWith('typegpu/') ||
+    id.startsWith('@typegpu/') ||
+    id === 'typed-binary' ||
+    id === 'tinyest' ||
+    id.startsWith('tinyest')
+  );
+}
+
 async function withinBundleDeadline<T>(label: string, task: Promise<T>): Promise<T> {
   let timeout: NodeJS.Timeout | undefined;
   const deadline = new Promise<never>((_resolve, reject) => {

@@ -816,6 +816,14 @@ admit. It checks the identifier, header, level index, safe 64-bit section coordi
 data-format descriptor, exact dimensions and payload size, channel semantics, and the absence of supercompression or
 auxiliary metadata. The level payload remains a view into the source bytes. The general `ktx-parse` package is a
 development-only independent oracle for these checks; it is not a production dependency or a shipped runtime module.
+Against baseline `2ab37fdac`, the focused production graph for this reader moves from 12,109 raw / 8,791 minified /
+2,666 gzip bytes to 6,613 / 6,502 / 2,234, reductions of 5,496 (45.39%), 2,289 (26.04%), and 432 (16.20%) bytes.
+The complete peer-externalized Three Bitmap and MSDF graphs each remove 5,330 raw / 2,101 minified / 576 gzip bytes;
+Slug removes the same raw and minified bytes and 574 gzip bytes. Their initial graphs retain neither reader and move by
+only 73 raw / 64 minified / 3 gzip bytes because the emitted dynamic-chunk references change. The core root entry does
+not reach a KTX reader in either its initial or complete graph. These JavaScript measurements compile baseline and
+candidate with identical pinned configurations, include every selected dynamic chunk in the complete graph, and exclude
+Wasm and optional peers; they are measured production closures, not install size or a Bundlephobia estimate.
 
 ## Glyph outlines
 
