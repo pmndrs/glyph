@@ -1,14 +1,14 @@
 /**
  * One glyph's outline as raw columns, in em units (1 is the font size) with y down and the origin at the glyph's pen
  * position on the baseline. Place a point at `glyph.x + x * glyph.fontSize`, `glyph.y + y * glyph.fontSize`. Outlines
- * with equal `fontId` and `glyphId` are identical, so a caller can cache one shape per key.
+ * with equal `fontHandle` and `glyphId` are identical, so a caller can cache one shape per key.
  *
  * From `withGlyphs`, the typed arrays are views over the font's decoded outlines: valid only inside that callback, so
  * copy them (`points.slice()`) to keep an outline.
  */
 export interface GlyphOutlineView {
-  /** The id of the font that shaped the glyph. */
-  fontId: number;
+  /** The font that shaped the glyph. */
+  fontHandle: number;
   /** The glyph's ID in that font. */
   glyphId: number;
   /**
@@ -44,7 +44,7 @@ export type GlyphOutlineContour = readonly GlyphOutlineCurve[];
 export function viewGlyphOutline(
   memory: ArrayBuffer,
   pointer: number,
-  fontId: number,
+  fontHandle: number,
   glyphId: number,
   target: GlyphOutlineView,
 ): GlyphOutlineView {
@@ -53,7 +53,7 @@ export function viewGlyphOutline(
   const segmentCount = header[1]!;
   const pointsOffset = pointer + 8 + contourCount * 4;
   const pointCount = 2 * segmentCount + contourCount;
-  target.fontId = fontId;
+  target.fontHandle = fontHandle;
   target.glyphId = glyphId;
   target.contourEnds = new Uint32Array(memory, pointer + 8, contourCount);
   target.points = new Float32Array(memory, pointsOffset, pointCount * 2);
@@ -62,9 +62,9 @@ export function viewGlyphOutline(
 }
 
 /** @internal An empty holder for `viewGlyphOutline` and `viewStoredGlyphOutline` to fill. */
-export function emptyGlyphOutlineView(fontId = 0, glyphId = 0): GlyphOutlineView {
+export function emptyGlyphOutlineView(fontHandle = 0, glyphId = 0): GlyphOutlineView {
   return {
-    fontId,
+    fontHandle,
     glyphId,
     points: new Float32Array(0),
     contourEnds: new Uint32Array(0),
@@ -149,7 +149,7 @@ function grown<Column extends Float32Array | Uint32Array | Uint8Array>(column: C
 /** @internal Fills `target` with views over glyph `glyphId`'s slice of `store`. */
 export function viewStoredGlyphOutline(
   store: GlyphOutlineStore,
-  fontId: number,
+  fontHandle: number,
   glyphId: number,
   target: GlyphOutlineView,
 ): GlyphOutlineView {
@@ -162,7 +162,7 @@ export function viewStoredGlyphOutline(
     glyphs[record + 3]!,
     glyphs[record + 4]!,
   ];
-  target.fontId = fontId;
+  target.fontHandle = fontHandle;
   target.glyphId = glyphId;
   target.points = store.points.subarray(2 * point, 2 * (point + 2 * segments + contours));
   target.contourEnds = store.contourEnds.subarray(contour, contour + contours);

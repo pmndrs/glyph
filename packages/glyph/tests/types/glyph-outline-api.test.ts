@@ -6,7 +6,7 @@ declare const bitmapText: Text<typeof bitmap>;
 declare const slugText: Text<typeof slug>;
 
 const target: GlyphOutlineView = {
-  fontId: 0,
+  fontHandle: 0,
   glyphId: 0,
   points: new Float32Array(0),
   contourEnds: new Uint32Array(0),

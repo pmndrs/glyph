@@ -26,7 +26,8 @@ writes version 0, and readers accept both. The format, read paths, and decoder a
 - **Em space.** An outline is the shape of a glyph ID in a font, in em units with y down and the origin at the pen
   position on the baseline, so equal font and glyph IDs give equal outlines. Borrowed reads return a plain
   `GlyphOutlineView` and owned reads return `[x0, y0, cx, cy, x1, y1, isLine]` contours (agreed on the pull request,
-  2026-10-06).
+  2026-10-06). The view names its font `fontHandle`, matching `BorrowedGlyph.fontHandle` and `glyphs().fontHandles`;
+  `DetachedGlyph` names it `fontId`.
 - **One detached index.** A split glyph reads its outline through `Glyphs.outlineAt(index)` and nowhere else on the
   Three side. `Glyphs` uses the layout glyph index of `text.glyphs()`, `withGlyphs`, and `GlyphPlacement.index`, with every
   per-glyph datum a parallel array at it and blank glyphs kept as `drawn: false` (user directive, 2026-10-07). A second

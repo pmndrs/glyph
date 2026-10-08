@@ -87,7 +87,7 @@ function readOutlines(text) {
       return {
         glyph: glyphs.glyphAt(index),
         view: {
-          fontId: view.fontId,
+          fontHandle: view.fontHandle,
           glyphId: view.glyphId,
           points: view.points.slice(),
           contourEnds: view.contourEnds.slice(),
@@ -195,7 +195,7 @@ test('a borrowed view shares endpoints, ends contours by segment, and flags each
   for (const text of texts) {
     for (const { glyph: record, view } of readOutlines(text)) {
       const { points, contourEnds, segmentLines } = view;
-      assert.equal(view.fontId, record.fontHandle);
+      assert.equal(view.fontHandle, record.fontHandle);
       assert.equal(view.glyphId, record.glyphId);
       assert.ok(points instanceof Float32Array && contourEnds instanceof Uint32Array);
       assert.ok(segmentLines instanceof Uint8Array);
@@ -245,7 +245,7 @@ test('a target is refilled with new views and returned', async (t) => {
   const text = three.createText({ font, text: 'Ho' });
   text.withGlyphs((glyphs) => {
     const target = {
-      fontId: 0,
+      fontHandle: 0,
       glyphId: 0,
       points: new Float32Array(0),
       contourEnds: new Uint32Array(0),
@@ -326,7 +326,7 @@ test('a fallback glyph decodes from the font that shaped it', async (t) => {
   const read = readOutlines(text);
   const globe = read.at(-1);
   assert.notEqual(globe.glyph.fontHandle, read[0].glyph.fontHandle);
-  assert.equal(globe.view.fontId, globe.glyph.fontHandle);
+  assert.equal(globe.view.fontHandle, globe.glyph.fontHandle);
   const box = controlBox(placed(globe.outline, globe.glyph));
   const tolerance = globe.glyph.fontSize * 1e-5;
   assertNear(box.minX, globe.glyph.inkX, tolerance, 'left');

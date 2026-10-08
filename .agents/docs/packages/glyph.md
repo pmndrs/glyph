@@ -781,12 +781,12 @@ across the fixture faces (Inter adds 226 KB to 412 KB; Noto Sans CJK JP adds 15.
 
 An outline describes a glyph ID of a font, not one placement, in em units (1 is the font size) with y down and the
 origin at the pen position on the baseline, like every box the layout publishes. A caller places a point at
-`glyph.x + ex * glyph.fontSize`, `glyph.y + ey * glyph.fontSize`; equal `fontId` and `glyphId` mean equal outlines, so
+`glyph.x + ex * glyph.fontSize`, `glyph.y + ey * glyph.fontSize`; equal `fontHandle` and `glyphId` mean equal outlines, so
 a caller can cache one shape per key. A fallback glyph reads from the font that shaped it. Every read path throws a
 `TypeError` for a glyph whose font has no outlines; outlines are optional today and planned to become required.
 
 - **Borrowed:** `text.withGlyphs((glyphs) => glyphs.outlineAt(index, target?))` returns a `GlyphOutlineView` of
-  `fontId`, `glyphId`, and typed-array views over the font's decoded store: endpoint-shared `points` (segment `s` of
+  `fontHandle`, `glyphId`, and typed-array views over the font's decoded store: endpoint-shared `points` (segment `s` of
   contour `c` uses points `2s + c` through `2s + c + 2`), `contourEnds` (exclusive end of each contour, as a segment
   index), and `segmentLines` (`1` for a line, `0` for a quadratic). A `target` is refilled and returned, which saves only
   the holder. The views are documented as valid only inside the callback, which keeps the freedom to back them with engine
