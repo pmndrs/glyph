@@ -1,11 +1,12 @@
 import earcut from 'earcut';
 import { Clipper64, ClipType, FillRule, PolyTree64, type Path64, type Paths64, type PolyPath64 } from 'clipper2-ts';
 import type { GlyphOutlineContour } from '@pmndrs/glyph';
+import type { DetachedGlyph } from '@pmndrs/glyph/three';
 
 /**
  * Convex collider pieces built from a glyph outline.
  *
- * Pipeline, once per `fontHandle:glyphId`: flatten every quadratic to a fixed em-space chord tolerance, resolve the
+ * Pipeline, once per `(fontId, glyphId)`: flatten every quadratic to a fixed em-space chord tolerance, resolve the
  * contours under the font's nonzero fill rule (Clipper2 union, so holes are holes and overlapping contours merge),
  * triangulate each resolved region with its holes (earcut), then merge adjacent triangles into convex pieces
  * (Hertel-Mehlhorn). Everything stays in the outline's own space: em units, y down, origin at the glyph's pen position.
@@ -301,33 +302,49 @@ export function flattenToleranceEm(fontSize: number, pixelTolerance = 0.2): numb
   return Math.min(0.02, Math.max(0.0015, pixelTolerance / fontSize));
 }
 
+/** The part of `Glyphs` that building colliders reads; every method is addressed by the one layout glyph index. */
+export interface ColliderSource {
+  readonly count: number;
+  glyphAt(index: number): Pick<DetachedGlyph, 'drawn' | 'fontId' | 'glyphId'>;
+  outlineAt(index: number): readonly GlyphOutlineContour[];
+}
+
+export interface ParagraphColliders {
+  /** Colliders built, one per distinct shape when deduplicating, one per drawn glyph when not. */
+  readonly built: number;
+  /** Parallel to the source's glyph index: `colliders[i]` drives `setMatrixAt(i)`, and is `undefined` for a blank glyph. */
+  readonly colliders: readonly (GlyphCollider | undefined)[];
+}
+
 /**
- * Builds one collider per distinct glyph and shares it across every placement. `Glyphs.outlineAt(i)` returns a fresh
- * outer array whose frozen contours are shared by every glyph of the same font and glyph ID, so the first contour's
- * identity is the glyph's identity. A blank glyph has no outline and no collider.
+ * Builds the colliders of a paragraph. Equal `fontId` and `glyphId` mean an equal outline, so with `dedupe` every
+ * occurrence of a shape shares the one collider built for it. Blank glyphs (`drawn === false`) have no outline and no
+ * collider. Without `dedupe` each drawn glyph builds its own, which only measures what sharing saves.
  */
-export class GlyphColliderCache {
-  readonly #colliders = new Map<GlyphOutlineContour, GlyphCollider>();
-  readonly #tolerance: number;
-
-  constructor(tolerance: number) {
-    this.#tolerance = tolerance;
-  }
-
-  get size(): number {
-    return this.#colliders.size;
-  }
-
-  get(outline: readonly GlyphOutlineContour[]): GlyphCollider | undefined {
-    const identity = outline[0];
-    if (identity === undefined) return undefined;
-    let collider = this.#colliders.get(identity);
-    if (collider === undefined) {
-      collider = buildGlyphCollider(outline, this.#tolerance);
-      this.#colliders.set(identity, collider);
+export function buildParagraphColliders(source: ColliderSource, tolerance: number, dedupe = true): ParagraphColliders {
+  const shapes = new Map<number, Map<number, GlyphCollider>>();
+  const colliders: (GlyphCollider | undefined)[] = [];
+  let built = 0;
+  for (let index = 0; index < source.count; index += 1) {
+    const { drawn, fontId, glyphId } = source.glyphAt(index);
+    if (!drawn) {
+      colliders.push(undefined);
+      continue;
     }
-    return collider;
+    let ofFont = shapes.get(fontId);
+    if (ofFont === undefined) {
+      ofFont = new Map();
+      shapes.set(fontId, ofFont);
+    }
+    let collider = dedupe ? ofFont.get(glyphId) : undefined;
+    if (collider === undefined) {
+      collider = buildGlyphCollider(source.outlineAt(index), tolerance);
+      ofFont.set(glyphId, collider);
+      built += 1;
+    }
+    colliders.push(collider);
   }
+  return { built, colliders };
 }
 
 /**

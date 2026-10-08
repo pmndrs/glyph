@@ -3,7 +3,7 @@ import type { Box3DModule } from 'box3d.js';
 
 import type { WorkloadText } from '../shared/scene-entry';
 import { ColliderOverlay, type OverlayVisibility } from './collider-overlay';
-import { flattenToleranceEm, GlyphColliderCache } from './glyph-colliders';
+import { flattenToleranceEm, buildParagraphColliders } from './glyph-colliders';
 import {
   COLLIDER_DEPTH_EM,
   GlyphPhysicsWorld,
@@ -97,16 +97,15 @@ export class GlyphPhysicsScene {
     this.#text.visible = false;
     const world = new GlyphPhysicsWorld(this.#b3);
     const overlay = new ColliderOverlay(this.#fontSize);
-    const cache = new GlyphColliderCache(flattenToleranceEm(this.#fontSize));
+    const { colliders } = buildParagraphColliders(glyphs, flattenToleranceEm(this.#fontSize));
     this.#world = world;
     this.#overlay = overlay;
     overlay.root.position.copy(this.#text.position);
     this.#node.add(overlay.root);
     for (let index = 0; index < glyphs.count; index += 1) {
-      const detached = glyphs.glyphAt(index);
-      if (!detached.drawn) continue;
-      const collider = cache.get(glyphs.outlineAt(index));
+      const collider = colliders[index];
       if (collider === undefined) continue;
+      const detached = glyphs.glyphAt(index);
       const pen = glyphs.measurements[index]!.drawnOrigin;
       world.addGlyph(collider, detached.fontSize, pen.x, pen.y);
       overlay.addBody(collider);

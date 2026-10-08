@@ -7,7 +7,7 @@ import {
   emToWorld,
   flattenOutline,
   flattenToleranceEm,
-  GlyphColliderCache,
+  buildParagraphColliders,
   polygonArea,
   type GlyphCollider,
 } from './glyph-colliders';
@@ -378,21 +378,32 @@ describe('outline flattening', () => {
   });
 });
 
-describe('collider cache', () => {
-  it('builds one collider per distinct glyph, shares it across placements, and gives blanks none', async () => {
+describe('paragraph colliders', () => {
+  it('shares one collider between occurrences of a letter, gives different letters their own, and blanks none', async () => {
+    const paragraph = await breakApartParagraph('inter', 'o a o', 24);
+    try {
+      const { built, colliders } = buildParagraphColliders(paragraph.glyphs, TOLERANCE_EM);
+      expect(colliders).toHaveLength(paragraph.glyphs.count);
+      const drawn = colliders.flatMap((collider, index) => (collider === undefined ? [] : [index]));
+      expect(drawn).toHaveLength(3);
+      const [firstO, a, secondO] = drawn.map((index) => colliders[index]!);
+      expect(secondO).toBe(firstO);
+      expect(a).not.toBe(firstO);
+      expect(built).toBe(2);
+      for (let index = 0; index < colliders.length; index += 1) {
+        expect(colliders[index] === undefined).toBe(!paragraph.glyphs.glyphAt(index).drawn);
+      }
+    } finally {
+      paragraph.dispose();
+    }
+  });
+
+  it('builds one collider per drawn glyph when deduplication is off', async () => {
     const paragraph = await breakApartParagraph('inter', 'o o o', 24);
     try {
-      const cache = new GlyphColliderCache(TOLERANCE_EM);
-      const colliders = Array.from({ length: paragraph.glyphs.count }, (_, index) =>
-        cache.get(paragraph.glyphs.outlineAt(index)),
-      );
-      expect(colliders).toHaveLength(5);
-      expect(colliders[1]).toBeUndefined();
-      expect(colliders[3]).toBeUndefined();
-      expect(colliders[0]).toBeDefined();
-      expect(colliders[2]).toBe(colliders[0]);
-      expect(colliders[4]).toBe(colliders[0]);
-      expect(cache.size).toBe(1);
+      const { built, colliders } = buildParagraphColliders(paragraph.glyphs, TOLERANCE_EM, false);
+      expect(built).toBe(3);
+      expect(new Set(colliders.filter((collider) => collider !== undefined)).size).toBe(3);
     } finally {
       paragraph.dispose();
     }
@@ -413,11 +424,11 @@ describe('outline space to world', () => {
     const paragraph = await breakApartParagraph('inter', 'Hg, o8', fontSize);
     try {
       const { glyphs } = paragraph;
-      const cache = new GlyphColliderCache(TOLERANCE_EM);
+      const { colliders } = buildParagraphColliders(glyphs, TOLERANCE_EM);
       let placed = 0;
       for (let index = 0; index < glyphs.count; index += 1) {
         const detached = glyphs.glyphAt(index);
-        const collider = cache.get(glyphs.outlineAt(index));
+        const collider = colliders[index];
         // A blank glyph (the comma's neighbour, the spaces) has no outline, no collider, and no record.
         expect(collider === undefined).toBe(!detached.drawn);
         if (collider === undefined) continue;
