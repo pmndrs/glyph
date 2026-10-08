@@ -407,9 +407,10 @@ Glyph initialization retains one settled `Promise<void>` forever, whether it ful
 cannot repeatedly allocate large Wasm memories; a full page or module replacement is the retry boundary. In browsers
 every default Wasm asset (the text shaper, the runtime-bake worker's font baker, and the Bitmap, MSDF and Slug bakers)
 is fetched and handed to `WebAssembly.compileStreaming`, so compilation overlaps the download and HTTP compression is
-decoded by the network stack. The engine decides what it streams: a response it declines (a content type other than
-`application/wasm`, an opaque origin, a failed status) rejects before the body is read and is buffered and compiled
-instead. Node reads the packaged files directly. Vite HMR carries
+decoded by the network stack. Streaming is attempted before inspecting response MIME or type. Following wasm-bindgen's
+loader policy, a streaming rejection falls back to buffered compilation for a basic, CORS or default response whose
+MIME is not `application/wasm`; other streaming errors propagate. The same response is used without cloning or
+refetching. Node reads the packaged files directly. Vite HMR carries
 the process-local Glyph runtime through replacement data instead of instantiating a second engine. React still checks
 synchronous initialized and loaded state first, so ready renders do not enter Suspense or cross a microtask. Pending font
 loads use `suspend-react` only as React's stable suspension cache; Glyph's FontFace resource graph remains the semantic
