@@ -66,23 +66,14 @@ export function setGlyphDrawOrder(glyphs: Glyphs, start: number): number {
 
 /** Immutable identity and grouping metadata for one glyph of a detached `Glyphs` object. */
 export interface DetachedGlyph {
-  /**
-   * The glyph's layout index: the same index `text.glyphs()`, `text.withGlyphs()`, `GlyphPlacement.index`, and every
-   * `Glyphs` method use. Blank glyphs keep their index.
-   */
+  /** The glyph's layout index, the one `text.glyphs()`, `text.withGlyphs()`, `GlyphPlacement.index`, and every `Glyphs` method use. */
   readonly index: number;
   /** Whether this glyph has a render record. A blank glyph does not: its matrix is stored and nothing is drawn. */
   readonly drawn: boolean;
   readonly key: GlyphPlacement['key'];
-  /**
-   * The id of the font this glyph was shaped with: a plain number, unique for the life of the page and never reused.
-   * It is not a lease and retains nothing. Equals `text.glyphs().fontHandles[glyphFontSlots[index]]`.
-   */
+  /** The font that shaped this glyph: a plain number, never reused, that retains nothing. Equals `text.glyphs().fontHandles[glyphFontSlots[index]]`. */
   readonly fontId: number;
-  /**
-   * The glyph's index in that font. Equal `fontId` and `glyphId` mean an equal outline, so a shape built once can be
-   * reused for every occurrence.
-   */
+  /** The glyph's index in that font. Equal `fontId` and `glyphId` mean an equal outline. */
   readonly glyphId: number;
   readonly cluster: number;
   readonly line: number;
@@ -99,9 +90,8 @@ interface DetachedGlyphStorage {
 /**
  * A detached render-plan branch from `Text.breakApart()`: imports the planner's compacted publication into the normal renderer without child Text objects; per-glyph matrices are Three-side only and never reach the live paragraph.
  *
- * Every per-glyph datum is a parallel array at one index, the layout glyph index of `text.glyphs()`: `count` is the
- * layout's glyph count, and `glyphAt`, `measurements`, `outlineAt`, and the matrix methods all take that index.
- * Blank glyphs stay in the index space with `drawn: false`: they keep a matrix but no render record.
+ * Every per-glyph datum is indexed by the layout glyph index of `text.glyphs()`. Blank glyphs keep their index with
+ * `drawn: false`: they keep a matrix but no render record.
  */
 export class Glyphs extends THREE.Object3D {
   readonly #target: ThreeCommandBufferRenderer;
@@ -138,7 +128,6 @@ export class Glyphs extends THREE.Object3D {
     let target: ThreeCommandBufferRenderer | undefined;
     let copy: GlyphCopy<void> | undefined;
     try {
-      // The owned snapshot the placements describe: it keeps its fonts' decoded outlines, so `outlineAt` stays plain data.
       const layout = options.placements.layout;
       this.#layout = layout;
       const incomplete = new Set(options.placements.incomplete);
@@ -208,7 +197,7 @@ export class Glyphs extends THREE.Object3D {
       }
       for (const [index, placement] of placements.entries()) {
         if (incomplete.has(index)) continue;
-        const stableId = options.placements.layout.glyphStableIds[index];
+        const stableId = layout.glyphStableIds[index];
         if (stableId === undefined) throw new Error(`detached glyph ${placement.index} has no stable id`);
         const address = this.#target.glyphRecord(stableId);
         if (address === undefined)
@@ -300,19 +289,15 @@ export class Glyphs extends THREE.Object3D {
   }
 
   /**
-   * Reads the outline of glyph `index`, the same layout index `glyphAt` and `setMatrixAt` take and the one
-   * `text.glyphs().outlineAt` takes, as caller-owned closed contours of `[x0, y0, cx, cy, x1, y1, isLine]` curves.
-   * Coordinates are em units with y down and the origin at the glyph's pen origin, the pivot of the matrix
-   * `setMatrixAt` places. To draw the glyph where this object draws it, scale each coordinate by
+   * Reads glyph `index`'s outline as `text.glyphs().outlineAt(index)` does: closed contours of
+   * `[x0, y0, cx, cy, x1, y1, isLine]` curves in em units, y down, origin at the glyph's pen origin, the pivot of the
+   * matrix `setMatrixAt` places. To draw the glyph where this object draws it, scale each coordinate by
    * `DetachedGlyph.fontSize`, negate y (this object's local space is y up), and place the result with the glyph's
-   * matrix. A blank glyph returns `[]`. Each call returns a new outer array whose frozen contours are shared by
-   * every glyph of the same font and glyph ID.
+   * matrix. A blank glyph returns `[]`.
    *
-   * The outlines were captured with the source paragraph's layout when `breakApart()` ran, and the font decoded
-   * them when it loaded. So this is a plain read: it makes no engine call, still returns the same contours after
-   * the source `Text` re-lays out or changes text, and, like `glyphAt`, still reads after the font or this object is
-   * disposed. Throws `RangeError` outside `0 <= index < count`, and `TypeError` when the glyph's font has no outlines
-   * because it was baked without them: outlines are optional today and are planned to become required.
+   * The outlines were captured when `breakApart()` ran, so, like `glyphAt`, this still reads after the source `Text`
+   * re-lays out and after the font or this object is disposed. Throws `RangeError` outside `0 <= index < count`, and
+   * `TypeError` when the glyph's font was baked without outlines.
    */
   outlineAt(index: number): GlyphOutlineContour[] {
     this.#assertIndex(index);

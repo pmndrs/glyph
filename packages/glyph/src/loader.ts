@@ -283,8 +283,7 @@ export class FontRegistry {
       );
     }
     const shapingFingerprint = artifact.shapingFingerprint;
-    // Decoded here, behind the load promise, so every outline read afterwards is plain data. Registration below stays
-    // synchronous, so concurrent loads of one font still register it once.
+    // Registration below stays synchronous, so concurrent loads of one font still register it once.
     let glyphOutlines: GlyphOutlineStore | undefined;
     if (artifact.glyphOutlines !== undefined) {
       try {
