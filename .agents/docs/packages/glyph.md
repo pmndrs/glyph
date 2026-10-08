@@ -829,6 +829,14 @@ These JavaScript measurements compile revisions with identical pinned configurat
 every selected dynamic chunk in the complete graph, and exclude Wasm and optional peers; they are measured production
 closures, not install size or a Bundlephobia estimate.
 
+The in-place payload-reader pass at `e03de5a4f` reduces that first native reader from 6,611 raw / 6,501 minified / 2,233
+gzip / 1,929 Brotli bytes to 4,409 / 4,303 / 1,577 / 1,370: another 2,202 (33.31%), 2,198 (33.81%), 656
+(29.38%), and 559 (28.98%) bytes. Relative to `2ab37fdac`, the focused closure is 63.59% smaller raw and 40.89%
+smaller gzip. Complete Three Bitmap, MSDF, and Slug graphs each remove another 2,438 raw / 2,402 minified / 705 gzip
+bytes; their Brotli reductions are 516, 422, and 626 bytes. The root graph remains byte-identical. Initial Three graph
+raw and minified lengths are unchanged because the KTX reader is lazy; compression can move slightly when dynamic-chunk
+references change, so the complete graph is the application-facing comparison.
+
 ## Glyph outlines
 
 Glyph geometry for colliders, extrusion, or other CPU consumers is core-font data, not raster data ([glyph outlines](../planning/decisions/glyph-outlines.md)).
