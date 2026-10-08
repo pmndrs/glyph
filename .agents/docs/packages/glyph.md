@@ -968,7 +968,9 @@ layout, and constraint snapshots. Reusing the same readonly outer record is an O
 outer record compares it with the accepted snapshot and clones only a material change. A nested edit submitted through a
 new outer style, layout, or constraint record therefore cannot rewrite history or disappear through `/typegpu` or a
 custom `GlyphConfig`. Three's retained authoring model uses the same snapshot utility, and its package-owned records cross
-the controller seam without a second clone. A plain string replacement reuses its normalized font, transform, material,
+the controller seam without a second clone. Equivalent normalized Three text updates preserve the desired revision and
+cached measurements without staging another publication. Explicit font or material assignments still invalidate
+publication, including renderer retries after a rejected frame. A plain string replacement reuses its normalized font, transform, material,
 style, layout, and constraint ownership. When those accepted input identities return through a content-only update,
 normalization skips recursive comparison and cloning; a new outer property record still takes the validating path.
 Equal-length content emits only the minimal scalar-aligned text record; length changes additionally republish
