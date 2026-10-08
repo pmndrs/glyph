@@ -36,7 +36,7 @@ export function localToWorldMatrix(
   return target.copy(glyphsMatrixWorld).multiply(matrixLocal);
 }
 
-/** @internal Constructed only by `Text.breakApart()`. */
+/** @internal Constructed only by `Text.split()`. */
 interface GlyphsOptions {
   readonly source: DetachedTextSource;
   readonly placements: GlyphPlacements;
@@ -86,7 +86,7 @@ interface DetachedGlyphStorage {
 }
 
 /**
- * A detached render-plan branch from `Text.breakApart()`: imports the planner's compacted publication into the normal renderer without child Text objects; per-glyph matrices are Three-side only and never reach the live paragraph.
+ * A detached render-plan branch from `Text.split()`: imports the planner's compacted publication into the normal renderer without child Text objects; per-glyph matrices are Three-side only and never reach the live paragraph.
  *
  * Only glyphs with render records are included. Per-glyph data and matrices share a dense drawable index;
  * the mapping back to the source layout stays private.
@@ -123,7 +123,7 @@ export class Glyphs extends THREE.Object3D {
 
   private constructor(token: typeof glyphsConstructorToken, options: GlyphsOptions) {
     super();
-    if (token !== glyphsConstructorToken) throw new TypeError('Glyphs objects are created by Text.breakApart()');
+    if (token !== glyphsConstructorToken) throw new TypeError('Glyphs objects are created by Text.split()');
     let target: ThreeCommandBufferRenderer | undefined;
     let copy: GlyphCopy<void> | undefined;
     try {
@@ -296,7 +296,7 @@ export class Glyphs extends THREE.Object3D {
    * `DetachedGlyph.fontSize`, negate y (this object's local space is y up), and place the result with the glyph's
    * matrix. Blank layout glyphs are excluded from this object.
    *
-   * The outlines were captured when `breakApart()` ran, so, like `glyphAt`, this still reads after the source `Text`
+   * The outlines were captured when `split()` ran, so, like `glyphAt`, this still reads after the source `Text`
    * re-lays out and after the font or this object is disposed. Throws `RangeError` outside `0 <= index < count`, and
    * `TypeError` when the glyph's font was baked without outlines.
    */

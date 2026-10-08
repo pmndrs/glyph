@@ -931,13 +931,13 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
    * Copies drawable committed glyphs and optional decorations into independently rendered Three objects; blank glyphs
    * are excluded. A pending Text in a Scene commits first, through the same engine-wide `glyph.shape()` a draw runs.
    */
-  breakApart(): readonly [glyphs: Glyphs, decorations: Decorations | undefined] {
+  split(): readonly [glyphs: Glyphs, decorations: Decorations | undefined] {
     this.#assertActive();
     const placements = this.#glyphPlacements();
-    this.#assertDetachedCopyAvailable('break apart');
-    if (placements === undefined) throw new Error('cannot break apart text before a committed layout is available');
+    this.#assertDetachedCopyAvailable('split');
+    if (placements === undefined) throw new Error('cannot split text before a committed layout is available');
     const binding = this.#binding;
-    if (binding === undefined) throw new Error('cannot break apart an unbound text paragraph');
+    if (binding === undefined) throw new Error('cannot split an unbound text paragraph');
     const incomplete = new Set(placements.incomplete);
     const drawable = placements.glyphs.filter((placement) => !incomplete.has(placement.index));
     const stableIds = new Uint32Array(drawable.length);
@@ -946,7 +946,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       if (stableId === undefined) throw new Error(`drawable glyph ${placement.index} has no stable id`);
       stableIds[index] = stableId;
     }
-    if (stableIds.length === 0) throw new Error('cannot break apart text with no drawable glyphs');
+    if (stableIds.length === 0) throw new Error('cannot split text with no drawable glyphs');
     const source = this.#root.member(this);
     const glyphRenderOrderBase = binding.glyphRenderOrderBase(source, stableIds);
     const glyphs = createGlyphs({

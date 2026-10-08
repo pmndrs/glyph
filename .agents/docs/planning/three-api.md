@@ -404,25 +404,25 @@ resources declared by the active Three Codec.
 The accepted D-356 design for an attached, index-addressed `Text.transformGlyphs()` mutation is deferred and is not part
 of the current Three API; `Text` exposes neither `transformGlyphs()` nor `clearGlyphTransforms()` and carries no attached
 matrix storage. A later, separately scoped implementation must prove Three and TypeGPU lifecycle, storage,
-interaction-geometry, and performance behavior together. Use `breakApart()` when the caller wants an independently
+interaction-geometry, and performance behavior together. Use `split()` when the caller wants an independently
 owned, already-shaped object whose existing per-glyph matrices can be manipulated outside the source Text lifecycle.
 
 ## Break committed glyphs into an independent object
 
-`breakApart()` copies the source paragraph's committed drawable records and any committed decoration draws into independently
+`split()` copies the source paragraph's committed drawable records and any committed decoration draws into independently
 owned groups. The copy is synchronous and returns a frozen two-entry tuple whose decoration slot is `undefined` when the
 paragraph has no decoration draws. A `pending` paragraph inside a Scene commits first through the ordinary engine-wide
 `glyph.shape()` batch, so a callback ref can break a paragraph apart as it mounts ([commit on read](decisions/commit-on-read.md)); a paragraph outside any Scene or
 one whose commit failed throws. Moving a committed paragraph to another group, or changing its root/group material,
 snapping, or order, republishes it at the next read in the same way. Once its root is disposed, the reads answer
-`undefined` and `breakApart()` throws.
+`undefined` and `split()` throws.
 
 Failures during a read-triggered commit propagate from the read. An unchanged rejected paragraph is not retried; explicit
 changes to the text or its root/group presentation allow the next read to retry without a draw. Reading the same failure
 from `onError` does not reenter publication. A successful retry clears the retained text and group errors.
 
 ```ts
-const [glyphs, decorations] = label.breakApart();
+const [glyphs, decorations] = label.split();
 label.parent!.add(glyphs); // sibling attachment preserves the source transform
 if (decorations !== undefined) label.parent!.add(decorations);
 label.visible = false;
@@ -471,7 +471,7 @@ result separately in tuple slot two. The detached roots keep Three's default gro
 the source boundary's under-decoration, glyph, then line-through paint order:
 
 ```ts
-const [glyphs, decorations] = label.breakApart();
+const [glyphs, decorations] = label.split();
 if (decorations !== undefined) {
   label.parent!.add(decorations);
   decorations.materials[0].opacity = 0.5;

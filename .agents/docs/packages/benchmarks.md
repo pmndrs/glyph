@@ -237,7 +237,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-6
-  at: '2026-09-16T13:27:39Z'
+  at: '2026-09-24T20:41:15Z'
 ---
 
 # Package reference: `@pmndrs/glyph-benchmarks`
@@ -394,7 +394,7 @@ Their presentation transitions are application-owned consumers of the detached-c
 `captureBitmapGlyphPositions` and `createBitmapGlyphPositionTransition`, which combined identity matching and live-buffer
 overrides for Bitmap only. `techniques/shared/glyph-origin-transition.ts` now reads local matrices through
 `measureGlyphs()`, refreshes the source world matrix once at that explicit boundary, composes committed world matrices,
-updates the source layout, calls `breakApart()` for one independently rendered `Glyphs` branch, hides
+updates the source layout, calls `split()` for one independently rendered `Glyphs` branch, hides
 the live source, updates the detached root once per frame, converts each interpolated world matrix through a hoisted
 world inverse, and writes complete position/quaternion/scale matrices through `setMatrixAt()`. It matches
 records by the package-owned `GlyphKey`, disposes the copy at settle, and restores source visibility. No benchmark keeps a
@@ -888,3 +888,6 @@ tree-shakes, preserves optional peer isolation, and cannot expose private deep i
 Read-publication Labs names begin with scene count and schedule so truncated terminal names remain distinct.
 The Markdown report restores only unambiguous full names; shared truncated prefixes remain printed rather than being
 assigned by registration order to another workload.
+
+The shared package Labs fixture adapts an older installed canary's `breakApart` to `split` once before timing.
+The package publishes only the renamed method; the adapter belongs to the comparison harness.

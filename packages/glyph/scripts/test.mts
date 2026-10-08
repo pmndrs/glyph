@@ -20,6 +20,7 @@ const libraryRustManifests = [
 
 export async function runGlyphTest(): Promise<void> {
   await runNode('scripts/migrate-read-glyphs.mts', ['--test']);
+  await runNode('scripts/migrate-split.mts', ['--test']);
   await runNode('scripts/unicode.mts', ['check-data']);
   await runNode('scripts/build.mjs');
   await runNode('node_modules/typescript/bin/tsc', ['-p', 'tsconfig.types.json']);

@@ -75,7 +75,7 @@ export function updateThenRead(
 /** Spawns and breaks apart each string, then renders and returns the glyph count and cleanup. */
 export function spawnAndBreakApart(scene: LabelScene, texts: readonly string[], eachInTurn: boolean) {
   const spawned = texts.map((text) => scene.root.createText({ font, text, style: { fontSize: 16 } }));
-  const copies: ReturnType<Label['breakApart']>[0][] = [];
+  const copies: ReturnType<Label['split']>[0][] = [];
   const copied = updateThenRead(
     scene,
     spawned,
@@ -83,7 +83,7 @@ export function spawnAndBreakApart(scene: LabelScene, texts: readonly string[], 
       scene.textGroup.add(object);
     },
     (object) => {
-      const [glyphs, decorations] = object.breakApart();
+      const [glyphs, decorations] = object.split();
       decorations?.dispose();
       object.visible = false;
       scene.scene.add(glyphs);

@@ -1211,7 +1211,7 @@ test('detached matrix helpers round-trip aliased and independent targets with a 
   }
 });
 
-test('Text.breakApart imports a planner-assisted copy with exact world alignment and full matrices', async (t) => {
+test('Text.split imports a planner-assisted copy with exact world alignment and full matrices', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
@@ -1228,12 +1228,12 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
   label.position.x += 2;
   assert.ok(
     label.matrix.equals(traversedSourceMatrix),
-    'the fixture must leave the source local matrix stale before breakApart',
+    'the fixture must leave the source local matrix stale before split',
   );
 
   let detached;
   try {
-    [detached] = label.breakApart();
+    [detached] = label.split();
     assert.deepEqual(
       detached.matrix.elements,
       label.matrix.elements,
@@ -1420,7 +1420,7 @@ test('detached glyphs retain their engine domain after the source and font owner
   const label = three.createText({ font, text: 'outlives source', style: { fontSize: 16 } });
   scene.add(label);
   scene.updateMatrixWorld(true);
-  const [detached] = label.breakApart();
+  const [detached] = label.split();
   scene.add(detached);
   label.dispose();
   font.dispose();
@@ -1433,7 +1433,7 @@ test('detached glyphs retain their engine domain after the source and font owner
   }
 });
 
-test('Text.breakApart returns a paragraph-scoped independent decoration plan when one exists', async (t) => {
+test('Text.split returns a paragraph-scoped independent decoration plan when one exists', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
@@ -1450,7 +1450,7 @@ test('Text.breakApart returns a paragraph-scoped independent decoration plan whe
   let plain;
   let plainGlyphs;
   try {
-    [detached, decorations] = label.breakApart();
+    [detached, decorations] = label.split();
     assert.ok(decorations, 'the tuple includes decorations when the committed paragraph draws them');
     scene.add(decorations);
     scene.updateMatrixWorld();
@@ -1500,7 +1500,7 @@ test('Text.breakApart returns a paragraph-scoped independent decoration plan whe
     plain = three.createText({ font, text: 'plain text', style: { fontSize: 16 } });
     scene.add(plain);
     scene.updateMatrixWorld(true);
-    const plainParts = plain.breakApart();
+    const plainParts = plain.split();
     assert.equal(plainParts.length, 2);
     assert.ok(Object.isFrozen(plainParts));
     [plainGlyphs] = plainParts;
@@ -1515,7 +1515,7 @@ test('Text.breakApart returns a paragraph-scoped independent decoration plan whe
   }
 });
 
-test('Text.breakApart preserves TextGroup paint order across detached roots', async (t) => {
+test('Text.split preserves TextGroup paint order across detached roots', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
@@ -1540,7 +1540,7 @@ test('Text.breakApart preserves TextGroup paint order across detached roots', as
   let glyphs;
   let decorations;
   try {
-    [glyphs, decorations] = label.breakApart();
+    [glyphs, decorations] = label.split();
     assert.ok(decorations);
     group.add(glyphs, decorations);
     assert.equal(glyphs.isGroup, undefined, 'the detached root must not create a Three group-order bucket');
@@ -1587,7 +1587,7 @@ test('Text.breakApart preserves TextGroup paint order across detached roots', as
   }
 });
 
-test('Text.breakApart preserves per-span material routing with independently owned instances', async (t) => {
+test('Text.split preserves per-span material routing with independently owned instances', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const namedMaterial = (name) =>
@@ -1612,7 +1612,7 @@ test('Text.breakApart preserves per-span material routing with independently own
   try {
     const sourceNames = new Set(rootDraws(scene).map((draw) => draw.material.name));
     assert.deepEqual(sourceNames, new Set(['detached-base', 'detached-accent']));
-    [detached] = label.breakApart();
+    [detached] = label.split();
     scene.add(detached);
     scene.updateMatrixWorld(true);
     assert.deepEqual(
@@ -2122,7 +2122,7 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
     'drawn measurements are unavailable while renderer realization failed',
   );
   assert.throws(
-    () => label.breakApart(),
+    () => label.split(),
     /after renderer realization failed/,
     'a failed renderer publication cannot be presented as a committed detached copy',
   );
@@ -2370,7 +2370,7 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async (t)
     `Slug needs ${String(slugStorageBindings.length)} WebGPU vertex storage buffers`,
   );
 
-  const [detached] = label.breakApart();
+  const [detached] = label.split();
   scene.add(detached);
   label.visible = false;
   scene.updateMatrixWorld(true);
@@ -2759,7 +2759,7 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
 
   const rightStableIdsBeforeCopy = Array.from(right.glyphs().glyphStableIds);
   const rightLocalMatricesBeforeCopy = right.measureGlyphs()?.map((measurement) => measurement.originalMatrix.clone());
-  const [leftDetached] = left.breakApart();
+  const [leftDetached] = left.split();
   group.add(leftDetached);
   const moved = new THREE.Matrix4();
   leftDetached.getMatrixAt(0, moved);

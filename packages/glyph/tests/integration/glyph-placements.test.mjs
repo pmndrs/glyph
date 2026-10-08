@@ -168,14 +168,14 @@ test('glyph flags decode through exported names rather than remembered indices',
   }
 });
 
-test('breakApart carries stable line and word metadata without presentation overrides', async (t) => {
+test('split carries stable line and word metadata without presentation overrides', async (t) => {
   const mounted = await mount(t, await loadFont(), 'one two three', {
     constraints: { width: { mode: 'exact', size: 60 } },
     layout: { wrap: 'word' },
   });
   let glyphs;
   try {
-    [glyphs] = mounted.node.breakApart();
+    [glyphs] = mounted.node.split();
     mounted.scene.add(glyphs);
     mounted.scene.updateMatrixWorld(true);
     assert.ok(glyphs.count > 0);
@@ -209,13 +209,13 @@ test('detached glyph keys survive movement-only reflow and change when text resh
   let resized;
   let reshaped;
   try {
-    [before] = mounted.node.breakApart();
+    [before] = mounted.node.split();
     const beforeKeys = Array.from({ length: before.count }, (_, index) => before.glyphAt(index)?.key);
     const beforeX = before.measurements.map((measurement) => measurement.originalMatrix.elements[12]);
 
     mounted.node.style = { fontSize: 32 };
     mounted.scene.updateMatrixWorld(true);
-    [resized] = mounted.node.breakApart();
+    [resized] = mounted.node.split();
     const resizedKeys = Array.from({ length: resized.count }, (_, index) => resized.glyphAt(index)?.key);
     assert.deepEqual(resizedKeys, beforeKeys, 'a font-size reflow moves the same glyph identities');
     assert.ok(
@@ -225,7 +225,7 @@ test('detached glyph keys survive movement-only reflow and change when text resh
 
     mounted.node.text = 'WXYZ';
     mounted.scene.updateMatrixWorld(true);
-    [reshaped] = mounted.node.breakApart();
+    [reshaped] = mounted.node.split();
     const reshapedKeys = new Set(Array.from({ length: reshaped.count }, (_, index) => reshaped.glyphAt(index)?.key));
     assert.equal(
       beforeKeys.filter((key) => reshapedKeys.has(key)).length,
@@ -247,7 +247,7 @@ test('commit state distinguishes unbound, pending, and committed paragraph state
   const node = three.createText({ font, style: { fontSize: 16 }, text: 'ready' });
   try {
     assert.deepEqual(node.commitState(), { status: 'unbound' });
-    assert.throws(() => node.breakApart(), /before its renderer state is committed/);
+    assert.throws(() => node.split(), /before its renderer state is committed/);
     scene.add(node);
     assert.equal(node.commitState().status, 'pending');
     scene.updateMatrixWorld(true);
@@ -276,7 +276,7 @@ test('committed-layout reads publish a pending paragraph in a Scene without wait
     parent.add(node);
     assert.equal(node.commitState().status, 'pending');
     assert.equal(node.measureGlyphs(), undefined, 'a paragraph outside any Scene has no root publication');
-    assert.throws(() => node.breakApart(), /before its renderer state is committed/);
+    assert.throws(() => node.split(), /before its renderer state is committed/);
 
     scene.add(parent);
     assert.equal(node.measureGlyphs()?.length, node.measure().glyphCount);
@@ -288,7 +288,7 @@ test('committed-layout reads publish a pending paragraph in a Scene without wait
     node.text = 'steadier';
     assert.ok((node.selectionRects(0, node.text.length)?.length ?? 0) > 0);
     node.text = 'readylater';
-    [copy] = node.breakApart();
+    [copy] = node.split();
     assert.equal(copy.count, node.measure().glyphCount);
     assert.equal(node.commitState().status, 'committed');
   } finally {
@@ -344,13 +344,13 @@ for (const owner of ['text', 'group']) {
         (error) => error === failure,
       );
       assert.equal(node.measureGlyphs(), undefined);
-      assert.throws(() => node.breakApart(), /after renderer realization failed/);
+      assert.throws(() => node.split(), /after renderer realization failed/);
       assert.equal(attempts, 1);
 
       if (owner === 'text') node.material = undefined;
       else group.material = undefined;
       assert.ok(node.computeBoundingBox().max.x > node.computeBoundingBox().min.x);
-      copies = node.breakApart();
+      copies = node.split();
       assert.equal(copies[0].count, 5);
       assert.equal(node.commitState().status, 'committed');
       assert.equal(node.error, undefined);
@@ -385,10 +385,10 @@ test('a repair skipped by fixed capacity keeps rejected draw data unavailable un
     group.add(extra);
     node.computeBoundingBox();
     assert.equal(node.measureGlyphs(), undefined, 'staging the repair cannot acknowledge rejected renderer data');
-    assert.throws(() => node.breakApart(), /after renderer realization failed/);
+    assert.throws(() => node.split(), /after renderer realization failed/);
 
     extra.dispose();
-    copies = node.breakApart();
+    copies = node.split();
     assert.equal(copies[0].count, 5);
     assert.equal(node.commitState().status, 'committed');
   } finally {
@@ -413,7 +413,7 @@ test('a layout read republishes a committed Text whose group presentation change
   let copies;
   try {
     second.add(node);
-    copies = node.breakApart();
+    copies = node.split();
     const names = new Set();
     copies[0].traverse((object) => {
       if (object.material !== undefined) names.add(object.material.name);
@@ -427,7 +427,7 @@ test('a layout read republishes a committed Text whose group presentation change
   }
 });
 
-test('breakApart publishes a committed Text after its root material changes', async (t) => {
+test('split publishes a committed Text after its root material changes', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont();
   const named = (name) => defineTextMaterial((context) => Object.assign(context.createDefaultMaterial(), { name }));
@@ -441,7 +441,7 @@ test('breakApart publishes a committed Text after its root material changes', as
     assert.equal(node.commitState().status, 'committed');
     three.material = named('second');
     assert.equal(node.commitState().status, 'committed');
-    copies = node.breakApart();
+    copies = node.split();
     const names = new Set();
     copies[0].traverse((object) => {
       if (object.material !== undefined) names.add(object.material.name);
@@ -466,7 +466,7 @@ test('layout reads answer nothing once the root is disposed', async (t) => {
     assert.equal(node.measureGlyphs(), undefined);
     assert.equal(node.caretAt(0, 0), undefined);
     assert.equal(node.selectionRects(0, 1), undefined);
-    assert.throws(() => node.breakApart(), /before its renderer state is committed/);
+    assert.throws(() => node.split(), /before its renderer state is committed/);
   } finally {
     node.dispose();
     group.dispose();

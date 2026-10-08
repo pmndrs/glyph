@@ -206,7 +206,7 @@ void borrowedGlyphId;
 
 labels.add(three.createText({ font: mtsdfFont, text: 'Mixed technique' }));
 
-const [detachedGlyphs, detachedDecorations] = label.breakApart();
+const [detachedGlyphs, detachedDecorations] = label.split();
 detachedGlyphs satisfies Glyphs;
 detachedDecorations satisfies Decorations | undefined;
 detachedGlyphs.outlineAt(0) satisfies GlyphOutlineContour[];
@@ -220,12 +220,12 @@ detachedGlyphs.glyphAt(0).fontHandle satisfies import('../../src/identity.js').F
 void detachedGlyphs.glyphAt(0).sourceIndex;
 void detachedGlyphs;
 void detachedDecorations;
-// @ts-expect-error Detached glyph branches are created only by Text.breakApart().
+// @ts-expect-error Detached glyph branches are created only by Text.split().
 const invalidGlyphs = new Glyphs();
 void invalidGlyphs;
 // @ts-expect-error No source-condition-only factory may leak through the public class.
 Glyphs.create({});
-// @ts-expect-error Detached decoration branches are created only by Text.breakApart().
+// @ts-expect-error Detached decoration branches are created only by Text.split().
 const invalidDecorations = new Decorations();
 void invalidDecorations;
 // @ts-expect-error No source-condition-only factory may leak through the public class.
