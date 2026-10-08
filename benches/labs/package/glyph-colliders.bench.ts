@@ -35,10 +35,10 @@ function breakApart(text: string) {
   };
 }
 
-// Registered only when the package under test reads outlines and names each detached glyph's shape by fontId and
+// Registered only when the package under test reads outlines and names each detached glyph's shape by fontHandle and
 // glyphId, so a baseline without them skips these benches instead of timing a different job under their names.
 const probe = outlinedFont === undefined ? undefined : breakApart('Probe');
-const supported = probe !== undefined && typeof probe.glyphs.glyphAt(0).fontId === 'number';
+const supported = probe !== undefined && typeof probe.glyphs.glyphAt(0).fontHandle === 'number';
 probe?.dispose();
 
 if (supported) {
@@ -55,9 +55,7 @@ if (supported) {
       bench(`build the colliders of a ${String(PARAGRAPH_GLYPHS)}-glyph paragraph with dedupe ${dedupe ? 'on' : 'off'} @glyphs @api @stress`, function* () {
         const paragraph = breakApart(paragraphTextForGlyphs(PARAGRAPH_GLYPHS));
         const { glyphs } = paragraph;
-        const drawn = Array.from({ length: glyphs.count }, (_, index) => glyphs.glyphAt(index)).filter(
-          (glyph) => glyph.drawn,
-        ).length;
+        const drawn = glyphs.count;
         assert(drawn > PARAGRAPH_GLYPHS / 2, 'the paragraph must hold about the requested glyph count');
         const built = yield () => buildParagraphColliders(glyphs, TOLERANCE_EM, dedupe).built;
         assert(dedupe ? built < 120 : built === drawn, 'dedupe must collapse repeats and its absence must not');

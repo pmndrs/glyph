@@ -401,15 +401,11 @@ describe('paragraph colliders', () => {
     try {
       const { built, colliders } = buildParagraphColliders(paragraph.glyphs, TOLERANCE_EM);
       expect(colliders).toHaveLength(paragraph.glyphs.count);
-      const drawn = colliders.flatMap((collider, index) => (collider === undefined ? [] : [index]));
-      expect(drawn).toHaveLength(3);
-      const [firstO, a, secondO] = drawn.map((index) => colliders[index]!);
+      expect(colliders).toHaveLength(3);
+      const [firstO, a, secondO] = colliders;
       expect(secondO).toBe(firstO);
       expect(a).not.toBe(firstO);
       expect(built).toBe(2);
-      for (let index = 0; index < colliders.length; index += 1) {
-        expect(colliders[index] === undefined).toBe(!paragraph.glyphs.glyphAt(index).drawn);
-      }
     } finally {
       paragraph.dispose();
     }
@@ -446,11 +442,9 @@ describe('outline space to world', () => {
       for (let index = 0; index < glyphs.count; index += 1) {
         const detached = glyphs.glyphAt(index);
         const collider = colliders[index];
-        // A blank glyph (the comma's neighbour, the spaces) has no outline, no collider, and no record.
-        expect(collider === undefined).toBe(!detached.drawn);
-        if (collider === undefined) continue;
+        expect(collider).toBeDefined();
         const measurement = glyphs.measurements[index]!;
-        const { maxX, maxY, minX, minY } = collider.bounds!;
+        const { maxX, maxY, minX, minY } = collider!.bounds!;
         const low = { x: 0, y: 0 };
         const high = { x: 0, y: 0 };
         emToWorld(minX, maxY, detached.fontSize, low);
@@ -472,30 +466,25 @@ describe('outline space to world', () => {
     }
   });
 
-  it('addresses glyphs, outlines, and the source layout by one index', async () => {
+  it('keeps detached outlines and positions aligned after excluding spaces', async () => {
     const paragraph = await breakApartParagraph('inter', 'Bo dega A8', 32);
     try {
       const { glyphs, text } = paragraph;
       const layout = text.glyphs();
-      expect(glyphs.count).toBe(layout.glyphCount);
+      const sourceIndices = Array.from({ length: layout.glyphCount }, (_, index) => index).filter(
+        (index) => layout.outlineAt(index).length > 0,
+      );
+      expect(glyphs.count).toBe(8);
+      expect(glyphs.count).toBe(sourceIndices.length);
+      const sourceMeasurements = text.measureGlyphs()!;
       for (let index = 0; index < glyphs.count; index += 1) {
-        // The detached outline is the source layout's outline at the same index, blanks included.
-        expect(glyphs.outlineAt(index)).toEqual(layout.outlineAt(index));
-        expect(glyphs.glyphAt(index).drawn).toBe(layout.outlineAt(index).length > 0);
+        const sourceIndex = sourceIndices[index]!;
+        expect(glyphs.outlineAt(index)).toEqual(layout.outlineAt(sourceIndex));
+        expect(glyphs.measurements[index]!.originalMatrix.elements).toEqual(
+          sourceMeasurements[sourceIndex]!.originalMatrix.elements,
+        );
         expect(glyphs.glyphAt(index).index).toBe(index);
       }
-      expect(Array.from({ length: glyphs.count }, (_, index) => glyphs.glyphAt(index).drawn)).toEqual([
-        true,
-        true,
-        false,
-        true,
-        true,
-        true,
-        true,
-        false,
-        true,
-        true,
-      ]);
     } finally {
       paragraph.dispose();
     }

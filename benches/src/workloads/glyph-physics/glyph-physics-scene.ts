@@ -79,7 +79,7 @@ export class GlyphPhysicsScene {
   /**
    * Breaks the committed paragraph apart and builds one body per drawn glyph. One index addresses everything: glyph `i`
    * of the `Glyphs` object supplies its outline (`outlineAt(i)`), its pen position (`measurements[i]`), and receives its
-   * pose (`setMatrixAt(i, pose)`). Blank glyphs stay in the index space but get no body.
+   * pose (`setMatrixAt(i, pose)`). `breakApart` already excludes blank glyphs.
    */
   activate(viewport: PhysicsViewport, visibility: OverlayVisibility): void {
     const [glyphs] = this.#text.breakApart();

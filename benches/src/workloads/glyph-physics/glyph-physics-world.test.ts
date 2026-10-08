@@ -110,7 +110,6 @@ describe('Box3D colliders built from glyph outlines', () => {
       const physics = world();
       const { glyphs } = paragraph;
       for (let index = 0; index < glyphs.count; index += 1) {
-        if (!glyphs.glyphAt(index).drawn) continue;
         const before = physics.hullCount;
         physics.addGlyph(buildGlyphCollider(glyphs.outlineAt(index), 0.2 / 24), 24, index * 30, 0);
         // Thin straight glyphs (l, i, I, |) are one rectangle each; none may end up with no hull at all.
@@ -255,7 +254,6 @@ describe('a settled pile', () => {
       const dropHeight = 108;
       const colliders: GlyphCollider[] = [];
       for (let index = 0; index < glyphs.count; index += 1) {
-        if (!glyphs.glyphAt(index).drawn) continue;
         const collider = buildGlyphCollider(glyphs.outlineAt(index), 0.2 / fontSize);
         const pen = glyphs.measurements[index]!.drawnOrigin;
         physics.addGlyph(collider, fontSize, pen.x + 24, pen.y + dropHeight);

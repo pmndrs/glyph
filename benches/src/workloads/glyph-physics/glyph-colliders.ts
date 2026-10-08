@@ -6,7 +6,7 @@ import type { DetachedGlyph } from '@pmndrs/glyph/three';
 /**
  * Convex collider pieces built from a glyph outline.
  *
- * Pipeline, once per `(fontId, glyphId)`: flatten every quadratic to a fixed em-space chord tolerance, resolve the
+ * Pipeline, once per `(fontHandle, glyphId)`: flatten every quadratic to a fixed em-space chord tolerance, resolve the
  * contours under the font's nonzero fill rule (Clipper2 union, so overlapping contours merge) and keep each region's
  * outer boundary only, so counters are solid, triangulate it (earcut), then merge adjacent triangles into convex pieces
  * (Hertel-Mehlhorn). Everything stays in the outline's own space: em units, y down, origin at the glyph's pen position.
@@ -280,39 +280,35 @@ export function flattenToleranceEm(fontSize: number, pixelTolerance = 0.2): numb
   return Math.min(0.02, Math.max(0.0015, pixelTolerance / fontSize));
 }
 
-/** The part of `Glyphs` that building colliders reads; every method is addressed by the one layout glyph index. */
+/** The part of `Glyphs` that building colliders reads, addressed by the dense detached glyph index. */
 export interface ColliderSource {
   readonly count: number;
-  glyphAt(index: number): Pick<DetachedGlyph, 'drawn' | 'fontId' | 'glyphId'>;
+  glyphAt(index: number): Pick<DetachedGlyph, 'fontHandle' | 'glyphId'>;
   outlineAt(index: number): readonly GlyphOutlineContour[];
 }
 
 export interface ParagraphColliders {
   /** Colliders built, one per distinct shape when deduplicating, one per drawn glyph when not. */
   readonly built: number;
-  /** Parallel to the source's glyph index: `colliders[i]` drives `setMatrixAt(i)`, and is `undefined` for a blank glyph. */
-  readonly colliders: readonly (GlyphCollider | undefined)[];
+  /** Parallel to detached glyphs: `colliders[i]` drives `setMatrixAt(i)`. Spaces are already excluded by `breakApart`. */
+  readonly colliders: readonly GlyphCollider[];
 }
 
 /**
- * Builds the colliders of a paragraph. Equal `fontId` and `glyphId` mean an equal outline, so with `dedupe` every
- * occurrence of a shape shares the one collider built for it. Blank glyphs (`drawn === false`) have no outline and no
- * collider. Without `dedupe` each drawn glyph builds its own, which only measures what sharing saves.
+ * Builds the colliders of a paragraph. Equal `fontHandle` and `glyphId` mean an equal outline, so with `dedupe` every
+ * occurrence of a shape shares the one collider built for it. Without `dedupe` each detached glyph builds its own,
+ * which only measures what sharing saves.
  */
 export function buildParagraphColliders(source: ColliderSource, tolerance: number, dedupe = true): ParagraphColliders {
   const shapes = new Map<number, Map<number, GlyphCollider>>();
-  const colliders: (GlyphCollider | undefined)[] = [];
+  const colliders: GlyphCollider[] = [];
   let built = 0;
   for (let index = 0; index < source.count; index += 1) {
-    const { drawn, fontId, glyphId } = source.glyphAt(index);
-    if (!drawn) {
-      colliders.push(undefined);
-      continue;
-    }
-    let ofFont = shapes.get(fontId);
+    const { fontHandle, glyphId } = source.glyphAt(index);
+    let ofFont = shapes.get(fontHandle);
     if (ofFont === undefined) {
       ofFont = new Map();
-      shapes.set(fontId, ofFont);
+      shapes.set(fontHandle, ofFont);
     }
     let collider = dedupe ? ofFont.get(glyphId) : undefined;
     if (collider === undefined) {

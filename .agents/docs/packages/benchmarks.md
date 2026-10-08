@@ -634,10 +634,10 @@ not portable budgets. A refreshed run with the authored cap contour passes all t
 draws through every 64-sample reflow sequence; its stdout timing is evidence for this host rather than a portable budget.
 The obstacle mesh and material are disposed with the workload generation.
 
-Glyph physics drops one paragraph as rigid bodies, in 2D. `breakApart()` supplies one `Glyphs` object whose single layout
+Glyph physics drops one paragraph as rigid bodies, in 2D. `breakApart()` supplies one `Glyphs` object whose dense drawable
 glyph index addresses `glyphAt(i)`, `outlineAt(i)`, `measurements[i]`, and `setMatrixAt(i)`. Colliders are built once per
-`(fontId, glyphId)` and shared by every occurrence, with `colliders[i]` kept parallel to `Glyphs` so a body writes its pose
-to glyph `i`; blanks (`drawn === false`) have no collider. Each outline is flattened to a fixed chord tolerance, merged under the nonzero rule with a Clipper2 union, and only the
+`(fontHandle, glyphId)` and shared by every occurrence, with `colliders[i]` kept parallel to `Glyphs` so a body writes its pose
+to glyph `i`; `breakApart()` excludes blanks before collider construction. Each outline is flattened to a fixed chord tolerance, merged under the nonzero rule with a Clipper2 union, and only the
 outer boundary of each top-level region is kept, so counters are solid for physics; the region is then triangulated with
 earcut and merged into convex pieces with Hertel-Mehlhorn. Each piece becomes a Box3D prism hull on one dynamic body with z
 and x/y rotation locked, so the motion is planar. The Outlines overlay is unchanged and still draws the true contours,
