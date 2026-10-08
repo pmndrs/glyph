@@ -91,7 +91,7 @@ export function inheritClusterAlignedRanges<Range extends ClusterAlignableRange>
 
 /** True only for an exact package-owned range array normalized against the same text. */
 export function areOwnedRangesClusterAligned(text: string, ranges: readonly ClusterAlignableRange[]): boolean {
-  return clusterAlignedTextByRanges.get(ranges) === text;
+  return Object.isFrozen(ranges) && clusterAlignedTextByRanges.get(ranges) === text;
 }
 
 function markOwnedRangesClusterAligned<Range extends ClusterAlignableRange>(
