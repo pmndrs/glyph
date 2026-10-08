@@ -25,6 +25,7 @@ on:
           - stress
           - cold
           - edit
+          - read-publication
           - full
 
 permissions:
@@ -385,7 +386,8 @@ jobs:
     needs: check
     continue-on-error: true
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    # Full runs include fresh 1,000-label per-object publication, with eight process blocks per artifact.
+    timeout-minutes: 90
     env:
       CI: true
 

@@ -565,7 +565,7 @@ export const Text = forwardRef(function Text(
   const flattened = useMemo(() => flattenText(properties.children, context), [context, properties.children]);
   const fontFaces = useMemo(() => collectTextFontFaces(selected, flattened.fontFaces), [flattened.fontFaces, selected]);
   const [object, publishObject] = useState<ThreeText<RasterFormatMetadata> | null>(null);
-  useLayoutEffect(() => assignRef(forwardedRef, object ?? undefined), [forwardedRef, object]);
+  useLayoutEffect(() => assignRef(forwardedRef, object), [forwardedRef, object]);
   return createElement(ResolvedTextObject, {
     key: `${rootId(root)}:${properties.pixelSnapping === true ? 'pixel-snapped' : 'unsnapped'}`,
     handle,
@@ -709,7 +709,7 @@ export const TextGroup: (input: R3fTextGroupProps) => ReactElement | null = forw
   const context = useSelectedGlyphContext();
   const root = context.root;
   const [object, publishObject] = useState<ThreeTextGroup | null>(null);
-  useLayoutEffect(() => assignRef(forwardedRef, object ?? undefined), [forwardedRef, object]);
+  useLayoutEffect(() => assignRef(forwardedRef, object), [forwardedRef, object]);
   return createElement(TextGroupObject, {
     key: `${rootId(root)}:${properties.pixelSnapping === true ? 'pixel-snapped' : 'unsnapped'}`,
     root,
@@ -1011,13 +1011,16 @@ function createObjectStore<Value>(): ObjectStore<Value> {
   };
 }
 
-function assignRef<Value>(ref: Ref<Value> | undefined, value: Value | undefined): () => void {
-  const resolved = value ?? null;
-  if (typeof ref === 'function') ref(resolved);
-  else if (ref !== undefined && ref !== null) ref.current = resolved;
+/** Attaches a mounted host with React 19 ref semantics: a callback ref's returned cleanup replaces its `null` call. */
+function assignRef<Value>(ref: Ref<Value> | undefined, value: Value | null): (() => void) | undefined {
+  if (value === null || ref === undefined || ref === null) return undefined;
+  if (typeof ref === 'function') {
+    const cleanup = ref(value);
+    return typeof cleanup === 'function' ? cleanup : () => ref(null);
+  }
+  ref.current = value;
   return () => {
-    if (typeof ref === 'function') ref(null);
-    else if (ref !== undefined && ref !== null) ref.current = null;
+    ref.current = null;
   };
 }
 

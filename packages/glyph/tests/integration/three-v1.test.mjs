@@ -201,6 +201,29 @@ test('one initialized Glyph runtime creates independent named Three handles over
   reused.dispose();
 });
 
+test('a committed-layout read publishes all pending roots once and leaves the next traversal clean', async (t) => {
+  const first = await createThreeTestHandle(t);
+  const second = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scenes = [new THREE.Scene(), new THREE.Scene()];
+  const labels = [first.createText({ font, text: 'first' }), second.createText({ font, text: 'second' })];
+  for (const [index, label] of labels.entries()) scenes[index].add(label);
+  instrumentedGlyph.reset();
+  try {
+    assert.equal(labels[0].measureGlyphs().length, 5);
+    assert.equal(instrumentedGlyph.crossings, 1);
+    assert.equal(instrumentedGlyph.latestBatchCount, 2, 'a read uses the engine-wide pending-root batch');
+    assert.equal(labels[1].measureGlyphs().length, 6);
+    assert.equal(instrumentedGlyph.crossings, 1, 'the other root was already published');
+    for (const scene of scenes) scene.updateMatrixWorld(true);
+    assert.equal(instrumentedGlyph.crossings, 1, 'the next draw must not repeat read-triggered publication');
+    for (const scene of scenes) assert.ok(rootDraws(scene).length > 0);
+  } finally {
+    for (const label of labels) label.dispose();
+    font.dispose();
+  }
+});
+
 test('glyph.shape preserves root, codec, and font ownership while batching handles', async (t) => {
   const first = await createThreeTestHandle(t);
   const second = await createThreeTestHandle(t);

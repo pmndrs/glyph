@@ -10,6 +10,7 @@ export const PACKAGE_LABS_SUITES = [
   'stress',
   'cold',
   'edit',
+  'read-publication',
   'full',
 ] as const;
 

@@ -42,7 +42,7 @@ if (textPrototype.readGlyphs === undefined && textPrototype.withGlyphs !== undef
 const fontBytes = await readFile(new URL('../../fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url));
 
 await glyph.init();
-const font = glyph.fontFace(new Blob([new Uint8Array(fontBytes)], { type: 'model/gltf-binary' }), {
+export const font = glyph.fontFace(new Blob([new Uint8Array(fontBytes)], { type: 'model/gltf-binary' }), {
   format: bitmap({ strikes: [16] }),
 });
 await font.load();
@@ -156,6 +156,18 @@ export function createLabels(count = 100) {
   scene.updateMatrixWorld(true);
   if (textGroup.error !== undefined) throw textGroup.error;
   return { labels, root, scene, textGroup };
+}
+
+/** An empty root, TextGroup, and Scene for workloads that mount their own Text objects. */
+export function createLabelScene(capacity: number) {
+  const root = glyph.handle(
+    `labs:label-scene:${String(nextHandle++)}`,
+    defineThreeConfig({ capacity: { size: Math.max(capacity, 1) * 16, policy: 'grow' } }),
+  );
+  const textGroup = root.createTextGroup();
+  const scene = new THREE.Scene();
+  scene.add(textGroup);
+  return { root, scene, textGroup };
 }
 
 export function disposeLabels(created: ReturnType<typeof createLabels>): void {

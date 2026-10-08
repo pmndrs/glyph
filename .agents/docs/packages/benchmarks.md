@@ -232,12 +232,15 @@ sources:
   - id: labs-result-validator
     resource: ../../../benches/scripts/support/labs-result.mts
     title: Saved Labs result failure validator
+  - id: pr-240-full-labs-run
+    resource: https://github.com/pmndrs/glyph/actions/runs/37785945860/job/113346825511
+    title: PR 240 full installed-package performance job
   - id: raster-technique-compare-probe
     resource: ../../../benches/vitexec/raster-technique-compare.probe.ts
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-6
-  at: '2026-09-24T20:41:15Z'
+  at: '2026-10-08T17:48:50Z'
 ---
 
 # Package reference: `@pmndrs/glyph-benchmarks`
@@ -276,7 +279,8 @@ Package performance is measured from installable artifacts rather than workspace
 performance job. `benchmark:labs-package` installs the candidate tarball and an exact version resolved from the current
 npm canary into isolated temporary consumers, then runs both through `@pmndrs/labs`. It never rebuilds either artifact.
 The retained report includes native Labs JSON, comparison output, exact package manifests and lockfiles, and the candidate
-tarball SHA-256.
+tarball SHA-256. Labs' Git metadata identifies the benchmark checkout, not the installed package's source
+revision; use the artifact manifest to identify the compared packages.
 
 The runner also renders the comparison as Markdown (`summary.md` under the output directory, appended to
 `$GITHUB_STEP_SUMMARY` when set): counts; a forest plot in a `diff` block, with each bench's Δ p50 inside its 95%
@@ -308,6 +312,48 @@ mounted state lives in the `cold` suite. The comparison still reports any worklo
 sides as not comparable instead of printing its delta. A candidate must pass every benchmark check; a baseline may
 fail checks that guard behavior it predates, and those workloads are reported as not comparable rather than aborting
 the comparison. Both lists are recorded in the retained manifest.
+
+The read-publication workloads measure what deferred versus synchronous layout ([commit on read](../planning/decisions/commit-on-read.md)) costs an application in common
+use cases, without assuming a framework. Cases that repeat work on mounted labels run in the `read-publication` suite;
+cases whose every call mounts new text (mounting and reading a label, breaking a title apart, combat numbers, and loading
+the scene) run in the `cold` suite, so each suite times alike. A small scene with one existing label covers mounting another label
+and reading it before the first frame, editing one label and reading its glyphs, editing one label with only a draw,
+breaking a title into letters, typing in a text field, and clicking to place the caret. Larger scenes hold 100 or 1,000
+labels in one root, as an application's other text shares its root. They also cover the title, field, and caret cases,
+plus spawning 30 floating combat numbers that break apart, editing 50 lines and placing a caret and selection in each,
+100 dashboard tickers that measure their glyphs to roll digits, the same tickers without reading layout, and loading the
+scene with every label broken apart.
+Use cases that touch several objects run twice: all updates before the reads, and each object updated and read in turn,
+as per-object update code does.
+
+Each use case reaches the same outcome on both artifacts, written the way that artifact's API requires; an untimed public
+capability probe selects the code. On a deferred artifact the use case renders a frame, confirms the commit, reads, and
+renders the result in a second frame. On a synchronous artifact it reads at once and renders one frame, so its result
+appears one frame sooner. A deferred artifact cannot read an object before a frame publishes it, so its "each in turn"
+schedule runs the batched code. Every read checks that it answered for the latest text, and untimed snapshots require
+identical outcomes on both artifacts. A frame is the scene traversal `renderer.render()` performs; timings exclude GPU
+execution and font loading.
+Within either suite, the `@one-label` tag selects the label lifecycle cases, and `@small-scene` selects the title, field,
+and caret cases in the one-label scene. Eight-block packed-artifact runs matched all six outcomes on baseline and candidate. The label
+lifecycle, title, and field cases were neutral at the measured resolution; caret placement was 85.4% faster (p < .001).
+The 2026-10-06 PR #240 CI comparison also found large regressions in the multi-label "each in turn" schedules:
+100 rolling tickers in a 1,000-label root increased from 34.22 ms to 976.23 ms, and 50 edited lines from 27.21 ms to
+385.94 ms. Batched writes followed by reads remained neutral. This is repeated root publication, not a cold-start
+measurement; #247 tracks edit-sized publication as a release gate.
+
+The 2026-10-08 full PR #240 job compared the exact published canary
+`0.1.0-canary-2324d74f-20261008` with candidate package SHA-256 `37fc98ed…c11a` built from `961c852…`.
+Dependency installation and artifact preparation completed in seconds, and every earlier benchmark file completed.
+The baseline `read-publication.bench.ts` file alone took 28 minutes 24 seconds; its two 1,000-label load-and-detach
+workloads averaged 3.15 and 3.11 seconds and allocated about 393 MB per iteration. The candidate then remained in that
+file for more than 41 minutes 59 seconds until the 90-minute job limit canceled it, before Labs emitted the file result
+or any comparison report. Runner clocks stayed between about 3.10 and 3.17 GHz across the run. This localizes the job
+bottleneck to the 30-case read-publication matrix and its high-scale cold-copy work, rather than checkout, installation,
+or artifact setup, but it does not establish a candidate delta because the candidate file did not finish.[^pr-240-full-labs-run]
+Run `mise exec -- pnpm scripts run benchmark:labs-package -- --baseline /absolute/base.tgz --candidate /absolute/head.tgz
+--suite read-publication --output .cache/read-publication`, and again with `--suite cold`, to retain the comparison and
+artifact identities. Build and pack each revision first; the runner never builds source. The suite is recorded in the run
+manifest.
 
 Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentation are complete
 
@@ -850,6 +896,10 @@ native `/three`, optional TypeGPU-backed `/three/typegpu`, and direct `/typegpu`
 `/three/typegpu` measures 609,736 raw / 596,546 minified / 136,568 gzip / 112,065 Brotli, while `/typegpu` measures
 221,958 / 219,098 / 41,382 / 35,132. Package and graph tests separately prove every shader barrel resolves,
 tree-shakes, preserves optional peer isolation, and cannot expose private deep implementation paths.
+
+Read-publication Labs names begin with scene count and schedule so truncated terminal names remain distinct.
+The Markdown report restores only unambiguous full names; shared truncated prefixes remain printed rather than being
+assigned by registration order to another workload.
 
 The shared package Labs fixture adapts an older installed canary's `breakApart` to `split` once before timing.
 The package publishes only the renamed method; the adapter belongs to the comparison harness.

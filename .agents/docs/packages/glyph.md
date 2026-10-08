@@ -903,10 +903,22 @@ The semantic values preserve information useful to callers:
 [archived migration](../../skills/codemod/codemods/2026-09-24-text-split/instructions.md).
 The rename preserves the tuple result, committed-state requirement, source independence, and disposal ownership.
 
-Public `Text.split()` requests committed glyph and decoration subsets through its owning root. Rust compacts the
-selected paragraph records through the installed Codec into complete checkpoints; it does not expose buffer offsets or
-private planning objects for each renderer to reconstruct. Root services synchronously decode each detached copy into its
-destination renderer. The query does not advance the source root's revision or publication generation.
+Public `Text.split()` requests committed glyph and decoration subsets through its owning root. A `pending`
+paragraph inside a Scene first runs its root's ordinary commit through the engine-wide `glyph.shape()` batch, as
+`measureGlyphs()`, `caretAt()`, and `selectionRects()` also do, so none of them depends on a draw having happened
+([commit on read](../planning/decisions/commit-on-read.md)). A committed paragraph whose group, root/group material, pixel snapping, or draw order changed since its last
+publication republishes the same way, so a copy never carries the previous material or group's draws. The check reads
+the root material and walks the Text's ancestors, not the root's members. Once the root is disposed, these reads answer
+`undefined` and `split()` throws.
+Rust compacts the selected paragraph records through the installed Codec into complete checkpoints; it does not expose
+buffer offsets or private planning objects for each renderer to reconstruct. Root services synchronously decode each
+detached copy into its destination renderer. Copying does not advance the source root's revision or publication
+generation; the preceding commit may publish pending changes. A read-triggered publication failure throws from that
+read. Reading an unchanged rejected paragraph does not retry it, including inside `onError`; explicit text changes or
+root/group presentation changes allow the next read to publish again. Successful publication clears the retained errors.
+Write several labels before reading their layouts when possible. Alternating a write and a committed-layout read for
+each label publishes the shared root once per label; the next draw does not batch those already completed publications.
+Edit-sized publication is tracked in #247 as a 0.2.0 release gate.
 
 Three's `Text.split()` uses both planner requests and returns the frozen tuple
 `[Glyphs, Decorations | undefined]`. It preserves the source transform, Codec-defined batching, fallback raster formats,

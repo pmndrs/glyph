@@ -509,6 +509,21 @@ export class ThreeRootHost {
     if (this.#bindScene(texts)) this.#commitTraversal(false);
   }
 
+  /** @internal Whether caller changes are staged or still need root reconciliation. */
+  needsPublication(): boolean {
+    this.#assertActive();
+    return this.#binding?.needsPublication(this.#renderMembers()) ?? false;
+  }
+
+  /** @internal Publish for an explicit read, propagating failures at that call instead of retaining them only for traversal. */
+  commit(): void {
+    this.#assertActive();
+    const texts = this.#renderMembers();
+    if (this.#binding?.needsPublication(texts) === true) this.#services.invalidate();
+    glyph.shape();
+    this.#syncTransforms(false, texts);
+  }
+
   /** @internal Publish a directly observed TextGroup presentation change. */
   observeGroupPresentation(): void {
     if (this.#disposed || this.#binding === undefined) return;
@@ -892,21 +907,34 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
 
   #glyphPlacements(): GlyphPlacements | undefined {
     this.#assertActive();
+    const state = this.commitState();
+    if (
+      nearestScene(this) !== undefined &&
+      !this.#root.disposed &&
+      (state.status === 'pending' ||
+        (state.status === 'committed' && this.#binding?.presentationPublished(this.#root.member(this)) === false) ||
+        (state.status === 'failed' && this.#root.needsPublication()))
+    ) {
+      this.#root.commit();
+    }
     return this.#binding?.glyphPlacements(this.#root.member(this));
   }
 
-  /** Measures each currently displayed glyph in Text-local space. */
+  /** Measures each currently displayed glyph in Text-local space, committing a pending Text in a Scene first. */
   measureGlyphs(): readonly ThreeGlyphMeasurement[] | undefined {
     const placements = this.#glyphPlacements();
     if (placements === undefined) return undefined;
     return measureGlyphPlacements(placements, this.#glyphGeometry(placements));
   }
 
-  /** Copies drawable committed glyphs and optional decorations into independently rendered Three objects; blank glyphs are excluded. */
+  /**
+   * Copies drawable committed glyphs and optional decorations into independently rendered Three objects; blank glyphs
+   * are excluded. A pending Text in a Scene commits first, through the same engine-wide `glyph.shape()` a draw runs.
+   */
   split(): readonly [glyphs: Glyphs, decorations: Decorations | undefined] {
     this.#assertActive();
-    this.#assertDetachedCopyAvailable('split');
     const placements = this.#glyphPlacements();
+    this.#assertDetachedCopyAvailable('split');
     if (placements === undefined) throw new Error('cannot split text before a committed layout is available');
     const binding = this.#binding;
     if (binding === undefined) throw new Error('cannot split an unbound text paragraph');
@@ -980,10 +1008,12 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return sourceByIndex;
   }
 
+  /** Nearest cluster boundary to a point, committing a pending Text in a Scene first. */
   caretAt(x: number, y: number): GlyphCaret | undefined {
     return this.#glyphPlacements()?.caretAt(x, y);
   }
 
+  /** Line-clipped rectangles covering the clusters in a UTF-16 range, committing a pending Text in a Scene first. */
   selectionRects(start: number, end: number): readonly LayoutBox[] | undefined {
     return this.#glyphPlacements()?.selectionRects(start, end);
   }
@@ -1192,6 +1222,8 @@ interface BoundTextEntry {
   stagedOrderRank: number;
   stagedPresentation: TextPresentation;
   committedRevision: number;
+  committedOrderRank: number | undefined;
+  committedPresentation: TextPresentation | undefined;
 }
 
 interface DetachedQueryEntry {
@@ -1221,6 +1253,8 @@ class ThreeRootPublication {
   readonly #materialBindings = new ThreeMaterialBindingCache();
   #capacity: GlyphBufferCapacity;
   #rendererUpdateRejected = false;
+  // A staged repair still needs renderer publication after a layout query.
+  #publicationPending = true;
   #capacityExceeded: { readonly required: number; readonly size: number } | undefined;
   #materialInvalidated = false;
   readonly #pendingMeasurements = new Set<Text<RasterFormatMetadata>>();
@@ -1248,6 +1282,7 @@ class ThreeRootPublication {
   invalidateMaterial(): void {
     this.#assertActive();
     this.#materialInvalidated = true;
+    this.#publicationPending = true;
     this.#services.invalidate();
   }
 
@@ -1285,6 +1320,7 @@ class ThreeRootPublication {
         !Object.is(entry.stagedOrderRank, orderRank)
       ) {
         entry.handle.updateParagraphOrder(order, orderScope, orderRank);
+        this.#publicationPending = true;
         entry.stagedOrder = order;
         entry.stagedOrderScope = orderScope;
         entry.stagedOrderRank = orderRank;
@@ -1297,6 +1333,21 @@ class ThreeRootPublication {
   needsReconcile(texts: readonly Text<RasterFormatMetadata>[]): boolean {
     this.#assertActive();
     return this.#detachedQueryCache !== undefined || this.#needsActiveReconcile(texts);
+  }
+
+  /** Whether the published draws still carry this Text's current group, material, snapping, and draw order. */
+  presentationPublished(text: Text<RasterFormatMetadata>): boolean {
+    const entry = this.#entries.get(text);
+    if (entry?.committedPresentation === undefined) return false;
+    const presentation = resolveTextPresentation(text);
+    return (
+      sameTextPresentation(entry.committedPresentation, presentation) &&
+      Object.is(entry.committedOrderRank, presentation.group === undefined ? 0 : paragraphOrderRank(text))
+    );
+  }
+
+  needsPublication(texts: readonly Text<RasterFormatMetadata>[]): boolean {
+    return this.#publicationPending || this.needsReconcile(texts);
   }
 
   #needsActiveReconcile(texts: readonly Text<RasterFormatMetadata>[]): boolean {
@@ -1358,6 +1409,7 @@ class ThreeRootPublication {
       return;
     }
     entry.handle.dispose();
+    this.#publicationPending = true;
     this.#entries.delete(text);
     this.#inspections.delete(text);
     reconciler.unbindFrom(text, this);
@@ -1522,9 +1574,12 @@ class ThreeRootPublication {
   acceptShape(): void {
     this.#assertActive();
     this.#rendererUpdateRejected = false;
+    this.#publicationPending = false;
     this.#inspections.clear();
     for (const [text, entry] of this.#entries) {
       entry.committedRevision = entry.stagedRevision;
+      entry.committedOrderRank = entry.stagedOrderRank;
+      entry.committedPresentation = entry.stagedPresentation;
       reconciler.markCommitted(text);
     }
     for (const text of this.#pendingMeasurements) {
@@ -1537,6 +1592,7 @@ class ThreeRootPublication {
   rejectShape(): void {
     this.#assertActive();
     this.#rendererUpdateRejected = true;
+    this.#publicationPending = false;
   }
 
   syncTransforms(worldMatricesCurrent: boolean): void {
@@ -1581,13 +1637,8 @@ class ThreeRootPublication {
     presentation: TextPresentation,
   ): void {
     const previous = this.#entries.get(text);
-    const state = coreTextState(
-      desired,
-      text,
-      presentation,
-      this.#root,
-      order,
-      (material, pixelSnapping, renderOrder) => this.#materialBindings.get(material, pixelSnapping, renderOrder),
+    const state = coreTextState(desired, text, presentation, order, (material, pixelSnapping, renderOrder) =>
+      this.#materialBindings.get(material, pixelSnapping, renderOrder),
     );
     if (previous === undefined) {
       const handle = this.#services.createText(state);
@@ -1600,6 +1651,8 @@ class ThreeRootPublication {
         stagedOrderRank: orderRank,
         stagedPresentation: presentation,
         committedRevision: -1,
+        committedOrderRank: undefined,
+        committedPresentation: undefined,
       });
     } else {
       const scopedOrderChanged =
@@ -1613,6 +1666,7 @@ class ThreeRootPublication {
       previous.stagedPresentation = presentation;
     }
     this.#pendingMeasurements.add(text);
+    this.#publicationPending = true;
     this.#inspections.delete(text);
   }
 
@@ -1641,7 +1695,6 @@ function coreTextState(
   desired: DesiredTextState<RasterFormatMetadata>,
   transform: THREE.Object3D,
   presentation: TextPresentation,
-  root: ThreeRootHost,
   order: number,
   materialBinding: (
     material: ThreeTextMaterial | undefined,
@@ -1650,11 +1703,7 @@ function coreTextState(
   ) => ThreeMaterialBinding,
 ) {
   const { pixelSnapping, renderOrder } = presentation;
-  const material = materialBinding(
-    desired.material ?? presentation.material ?? root.material,
-    pixelSnapping,
-    renderOrder,
-  );
+  const material = materialBinding(desired.material ?? presentation.material, pixelSnapping, renderOrder);
   const spans = desired.spans.map((span) => {
     const spanMaterial: ThreeMaterialBinding | undefined =
       span.material === undefined ? undefined : materialBinding(span.material, pixelSnapping, renderOrder);
@@ -1933,7 +1982,7 @@ function resolveTextPresentation(text: Text<RasterFormatMetadata>): TextPresenta
   }
   const resolved: TextPresentation = {
     group,
-    material,
+    material: material ?? root.material,
     pixelSnapping: pixelSnapping ?? text.pixelSnapping,
     // Inside a group the child's renderOrder is a Rust paragraph rank, never a
     // Three material/draw key. An entirely unstated group shares Three's default 0.
