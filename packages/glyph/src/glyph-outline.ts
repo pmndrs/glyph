@@ -7,9 +7,9 @@
  * copy them (`points.slice()`) to keep an outline.
  */
 export interface GlyphOutlineView {
-  /** The font that shaped the glyph. */
+  /** The engine font handle that shaped the glyph; equal handles identify the same registered font. */
   fontHandle: number;
-  /** The glyph's ID in that font. */
+  /** The glyph index in that font, not a Unicode code point or a layout index. */
   glyphId: number;
   /**
    * `x, y` pairs, endpoint-shared: segment `s` of contour `c` starts at point `2s + c`, has its control at

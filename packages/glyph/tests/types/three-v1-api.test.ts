@@ -210,11 +210,12 @@ const [detachedGlyphs, detachedDecorations] = label.breakApart();
 detachedGlyphs satisfies Glyphs;
 detachedDecorations satisfies Decorations | undefined;
 detachedGlyphs.outlineAt(0) satisfies GlyphOutlineContour[];
-detachedGlyphs.glyphAt(0).drawn satisfies boolean;
-detachedGlyphs.glyphAt(0).fontId satisfies number;
+// @ts-expect-error Renderer record state is private.
+void detachedGlyphs.glyphAt(0).drawn;
+detachedGlyphs.glyphAt(0).fontHandle satisfies number;
 detachedGlyphs.glyphAt(0).glyphId satisfies number;
 // @ts-expect-error The font id is a plain number, not a branded FontHandle.
-detachedGlyphs.glyphAt(0).fontId satisfies import('../../src/identity.js').FontHandle;
+detachedGlyphs.glyphAt(0).fontHandle satisfies import('../../src/identity.js').FontHandle;
 // @ts-expect-error A detached glyph is addressed by its layout index only.
 void detachedGlyphs.glyphAt(0).sourceIndex;
 void detachedGlyphs;

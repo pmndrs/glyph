@@ -904,12 +904,12 @@ root-relative resource leases belong to each detached object,
 so the pair may outlive the source `Text`, font, and loader without sharing mutable presentation state. The source `Text`
 stays live and may continue publishing while detached objects remain unchanged.
 `Glyphs` has one index, the layout glyph index `text.glyphs()` uses: `count` is the layout's glyph count, blank glyphs
-stay in the index space with `DetachedGlyph.drawn: false`, and `glyphAt`, `measurements`, `outlineAt`, and the matrix
+stay in the index space without exposing renderer record state, and `glyphAt`, `measurements`, `outlineAt`, and the matrix
 methods are parallel arrays at it, throwing `RangeError` outside `0 <= index < count`. Matrices and pivots are flat
 per-glyph arrays (`count * 16` and `count * 2`) and a dense `Int32Array` maps a glyph to its physical record, `-1` for
 none. A blank glyph's matrix rests at its pen origin, `setMatrixAt` stores it, and no shader transform is written for a
 glyph without a record. A `DetachedGlyph` carries three identities: `index` is its position in this layout, `key` is the
-same occurrence across a reflow (the shipped contract, unchanged), and `fontId` plus `glyphId` are the same shape: the
+same occurrence across a reflow (the shipped contract, unchanged), and `fontHandle` plus `glyphId` are the same shape: the
 plain-number id of the font that shaped it (never reused, not a lease, equal to
 `text.glyphs().fontHandles[glyphFontSlots[index]]`) and its index in that font, filled for every index from the retained
 layout. Equal pairs mean an equal outline, so a shape built once serves every occurrence. There is no public lookup of

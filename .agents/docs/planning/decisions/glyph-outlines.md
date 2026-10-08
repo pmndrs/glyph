@@ -27,14 +27,14 @@ writes version 0, and readers accept both. The format, read paths, and decoder a
   position on the baseline, so equal font and glyph IDs give equal outlines. Borrowed reads return a plain
   `GlyphOutlineView` and owned reads return `[x0, y0, cx, cy, x1, y1, isLine]` contours (agreed on the pull request,
   2026-10-06). The view names its font `fontHandle`, matching `BorrowedGlyph.fontHandle` and `glyphs().fontHandles`;
-  `DetachedGlyph` names it `fontId`.
+  `DetachedGlyph` uses the same `fontHandle` name.
 - **One detached index.** A split glyph reads its outline through `Glyphs.outlineAt(index)` and nowhere else on the
   Three side. `Glyphs` uses the layout glyph index of `text.glyphs()`, `withGlyphs`, and `GlyphPlacement.index`, with every
-  per-glyph datum a parallel array at it and blank glyphs kept as `drawn: false` (user directive, 2026-10-07). A second
+  per-glyph datum a parallel array at it and blank glyphs kept at their layout indices (user directive, 2026-10-07). A second
   `sourceIndex` would only name the same number, so `DetachedGlyph` and `ThreeGlyphMeasurement` do not carry one.
 - **Three identities.** `index` is the position in this layout, `key` is the same occurrence across reflow (the shipped
-  0.1.0 contract), and `fontId` plus `glyphId` are the same shape (user directive, 2026-10-08). `fontId` is a plain number
-  named so it does not read as a ref-counted handle; it retains nothing, and no public font-by-id lookup is added.
+  0.1.0 contract), and `fontHandle` plus `glyphId` are the same shape (user directive, 2026-10-08). `fontHandle` is a plain number
+  consistent with the other glyph views; it retains nothing, and no public font-by-handle lookup is added.
 
 ## Consequences
 

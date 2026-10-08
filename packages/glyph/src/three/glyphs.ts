@@ -68,12 +68,10 @@ export function setGlyphDrawOrder(glyphs: Glyphs, start: number): number {
 export interface DetachedGlyph {
   /** The glyph's layout index, the one `text.glyphs()`, `text.withGlyphs()`, `GlyphPlacement.index`, and every `Glyphs` method use. */
   readonly index: number;
-  /** Whether this glyph has a render record. A blank glyph does not: its matrix is stored and nothing is drawn. */
-  readonly drawn: boolean;
   readonly key: GlyphPlacement['key'];
   /** The font that shaped this glyph: a plain number, never reused, that retains nothing. Equals `text.glyphs().fontHandles[glyphFontSlots[index]]`. */
-  readonly fontId: number;
-  /** The glyph's index in that font. Equal `fontId` and `glyphId` mean an equal outline. */
+  readonly fontHandle: number;
+  /** The glyph index in that font, not a Unicode code point or a layout index. Equal `fontHandle` and `glyphId` mean an equal outline. */
   readonly glyphId: number;
   readonly cluster: number;
   readonly line: number;
@@ -90,8 +88,8 @@ interface DetachedGlyphStorage {
 /**
  * A detached render-plan branch from `Text.breakApart()`: imports the planner's compacted publication into the normal renderer without child Text objects; per-glyph matrices are Three-side only and never reach the live paragraph.
  *
- * Every per-glyph datum is indexed by the layout glyph index of `text.glyphs()`. Blank glyphs keep their index with
- * `drawn: false`: they keep a matrix but no render record.
+ * Every per-glyph datum is indexed by the layout glyph index of `text.glyphs()`. Blank glyphs keep their index and
+ * matrix but have no render record.
  */
 export class Glyphs extends THREE.Object3D {
   readonly #target: ThreeCommandBufferRenderer;
@@ -136,8 +134,7 @@ export class Glyphs extends THREE.Object3D {
         placements.map((placement, index) =>
           Object.freeze({
             index,
-            drawn: !incomplete.has(index),
-            fontId: layout.fontHandles[layout.glyphFontSlots[index]!]!,
+            fontHandle: layout.fontHandles[layout.glyphFontSlots[index]!]!,
             glyphId: layout.glyphIds[index]!,
             key: placement.key,
             cluster: placement.cluster,

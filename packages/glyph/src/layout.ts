@@ -142,6 +142,7 @@ export type GlyphLayoutColumns = Omit<GlyphLayoutInspection, 'outlineAt'>;
 export interface BorrowedGlyph {
   readonly stableId: number;
   readonly fontHandle: number;
+  /** The glyph index in the registered font, not a Unicode code point or a layout index. */
   readonly glyphId: number;
   readonly cluster: number;
   readonly bidiLevel: number;

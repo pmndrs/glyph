@@ -1298,12 +1298,13 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
       entries.map((_, index) => index),
       'an index is the layout index',
     );
+    const hasInk = detached.measurements.map(({ localInkBounds }) => localInkBounds.max.x > localInkBounds.min.x);
     assert.ok(
-      entries.some((entry) => !entry.drawn),
+      hasInk.some((ink) => !ink),
       'the semantic-only space stays in the index space, undrawn',
     );
     assert.ok(
-      entries.findIndex((entry) => !entry.drawn) < entries.findLastIndex((entry) => entry.drawn),
+      hasInk.findIndex((ink) => !ink) < hasInk.findLastIndex((ink) => ink),
       'the fixture must include drawable glyphs after a semantic-only space',
     );
     assert.ok(entries.every((entry) => !('sourceIndex' in entry)));
@@ -1336,7 +1337,7 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
       );
       comparedRecords += 1;
     }
-    assert.equal(comparedRecords, entries.filter((entry) => entry.drawn).length, 'every drawn glyph owns one record');
+    assert.equal(comparedRecords, hasInk.filter(Boolean).length, 'every glyph with ink owns one record');
     assert.notEqual(draw.material, sourceDraw.material, 'the detached branch owns independent material state');
     const sourceOpacity = sourceDraw.material.opacity;
     detached.materials[0].opacity = 0.35;
