@@ -5,9 +5,11 @@ import { GlyphEngineStatusError } from '../engine-error.js';
 import {
   copyGlyphLayoutInspection,
   type BorrowedGlyphLayout,
+  type GlyphLayoutColumns,
   type GlyphLayoutInspection,
   type ParagraphLayoutSummary,
 } from '../layout.js';
+import { requireGlyphOutlineStore, storedGlyphOutline, type GlyphOutlineStore } from '../glyph-outline.js';
 import {
   assertConstraints,
   assertParagraphLayout,
@@ -50,7 +52,12 @@ import type {
 } from './handle-state.js';
 import { RenderPlanView, type RenderPlanTable } from './plan-view.js';
 import { measurementFromLayoutInspection, readPlannerLayouts, readPlannerMeasurements } from './layout-query-view.js';
-import { createBorrowedGlyphLayout, createInspectionBorrowedGlyphLayout } from './borrowed-layout-view.js';
+import {
+  createBorrowedGlyphLayout,
+  createInspectionBorrowedGlyphLayout,
+  fontHandleAt,
+  type OutlineDecoder,
+} from './borrowed-layout-view.js';
 import type { PortableResource } from '../config/resources.js';
 import { reuseOrCreateTextPropertySnapshot } from '../config/text-property.js';
 import type { ParagraphId, ResourceHandle } from './glyph-id.js';
@@ -358,7 +365,7 @@ interface RetainedTextState {
   desiredReleased: boolean;
   committed: ResolvedTextOptions | undefined;
   measurement: ParagraphLayoutSummary | undefined;
-  inspection: GlyphLayoutInspection | undefined;
+  inspection: GlyphLayoutColumns | undefined;
   inspectionBorrowMode: 'sparse-first' | 'promotion-ready' | 'sparse-only';
 }
 
@@ -702,9 +709,17 @@ class RenderPlannerImpl {
   /** @internal */
   _inspectText(state: RetainedTextState): GlyphLayoutInspection {
     this.#assertTextQueryable(state);
-    const cached = state.inspection;
-    if (cached !== undefined) return copyGlyphLayoutInspection(cached);
-    return copyGlyphLayoutInspection(this.#queryInspection(state));
+    const layout = state.inspection ?? this.#queryInspection(state);
+    // The copy holds each font's store, so it reads after the font or this handle is gone.
+    const stores = new Map<number, GlyphOutlineStore | undefined>();
+    for (const fontHandle of layout.fontHandles)
+      stores.set(fontHandle, this.#handleState._glyphOutlineStore(fontHandle));
+    return copyGlyphLayoutInspection(layout, (index) =>
+      storedGlyphOutline(
+        requireGlyphOutlineStore(stores.get(fontHandleAt(layout, index))),
+        layout.glyphIds[index]!,
+      ).slice(),
+    );
   }
 
   /** @internal */
@@ -722,21 +737,20 @@ class RenderPlannerImpl {
         state.inspectionBorrowMode = 'sparse-only';
       }
     }
+    const assertActive = (): void => {
+      if (!active) throw new Error('borrowed glyph layout has expired');
+    };
+    const decodeOutline: OutlineDecoder = (fontHandle, glyphId, target) =>
+      this.#handleState._glyphOutline(fontHandle, glyphId, target);
     if (inspection !== undefined) {
-      glyphs = createInspectionBorrowedGlyphLayout(inspection, () => {
-        if (!active) throw new Error('borrowed glyph layout has expired');
-      });
+      glyphs = createInspectionBorrowedGlyphLayout(inspection, assertActive, decodeOutline);
     } else {
       const publication = this.#transport.borrowParagraphLayout(
         this.#queryTextRequest(state, textShaperAbi.engine.semanticViewMasks.borrowedLayout),
         state.paragraphId,
         this.#limits.maxOutputBytes,
       );
-      glyphs = createBorrowedGlyphLayout(this.#transport, publication, () => {
-        if (!active || this.#transport.isExpired(publication.publication)) {
-          throw new Error('borrowed glyph layout has expired');
-        }
-      });
+      glyphs = createBorrowedGlyphLayout(this.#transport, publication, assertActive, decodeOutline);
       if (state.inspectionBorrowMode === 'sparse-first') state.inspectionBorrowMode = 'promotion-ready';
       this.#adoptMeasuredBindings(state);
     }
@@ -956,7 +970,7 @@ class RenderPlannerImpl {
     return measurement;
   }
 
-  #queryInspection(state: RetainedTextState): GlyphLayoutInspection {
+  #queryInspection(state: RetainedTextState): GlyphLayoutColumns {
     this.#assertTextQueryable(state);
     const publication = this.#queryTextPublication(state, textShaperAbi.engine.semanticViewMasks.layoutInspection);
     const layout = readPlannerLayouts(publication).get(state.paragraphId);
@@ -1006,8 +1020,12 @@ class RenderPlannerImpl {
 
   #compileFrame(options: NormalizedPublishOptions, checkpointGeneration: number): Uint8Array {
     this.#assertUniqueBaseOrders();
+    // A measured but never published text only ever existed as the engine's speculative candidate,
+    // which the frame drops on its own; only a committed paragraph has something to remove.
     const paragraphMutations = [
-      ...[...this.#removed].map((state) => ({ opcode: 'remove' as const, paragraphId: state.paragraphId })),
+      ...[...this.#removed]
+        .filter((state) => state.published)
+        .map((state) => ({ opcode: 'remove' as const, paragraphId: state.paragraphId })),
       ...[...this.#texts]
         .filter((state) => !state.removed && state.lifecycleDirty)
         .map((state) => ({

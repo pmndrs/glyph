@@ -10,9 +10,9 @@
     "../../../../../packages/glyph/src/**/*.ts",
     "../../../../../packages/glyph/tests/types/**/*.ts",
     "../../../../../packages/glyph/tests/types/**/*.tsx",
-    "../../../../../packages/glyph/tests/integration/three-v1.test.mjs",
     "../../../../../benches/src/v1-detached-proof.ts",
-    "../../../../../packages/glyph/tests/integration/glyph-placements.test.mjs"
+    "../../../../../packages/glyph/tests/integration/**/*.mjs",
+    "../../../../../benches/labs/package/**/*.ts"
   ],
   "exclude": ["../../../../../**/dist/**", "../../../../../**/node_modules/**"]
 }

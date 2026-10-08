@@ -24,9 +24,8 @@ const defaultBranches = ['origin/HEAD', 'origin/main', 'main'];
 async function runHook() {
   const repositoryRoot = git(['rev-parse', '--show-toplevel']).trim();
   process.chdir(repositoryRoot);
-  const staged = gitBuffer(['diff', '--cached', '--name-only', '-z']).toString('utf8').split('\0').filter(Boolean);
   // Every commit counts while the branch has unattested package changes, whatever this commit stages.
-  const changed = [...staged, ...branchChanges()];
+  const changed = branchChanges();
   if (!changed.some((filePath) => watchedRoots.some((root) => filePath.startsWith(root)))) return;
 
   // Judge the staged snapshot, not the working tree, so unstaged edits neither hide nor invent findings.
@@ -49,21 +48,28 @@ async function runHook() {
 }
 
 /**
- * Files the branch changed since it left the default branch; empty when no base exists (an unborn branch
- * or shallow history). Of the candidate bases, the newest merge base wins, so a stale or misdirected
- * `origin/HEAD` can never widen the range to other branches' changes.
+ * Files the staged snapshot changes since the branch left the default branch, or since `HEAD` when no base
+ * exists (an unborn branch or shallow history). Of the candidate bases, the newest merge base wins, so a
+ * stale or misdirected `origin/HEAD` can never widen the range to other branches' changes, and a merge of
+ * the default branch into this one counts only what the branch itself changed.
  */
 function branchChanges() {
   const bases = [];
   for (const candidate of defaultBranches) {
-    try {
-      bases.push(git(['merge-base', candidate, 'HEAD']).trim());
-    } catch {
-      // Unknown ref, unborn branch, or shallow history.
+    for (const tip of ['HEAD', 'MERGE_HEAD']) {
+      try {
+        bases.push(git(['merge-base', candidate, tip]).trim());
+      } catch {
+        // Unknown ref, no merge in progress, unborn branch, or shallow history.
+      }
     }
   }
   const newest = bases.find((base) => bases.every((other) => isAncestor(other, base)));
-  return newest === undefined ? [] : git(['diff', '--name-only', newest, 'HEAD']).split('\n').filter(Boolean);
+  const range = newest === undefined ? [] : [newest];
+  return gitBuffer(['diff', '--cached', '--name-only', '-z', ...range])
+    .toString('utf8')
+    .split('\0')
+    .filter(Boolean);
 }
 
 function isAncestor(ancestor, descendant) {

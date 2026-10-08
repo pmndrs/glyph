@@ -19,6 +19,7 @@ import {
   type SlugOptions,
   type SlugDescriptor,
 } from '../internal/slug-contract.js';
+import { compileWasmResponse } from '../internal/compile-wasm-response.js';
 import { cacheSuccessfulPromise } from '../internal/successful-promise-cache.js';
 import { GlyphError } from '../glyph-error.js';
 import type { Fingerprint, RasterKey } from '../identity.js';
@@ -128,16 +129,16 @@ export function slugBakerFromCore(
 
 async function loadDefaultSlugBaker(): Promise<ReturnType<typeof slugBakerFromCore>> {
   const wasmUrl = new URL('../../dist/slug-baker.wasm', import.meta.url);
-  let bytes: BufferSource;
+  let source: BufferSource | WebAssembly.Module;
   if (wasmUrl.protocol === 'file:') {
     const { readFile } = await import('node:fs/promises');
-    bytes = await readFile(wasmUrl);
+    source = await readFile(wasmUrl);
   } else {
     const response = await fetch(wasmUrl);
     if (!response.ok) throw new Error(`Unable to load Slug baker Wasm (${response.status})`);
-    bytes = await response.arrayBuffer();
+    source = await compileWasmResponse(response);
   }
-  return slugBakerFromCore(await createSlugBaker(bytes));
+  return slugBakerFromCore(await createSlugBaker(source));
 }
 
 const defaultSlugBaker = cacheSuccessfulPromise(loadDefaultSlugBaker);

@@ -902,14 +902,14 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return measureGlyphPlacements(placements, this.#glyphGeometry(placements));
   }
 
-  /** Copies the committed glyphs and optional decorations into independently rendered Three objects, leaving this text unchanged. */
+  /** Copies drawable committed glyphs and optional decorations into independently rendered Three objects; blank glyphs are excluded. */
   split(): readonly [glyphs: Glyphs, decorations: Decorations | undefined] {
     this.#assertActive();
-    this.#assertDetachedCopyAvailable('split');
+    this.#assertDetachedCopyAvailable('break apart');
     const placements = this.#glyphPlacements();
-    if (placements === undefined) throw new Error('cannot split text before a committed layout is available');
+    if (placements === undefined) throw new Error('cannot break apart text before a committed layout is available');
     const binding = this.#binding;
-    if (binding === undefined) throw new Error('cannot split an unbound text paragraph');
+    if (binding === undefined) throw new Error('cannot break apart an unbound text paragraph');
     const incomplete = new Set(placements.incomplete);
     const drawable = placements.glyphs.filter((placement) => !incomplete.has(placement.index));
     const stableIds = new Uint32Array(drawable.length);
@@ -918,7 +918,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       if (stableId === undefined) throw new Error(`drawable glyph ${placement.index} has no stable id`);
       stableIds[index] = stableId;
     }
-    if (stableIds.length === 0) throw new Error('cannot split text with no drawable glyphs');
+    if (stableIds.length === 0) throw new Error('cannot break apart text with no drawable glyphs');
     const source = this.#root.member(this);
     const glyphRenderOrderBase = binding.glyphRenderOrderBase(source, stableIds);
     const glyphs = createGlyphs({
@@ -1464,7 +1464,7 @@ class ThreeRootPublication {
     if (layout === undefined) return undefined;
     const drawn = this.#target.snapshotGlyphOrigins(layout.glyphStableIds, layout.x, layout.y);
     const placements = createGlyphPlacements(
-      copyGlyphLayoutInspection(layout),
+      copyGlyphLayoutInspection(layout, (index) => layout.outlineAt(index)),
       text.text,
       drawn.drawnX,
       drawn.drawnY,

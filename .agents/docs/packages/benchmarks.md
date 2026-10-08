@@ -226,6 +226,9 @@ sources:
   - id: labs-internal-workflow
     resource: ../../../benches/scripts/run-internal-labs.mts
     title: Workspace-only Labs benchmark workflow
+  - id: labs-summary
+    resource: ../../../benches/scripts/support/labs-summary.mts
+    title: Labs comparison Markdown job summary
   - id: labs-result-validator
     resource: ../../../benches/scripts/support/labs-result.mts
     title: Saved Labs result failure validator
@@ -271,6 +274,17 @@ performance job. `benchmark:labs-package` installs the candidate tarball and an 
 npm canary into isolated temporary consumers, then runs both through `@pmndrs/labs`. It never rebuilds either artifact.
 The retained report includes native Labs JSON, comparison output, exact package manifests and lockfiles, and the candidate
 tarball SHA-256.
+
+The runner also renders the comparison as Markdown (`summary.md` under the output directory, appended to
+`$GITHUB_STEP_SUMMARY` when set): counts; a forest plot in a `diff` block, with each bench's Δ p50 inside its 95%
+confidence interval against a zero line, plus p and Labs' baseline and candidate distribution sparklines (GitHub
+colours slower `-` rows red and faster `+` rows green, while neutral rows stay plain; the axis caps at ±50% and draws an
+arrow past it); a slower-first table of non-neutral benches with full names; and the neutral and skipped rows folded
+in `<details>`. It is parsed from the `labs compare` text, with names restored from the candidate result, and a
+failure to write it only warns. On a pull request, CI also keeps
+one PR comment current with the same Markdown, found by its `<!-- glyph-labs-report -->` marker, like the size and docs
+reports. Fork pull requests get a read-only token, so for them the comment step may fail and the job summary carries
+the report.
 
 The default package suite is a common-use smoke comparison: cached `measure()`, measurement and publication after a text
 change, exact-width reflow, paint-only style publication, and font-size relayout. It deliberately excludes per-glyph
@@ -520,7 +534,7 @@ The application's browser and script projects use the repository-pinned TypeScri
 
 Every measured call receives its actual zero-based sample index; warmups remain outside the reported sample sequence. Controls reject invalid sample/warmup counts and non-finite, non-positive, or greater-than-4 DPR before target loading. The existing 1×/2× scene buttons now select the actual renderer density, initialize from the user's display class, and invalidate stale results. Automated probes and the headless CLI always pass DPR explicitly. Successful summaries include the V0 schema marker and exact controls, so timings, framebuffer bytes, and pixels cannot be compared without their density. The deterministic headless lane runs its cases sequentially through one Chromium/Vite session while opening an isolated page for each case; explicit readiness, launch, navigation, and execution deadlines identify a stalled lifecycle without using time as a readiness signal.
 
-GitHub CI uses the Ubuntu runner's rolling system Chromium as a deliberate compatibility canary instead of downloading Playwright's pinned browser. The workflow discovers an executable, prints its version, fails if none exists, and exports only `PMNDRS_GLYPH_CHROMIUM_EXECUTABLE_PATH`. One shared launcher conditionally supplies that exact path to all five direct Playwright launch sites; without the variable, local commands retain Playwright's managed executable. Every launch reports `browser.version()` to stderr, and headless benchmark summaries retain that exact value as `browserVersion` beside the browser-provided user-agent string, whose Chromium minor/build components may be reduced. The packed-tarball consumer declares a data-URL favicon so its synthetic document makes no browser-implicit network request; browser error diagnostics retain console source locations and failed HTTP status, resource type, and URL. Historical fixture filenames and goldens remain tied to their recorded captures rather than being relabeled by this rolling lane.
+GitHub CI uses the Ubuntu runner's rolling system Chromium as a deliberate compatibility canary instead of downloading Playwright's pinned browser. The workflow discovers an executable, prints its version, fails if none exists, and exports only `PMNDRS_GLYPH_CHROMIUM_EXECUTABLE_PATH`. One shared launcher conditionally supplies that exact path to all five direct Playwright launch sites; without the variable, local commands retain Playwright's managed executable. The example Vitexec lane runs through `benchmark:with-browser`, which launches the same selected Chromium as a temporary Playwright browser server, supplies its WebSocket endpoint to the child command, and closes it when that command exits. This prevents Vitexec from attempting a second browser download in CI. Every launch reports `browser.version()` to stderr, and headless benchmark summaries retain that exact value as `browserVersion` beside the browser-provided user-agent string, whose Chromium minor/build components may be reduced. The packed-tarball consumer declares a data-URL favicon so its synthetic document makes no browser-implicit network request; browser error diagnostics retain console source locations and failed HTTP status, resource type, and URL. Historical fixture filenames and goldens remain tied to their recorded captures rather than being relabeled by this rolling lane.
 
 The canonical package-size lane measures the initial public JavaScript graph, lazy font validator, runtime Worker boundary, baker and shaper JavaScript/Wasm, and representative font artifacts without zero-byte placeholders. Static entry closures and dynamic chunks are separated from Rollup metadata rather than conflated; Core, Three, and React adapter measurements externalize the package's declared Three.js, React, and R3F peers, and package-owned Wasm URLs are externalized from JavaScript measurements regardless of their owning package. The production R3F hello-world row separately sums every JavaScript chunk emitted by the existing application build, including its consumer-owned React, R3F, and Three graph; each independently delivered chunk is compressed independently. This catches package changes that duplicate a peer entry graph while keeping adapter-only attribution honest. The graph gate also requires runtime baking and explicit FontFace transfer reconstruction to remain dynamically reachable while excluding both implementations from the initial Core, Three, and React closures. The detailed record retains its measurement platform, architecture, SHA-256 payload identities, and raw/minified/gzip/Brotli measurements. Package size is pull-request review evidence rather than a gate: no byte budget or committed-report freshness check fails a change, `pnpm size` prints without writing, and the committed `src/generated/package-sizes.json` is the harness's display snapshot, refreshed only by `release:size:generate` during release preparation ([package-size review evidence](../planning/decisions/package-size-review-evidence.md)). The human summary is deliberately smaller: the benchmark UI and Size Limit pull-request comment use one fail-closed projection containing only gzip for Core JS, Shaper Wasm, Three.js adapter JS, React adapter JS, the production R3F hello-world application, Inter plus Font Awesome across Bitmap, MTSDF, and Slug, and each optional validator, runtime-bake, font-baker, and raster-baker JS/Wasm payload. It publishes neither arithmetic runtime/delivery totals nor alternate compression columns. This keeps each displayed number attributable to one emitted payload and avoids presenting external peers or a chosen font combination as a universal application total. The pinned Size Limit action still owns checkout, same-runner base/head execution, and its machine-readable two-column input; no size limit is configured, so it reports and never fails on growth. Its fixed renderer cannot author the desired compact layout, so a staged formatter records those same two result arrays and replaces the action's comment with one balanced `Surface | gzip | Surface | gzip` table; every summary surface appears exactly once. The inspector's runtime and resource cards remain separate workload telemetry rather than inputs to the pull-request size summary.
 
@@ -745,6 +759,12 @@ CI routes the installed-package lane by event. Pull requests default to the four
 `benchmark:full` selects the complete matrix and overrides focused labels. Pushes to `main` always run `full`. Manual
 dispatch accepts the same suite names. This routing changes only the installed-package timing report; correctness,
 browser, payload, and conformance lanes retain their own workflows.
+
+The `@glyphs` suite also times glyph outlines (`labs/package/outlines.bench.ts`): `glyphs()` after a text change on Inter
+baked with outlines, beside the same paragraph on the plain font in `inspection.bench.ts`, and reading every outline from
+an unchanged copy. Labs times synchronous work only, so the decode at font load is recorded in the package reference. The
+fixture registers these benches only when the package under test has `outlineAt()`, so a baseline without outlines
+reports them as missing instead of timing a plain font under their names.
 
 The 0.1.0 export cleanup removes raw ABI re-exports from the baker size entries. The regenerated package-size report
 records the supported consumer surface, including the root format move. Relative to the original pre-cleanup build,
