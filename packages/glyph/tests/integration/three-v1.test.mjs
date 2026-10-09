@@ -894,6 +894,258 @@ test('TextGroup batching resolves automatic roots, shared structure, and explici
   }
 });
 
+test('0.2 manual visibility retains 1,000 labels across row and ancestor changes', async (t) => {
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const rowCount = 10;
+  const labelsPerRow = 100;
+
+  try {
+    for (const transformMode of ['indexed', 'direct']) {
+      await t.test(transformMode, async (subtest) => {
+        const configured = defineThreeConfig({
+          capacity: { size: 2_048, policy: 'grow' },
+          transformMode,
+        });
+        let rendererPublications = 0;
+        const three = await createThreeTestHandle(subtest, {
+          ...configured,
+          renderer(context) {
+            const renderer = configured.renderer(context);
+            const decode = renderer.decode.bind(renderer);
+            renderer.decode = (frame) => {
+              rendererPublications += 1;
+              return decode(frame);
+            };
+            return renderer;
+          },
+        });
+        const scene = new THREE.Scene();
+        const ancestor = new THREE.Group();
+        const rows = [];
+        const labels = [];
+        let editedLabel;
+
+        try {
+          for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+            const batching = rowIndex % 2 === 0 ? 'auto' : 'group';
+            const row = three.createTextGroup({ batching });
+            row.position.y = -rowIndex * 18;
+            for (let column = 0; column < labelsPerRow; column += 1) {
+              const edited = rowIndex === 3 && column === 0;
+              const label = three.createText({
+                font,
+                text: edited ? 'A A' : 'A',
+                ...(edited
+                  ? {
+                      constraints: { width: { mode: 'exact', size: 240 } },
+                      layout: { wrap: 'word' },
+                    }
+                  : {}),
+              });
+              label.position.x = column * 12;
+              row.add(label);
+              labels.push(label);
+              if (edited) editedLabel = label;
+            }
+            rows.push(row);
+            ancestor.add(row);
+          }
+          scene.add(ancestor);
+          scene.updateMatrixWorld(true);
+
+          assert.ok(editedLabel);
+          assert.equal(three.textCount, 1_000, 'the retained root accepts the complete release-scale label set');
+          assert.deepEqual(
+            rows.map((row) => row.batching),
+            Array.from({ length: rowCount }, (_, index) => (index % 2 === 0 ? 'auto' : 'group')),
+            'the public batching policy partitions alternating automatic and explicit row boundaries',
+          );
+          const initialDraws = rootDraws(scene);
+          assert.ok(initialDraws.length >= rowCount, 'every retained row owns at least one draw scope');
+          assert.ok(
+            initialDraws.every((draw) => draw.visible),
+            'the accepted initial publication is fully visible',
+          );
+          assert.ok(rendererPublications > 0, 'the initial traversal reaches renderer acceptance');
+          const acceptedPublications = rendererPublications;
+          const initialMeasurement = editedLabel.measure();
+          assert.ok(initialMeasurement);
+          assert.equal(initialMeasurement.lineCount, 1, 'the editable label begins on one wide line');
+          const retainedDrawResources = initialDraws.map((draw) => ({
+            draw,
+            geometry: draw.geometry,
+            index: draw.geometry.index,
+            attributes: Object.entries(draw.geometry.attributes),
+          }));
+          const assertRetainedDrawResources = (stage) => {
+            const current = rootDraws(scene);
+            assert.equal(current.length, retainedDrawResources.length, `${stage} retains the accepted draw count`);
+            for (let index = 0; index < current.length; index += 1) {
+              const retained = retainedDrawResources[index];
+              assert.equal(current[index], retained.draw, `${stage} retains mesh ${String(index)}`);
+              assert.equal(current[index].geometry, retained.geometry, `${stage} retains geometry ${String(index)}`);
+              assert.equal(
+                current[index].geometry.index,
+                retained.index,
+                `${stage} retains index buffer ${String(index)}`,
+              );
+              assert.deepEqual(
+                Object.keys(current[index].geometry.attributes),
+                retained.attributes.map(([name]) => name),
+                `${stage} retains the buffer set for draw ${String(index)}`,
+              );
+              for (const [name, attribute] of retained.attributes) {
+                assert.equal(
+                  current[index].geometry.getAttribute(name),
+                  attribute,
+                  `${stage} retains ${name} for draw ${String(index)}`,
+                );
+              }
+            }
+          };
+
+          const automaticRow = rows[2];
+          instrumentedGlyph.reset();
+          automaticRow.visible = false;
+          scene.updateMatrixWorld(true);
+          const automaticOwnedDraws = initialDraws.filter((draw) => !draw.visible);
+          assert.ok(automaticOwnedDraws.length > 0, 'the hidden automatic row suppresses its owned draw scopes');
+          assert.ok(
+            initialDraws.some((draw) => draw.visible),
+            'hiding one automatic row leaves unrelated row draws visible',
+          );
+          assert.equal(instrumentedGlyph.crossings, 0, 'manual row visibility does not cross into Wasm');
+          assert.equal(rendererPublications, acceptedPublications, 'manual row visibility does not publish');
+          assertRetainedDrawResources('automatic row hide');
+
+          instrumentedGlyph.reset();
+          automaticRow.visible = true;
+          scene.updateMatrixWorld(true);
+          assert.ok(
+            initialDraws.every((draw) => draw.visible),
+            'restoring the automatic row restores every owned draw',
+          );
+          assert.equal(instrumentedGlyph.crossings, 0, 'automatic row restoration does not cross into Wasm');
+          assert.equal(rendererPublications, acceptedPublications, 'automatic row restoration does not publish');
+          assertRetainedDrawResources('automatic row restoration');
+
+          instrumentedGlyph.reset();
+          ancestor.visible = false;
+          scene.updateMatrixWorld(true);
+          assert.ok(
+            initialDraws.every((draw) => !draw.visible),
+            'ancestor visibility suppresses every retained row',
+          );
+          assert.equal(instrumentedGlyph.crossings, 0, 'ancestor visibility does not cross into Wasm');
+          assert.equal(rendererPublications, acceptedPublications, 'ancestor visibility does not publish');
+          assertRetainedDrawResources('ancestor hide');
+
+          instrumentedGlyph.reset();
+          ancestor.visible = true;
+          scene.updateMatrixWorld(true);
+          assert.ok(
+            initialDraws.every((draw) => draw.visible),
+            'restoring the ancestor restores every retained row',
+          );
+          assert.equal(instrumentedGlyph.crossings, 0, 'ancestor restoration does not cross into Wasm');
+          assert.equal(rendererPublications, acceptedPublications, 'ancestor restoration does not publish');
+          assertRetainedDrawResources('ancestor restoration');
+
+          const explicitRow = rows[3];
+          instrumentedGlyph.reset();
+          explicitRow.visible = false;
+          scene.updateMatrixWorld(true);
+          const explicitOwnedDraws = initialDraws.filter((draw) => !draw.visible);
+          assert.ok(explicitOwnedDraws.length > 0, 'the hidden explicit row suppresses its owned draw scopes');
+          assert.ok(
+            explicitOwnedDraws.every((draw) => !automaticOwnedDraws.includes(draw)),
+            'automatic and explicit rows own disjoint draw scopes',
+          );
+          assert.ok(
+            initialDraws.some((draw) => draw.visible),
+            'the hidden explicit row leaves unrelated rows visible',
+          );
+          assert.equal(instrumentedGlyph.crossings, 0, 'explicit row visibility does not cross into Wasm');
+          assert.equal(rendererPublications, acceptedPublications, 'explicit row visibility does not publish');
+          assertRetainedDrawResources('explicit row hide');
+
+          const editedDrawableGlyphCount = 12;
+          const editedText = Array.from({ length: editedDrawableGlyphCount }, () => 'A').join(' ');
+          editedLabel.set({
+            text: editedText,
+            constraints: { width: { mode: 'exact', size: 24 } },
+            layout: { wrap: 'word' },
+          });
+          instrumentedGlyph.reset();
+          const beforeEditPublications = rendererPublications;
+          scene.updateMatrixWorld(true);
+          assert.equal(
+            instrumentedGlyph.crossings,
+            1,
+            'the hidden semantic edit publishes through the normal root path',
+          );
+          assert.equal(
+            rendererPublications,
+            beforeEditPublications + 1,
+            'the hidden edit and reflow produce one accepted renderer publication',
+          );
+          const editedMeasurement = editedLabel.measure();
+          assert.ok(
+            editedMeasurement && editedMeasurement.lineCount > initialMeasurement.lineCount,
+            'the accepted hidden edit exposes the current narrower reflow through the public measurement',
+          );
+          assert.equal(editedLabel.text, editedText, 'the retained Text exposes the accepted edited source');
+          assert.equal(
+            instrumentedGlyph.measureCrossings,
+            0,
+            'reading the accepted hidden reflow uses its cached result',
+          );
+          const editedDraws = rootDraws(scene);
+          const editedOwnedDraws = editedDraws.filter((draw) => !draw.visible);
+          assert.ok(editedOwnedDraws.length > 0, 'replacement preparation preserves the hidden row state');
+          assert.ok(
+            editedDraws.some((draw) => draw.visible),
+            'the hidden edit leaves unrelated rows visible',
+          );
+          assert.equal(
+            editedOwnedDraws.reduce((count, draw) => count + draw.geometry.instanceCount, 0),
+            labelsPerRow - 1 + editedDrawableGlyphCount,
+            'the hidden row contains the current drawable A glyphs rather than its initial output',
+          );
+          assertRetainedDrawResources('hidden row edit and reflow');
+
+          instrumentedGlyph.reset();
+          const acceptedEditPublications = rendererPublications;
+          explicitRow.visible = true;
+          scene.updateMatrixWorld(true);
+          assert.ok(
+            editedOwnedDraws.every((draw) => draw.visible),
+            'restoring the edited row reveals its current draws',
+          );
+          assert.ok(
+            rootDraws(scene).every((draw) => draw.visible),
+            'the restored retained workload is fully visible',
+          );
+          assert.equal(
+            editedOwnedDraws.reduce((count, draw) => count + draw.geometry.instanceCount, 0),
+            labelsPerRow - 1 + editedDrawableGlyphCount,
+            'restoration keeps the accepted edited output current',
+          );
+          assert.equal(instrumentedGlyph.crossings, 0, 'restoring edited output does not cross into Wasm');
+          assert.equal(rendererPublications, acceptedEditPublications, 'restoring edited output does not publish');
+          assert.equal(editedLabel.measure(), editedMeasurement, 'restoration preserves the accepted reflow snapshot');
+          assertRetainedDrawResources('edited row restoration');
+        } finally {
+          for (const label of labels) label.dispose();
+          for (const row of rows) row.dispose();
+        }
+      });
+    }
+  } finally {
+    font.dispose();
+  }
+});
+
 test('groups without a committed batch scope skip scope visibility synchronization', async (t) => {
   const synchronizeBatchVisibility = ThreeCommandBufferRenderer.prototype.synchronizeBatchVisibility;
   let synchronizations = 0;
