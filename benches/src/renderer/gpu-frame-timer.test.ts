@@ -60,7 +60,7 @@ describe('GPU frame timer', () => {
     await timer.dispose();
   });
 
-  it('disposes without waiting for an uncancellable WebGPU readback', async () => {
+  it('settles a pending WebGPU readback before disposal completes', async () => {
     let resolveTimestamp!: (duration: number) => void;
     const timer = createWebGpuFrameTimer(
       {
@@ -74,17 +74,53 @@ describe('GPU frame timer', () => {
     timer.beginFrame(1);
     timer.endFrame();
 
-    await expect(timer.dispose()).resolves.toBeUndefined();
+    let disposed = false;
+    const disposal = timer.dispose().then(() => {
+      disposed = true;
+    });
+    await Promise.resolve();
+
+    expect(disposed).toBe(false);
+    expect(timer.diagnostics()).toEqual({
+      activeFrameId: undefined,
+      latestFrameId: 1,
+      oldestPendingFrameId: 1,
+      pendingCount: 1,
+    });
+
+    resolveTimestamp(2);
+    await disposal;
+    expect(disposed).toBe(true);
     expect(timer.diagnostics()).toEqual({
       activeFrameId: undefined,
       latestFrameId: 1,
       oldestPendingFrameId: undefined,
       pendingCount: 0,
     });
+    expect(timer.poll()).toEqual([]);
+  });
 
-    resolveTimestamp(2);
-    await Promise.resolve();
-    await Promise.resolve();
+  it('reports a WebGPU readback failure that settles during disposal', async () => {
+    let rejectTimestamp!: (error: unknown) => void;
+    const errors: unknown[] = [];
+    const timer = createWebGpuFrameTimer(
+      {
+        resolveTimestampsAsync: () =>
+          new Promise<number>((_resolve, reject) => {
+            rejectTimestamp = reject;
+          }),
+      },
+      { onError: (error) => errors.push(error), supported: true },
+    );
+    timer.beginFrame(1);
+    timer.endFrame();
+
+    const disposal = timer.dispose();
+    const failure = new Error('timestamp readback failed');
+    rejectTimestamp(failure);
+    await disposal;
+
+    expect(errors).toEqual([failure]);
     expect(timer.poll()).toEqual([]);
   });
 

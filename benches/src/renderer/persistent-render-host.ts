@@ -1,6 +1,11 @@
 import * as THREE from 'three/webgpu';
 
-import { bindGpuFrameTimerDiagnosticsRequests, createGpuFrameTimer, type GpuFrameTimer } from './gpu-frame-timer';
+import {
+  bindGpuFrameTimerDiagnosticsRequests,
+  createGpuFrameTimer,
+  publishGpuFrameTimerRetirement,
+  type GpuFrameTimer,
+} from './gpu-frame-timer';
 import {
   bindLiveFrameTelemetryCaptureRequests,
   createLiveFrameTelemetry,
@@ -373,6 +378,7 @@ export async function createPersistentRenderHost(options: PersistentRenderHostOp
           activeScene = undefined;
           if (current !== undefined) await deactivate(current, 'disposed');
           listeners.clear();
+          publishGpuFrameTimerRetirement(options.canvas, activeFrameTimer);
           await activeFrameTimer.dispose();
           await dependencies.disposeRenderer(renderer);
         })();
