@@ -211,6 +211,9 @@ sources:
   - id: ktx-runtime-size-workflow
     resource: ../../../benches/scripts/measure-ktx-runtime-size.mts
     title: Reproducible baseline-to-candidate KTX runtime bundle comparison
+  - id: ktx-runtime-performance-workflow
+    resource: ../../../packages/glyph/scripts/benchmark-ktx-runtime.mts
+    title: Reproducible KTX validation CPU and allocation comparison
   - id: labs-config
     resource: ../../../benches/labs.config.ts
     title: Packaged public API benchmark configuration
@@ -565,6 +568,16 @@ URL remain external in both revisions. The workflow rejects `ktx-parse` in every
 oracle/corruption tests, uses a stable ignored build path so chunk identities and compression are reproducible, removes
 that path on exit, and writes evidence only to stdout. Baseline and candidate compile and bundle sequentially at that
 same path, so source-location differences cannot enter the byte comparison.
+
+`glyph:ktx-runtime-performance` owns the matching runtime-cost evidence. It authenticates three real Inter raster GLBs,
+extracts and preloads all twelve KTX2 pages before timing, and requires the baseline and candidate to return identical
+zero-copy payload views. One suite represents the six admitted GPU formats; the real-page suite covers the complete R8,
+RGBA8, and RGBA16F production fixture set. Each cold sample uses a fresh process but starts timing only before the
+implementation import, so process launch, fixture construction and I/O, GLB parsing, and gzip are explicitly excluded.
+Warm samples alternate implementation order over preconstructed inputs. Separate fresh processes use V8 statistical
+heap-allocation sampling and observe automatic GC without counting the explicit pre-run collection. The whole workflow
+runs under the shared nonblocking `/private/tmp/glyph-perf-measurement.lock`, removes its ignored fixture pack on exit,
+and writes versioned JSON evidence to stdout.
 
 The current Darwin arm64 record reports a 318,898 minified / 80,416 gzip / 67,065 Brotli peer-externalized browser graph. The validator, runtime-bake host, runtime-bake Worker, font-baker host, font-baker Wasm, and shaper Wasm report 584,223 minified, 13,994 minified, 47,571 minified, 8,274 minified, 1,073,628 raw, and 1,195,483 raw bytes respectively. Their gzip sizes are 137,957, 6,089, 13,242, 2,610, 386,250, and 465,801 bytes. A fresh same-host exact-main comparison puts the candidate browser core at +0.60% raw/+0.87% gzip, shaper Wasm at +0.93% raw/+1.18% gzip, and Three adapter at +0.51% raw/+0.72% gzip. Those three release-facing payloads remain inside their reviewed ceilings, but the positive deltas are reported rather than called free. Several small optional host graphs move by larger percentages: the runtime-bake Worker is +6.71% raw/+7.61% gzip and the Slug baker host is +5.34%/+6.32%; their absolute deltas and ceilings remain independently visible in the generated record. Bitmap, MTSDF, and Slug baker hosts measure 4,876, 5,597, and 4,411 gzip bytes; their Wasm modules measure 231,072, 215,539, and 183,643 gzip bytes. Static Node project discovery is excluded from the direct font-baker host graph, and dynamic raster modules are excluded from the initial Worker graph because each has its own independently visible row. Bitmap-only and MTSDF-only size entries inspect their initial module closures and fail if Slug runtime, shader, baker, or runtime-baker modules enter either graph. Paragraph layout hashes and the Codec composite hash share one implementation over the actual normalized layouts; the generator, benchmark target, unit tests, and Vitexec probes no longer maintain parallel digest logic.
 

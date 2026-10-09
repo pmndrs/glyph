@@ -61,6 +61,9 @@ sources:
   - id: native-ktx-tests
     resource: ../../../packages/glyph/tests/package/raster-ktx.test.mjs
     title: Native KTX2 reader oracle and corruption tests
+  - id: native-ktx-performance
+    resource: ../../../packages/glyph/scripts/benchmark-ktx-runtime.mts
+    title: Native KTX2 reader CPU and allocation comparison
   - id: tsl-shaders
     resource: ../../../packages/glyph/src/shaders/tsl/index.ts
     title: Raster-format shader library layer
@@ -836,6 +839,18 @@ smaller gzip. Complete Three Bitmap, MSDF, and Slug graphs each remove another 2
 bytes; their Brotli reductions are 516, 422, and 626 bytes. The root graph remains byte-identical. Initial Three graph
 raw and minified lengths are unchanged because the KTX reader is lazy; compression can move slightly when dynamic-chunk
 references change, so the complete graph is the application-facing comparison.
+
+The package-owned `glyph:ktx-runtime-performance` workflow compares the successful path of `ktx-parse` 1.1.0 plus the
+exact Glyph native-image policy from `f97d17be5` with the bounded reader at `1959e9982`. It authenticates and extracts
+all twelve KTX2 pages from the checked-in Inter Bitmap, MSDF, and Slug LFS artifacts before timing. Its six-format suite
+uses one real R8, RGBA8, and RGBA16F page plus independently serialized BC4, EAC R11, and ASTC containers because the
+repository has no compressed KTX2 fixture. Both implementations must return the same payload bytes, buffer, and byte
+offset. On Node 24.18.0 and Apple M2 Pro, fresh-process module load plus one real R8 validation measured 2.024 ms for
+`ktx-parse` and 1.033 ms for the native reader, a 1.96× speedup excluding process launch, fixture work, and I/O. Warm
+medians were 545.7 versus 120.9 ns/validation across six formats (4.51×) and 595.8 versus 133.1 ns across the twelve
+real pages (4.48×). V8 allocation sampling over 120,000 six-format validations observed 2,443.3 versus 196.7 sampled
+bytes/validation, a 91.95% reduction; this is statistical profiler evidence, not an exact language-level allocation
+count. The workflow serializes its complete measurement through `/private/tmp/glyph-perf-measurement.lock`.
 
 ## Glyph outlines
 
