@@ -647,6 +647,10 @@ draws, or retirements. Recordless source glyphs remain in retained semantic stat
 permutation exactly as they are from Codec output. Any incompatible topology falls back to ordinary retained compilation.
 The packed-artifact Labs case over 1,000 labels measured 6.62 ms to 3.85 ms p50 (-41.8%, p=.002) with the other 18 matched
 benchmarks neutral.
+An active paragraph with no authored text, style, constraint, or inline-object span skips paragraph preparation when it
+also has no pending staged state. A speculative measurement query leaves staged paragraph state, so the next ordinary
+frame still prepares that paragraph to resolve the transaction even when the frame edits only a sibling. Codec and
+font-binding invalidation remain gather concerns; this preparation skip adds no alternate gather or publication path.
 Core preflights uniqueness only when a paragraph is created or its base lifecycle order changes, and validates the final
 nonremoved desired set rather than each update in isolation. Atomic base-order swaps therefore remain valid, duplicate
 final slots fail before serialization, and rank-only Billboard frames avoid the scan entirely; Rust retains the same
