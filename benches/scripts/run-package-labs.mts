@@ -16,6 +16,7 @@ import {
   labsRunNames,
   type LabsResultRole,
   readLabsResult,
+  timingModeDifferences,
   timingModeMismatches,
 } from './support/labs-result.mts';
 import { parseLabsComparison, renderLabsSummary, writeLabsSummary } from './support/labs-summary.mts';
@@ -126,7 +127,7 @@ try {
     )}\n`,
   );
   if (comparison !== undefined && baseline !== undefined) {
-    await publishSummary(comparison, candidateRun.result, baseline, candidate);
+    await publishSummary(comparison, baselineRun?.result, candidateRun.result, baseline, candidate);
   }
   process.stdout.write(`Labs artifacts: ${output}\n`);
 } finally {
@@ -136,6 +137,7 @@ try {
 /** The summary is a convenience view of finished results, so a failure here warns instead of failing the benchmark. */
 async function publishSummary(
   comparison: string,
+  baselineResult: unknown,
   candidateResult: unknown,
   baseline: InstalledArtifact,
   candidate: InstalledArtifact,
@@ -149,7 +151,13 @@ async function publishSummary(
         suite: options.suite,
         baseline: artifactLabel(baseline),
         candidate: artifactLabel(candidate),
-        comparison: parseLabsComparison(comparison, labsRunNames(candidateResult)),
+        comparison: parseLabsComparison(
+          comparison,
+          labsRunNames(candidateResult),
+          baselineResult === undefined
+            ? []
+            : timingModeDifferences(baselineResult, candidateResult).map(({ name }) => name),
+        ),
       });
     await writeLabsSummary(markdown, output, process.env);
   } catch (error) {

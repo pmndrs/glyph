@@ -45,7 +45,11 @@ const statusOf = { '▲': 'faster', '▼': 'slower', '■': 'neutral' } as const
  * Reads the report `labs compare` prints. Labs truncates names to 36 columns, so `runNames` (the candidate result's full
  * run names, in report order) restores each one; a name with no match keeps its printed form.
  */
-export function parseLabsComparison(report: string, runNames: readonly string[]): LabsComparison {
+export function parseLabsComparison(
+  report: string,
+  runNames: readonly string[],
+  excludedTimingNames: readonly string[] = [],
+): LabsComparison {
   const unused = [...runNames];
   const fullName = (printed: string): string => {
     if (!printed.endsWith('…')) return printed;
@@ -88,9 +92,13 @@ export function parseLabsComparison(report: string, runNames: readonly string[])
       ci: match[7]!,
     });
   }
+  const excluded = new Set(excludedTimingNames);
   return {
-    rows,
-    skipped: skipped.map(({ name, reason }) => ({ name: fullName(name), reason })),
+    rows: rows.filter((row) => !excluded.has(row.name)),
+    skipped: [
+      ...skipped.map(({ name, reason }) => ({ name: fullName(name), reason })),
+      ...rows.filter((row) => excluded.has(row.name)).map(({ name }) => ({ name, reason: 'timing-mode mismatch' })),
+    ],
     warnings,
   };
 }

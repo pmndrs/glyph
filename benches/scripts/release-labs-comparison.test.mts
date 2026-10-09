@@ -6,6 +6,8 @@ import { test } from 'node:test';
 
 import { packageLabsBaseline } from './support/package-labs-suite.mts';
 import { validateSavedPackageLabs } from './support/saved-package-labs.mts';
+import { labsRunNames, timingModeDifferences, timingModeMismatches } from './support/labs-result.mts';
+import { parseLabsComparison, renderLabsSummary } from './support/labs-summary.mts';
 
 test('pins manual release comparisons while preserving push and PR baselines', () => {
   assert.equal(
@@ -61,4 +63,48 @@ test('rejects saved candidate benchmark failures', () => {
     files: [{ file: 'bad.bench.ts', benchmarks: [{ runs: [{ name: 'bad', error: 'failed' }] }] }],
   };
   assert.throws(() => validateSavedPackageLabs(manifest, failed, expected), /benchmark error/u);
+});
+
+test('excludes incompatible timing modes from counts and plots while preserving comparable rows', () => {
+  const name = 'write one paragraph and text mutation';
+  const result = (batch: boolean) => ({
+    files: [
+      {
+        file: 'request-arena.bench.ts',
+        benchmarks: [
+          {
+            alias: 'write',
+            runs: [
+              { name, stats: { plan: { batch } } },
+              { name: 'comparable control', stats: { plan: { batch: true } } },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  const baseline = result(true);
+  const candidate = result(false);
+  const report = [
+    `  ▼ ${name} 11.28µs 60.63µs +437.4% +0.0% <.001 +396.7..+476.9%`,
+    '  ■ comparable control 1.00ms 1.00ms +0.0% +0.0% 1.000 -1.0..+1.0%',
+  ].join('\n');
+  assert.deepEqual(timingModeMismatches(baseline, candidate), [
+    `request-arena.bench.ts / write / ${name}: baseline batched, candidate single-call`,
+  ]);
+  const comparison = parseLabsComparison(
+    report,
+    labsRunNames(candidate),
+    timingModeDifferences(baseline, candidate).map((difference) => difference.name),
+  );
+  assert.deepEqual(
+    comparison.rows.map((row) => row.name),
+    ['comparable control'],
+  );
+  assert.deepEqual(comparison.skipped, [{ name, reason: 'timing-mode mismatch' }]);
+  const summary = renderLabsSummary({ suite: 'full', baseline: '0.1.0', candidate: 'main', comparison });
+  assert.match(summary, /0 faster · 0 slower · 1 neutral · 1 skipped/u);
+  assert.match(summary, /timing-mode mismatch/u);
+  assert.doesNotMatch(summary, /437\.4|60\.63/u);
+  assert.equal(parseLabsComparison(report, labsRunNames(candidate)).rows.length, 2);
 });

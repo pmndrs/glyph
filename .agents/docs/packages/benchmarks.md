@@ -854,6 +854,10 @@ and candidate timings, deltas, confidence intervals, and cases that cannot be co
 performance improved. Record this full comparison against the previous stable release before publishing a release,
 and retain its exact source commit and artifact identities with the release notes.
 
+The summary excludes workloads whose saved Labs plans use different timing modes (batched versus single-call).
+They remain listed as skipped with a timing-mode mismatch reason, rather than entering regression counts or plots.
+Raw comparison artifacts are preserved for inspection.
+
 Locally, use `pnpm scripts run benchmark:labs-package -- --baseline @pmndrs/glyph@0.1.0 --candidate <exact-package.tgz>
 --suite full --blocks 8 --output <report-directory>`. This runs the same harness against both installed packages; it
 does not build workspace source. Report individual workloads and absolute changes rather than averaging unrelated
