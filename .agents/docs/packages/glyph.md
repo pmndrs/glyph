@@ -128,8 +128,8 @@ sources:
     resource: https://github.com/Chlumsky/msdfgen/blob/v1.13/main.cpp
     title: Pinned msdfgen CLI scanline and error-correction configuration
 generated:
-  by: openai-codex/gpt-6
-  at: '2026-09-24T20:41:15Z'
+  by: openai-codex/gpt-5
+  at: '2026-10-09T08:54:30Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -1516,12 +1516,24 @@ replacement because the wire contract has no partial immutable-metadata patch. T
 remains open; this change removes redundant serialization and host reconciliation for the compatible patch-only class
 without adding a scheduler, cache, reconciliation system, or public API.
 
+Ordered retained preparation now also uses the package-owned semantic change mask to identify foreground-paint,
+region/flow, indexed-transform-selection, and text-effect changes that cannot alter `PlanGlyph` display-list metadata.
+When that proof and the preceding exact storage-binding proof both hold, an ordered plan preserves the accepted
+primitive/draw tables through commit and skips rebuilding resource, buffer, primitive, and draw records. Checkpoints,
+independent compositing, unknown or missing masks, identity/geometry/cluster/placement changes, topology or storage-key
+changes, buffer recreation or growth, and pending retirement all retain complete compilation. A focused 1,000-glyph
+single-draw case proves this branch does not walk the accepted draw span, but retained topology still confirms every
+glyph and rebuilds root-wide pending instance state. Overall preparation therefore remains root-scaled; no latency gain
+or edit-sized gate closure is claimed until the serialized Labs measurement owned by the parent review.
+
 The retained-publication regression suite replays emitted allocation/write/retirement records into a test host and
-compares active buffer bytes and draw metadata against forced full checkpoints over 4,096 deterministic mutation steps.
-The two storage policies cover content edits, no-ops, metadata changes, resources, capacity growth, removal, reordering,
-empty roots, and rejected preparations followed by retries. The oracle bypasses both retained topology and binding
-elision, while focused tests still own exact patch ranges and rejection semantics. Run the Rust engine and authenticated
-outline/Unicode tests with `pnpm scripts run glyph:shaper-tests`, optionally passing a test-name filter.
+compares active buffer bytes and draw metadata against both forced full checkpoints and fresh cold compilers over 4,096
+deterministic mutation steps. The two storage policies cover content edits, no-ops, metadata changes, resources, capacity
+growth, insertion, removal, reordering, empty roots, periodic checkpoints, and rejected preparations followed by retries.
+The oracles bypass retained topology and binding elision; focused cases cover later draw entries, a 1,000-record shared
+draw, draw-boundary split/merge, independent-order fallback, resource lifetime, exact patch ranges, and rejection
+semantics. Run the Rust engine and authenticated outline/Unicode tests with `pnpm scripts run glyph:shaper-tests`,
+optionally passing a test-name filter.
 
 Three retains pending attribute upload ranges until its renderer consumes them. Consecutive Rust publications and
 presentation-origin restoration before rendering coalesce overlapping or adjacent ranges instead of clearing earlier

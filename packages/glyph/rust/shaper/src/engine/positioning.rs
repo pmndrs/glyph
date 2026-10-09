@@ -6725,6 +6725,26 @@ mod tests {
     }
 
     #[test]
+    fn semantic_change_mask_abi_marks_instance_only_lanes_and_revision() {
+        let previous = fixture_position_results(0, 3, |_, _, _| {});
+        let mut next = fixture_position_results(0, 3, |_, _, _| {});
+        for field in [0, 2, 3, 4] {
+            next.semantic_u32[field][0] ^= 1;
+        }
+        next.text_effects = true;
+        let expected = (1 << 8) | (1 << 10) | (1 << 11) | (1 << 12) | SEMANTIC_EFFECTS_CHANGE;
+
+        assert_eq!(next.semantic_change_mask(0, &previous, 0), expected);
+        next.semantic_change_masks.resize(next.glyphs.len(), 0);
+        let mut next_revision = 41;
+        next.assign_content_revision(0, &previous, Some(0), &mut next_revision)
+            .unwrap();
+        assert_eq!(next.semantic_change_masks[0], expected);
+        assert_eq!(next.glyphs[0].content_revision, 41);
+        assert_eq!(next_revision, 42);
+    }
+
+    #[test]
     fn converged_lines_assign_revisions_only_inside_the_recomposed_glyph_range() {
         let glyph = |stable_id, revision| LayoutGlyph {
             stable_id,
