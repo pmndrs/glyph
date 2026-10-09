@@ -51,10 +51,9 @@ export type TransformRealization =
 
 export interface ReusedDrawUpdate {
   readonly mesh: THREE.Mesh;
-  readonly batchScope: THREE.Object3D | undefined;
+  readonly visible: boolean;
   readonly recordCount: number;
   readonly recordIndex: number;
-  readonly transformId: number;
   readonly primitiveKind: 'decoration' | 'glyph';
   readonly matrixAutoUpdate: boolean;
   readonly renderOrder: number;
@@ -84,6 +83,7 @@ export interface PreparedDrawReplacement {
   readonly reusedUpdates: readonly ReusedDrawUpdate[];
   readonly activeTransformIndices: ReadonlySet<number>;
   readonly directDrawsByTransform: ReadonlyMap<number, THREE.Mesh[]>;
+  readonly batchDrawsByScope: WeakMap<THREE.Object3D, THREE.Mesh[]>;
 }
 
 export interface PreparationContext {

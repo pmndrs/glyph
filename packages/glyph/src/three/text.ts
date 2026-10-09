@@ -532,10 +532,15 @@ export class ThreeRootHost {
     if (this.#bindScene(texts)) this.#commitTraversal(false);
   }
 
-  /** @internal Publish a directly observed TextGroup presentation change. */
-  observeGroupPresentation(): void {
+  /** @internal Publish directly observed TextGroup presentation and synchronize its retained draw scope. */
+  observeGroupPresentation(group: TextGroup): void {
     if (this.#disposed || this.#binding === undefined) return;
-    this.#commitTraversal(true);
+    const renderOrderChanged = observeTextGroupRenderOrder(group);
+    if (this.#renderer.hasBatchVisibilityScope(group)) {
+      const visible = this.visible(group);
+      if (observeTextGroupVisibility(group, visible)) this.#renderer.synchronizeBatchVisibility(group, visible);
+    }
+    if (renderOrderChanged) this.#commitTraversal(true);
   }
 
   /** @internal Stable snapshot of every registered member used when a new Text enters this root. */
@@ -1109,12 +1114,13 @@ export function updateTextFromFramework<Format extends RasterFormatMetadata>(
   return reconciler.update(text, update);
 }
 
-interface TextGroupRenderOrderState {
+interface TextGroupObservationState {
   stated: number | undefined;
   observed: number;
+  visible: boolean | undefined;
 }
 
-const textGroupRenderOrders = new WeakMap<TextGroup, TextGroupRenderOrderState>();
+const textGroupObservations = new WeakMap<TextGroup, TextGroupObservationState>();
 const textGroupRoots = new WeakMap<TextGroup, ThreeRootHost>();
 const textPresentations = new WeakMap<Text<RasterFormatMetadata>, TextPresentation>();
 
@@ -1158,9 +1164,10 @@ export class TextGroup extends THREE.Object3D {
       if (!Number.isFinite(options.renderOrder)) throw new RangeError('TextGroup renderOrder must be finite');
       this.renderOrder = options.renderOrder;
     }
-    textGroupRenderOrders.set(this, {
+    textGroupObservations.set(this, {
       stated: options.renderOrder,
       observed: this.renderOrder,
+      visible: undefined,
     });
     textGroupRoots.set(this, host);
   }
@@ -1219,14 +1226,14 @@ export class TextGroup extends THREE.Object3D {
 
   override updateMatrixWorld(force?: boolean): void {
     super.updateMatrixWorld(force);
-    if (this.#disposed || !observeTextGroupRenderOrder(this)) return;
-    this.#root.observeGroupPresentation();
+    if (this.#disposed) return;
+    this.#root.observeGroupPresentation(this);
   }
 
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    textGroupRenderOrders.delete(this);
+    textGroupObservations.delete(this);
     textGroupRoots.delete(this);
     if (!this.#root.disposed) this.#root.invalidateMaterial();
   }
@@ -2166,7 +2173,7 @@ function resolveTextPresentation(text: Text<RasterFormatMetadata>): TextPresenta
 }
 
 function statedTextGroupRenderOrder(group: TextGroup): number | undefined {
-  const state = textGroupRenderOrders.get(group);
+  const state = textGroupObservations.get(group);
   if (state === undefined) throw new Error('TextGroup render-order state is unavailable');
   observeTextGroupRenderOrder(group, state);
   return state.stated;
@@ -2174,13 +2181,21 @@ function statedTextGroupRenderOrder(group: TextGroup): number | undefined {
 
 function observeTextGroupRenderOrder(
   group: TextGroup,
-  state: TextGroupRenderOrderState | undefined = textGroupRenderOrders.get(group),
+  state: TextGroupObservationState | undefined = textGroupObservations.get(group),
 ): boolean {
   if (state === undefined) throw new Error('TextGroup render-order state is unavailable');
   if (state.observed === group.renderOrder) return false;
   if (!Number.isFinite(group.renderOrder)) throw new RangeError('TextGroup renderOrder must be finite');
   state.observed = group.renderOrder;
   state.stated = group.renderOrder;
+  return true;
+}
+
+function observeTextGroupVisibility(group: TextGroup, visible: boolean): boolean {
+  const state = textGroupObservations.get(group);
+  if (state === undefined) throw new Error('TextGroup observation state is unavailable');
+  if (state.visible === visible) return false;
+  state.visible = visible;
   return true;
 }
 

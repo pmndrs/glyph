@@ -4,7 +4,6 @@ import { visibleBelowRoot } from './internal/scene-tree.js';
 
 export interface ThreeTransformState {
   readonly renderObject: THREE.Object3D;
-  readonly draws: readonly THREE.Mesh[];
   readonly activeTransformIndices: ReadonlySet<number>;
   readonly directDrawsByTransform: ReadonlyMap<number, readonly THREE.Mesh[]>;
   readonly transforms: ReadonlyMap<number, THREE.Object3D>;
@@ -18,14 +17,6 @@ export class ThreeTransformSynchronizer {
   readonly #relativeTransform = new THREE.Matrix4();
 
   sync(state: ThreeTransformState, transformIds: Iterable<number>, worldMatricesCurrent: boolean): number {
-    for (const draw of state.draws) {
-      draw.renderOrder = (draw.userData.pmndrsGlyphRenderOrder as number | undefined) ?? draw.renderOrder;
-      const transformId = (draw.userData.pmndrsGlyphTransformId as number | undefined) ?? 0;
-      const batchScope = draw.userData.pmndrsGlyphBatchScope as THREE.Object3D | undefined;
-      if (transformId === 0) {
-        draw.visible = batchScope === undefined || state.visibleObject === undefined || state.visibleObject(batchScope);
-      }
-    }
     const target = state.transformAttribute.array as Float32Array;
     let rootPrepared = false;
     let changedTransforms = 0;

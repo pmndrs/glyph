@@ -25,6 +25,7 @@ interface DrawOwner {
   readonly renderObject: THREE.Object3D;
   readonly pixelSnapping?: boolean;
   readonly renderOrderBase?: number;
+  visibleObject?(object: THREE.Object3D): boolean;
   prepareGlyphStorage?(storageKey: string, capacityRecords: number): void;
   glyphStorage?(storageKey: string):
     | Readonly<{
@@ -76,6 +77,8 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
   const transformIds = new WeakMap<THREE.Object3D, number>();
   for (const [recordIndex, object] of context.transforms) transformIds.set(object, recordIndex);
   const activeTransformIndices = new Set<number>();
+  const directDrawsByTransform = new Map<number, THREE.Mesh[]>();
+  const batchDrawsByScope = new WeakMap<THREE.Object3D, THREE.Mesh[]>();
   let indexedTransformsPrepared = false;
   const reused = new Set<THREE.Mesh>();
   let drawIndex = 0;
@@ -94,6 +97,7 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
       }
       const draw = child.value.input;
       const batchScope = threeBatchScope(draw.material);
+      const visible = batchScope === undefined || owner.visibleObject === undefined || owner.visibleObject(batchScope);
       const transformId = child.kind === 'instance' ? (transformIds.get(child.transform!) ?? 0) : 0;
       const byCodecId = new Map<ThreeBufferBindingId, RetainedBuffer>();
       for (const binding of draw.buffers) {
@@ -147,44 +151,41 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
           decoration ? 'placement:none' : `placement:${context.placementTable?.storageKey ?? 'missing'}`,
         );
         const reusable = previous.get(key)?.shift();
+        let mesh: THREE.Mesh;
         if (reusable !== undefined) {
           reusedUpdates.push({
             mesh: reusable,
-            batchScope,
+            visible,
             recordCount: span.recordCount,
             recordIndex: span.recordIndex,
-            transformId,
             primitiveKind: decoration ? 'decoration' : 'glyph',
             matrixAutoUpdate: transform.kind !== 'direct',
             renderOrder: renderOrderBase + drawIndex,
             depthKey: draw.depthKey,
           });
           reused.add(reusable);
-          next.push(reusable);
-          nextKeys.push(key);
-          drawIndex += 1;
-          continue;
+          mesh = reusable;
+        } else {
+          const geometry = realizeGeometry(drawGeometry, span.recordCount);
+          for (const buffer of byCodecId.values()) geometry.setAttribute(buffer.threeAttributeName, buffer.attribute);
+          const glyphStorage = stableIds === undefined ? undefined : owner.glyphStorage?.(glyphStorageKey(stableIds));
+          if (glyphStorage !== undefined) {
+            geometry.setAttribute('_pmndrsGlyphInstanceTransforms', glyphStorage.transforms);
+          }
+          if (transform.kind === 'indexed') geometry.setAttribute('_pmndrsGlyphTransforms', context.transformAttribute);
+          mesh = new THREE.Mesh(geometry, material);
+          mesh.userData.pmndrsGlyphRunStart = span.recordIndex;
+          mesh.userData.pmndrsGlyphPrimitiveKind = decoration ? 'decoration' : 'glyph';
+          mesh.userData.pmndrsGlyphDepthKey = draw.depthKey;
+          mesh.matrixAutoUpdate = transform.kind !== 'direct';
+          mesh.visible = visible;
+          mesh.frustumCulled = false;
+          mesh.renderOrder = renderOrderBase + drawIndex;
         }
-
-        const geometry = realizeGeometry(drawGeometry, span.recordCount);
-        for (const buffer of byCodecId.values()) geometry.setAttribute(buffer.threeAttributeName, buffer.attribute);
-        const glyphStorage = stableIds === undefined ? undefined : owner.glyphStorage?.(glyphStorageKey(stableIds));
-        if (glyphStorage !== undefined) {
-          geometry.setAttribute('_pmndrsGlyphInstanceTransforms', glyphStorage.transforms);
-        }
-        if (transform.kind === 'indexed') geometry.setAttribute('_pmndrsGlyphTransforms', context.transformAttribute);
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.userData.pmndrsGlyphRunStart = span.recordIndex;
-        mesh.userData.pmndrsGlyphBatchScope = batchScope;
-        mesh.userData.pmndrsGlyphTransformId = transformId;
-        mesh.userData.pmndrsGlyphPrimitiveKind = decoration ? 'decoration' : 'glyph';
-        mesh.userData.pmndrsGlyphDepthKey = draw.depthKey;
-        mesh.matrixAutoUpdate = transform.kind !== 'direct';
-        mesh.frustumCulled = false;
-        mesh.renderOrder = renderOrderBase + drawIndex;
-        mesh.userData.pmndrsGlyphRenderOrder = mesh.renderOrder;
         next.push(mesh);
         nextKeys.push(key);
+        if (transformId !== 0) appendIndexedDraw(directDrawsByTransform, transformId, mesh);
+        else if (batchScope !== undefined) appendIndexedDraw(batchDrawsByScope, batchScope, mesh);
         drawIndex += 1;
       }
     }
@@ -200,14 +201,6 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
     throw error;
   }
 
-  const directDrawsByTransform = new Map<number, THREE.Mesh[]>();
-  for (const draw of next) {
-    const transformId = (draw.userData.pmndrsGlyphTransformId as number | undefined) ?? 0;
-    if (transformId === 0) continue;
-    const draws = directDrawsByTransform.get(transformId) ?? [];
-    draws.push(draw);
-    directDrawsByTransform.set(transformId, draws);
-  }
   return {
     changed: true,
     root: options.root,
@@ -218,7 +211,21 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
     reusedUpdates,
     activeTransformIndices,
     directDrawsByTransform,
+    batchDrawsByScope,
   };
+}
+
+function appendIndexedDraw<Key extends object | number>(
+  index: {
+    get(key: Key): THREE.Mesh[] | undefined;
+    set(key: Key, draws: THREE.Mesh[]): unknown;
+  },
+  key: Key,
+  draw: THREE.Mesh,
+): void {
+  const draws = index.get(key);
+  if (draws === undefined) index.set(key, [draw]);
+  else draws.push(draw);
 }
 
 function prepareOwnerGlyphStorage(buffers: ReadonlyMap<ThreeBufferBinding, RetainedBuffer>, owner: DrawOwner): void {
