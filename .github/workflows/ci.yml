@@ -241,10 +241,11 @@ jobs:
         env:
           SIZE_REPORT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           SIZE_REPORT_BASE_PATH: ${{ runner.temp }}/glyph-package-size-base.json
+          SIZE_REPORT_ARTIFACT_PATH: ${{ github.workspace }}/.package-size/base-artifact/package-size-baseline.json
         run: >-
           pnpm scripts run ci:package-size-baseline -- extract
           --commit="$SIZE_REPORT_BASE_SHA"
-          --artifact=.package-size/base-artifact/package-size-baseline.json
+          --artifact="$SIZE_REPORT_ARTIFACT_PATH"
           --output="$SIZE_REPORT_BASE_PATH"
 
       - name: Check out base for first-run fallback

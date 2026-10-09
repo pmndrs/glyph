@@ -18,8 +18,8 @@ describe('package-size baseline artifact', () => {
 
   it('rejects invalid measurement bytes from a downloaded report', () => {
     const invalid = structuredClone(report);
-    const entry = invalid.entries.find((entry) => entry.id === 'browser-core')!;
-    entry.gzipBytes = -1;
+    const measurement = invalid.entries.find((entry) => entry.id === 'browser-core')!;
+    measurement.gzipBytes = -1;
     expect(() => createPackageSizeBaseline(commit, invalid)).toThrow(/positive measured gzip/);
   });
 
