@@ -14,8 +14,19 @@ name: gh-stack
 # gh-stack
 
 A stack is a linear dependency chain rooted on the repository's remote default branch. Each branch maps to one PR whose
-base is the branch below it. Use gh stack for the whole lifecycle; ordinary push, PR creation, and PR merge commands do
+base is the branch below it. Use gh stack for an actual stack's whole lifecycle; ordinary push, PR creation, and PR merge commands do
 not preserve stack state.
+
+## Independent pull requests
+
+Apply stack commands only to actual dependent PRs or an existing GitHub stack. An independent PR targeting the remote
+default branch uses the ordinary GitHub PR workflow, including `gh pr merge <number> --repo <owner/repo>
+--match-head-commit <reviewed-sha>` with an explicit merge method after required checks and appropriate benchmarks pass.
+
+Local `gh stack` tracking of one feature branch does not establish a submitted GitHub stack. Inspect the PR's base,
+dependencies, and remote stack membership. Do not create a stack, add a dummy layer, or block an independent merge because
+`gh stack merge` reports that the PR is not stacked. Preserve actual stack membership; ordinary PR commands are not a
+workaround for a failed real-stack merge.
 
 ## Invariants
 
@@ -24,7 +35,7 @@ not preserve stack state.
 - Use deliberate git add and Conventional Commits. A branch may contain several commits, but one coherent review concern.
 - Use gh stack submit --auto; add --remote when the remote is not unambiguous.
 - Use gh stack view --json; the unflagged command opens a TUI.
-- Use gh stack merge with --yes; never substitute gh pr merge.
+- Use gh stack merge with --yes for actual stacks; never substitute gh pr merge for a real-stack merge.
 - Foundational work belongs below dependent work. Modify the lowest branch that owns an invariant, then rebase upward.
 - Do not share a branch across stacks. Disambiguation failures are structural errors, not prompts to bypass the tool.
 - Never destroy or rewrite user work to recover a stack. Resolve conflicts deliberately or abort the stack operation.
@@ -39,8 +50,8 @@ gh stack <command> --help rather than relying on copied command documentation.
     git symbolic-ref --short refs/remotes/origin/HEAD
     gh stack view --json
 
-An existing checkout may already be tracked by a stack even when it contains only one feature branch. Preserve that state
-and submit through the stack instead of recreating the PR.
+An existing checkout may have local stack tracking even with only one feature branch. Verify actual remote membership
+and dependencies before choosing a workflow. Local tracking alone does not require stack submission or merging.
 
 ## Common workflows
 
@@ -91,7 +102,8 @@ it; merge queues may enqueue the PRs instead.
 
 ## Failure handling
 
-- Exit 2: the checkout is not in a stack; inspect before initializing or adopting one.
+- Exit 2: inspect dependencies and remote membership. Use ordinary PR commands for an independent PR; initialize only an
+  intended dependent stack.
 - Exit 3: resolve the reported rebase conflicts, then continue or abort.
 - Exit 6: a branch belongs to multiple stacks; check out an unambiguous branch explicitly.
 - Exit 7: finish or abort the existing rebase before another stack operation.
