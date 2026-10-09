@@ -112,7 +112,7 @@ export function sizeLimitRows(
 export function formatCompactSizeLimitMarkdown(
   baseRows: readonly SizeLimitRow[],
   currentRows: readonly SizeLimitRow[],
-  iconBaseUrl = 'https://raw.githubusercontent.com/pmndrs/glyph/main/.github/assets/package-size',
+  iconBaseUrl = 'https://media.githubusercontent.com/media/pmndrs/glyph/main/.github/assets/package-size',
 ): string {
   const definitions = new Map(summaryDefinitions.map((definition) => [definition.id, definition]));
   const base = new Map(baseRows.map((row) => [row.name, row.size]));

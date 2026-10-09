@@ -3,7 +3,7 @@ import { appendFile, readFile } from 'node:fs/promises';
 import { formatCompactSizeLimitMarkdown, sizeLimitRows } from './package-size-summary.ts';
 
 const heading = '## size-limit report 📦 ';
-const iconBaseUrl = `https://raw.githubusercontent.com/${requiredEnvironment('SIZE_REPORT_ASSET_REPOSITORY')}/${requiredEnvironment('SIZE_REPORT_ASSET_REF')}/.github/assets/package-size`;
+const iconBaseUrl = `https://media.githubusercontent.com/media/${requiredEnvironment('SIZE_REPORT_ASSET_REPOSITORY')}/${requiredEnvironment('SIZE_REPORT_ASSET_REF')}/.github/assets/package-size`;
 const current = sizeLimitRows(await readReport('SIZE_REPORT_CURRENT_PATH'));
 const base = sizeLimitRows(await readReport('SIZE_REPORT_BASE_PATH'), { allowMissing: true });
 const body = `${heading}\n${formatCompactSizeLimitMarkdown(base, current, iconBaseUrl)}`;

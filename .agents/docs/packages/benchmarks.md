@@ -910,7 +910,7 @@ artifact contents fail visibly. `benchmark:package-size -- --output=<path>` prin
 report; it does not refresh the release display snapshot. `release:size:generate` remains the deliberate snapshot writer.
 This is a reporting cache, with no restored size ceilings or snapshot freshness gate. The compact report embeds matching 12px SVG arrows from
 `.github/assets/package-size`: red/up for increases and green/down for decreases, after each percentage. CI pins
-image URLs to the PR head repository and commit so fork assets and historical reports resolve correctly. Sub-rounding
+LFS media image URLs to the PR head repository and commit so fork assets and historical reports resolve correctly. Sub-rounding
 changes display `<0.01%` with their direction rather than appearing unchanged. Equal byte counts remain `0%`, and a
 missing baseline remains `new`.
 
