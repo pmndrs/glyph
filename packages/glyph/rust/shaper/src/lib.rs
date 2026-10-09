@@ -24,6 +24,8 @@ extern crate std;
 #[cfg(test)]
 std::thread_local! {
     pub(crate) static SHAPINGS: Cell<usize> = const { Cell::new(0) };
+    pub(crate) static SHAPED_UNITS: Cell<usize> = const { Cell::new(0) };
+    pub(crate) static SPARSE_BOUNDARY_VISITS: Cell<usize> = const { Cell::new(0) };
 }
 use harfrust::{
     BufferClusterLevel, BufferFlags, Direction, Feature, FontRef, GlyphExtents, Language,
@@ -344,7 +346,16 @@ impl ShaperRegistry {
         consume: impl FnOnce(&harfrust::GlyphBuffer) -> Result<T, u32>,
     ) -> Result<T, u32> {
         #[cfg(test)]
-        SHAPINGS.with(|count| count.set(count.get() + 1));
+        {
+            SHAPINGS.with(|count| count.set(count.get() + 1));
+            SHAPED_UNITS.with(|count| {
+                count.set(
+                    count
+                        .get()
+                        .saturating_add(range.item_end.saturating_sub(range.item_start) as usize),
+                );
+            });
+        }
         let index = self.font_index(font_handle).ok_or(STATUS_FONT_MISSING)?;
         let font = &mut self.fonts[index];
         let shaped = shape_segment(

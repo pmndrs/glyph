@@ -1260,6 +1260,23 @@ paragraph queries. The writer respects the arena view's byte offset and clears r
 requests retain minimal text mutations; removal requests include only paragraphs previously published. Output growth
 invalidates prior borrowed results and rewrites the request before retrying, preserving the existing acceptance fence.
 
+Complete public text assignment still compiles to at most one scalar-aligned UTF-16 replacement; JavaScript does not
+allocate a precise edit table or expose a separate edit API. For a same-length replacement, the retained Rust engine
+compares accepted and candidate UTF-16 two units at a time within that validated replacement range, keeps identities at
+equal positions, and records only the changed islands for downstream invalidation. One logical-order traversal of the
+retained clusters derives every dirty window and glyph cursor for both LTR and RTL runs. One scope-driven executor then
+handles bounded windows or a whole run and collapses its chunks back into the canonical retained shaped run. Window
+splicing is admitted only when retained and new HarfRust `UNSAFE_TO_CONCAT` flags prove the boundaries safe with full
+source-run context; font fallback, unsafe boundaries, topology changes, and unequal lengths use the broad scopes or
+existing fallback pipeline. Multiple internal islands deliberately take a full flow-layout rebuild because line
+convergence currently accepts only one dirty offset. The retained storage remains compact vectors rather than a claimed
+rope, pending end-to-end transfer and comparison measurements. Public Three integration coverage repeatedly assigns full
+strings through `Text.set`, publishes both retained and freshly created `Text` objects, and compares every public semantic
+glyph and line column except retained glyph identities across safe-boundary RTL, ligature/combining/bidi/surrogate risk,
+font-fallback entry and exit, and renderer rejection followed by explicit retry. A two-paragraph lifecycle regression
+also expands one public `Text`, performs a sparse full assignment, shrinks it through surrogate and scalar values, changes
+its layout, and proves an unchanged constrained sibling still measures and publishes normally.
+
 ## Legacy-path and duplication audit
 
 The Rust command buffer is the only glyph-packing implementation. Rust is also the production authority for Unicode

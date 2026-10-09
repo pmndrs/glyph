@@ -54,3 +54,19 @@ test('a measured one-character edit sends the minimal splice, not a whole-text r
     fonts.dispose();
   }
 });
+
+test('a measured full-string assignment sends one replacement spanning distant edits', { timeout }, async () => {
+  const font = await fonts.load('inter');
+  const text = 'alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|juliet';
+  const properties = { style: { fontSize: 6 }, constraints: { width: { mode: 'exact', size: 120 } }, text };
+  const mounted = mount(font, [{ properties }]);
+  try {
+    const [node] = mounted.nodes;
+    node.set({ text: 'Alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|JulieT' });
+    node.measure();
+    assert.deepEqual(textMutations(latestRequest), [{ start: 0, deleteCount: 62, insertCount: 62 }]);
+  } finally {
+    unmount(mounted);
+    fonts.dispose();
+  }
+});

@@ -442,6 +442,48 @@ impl ShapeArena {
         }
         let (selected_start, selected_end) =
             selected_start.map_or((run_start, run_start), |start| (start, selected_end));
+        self.append_glyph_range_from(
+            source,
+            run_index,
+            source_run,
+            text_start,
+            text_end,
+            selected_start,
+            selected_end,
+            text_delta,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn append_glyph_range_from(
+        &mut self,
+        source: &Self,
+        run_index: usize,
+        source_run: u32,
+        text_start: u32,
+        text_end: u32,
+        selected_start: usize,
+        selected_end: usize,
+        text_delta: i64,
+    ) -> Result<(), EngineError> {
+        if text_start > text_end || selected_start > selected_end {
+            return Err(EngineError::InvalidRequest);
+        }
+        if text_start == text_end {
+            return Ok(());
+        }
+        let run = *source
+            .runs
+            .get(run_index)
+            .ok_or(EngineError::InvalidRequest)?;
+        let run_start =
+            usize::try_from(run.glyph_start).map_err(|_| EngineError::InvalidRequest)?;
+        let run_end = run_start
+            .checked_add(usize::try_from(run.glyph_count).map_err(|_| EngineError::InvalidRequest)?)
+            .ok_or(EngineError::InvalidRequest)?;
+        if selected_start < run_start || selected_end > run_end {
+            return Err(EngineError::InvalidRequest);
+        }
         let glyph_start =
             u32::try_from(self.glyph_ids.len()).map_err(|_| EngineError::ResultTooLarge)?;
         let glyph_count = u32::try_from(selected_end - selected_start)
@@ -474,6 +516,34 @@ impl ShapeArena {
             .extend_from_slice(&source.y_offsets[selected_start..selected_end]);
         self.glyph_flags
             .extend_from_slice(&source.glyph_flags[selected_start..selected_end]);
+        Ok(())
+    }
+
+    pub(crate) fn collapse_appended_runs(
+        &mut self,
+        first_run: usize,
+        text_start: u32,
+        text_end: u32,
+    ) -> Result<(), EngineError> {
+        let appended = self
+            .runs
+            .get(first_run..)
+            .ok_or(EngineError::InvalidRequest)?;
+        let Some(first) = appended.first().copied() else {
+            return Err(EngineError::InvalidRequest);
+        };
+        let glyph_count = appended.iter().try_fold(0_u32, |total, run| {
+            total
+                .checked_add(run.glyph_count)
+                .ok_or(EngineError::ResultTooLarge)
+        })?;
+        self.runs[first_run] = ShapedRun {
+            text_start,
+            text_end,
+            glyph_count,
+            ..first
+        };
+        self.runs.truncate(first_run + 1);
         Ok(())
     }
 }

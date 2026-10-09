@@ -223,6 +223,9 @@ sources:
   - id: labs-package-workflow
     resource: ../../../benches/scripts/run-package-labs.mts
     title: Installed package artifact benchmark workflow
+  - id: labs-sparse-assignment
+    resource: ../../../benches/labs/package/sparse-assignment.bench.ts
+    title: Large retained paragraph full-assignment workloads
   - id: labs-internal-config
     resource: ../../../benches/labs-internal/labs.config.ts
     title: Workspace-only Labs benchmark configuration
@@ -307,6 +310,10 @@ published for that same push would otherwise be installed as its own baseline. M
 choice and compares with the canary. Available focused suites are `layout`, `measure`, `glyphs`, `publication`, `spans`,
 `batch`, `style`, `reflow`, `stress`, `cold`, and `edit`; `spans` isolates the 1,000-label trailing-span mutation, while
 `edit` types one character into a long Inter or Fredoka paragraph and measures it or publishes a frame.
+The `assignment` suite isolates one 18,432-unit paragraph with 8,192 alternating paint spans. It compares unchanged,
+scattered-character, and broad-character full assignments through public `Text.set()` and scene publication. Prepared
+inputs keep scene generation outside timing; untimed checks verify text, rendered glyph semantics, and draw glyph count.
+These checks are benchmark sanity checks, while independent warm-versus-cold integration tests own correctness evidence.
 `full` does not run browser observations, native/Worker profiles, or correctness and release gates.
 
 The `publication` suite includes 1,000 retained labels receiving equivalent style, layout, and constraint snapshots.
