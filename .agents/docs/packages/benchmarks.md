@@ -803,8 +803,10 @@ Run `pnpm scripts list benchmark` from the workspace root to discover current be
 CPU comparisons use two fresh-process `@pmndrs/labs` lanes. `benchmark:labs-package` installs packed or registry
 artifacts and measures the public API; its default smoke suite covers common layout, measurement, style, and retained
 publication work. Its `edit-sized` suite isolates first and last same-length, length-changing, and color-only edits in
-10-, 100-, and 1,000-label roots, plus batched and interleaved edit-read paths at 100 labels; warm setup and untimed
-semantic checks surround every timed mutation. `benchmark:edit-sized-publication-profile` installs one packed artifact
+10-, 100-, and 1,000-label roots, plus batched and interleaved edit-read paths for 100 edits in 100- and 1,000-label
+roots. Edits in the larger root are spread across its ordered labels. Untimed glyph snapshots distinguish both edited
+outputs and verify untouched labels retain their accepted output. Warm setup and untimed semantic checks surround every
+timed mutation. `benchmark:edit-sized-publication-profile` installs one packed artifact
 and optionally substitutes a named shaper Wasm, then emits a CPU profile, timing summary, and manifest for shaping,
 gather, render-plan, serialization, allocation, host-JavaScript, and other-Wasm attribution.
 `benchmark:labs-internal` is reserved for workspace-only implementation experiments that cannot ship in

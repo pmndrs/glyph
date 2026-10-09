@@ -1,3 +1,5 @@
+import { deepStrictEqual } from 'node:assert';
+
 import { assert, bench, group } from '@pmndrs/labs';
 
 import {
@@ -143,39 +145,58 @@ group('edit-sized root publication @publication @edit-sized @edit', () => {
     }
   }
 
-  for (const interleaved of [false, true]) {
-    const mode = interleaved ? 'interleaved edit-read' : 'batched edit-read';
-    bench(`100 labels ${mode} publication @interleaved-read`, function* () {
-      const created = createLabels(100);
-      let alternate = false;
-      const publish = () => {
-        alternate = !alternate;
-        let glyphCount = 0;
-        for (const [index, label] of created.labels.entries()) {
-          label.text = alternate
-            ? `ticker ${String(index).padStart(3, '0')}`
-            : `quote! ${String(index).padStart(3, '0')}`;
-          if (interleaved) glyph.shape();
-          const glyphs = interleaved ? label.measureGlyphs() : undefined;
-          if (interleaved && glyphs === undefined) throw new Error('interleaved read did not observe committed glyphs');
-          glyphCount += glyphs?.length ?? 0;
-        }
-        if (!interleaved) {
-          glyph.shape();
-          for (const label of created.labels) {
-            const glyphs = label.measureGlyphs();
-            if (glyphs === undefined) throw new Error('batched read did not observe committed glyphs');
-            glyphCount += glyphs.length;
+  for (const count of [100, 1_000]) {
+    for (const interleaved of [false, true]) {
+      const mode = interleaved ? 'interleaved edit-read' : 'batched edit-read';
+      const edits = count === 100 ? '' : ' 100 edits';
+      bench(`${String(count)} labels${edits} ${mode} publication @interleaved-read`, function* () {
+        const created = createLabels(count);
+        const stride = count / 100;
+        const edited = created.labels.filter((_, index) => index % stride === 0);
+        const untouched = created.labels.filter((_, index) => index % stride !== 0);
+        const untouchedSnapshots = untouched.map(committedGlyphSnapshot);
+        let alternate = false;
+        const publish = () => {
+          alternate = !alternate;
+          let glyphCount = 0;
+          for (const [index, label] of edited.entries()) {
+            label.text = alternate
+              ? `ticker ${String(index).padStart(3, '0')}`
+              : `quote! ${String(index).padStart(3, '0')}`;
+            if (interleaved) glyph.shape();
+            const glyphs = interleaved ? label.measureGlyphs() : undefined;
+            if (interleaved && glyphs === undefined)
+              throw new Error('interleaved read did not observe committed glyphs');
+            glyphCount += glyphs?.length ?? 0;
           }
-        }
-        if (created.textGroup.error !== undefined) throw created.textGroup.error;
-        return glyphCount;
-      };
+          if (!interleaved) {
+            glyph.shape();
+            for (const label of edited) {
+              const glyphs = label.measureGlyphs();
+              if (glyphs === undefined) throw new Error('batched read did not observe committed glyphs');
+              glyphCount += glyphs.length;
+            }
+          }
+          if (created.textGroup.error !== undefined) throw created.textGroup.error;
+          return glyphCount;
+        };
 
-      publish();
-      const glyphCount = yield publish;
-      assert(glyphCount > 0, 'published labels must expose glyphs');
-      disposeLabels(created);
-    });
+        publish();
+        const first = edited.map(committedGlyphSnapshot);
+        publish();
+        const second = edited.map(committedGlyphSnapshot);
+        assert(
+          first.every((snapshot, index) => snapshot !== second[index]),
+          'each edited label must change glyph output',
+        );
+        const glyphCount = yield publish;
+        assert(glyphCount > 0, 'published labels must expose glyphs');
+        assert.equal(created.textGroup.textCount, count);
+        assert.equal(edited.length, 100);
+        deepStrictEqual(edited.map(committedGlyphSnapshot), alternate ? first : second);
+        deepStrictEqual(untouched.map(committedGlyphSnapshot), untouchedSnapshots);
+        disposeLabels(created);
+      });
+    }
   }
 });
