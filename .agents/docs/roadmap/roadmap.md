@@ -28,10 +28,13 @@ sources:
   - id: 'fragment-relative-reflow'
     resource: '../planning/fragment-relative-reflow.md'
     title: 'Fragment-relative reflow and LayoutRun placement'
+  - id: 'release-0-2-tracker'
+    resource: 'https://github.com/pmndrs/glyph/issues/253'
+    title: '0.2.0 release integration and evidence tracker'
 
 generated:
   by: openai-codex/gpt-6
-  at: '2026-09-24T20:29:45Z'
+  at: '2026-10-09T22:58:02Z'
 ---
 
 # Canonical implementation roadmap
@@ -56,6 +59,25 @@ renderer baseline. Their completion did not publish a release or freeze the publ
 > **First executable artifact:** build the shared interactive/headless benchmark harness before the baker, loader, shaper, paragraph engine, or raster. Each implementation milestone adds adapters and scenarios to that existing harness. The first rendered bitmap frame MUST appear there; the roadmap does not authorize a separate throwaway rendering demo that is benchmarked later.
 
 ## Implementation order
+
+### npm 0.2.0 release cut
+
+The historical v0/v1 architecture milestone names below are distinct from npm versions. The published baseline is
+0.1.0. The maintainer's current cut line is to release stable merged work as 0.2.0 once correctness and release-wide
+performance parity are established, with remaining Xi rope integration and #247 frontier work targeted at 0.3.0.
+Do not land the unvalidated preparation/rope branches to satisfy the release date. #240 remains dependent on #247's
+original edit-sized and interleaved-read acceptance; it is excluded from this release candidate.
+
+- [x] Land manual batch visibility validation and package-owned breaking-change migration guidance (#284, #281).
+- [x] Pass current main `8122d97e` full CI, including browser/packed-consumer checks and full Labs (run 37997996053).
+- [ ] Establish release-wide parity against published 0.1.0; comparison run 38001807239 reuses that pinned main result.
+- [ ] Land complete merged-feature release notes (#288), then prepare and validate the 0.2.0 manifest and stable tag.
+- [ ] Publish only after those gates pass under the maintainer's conditional release authorization.
+
+The [release tracker](https://github.com/pmndrs/glyph/issues/253) carries exact-head CI/Labs evidence and exclusions.
+Rope implementation continues in parallel through the existing preparation/publication design, preserving synchronous
+reads, assignment ergonomics and cold/full correctness oracles. Automatic off-screen culling, variable fonts and
+bindless remain deferred.
 
 Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 
