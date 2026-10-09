@@ -41,6 +41,10 @@ try {
       join(appDirectory, 'fixtures/fonts/inter-v4.1/Inter-Regular.ttf'),
       join(consumerDirectory, 'Inter-Regular.ttf'),
     ),
+    copyFile(
+      join(appDirectory, 'fixtures/rendering/inter-bitmap-16.font.glb'),
+      join(consumerDirectory, 'Inter.font.glb'),
+    ),
   ]);
   await Promise.all([
     writeFile(
@@ -54,12 +58,16 @@ try {
     writeFile(
       join(consumerDirectory, 'entry.js'),
       `import { bakeFontInWorker } from '@pmndrs/glyph/runtime-bake'
+import { glyph, bitmap } from '@pmndrs/glyph'
 try {
   const source = new Uint8Array(await (await fetch('/Inter-Regular.ttf')).arrayBuffer())
   const artifact = await bakeFontInWorker({ source, sourceUrl: location.href })
   const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', artifact))]
     .map((value) => value.toString(16).padStart(2, '0'))
     .join('')
+  const font = glyph.fontFace('/Inter.font.glb', { format: bitmap({ strikes: [16] }) })
+  await font.load()
+  font.dispose()
   await globalThis.__reportPackedResult({ hash, bytes: artifact.byteLength })
 } catch (error) {
   await globalThis.__reportPackedResult({ error: error instanceof Error ? error.stack : String(error) })
@@ -86,7 +94,12 @@ try {
   }
 
   browser = await launchProjectChromium({ headless: true });
-  const page = await browser.newPage();
+  const page = await browser.newPage({ ignoreHTTPSErrors: process.env.PORTLESS_URL !== undefined });
+  const blockedRequests: string[] = [];
+  await page.context().route(/fingerprint/i, async (route) => {
+    blockedRequests.push(route.request().url());
+    await route.abort('blockedbyclient');
+  });
   const completion = Promise.withResolvers<PackedResult>();
   const errors: string[] = [];
   page.context().on('weberror', (webError) => {
@@ -98,11 +111,17 @@ try {
     const location = message.location();
     const source = location.url === '' ? '' : ` @ ${location.url}:${String(location.lineNumber)}`;
     errors.push(`${message.text()}${source}`);
+    console.error(`${message.text()}${source}`);
   });
-  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('pageerror', (error) => {
+    errors.push(error.message);
+    completion.resolve({ error: error.message });
+  });
   page.on('response', (response) => {
     if (response.status() >= 400) {
-      errors.push(`HTTP ${String(response.status())} ${response.request().resourceType()} ${response.url()}`);
+      const message = `HTTP ${String(response.status())} ${response.request().resourceType()} ${response.url()}`;
+      errors.push(message);
+      completion.resolve({ error: message });
     }
   });
   await page.exposeFunction('__reportPackedResult', (value: PackedResult) => {
@@ -115,6 +134,18 @@ try {
     throw new Error(`${result.error}${errors.length === 0 ? '' : `\nBrowser errors:\n${errors.join('\n')}`}`);
   }
   if (errors.length > 0) throw new Error(`packed consumer browser errors: ${errors.join(' | ')}`);
+
+  const blocked = await page.evaluate(async () => {
+    try {
+      await fetch('/fingerprint-negative-control.js');
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  if (!blocked || blockedRequests.length !== 1 || !blockedRequests[0]!.endsWith('/fingerprint-negative-control.js')) {
+    throw new Error(`Blocked module URLs during installed-package loading: ${blockedRequests.join(', ')}`);
+  }
 
   const manifest = JSON.parse(await readFile(join(appDirectory, 'fixtures/fonts/inter-v4.1/manifest.json'), 'utf8'));
   const expectedHash = manifest.bake.expectedCore.artifactSha256;

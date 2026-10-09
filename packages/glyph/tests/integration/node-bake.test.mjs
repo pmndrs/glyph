@@ -13,7 +13,7 @@ import { validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 
 import { runCli } from '../../dist/node/cli.js';
-import { fingerprint128, fingerprintDomain } from '../../dist/internal/fingerprint.js';
+import { fingerprint128, fingerprintDomain } from '../../dist/internal/content-digest.js';
 import { bitmapDescriptor, bitmapRasterKey } from '../../dist/internal/bitmap-contract.js';
 
 const fontUrl = new URL('../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);

@@ -8,7 +8,7 @@ import {
   createFontBakerFromInstance,
   fontBakerAbi,
 } from '../../../dist/font-baker/index.js';
-import { fingerprint128 } from '../../../dist/internal/fingerprint.js';
+import { fingerprint128 } from '../../../dist/internal/content-digest.js';
 
 const [wasm, rustReleaseWasm] = await Promise.all([
   readFile(new URL('../../../dist/font-baker.wasm', import.meta.url)),

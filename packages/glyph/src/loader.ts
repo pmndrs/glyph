@@ -42,7 +42,7 @@ import { normalizeUnicodeRanges } from './internal/font-selection.js';
 import { canonicalJson, compatibilityFingerprint, deriveRasterKey } from './internal/raster-identity.js';
 import type { RuntimeBakeRaster, RuntimeBakeUnicodeRange } from './internal/runtime-bake-protocol.js';
 import { workerRasterKinds } from './internal/runtime-bake-protocol.js';
-import { fingerprint128, fingerprintDomain, isFingerprint } from './internal/fingerprint.js';
+import { fingerprint128, fingerprintDomain, isFingerprint } from './internal/content-digest.js';
 import {
   type RasterFormat,
   type RasterFormatId,

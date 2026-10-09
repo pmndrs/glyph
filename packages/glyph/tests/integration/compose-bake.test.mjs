@@ -8,7 +8,7 @@ import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { bitmapBakerFromCore, createBitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
 import { validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
 import { BakeCompositionError, composeFontBake } from '../../dist/internal/compose-bake.js';
-import { fingerprint128, fingerprintDomain } from '../../dist/internal/fingerprint.js';
+import { fingerprint128, fingerprintDomain } from '../../dist/internal/content-digest.js';
 import { compatibilityFingerprint } from '../../dist/internal/raster-identity.js';
 import { bitmapDescriptor, bitmapRasterKey } from '../../dist/internal/bitmap-contract.js';
 import { parseGlb } from '../../dist/font-baker/validator.js';

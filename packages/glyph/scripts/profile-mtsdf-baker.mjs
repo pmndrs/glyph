@@ -98,7 +98,7 @@ async function runDirectProfile(profileCase, source) {
       import('../dist/internal/raster-baker-profile.js'),
       import('../dist/generated/mtsdf-baker-abi.js'),
       import('../dist/internal/msdf-contract.js'),
-      import('../dist/internal/fingerprint.js'),
+      import('../dist/internal/content-digest.js'),
     ],
   );
   const instance = await WebAssembly.instantiate(
@@ -182,7 +182,7 @@ async function runWorkerChild(profileCase) {
   const [{ default: baker }, contract, fingerprint] = await Promise.all([
     import('../dist/runtime-bakers/msdf.js'),
     import('../dist/internal/msdf-contract.js'),
-    import('../dist/internal/fingerprint.js'),
+    import('../dist/internal/content-digest.js'),
   ]);
   const source = new Uint8Array(await readFile(fontPath));
   const sourceFingerprint = fingerprint.fingerprint128(source, fingerprint.fingerprintDomain.source);

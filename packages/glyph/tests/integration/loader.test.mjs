@@ -26,7 +26,7 @@ import { bitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 
 import { getRegisteredFontData } from '../../dist/internal/registered-font.js';
-import { fingerprint128, fingerprintDomain } from '../../dist/internal/fingerprint.js';
+import { fingerprint128, fingerprintDomain } from '../../dist/internal/content-digest.js';
 
 const fontUrl = new URL('../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const multiFormatUrl = new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url);

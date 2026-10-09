@@ -39,6 +39,11 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   const manifest = JSON.parse(await readFile(join(installedDirectory, 'package.json'), 'utf8'));
   const packedFiles = await readdir(installedDirectory, { recursive: true });
   assert.equal(packedFiles.includes('dist/.tsbuildinfo'), false);
+  assert.deepEqual(
+    packedFiles.filter((path) => path.startsWith('dist/') && /fingerprint/i.test(path)),
+    [],
+  );
+  assert.ok(packedFiles.includes('dist/internal/content-digest.js'));
   assert.equal(packedFiles.includes('dist/internal/raster-baker-profile.d.ts'), false);
   assert.equal(packedFiles.includes('dist/internal/raster-baker-profile.js'), false);
   // The ABI ships as the generated TypeScript module the package's own bakers import. No JSON copy is
@@ -426,7 +431,7 @@ function publicSurfaceEntry(specifiers) {
 }
 
 async function buildInstalledConsumer(entry) {
-  await build({
+  const result = await build({
     configFile: false,
     logLevel: 'silent',
     mode: 'production',
@@ -438,6 +443,9 @@ async function buildInstalledConsumer(entry) {
       write: false,
     },
   });
+  for (const bundle of Array.isArray(result) ? result : [result]) {
+    for (const asset of bundle.output) assert.doesNotMatch(asset.fileName, /fingerprint/i);
+  }
 }
 
 function escapeRegExp(value) {

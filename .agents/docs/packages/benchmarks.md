@@ -805,15 +805,15 @@ semantic result afterward with package-owned counts, encoded bytes,
 borrowed glyph checksums, or draw topology. Compatibility probes and old-canary adapters run once during fixture setup;
 candidate-only helpers are required before timing begins.
 
-| Need                                  | Command                                                                                                                                 |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Common installed-package signal       | `pnpm scripts run benchmark:labs-package -- --candidate <package-or-tgz>`                                                               |
+| Need                                  | Command                                                                                                                                          |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Common installed-package signal       | `pnpm scripts run benchmark:labs-package -- --candidate <package-or-tgz>`                                                                        |
 | Focused/full installed-package signal | add `--suite layout`, `measure`, `glyphs`, `publication`, `spans`, `batch`, `style`, `reflow`, `stress`, `cold`, `edit`, `edit-sized`, or `full` |
-| Edit-sized stage profile              | `pnpm scripts run benchmark:edit-sized-publication-profile -- --artifact <tgz> [--wasm <named-wasm>] --case <case>`                     |
-| Raw retained-engine signal            | `pnpm scripts run benchmark:labs-internal -- --suite <engine-case>`                                                                     |
-| Kernel signal                         | build with `glyph:kernel-lab-build`, then select `kernel`, `pack`, `break`, or `bidi`                                                   |
-| Generator signal                      | `pnpm scripts run benchmark:labs-internal -- --suite mtsdf-generator`                                                                   |
-| Browser/GPU/frame signal              | select the maintained `benchmark:*` or `glyph:kernel-lab-browser` workflow from the index                                               |
+| Edit-sized stage profile              | `pnpm scripts run benchmark:edit-sized-publication-profile -- --artifact <tgz> [--wasm <named-wasm>] --case <case>`                              |
+| Raw retained-engine signal            | `pnpm scripts run benchmark:labs-internal -- --suite <engine-case>`                                                                              |
+| Kernel signal                         | build with `glyph:kernel-lab-build`, then select `kernel`, `pack`, `break`, or `bidi`                                                            |
+| Generator signal                      | `pnpm scripts run benchmark:labs-internal -- --suite mtsdf-generator`                                                                            |
+| Browser/GPU/frame signal              | select the maintained `benchmark:*` or `glyph:kernel-lab-browser` workflow from the index                                                        |
 
 Both Labs runners inspect the saved result and fail on an empty selection or any recorded benchmark-body error; Labs
 0.9.0 can otherwise print such an error and still exit zero. Generator fixture scripts may print elapsed progress while
@@ -930,3 +930,4 @@ LFS media image URLs to the PR head repository and commit so fork assets and his
 changes display `<0.01%` with their direction rather than appearing unchanged. Equal byte counts remain `0%`, and a
 missing baseline remains `new`.
 
+The installed-package browser consumer rejects requests whose URLs contain `fingerprint`, proving Worker baking and Bitmap font loading under that filename filter. A deliberate blocked request is the negative control; all real load requests must remain unblocked. Portless HTTPS origin detection is optional so the workflow remains portable.

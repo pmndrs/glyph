@@ -3,7 +3,7 @@ import type { FontBakeResult } from '../font-baker/index.js';
 import type { BakeArtifact, BakeWarning, FontPayloadReport, RasterBakeArtifact, RasterPackaging } from '../bake.js';
 import { GlyphError } from '../glyph-error.js';
 import type { Fingerprint } from '../identity.js';
-import { fingerprint128, fingerprintDomain, isFingerprint } from './fingerprint.js';
+import { fingerprint128, fingerprintDomain, isFingerprint } from './content-digest.js';
 import { readGlb } from './glb-reader.js';
 import { compatibilityFingerprint } from './raster-identity.js';
 

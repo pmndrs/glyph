@@ -10,7 +10,7 @@ import {
 } from './raster-bake-worker-protocol.js';
 import { SerialWorkerHost } from './serial-worker-host.js';
 import { isBakeProgressMessage, type BakeProgressMessage } from './bake-progress-protocol.js';
-import { isFingerprint } from './fingerprint.js';
+import { isFingerprint } from './content-digest.js';
 
 class RuntimeRasterBakeError extends GlyphError<'bake-failed'> {
   readonly reason: string;

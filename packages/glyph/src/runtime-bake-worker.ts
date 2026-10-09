@@ -13,7 +13,7 @@ import { bakeFontPipeline } from './internal/font-bake-pipeline.js';
 import { MSDF_GENERATOR_VERSION, msdfDescriptor, type MsdfDescriptor } from './internal/msdf-contract.js';
 import { createResolvedRasterBakePlan, type ResolvedRasterBakePlan } from './internal/raster-bake-plan.js';
 import { canonicalJson, deriveRasterKey } from './internal/raster-identity.js';
-import { fingerprint128, fingerprintDomain } from './internal/fingerprint.js';
+import { fingerprint128, fingerprintDomain } from './internal/content-digest.js';
 import { createRuntimeFontCache, type CachedFontArtifact } from './internal/runtime-font-cache.js';
 import {
   isRuntimeBakeRequest,

@@ -1,4 +1,4 @@
-import { fingerprint128, fingerprintDomain } from './internal/fingerprint.js';
+import { fingerprint128, fingerprintDomain } from './internal/content-digest.js';
 
 declare const brand: unique symbol;
 

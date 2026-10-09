@@ -4,7 +4,7 @@ import { copyToOwnedArrayBuffer } from './owned-array-buffer.js';
 import { canonicalJson } from './raster-identity.js';
 import type { RuntimeBakeRequest } from './runtime-bake-protocol.js';
 import type { Fingerprint } from '../identity.js';
-import { fingerprint128, fingerprintDomain, isFingerprint } from './fingerprint.js';
+import { fingerprint128, fingerprintDomain, isFingerprint } from './content-digest.js';
 
 const textEncoder = new TextEncoder();
 

@@ -215,6 +215,8 @@ config helpers.
 
 ## Public package surfaces
 
+Browser ESM delivery uses the private `content-digest` module filename to avoid URL filters matching `fingerprint`. Public fingerprint names, hash vectors, cache headers and artifact identities remain unchanged. The installed-package browser consumer rejects matching requests and proves both Worker baking and font loading, with an explicit blocking negative control. This models a filename filter; it does not claim coverage of every browser extension.
+
 | Subpath                         | Purpose                                                                                                          |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `@pmndrs/glyph`                 | Root runtime, built-in format selection, font/raster types, fallback stacks, text authoring, and layout results. |
