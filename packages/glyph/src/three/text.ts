@@ -653,7 +653,7 @@ export class ThreeRootHost {
     try {
       if (this.#binding?.needsReconcile(texts) === true) this.#services.invalidate();
     } catch (error) {
-      if (!this.#renderer.hasPendingPublicationFailure()) this.#reportError(error, texts);
+      if (!this.#renderer.ownsTraversalFailure(error)) this.#reportError(error, texts);
       return;
     }
     try {
@@ -664,7 +664,7 @@ export class ThreeRootHost {
     try {
       this.#syncTransforms(worldMatricesCurrent, texts);
     } catch (error) {
-      if (!this.#renderer.hasPendingPublicationFailure()) this.#reportError(error, texts);
+      if (!this.#renderer.ownsTraversalFailure(error)) this.#reportError(error, texts);
     }
   }
 

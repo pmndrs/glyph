@@ -62,6 +62,8 @@ export interface ThreeRendererHost {
     | undefined;
 }
 
+type PublicationFailure = Readonly<{ error: unknown }>;
+
 /** Applies retained Rust command-buffer deltas to Three storage attributes and draw objects. */
 export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, void> {
   readonly #resourcesContext: ThreeRendererResources;
@@ -93,7 +95,9 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
   #synchronizingTransforms = false;
   #syncWorldMatricesCurrent = false;
   #synchronizedTransformCount = 0;
-  #publicationFailure: Readonly<{ error: unknown }> | undefined;
+  #publicationCommitActive = false;
+  #deferredTraversalFailure: PublicationFailure | undefined;
+  #publicationFailure: PublicationFailure | undefined;
   #disposed = false;
 
   constructor(resources: ThreeRendererResources, owner: ThreeRendererHost) {
@@ -238,14 +242,18 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
   }
 
   /** Returns and clears a caller-owned failure raised after the latest publication became irreversible. */
-  takePublicationFailure(): Readonly<{ error: unknown }> | undefined {
+  takePublicationFailure(): PublicationFailure | undefined {
     const failure = this.#publicationFailure;
     this.#publicationFailure = undefined;
     return failure;
   }
 
-  /** Whether an accepted publication failure still belongs to this root's pending settlement hook. */
-  hasPendingPublicationFailure(): boolean {
+  /** Claims traversal failure ownership during commit or pending accepted-failure settlement. */
+  ownsTraversalFailure(error: unknown): boolean {
+    if (this.#publicationCommitActive) {
+      this.#deferredTraversalFailure ??= { error };
+      return true;
+    }
     return this.#publicationFailure !== undefined;
   }
 
@@ -287,7 +295,20 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       commit: (): void => {
         if (state !== 'open') throw new Error(`Three renderer preparation was already ${state}`);
         state = 'committed';
-        this.#publicationFailure = this.#commit(prepared);
+        this.#publicationCommitActive = true;
+        this.#deferredTraversalFailure = undefined;
+        let publicationFailure: PublicationFailure | undefined;
+        try {
+          publicationFailure = this.#commit(prepared);
+        } catch (error) {
+          this.#deferredTraversalFailure = undefined;
+          throw error;
+        } finally {
+          this.#publicationCommitActive = false;
+        }
+        // A retirement callback owns precedence; otherwise surface the traversal failure that commit deferred.
+        this.#publicationFailure = publicationFailure ?? this.#deferredTraversalFailure;
+        this.#deferredTraversalFailure = undefined;
       },
       discard: (): void => {
         if (state !== 'open') return;
@@ -388,8 +409,8 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     }
   }
 
-  #commit(prepared: PreparedPublication): Readonly<{ error: unknown }> | undefined {
-    let failure: Readonly<{ error: unknown }> | undefined;
+  #commit(prepared: PreparedPublication): PublicationFailure | undefined {
+    let failure: PublicationFailure | undefined;
     const previousDraws = this.#draws;
     const retiredTransformAttribute =
       prepared.replacesDraws && prepared.context.transformAttribute !== this.#transformAttribute

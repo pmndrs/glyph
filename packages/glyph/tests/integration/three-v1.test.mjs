@@ -3460,6 +3460,184 @@ test('throwing Three retirement callbacks preserve the accepted publication', as
   }
 });
 
+test('irreversible Three callback windows preserve primary notification precedence', async (t) => {
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+
+  for (const { callbackWindow, primaryFailure } of [
+    { callbackWindow: 'material disposal', primaryFailure: undefined },
+    { callbackWindow: 'geometry disposal', primaryFailure: null },
+    { callbackWindow: 'draw addition', primaryFailure: 0 },
+    { callbackWindow: 'draw removal', primaryFailure: new Error('primary draw removal failure') },
+  ]) {
+    await t.test(callbackWindow, async (subtest) => {
+      const three = await createThreeTestHandle(subtest, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+      const scene = new THREE.Scene();
+      const group = three.createTextGroup();
+      const secondaryFailure = new Error(`secondary ${callbackWindow} transform failure`);
+      let transformMustFail = false;
+      let failingTransformUpdates = 0;
+      let successfulTransformUpdates = 0;
+      class ThrowingTransformParent extends THREE.Object3D {
+        updateWorldMatrix(updateParents, updateChildren) {
+          if (transformMustFail) {
+            failingTransformUpdates += 1;
+            throw secondaryFailure;
+          }
+          successfulTransformUpdates += 1;
+          return super.updateWorldMatrix(updateParents, updateChildren);
+        }
+      }
+      const throwingParent = new ThrowingTransformParent();
+      group.add(throwingParent);
+      let runRetirementCallback = () => {};
+      const acceptedMaterial = defineTextMaterial((context) => {
+        const material = context.createDefaultMaterial();
+        if (callbackWindow === 'material disposal') {
+          material.addEventListener('dispose', () => runRetirementCallback());
+        }
+        return material;
+      });
+      const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+      const label = three.createText({ font, material: acceptedMaterial, text: 'A' });
+      group.add(label);
+      scene.add(group);
+      scene.updateMatrixWorld(true);
+      const acceptedDraw = rootDraws(scene)[0];
+      assert.ok(acceptedDraw);
+      const publicationObject = acceptedDraw.parent;
+      assert.ok(publicationObject);
+
+      scene.add(group);
+      scene.updateMatrixWorld(true);
+      assert.ok(
+        scene.children.indexOf(publicationObject) < scene.children.indexOf(group),
+        'the publication object must traverse before the authored group',
+      );
+
+      const notifications = [];
+      label.onError = (error) => notifications.push(error);
+      let callbackInvocations = 0;
+      runRetirementCallback = () => {
+        callbackInvocations += 1;
+        throwingParent.add(label);
+        transformMustFail = true;
+        scene.updateMatrixWorld(true);
+        throw primaryFailure;
+      };
+      let publicationEvent;
+      if (callbackWindow === 'geometry disposal') {
+        acceptedDraw.geometry.addEventListener('dispose', runRetirementCallback);
+      } else if (callbackWindow === 'draw addition') {
+        publicationEvent = 'childadded';
+        publicationObject.addEventListener(publicationEvent, runRetirementCallback);
+      } else if (callbackWindow === 'draw removal') {
+        publicationEvent = 'childremoved';
+        publicationObject.addEventListener(publicationEvent, runRetirementCallback);
+      }
+
+      label.set({ material: replacementMaterial, text: `replacement for ${callbackWindow}` });
+      const publicationThrow = captureThrown(() => glyph.shape());
+      if (publicationEvent !== undefined) {
+        publicationObject.removeEventListener(publicationEvent, runRetirementCallback);
+      }
+      assert.equal(publicationThrow.present, true);
+      assert.ok(Object.is(publicationThrow.error, primaryFailure));
+      assert.equal(callbackInvocations, 1, 'the selected irreversible callback window must run once');
+      assert.ok(failingTransformUpdates > 0, 'callback traversal must enter the throwing updateWorldMatrix override');
+      assert.equal(notifications.length, 1);
+      assert.ok(Object.is(notifications[0], primaryFailure), 'only the raw primary failure may be notified');
+      assert.deepEqual(label.commitState(), { status: 'committed', revision: 1 });
+      assert.ok(Object.is(label.error, primaryFailure));
+      assert.equal(rootDraws(scene).length, 1, 'the accepted candidate draw must remain published');
+
+      const successfulUpdatesBeforeRecovery = successfulTransformUpdates;
+      transformMustFail = false;
+      label.text = `recovered ${callbackWindow}`;
+      glyph.shape();
+      scene.updateMatrixWorld(true);
+      assert.ok(successfulTransformUpdates > successfulUpdatesBeforeRecovery);
+      assert.deepEqual(label.commitState(), { status: 'committed', revision: 2 });
+      assert.equal(label.error, undefined);
+      assert.equal(notifications.length, 1);
+
+      label.dispose();
+      group.dispose();
+    });
+  }
+});
+
+test('a traversal failure deferred during successful retirement commit surfaces through accepted settlement', async (t) => {
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const deferredFailure = new Error('deferred in-commit transform failure');
+  let transformMustFail = false;
+  let failingTransformUpdates = 0;
+  let successfulTransformUpdates = 0;
+  class ThrowingTransformParent extends THREE.Object3D {
+    updateWorldMatrix(updateParents, updateChildren) {
+      if (transformMustFail) {
+        failingTransformUpdates += 1;
+        throw deferredFailure;
+      }
+      successfulTransformUpdates += 1;
+      return super.updateWorldMatrix(updateParents, updateChildren);
+    }
+  }
+  const throwingParent = new ThrowingTransformParent();
+  group.add(throwingParent);
+  let runRetirementCallback = () => {};
+  const retiringMaterial = defineTextMaterial((context) => {
+    const material = context.createDefaultMaterial();
+    material.addEventListener('dispose', () => runRetirementCallback());
+    return material;
+  });
+  const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+  const label = three.createText({ font, material: retiringMaterial, text: 'A' });
+  group.add(label);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+  const publicationObject = rootDraws(scene)[0]?.parent;
+  assert.ok(publicationObject);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+
+  const notifications = [];
+  label.onError = (error) => notifications.push(error);
+  let callbackInvocations = 0;
+  runRetirementCallback = () => {
+    callbackInvocations += 1;
+    throwingParent.add(label);
+    transformMustFail = true;
+    scene.updateMatrixWorld(true);
+  };
+  label.set({ material: replacementMaterial, text: 'accepted despite deferred traversal failure' });
+  const publicationThrow = captureThrown(() => glyph.shape());
+  assert.deepEqual(publicationThrow, { present: true, error: deferredFailure });
+  assert.equal(callbackInvocations, 1);
+  assert.ok(failingTransformUpdates > 0, 'the successful disposer must encounter the deferred transform failure');
+  assert.deepEqual(notifications, [deferredFailure]);
+  assert.deepEqual(label.commitState(), { status: 'committed', revision: 1 });
+  assert.equal(label.error, deferredFailure);
+  assert.equal(rootDraws(scene).length, 1, 'the renderer commit itself must remain accepted');
+
+  const successfulUpdatesBeforeRecovery = successfulTransformUpdates;
+  transformMustFail = false;
+  label.text = 'deferred traversal recovery';
+  glyph.shape();
+  scene.updateMatrixWorld(true);
+  assert.ok(successfulTransformUpdates > successfulUpdatesBeforeRecovery);
+  assert.deepEqual(label.commitState(), { status: 'committed', revision: 2 });
+  assert.equal(label.error, undefined);
+  assert.deepEqual(notifications, [deferredFailure]);
+
+  label.dispose();
+  group.dispose();
+  font.dispose();
+});
+
 test('retirement callbacks reject reentrant Text and root disposal before lifecycle mutation', async (t) => {
   const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   t.after(() => font.dispose());
@@ -3917,11 +4095,15 @@ test('a later root keeps its prepared revision and primary retirement failure th
   const callbackText = 'callback update remains pending until the next shape';
   const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
   const transformFailure = new Error('secondary cross-root transform failure');
-  let transformMustFail = true;
+  let transformMustFail = false;
+  let failedTransformUpdates = 0;
   let successfulTransformUpdates = 0;
   class ThrowingTransformParent extends THREE.Object3D {
     updateWorldMatrix(updateParents, updateChildren) {
-      if (transformMustFail) throw transformFailure;
+      if (transformMustFail) {
+        failedTransformUpdates += 1;
+        throw transformFailure;
+      }
       successfulTransformUpdates += 1;
       return super.updateWorldMatrix(updateParents, updateChildren);
     }
@@ -3942,6 +4124,8 @@ test('a later root keeps its prepared revision and primary retirement failure th
     return label;
   });
   for (const scene of scenes) scene.updateMatrixWorld(true);
+  scenes[1].add(groups[1]);
+  scenes[1].updateMatrixWorld(true);
 
   const candidateEntry = {
     id: 0,
@@ -3988,6 +4172,7 @@ test('a later root keeps its prepared revision and primary retirement failure th
     notifications.push([0, error]);
     labels[1].text = callbackText;
     throwingParent.add(labels[1]);
+    transformMustFail = true;
     scenes[1].updateMatrixWorld(true);
     callbackTraversalCompleted = true;
   };
@@ -4002,6 +4187,7 @@ test('a later root keeps its prepared revision and primary retirement failure th
   assert.ok(Object.is(publicationThrow.error.errors[1], 0));
   assert.equal(publicationThrow.error.errors.includes(transformFailure), false);
   assert.equal(callbackTraversalCompleted, true, 'the first root callback must traverse the later root');
+  assert.ok(failedTransformUpdates > 0, 'the callback traversal must enter the throwing updateWorldMatrix override');
   assert.equal(labels[1].parent, throwingParent, 'the callback must install the throwing transform ancestor');
   assert.deepEqual(notifications, [
     [0, undefined],
@@ -4021,6 +4207,7 @@ test('a later root keeps its prepared revision and primary retirement failure th
   );
   assert.notDeepEqual(acceptedDrawSnapshot, callbackSnapshot.draws);
 
+  const successfulUpdatesBeforeRecovery = successfulTransformUpdates;
   transformMustFail = false;
   glyph.shape();
   assert.deepEqual(labels[1].commitState(), { status: 'committed', revision: 2 });
@@ -4037,7 +4224,10 @@ test('a later root keeps its prepared revision and primary retirement failure th
     callbackSnapshot,
     'the later callback update must recover to the full cold renderer',
   );
-  assert.ok(successfulTransformUpdates > 0, 'the guarded transform traversal must recover deterministically');
+  assert.ok(
+    successfulTransformUpdates > successfulUpdatesBeforeRecovery,
+    'the guarded transform traversal must recover deterministically',
+  );
   assert.deepEqual(notifications, [
     [0, undefined],
     [1, 0],

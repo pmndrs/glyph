@@ -3,7 +3,7 @@ type: Log Entry
 title: 'Keep accepted Three publications coherent after retirement failures'
 generated:
   by: process:docs-new
-  at: '2026-10-09T14:59:58Z'
+  at: '2026-10-09T18:57:02Z'
 ---
 
 The [Glyph package](../packages/glyph.md) correction for [#275](https://github.com/pmndrs/glyph/issues/275) keeps an
@@ -77,3 +77,19 @@ whose secondary throwing transform is not reported, and whose next publication m
 These new source and test changes have not yet been built or executed; the prior validation above does not cover them.
 Targeted type/static/format checks, the Glyph build, focused and package Node tests, exact-head independent review, Labs,
 and remote CI remain pending.
+
+The independent callback review of `38d08b4b` was also not clear. Its causal trace showed that the pending-failure guard
+began only after `#commit()` returned, while public add, remove, disposal, and final-matrix callbacks all execute inside
+that call. A callback traversal could therefore notify a secondary transform error before its later primary retirement
+failure became known. The review also showed that the new cross-root test never entered its claimed
+`updateWorldMatrix()` failure because the authored group preceded the publication object.
+
+The source correction uses the existing renderer/root traversal owner with one commit-active flag and one explicit
+deferred-error wrapper. Traversal errors during irreversible commit wait for commit precedence: a retirement failure wins,
+while a successful commit promotes the deferred traversal error into the existing accepted settlement and public throw.
+Post-commit pending-primary suppression remains the same, including exact `undefined`, `null`, and `0` identity. New public
+test source moves the authored group after the publication object, proves the throwing override was entered, and covers
+material disposal, geometry disposal, child-add, child-remove, primary precedence, and successful-commit deferred-error
+settlement. The cross-root prepared-revision case now uses the same causal ordering and a failing-override counter. These
+changes are source-only and unexecuted; all build, type/static, focused/package runtime, exact-head review, Labs, and CI
+claims remain pending.

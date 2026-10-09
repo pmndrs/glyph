@@ -135,7 +135,7 @@ sources:
     title: Pinned msdfgen CLI scanline and error-correction configuration
 generated:
   by: openai-codex/gpt-5
-  at: '2026-10-09T15:48:01Z'
+  at: '2026-10-09T18:57:02Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -742,10 +742,13 @@ updates it, successful publication clears current Text state plus the retained g
 participants or rediscovering ancestry, and group disposal releases the group from the same set and clears its terminal
 error state after lifecycle preflight. The root admits only the outermost attribution through state installation and user
 notifications, so callback-driven scene traversal cannot replace that in-flight failure with a secondary reconciliation
-or transform error. Before a later root consumes its accepted-retirement failure, the renderer's existing explicit
-failure-presence wrapper also owns that root's settlement phase; nested traversal may continue useful host observation but
-cannot report a secondary reconciliation or transform error ahead of the primary. Disposed groups cannot be reacquired by
-later attribution. Arbitrary callback throws, including
+or transform error. One bounded renderer phase flag extends that ownership across the complete irreversible commit: a
+traversal failure raised from add, remove, disposal, or final-matrix callbacks is retained in one explicit-value wrapper
+until commit reveals whether a primary retirement failure exists. The primary wins when present; otherwise the deferred
+traversal failure enters the same accepted hook and public throw instead of being lost. After commit and before a root
+consumes its accepted failure, the existing publication-failure wrapper continues to suppress later secondary traversal
+reports. Nested traversal and ordinary Text edits remain allowed throughout. Disposed groups cannot be reacquired by later
+attribution. Arbitrary callback throws, including
 `undefined`, `null`, and `0`, retain their identity through `onError` and the public shaping throw. The
 accepted hook also preserves that retirement value if reentrant notification changes hierarchy and the following initial
 transform synchronization throws: synchronization errors surface when no earlier publication failure exists, and failed
