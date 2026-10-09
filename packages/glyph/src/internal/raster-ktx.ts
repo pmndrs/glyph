@@ -15,6 +15,12 @@ const HEADER_BYTE_LENGTH = 80;
 const LEVEL_INDEX_ENTRY_BYTE_LENGTH = 24;
 const BASIC_DFD_BYTE_LENGTH = 24;
 const BASIC_DFD_SAMPLE_BYTE_LENGTH = 16;
+const KTX2_IDENTIFIER_WORD_0 = 0x5854_4bab;
+const KTX2_IDENTIFIER_WORD_1 = 0xbb30_3220;
+const KTX2_IDENTIFIER_WORD_2 = 0x0a1a_0a0d;
+const FLOAT32_NEGATIVE_ONE_BITS = -1_082_130_432;
+const FLOAT32_ONE_BITS = 0x3f80_0000;
+const MAX_SAFE_UINT64_HIGH_WORD = 0x1f_ffff;
 
 export type RasterKtxValidationErrorCode = 'KTX2_INVALID' | 'KTX2_VARIANT' | 'KTX2_DFD' | 'KTX2_METADATA';
 
@@ -47,11 +53,10 @@ export function validateNativeKtx2(
   try {
     if (bytes.byteLength < HEADER_BYTE_LENGTH) throw new RangeError('KTX2 header is truncated');
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    // Compare the identifier as little-endian words without allocating a byte table.
     if (
-      view.getUint32(0, true) !== 0x5854_4bab ||
-      view.getUint32(4, true) !== 0xbb30_3220 ||
-      view.getUint32(8, true) !== 0x0a1a_0a0d
+      view.getUint32(0, true) !== KTX2_IDENTIFIER_WORD_0 ||
+      view.getUint32(4, true) !== KTX2_IDENTIFIER_WORD_1 ||
+      view.getUint32(8, true) !== KTX2_IDENTIFIER_WORD_2
     ) {
       throw new Error('Missing KTX 2.0 identifier.');
     }
@@ -190,9 +195,9 @@ function matchesBasicDescriptor(
       view.getUint8(sampleByteOffset + 3) !== (channelTypes[index]! | qualifiers) ||
       view.getUint32(sampleByteOffset + 4, true) !== 0 ||
       (float16 ? view.getInt32(sampleByteOffset + 8, true) : view.getUint32(sampleByteOffset + 8, true)) !==
-        (float16 ? -1_082_130_432 : 0) ||
+        (float16 ? FLOAT32_NEGATIVE_ONE_BITS : 0) ||
       (float16 ? view.getInt32(sampleByteOffset + 12, true) : view.getUint32(sampleByteOffset + 12, true)) !==
-        (float16 ? 0x3f80_0000 : 255)
+        (float16 ? FLOAT32_ONE_BITS : 255)
     ) {
       return false;
     }
@@ -203,7 +208,7 @@ function matchesBasicDescriptor(
 function readSafeUint64(view: DataView, byteOffset: number, label: string): number {
   const low = view.getUint32(byteOffset, true);
   const high = view.getUint32(byteOffset + 4, true);
-  if (high > 0x1f_ffff) throw new RangeError(`${label} exceeds the safe integer range`);
+  if (high > MAX_SAFE_UINT64_HIGH_WORD) throw new RangeError(`${label} exceeds the safe integer range`);
   return high * 0x1_0000_0000 + low;
 }
 
