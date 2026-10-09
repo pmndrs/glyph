@@ -213,6 +213,7 @@ class ConfiguredHandleDomain<
     const bound = new Map<PropertyKey, Function>();
     const dispose = (): void => {
       if (disposed) return;
+      services._preflightLifecycleMutation();
       disposed = true;
       this.#roots.delete(name);
       let failure: unknown;
@@ -301,6 +302,7 @@ class ConfiguredHandleDomain<
 
   #dispose(): void {
     if (this.#disposed) return;
+    this.#handleState._assertEngineLifecycleMutationAllowed();
     this.#disposed = true;
     let failure: unknown;
     for (const root of [...this.#roots.values()]) {
@@ -491,6 +493,7 @@ class ConfiguredRootServices<
 
   invalidate(): void {
     this.#requiredPlanner();
+    this.#handleState._assertEngineMutationAllowed();
     this.#forceShape = true;
     this.#shapeRegistration!.invalidate();
   }
@@ -612,8 +615,13 @@ class ConfiguredRootServices<
     this.#requiredPlanner();
   }
 
+  _preflightLifecycleMutation(): void {
+    this.#handleState._assertEngineLifecycleMutationAllowed();
+  }
+
   dispose(): void {
     if (this.#disposed) return;
+    this._preflightLifecycleMutation();
     this.#disposed = true;
     this.#stopObservingDirty?.();
     this.#stopObservingDirty = undefined;
@@ -910,12 +918,10 @@ class ConfiguredTextController<
 
   dispose(): void {
     if (this.#disposed) return;
+    this.#services._preflightLifecycleMutation();
+    this.#text.dispose();
     this.#disposed = true;
-    try {
-      this.#text.dispose();
-    } finally {
-      this.#disposeLeases(this.#bound.leases);
-    }
+    this.#disposeLeases(this.#bound.leases);
   }
 
   #disposeLeases(leases: readonly { dispose(): void }[]): void {

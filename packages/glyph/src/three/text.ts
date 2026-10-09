@@ -139,6 +139,12 @@ interface DesiredTextState<Format extends RasterFormatMetadata> {
 
 const emptyTextSpans: readonly never[] = Object.freeze([]);
 
+type AttributedErrorState =
+  | Readonly<{ present: false }>
+  | Readonly<{ present: true; error: unknown; publicationAccepted: boolean }>;
+
+const noAttributedError: AttributedErrorState = Object.freeze({ present: false });
+
 interface TextReconciler {
   desired<Format extends RasterFormatMetadata>(text: Text<Format>): DesiredTextState<Format>;
   desiredRevision(text: Text<RasterFormatMetadata>): number;
@@ -148,14 +154,17 @@ interface TextReconciler {
   publishMeasurement(text: Text<RasterFormatMetadata>, measurement: ParagraphLayoutSummary): void;
   bind(text: Text<RasterFormatMetadata>, binding: ThreeRootPublication, group: TextGroup | undefined): void;
   unbindFrom(text: Text<RasterFormatMetadata>, binding: ThreeRootPublication): void;
-  reportError(text: Text<RasterFormatMetadata>, error: unknown): void;
+  setError(text: Text<RasterFormatMetadata>, error: unknown, publicationAccepted: boolean): boolean;
+  notifyError(text: Text<RasterFormatMetadata>, error: unknown): void;
   clearError(text: Text<RasterFormatMetadata>): void;
 }
 
 let reconciler!: TextReconciler;
 
 interface TextGroupErrorReconciler {
-  reportError(group: TextGroup, error: unknown): void;
+  state(group: TextGroup): AttributedErrorState;
+  setError(group: TextGroup, error: unknown, publicationAccepted: boolean): boolean;
+  notifyError(group: TextGroup, error: unknown): void;
   clearError(group: TextGroup): void;
 }
 
@@ -278,6 +287,7 @@ export class ThreeRootHost {
   #binding: ThreeRootPublication | undefined;
   #needsInitialTransformSync = false;
   readonly #renderMemberScratch: Text<RasterFormatMetadata>[] = [];
+  readonly #attributedErrorGroups = new Set<TextGroup>();
   #capacity: GlyphBufferCapacity;
   #material: ThreeTextMaterial | undefined;
   #disposed = false;
@@ -396,6 +406,7 @@ export class ThreeRootHost {
       this.#binding?.dispose();
       this.#binding = undefined;
     } finally {
+      this.#clearAttributedErrorGroups();
       threeRootHosts.delete(this);
       this.#renderObject.removeFromParent();
       this.#scene = undefined;
@@ -409,6 +420,11 @@ export class ThreeRootHost {
   /** @internal Core services and renderer used by this root recipe. */
   get services(): GlyphRootServices<ThreeBindings, void, ThreePublicationBoundary> {
     return this.#services;
+  }
+
+  /** @internal Reject host lifecycle mutation while this root belongs to an active engine settlement. */
+  preflightLifecycleMutation(): void {
+    this.#services._preflightLifecycleMutation();
   }
 
   /** @internal Built-in Three decoder installed by the root recipe. */
@@ -476,6 +492,7 @@ export class ThreeRootHost {
 
   /** @internal Remove one retained leaf from this publication root. */
   unregister(text: THREE.Object3D): void {
+    if (!this.#disposed) this.preflightLifecycleMutation();
     if (text instanceof Text) this.#binding?.removeText(text);
     this.#texts.delete(text);
     if (this.#texts.size !== 0 || this.#binding === undefined) return;
@@ -492,6 +509,13 @@ export class ThreeRootHost {
   /** @internal Invalidate inherited material state after a TextGroup change. */
   invalidateMaterial(): void {
     this.#binding?.invalidateMaterial();
+  }
+
+  /** @internal Release one retiring group from presentation and attributed-error ownership. */
+  retireGroup(group: TextGroup): void {
+    this.preflightLifecycleMutation();
+    this.invalidateMaterial();
+    this.#attributedErrorGroups.delete(group);
   }
 
   /** @internal Measure one root member through the root-owned planner. */
@@ -580,11 +604,19 @@ export class ThreeRootHost {
   acceptShape(): void {
     this.#binding?.acceptShape();
     const texts = this.#renderMembers();
-    this.#clearErrors(texts);
+    const publicationFailure = this.#renderer.takePublicationFailure();
+    if (publicationFailure === undefined) this.#clearErrors(texts);
+    else this.#reportError(publicationFailure.error, texts, true);
     if (this.#needsInitialTransformSync) {
-      this.#needsInitialTransformSync = false;
-      this.#syncTransforms(false, texts);
+      try {
+        this.#syncTransforms(false, texts);
+        this.#needsInitialTransformSync = false;
+      } catch (error) {
+        if (publicationFailure === undefined) throw error;
+        // Initial synchronization cannot replace the accepted publication failure already attributed above.
+      }
     }
+    if (publicationFailure !== undefined) throw publicationFailure.error;
   }
 
   /** @internal Preserve the last accepted draw state and attribute this root's rejected shape. */
@@ -635,26 +667,47 @@ export class ThreeRootHost {
     }
   }
 
-  #reportError(error: unknown, texts: readonly Text<RasterFormatMetadata>[]): void {
+  #reportError(error: unknown, texts: readonly Text<RasterFormatMetadata>[], publicationAccepted = false): void {
+    const participants = [...texts];
     const groups = new Set<TextGroup>();
-    for (const text of texts) {
-      reconciler.reportError(text, error);
+    for (const text of participants) {
       for (let parent = text.parent; parent !== null; parent = parent.parent) {
-        if (parent instanceof TextGroup) groups.add(parent);
+        if (parent instanceof TextGroup && !parent.disposed) groups.add(parent);
       }
     }
-    for (const group of groups) textGroupErrors.reportError(group, error);
+    for (const group of this.#attributedErrorGroups) {
+      if (!groups.has(group)) textGroupErrors.clearError(group);
+    }
+    const textNotifications = participants.filter((text) => reconciler.setError(text, error, publicationAccepted));
+    const groupNotifications = [...groups].filter((group) =>
+      textGroupErrors.setError(group, error, publicationAccepted),
+    );
+    this.#attributedErrorGroups.clear();
+    for (const group of groups) this.#attributedErrorGroups.add(group);
+    for (const text of textNotifications) {
+      try {
+        reconciler.notifyError(text, error);
+      } catch {
+        // Error notification cannot replace the renderer failure it reports.
+      }
+    }
+    for (const group of groupNotifications) {
+      try {
+        textGroupErrors.notifyError(group, error);
+      } catch {
+        // Error notification cannot replace the renderer failure it reports.
+      }
+    }
   }
 
   #clearErrors(texts: readonly Text<RasterFormatMetadata>[]): void {
-    const groups = new Set<TextGroup>();
-    for (const text of texts) {
-      reconciler.clearError(text);
-      for (let parent = text.parent; parent !== null; parent = parent.parent) {
-        if (parent instanceof TextGroup) groups.add(parent);
-      }
-    }
-    for (const group of groups) textGroupErrors.clearError(group);
+    for (const text of texts) reconciler.clearError(text);
+    this.#clearAttributedErrorGroups();
+  }
+
+  #clearAttributedErrorGroups(): void {
+    for (const group of this.#attributedErrorGroups) textGroupErrors.clearError(group);
+    this.#attributedErrorGroups.clear();
   }
 
   #rootBinding(): ThreeRootPublication {
@@ -745,7 +798,8 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       publishMeasurement: (text, measurement) => text.#setBoundingBox(measurement),
       bind: (text, binding, group) => text.#bind(binding, group),
       unbindFrom: (text, binding) => text.#unbindFrom(binding),
-      reportError: (text, error) => text.#reportError(error),
+      setError: (text, error, publicationAccepted) => text.#setError(error, publicationAccepted),
+      notifyError: (text, error) => text.#notifyError(error),
       clearError: (text) => text.#clearError(),
     };
   }
@@ -761,7 +815,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   #committedRevision = -1;
   #boundingBoxCurrent = false;
   #disposed = false;
-  #error: unknown;
+  #errorState: AttributedErrorState = noAttributedError;
   onError: ((error: unknown) => void) | undefined;
 
   /** Ordinary applications construct Text through `handle.createText()`. */
@@ -801,7 +855,8 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return this.#disposed;
   }
   get error(): unknown {
-    return this.#error ?? this.#textGroup?.error;
+    const state = this.#effectiveErrorState();
+    return state.present ? state.error : undefined;
   }
   get gpuBytes(): number {
     return this.#binding?.gpuBytes ?? 0;
@@ -929,8 +984,8 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
 
   commitState(): TextCommitState {
     if (this.#disposed || this.parent === null) return { status: 'unbound' };
-    const error = this.error;
-    if (error !== undefined) return { status: 'failed', error };
+    const error = this.#effectiveErrorState();
+    if (error.present && !error.publicationAccepted) return { status: 'failed', error: error.error };
     if (this.#binding === undefined || this.#committedRevision !== this.#desiredRevision) {
       return { status: 'pending' };
     }
@@ -1053,8 +1108,8 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
 
   dispose(): void {
     if (this.#disposed) return;
-    this.#disposed = true;
     this.#root.unregister(this);
+    this.#disposed = true;
     for (const font of this.#ownedFonts) font.dispose();
   }
 
@@ -1093,14 +1148,23 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     binding?.removeText(this.#root.member(this));
   }
 
-  #reportError(error: unknown): void {
-    if (this.#error === error) return;
-    this.#error = error;
+  #effectiveErrorState(): AttributedErrorState {
+    if (this.#errorState.present) return this.#errorState;
+    return this.#textGroup === undefined ? noAttributedError : textGroupErrors.state(this.#textGroup);
+  }
+
+  #setError(error: unknown, publicationAccepted: boolean): boolean {
+    const notify = !this.#errorState.present || !Object.is(this.#errorState.error, error);
+    this.#errorState = { present: true, error, publicationAccepted };
+    return notify;
+  }
+
+  #notifyError(error: unknown): void {
     this.onError?.(error);
   }
 
   #clearError(): void {
-    this.#error = undefined;
+    this.#errorState = noAttributedError;
   }
 
   #assertActive(): void {
@@ -1129,7 +1193,9 @@ const textPresentations = new WeakMap<Text<RasterFormatMetadata>, TextPresentati
 export class TextGroup extends THREE.Object3D {
   static {
     textGroupErrors = {
-      reportError: (group, error) => group.#reportError(error),
+      state: (group) => group.#errorState,
+      setError: (group, error, publicationAccepted) => group.#setError(error, publicationAccepted),
+      notifyError: (group, error) => group.#notifyError(error),
       clearError: (group) => group.#clearError(),
     };
   }
@@ -1139,7 +1205,7 @@ export class TextGroup extends THREE.Object3D {
   #material: ThreeTextMaterial | undefined;
   readonly #texts: Text<RasterFormatMetadata>[] = [];
   #disposed = false;
-  #error: unknown;
+  #errorState: AttributedErrorState = noAttributedError;
   onError: ((error: unknown) => void) | undefined;
 
   /** Ordinary applications construct TextGroup through `handle.createTextGroup()`. */
@@ -1194,7 +1260,7 @@ export class TextGroup extends THREE.Object3D {
     return this.#disposed;
   }
   get error(): unknown {
-    return this.#error;
+    return this.#errorState.present ? this.#errorState.error : undefined;
   }
   get gpuBytes(): number {
     return this.#root.gpuBytes;
@@ -1234,20 +1300,25 @@ export class TextGroup extends THREE.Object3D {
 
   dispose(): void {
     if (this.#disposed) return;
+    if (!this.#root.disposed) this.#root.retireGroup(this);
+    this.#clearError();
     this.#disposed = true;
     textGroupObservations.delete(this);
     textGroupRoots.delete(this);
-    if (!this.#root.disposed) this.#root.invalidateMaterial();
   }
 
-  #reportError(error: unknown): void {
-    if (this.#error === error) return;
-    this.#error = error;
+  #setError(error: unknown, publicationAccepted: boolean): boolean {
+    const notify = !this.#errorState.present || !Object.is(this.#errorState.error, error);
+    this.#errorState = { present: true, error, publicationAccepted };
+    return notify;
+  }
+
+  #notifyError(error: unknown): void {
     this.onError?.(error);
   }
 
   #clearError(): void {
-    this.#error = undefined;
+    this.#errorState = noAttributedError;
   }
 
   #assertActive(): void {
@@ -1327,8 +1398,8 @@ class ThreeRootPublication {
 
   invalidateMaterial(): void {
     this.#assertActive();
-    this.#materialInvalidated = true;
     this.#services.invalidate();
+    this.#materialInvalidated = true;
   }
 
   reconcile(texts: readonly Text<RasterFormatMetadata>[]): void {
@@ -1423,10 +1494,10 @@ class ThreeRootPublication {
   }
 
   removeText(text: Text<RasterFormatMetadata>): void {
-    if (this.#detachedQuery === text) this.#detachedQuery = undefined;
-    this.#pendingMeasurements.delete(text);
     if (this.#detachedQueryCache?.text === text) {
       this.#detachedQueryCache.entry.handle.dispose();
+      if (this.#detachedQuery === text) this.#detachedQuery = undefined;
+      this.#pendingMeasurements.delete(text);
       this.#detachedQueryCache = undefined;
       this.#inspections.delete(text);
       reconciler.unbindFrom(text, this);
@@ -1434,10 +1505,14 @@ class ThreeRootPublication {
     }
     const entry = this.#entries.get(text);
     if (entry === undefined) {
+      if (this.#detachedQuery === text) this.#detachedQuery = undefined;
+      this.#pendingMeasurements.delete(text);
       reconciler.unbindFrom(text, this);
       return;
     }
     entry.handle.dispose();
+    if (this.#detachedQuery === text) this.#detachedQuery = undefined;
+    this.#pendingMeasurements.delete(text);
     this.#entries.delete(text);
     this.#inspections.delete(text);
     reconciler.unbindFrom(text, this);

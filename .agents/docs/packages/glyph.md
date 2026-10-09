@@ -720,6 +720,31 @@ replaces a three-component attribute view with four-component padded storage, pu
 into that detached view before advancing the version. Transform-table growth disposes the superseded attribute only after
 the candidate publishes; rejection disposes only the candidate, and root teardown disposes the final table.
 
+Three preparation remains the rejection boundary: a material factory or other realization failure leaves the last
+accepted renderer branch and core revision live. Once commit starts retiring the old host branch, publication is
+irreversible. A caller-owned `dispose` or final matrix-update callback that throws after that point is therefore reported
+only after Three and the retained planner accept the same candidate. The public shaping call still throws that callback
+error and the affected Text/TextGroup records it, while `commitState()` reports the newly accepted revision; later
+visibility, transforms, and render order continue from that publication rather than from a rejected-core split state.
+Public Text, root, and handle disposal first use the engine's existing mutation gate, so a disposal attempted from a
+borrowed publication callback rejects before changing lifecycle flags, root membership, or shape participation. Text
+preflights at the root-membership boundary even when it is detached and has no publication entry. The same gate remains
+closed until every shape participant captured for settlement has consumed its outcome, so an earlier root's `onError`
+cannot dispose a later root or handle and suppress its accepted-publication failure. Error attribution snapshots the
+publication's Text and live-group ownership, carries the accepted/rejected classification to both, installs every internal
+state, and only then invokes guarded notifications. The root retains only that error-path group ownership: replacement
+updates it, successful publication clears current Text state plus the retained group set directly without copying
+participants or rediscovering ancestry, and group disposal releases the group from the same set and clears its terminal
+error state after lifecycle preflight. Disposed groups cannot be reacquired by later attribution. Arbitrary callback
+throws, including `undefined`, `null`, and `0`, retain their identity through `onError` and the public shaping throw. The
+accepted hook also preserves that retirement value if reentrant notification changes hierarchy and the following initial
+transform synchronization throws: synchronization errors surface when no earlier publication failure exists, and failed
+initial synchronization remains pending for a later publication retry. The historical `Text.error`/`TextGroup.error`
+getters still return `undefined` for both no error and a thrown `undefined`; internal presence state keeps `commitState()`
+and later replacement/clearing deterministic without expanding that public API. Final renderer teardown after a throwing
+Three disposal listener remains an inherited total-cleanup limitation owned by a separate follow-up; this publication
+correction does not broaden into it.
+
 A paragraph's public content box may declare `columns: { count, gap }`, flowing text through side-by-side ordered columns
 inside the exact content-box width. Columns fill in order without balancing, so the final column may run short, and an
 exact `width` is required because the column advance is derived from it. Internally, Rust already retains bounded rectangle

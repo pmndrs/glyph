@@ -93,6 +93,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
   #synchronizingTransforms = false;
   #syncWorldMatricesCurrent = false;
   #synchronizedTransformCount = 0;
+  #publicationFailure: Readonly<{ error: unknown }> | undefined;
   #disposed = false;
 
   constructor(resources: ThreeRendererResources, owner: ThreeRendererHost) {
@@ -236,6 +237,13 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     if (this.#synchronizingTransforms) this.#synchronizedTransformCount = changed;
   }
 
+  /** Returns and clears a caller-owned failure raised after the latest publication became irreversible. */
+  takePublicationFailure(): Readonly<{ error: unknown }> | undefined {
+    const failure = this.#publicationFailure;
+    this.#publicationFailure = undefined;
+    return failure;
+  }
+
   #syncTransformsCore(transformIds: Iterable<number>, worldMatricesCurrent: boolean): number {
     return this.#transformSynchronizer.sync(this.#transformState, transformIds, worldMatricesCurrent);
   }
@@ -274,8 +282,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       commit: (): void => {
         if (state !== 'open') throw new Error(`Three renderer preparation was already ${state}`);
         state = 'committed';
-        const failure = this.#commit(prepared);
-        if (failure !== undefined) throw failure;
+        this.#publicationFailure = this.#commit(prepared);
       },
       discard: (): void => {
         if (state !== 'open') return;
@@ -376,8 +383,8 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     }
   }
 
-  #commit(prepared: PreparedPublication): unknown | undefined {
-    let failure: unknown;
+  #commit(prepared: PreparedPublication): Readonly<{ error: unknown }> | undefined {
+    let failure: Readonly<{ error: unknown }> | undefined;
     const retiredTransformAttribute =
       prepared.replacesDraws && prepared.context.transformAttribute !== this.#transformAttribute
         ? this.#transformAttribute
@@ -388,7 +395,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       try {
         operation();
       } catch (error) {
-        failure ??= error;
+        failure ??= { error };
       }
     };
     commitBufferMutations(prepared.bufferMutations);

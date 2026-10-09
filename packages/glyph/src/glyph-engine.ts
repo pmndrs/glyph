@@ -193,6 +193,7 @@ class GlyphEngineImpl implements GlyphEngine {
   #disposed = false;
   #disposing = false;
   #borrowedPlanActive = false;
+  #shapeSettlementActive = false;
   #shapeActive = false;
   #nextHandleOrdinal = 1;
 
@@ -220,6 +221,7 @@ class GlyphEngineImpl implements GlyphEngine {
       () => this.#assertHandleStateAvailable(),
       () => this.#enterBorrowedPlan(),
       `${options.integration}/handle/${ordinal}`,
+      () => this.#assertHandleLifecycleMutationAllowed(),
     );
     this.#handleStates.add(state);
     this.#nextHandleOrdinal = nextOrdinal;
@@ -229,6 +231,7 @@ class GlyphEngineImpl implements GlyphEngine {
   /** Teardown is total — every stage runs even if an earlier one fails, so one bad font can't strand the Wasm memory. Failures are reported, not thrown, since this often runs while already unwinding. */
   dispose(): void {
     if (this.#disposed || this.#disposing) return;
+    this.#assertHandleLifecycleMutationAllowed();
     if (this.#borrowedPlanActive) {
       throw new Error('glyph engine cannot be disposed while a borrowed render plan is active');
     }
@@ -349,6 +352,10 @@ class GlyphEngineImpl implements GlyphEngine {
 
   /** @internal */
   _disposeShapeParticipant(registration: GlyphShapeRegistrationImpl): void {
+    if (!this.#disposing) {
+      this.#assertHandleStateAvailable();
+      this.#assertHandleLifecycleMutationAllowed();
+    }
     this.#dirtyShapeRegistrations.delete(registration);
     this.#shapeRegistrations.delete(registration);
   }
@@ -367,7 +374,7 @@ class GlyphEngineImpl implements GlyphEngine {
     staged.length = 0;
     stagedRegistrationIndices.length = 0;
     outcomes.length = 0;
-    let failure: unknown;
+    let failure: ShapeFailure | undefined;
     try {
       for (const registration of this.#dirtyShapeRegistrations) registrations.push(registration);
       this.#dirtyShapeRegistrations.clear();
@@ -376,7 +383,7 @@ class GlyphEngineImpl implements GlyphEngine {
         try {
           this.#updateShapeBatch(staged, stagedRegistrationIndices, outcomes);
         } catch (error) {
-          const batchError = asError(error);
+          const batchError = shapeFailure(error);
           for (let index = 0; index < outcomes.length; index += 1) {
             if (outcomes[index] === undefined) outcomes[index] = batchError;
           }
@@ -384,13 +391,13 @@ class GlyphEngineImpl implements GlyphEngine {
       }
       this.#settleShapeParticipants(registrations, outcomes);
     } catch (error) {
-      failure = error;
+      failure = shapeFailure(error);
     } finally {
       for (const planner of staged) {
         try {
           planner.discard();
         } catch (error) {
-          failure ??= error;
+          failure ??= shapeFailure(error);
         }
       }
       registrations.length = 0;
@@ -399,7 +406,7 @@ class GlyphEngineImpl implements GlyphEngine {
       outcomes.length = 0;
       this.#shapeActive = false;
     }
-    if (failure !== undefined) throw failure;
+    if (failure !== undefined) throw failure.error;
   }
 
   #stageShapeParticipants(
@@ -423,7 +430,7 @@ class GlyphEngineImpl implements GlyphEngine {
         }
       } catch (error) {
         this.#dirtyShapeRegistrations.delete(registration);
-        outcomes[index] = asError(error);
+        outcomes[index] = shapeFailure(error);
       }
     }
   }
@@ -468,19 +475,19 @@ class GlyphEngineImpl implements GlyphEngine {
         if (resultPointer === 0) requireEngineStatus(status, 'publish Glyph root');
         planner.adopt(resultPointer, finalMemory);
       } catch (error) {
-        outcomes[registrationIndex] = asError(error);
+        outcomes[registrationIndex] = shapeFailure(error);
       }
     }
     const leaveBorrow = this.#enterBorrowedPlan();
     try {
       for (let stagedIndex = 0; stagedIndex < staged.length; stagedIndex += 1) {
         const registrationIndex = stagedRegistrationIndices[stagedIndex]!;
-        if (outcomes[registrationIndex] instanceof Error) continue;
+        if (isShapeFailure(outcomes[registrationIndex])) continue;
         const planner = staged[stagedIndex]!;
         try {
           outcomes[registrationIndex] = planner.consume();
         } catch (error) {
-          outcomes[registrationIndex] = asError(error);
+          outcomes[registrationIndex] = shapeFailure(error);
         }
       }
     } finally {
@@ -489,37 +496,43 @@ class GlyphEngineImpl implements GlyphEngine {
     for (let stagedIndex = 0; stagedIndex < staged.length; stagedIndex += 1) {
       const registrationIndex = stagedRegistrationIndices[stagedIndex]!;
       const outcome = outcomes[registrationIndex];
-      if (outcome === undefined || outcome === SKIPPED || outcome instanceof Error || !outcome.accepted) continue;
+      if (outcome === undefined || outcome === SKIPPED || isShapeFailure(outcome) || !outcome.accepted) continue;
       try {
         staged[stagedIndex]!.settle();
       } catch (error) {
-        outcomes[registrationIndex] = asError(error);
+        outcomes[registrationIndex] = shapeFailure(error);
       }
     }
   }
 
   #settleShapeParticipants(registrations: GlyphShapeRegistrationImpl[], outcomes: ShapeOutcome[]): void {
-    const errors = new Set<Error>();
-    for (let index = 0; index < registrations.length; index += 1) {
-      const registration = registrations[index]!;
-      if (registration.disposed) continue;
-      const outcome = outcomes[index];
-      try {
-        if (outcome === SKIPPED) continue;
-        if (outcome === undefined || outcome instanceof Error) {
-          const error = outcome ?? new Error('Glyph root did not produce a shape outcome');
-          registration.rejected(error);
-          errors.add(error);
-        } else if (outcome.accepted) {
-          registration.accepted();
-        } else {
-          const error = asError(outcome.error);
-          registration.rejected(error);
+    const errors = new Set<unknown>();
+    this.#shapeSettlementActive = true;
+    try {
+      for (let index = 0; index < registrations.length; index += 1) {
+        const registration = registrations[index]!;
+        if (registration.disposed) continue;
+        const outcome = outcomes[index];
+        try {
+          if (outcome === SKIPPED) continue;
+          if (outcome === undefined || isShapeFailure(outcome)) {
+            const error =
+              outcome === undefined ? new Error('Glyph root did not produce a shape outcome') : outcome.error;
+            registration.rejected(error);
+            errors.add(error);
+          } else if (outcome.accepted) {
+            registration.accepted();
+          } else {
+            const error = outcome.error;
+            registration.rejected(error);
+            errors.add(error);
+          }
+        } catch (error) {
           errors.add(error);
         }
-      } catch (error) {
-        errors.add(asError(error));
       }
+    } finally {
+      this.#shapeSettlementActive = false;
     }
     if (errors.size === 1) throw errors.values().next().value;
     if (errors.size > 1) throw new AggregateError(errors, 'multiple Glyph roots rejected shape()');
@@ -549,6 +562,12 @@ class GlyphEngineImpl implements GlyphEngine {
     if (this.#disposed) throw new Error('glyph engine has been disposed');
     if (this.#borrowedPlanActive) {
       throw new Error('glyph engine cannot be reentered while a borrowed render plan is active');
+    }
+  }
+
+  #assertHandleLifecycleMutationAllowed(): void {
+    if (this.#shapeSettlementActive) {
+      throw new Error('glyph engine cannot mutate handles while shape participants are settling');
     }
   }
 
@@ -583,7 +602,17 @@ class GlyphEngineImpl implements GlyphEngine {
 }
 
 const SKIPPED: unique symbol = Symbol('pmndrs.glyph.shape.skipped');
-type ShapeOutcome = PlanAcceptance | Error | typeof SKIPPED | undefined;
+const SHAPE_FAILURE: unique symbol = Symbol('pmndrs.glyph.shape.failure');
+type ShapeFailure = Readonly<{ [SHAPE_FAILURE]: true; error: unknown }>;
+type ShapeOutcome = PlanAcceptance | ShapeFailure | typeof SKIPPED | undefined;
+
+function shapeFailure(error: unknown): ShapeFailure {
+  return { [SHAPE_FAILURE]: true, error };
+}
+
+function isShapeFailure(outcome: ShapeOutcome): outcome is ShapeFailure {
+  return typeof outcome === 'object' && outcome !== null && SHAPE_FAILURE in outcome;
+}
 
 class GlyphShapeRegistrationImpl implements GlyphShapeRegistration {
   readonly #engine: GlyphEngineImpl;
@@ -618,17 +647,13 @@ class GlyphShapeRegistrationImpl implements GlyphShapeRegistration {
 
   dispose(): void {
     if (this.#disposed) return;
-    this.#disposed = true;
     this.#engine._disposeShapeParticipant(this);
+    this.#disposed = true;
   }
 }
 
 function requireEngineStatus(status: number, operation: string): void {
   if (status !== textShaperAbi.status.ok) throw new GlyphEngineStatusError(operation, status);
-}
-
-function asError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
 }
 
 class EngineFontBindingLeaseImpl<Format extends RasterFormatMetadata> implements EngineFontBindingLease<Format> {

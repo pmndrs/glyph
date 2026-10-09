@@ -461,6 +461,8 @@ export interface GlyphShapeOptions {
 
 /** Core-owned shaping/publication services scoped to exactly one anonymous or named root. */
 export interface GlyphRootServices<Bindings extends GlyphBindingSet, RendererResult, Boundary = unknown> {
+  /** @internal Reject lifecycle mutation while this root belongs to an active engine publication or settlement. */
+  _preflightLifecycleMutation(): void;
   createText<Format extends RasterFormatMetadata>(
     state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>,
   ): GlyphTextController<Format, Bindings['materialInput'], Bindings['transformInput']>;
