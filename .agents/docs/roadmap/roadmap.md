@@ -69,10 +69,11 @@ Do not land the unvalidated preparation/rope branches to satisfy the release dat
 original edit-sized and interleaved-read acceptance; it is excluded from this release candidate.
 
 - [x] Land manual batch visibility validation and package-owned breaking-change migration guidance (#284, #281).
-- [x] Pass current main `8122d97e` full CI, including browser/packed-consumer checks and full Labs (run 37997996053).
-- [ ] Establish release-wide parity against published 0.1.0; comparison run 38001807239 reuses that pinned main result.
-- [ ] Land complete merged-feature release notes (#288), then prepare and validate the 0.2.0 manifest and stable tag.
-- [ ] Publish only after those gates pass under the maintainer's conditional release authorization.
+- [x] Pass full CI for merged runtime checkpoint `8122d97e`, including browser/packed-consumer checks and full Labs (run 37997996053).
+- [ ] Establish release-wide parity against published 0.1.0. Saved-main comparison 38001807239 refused runner CPU mismatches before timing; same-runner smoke comparison 38003684672 completed with five neutral cases and one clock-confounded exclusion. This focused result cannot alone clear release-wide parity.
+- [x] Land complete merged-feature release notes (#288, main `653d7969`).
+- [ ] Prepare and validate the 0.2.0 manifest and release package after the performance cut is accepted.
+- [ ] Obtain explicit authorization and publish only after the release gates pass. Pushing a stable `v0.2.0` tag invokes npm publication; do not push that tag as a preparation step.
 
 The [release tracker](https://github.com/pmndrs/glyph/issues/253) carries exact-head CI/Labs evidence and exclusions.
 Rope implementation continues in parallel through the existing preparation/publication design, preserving synchronous
