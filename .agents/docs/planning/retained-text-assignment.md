@@ -11,6 +11,18 @@ sources:
   - id: wrapping
     resource: https://xi-editor.io/docs/rope_science_05.html
     title: Incremental word wrapping
+  - id: summaries
+    resource: https://xi-editor.io/docs/rope_science_01.html
+    title: MapReduce for text
+  - id: metrics
+    resource: https://xi-editor.io/docs/rope_science_02.html
+    title: Metrics
+  - id: graphemes
+    resource: https://xi-editor.io/docs/rope_science_03.html
+    title: Grapheme cluster boundaries
+  - id: bulk-wrap
+    resource: https://xi-editor.io/docs/rope_science_06.html
+    title: Parallel and asynchronous word wrapping
   - id: invalidation
     resource: https://xi-editor.io/docs/rope_science_12.html
     title: Minimal invalidation
@@ -31,7 +43,7 @@ sources:
     title: Retained label and trailing-span Labs cases
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-09T14:00:00Z'
+  at: '2026-10-09T15:21:10Z'
 ---
 
 # Retained text assignment and incremental invalidation
@@ -64,6 +76,38 @@ invalidation sources. Xi's proposed part 7 about spans and interval trees was ne
 Rust word comparison, fused JS packing with 32-bit comparisons, scalar scans, and SIMD are candidates. Do not assume a
 packed loop beats native string equality, allocate a second packed copy just to compare, or use JS BigInt per word. Keep
 Unicode boundary checks and sequential mutation semantics. A storage chunk is not a safe shaping boundary by itself.
+
+### Applying the six Rope Science articles
+
+The following are proposed Glyph applications of the linked research, not implemented storage or measured speedups.
+
+| Article | Mechanism                                                                                                   | Glyph application and constraint                                                                                                                                                                                            |
+| ------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Part 1  | Associative summaries retained at tree nodes; an edit recomputes affected ancestors.                        | Summarize hard breaks, lengths, and proven composable properties. Arbitrary shaped width is not an additive character metric. Full assignment still requires change discovery. [^summaries]                                 |
+| Part 2  | Compatible text metrics and aligned secondary break storage; stateful boundaries are computed separately.   | Keep UTF-16 offsets, Unicode boundaries, and retained layout records aligned. Use conservative difficulty summaries to select scope within the existing pipeline. [^metrics]                                                |
+| Part 3  | Context summaries avoid repeatedly scanning long regional-indicator sequences for parity.                   | Carry required Unicode context across chunks instead of treating leaf boundaries as grapheme boundaries. This historical discussion is not a current Unicode ruleset or a complete shaping-boundary algorithm. [^graphemes] |
+| Part 5  | Retain breaks, restart before an edit, and stop after the edit when new breaks agree with the old result.   | Add multi-island flow reconvergence after the sparse shaping slice; preserve unaffected suffixes. Derive restart and convergence proofs for Glyph's full layout state. [^wrapping]                                          |
+| Part 6  | Hard-break partitioning exposes independent wrapping work; initial layout and width changes need bulk work. | Reuse independence where proved, synchronously. Keep calls answering where invoked; no background wrapping or partially correct public reads. [^bulk-wrap]                                                                  |
+| Part 12 | Lightweight retained validity, including partial validity, produces small downstream updates.               | Preserve dirty scope through gather, planning, and GPU publication; distinguish changed paint from changed glyph content. Reuse the existing accepted-state authority. [^invalidation]                                      |
+
+Part 5 is particularly relevant to the remaining reflow cost: paragraph-level caching loses the information that only a
+few lines changed. Xi restarts two breaks before an edit and stops at an agreeing break beyond it, under its wrapping
+model. Glyph must prove an unchanged downstream input and equivalent continuation state, including shaping context,
+flow constraints, line metrics, exclusions/drop caps, and any carried bidi state; equal offsets alone are insufficient.
+For scattered edits, convergence before the next dirty island skips only the intervening unchanged region, not later
+dirty work. Preserve suffix positions through a proven common displacement or recompute affected positions. This is a
+Glyph adaptation to validate against full layout, not a claim that Xi's simple wrap rules transfer unchanged.[^wrapping]
+
+Keep grapheme, line-break, shaping, and storage boundaries distinct. Use the repository's pinned Unicode data and
+conformance vectors; the 2016 grapheme article illustrates context composition rather than supplying today's rules.
+Test long regional-indicator sequences, combining marks, ZWJ sequences, and edits at chunk seams against cold output.
+Safe grapheme segmentation alone does not establish independent font shaping.[^graphemes]
+
+The next reflow slice should instrument visited lines and reused suffixes, then test split/merged hard breaks,
+length-changing edits, scattered islands, and width changes against cold layout. Benchmark local and broad changes;
+incremental bookkeeping must not penalize the bulk case. Carry the resulting changed ranges through existing publication
+owners and validate emitted records, rather than rediscovering changes with whole-root scans. Xi's viewport-lazy cache
+is separate future research; it must not make Glyph measurements depend on what is visible.[^wrapping][^invalidation]
 
 ## Proposed JS mini-shaper fallback
 
