@@ -10,6 +10,12 @@ sources:
   - id: manifest
     resource: ../../../packages/glyph/package.json
     title: Package manifest
+  - id: changelog
+    resource: ../../../packages/glyph/CHANGELOG.md
+    title: User-facing release record
+  - id: migration-0-2
+    resource: ../../../packages/glyph/MIGRATION-0.2.md
+    title: Glyph 0.1 to 0.2 migration guide
   - id: release-workflow
     resource: ../../../.github/workflows/release.yml
     title: npm stable and canary release workflow
@@ -129,7 +135,7 @@ sources:
     title: Pinned msdfgen CLI scanline and error-correction configuration
 generated:
   by: openai-codex/gpt-5
-  at: '2026-10-09T08:54:30Z'
+  at: '2026-10-09T15:48:01Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -141,7 +147,9 @@ publishes under `latest` only when it matches the package manifest version exact
 package before publishing through the existing npm trusted publisher. Prepare each release's version separately,
 then cut its stable tag from the reviewed commit after CI passes.
 `packages/glyph/CHANGELOG.md` is the hand-authored user-facing release record; its Unreleased section declares the next
-semver target and excludes CI or commit-history narration.
+semver target and excludes CI or commit-history narration. The package-owned
+[`MIGRATION-0.2.md`](../../../packages/glyph/MIGRATION-0.2.md) is the task-oriented path from 0.1 to 0.2; it links the
+archived rename commands and keeps deferred API work out of shipped claims.
 
 ## Ownership
 
@@ -1034,10 +1042,10 @@ stays live and may continue publishing while detached objects remain unchanged.
 preserves the relationship for outline reads, while matrices and pivots remain flat per-drawable arrays (`count * 16`
 and `count * 2`). Each drawable maps to its physical render record. A `DetachedGlyph` carries three identities: `index` is its position in this detached object, `key` is the
 same occurrence across a reflow (the shipped contract, unchanged), and `fontHandle` plus `glyphId` are the same shape: the
-plain-number id of the font that shaped it (never reused, not a lease, equal to
-`text.glyphs().fontHandles[glyphFontSlots[index]]`) and its index in that font, filled for every index from the retained
-layout. Equal pairs mean an equal outline, so a shape built once serves every occurrence. There is no public lookup of
-a font by id. `Glyphs.outlineAt(index)` ([Glyph outlines](#glyph-outlines)) reads from the owned inspection
+plain-number id of the font that shaped it (never reused and not a lease) and its index in that font. Because the
+corresponding full-layout index is private, callers must not use a detached index with `text.glyphs()` columns. Equal
+pairs mean an equal outline, so a shape built once serves every occurrence. There is no public lookup of a font by id.
+`Glyphs.outlineAt(index)` ([Glyph outlines](#glyph-outlines)) reads from the owned inspection
 `split()` retained, so like `glyphAt` it is data: it reads after the source re-lays out and after the font or the
 `Glyphs` object is disposed. Its origin is the pivot of `setMatrixAt`'s matrix; scale by `DetachedGlyph.fontSize` and
 negate y to get the local frame that matrix places.

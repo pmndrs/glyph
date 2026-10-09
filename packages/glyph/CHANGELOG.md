@@ -4,13 +4,19 @@ This file records user-facing package changes. It is hand-authored and intention
 
 ## Unreleased — targets 0.2.0
 
+See the [0.2 migration guide](./MIGRATION-0.2.md) for before/after examples and the archived rename commands.
+
 ### Breaking
 
+- Renamed synchronous borrowed glyph reads from `withGlyphs` to `readGlyphs` across core, Three, and TypeGPU, without a compatibility alias. The callback's synchronous lifetime, return value, and exception behavior are unchanged.
+- Renamed Three's `Text.breakApart()` to `Text.split()` without a compatibility alias. The frozen `[Glyphs, Decorations | undefined]` result, committed-state requirement, independent ownership, and caller-owned disposal are unchanged.
+- `Text.split()` now exposes one dense index over drawable glyphs only. Spaces and other blank layout glyphs remain in `text.glyphs()` but are excluded from detached `Glyphs`; `DetachedGlyph.sourceIndex` is removed, while `fontHandle` and `glyphId` identify the glyph's reusable shape. Use `glyphs.measurements[index]` to align detached transforms instead of indexing full-layout measurements. Indexed detached-glyph methods throw `RangeError` outside `0 <= index < glyphs.count`.
 - `TextGroup` now creates a batch boundary by default. Compatible text no longer coalesces across separate top-level authored groups, and hiding a group can skip its owned draws. This makes `TextGroup.visible` intuitive but may increase draw counts and renumber renderer-owned mesh `renderOrder` values in applications that relied on the 0.1.0 global pool. Set `batching="shared"` to retain the 0.1.0 coalescing behavior.
 - `Text.set()` with state equivalent to the accepted state no longer forces another publication. Assign `font` or `material` explicitly to force resource restaging.
 
 ### Added
 
+- Added optional static-font glyph outlines for any raster format. Bake with `glyph bake --outlines`, then use borrowed `readGlyphs((glyphs) => glyphs.outlineAt(...))`, owned `glyphs().outlineAt()`, or dense detached `Glyphs.outlineAt()` reads. Outline-format metadata and variable-font axes are deferred and are not 0.2 support.
 - Added `batching="auto" | "shared" | "group"` to Three, React, and Vue `TextGroup`s. `auto` creates a boundary for a top-level authored group and inherits that boundary through nested automatic groups; `group` forces a nested boundary; `shared` joins the nearest enclosing authored boundary or the implicit root pool.
 - Exported `TextGroupBatching` from `@pmndrs/glyph/three`.
 
