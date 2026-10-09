@@ -3,9 +3,15 @@ type: Engineering Report
 title: 'Issue-ready update for #99: dynamic variable-font acceptance'
 description: Provides exact issue-ready support scope and Paper Mono acceptance evidence for Glyph variable fonts.
 tags: [glyph, fonts, variable-fonts, issues, paper-mono]
+status: draft
+sources:
+  - resource: https://github.com/pmndrs/glyph/issues/99
+  - resource: https://github.com/pmndrs/glyph/issues/244
+  - resource: ../../../packages/glyph/research/paper-mono/results.json
+  - resource: ../../../packages/glyph/research/paper-mono/validate.py
 generated:
-  by: openai-codex/gpt-5
-  at: '2026-10-08T00:00:00Z'
+  by: openai-codex/gpt-6
+  at: '2026-10-09T06:00:00Z'
 ---
 
 # Issue-ready update for #99: dynamic variable-font acceptance

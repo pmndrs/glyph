@@ -3,9 +3,15 @@ type: Engineering Report
 title: Paper Mono validation for the variable outline stream
 description: Validates the proposed dynamic outline-stream format and its variable-font design against pinned Paper Mono.
 tags: [glyph, fonts, opentype, variable-fonts, outlines, paper-mono]
+status: draft
+sources:
+  - resource: https://github.com/pmndrs/glyph/issues/99
+  - resource: https://github.com/pmndrs/glyph/issues/244
+  - resource: ../../../packages/glyph/research/paper-mono/results.json
+  - resource: ../../../packages/glyph/research/paper-mono/validate.py
 generated:
-  by: openai-codex/gpt-5
-  at: '2026-10-08T00:00:00Z'
+  by: openai-codex/gpt-6
+  at: '2026-10-09T06:00:00Z'
 ---
 
 # Paper Mono validation for the variable outline stream
@@ -69,8 +75,8 @@ requires SHA-256 `43369c40e211aab9dda29464b0d715c9f20d90118626a56659607108c9c03d
 font and oracle instances. The font is available under the project's
 [SIL Open Font License 1.1](https://github.com/paper-design/paper-mono/blob/e6eaeceaef02e77e3db997711e07a16378de2bd7/OFL.txt);
 no font binary is committed or redistributed. The checked-in implementation and complete deterministic result are
-`spikes/outline-stream/research/paper-mono/validate.py` and
-`spikes/outline-stream/research/paper-mono/results.json`.
+`packages/glyph/research/paper-mono/validate.py` and
+`packages/glyph/research/paper-mono/results.json`.
 
 The validator does the following:
 

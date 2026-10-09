@@ -1,4 +1,4 @@
-/* @workflow { "name": "glyph:paper-mono-outline-stream-check", "summary": "Validate the proposed dynamic outline stream against pinned Paper Mono, HarfBuzz, and fontTools oracles.", "requirements": "Network access, uv, the pinned Python dependency, and the vendored HarfBuzz 14.2.0 tools.", "writes": "Temporary downloaded/oracle fonts; with --write, spikes/outline-stream/research/paper-mono/results.json." } */
+/* @workflow { "name": "glyph:paper-mono-outline-stream-check", "summary": "Validate the proposed dynamic outline stream against pinned Paper Mono, HarfBuzz, and fontTools oracles.", "requirements": "Network access, uv, the pinned Python dependency, and the vendored HarfBuzz 14.2.0 tools.", "writes": "Temporary downloaded/oracle fonts; with --write, packages/glyph/research/paper-mono/results.json." } */
 
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -13,8 +13,8 @@ const sourceSha256 = '43369c40e211aab9dda29464b0d715c9f20d90118626a56659607108c9
 const sourceUrl = `https://raw.githubusercontent.com/paper-design/paper-mono/${sourceCommit}/fonts/variable/PaperMono%5Bwght%5D.ttf`;
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const repositoryRoot = resolve(packageRoot, '../..');
-const validator = resolve(repositoryRoot, 'spikes/outline-stream/research/paper-mono/validate.py');
-const expected = resolve(repositoryRoot, 'spikes/outline-stream/research/paper-mono/results.json');
+const validator = resolve(repositoryRoot, 'packages/glyph/research/paper-mono/validate.py');
+const expected = resolve(repositoryRoot, 'packages/glyph/research/paper-mono/results.json');
 const write = process.argv.slice(2).includes('--write');
 const scratch = await mkdtemp(join(tmpdir(), 'glyph-paper-mono-outline-stream-'));
 
