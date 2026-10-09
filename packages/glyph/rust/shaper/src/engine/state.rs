@@ -369,6 +369,8 @@ fn index_paragraph_records(
 
 #[derive(Default)]
 struct ParagraphState {
+    #[cfg(test)]
+    preparation_count: usize,
     text: Staged<TextStage>,
     /// Whether the pending buffers are a byte-identical copy of the committed ones, so a
     /// mutation batch can skip re-seeding them.
@@ -774,6 +776,19 @@ impl TextEngine {
             .get(&handle)
             .and_then(PlannerState::first_paragraph_state)
             .map(|paragraph| paragraph.shaping_runs.committed().runs().len())
+            .ok_or(EngineError::RootMissing)
+    }
+
+    #[cfg(test)]
+    fn planner_paragraph_preparation_count(
+        &self,
+        root: u32,
+        paragraph: u32,
+    ) -> Result<usize, EngineError> {
+        self.planners
+            .get(&root)
+            .and_then(|planner| planner.paragraph(paragraph))
+            .map(|paragraph| paragraph.state.preparation_count)
             .ok_or(EngineError::RootMissing)
     }
 
@@ -1528,6 +1543,10 @@ impl TextEngine {
                 let paragraph = planner
                     .paragraph_mut(paragraph_id)
                     .ok_or(EngineError::InvalidRequest)?;
+                if spans.is_empty() && !paragraph.state.has_pending_preparation() {
+                    paragraph.positioned_changed = false;
+                    continue;
+                }
                 let (prefix_adopted, geometry_adopted) = if adopted.is_some() {
                     paragraph.state.speculative_match(text, styles, geometry)
                 } else {
@@ -2823,6 +2842,19 @@ impl PlannerState {
 }
 
 impl ParagraphState {
+    fn has_pending_preparation(&self) -> bool {
+        self.text.is_prepared()
+            || self.styles.is_prepared()
+            || self.unicode.is_prepared()
+            || self.bidi.is_prepared()
+            || self.shaping_runs.is_prepared()
+            || self.shape.is_prepared()
+            || self.clusters.is_prepared()
+            || self.geometry.is_prepared()
+            || self.flow_layout.is_prepared()
+            || self.positioned.is_prepared()
+    }
+
     /// Clears paragraph identity and committed/pending semantics while retaining every allocation.
     #[inline(never)]
     fn reset_for_reuse(&mut self) {
@@ -2949,6 +2981,10 @@ impl ParagraphState {
         next_glyph_id: &mut u32,
         next_content_revision: &mut u32,
     ) -> Result<bool, EngineError> {
+        #[cfg(test)]
+        {
+            self.preparation_count += 1;
+        }
         self.prepare_text(text_mutations)?;
         self.prepare_styles(style_mutations, |handle| {
             font_stacks
@@ -6105,6 +6141,262 @@ mod tests {
         assert_eq!(engine.root_count(), 1);
         assert_eq!(engine.dispose_root(4), Ok(()));
         assert_eq!(engine.dispose_root(4), Err(EngineError::RootMissing));
+    }
+
+    #[test]
+    fn unchanged_paragraphs_skip_real_shaper_preparation_across_lifecycle_transitions() {
+        const INTER: &[u8] =
+            include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
+        const GLYPH_COUNT: u32 = 2937;
+
+        let mut shaper = ShaperRegistry::default();
+        let extents = vec![0; GLYPH_COUNT as usize * 8];
+        let availability = vec![0; (GLYPH_COUNT as usize).div_ceil(8)];
+        assert_eq!(
+            shaper.register_font(101, INTER, &extents, &availability, 0, 0),
+            crate::STATUS_OK
+        );
+
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine
+            .register_font_binding(20, 101, GLYPH_COUNT, render_binding(GLYPH_COUNT, 1))
+            .unwrap();
+        engine.register_font_stack(7, &[20]).unwrap();
+        engine.create_root(4).unwrap();
+
+        let lifecycle = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 1),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 2),
+            (PARAGRAPH_MUTATION_UPSERT, 3, 3),
+        ]);
+        let text = paragraph_text_mutation_bytes(&[
+            (1, 0, 0, &[0x61]),
+            (2, 0, 0, &[0x62]),
+            (3, 0, 0, &[0x63]),
+        ]);
+        let styles = paragraph_root_style_bytes(&[(1, 1), (2, 1), (3, 1)]);
+        let mut initial = update(0, 0, 0);
+        initial.limits.max_paragraphs = 3;
+        initial.limits.max_clusters = 8;
+        initial.limits.max_lines = 8;
+        initial.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 3).unwrap();
+        initial.text_mutations =
+            parse_text_mutations(&text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 3).unwrap();
+        initial.style_mutations =
+            parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 3).unwrap();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, initial, 1)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+        for paragraph_id in 1..=3 {
+            assert_eq!(
+                engine.planner_paragraph_preparation_count(4, paragraph_id),
+                Ok(1)
+            );
+            assert_eq!(
+                engine
+                    .planners
+                    .get(&4)
+                    .unwrap()
+                    .paragraph(paragraph_id)
+                    .unwrap()
+                    .state
+                    .shape
+                    .active()
+                    .glyph_ids
+                    .len(),
+                1
+            );
+        }
+
+        let sibling_text = paragraph_text_mutation_bytes(&[(2, 0, 1, &[0x79])]);
+        let mut sibling = update(1, 1, 1);
+        sibling.limits.max_paragraphs = 3;
+        sibling.limits.max_clusters = 8;
+        sibling.limits.max_lines = 8;
+        sibling.text_mutations =
+            parse_text_mutations(&sibling_text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, sibling, 2)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+        assert_eq!(engine.planner_paragraph_preparation_count(4, 1), Ok(1));
+        assert_eq!(engine.planner_paragraph_preparation_count(4, 2), Ok(2));
+        assert_eq!(engine.planner_paragraph_preparation_count(4, 3), Ok(1));
+        assert_eq!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .paragraph(2)
+                .unwrap()
+                .state
+                .text
+                .committed()
+                .units,
+            [0x79]
+        );
+
+        let speculative_text = paragraph_text_mutation_bytes(&[(1, 0, 1, &[0x71])]);
+        let mut query = update(2, 2, 2);
+        query.limits.max_paragraphs = 3;
+        query.limits.max_clusters = 8;
+        query.limits.max_lines = 8;
+        query.text_mutations =
+            parse_text_mutations(&speculative_text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        engine
+            .measure_paragraph_with_shaper(&mut shaper, query, 1)
+            .unwrap();
+        assert_eq!(engine.planner_paragraph_preparation_count(4, 1), Ok(2));
+        assert!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .paragraph(1)
+                .unwrap()
+                .state
+                .has_pending_preparation()
+        );
+        assert_eq!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .paragraph(1)
+                .unwrap()
+                .state
+                .text
+                .committed()
+                .units,
+            [0x61]
+        );
+        assert_eq!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .paragraph(1)
+                .unwrap()
+                .state
+                .text
+                .pending()
+                .units,
+            [0x71]
+        );
+
+        let next_sibling_text = paragraph_text_mutation_bytes(&[(2, 0, 1, &[0x7a])]);
+        let mut next_sibling = update(2, 2, 2);
+        next_sibling.limits.max_paragraphs = 3;
+        next_sibling.limits.max_clusters = 8;
+        next_sibling.limits.max_lines = 8;
+        next_sibling.text_mutations =
+            parse_text_mutations(&next_sibling_text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, next_sibling, 3)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+        assert_eq!(engine.planner_paragraph_preparation_count(4, 1), Ok(3));
+        assert_eq!(engine.planner_paragraph_preparation_count(4, 2), Ok(3));
+        assert_eq!(engine.planner_paragraph_preparation_count(4, 3), Ok(1));
+        assert_eq!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .paragraph(1)
+                .unwrap()
+                .state
+                .text
+                .committed()
+                .units,
+            [0x61]
+        );
+
+        let retry_text = paragraph_text_mutation_bytes(&[(3, 0, 1, &[0x64])]);
+        let mut retry_request = update(3, 3, 3);
+        retry_request.limits.max_paragraphs = 3;
+        retry_request.limits.max_clusters = 8;
+        retry_request.limits.max_lines = 8;
+        retry_request.text_mutations =
+            parse_text_mutations(&retry_text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, retry_request, 4)
+            .unwrap();
+        engine.abort_update(prepared).unwrap();
+        assert_eq!(engine.planner_paragraph_preparation_count(4, 1), Ok(3));
+        assert_eq!(engine.planner_paragraph_preparation_count(4, 2), Ok(3));
+        assert_eq!(engine.planner_paragraph_preparation_count(4, 3), Ok(2));
+        assert_eq!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .paragraph(3)
+                .unwrap()
+                .state
+                .text
+                .committed()
+                .units,
+            [0x63]
+        );
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, retry_request, 4)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+        assert_eq!(engine.planner_paragraph_preparation_count(4, 1), Ok(3));
+        assert_eq!(engine.planner_paragraph_preparation_count(4, 2), Ok(3));
+        assert_eq!(engine.planner_paragraph_preparation_count(4, 3), Ok(3));
+        assert_eq!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .paragraph(3)
+                .unwrap()
+                .state
+                .text
+                .committed()
+                .units,
+            [0x64]
+        );
+
+        engine.dispose_root(4).unwrap();
+        engine.create_root(4).unwrap();
+        let recreated_lifecycle = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 4, 1)]);
+        let recreated_text = paragraph_text_mutation_bytes(&[(4, 0, 0, &[0x65])]);
+        let recreated_style = paragraph_root_style_bytes(&[(4, 1)]);
+        let mut recreated = update(0, 0, 0);
+        recreated.paragraph_mutations =
+            parse_paragraph_mutations(&recreated_lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        recreated.text_mutations =
+            parse_text_mutations(&recreated_text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        recreated.style_mutations =
+            parse_style_mutations(&recreated_style, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, recreated, 5)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+        assert_eq!(engine.planner_paragraph_preparation_count(4, 4), Ok(1));
+        assert_eq!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .paragraph(4)
+                .unwrap()
+                .state
+                .shape
+                .active()
+                .glyph_ids
+                .len(),
+            1
+        );
     }
 
     #[test]
