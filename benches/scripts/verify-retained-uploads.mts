@@ -20,6 +20,8 @@ const scriptPath = fileURLToPath(import.meta.url);
 const lockHeld = process.argv.includes('--performance-lock-held');
 const usage = process.argv.includes('--usage=dynamic') ? 'dynamic' : 'stream';
 const root = fileURLToPath(new URL('..', import.meta.url));
+const origin = process.env.PORTLESS_URL;
+if (origin === undefined) throw new Error('Run benchmark:retained-uploads through Portless; PORTLESS_URL is required.');
 const glyphPackageRoot =
   process.env.GLYPH_RETAINED_UPLOAD_PACKAGE_ROOT === undefined
     ? undefined
@@ -87,7 +89,6 @@ async function run(): Promise<void> {
     if (address === null || address === undefined || typeof address === 'string') {
       throw new Error('Vite did not publish its loopback TCP address');
     }
-    const origin = process.env.PORTLESS_URL ?? `http://127.0.0.1:${String(address.port)}`;
     browser = await launchProjectChromium({
       headless: true,
       args: ['--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu'],

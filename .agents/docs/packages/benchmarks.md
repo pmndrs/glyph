@@ -763,7 +763,7 @@ A successful baked Presentation preload retains one application-lifetime `Font` 
 
 `pnpm scripts run benchmark:presentation-screenshots` retains one MTSDF screenshot for every verified workload on WebGPU and forced WebGL under the ignored benchmark cache.
 
-`pnpm scripts run benchmark:retained-uploads` runs one multi-color ASCII-rich retained `Text` through WebGPU and forced
+`mise exec -- npx --yes portless run --name glyph-retained-uploads pnpm scripts run benchmark:retained-uploads` runs one multi-color ASCII-rich retained `Text` through WebGPU and forced
 WebGL2 in project Chromium. It separates text scheduling and publication time from render submission, counts retained
 attribute and PBO-texture upload calls and bytes at Three's common managers, verifies framebuffer readback after content,
 count, capacity, draw-topology, and transform changes, and requires unchanged attribute versions. The default candidate
