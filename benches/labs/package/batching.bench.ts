@@ -153,11 +153,15 @@ group('edit-sized root publication @publication @edit-sized @edit', () => {
         const expected = texts.map((text) => {
           const cold = createLabels(1);
           cold.labels[0]!.text = text;
-          const measurement = JSON.stringify(cold.labels[0]!.measure());
+          if (publishRenderer) glyph.shape();
+          const measurement = cold.labels[0]!.measure();
           disposeLabels(cold);
           return measurement;
         });
-        assert(expected[0] !== expected[1], 'the edited values must produce distinct measurements');
+        assert(
+          JSON.stringify(expected[0]) !== JSON.stringify(expected[1]),
+          'the edited values must produce distinct measurements',
+        );
         const created = createLabels(count);
         const stride = count / 100;
         const edited = created.labels.filter((_, index) => index % stride === 0);
@@ -178,7 +182,7 @@ group('edit-sized root publication @publication @edit-sized @edit', () => {
         assert(glyphCount > 0, 'immediate measurements must contain glyphs');
         assert.equal(edited.length, 100);
         for (const label of edited) {
-          assert.equal(JSON.stringify(label.measure()), expected[alternate ? 0 : 1]);
+          deepStrictEqual(label.measure(), expected[alternate ? 0 : 1]);
         }
         deepStrictEqual(
           untouched.map((label) => JSON.stringify(label.measure())),
