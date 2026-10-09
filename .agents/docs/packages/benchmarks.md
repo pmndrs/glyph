@@ -252,7 +252,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-09T18:20:19Z'
+  at: '2026-10-09T21:20:46Z'
 ---
 
 # Package reference: `@pmndrs/glyph-benchmarks`
@@ -814,6 +814,10 @@ reads are distinct from `measureGlyphs()`, which describes currently displayed g
 `benchmark:edit-sized-publication-profile` installs one packed artifact
 and optionally substitutes a named shaper Wasm, then emits a CPU profile, timing summary, and manifest for shaping,
 gather, render-plan, serialization, allocation, host-JavaScript, and other-Wasm attribution.
+Its `--case prepared-read --count 100|1000 --boundary preparation|publication` profiles the same 100 scattered
+assignments and immediate semantic measurements as the paired Labs cases. Both boundaries use identical edited strings;
+only the publication boundary calls `glyph.shape()` after each assignment. Cold measurement oracles and untouched-label
+checks run outside the sampled loop. Existing profile cases retain their explicit-publication behavior.
 `benchmark:labs-internal` is reserved for workspace-only implementation experiments that cannot ship in
 the package artifact. Its `engine` suite preserves the raw retained-engine invalidation classes across selectable Bitmap,
 MTSDF, and Slug artifacts and Latin, bidi, and CJK corpora. Its `kernel` suite measures the scalar,

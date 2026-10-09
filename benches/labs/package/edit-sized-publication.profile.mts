@@ -1,4 +1,5 @@
 import { Session } from 'node:inspector/promises';
+import assert, { deepStrictEqual } from 'node:assert/strict';
 import type { Profiler } from 'node:inspector';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
@@ -9,16 +10,49 @@ import { createLabels, disposeLabels, glyph } from './fixture.ts';
 
 const output = requiredEnvironment('GLYPH_EDIT_PROFILE_OUTPUT');
 const profileCase = requiredEnvironment('GLYPH_EDIT_PROFILE_CASE');
+const boundary = process.env.GLYPH_EDIT_PROFILE_BOUNDARY ?? 'publication';
 const count = positiveInteger(requiredEnvironment('GLYPH_EDIT_PROFILE_COUNT'), 'count');
 const iterations = positiveInteger(requiredEnvironment('GLYPH_EDIT_PROFILE_ITERATIONS'), 'iterations');
 const warmups = positiveInteger(requiredEnvironment('GLYPH_EDIT_PROFILE_WARMUPS'), 'warmups');
 const position = requiredEnvironment('GLYPH_EDIT_PROFILE_POSITION');
-if (!['same-length', 'length-changing', 'color-only', 'interleaved-read'].includes(profileCase)) {
+if (!['same-length', 'length-changing', 'color-only', 'interleaved-read', 'prepared-read'].includes(profileCase)) {
   throw new Error(`Unknown profile case: ${profileCase}`);
 }
 if (position !== 'first' && position !== 'last') throw new Error(`Unknown profile position: ${position}`);
+if (boundary !== 'preparation' && boundary !== 'publication') throw new Error(`Unknown profile boundary: ${boundary}`);
+if (boundary === 'preparation' && profileCase !== 'prepared-read') {
+  throw new Error('The preparation boundary requires the prepared-read case');
+}
+if (profileCase === 'prepared-read' && count !== 100 && count !== 1000) {
+  throw new RangeError('The prepared-read case requires 100 or 1000 labels');
+}
+if (profileCase === 'interleaved-read' && count < 100) {
+  throw new RangeError('The interleaved-read case requires at least 100 labels');
+}
+
+const texts = ['ticker 000', 'quote! 000'] as const;
+const expectedMeasurements =
+  profileCase === 'prepared-read'
+    ? texts.map((text) => {
+        const cold = createLabels(1);
+        try {
+          cold.labels[0]!.text = text;
+          if (boundary === 'publication') glyph.shape();
+          return cold.labels[0]!.measure();
+        } finally {
+          disposeLabels(cold);
+        }
+      })
+    : undefined;
+if (expectedMeasurements !== undefined) {
+  assert(JSON.stringify(expectedMeasurements[0]) !== JSON.stringify(expectedMeasurements[1]));
+}
 
 const created = createLabels(count);
+const edited = profileCase === 'prepared-read' ? created.labels.filter((_, index) => index % (count / 100) === 0) : [];
+const untouched =
+  profileCase === 'prepared-read' ? created.labels.filter((_, index) => index % (count / 100) !== 0) : [];
+const untouchedMeasurements = untouched.map((label) => JSON.stringify(label.measure()));
 const targetIndex = position === 'first' ? 0 : count - 1;
 const target = created.labels[targetIndex]!;
 let alternate = false;
@@ -40,7 +74,18 @@ const updateInterleaved = () => {
     if (label.measureGlyphs() === undefined) throw new Error('interleaved read did not observe committed glyphs');
   }
 };
-const update = profileCase === 'interleaved-read' ? updateInterleaved : updateOne;
+const updatePrepared = () => {
+  alternate = !alternate;
+  let glyphCount = 0;
+  for (const label of edited) {
+    label.text = texts[alternate ? 0 : 1];
+    if (boundary === 'publication') glyph.shape();
+    glyphCount += label.measure().glyphCount;
+  }
+  return glyphCount;
+};
+const update =
+  profileCase === 'prepared-read' ? updatePrepared : profileCase === 'interleaved-read' ? updateInterleaved : updateOne;
 
 for (let index = 0; index < warmups; index++) update();
 globalGc()?.();
@@ -59,13 +104,21 @@ for (let index = 0; index < iterations; index++) {
 const cpu = await session.post('Profiler.stop');
 session.disconnect();
 
-assertCommitted();
+if (expectedMeasurements !== undefined) {
+  assert.equal(edited.length, 100);
+  for (const label of edited) deepStrictEqual(label.measure(), expectedMeasurements[alternate ? 0 : 1]);
+  deepStrictEqual(
+    untouched.map((label) => JSON.stringify(label.measure())),
+    untouchedMeasurements,
+  );
+}
+if (boundary === 'publication') assertCommitted();
 disposeLabels(created);
 const directory = resolve(output);
 await mkdir(directory, { recursive: true });
 await writeFile(resolve(directory, 'cpu-profile.json'), `${JSON.stringify(cpu.profile)}\n`);
 const summary = {
-  workload: { count, iterations, position, profileCase, warmups },
+  workload: { boundary, count, iterations, position, profileCase, warmups },
   elapsedMs: distribution(elapsedMs),
   sampledMs: {
     total: sampleTotal(cpu.profile) / 1_000,
