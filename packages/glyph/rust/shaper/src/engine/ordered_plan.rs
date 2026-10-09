@@ -31,8 +31,6 @@ use super::{
 pub use super::plan_error::PlanError as OrderedPlanError;
 
 use super::render_plan::PRIMITIVE_DECORATION;
-#[cfg(test)]
-use super::render_plan::PRIMITIVE_GLYPH;
 
 pub use super::plan_input::{PlanGlyph as OrderedGlyph, PlanInput as OrderedPlanInput};
 
@@ -1172,12 +1170,51 @@ impl OrderedPlanCompiler {
         } else {
             self.compile_ordered_draws(context)?;
         }
-        self.publish_bindings = context.checkpoint
-            || !self.patches.is_empty()
-            || !self.retirements.is_empty()
-            || self.primitives != self.live_primitives
-            || self.draws != self.live_draws;
+        self.publish_bindings = context.checkpoint || !self.retained_bindings_match()?;
         Ok(())
+    }
+
+    /// Whether the candidate can publish buffer patches against the accepted display list.
+    /// Buffer contents are deliberately absent from this proof: patches are the operation that
+    /// changes them. Every identity, capacity, live span, and draw descriptor must still match.
+    fn retained_bindings_match(&self) -> Result<bool, OrderedPlanError> {
+        if !self.retirements.is_empty()
+            || self.pending_batches.len() != self.batches.len()
+            || self.primitives != self.live_primitives
+            || self.draws != self.live_draws
+        {
+            return Ok(false);
+        }
+        for (batch_index, pending) in self.pending_batches.iter().enumerate() {
+            let Some(committed) = self.batches.get(batch_index) else {
+                return Ok(false);
+            };
+            if pending.prior_index != Some(batch_index as u32)
+                || pending.state != *committed
+                || usize::from(committed.buffer_count)
+                    > pending
+                        .buffer_ids
+                        .len()
+                        .min(pending.buffer_generations.len())
+            {
+                return Ok(false);
+            }
+            let buffers = self
+                .buffers
+                .get(range(
+                    committed.buffer_start,
+                    u32::from(committed.buffer_count),
+                )?)
+                .ok_or(OrderedPlanError::InvalidIdentity)?;
+            if buffers.iter().enumerate().any(|(buffer_index, buffer)| {
+                pending.buffer_ids[buffer_index] != buffer.id
+                    || pending.buffer_generations[buffer_index] != buffer.generation
+                    || pending.capacity != buffer.capacity
+            }) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 
     fn compile_ordered_draws(
@@ -1647,8 +1684,22 @@ mod tests {
         assert_eq!(delta.patches[0].destination_offset, 4);
         assert_eq!(delta.patches[0].byte_length, 4);
         assert_eq!(delta.payload.len(), 4);
-        assert_eq!(delta.primitives, first_span(3).as_slice());
-        assert_eq!(delta.draws.len(), 1);
+        assert!(delta.resources.is_empty());
+        assert!(delta.buffers.is_empty());
+        assert!(delta.primitives.is_empty());
+        assert!(delta.draws.is_empty());
+        compiler.abort();
+        assert_eq!(read_f32(compiler.buffer_bytes(1).unwrap(), 4), 2.0);
+
+        prepare(&mut compiler, &codec, &changed, &changed_x, false);
+        let retry = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        assert_eq!(retry.patches.len(), 1);
+        assert!(retry.resources.is_empty());
+        assert!(retry.buffers.is_empty());
+        assert!(retry.primitives.is_empty());
+        assert!(retry.draws.is_empty());
         compiler.commit().unwrap();
         assert_eq!(read_f32(compiler.buffer_bytes(1).unwrap(), 4), 20.0);
     }
@@ -1679,13 +1730,12 @@ mod tests {
                 1,
             )
             .unwrap();
-        assert!(
-            compiler
-                .plan_view(7, CAPABILITY, codec.fingerprint())
-                .unwrap()
-                .patches
-                .is_empty()
-        );
+        let metadata_delta = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        assert!(metadata_delta.patches.is_empty());
+        assert!(!metadata_delta.primitives.is_empty());
+        assert!(!metadata_delta.draws.is_empty());
         compiler.commit().unwrap();
 
         compiler
@@ -1741,8 +1791,6 @@ mod tests {
             .find(|buffer| buffer.codec_buffer_id == 2)
             .unwrap()
             .id;
-        let primitives = first.primitives.to_vec();
-        let draws = first.draws.to_vec();
         compiler.commit().unwrap();
 
         compiler
@@ -1764,8 +1812,9 @@ mod tests {
         let delta = compiler
             .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
-        assert_eq!(delta.primitives, primitives);
-        assert_eq!(delta.draws, draws);
+        assert!(delta.buffers.is_empty());
+        assert!(delta.primitives.is_empty());
+        assert!(delta.draws.is_empty());
         assert_eq!(delta.patches.len(), 1);
         assert_eq!(delta.patches[0].buffer_id, placement_buffer);
         assert_eq!(delta.payload, 9_u32.to_le_bytes());
@@ -2590,29 +2639,6 @@ mod tests {
 
     fn read_f32(bytes: &[u8], offset: usize) -> f32 {
         f32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap())
-    }
-
-    fn first_span(record_count: u16) -> [PrimitiveRecord; 1] {
-        [PrimitiveRecord {
-            id: 1,
-            kind: PRIMITIVE_GLYPH,
-            technique_id: TECHNIQUE.0,
-            resource_id: 11,
-            resource_generation: 1,
-            program_id: 5,
-            program_variant: 0,
-            record_count,
-            buffer_id: 1,
-            record_index: 0,
-            logical_order: 0,
-            clip_id: 0,
-            semantic_id: 1,
-            inline_start: 1.0,
-            block_start: 0.0,
-            inline_extent: record_count as f32,
-            block_extent: 1.0,
-            ..PrimitiveRecord::default()
-        }]
     }
 
     fn capacities(compiler: &OrderedPlanCompiler) -> [usize; 16] {
