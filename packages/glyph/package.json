@@ -22,6 +22,7 @@
   "files": [
     "CHANGELOG.md",
     "LICENSE",
+    "MIGRATION-0.2.md",
     "bin",
     "dist",
     "src",
