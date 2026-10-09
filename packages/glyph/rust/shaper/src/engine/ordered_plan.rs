@@ -1654,6 +1654,182 @@ mod tests {
     const CAPABILITY: CapabilitySetId = CapabilitySetId(1);
     const TECHNIQUE: TechniqueId = TechniqueId(1);
 
+    /// Replays only the emitted patch protocol, independently of the compiler's CPU mirrors.
+    #[derive(Default)]
+    struct TestHost {
+        bytes: alloc::collections::BTreeMap<(u32, u32), Vec<u8>>,
+        resources: Vec<ResourceRecord>,
+        bindings: Vec<BufferRecord>,
+        primitives: Vec<PrimitiveRecord>,
+        draws: Vec<DrawRecord>,
+    }
+
+    impl TestHost {
+        fn accept(&mut self, plan: RenderPlanView<'_>, replace_bindings: bool) {
+            for patch in plan.patches {
+                match patch.opcode {
+                    PATCH_ALLOCATE_OR_RESIZE => {
+                        self.bytes.insert(
+                            (patch.buffer_id, patch.buffer_generation),
+                            vec![0; patch.byte_length as usize],
+                        );
+                    }
+                    PATCH_WRITE => {
+                        let start = patch.destination_offset as usize;
+                        let length = patch.byte_length as usize;
+                        let payload = patch.payload_start as usize;
+                        self.bytes
+                            .get_mut(&(patch.buffer_id, patch.buffer_generation))
+                            .unwrap()[start..start + length]
+                            .copy_from_slice(&plan.payload[payload..payload + length]);
+                    }
+                    opcode => panic!("unexpected test codec patch {opcode}"),
+                }
+            }
+            for retirement in plan.retirements {
+                if retirement.kind == RETIRE_BUFFER {
+                    self.bytes.remove(&(retirement.id, retirement.generation));
+                }
+            }
+            if replace_bindings {
+                self.resources = plan
+                    .resources
+                    .iter()
+                    .map(|resource| ResourceRecord {
+                        action: RESOURCE_ACTION_RETAIN,
+                        ..*resource
+                    })
+                    .collect();
+                self.bindings = plan.buffers.to_vec();
+                self.primitives = plan.primitives.to_vec();
+                self.draws = plan.draws.to_vec();
+            }
+        }
+    }
+
+    #[test]
+    fn retained_publication_mutations_match_forced_full_publications() {
+        // Fixed seeds make every failure reproducible in the ordinary Rust CI lane. The
+        // checkpoint oracle bypasses retained topology and binding elision on every step.
+        for material_storage in [false, true] {
+            let codec = codec_with_material_storage(material_storage);
+            for seed in 1_u32..=16 {
+                let mut random = seed;
+                let mut optimized = OrderedPlanCompiler::default();
+                let mut complete = OrderedPlanCompiler::default();
+                let mut host = TestHost::default();
+                let mut oracle = TestHost::default();
+                let mut glyphs = vec![glyph(1, 1), glyph(2, 1), glyph(3, 1)];
+                let mut x = vec![1.0, 2.0, 3.0];
+                let mut next_id = 4;
+                let mut skipped_bindings = 0;
+                for step in 0..128 {
+                    random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                    let index = (random as usize >> 8) % glyphs.len().max(1);
+                    match (random >> 24) % 12 {
+                        0 => {} // An actual no-op must retain accepted bytes and bindings.
+                        1 if !glyphs.is_empty() => {
+                            glyphs[index].content_revision += 1;
+                            x[index] += 0.25;
+                        }
+                        2 if !glyphs.is_empty() => glyphs[index].block_start += 1.0,
+                        3 if !glyphs.is_empty() => glyphs[index].material_id = 1 + random % 3,
+                        4 if !glyphs.is_empty() => glyphs[index].transform_id = 1 + random % 3,
+                        5 if !glyphs.is_empty() => {
+                            glyphs[index].resource_id = 100 + next_id;
+                            next_id += 1;
+                            glyphs[index].resource_generation += 1;
+                        }
+                        6 if !glyphs.is_empty() => {
+                            glyphs[index].resource_id = 100 + next_id;
+                            next_id += 1;
+                            glyphs[index].resource_reference += 1;
+                        }
+                        7 if !glyphs.is_empty() => {
+                            glyphs.remove(index);
+                            x.remove(index);
+                        }
+                        8 if glyphs.len() > 1 => {
+                            glyphs.rotate_left(1);
+                            x.rotate_left(1);
+                        }
+                        9 if !glyphs.is_empty() => glyphs[index].semantic_id = 1 + random % 3,
+                        10 => {
+                            glyphs.clear();
+                            x.clear();
+                        }
+                        _ => {
+                            // Repeated insertion exercises capacity growth and recreation.
+                            for _ in 0..1 + random % 4 {
+                                glyphs.push(glyph(next_id, 1));
+                                x.push(next_id as f32);
+                                next_id += 1;
+                            }
+                        }
+                    }
+                    let checkpoint = step % 17 == 0;
+                    prepare(&mut optimized, &codec, &glyphs, &x, checkpoint);
+                    prepare(&mut complete, &codec, &glyphs, &x, true);
+                    if step % 7 == 0 {
+                        let accepted = optimized
+                            .buffers
+                            .iter()
+                            .map(|buffer| (buffer.id, buffer.bytes.clone()))
+                            .collect::<Vec<_>>();
+                        optimized.abort();
+                        complete.abort();
+                        assert_eq!(
+                            accepted,
+                            optimized
+                                .buffers
+                                .iter()
+                                .map(|buffer| (buffer.id, buffer.bytes.clone()))
+                                .collect::<Vec<_>>()
+                        );
+                        prepare(&mut optimized, &codec, &glyphs, &x, checkpoint);
+                        prepare(&mut complete, &codec, &glyphs, &x, true);
+                    }
+                    skipped_bindings += usize::from(!optimized.publish_bindings);
+                    let delta = optimized
+                        .plan_view(7, CAPABILITY, codec.fingerprint())
+                        .unwrap();
+                    let full = complete
+                        .plan_view(7, CAPABILITY, codec.fingerprint())
+                        .unwrap();
+                    plan_layout(delta).unwrap();
+                    plan_layout(full).unwrap();
+                    host.accept(delta, optimized.publish_bindings);
+                    oracle.accept(full, true);
+                    assert_eq!(host.resources, oracle.resources, "seed {seed}, step {step}");
+                    assert_eq!(host.bindings, oracle.bindings, "seed {seed}, step {step}");
+                    assert_eq!(
+                        host.primitives, oracle.primitives,
+                        "seed {seed}, step {step}"
+                    );
+                    assert_eq!(host.draws, oracle.draws, "seed {seed}, step {step}");
+                    // Capacity slack is not rendered and may retain old bytes. Compare the
+                    // active records of each buffer, plus the canonical codec's input bytes.
+                    for binding in &host.bindings {
+                        let live = binding.live_records as usize * 4;
+                        assert_eq!(
+                            &host.bytes[&(binding.id, binding.generation)][..live],
+                            &oracle.bytes[&(binding.id, binding.generation)][..live],
+                            "seed {seed}, step {step}"
+                        );
+                    }
+                    optimized.commit().unwrap();
+                    complete.commit().unwrap();
+                    assert_eq!(optimized.live_primitives, complete.live_primitives);
+                    assert_eq!(optimized.live_draws, complete.live_draws);
+                }
+                assert!(
+                    skipped_bindings > 0,
+                    "seed {seed} never exercised the skip path"
+                );
+            }
+        }
+    }
+
     #[test]
     fn ordered_direct_uses_identity_revisions_instead_of_scanning_physical_bytes() {
         let codec = codec();

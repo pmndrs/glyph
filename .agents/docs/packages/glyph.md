@@ -1501,6 +1501,13 @@ replacement because the wire contract has no partial immutable-metadata patch. T
 remains open; this change removes redundant serialization and host reconciliation for the compatible patch-only class
 without adding a scheduler, cache, reconciliation system, or public API.
 
+The retained-publication regression suite replays emitted allocation/write/retirement records into a test host and
+compares active buffer bytes and draw metadata against forced full checkpoints over 4,096 deterministic mutation steps.
+The two storage policies cover content edits, no-ops, metadata changes, resources, capacity growth, removal, reordering,
+empty roots, and rejected preparations followed by retries. The oracle bypasses both retained topology and binding
+elision, while focused tests still own exact patch ranges and rejection semantics. Run the Rust engine and authenticated
+outline/Unicode tests with `pnpm scripts run glyph:shaper-tests`, optionally passing a test-name filter.
+
 Three retains pending attribute upload ranges until its renderer consumes them. Consecutive Rust publications and
 presentation-origin restoration before rendering coalesce overlapping or adjacent ranges instead of clearing earlier
 writes. Paragraph transform identities return to a binding-local free list only after the Rust removal
