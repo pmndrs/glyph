@@ -215,6 +215,8 @@ config helpers.
 
 ## Public package surfaces
 
+Browser ESM delivery uses the private `content-digest` module filename to avoid URL filters matching `fingerprint`. Public fingerprint names, hash vectors, cache headers and artifact identities remain unchanged. The installed-package browser consumer rejects matching requests and proves both Worker baking and font loading, with an explicit blocking negative control. This models a filename filter; it does not claim coverage of every browser extension.
+
 | Subpath                         | Purpose                                                                                                          |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `@pmndrs/glyph`                 | Root runtime, built-in format selection, font/raster types, fallback stacks, text authoring, and layout results. |
@@ -1983,5 +1985,3 @@ checks cover vertex/fragment layouts, replacement, parent-view isolation, missin
 The Three split is exercised through `pnpm scripts run benchmark:v1-bitmap`, with `-- --typegpu` selecting the experimental entry. The same Bitmap, MTSDF, Slug, decoration, retained-update, detached-glyph, and custom-material assertions run on WebGPU and WebGL2 for either config. A focused package test also runs one Bitmap-plus-decoration material factory through `/three` and `/three/typegpu` and requires the same shader context. The packed-consumer test bundles the root and stable `/three` while rejecting any TypeGPU peer request, then proves the TypeGPU shader, direct-renderer, and Three bridge entries both request their optional peers and bundle when those peers are supplied externally.
 
 The split verification on 2026-09-07 passed both browser workflows. Bitmap produced 3,109 lit pixels with native TSL and 2,685 with the experimental shaders on each backend; custom Bitmap composition likewise produced 2,642 versus 2,185. MTSDF and Slug lit-pixel counts matched in these fixtures. These checks establish rendering and lifecycle behavior, not complete visual parity; the Bitmap difference remains a reason to keep the experimental entry separate.
-
-Browser ESM delivery uses the private `content-digest` module filename to avoid URL filters matching `fingerprint`. Public fingerprint names, hash vectors, cache headers and artifact identities remain unchanged. The installed-package browser consumer rejects matching requests and proves both Worker baking and font loading, with an explicit blocking negative control. This models a filename filter; it does not claim coverage of every browser extension.
