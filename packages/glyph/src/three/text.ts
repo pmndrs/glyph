@@ -3,6 +3,8 @@ import * as THREE from 'three/webgpu';
 import {
   alignSpansToClusters,
   areOwnedSpansClusterAligned,
+  inheritClusterAlignedSpans,
+  ownClusterAlignedSpans,
   type FormattedText,
   type ParagraphSpan,
   type TextInput,
@@ -1722,7 +1724,7 @@ function coreTextState(
 ) {
   const { batchGroup, pixelSnapping, renderOrder } = presentation;
   const material = materialBinding(desired.material ?? presentation.material, pixelSnapping, renderOrder, batchGroup);
-  const spans = desired.spans.map((span) => {
+  const mappedSpans = desired.spans.map((span) => {
     const spanMaterial: ThreeMaterialBinding | undefined =
       span.material === undefined ? undefined : materialBinding(span.material, pixelSnapping, renderOrder, batchGroup);
     return Object.freeze({
@@ -1733,9 +1735,13 @@ function coreTextState(
       ...(span.style === undefined ? {} : { style: span.style }),
     });
   });
+  const spans =
+    mappedSpans.length !== 0 && areOwnedSpansClusterAligned(desired.text, desired.spans)
+      ? inheritClusterAlignedSpans(desired.text, desired.spans, mappedSpans)
+      : Object.freeze(mappedSpans);
   return {
     font: desired.font,
-    text: spans.length === 0 ? desired.text : Object.freeze({ text: desired.text, spans: Object.freeze(spans) }),
+    text: spans.length === 0 ? desired.text : Object.freeze({ text: desired.text, spans }),
     transform,
     order,
     material,
@@ -1864,7 +1870,16 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
       previous !== undefined && previous.text === text && haveEqualSpanBoundaries(previous.spans, checked);
     const aligned =
       areOwnedSpansClusterAligned(text, checked) || alignmentReused ? checked : alignSpansToClusters(text, checked);
-    spans = reuseOrCreateTextSpans(previous?.spans, aligned);
+    const snapshot = reuseOrCreateTextSpans(previous?.spans, aligned);
+    if (areOwnedSpansClusterAligned(text, snapshot)) {
+      spans = snapshot;
+    } else if (areOwnedSpansClusterAligned(text, checked)) {
+      spans = inheritClusterAlignedSpans(text, checked, snapshot);
+    } else if (alignmentReused) {
+      spans = inheritClusterAlignedSpans(text, previous!.spans, snapshot);
+    } else {
+      spans = ownClusterAlignedSpans(text, snapshot);
+    }
   }
   const rootTechniques = immutableFontSelectionFonts(properties.font).map((font) => font.raster);
   const inheritedTechniques = [
@@ -1966,7 +1981,7 @@ function reuseOrCreateTextSpans<Format extends RasterFormatMetadata>(
     if (snapshot === undefined) snapshot = previous!.slice(0, index);
     snapshot.push(Object.freeze({ ...span, ...(style === undefined ? {} : { style }) }));
   }
-  return snapshot === undefined ? previous! : Object.freeze(snapshot);
+  return snapshot === undefined ? previous! : snapshot;
 }
 
 function assertNoRawSpans(value: object, subject: string): void {

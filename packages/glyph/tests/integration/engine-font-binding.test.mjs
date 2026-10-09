@@ -664,6 +664,58 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
 
     shapeGlyphEngine(glyphEngine);
     assert.equal(acceptedPublications, 1, 'the same producer state passes the Wasm publication path');
+    const changedSpanStyle = {
+      language: 'fr',
+      features: [{ tag: 'liga' }],
+      color: '#3366cc',
+    };
+    text.update({
+      text: {
+        text: sourceText,
+        spans: [{ start: 1, end: 4, style: changedSpanStyle }],
+      },
+    });
+    changedSpanStyle.color = '#ff0000';
+    assert.equal(text.measure().lineCount > 0, true);
+    const sparseStyleBytes = capture.bytes();
+    const sparseStyles = readRecords(
+      sparseStyleBytes,
+      request.styleMutationsOffset,
+      request.styleMutationCount,
+      textShaperAbi.layouts.engineStyleMutation,
+    );
+    assert.equal(sparseStyles.length, 1, 'one changed span emits one retained style upsert');
+    assert.equal(sparseStyles[0].getUint32(style.foregroundRgba, true), 0xffcc_6633, 'caller mutation is isolated');
+    shapeGlyphEngine(glyphEngine);
+    assert.equal(acceptedPublications, 2);
+
+    text.update({
+      text: {
+        text: sourceText,
+        spans: [
+          {
+            start: 1,
+            end: 4,
+            style: { language: 'fr', features: [{ tag: 'liga' }], color: '#3366cc' },
+          },
+        ],
+      },
+    });
+    assert.equal(text.measure().lineCount > 0, true);
+    const noOpStyleBytes = capture.bytes();
+    assert.equal(
+      readRecords(
+        noOpStyleBytes,
+        request.styleMutationsOffset,
+        request.styleMutationCount,
+        textShaperAbi.layouts.engineStyleMutation,
+      ).length,
+      0,
+      'an equal normalized batch retains the committed style identities',
+    );
+    shapeGlyphEngine(glyphEngine);
+    assert.equal(acceptedPublications, 3);
+
     text.update({
       flow: {
         regions: [
@@ -707,7 +759,7 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
       'only the moved exclusion advances its geometry revision',
     );
     shapeGlyphEngine(glyphEngine);
-    assert.equal(acceptedPublications, 2);
+    assert.equal(acceptedPublications, 4);
     text.update({
       flow: {
         regions: [
@@ -751,7 +803,7 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
       'reordering retains each exclusion revision by key',
     );
     shapeGlyphEngine(glyphEngine);
-    assert.equal(acceptedPublications, 3);
+    assert.equal(acceptedPublications, 5);
     text.update({ text: sourceText });
     assert.equal(
       text.measure().lineCount > 0,
@@ -760,10 +812,9 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
     );
     const removalBytes = capture.bytes();
     const removalStyles = readRecords(removalBytes, request.styleMutationsOffset, request.styleMutationCount, style);
-    assert.equal(removalStyles.length, 2);
-    assert.equal(removalStyles[0].getUint8(style.opcode), textShaperAbi.engine.styleMutationOpcodes.upsert);
-    assert.equal(removalStyles[1].getUint8(style.opcode), textShaperAbi.engine.styleMutationOpcodes.remove);
-    const removalRecord = new Uint8Array(removalBytes.buffer, removalStyles[1].byteOffset, style.size);
+    assert.equal(removalStyles.length, 1);
+    assert.equal(removalStyles[0].getUint8(style.opcode), textShaperAbi.engine.styleMutationOpcodes.remove);
+    const removalRecord = new Uint8Array(removalBytes.buffer, removalStyles[0].byteOffset, style.size);
     assert.equal(
       removalRecord.every(
         (value, index) =>
@@ -846,8 +897,11 @@ test('style-clean text edits do not consume the pending style mutation limit', a
     shapeGlyphEngine(glyphEngine);
     assert.equal(acceptedPublications, 1);
 
-    first.update({ text: 'abc' });
+    // Two span removals and this root paint update consume three mutation slots.
+    first.update({ text: 'abc', style: { color: '#ff0000' } });
     second.update({
+      // This root update plus one span upsert fill the remaining two slots.
+      style: { color: '#00ff00' },
       text: {
         text: 'd',
         spans: [{ start: 0, end: 1, style: { color: '#0000ff' } }],

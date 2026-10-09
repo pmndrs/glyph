@@ -4,7 +4,7 @@ import { createElement } from 'react';
 
 import { glyph, span, txt, bitmap } from '@pmndrs/glyph';
 import { Text as R3fText } from '@pmndrs/glyph/react';
-import { createFontCache, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
+import { assertMatchesFreshBuild, createFontCache, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
 import {
   areOwnedRangesClusterAligned,
   findGraphemeBoundaries,
@@ -229,6 +229,79 @@ test(
     }
   },
 );
+
+test('seeded retained formatted batches match a cold full publication after sparse edits', { timeout }, async () => {
+  const font = await fonts.load('inter');
+  const base = { constraints, layout, style };
+  let units = Array.from({ length: 36 }, (_value, index) => String.fromCharCode(97 + (index % 26)));
+  let widths = [6, 6, 6, 6, 6, 6];
+  let phase = 0;
+  const palette = ['#ff2f00', '#2f7fff', '#00bf63', '#f2c94c'];
+  const formatted = () => {
+    const text = units.join('');
+    const spans = [{ start: 0, end: text.length, style: { opacity: 0.95 } }];
+    let unitStart = 0;
+    for (const [index, width] of widths.entries()) {
+      const start = units.slice(0, unitStart).join('').length;
+      unitStart += width;
+      const end = units.slice(0, unitStart).join('').length;
+      spans.push({
+        start,
+        end,
+        style: {
+          color: palette[(index + phase) % palette.length],
+          opacity: 0.65 + ((index + phase) % 3) * 0.15,
+        },
+      });
+    }
+    return { text, spans };
+  };
+
+  let current = formatted();
+  const mounted = mount(font, [{ properties: { ...base, text: current } }]);
+  try {
+    mounted.scene.updateMatrixWorld(true);
+    assertMatchesFreshBuild(font, mounted, [{ properties: { ...base, text: current } }], 'initial retained batch');
+
+    const steps = [
+      () => {
+        units[2] = 'z';
+        units[31] = 'q';
+        phase += 1;
+      },
+      () => {
+        units[5] = `a${ACUTE}`;
+        units[28] = '😀';
+        phase += 1;
+      },
+      () => {
+        widths = [3, 3, 9, 3, 6, 12];
+        phase += 1;
+      },
+      () => {
+        units[5] = 'é';
+        units[28] = 'x';
+        widths = [12, 6, 6, 6, 6];
+        phase += 1;
+      },
+    ];
+    for (const [index, mutate] of steps.entries()) {
+      mutate();
+      current = formatted();
+      mounted.nodes[0].set({ text: current });
+      mounted.scene.updateMatrixWorld(true);
+      assert.equal(mounted.nodes[0].error, undefined, `step ${index} publishes`);
+      assertMatchesFreshBuild(
+        font,
+        mounted,
+        [{ properties: { ...base, text: current } }],
+        `retained formatted step ${index}`,
+      );
+    }
+  } finally {
+    unmount(mounted);
+  }
+});
 
 test('nested React Text crossing a joining boundary mounts and publishes', { timeout }, async () => {
   const { create } = await import('../support/r3f-test-renderer.mjs');

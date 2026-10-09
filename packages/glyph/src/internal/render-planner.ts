@@ -1,4 +1,9 @@
-import { alignSpansToClusters } from '../formatted-text.js';
+import {
+  alignSpansToClusters,
+  areOwnedSpansClusterAligned,
+  inheritClusterAlignedSpans,
+  ownClusterAlignedSpans,
+} from '../formatted-text.js';
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { GlyphError } from '../glyph-error.js';
 import { GlyphEngineStatusError } from '../engine-error.js';
@@ -339,13 +344,20 @@ interface ResolvedTextOptions {
   readonly inlineResources: readonly HandleBindingLease<HandleResourceBinding>[];
 }
 
+type RetainedStyleChange =
+  | Readonly<{ kind: 'root' }>
+  | Readonly<{ kind: 'span'; styleIndex: number; cascadeOrder: number; span: ResolvedSpan }>
+  | Readonly<{ kind: 'remove'; styleIndex: number }>;
+
+const noRetainedStyleChanges: readonly RetainedStyleChange[] = Object.freeze([]);
+
 interface RetainedTextState {
   readonly paragraphId: ParagraphId;
   readonly ordinal: number;
   desired: ResolvedTextOptions;
   metrics: RetainedTextMetrics;
   publishedText: string;
-  publishedStyleCount: number;
+  styleChanges: readonly RetainedStyleChange[];
   geometryRevision: number;
   committedFlowRegions: Map<string, CommittedFlowRegion>;
   committedFlowExclusions: Map<string, CommittedFlowExclusion>;
@@ -355,7 +367,6 @@ interface RetainedTextState {
   dirty: boolean;
   semanticDirty: boolean;
   lifecycleDirty: boolean;
-  styleDirty: boolean;
   geometryDirty: boolean;
   orderScope: number;
   orderRank: number;
@@ -390,7 +401,7 @@ interface RetainedTextMetrics {
 
 type RetainedTextLimitState = Pick<
   RetainedTextState,
-  'desired' | 'metrics' | 'dirty' | 'semanticDirty' | 'styleDirty' | 'publishedStyleCount'
+  'desired' | 'metrics' | 'dirty' | 'semanticDirty' | 'styleChanges'
 >;
 
 interface PendingPublication {
@@ -561,13 +572,14 @@ class RenderPlannerImpl {
     const ordinal = this.#nextTextOrdinal;
     const nextOrdinal = checkedNextOrdinal(ordinal);
     const desired = resolveTextOptions(this.#handleState, options);
+    const paragraphId = this.#handleState.id('paragraph', `${this.#handleState.integration}/text/${ordinal}`);
     const state: RetainedTextState = {
-      paragraphId: this.#handleState.id('paragraph', `${this.#handleState.integration}/text/${ordinal}`),
+      paragraphId,
       ordinal,
       desired,
       metrics: retainedTextMetrics(desired, ordinal),
       publishedText: '',
-      publishedStyleCount: 0,
+      styleChanges: retainedStyleChanges(desired),
       geometryRevision: 0,
       committedFlowRegions: new Map(),
       committedFlowExclusions: new Map(),
@@ -577,7 +589,6 @@ class RenderPlannerImpl {
       dirty: true,
       semanticDirty: true,
       lifecycleDirty: true,
-      styleDirty: true,
       geometryDirty: true,
       orderScope: 0,
       orderRank: 0,
@@ -622,18 +633,19 @@ class RenderPlannerImpl {
           )
         : forkResolvedTextWithText(state.desired, textOnly, state.metrics.order);
     const metrics = retainedTextMetrics(desired, state.ordinal);
-    const styleDirty =
-      state.styleDirty ||
+    const styleChanges =
+      state.styleChanges.length !== 0 ||
       desired.text.length !== state.desired.text.length ||
-      updateChangesStyle(update, state.desired, desired);
+      updateChangesStyle(update, state.desired, desired)
+        ? retainedStyleChanges(desired, state.committed)
+        : noRetainedStyleChanges;
     const geometryDirty = state.geometryDirty || updateChangesGeometry(update);
     const candidate: RetainedTextLimitState = {
       desired,
       metrics,
       dirty: true,
       semanticDirty: true,
-      styleDirty,
-      publishedStyleCount: state.publishedStyleCount,
+      styleChanges,
     };
     try {
       this.#validateAggregateLimits(candidate, state);
@@ -643,14 +655,14 @@ class RenderPlannerImpl {
     }
     const previousOrder = state.metrics.order;
     const nextOrder = candidate.metrics.order;
-    this.#replaceLiveState(state, candidate.metrics, styleDirty);
+    this.#replaceLiveState(state, candidate.metrics, styleChanges);
     releaseResolvedText(state.desired);
     state.desired = desired;
     state.metrics = candidate.metrics;
     state.dirty = true;
     state.semanticDirty = true;
     state.lifecycleDirty = state.lifecycleDirty || previousOrder !== nextOrder;
-    state.styleDirty = styleDirty;
+    state.styleChanges = styleChanges;
     state.geometryDirty = geometryDirty;
     state.measurement = undefined;
     state.inspection = undefined;
@@ -989,14 +1001,6 @@ class RenderPlannerImpl {
 
   #queryTextRequest(state: RetainedTextState, semanticViewMask: number): PlannerFrameUpdate {
     const styles = compileStyles(this.#handleState, state);
-    const styleMutations: PlannerStyleMutation[] = [...styles];
-    for (let index = styles.length + 1; index <= state.publishedStyleCount; index += 1) {
-      styleMutations.push({
-        opcode: 'remove',
-        paragraphId: state.paragraphId,
-        styleId: engineStyleId(this.#handleState.id, state.paragraphId, index),
-      });
-    }
     const geometry = compileGeometry(this.#handleState, state, 0, 0);
     const textMutation = minimalTextMutation(state.publishedText, state.desired.text);
     return {
@@ -1011,7 +1015,7 @@ class RenderPlannerImpl {
       paragraphMutations: this.#measurementParagraphMutations(state),
       paragraphOrderMutations: this.#measurementParagraphOrderMutations(),
       textMutations: textMutation === undefined ? [] : [{ paragraphId: state.paragraphId, ...textMutation }],
-      styleMutations,
+      styleMutations: styles,
       constraints: [geometry.constraint],
       regions: geometry.regions,
       exclusions: geometry.exclusions,
@@ -1055,16 +1059,9 @@ class RenderPlannerImpl {
     const exclusions: PlannerExclusion[] = [];
     const inlineObjects: PlannerInlineObject[] = [];
     for (const state of contentStates) {
-      if (state.styleDirty) {
+      if (state.styleChanges.length !== 0) {
         const styles = compileStyles(this.#handleState, state);
         styleMutations.push(...styles);
-        for (let index = styles.length + 1; index <= state.publishedStyleCount; index += 1) {
-          styleMutations.push({
-            opcode: 'remove',
-            paragraphId: state.paragraphId,
-            styleId: engineStyleId(this.#handleState.id, state.paragraphId, index),
-          });
-        }
       }
       if (state.geometryDirty) {
         const geometry = compileGeometry(this.#handleState, state, regions.length, exclusions.length);
@@ -1152,14 +1149,18 @@ class RenderPlannerImpl {
     if (state.dirty) this.#pendingStyleCount += pendingStyleMutationCount(state);
   }
 
-  #replaceLiveState(state: RetainedTextState, metrics: RetainedTextMetrics, styleDirty: boolean): void {
+  #replaceLiveState(
+    state: RetainedTextState,
+    metrics: RetainedTextMetrics,
+    styleChanges: readonly RetainedStyleChange[],
+  ): void {
     this.#liveStyleCount += metrics.styleCount - state.metrics.styleCount;
     this.#liveRegionCount += metrics.regionCount - state.metrics.regionCount;
     this.#liveExclusionCount += metrics.exclusionCount - state.metrics.exclusionCount;
     this.#liveInlineObjectCount += metrics.inlineObjectCount - state.metrics.inlineObjectCount;
     const hadPendingContent = state.semanticDirty;
     if (state.dirty) this.#pendingStyleCount -= pendingStyleMutationCount(state);
-    const candidate = { ...state, metrics, dirty: true, semanticDirty: true, styleDirty };
+    const candidate = { ...state, metrics, dirty: true, semanticDirty: true, styleChanges };
     this.#pendingParagraphCount += Number(!state.dirty);
     this.#pendingContentCount += Number(!hadPendingContent);
     this.#pendingStyleCount += pendingStyleMutationCount(candidate);
@@ -1202,11 +1203,10 @@ class RenderPlannerImpl {
       this.#pendingParagraphCount -= 1;
       this.#pendingContentCount -= Number(state.semanticDirty);
       this.#pendingStyleCount -= pendingStyleMutationCount(state);
-      if (state.styleDirty) state.publishedStyleCount = compiledStyleCount(state);
       state.dirty = false;
       state.semanticDirty = false;
       state.lifecycleDirty = false;
-      state.styleDirty = false;
+      state.styleChanges = noRetainedStyleChanges;
       state.geometryDirty = false;
       state.orderDirty = false;
     }
@@ -1644,10 +1644,10 @@ function resolveTextOptions(
         font,
         material,
         transform,
-        spans,
         flowTransforms,
         inlineMaterials,
         inlineResources,
+        previous,
       ),
       text: formattedText.text,
       spans: Object.freeze(spans),
@@ -1689,7 +1689,10 @@ function normalizeTextInput(value: unknown, previous?: ResolvedTextOptions): Ret
     throw new TypeError('text must be a string or formatted text value');
   }
   const text = value.text;
-  const spans = value.spans.map((span, index) => {
+  const previousInput = typeof previous?.source.text === 'object' ? previous.source.text : undefined;
+  const inputSpans = value.spans as readonly unknown[];
+  const ownedAligned = areOwnedSpansClusterAligned(text, inputSpans as readonly { start: number; end: number }[]);
+  const checked = inputSpans.map((span, index) => {
     if (!isNonArrayObject(span)) throw new TypeError(`text span ${index} must be an object`);
     if (!Number.isSafeInteger(span.start) || !Number.isSafeInteger(span.end)) {
       throw new TypeError(`text span ${index} bounds must be safe integers`);
@@ -1701,24 +1704,38 @@ function normalizeTextInput(value: unknown, previous?: ResolvedTextOptions): Ret
     ) {
       throw new RangeError(`text span ${index} is outside the text`);
     }
+    const style =
+      span.style === undefined
+        ? undefined
+        : reuseOrCreateTextPropertySnapshot(
+            previousInput?.spans[index]?.style,
+            span.style as TextStyle,
+            `text span ${index} style`,
+          );
+    if (ownedAligned && (span.style === undefined || style === span.style)) {
+      return span as unknown as RetainedTextSpan;
+    }
     return Object.freeze({
       start: span.start as number,
       end: span.end as number,
       ...(span.font === undefined ? {} : { font: span.font as HandleFontStackBinding }),
       ...(span.material === undefined ? {} : { material: span.material as HandleMaterialBinding }),
-      ...(span.style === undefined
-        ? {}
-        : {
-            style: reuseOrCreateTextPropertySnapshot(undefined, span.style as TextStyle, `text span ${index} style`),
-          }),
+      ...(style === undefined ? {} : { style }),
     });
   });
-  const alignmentReused =
-    previous !== undefined && previous.text === text && haveEqualSpanBoundaries(previous.spans, spans);
-  return Object.freeze({
-    text,
-    spans: Object.freeze(alignmentReused ? spans : alignSpansToClusters(text, spans)),
-  });
+  const previousSpans = previous?.text === text ? previousInput?.spans : undefined;
+  const alignmentReused = previousSpans !== undefined && haveEqualSpanBoundaries(previousSpans, checked);
+  const aligned = ownedAligned || alignmentReused ? checked : alignSpansToClusters(text, checked);
+  const reconciled = reuseOrCreateRetainedTextSpans(previousSpans, aligned);
+  const spans = areOwnedSpansClusterAligned(text, reconciled)
+    ? reconciled
+    : ownedAligned
+      ? inheritClusterAlignedSpans(text, inputSpans as readonly RetainedTextSpan[], reconciled)
+      : alignmentReused
+        ? inheritClusterAlignedSpans(text, previousSpans, reconciled)
+        : ownClusterAlignedSpans(text, reconciled);
+  if (spans === value.spans && Object.isFrozen(value)) return value as unknown as RetainedFormattedText;
+  return Object.freeze({ text, spans });
 }
 
 function haveEqualSpanBoundaries(
@@ -1731,47 +1748,63 @@ function haveEqualSpanBoundaries(
   );
 }
 
+function reuseOrCreateRetainedTextSpans(
+  previous: readonly RetainedTextSpan[] | undefined,
+  spans: readonly RetainedTextSpan[],
+): readonly RetainedTextSpan[] {
+  let snapshot: RetainedTextSpan[] | undefined = previous?.length === spans.length ? undefined : [];
+  for (const [index, span] of spans.entries()) {
+    const prior = previous?.[index];
+    if (
+      prior !== undefined &&
+      prior.start === span.start &&
+      prior.end === span.end &&
+      prior.font === span.font &&
+      prior.material === span.material &&
+      prior.style === span.style
+    ) {
+      snapshot?.push(prior);
+      continue;
+    }
+    if (snapshot === undefined) snapshot = previous!.slice(0, index);
+    snapshot.push(span);
+  }
+  return snapshot === undefined ? previous! : snapshot;
+}
+
 function snapshotTextOptions(
   value: RetainedTextOptions,
   input: RetainedFormattedText,
   font: ReturnType<GlyphHandleState['_retainFontStackBinding']>,
   material: HandleBindingLease<HandleMaterialBinding> | undefined,
   transform: HandleBindingLease<HandleTransformBinding>,
-  spans: readonly ResolvedSpan[],
   flowTransforms: readonly HandleBindingLease<HandleTransformBinding>[],
   inlineMaterials: readonly HandleBindingLease<HandleMaterialBinding>[],
   inlineResources: readonly HandleBindingLease<HandleResourceBinding>[],
+  previous?: ResolvedTextOptions,
 ): RetainedTextOptions {
-  const text = Object.freeze({
-    text: input.text,
-    spans: Object.freeze(
-      spans.map((span) =>
-        Object.freeze({
-          start: span.start,
-          end: span.end,
-          ...(span.font === undefined ? {} : { font: span.font.binding }),
-          ...(span.material === undefined ? {} : { material: span.material.binding }),
-          ...(span.style === undefined ? {} : { style: span.style }),
-        }),
-      ),
-    ),
-  });
   return Object.freeze({
     font: font.binding,
-    text,
+    text: input,
     ...(material === undefined ? {} : { material: material.binding }),
     transform: transform.binding,
     ...(value.order === undefined ? {} : { order: value.order }),
     ...(value.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: value.rasterPixelRatio }),
     ...(value.style === undefined
       ? {}
-      : { style: reuseOrCreateTextPropertySnapshot(undefined, value.style, 'text style') }),
+      : { style: reuseOrCreateTextPropertySnapshot(previous?.source.style, value.style, 'text style') }),
     ...(value.layout === undefined
       ? {}
-      : { layout: reuseOrCreateTextPropertySnapshot(undefined, value.layout, 'text layout') }),
+      : { layout: reuseOrCreateTextPropertySnapshot(previous?.source.layout, value.layout, 'text layout') }),
     ...(value.constraints === undefined
       ? {}
-      : { constraints: reuseOrCreateTextPropertySnapshot(undefined, value.constraints, 'text constraints') }),
+      : {
+          constraints: reuseOrCreateTextPropertySnapshot(
+            previous?.source.constraints,
+            value.constraints,
+            'text constraints',
+          ),
+        }),
     ...(value.flow === undefined
       ? {}
       : {
@@ -1889,45 +1922,101 @@ function forkResolvedTextWithText(previous: ResolvedTextOptions, text: string, o
   );
 }
 
+function retainedStyleChanges(
+  desired: ResolvedTextOptions,
+  committed?: ResolvedTextOptions,
+): readonly RetainedStyleChange[] {
+  const changes: RetainedStyleChange[] = [];
+  if (committed === undefined || !sameRootEngineStyle(desired, committed)) changes.push({ kind: 'root' });
+
+  let desiredIndex = nextNonEmptySpan(desired.spans, 0);
+  let committedIndex = nextNonEmptySpan(committed?.spans ?? [], 0);
+  let styleIndex = 2;
+  while (desiredIndex !== -1 || committedIndex !== -1) {
+    const desiredSpan = desiredIndex === -1 ? undefined : desired.spans[desiredIndex];
+    const committedSpan = committedIndex === -1 ? undefined : committed!.spans[committedIndex];
+    if (desiredSpan === undefined) {
+      changes.push({ kind: 'remove', styleIndex });
+    } else if (committedSpan === undefined || !sameSpanEngineStyle(desiredSpan, committedSpan)) {
+      changes.push({ kind: 'span', styleIndex, cascadeOrder: styleIndex - 1, span: desiredSpan });
+    }
+    styleIndex += 1;
+    desiredIndex = desiredIndex === -1 ? -1 : nextNonEmptySpan(desired.spans, desiredIndex + 1);
+    committedIndex = committedIndex === -1 ? -1 : nextNonEmptySpan(committed!.spans, committedIndex + 1);
+  }
+  return changes.length === 0 ? noRetainedStyleChanges : Object.freeze(changes);
+}
+
+function nextNonEmptySpan(spans: readonly ResolvedSpan[], start: number): number {
+  for (let index = start; index < spans.length; index += 1) {
+    const span = spans[index]!;
+    if (span.start !== span.end) return index;
+  }
+  return -1;
+}
+
+function sameRootEngineStyle(left: ResolvedTextOptions, right: ResolvedTextOptions): boolean {
+  return (
+    left.text.length === right.text.length &&
+    left.source.style === right.source.style &&
+    left.font.handle === right.font.handle &&
+    left.material?.handle === right.material?.handle &&
+    Object.is(left.source.rasterPixelRatio ?? 1, right.source.rasterPixelRatio ?? 1)
+  );
+}
+
+function sameSpanEngineStyle(left: ResolvedSpan, right: ResolvedSpan): boolean {
+  return (
+    left.start === right.start &&
+    left.end === right.end &&
+    left.style === right.style &&
+    left.font?.handle === right.font?.handle &&
+    left.material?.handle === right.material?.handle
+  );
+}
+
 function compileStyles(handleState: GlyphHandleState, state: RetainedTextState): readonly PlannerStyleMutation[] {
   const desired = state.desired;
   const source = desired.source;
-  const root: PlannerStyleMutation = {
-    opcode: 'upsert',
-    paragraphId: state.paragraphId,
-    styleId: engineStyleId(handleState.id, state.paragraphId, 1),
-    cascadeOrder: 0,
-    start: 0,
-    end: desired.text.length,
-    root: true,
-    value: engineStyleValue(source.style ?? {}, 0, desired.text.length, {
-      fontStackHandle: desired.font.handle,
-      fontSize: source.style?.fontSize ?? 16,
-      rasterPixelRatio: source.rasterPixelRatio ?? 1,
-      ...(desired.material === undefined ? {} : { materialId: desired.material.handle }),
-    }),
-  };
-  return [
-    root,
-    ...desired.spans
-      .filter((span) => span.start !== span.end)
-      .map((span, index) => ({
-        opcode: 'upsert' as const,
+  return state.styleChanges.map((change): PlannerStyleMutation => {
+    if (change.kind === 'remove') {
+      return {
+        opcode: 'remove',
         paragraphId: state.paragraphId,
-        styleId: engineStyleId(handleState.id, state.paragraphId, index + 2),
-        cascadeOrder: index + 1,
-        start: span.start,
-        end: span.end,
-        value: engineStyleValue(span.style ?? {}, span.start, span.end, {
-          ...(span.font === undefined ? {} : { fontStackHandle: span.font.handle }),
-          ...(span.material === undefined ? {} : { materialId: span.material.handle }),
+        styleId: engineStyleId(handleState.id, state.paragraphId, change.styleIndex),
+      };
+    }
+    if (change.kind === 'root') {
+      return {
+        opcode: 'upsert',
+        paragraphId: state.paragraphId,
+        styleId: engineStyleId(handleState.id, state.paragraphId, 1),
+        cascadeOrder: 0,
+        start: 0,
+        end: desired.text.length,
+        root: true,
+        value: engineStyleValue(source.style ?? {}, 0, desired.text.length, {
+          fontStackHandle: desired.font.handle,
+          fontSize: source.style?.fontSize ?? 16,
+          rasterPixelRatio: source.rasterPixelRatio ?? 1,
+          ...(desired.material === undefined ? {} : { materialId: desired.material.handle }),
         }),
-      })),
-  ];
-}
-
-function compiledStyleCount(state: RetainedTextState): number {
-  return state.metrics.styleCount;
+      };
+    }
+    const span = change.span;
+    return {
+      opcode: 'upsert',
+      paragraphId: state.paragraphId,
+      styleId: engineStyleId(handleState.id, state.paragraphId, change.styleIndex),
+      cascadeOrder: change.cascadeOrder,
+      start: span.start,
+      end: span.end,
+      value: engineStyleValue(span.style ?? {}, span.start, span.end, {
+        ...(span.font === undefined ? {} : { fontStackHandle: span.font.handle }),
+        ...(span.material === undefined ? {} : { materialId: span.material.handle }),
+      }),
+    };
+  });
 }
 
 function retainedTextMetrics(desired: ResolvedTextOptions, ordinal: number): RetainedTextMetrics {
@@ -1944,8 +2033,7 @@ function retainedTextMetrics(desired: ResolvedTextOptions, ordinal: number): Ret
 }
 
 function pendingStyleMutationCount(state: RetainedTextLimitState): number {
-  if (!state.styleDirty) return 0;
-  return state.metrics.styleCount + Math.max(0, state.publishedStyleCount - state.metrics.styleCount);
+  return state.styleChanges.length;
 }
 
 function compileGeometry(
