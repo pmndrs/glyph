@@ -119,6 +119,7 @@ export function renderLabsSummary({ suite, baseline, candidate, comparison }: La
     ...warnings.map((warning) => `> ⚠ ${warning}`),
     ...(warnings.length === 0 ? [] : ['']),
   ];
+  lines.push(...latencyDistribution(rows));
   if (rows.length > 0) lines.push(...forestPlot([...changed, ...[...neutral].sort((a, b) => b.delta - a.delta)]), '');
   if (changed.length === 0) {
     lines.push(`All ${rows.length} compared benches are neutral.`, '');
@@ -127,7 +128,7 @@ export function renderLabsSummary({ suite, baseline, candidate, comparison }: La
   }
   const rest = [
     ...neutral.map((row) => cells(row, 'neutral')),
-    ...skipped.map(({ name, reason }) => [`skipped: ${escapeCell(reason)}`, escapeCell(name), '', '', '', '', '']),
+    ...skipped.map(({ name, reason }) => [`skipped: ${escapeCell(reason)}`, escapeCell(name), '', '', '', '', '', '']),
   ];
   lines.push(`<details><summary>${neutral.length} neutral, ${skipped.length} skipped</summary>`, '');
   lines.push(...(rest.length === 0 ? ['Nothing else was compared.'] : table(rest)), '', '</details>', '');
@@ -146,13 +147,73 @@ export async function writeLabsSummary(
 }
 
 function cells(row: LabsRow, status: string): readonly string[] {
-  return [status, escapeCell(row.name), row.baseline, row.candidate, signed(row.delta), row.p, row.ci];
+  const baseline = durationNs(row.baseline);
+  const candidate = durationNs(row.candidate);
+  const difference = baseline === undefined || candidate === undefined ? '' : milliseconds(candidate - baseline, true);
+  return [status, escapeCell(row.name), row.baseline, row.candidate, difference, signed(row.delta), row.p, row.ci];
 }
 
 function table(body: readonly (readonly string[])[]): readonly string[] {
-  const header = ['status', 'bench', 'baseline', 'candidate', 'Δ p50', 'p', '95% CI'];
+  const header = ['status', 'bench', 'baseline', 'candidate', 'Δ time', 'Δ p50', 'p', '95% CI'];
   const row = (values: readonly string[]) => `| ${values.join(' | ')} |`;
   return [row(header), row(header.map(() => '---')), ...body.map(row)];
+}
+
+/** Summarizes only comparable rows; a workload median is not a frame time or an application-weighted score. */
+function latencyDistribution(rows: readonly LabsRow[]): readonly string[] {
+  const timings = rows.flatMap((row) => {
+    const baseline = durationNs(row.baseline);
+    const candidate = durationNs(row.candidate);
+    return baseline === undefined || candidate === undefined ? [] : [{ row, baseline, candidate }];
+  });
+  if (timings.length === 0) return [];
+  const baselineTimes = timings.map((timing) => timing.baseline);
+  const candidateTimes = timings.map((timing) => timing.candidate);
+  const lines = [
+    `Latency distribution across ${timings.length} comparable workload p50s. Each workload counts once; these are not frame times.`,
+    '',
+    '| statistic | baseline | candidate |',
+    '| --- | ---: | ---: |',
+    `| Median workload p50 | ${milliseconds(median(baselineTimes))} | ${milliseconds(median(candidateTimes))} |`,
+    ...[1, 2, 3].map(
+      (limit) =>
+        `| Workloads ≤${String(limit)} ms | ${baselineTimes.filter((time) => time <= limit * 1e6).length} | ${candidateTimes.filter((time) => time <= limit * 1e6).length} |`,
+    ),
+    `| Workloads >3 ms | ${baselineTimes.filter((time) => time > 3e6).length} | ${candidateTimes.filter((time) => time > 3e6).length} |`,
+    '',
+    'Largest candidate workloads (including neutral results):',
+    '',
+    '| workload | baseline | candidate | Δ time |',
+    '| --- | ---: | ---: | ---: |',
+    ...timings
+      .sort((left, right) => right.candidate - left.candidate)
+      .slice(0, 5)
+      .map(
+        ({ row, baseline, candidate }) =>
+          `| ${escapeCell(row.name)} | ${row.baseline} | ${row.candidate} | ${milliseconds(candidate - baseline, true)} |`,
+      ),
+    '',
+  ];
+  return lines;
+}
+
+function durationNs(value: string): number | undefined {
+  const match = /^(\d+(?:\.\d+)?)(ns|µs|us|ms|s)$/u.exec(value);
+  if (match === null) return undefined;
+  const scale: Readonly<Record<string, number>> = { ns: 1, µs: 1e3, us: 1e3, ms: 1e6, s: 1e9 };
+  const duration = Number(match[1]) * scale[match[2]!]!;
+  return Number.isFinite(duration) ? duration : undefined;
+}
+
+function median(values: readonly number[]): number {
+  const ordered = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(ordered.length / 2);
+  return ordered.length % 2 === 0 ? (ordered[middle - 1]! + ordered[middle]!) / 2 : ordered[middle]!;
+}
+
+function milliseconds(nanoseconds: number, includeSign = false): string {
+  const digits = nanoseconds !== 0 && Math.abs(nanoseconds) < 1000 ? 6 : 3;
+  return `${includeSign && nanoseconds > 0 ? '+' : ''}${(nanoseconds / 1e6).toFixed(digits)}ms`;
 }
 
 const plotWidth = 31;

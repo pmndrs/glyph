@@ -299,12 +299,20 @@ The runner also renders the comparison as Markdown (`summary.md` under the outpu
 `$GITHUB_STEP_SUMMARY` when set): counts; a forest plot in a `diff` block, with each bench's Δ p50 inside its 95%
 confidence interval against a zero line, plus p and Labs' baseline and candidate distribution sparklines (GitHub
 colours slower `-` rows red and faster `+` rows green, while neutral rows stay plain; the axis caps at ±50% and draws an
-arrow past it); a slower-first table of non-neutral benches with full names; and the neutral and skipped rows folded
+arrow past it); a slower-first table of non-neutral benches with full names and absolute time changes; and the neutral and skipped rows folded
 in `<details>`. It is parsed from the `labs compare` text, with names restored from the candidate result, and a
 failure to write it only warns. On a pull request, CI also keeps
 one PR comment current with the same Markdown, found by its `<!-- glyph-labs-report -->` marker, like the size and docs
 reports. Fork pull requests get a read-only token, so for them the comment step may fail and the job summary carries
 the report.
+
+The same comparable rows now also produce old/new medians across workload p50s, cumulative counts below 1/2/3 ms,
+and the five largest candidate workload timings, including statistically neutral outliers. Excluded timing modes,
+clock-confounded skipped rows and new-only cases do not enter this distribution. Each workload counts once; this is
+neither a frame-time estimate nor an application-weighted performance score, and unrelated workload times are not summed.
+Absolute differences use the rounded p50 values printed by Labs. The release-comparison gate covers mixed units,
+zero/unsupported values, exclusion accounting, neutral outliers and median/threshold behavior. Six focused tests pass;
+script TypeScript and lint pass against the exact successful main distribution. No runtime benchmark or Glyph source changes.
 
 The default package suite is a common-use smoke comparison: cached `measure()`, measurement and publication after a text
 change, exact-width reflow, paint-only style publication, and font-size relayout. It deliberately excludes per-glyph

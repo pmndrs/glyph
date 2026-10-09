@@ -1,4 +1,4 @@
-/* @workflow { "name": "benchmark:release-comparison-check", "summary": "Verify exact-release Labs baseline selection and reject unsafe version inputs.", "requirements": "Workspace Node toolchain.", "writes": "stdout" } */
+/* @workflow { "name": "benchmark:release-comparison-check", "summary": "Verify exact-release Labs selection, comparable latency distributions and unsafe-input rejection.", "requirements": "Workspace Node toolchain.", "writes": "stdout" } */
 import assert from 'node:assert/strict';
 import { cpus } from 'node:os';
 import { execFileSync } from 'node:child_process';
@@ -107,4 +107,45 @@ test('excludes incompatible timing modes from counts and plots while preserving 
   assert.match(summary, /timing-mode mismatch/u);
   assert.doesNotMatch(summary, /437\.4|60\.63/u);
   assert.equal(parseLabsComparison(report, labsRunNames(candidate)).rows.length, 2);
+});
+
+test('reports absolute changes and workload medians without hiding large neutral workloads', () => {
+  const report = [
+    '  ▼ tiny 1000ns 2us +100.0% +0.0% .001 +90.0..+110.0%',
+    '  ▼ small 500µs 1ms +100.0% +0.0% .001 +90.0..+110.0%',
+    '  ▼ medium 2ms 3ms +50.0% +0.0% .001 +40.0..+60.0%',
+    '  ■ large 4ms 6ms +50.0% +0.0% .100 -10.0..+70.0%',
+    '  ▼ incompatible 1s 2s +100.0% +0.0% .001 +90.0..+110.0%',
+  ].join('\n');
+  const comparison = parseLabsComparison(report, [], ['incompatible']);
+  const summary = renderLabsSummary({ suite: 'full', baseline: 'old', candidate: 'new', comparison });
+  assert.match(summary, /Latency distribution across 4 comparable workload p50s/u);
+  assert.match(summary, /\| Median workload p50 \| 1\.250ms \| 2\.000ms \|/u);
+  assert.match(summary, /\| Workloads ≤1 ms \| 2 \| 2 \|/u);
+  assert.match(summary, /\| Workloads ≤2 ms \| 3 \| 2 \|/u);
+  assert.match(summary, /\| Workloads ≤3 ms \| 3 \| 3 \|/u);
+  assert.match(summary, /\| Workloads >3 ms \| 1 \| 1 \|/u);
+  assert.match(summary, /\| large \| 4ms \| 6ms \| \+2\.000ms \|/u);
+  assert.match(summary, /\| tiny \| 1000ns \| 2us \| \+0\.001ms \|/u);
+  assert.match(summary, /not frame times/u);
+  assert.ok(summary.indexOf('| large |') < summary.indexOf('| medium |'));
+  assert.doesNotMatch(summary, /\| incompatible \| 1s|2s/u);
+});
+
+test('handles zero and second-scale medians without manufacturing timings for unsupported values', () => {
+  const report = [
+    '  ■ zero 0ns 0ns +0.0% +0.0% 1.000 -1.0..+1.0%',
+    '  ▼ slow 1s 2s +100.0% +0.0% .001 +90.0..+110.0%',
+    '  ■ unknown unavailable unavailable +0.0% +0.0% 1.000 -1.0..+1.0%',
+  ].join('\n');
+  const summary = renderLabsSummary({
+    suite: 'full',
+    baseline: 'old',
+    candidate: 'new',
+    comparison: parseLabsComparison(report, []),
+  });
+  assert.match(summary, /across 2 comparable workload p50s/u);
+  assert.match(summary, /\| Median workload p50 \| 500\.000ms \| 1000\.000ms \|/u);
+  assert.match(summary, /\| unknown \| unavailable \| unavailable \|  \|/u);
+  assert.doesNotMatch(summary, /NaN|Infinity/u);
 });
