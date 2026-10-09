@@ -763,14 +763,15 @@ A successful baked Presentation preload retains one application-lifetime `Font` 
 
 `pnpm scripts run benchmark:presentation-screenshots` retains one MTSDF screenshot for every verified workload on WebGPU and forced WebGL under the ignored benchmark cache.
 
-`mise exec -- npx --yes portless run --name glyph-retained-uploads pnpm scripts run benchmark:retained-uploads` runs one multi-color ASCII-rich retained `Text` through WebGPU and forced
+`pnpm scripts run benchmark:retained-uploads` runs one multi-color ASCII-rich retained `Text` through WebGPU and forced
 WebGL2 in project Chromium. It separates text scheduling and publication time from render submission, counts retained
 attribute and PBO-texture upload calls and bytes at Three's common managers, verifies framebuffer readback after content,
 count, capacity, draw-topology, and transform changes, and requires unchanged attribute versions. The default candidate
 expects version-driven `StreamDrawUsage`; `--usage=dynamic` is the baseline mode. An optional
 `GLYPH_RETAINED_UPLOAD_PACKAGE_ROOT` points the same harness at a built installed package. The workflow acquires the shared
 performance advisory lock and reports synchronous CPU cadence separately from upload traffic; it does not claim GPU
-execution or display-presentation timing.
+execution or display-presentation timing. `PORTLESS_URL` optionally overrides the browser origin; without it,
+the workflow uses the local server origin. Portless is not a package prerequisite.
 
 | Script  | Purpose                                                                                                          |
 | ------- | ---------------------------------------------------------------------------------------------------------------- |
