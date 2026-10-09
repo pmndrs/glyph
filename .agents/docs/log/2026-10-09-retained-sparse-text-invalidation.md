@@ -2,8 +2,8 @@
 type: Log Entry
 title: 'Derived sparse text invalidation in the retained Rust engine'
 generated:
-  by: process:docs-new
-  at: '2026-10-09T14:02:17Z'
+  by: openai-codex/gpt-6
+  at: '2026-10-09T15:48:00Z'
 ---
 
 Public `Text.set` assignment continues through the existing one-record scalar-aligned UTF-16 mutation path. The
@@ -46,3 +46,10 @@ projects passed, as did shaper rustfmt, strict all-target Clippy, focused Oxc ch
 `benchmark:workflow-check` cases including the `assignment` selector. The parent separately reported a successful full
 Glyph build at this source revision. No post-rebase source correction was required. Package Labs, browsers, servers, and
 profilers were deliberately not run here; the parent owns the serialized assignment benchmark lane.
+
+The parent's eight-block installed-package assignment comparison against main `7b845b30` reports one faster, zero
+slower, two neutral, and zero skipped cases. Scattered assignments improve 33.19 to 30.65 ms (minus 7.6%, p below .001,
+95% interval minus 10.6 to minus 4.5%). Unchanged assignments are neutral at 6.99 to 7.04 ms; broad replacement is
+neutral at 32.00 to 31.00 ms. Baseline SHA-256 begins `069f2077`, candidate `327bbf8b`; all checks pass with no timing-mode
+mismatch. Limited resolution remains, including an approximately plus/minus 6% warning on scattered edits. This narrow
+local result supports remote CI submission; it does not prove #247's root-scaling/read-loop targets or clear full Labs.

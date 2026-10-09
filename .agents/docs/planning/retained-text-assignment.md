@@ -166,7 +166,10 @@ implementation or measured SWAR speedup is claimed.
 Independent source review is clear after correcting quadratic window discovery and retaining public cold-output and
 two-sibling lifecycle regressions. At rebased source revision `79537881`, 328 Rust library tests and 85 public integration
 tests passed, as did source/declaration TypeScript checks, strict shaper Clippy, and the package-Labs workflow selector.
-The assignment Labs comparison remains the performance acceptance gate. Main already contains unchanged-paragraph
+Local eight-block assignment Labs against main `7b845b30` reports one faster, zero slower, two neutral, no skips:
+scattered edits improve 33.19 to 30.65 ms (minus 7.6%, p below .001), while unchanged and broad assignments are neutral.
+Limited resolution and the remaining 30 ms total cost preclude whole-epic claims. Remote CI and release-wide Labs remain
+acceptance gates. Main already contains unchanged-paragraph
 preparation (#276), canonical spans/style deltas (#278), scoped Three synchronization (#279), and render-plan correction
 (#274). Their individual evidence does not close #247; the issue and roadmap own landing status.
 
