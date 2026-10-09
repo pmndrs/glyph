@@ -59,12 +59,23 @@ export function createHostRasterCodecProgram<
   assertTechniqueCodecBody(authoredBody, codec.schema);
   const body = attachHostCodecProgramSystemBuffers(authoredBody, codec.schema, system, placementSlotTarget);
   assertTechniqueCodecBody(body, codec.schema, system, placementSlotTarget);
+  const techniqueBuffers = schemaCodecBuffers(codec.schema);
+  const namedSystemBuffers = systemCodecBuffers(system, placementSlotTarget);
+  const systemBuffers = namedSystemBuffers.map(({ buffer }) => buffer);
+  if (techniqueBuffers.length + systemBuffers.length > capabilitySet.maxBuffersPerDraw) {
+    const systemNames = namedSystemBuffers.map(({ name }) => name);
+    throw new RangeError(
+      `raster codec "${codec.schema.technique}" needs ${techniqueBuffers.length + systemBuffers.length} buffers per draw ` +
+        `(${techniqueBuffers.length} technique buffers plus ${systemNames.join(', ')}) ` +
+        `but the capability set binds at most ${capabilitySet.maxBuffersPerDraw}`,
+    );
+  }
   return Object.freeze({
     ...createCodecProgram(
       compiledTechniqueId,
       compiledProgramId,
       body,
-      [...schemaCodecBuffers(codec.schema), ...systemCodecBuffers(system, placementSlotTarget)],
+      [...techniqueBuffers, ...systemBuffers],
       options.transformMode,
     ),
     capabilitySet,
@@ -75,15 +86,25 @@ export function createHostRasterCodecProgram<
 function systemCodecBuffers(
   system: RasterCodecSystem,
   placementSlotTarget: CodecProgramU32StoreTarget | undefined,
-): CodecBuffer[] {
+): Array<{ readonly name: string; readonly buffer: CodecBuffer }> {
   return [
-    { id: system.stableGlyphId.id, scalar: 'u32', vectorWidth: 1 },
+    { name: 'stableGlyphId', buffer: { id: system.stableGlyphId.id, scalar: 'u32', vectorWidth: 1 } },
     ...(placementSlotTarget === undefined
-      ? [{ id: system.placementSlot.id, scalar: 'u32' as const, vectorWidth: 1 }]
+      ? [
+          {
+            name: 'placementSlot',
+            buffer: { id: system.placementSlot.id, scalar: 'u32' as const, vectorWidth: 1 },
+          },
+        ]
       : []),
     ...(system.transformIndex === undefined
       ? []
-      : [{ id: system.transformIndex.id, scalar: 'u32' as const, vectorWidth: 1 }]),
+      : [
+          {
+            name: 'transformIndex',
+            buffer: { id: system.transformIndex.id, scalar: 'u32' as const, vectorWidth: 1 },
+          },
+        ]),
   ];
 }
 

@@ -293,10 +293,8 @@ impl ValidatedCodec {
         &self,
         capability_set: CapabilitySetId,
     ) -> Option<&ProgramDescriptor> {
-        self.programs.iter().find(|program| {
-            program.primitive_kind == super::render_plan::PRIMITIVE_DECORATION
-                && (program.capability_set.0 == 0 || program.capability_set == capability_set)
-        })
+        self.programs
+            .get(decoration_program_index(&self.programs, capability_set)?)
     }
 
     pub fn new(descriptor: CodecDescriptor) -> Result<Self, CodecError> {
@@ -338,20 +336,12 @@ impl ValidatedCodec {
         technique: TechniqueId,
         variant: u16,
     ) -> Option<&ProgramDescriptor> {
-        self.programs
-            .iter()
-            .find(|program| {
-                program.capability_set == capability_set
-                    && program.technique == technique
-                    && program.variant == variant
-            })
-            .or_else(|| {
-                self.programs.iter().find(|program| {
-                    program.capability_set.0 == 0
-                        && program.technique == technique
-                        && program.variant == variant
-                })
-            })
+        self.programs.get(program_index(
+            &self.programs,
+            capability_set,
+            technique,
+            variant,
+        )?)
     }
 
     pub fn execute(
@@ -366,21 +356,7 @@ impl ValidatedCodec {
         if self.capability_set(capability_set).is_none() {
             return Err(CodecExecutionError::CapabilitySetMissing);
         }
-        let program_index = self
-            .programs
-            .iter()
-            .position(|program| {
-                program.capability_set == capability_set
-                    && program.technique == technique
-                    && program.variant == variant
-            })
-            .or_else(|| {
-                self.programs.iter().position(|program| {
-                    program.capability_set.0 == 0
-                        && program.technique == technique
-                        && program.variant == variant
-                })
-            })
+        let program_index = program_index(&self.programs, capability_set, technique, variant)
             .ok_or(CodecExecutionError::ProgramMissing)?;
         let program = self
             .programs
@@ -418,21 +394,7 @@ impl ValidatedCodec {
         if self.capability_set(capability_set).is_none() {
             return Err(CodecExecutionError::CapabilitySetMissing);
         }
-        let program_index = self
-            .programs
-            .iter()
-            .position(|program| {
-                program.capability_set == capability_set
-                    && program.technique == technique
-                    && program.variant == variant
-            })
-            .or_else(|| {
-                self.programs.iter().position(|program| {
-                    program.capability_set.0 == 0
-                        && program.technique == technique
-                        && program.variant == variant
-                })
-            })
+        let program_index = program_index(&self.programs, capability_set, technique, variant)
             .ok_or(CodecExecutionError::ProgramMissing)?;
         execute_program(
             &self.programs[program_index],
@@ -450,21 +412,7 @@ impl ValidatedCodec {
         technique: TechniqueId,
         variant: u16,
     ) -> Option<&[u16]> {
-        let index = self
-            .programs
-            .iter()
-            .position(|program| {
-                program.capability_set == capability_set
-                    && program.technique == technique
-                    && program.variant == variant
-            })
-            .or_else(|| {
-                self.programs.iter().position(|program| {
-                    program.capability_set.0 == 0
-                        && program.technique == technique
-                        && program.variant == variant
-                })
-            })?;
+        let index = program_index(&self.programs, capability_set, technique, variant)?;
         Some(&self.execution.get(index)?.buffer_dependency_masks)
     }
 
@@ -476,21 +424,7 @@ impl ValidatedCodec {
         semantic_changes: u16,
         force_all: bool,
     ) -> Option<(u32, u32)> {
-        let index = self
-            .programs
-            .iter()
-            .position(|program| {
-                program.capability_set == capability_set
-                    && program.technique == technique
-                    && program.variant == variant
-            })
-            .or_else(|| {
-                self.programs.iter().position(|program| {
-                    program.capability_set.0 == 0
-                        && program.technique == technique
-                        && program.variant == variant
-                })
-            })?;
+        let index = program_index(&self.programs, capability_set, technique, variant)?;
         let execution = self.execution.get(index)?;
         let program = self.programs.get(index)?;
         if force_all || semantic_changes == super::positioning::ALL_SEMANTIC_CHANGES {
@@ -516,6 +450,38 @@ impl ValidatedCodec {
         }
         Some((f32_inputs, u32_inputs))
     }
+}
+
+fn decoration_program_index(
+    programs: &[ProgramDescriptor],
+    capability_set: CapabilitySetId,
+) -> Option<usize> {
+    programs.iter().position(|program| {
+        program.primitive_kind == super::render_plan::PRIMITIVE_DECORATION
+            && (program.capability_set.0 == 0 || program.capability_set == capability_set)
+    })
+}
+
+fn program_index(
+    programs: &[ProgramDescriptor],
+    capability_set: CapabilitySetId,
+    technique: TechniqueId,
+    variant: u16,
+) -> Option<usize> {
+    programs
+        .iter()
+        .position(|program| {
+            program.capability_set == capability_set
+                && program.technique == technique
+                && program.variant == variant
+        })
+        .or_else(|| {
+            programs.iter().position(|program| {
+                program.capability_set.0 == 0
+                    && program.technique == technique
+                    && program.variant == variant
+            })
+        })
 }
 
 fn low_bits(count: u8) -> u32 {
@@ -1024,6 +990,7 @@ pub enum CodecError {
     InvalidInputSources,
     EmptyBuffers,
     TooManyBuffers,
+    TooManyBuffersPerDraw,
     InvalidBufferId,
     DuplicateBufferId,
     InvalidVectorWidth,
@@ -1545,6 +1512,21 @@ fn validate_codec(descriptor: &CodecDescriptor) -> Result<(), CodecError> {
         }
         validate_program(program)?;
     }
+    // Resolve only after every program is valid: a set-specific glyph program
+    // shadows its wildcard, while decorations intentionally use first match.
+    for set in &descriptor.capability_sets {
+        if descriptor
+            .programs
+            .iter()
+            .enumerate()
+            .any(|(index, program)| {
+                program_serves_capability_set(&descriptor.programs, index, set.id)
+                    && program.buffers.len() > usize::from(set.max_buffers_per_draw)
+            })
+        {
+            return Err(CodecError::TooManyBuffersPerDraw);
+        }
+    }
     if descriptor.capability_sets.iter().any(|set| {
         !descriptor
             .programs
@@ -1554,6 +1536,19 @@ fn validate_codec(descriptor: &CodecDescriptor) -> Result<(), CodecError> {
         return Err(CodecError::UnknownCapabilitySet);
     }
     Ok(())
+}
+
+fn program_serves_capability_set(
+    programs: &[ProgramDescriptor],
+    candidate_index: usize,
+    capability_set: CapabilitySetId,
+) -> bool {
+    let program = &programs[candidate_index];
+    if program.primitive_kind == super::render_plan::PRIMITIVE_DECORATION {
+        return decoration_program_index(programs, capability_set) == Some(candidate_index);
+    }
+    program_index(programs, capability_set, program.technique, program.variant)
+        == Some(candidate_index)
 }
 
 fn validate_capability_sets(capability_sets: &[CapabilitySet]) -> Result<(), CodecError> {
@@ -1910,6 +1905,31 @@ mod tests {
         }
     }
 
+    fn two_buffer_program() -> ProgramDescriptor {
+        let mut program = valid_program();
+        program.u32_input_count = 1;
+        program.inputs.push(InputSource::semantic(2));
+        program.buffers.push(BufferSchema::packed(
+            COLORS,
+            ScalarType::U32,
+            1,
+            BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST,
+            1,
+        ));
+        program.operations.extend([
+            Operation::LoadU32 {
+                target: 2,
+                field: 0,
+            },
+            Operation::StoreU32 {
+                source: 2,
+                buffer: COLORS,
+                lane: 0,
+            },
+        ]);
+        program
+    }
+
     #[test]
     fn accepts_complete_straight_line_program() {
         let codec = ValidatedCodec::new(descriptor(vec![valid_program()])).unwrap();
@@ -2150,6 +2170,116 @@ mod tests {
             }),
             Err(CodecError::InvalidUploadCostModel)
         );
+    }
+
+    #[test]
+    fn rejects_programs_declaring_more_buffers_than_one_draw_binds() {
+        let program = two_buffer_program();
+        let mut narrow = valid_capability_set();
+        narrow.max_buffers_per_draw = 1;
+        assert_eq!(
+            ValidatedCodec::new(CodecDescriptor {
+                capability_sets: vec![narrow],
+                programs: vec![program.clone()],
+            }),
+            Err(CodecError::TooManyBuffersPerDraw)
+        );
+
+        let mut wide = valid_capability_set();
+        wide.id = CapabilitySetId(2);
+        wide.max_buffers_per_draw = 2;
+        let mut wide_program = program.clone();
+        wide_program.id = ProgramId(2);
+        wide_program.capability_set = wide.id;
+        let mut narrow_program = valid_program();
+        narrow_program.capability_set = narrow.id;
+        assert!(
+            ValidatedCodec::new(CodecDescriptor {
+                capability_sets: vec![narrow, wide],
+                programs: vec![narrow_program, wide_program],
+            })
+            .is_ok()
+        );
+        assert_eq!(
+            ValidatedCodec::new(CodecDescriptor {
+                capability_sets: vec![narrow, wide],
+                programs: vec![program],
+            }),
+            Err(CodecError::TooManyBuffersPerDraw)
+        );
+    }
+
+    #[test]
+    fn validates_buffer_limits_against_the_glyph_program_each_set_resolves() {
+        let mut narrow = valid_capability_set();
+        narrow.max_buffers_per_draw = 1;
+        let mut wide = valid_capability_set();
+        wide.id = CapabilitySetId(2);
+        wide.max_buffers_per_draw = 2;
+
+        let wildcard = two_buffer_program();
+        let mut narrow_override = valid_program();
+        narrow_override.id = ProgramId(2);
+        narrow_override.capability_set = narrow.id;
+        let codec = ValidatedCodec::new(CodecDescriptor {
+            capability_sets: vec![narrow, wide],
+            programs: vec![wildcard, narrow_override],
+        })
+        .unwrap();
+        assert_eq!(
+            codec.program(narrow.id, BITMAP, 0).unwrap().id,
+            ProgramId(2)
+        );
+        assert_eq!(codec.program(wide.id, BITMAP, 0).unwrap().id, ProgramId(1));
+
+        let wildcard = valid_program();
+        let mut over_limit_override = two_buffer_program();
+        over_limit_override.id = ProgramId(2);
+        over_limit_override.capability_set = narrow.id;
+        assert_eq!(
+            ValidatedCodec::new(CodecDescriptor {
+                capability_sets: vec![narrow, wide],
+                programs: vec![wildcard, over_limit_override],
+            }),
+            Err(CodecError::TooManyBuffersPerDraw)
+        );
+    }
+
+    #[test]
+    fn decoration_buffer_limits_follow_first_matching_program_order() {
+        let mut narrow = valid_capability_set();
+        narrow.max_buffers_per_draw = 1;
+        let mut wide = valid_capability_set();
+        wide.id = CapabilitySetId(2);
+        wide.max_buffers_per_draw = 2;
+
+        let mut wildcard = two_buffer_program();
+        wildcard.primitive_kind = super::super::render_plan::PRIMITIVE_DECORATION;
+        wildcard.resource_kind_mask = 0;
+        let mut narrow_program = valid_program();
+        narrow_program.id = ProgramId(2);
+        narrow_program.capability_set = narrow.id;
+        narrow_program.primitive_kind = super::super::render_plan::PRIMITIVE_DECORATION;
+        narrow_program.resource_kind_mask = 0;
+
+        assert_eq!(
+            ValidatedCodec::new(CodecDescriptor {
+                capability_sets: vec![narrow, wide],
+                programs: vec![wildcard.clone(), narrow_program.clone()],
+            }),
+            Err(CodecError::TooManyBuffersPerDraw)
+        );
+
+        let codec = ValidatedCodec::new(CodecDescriptor {
+            capability_sets: vec![narrow, wide],
+            programs: vec![narrow_program, wildcard],
+        })
+        .unwrap();
+        assert_eq!(
+            codec.decoration_program(narrow.id).unwrap().id,
+            ProgramId(2)
+        );
+        assert_eq!(codec.decoration_program(wide.id).unwrap().id, ProgramId(1));
     }
 
     #[test]
