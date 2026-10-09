@@ -88,6 +88,21 @@ describe('independent package-size report', () => {
     expect(() => summarizePackageSizes(incomplete)).toThrow(/text-shaper-wasm/);
   });
 
+  it('marks increases and decreases without disguising sub-rounding changes as unchanged', () => {
+    const rows = sizeLimitRows(report).map((row) => ({ ...row, size: 100_000 }));
+    const names = rows.slice(0, 6).map(({ name }) => name);
+    const sizes = [110_000, 90_000, 100_000, 100_001, 99_999, 100_000];
+    const current = rows.map((row) => ({ ...row, size: sizes[names.indexOf(row.name)] ?? row.size }));
+    const base = rows.filter(({ name }) => name !== names[5]);
+    const markdown = formatCompactSizeLimitMarkdown(base, current);
+    expect(markdown).toContain('(🔴 ↑ +10%)');
+    expect(markdown).toContain('(🟢 ↓ -10%)');
+    expect(markdown).toContain('(0%)');
+    expect(markdown).toContain('(🔴 ↑ <0.01%)');
+    expect(markdown).toContain('(🟢 ↓ <0.01%)');
+    expect(markdown).toContain('(new)');
+  });
+
   it('presents every measured surface once in balanced compact columns', () => {
     const current = sizeLimitRows(report);
     const base = current.map((row) => ({ ...row, size: row.size - 1 }));
