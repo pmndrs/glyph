@@ -617,7 +617,9 @@ the exact array and text value, so React and Vue may preserve that proof while r
 Three may skip duplicate Unicode segmentation. A separately authored raw array is still validated in full; when its text
 and every boundary equal the previous normalized value, that value proves the new records remain aligned in both Three
 and the retained planner. Changed text or boundaries, malformed UTF-16, and unproven first inputs still take the normal
-cluster-alignment path.
+cluster-alignment path. Three also marks each deeply frozen span-style snapshot with package-private WeakSet provenance;
+the retained planner adopts that exact snapshot instead of cloning it again. A caller-authored style, including a merely
+frozen object, has no such proof and is still cloned and deeply frozen at the owning boundary.
 
 Three's ordinary scene traversal owns world-matrix composition. The root observes Text membership and ancestor state,
 publishes semantic changes once at its renderer-owned draw node, and patches root-relative transforms through a separate
