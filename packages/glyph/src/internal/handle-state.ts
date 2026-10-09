@@ -287,6 +287,7 @@ export class GlyphHandleState {
   readonly #bindEngineFont: HandleEngineFontBinder | undefined;
   readonly #assertEngineAvailable: (() => void) | undefined;
   readonly #enterEngineBorrow: (() => () => void) | undefined;
+  readonly #assertEngineLifecycleMutationAllowed: (() => void) | undefined;
   #nextCodecOrdinal = 1;
   #nextFontBindingOrdinal = 1;
   #nextFontStackOrdinal = 1;
@@ -306,6 +307,7 @@ export class GlyphHandleState {
     assertEngineAvailable?: () => void,
     enterEngineBorrow?: () => () => void,
     identityNamespace?: string,
+    assertEngineLifecycleMutationAllowed?: () => void,
   ) {
     if (typeof options !== 'object' || options === null || Array.isArray(options)) {
       throw new TypeError('Glyph handle state options must be an object');
@@ -322,6 +324,7 @@ export class GlyphHandleState {
     this.#bindEngineFont = bindEngineFont;
     this.#assertEngineAvailable = assertEngineAvailable;
     this.#enterEngineBorrow = enterEngineBorrow;
+    this.#assertEngineLifecycleMutationAllowed = assertEngineLifecycleMutationAllowed;
   }
 
   /** @internal Fills `target` with views over the outline its font decoded when it loaded. */
@@ -822,10 +825,16 @@ export class GlyphHandleState {
     this.#assertActive();
   }
 
+  /** @internal */
+  _assertEngineLifecycleMutationAllowed(): void {
+    this._assertEngineMutationAllowed();
+    this.#assertEngineLifecycleMutationAllowed?.();
+  }
+
   /** Disposes this handle and every codec, binding, planner, and transport it owns. */
   dispose(): void {
     if (this.#disposed) return;
-    this.#assertEngineAvailable?.();
+    this._assertEngineLifecycleMutationAllowed();
     let failure: unknown;
     const attempt = (dispose: () => void): void => {
       try {

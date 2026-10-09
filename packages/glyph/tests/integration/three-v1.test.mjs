@@ -3129,6 +3129,54 @@ test('rejected draw replacement retains the accepted scope index and retry match
   font.dispose();
 });
 
+test('material preparation rejection preserves the last accepted Three branch and core revision', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const label = three.createText({ font, text: 'accepted before preparation failure' });
+  group.add(label);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+  const acceptedDraw = rootDraws(scene)[0];
+  assert.ok(acceptedDraw);
+  assert.deepEqual(label.commitState(), { status: 'committed', revision: 0 });
+
+  const preparationError = new Error('deliberate replacement material failure');
+  let rejectReplacement = true;
+  const replacementMaterial = defineTextMaterial((context) => {
+    if (rejectReplacement) throw preparationError;
+    return context.createDefaultMaterial();
+  });
+  group.material = replacementMaterial;
+  assert.throws(
+    () => glyph.shape(),
+    (error) => error === preparationError,
+    'the material factory failure must reject before host publication',
+  );
+  assert.equal(rootDraws(scene)[0], acceptedDraw, 'preparation failure must retain the accepted draw branch');
+  assert.deepEqual(label.commitState(), { status: 'failed', error: preparationError });
+
+  group.visible = false;
+  scene.updateMatrixWorld(true);
+  assert.equal(rootDraws(scene)[0], acceptedDraw, 'transform synchronization cannot publish the rejected branch');
+  assert.equal(acceptedDraw.visible, false, 'the last accepted branch remains live for visibility changes');
+
+  rejectReplacement = false;
+  group.material = replacementMaterial;
+  scene.updateMatrixWorld(true);
+  assert.deepEqual(
+    label.commitState(),
+    { status: 'committed', revision: 0 },
+    'retry keeps the accepted core revision paired with the newly accepted renderer branch',
+  );
+  assert.equal(label.error, undefined);
+
+  label.dispose();
+  group.dispose();
+  font.dispose();
+});
+
 test('a rejected fixed-capacity candidate releases its provisional font-stack lease', async (t) => {
   const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'fixed' } }));
   const registerFontStack = GlyphHandleState.prototype.registerFontStack;
@@ -3274,6 +3322,1425 @@ test('Three retires materials bound to a replaced buffer generation', async (t) 
   label.dispose();
   font.dispose();
   fontDomain.dispose();
+});
+
+test('throwing Three retirement callbacks preserve the accepted publication', async (t) => {
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+
+  for (const resource of ['material', 'geometry']) {
+    await t.test(resource, async (subtest) => {
+      const config = defineThreeConfig({ capacity: { size: 1, policy: 'grow' } });
+      const three = await createThreeTestHandle(subtest, config);
+      const scene = new THREE.Scene();
+      const group = three.createTextGroup({ renderOrder: 3 });
+      const disposalError = new Error(`application ${resource} dispose listener failure`);
+      let disposalEvents = 0;
+      const acceptedMaterials = [];
+      const acceptedMaterial = defineTextMaterial((context) => {
+        const realized = context.createDefaultMaterial();
+        acceptedMaterials.push(realized);
+        if (resource === 'material') {
+          realized.addEventListener('dispose', () => {
+            disposalEvents += 1;
+            throw disposalError;
+          });
+        }
+        return realized;
+      });
+      const replacementMaterials = [];
+      const replacementMaterial = defineTextMaterial((context) => {
+        const realized = context.createDefaultMaterial();
+        replacementMaterials.push(realized);
+        return realized;
+      });
+      const label = three.createText({ font, material: acceptedMaterial, text: 'A' });
+      group.add(label);
+      scene.add(group);
+      scene.updateMatrixWorld(true);
+      const acceptedDraw = rootDraws(scene)[0];
+      assert.ok(acceptedDraw);
+      assert.equal(acceptedDraw.material, acceptedMaterials[0], 'the accepted draw must use its realized material');
+      const acceptedRevision = label.commitState();
+      assert.deepEqual(acceptedRevision, { status: 'committed', revision: 0 });
+      if (resource === 'geometry') {
+        acceptedDraw.geometry.addEventListener('dispose', () => {
+          disposalEvents += 1;
+          group.visible = false;
+          scene.updateMatrixWorld(true);
+          throw disposalError;
+        });
+      }
+
+      label.material = replacementMaterial;
+      label.text = 'replacement text forces retained storage growth';
+      assert.throws(
+        () => glyph.shape(),
+        (error) => error === disposalError,
+        'the caller-owned throw must surface',
+      );
+
+      const replacementDraw = rootDraws(scene)[0];
+      assert.notEqual(replacementDraw, acceptedDraw, 'the replacement draw must be the published host branch');
+      assert.equal(
+        replacementDraw.material,
+        replacementMaterials[0],
+        'the replacement draw must use the newly realized material',
+      );
+      assert.notEqual(
+        replacementDraw.material,
+        acceptedDraw.material,
+        'the retired material must not remain installed',
+      );
+      assert.equal(disposalEvents, 1, `the retired ${resource} must be disposed exactly once`);
+      if (resource === 'geometry') {
+        assert.equal(group.visible, false, 'the geometry callback must mutate the accepted scope');
+        assert.equal(replacementDraw.visible, false, 'callback traversal must update the candidate draw');
+        scene.updateMatrixWorld(true);
+        assert.equal(replacementDraw.visible, false, 'an unchanged later traversal must preserve candidate visibility');
+      }
+      assert.deepEqual(
+        label.commitState(),
+        { status: 'committed', revision: 2 },
+        'core and Three must accept the same publication before surfacing cleanup failure',
+      );
+      assert.equal(label.error, disposalError, 'scene-owned error reporting retains the caller failure');
+
+      const entry = {
+        id: 0,
+        batching: 'auto',
+        color: '#ffffff',
+        material: replacementMaterial,
+        renderOrder: 3,
+        text: label.text,
+        visible: group.visible,
+        x: 0,
+      };
+      const mounted = new Map([[entry.id, { group, label }]]);
+      const cold = await createThreeTestHandle(subtest, config);
+      const coldScene = new THREE.Scene();
+      const coldMounted = new Map([[entry.id, mountRendererDifferentialEntry(cold, font, coldScene, entry)]]);
+      const { group: coldGroup, label: coldLabel } = coldMounted.get(entry.id);
+      coldScene.updateMatrixWorld(true);
+      const assertMatchesCold = (message) =>
+        assert.deepEqual(
+          rendererDifferentialSnapshot(scene, undefined, [entry], mounted),
+          rendererDifferentialSnapshot(coldScene, undefined, [entry], coldMounted),
+          message,
+        );
+      assertMatchesCold('the accepted retirement publication must match a cold full preparation');
+
+      label.position.set(23, -7, 0);
+      coldLabel.position.copy(label.position);
+      scene.updateMatrixWorld(true);
+      coldScene.updateMatrixWorld(true);
+      assertMatchesCold('later transforms must match a cold full preparation');
+      assert.equal(label.error, disposalError, 'transform synchronization does not erase the attributed failure');
+
+      group.visible = false;
+      coldGroup.visible = false;
+      scene.updateMatrixWorld(true);
+      coldScene.updateMatrixWorld(true);
+      assertMatchesCold('later visibility must match a cold full preparation');
+
+      group.visible = true;
+      coldGroup.visible = true;
+      group.renderOrder = 17;
+      coldGroup.renderOrder = 17;
+      scene.updateMatrixWorld(true);
+      coldScene.updateMatrixWorld(true);
+      assert.equal(label.error, undefined, 'a later accepted publication clears the attributed cleanup error');
+      assertMatchesCold('the recovered publication must match a cold full preparation');
+
+      coldLabel.dispose();
+      coldGroup.dispose();
+      label.dispose();
+      group.dispose();
+    });
+  }
+});
+
+test('irreversible Three callback windows preserve primary notification precedence', async (t) => {
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+
+  for (const { callbackWindow, primaryFailure } of [
+    { callbackWindow: 'material disposal', primaryFailure: undefined },
+    { callbackWindow: 'geometry disposal', primaryFailure: null },
+    { callbackWindow: 'draw addition', primaryFailure: 0 },
+    { callbackWindow: 'draw removal', primaryFailure: new Error('primary draw removal failure') },
+  ]) {
+    await t.test(callbackWindow, async (subtest) => {
+      const three = await createThreeTestHandle(subtest, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+      const scene = new THREE.Scene();
+      const group = three.createTextGroup();
+      const secondaryFailure = new Error(`secondary ${callbackWindow} transform failure`);
+      let transformMustFail = false;
+      let failingTransformUpdates = 0;
+      let successfulTransformUpdates = 0;
+      class ThrowingTransformParent extends THREE.Object3D {
+        updateWorldMatrix(updateParents, updateChildren) {
+          if (transformMustFail) {
+            failingTransformUpdates += 1;
+            throw secondaryFailure;
+          }
+          successfulTransformUpdates += 1;
+          return super.updateWorldMatrix(updateParents, updateChildren);
+        }
+      }
+      const throwingParent = new ThrowingTransformParent();
+      group.add(throwingParent);
+      let runRetirementCallback = () => {};
+      const acceptedMaterial = defineTextMaterial((context) => {
+        const material = context.createDefaultMaterial();
+        if (callbackWindow === 'material disposal') {
+          material.addEventListener('dispose', () => runRetirementCallback());
+        }
+        return material;
+      });
+      const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+      const label = three.createText({ font, material: acceptedMaterial, text: 'A' });
+      group.add(label);
+      scene.add(group);
+      scene.updateMatrixWorld(true);
+      const acceptedDraw = rootDraws(scene)[0];
+      assert.ok(acceptedDraw);
+      const publicationObject = acceptedDraw.parent;
+      assert.ok(publicationObject);
+
+      scene.add(group);
+      scene.updateMatrixWorld(true);
+      assert.ok(
+        scene.children.indexOf(publicationObject) < scene.children.indexOf(group),
+        'the publication object must traverse before the authored group',
+      );
+
+      const notifications = [];
+      label.onError = (error) => notifications.push(error);
+      let callbackInvocations = 0;
+      runRetirementCallback = () => {
+        callbackInvocations += 1;
+        throwingParent.add(label);
+        transformMustFail = true;
+        scene.updateMatrixWorld(true);
+        throw primaryFailure;
+      };
+      let publicationEvent;
+      if (callbackWindow === 'geometry disposal') {
+        acceptedDraw.geometry.addEventListener('dispose', runRetirementCallback);
+      } else if (callbackWindow === 'draw addition') {
+        publicationEvent = 'childadded';
+        publicationObject.addEventListener(publicationEvent, runRetirementCallback);
+      } else if (callbackWindow === 'draw removal') {
+        publicationEvent = 'childremoved';
+        publicationObject.addEventListener(publicationEvent, runRetirementCallback);
+      }
+
+      label.set({ material: replacementMaterial, text: `replacement for ${callbackWindow}` });
+      const publicationThrow = captureThrown(() => glyph.shape());
+      if (publicationEvent !== undefined) {
+        publicationObject.removeEventListener(publicationEvent, runRetirementCallback);
+      }
+      assert.equal(publicationThrow.present, true);
+      assert.ok(Object.is(publicationThrow.error, primaryFailure));
+      assert.equal(callbackInvocations, 1, 'the selected irreversible callback window must run once');
+      assert.ok(failingTransformUpdates > 0, 'callback traversal must enter the throwing updateWorldMatrix override');
+      assert.equal(notifications.length, 1);
+      assert.ok(Object.is(notifications[0], primaryFailure), 'only the raw primary failure may be notified');
+      assert.deepEqual(label.commitState(), { status: 'committed', revision: 1 });
+      assert.ok(Object.is(label.error, primaryFailure));
+      assert.equal(rootDraws(scene).length, 1, 'the accepted candidate draw must remain published');
+
+      const successfulUpdatesBeforeRecovery = successfulTransformUpdates;
+      transformMustFail = false;
+      label.text = `recovered ${callbackWindow}`;
+      glyph.shape();
+      scene.updateMatrixWorld(true);
+      assert.ok(successfulTransformUpdates > successfulUpdatesBeforeRecovery);
+      assert.deepEqual(label.commitState(), { status: 'committed', revision: 2 });
+      assert.equal(label.error, undefined);
+      assert.equal(notifications.length, 1);
+
+      label.dispose();
+      group.dispose();
+    });
+  }
+});
+
+test('a traversal failure deferred during successful retirement commit surfaces through accepted settlement', async (t) => {
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const deferredFailure = new Error('deferred in-commit transform failure');
+  let transformMustFail = false;
+  let failingTransformUpdates = 0;
+  let successfulTransformUpdates = 0;
+  class ThrowingTransformParent extends THREE.Object3D {
+    updateWorldMatrix(updateParents, updateChildren) {
+      if (transformMustFail) {
+        failingTransformUpdates += 1;
+        throw deferredFailure;
+      }
+      successfulTransformUpdates += 1;
+      return super.updateWorldMatrix(updateParents, updateChildren);
+    }
+  }
+  const throwingParent = new ThrowingTransformParent();
+  group.add(throwingParent);
+  let runRetirementCallback = () => {};
+  const retiringMaterial = defineTextMaterial((context) => {
+    const material = context.createDefaultMaterial();
+    material.addEventListener('dispose', () => runRetirementCallback());
+    return material;
+  });
+  const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+  const label = three.createText({ font, material: retiringMaterial, text: 'A' });
+  group.add(label);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+  const publicationObject = rootDraws(scene)[0]?.parent;
+  assert.ok(publicationObject);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+
+  const notifications = [];
+  label.onError = (error) => notifications.push(error);
+  let callbackInvocations = 0;
+  runRetirementCallback = () => {
+    callbackInvocations += 1;
+    throwingParent.add(label);
+    transformMustFail = true;
+    scene.updateMatrixWorld(true);
+  };
+  label.set({ material: replacementMaterial, text: 'accepted despite deferred traversal failure' });
+  const publicationThrow = captureThrown(() => glyph.shape());
+  assert.deepEqual(publicationThrow, { present: true, error: deferredFailure });
+  assert.equal(callbackInvocations, 1);
+  assert.ok(failingTransformUpdates > 0, 'the successful disposer must encounter the deferred transform failure');
+  assert.deepEqual(notifications, [deferredFailure]);
+  assert.deepEqual(label.commitState(), { status: 'committed', revision: 1 });
+  assert.equal(label.error, deferredFailure);
+  assert.equal(rootDraws(scene).length, 1, 'the renderer commit itself must remain accepted');
+
+  const successfulUpdatesBeforeRecovery = successfulTransformUpdates;
+  transformMustFail = false;
+  label.text = 'deferred traversal recovery';
+  glyph.shape();
+  scene.updateMatrixWorld(true);
+  assert.ok(successfulTransformUpdates > successfulUpdatesBeforeRecovery);
+  assert.deepEqual(label.commitState(), { status: 'committed', revision: 2 });
+  assert.equal(label.error, undefined);
+  assert.deepEqual(notifications, [deferredFailure]);
+
+  label.dispose();
+  group.dispose();
+  font.dispose();
+});
+
+test('retirement callbacks reject reentrant Text and root disposal before lifecycle mutation', async (t) => {
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+
+  for (const { resource, target } of [
+    { resource: 'material', target: 'Text' },
+    { resource: 'geometry', target: 'root' },
+  ]) {
+    await t.test(`${resource} disposes ${target}`, async (subtest) => {
+      const three = await createThreeTestHandle(subtest, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+      const root = three(`reentrant-${resource}`);
+      const scene = new THREE.Scene();
+      const group = root.createTextGroup();
+      let label;
+      let disposalAttempt = { present: false };
+      const retiringMaterial = defineTextMaterial((context) => {
+        const material = context.createDefaultMaterial();
+        if (resource === 'material') {
+          material.addEventListener('dispose', () => {
+            try {
+              if (target === 'Text') label.dispose();
+              else root.dispose();
+            } catch (error) {
+              disposalAttempt = { present: true, error };
+              throw error;
+            }
+            throw new Error(`reentrant ${target} disposal unexpectedly succeeded`);
+          });
+        }
+        return material;
+      });
+      const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+      label = root.createText({ font, material: retiringMaterial, text: 'A' });
+      group.add(label);
+      scene.add(group);
+      scene.updateMatrixWorld(true);
+      const acceptedDraw = rootDraws(scene, `reentrant-${resource}`)[0];
+      assert.ok(acceptedDraw);
+      if (resource === 'geometry') {
+        acceptedDraw.geometry.addEventListener('dispose', () => {
+          try {
+            if (target === 'Text') label.dispose();
+            else root.dispose();
+          } catch (error) {
+            disposalAttempt = { present: true, error };
+            throw error;
+          }
+          throw new Error(`reentrant ${target} disposal unexpectedly succeeded`);
+        });
+      }
+
+      label.material = replacementMaterial;
+      label.text = 'replacement text forces retained storage growth';
+      const publicationThrow = captureThrown(() => glyph.shape());
+      assert.equal(disposalAttempt.present, true, 'the nested disposal call must reject synchronously');
+      assert.equal(publicationThrow.present, true);
+      assert.equal(publicationThrow.error, disposalAttempt.error, 'the exact disposal rejection must surface');
+      assert.match(String(disposalAttempt.error), /borrowed render plan is active/u);
+      assert.equal(root.disposed, false, 'rejected disposal must leave the root live');
+      assert.equal(label.disposed, false, 'rejected disposal must leave the Text live');
+      assert.equal(root.textCount, 1, 'rejected disposal must preserve root membership');
+      assert.equal(label.bound, true, 'rejected disposal must preserve the Text binding');
+      assert.deepEqual(label.commitState(), { status: 'committed', revision: 2 });
+      assert.notEqual(rootDraws(scene, `reentrant-${resource}`)[0], acceptedDraw);
+
+      const rejectionError = new Error(`later ${resource} realization rejection`);
+      const rejectingMaterial = defineTextMaterial(() => {
+        throw rejectionError;
+      });
+      label.material = rejectingMaterial;
+      const rejectionThrow = captureThrown(() => glyph.shape());
+      assert.deepEqual(rejectionThrow, { present: true, error: rejectionError });
+      assert.deepEqual(label.commitState(), { status: 'failed', error: rejectionError });
+
+      label.material = replacementMaterial;
+      glyph.shape();
+      assert.deepEqual(label.commitState(), { status: 'committed', revision: 4 });
+      assert.equal(label.error, undefined);
+
+      label.dispose();
+      group.dispose();
+      root.dispose();
+    });
+  }
+});
+
+test('one root cannot unregister another root during borrowed retirement', async (t) => {
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const left = three('reentrant-left');
+  const right = three('reentrant-right');
+  const leftScene = new THREE.Scene();
+  const rightScene = new THREE.Scene();
+  const leftGroup = left.createTextGroup();
+  const rightGroup = right.createTextGroup();
+  let disposalAttempt = { present: false };
+  const retiringMaterial = defineTextMaterial((context) => {
+    const material = context.createDefaultMaterial();
+    material.addEventListener('dispose', () => {
+      try {
+        right.dispose();
+      } catch (error) {
+        disposalAttempt = { present: true, error };
+        throw error;
+      }
+      throw new Error('cross-root disposal unexpectedly succeeded');
+    });
+    return material;
+  });
+  const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+  const leftLabel = left.createText({ font, material: retiringMaterial, text: 'left' });
+  const rightLabel = right.createText({ font, text: 'right' });
+  leftGroup.add(leftLabel);
+  rightGroup.add(rightLabel);
+  leftScene.add(leftGroup);
+  rightScene.add(rightGroup);
+  leftScene.updateMatrixWorld(true);
+  rightScene.updateMatrixWorld(true);
+
+  leftLabel.material = replacementMaterial;
+  leftLabel.text = 'left replacement grows';
+  rightLabel.text = 'right accepted in the same batch';
+  const publicationThrow = captureThrown(() => glyph.shape());
+  assert.equal(disposalAttempt.present, true);
+  assert.equal(publicationThrow.error, disposalAttempt.error);
+  assert.equal(right.disposed, false, 'the other root must remain registered and live');
+  assert.equal(right.textCount, 1);
+  assert.equal(rightLabel.disposed, false);
+  assert.equal(rightLabel.bound, true);
+  assert.deepEqual(leftLabel.commitState(), { status: 'committed', revision: 2 });
+  assert.deepEqual(rightLabel.commitState(), { status: 'committed', revision: 1 });
+
+  rightLabel.text = 'right still publishes later';
+  glyph.shape();
+  assert.deepEqual(rightLabel.commitState(), { status: 'committed', revision: 2 });
+
+  leftLabel.dispose();
+  rightLabel.dispose();
+  leftGroup.dispose();
+  rightGroup.dispose();
+  left.dispose();
+  right.dispose();
+  font.dispose();
+});
+
+test('accepted cleanup attribution snapshots participants before guarded onError callbacks', async (t) => {
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const primaryError = new Error('primary retirement failure');
+  const notificationError = new Error('secondary onError failure');
+  const retiringMaterial = defineTextMaterial((context) => {
+    const material = context.createDefaultMaterial();
+    material.addEventListener('dispose', () => {
+      throw primaryError;
+    });
+    return material;
+  });
+  const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+  const first = three.createText({ font, material: retiringMaterial, text: 'first' });
+  const second = three.createText({ font, material: retiringMaterial, text: 'second' });
+  const notifications = [];
+  first.onError = (error) => {
+    notifications.push(['first', error]);
+    scene.add(second);
+    throw notificationError;
+  };
+  second.onError = (error) => notifications.push(['second', error]);
+  group.onError = (error) => notifications.push(['group', error]);
+  group.add(first, second);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+
+  first.material = replacementMaterial;
+  second.material = replacementMaterial;
+  first.text = 'first replacement grows retained storage';
+  second.text = 'second replacement grows retained storage';
+  const publicationThrow = captureThrown(() => glyph.shape());
+  assert.deepEqual(publicationThrow, { present: true, error: primaryError });
+  assert.equal(second.parent, scene, 'the first callback may reparent after ownership was snapshotted');
+  assert.deepEqual(first.commitState(), { status: 'committed', revision: 2 });
+  assert.deepEqual(second.commitState(), { status: 'committed', revision: 2 });
+  assert.equal(first.error, primaryError);
+  assert.equal(second.error, primaryError);
+  assert.equal(group.error, primaryError, 'the original group must retain attribution after reparenting');
+  assert.deepEqual(
+    notifications,
+    [
+      ['first', primaryError],
+      ['second', primaryError],
+      ['group', primaryError],
+    ],
+    'one throwing notification cannot interrupt or duplicate the attribution pass',
+  );
+
+  first.onError = undefined;
+  second.onError = undefined;
+  group.onError = undefined;
+  const rejectionError = new Error('ordinary renderer rejection after accepted cleanup failure');
+  const rejectingMaterial = defineTextMaterial(() => {
+    throw rejectionError;
+  });
+  first.material = rejectingMaterial;
+  const rejectionThrow = captureThrown(() => glyph.shape());
+  assert.deepEqual(rejectionThrow, { present: true, error: rejectionError });
+  assert.deepEqual(first.commitState(), { status: 'failed', error: rejectionError });
+  assert.deepEqual(second.commitState(), { status: 'failed', error: rejectionError });
+
+  first.material = replacementMaterial;
+  glyph.shape();
+  assert.deepEqual(first.commitState(), { status: 'committed', revision: 4 });
+  assert.deepEqual(second.commitState(), { status: 'committed', revision: 2 });
+  assert.equal(first.error, undefined);
+  assert.equal(second.error, undefined);
+
+  first.dispose();
+  second.dispose();
+  group.dispose();
+  font.dispose();
+});
+
+test('accepted cleanup preserves arbitrary thrown values through notification and shape', async (t) => {
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+
+  for (const [name, thrownValue] of [
+    ['undefined', undefined],
+    ['null', null],
+    ['zero', 0],
+  ]) {
+    await t.test(name, async (subtest) => {
+      const three = await createThreeTestHandle(subtest, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+      const scene = new THREE.Scene();
+      const group = three.createTextGroup();
+      const retiringMaterial = defineTextMaterial((context) => {
+        const material = context.createDefaultMaterial();
+        material.addEventListener('dispose', () => {
+          throw thrownValue;
+        });
+        return material;
+      });
+      const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+      const label = three.createText({ font, material: retiringMaterial, text: name });
+      const notifications = [];
+      label.onError = (error) => notifications.push(error);
+      group.add(label);
+      scene.add(group);
+      scene.updateMatrixWorld(true);
+
+      label.material = replacementMaterial;
+      label.text = `${name} replacement grows retained storage`;
+      const cleanupThrow = captureThrown(() => glyph.shape());
+      assert.equal(cleanupThrow.present, true);
+      assert.ok(Object.is(cleanupThrow.error, thrownValue), 'glyph.shape() must throw the exact callback value');
+      assert.equal(notifications.length, 1);
+      assert.ok(Object.is(notifications[0], thrownValue), 'onError must receive the exact callback value');
+      assert.deepEqual(label.commitState(), { status: 'committed', revision: 2 });
+      if (thrownValue === undefined) {
+        assert.equal(label.error, undefined, 'the public getter reserves undefined for its historical no-error shape');
+      } else {
+        assert.ok(Object.is(label.error, thrownValue));
+      }
+
+      const rejectionError = new Error(`rejection after ${name}`);
+      const rejectingMaterial = defineTextMaterial(() => {
+        throw rejectionError;
+      });
+      label.onError = undefined;
+      label.material = rejectingMaterial;
+      const rejectionThrow = captureThrown(() => glyph.shape());
+      assert.deepEqual(rejectionThrow, { present: true, error: rejectionError });
+      assert.deepEqual(label.commitState(), { status: 'failed', error: rejectionError });
+
+      label.material = replacementMaterial;
+      glyph.shape();
+      assert.deepEqual(label.commitState(), { status: 'committed', revision: 4 });
+      assert.equal(label.error, undefined);
+
+      label.dispose();
+      group.dispose();
+    });
+  }
+});
+
+test('two-root cleanup failures settle every root despite a throwing notification', async (t) => {
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const roots = [three('arbitrary-left'), three('arbitrary-right')];
+  const scenes = [new THREE.Scene(), new THREE.Scene()];
+  const values = [undefined, 0];
+  const notifications = [];
+  const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+  const groups = [];
+  const labels = [];
+  for (let index = 0; index < roots.length; index += 1) {
+    const value = values[index];
+    const retiringMaterial = defineTextMaterial((context) => {
+      const material = context.createDefaultMaterial();
+      material.addEventListener('dispose', () => {
+        throw value;
+      });
+      return material;
+    });
+    const group = roots[index].createTextGroup();
+    const label = roots[index].createText({ font, material: retiringMaterial, text: String(index) });
+    label.onError = (error) => {
+      notifications.push([index, error]);
+      if (index === 0) throw new Error('secondary two-root notification failure');
+    };
+    group.add(label);
+    scenes[index].add(group);
+    scenes[index].updateMatrixWorld(true);
+    groups.push(group);
+    labels.push(label);
+  }
+
+  for (const [index, label] of labels.entries()) {
+    label.material = replacementMaterial;
+    label.text = `replacement ${String(index)} grows retained storage`;
+  }
+  const cleanupThrow = captureThrown(() => glyph.shape());
+  assert.equal(cleanupThrow.present, true);
+  assert.ok(cleanupThrow.error instanceof AggregateError);
+  assert.equal(cleanupThrow.error.errors.length, 2);
+  assert.ok(Object.is(cleanupThrow.error.errors[0], undefined));
+  assert.ok(Object.is(cleanupThrow.error.errors[1], 0));
+  assert.deepEqual(notifications, [
+    [0, undefined],
+    [1, 0],
+  ]);
+  assert.deepEqual(labels[0].commitState(), { status: 'committed', revision: 2 });
+  assert.deepEqual(labels[1].commitState(), { status: 'committed', revision: 2 });
+
+  for (const label of labels) label.dispose();
+  for (const group of groups) group.dispose();
+  for (const root of roots) root.dispose();
+  font.dispose();
+});
+
+test('accepted retirement failures outrank reentrant notification traversal and transform synchronization', async (t) => {
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const thrownValues = [undefined, null, 0];
+  const roots = thrownValues.map((_, index) => three(`transform-precedence-${String(index)}`));
+  const initialScenes = roots.map(() => new THREE.Scene());
+  const movedScene = new THREE.Scene();
+  const groups = roots.map((root) => root.createTextGroup());
+  const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+  const transformFailure = new Error('secondary initial transform synchronization failure');
+  let transformMustFail = true;
+  let successfulTransformUpdates = 0;
+  class ThrowingTransformParent extends THREE.Object3D {
+    updateWorldMatrix(updateParents, updateChildren) {
+      if (transformMustFail) throw transformFailure;
+      successfulTransformUpdates += 1;
+      return super.updateWorldMatrix(updateParents, updateChildren);
+    }
+  }
+  const throwingParent = new ThrowingTransformParent();
+  movedScene.add(throwingParent);
+  const notifications = [];
+  let notificationTraversalStarted = false;
+  let notificationTraversalCompleted = false;
+  const labels = thrownValues.map((thrownValue, index) => {
+    const retiringMaterial = defineTextMaterial((context) => {
+      const material = context.createDefaultMaterial();
+      material.addEventListener('dispose', () => {
+        throw thrownValue;
+      });
+      return material;
+    });
+    const label = roots[index].createText({ font, material: retiringMaterial, text: String(index) });
+    label.onError = (error) => {
+      notifications.push([index, error]);
+      if (index === 0 && !notificationTraversalStarted) {
+        notificationTraversalStarted = true;
+        throwingParent.add(label);
+        movedScene.updateMatrixWorld(true);
+        notificationTraversalCompleted = true;
+      }
+    };
+    groups[index].add(label);
+    return label;
+  });
+  for (const [index, scene] of initialScenes.entries()) {
+    scene.add(groups[index]);
+    scene.updateMatrixWorld(true);
+  }
+
+  movedScene.add(groups[0]);
+  for (const [index, label] of labels.entries()) {
+    label.material = replacementMaterial;
+    label.text = `transform precedence replacement ${String(index)} grows retained storage`;
+  }
+  const cleanupThrow = captureThrown(() => glyph.shape());
+  assert.equal(cleanupThrow.present, true);
+  assert.ok(cleanupThrow.error instanceof AggregateError);
+  assert.equal(cleanupThrow.error.errors.length, 3);
+  assert.ok(Object.is(cleanupThrow.error.errors[0], undefined));
+  assert.ok(Object.is(cleanupThrow.error.errors[1], null));
+  assert.ok(Object.is(cleanupThrow.error.errors[2], 0));
+  assert.equal(cleanupThrow.error.errors.includes(transformFailure), false);
+  assert.deepEqual(notifications, [
+    [0, undefined],
+    [1, null],
+    [2, 0],
+  ]);
+  assert.equal(notificationTraversalCompleted, true, 'the first public onError callback must traverse the moved scene');
+  assert.equal(labels[0].parent, throwingParent, 'the first notification must install the throwing parent');
+  for (const [index, label] of labels.entries()) {
+    assert.deepEqual(label.commitState(), { status: 'committed', revision: 2 });
+    assert.ok(Object.is(label.error, thrownValues[index]), 'Text must retain its exact accepted retirement value');
+    assert.ok(Object.is(groups[index].error, thrownValues[index]), 'TextGroup must retain the same attributed value');
+  }
+  for (const [index, root] of roots.entries()) {
+    assert.equal(root.disposed, false);
+    assert.equal(root.textCount, 1);
+    assert.equal(labels[index].disposed, false);
+    assert.equal(labels[index].bound, true);
+  }
+
+  transformMustFail = false;
+  for (const [index, label] of labels.entries()) {
+    label.text = `transform precedence recovery ${String(index)}`;
+  }
+  glyph.shape();
+  assert.ok(successfulTransformUpdates > 0, 'the pending transform synchronization must recover deterministically');
+  for (let index = 0; index < labels.length; index += 1) {
+    assert.deepEqual(labels[index].commitState(), { status: 'committed', revision: 3 });
+    assert.equal(labels[index].error, undefined);
+    assert.equal(groups[index].error, undefined);
+  }
+  assert.deepEqual(notifications, [
+    [0, undefined],
+    [1, null],
+    [2, 0],
+  ]);
+
+  for (const label of labels) label.dispose();
+  for (const group of groups) group.dispose();
+  for (const root of roots) root.dispose();
+  font.dispose();
+});
+
+test('a captured later root defers callback traversal until its own retirement outcome is known', async (t) => {
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+
+  for (const laterOutcome of [
+    { name: 'primary zero', present: true, error: 0 },
+    { name: 'no primary', present: false },
+  ]) {
+    await t.test(laterOutcome.name, async (subtest) => {
+      const three = await createThreeTestHandle(subtest, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+      const rootNames = [`full-cycle-left-${laterOutcome.name}`, `full-cycle-right-${laterOutcome.name}`];
+      const roots = rootNames.map((name) => three(name));
+      const scenes = roots.map(() => new THREE.Scene());
+      const groups = roots.map((root) => root.createTextGroup());
+      const primaryFailure = new Error(`left retirement failure before ${laterOutcome.name}`);
+      const secondaryFailure = new Error(`right pre-commit traversal failure before ${laterOutcome.name}`);
+      let transformMustFail = false;
+      let failingTransformUpdates = 0;
+      let laterCommitCallbackStarted = false;
+      let traversalRanBeforeLaterCommitCallback = false;
+      class ThrowingTransformParent extends THREE.Object3D {
+        updateWorldMatrix(updateParents, updateChildren) {
+          if (transformMustFail) {
+            transformMustFail = false;
+            failingTransformUpdates += 1;
+            traversalRanBeforeLaterCommitCallback ||= !laterCommitCallbackStarted;
+            throw secondaryFailure;
+          }
+          return super.updateWorldMatrix(updateParents, updateChildren);
+        }
+      }
+      const throwingParent = new ThrowingTransformParent();
+      groups[1].add(throwingParent);
+      let runEarlierRetirement = () => {};
+      const earlierMaterial = defineTextMaterial((context) => {
+        const material = context.createDefaultMaterial();
+        material.addEventListener('dispose', () => runEarlierRetirement());
+        return material;
+      });
+      const laterMaterial = defineTextMaterial((context) => {
+        const material = context.createDefaultMaterial();
+        material.addEventListener('dispose', () => {
+          if (laterCommitCallbackStarted) return;
+          laterCommitCallbackStarted = true;
+          if (laterOutcome.present) throw laterOutcome.error;
+        });
+        return material;
+      });
+      const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+      const labels = [
+        roots[0].createText({ font, material: earlierMaterial, text: 'A' }),
+        roots[1].createText({ font, material: laterMaterial, text: 'B' }),
+      ];
+      groups[0].add(labels[0]);
+      groups[1].add(labels[1]);
+      scenes[0].add(groups[0]);
+      scenes[1].add(groups[1]);
+      for (const scene of scenes) scene.updateMatrixWorld(true);
+      const laterPublicationObject = rootDraws(scenes[1], rootNames[1])[0]?.parent;
+      assert.ok(laterPublicationObject);
+      scenes[1].add(groups[1]);
+      scenes[1].updateMatrixWorld(true);
+      assert.ok(
+        scenes[1].children.indexOf(laterPublicationObject) < scenes[1].children.indexOf(groups[1]),
+        'the later publication object must traverse before its authored group',
+      );
+
+      const laterNotifications = [];
+      labels[1].onError = (error) => laterNotifications.push(error);
+      let earlierCallbackInvocations = 0;
+      runEarlierRetirement = () => {
+        earlierCallbackInvocations += 1;
+        throwingParent.add(labels[1]);
+        transformMustFail = true;
+        scenes[1].updateMatrixWorld(true);
+        throw primaryFailure;
+      };
+      labels[0].set({
+        material: replacementMaterial,
+        text: 'candidate 0 forces retained storage growth for retirement',
+      });
+      labels[1].set({
+        material: replacementMaterial,
+        text: 'candidate 1 forces retained storage growth for retirement',
+      });
+
+      const publicationThrow = captureThrown(() => glyph.shape());
+      assert.equal(earlierCallbackInvocations, 1, 'the earlier material retirement callback must run once');
+      assert.ok(failingTransformUpdates > 0, 'the callback must enter the later root throwing transform override');
+      assert.equal(
+        traversalRanBeforeLaterCommitCallback,
+        true,
+        'the later transform failure must precede its renderer commit callback',
+      );
+      assert.equal(publicationThrow.present, true);
+      assert.ok(publicationThrow.error instanceof AggregateError);
+      const expectedLaterFailure = laterOutcome.present ? laterOutcome.error : secondaryFailure;
+      assert.deepEqual(publicationThrow.error.errors, [primaryFailure, expectedLaterFailure]);
+      assert.equal(laterCommitCallbackStarted, true, 'the later renderer commit must reach its public callback');
+      assert.equal(laterNotifications.length, 1, 'the later root must notify only its final owned failure');
+      assert.ok(Object.is(laterNotifications[0], expectedLaterFailure));
+      assert.deepEqual(labels[0].commitState(), { status: 'committed', revision: 1 });
+      assert.deepEqual(labels[1].commitState(), { status: 'committed', revision: 1 });
+      assert.ok(Object.is(labels[1].error, expectedLaterFailure));
+      assert.ok(Object.is(groups[1].error, expectedLaterFailure));
+
+      transformMustFail = false;
+      labels[1].text = `recovered ${laterOutcome.name}`;
+      glyph.shape();
+      scenes[1].updateMatrixWorld(true);
+      assert.deepEqual(labels[1].commitState(), { status: 'committed', revision: 2 });
+      assert.equal(labels[1].error, undefined);
+      assert.equal(groups[1].error, undefined);
+      assert.deepEqual(laterNotifications, [expectedLaterFailure]);
+
+      for (const label of labels) label.dispose();
+      for (const group of groups) group.dispose();
+      for (const root of roots) root.dispose();
+    });
+  }
+});
+
+test('a committed later root defers onError traversal until its accepted hook', async (t) => {
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const rootNames = ['post-commit-left', 'post-commit-right'];
+  const roots = rootNames.map((name) => three(name));
+  const scenes = roots.map(() => new THREE.Scene());
+  const groups = roots.map((root) => root.createTextGroup());
+  const primaryFailure = new Error('earlier accepted retirement failure');
+  const secondaryFailure = new Error('later post-commit traversal failure');
+  let transformMustFail = false;
+  let failingTransformUpdates = 0;
+  let laterCommitCallbackCompleted = false;
+  let traversalObservedLaterCommit = false;
+  class ThrowingTransformParent extends THREE.Object3D {
+    updateWorldMatrix(updateParents, updateChildren) {
+      if (transformMustFail) {
+        failingTransformUpdates += 1;
+        traversalObservedLaterCommit ||= laterCommitCallbackCompleted;
+        throw secondaryFailure;
+      }
+      return super.updateWorldMatrix(updateParents, updateChildren);
+    }
+  }
+  const throwingParent = new ThrowingTransformParent();
+  groups[1].add(throwingParent);
+  const earlierMaterial = defineTextMaterial((context) => {
+    const material = context.createDefaultMaterial();
+    material.addEventListener('dispose', () => {
+      throw primaryFailure;
+    });
+    return material;
+  });
+  const laterMaterial = defineTextMaterial((context) => {
+    const material = context.createDefaultMaterial();
+    material.addEventListener('dispose', () => {
+      laterCommitCallbackCompleted = true;
+    });
+    return material;
+  });
+  const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+  const labels = [
+    roots[0].createText({ font, material: earlierMaterial, text: 'A' }),
+    roots[1].createText({ font, material: laterMaterial, text: 'B' }),
+  ];
+  groups[0].add(labels[0]);
+  groups[1].add(labels[1]);
+  scenes[0].add(groups[0]);
+  scenes[1].add(groups[1]);
+  for (const scene of scenes) scene.updateMatrixWorld(true);
+  const laterPublicationObject = rootDraws(scenes[1], rootNames[1])[0]?.parent;
+  assert.ok(laterPublicationObject);
+  scenes[1].add(groups[1]);
+  scenes[1].updateMatrixWorld(true);
+
+  const laterNotifications = [];
+  labels[0].onError = () => {
+    throwingParent.add(labels[1]);
+    transformMustFail = true;
+    scenes[1].updateMatrixWorld(true);
+  };
+  labels[1].onError = (error) => laterNotifications.push(error);
+  labels[0].set({
+    material: replacementMaterial,
+    text: 'post-commit candidate 0 forces retained storage growth for retirement',
+  });
+  labels[1].set({
+    material: replacementMaterial,
+    text: 'post-commit candidate 1 forces retained storage growth for retirement',
+  });
+
+  const publicationThrow = captureThrown(() => glyph.shape());
+  assert.equal(
+    laterCommitCallbackCompleted,
+    true,
+    'the later renderer commit must finish before the earlier onError hook',
+  );
+  assert.ok(failingTransformUpdates > 0, 'the earlier onError hook must enter the later throwing transform override');
+  assert.equal(traversalObservedLaterCommit, true, 'the traversal must occur after the later renderer commit');
+  assert.equal(publicationThrow.present, true);
+  assert.ok(publicationThrow.error instanceof AggregateError);
+  assert.deepEqual(publicationThrow.error.errors, [primaryFailure, secondaryFailure]);
+  assert.deepEqual(laterNotifications, [secondaryFailure]);
+  assert.deepEqual(labels[0].commitState(), { status: 'committed', revision: 1 });
+  assert.deepEqual(labels[1].commitState(), { status: 'committed', revision: 1 });
+  assert.equal(labels[1].error, secondaryFailure);
+  assert.equal(groups[1].error, secondaryFailure);
+
+  transformMustFail = false;
+  labels[1].text = 'post-commit recovery';
+  glyph.shape();
+  scenes[1].updateMatrixWorld(true);
+  assert.deepEqual(labels[1].commitState(), { status: 'committed', revision: 2 });
+  assert.equal(labels[1].error, undefined);
+  assert.equal(groups[1].error, undefined);
+  assert.deepEqual(laterNotifications, [secondaryFailure]);
+
+  for (const label of labels) label.dispose();
+  for (const group of groups) group.dispose();
+  for (const root of roots) root.dispose();
+  font.dispose();
+});
+
+test('a later root keeps its prepared revision and primary retirement failure through cross-root traversal', async (t) => {
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const rootNames = ['cross-root-left', 'cross-root-right'];
+  const roots = rootNames.map((name) => three(name));
+  const scenes = roots.map(() => new THREE.Scene());
+  const groups = roots.map((root) => root.createTextGroup());
+  const primaryFailures = [undefined, 0];
+  const candidateText = 'candidate publication';
+  const callbackText = 'callback update remains pending until the next shape';
+  const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+  const transformFailure = new Error('secondary cross-root transform failure');
+  let transformMustFail = false;
+  let failedTransformUpdates = 0;
+  let successfulTransformUpdates = 0;
+  class ThrowingTransformParent extends THREE.Object3D {
+    updateWorldMatrix(updateParents, updateChildren) {
+      if (transformMustFail) {
+        failedTransformUpdates += 1;
+        throw transformFailure;
+      }
+      successfulTransformUpdates += 1;
+      return super.updateWorldMatrix(updateParents, updateChildren);
+    }
+  }
+  const throwingParent = new ThrowingTransformParent();
+  groups[1].add(throwingParent);
+  const labels = primaryFailures.map((primaryFailure, index) => {
+    const retiringMaterial = defineTextMaterial((context) => {
+      const material = context.createDefaultMaterial();
+      material.addEventListener('dispose', () => {
+        throw primaryFailure;
+      });
+      return material;
+    });
+    const label = roots[index].createText({ font, material: retiringMaterial, text: `initial ${String(index)}` });
+    groups[index].add(label);
+    scenes[index].add(groups[index]);
+    return label;
+  });
+  for (const scene of scenes) scene.updateMatrixWorld(true);
+  scenes[1].add(groups[1]);
+  scenes[1].updateMatrixWorld(true);
+
+  const candidateEntry = {
+    id: 0,
+    batching: 'auto',
+    color: '#ffffff',
+    material: replacementMaterial,
+    renderOrder: 0,
+    text: candidateText,
+    visible: true,
+    x: 0,
+  };
+  const callbackEntry = { ...candidateEntry, text: callbackText };
+  const coldCandidateName = 'cross-root-candidate-cold';
+  const coldCandidate = three(coldCandidateName);
+  const coldCandidateScene = new THREE.Scene();
+  const coldCandidateMounted = new Map([
+    [candidateEntry.id, mountRendererDifferentialEntry(coldCandidate, font, coldCandidateScene, candidateEntry)],
+  ]);
+  coldCandidateScene.updateMatrixWorld(true);
+  const candidateSnapshot = rendererDifferentialSnapshot(
+    coldCandidateScene,
+    coldCandidateName,
+    [candidateEntry],
+    coldCandidateMounted,
+  );
+  const coldCallbackName = 'cross-root-callback-cold';
+  const coldCallback = three(coldCallbackName);
+  const coldCallbackScene = new THREE.Scene();
+  const coldCallbackMounted = new Map([
+    [callbackEntry.id, mountRendererDifferentialEntry(coldCallback, font, coldCallbackScene, callbackEntry)],
+  ]);
+  coldCallbackScene.updateMatrixWorld(true);
+  const callbackSnapshot = rendererDifferentialSnapshot(
+    coldCallbackScene,
+    coldCallbackName,
+    [callbackEntry],
+    coldCallbackMounted,
+  );
+  assert.notDeepEqual(candidateSnapshot.draws, callbackSnapshot.draws, 'the cold renderer oracles must discriminate');
+
+  const notifications = [];
+  let callbackTraversalCompleted = false;
+  labels[0].onError = (error) => {
+    notifications.push([0, error]);
+    labels[1].text = callbackText;
+    throwingParent.add(labels[1]);
+    transformMustFail = true;
+    scenes[1].updateMatrixWorld(true);
+    callbackTraversalCompleted = true;
+  };
+  labels[1].onError = (error) => notifications.push([1, error]);
+  for (const label of labels) label.set({ material: replacementMaterial, text: candidateText });
+
+  const publicationThrow = captureThrown(() => glyph.shape());
+  assert.equal(publicationThrow.present, true);
+  assert.ok(publicationThrow.error instanceof AggregateError);
+  assert.equal(publicationThrow.error.errors.length, 2);
+  assert.ok(Object.is(publicationThrow.error.errors[0], undefined));
+  assert.ok(Object.is(publicationThrow.error.errors[1], 0));
+  assert.equal(publicationThrow.error.errors.includes(transformFailure), false);
+  assert.equal(callbackTraversalCompleted, true, 'the first root callback must traverse the later root');
+  assert.ok(failedTransformUpdates > 0, 'the callback traversal must enter the throwing updateWorldMatrix override');
+  assert.equal(labels[1].parent, throwingParent, 'the callback must install the throwing transform ancestor');
+  assert.deepEqual(notifications, [
+    [0, undefined],
+    [1, 0],
+  ]);
+  assert.deepEqual(labels[0].commitState(), { status: 'committed', revision: 1 });
+  assert.deepEqual(labels[1].commitState(), { status: 'pending' });
+  for (const [index, label] of labels.entries()) {
+    assert.ok(Object.is(label.error, primaryFailures[index]));
+    assert.ok(Object.is(groups[index].error, primaryFailures[index]));
+  }
+  const acceptedDrawSnapshot = rendererDifferentialSnapshot(scenes[1], rootNames[1], [], new Map()).draws;
+  assert.deepEqual(
+    acceptedDrawSnapshot,
+    candidateSnapshot.draws,
+    'the later root renderer must retain the exact prepared candidate while its callback update stays pending',
+  );
+  assert.notDeepEqual(acceptedDrawSnapshot, callbackSnapshot.draws);
+
+  const successfulUpdatesBeforeRecovery = successfulTransformUpdates;
+  transformMustFail = false;
+  glyph.shape();
+  assert.deepEqual(labels[1].commitState(), { status: 'committed', revision: 2 });
+  assert.equal(labels[1].error, undefined);
+  assert.equal(groups[1].error, undefined);
+  const recoveredSnapshot = rendererDifferentialSnapshot(
+    scenes[1],
+    rootNames[1],
+    [callbackEntry],
+    new Map([[callbackEntry.id, { group: groups[1], label: labels[1] }]]),
+  );
+  assert.deepEqual(
+    recoveredSnapshot,
+    callbackSnapshot,
+    'the later callback update must recover to the full cold renderer',
+  );
+  assert.ok(
+    successfulTransformUpdates > successfulUpdatesBeforeRecovery,
+    'the guarded transform traversal must recover deterministically',
+  );
+  assert.deepEqual(notifications, [
+    [0, undefined],
+    [1, 0],
+  ]);
+
+  for (const label of labels) label.dispose();
+  for (const group of groups) group.dispose();
+  for (const root of roots) root.dispose();
+  for (const { label, group } of coldCandidateMounted.values()) {
+    label.dispose();
+    group.dispose();
+  }
+  for (const { label, group } of coldCallbackMounted.values()) {
+    label.dispose();
+    group.dispose();
+  }
+  coldCandidate.dispose();
+  coldCallback.dispose();
+  font.dispose();
+});
+
+test('shape settlement rejects lifecycle disposal until every captured root consumes its failure', async (t) => {
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+
+  for (const target of ['second root', 'handle']) {
+    await t.test(target, async (subtest) => {
+      const three = await createThreeTestHandle(subtest, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+      const roots = [three(`settlement-left-${target}`), three(`settlement-right-${target}`)];
+      const scenes = [new THREE.Scene(), new THREE.Scene()];
+      const groups = [];
+      const labels = [];
+      const thrownValues = [undefined, 0];
+      const notifications = [];
+      const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+      let disposalAttempt = { present: false };
+
+      for (let index = 0; index < roots.length; index += 1) {
+        const thrownValue = thrownValues[index];
+        const retiringMaterial = defineTextMaterial((context) => {
+          const material = context.createDefaultMaterial();
+          material.addEventListener('dispose', () => {
+            throw thrownValue;
+          });
+          return material;
+        });
+        const group = roots[index].createTextGroup();
+        const label = roots[index].createText({ font, material: retiringMaterial, text: String(index) });
+        label.onError = (error) => {
+          notifications.push([index, error]);
+          if (index !== 0) return;
+          try {
+            if (target === 'second root') roots[1].dispose();
+            else three.dispose();
+          } catch (disposalError) {
+            disposalAttempt = { present: true, error: disposalError };
+          }
+        };
+        group.add(label);
+        scenes[index].add(group);
+        scenes[index].updateMatrixWorld(true);
+        groups.push(group);
+        labels.push(label);
+      }
+
+      for (const [index, label] of labels.entries()) {
+        label.material = replacementMaterial;
+        label.text = `settlement replacement ${String(index)} grows retained storage`;
+      }
+      const cleanupThrow = captureThrown(() => glyph.shape());
+      assert.equal(disposalAttempt.present, true, 'lifecycle mutation must reject during participant settlement');
+      assert.match(String(disposalAttempt.error), /shape participants are settling/u);
+      assert.equal(cleanupThrow.present, true);
+      assert.ok(cleanupThrow.error instanceof AggregateError);
+      assert.equal(cleanupThrow.error.errors.length, 2);
+      assert.ok(Object.is(cleanupThrow.error.errors[0], undefined));
+      assert.ok(Object.is(cleanupThrow.error.errors[1], 0));
+      assert.deepEqual(notifications, [
+        [0, undefined],
+        [1, 0],
+      ]);
+      assert.equal(three.disposed, false);
+      assert.equal(roots[0].disposed, false);
+      assert.equal(roots[1].disposed, false);
+      assert.deepEqual(labels[0].commitState(), { status: 'committed', revision: 2 });
+      assert.deepEqual(labels[1].commitState(), { status: 'committed', revision: 2 });
+
+      for (const label of labels) label.dispose();
+      for (const group of groups) group.dispose();
+      for (const root of roots) root.dispose();
+      three.dispose();
+      assert.equal(three.disposed, true, 'ordinary disposal succeeds after settlement releases the gate');
+    });
+  }
+});
+
+test('shape settlement rejects disposal of a detached unbound Text before local mutation', async (t) => {
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+  const fontBytes = await readFile(fontUrl);
+  const font = await loadFont({ baked: dataUrl(fontBytes) }, bitmap({ strikes: [16] }));
+  const face = glyph.fontFace(new Blob([fontBytes], { type: 'model/gltf-binary' }), {
+    format: bitmap({ strikes: [16] }),
+  });
+  await face.bitmap.load();
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const retirementValue = undefined;
+  const retiringMaterial = defineTextMaterial((context) => {
+    const material = context.createDefaultMaterial();
+    material.addEventListener('dispose', () => {
+      throw retirementValue;
+    });
+    return material;
+  });
+  const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+  const active = three.createText({ font, material: retiringMaterial, text: 'active' });
+  const detached = three.createText({ font: face.bitmap, text: 'detached' });
+  let disposalAttempt = { present: false };
+  active.onError = () => {
+    disposalAttempt = captureThrown(() => detached.dispose());
+  };
+  group.add(active);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+  assert.equal(detached.bound, false, 'the counterexample requires a registered Text with no publication entry');
+  assert.equal(three.textCount, 2);
+
+  active.material = replacementMaterial;
+  active.text = 'active replacement grows retained storage';
+  const cleanupThrow = captureThrown(() => glyph.shape());
+  assert.equal(disposalAttempt.present, true, 'detached lifecycle mutation must use the settlement gate');
+  assert.match(String(disposalAttempt.error), /shape participants are settling/u);
+  assert.equal(detached.disposed, false, 'rejected disposal must not set the public disposed flag');
+  assert.equal(detached.bound, false, 'rejected disposal must not create a publication entry');
+  assert.equal(three.textCount, 2, 'rejected disposal must preserve root membership');
+  assert.ok(detached.measure().glyphCount > 0, 'rejected disposal must preserve its owned font lease and reads');
+  assert.equal(cleanupThrow.present, true);
+  assert.ok(Object.is(cleanupThrow.error, retirementValue), 'the outer call must retain the raw thrown value');
+  assert.deepEqual(active.commitState(), { status: 'committed', revision: 2 });
+
+  detached.dispose();
+  assert.equal(detached.disposed, true, 'ordinary disposal succeeds after settlement releases the gate');
+  assert.equal(three.textCount, 1);
+  active.dispose();
+  group.dispose();
+  face.dispose();
+  font.dispose();
+});
+
+test('accepted group attribution follows the snapshotted owner until replacement or clear', async (t) => {
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const primaryError = new Error('sole-member accepted retirement failure');
+  const retiringMaterial = defineTextMaterial((context) => {
+    const material = context.createDefaultMaterial();
+    material.addEventListener('dispose', () => {
+      throw primaryError;
+    });
+    return material;
+  });
+  const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+  const original = three.createText({ font, material: retiringMaterial, text: 'original' });
+  const fresh = three.createText({ font, material: replacementMaterial, text: 'fresh' });
+  const notifications = [];
+  original.onError = (error) => {
+    notifications.push(['original', error]);
+    scene.add(original);
+    group.add(fresh);
+  };
+  fresh.onError = (error) => notifications.push(['fresh', error]);
+  group.onError = (error) => notifications.push(['group', error]);
+  group.add(original);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+
+  original.material = replacementMaterial;
+  original.text = 'original replacement grows retained storage';
+  const cleanupThrow = captureThrown(() => glyph.shape());
+  assert.deepEqual(cleanupThrow, { present: true, error: primaryError });
+  assert.equal(original.parent, scene);
+  assert.equal(fresh.parent, group);
+  fresh.measure();
+  assert.equal(group.error, primaryError);
+  assert.equal(fresh.error, primaryError);
+  assert.deepEqual(fresh.commitState(), { status: 'pending' }, 'a new member must inherit accepted attribution');
+  assert.deepEqual(notifications, [
+    ['original', primaryError],
+    ['group', primaryError],
+  ]);
+
+  scene.add(fresh);
+  original.text = 'successful publication clears snapshotted ownership';
+  glyph.shape();
+  assert.equal(group.error, undefined, 'success clears the group retained by the error snapshot');
+  assert.equal(original.error, undefined);
+  assert.equal(fresh.error, undefined);
+  assert.deepEqual(original.commitState(), { status: 'committed', revision: 3 });
+  assert.deepEqual(fresh.commitState(), { status: 'committed', revision: 0 });
+
+  original.onError = undefined;
+  fresh.onError = undefined;
+  group.onError = undefined;
+  group.add(fresh);
+  const rejectionError = new Error('ordinary rejection after accepted group attribution');
+  fresh.material = defineTextMaterial(() => {
+    throw rejectionError;
+  });
+  const rejectionThrow = captureThrown(() => glyph.shape());
+  assert.deepEqual(rejectionThrow, { present: true, error: rejectionError });
+  assert.deepEqual(original.commitState(), { status: 'failed', error: rejectionError });
+  assert.deepEqual(fresh.commitState(), { status: 'failed', error: rejectionError });
+  assert.equal(group.error, rejectionError);
+
+  original.dispose();
+  fresh.dispose();
+  group.dispose();
+  font.dispose();
+});
+
+test('disposing an attributed TextGroup releases root-owned error state', async (t) => {
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+  const firstError = new Error('disposed group accepted retirement failure');
+  const firstRetiringMaterial = defineTextMaterial((context) => {
+    const material = context.createDefaultMaterial();
+    material.addEventListener('dispose', () => {
+      throw firstError;
+    });
+    return material;
+  });
+  const firstGroup = three.createTextGroup();
+  const first = three.createText({ font, material: firstRetiringMaterial, text: 'first' });
+  firstGroup.add(first);
+  scene.add(firstGroup);
+  scene.updateMatrixWorld(true);
+
+  first.material = replacementMaterial;
+  first.text = 'first replacement grows retained storage';
+  assert.deepEqual(
+    captureThrown(() => glyph.shape()),
+    { present: true, error: firstError },
+  );
+  assert.equal(firstGroup.error, firstError);
+
+  scene.remove(firstGroup);
+  firstGroup.dispose();
+  assert.equal(firstGroup.disposed, true);
+  assert.equal(firstGroup.error, undefined, 'disposal clears the terminal group state and releases root ownership');
+  let disposedGroupNotifications = 0;
+  firstGroup.onError = () => {
+    disposedGroupNotifications += 1;
+  };
+  scene.add(firstGroup);
+  first.measure();
+
+  const secondError = new Error('unrelated group preparation failure');
+  const rejectingMaterial = defineTextMaterial(() => {
+    throw secondError;
+  });
+  const secondGroup = three.createTextGroup();
+  const second = three.createText({ font, material: replacementMaterial, text: 'second' });
+  secondGroup.add(second);
+  scene.add(secondGroup);
+  scene.updateMatrixWorld(true);
+  assert.deepEqual(second.commitState(), { status: 'committed', revision: 0 });
+
+  second.material = rejectingMaterial;
+  assert.deepEqual(
+    captureThrown(() => glyph.shape()),
+    { present: true, error: secondError },
+  );
+  assert.equal(secondGroup.error, secondError);
+  assert.equal(firstGroup.error, undefined, 'a later attribution cannot mutate disposed group state');
+  assert.equal(disposedGroupNotifications, 0, 'a disposed group cannot be reacquired for error notification');
+
+  second.material = replacementMaterial;
+  glyph.shape();
+  assert.equal(secondGroup.error, undefined);
+  assert.equal(firstGroup.error, undefined, 'a later clear cannot mutate disposed group state');
+  assert.equal(disposedGroupNotifications, 0);
+
+  first.dispose();
+  second.dispose();
+  secondGroup.dispose();
+  font.dispose();
 });
 
 test('Three reflow patches only host placement while retaining raster geometry, draws, and materials', async (t) => {
@@ -5490,4 +6957,13 @@ function rendererDifferentialSnapshot(scene, rootName, entries, mounted) {
     };
   });
   return { draws, layouts, visibilityByEntry };
+}
+
+function captureThrown(call) {
+  try {
+    call();
+  } catch (error) {
+    return { present: true, error };
+  }
+  return { present: false };
 }

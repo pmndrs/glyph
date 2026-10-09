@@ -135,7 +135,7 @@ sources:
     title: Pinned msdfgen CLI scanline and error-correction configuration
 generated:
   by: openai-codex/gpt-5
-  at: '2026-10-09T15:48:01Z'
+  at: '2026-10-09T18:57:02Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -719,6 +719,45 @@ still merge update ranges, advance the storage version, and invalidate Three's W
 replaces a three-component attribute view with four-component padded storage, publication repacks every affected record
 into that detached view before advancing the version. Transform-table growth disposes the superseded attribute only after
 the candidate publishes; rejection disposes only the candidate, and root teardown disposes the final table.
+
+Three preparation remains the rejection boundary: a material factory or other realization failure leaves the last
+accepted renderer branch and core revision live. Once commit starts retiring the old host branch, publication is
+irreversible. A caller-owned `dispose` or final matrix-update callback that throws after that point is therefore reported
+only after Three and the retained planner accept the same candidate. The public shaping call still throws that callback
+error and the affected Text/TextGroup records it, while `commitState()` reports the newly accepted revision; later
+visibility, transforms, and render order continue from that publication rather than from a rejected-core split state.
+The commit installs the candidate resource, transform, draw, and batch-scope authority before invoking any host add,
+remove, geometry-disposal, or resource-disposal callback; it retains the previous draw array only as the local retirement
+source. Reused draw metadata still updates before transform commit. An accepted hook commits the exact revision captured
+for engine preparation, not a callback-mutable staged revision, so a different Text update authored by an earlier root's
+notification remains pending and publishes through the ordinary next shape call.
+Public Text, root, and handle disposal first use the engine's existing mutation gate, so a disposal attempted from a
+borrowed publication callback rejects before changing lifecycle flags, root membership, or shape participation. Text
+preflights at the root-membership boundary even when it is detached and has no publication entry. The same gate remains
+closed until every shape participant captured for settlement has consumed its outcome, so an earlier root's `onError`
+cannot dispose a later root or handle and suppress its accepted-publication failure. Error attribution snapshots the
+publication's Text and live-group ownership, carries the accepted/rejected classification to both, installs every internal
+state, and only then invokes guarded notifications. The root retains only that error-path group ownership: replacement
+updates it, successful publication clears current Text state plus the retained group set directly without copying
+participants or rediscovering ancestry, and group disposal releases the group from the same set and clears its terminal
+error state after lifecycle preflight. The root admits only the outermost attribution through state installation and user
+notifications, so callback-driven scene traversal cannot replace that in-flight failure with a secondary reconciliation
+or transform error. One bounded root publication-cycle flag extends that ownership from preparation, before any captured
+root can consume renderer commands, through accepted or rejected settlement. A traversal failure raised while that cycle
+is active is retained in one explicit-value wrapper. The renderer's existing retirement wrapper remains the primary when
+present; otherwise the deferred traversal failure enters the same accepted hook and public throw instead of being lost.
+This root ownership covers cross-root callbacks both before a later root commits and after it commits but before its hook,
+and clears on every adapter skip, rejection, acceptance, throw settlement, or disposal exit. Nested traversal and ordinary
+Text edits remain allowed throughout, and the successful hot path allocates no participant or ancestry snapshot. Disposed
+groups cannot be reacquired by later attribution. Arbitrary callback throws, including
+`undefined`, `null`, and `0`, retain their identity through `onError` and the public shaping throw. The
+accepted hook also preserves that retirement value if reentrant notification changes hierarchy and the following initial
+transform synchronization throws: synchronization errors surface when no earlier publication failure exists, and failed
+initial synchronization remains pending for a later publication retry. The historical `Text.error`/`TextGroup.error`
+getters still return `undefined` for both no error and a thrown `undefined`; internal presence state keeps `commitState()`
+and later replacement/clearing deterministic without expanding that public API. Final renderer teardown after a throwing
+Three disposal listener remains an inherited total-cleanup limitation owned by a separate follow-up; this publication
+correction does not broaden into it.
 
 A paragraph's public content box may declare `columns: { count, gap }`, flowing text through side-by-side ordered columns
 inside the exact content-box width. Columns fill in order without balancing, so the final column may run short, and an
