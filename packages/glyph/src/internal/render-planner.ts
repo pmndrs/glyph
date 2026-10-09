@@ -1708,7 +1708,9 @@ function normalizeTextInput(value: unknown, previous?: ResolvedTextOptions): Ret
       ...(span.material === undefined ? {} : { material: span.material as HandleMaterialBinding }),
       ...(span.style === undefined
         ? {}
-        : { style: snapshotAuthoredData(span.style as TextStyle, `text span ${index} style`) }),
+        : {
+            style: reuseOrCreateTextPropertySnapshot(undefined, span.style as TextStyle, `text span ${index} style`),
+          }),
     });
   });
   const alignmentReused =

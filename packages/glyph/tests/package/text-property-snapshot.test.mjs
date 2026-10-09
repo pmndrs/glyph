@@ -36,6 +36,18 @@ test('package-created frozen snapshots cross normalization seams without another
   assert.equal(reuseOrCreateTextPropertySnapshot(undefined, snapshot, 'Test property'), snapshot);
 });
 
+test('caller-frozen records still receive an isolated owned snapshot', () => {
+  const decoration = { underline: true };
+  const caller = Object.freeze({ fontSize: 16, decoration });
+  const snapshot = reuseOrCreateTextPropertySnapshot(undefined, caller, 'Test property');
+
+  assert.notEqual(snapshot, caller, 'freezing does not prove package ownership');
+  decoration.underline = false;
+  assert.equal(snapshot.decoration.underline, true);
+  assert.equal(Object.isFrozen(snapshot.decoration), true);
+  assert.equal(isOwnedTextPropertySnapshot(snapshot), true);
+});
+
 test('an equal prior snapshot wins over a different package-owned identity', () => {
   const previous = reuseOrCreateTextPropertySnapshot(undefined, { fontSize: 16 }, 'Test property');
   const equalOwned = ownTextPropertySnapshot({ fontSize: 16 });

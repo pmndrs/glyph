@@ -184,7 +184,22 @@ test(
         },
       });
       try {
-        assert.doesNotThrow(() => node.set({ text: formatted('#2f7fff') }));
+        const originalStructuredClone = globalThis.structuredClone;
+        let structuredCloneCalls = 0;
+        globalThis.structuredClone = (...arguments_) => {
+          structuredCloneCalls += 1;
+          return originalStructuredClone(...arguments_);
+        };
+        try {
+          assert.doesNotThrow(() => node.set({ text: formatted('#2f7fff') }));
+        } finally {
+          globalThis.structuredClone = originalStructuredClone;
+        }
+        assert.equal(
+          structuredCloneCalls,
+          1,
+          'Three snapshots the changed caller style once and the planner adopts its proven immutable spans',
+        );
         assert.throws(
           () =>
             node.set({
