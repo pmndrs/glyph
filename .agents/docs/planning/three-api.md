@@ -132,7 +132,7 @@ may override font selection, text style, and material.
 ## Batch text
 
 ```ts
-const group = three.createTextGroup({ renderOrder: 10 });
+const group = three.createTextGroup({ batching: 'auto', renderOrder: 10 });
 
 group.add(title, body, iconLabel);
 scene.add(group);
@@ -141,6 +141,18 @@ scene.add(group);
 All descendant `Text` objects under the group participate in its retained hierarchy and nearest root publication.
 Compatible Bitmap, MSDF, and Slug records may share backing storage while the command buffer emits the draw boundaries
 required by raster, font resource, material, and clipping policy.
+
+`batching` controls where compatible records may share a physical draw without creating another semantic root:
+
+| Value    | Boundary behavior                                                                                |
+| -------- | ------------------------------------------------------------------------------------------------ |
+| `auto`   | Default. A top-level authored `TextGroup` owns a boundary; nested automatic groups inherit it.   |
+| `shared` | Joins the nearest authored boundary, or the implicit root pool when no authored boundary exists. |
+| `group`  | Forces this group to own a nested boundary.                                                      |
+
+Setting `visible = false` always hides descendants. When the group owns a boundary, Three also skips its draws while
+retaining the same buffers and meshes. Use `shared` when cross-group draw coalescing matters more than draw-level group
+culling.
 
 A `Text` always batches its own spans. Inside a `TextGroup`, each child `Text.renderOrder` is the stable paragraph rank;
 the adapter sends changed ranks and group-owned scope identities through a separate order sideband, while the ordinary

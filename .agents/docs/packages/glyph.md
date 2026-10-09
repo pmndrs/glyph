@@ -128,6 +128,8 @@ The release workflow publishes main-branch pushes under npm's `canary` tag. A pu
 publishes under `latest` only when it matches the package manifest version exactly. Both paths build and check the
 package before publishing through the existing npm trusted publisher. Prepare each release's version separately,
 then cut its stable tag from the reviewed commit after CI passes.
+`packages/glyph/CHANGELOG.md` is the hand-authored user-facing release record; its Unreleased section declares the next
+semver target and excludes CI or commit-history narration.
 
 ## Ownership
 
@@ -360,11 +362,15 @@ missing loads together, and keeps the current paragraph while a later selection 
 `{ font, error, ready }` shallow refs plus a promise for async setup; the format leaves compose it exactly like the
 React hooks. See [Vue and TresJS font loading](../guides/vue.md).
 
-Both component adapters snapshot paragraph property data and treat each committed prop set as complete desired state:
-removing style, layout, constraints, flow, material, or raster pixel ratio restores the corresponding default. Vue reads
-through nested reactive records while taking those snapshots, so in-place changes trigger updates without retaining
-mutable comparison state. `TextGroup` material and render order follow the same rule through one shared imperative
-apply step rather than framework prop diffing, so removing either restores the Three default. Paragraph and group
+Both component adapters treat each committed prop set as complete desired state: removing style, layout, constraints,
+flow, material, or raster pixel ratio restores the corresponding default. React and Vue pass that state through Three's
+canonical framework-update path, which normalizes it once, reuses equal package-owned property, span, and flow snapshots,
+and reports whether the desired revision changed. Neither adapter retains a caller-owned applied-state cache, so an ignored
+in-place mutation cannot swallow a later valid immutable update. Vue still detaches nested reactive records before the
+call so proxy mutation cannot rewrite a package-owned snapshot; Three adopts equal records without another clone.
+Neither adapter mutates a render-time React ref or treats object identity as paragraph correctness. `TextGroup` material
+and render order follow the same rule through one shared
+imperative apply step rather than framework prop diffing, so removing either restores the Three default. Paragraph and group
 updates request a frame on demand-rendered canvases only when the desired snapshot changed; a re-render with identical
 props requests nothing. A pending Vue font switch keeps the current Three object and its leases until replacement fonts
 are ready; constructor arguments remain valid for that mounted object's lifetime. React retains its ordinary Suspense
@@ -372,9 +378,13 @@ lifecycle.
 
 `pnpm scripts run glyph:adapters-check` runs the shared React/Vue behavior cases and each framework's lifecycle tests
 against a freshly built distribution, plus adapter formatting, lint, and source declaration checks. Shared cases cover
-prop removal, nested property replacement, frame requests with an identical-snapshot negative control, flow retention
-and removal, group material and render-order removal, loaded-to-pending font switches, and lease disposal; Vue also
-proves in-place reactive updates. Three's `Text.set({ material: undefined })` explicitly clears an override.
+prop removal, nested property replacement, presentation-only changes, equivalent PropertyList shapes, malformed property
+input, frame requests with an identical-snapshot negative control that also retains flow and measurement identity, flow
+retention and removal, group material and render-order removal, loaded-to-pending font switches, and lease disposal. Vue
+additionally proves a reuse hit followed by
+in-place nested reactive updates. React additionally proves that mutating stable caller input cannot poison the accepted
+state used by a later fresh update. Three's
+`Text.set({ material: undefined })` explicitly clears an override.
 
 The public `ThreeRoot` contract stops at that retained scene API: identity and disposal, Text/TextGroup construction,
 counts, and mutable material presentation. The renderer draw object, discovered Three Scene, root services, command
@@ -410,7 +420,9 @@ every default Wasm asset (the text shaper, the runtime-bake worker's font baker,
 is fetched and handed to `WebAssembly.compileStreaming`, so compilation overlaps the download and HTTP compression is
 decoded by the network stack. Streaming is attempted before inspecting response MIME or type. Following wasm-bindgen's
 loader policy, a streaming rejection falls back to buffered compilation for a basic, CORS or default response whose
-MIME is not `application/wasm`; other streaming errors propagate. The same response is used without cloning or
+MIME is not a case-insensitive match for `application/wasm`; other streaming errors propagate. MIME parameters remain
+invalid for streaming, including `application/wasm;`. A mixed-case Wasm header preserves a consumed-body compile error
+instead of retrying the body. The same response is used without cloning or
 refetching. Node reads the packaged files directly. Vite HMR carries
 the process-local Glyph runtime through replacement data instead of instantiating a second engine. React still checks
 synchronous initialized and loaded state first, so ready renders do not enter Suspense or cross a microtask. Pending font
@@ -586,6 +598,12 @@ paragraph sections:
 - transform and visibility changes update Three's renderer-local sidecar without calling Wasm;
 - an empty or normalized-equal update sends nothing.
 
+Formatted-text compilers resolve cluster boundaries once and freeze their span arrays. A package-private WeakMap records
+the exact array and text value, so React and Vue may preserve that proof while replacing span records to bind fonts and
+Three may skip duplicate Unicode segmentation. The proof transfers only when every boundary is unchanged. Raw caller
+arrays, changed text or boundaries, malformed UTF-16, and arrays produced by another package copy still take the normal
+validation and cluster-alignment path.
+
 Three's ordinary scene traversal owns world-matrix composition. The root observes Text membership and ancestor state,
 publishes semantic changes once at its renderer-owned draw node, and patches root-relative transforms through a separate
 engine-free side path. Camera motion does not republish text. Text, nested `TextGroup`, and other ancestor motion,
@@ -599,8 +617,12 @@ Within a `TextGroup`, each child `Text.renderOrder` ranks that paragraph's insta
 text, styles, geometry, measurement, or per-glyph records. Ordinary content updates retain the 12-byte lifecycle record
 and omit the sideband when scope and rank are unchanged. An ungrouped
 `Text.renderOrder` retains ordinary Three draw-mesh meaning. Paragraph rank is deliberately absent from glyph storage and
-draw keys: compatible spans and grouped paragraphs therefore coalesce by resource, material, and fixed paint layer, with
-under-decoration, glyph, and over-decoration layers preserving CSS paint order.
+draw keys: compatible spans and grouped paragraphs therefore coalesce within their authored batch boundary by resource,
+material, and fixed paint layer, with under-decoration, glyph, and over-decoration layers preserving CSS paint order.
+`TextGroup.batching` controls only that physical boundary; it does not create another planner, Wasm root, or publication
+stream. The default `auto` makes each top-level authored group a boundary while nested automatic groups inherit it;
+`group` forces a nested boundary, and `shared` joins the nearest authored boundary or the implicit root pool. Hiding a
+boundary-owning group skips its compatible draws without resizing buffers, replacing meshes, or entering Wasm.
 When a rank-only permutation keeps the committed Codec, capability, one-batch single-aggregate-draw storage topology,
 and renderable stable-ID set, Rust copies the committed physical records into their new order and publishes write patches only. It transactionally
 updates its internal aggregate primitive/draw spans but does not republish unchanged buffers, resources, primitives,
@@ -975,7 +997,9 @@ layout, and constraint snapshots. Reusing the same readonly outer record is an O
 outer record compares it with the accepted snapshot and clones only a material change. A nested edit submitted through a
 new outer style, layout, or constraint record therefore cannot rewrite history or disappear through `/typegpu` or a
 custom `GlyphConfig`. Three's retained authoring model uses the same snapshot utility, and its package-owned records cross
-the controller seam without a second clone. A plain string replacement reuses its normalized font, transform, material,
+the controller seam without a second clone. Equivalent normalized Three text updates preserve the desired revision and
+cached measurements without staging another publication. Explicit font or material assignments still invalidate
+publication, including renderer retries after a rejected frame. A plain string replacement reuses its normalized font, transform, material,
 style, layout, and constraint ownership. When those accepted input identities return through a content-only update,
 normalization skips recursive comparison and cloning; a new outer property record still takes the validating path.
 Equal-length content emits only the minimal scalar-aligned text record; length changes additionally republish
@@ -1147,6 +1171,15 @@ are unchanged.
 
 [^msdfgen-cli]: msdfgen 1.13 `main.cpp`, scanline defaults and post-generation error-correction configuration.
 
+Direct TypeGPU text owns its position coordinates separately from semantic text state. Position-only updates write the
+uniform without staging a semantic publication; unchanged coordinates do not write it again. Mixed updates validate
+and stage semantic changes before moving the uniform, so rejected caller input preserves the accepted position.
+
+Planner frames are prepared as validated records and written directly into the retained Wasm request arena, including
+paragraph queries. The writer respects the arena view's byte offset and clears reused storage before encoding. Query
+requests retain minimal text mutations; removal requests include only paragraphs previously published. Output growth
+invalidates prior borrowed results and rewrites the request before retrying, preserving the existing acceptance fence.
+
 ## Legacy-path and duplication audit
 
 The Rust command buffer is the only glyph-packing implementation. Rust is also the production authority for Unicode
@@ -1299,7 +1332,10 @@ exports, calls, branches, and clock reads are now absent from the package source
 workload markers and the direct Wasm timer remain outside the shipped library.
 
 After the final plan-application lifecycle audit, Three sizes indexed transforms from live paragraph IDs instead of
-scanning every glyph record in JavaScript. A renderer preparation failure discards its candidate, retains the last
+scanning every glyph record in JavaScript. Patch-only publications retain the transform table and its index instead of
+preparing and uploading them again; the ordinary synchronizer still applies transforms and visibility changed in that
+frame. Replacement publications prepare fresh transform ownership and resolve visibility through the application scene.
+A renderer preparation failure discards its candidate, retains the last
 accepted plan fence and error, and waits for explicit renderer-relevant invalidation to request a checkpoint. Dirty upload
 ranges accumulate across presentation restoration and Rust patches; buffer/resource generations dispose only their exact
 dependent materials; and direct materials survive indexed transform-table growth. A loaded font owns one

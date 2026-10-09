@@ -47,6 +47,7 @@ export {
 export type {
   StandaloneTextProperties,
   TextCommitState,
+  TextGroupBatching,
   TextGroupOptions,
   TextProperties,
   TextUpdate,

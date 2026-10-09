@@ -26,6 +26,8 @@ const threePackage = (await import(
 // Adapt older installed canaries once, outside every timed workload.
 const { bitmap, glyph } = glyphPackage;
 const { defineThreeConfig } = threePackage;
+export { font, glyph };
+export const { span, txt } = glyphPackage;
 const textPrototype: {
   readGlyphs?: (typeof threePackage.Text.prototype)['readGlyphs'];
   withGlyphs?: (typeof threePackage.Text.prototype)['readGlyphs'];
@@ -240,7 +242,7 @@ export function inspectDraws(renderObject: ThreeTypes.Object3D): Readonly<{ draw
   return { draws, glyphs };
 }
 
-export function borrowedGlyphChecksum(labels: ReturnType<typeof createLabels>['labels']): number {
+export function borrowedChecksum(labels: ReturnType<typeof createLabels>['labels']): number {
   return labels.reduce(
     (total, label) =>
       total +
@@ -255,6 +257,8 @@ export function borrowedGlyphChecksum(labels: ReturnType<typeof createLabels>['l
     0,
   );
 }
+
+export const borrowedGlyphChecksum = borrowedChecksum;
 
 export function editedText(iteration: number): string {
   const leading = String.fromCharCode(65 + (iteration % 26));

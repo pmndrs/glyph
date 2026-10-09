@@ -275,6 +275,8 @@ Package performance is measured from installable artifacts rather than workspace
 `@pmndrs/glyph` once, creates one package tarball with `pnpm pack`, and retains that tarball for the separate non-blocking
 performance job. `benchmark:labs-package` installs the candidate tarball and an exact version resolved from the current
 npm canary into isolated temporary consumers, then runs both through `@pmndrs/labs`. It never rebuilds either artifact.
+Those consumers install the optional Three and TypeGPU peers exercised by the package workloads instead of relying on
+the benchmark workspace's dependency graph.
 The retained report includes native Labs JSON, comparison output, exact package manifests and lockfiles, and the candidate
 tarball SHA-256.
 
@@ -299,6 +301,16 @@ published for that same push would otherwise be installed as its own baseline. M
 choice and compares with the canary. Available focused suites are `layout`, `measure`, `glyphs`, `publication`,
 `batch`, `style`, `reflow`, `stress`, `cold`, and `edit`; `edit` types one character into a long Inter or Fredoka paragraph and measures it or publishes a frame.
 `full` does not run browser observations, native/Worker profiles, or correctness and release gates.
+
+The `publication` suite includes 1,000 retained labels receiving equivalent style, layout, and constraint snapshots.
+It uses the installed package's Three instance through the shared fixture, warms the update before timing, and checks
+glyph identities/positions and realized draw counts afterward. It also measures position-only updates of 1,000 TypeGPU
+labels through a recording host: CPU adapter and publication work, not GPU execution. Artifact role is passed to the
+workloads so older canaries may publish while the candidate must keep semantic publication idle. Framework workloads
+measure equivalent formatted flow updates at the shared Three normalization boundary and Vue's installed snapshot
+helper; they do not time React component rendering. Warm setup and untimed glyph checks guard the formatted flow case.
+The `layout` suite also compares single-paragraph, 1,000-paragraph and order-only request-arena encoding from installed
+artifacts, with full encoded-byte equality checked after timing; it measures wire preparation, not engine layout.
 
 Each suite holds workloads that time alike. Labs decides per run whether to batch iterations or time single calls from
 the cost of the first calls, so a workload whose first call is first-time work can be timed differently on each side
@@ -740,6 +752,13 @@ no-warm-memory-growth checks outside the timed region. Its `mtsdf-generator` sui
 host initialization, initialized-plus-corpus work, and retained-generator corpus work while preserving every oracle hash.
 Browser frame, GPU, and input-latency observations remain Vitexec or Playwright workflows, while package size and
 conformance remain deterministic gates rather than timing benchmarks.
+
+The installed-package publication suite includes warm retained-label normalization, framework-shaped formatted-flow
+updates, Vue snapshot reuse, TypeGPU position-only updates, and raw trailing-span changes. The batch suite also toggles
+one authored boundary containing 1,000 retained labels. Each case warms once before its timed yield and checks its
+semantic result afterward with package-owned counts, encoded bytes,
+borrowed glyph checksums, or draw topology. Compatibility probes and old-canary adapters run once during fixture setup;
+candidate-only helpers are required before timing begins.
 
 | Need                                  | Command                                                                                                                   |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |

@@ -76,24 +76,35 @@ test('Vue tracks in-place root and nested reactive property changes', async () =
   const style = reactive({ fontSize: 16, decoration: { underline: true } });
   const constraints = reactive({ width: { mode: 'exact', size: 200 } });
   const inline = reactive({ fontSize: 18, decoration: { underline: true } });
+  const revision = shallowRef(0);
   let component;
   const host = await mountTres(() =>
     h(
       Text,
       {
         font: font.face,
+        name: `snapshot-${revision.value}`,
         textStyle: style,
         constraints,
         ref: (value) => {
           component = value;
         },
       },
-      () => ['root ', h(Text, { textStyle: inline }, () => 'inline')],
+      () => ['a', h(Text, { textStyle: inline }, () => '\u0301b')],
     ),
   );
   try {
     const object = component.instance;
     const previous = object.style;
+    const acceptedMeasurement = object.measure();
+    revision.value += 1;
+    await nextTick();
+    assert.equal(object.style, previous, 'an unrelated re-render must reuse the accepted reactive snapshot');
+    assert.equal(
+      object.measure(),
+      acceptedMeasurement,
+      'fresh equivalent nested text must retain accepted measurement',
+    );
     style.fontSize = 24;
     style.decoration.underline = false;
     constraints.width.size = 100;

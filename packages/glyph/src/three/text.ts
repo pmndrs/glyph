@@ -1,6 +1,12 @@
 import * as THREE from 'three/webgpu';
 
-import { alignSpansToClusters, type FormattedText, type ParagraphSpan, type TextInput } from '../formatted-text.js';
+import {
+  alignSpansToClusters,
+  areOwnedSpansClusterAligned,
+  type FormattedText,
+  type ParagraphSpan,
+  type TextInput,
+} from '../formatted-text.js';
 import type { Font } from '../font.js';
 import { isFontFaceSelection, resolveFontFace, type FontFaceSelection, type FontFaceRasterOf } from '../font-face.js';
 import { createGlyphPlacements, type GlyphCaret, type GlyphPlacements } from '../glyph-placement.js';
@@ -35,10 +41,15 @@ import {
 } from '../text-properties.js';
 import { assertTextEffectsSupported, normalizedColumns, replacedContent } from '../engine-encoding.js';
 import type { GlyphCopy, GlyphRoot, GlyphRootServices, GlyphTextController } from '../config/glyph.js';
-import { reuseOrCreateTextPropertySnapshot } from '../config/text-property.js';
+import {
+  equalTextPropertySnapshots,
+  isOwnedTextPropertySnapshot,
+  reuseOrCreateTextPropertySnapshot,
+} from '../config/text-property.js';
 import { ThreeCommandBufferRenderer } from './command-buffer-renderer.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import type { ThreeBindings, ThreeMaterialBinding } from './schema.js';
+import { setThreeBatchScope } from './internal/batch-scope.js';
 import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
 import type { ThreeRendererResources } from './internal/renderer-resources.js';
 import {
@@ -88,11 +99,22 @@ export interface ThreeRootOptions {
 
 /** Construction options for one Three scene-hierarchy parent. */
 export interface TextGroupOptions {
+  /** Physical draw ownership without creating another semantic root or publication stream. Defaults to `auto`. */
+  readonly batching?: TextGroupBatching;
   readonly renderOrder?: number;
   readonly material?: ThreeTextMaterial;
   /** Snap Bitmap vertices to physical pixels. */
   readonly pixelSnapping?: boolean;
 }
+
+/**
+ * Controls where compatible descendant draws may coalesce.
+ *
+ * - `auto`: a top-level authored group owns a boundary; nested automatic groups inherit it.
+ * - `shared`: join the nearest authored boundary, or the implicit root pool when none exists.
+ * - `group`: force this group to own a nested boundary.
+ */
+export type TextGroupBatching = 'auto' | 'shared' | 'group';
 
 /** Observable publication state of one Three text instance. */
 export type TextCommitState =
@@ -118,6 +140,7 @@ const emptyTextSpans: readonly never[] = Object.freeze([]);
 interface TextReconciler {
   desired<Format extends RasterFormatMetadata>(text: Text<Format>): DesiredTextState<Format>;
   desiredRevision(text: Text<RasterFormatMetadata>): number;
+  update<Format extends RasterFormatMetadata>(text: Text<Format>, update: TextUpdate<Format>): boolean;
   root(text: Text<RasterFormatMetadata>): ThreeRootHost;
   markCommitted(text: Text<RasterFormatMetadata>): void;
   publishMeasurement(text: Text<RasterFormatMetadata>, measurement: ParagraphLayoutSummary): void;
@@ -567,8 +590,18 @@ export class ThreeRootHost {
     worldMatricesCurrent: boolean,
     texts: readonly Text<RasterFormatMetadata>[] = this.#renderMembers(),
   ): void {
-    if (!worldMatricesCurrent) {
-      for (const text of texts) text.updateWorldMatrix(true, false);
+    const traversalParent = worldMatricesCurrent ? this.#renderObject.parent : null;
+    const pendingBranches =
+      traversalParent === null ? undefined : followingSiblingBranches(this.#renderObject, traversalParent);
+    for (const text of texts) {
+      if (
+        !worldMatricesCurrent ||
+        (traversalParent !== null &&
+          pendingBranches !== undefined &&
+          belongsToParentBranch(text, traversalParent, pendingBranches))
+      ) {
+        text.updateWorldMatrix(true, false);
+      }
     }
     this.#renderObject.updateMatrixWorldWithoutCommit(true);
     this.#binding?.syncTransforms(worldMatricesCurrent);
@@ -699,6 +732,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     reconciler = {
       desired: (text) => text.#desired,
       desiredRevision: (text) => text.#desiredRevision,
+      update: (text, update) => text.#applyUpdate(update, false),
       root: (text) => text.#root,
       markCommitted: (text) => text.#markCommitted(),
       publishMeasurement: (text, measurement) => text.#setBoundingBox(measurement),
@@ -823,13 +857,17 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   }
 
   set(update: TextUpdate<Format>): void {
+    this.#applyUpdate(update, true);
+  }
+
+  #applyUpdate(update: TextUpdate<Format>, preserveExplicitPublication: boolean): boolean {
     this.#assertActive();
     if (typeof update !== 'object' || update === null || Array.isArray(update)) {
       throw new TypeError('Text update must be an object');
     }
     assertNoRawSpans(update, 'Text update');
     const updateKeys = Reflect.ownKeys(update);
-    if (updateKeys.length === 0) return;
+    if (updateKeys.length === 0) return false;
     if (
       updateKeys.length === 1 &&
       updateKeys[0] === 'text' &&
@@ -837,18 +875,25 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       this.#desired.spans.length === 0 &&
       update.text === this.#desired.text
     ) {
-      return;
+      return false;
     }
     const next =
       updateKeys.length === 1 && updateKeys[0] === 'text' && typeof update.text === 'string'
         ? replaceDesiredString(this.#desired, update.text)
         : normalizeDesired({ ...this.#desired, ...replacedContent(update) } as TextProperties<Format>, this.#desired);
+    if (
+      (!preserveExplicitPublication || (!Object.hasOwn(update, 'font') && !Object.hasOwn(update, 'material'))) &&
+      sameDesiredTextState(this.#desired, next)
+    ) {
+      return false;
+    }
     const nextRevision = checkedNextRevision(this.#desiredRevision);
     this.#binding?.stageUpdate(this.#root.member(this), next, nextRevision);
     this.#desired = next;
     this.#desiredRevision = nextRevision;
     this.#boundingBox.makeEmpty();
     this.#boundingBoxCurrent = false;
+    return true;
   }
 
   /** Measures current desired text without scene attachment or matrix traversal; a cache miss may synchronously incur font/measure lookup work. */
@@ -1056,6 +1101,14 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   }
 }
 
+/** @internal Apply framework state through Three's canonical normalization and report whether it changed. */
+export function updateTextFromFramework<Format extends RasterFormatMetadata>(
+  text: Text<Format>,
+  update: TextUpdate<Format>,
+): boolean {
+  return reconciler.update(text, update);
+}
+
 interface TextGroupRenderOrderState {
   stated: number | undefined;
   observed: number;
@@ -1074,6 +1127,7 @@ export class TextGroup extends THREE.Object3D {
   }
   readonly #pixelSnapping: boolean | undefined;
   readonly #root: ThreeRootHost;
+  #batching: TextGroupBatching;
   #material: ThreeTextMaterial | undefined;
   readonly #texts: Text<RasterFormatMetadata>[] = [];
   #disposed = false;
@@ -1098,6 +1152,7 @@ export class TextGroup extends THREE.Object3D {
     this.#pixelSnapping =
       options.pixelSnapping === undefined ? undefined : normalizePixelSnapping(options.pixelSnapping);
     this.#root = host;
+    this.#batching = normalizeTextGroupBatching(options.batching);
     this.#material = options.material;
     if (options.renderOrder !== undefined) {
       if (!Number.isFinite(options.renderOrder)) throw new RangeError('TextGroup renderOrder must be finite');
@@ -1115,6 +1170,16 @@ export class TextGroup extends THREE.Object3D {
   }
   get pixelSnapping(): boolean | undefined {
     return this.#pixelSnapping;
+  }
+  get batching(): TextGroupBatching {
+    return this.#batching;
+  }
+  set batching(value: TextGroupBatching) {
+    this.#assertActive();
+    const batching = normalizeTextGroupBatching(value);
+    if (this.#batching === batching) return;
+    this.#batching = batching;
+    this.#root.invalidateMaterial();
   }
   get disposed(): boolean {
     return this.#disposed;
@@ -1206,6 +1271,7 @@ interface DetachedQueryEntry {
 
 interface TextPresentation {
   readonly group: TextGroup | undefined;
+  readonly batchGroup: TextGroup | undefined;
   readonly material: ThreeTextMaterial | undefined;
   readonly pixelSnapping: boolean;
   /** Three's render order for the draw mesh, stated by the Text or its nearest TextGroup. */
@@ -1590,9 +1656,9 @@ class ThreeRootPublication {
       desired,
       text,
       presentation,
-      this.#root,
       order,
-      (material, pixelSnapping, renderOrder) => this.#materialBindings.get(material, pixelSnapping, renderOrder),
+      (material, pixelSnapping, renderOrder, batchGroup) =>
+        this.#materialBindings.get(material, pixelSnapping, renderOrder, batchGroup),
     );
     if (previous === undefined) {
       const handle = this.#services.createText(state);
@@ -1646,23 +1712,19 @@ function coreTextState(
   desired: DesiredTextState<RasterFormatMetadata>,
   transform: THREE.Object3D,
   presentation: TextPresentation,
-  root: ThreeRootHost,
   order: number,
   materialBinding: (
     material: ThreeTextMaterial | undefined,
     pixelSnapping: boolean,
     renderOrder: number,
+    batchGroup: TextGroup | undefined,
   ) => ThreeMaterialBinding,
 ) {
-  const { pixelSnapping, renderOrder } = presentation;
-  const material = materialBinding(
-    desired.material ?? presentation.material ?? root.material,
-    pixelSnapping,
-    renderOrder,
-  );
+  const { batchGroup, pixelSnapping, renderOrder } = presentation;
+  const material = materialBinding(desired.material ?? presentation.material, pixelSnapping, renderOrder, batchGroup);
   const spans = desired.spans.map((span) => {
     const spanMaterial: ThreeMaterialBinding | undefined =
-      span.material === undefined ? undefined : materialBinding(span.material, pixelSnapping, renderOrder);
+      span.material === undefined ? undefined : materialBinding(span.material, pixelSnapping, renderOrder, batchGroup);
     return Object.freeze({
       start: span.start,
       end: span.end,
@@ -1685,26 +1747,59 @@ function coreTextState(
   };
 }
 
-class ThreeMaterialBindingCache {
-  readonly #default = new Map<string, ThreeMaterialBinding>();
-  readonly #custom = new WeakMap<ThreeTextMaterial, Map<string, ThreeMaterialBinding>>();
+interface ThreeMaterialBindingVariants {
+  readonly default: Map<string, ThreeMaterialBinding>;
+  readonly custom: WeakMap<ThreeTextMaterial, Map<string, ThreeMaterialBinding>>;
+}
 
-  get(material: ThreeTextMaterial | undefined, pixelSnapping: boolean, renderOrder: number): ThreeMaterialBinding {
+class ThreeMaterialBindingCache {
+  readonly #shared = createMaterialBindingVariants();
+  readonly #scoped = new WeakMap<TextGroup, ThreeMaterialBindingVariants>();
+  // Reconciliation stages sibling Texts contiguously; retain the hot variants without retaining their group.
+  #recentGroup: WeakRef<TextGroup> | undefined;
+  #recentScoped: ThreeMaterialBindingVariants | undefined;
+
+  get(
+    material: ThreeTextMaterial | undefined,
+    pixelSnapping: boolean,
+    renderOrder: number,
+    batchGroup: TextGroup | undefined,
+  ): ThreeMaterialBinding {
+    let bindings = this.#shared;
+    if (batchGroup !== undefined) {
+      const recent = this.#recentScoped;
+      if (recent !== undefined && this.#recentGroup?.deref() === batchGroup) {
+        bindings = recent;
+      } else {
+        bindings = this.#scoped.get(batchGroup) ?? createMaterialBindingVariants();
+        this.#scoped.set(batchGroup, bindings);
+        this.#recentGroup = new WeakRef(batchGroup);
+        this.#recentScoped = bindings;
+      }
+    }
     let variants: Map<string, ThreeMaterialBinding>;
     if (material === undefined) {
-      variants = this.#default;
+      variants = bindings.default;
     } else {
-      variants = this.#custom.get(material) ?? new Map();
-      this.#custom.set(material, variants);
+      variants = bindings.custom.get(material) ?? new Map();
+      bindings.custom.set(material, variants);
     }
     const key = `${pixelSnapping ? 1 : 0}:${String(renderOrder)}`;
     let binding = variants.get(key);
     if (binding === undefined) {
       binding = Object.freeze({ material, pixelSnapping, renderOrder });
+      setThreeBatchScope(binding, batchGroup);
       variants.set(key, binding);
     }
     return binding;
   }
+}
+
+function createMaterialBindingVariants(): ThreeMaterialBindingVariants {
+  return {
+    default: new Map(),
+    custom: new WeakMap(),
+  };
 }
 
 function normalizeDesired<Format extends RasterFormatMetadata>(
@@ -1718,19 +1813,35 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
   const layoutReused = previous !== undefined && properties.layout === previous.layout;
   const constraintsReused = previous !== undefined && properties.constraints === previous.constraints;
   const flowReused = previous !== undefined && properties.flow === previous.flow;
-  const style = styleReused ? previous.style : mergePropertyList(properties.style, 'Text style');
-  const layout = layoutReused ? previous.layout : mergePropertyList(properties.layout, 'Text layout');
+  const style = styleReused
+    ? previous.style
+    : isOwnedTextPropertySnapshot(properties.style)
+      ? (properties.style as TextStyle)
+      : mergePropertyList(properties.style, 'Text style');
+  const layout = layoutReused
+    ? previous.layout
+    : isOwnedTextPropertySnapshot(properties.layout)
+      ? (properties.layout as ParagraphLayout)
+      : mergePropertyList(properties.layout, 'Text layout');
   const constraints = constraintsReused
     ? previous.constraints
-    : mergePropertyList(properties.constraints, 'Text constraints');
+    : isOwnedTextPropertySnapshot(properties.constraints)
+      ? (properties.constraints as Constraints)
+      : mergePropertyList(properties.constraints, 'Text constraints');
   if (!styleReused) assertTextStyle(style, 'Text style');
   if (!layoutReused) assertParagraphLayout(layout, 'Text layout');
   if (!constraintsReused) assertConstraints(constraints, 'Text constraints');
-  const flow = flowReused
+  const normalizedFlow = flowReused
     ? previous.flow
     : properties.flow === undefined
       ? undefined
       : normalizeTextFlow(properties.flow, 'Text flow');
+  const flow =
+    !flowReused && previous?.flow !== undefined && normalizedFlow !== undefined
+      ? equalTextPropertySnapshots(previous.flow, normalizedFlow)
+        ? previous.flow
+        : normalizedFlow
+      : normalizedFlow;
   if (!layoutReused || !constraintsReused) normalizedColumns(layout, constraints);
   const formatted = typeof properties.text === 'string' ? undefined : properties.text;
   if (formatted !== undefined && !isFormattedText(formatted)) throw new TypeError('Text content is invalid');
@@ -1741,12 +1852,16 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
     (formatted?.spans as readonly TextSpan<Format>[] | undefined) ??
     (properties as DesiredTextState<Format>).spans ??
     [];
-  const resolved =
-    previous !== undefined && previous.text === text && previous.spans === stated
-      ? stated
-      : alignSpansToClusters(text, assertSpanRanges(text, stated));
-  const spans =
-    resolved === previous?.spans ? previous.spans : Object.freeze(resolved.map((span) => Object.freeze({ ...span })));
+  let spans: readonly TextSpan<Format>[];
+  if (previous !== undefined && previous.text === text && previous.spans === stated) {
+    spans = stated;
+  } else {
+    const checked = assertSpanRanges(text, stated);
+    // Glyph's text compilers hand off package-owned arrays already normalized to this text's cluster grid. Raw caller
+    // arrays still take the exact shared Unicode path; the provenance marker is only a redundant-work fast path.
+    const aligned = areOwnedSpansClusterAligned(text, checked) ? checked : alignSpansToClusters(text, checked);
+    spans = reuseOrCreateTextSpans(previous?.spans, aligned);
+  }
   const rootTechniques = immutableFontSelectionFonts(properties.font).map((font) => font.raster);
   const inheritedTechniques = [
     ...rootTechniques,
@@ -1793,6 +1908,51 @@ function replaceDesiredString<Format extends RasterFormatMetadata>(
     text,
     spans: emptyTextSpans,
   });
+}
+
+function sameDesiredTextState<Format extends RasterFormatMetadata>(
+  previous: DesiredTextState<Format>,
+  next: DesiredTextState<Format>,
+): boolean {
+  return (
+    previous.font === next.font &&
+    previous.text === next.text &&
+    previous.spans === next.spans &&
+    previous.style === next.style &&
+    previous.layout === next.layout &&
+    previous.constraints === next.constraints &&
+    previous.flow === next.flow &&
+    Object.is(previous.rasterPixelRatio ?? 1, next.rasterPixelRatio ?? 1) &&
+    previous.material === next.material
+  );
+}
+
+function reuseOrCreateTextSpans<Format extends RasterFormatMetadata>(
+  previous: readonly TextSpan<Format>[] | undefined,
+  spans: readonly TextSpan<Format>[],
+): readonly TextSpan<Format>[] {
+  let snapshot: TextSpan<Format>[] | undefined = previous?.length === spans.length ? undefined : [];
+  for (const [index, span] of spans.entries()) {
+    const prior = previous?.[index];
+    const style =
+      span.style === undefined
+        ? undefined
+        : reuseOrCreateTextPropertySnapshot(prior?.style, span.style, `Text span ${index} style`);
+    if (
+      prior !== undefined &&
+      prior.start === span.start &&
+      prior.end === span.end &&
+      prior.font === span.font &&
+      prior.material === span.material &&
+      prior.style === style
+    ) {
+      snapshot?.push(prior);
+      continue;
+    }
+    if (snapshot === undefined) snapshot = previous!.slice(0, index);
+    snapshot.push(Object.freeze({ ...span, ...(style === undefined ? {} : { style }) }));
+  }
+  return snapshot === undefined ? previous! : Object.freeze(snapshot);
 }
 
 function assertNoRawSpans(value: object, subject: string): void {
@@ -1886,6 +2046,12 @@ function normalizePixelSnapping(value: boolean | undefined): boolean {
   throw new TypeError('pixelSnapping must be a boolean');
 }
 
+function normalizeTextGroupBatching(value: TextGroupBatching | undefined): TextGroupBatching {
+  if (value === undefined || value === 'auto') return 'auto';
+  if (value === 'shared' || value === 'group') return value;
+  throw new TypeError('TextGroup batching must be "auto", "shared", or "group"');
+}
+
 function nearestScene(object: THREE.Object3D): THREE.Scene | undefined {
   let current: THREE.Object3D | null = object;
   while (current !== null) {
@@ -1893,6 +2059,33 @@ function nearestScene(object: THREE.Object3D): THREE.Scene | undefined {
     current = current.parent;
   }
   return undefined;
+}
+
+function followingSiblingBranches(
+  reference: THREE.Object3D,
+  parent: THREE.Object3D,
+): ReadonlySet<THREE.Object3D> | undefined {
+  const referenceIndex = parent.children.indexOf(reference);
+  if (referenceIndex === -1 || referenceIndex === parent.children.length - 1) return undefined;
+  const branches = new Set<THREE.Object3D>();
+  for (let index = referenceIndex + 1; index < parent.children.length; index += 1) {
+    branches.add(parent.children[index]!);
+  }
+  return branches;
+}
+
+/** Whether an object belongs to a top-level subtree that Three has not visited in the current parent traversal. */
+function belongsToParentBranch(
+  object: THREE.Object3D,
+  parent: THREE.Object3D,
+  branches: ReadonlySet<THREE.Object3D>,
+): boolean {
+  let branch = object;
+  while (branch.parent !== parent) {
+    if (branch.parent === null) return false;
+    branch = branch.parent;
+  }
+  return branches.has(branch);
 }
 
 function collectTextDescendants(group: TextGroup, result: Text<RasterFormatMetadata>[]): Text<RasterFormatMetadata>[] {
@@ -1916,6 +2109,8 @@ function paragraphOrderRank(text: Text<RasterFormatMetadata>): number {
 function resolveTextPresentation(text: Text<RasterFormatMetadata>): TextPresentation {
   const root = reconciler.root(text);
   let group: TextGroup | undefined;
+  let explicitBatchGroup: TextGroup | undefined;
+  let outermostGroup: TextGroup | undefined;
   let material: ThreeTextMaterial | undefined;
   let pixelSnapping: boolean | undefined;
   let renderOrder: number | undefined;
@@ -1930,15 +2125,19 @@ function resolveTextPresentation(text: Text<RasterFormatMetadata>): TextPresenta
         throw new TypeError('one Three TextGroup cannot contain Text objects from different Glyph roots');
       }
       group ??= parent;
+      explicitBatchGroup ??= parent.batching === 'group' ? parent : undefined;
+      outermostGroup = parent;
       material ??= parent.material;
       pixelSnapping ??= parent.pixelSnapping;
       renderOrder ??= statedTextGroupRenderOrder(parent);
     }
     parent = parent.parent;
   }
+  const batchGroup = explicitBatchGroup ?? (outermostGroup?.batching === 'auto' ? outermostGroup : undefined);
   const resolved: TextPresentation = {
     group,
-    material,
+    batchGroup,
+    material: material ?? root.material,
     pixelSnapping: pixelSnapping ?? text.pixelSnapping,
     // Inside a group the child's renderOrder is a Rust paragraph rank, never a
     // Three material/draw key. An entirely unstated group shares Three's default 0.
@@ -1974,6 +2173,7 @@ function observeTextGroupRenderOrder(
 function sameTextPresentation(left: TextPresentation, right: TextPresentation): boolean {
   return (
     left.group === right.group &&
+    left.batchGroup === right.batchGroup &&
     left.material === right.material &&
     left.pixelSnapping === right.pixelSnapping &&
     left.renderOrder === right.renderOrder

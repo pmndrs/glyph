@@ -34,7 +34,12 @@ test('an application/wasm response streams into the compiler', async () => {
 });
 
 test('a response the engine declines to stream is buffered and compiled', async () => {
-  for (const headers of [{ 'content-type': 'application/octet-stream' }, { 'content-type': 'application/wasm;' }, {}]) {
+  for (const headers of [
+    { 'content-type': 'application/octet-stream' },
+    { 'content-type': 'application/wasm;' },
+    { 'content-type': 'Application/Wasm;' },
+    {},
+  ]) {
     const { module, outcomes } = await compileCountingStreams(new Response(emptyModule, { headers }));
     assert.ok(module instanceof WebAssembly.Module);
     assert.deepEqual(outcomes, ['declined']);
@@ -56,6 +61,30 @@ test('compiles buffered bytes when streaming compilation is unavailable', async 
   try {
     const module = await compileWasmResponse(new Response(emptyModule));
     assert.ok(module instanceof WebAssembly.Module);
+  } finally {
+    WebAssembly.compileStreaming = streaming;
+  }
+});
+
+test('a mixed-case Wasm compile failure preserves the error after streaming consumes the body', async () => {
+  const streaming = WebAssembly.compileStreaming;
+  const response = new Response(invalidModule, { headers: { 'content-type': 'Application/Wasm' } });
+  let failure;
+  // Browsers accept MIME case-insensitively; Node rejects this header before consuming the body.
+  WebAssembly.compileStreaming = async (source) => {
+    try {
+      return await WebAssembly.compile(await source.arrayBuffer());
+    } catch (error) {
+      failure = error;
+      throw error;
+    }
+  };
+  try {
+    await assert.rejects(compileWasmResponse(response), (error) => {
+      assert.ok(error instanceof WebAssembly.CompileError);
+      return error === failure;
+    });
+    assert.equal(response.bodyUsed, true);
   } finally {
     WebAssembly.compileStreaming = streaming;
   }

@@ -9,7 +9,6 @@ import {
   use,
   useLayoutEffect,
   useMemo,
-  useRef,
   useState,
   useSyncExternalStore,
   type ReactElement,
@@ -29,19 +28,18 @@ import {
   type FontFaceRasterOf,
   type FontFaceSource,
 } from './font-face.js';
-import { resolveRangesToClusters, type FormattedText, type TextInput } from './formatted-text.js';
+import {
+  inheritClusterAlignedSpans,
+  ownClusterAlignedSpans,
+  type FormattedText,
+  type TextInput,
+} from './formatted-text.js';
 import type { Font } from './font.js';
 import { glyph } from './glyph.js';
 import { GlyphFontError } from './loader.js';
 import { type FontSelection, type FontStack } from './loaded-font.js';
-import { mergePropertyList } from './property-list.js';
-import {
-  applyTextGroupOptions,
-  desiredTextUpdate,
-  sameDesiredText,
-  snapshotProperty,
-  snapshotPropertyList,
-} from './internal/desired-text.js';
+import { assertPropertyList, mergePropertyList } from './property-list.js';
+import { applyTextGroupOptions, desiredTextUpdate } from './internal/desired-text.js';
 import { fontResourceKey } from './internal/font-resource-key.js';
 import {
   type Constraints,
@@ -72,6 +70,7 @@ import {
 import {
   threeRootHost,
   threeTextConstructionToken,
+  updateTextFromFramework,
   type TextSpan as ThreeTextSpanRecord,
   type ThreeRootHost,
 } from './three/text.js';
@@ -167,6 +166,16 @@ type DesiredR3fTextInput<Technique extends RasterFormatMetadata> = Omit<
   readonly font?: R3fFontSelection<Technique>;
   readonly text: TextInput<Technique>;
 };
+
+interface DesiredR3fTextSource {
+  readonly constraints: PropertyList<Constraints>;
+  readonly flow: TextFlow | undefined;
+  readonly layout: PropertyList<ParagraphLayout>;
+  readonly material: ThreeTextMaterial | undefined;
+  readonly pixelSnapping: boolean | undefined;
+  readonly rasterPixelRatio: number | undefined;
+  readonly style: PropertyList<TextStyle>;
+}
 
 type SelectedHookFontConfig<Format> = Readonly<{ format: FontFaceFormatInput<Format> }>;
 type DefaultHookFontConfig = Readonly<{ format?: FontFaceFormat }>;
@@ -599,13 +608,18 @@ function ResolvedTextObject({
   readonly publishObject: (value: ThreeText<RasterFormatMetadata> | null) => void;
 }): ReactElement {
   const loadedFonts = useHandleFontFaces(handle, fontFaces);
+  const { constraints, flow, layout, material, pixelSnapping, rasterPixelRatio, style } = input;
+  const semanticInput = useMemo<DesiredR3fTextSource>(
+    () => ({ constraints, flow, layout, material, pixelSnapping, rasterPixelRatio, style }),
+    [constraints, flow, layout, material, pixelSnapping, rasterPixelRatio, style],
+  );
   const desired = useMemo(
     () =>
       bindDesiredFont(
-        textProperties(input, bindFlattenedTextFonts(flattened, loadedFonts)),
+        textProperties(semanticInput, bindFlattenedTextFonts(flattened, loadedFonts)),
         loadedTextFont(selected, loadedFonts),
       ),
-    [flattened, input, loadedFonts, selected],
+    [flattened, loadedFonts, selected, semanticInput],
   );
   return createElement(TextObject, { ...renderedProperties, desired });
 }
@@ -627,8 +641,34 @@ function collectTextFontFaces(
   selected: FontSelection<RasterFormatMetadata> | FontFaceSelection,
   nested: readonly FontFaceSelection[],
 ): readonly FontFaceSelection[] {
-  if (!isFontFaceSelection(selected) || nested.includes(selected)) return nested;
-  return Object.freeze([selected, ...nested]);
+  return internFontFaceSelections(
+    !isFontFaceSelection(selected) || nested.includes(selected) ? nested : [selected, ...nested],
+  );
+}
+
+interface FontFaceSelectionListNode {
+  readonly children: WeakMap<FontFaceSelection, FontFaceSelectionListNode>;
+  canonical?: readonly FontFaceSelection[];
+}
+
+const emptyFontFaceSelections = Object.freeze([]) as readonly FontFaceSelection[];
+// Each trie edge is weak. Although a leaf's canonical array strongly retains its selections, that leaf is reachable only
+// while every FontFaceSelection key on its path is independently live; ephemeron reachability therefore does not pin
+// transient resources. Module-scope faces intentionally retain the small set of orderings an application actually uses.
+const fontFaceSelectionLists: FontFaceSelectionListNode = { children: new WeakMap() };
+
+function internFontFaceSelections(selections: readonly FontFaceSelection[]): readonly FontFaceSelection[] {
+  if (selections.length === 0) return emptyFontFaceSelections;
+  let node = fontFaceSelectionLists;
+  for (const selection of selections) {
+    let child = node.children.get(selection);
+    if (child === undefined) {
+      child = { children: new WeakMap() };
+      node.children.set(selection, child);
+    }
+    node = child;
+  }
+  return (node.canonical ??= Object.freeze([...selections]));
 }
 
 function loadedTextFont(
@@ -644,9 +684,12 @@ function bindFlattenedTextFonts(
 ): FlattenedText<RasterFormatMetadata> {
   const spans = flattened.spans.map((span): ThreeTextSpanRecord<RasterFormatMetadata> => {
     const { font, ...properties } = span;
-    return font === undefined ? properties : Object.freeze({ ...properties, font: loadedTextFont(font, loaded) });
+    return Object.freeze({ ...properties, ...(font === undefined ? {} : { font: loadedTextFont(font, loaded) }) });
   });
-  return Object.freeze({ text: flattened.text, spans: Object.freeze(spans) });
+  return Object.freeze({
+    text: flattened.text,
+    spans: inheritClusterAlignedSpans(flattened.text, flattened.spans, spans),
+  });
 }
 
 function bindDesiredFont(
@@ -672,7 +715,6 @@ function TextObject({
   const [constructorArguments] = useState<
     [typeof threeTextConstructionToken, StandaloneTextProperties<RasterFormatMetadata>, readonly [], ThreeRootHost]
   >(() => [threeTextConstructionToken, desired, [], threeRootHost(root)]);
-  const appliedRef = useRef(desired);
   const [store] = useState(() => createObjectStore<ThreeText<RasterFormatMetadata>>());
   const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const invalidate = useThree((state) => state.invalidate);
@@ -686,10 +728,7 @@ function TextObject({
 
   useLayoutEffect(() => {
     if (object === undefined) return;
-    if (sameDesiredText(appliedRef.current, desired)) return;
-    object.set(desiredTextUpdate(desired));
-    appliedRef.current = desired;
-    invalidate();
+    if (updateTextFromFramework(object, desiredTextUpdate(desired))) invalidate();
   }, [desired, invalidate, object]);
 
   return createElement<ThreeElement<typeof ThreeText>>('pmndrsGlyphText', {
@@ -734,6 +773,7 @@ function TextGroupObject({
     threeTextConstructionToken,
     {
       ...(options.renderOrder === undefined ? {} : { renderOrder: options.renderOrder }),
+      ...(options.batching === undefined ? {} : { batching: options.batching }),
       ...(options.material === undefined ? {} : { material: options.material }),
       ...(options.pixelSnapping === undefined ? {} : { pixelSnapping: options.pixelSnapping }),
     },
@@ -749,13 +789,13 @@ function TextGroupObject({
     },
     [publishCommittedObject, store],
   );
-  const { material, renderOrder } = options;
+  const { batching, material, renderOrder } = options;
 
   // Group presentation is complete desired state owned here, not by r3f prop diffing, so a removed prop resets.
   useLayoutEffect(() => {
     if (object === undefined) return;
-    if (applyTextGroupOptions(object, { material, renderOrder })) invalidate();
-  }, [invalidate, material, object, renderOrder]);
+    if (applyTextGroupOptions(object, { batching, material, renderOrder })) invalidate();
+  }, [batching, invalidate, material, object, renderOrder]);
 
   return createElement<ThreeElement<typeof ThreeTextGroup>>(
     'pmndrsGlyphTextGroup',
@@ -1101,7 +1141,7 @@ function createMountedHookFontStore(resource: ReactFontFaceResource): MountedHoo
   };
 }
 
-/** Boundaries are JOIN offsets in the concatenated text; when a JOIN fuses a grapheme cluster across children, `resolveRangesToClusters` gives the fused cluster the earlier child's style. */
+/** Boundaries are JOIN offsets in the concatenated text; when a JOIN fuses a grapheme cluster across children, the shared cluster alignment gives the fused cluster the earlier child's style. */
 function flattenText(
   children: R3fTextChild<RasterFormatMetadata> | undefined,
   context: GlyphReactContext,
@@ -1155,7 +1195,7 @@ function flattenText(
   const text = chunks.join('');
   return Object.freeze({
     text,
-    spans: Object.freeze(resolveRangesToClusters(text, spans)),
+    spans: ownClusterAlignedSpans(text, spans),
     fontFaces: Object.freeze(fontFaces),
   });
 }
@@ -1185,19 +1225,21 @@ function assertInlineTextProperties<Technique extends RasterFormatMetadata>(prop
 }
 
 function textProperties<Technique extends RasterFormatMetadata>(
-  properties: R3fTextProps<Technique>,
+  properties: DesiredR3fTextSource,
   flattened: FlattenedText<Technique>,
 ): DesiredR3fTextInput<Technique> {
+  assertPropertyList(properties.style, 'Text style');
+  assertPropertyList(properties.layout, 'Text layout');
+  assertPropertyList(properties.constraints, 'Text constraints');
   return Object.freeze({
-    ...(properties.font === undefined ? {} : { font: properties.font }),
     text: Object.freeze({
       text: flattened.text,
       spans: flattened.spans,
     }) as FormattedText<Technique>,
-    style: snapshotPropertyList(properties.style, 'Text style'),
-    layout: snapshotPropertyList(properties.layout, 'Text layout'),
-    constraints: snapshotPropertyList(properties.constraints, 'Text constraints'),
-    ...(properties.flow === undefined ? {} : { flow: snapshotProperty(properties.flow) }),
+    style: properties.style,
+    layout: properties.layout,
+    constraints: properties.constraints,
+    ...(properties.flow === undefined ? {} : { flow: properties.flow }),
     ...(properties.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: properties.rasterPixelRatio }),
     ...(properties.material === undefined ? {} : { material: properties.material }),
     ...(properties.pixelSnapping === undefined ? {} : { pixelSnapping: properties.pixelSnapping }),
@@ -1227,7 +1269,8 @@ function objectProperties<Technique extends RasterFormatMetadata>(
 
 function groupObjectProperties(properties: R3fTextGroupProps): TextGroupElementProps {
   const object = { ...properties } as Record<string, unknown>;
-  for (const key of ['material', 'renderOrder', 'pixelSnapping', 'children', 'onError', 'ref']) delete object[key];
+  for (const key of ['batching', 'material', 'renderOrder', 'pixelSnapping', 'children', 'onError', 'ref'])
+    delete object[key];
   return object as TextGroupElementProps;
 }
 
