@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { brotliCompress, brotliCompressSync, constants, gunzipSync, gzip, gzipSync } from 'node:zlib';
@@ -534,5 +535,13 @@ if (process.argv.includes('--write')) {
   await mkdir(new URL('../src/generated/', import.meta.url), { recursive: true });
   await writeFile(new URL('../src/generated/package-sizes.json', import.meta.url), serialized);
 }
+const outputArgument = process.argv.find((argument) => argument.startsWith('--output='));
+if (outputArgument !== undefined) {
+  const output = resolve(outputArgument.slice('--output='.length));
+  await mkdir(dirname(output), { recursive: true });
+  await writeFile(output, serialized);
+}
 process.stdout.write(serialized);
 /* @workflow { "name": "release:size:generate", "args": ["--write"], "summary": "Refresh the benchmark harness package-size display snapshot during release preparation; feature branches never commit it.", "requirements": "Built runtime packages, the R3F hello-world production application, and Binaryen.", "writes": "benches/src/generated/package-sizes.json and stdout." } */
+
+/* @workflow { "name": "benchmark:package-size", "summary": "Measure delivery surfaces without refreshing the release snapshot; --output=<path> saves an external report.", "requirements": "Built Glyph, R3F hello-world and Tres production outputs, plus Binaryen.", "writes": "stdout and the optional --output path." } */
