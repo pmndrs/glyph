@@ -143,6 +143,8 @@ type AttributedErrorState =
   | Readonly<{ present: false }>
   | Readonly<{ present: true; error: unknown; publicationAccepted: boolean }>;
 
+type PublicationFailure = Readonly<{ error: unknown }>;
+
 const noAttributedError: AttributedErrorState = Object.freeze({ present: false });
 
 interface TextReconciler {
@@ -286,6 +288,8 @@ export class ThreeRootHost {
   #scene: THREE.Scene | undefined;
   #binding: ThreeRootPublication | undefined;
   #needsInitialTransformSync = false;
+  #publicationCycleActive = false;
+  #deferredTraversalFailure: PublicationFailure | undefined;
   #errorAttributionActive = false;
   readonly #renderMemberScratch: Text<RasterFormatMetadata>[] = [];
   readonly #attributedErrorGroups = new Set<TextGroup>();
@@ -403,6 +407,7 @@ export class ThreeRootHost {
   disposeHost(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    this.#finishPublicationCycle();
     try {
       this.#binding?.dispose();
       this.#binding = undefined;
@@ -590,40 +595,56 @@ export class ThreeRootHost {
   /** @internal Reconcile this root before the engine stages its contribution to `glyph.shape()`. */
   prepareShape(): import('../config/glyph.js').GlyphShapeOptions | false {
     this.#assertActive();
+    this.#publicationCycleActive = true;
+    this.#deferredTraversalFailure = undefined;
     const texts = this.#renderMembers();
     this.#needsInitialTransformSync ||= this.#bindScene(texts);
     if (texts.length === 0) {
-      if (this.#binding === undefined) return false;
+      if (this.#binding === undefined) {
+        this.#finishPublicationCycle();
+        return false;
+      }
       this.#binding.reconcile([]);
     } else {
       this.#rootBinding().reconcile(texts);
     }
-    return this.#binding?.prepareShape() ?? false;
+    const prepared = this.#binding?.prepareShape() ?? false;
+    if (prepared === false) this.#finishPublicationCycle();
+    return prepared;
   }
 
   /** @internal Apply adapter bookkeeping after this root's renderer accepts its command buffer. */
   acceptShape(): void {
-    this.#binding?.acceptShape();
-    const texts = this.#renderMembers();
-    const publicationFailure = this.#renderer.takePublicationFailure();
-    if (publicationFailure === undefined) this.#clearErrors(texts);
-    else this.#reportError(publicationFailure.error, texts, true);
-    if (this.#needsInitialTransformSync) {
-      try {
-        this.#syncTransforms(false, texts);
-        this.#needsInitialTransformSync = false;
-      } catch (error) {
-        if (publicationFailure === undefined) throw error;
-        // Initial synchronization cannot replace the accepted publication failure already attributed above.
+    try {
+      this.#binding?.acceptShape();
+      const texts = this.#renderMembers();
+      const publicationFailure = this.#renderer.takePublicationFailure() ?? this.#deferredTraversalFailure;
+      if (publicationFailure === undefined) this.#clearErrors(texts);
+      else this.#reportError(publicationFailure.error, texts, true);
+      if (this.#needsInitialTransformSync) {
+        try {
+          this.#syncTransforms(false, texts);
+          this.#needsInitialTransformSync = false;
+        } catch (error) {
+          if (publicationFailure === undefined) throw error;
+          // Initial synchronization cannot replace the accepted publication failure already attributed above.
+        }
       }
+      if (publicationFailure !== undefined) throw publicationFailure.error;
+    } finally {
+      this.#finishPublicationCycle();
     }
-    if (publicationFailure !== undefined) throw publicationFailure.error;
   }
 
   /** @internal Preserve the last accepted draw state and attribute this root's rejected shape. */
   rejectShape(error: unknown): void {
-    this.#binding?.rejectShape();
-    this.#reportError(error, this.#renderMembers());
+    try {
+      this.#renderer.takePublicationFailure();
+      this.#binding?.rejectShape();
+      this.#reportError(error, this.#renderMembers());
+    } finally {
+      this.#finishPublicationCycle();
+    }
   }
 
   #syncTransforms(
@@ -653,7 +674,7 @@ export class ThreeRootHost {
     try {
       if (this.#binding?.needsReconcile(texts) === true) this.#services.invalidate();
     } catch (error) {
-      if (!this.#renderer.ownsTraversalFailure(error)) this.#reportError(error, texts);
+      if (!this.#ownsTraversalFailure(error)) this.#reportError(error, texts);
       return;
     }
     try {
@@ -664,8 +685,19 @@ export class ThreeRootHost {
     try {
       this.#syncTransforms(worldMatricesCurrent, texts);
     } catch (error) {
-      if (!this.#renderer.ownsTraversalFailure(error)) this.#reportError(error, texts);
+      if (!this.#ownsTraversalFailure(error)) this.#reportError(error, texts);
     }
+  }
+
+  #ownsTraversalFailure(error: unknown): boolean {
+    if (!this.#publicationCycleActive) return false;
+    this.#deferredTraversalFailure ??= { error };
+    return true;
+  }
+
+  #finishPublicationCycle(): void {
+    this.#publicationCycleActive = false;
+    this.#deferredTraversalFailure = undefined;
   }
 
   #reportError(error: unknown, texts: readonly Text<RasterFormatMetadata>[], publicationAccepted = false): void {

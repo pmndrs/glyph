@@ -95,8 +95,6 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
   #synchronizingTransforms = false;
   #syncWorldMatricesCurrent = false;
   #synchronizedTransformCount = 0;
-  #publicationCommitActive = false;
-  #deferredTraversalFailure: PublicationFailure | undefined;
   #publicationFailure: PublicationFailure | undefined;
   #disposed = false;
 
@@ -248,15 +246,6 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     return failure;
   }
 
-  /** Claims traversal failure ownership during commit or pending accepted-failure settlement. */
-  ownsTraversalFailure(error: unknown): boolean {
-    if (this.#publicationCommitActive) {
-      this.#deferredTraversalFailure ??= { error };
-      return true;
-    }
-    return this.#publicationFailure !== undefined;
-  }
-
   #syncTransformsCore(transformIds: Iterable<number>, worldMatricesCurrent: boolean): number {
     return this.#transformSynchronizer.sync(this.#transformState, transformIds, worldMatricesCurrent);
   }
@@ -295,20 +284,8 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       commit: (): void => {
         if (state !== 'open') throw new Error(`Three renderer preparation was already ${state}`);
         state = 'committed';
-        this.#publicationCommitActive = true;
-        this.#deferredTraversalFailure = undefined;
-        let publicationFailure: PublicationFailure | undefined;
-        try {
-          publicationFailure = this.#commit(prepared);
-        } catch (error) {
-          this.#deferredTraversalFailure = undefined;
-          throw error;
-        } finally {
-          this.#publicationCommitActive = false;
-        }
-        // A retirement callback owns precedence; otherwise surface the traversal failure that commit deferred.
-        this.#publicationFailure = publicationFailure ?? this.#deferredTraversalFailure;
-        this.#deferredTraversalFailure = undefined;
+        this.#publicationFailure = undefined;
+        this.#publicationFailure = this.#commit(prepared);
       },
       discard: (): void => {
         if (state !== 'open') return;

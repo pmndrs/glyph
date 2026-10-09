@@ -4083,6 +4083,230 @@ test('accepted retirement failures outrank reentrant notification traversal and 
   font.dispose();
 });
 
+test('a captured later root defers callback traversal until its own retirement outcome is known', async (t) => {
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+
+  for (const laterOutcome of [
+    { name: 'primary zero', present: true, error: 0 },
+    { name: 'no primary', present: false },
+  ]) {
+    await t.test(laterOutcome.name, async (subtest) => {
+      const three = await createThreeTestHandle(subtest, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+      const rootNames = [`full-cycle-left-${laterOutcome.name}`, `full-cycle-right-${laterOutcome.name}`];
+      const roots = rootNames.map((name) => three(name));
+      const scenes = roots.map(() => new THREE.Scene());
+      const groups = roots.map((root) => root.createTextGroup());
+      const primaryFailure = new Error(`left retirement failure before ${laterOutcome.name}`);
+      const secondaryFailure = new Error(`right pre-commit traversal failure before ${laterOutcome.name}`);
+      let transformMustFail = false;
+      let failingTransformUpdates = 0;
+      let laterCommitCallbackStarted = false;
+      let traversalRanBeforeLaterCommitCallback = false;
+      class ThrowingTransformParent extends THREE.Object3D {
+        updateWorldMatrix(updateParents, updateChildren) {
+          if (transformMustFail) {
+            transformMustFail = false;
+            failingTransformUpdates += 1;
+            traversalRanBeforeLaterCommitCallback ||= !laterCommitCallbackStarted;
+            throw secondaryFailure;
+          }
+          return super.updateWorldMatrix(updateParents, updateChildren);
+        }
+      }
+      const throwingParent = new ThrowingTransformParent();
+      groups[1].add(throwingParent);
+      let runEarlierRetirement = () => {};
+      const earlierMaterial = defineTextMaterial((context) => {
+        const material = context.createDefaultMaterial();
+        material.addEventListener('dispose', () => runEarlierRetirement());
+        return material;
+      });
+      const laterMaterial = defineTextMaterial((context) => {
+        const material = context.createDefaultMaterial();
+        material.addEventListener('dispose', () => {
+          if (laterCommitCallbackStarted) return;
+          laterCommitCallbackStarted = true;
+          if (laterOutcome.present) throw laterOutcome.error;
+        });
+        return material;
+      });
+      const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+      const labels = [
+        roots[0].createText({ font, material: earlierMaterial, text: 'A' }),
+        roots[1].createText({ font, material: laterMaterial, text: 'B' }),
+      ];
+      groups[0].add(labels[0]);
+      groups[1].add(labels[1]);
+      scenes[0].add(groups[0]);
+      scenes[1].add(groups[1]);
+      for (const scene of scenes) scene.updateMatrixWorld(true);
+      const laterPublicationObject = rootDraws(scenes[1], rootNames[1])[0]?.parent;
+      assert.ok(laterPublicationObject);
+      scenes[1].add(groups[1]);
+      scenes[1].updateMatrixWorld(true);
+      assert.ok(
+        scenes[1].children.indexOf(laterPublicationObject) < scenes[1].children.indexOf(groups[1]),
+        'the later publication object must traverse before its authored group',
+      );
+
+      const laterNotifications = [];
+      labels[1].onError = (error) => laterNotifications.push(error);
+      let earlierCallbackInvocations = 0;
+      runEarlierRetirement = () => {
+        earlierCallbackInvocations += 1;
+        throwingParent.add(labels[1]);
+        transformMustFail = true;
+        scenes[1].updateMatrixWorld(true);
+        throw primaryFailure;
+      };
+      labels[0].set({
+        material: replacementMaterial,
+        text: 'candidate 0 forces retained storage growth for retirement',
+      });
+      labels[1].set({
+        material: replacementMaterial,
+        text: 'candidate 1 forces retained storage growth for retirement',
+      });
+
+      const publicationThrow = captureThrown(() => glyph.shape());
+      assert.equal(earlierCallbackInvocations, 1, 'the earlier material retirement callback must run once');
+      assert.ok(failingTransformUpdates > 0, 'the callback must enter the later root throwing transform override');
+      assert.equal(
+        traversalRanBeforeLaterCommitCallback,
+        true,
+        'the later transform failure must precede its renderer commit callback',
+      );
+      assert.equal(publicationThrow.present, true);
+      assert.ok(publicationThrow.error instanceof AggregateError);
+      const expectedLaterFailure = laterOutcome.present ? laterOutcome.error : secondaryFailure;
+      assert.deepEqual(publicationThrow.error.errors, [primaryFailure, expectedLaterFailure]);
+      assert.equal(laterCommitCallbackStarted, true, 'the later renderer commit must reach its public callback');
+      assert.equal(laterNotifications.length, 1, 'the later root must notify only its final owned failure');
+      assert.ok(Object.is(laterNotifications[0], expectedLaterFailure));
+      assert.deepEqual(labels[0].commitState(), { status: 'committed', revision: 1 });
+      assert.deepEqual(labels[1].commitState(), { status: 'committed', revision: 1 });
+      assert.ok(Object.is(labels[1].error, expectedLaterFailure));
+      assert.ok(Object.is(groups[1].error, expectedLaterFailure));
+
+      transformMustFail = false;
+      labels[1].text = `recovered ${laterOutcome.name}`;
+      glyph.shape();
+      scenes[1].updateMatrixWorld(true);
+      assert.deepEqual(labels[1].commitState(), { status: 'committed', revision: 2 });
+      assert.equal(labels[1].error, undefined);
+      assert.equal(groups[1].error, undefined);
+      assert.deepEqual(laterNotifications, [expectedLaterFailure]);
+
+      for (const label of labels) label.dispose();
+      for (const group of groups) group.dispose();
+      for (const root of roots) root.dispose();
+    });
+  }
+});
+
+test('a committed later root defers onError traversal until its accepted hook', async (t) => {
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const rootNames = ['post-commit-left', 'post-commit-right'];
+  const roots = rootNames.map((name) => three(name));
+  const scenes = roots.map(() => new THREE.Scene());
+  const groups = roots.map((root) => root.createTextGroup());
+  const primaryFailure = new Error('earlier accepted retirement failure');
+  const secondaryFailure = new Error('later post-commit traversal failure');
+  let transformMustFail = false;
+  let failingTransformUpdates = 0;
+  let laterCommitCallbackCompleted = false;
+  let traversalObservedLaterCommit = false;
+  class ThrowingTransformParent extends THREE.Object3D {
+    updateWorldMatrix(updateParents, updateChildren) {
+      if (transformMustFail) {
+        failingTransformUpdates += 1;
+        traversalObservedLaterCommit ||= laterCommitCallbackCompleted;
+        throw secondaryFailure;
+      }
+      return super.updateWorldMatrix(updateParents, updateChildren);
+    }
+  }
+  const throwingParent = new ThrowingTransformParent();
+  groups[1].add(throwingParent);
+  const earlierMaterial = defineTextMaterial((context) => {
+    const material = context.createDefaultMaterial();
+    material.addEventListener('dispose', () => {
+      throw primaryFailure;
+    });
+    return material;
+  });
+  const laterMaterial = defineTextMaterial((context) => {
+    const material = context.createDefaultMaterial();
+    material.addEventListener('dispose', () => {
+      laterCommitCallbackCompleted = true;
+    });
+    return material;
+  });
+  const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+  const labels = [
+    roots[0].createText({ font, material: earlierMaterial, text: 'A' }),
+    roots[1].createText({ font, material: laterMaterial, text: 'B' }),
+  ];
+  groups[0].add(labels[0]);
+  groups[1].add(labels[1]);
+  scenes[0].add(groups[0]);
+  scenes[1].add(groups[1]);
+  for (const scene of scenes) scene.updateMatrixWorld(true);
+  const laterPublicationObject = rootDraws(scenes[1], rootNames[1])[0]?.parent;
+  assert.ok(laterPublicationObject);
+  scenes[1].add(groups[1]);
+  scenes[1].updateMatrixWorld(true);
+
+  const laterNotifications = [];
+  labels[0].onError = () => {
+    throwingParent.add(labels[1]);
+    transformMustFail = true;
+    scenes[1].updateMatrixWorld(true);
+  };
+  labels[1].onError = (error) => laterNotifications.push(error);
+  labels[0].set({
+    material: replacementMaterial,
+    text: 'post-commit candidate 0 forces retained storage growth for retirement',
+  });
+  labels[1].set({
+    material: replacementMaterial,
+    text: 'post-commit candidate 1 forces retained storage growth for retirement',
+  });
+
+  const publicationThrow = captureThrown(() => glyph.shape());
+  assert.equal(
+    laterCommitCallbackCompleted,
+    true,
+    'the later renderer commit must finish before the earlier onError hook',
+  );
+  assert.ok(failingTransformUpdates > 0, 'the earlier onError hook must enter the later throwing transform override');
+  assert.equal(traversalObservedLaterCommit, true, 'the traversal must occur after the later renderer commit');
+  assert.equal(publicationThrow.present, true);
+  assert.ok(publicationThrow.error instanceof AggregateError);
+  assert.deepEqual(publicationThrow.error.errors, [primaryFailure, secondaryFailure]);
+  assert.deepEqual(laterNotifications, [secondaryFailure]);
+  assert.deepEqual(labels[0].commitState(), { status: 'committed', revision: 1 });
+  assert.deepEqual(labels[1].commitState(), { status: 'committed', revision: 1 });
+  assert.equal(labels[1].error, secondaryFailure);
+  assert.equal(groups[1].error, secondaryFailure);
+
+  transformMustFail = false;
+  labels[1].text = 'post-commit recovery';
+  glyph.shape();
+  scenes[1].updateMatrixWorld(true);
+  assert.deepEqual(labels[1].commitState(), { status: 'committed', revision: 2 });
+  assert.equal(labels[1].error, undefined);
+  assert.equal(groups[1].error, undefined);
+  assert.deepEqual(laterNotifications, [secondaryFailure]);
+
+  for (const label of labels) label.dispose();
+  for (const group of groups) group.dispose();
+  for (const root of roots) root.dispose();
+  font.dispose();
+});
+
 test('a later root keeps its prepared revision and primary retirement failure through cross-root traversal', async (t) => {
   const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
   const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
