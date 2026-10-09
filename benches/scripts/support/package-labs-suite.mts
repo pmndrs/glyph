@@ -4,6 +4,7 @@ export const PACKAGE_LABS_SUITES = [
   'measure',
   'glyphs',
   'publication',
+  'spans',
   'batch',
   'style',
   'reflow',

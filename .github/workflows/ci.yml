@@ -19,6 +19,7 @@ on:
           - measure
           - glyphs
           - publication
+          - spans
           - batch
           - style
           - reflow

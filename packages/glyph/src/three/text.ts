@@ -1853,8 +1853,12 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
   } else {
     const checked = assertSpanRanges(text, stated);
     // Glyph's text compilers hand off package-owned arrays already normalized to this text's cluster grid. Raw caller
-    // arrays still take the exact shared Unicode path; the provenance marker is only a redundant-work fast path.
-    const aligned = areOwnedSpansClusterAligned(text, checked) ? checked : alignSpansToClusters(text, checked);
+    // arrays with new text or boundaries still take the exact shared Unicode path. A previous normalized state also
+    // proves that validated raw spans with the same text and boundaries are already on that grid.
+    const alignmentReused =
+      previous !== undefined && previous.text === text && haveEqualSpanBoundaries(previous.spans, checked);
+    const aligned =
+      areOwnedSpansClusterAligned(text, checked) || alignmentReused ? checked : alignSpansToClusters(text, checked);
     spans = reuseOrCreateTextSpans(previous?.spans, aligned);
   }
   const rootTechniques = immutableFontSelectionFonts(properties.font).map((font) => font.raster);
@@ -1890,6 +1894,16 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
     ...(rasterPixelRatio === undefined ? {} : { rasterPixelRatio }),
     ...(properties.material === undefined ? {} : { material: properties.material }),
   });
+}
+
+function haveEqualSpanBoundaries<Format extends RasterFormatMetadata>(
+  previous: readonly TextSpan<Format>[],
+  next: readonly TextSpan<Format>[],
+): boolean {
+  return (
+    previous.length === next.length &&
+    previous.every((span, index) => span.start === next[index]!.start && span.end === next[index]!.end)
+  );
 }
 
 function replaceDesiredString<Format extends RasterFormatMetadata>(
