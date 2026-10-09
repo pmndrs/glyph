@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { copyFile, mkdtemp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { build } from 'vite';
@@ -58,6 +58,32 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     'package.json',
     'src',
   ]);
+  const maps = packedFiles.filter((path) => path.startsWith('dist/') && path.endsWith('.map'));
+  assert.ok(
+    maps.some((path) => path.endsWith('.js.map')),
+    'JavaScript maps must ship',
+  );
+  assert.ok(
+    maps.some((path) => path.endsWith('.d.ts.map')),
+    'declaration maps must ship',
+  );
+  for (const path of packedFiles.filter((entry) => entry.startsWith('dist/') && entry.endsWith('.js'))) {
+    assert.doesNotMatch(await readFile(join(installedDirectory, path), 'utf8'), /sourceMappingURL=/, path);
+  }
+  for (const path of packedFiles.filter((entry) => entry.startsWith('dist/') && entry.endsWith('.d.ts'))) {
+    const declaration = await readFile(join(installedDirectory, path), 'utf8');
+    for (const [, map] of declaration.matchAll(/sourceMappingURL=([^\s]+)/g)) {
+      assert.ok(packedFiles.includes(join(dirname(path), map)), `${path} must reference a packed map`);
+    }
+  }
+  for (const path of maps) {
+    const map = JSON.parse(await readFile(join(installedDirectory, path), 'utf8'));
+    for (const source of map.sources) {
+      const sourcePath = resolve(dirname(join(installedDirectory, path)), map.sourceRoot ?? '', source);
+      assert.ok(sourcePath.startsWith(`${join(installedDirectory, 'src')}/`), `${path}: ${source}`);
+      assert.ok((await stat(sourcePath)).isFile(), `${path} must resolve to a packed source: ${source}`);
+    }
+  }
   for (const peer of ['typegpu', '@typegpu/gl', '@typegpu/three']) {
     assert.ok(manifest.peerDependencies[peer], `${peer} must be a declared peer`);
     assert.equal(manifest.peerDependenciesMeta[peer]?.optional, true, `${peer} must remain optional`);

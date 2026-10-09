@@ -26,7 +26,6 @@
     "dist",
     "src",
     "!dist/.tsbuildinfo",
-    "!dist/**/*.map",
     "!dist/internal/raster-baker-profile.d.ts",
     "!dist/internal/raster-baker-profile.js"
   ],
