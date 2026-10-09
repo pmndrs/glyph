@@ -1,0 +1,414 @@
+{
+  "baseStream": {
+    "planeBytes": {
+      "cn": 1257,
+      "comp": 2740,
+      "data": 14463,
+      "flags": 11229,
+      "hdr": 802
+    },
+    "roundTripMismatchedGlyphs": 0,
+    "sha256": "62cd258fb9dec0fb99db9c804ea5efdb04f51f3b609ba51f0e664e6e59d9de68",
+    "totalBytes": 30491
+  },
+  "font": {
+    "allOffCurveContours": 0,
+    "components": 544,
+    "explicitMidpointPointsPreserved": 310,
+    "firstOffCurveContours": 0,
+    "glyphs": 800,
+    "kinds": {
+      "composite": 286,
+      "empty": 5,
+      "simple": 509
+    },
+    "nestedComponents": 0,
+    "pointMatchedComponents": 0,
+    "roundXyToGridComponents": 544,
+    "scaledOffsetComponents": 0,
+    "simpleContours": 1257,
+    "simplePoints": 11229,
+    "tables": [
+      "GDEF",
+      "GPOS",
+      "GSUB",
+      "HVAR",
+      "OS/2",
+      "STAT",
+      "avar",
+      "cmap",
+      "fvar",
+      "gasp",
+      "glyf",
+      "gvar",
+      "head",
+      "hhea",
+      "hmtx",
+      "loca",
+      "maxp",
+      "meta",
+      "name",
+      "post",
+      "prep"
+    ],
+    "transformedComponents": 0,
+    "unitsPerEm": 1000,
+    "unscaledOffsetComponents": 0,
+    "useMyMetricsComponents": 0
+  },
+  "instances": {
+    "dynamicStreamReused": true,
+    "exactVsHarfBuzz": {
+      "controlBoundsMismatchedGlyphs": 0,
+      "decomposedCoordinateMismatches": 0,
+      "decomposedMaximumError": 0,
+      "inkBoundsMaximumError": 0,
+      "inkBoundsMismatchedGlyphs": 0,
+      "ownCoordinateMismatches": 0,
+      "ownMaximumError": 0,
+      "topologyMismatchedGlyphs": 0
+    },
+    "f32VsHarfBuzz": {
+      "controlBoundsMismatchedGlyphs": 0,
+      "decomposedCoordinateMismatches": 0,
+      "decomposedMaximumError": 0,
+      "inkBoundsMaximumError": 0,
+      "inkBoundsMismatchedGlyphs": 0,
+      "ownCoordinateMismatches": 0,
+      "ownMaximumError": 0,
+      "topologyMismatchedGlyphs": 0
+    },
+    "fontToolsVsHarfBuzz": {
+      "controlBoundsMismatchedGlyphs": 0,
+      "decomposedCoordinateMismatches": 0,
+      "decomposedMaximumError": 0,
+      "inkBoundsMaximumError": 0,
+      "inkBoundsMismatchedGlyphs": 0,
+      "ownCoordinateMismatches": 0,
+      "ownMaximumError": 0,
+      "topologyMismatchedGlyphs": 0
+    },
+    "gpuCoordinateRange": [-1738, -265, 768, 975],
+    "gpuSlotMismatches": 0,
+    "gpuSlotsCompared": 429400,
+    "gpuTagOrI16RangeFailures": 0,
+    "hvarOracleComparison": {
+      "disagreements": 45,
+      "disagreementsByLocation": [
+        {
+          "kind": "off-named",
+          "maximumError": 1,
+          "values": 3,
+          "wght": 650.0
+        },
+        {
+          "kind": "avar-boundary-below",
+          "maximumError": 1,
+          "values": 2,
+          "wght": 199.99
+        },
+        {
+          "kind": "avar-boundary",
+          "maximumError": 1,
+          "values": 2,
+          "wght": 200.0
+        },
+        {
+          "kind": "avar-boundary-above",
+          "maximumError": 1,
+          "values": 4,
+          "wght": 200.01
+        },
+        {
+          "kind": "avar-boundary-below",
+          "maximumError": 1,
+          "values": 4,
+          "wght": 299.99
+        },
+        {
+          "kind": "avar-boundary",
+          "maximumError": 1,
+          "values": 3,
+          "wght": 300.0
+        },
+        {
+          "kind": "avar-boundary-above",
+          "maximumError": 1,
+          "values": 3,
+          "wght": 300.01
+        },
+        {
+          "kind": "avar-boundary-below",
+          "maximumError": 1,
+          "values": 3,
+          "wght": 499.99
+        },
+        {
+          "kind": "avar-boundary",
+          "maximumError": 1,
+          "values": 3,
+          "wght": 500.0
+        },
+        {
+          "kind": "avar-boundary-above",
+          "maximumError": 1,
+          "values": 3,
+          "wght": 500.01
+        },
+        {
+          "kind": "avar-boundary-below",
+          "maximumError": 1,
+          "values": 3,
+          "wght": 599.99
+        },
+        {
+          "kind": "avar-boundary",
+          "maximumError": 1,
+          "values": 3,
+          "wght": 600.0
+        },
+        {
+          "kind": "avar-boundary-above",
+          "maximumError": 1,
+          "values": 3,
+          "wght": 600.01
+        },
+        {
+          "kind": "avar-boundary-below",
+          "maximumError": 1,
+          "values": 2,
+          "wght": 699.99
+        },
+        {
+          "kind": "avar-boundary",
+          "maximumError": 1,
+          "values": 2,
+          "wght": 700.0
+        },
+        {
+          "kind": "avar-boundary-above",
+          "maximumError": 1,
+          "values": 2,
+          "wght": 700.01
+        }
+      ],
+      "maximumError": 1,
+      "valuesCompared": 30400
+    },
+    "locationCount": 19,
+    "locations": [
+      {
+        "avarNormalized": -1.0,
+        "defaultNormalized": -1.0,
+        "f2Dot14": -16384,
+        "kind": "minimum",
+        "wght": 100.0
+      },
+      {
+        "avarNormalized": 0.0,
+        "defaultNormalized": 0.0,
+        "f2Dot14": 0,
+        "kind": "default",
+        "wght": 400.0
+      },
+      {
+        "avarNormalized": 0.432434082,
+        "defaultNormalized": 0.625,
+        "f2Dot14": 7085,
+        "kind": "off-named",
+        "wght": 650.0
+      },
+      {
+        "avarNormalized": 1.0,
+        "defaultNormalized": 1.0,
+        "f2Dot14": 16384,
+        "kind": "maximum",
+        "wght": 800.0
+      },
+      {
+        "avarNormalized": -0.642883301,
+        "defaultNormalized": -0.6667,
+        "f2Dot14": -10533,
+        "kind": "avar-boundary-below",
+        "wght": 199.99
+      },
+      {
+        "avarNormalized": -0.642883301,
+        "defaultNormalized": -0.666666667,
+        "f2Dot14": -10533,
+        "kind": "avar-boundary",
+        "wght": 200.0
+      },
+      {
+        "avarNormalized": -0.642822266,
+        "defaultNormalized": -0.666633333,
+        "f2Dot14": -10532,
+        "kind": "avar-boundary-above",
+        "wght": 200.01
+      },
+      {
+        "avarNormalized": -0.357177734,
+        "defaultNormalized": -0.333366667,
+        "f2Dot14": -5852,
+        "kind": "avar-boundary-below",
+        "wght": 299.99
+      },
+      {
+        "avarNormalized": -0.357116699,
+        "defaultNormalized": -0.333333333,
+        "f2Dot14": -5851,
+        "kind": "avar-boundary",
+        "wght": 300.0
+      },
+      {
+        "avarNormalized": -0.357116699,
+        "defaultNormalized": -0.3333,
+        "f2Dot14": -5851,
+        "kind": "avar-boundary-above",
+        "wght": 300.01
+      },
+      {
+        "avarNormalized": 0.108093262,
+        "defaultNormalized": 0.249975,
+        "f2Dot14": 1771,
+        "kind": "avar-boundary-below",
+        "wght": 499.99
+      },
+      {
+        "avarNormalized": 0.108093262,
+        "defaultNormalized": 0.25,
+        "f2Dot14": 1771,
+        "kind": "avar-boundary",
+        "wght": 500.0
+      },
+      {
+        "avarNormalized": 0.108093262,
+        "defaultNormalized": 0.250025,
+        "f2Dot14": 1771,
+        "kind": "avar-boundary-above",
+        "wght": 500.01
+      },
+      {
+        "avarNormalized": 0.32434082,
+        "defaultNormalized": 0.499975,
+        "f2Dot14": 5314,
+        "kind": "avar-boundary-below",
+        "wght": 599.99
+      },
+      {
+        "avarNormalized": 0.32434082,
+        "defaultNormalized": 0.5,
+        "f2Dot14": 5314,
+        "kind": "avar-boundary",
+        "wght": 600.0
+      },
+      {
+        "avarNormalized": 0.32434082,
+        "defaultNormalized": 0.500025,
+        "f2Dot14": 5314,
+        "kind": "avar-boundary-above",
+        "wght": 600.01
+      },
+      {
+        "avarNormalized": 0.540527344,
+        "defaultNormalized": 0.749975,
+        "f2Dot14": 8856,
+        "kind": "avar-boundary-below",
+        "wght": 699.99
+      },
+      {
+        "avarNormalized": 0.540527344,
+        "defaultNormalized": 0.75,
+        "f2Dot14": 8856,
+        "kind": "avar-boundary",
+        "wght": 700.0
+      },
+      {
+        "avarNormalized": 0.540588379,
+        "defaultNormalized": 0.750025,
+        "f2Dot14": 8857,
+        "kind": "avar-boundary-above",
+        "wght": 700.01
+      }
+    ],
+    "maximumGlyphsWithChangedAdvance": 0,
+    "maximumGlyphsWithChangedSideBearing": 588
+  },
+  "limits": {
+    "componentRoundFlagStoredByCurrentProposal": false,
+    "gpuExecuted": false,
+    "paperExercisesCff2": false,
+    "paperExercisesNestedComponents": false,
+    "paperExercisesPointMatchedComponents": false,
+    "paperExercisesTransformedComponents": false,
+    "paperExercisesVarc": false
+  },
+  "schemaVersion": 2,
+  "slugBands": {
+    "bandCountPerAxis": 16,
+    "defaultListsReusedAtOtherInstancesMissingReferences": 122418,
+    "defaultListsReusedAtOtherInstancesOrderInversions": 7211,
+    "maximumReferencesPerBand": 66,
+    "proof": "CPU structural proof against the current instanced-maximum early-exit ordering; no GPU call",
+    "rebuiltAdjacentOrderInversions": 0,
+    "rebuiltListsChecked": 486400,
+    "rebuiltMissingReferences": 0,
+    "rebuiltReferences": 2070327
+  },
+  "sources": {
+    "fontTools": "4.59.2",
+    "harfBuzz": "hb-shape (HarfBuzz) 14.2.0",
+    "paperMonoCommit": "e6eaeceaef02e77e3db997711e07a16378de2bd7",
+    "paperMonoSha256": "43369c40e211aab9dda29464b0d715c9f20d90118626a56659607108c9c03dfe",
+    "paperMonoUrl": "https://github.com/paper-design/paper-mono/blob/e6eaeceaef02e77e3db997711e07a16378de2bd7/fonts/variable/PaperMono%5Bwght%5D.ttf"
+  },
+  "ss02": {
+    "alternatesExpected": 16,
+    "alternatesPresentInStream": 16,
+    "disabledAdvances": [606],
+    "enabledAdvances": [758],
+    "shapedGlyphsChecked": 608,
+    "shapingOrAdvanceMismatches": 0,
+    "substitutionsObserved": 304
+  },
+  "variationStream": {
+    "axes": [
+      {
+        "avar": [
+          [-16384, -16384],
+          [-10923, -10533],
+          [-5461, -5851],
+          [0, 0],
+          [4096, 1771],
+          [8192, 5314],
+          [12288, 8856],
+          [16384, 16384]
+        ],
+        "default": 400.0,
+        "maximum": 800.0,
+        "minimum": 100.0,
+        "tag": "wght"
+      }
+    ],
+    "axisTableBytes": 50,
+    "compositeGlyphsWithNonzeroDeltas": 155,
+    "deltaPlaneBytes": {
+      "ddata": 16963,
+      "dflags": 17550,
+      "points": 3814,
+      "presence": 400
+    },
+    "deltaTotalBytes": 38727,
+    "explicitDeltas": 17550,
+    "glyphsWithNonzeroDeltas": 629,
+    "maximumPredictedDeltaMagnitude": 222,
+    "phantomTuplesWithNonzeroDeltas": 0,
+    "regionTableBytes": 25,
+    "regions": 4,
+    "roundTripMismatchedGlyphs": 0,
+    "sha256": "2e301d73a98a38d6cdc9f846c58d07ef989362b3d32e70f70383fa10f4819315",
+    "tuplePointSlots": 20089,
+    "tuples": 1222,
+    "untouchedDeltas": 2539
+  }
+}

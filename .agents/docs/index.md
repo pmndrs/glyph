@@ -22,6 +22,8 @@ okf_version: '0.2'
 - [Merged v0 raster and baker plugin guide](planning/raster-baker-plugin.md) — build against the implemented combined runtime/renderer module before the target v1 extraction replaces it.
 - [External gpucat integration fitness plan](planning/gpucat-integration.md) — source-validated proof plan for consuming the target v1 core without private imports or core changes.
 
+- [Variable font implementation handoff](planning/paper-mono-variable-fonts.md) — Paper Mono evidence, outline design provenance, and remaining acceptance gates.
+
 ## Architecture and data contracts
 
 - [Architecture](planning/architecture.md) — ownership, loading, shaping, paragraph, and raster boundaries.

@@ -1965,3 +1965,7 @@ checks cover vertex/fragment layouts, replacement, parent-view isolation, missin
 The Three split is exercised through `pnpm scripts run benchmark:v1-bitmap`, with `-- --typegpu` selecting the experimental entry. The same Bitmap, MTSDF, Slug, decoration, retained-update, detached-glyph, and custom-material assertions run on WebGPU and WebGL2 for either config. A focused package test also runs one Bitmap-plus-decoration material factory through `/three` and `/three/typegpu` and requires the same shader context. The packed-consumer test bundles the root and stable `/three` while rejecting any TypeGPU peer request, then proves the TypeGPU shader, direct-renderer, and Three bridge entries both request their optional peers and bundle when those peers are supplied externally.
 
 The split verification on 2026-09-07 passed both browser workflows. Bitmap produced 3,109 lit pixels with native TSL and 2,685 with the experimental shaders on each backend; custom Bitmap composition likewise produced 2,642 versus 2,185. MTSDF and Slug lit-pixel counts matched in these fixtures. These checks establish rendering and lifecycle behavior, not complete visual parity; the Bitmap difference remains a reason to keep the experimental entry separate.
+
+## Variable outline research
+
+The [Paper Mono handoff](../planning/paper-mono-variable-fonts.md) and [CPU validation report](../reports/2026-10-08-paper-mono-support.md) support #99/#244. The reproducible package-owned probe lives under `research/paper-mono`; it does not add production variable-font support.
