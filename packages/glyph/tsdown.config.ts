@@ -23,7 +23,7 @@ const shared = defineConfig({
     neverBundle: true,
   },
   exports: false,
-  // The package excludes the map files, so the emitted modules must not reference them.
+  // Ship maps for external tooling while keeping browser modules free of map references.
   sourcemap: 'hidden',
   report: false,
   // Auto-naming wraps constructor calls outside their PURE annotations, preventing

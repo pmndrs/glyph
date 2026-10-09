@@ -5,6 +5,7 @@ import { basename, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { captureCommand } from './support/capture-command.mjs';
+import { rewritePublishedSourceMaps } from './support/published-source-maps.mjs';
 import { writeGeneratedTypescriptAbi } from './support/generated-typescript-abi.mjs';
 import { reproducibleRustEnvironment } from './support/reproducible-rust-env.mjs';
 
@@ -280,6 +281,7 @@ await run(tsc, [
 // private test seams out of the public module graph while the published subpaths share
 // package-owned chunks and TypeGPU metadata compiled at publish time.
 await run(tsdown, ['--out-dir', fileURLToPath(stagingDirectory), '--no-clean']);
+await rewritePublishedSourceMaps(stagingPath, fileURLToPath(distributionDirectory), join(packageRoot, 'src'));
 await run(wasmOpt, [
   '--enable-bulk-memory',
   '--enable-nontrapping-float-to-int',
