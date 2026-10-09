@@ -59,3 +59,21 @@ single primary notifications, deterministic transform recovery, both real dispos
 differential. Authenticated fixture bodies were materialized from the recovery checkout and restored to their exact Git
 LFS pointer contents afterward. No Labs, install, server, full package check, or CI workflow ran; exact-artifact publication
 Labs, remote CI, and a final independent review of this corrected head remain release gates.
+
+The corrected terminal review of `7fc2918e` was not clear. It found two inherited source-traced gaps that the accepted
+publication invariant still had to close: geometry retirement could run callback traversal before the candidate scope
+index became authoritative, and an earlier root's notification could mutate a later root's staged revision and traverse
+it before that root consumed its already-accepted retirement failure. It also found that the full draw/layout/visibility
+oracle did not independently prove which realized material the replacement draw owned.
+
+This source-only correction rebased without conflicts onto `5486a552`, preserving the release-scale visibility coverage.
+The renderer now installs candidate draw/scope and resource authority before add/remove/disposal callbacks while retaining
+the previous draw array locally for retirement and preserving reused-metadata-before-transform ordering. Root acceptance
+uses the revision captured in the existing preparation loop, leaving callback-authored later revisions and measurements
+pending. The existing explicit publication-failure wrapper gates only secondary traversal reporting while that root's
+primary accepted-retirement settlement is pending. Public regressions specify callback-time hidden geometry replacement,
+the exact warm replacement material realization, and a two-root `undefined`/`0` case whose callback update stays pending,
+whose secondary throwing transform is not reported, and whose next publication matches a full cold renderer snapshot.
+These new source and test changes have not yet been built or executed; the prior validation above does not cover them.
+Targeted type/static/format checks, the Glyph build, focused and package Node tests, exact-head independent review, Labs,
+and remote CI remain pending.

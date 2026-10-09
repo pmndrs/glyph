@@ -726,6 +726,11 @@ irreversible. A caller-owned `dispose` or final matrix-update callback that thro
 only after Three and the retained planner accept the same candidate. The public shaping call still throws that callback
 error and the affected Text/TextGroup records it, while `commitState()` reports the newly accepted revision; later
 visibility, transforms, and render order continue from that publication rather than from a rejected-core split state.
+The commit installs the candidate resource, transform, draw, and batch-scope authority before invoking any host add,
+remove, geometry-disposal, or resource-disposal callback; it retains the previous draw array only as the local retirement
+source. Reused draw metadata still updates before transform commit. An accepted hook commits the exact revision captured
+for engine preparation, not a callback-mutable staged revision, so a different Text update authored by an earlier root's
+notification remains pending and publishes through the ordinary next shape call.
 Public Text, root, and handle disposal first use the engine's existing mutation gate, so a disposal attempted from a
 borrowed publication callback rejects before changing lifecycle flags, root membership, or shape participation. Text
 preflights at the root-membership boundary even when it is detached and has no publication entry. The same gate remains
@@ -737,7 +742,10 @@ updates it, successful publication clears current Text state plus the retained g
 participants or rediscovering ancestry, and group disposal releases the group from the same set and clears its terminal
 error state after lifecycle preflight. The root admits only the outermost attribution through state installation and user
 notifications, so callback-driven scene traversal cannot replace that in-flight failure with a secondary reconciliation
-or transform error. Disposed groups cannot be reacquired by later attribution. Arbitrary callback throws, including
+or transform error. Before a later root consumes its accepted-retirement failure, the renderer's existing explicit
+failure-presence wrapper also owns that root's settlement phase; nested traversal may continue useful host observation but
+cannot report a secondary reconciliation or transform error ahead of the primary. Disposed groups cannot be reacquired by
+later attribution. Arbitrary callback throws, including
 `undefined`, `null`, and `0`, retain their identity through `onError` and the public shaping throw. The
 accepted hook also preserves that retirement value if reentrant notification changes hierarchy and the following initial
 transform synchronization throws: synchronization errors surface when no earlier publication failure exists, and failed

@@ -3336,8 +3336,10 @@ test('throwing Three retirement callbacks preserve the accepted publication', as
       const group = three.createTextGroup({ renderOrder: 3 });
       const disposalError = new Error(`application ${resource} dispose listener failure`);
       let disposalEvents = 0;
+      const acceptedMaterials = [];
       const acceptedMaterial = defineTextMaterial((context) => {
         const realized = context.createDefaultMaterial();
+        acceptedMaterials.push(realized);
         if (resource === 'material') {
           realized.addEventListener('dispose', () => {
             disposalEvents += 1;
@@ -3346,18 +3348,26 @@ test('throwing Three retirement callbacks preserve the accepted publication', as
         }
         return realized;
       });
-      const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+      const replacementMaterials = [];
+      const replacementMaterial = defineTextMaterial((context) => {
+        const realized = context.createDefaultMaterial();
+        replacementMaterials.push(realized);
+        return realized;
+      });
       const label = three.createText({ font, material: acceptedMaterial, text: 'A' });
       group.add(label);
       scene.add(group);
       scene.updateMatrixWorld(true);
       const acceptedDraw = rootDraws(scene)[0];
       assert.ok(acceptedDraw);
+      assert.equal(acceptedDraw.material, acceptedMaterials[0], 'the accepted draw must use its realized material');
       const acceptedRevision = label.commitState();
       assert.deepEqual(acceptedRevision, { status: 'committed', revision: 0 });
       if (resource === 'geometry') {
         acceptedDraw.geometry.addEventListener('dispose', () => {
           disposalEvents += 1;
+          group.visible = false;
+          scene.updateMatrixWorld(true);
           throw disposalError;
         });
       }
@@ -3372,7 +3382,23 @@ test('throwing Three retirement callbacks preserve the accepted publication', as
 
       const replacementDraw = rootDraws(scene)[0];
       assert.notEqual(replacementDraw, acceptedDraw, 'the replacement draw must be the published host branch');
+      assert.equal(
+        replacementDraw.material,
+        replacementMaterials[0],
+        'the replacement draw must use the newly realized material',
+      );
+      assert.notEqual(
+        replacementDraw.material,
+        acceptedDraw.material,
+        'the retired material must not remain installed',
+      );
       assert.equal(disposalEvents, 1, `the retired ${resource} must be disposed exactly once`);
+      if (resource === 'geometry') {
+        assert.equal(group.visible, false, 'the geometry callback must mutate the accepted scope');
+        assert.equal(replacementDraw.visible, false, 'callback traversal must update the candidate draw');
+        scene.updateMatrixWorld(true);
+        assert.equal(replacementDraw.visible, false, 'an unchanged later traversal must preserve candidate visibility');
+      }
       assert.deepEqual(
         label.commitState(),
         { status: 'committed', revision: 2 },
@@ -3387,7 +3413,7 @@ test('throwing Three retirement callbacks preserve the accepted publication', as
         material: replacementMaterial,
         renderOrder: 3,
         text: label.text,
-        visible: true,
+        visible: group.visible,
         x: 0,
       };
       const mounted = new Map([[entry.id, { group, label }]]);
@@ -3876,6 +3902,160 @@ test('accepted retirement failures outrank reentrant notification traversal and 
   for (const label of labels) label.dispose();
   for (const group of groups) group.dispose();
   for (const root of roots) root.dispose();
+  font.dispose();
+});
+
+test('a later root keeps its prepared revision and primary retirement failure through cross-root traversal', async (t) => {
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const rootNames = ['cross-root-left', 'cross-root-right'];
+  const roots = rootNames.map((name) => three(name));
+  const scenes = roots.map(() => new THREE.Scene());
+  const groups = roots.map((root) => root.createTextGroup());
+  const primaryFailures = [undefined, 0];
+  const candidateText = 'candidate publication';
+  const callbackText = 'callback update remains pending until the next shape';
+  const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+  const transformFailure = new Error('secondary cross-root transform failure');
+  let transformMustFail = true;
+  let successfulTransformUpdates = 0;
+  class ThrowingTransformParent extends THREE.Object3D {
+    updateWorldMatrix(updateParents, updateChildren) {
+      if (transformMustFail) throw transformFailure;
+      successfulTransformUpdates += 1;
+      return super.updateWorldMatrix(updateParents, updateChildren);
+    }
+  }
+  const throwingParent = new ThrowingTransformParent();
+  groups[1].add(throwingParent);
+  const labels = primaryFailures.map((primaryFailure, index) => {
+    const retiringMaterial = defineTextMaterial((context) => {
+      const material = context.createDefaultMaterial();
+      material.addEventListener('dispose', () => {
+        throw primaryFailure;
+      });
+      return material;
+    });
+    const label = roots[index].createText({ font, material: retiringMaterial, text: `initial ${String(index)}` });
+    groups[index].add(label);
+    scenes[index].add(groups[index]);
+    return label;
+  });
+  for (const scene of scenes) scene.updateMatrixWorld(true);
+
+  const candidateEntry = {
+    id: 0,
+    batching: 'auto',
+    color: '#ffffff',
+    material: replacementMaterial,
+    renderOrder: 0,
+    text: candidateText,
+    visible: true,
+    x: 0,
+  };
+  const callbackEntry = { ...candidateEntry, text: callbackText };
+  const coldCandidateName = 'cross-root-candidate-cold';
+  const coldCandidate = three(coldCandidateName);
+  const coldCandidateScene = new THREE.Scene();
+  const coldCandidateMounted = new Map([
+    [candidateEntry.id, mountRendererDifferentialEntry(coldCandidate, font, coldCandidateScene, candidateEntry)],
+  ]);
+  coldCandidateScene.updateMatrixWorld(true);
+  const candidateSnapshot = rendererDifferentialSnapshot(
+    coldCandidateScene,
+    coldCandidateName,
+    [candidateEntry],
+    coldCandidateMounted,
+  );
+  const coldCallbackName = 'cross-root-callback-cold';
+  const coldCallback = three(coldCallbackName);
+  const coldCallbackScene = new THREE.Scene();
+  const coldCallbackMounted = new Map([
+    [callbackEntry.id, mountRendererDifferentialEntry(coldCallback, font, coldCallbackScene, callbackEntry)],
+  ]);
+  coldCallbackScene.updateMatrixWorld(true);
+  const callbackSnapshot = rendererDifferentialSnapshot(
+    coldCallbackScene,
+    coldCallbackName,
+    [callbackEntry],
+    coldCallbackMounted,
+  );
+  assert.notDeepEqual(candidateSnapshot.draws, callbackSnapshot.draws, 'the cold renderer oracles must discriminate');
+
+  const notifications = [];
+  let callbackTraversalCompleted = false;
+  labels[0].onError = (error) => {
+    notifications.push([0, error]);
+    labels[1].text = callbackText;
+    throwingParent.add(labels[1]);
+    scenes[1].updateMatrixWorld(true);
+    callbackTraversalCompleted = true;
+  };
+  labels[1].onError = (error) => notifications.push([1, error]);
+  for (const label of labels) label.set({ material: replacementMaterial, text: candidateText });
+
+  const publicationThrow = captureThrown(() => glyph.shape());
+  assert.equal(publicationThrow.present, true);
+  assert.ok(publicationThrow.error instanceof AggregateError);
+  assert.equal(publicationThrow.error.errors.length, 2);
+  assert.ok(Object.is(publicationThrow.error.errors[0], undefined));
+  assert.ok(Object.is(publicationThrow.error.errors[1], 0));
+  assert.equal(publicationThrow.error.errors.includes(transformFailure), false);
+  assert.equal(callbackTraversalCompleted, true, 'the first root callback must traverse the later root');
+  assert.equal(labels[1].parent, throwingParent, 'the callback must install the throwing transform ancestor');
+  assert.deepEqual(notifications, [
+    [0, undefined],
+    [1, 0],
+  ]);
+  assert.deepEqual(labels[0].commitState(), { status: 'committed', revision: 1 });
+  assert.deepEqual(labels[1].commitState(), { status: 'pending' });
+  for (const [index, label] of labels.entries()) {
+    assert.ok(Object.is(label.error, primaryFailures[index]));
+    assert.ok(Object.is(groups[index].error, primaryFailures[index]));
+  }
+  const acceptedDrawSnapshot = rendererDifferentialSnapshot(scenes[1], rootNames[1], [], new Map()).draws;
+  assert.deepEqual(
+    acceptedDrawSnapshot,
+    candidateSnapshot.draws,
+    'the later root renderer must retain the exact prepared candidate while its callback update stays pending',
+  );
+  assert.notDeepEqual(acceptedDrawSnapshot, callbackSnapshot.draws);
+
+  transformMustFail = false;
+  glyph.shape();
+  assert.deepEqual(labels[1].commitState(), { status: 'committed', revision: 2 });
+  assert.equal(labels[1].error, undefined);
+  assert.equal(groups[1].error, undefined);
+  const recoveredSnapshot = rendererDifferentialSnapshot(
+    scenes[1],
+    rootNames[1],
+    [callbackEntry],
+    new Map([[callbackEntry.id, { group: groups[1], label: labels[1] }]]),
+  );
+  assert.deepEqual(
+    recoveredSnapshot,
+    callbackSnapshot,
+    'the later callback update must recover to the full cold renderer',
+  );
+  assert.ok(successfulTransformUpdates > 0, 'the guarded transform traversal must recover deterministically');
+  assert.deepEqual(notifications, [
+    [0, undefined],
+    [1, 0],
+  ]);
+
+  for (const label of labels) label.dispose();
+  for (const group of groups) group.dispose();
+  for (const root of roots) root.dispose();
+  for (const { label, group } of coldCandidateMounted.values()) {
+    label.dispose();
+    group.dispose();
+  }
+  for (const { label, group } of coldCallbackMounted.values()) {
+    label.dispose();
+    group.dispose();
+  }
+  coldCandidate.dispose();
+  coldCallback.dispose();
   font.dispose();
 });
 

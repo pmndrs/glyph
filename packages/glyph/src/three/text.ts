@@ -150,7 +150,7 @@ interface TextReconciler {
   desiredRevision(text: Text<RasterFormatMetadata>): number;
   update<Format extends RasterFormatMetadata>(text: Text<Format>, update: TextUpdate<Format>): boolean;
   root(text: Text<RasterFormatMetadata>): ThreeRootHost;
-  markCommitted(text: Text<RasterFormatMetadata>): void;
+  markCommitted(text: Text<RasterFormatMetadata>, revision: number): void;
   publishMeasurement(text: Text<RasterFormatMetadata>, measurement: ParagraphLayoutSummary): void;
   bind(text: Text<RasterFormatMetadata>, binding: ThreeRootPublication, group: TextGroup | undefined): void;
   unbindFrom(text: Text<RasterFormatMetadata>, binding: ThreeRootPublication): void;
@@ -653,7 +653,7 @@ export class ThreeRootHost {
     try {
       if (this.#binding?.needsReconcile(texts) === true) this.#services.invalidate();
     } catch (error) {
-      this.#reportError(error, texts);
+      if (!this.#renderer.hasPendingPublicationFailure()) this.#reportError(error, texts);
       return;
     }
     try {
@@ -664,7 +664,7 @@ export class ThreeRootHost {
     try {
       this.#syncTransforms(worldMatricesCurrent, texts);
     } catch (error) {
-      this.#reportError(error, texts);
+      if (!this.#renderer.hasPendingPublicationFailure()) this.#reportError(error, texts);
     }
   }
 
@@ -802,7 +802,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       desiredRevision: (text) => text.#desiredRevision,
       update: (text, update) => text.#applyUpdate(update, false),
       root: (text) => text.#root,
-      markCommitted: (text) => text.#markCommitted(),
+      markCommitted: (text, revision) => text.#markCommitted(revision),
       publishMeasurement: (text, measurement) => text.#setBoundingBox(measurement),
       bind: (text, binding, group) => text.#bind(binding, group),
       unbindFrom: (text, binding) => text.#unbindFrom(binding),
@@ -1121,8 +1121,8 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     for (const font of this.#ownedFonts) font.dispose();
   }
 
-  #markCommitted(): void {
-    this.#committedRevision = this.#desiredRevision;
+  #markCommitted(revision: number): void {
+    this.#committedRevision = revision;
   }
 
   #setBoundingBox(measurement: ParagraphLayoutSummary): void {
@@ -1345,6 +1345,7 @@ export class TextGroup extends THREE.Object3D {
 interface BoundTextEntry {
   readonly handle: GlyphTextController<RasterFormatMetadata, ThreeMaterialBinding, THREE.Object3D>;
   stagedRevision: number;
+  preparedRevision: number | undefined;
   stagedOrder: number;
   stagedOrderScope: TextGroup | undefined;
   stagedOrderRank: number;
@@ -1673,7 +1674,10 @@ class ThreeRootPublication {
   prepareShape(): import('../config/glyph.js').GlyphShapeOptions | false {
     this.#assertActive();
     let required = 0;
-    for (const text of this.#entries.keys()) required += text.text.length;
+    for (const [text, entry] of this.#entries) {
+      required += text.text.length;
+      entry.preparedRevision = entry.stagedRevision;
+    }
     if (this.#capacity.policy === 'fixed' && required > this.#capacity.size) {
       this.#capacityExceeded = Object.freeze({ required, size: this.#capacity.size });
       return false;
@@ -1687,19 +1691,21 @@ class ThreeRootPublication {
     this.#rendererUpdateRejected = false;
     this.#inspections.clear();
     for (const [text, entry] of this.#entries) {
-      entry.committedRevision = entry.stagedRevision;
-      reconciler.markCommitted(text);
+      const acceptedRevision = entry.preparedRevision;
+      entry.preparedRevision = undefined;
+      if (acceptedRevision === undefined) continue;
+      entry.committedRevision = acceptedRevision;
+      reconciler.markCommitted(text, acceptedRevision);
+      if (entry.stagedRevision === acceptedRevision && this.#pendingMeasurements.delete(text)) {
+        reconciler.publishMeasurement(text, entry.handle.measure());
+      }
     }
-    for (const text of this.#pendingMeasurements) {
-      const entry = this.#entries.get(text);
-      if (entry !== undefined) reconciler.publishMeasurement(text, entry.handle.measure());
-    }
-    this.#pendingMeasurements.clear();
   }
 
   rejectShape(): void {
     this.#assertActive();
     this.#rendererUpdateRejected = true;
+    for (const entry of this.#entries.values()) entry.preparedRevision = undefined;
   }
 
   syncTransforms(worldMatricesCurrent: boolean): void {
@@ -1758,6 +1764,7 @@ class ThreeRootPublication {
       this.#entries.set(text, {
         handle,
         stagedRevision: revision,
+        preparedRevision: undefined,
         stagedOrder: order,
         stagedOrderScope: orderScope,
         stagedOrderRank: orderRank,

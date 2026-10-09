@@ -244,6 +244,11 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     return failure;
   }
 
+  /** Whether an accepted publication failure still belongs to this root's pending settlement hook. */
+  hasPendingPublicationFailure(): boolean {
+    return this.#publicationFailure !== undefined;
+  }
+
   #syncTransformsCore(transformIds: Iterable<number>, worldMatricesCurrent: boolean): number {
     return this.#transformSynchronizer.sync(this.#transformState, transformIds, worldMatricesCurrent);
   }
@@ -385,6 +390,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
 
   #commit(prepared: PreparedPublication): Readonly<{ error: unknown }> | undefined {
     let failure: Readonly<{ error: unknown }> | undefined;
+    const previousDraws = this.#draws;
     const retiredTransformAttribute =
       prepared.replacesDraws && prepared.context.transformAttribute !== this.#transformAttribute
         ? this.#transformAttribute
@@ -405,16 +411,6 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     if (prepared.replacesDraws) {
       commitTransforms(prepared.context.transformAttribute, prepared.transforms);
       for (const update of prepared.transforms.direct) applyTransformUpdate(update);
-    }
-    if (prepared.draws.changed) {
-      for (const mesh of prepared.draws.draws) {
-        if (mesh.parent !== prepared.draws.root) attempt(() => prepared.draws.root.add(mesh));
-      }
-      for (const mesh of this.#draws) {
-        if (prepared.draws.reused.has(mesh)) continue;
-        attempt(() => mesh.removeFromParent());
-        attempt(() => mesh.geometry.dispose());
-      }
     }
     this.#buffers = prepared.context.buffers;
     this.#resources = prepared.context.resources;
@@ -441,6 +437,16 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       this.#batchDrawsByScope = prepared.draws.batchDrawsByScope;
     }
     for (const material of prepared.context.newMaterials) this.#ownedMaterials.add(material);
+    if (prepared.draws.changed) {
+      for (const mesh of prepared.draws.draws) {
+        if (mesh.parent !== prepared.draws.root) attempt(() => prepared.draws.root.add(mesh));
+      }
+      for (const mesh of previousDraws) {
+        if (prepared.draws.reused.has(mesh)) continue;
+        attempt(() => mesh.removeFromParent());
+        attempt(() => mesh.geometry.dispose());
+      }
+    }
     for (const material of prepared.retiredMaterials) attempt(() => material.dispose());
     for (const texture of prepared.retiredTextures) attempt(() => texture.dispose());
     for (const buffer of retiredBuffers) attempt(() => buffer.attribute.dispose());
