@@ -26,6 +26,7 @@ on:
           - stress
           - cold
           - edit
+          - edit-sized
           - full
 
 permissions:

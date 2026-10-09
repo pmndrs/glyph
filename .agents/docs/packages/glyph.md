@@ -1497,6 +1497,24 @@ identity; the first storage mismatch falls back to complete batch discovery. Thr
 shaper is 1,157,311 raw bytes, a 4,189-byte increase, and retained high-water memory is 79.81 MiB. The repeated median gain
 is established; the roughly 5.74 ms p95 and 81.4–81.6% RSD still fail the tail-latency gate.
 
+Patch-only publications now omit the immutable resource, buffer, primitive, and draw bindings when the pending plan
+proves the committed batch count, batch state, buffer identity and capacity, primitives, and draws are unchanged and no
+retirement is pending. Physical patches remain the complete mutable payload; abort preserves the accepted bytes and a
+retry remains patch-only. In a fresh-package four-block Labs comparison, eleven color-only lanes improved by 30.8–46.1%;
+the twelfth was inconclusive, while same-length and length-changing text lanes were neutral. Named-Wasm profiles found no shaping samples
+for color-only edits, but the 1,000-label candidate still spent time in retained update, gather, and render-plan prepare
+and scaled 11.4× from 10 labels. Text edits that change instance-span metadata still require the root display-list group
+replacement because the wire contract has no partial immutable-metadata patch. The edit-sized acceptance gate therefore
+remains open; this change removes redundant serialization and host reconciliation for the compatible patch-only class
+without adding a scheduler, cache, reconciliation system, or public API.
+
+The retained-publication regression suite replays emitted allocation/write/retirement records into a test host and
+compares active buffer bytes and draw metadata against forced full checkpoints over 4,096 deterministic mutation steps.
+The two storage policies cover content edits, no-ops, metadata changes, resources, capacity growth, removal, reordering,
+empty roots, and rejected preparations followed by retries. The oracle bypasses both retained topology and binding
+elision, while focused tests still own exact patch ranges and rejection semantics. Run the Rust engine and authenticated
+outline/Unicode tests with `pnpm scripts run glyph:shaper-tests`, optionally passing a test-name filter.
+
 Three retains pending attribute upload ranges until its renderer consumes them. Consecutive Rust publications and
 presentation-origin restoration before rendering coalesce overlapping or adjacent ranges instead of clearing earlier
 writes. Paragraph transform identities return to a binding-local free list only after the Rust removal

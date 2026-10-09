@@ -784,7 +784,12 @@ Run `pnpm scripts list benchmark` from the workspace root to discover current be
 
 CPU comparisons use two fresh-process `@pmndrs/labs` lanes. `benchmark:labs-package` installs packed or registry
 artifacts and measures the public API; its default smoke suite covers common layout, measurement, style, and retained
-publication work. `benchmark:labs-internal` is reserved for workspace-only implementation experiments that cannot ship in
+publication work. Its `edit-sized` suite isolates first and last same-length, length-changing, and color-only edits in
+10-, 100-, and 1,000-label roots, plus batched and interleaved edit-read paths at 100 labels; warm setup and untimed
+semantic checks surround every timed mutation. `benchmark:edit-sized-publication-profile` installs one packed artifact
+and optionally substitutes a named shaper Wasm, then emits a CPU profile, timing summary, and manifest for shaping,
+gather, render-plan, serialization, allocation, host-JavaScript, and other-Wasm attribution.
+`benchmark:labs-internal` is reserved for workspace-only implementation experiments that cannot ship in
 the package artifact. Its `engine` suite preserves the raw retained-engine invalidation classes across selectable Bitmap,
 MTSDF, and Slug artifacts and Latin, bidi, and CJK corpora. Its `kernel` suite measures the scalar,
 compiler-vectorized, and explicit-SIMD artifacts at 22k and 86k target scales, preserving exact output-hash and
@@ -800,14 +805,15 @@ semantic result afterward with package-owned counts, encoded bytes,
 borrowed glyph checksums, or draw topology. Compatibility probes and old-canary adapters run once during fixture setup;
 candidate-only helpers are required before timing begins.
 
-| Need                                  | Command                                                                                                                            |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Common installed-package signal       | `pnpm scripts run benchmark:labs-package -- --candidate <package-or-tgz>`                                                          |
-| Focused/full installed-package signal | add `--suite layout`, `measure`, `glyphs`, `publication`, `spans`, `batch`, `style`, `reflow`, `stress`, `cold`, `edit`, or `full` |
-| Raw retained-engine signal            | `pnpm scripts run benchmark:labs-internal -- --suite <engine-case>`                                                                |
-| Kernel signal                         | build with `glyph:kernel-lab-build`, then select `kernel`, `pack`, `break`, or `bidi`                                              |
-| Generator signal                      | `pnpm scripts run benchmark:labs-internal -- --suite mtsdf-generator`                                                              |
-| Browser/GPU/frame signal              | select the maintained `benchmark:*` or `glyph:kernel-lab-browser` workflow from the index                                          |
+| Need                                  | Command                                                                                                                                 |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Common installed-package signal       | `pnpm scripts run benchmark:labs-package -- --candidate <package-or-tgz>`                                                               |
+| Focused/full installed-package signal | add `--suite layout`, `measure`, `glyphs`, `publication`, `spans`, `batch`, `style`, `reflow`, `stress`, `cold`, `edit`, `edit-sized`, or `full` |
+| Edit-sized stage profile              | `pnpm scripts run benchmark:edit-sized-publication-profile -- --artifact <tgz> [--wasm <named-wasm>] --case <case>`                     |
+| Raw retained-engine signal            | `pnpm scripts run benchmark:labs-internal -- --suite <engine-case>`                                                                     |
+| Kernel signal                         | build with `glyph:kernel-lab-build`, then select `kernel`, `pack`, `break`, or `bidi`                                                   |
+| Generator signal                      | `pnpm scripts run benchmark:labs-internal -- --suite mtsdf-generator`                                                                   |
+| Browser/GPU/frame signal              | select the maintained `benchmark:*` or `glyph:kernel-lab-browser` workflow from the index                                               |
 
 Both Labs runners inspect the saved result and fail on an empty selection or any recorded benchmark-body error; Labs
 0.9.0 can otherwise print such an error and still exit zero. Generator fixture scripts may print elapsed progress while
