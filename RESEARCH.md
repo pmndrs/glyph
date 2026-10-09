@@ -271,6 +271,70 @@ Extracted:
 - Unicode properties and tests must be pinned to an explicit version alongside HarfRust/HarfBuzz.
 - Test data should be vendored or fetched by immutable version/hash rather than silently following a latest URL.
 
+## Incremental text storage, layout, and rendering
+
+### Xi editor and Rope Science
+
+Sources:
+
+- [Xi editor documentation and complete Rope Science series](https://xi-editor.io/docs.html)
+- [Series introduction](https://xi-editor.io/docs/rope_science_00.html)
+- [Part 1: MapReduce for text](https://xi-editor.io/docs/rope_science_01.html)
+- [Part 2: Metrics](https://xi-editor.io/docs/rope_science_02.html)
+- [Part 3: Grapheme cluster boundaries](https://xi-editor.io/docs/rope_science_03.html)
+- [Part 5: Incremental word wrapping](https://xi-editor.io/docs/rope_science_05.html)
+- [Part 6: Parallel and asynchronous word wrapping](https://xi-editor.io/docs/rope_science_06.html)
+- [Part 11: Practical syntax highlighting](https://xi-editor.io/docs/rope_science_11.html)
+- [Part 12: Minimal invalidation](https://xi-editor.io/docs/rope_science_12.html)
+
+Type: primary project design articles and implementation explanations, originally written in 2016–2017
+Reviewed: 2026-10-09
+
+Abstract: Xi models text and derived results as retained sequences, applies explicit edit deltas, and propagates
+invalidation through incremental analysis, wrapping, and rendering. The rope is supporting storage; the larger
+contribution is preserving changes through the pipeline instead of recomputing each stage from complete input.
+
+Extracted:
+
+- Part 1 stores text slices in tree leaves and composable summaries in interior nodes. An edit updates the affected
+  summaries and ancestors rather than recomputing a document-wide property. Leaf boundaries need not coincide with lines.
+- Part 2 maintains distinct metrics for storage offsets, UTF-16 positions, and line counts. Cursors support sequential
+  iteration without a fresh tree lookup per character. It also discusses aggregate difficulty flags, allowing one
+  representation to select simpler processing where its text properties justify it.
+- Part 3 treats grapheme segmentation as a context-sensitive computation across leaf boundaries. Chunking storage does
+  not permit treating each chunk as an independent Unicode string.
+- Part 5 represents a text edit as a delta and updates the retained break sequence. Wrapping starts before the edit and
+  stops after a later break agrees with the previous result. It explicitly recommends random-input comparison against
+  complete recomputation. Its width discussion distinguishes simple monospace cases from contextual shaping and complex
+  scripts; its historical timings are not Glyph performance evidence.
+- Part 6 separates small-edit processing from loading and width changes, which may require broad work. Parallel or
+  asynchronous wrapping addresses those different workloads; it is not a reason to send every small edit through a worker.
+- Part 11 propagates an edit through retained syntax state until the state converges, preserving unaffected results.
+  It demonstrates incremental computation without requiring a second implementation of the original analysis.
+- Part 12 carries deltas to a retained frontend line cache and uses partial validity to distinguish changed aspects of
+  a line. Rendering can update the affected content instead of serializing and repainting the entire document.
+- The introduction says the proposed part 7 on spans and interval trees was never written. Do not cite that missing
+  chapter as an implemented style-range design; the series index also covers CRDT, undo, and asynchronous plugin research.
+
+Glyph application, inferred from these sources:
+
+- For [#247](https://github.com/pmndrs/glyph/issues/247), preserve multiple sparse text edits and independent paint changes
+  through the existing assignment, engine preparation, shaping, layout, and publication flow. A new full string still
+  needs change discovery; retained storage does not make fresh caller data free to inspect. Keep the public `set()` path:
+  compare packed candidate and accepted text in engine preparation rather than constructing a detailed edit table in JS.
+  An explicit public edit API is deferred.
+- A rope with aligned range structures and compact retained chunks are candidates to compare, not additional systems to
+  layer over the current engine. Preserve public assignment ergonomics and retire whichever old path a refactor replaces.
+- Unicode, bidi, font fallback, ligatures, shaping context, and flow constraints determine safe invalidation boundaries.
+  A paint range or storage chunk is not automatically a safe shaping boundary. Reuse existing engine proofs and verify
+  incremental output against cold/full recomputation, including abort/retry and sequential edits.
+- Connect semantic deltas to [adaptive dirty-range uploads](.agents/docs/planning/dirty-range-upload-research.md), retaining
+  unchanged draw bindings and coalescing buffer updates when broad publication is cheaper. This connection is our proposed
+  GPU application of Xi's invalidation model, not a GPU performance claim made by Xi.
+- Scalar scans, fused JS packing/SWAR, Rust SWAR, and SIMD remain comparison-kernel experiments. The acceptance evidence
+  must include encoding/transfer, allocation and GC, bytes published, and actual frame intervals; an isolated faster scan
+  does not establish a faster large text edit flow.
+
 ## WebAssembly and code generation
 
 ### WebAssembly core and JavaScript interface
