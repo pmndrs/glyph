@@ -1,7 +1,7 @@
 /* @workflow {
   "name": "benchmark:labs-package",
   "summary": "Benchmark common installed-package workflows by default, or select a focused/full pmndrs/labs suite.",
-  "requirements": "Network access for registry specs, or one or two packed @pmndrs/glyph .tgz artifacts. Never builds workspace source. Accepts --suite smoke|layout|measure|glyphs|publication|spans|batch|style|reflow|stress|cold|edit|assignment|edit-sized|full.",
+  "requirements": "Network access for registry specs, or one or two packed @pmndrs/glyph .tgz artifacts. Never builds workspace source. --saved-candidate <report-directory> reuses an exact artifact's saved candidate instead of timing it again, with matching environment checks. Accepts --suite smoke|layout|measure|glyphs|publication|spans|batch|style|reflow|stress|cold|edit|assignment|edit-sized|full.",
   "writes": "Ignored Labs results, an artifact manifest, and a Markdown summary.md (also appended to $GITHUB_STEP_SUMMARY when set) under --output (default .cache/labs-package)."
 } */
 import { createHash } from 'node:crypto';
@@ -16,11 +16,13 @@ import {
   labsRunNames,
   type LabsResultRole,
   readLabsResult,
+  timingModeDifferences,
   timingModeMismatches,
 } from './support/labs-result.mts';
 import { parseLabsComparison, renderLabsSummary, writeLabsSummary } from './support/labs-summary.mts';
 import { installedPackageDependencies } from './support/package-labs-dependencies.mts';
 import { type PackageLabsSuite, requirePackageLabsSuite } from './support/package-labs-suite.mts';
+import { validateSavedPackageLabs } from './support/saved-package-labs.mts';
 
 interface Options {
   readonly baseline?: string;
@@ -28,6 +30,7 @@ interface Options {
   readonly candidate: string;
   readonly output: string;
   readonly suite: PackageLabsSuite;
+  readonly savedCandidate?: string;
 }
 
 interface InstalledArtifact {
@@ -54,18 +57,32 @@ try {
   const candidate = await installArtifact('candidate', options.candidate, temporaryRoot);
   const baselineRunName = baseline === undefined ? undefined : artifactRunName('baseline', baseline);
   const candidateRunName = artifactRunName('candidate', candidate);
+  const savedCandidate =
+    options.savedCandidate === undefined ? undefined : resolve(benchesRoot, options.savedCandidate);
+  if (savedCandidate !== undefined) {
+    const manifest = await readLabsResult(resolve(savedCandidate, 'manifest.json'));
+    const result = await readLabsResult(resolve(savedCandidate, 'candidate.json'));
+    validateSavedPackageLabs(manifest, result, {
+      ...artifactIdentity(candidate),
+      suite: options.suite,
+      blocks: options.blocks,
+    });
+    await mkdir(labsResults, { recursive: true });
+    await copyFile(resolve(savedCandidate, 'candidate.json'), resolve(labsResults, `${candidateRunName}.json`));
+    await copyFile(resolve(savedCandidate, 'manifest.json'), resolve(output, 'saved-candidate-manifest.json'));
+    process.stdout.write(
+      `Reusing saved candidate timings from ${savedCandidate}; candidate will not be benchmarked again\n`,
+    );
+  }
 
   const baselineRun =
     baseline === undefined || baselineRunName === undefined
       ? undefined
       : await runLabs(baselineRunName, baseline.packageRoot, options.blocks, options.suite, 'baseline');
-  const candidateRun = await runLabs(
-    candidateRunName,
-    candidate.packageRoot,
-    options.blocks,
-    options.suite,
-    'candidate',
-  );
+  const candidateRun =
+    savedCandidate === undefined
+      ? await runLabs(candidateRunName, candidate.packageRoot, options.blocks, options.suite, 'candidate')
+      : { result: await readLabsResult(resolve(labsResults, `${candidateRunName}.json`)), notComparable: [] };
 
   let comparison: string | undefined;
   const timingMismatches =
@@ -98,6 +115,7 @@ try {
         suite: options.suite,
         baseline: baseline === undefined ? undefined : artifactIdentity(baseline),
         candidate: artifactIdentity(candidate),
+        savedCandidate,
         comparison: comparison === undefined ? 'not requested' : 'comparison.txt',
         notComparable: {
           baselineCheckFailures: baselineRun?.notComparable ?? [],
@@ -109,7 +127,7 @@ try {
     )}\n`,
   );
   if (comparison !== undefined && baseline !== undefined) {
-    await publishSummary(comparison, candidateRun.result, baseline, candidate);
+    await publishSummary(comparison, baselineRun?.result, candidateRun.result, baseline, candidate);
   }
   process.stdout.write(`Labs artifacts: ${output}\n`);
 } finally {
@@ -119,17 +137,28 @@ try {
 /** The summary is a convenience view of finished results, so a failure here warns instead of failing the benchmark. */
 async function publishSummary(
   comparison: string,
+  baselineResult: unknown,
   candidateResult: unknown,
   baseline: InstalledArtifact,
   candidate: InstalledArtifact,
 ): Promise<void> {
   try {
-    const markdown = renderLabsSummary({
-      suite: options.suite,
-      baseline: artifactLabel(baseline),
-      candidate: artifactLabel(candidate),
-      comparison: parseLabsComparison(comparison, labsRunNames(candidateResult)),
-    });
+    const markdown =
+      (options.savedCandidate === undefined
+        ? ''
+        : 'Candidate timings reuse a saved run; only the baseline was measured in this job. CPU model, architecture, Node version, suite, blocks and package digest match. Separate-run machine variability remains.\n\n') +
+      renderLabsSummary({
+        suite: options.suite,
+        baseline: artifactLabel(baseline),
+        candidate: artifactLabel(candidate),
+        comparison: parseLabsComparison(
+          comparison,
+          labsRunNames(candidateResult),
+          baselineResult === undefined
+            ? []
+            : timingModeDifferences(baselineResult, candidateResult).map(({ name }) => name),
+        ),
+      });
     await writeLabsSummary(markdown, output, process.env);
   } catch (error) {
     process.stdout.write(`::warning::Labs job summary was not written: ${String(error)}\n`);
@@ -159,6 +188,7 @@ async function parseOptions(argv: readonly string[]): Promise<Options> {
     output: values.get('output') ?? '.cache/labs-package',
     suite,
     ...(values.has('baseline') ? { baseline: values.get('baseline')! } : {}),
+    ...(values.has('saved-candidate') ? { savedCandidate: values.get('saved-candidate')! } : {}),
   };
 }
 

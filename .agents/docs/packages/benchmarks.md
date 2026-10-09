@@ -843,8 +843,26 @@ CI routes the installed-package lane by event. Pull requests default to the four
 `benchmark:layout`, `benchmark:measure`, `benchmark:glyphs`, `benchmark:publication`, `benchmark:spans`, `benchmark:style`,
 `benchmark:batch`, `benchmark:reflow`, `benchmark:stress`, `benchmark:cold`, or `benchmark:edit` label selects that focused eight-block suite;
 `benchmark:full` selects the complete matrix and overrides focused labels. Pushes to `main` always run `full`. Manual
-dispatch accepts the same suite names. This routing changes only the installed-package timing report; correctness,
-browser, payload, and conformance lanes retain their own workflows.
+dispatch accepts the same suite names and an optional `baseline_version`. Set `suite=full` and
+`baseline_version=0.1.0` to compare the selected branch's packed package against that exact published release; blank
+keeps the canary baseline. When main already has a full result, set `candidate_run_id` to its CI run ID to reuse both
+its saved timings and exact package instead of benchmarking main again. Reuse requires matching package SHA-256,
+Labs version, suite, block count, CPU model, architecture and Node version; mismatches stop before benchmarking the
+baseline. Separate jobs still have machine variability even when those properties match. The Actions job summary and `glyph-package-performance` artifact contain absolute baseline
+and candidate timings, deltas, confidence intervals, and cases that cannot be compared. Full release comparisons have
+90 minutes for both eight-block package runs. For local reuse, add `--saved-candidate <saved-report-directory>` with that report's exact candidate archive. They are advisory evidence; a green CI job alone does not establish that
+performance improved. Record this full comparison against the previous stable release before publishing a release,
+and retain its exact source commit and artifact identities with the release notes.
+
+The summary excludes workloads whose saved Labs plans use different timing modes (batched versus single-call).
+They remain listed as skipped with a timing-mode mismatch reason, rather than entering regression counts or plots.
+Raw comparison artifacts are preserved for inspection.
+
+Locally, use `pnpm scripts run benchmark:labs-package -- --baseline @pmndrs/glyph@0.1.0 --candidate <exact-package.tgz>
+--suite full --blocks 8 --output <report-directory>`. This runs the same harness against both installed packages; it
+does not build workspace source. Report individual workloads and absolute changes rather than averaging unrelated
+benchmark percentages into one overall speedup. This routing changes only the installed-package timing report;
+correctness, browser, payload, and conformance lanes retain their own workflows.
 
 The `@glyphs` suite also times glyph outlines (`labs/package/outlines.bench.ts`): `glyphs()` after a text change on Inter
 baked with outlines, beside the same paragraph on the plain font in `inspection.bench.ts`, and reading every outline from

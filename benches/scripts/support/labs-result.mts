@@ -57,12 +57,20 @@ export function acceptLabsResult(result: unknown, role: LabsResultRole): readonl
  * timed in different modes on each side reports a delta that measures the mode, not the package.
  */
 export function timingModeMismatches(baseline: unknown, candidate: unknown): readonly string[] {
+  return timingModeDifferences(baseline, candidate).map(
+    ({ label, baselineBatched, candidateBatched }) =>
+      `${label}: baseline ${modeName(baselineBatched)}, candidate ${modeName(candidateBatched)}`,
+  );
+}
+
+/** Workload identities whose timing plans differ, before formatting report text. */
+export function timingModeDifferences(baseline: unknown, candidate: unknown) {
   const baselineModes = new Map(labeledRuns(baseline).flatMap(({ label, run }) => timingMode(label, run)));
   return labeledRuns(candidate).flatMap(({ label, run }) =>
     timingMode(label, run).flatMap(([, candidateBatched]) => {
       const baselineBatched = baselineModes.get(label);
       if (baselineBatched === undefined || baselineBatched === candidateBatched) return [];
-      return [`${label}: baseline ${modeName(baselineBatched)}, candidate ${modeName(candidateBatched)}`];
+      return [{ label, name: displayName(run.name, '<unknown run>'), baselineBatched, candidateBatched }];
     }),
   );
 }
