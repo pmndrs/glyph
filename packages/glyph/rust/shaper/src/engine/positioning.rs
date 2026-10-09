@@ -37,6 +37,12 @@ pub(crate) const SEMANTIC_U32_FIELD_COUNT: usize = 8;
 pub(crate) const SEMANTIC_EFFECTS_CHANGE: u16 = 1 << 14;
 pub(crate) const SEMANTIC_PLACEMENT_SLOT_CHANGE: u16 = 1 << 15;
 pub(crate) const ALL_SEMANTIC_CHANGES: u16 = u16::MAX;
+const PLAN_BINDING_INDEPENDENT_CHANGES: u16 =
+    (1 << 8) | (1 << 10) | (1 << 11) | (1 << 12) | SEMANTIC_EFFECTS_CHANGE;
+
+pub(crate) const fn semantic_changes_preserve_plan_bindings(changes: u16) -> bool {
+    changes & !PLAN_BINDING_INDEPENDENT_CHANGES == 0
+}
 const BIDI_BN: u8 = 9;
 const BIDI_B: u8 = 10;
 const BIDI_S: u8 = 11;
@@ -6740,6 +6746,11 @@ mod tests {
         next.assign_content_revision(0, &previous, Some(0), &mut next_revision)
             .unwrap();
         assert_eq!(next.semantic_change_masks[0], expected);
+        assert!(semantic_changes_preserve_plan_bindings(expected));
+        assert!(!semantic_changes_preserve_plan_bindings(1 << 9));
+        assert!(!semantic_changes_preserve_plan_bindings(
+            SEMANTIC_PLACEMENT_SLOT_CHANGE
+        ));
         assert_eq!(next.glyphs[0].content_revision, 41);
         assert_eq!(next_revision, 42);
     }

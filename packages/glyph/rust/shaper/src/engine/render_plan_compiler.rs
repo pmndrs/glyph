@@ -260,6 +260,11 @@ impl RenderPlanCompiler {
             .buffer_bytes(id)
             .or_else(|| self.ordered.buffer_bytes(id))
     }
+
+    #[cfg(test)]
+    pub(crate) fn retained_binding_compilation_skips(&self) -> u32 {
+        self.ordered.retained_binding_compilation_skips()
+    }
 }
 
 #[cfg(test)]

@@ -35,11 +35,6 @@ use super::render_plan::PRIMITIVE_DECORATION;
 pub use super::plan_input::{PlanGlyph as OrderedGlyph, PlanInput as OrderedPlanInput};
 
 const NONE: u32 = u32::MAX;
-// Foreground paint, region/flow metadata, indexed-transform selection, and text effects are the
-// semantic lanes that cannot change PlanGlyph display-list metadata. Unknown or newly assigned
-// bits deliberately fall back to complete binding compilation.
-const INSTANCE_ONLY_SEMANTIC_CHANGES: u16 =
-    (1 << 8) | (1 << 10) | (1 << 11) | (1 << 12) | super::positioning::SEMANTIC_EFFECTS_CHANGE;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct BatchKey {
@@ -548,6 +543,11 @@ impl OrderedPlanCompiler {
             .map(|buffer| (buffer.program_id, buffer.schema))
     }
 
+    #[cfg(test)]
+    pub(crate) fn retained_binding_compilation_skips(&self) -> u32 {
+        self.retained_binding_compilation_skips
+    }
+
     fn reset_pending(&mut self) {
         self.pending_batches.clear();
         self.pending_instances.clear();
@@ -698,7 +698,7 @@ impl OrderedPlanCompiler {
                 .unwrap_or(super::positioning::ALL_SEMANTIC_CHANGES);
             self.bindings_dirty |= instance.stable_id != glyph.stable_id
                 || (instance.content_revision != glyph.content_revision && semantic_changes == 0)
-                || semantic_changes & !INSTANCE_ONLY_SEMANTIC_CHANGES != 0;
+                || !super::positioning::semantic_changes_preserve_plan_bindings(semantic_changes);
         }
 
         reserve(&mut self.pending_batches, self.batches.len())?;
@@ -1116,11 +1116,7 @@ impl OrderedPlanCompiler {
         context: PrepareContext<'_>,
         retained_topology: bool,
     ) -> Result<(), OrderedPlanError> {
-        if retained_topology
-            && !context.input.order_independent
-            && !self.bindings_dirty
-            && self.retained_storage_bindings_match()?
-        {
+        if retained_topology && !self.bindings_dirty && self.retained_storage_bindings_match()? {
             self.reuse_live_bindings = true;
             #[cfg(test)]
             {
@@ -1807,162 +1803,204 @@ mod tests {
         // checkpoint oracle bypasses retained topology and binding elision on every step.
         for material_storage in [false, true] {
             let codec = paint_codec_with_material_storage(material_storage);
-            for seed in 1_u32..=16 {
-                let mut random = seed;
-                let mut optimized = OrderedPlanCompiler::default();
-                let mut complete = OrderedPlanCompiler::default();
-                let mut host = TestHost::default();
-                let mut oracle = TestHost::default();
-                let mut glyphs = vec![glyph(1, 1), glyph(2, 1), glyph(3, 1)];
-                let mut x = vec![1.0, 2.0, 3.0];
-                let mut next_id = 4;
-                let mut skipped_bindings = 0;
-                for step in 0..128 {
-                    random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-                    let index = (random as usize >> 8) % glyphs.len().max(1);
-                    let mut changed = None;
-                    let mut topology_changed = false;
-                    match (random >> 24) % 12 {
-                        0 => {} // An actual no-op must retain accepted bytes and bindings.
-                        1 if !glyphs.is_empty() => {
-                            glyphs[index].content_revision += 1;
-                            x[index] += 0.25;
-                            changed = Some((index, 1 << 8));
-                        }
-                        2 if !glyphs.is_empty() => {
-                            glyphs[index].block_start += 1.0;
-                            changed = Some((index, 1 << 1));
-                        }
-                        3 if !glyphs.is_empty() => {
-                            glyphs[index].material_id = 1 + random % 3;
-                            changed = Some((index, u16::MAX));
-                        }
-                        4 if !glyphs.is_empty() => {
-                            glyphs[index].transform_id = 1 + random % 3;
-                            changed = Some((index, u16::MAX));
-                        }
-                        5 if !glyphs.is_empty() => {
-                            glyphs[index].resource_id = 100 + next_id;
-                            next_id += 1;
-                            glyphs[index].resource_generation += 1;
-                            changed = Some((index, u16::MAX));
-                        }
-                        6 if !glyphs.is_empty() => {
-                            glyphs[index].resource_id = 100 + next_id;
-                            next_id += 1;
-                            glyphs[index].resource_reference += 1;
-                            changed = Some((index, u16::MAX));
-                        }
-                        7 if !glyphs.is_empty() => {
-                            glyphs.remove(index);
-                            x.remove(index);
-                            topology_changed = true;
-                        }
-                        8 if glyphs.len() > 1 => {
-                            glyphs.rotate_left(1);
-                            x.rotate_left(1);
-                            topology_changed = true;
-                        }
-                        9 if !glyphs.is_empty() => {
-                            glyphs[index].semantic_id = 1 + random % 3;
-                            changed = Some((index, 1 << 9));
-                        }
-                        10 => {
-                            glyphs.clear();
-                            x.clear();
-                            topology_changed = true;
-                        }
-                        _ => {
-                            // Repeated insertion exercises capacity growth and recreation.
-                            for _ in 0..1 + random % 4 {
-                                glyphs.push(glyph(next_id, 1));
-                                x.push(next_id as f32);
-                                next_id += 1;
+            for order_independent in [false, true] {
+                for seed in 1_u32..=8 {
+                    let mut random = seed;
+                    let mut optimized = OrderedPlanCompiler::default();
+                    let mut complete = OrderedPlanCompiler::default();
+                    let mut host = TestHost::default();
+                    let mut oracle = TestHost::default();
+                    let mut glyphs = vec![glyph(1, 1), glyph(2, 1), glyph(3, 1)];
+                    let mut x = vec![1.0, 2.0, 3.0];
+                    let mut next_id = 4;
+                    let mut skipped_bindings = 0;
+                    for step in 0..128 {
+                        random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                        let index = (random as usize >> 8) % glyphs.len().max(1);
+                        let mut changed = None;
+                        let mut topology_changed = false;
+                        match (random >> 24) % 12 {
+                            0 => {} // An actual no-op must retain accepted bytes and bindings.
+                            1 if !glyphs.is_empty() => {
+                                glyphs[index].content_revision += 1;
+                                x[index] += 0.25;
+                                changed = Some((index, 1 << 8));
                             }
-                            topology_changed = true;
+                            2 if !glyphs.is_empty() => {
+                                glyphs[index].block_start += 1.0;
+                                changed = Some((index, 1 << 1));
+                            }
+                            3 if !glyphs.is_empty() => {
+                                glyphs[index].material_id = 1 + random % 3;
+                                changed = Some((index, u16::MAX));
+                            }
+                            4 if !glyphs.is_empty() => {
+                                glyphs[index].transform_id = 1 + random % 3;
+                                changed = Some((index, u16::MAX));
+                            }
+                            5 if !glyphs.is_empty() => {
+                                glyphs[index].resource_id = 100 + next_id;
+                                next_id += 1;
+                                glyphs[index].resource_generation += 1;
+                                changed = Some((index, u16::MAX));
+                            }
+                            6 if !glyphs.is_empty() => {
+                                glyphs[index].resource_id = 100 + next_id;
+                                next_id += 1;
+                                glyphs[index].resource_reference += 1;
+                                changed = Some((index, u16::MAX));
+                            }
+                            7 if !glyphs.is_empty() => {
+                                glyphs.remove(index);
+                                x.remove(index);
+                                topology_changed = true;
+                            }
+                            8 if glyphs.len() > 1 => {
+                                glyphs.rotate_left(1);
+                                x.rotate_left(1);
+                                topology_changed = true;
+                            }
+                            9 if !glyphs.is_empty() => {
+                                glyphs[index].semantic_id = 1 + random % 3;
+                                changed = Some((index, 1 << 9));
+                            }
+                            10 => {
+                                glyphs.clear();
+                                x.clear();
+                                topology_changed = true;
+                            }
+                            _ => {
+                                // Repeated insertion exercises capacity growth and recreation.
+                                for _ in 0..1 + random % 4 {
+                                    glyphs.push(glyph(next_id, 1));
+                                    x.push(next_id as f32);
+                                    next_id += 1;
+                                }
+                                topology_changed = true;
+                            }
                         }
-                    }
-                    let mut masks = vec![0; glyphs.len()];
-                    if topology_changed {
-                        masks.fill(u16::MAX);
-                    } else if let Some((index, mask)) = changed {
-                        masks[index] = mask;
-                    }
-                    let checkpoint = step % 17 == 0;
-                    prepare_with_masks(&mut optimized, &codec, &glyphs, &x, &masks, checkpoint);
-                    prepare_with_masks(&mut complete, &codec, &glyphs, &x, &masks, true);
-                    if step % 7 == 0 {
-                        let accepted = optimized
-                            .buffers
-                            .iter()
-                            .map(|buffer| (buffer.id, buffer.bytes.clone()))
-                            .collect::<Vec<_>>();
-                        optimized.abort();
-                        complete.abort();
-                        assert_eq!(
-                            accepted,
-                            optimized
+                        let mut masks = vec![0; glyphs.len()];
+                        if topology_changed {
+                            masks.fill(u16::MAX);
+                        } else if let Some((index, mask)) = changed {
+                            masks[index] = mask;
+                        }
+                        let checkpoint = step % 17 == 0;
+                        prepare_with_options(
+                            &mut optimized,
+                            &codec,
+                            &glyphs,
+                            &x,
+                            &masks,
+                            checkpoint,
+                            order_independent,
+                        );
+                        prepare_with_options(
+                            &mut complete,
+                            &codec,
+                            &glyphs,
+                            &x,
+                            &masks,
+                            true,
+                            order_independent,
+                        );
+                        if step % 7 == 0 {
+                            let accepted = optimized
                                 .buffers
                                 .iter()
                                 .map(|buffer| (buffer.id, buffer.bytes.clone()))
-                                .collect::<Vec<_>>()
+                                .collect::<Vec<_>>();
+                            optimized.abort();
+                            complete.abort();
+                            assert_eq!(
+                                accepted,
+                                optimized
+                                    .buffers
+                                    .iter()
+                                    .map(|buffer| (buffer.id, buffer.bytes.clone()))
+                                    .collect::<Vec<_>>()
+                            );
+                            prepare_with_options(
+                                &mut optimized,
+                                &codec,
+                                &glyphs,
+                                &x,
+                                &masks,
+                                checkpoint,
+                                order_independent,
+                            );
+                            prepare_with_options(
+                                &mut complete,
+                                &codec,
+                                &glyphs,
+                                &x,
+                                &masks,
+                                true,
+                                order_independent,
+                            );
+                        }
+                        skipped_bindings += usize::from(!optimized.publish_bindings);
+                        let delta = optimized
+                            .plan_view(7, CAPABILITY, codec.fingerprint())
+                            .unwrap();
+                        let full = complete
+                            .plan_view(7, CAPABILITY, codec.fingerprint())
+                            .unwrap();
+                        let mut cold = OrderedPlanCompiler::default();
+                        prepare_with_options(
+                            &mut cold,
+                            &codec,
+                            &glyphs,
+                            &x,
+                            &masks,
+                            true,
+                            order_independent,
                         );
-                        prepare_with_masks(&mut optimized, &codec, &glyphs, &x, &masks, checkpoint);
-                        prepare_with_masks(&mut complete, &codec, &glyphs, &x, &masks, true);
-                    }
-                    skipped_bindings += usize::from(!optimized.publish_bindings);
-                    let delta = optimized
-                        .plan_view(7, CAPABILITY, codec.fingerprint())
-                        .unwrap();
-                    let full = complete
-                        .plan_view(7, CAPABILITY, codec.fingerprint())
-                        .unwrap();
-                    let mut cold = OrderedPlanCompiler::default();
-                    prepare_with_masks(&mut cold, &codec, &glyphs, &x, &masks, true);
-                    let mut cold_host = TestHost::default();
-                    cold_host.accept(
-                        cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
-                        true,
-                    );
-                    plan_layout(delta).unwrap();
-                    plan_layout(full).unwrap();
-                    host.accept(delta, optimized.publish_bindings);
-                    oracle.accept(full, true);
-                    assert_eq!(host.resources, oracle.resources, "seed {seed}, step {step}");
-                    assert_eq!(host.bindings, oracle.bindings, "seed {seed}, step {step}");
-                    assert_eq!(
-                        host.primitives, oracle.primitives,
-                        "seed {seed}, step {step}"
-                    );
-                    assert_eq!(host.draws, oracle.draws, "seed {seed}, step {step}");
-                    assert_eq!(
-                        host.snapshot(),
-                        cold_host.snapshot(),
-                        "cold seed {seed}, step {step}"
-                    );
-                    // Capacity slack is not rendered and may retain old bytes. Compare the
-                    // active records of each buffer, plus the canonical codec's input bytes.
-                    for binding in &host.bindings {
-                        let live = binding.live_records as usize * 4;
+                        let mut cold_host = TestHost::default();
+                        cold_host.accept(
+                            cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
+                            true,
+                        );
+                        plan_layout(delta).unwrap();
+                        plan_layout(full).unwrap();
+                        host.accept(delta, optimized.publish_bindings);
+                        oracle.accept(full, true);
+                        assert_eq!(host.resources, oracle.resources, "seed {seed}, step {step}");
+                        assert_eq!(host.bindings, oracle.bindings, "seed {seed}, step {step}");
                         assert_eq!(
-                            &host.bytes[&(binding.id, binding.generation)][..live],
-                            &oracle.bytes[&(binding.id, binding.generation)][..live],
+                            host.primitives, oracle.primitives,
                             "seed {seed}, step {step}"
                         );
+                        assert_eq!(host.draws, oracle.draws, "seed {seed}, step {step}");
+                        assert_eq!(
+                            host.snapshot(),
+                            cold_host.snapshot(),
+                            "cold seed {seed}, step {step}"
+                        );
+                        // Capacity slack is not rendered and may retain old bytes. Compare the
+                        // active records of each buffer, plus the canonical codec's input bytes.
+                        for binding in &host.bindings {
+                            let live = binding.live_records as usize * 4;
+                            assert_eq!(
+                                &host.bytes[&(binding.id, binding.generation)][..live],
+                                &oracle.bytes[&(binding.id, binding.generation)][..live],
+                                "seed {seed}, step {step}"
+                            );
+                        }
+                        optimized.commit().unwrap();
+                        complete.commit().unwrap();
+                        assert_eq!(optimized.live_primitives, complete.live_primitives);
+                        assert_eq!(optimized.live_draws, complete.live_draws);
                     }
-                    optimized.commit().unwrap();
-                    complete.commit().unwrap();
-                    assert_eq!(optimized.live_primitives, complete.live_primitives);
-                    assert_eq!(optimized.live_draws, complete.live_draws);
+                    assert!(
+                        skipped_bindings > 0,
+                        "seed {seed}, independent {order_independent} never exercised the skip path"
+                    );
+                    assert!(
+                        optimized.retained_binding_compilation_skips > 0,
+                        "seed {seed}, independent {order_independent} never skipped accepted binding compilation"
+                    );
                 }
-                assert!(
-                    skipped_bindings > 0,
-                    "seed {seed} never exercised the skip path"
-                );
-                assert!(
-                    optimized.retained_binding_compilation_skips > 0,
-                    "seed {seed} never skipped accepted binding compilation"
-                );
             }
         }
     }
@@ -2192,7 +2230,7 @@ mod tests {
     }
 
     #[test]
-    fn independent_order_keeps_complete_binding_compilation() {
+    fn independent_order_reuses_bindings_for_instance_only_changes_and_retries() {
         let codec = paint_codec_with_options(false, false);
         let mut compiler = OrderedPlanCompiler::default();
         let mut glyphs = [glyph(1, 1), glyph(2, 1)];
@@ -2233,11 +2271,53 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(compiler.retained_binding_compilation_skips, 0);
+        assert_eq!(compiler.retained_binding_compilation_skips, 1);
+        assert!(compiler.reuse_live_bindings);
+        assert!(compiler.primitives.is_empty());
+        assert!(compiler.draws.is_empty());
+        compiler.abort();
+
+        compiler
+            .prepare(
+                &codec,
+                CAPABILITY,
+                OrderedPlanInput {
+                    glyphs: &glyphs,
+                    placement_slots: &placement_slots,
+                    semantic_change_masks: &[0, 1 << 8],
+                    f32_fields: &[&[1.0, 20.0]],
+                    u32_fields: &[],
+                    order_independent: true,
+                },
+                false,
+                2,
+            )
+            .unwrap();
+        assert_eq!(compiler.retained_binding_compilation_skips, 2);
+        compiler.commit().unwrap();
+
+        glyphs[1].block_start = 3.0;
+        glyphs[1].content_revision = 3;
+        compiler
+            .prepare(
+                &codec,
+                CAPABILITY,
+                OrderedPlanInput {
+                    glyphs: &glyphs,
+                    placement_slots: &placement_slots,
+                    semantic_change_masks: &[0, 1 << 1],
+                    f32_fields: &[&[1.0, 20.0]],
+                    u32_fields: &[],
+                    order_independent: true,
+                },
+                false,
+                3,
+            )
+            .unwrap();
+        assert_eq!(compiler.retained_binding_compilation_skips, 2);
         assert!(!compiler.reuse_live_bindings);
         assert!(!compiler.primitives.is_empty());
         assert!(!compiler.draws.is_empty());
-        compiler.commit().unwrap();
     }
 
     #[test]
@@ -2913,6 +2993,26 @@ mod tests {
         semantic_change_masks: &[u16],
         checkpoint: bool,
     ) {
+        prepare_with_options(
+            compiler,
+            codec,
+            glyphs,
+            x,
+            semantic_change_masks,
+            checkpoint,
+            false,
+        );
+    }
+
+    fn prepare_with_options(
+        compiler: &mut OrderedPlanCompiler,
+        codec: &ValidatedCodec,
+        glyphs: &[OrderedGlyph],
+        x: &[f32],
+        semantic_change_masks: &[u16],
+        checkpoint: bool,
+        order_independent: bool,
+    ) {
         let placement_slots = vec![0; glyphs.len()];
         compiler
             .prepare(
@@ -2924,7 +3024,7 @@ mod tests {
                     semantic_change_masks,
                     f32_fields: &[x],
                     u32_fields: &[],
-                    order_independent: false,
+                    order_independent,
                 },
                 checkpoint,
                 1,

@@ -797,6 +797,14 @@ impl TextEngine {
     }
 
     #[cfg(test)]
+    fn retained_binding_compilation_skips(&self, handle: u32) -> Result<u32, EngineError> {
+        self.planners
+            .get(&handle)
+            .map(|planner| planner.plan.retained_binding_compilation_skips())
+            .ok_or(EngineError::RootMissing)
+    }
+
+    #[cfg(test)]
     pub(crate) fn prepare_update(
         &mut self,
         request: UpdateRequest<'_>,
@@ -5934,15 +5942,17 @@ mod tests {
                 FieldTable, FontRenderBinding, FontResource, FontStrike, MISSING_RESOURCE_INDEX,
             },
             frame::{
-                PARAGRAPH_MUTATION_REMOVE, PARAGRAPH_MUTATION_UPSERT, STYLE_FIELD_DIRECTION,
-                STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK, STYLE_FIELD_LINE_HEIGHT,
-                STYLE_FIELD_MATERIAL, STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FLAG_ROOT,
-                STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE,
-                TEXT_MUTATION_REPLACE_UTF16,
+                ALIGN_START, AXIS_EXACT, BLOCK_ALIGN_START, LAST_LINE_AUTO, ORIENTATION_MIXED,
+                PARAGRAPH_MUTATION_REMOVE, PARAGRAPH_MUTATION_UPSERT, SHAPE_RECTANGLE,
+                STYLE_FIELD_DIRECTION, STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK,
+                STYLE_FIELD_FOREGROUND, STYLE_FIELD_LINE_HEIGHT, STYLE_FIELD_MATERIAL,
+                STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FLAG_ROOT, STYLE_MUTATION_REMOVE,
+                STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE, TEXT_MUTATION_REPLACE_UTF16,
+                WRITING_HORIZONTAL_TB,
             },
             semantic_wire::{
-                parse_paragraph_mutations, parse_paragraph_order_mutations, parse_style_mutations,
-                parse_text_mutations,
+                parse_geometry, parse_paragraph_mutations, parse_paragraph_order_mutations,
+                parse_style_mutations, parse_text_mutations,
             },
         },
         wire::write_u32,
@@ -6397,6 +6407,89 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[test]
+    fn production_independent_paint_update_skips_accepted_binding_compilation() {
+        const GLYPH_COUNT: u32 = 2_937;
+        const INTER: &[u8] =
+            include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
+
+        let mut shaper = ShaperRegistry::default();
+        let extents = vec![0; GLYPH_COUNT as usize * 8];
+        let mut availability = vec![u8::MAX; (GLYPH_COUNT as usize).div_ceil(8)];
+        *availability.last_mut().unwrap() = (1 << (GLYPH_COUNT % 8)) - 1;
+        assert_eq!(
+            shaper.register_font(42, INTER, &extents, &availability, 0, 0),
+            0
+        );
+
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_paint_codec(TechniqueId(1)))
+            .unwrap();
+        engine
+            .register_font_binding(42, 42, GLYPH_COUNT, render_binding(GLYPH_COUNT, 1))
+            .unwrap();
+        engine.register_font_stack(7, &[42]).unwrap();
+        engine.create_root(4).unwrap();
+
+        let text_bytes = text_mutation_bytes(&[(0, 0, &[0x41])]);
+        let initial_style_bytes = paragraph_root_style_with_foreground(0xff00_00ff);
+        let geometry_bytes = root_geometry_bytes();
+        let mut initial = update(0, 0, 0);
+        initial.compositing_independent = true;
+        initial.text_mutations =
+            parse_text_mutations(&text_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        initial.style_mutations =
+            parse_style_mutations(&initial_style_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        initial.geometry = parse_root_geometry(&geometry_bytes, initial.limits);
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, initial, 1)
+            .unwrap();
+        let positioned_glyphs = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap()
+            .positioned
+            .active()
+            .glyphs()
+            .len();
+        assert_eq!(
+            positioned_glyphs, 1,
+            "the production pipeline must position the authored glyph"
+        );
+        let initial_plan = engine.prepared_plan(prepared).unwrap();
+        assert!(!initial_plan.buffers.is_empty());
+        assert!(!initial_plan.draws.is_empty());
+        engine.commit_update(prepared).unwrap();
+
+        let changed_style_bytes = paragraph_root_style_with_foreground(0x00ff_00ff);
+        let mut changed = update(1, 1, 1);
+        changed.compositing_independent = true;
+        changed.style_mutations =
+            parse_style_mutations(&changed_style_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, changed, 2)
+            .unwrap();
+        let delta = engine.prepared_plan(prepared).unwrap();
+        assert!(!delta.patches.is_empty());
+        assert!(delta.resources.is_empty());
+        assert!(delta.buffers.is_empty());
+        assert!(delta.primitives.is_empty());
+        assert!(delta.draws.is_empty());
+        assert_eq!(engine.retained_binding_compilation_skips(4), Ok(1));
+        engine.abort_update(prepared).unwrap();
+
+        let retry = engine
+            .prepare_update_with_shaper(&mut shaper, changed, 2)
+            .unwrap();
+        assert_eq!(engine.retained_binding_compilation_skips(4), Ok(2));
+        engine.commit_update(retry).unwrap();
     }
 
     #[test]
@@ -7790,6 +7883,14 @@ mod tests {
     }
 
     fn validated_codec(technique: TechniqueId) -> ValidatedCodec {
+        validated_codec_with_input(technique, 0)
+    }
+
+    fn validated_paint_codec(technique: TechniqueId) -> ValidatedCodec {
+        validated_codec_with_input(technique, 8)
+    }
+
+    fn validated_codec_with_input(technique: TechniqueId, semantic_field: u8) -> ValidatedCodec {
         ValidatedCodec::new(CodecDescriptor {
             capability_sets: vec![
                 CapabilitySet {
@@ -7839,7 +7940,7 @@ mod tests {
                     | crate::engine::codec::BATCH_TRANSFORM,
                 f32_input_count: 1,
                 u32_input_count: 0,
-                inputs: vec![crate::engine::codec::InputSource::semantic(0)],
+                inputs: vec![crate::engine::codec::InputSource::semantic(semantic_field)],
                 capabilities: ProgramCapabilities::default(),
                 buffers: vec![BufferSchema::packed(
                     BufferId(1),
@@ -8126,6 +8227,86 @@ mod tests {
             write_f32(record, abi::ENGINE_STYLE_MUTATION_RASTER_PIXEL_RATIO, 1.0);
         }
         bytes
+    }
+
+    fn paragraph_root_style_with_foreground(foreground_rgba: u32) -> Vec<u8> {
+        let mut bytes = paragraph_root_style_bytes(&[(1, 1)]);
+        let record = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        write_u32(
+            &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_FIELD_MASK,
+            STYLE_FIELD_FONT_STACK
+                | STYLE_FIELD_MATERIAL
+                | STYLE_FIELD_FONT_SIZE
+                | STYLE_FIELD_LINE_HEIGHT
+                | STYLE_FIELD_RASTER_PIXEL_RATIO
+                | STYLE_FIELD_FOREGROUND,
+        );
+        write_u32(
+            &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_FOREGROUND_RGBA,
+            foreground_rgba,
+        );
+        bytes
+    }
+
+    fn root_geometry_bytes() -> Vec<u8> {
+        let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let region = constraint + abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+        let mut bytes = vec![0; region + abi::ENGINE_REGION_RECORD_SIZE as usize];
+        write_u32(
+            &mut bytes,
+            constraint + abi::ENGINE_CONSTRAINT_PARAGRAPH_ID,
+            1,
+        );
+        write_u32(
+            &mut bytes,
+            constraint + abi::ENGINE_CONSTRAINT_FLOW_THREAD_ID,
+            1,
+        );
+        for field in [
+            abi::ENGINE_CONSTRAINT_WIDTH,
+            abi::ENGINE_CONSTRAINT_HEIGHT,
+            abi::ENGINE_CONSTRAINT_VIEWPORT_BLOCK_END,
+        ] {
+            write_f32(&mut bytes, constraint + field, 100.0);
+        }
+        write_u32(&mut bytes, constraint + abi::ENGINE_CONSTRAINT_MAX_LINES, 1);
+        bytes[constraint + abi::ENGINE_CONSTRAINT_REGION_COUNT
+            ..constraint + abi::ENGINE_CONSTRAINT_REGION_COUNT + 2]
+            .copy_from_slice(&1_u16.to_le_bytes());
+        bytes[constraint + abi::ENGINE_CONSTRAINT_WIDTH_MODE] = AXIS_EXACT;
+        bytes[constraint + abi::ENGINE_CONSTRAINT_HEIGHT_MODE] = AXIS_EXACT;
+        bytes[constraint + abi::ENGINE_CONSTRAINT_WRAP] = WRAP_WORD;
+        bytes[constraint + abi::ENGINE_CONSTRAINT_ALIGN] = ALIGN_START;
+        bytes[constraint + abi::ENGINE_CONSTRAINT_OVERFLOW] = OVERFLOW_CLIP;
+        bytes[constraint + abi::ENGINE_CONSTRAINT_BLOCK_ALIGN] = BLOCK_ALIGN_START;
+        bytes[constraint + abi::ENGINE_CONSTRAINT_LAST_LINE] = LAST_LINE_AUTO;
+
+        write_u32(&mut bytes, region + abi::ENGINE_REGION_ID, 1);
+        write_u32(&mut bytes, region + abi::ENGINE_REGION_GEOMETRY_REVISION, 1);
+        write_u32(&mut bytes, region + abi::ENGINE_REGION_TRANSFORM_INDEX, 1);
+        bytes[region + abi::ENGINE_REGION_SHAPE] = SHAPE_RECTANGLE;
+        bytes[region + abi::ENGINE_REGION_WRITING_MODE] = WRITING_HORIZONTAL_TB;
+        bytes[region + abi::ENGINE_REGION_TEXT_ORIENTATION] = ORIENTATION_MIXED;
+        for field in [
+            abi::ENGINE_REGION_INLINE_END,
+            abi::ENGINE_REGION_BLOCK_END,
+            abi::ENGINE_REGION_CLIP_INLINE_END,
+            abi::ENGINE_REGION_CLIP_BLOCK_END,
+        ] {
+            write_f32(&mut bytes, region + field, 100.0);
+        }
+        bytes
+    }
+
+    fn parse_root_geometry(
+        bytes: &[u8],
+        limits: super::super::frame::UpdateLimits,
+    ) -> super::super::semantic_wire::GeometryBatch<'_> {
+        let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE;
+        let region = constraint + abi::ENGINE_CONSTRAINT_RECORD_SIZE;
+        parse_geometry(bytes, constraint, 1, region, 1, 0, 0, 0, 0, limits).unwrap()
     }
 
     fn text_mutation_bytes(records: &[(u32, u32, &[u16])]) -> Vec<u8> {
