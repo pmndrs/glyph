@@ -75,6 +75,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
   readonly #ownedMaterials = new WeakSet<THREE.NodeMaterial>();
   readonly #activeTransformIndices = new Set<number>();
   readonly #directDrawsByTransform = new Map<number, THREE.Mesh[]>();
+  #batchDrawsByScope = new WeakMap<THREE.Object3D, THREE.Mesh[]>();
   #transforms = new Map<number, THREE.Object3D>();
   #transformIdsByObject = new WeakMap<THREE.Object3D, readonly number[]>();
   readonly #requestedTransformIds: number[] = [];
@@ -100,9 +101,6 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     const renderer = this;
     this.#transformState = {
       renderObject: owner.renderObject,
-      get draws() {
-        return renderer.#draws;
-      },
       activeTransformIndices: this.#activeTransformIndices,
       directDrawsByTransform: this.#directDrawsByTransform,
       get transforms() {
@@ -216,6 +214,16 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     }
   }
 
+  /** Apply one observed batch scope's effective visibility without scanning unrelated draws. */
+  synchronizeBatchVisibility(scope: THREE.Object3D, visible: boolean): void {
+    for (const draw of this.#batchDrawsByScope.get(scope) ?? []) draw.visible = visible;
+  }
+
+  /** Whether the committed draw branch currently has visibility work for this scope. */
+  hasBatchVisibilityScope(scope: THREE.Object3D): boolean {
+    return this.#batchDrawsByScope.has(scope);
+  }
+
   syncTransforms(updates: readonly TransformUpdate<THREE.Object3D>[]): void {
     const ids = this.#requestedTransformIds;
     ids.length = 0;
@@ -253,6 +261,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     this.#transformIdsByObject = new WeakMap();
     this.#activeTransformIndices.clear();
     this.#directDrawsByTransform.clear();
+    this.#batchDrawsByScope = new WeakMap();
     this.#originRecords.clear();
     this.#originSegments = [];
   }
@@ -327,6 +336,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
               reusedUpdates: [],
               activeTransformIndices: this.#activeTransformIndices,
               directDrawsByTransform: this.#directDrawsByTransform,
+              batchDrawsByScope: this.#batchDrawsByScope,
             };
       this.#applyBoundRetirements(frame, context);
       const retainedMaterials = preparedDraws.changed
@@ -382,12 +392,12 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       }
     };
     commitBufferMutations(prepared.bufferMutations);
+    if (prepared.draws.changed) {
+      for (const update of prepared.draws.reusedUpdates) applyReusedDrawUpdate(update);
+    }
     if (prepared.replacesDraws) {
       commitTransforms(prepared.context.transformAttribute, prepared.transforms);
       for (const update of prepared.transforms.direct) applyTransformUpdate(update);
-    }
-    if (prepared.draws.changed) {
-      for (const update of prepared.draws.reusedUpdates) applyReusedDrawUpdate(update);
     }
     if (prepared.draws.changed) {
       for (const mesh of prepared.draws.draws) {
@@ -421,6 +431,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       for (const [id, meshes] of prepared.draws.directDrawsByTransform) {
         this.#directDrawsByTransform.set(id, meshes);
       }
+      this.#batchDrawsByScope = prepared.draws.batchDrawsByScope;
     }
     for (const material of prepared.context.newMaterials) this.#ownedMaterials.add(material);
     for (const material of prepared.retiredMaterials) attempt(() => material.dispose());
@@ -709,13 +720,11 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
 
 function applyReusedDrawUpdate(update: ReusedDrawUpdate): void {
   updateGeometryInstances(update.mesh.geometry, update.recordCount);
-  update.mesh.userData.pmndrsGlyphBatchScope = update.batchScope;
   update.mesh.userData.pmndrsGlyphRunStart = update.recordIndex;
-  update.mesh.userData.pmndrsGlyphTransformId = update.transformId;
   update.mesh.userData.pmndrsGlyphPrimitiveKind = update.primitiveKind;
   update.mesh.userData.pmndrsGlyphDepthKey = update.depthKey;
-  update.mesh.userData.pmndrsGlyphRenderOrder = update.renderOrder;
   update.mesh.matrixAutoUpdate = update.matrixAutoUpdate;
+  update.mesh.visible = update.visible;
   update.mesh.renderOrder = update.renderOrder;
 }
 

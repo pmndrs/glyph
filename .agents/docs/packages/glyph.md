@@ -645,6 +645,12 @@ material, and fixed paint layer, with under-decoration, glyph, and over-decorati
 stream. The default `auto` makes each top-level authored group a boundary while nested automatic groups inherit it;
 `group` forces a nested boundary, and `shared` joins the nearest authored boundary or the implicit root pool. Hiding a
 boundary-owning group skips its compatible draws without resizing buffers, replacing meshes, or entering Wasm.
+Committed draw order and batch-scope indexes are installed by the draw replacement transaction rather than replayed by
+every transform synchronization. `TextGroup` traversal first checks constant-time committed scope presence, then retains
+effective visibility only for an owned scope; direct transforms and groups joined to a scope-less shared pool do no batch
+scope visibility work. The Three renderer updates only an observed scope's draws when visibility changes, while a
+replacement stages initial visibility before commit so rejected candidates cannot publish scope state. Transform
+synchronization still visits the retained transform bindings to preserve arbitrary mutable Three ancestor matrices.
 When a rank-only permutation keeps the committed Codec, capability, one-batch single-aggregate-draw storage topology,
 and renderable stable-ID set, Rust copies the committed physical records into their new order and publishes write patches only. It transactionally
 updates its internal aggregate primitive/draw spans but does not republish unchanged buffers, resources, primitives,

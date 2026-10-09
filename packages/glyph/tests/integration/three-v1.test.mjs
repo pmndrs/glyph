@@ -29,6 +29,7 @@ import { bitmapSchema } from '../../dist/raster/bitmap.js';
 import { msdfSchema } from '../../dist/raster/msdf.js';
 import { slugSchema } from '../../dist/raster/slug.js';
 import { decorationSchema, threeSystemBuffers } from '../../dist/three/codec.js';
+import { ThreeCommandBufferRenderer } from '../../dist/three/command-buffer-renderer.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 import { compileNodeMaterial } from '../support/node-material-shaders.mjs';
 
@@ -607,6 +608,24 @@ test('patch-only publications refresh a standalone Text added after the publicat
 
           assert.equal(instrumentedGlyph.latestPlanCounts().draws, 0, 'the width-only reflow remains patch-only');
           assert.equal(visibleX(), 42, 'the late Text transform becomes visible in the accepting scene traversal');
+
+          const renderObject = scene.getObjectByName('@pmndrs/glyph:anonymous');
+          assert.ok(renderObject);
+          scene.add(renderObject);
+          assert.ok(
+            scene.children.indexOf(late) < scene.children.indexOf(renderObject),
+            'the late-added Text must now precede the private publication root',
+          );
+          late.position.x = 84;
+          late.constraints = { ...late.constraints, width: { mode: 'exact', size: 80 } };
+          instrumentedGlyph.reset();
+          scene.updateMatrixWorld(true);
+          assert.equal(
+            instrumentedGlyph.latestPlanCounts().draws,
+            0,
+            'the second width-only reflow remains patch-only',
+          );
+          assert.equal(visibleX(), 84, 'a late-added Text before the private root keeps same-frame transforms');
         } finally {
           late.dispose();
           first.dispose();
@@ -783,11 +802,15 @@ test('automatic sibling TextGroups own draws while shared siblings recover 0.1.0
   try {
     const automaticDraws = rootDraws(scene);
     assert.equal(automaticDraws.length, 2, 'each top-level automatic group owns one compatible draw');
+    first.visible = false;
+    scene.updateMatrixWorld(true);
     assert.deepEqual(
-      automaticDraws.map((draw) => draw.userData.pmndrsGlyphBatchScope),
-      [first, second],
-      'automatic sibling draws preserve authored group order',
+      automaticDraws.map((draw) => draw.visible),
+      [false, true],
+      'the first automatic sibling owns the first draw visibility scope',
     );
+    first.visible = true;
+    scene.updateMatrixWorld(true);
     assert.equal(automaticDraws[0].material, automaticDraws[1].material, 'split draws reuse one realized material');
     assert.deepEqual(
       automaticDraws.map((draw) => draw.renderOrder),
@@ -836,13 +859,11 @@ test('TextGroup batching resolves automatic roots, shared structure, and explici
       'two automatic roots, one explicit nested group, and one implicit shared scope own four draws',
     );
     assert.equal(first.batching, 'auto');
-    const firstBoundaryDraws = initialDraws.filter(
-      (draw) => draw.userData.pmndrsGlyphBatchScope === first || draw.userData.pmndrsGlyphBatchScope === nestedGroup,
-    );
-    assert.equal(firstBoundaryDraws.length, 2, 'the automatic root and explicit descendant own separate draw scopes');
     instrumentedGlyph.reset();
     first.visible = false;
     scene.updateMatrixWorld(true);
+    const firstBoundaryDraws = initialDraws.filter((draw) => !draw.visible);
+    assert.equal(firstBoundaryDraws.length, 2, 'the automatic root and explicit descendant own separate draw scopes');
     assert.equal(instrumentedGlyph.crossings, 0, 'group visibility does not enter Wasm or rebuild the display list');
     assert.deepEqual(rootDraws(scene), initialDraws, 'group visibility preserves every realized mesh');
     assert.ok(
@@ -873,6 +894,334 @@ test('TextGroup batching resolves automatic roots, shared structure, and explici
   }
 });
 
+test('groups without a committed batch scope skip scope visibility synchronization', async (t) => {
+  const synchronizeBatchVisibility = ThreeCommandBufferRenderer.prototype.synchronizeBatchVisibility;
+  let synchronizations = 0;
+  ThreeCommandBufferRenderer.prototype.synchronizeBatchVisibility = function (...args) {
+    synchronizations += 1;
+    return synchronizeBatchVisibility.apply(this, args);
+  };
+  t.after(() => {
+    ThreeCommandBufferRenderer.prototype.synchronizeBatchVisibility = synchronizeBatchVisibility;
+  });
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const cases = [
+    { transformMode: 'indexed', batching: 'auto', expected: 1 },
+    { transformMode: 'indexed', batching: 'shared', expected: 0 },
+    { transformMode: 'direct', batching: 'auto', expected: 0 },
+  ];
+
+  try {
+    for (const scenario of cases) {
+      await t.test(`${scenario.transformMode}-${scenario.batching}`, async (subtest) => {
+        const three = await createThreeTestHandle(
+          subtest,
+          defineThreeConfig({ transformMode: scenario.transformMode }),
+        );
+        const scene = new THREE.Scene();
+        const group = three.createTextGroup({ batching: scenario.batching });
+        const label = three.createText({ font, text: `${scenario.transformMode} ${scenario.batching}` });
+        group.add(label);
+        scene.add(group);
+        scene.updateMatrixWorld(true);
+
+        synchronizations = 0;
+        group.visible = false;
+        scene.updateMatrixWorld(true);
+        assert.equal(
+          synchronizations,
+          scenario.expected,
+          'only an indexed group with an owned committed scope performs batch visibility work',
+        );
+        label.dispose();
+        group.dispose();
+      });
+    }
+  } finally {
+    font.dispose();
+  }
+});
+
+test('clean transform synchronization skips committed draw metadata and updates only changed batch scopes', async (t) => {
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+
+  try {
+    for (const transformMode of ['indexed', 'direct']) {
+      await t.test(transformMode, async (subtest) => {
+        const three = await createThreeTestHandle(subtest, defineThreeConfig({ transformMode }));
+        const scene = new THREE.Scene();
+        const parent = new THREE.Group();
+        const groups = Array.from({ length: 3 }, () => three.createTextGroup());
+        const labels = groups.map((group, index) => {
+          const label = three.createText({ font, text: `scope ${String(index)}` });
+          group.add(label);
+          return label;
+        });
+        parent.add(...groups);
+        scene.add(parent);
+        scene.updateMatrixWorld(true);
+
+        try {
+          const draws = groups.map((group) => singleDrawAffectedByGroupVisibility(scene, group));
+          const writes = draws.map((draw) => observeDrawMetadataWrites(draw));
+          const resetWrites = () => {
+            for (const write of writes) {
+              write.renderOrder = 0;
+              write.visible = 0;
+            }
+          };
+
+          resetWrites();
+          scene.updateMatrixWorld(true);
+          assert.deepEqual(
+            writes,
+            writes.map(() => ({ renderOrder: 0, visible: 0 })),
+            'an unchanged traversal must not rewrite committed draw metadata',
+          );
+
+          labels[1].style = { ...labels[1].style, color: '#00ff00' };
+          scene.updateMatrixWorld(true);
+          assert.deepEqual(
+            writes,
+            writes.map(() => ({ renderOrder: 0, visible: 0 })),
+            'a patch-only paint publication must not rescan unchanged draw bindings',
+          );
+
+          groups[1].visible = false;
+          scene.updateMatrixWorld(true);
+          assert.deepEqual(
+            writes,
+            [
+              { renderOrder: 0, visible: 0 },
+              { renderOrder: 0, visible: 1 },
+              { renderOrder: 0, visible: 0 },
+            ],
+            'one group visibility change must touch only its retained draw scope',
+          );
+          assert.equal(draws[1].visible, false);
+
+          resetWrites();
+          parent.visible = false;
+          scene.updateMatrixWorld(true);
+          assert.deepEqual(
+            writes.map(({ visible }) => visible),
+            [1, 0, 1],
+            'ancestor visibility must touch each newly hidden descendant scope and skip the already hidden scope',
+          );
+          assert.ok(draws.every((draw) => !draw.visible));
+
+          resetWrites();
+          parent.visible = true;
+          groups[1].visible = true;
+          scene.updateMatrixWorld(true);
+          assert.deepEqual(
+            writes.map(({ visible }) => visible),
+            [1, 1, 1],
+            'restoring ancestor and local visibility must update exactly the affected scopes',
+          );
+          assert.ok(draws.every((draw) => draw.visible));
+
+          if (transformMode === 'direct') {
+            const renderObject = scene.getObjectByName('@pmndrs/glyph:anonymous');
+            assert.ok(renderObject);
+            scene.add(parent);
+            assert.ok(
+              scene.children.indexOf(renderObject) < scene.children.indexOf(parent),
+              'the private publication root must precede the authored direct transforms',
+            );
+            labels[1].visible = false;
+            groups[1].visible = false;
+            scene.updateMatrixWorld(true);
+            groups[1].visible = true;
+            scene.updateMatrixWorld(true);
+            assert.equal(
+              draws[1].visible,
+              false,
+              'late group visibility observation must not override an already traversed hidden direct Text',
+            );
+          }
+        } finally {
+          for (const label of labels) label.dispose();
+          for (const group of groups) group.dispose();
+        }
+      });
+    }
+  } finally {
+    font.dispose();
+  }
+});
+
+test('deterministic retained renderer mutations match cold checkpoints in indexed and direct modes', async (t) => {
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+
+  try {
+    for (const transformMode of ['indexed', 'direct']) {
+      await t.test(transformMode, async (subtest) => {
+        const three = await createThreeTestHandle(
+          subtest,
+          defineThreeConfig({ capacity: { size: 2, policy: 'grow' }, transformMode }),
+        );
+        const scene = new THREE.Scene();
+        const parent = new THREE.Group();
+        const entries = [];
+        const mounted = new Map();
+        let nextId = 0;
+        let randomState = transformMode === 'indexed' ? 0x247_1d : 0x247_d1;
+        const random = () => {
+          randomState = (Math.imul(randomState, 1_664_525) + 1_013_904_223) >>> 0;
+          return randomState;
+        };
+        const insert = () => {
+          const id = nextId++;
+          const entry = {
+            id,
+            batching: 'auto',
+            color: '#ffffff',
+            renderOrder: 0,
+            text: `label ${String(id)}`,
+            visible: true,
+            x: id * 3,
+          };
+          entries.splice(random() % (entries.length + 1), 0, entry);
+          mounted.set(id, mountRendererDifferentialEntry(three, font, parent, entry));
+          parent.add(...entries.map(({ id: entryId }) => mounted.get(entryId).group));
+        };
+        insert();
+        insert();
+        scene.add(parent);
+        scene.updateMatrixWorld(true);
+        const storageGenerations = new Set(
+          rootDraws(scene).map((draw) => draw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.origin.id))),
+        );
+        let storageGenerationChanged = false;
+
+        try {
+          for (let step = 0; step < 30; step += 1) {
+            const selected = entries[random() % entries.length];
+            assert.ok(selected);
+            const live = mounted.get(selected.id);
+            assert.ok(live);
+            switch (step % 10) {
+              case 0: {
+                if (entries.length < 5) insert();
+                else {
+                  selected.text += ' growing';
+                  live.label.text = selected.text;
+                }
+                break;
+              }
+              case 1: {
+                selected.text = `${selected.text} ${'growth '.repeat((step % 4) + 1)}`;
+                live.label.text = selected.text;
+                break;
+              }
+              case 2: {
+                selected.color = (random() & 1) === 0 ? '#00ff00' : '#ff00ff';
+                live.label.style = { ...live.label.style, color: selected.color };
+                break;
+              }
+              case 3: {
+                selected.x = (random() % 31) - 15;
+                live.group.position.x = selected.x;
+                break;
+              }
+              case 4: {
+                selected.visible = !selected.visible;
+                live.group.visible = selected.visible;
+                break;
+              }
+              case 5: {
+                entries.push(...entries.splice(random() % entries.length, 1));
+                selected.renderOrder = (random() % 7) - 3;
+                live.group.renderOrder = selected.renderOrder;
+                parent.add(...entries.map(({ id }) => mounted.get(id).group));
+                break;
+              }
+              case 6: {
+                selected.text = selected.text.length === 0 ? `restored ${String(selected.id)}` : '';
+                live.label.text = selected.text;
+                break;
+              }
+              case 7: {
+                selected.batching = selected.batching === 'auto' ? 'shared' : 'auto';
+                live.group.batching = selected.batching;
+                break;
+              }
+              case 8: {
+                if (entries.length > 1) {
+                  const removed = entries.splice(random() % entries.length, 1)[0];
+                  const removedLive = mounted.get(removed.id);
+                  removedLive.label.dispose();
+                  removedLive.label.removeFromParent();
+                  removedLive.group.dispose();
+                  removedLive.group.removeFromParent();
+                  mounted.delete(removed.id);
+                }
+                break;
+              }
+              case 9: {
+                parent.visible = !parent.visible;
+                break;
+              }
+            }
+
+            const renderObject = scene.getObjectByName('@pmndrs/glyph:anonymous');
+            assert.ok(renderObject);
+            if ((step & 1) === 0) scene.add(parent);
+            else scene.add(renderObject);
+            scene.updateMatrixWorld(true);
+            for (const draw of rootDraws(scene)) {
+              const storage = draw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.origin.id));
+              if (storageGenerations.has(storage)) continue;
+              storageGenerations.add(storage);
+              storageGenerationChanged = true;
+            }
+
+            const retained = rendererDifferentialSnapshot(scene, undefined, entries, mounted);
+            const coldName = `cold-${transformMode}-${String(step)}`;
+            const coldRoot = three(coldName);
+            const coldScene = new THREE.Scene();
+            const coldParent = new THREE.Group();
+            coldParent.visible = parent.visible;
+            const coldMounted = new Map();
+            for (const entry of [...entries].sort((left, right) => left.id - right.id)) {
+              coldMounted.set(entry.id, mountRendererDifferentialEntry(coldRoot, font, coldParent, entry));
+            }
+            coldParent.add(...entries.map(({ id }) => coldMounted.get(id).group));
+            coldScene.add(coldParent);
+            coldScene.updateMatrixWorld(true);
+            try {
+              assert.deepEqual(
+                retained,
+                rendererDifferentialSnapshot(coldScene, coldName, entries, coldMounted),
+                `retained step ${String(step)} must match a cold full checkpoint`,
+              );
+            } finally {
+              for (const { group, label } of coldMounted.values()) {
+                label.dispose();
+                group.dispose();
+              }
+              coldRoot.dispose();
+            }
+          }
+          assert.equal(
+            storageGenerationChanged,
+            true,
+            'the mutation sequence must cross a retained storage generation',
+          );
+        } finally {
+          for (const { group, label } of mounted.values()) {
+            label.dispose();
+            group.dispose();
+          }
+        }
+      });
+    }
+  } finally {
+    font.dispose();
+  }
+});
+
 test('a hidden automatic TextGroup never exposes its first realized draw', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
@@ -887,7 +1236,6 @@ test('a hidden automatic TextGroup never exposes its first realized draw', async
   try {
     const draws = rootDraws(scene);
     assert.equal(draws.length, 1);
-    assert.equal(draws[0].userData.pmndrsGlyphBatchScope, group);
     assert.equal(draws[0].visible, false, 'the first publication observes authored ancestor visibility');
   } finally {
     label.dispose();
@@ -2419,6 +2767,7 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   assert.equal(instrumented.crossings, 1, 'inspection must not turn a rejected unchanged frame into a retry');
 
   failMaterial = false;
+  group.visible = false;
   scene.updateMatrixWorld();
   assert.match(String(group.error), /deliberate material realization failure/u);
   assert.equal(instrumented.crossings, 1, 'an unchanged frame must not retry a renderer implementation failure');
@@ -2436,6 +2785,11 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   );
   assert.equal(errors.length, 1, 'a successful checkpoint must not repeat the old failure');
   assert.equal(rootDraws(scene).length, 1);
+  assert.equal(rootDraws(scene)[0].visible, false, 'retry must publish the current hidden batch scope');
+
+  group.visible = true;
+  scene.updateMatrixWorld();
+  assert.equal(rootDraws(scene)[0].visible, true, 'the accepted retry must install live scope synchronization');
 
   label.text = 'New input after recovery';
   scene.updateMatrixWorld();
@@ -2446,6 +2800,80 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
 
   group.dispose();
   label.dispose();
+  font.dispose();
+});
+
+test('rejected draw replacement retains the accepted scope index and retry matches a cold preparation', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  let failReplacement = false;
+  const replacementMaterial = defineTextMaterial((context) => {
+    if (failReplacement) throw new Error('deliberate replacement failure');
+    return context.createDefaultMaterial();
+  });
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const label = three.createText({ font, text: 'Accepted before retry' });
+  group.add(label);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+  const accepted = rootDraws(scene)[0];
+  assert.ok(accepted);
+
+  failReplacement = true;
+  label.material = replacementMaterial;
+  scene.updateMatrixWorld(true);
+  assert.match(String(label.error), /deliberate replacement failure/u);
+  assert.equal(rootDraws(scene)[0], accepted, 'rejection must keep the accepted draw branch');
+
+  group.visible = false;
+  scene.updateMatrixWorld(true);
+  assert.equal(accepted.visible, false, 'the accepted scope index remains live after rejection');
+  group.visible = true;
+  scene.updateMatrixWorld(true);
+  assert.equal(accepted.visible, true, 'the accepted scope can be restored before retry');
+
+  failReplacement = false;
+  label.material = replacementMaterial;
+  scene.updateMatrixWorld(true);
+  assert.equal(label.error, undefined);
+
+  const entry = {
+    id: 0,
+    batching: 'auto',
+    color: '#ffffff',
+    material: replacementMaterial,
+    renderOrder: 0,
+    text: label.text,
+    visible: true,
+    x: 0,
+  };
+  const mounted = new Map([[entry.id, { group, label }]]);
+  const coldName = 'cold-replacement-retry';
+  const coldRoot = three(coldName);
+  const coldScene = new THREE.Scene();
+  const coldParent = new THREE.Group();
+  const coldMounted = new Map([[entry.id, mountRendererDifferentialEntry(coldRoot, font, coldParent, entry)]]);
+  coldScene.add(coldParent);
+  coldScene.updateMatrixWorld(true);
+  try {
+    assert.deepEqual(
+      rendererDifferentialSnapshot(scene, undefined, [entry], mounted),
+      rendererDifferentialSnapshot(coldScene, coldName, [entry], coldMounted),
+      'the accepted retry must match a cold full preparation',
+    );
+  } finally {
+    for (const cold of coldMounted.values()) {
+      cold.label.dispose();
+      cold.group.dispose();
+    }
+    coldRoot.dispose();
+  }
+
+  label.dispose();
+  group.dispose();
+  scene.updateMatrixWorld(true);
+  assert.equal(rootDraws(scene).length, 0, 'disposing the accepted branch clears its scope index and draws');
   font.dispose();
 });
 
@@ -4389,4 +4817,167 @@ function dataUrl(bytes) {
 function rootDraws(scene, name = undefined) {
   const renderObject = scene.getObjectByName(name === undefined ? '@pmndrs/glyph:anonymous' : `@pmndrs/glyph:${name}`);
   return renderObject?.children.filter((child) => child.isMesh) ?? [];
+}
+
+function singleDrawAffectedByGroupVisibility(scene, group) {
+  const draws = rootDraws(scene);
+  assert.ok(
+    draws.every((draw) => draw.visible),
+    'scope discovery starts with every draw visible',
+  );
+  group.visible = false;
+  scene.updateMatrixWorld(true);
+  const affected = draws.filter((draw) => !draw.visible);
+  group.visible = true;
+  scene.updateMatrixWorld(true);
+  assert.equal(affected.length, 1, 'one automatic TextGroup must affect one committed draw');
+  assert.ok(
+    draws.every((draw) => draw.visible),
+    'scope discovery restores every draw',
+  );
+  return affected[0];
+}
+
+function observeDrawMetadataWrites(draw) {
+  let renderOrder = draw.renderOrder;
+  let visible = draw.visible;
+  const writes = { renderOrder: 0, visible: 0 };
+  Object.defineProperties(draw, {
+    renderOrder: {
+      configurable: true,
+      enumerable: true,
+      get: () => renderOrder,
+      set: (value) => {
+        writes.renderOrder += 1;
+        renderOrder = value;
+      },
+    },
+    visible: {
+      configurable: true,
+      enumerable: true,
+      get: () => visible,
+      set: (value) => {
+        writes.visible += 1;
+        visible = value;
+      },
+    },
+  });
+  return writes;
+}
+
+function mountRendererDifferentialEntry(root, font, parent, entry) {
+  const group = root.createTextGroup({ batching: entry.batching, renderOrder: entry.renderOrder });
+  const label = root.createText({
+    font,
+    ...(entry.material === undefined ? {} : { material: entry.material }),
+    style: { color: entry.color },
+    text: entry.text,
+  });
+  group.position.x = entry.x;
+  group.visible = entry.visible;
+  group.add(label);
+  parent.add(group);
+  return { group, label };
+}
+
+const rendererDifferentialLayoutColumns = [
+  'glyphIds',
+  'clusters',
+  'glyphFontSlots',
+  'glyphBidiLevels',
+  'glyphFontSizes',
+  'x',
+  'y',
+  'glyphAdvances',
+  'glyphInkX',
+  'glyphInkY',
+  'glyphInkWidths',
+  'glyphInkHeights',
+  'glyphFlags',
+  'lineTextStarts',
+  'lineTextEnds',
+  'lineGlyphStarts',
+  'lineGlyphCounts',
+  'lineBaselines',
+  'lineAdvances',
+];
+
+function rendererDifferentialSnapshot(scene, rootName, entries, mounted) {
+  const layouts = entries.map(({ id }) => {
+    const layout = mounted.get(id).label.glyphs();
+    return {
+      id,
+      columns: Object.fromEntries(rendererDifferentialLayoutColumns.map((field) => [field, Array.from(layout[field])])),
+      measurement: {
+        contentHeight: layout.contentHeight,
+        contentWidth: layout.contentWidth,
+        glyphCount: layout.glyphCount,
+        height: layout.height,
+        lineCount: layout.lineCount,
+        maxContentWidth: layout.maxContentWidth,
+        minContentWidth: layout.minContentWidth,
+        width: layout.width,
+      },
+    };
+  });
+  const visibilityByEntry = entries.map(({ id }) => {
+    const group = mounted.get(id).group;
+    const original = group.visible;
+    group.visible = false;
+    scene.updateMatrixWorld(true);
+    const whenHidden = rootDraws(scene, rootName).map((draw) => draw.visible);
+    group.visible = true;
+    scene.updateMatrixWorld(true);
+    const whenVisible = rootDraws(scene, rootName).map((draw) => draw.visible);
+    group.visible = original;
+    scene.updateMatrixWorld(true);
+    return { id, whenHidden, whenVisible };
+  });
+  const omittedAttributes = new Set([
+    '_pmndrsGlyphInstanceTransforms',
+    '_pmndrsGlyphTransforms',
+    glyphAttribute(threeSystemBuffers.placementSlot.id),
+    glyphAttribute(threeSystemBuffers.stableGlyphId.id),
+    glyphAttribute(threeSystemBuffers.transformIndex.id),
+  ]);
+  const draws = rootDraws(scene, rootName).map((draw) => {
+    const start = draw.userData.pmndrsGlyphRunStart;
+    const count = draw.geometry.instanceCount;
+    const transformIndices = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id));
+    const transformTable = draw.geometry.getAttribute('_pmndrsGlyphTransforms');
+    const matrices = Array.from({ length: count }, (_, index) => {
+      if (transformIndices === undefined || transformTable === undefined) {
+        return draw.matrix.elements.map(Math.fround);
+      }
+      const transformId = transformIndices.getX(start + index);
+      return Array.from(transformTable.array.subarray(transformId * 16, transformId * 16 + 16));
+    });
+    const attributes = Object.fromEntries(
+      Object.entries(draw.geometry.attributes)
+        .filter(([name]) => !omittedAttributes.has(name))
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([name, attribute]) => {
+          const first = start * attribute.itemSize;
+          const end = (start + count) * attribute.itemSize;
+          return [
+            name,
+            {
+              itemSize: attribute.itemSize,
+              normalized: attribute.normalized,
+              values: Array.from(attribute.array.subarray(first, end)),
+            },
+          ];
+        }),
+    );
+    return {
+      attributes,
+      count,
+      depthKey: draw.userData.pmndrsGlyphDepthKey,
+      matrices,
+      primitiveKind: draw.userData.pmndrsGlyphPrimitiveKind,
+      renderOrder: draw.renderOrder,
+      visible: draw.visible,
+    };
+  });
+  return { draws, layouts, visibilityByEntry };
 }
