@@ -806,7 +806,10 @@ publication work. Its `edit-sized` suite isolates first and last same-length, le
 10-, 100-, and 1,000-label roots, plus batched and interleaved edit-read paths for 100 edits in 100- and 1,000-label
 roots. Edits in the larger root are spread across its ordered labels. Untimed glyph snapshots distinguish both edited
 outputs and verify untouched labels retain their accepted output. Warm setup and untimed semantic checks surround every
-timed mutation. `benchmark:edit-sized-publication-profile` installs one packed artifact
+timed mutation. Paired immediate-measurement cases perform the same 100 assignments and `measure()` reads with and
+without explicit renderer publication, retaining cold measurement oracles and untouched-label checks. These semantic
+reads are distinct from `measureGlyphs()`, which describes currently displayed glyphs.
+`benchmark:edit-sized-publication-profile` installs one packed artifact
 and optionally substitutes a named shaper Wasm, then emits a CPU profile, timing summary, and manifest for shaping,
 gather, render-plan, serialization, allocation, host-JavaScript, and other-Wasm attribution.
 `benchmark:labs-internal` is reserved for workspace-only implementation experiments that cannot ship in
