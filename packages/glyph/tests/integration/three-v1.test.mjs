@@ -3380,40 +3380,42 @@ test('throwing Three retirement callbacks preserve the accepted publication', as
       );
       assert.equal(label.error, disposalError, 'scene-owned error reporting retains the caller failure');
 
+      const entry = {
+        id: 0,
+        batching: 'auto',
+        color: '#ffffff',
+        material: replacementMaterial,
+        renderOrder: 3,
+        text: label.text,
+        visible: true,
+        x: 0,
+      };
+      const mounted = new Map([[entry.id, { group, label }]]);
       const cold = await createThreeTestHandle(subtest, config);
       const coldScene = new THREE.Scene();
-      const coldGroup = cold.createTextGroup({ renderOrder: 3 });
-      const coldLabel = cold.createText({
-        font,
-        material: replacementMaterial,
-        text: 'replacement text forces retained storage growth',
-      });
-      coldLabel.position.copy(label.position);
-      coldGroup.add(coldLabel);
-      coldScene.add(coldGroup);
+      const coldMounted = new Map([[entry.id, mountRendererDifferentialEntry(cold, font, coldScene, entry)]]);
+      const { group: coldGroup, label: coldLabel } = coldMounted.get(entry.id);
       coldScene.updateMatrixWorld(true);
-
-      const snapshot = (targetScene) =>
-        rootDraws(targetScene).map((draw) => ({
-          instances: draw.geometry.instanceCount,
-          matrix: [...draw.matrix.elements],
-          renderOrder: draw.renderOrder,
-          transforms: [...(draw.geometry.getAttribute('_pmndrsGlyphTransforms')?.array ?? new Float32Array())],
-          visible: draw.visible,
-        }));
+      const assertMatchesCold = (message) =>
+        assert.deepEqual(
+          rendererDifferentialSnapshot(scene, undefined, [entry], mounted),
+          rendererDifferentialSnapshot(coldScene, undefined, [entry], coldMounted),
+          message,
+        );
+      assertMatchesCold('the accepted retirement publication must match a cold full preparation');
 
       label.position.set(23, -7, 0);
       coldLabel.position.copy(label.position);
       scene.updateMatrixWorld(true);
       coldScene.updateMatrixWorld(true);
-      assert.deepEqual(snapshot(scene), snapshot(coldScene), 'later transforms must match a cold scene');
+      assertMatchesCold('later transforms must match a cold full preparation');
       assert.equal(label.error, disposalError, 'transform synchronization does not erase the attributed failure');
 
       group.visible = false;
       coldGroup.visible = false;
       scene.updateMatrixWorld(true);
       coldScene.updateMatrixWorld(true);
-      assert.deepEqual(snapshot(scene), snapshot(coldScene), 'later visibility must match a cold scene');
+      assertMatchesCold('later visibility must match a cold full preparation');
 
       group.visible = true;
       coldGroup.visible = true;
@@ -3422,7 +3424,7 @@ test('throwing Three retirement callbacks preserve the accepted publication', as
       scene.updateMatrixWorld(true);
       coldScene.updateMatrixWorld(true);
       assert.equal(label.error, undefined, 'a later accepted publication clears the attributed cleanup error');
-      assert.deepEqual(snapshot(scene), snapshot(coldScene), 'later order and transforms must match a cold scene');
+      assertMatchesCold('the recovered publication must match a cold full preparation');
 
       coldLabel.dispose();
       coldGroup.dispose();
@@ -3772,27 +3774,30 @@ test('two-root cleanup failures settle every root despite a throwing notificatio
   font.dispose();
 });
 
-test('accepted retirement failures outrank reentrant initial transform synchronization', async (t) => {
+test('accepted retirement failures outrank reentrant notification traversal and transform synchronization', async (t) => {
   const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
   const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
-  const roots = [three('transform-precedence-left'), three('transform-precedence-right')];
-  const firstScene = new THREE.Scene();
+  const thrownValues = [undefined, null, 0];
+  const roots = thrownValues.map((_, index) => three(`transform-precedence-${String(index)}`));
+  const initialScenes = roots.map(() => new THREE.Scene());
   const movedScene = new THREE.Scene();
-  const secondScene = new THREE.Scene();
   const groups = roots.map((root) => root.createTextGroup());
-  const thrownValues = [undefined, 0];
   const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
   const transformFailure = new Error('secondary initial transform synchronization failure');
   let transformMustFail = true;
+  let successfulTransformUpdates = 0;
   class ThrowingTransformParent extends THREE.Object3D {
     updateWorldMatrix(updateParents, updateChildren) {
       if (transformMustFail) throw transformFailure;
+      successfulTransformUpdates += 1;
       return super.updateWorldMatrix(updateParents, updateChildren);
     }
   }
   const throwingParent = new ThrowingTransformParent();
   movedScene.add(throwingParent);
   const notifications = [];
+  let notificationTraversalStarted = false;
+  let notificationTraversalCompleted = false;
   const labels = thrownValues.map((thrownValue, index) => {
     const retiringMaterial = defineTextMaterial((context) => {
       const material = context.createDefaultMaterial();
@@ -3804,15 +3809,20 @@ test('accepted retirement failures outrank reentrant initial transform synchroni
     const label = roots[index].createText({ font, material: retiringMaterial, text: String(index) });
     label.onError = (error) => {
       notifications.push([index, error]);
-      if (index === 0) throwingParent.add(label);
+      if (index === 0 && !notificationTraversalStarted) {
+        notificationTraversalStarted = true;
+        throwingParent.add(label);
+        movedScene.updateMatrixWorld(true);
+        notificationTraversalCompleted = true;
+      }
     };
     groups[index].add(label);
     return label;
   });
-  firstScene.add(groups[0]);
-  secondScene.add(groups[1]);
-  firstScene.updateMatrixWorld(true);
-  secondScene.updateMatrixWorld(true);
+  for (const [index, scene] of initialScenes.entries()) {
+    scene.add(groups[index]);
+    scene.updateMatrixWorld(true);
+  }
 
   movedScene.add(groups[0]);
   for (const [index, label] of labels.entries()) {
@@ -3822,17 +3832,23 @@ test('accepted retirement failures outrank reentrant initial transform synchroni
   const cleanupThrow = captureThrown(() => glyph.shape());
   assert.equal(cleanupThrow.present, true);
   assert.ok(cleanupThrow.error instanceof AggregateError);
-  assert.equal(cleanupThrow.error.errors.length, 2);
+  assert.equal(cleanupThrow.error.errors.length, 3);
   assert.ok(Object.is(cleanupThrow.error.errors[0], undefined));
-  assert.ok(Object.is(cleanupThrow.error.errors[1], 0));
+  assert.ok(Object.is(cleanupThrow.error.errors[1], null));
+  assert.ok(Object.is(cleanupThrow.error.errors[2], 0));
   assert.equal(cleanupThrow.error.errors.includes(transformFailure), false);
   assert.deepEqual(notifications, [
     [0, undefined],
-    [1, 0],
+    [1, null],
+    [2, 0],
   ]);
+  assert.equal(notificationTraversalCompleted, true, 'the first public onError callback must traverse the moved scene');
   assert.equal(labels[0].parent, throwingParent, 'the first notification must install the throwing parent');
-  assert.deepEqual(labels[0].commitState(), { status: 'committed', revision: 2 });
-  assert.deepEqual(labels[1].commitState(), { status: 'committed', revision: 2 });
+  for (const [index, label] of labels.entries()) {
+    assert.deepEqual(label.commitState(), { status: 'committed', revision: 2 });
+    assert.ok(Object.is(label.error, thrownValues[index]), 'Text must retain its exact accepted retirement value');
+    assert.ok(Object.is(groups[index].error, thrownValues[index]), 'TextGroup must retain the same attributed value');
+  }
   for (const [index, root] of roots.entries()) {
     assert.equal(root.disposed, false);
     assert.equal(root.textCount, 1);
@@ -3845,14 +3861,16 @@ test('accepted retirement failures outrank reentrant initial transform synchroni
     label.text = `transform precedence recovery ${String(index)}`;
   }
   glyph.shape();
-  assert.deepEqual(labels[0].commitState(), { status: 'committed', revision: 3 });
-  assert.deepEqual(labels[1].commitState(), { status: 'committed', revision: 3 });
-  assert.equal(labels[0].error, undefined);
-  assert.equal(labels[1].error, undefined);
-  assert.equal(groups[0].error, undefined);
+  assert.ok(successfulTransformUpdates > 0, 'the pending transform synchronization must recover deterministically');
+  for (let index = 0; index < labels.length; index += 1) {
+    assert.deepEqual(labels[index].commitState(), { status: 'committed', revision: 3 });
+    assert.equal(labels[index].error, undefined);
+    assert.equal(groups[index].error, undefined);
+  }
   assert.deepEqual(notifications, [
     [0, undefined],
-    [1, 0],
+    [1, null],
+    [2, 0],
   ]);
 
   for (const label of labels) label.dispose();

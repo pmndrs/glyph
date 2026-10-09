@@ -735,8 +735,10 @@ publication's Text and live-group ownership, carries the accepted/rejected class
 state, and only then invokes guarded notifications. The root retains only that error-path group ownership: replacement
 updates it, successful publication clears current Text state plus the retained group set directly without copying
 participants or rediscovering ancestry, and group disposal releases the group from the same set and clears its terminal
-error state after lifecycle preflight. Disposed groups cannot be reacquired by later attribution. Arbitrary callback
-throws, including `undefined`, `null`, and `0`, retain their identity through `onError` and the public shaping throw. The
+error state after lifecycle preflight. The root admits only the outermost attribution through state installation and user
+notifications, so callback-driven scene traversal cannot replace that in-flight failure with a secondary reconciliation
+or transform error. Disposed groups cannot be reacquired by later attribution. Arbitrary callback throws, including
+`undefined`, `null`, and `0`, retain their identity through `onError` and the public shaping throw. The
 accepted hook also preserves that retirement value if reentrant notification changes hierarchy and the following initial
 transform synchronization throws: synchronization errors surface when no earlier publication failure exists, and failed
 initial synchronization remains pending for a later publication retry. The historical `Text.error`/`TextGroup.error`

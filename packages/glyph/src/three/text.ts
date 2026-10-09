@@ -286,6 +286,7 @@ export class ThreeRootHost {
   #scene: THREE.Scene | undefined;
   #binding: ThreeRootPublication | undefined;
   #needsInitialTransformSync = false;
+  #errorAttributionActive = false;
   readonly #renderMemberScratch: Text<RasterFormatMetadata>[] = [];
   readonly #attributedErrorGroups = new Set<TextGroup>();
   #capacity: GlyphBufferCapacity;
@@ -668,35 +669,42 @@ export class ThreeRootHost {
   }
 
   #reportError(error: unknown, texts: readonly Text<RasterFormatMetadata>[], publicationAccepted = false): void {
-    const participants = [...texts];
-    const groups = new Set<TextGroup>();
-    for (const text of participants) {
-      for (let parent = text.parent; parent !== null; parent = parent.parent) {
-        if (parent instanceof TextGroup && !parent.disposed) groups.add(parent);
+    // The outer failure owns state and notifications until its attribution finishes.
+    if (this.#errorAttributionActive) return;
+    this.#errorAttributionActive = true;
+    try {
+      const participants = [...texts];
+      const groups = new Set<TextGroup>();
+      for (const text of participants) {
+        for (let parent = text.parent; parent !== null; parent = parent.parent) {
+          if (parent instanceof TextGroup && !parent.disposed) groups.add(parent);
+        }
       }
-    }
-    for (const group of this.#attributedErrorGroups) {
-      if (!groups.has(group)) textGroupErrors.clearError(group);
-    }
-    const textNotifications = participants.filter((text) => reconciler.setError(text, error, publicationAccepted));
-    const groupNotifications = [...groups].filter((group) =>
-      textGroupErrors.setError(group, error, publicationAccepted),
-    );
-    this.#attributedErrorGroups.clear();
-    for (const group of groups) this.#attributedErrorGroups.add(group);
-    for (const text of textNotifications) {
-      try {
-        reconciler.notifyError(text, error);
-      } catch {
-        // Error notification cannot replace the renderer failure it reports.
+      for (const group of this.#attributedErrorGroups) {
+        if (!groups.has(group)) textGroupErrors.clearError(group);
       }
-    }
-    for (const group of groupNotifications) {
-      try {
-        textGroupErrors.notifyError(group, error);
-      } catch {
-        // Error notification cannot replace the renderer failure it reports.
+      const textNotifications = participants.filter((text) => reconciler.setError(text, error, publicationAccepted));
+      const groupNotifications = [...groups].filter((group) =>
+        textGroupErrors.setError(group, error, publicationAccepted),
+      );
+      this.#attributedErrorGroups.clear();
+      for (const group of groups) this.#attributedErrorGroups.add(group);
+      for (const text of textNotifications) {
+        try {
+          reconciler.notifyError(text, error);
+        } catch {
+          // Error notification cannot replace the renderer failure it reports.
+        }
       }
+      for (const group of groupNotifications) {
+        try {
+          textGroupErrors.notifyError(group, error);
+        } catch {
+          // Error notification cannot replace the renderer failure it reports.
+        }
+      }
+    } finally {
+      this.#errorAttributionActive = false;
     }
   }
 

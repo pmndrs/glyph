@@ -39,3 +39,19 @@ accepted-scope retry regression and renderer ordering, and this change's publica
 without another publication path. No build, test, package check, Labs, install, or server workflow ran after that rebase;
 the earlier results are scoped evidence, not validation of the new combined base. Throwing listeners during final renderer
 teardown remain a separate inherited follow-up.
+
+A final independent review found that an `onError` callback could synchronously traverse a reparented scene while the
+outer accepted failure was still being attributed. A secondary transform report could then replace the original error
+state even though the public shape call still threw the original retirement value. Root attribution is now outermost-only
+through state installation and callbacks, preserving the single owner and the accepted classification while nested scene
+work returns to the outer notification. The public regression performs that traversal beneath a throwing
+`updateWorldMatrix` parent, covers exact `undefined`, `null`, and `0` retirement values across roots, and specifies the
+primary aggregate entries, one notification per participant, committed revisions, Text/TextGroup attribution, and later
+transform recovery. The retirement regression now compares the accepted and recovered renderer through the existing full
+cold differential instead of a draw-shell snapshot.
+
+The branch rebased without conflicts onto docs-only main `e5515024`; read-only inspection retained the #279 renderer
+ordering and scope-index regression plus #280's sparse implementation and public tests. Runtime validation of this final
+source remains pending because another agent owns the serialized heavy lane. No build, test, package check, Labs, install,
+or server workflow has run for this correction, and the matching source attestation must be regenerated only after those
+checks complete.
