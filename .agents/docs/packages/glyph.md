@@ -651,6 +651,11 @@ effective visibility only for an owned scope; direct transforms and groups joine
 scope visibility work. The Three renderer updates only an observed scope's draws when visibility changes, while a
 replacement stages initial visibility before commit so rejected candidates cannot publish scope state. Transform
 synchronization still visits the retained transform bindings to preserve arbitrary mutable Three ancestor matrices.
+The 0.2 release regression source exercises that manual contract with 1,000 retained labels partitioned across
+alternating top-level `auto` and explicit `group` row boundaries in indexed and direct transform modes. It checks row
+and ancestor hide/restore after initial acceptance, unrelated-row visibility, zero visibility-only Wasm updates and
+renderer publications, retained mesh and buffer identity, and a hidden row edit/reflow whose current draw output appears
+on restoration. This coverage does not add automatic off-screen culling; that remains deferred.
 When a rank-only permutation keeps the committed Codec, capability, one-batch single-aggregate-draw storage topology,
 and renderable stable-ID set, Rust copies the committed physical records into their new order and publishes write patches only. It transactionally
 updates its internal aggregate primitive/draw spans but does not republish unchanged buffers, resources, primitives,
