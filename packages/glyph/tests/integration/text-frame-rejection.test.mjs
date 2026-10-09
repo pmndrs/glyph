@@ -136,9 +136,11 @@ test('a fixed root budget keeps the last complete revision and self-heals', { ti
     assert.deepEqual(node.commitState(), { status: 'pending' });
     assert.equal(node.error, undefined, 'honouring a fixed budget is not an error');
 
-    node.set({ text: 'ab' });
+    const recovered = txt`${span({ color: '#2f7fff' })`a`}b`;
+    node.set({ text: recovered });
     scene.updateMatrixWorld(true);
-    assert.equal(node.measure().glyphCount, 2, 'content back inside the budget commits');
+    assert.equal(node.measure().glyphCount, 2, 'formatted content back inside the budget commits');
+    assert.equal(node.text, 'ab');
     assert.equal(node.commitState().status, 'committed');
   } finally {
     node.dispose();

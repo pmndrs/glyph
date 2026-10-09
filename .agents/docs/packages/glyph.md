@@ -607,7 +607,8 @@ scene state because it describes authored presentation rather than renderer poli
 paragraph sections:
 
 - text replacement sends text plus any dependent style/geometry state;
-- font, spans, shaping style, paint, raster ratio, or material send style state;
+- font, spans, shaping style, paint, raster ratio, or material compare the complete normalized span batch with the last
+  engine-adopted state and send only changed compact style rows plus removed tail rows;
 - content-box changes send geometry;
 - transform and visibility changes update Three's renderer-local sidecar without calling Wasm;
 - an empty or normalized-equal update sends nothing.
@@ -618,8 +619,12 @@ Three may skip duplicate Unicode segmentation. A separately authored raw array i
 and every boundary equal the previous normalized value, that value proves the new records remain aligned in both Three
 and the retained planner. Changed text or boundaries, malformed UTF-16, and unproven first inputs still take the normal
 cluster-alignment path. Three also marks each deeply frozen span-style snapshot with package-private WeakSet provenance;
-the retained planner adopts that exact snapshot instead of cloning it again. A caller-authored style, including a merely
-frozen object, has no such proof and is still cloned and deeply frozen at the owning boundary.
+the material- and font-binding maps preserve both proofs, and the retained planner adopts that canonical formatted input
+instead of rebuilding a second span snapshot. It still scans every incoming batch because callers provide no change
+indices, but it retains equal record/array identities and derives sparse style upserts/removals against the engine-adopted
+state. Pre-adoption discard retains those pending changes; a renderer rejection occurs after adoption and uses the
+existing complete-checkpoint recovery. A caller-authored style, including a merely frozen object, has no ownership proof
+and is still cloned and deeply frozen at the owning boundary.
 
 Three's ordinary scene traversal owns world-matrix composition. The root observes Text membership and ancestor state,
 publishes semantic changes once at its renderer-owned draw node, and patches root-relative transforms through a separate

@@ -48,6 +48,7 @@ import type {
 } from './render-planner.js';
 import { observeRenderPlannerDirty, stageRenderPlanner } from './render-planner.js';
 import { reuseOrCreateTextPropertySnapshot } from '../config/text-property.js';
+import { areOwnedSpansClusterAligned, inheritClusterAlignedSpans } from '../formatted-text.js';
 import type { BorrowedGlyphLayout } from '../layout.js';
 import { normalizeTextFlow, type TextFlow, type TextFlowBounds, type TextFlowShape } from '../text-properties.js';
 
@@ -632,22 +633,24 @@ class ConfiguredRootServices<
     input: GlyphFormattedText<Format, Bindings['materialInput']>,
     leases: Array<{ dispose(): void }>,
   ): RetainedFormattedText {
+    const mappedSpans = input.spans.map((span) => {
+      const font = span.font === undefined ? undefined : this.#bindFontSelection(span.font);
+      if (font !== undefined) leases.push(font);
+      const material = span.material === undefined ? undefined : this.#bindMaterial(span.material, leases);
+      return Object.freeze({
+        start: span.start,
+        end: span.end,
+        ...(font === undefined ? {} : { font }),
+        ...(material === undefined ? {} : { material }),
+        ...(span.style === undefined ? {} : { style: span.style }),
+      });
+    });
+    const spans = areOwnedSpansClusterAligned(input.text, input.spans)
+      ? inheritClusterAlignedSpans(input.text, input.spans, mappedSpans)
+      : Object.freeze(mappedSpans);
     return Object.freeze({
       text: input.text,
-      spans: Object.freeze(
-        input.spans.map((span) => {
-          const font = span.font === undefined ? undefined : this.#bindFontSelection(span.font);
-          if (font !== undefined) leases.push(font);
-          const material = span.material === undefined ? undefined : this.#bindMaterial(span.material, leases);
-          return Object.freeze({
-            start: span.start,
-            end: span.end,
-            ...(font === undefined ? {} : { font }),
-            ...(material === undefined ? {} : { material }),
-            ...(span.style === undefined ? {} : { style: span.style }),
-          });
-        }),
-      ),
+      spans,
     });
   }
 
