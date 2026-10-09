@@ -84,6 +84,7 @@ test('application values and types stay at root while integration construction l
     'raster/bitmap.d.ts': ['bitmapSchema', 'bitmapCodec', 'selectBitmapStrikePpem'],
     'raster/msdf.d.ts': ['msdfSchema', 'msdfCodec'],
     'raster/slug.d.ts': ['slugSchema', 'slugCodec'],
+    'glyph-placement.d.ts': ['createGlyphPlacements'],
   };
   const config = await import('@pmndrs/glyph/core');
   for (const [path, names] of Object.entries(leaves)) {
@@ -94,6 +95,12 @@ test('application values and types stay at root while integration construction l
       assert.equal(config[name], implementation[name], `core must expose ${name} from its implementation`);
       assert.equal(root.has(name), false, `runtime integration helper ${name} must not leak through the root`);
     }
+  }
+  const core = published(await declaration('core.d.ts'));
+  const placementTypes = ['GlyphLine', 'GlyphPlacement', 'GlyphPlacements', 'GlyphRun', 'GlyphSpace'];
+  for (const name of placementTypes) {
+    assert.equal(core.has(name), true, `integration authors must be able to name ${name} from core`);
+    assert.equal(root.has(name), false, `${name} must not have a second home at the application root`);
   }
   for (const retired of ['compileRenderPolicy', 'createRasterPolicyProgram', 'definePolicyBuffers', 'policyProgram']) {
     assert.equal(root.has(retired), false, `the public integration surface must not publish retired ${retired}`);

@@ -240,7 +240,10 @@ publication into uikit's Three hierarchy; there is no parallel renderer-free obj
 
 ### 4. Replace interaction queries
 
-Current selection code indexes one layout entry per JavaScript character. Replace it with cluster-aware hit-test, caret, and selection helpers built over `GlyphLayoutInspection`. These interaction helpers are adjacent to the minimal layout contract and may be delivered as a separate root utility surface; uikit must not reconstruct character boundaries from glyph IDs.
+Current selection code indexes one layout entry per JavaScript character. Replace it with `/core`'s
+`createGlyphPlacements()` over the `GlyphLayoutInspection`, source text, and uikit's drawn origins. Its cluster-aware
+`caretAt()`, `caretForOffset()`, and `selectionRects()` preserve bidi, ligature, surrogate, combining-mark, soft-wrap,
+and hard-break boundaries; uikit must not reconstruct character boundaries from glyph IDs.
 
 ### 5. Remove the legacy text subsystem
 
