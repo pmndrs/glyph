@@ -155,6 +155,66 @@ test('repeated raw Unicode spans realign before retaining the accepted measureme
   }
 });
 
+test(
+  'validated raw spans reuse prior alignment only while text and boundaries stay unchanged',
+  { timeout },
+  async () => {
+    const text = `a${ACUTE}fi`;
+    const formatted = (color) => ({
+      text,
+      spans: [
+        { start: 0, end: 2, style: { color } },
+        { start: 2, end: 4, style: { color: '#ffffff' } },
+      ],
+    });
+    const font = await fonts.load('inter');
+    const mounted = mount(font, [{ properties: { constraints, layout, style, text: formatted('#ff2f00') } }]);
+    try {
+      mounted.scene.updateMatrixWorld(true);
+      const node = mounted.nodes[0];
+      const accepted = node.measure();
+      const descriptor = Object.getOwnPropertyDescriptor(String.prototype, 'isWellFormed');
+      assert.ok(descriptor);
+      // Test instrumentation: any full alignment path must revalidate UTF-16 through this built-in.
+      // oxlint-disable-next-line no-extend-native
+      Object.defineProperty(String.prototype, 'isWellFormed', {
+        ...descriptor,
+        value() {
+          throw new Error('full Unicode alignment invoked');
+        },
+      });
+      try {
+        assert.doesNotThrow(() => node.set({ text: formatted('#2f7fff') }));
+        assert.throws(
+          () =>
+            node.set({
+              text: {
+                text,
+                spans: [
+                  { start: 1, end: 2, style: { color: '#2f7fff' } },
+                  { start: 2, end: 4, style: { color: '#ffffff' } },
+                ],
+              },
+            }),
+          /full Unicode alignment invoked/u,
+        );
+        assert.throws(
+          () => node.set({ text: { ...formatted('#2f7fff'), text: `b${ACUTE}fi` } }),
+          /full Unicode alignment invoked/u,
+        );
+      } finally {
+        // oxlint-disable-next-line no-extend-native
+        Object.defineProperty(String.prototype, 'isWellFormed', descriptor);
+      }
+      mounted.scene.updateMatrixWorld(true);
+      assert.equal(node.error, undefined);
+      assert.deepEqual(node.measure(), accepted, 'a paint-only span change must preserve shaping and placement');
+    } finally {
+      unmount(mounted);
+    }
+  },
+);
+
 test('nested React Text crossing a joining boundary mounts and publishes', { timeout }, async () => {
   const { create } = await import('../support/r3f-test-renderer.mjs');
   const font = await fonts.load('inter');

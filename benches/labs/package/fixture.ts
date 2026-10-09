@@ -22,6 +22,9 @@ const glyphPackage = (await import(
 const threePackage = (await import(
   pathToFileURL(resolve(packageRoot, 'dist/three.js')).href
 )) as typeof import('@pmndrs/glyph/three');
+const { bitmapSchema } = (await import(pathToFileURL(resolve(packageRoot, 'dist/raster/bitmap.js')).href)) as {
+  bitmapSchema: { readonly buffers: { readonly color: { readonly id: string } } };
+};
 
 // Adapt older installed canaries once, outside every timed workload.
 const { bitmap, glyph } = glyphPackage;
@@ -240,6 +243,27 @@ export function inspectDraws(renderObject: ThreeTypes.Object3D): Readonly<{ draw
     if (object.geometry instanceof THREE.InstancedBufferGeometry) glyphs += object.geometry.instanceCount;
   });
   return { draws, glyphs };
+}
+
+export function inspectGlyphPaint(
+  renderObject: ThreeTypes.Object3D,
+): Readonly<{ blueDominant: number; redDominant: number }> {
+  let blueDominant = 0;
+  let redDominant = 0;
+  renderObject.traverse((object) => {
+    if (!(object instanceof THREE.Mesh) || object.userData.pmndrsGlyphPrimitiveKind !== 'glyph') return;
+    const start = object.userData.pmndrsGlyphRunStart;
+    if (typeof start !== 'number') return;
+    const color = object.geometry.getAttribute(`_pmndrsGlyph_${bitmapSchema.buffers.color.id}`);
+    if (color === undefined) return;
+    for (let index = 0; index < object.geometry.instanceCount; index += 1) {
+      const red = color.getX(start + index);
+      const blue = color.getZ(start + index);
+      if (red > blue + 1e-6) redDominant += 1;
+      if (blue > red + 1e-6) blueDominant += 1;
+    }
+  });
+  return { blueDominant, redDominant };
 }
 
 export function borrowedChecksum(labels: ReturnType<typeof createLabels>['labels']): number {

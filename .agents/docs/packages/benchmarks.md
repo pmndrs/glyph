@@ -304,8 +304,9 @@ configured five-percent significance threshold, keeping the pull-request signal 
 unless it carries one `benchmark:<suite>` label. `benchmark:full` overrides focused labels; otherwise multiple focused
 benchmark labels are rejected as ambiguous. A push to `main` runs `full` on the candidate alone: the canary release
 published for that same push would otherwise be installed as its own baseline. Manual dispatch exposes the same suite
-choice and compares with the canary. Available focused suites are `layout`, `measure`, `glyphs`, `publication`,
-`batch`, `style`, `reflow`, `stress`, `cold`, and `edit`; `edit` types one character into a long Inter or Fredoka paragraph and measures it or publishes a frame.
+choice and compares with the canary. Available focused suites are `layout`, `measure`, `glyphs`, `publication`, `spans`,
+`batch`, `style`, `reflow`, `stress`, `cold`, and `edit`; `spans` isolates the 1,000-label trailing-span mutation, while
+`edit` types one character into a long Inter or Fredoka paragraph and measures it or publishes a frame.
 `full` does not run browser observations, native/Worker profiles, or correctness and release gates.
 
 The `publication` suite includes 1,000 retained labels receiving equivalent style, layout, and constraint snapshots.
@@ -315,6 +316,9 @@ labels through a recording host: CPU adapter and publication work, not GPU execu
 workloads so older canaries may publish while the candidate must keep semantic publication idle. Framework workloads
 measure equivalent formatted flow updates at the shared Three normalization boundary and Vue's installed snapshot
 helper; they do not time React component rendering. Warm setup and untimed glyph checks guard the formatted flow case.
+The trailing-span oracle inspects the realized scene after timing, including text and glyph counts, borrowed positions,
+draw topology, and the selected red or blue Bitmap paint lane. `benchmark:publication-profile` runs that same installed-
+artifact workload with separate set/stage and commit timings plus V8 CPU and sampled-heap profiles.
 The `layout` suite also compares single-paragraph, 1,000-paragraph and order-only request-arena encoding from installed
 artifacts, with full encoded-byte equality checked after timing; it measures wire preparation, not engine layout.
 
@@ -786,14 +790,14 @@ semantic result afterward with package-owned counts, encoded bytes,
 borrowed glyph checksums, or draw topology. Compatibility probes and old-canary adapters run once during fixture setup;
 candidate-only helpers are required before timing begins.
 
-| Need                                  | Command                                                                                                                   |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Common installed-package signal       | `pnpm scripts run benchmark:labs-package -- --candidate <package-or-tgz>`                                                 |
-| Focused/full installed-package signal | add `--suite layout`, `measure`, `glyphs`, `publication`, `batch`, `style`, `reflow`, `stress`, `cold`, `edit`, or `full` |
-| Raw retained-engine signal            | `pnpm scripts run benchmark:labs-internal -- --suite <engine-case>`                                                       |
-| Kernel signal                         | build with `glyph:kernel-lab-build`, then select `kernel`, `pack`, `break`, or `bidi`                                     |
-| Generator signal                      | `pnpm scripts run benchmark:labs-internal -- --suite mtsdf-generator`                                                     |
-| Browser/GPU/frame signal              | select the maintained `benchmark:*` or `glyph:kernel-lab-browser` workflow from the index                                 |
+| Need                                  | Command                                                                                                                            |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Common installed-package signal       | `pnpm scripts run benchmark:labs-package -- --candidate <package-or-tgz>`                                                          |
+| Focused/full installed-package signal | add `--suite layout`, `measure`, `glyphs`, `publication`, `spans`, `batch`, `style`, `reflow`, `stress`, `cold`, `edit`, or `full` |
+| Raw retained-engine signal            | `pnpm scripts run benchmark:labs-internal -- --suite <engine-case>`                                                                |
+| Kernel signal                         | build with `glyph:kernel-lab-build`, then select `kernel`, `pack`, `break`, or `bidi`                                              |
+| Generator signal                      | `pnpm scripts run benchmark:labs-internal -- --suite mtsdf-generator`                                                              |
+| Browser/GPU/frame signal              | select the maintained `benchmark:*` or `glyph:kernel-lab-browser` workflow from the index                                          |
 
 Both Labs runners inspect the saved result and fail on an empty selection or any recorded benchmark-body error; Labs
 0.9.0 can otherwise print such an error and still exit zero. Generator fixture scripts may print elapsed progress while
@@ -802,7 +806,7 @@ remains separate because it compares native, direct Wasm, Worker transfer, and p
 callback cannot represent faithfully.
 
 CI routes the installed-package lane by event. Pull requests default to the four-block `smoke` suite. One
-`benchmark:layout`, `benchmark:measure`, `benchmark:glyphs`, `benchmark:publication`, `benchmark:style`,
+`benchmark:layout`, `benchmark:measure`, `benchmark:glyphs`, `benchmark:publication`, `benchmark:spans`, `benchmark:style`,
 `benchmark:batch`, `benchmark:reflow`, `benchmark:stress`, `benchmark:cold`, or `benchmark:edit` label selects that focused eight-block suite;
 `benchmark:full` selects the complete matrix and overrides focused labels. Pushes to `main` always run `full`. Manual
 dispatch accepts the same suite names. This routing changes only the installed-package timing report; correctness,

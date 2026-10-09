@@ -612,9 +612,10 @@ paragraph sections:
 
 Formatted-text compilers resolve cluster boundaries once and freeze their span arrays. A package-private WeakMap records
 the exact array and text value, so React and Vue may preserve that proof while replacing span records to bind fonts and
-Three may skip duplicate Unicode segmentation. The proof transfers only when every boundary is unchanged. Raw caller
-arrays, changed text or boundaries, malformed UTF-16, and arrays produced by another package copy still take the normal
-validation and cluster-alignment path.
+Three may skip duplicate Unicode segmentation. A separately authored raw array is still validated in full; when its text
+and every boundary equal the previous normalized value, that value proves the new records remain aligned in both Three
+and the retained planner. Changed text or boundaries, malformed UTF-16, and unproven first inputs still take the normal
+cluster-alignment path.
 
 Three's ordinary scene traversal owns world-matrix composition. The root observes Text membership and ancestor state,
 publishes semantic changes once at its renderer-owned draw node, and patches root-relative transforms through a separate

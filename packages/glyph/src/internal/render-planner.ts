@@ -618,6 +618,7 @@ class RenderPlannerImpl {
         ? resolveTextOptions(
             this.#handleState,
             mergeRetainedTextOptions(state.desired.source, state.metrics.order, update),
+            state.desired,
           )
         : forkResolvedTextWithText(state.desired, textOnly, state.metrics.order);
     const metrics = retainedTextMetrics(desired, state.ordinal);
@@ -1566,10 +1567,14 @@ function normalizePublishOptions(value: RenderPlannerPublishOptions | undefined)
   };
 }
 
-function resolveTextOptions(handleState: GlyphHandleState, value: RetainedTextOptions): ResolvedTextOptions {
+function resolveTextOptions(
+  handleState: GlyphHandleState,
+  value: RetainedTextOptions,
+  previous?: ResolvedTextOptions,
+): ResolvedTextOptions {
   if (!isNonArrayObject(value)) throw new TypeError('text engine text options must be an object');
   validateTextScalarOptions(value);
-  const formattedText = normalizeTextInput(value.text);
+  const formattedText = normalizeTextInput(value.text, previous);
   validateInlineObjects(value.inlineObjects, formattedText.text.length);
   const style = value.style ?? {};
   const layout = value.layout ?? {};
@@ -1678,7 +1683,7 @@ function validateInlineObjects(
   }
 }
 
-function normalizeTextInput(value: unknown): RetainedFormattedText {
+function normalizeTextInput(value: unknown, previous?: ResolvedTextOptions): RetainedFormattedText {
   if (typeof value === 'string') return Object.freeze({ text: value, spans: Object.freeze([]) });
   if (!isNonArrayObject(value) || typeof value.text !== 'string' || !Array.isArray(value.spans)) {
     throw new TypeError('text must be a string or formatted text value');
@@ -1706,7 +1711,22 @@ function normalizeTextInput(value: unknown): RetainedFormattedText {
         : { style: snapshotAuthoredData(span.style as TextStyle, `text span ${index} style`) }),
     });
   });
-  return Object.freeze({ text, spans: Object.freeze(alignSpansToClusters(text, spans)) });
+  const alignmentReused =
+    previous !== undefined && previous.text === text && haveEqualSpanBoundaries(previous.spans, spans);
+  return Object.freeze({
+    text,
+    spans: Object.freeze(alignmentReused ? spans : alignSpansToClusters(text, spans)),
+  });
+}
+
+function haveEqualSpanBoundaries(
+  previous: readonly { readonly start: number; readonly end: number }[],
+  next: readonly { readonly start: number; readonly end: number }[],
+): boolean {
+  return (
+    previous.length === next.length &&
+    previous.every((span, index) => span.start === next[index]!.start && span.end === next[index]!.end)
+  );
 }
 
 function snapshotTextOptions(
