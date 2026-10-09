@@ -27,6 +27,7 @@ on:
           - cold
           - edit
           - edit-sized
+          - assignment
           - full
 
 permissions:

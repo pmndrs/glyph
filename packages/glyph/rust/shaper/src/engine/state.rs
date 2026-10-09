@@ -33,7 +33,10 @@ use super::{
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
     semantic_wire::RecordSpan,
     session_placement::{SessionPlacementInput, SessionPlacementRow},
-    shaping_state::{BoundaryShape, BoundaryShapeArena, ShapeArena, ShapingRun, ShapingRunArena},
+    shaping_state::{
+        BoundaryShape, BoundaryShapeArena, GLYPH_FLAG_UNSAFE_TO_CONCAT, ShapeArena, ShapedRun,
+        ShapingRun, ShapingRunArena,
+    },
     sort,
     staged::{Staged, StyleStage, TextStage},
     style_state::{
@@ -184,7 +187,32 @@ struct ClusterRecord {
 struct TextEdit {
     old_start: usize,
     old_end: usize,
+    new_start: usize,
     new_end: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ShapeWindow {
+    old_start: u32,
+    old_end: u32,
+    new_start: u32,
+    new_end: u32,
+    probe_end: u32,
+    old_glyph_start: usize,
+    old_glyph_end: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ShapeAttempt {
+    Prepared,
+    RetryWholeRun,
+    NeedsFallback,
+}
+
+impl TextEdit {
+    fn is_same_length(self) -> bool {
+        self.old_end.saturating_sub(self.old_start) == self.new_end.saturating_sub(self.new_start)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -375,13 +403,14 @@ struct ParagraphState {
     /// Whether the pending buffers are a byte-identical copy of the committed ones, so a
     /// mutation batch can skip re-seeding them.
     pending_text_mirrors_committed: bool,
-    text_edit: Option<TextEdit>,
+    text_edits: Vec<TextEdit>,
     styles: Staged<StyleStage>,
     unicode: Staged<UnicodeAnalysis>,
     unicode_reused_for_text_edit: bool,
     bidi: Staged<BidiAnalysis>,
     shaping_runs: Staged<ShapingRunArena>,
     shape: Staged<ShapeArena>,
+    shape_window_scratch: Vec<ShapeWindow>,
     incremental_shape_source_run: Option<u32>,
     clusters: Staged<ClusterArena>,
     glyph_identity_index: IdentityIndex,
@@ -2880,7 +2909,7 @@ impl ParagraphState {
             pending.next_unit_id = 0;
         }
         self.text.abort();
-        self.text_edit = None;
+        self.text_edits.clear();
         {
             let (committed, pending) = self.styles.pair_mut();
             committed.arena.clear();
@@ -2914,6 +2943,7 @@ impl ParagraphState {
             pending.clear();
         }
         self.shape.abort();
+        self.shape_window_scratch.clear();
         self.incremental_shape_source_run = None;
         {
             let (committed, pending) = self.clusters.pair_mut();
@@ -3284,6 +3314,8 @@ impl ParagraphState {
         self.text.pending_mut().next_unit_id = seed_next_unit_id;
         self.text.mark_prepared();
         self.pending_text_mirrors_committed = false;
+        let reconcile_range = single_same_length_replacement_range(mutations);
+        self.text_edits.clear();
         for index in 0..mutations.len() {
             let Some(mutation) = mutations.get(index) else {
                 self.abort_text();
@@ -3296,26 +3328,43 @@ impl ParagraphState {
                     TextMutationError::Allocation => EngineError::ResultTooLarge,
                 });
             }
-            let TextStage {
-                unit_ids: pending_unit_ids,
-                next_unit_id: pending_next_unit_id,
-                ..
-            } = self.text.pending_mut();
-            if let Err(error) =
-                apply_text_identity_mutation(pending_unit_ids, pending_next_unit_id, mutation)
-            {
-                self.abort_text();
-                return Err(error);
+            if reconcile_range.is_none() {
+                let TextStage {
+                    unit_ids: pending_unit_ids,
+                    next_unit_id: pending_next_unit_id,
+                    ..
+                } = self.text.pending_mut();
+                if let Err(error) =
+                    apply_text_identity_mutation(pending_unit_ids, pending_next_unit_id, mutation)
+                {
+                    self.abort_text();
+                    return Err(error);
+                }
             }
         }
         if self.text.pending().units.len() != self.text.pending().unit_ids.len() {
             self.abort_text();
             return Err(EngineError::InvalidRequest);
         }
-        self.text_edit = {
+        if let Some((start, end)) = reconcile_range {
+            let reconciliation = {
+                let edits = &mut self.text_edits;
+                let (pending, committed) = self.text.derive_mut();
+                reconcile_same_length_candidate(committed, pending, edits, start, end)
+            };
+            if let Err(error) = reconciliation {
+                self.abort_text();
+                return Err(error);
+            }
+            if self.text_edits.is_empty() {
+                self.abort_text();
+            }
+        } else {
             let (pending, committed) = self.text.derive_mut();
-            changed_identity_range(&committed.unit_ids, &pending.unit_ids)
-        };
+            if let Some(edit) = changed_identity_range(&committed.unit_ids, &pending.unit_ids) {
+                self.text_edits.push(edit);
+            }
+        }
         Ok(())
     }
 
@@ -3336,7 +3385,7 @@ impl ParagraphState {
     fn clear_text_preparation(&mut self) {
         self.text.pending_mut().next_unit_id = 0;
         self.text.abort();
-        self.text_edit = None;
+        self.text_edits.clear();
     }
 
     fn prepare_styles(
@@ -3424,21 +3473,25 @@ impl ParagraphState {
 
     fn commit_text(&mut self) {
         if self.text.is_prepared() {
-            let retains_mirror =
-                self.text.pending().units.len() == self.text.committed().units.len();
-            let edit = self.text_edit;
+            let retains_mirror = self.text.pending().units.len()
+                == self.text.committed().units.len()
+                && self
+                    .text_edits
+                    .iter()
+                    .copied()
+                    .all(TextEdit::is_same_length);
             // One swap publishes units, identities, and the counter together. The
             // counter swaps rather than being assigned, which the original did by hand;
             // the difference is erased because `clear_text_preparation` zeroes the
             // pending counter immediately below.
             self.text.commit();
             if retains_mirror {
-                if let Some(edit) = edit {
-                    let (pending, committed) = self.text.derive_mut();
-                    pending.units[edit.old_start..edit.new_end]
-                        .copy_from_slice(&committed.units[edit.old_start..edit.new_end]);
-                    pending.unit_ids[edit.old_start..edit.new_end]
-                        .copy_from_slice(&committed.unit_ids[edit.old_start..edit.new_end]);
+                let (pending, committed) = self.text.derive_mut();
+                for edit in &self.text_edits {
+                    pending.units[edit.new_start..edit.new_end]
+                        .copy_from_slice(&committed.units[edit.new_start..edit.new_end]);
+                    pending.unit_ids[edit.new_start..edit.new_end]
+                        .copy_from_slice(&committed.unit_ids[edit.new_start..edit.new_end]);
                 }
                 self.pending_text_mirrors_committed = true;
             } else {
@@ -3455,14 +3508,16 @@ impl ParagraphState {
         if !self.text.is_prepared() {
             return Ok(());
         }
-        if let Some(edit) = self.text_edit
-            && self.unicode.committed().reusable_for_ascii_letter_edit(
-                &self.text.committed().units,
-                &self.text.pending().units,
-                edit.old_start,
-                edit.old_end,
-                edit.new_end,
-            )
+        if !self.text_edits.is_empty()
+            && self.text_edits.iter().copied().all(|edit| {
+                self.unicode.committed().reusable_for_ascii_letter_edit(
+                    &self.text.committed().units,
+                    &self.text.pending().units,
+                    edit.old_start,
+                    edit.old_end,
+                    edit.new_end,
+                )
+            })
         {
             self.unicode_reused_for_text_edit = true;
             return Ok(());
@@ -3749,7 +3804,7 @@ impl ParagraphState {
         &mut self,
         shaper: &mut ShaperRegistry,
     ) -> Result<bool, EngineError> {
-        let Some(edit) = self.text_edit else {
+        let Some(edit) = bounding_text_edit(&self.text_edits) else {
             return Ok(false);
         };
         let old_runs = self.shaping_runs.committed().runs();
@@ -3787,82 +3842,59 @@ impl ParagraphState {
         {
             return Ok(false);
         }
-        if self
+        let mut affected_shapes = self
             .shape
             .committed()
             .runs
             .iter()
-            .filter(|run| run.source_run == affected_source_run)
-            .count()
-            != 1
-        {
+            .copied()
+            .enumerate()
+            .filter(|(_, run)| run.source_run == affected_source_run);
+        let Some((affected_shape_index, affected_shape)) = affected_shapes.next() else {
+            return Ok(false);
+        };
+        if affected_shapes.next().is_some() {
             return Ok(false);
         }
-        let delta = edit_delta(edit)?;
-        let styles = &self.styles.active().arena;
-        self.boundary_shape_scratch.clear();
-        let scratch = &mut self.boundary_shape_scratch;
-        shaper
-            .with_shaped_run(
-                fallback.font_handle,
-                &self.text.pending().units,
-                ShapeRunRef {
-                    text_start: new_run.text_start,
-                    text_end: new_run.text_end,
-                    script: new_run.script,
-                    language: styles.resolved_language(new_run.style),
-                    features: styles.resolved_features(new_run.style),
-                    direction: new_run.direction,
-                    cluster_level: 0,
-                    flags: 0x40,
-                },
-                |shaped| {
-                    scratch.append(
-                        old_run_index,
-                        fallback.font_handle,
-                        fallback.binding_handle,
-                        new_run.text_start,
-                        new_run.text_end,
-                        shaped,
-                    )
-                },
-            )
-            .map_err(shaper_error)?;
-        if self.boundary_shape_scratch.glyph_ids.contains(&0) {
-            self.boundary_shape_scratch.clear();
-            return Ok(false);
-        }
-        // One split borrow for the whole scatter: the committed runs are read while the
-        // pending arena is appended to, which is exactly the shape `derive_mut` exists for.
-        // Copying the run list to satisfy the borrow checker instead would allocate on the
-        // incremental edit path this function exists to keep cheap.
-        let boundary_scratch = &self.boundary_shape_scratch;
-        let (pending_shape, committed_shape) = self.shape.derive_mut();
-        for (shape_run_index, shaped_run) in committed_shape.runs.iter().copied().enumerate() {
-            if shaped_run.source_run == affected_source_run {
-                pending_shape.append_text_range_from(
-                    boundary_scratch,
-                    0,
-                    affected_source_run,
-                    new_run.text_start,
-                    new_run.text_end,
-                    0,
-                )?;
-                continue;
-            }
-            let run_delta = if shaped_run.text_start >= old_run.text_end {
-                delta
-            } else {
-                0
-            };
-            pending_shape.append_text_range_from(
-                committed_shape,
-                shape_run_index,
-                shaped_run.source_run,
-                shaped_run.text_start,
-                shaped_run.text_end,
-                run_delta,
+        let sparse_scope = build_sparse_shape_windows(
+            &self.text_edits,
+            self.shape.committed(),
+            affected_shape,
+            old_run,
+            &mut self.shape_window_scratch,
+        )?;
+        if !sparse_scope {
+            set_whole_shape_window(
+                &mut self.shape_window_scratch,
+                affected_shape,
+                old_run,
+                new_run,
             )?;
+        }
+        let mut verify_boundaries = sparse_scope;
+        loop {
+            match self.prepare_incremental_shape_scope(
+                shaper,
+                old_run_index,
+                old_run,
+                new_run,
+                affected_shape_index,
+                affected_shape,
+                fallback,
+                verify_boundaries,
+            )? {
+                ShapeAttempt::Prepared => break,
+                ShapeAttempt::RetryWholeRun if verify_boundaries => {
+                    set_whole_shape_window(
+                        &mut self.shape_window_scratch,
+                        affected_shape,
+                        old_run,
+                        new_run,
+                    )?;
+                    verify_boundaries = false;
+                }
+                ShapeAttempt::RetryWholeRun | ShapeAttempt::NeedsFallback => return Ok(false),
+            }
         }
         for span in self.fallback_spans.iter().copied() {
             let (text_start, text_end) = if span.source_run == affected_source_run {
@@ -3884,8 +3916,184 @@ impl ParagraphState {
         Ok(true)
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn prepare_incremental_shape_scope(
+        &mut self,
+        shaper: &mut ShaperRegistry,
+        source_run_index: usize,
+        old_run: ShapingRun,
+        new_run: ShapingRun,
+        affected_shape_index: usize,
+        affected_shape: ShapedRun,
+        fallback: FallbackSpan,
+        verify_boundaries: bool,
+    ) -> Result<ShapeAttempt, EngineError> {
+        self.shape.pending_mut().clear();
+        let source_run =
+            u32::try_from(source_run_index).map_err(|_| EngineError::ResultTooLarge)?;
+        let run_count = self.shape.committed().runs.len();
+        let delta = i64::from(new_run.text_end) - i64::from(old_run.text_end);
+        for shape_index in 0..run_count {
+            let shaped_run = *self
+                .shape
+                .committed()
+                .runs
+                .get(shape_index)
+                .ok_or(EngineError::InvalidRequest)?;
+            if shape_index != affected_shape_index {
+                let run_delta = if shaped_run.text_start >= old_run.text_end {
+                    delta
+                } else {
+                    0
+                };
+                let (pending, committed) = self.shape.derive_mut();
+                pending.append_text_range_from(
+                    committed,
+                    shape_index,
+                    shaped_run.source_run,
+                    shaped_run.text_start,
+                    shaped_run.text_end,
+                    run_delta,
+                )?;
+                continue;
+            }
+            let rtl = old_run.direction == 1;
+            let (run_glyph_start, run_glyph_end) =
+                shaped_run_glyph_range(self.shape.committed(), affected_shape)?;
+            let appended_run_start = self.shape.pending().runs.len();
+            let mut cursor_text = if rtl {
+                old_run.text_end
+            } else {
+                old_run.text_start
+            };
+            let mut cursor_glyph = run_glyph_start;
+            for ordinal in 0..self.shape_window_scratch.len() {
+                let window_index = if rtl {
+                    self.shape_window_scratch.len() - ordinal - 1
+                } else {
+                    ordinal
+                };
+                let window = self.shape_window_scratch[window_index];
+                let (retained_start, retained_end, retained_glyph_end) = if rtl {
+                    (window.old_end, cursor_text, window.old_glyph_start)
+                } else {
+                    (cursor_text, window.old_start, window.old_glyph_start)
+                };
+                if retained_start < retained_end {
+                    let (pending, committed) = self.shape.derive_mut();
+                    pending.append_glyph_range_from(
+                        committed,
+                        affected_shape_index,
+                        source_run,
+                        retained_start,
+                        retained_end,
+                        cursor_glyph,
+                        retained_glyph_end,
+                        0,
+                    )?;
+                }
+                self.boundary_shape_scratch.clear();
+                let scratch = &mut self.boundary_shape_scratch;
+                let styles = &self.styles.active().arena;
+                shaper
+                    .with_shaped_range(
+                        fallback.font_handle,
+                        &self.text.pending().units,
+                        ShapeRunRef {
+                            text_start: new_run.text_start,
+                            text_end: new_run.text_end,
+                            script: new_run.script,
+                            language: styles.resolved_language(new_run.style),
+                            features: styles.resolved_features(new_run.style),
+                            direction: new_run.direction,
+                            cluster_level: 0,
+                            flags: 0x40,
+                        },
+                        ShapeRangeRef {
+                            item_start: window.new_start,
+                            item_end: window.probe_end,
+                            context_start: new_run.text_start,
+                            context_end: new_run.text_end,
+                            flags: 0x40,
+                        },
+                        |shaped| {
+                            scratch.append(
+                                source_run_index,
+                                fallback.font_handle,
+                                fallback.binding_handle,
+                                window.new_start,
+                                window.probe_end,
+                                shaped,
+                            )
+                        },
+                    )
+                    .map_err(shaper_error)?;
+                if self.boundary_shape_scratch.glyph_ids.contains(&0) {
+                    self.shape.pending_mut().clear();
+                    self.boundary_shape_scratch.clear();
+                    return Ok(ShapeAttempt::NeedsFallback);
+                }
+                if verify_boundaries
+                    && !sparse_shape_boundaries_are_safe(
+                        &self.boundary_shape_scratch,
+                        window,
+                        new_run.text_start,
+                        new_run.text_end,
+                    )
+                {
+                    self.shape.pending_mut().clear();
+                    self.boundary_shape_scratch.clear();
+                    return Ok(ShapeAttempt::RetryWholeRun);
+                }
+                {
+                    let scratch = &self.boundary_shape_scratch;
+                    self.shape.pending_mut().append_text_range_from(
+                        scratch,
+                        0,
+                        source_run,
+                        window.new_start,
+                        window.new_end,
+                        0,
+                    )?;
+                }
+                cursor_text = if rtl {
+                    window.old_start
+                } else {
+                    window.old_end
+                };
+                cursor_glyph = window.old_glyph_end;
+            }
+            let (retained_start, retained_end) = if rtl {
+                (old_run.text_start, cursor_text)
+            } else {
+                (cursor_text, old_run.text_end)
+            };
+            if retained_start < retained_end {
+                let (pending, committed) = self.shape.derive_mut();
+                pending.append_glyph_range_from(
+                    committed,
+                    affected_shape_index,
+                    source_run,
+                    retained_start,
+                    retained_end,
+                    cursor_glyph,
+                    run_glyph_end,
+                    0,
+                )?;
+            }
+            self.shape.pending_mut().collapse_appended_runs(
+                appended_run_start,
+                new_run.text_start,
+                new_run.text_end,
+            )?;
+        }
+        self.boundary_shape_scratch.clear();
+        Ok(ShapeAttempt::Prepared)
+    }
+
     fn abort_shape(&mut self) {
         self.shape.pending_mut().clear();
+        self.shape_window_scratch.clear();
         self.pending_fallback_spans.clear();
         self.fallback_span_scratch.clear();
         self.fallback_cluster_scratch.clear();
@@ -4195,7 +4403,7 @@ impl ParagraphState {
         };
         if !self.style_invalidation.metrics
             && !self.clusters.is_prepared()
-            && self.text_edit.is_none()
+            && self.text_edits.is_empty()
             && !self.boundary_shape.has_ellipsis()
             && geometry
                 .constraints
@@ -4231,9 +4439,7 @@ impl ParagraphState {
                 .constraints
                 .iter()
                 .all(|constraint| constraint.overflow != OVERFLOW_ELLIPSIS)
-            && let Some(edit) = self.text_edit
-            && edit.old_end.saturating_sub(edit.old_start)
-                == edit.new_end.saturating_sub(edit.old_start)
+            && let Some(edit_offset) = convergent_flow_edit_offset(&self.text_edits)
             && {
                 let (pending_flow, committed_flow) = self.flow_layout.derive_mut();
                 pending_flow.rebuild_until_state_converges(
@@ -4244,7 +4450,7 @@ impl ParagraphState {
                     runs,
                     styles,
                     &mut self.flow_slot_scratch,
-                    u32::try_from(edit.old_start).map_err(|_| EngineError::ResultTooLarge)?,
+                    u32::try_from(edit_offset).map_err(|_| EngineError::ResultTooLarge)?,
                     paragraph_level,
                     max_lines,
                     max_slots_per_band,
@@ -4668,8 +4874,388 @@ fn changed_identity_range(previous: &[u32], next: &[u32]) -> Option<TextEdit> {
     Some(TextEdit {
         old_start: start,
         old_end: previous_end,
+        new_start: start,
         new_end: next_end,
     })
+}
+
+fn bounding_text_edit(edits: &[TextEdit]) -> Option<TextEdit> {
+    let first = edits.first().copied()?;
+    let last = edits.last().copied()?;
+    Some(TextEdit {
+        old_start: first.old_start,
+        old_end: last.old_end,
+        new_start: first.new_start,
+        new_end: last.new_end,
+    })
+}
+
+fn convergent_flow_edit_offset(edits: &[TextEdit]) -> Option<usize> {
+    let [edit] = edits else {
+        return None;
+    };
+    edit.is_same_length().then_some(edit.old_start)
+}
+
+fn build_sparse_shape_windows(
+    edits: &[TextEdit],
+    shape: &ShapeArena,
+    shaped_run: ShapedRun,
+    source_run: ShapingRun,
+    windows: &mut Vec<ShapeWindow>,
+) -> Result<bool, EngineError> {
+    windows.clear();
+    if edits.is_empty()
+        || shaped_run.text_start != source_run.text_start
+        || shaped_run.text_end != source_run.text_end
+    {
+        return Ok(false);
+    }
+    let mut previous_end =
+        usize::try_from(source_run.text_start).map_err(|_| EngineError::ResultTooLarge)?;
+    let run_end = usize::try_from(source_run.text_end).map_err(|_| EngineError::ResultTooLarge)?;
+    for edit in edits.iter().copied() {
+        if !edit.is_same_length()
+            || edit.old_start != edit.new_start
+            || edit.old_start == edit.old_end
+            || edit.old_start < previous_end
+            || edit.old_end > run_end
+        {
+            return Ok(false);
+        }
+        previous_end = edit.old_end;
+    }
+    windows
+        .try_reserve(edits.len())
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    let (glyph_start, glyph_end) = shaped_run_glyph_range(shape, shaped_run)?;
+    let rtl = match source_run.direction {
+        0 => false,
+        1 => true,
+        _ => return Ok(false),
+    };
+    let run_start_boundary = if rtl { glyph_end } else { glyph_start };
+    let mut builder = SparseWindowBuilder {
+        edits,
+        next_edit: 0,
+        previous_safe: (source_run.text_start, run_start_boundary),
+        window_start: (source_run.text_start, run_start_boundary),
+        rtl,
+        windows,
+    };
+    let mut previous_cluster = None;
+    if rtl {
+        let mut glyph = glyph_end;
+        while glyph > glyph_start {
+            let group_end = glyph;
+            let cluster = shape.clusters[glyph - 1];
+            let mut group_start = glyph - 1;
+            let mut safe = shape.glyph_flags[group_start] & GLYPH_FLAG_UNSAFE_TO_CONCAT == 0;
+            while group_start > glyph_start && shape.clusters[group_start - 1] == cluster {
+                group_start -= 1;
+                safe &= shape.glyph_flags[group_start] & GLYPH_FLAG_UNSAFE_TO_CONCAT == 0;
+            }
+            if cluster < source_run.text_start
+                || cluster >= source_run.text_end
+                || previous_cluster.is_some_and(|previous| cluster < previous)
+            {
+                windows.clear();
+                return Ok(false);
+            }
+            #[cfg(test)]
+            crate::SPARSE_BOUNDARY_VISITS.with(|count| count.set(count.get() + 1));
+            builder.visit(cluster, group_end, safe)?;
+            previous_cluster = Some(cluster);
+            glyph = group_start;
+        }
+    } else {
+        let mut glyph = glyph_start;
+        while glyph < glyph_end {
+            let group_start = glyph;
+            let cluster = shape.clusters[glyph];
+            let mut group_end = glyph + 1;
+            let mut safe = shape.glyph_flags[glyph] & GLYPH_FLAG_UNSAFE_TO_CONCAT == 0;
+            while group_end < glyph_end && shape.clusters[group_end] == cluster {
+                safe &= shape.glyph_flags[group_end] & GLYPH_FLAG_UNSAFE_TO_CONCAT == 0;
+                group_end += 1;
+            }
+            if cluster < source_run.text_start
+                || cluster >= source_run.text_end
+                || previous_cluster.is_some_and(|previous| cluster < previous)
+            {
+                windows.clear();
+                return Ok(false);
+            }
+            #[cfg(test)]
+            crate::SPARSE_BOUNDARY_VISITS.with(|count| count.set(count.get() + 1));
+            builder.visit(cluster, group_start, safe)?;
+            previous_cluster = Some(cluster);
+            glyph = group_end;
+        }
+    }
+    let run_end_boundary = if rtl { glyph_start } else { glyph_end };
+    builder.visit(source_run.text_end, run_end_boundary, true)?;
+    if builder.next_edit != edits.len() {
+        windows.clear();
+        return Ok(false);
+    }
+    if let Some(window) = windows.last_mut()
+        && window.probe_end == 0
+    {
+        window.probe_end = source_run.text_end;
+    }
+    Ok(!windows.is_empty())
+}
+
+struct SparseWindowBuilder<'a> {
+    edits: &'a [TextEdit],
+    next_edit: usize,
+    previous_safe: (u32, usize),
+    window_start: (u32, usize),
+    rtl: bool,
+    windows: &'a mut Vec<ShapeWindow>,
+}
+
+impl SparseWindowBuilder<'_> {
+    fn visit(
+        &mut self,
+        boundary: u32,
+        glyph_boundary: usize,
+        safe: bool,
+    ) -> Result<(), EngineError> {
+        if let Some(window) = self.windows.last_mut()
+            && window.probe_end == 0
+            && boundary > window.new_end
+        {
+            window.probe_end = boundary;
+        }
+        if !safe {
+            return Ok(());
+        }
+        while let Some(edit) = self.edits.get(self.next_edit).copied() {
+            let edit_start =
+                u32::try_from(edit.old_start).map_err(|_| EngineError::ResultTooLarge)?;
+            let edit_end = u32::try_from(edit.old_end).map_err(|_| EngineError::ResultTooLarge)?;
+            if boundary <= edit_start {
+                self.window_start = (boundary, glyph_boundary);
+                break;
+            }
+            if boundary < edit_end {
+                break;
+            }
+            self.push_window(boundary, glyph_boundary)?;
+            self.next_edit += 1;
+            let Some(next) = self.edits.get(self.next_edit) else {
+                break;
+            };
+            let next_start =
+                u32::try_from(next.old_start).map_err(|_| EngineError::ResultTooLarge)?;
+            if boundary <= next_start {
+                self.window_start = (boundary, glyph_boundary);
+                break;
+            }
+            self.window_start = self.previous_safe;
+        }
+        self.previous_safe = (boundary, glyph_boundary);
+        Ok(())
+    }
+
+    fn push_window(&mut self, end: u32, end_glyph: usize) -> Result<(), EngineError> {
+        let (start, start_glyph) = self.window_start;
+        if start >= end {
+            return Err(EngineError::InvalidRequest);
+        }
+        let (old_glyph_start, old_glyph_end) = if self.rtl {
+            (end_glyph, start_glyph)
+        } else {
+            (start_glyph, end_glyph)
+        };
+        if old_glyph_start > old_glyph_end {
+            return Err(EngineError::InvalidRequest);
+        }
+        if let Some(previous) = self.windows.last_mut()
+            && start <= previous.old_end
+        {
+            previous.old_end = previous.old_end.max(end);
+            previous.new_end = previous.new_end.max(end);
+            previous.old_glyph_start = previous.old_glyph_start.min(old_glyph_start);
+            previous.old_glyph_end = previous.old_glyph_end.max(old_glyph_end);
+            previous.probe_end = 0;
+            return Ok(());
+        }
+        self.windows
+            .try_reserve(1)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        self.windows.push(ShapeWindow {
+            old_start: start,
+            old_end: end,
+            new_start: start,
+            new_end: end,
+            probe_end: 0,
+            old_glyph_start,
+            old_glyph_end,
+        });
+        Ok(())
+    }
+}
+
+fn set_whole_shape_window(
+    windows: &mut Vec<ShapeWindow>,
+    shaped_run: ShapedRun,
+    old_run: ShapingRun,
+    new_run: ShapingRun,
+) -> Result<(), EngineError> {
+    let old_glyph_start =
+        usize::try_from(shaped_run.glyph_start).map_err(|_| EngineError::InvalidRequest)?;
+    let old_glyph_end = old_glyph_start
+        .checked_add(
+            usize::try_from(shaped_run.glyph_count).map_err(|_| EngineError::InvalidRequest)?,
+        )
+        .ok_or(EngineError::InvalidRequest)?;
+    windows.clear();
+    windows
+        .try_reserve(1)
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    windows.push(ShapeWindow {
+        old_start: old_run.text_start,
+        old_end: old_run.text_end,
+        new_start: new_run.text_start,
+        new_end: new_run.text_end,
+        probe_end: new_run.text_end,
+        old_glyph_start,
+        old_glyph_end,
+    });
+    Ok(())
+}
+
+fn shaped_run_glyph_range(
+    shape: &ShapeArena,
+    shaped_run: ShapedRun,
+) -> Result<(usize, usize), EngineError> {
+    let start = usize::try_from(shaped_run.glyph_start).map_err(|_| EngineError::InvalidRequest)?;
+    let end = start
+        .checked_add(
+            usize::try_from(shaped_run.glyph_count).map_err(|_| EngineError::InvalidRequest)?,
+        )
+        .ok_or(EngineError::InvalidRequest)?;
+    if end > shape.glyph_ids.len() || end > shape.clusters.len() || end > shape.glyph_flags.len() {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok((start, end))
+}
+
+fn sparse_shape_boundaries_are_safe(
+    shape: &ShapeArena,
+    window: ShapeWindow,
+    run_start: u32,
+    run_end: u32,
+) -> bool {
+    (window.new_start == run_start || concat_boundary_is_safe(shape, window.new_start))
+        && (window.new_end == run_end || concat_boundary_is_safe(shape, window.new_end))
+}
+
+fn concat_boundary_is_safe(shape: &ShapeArena, boundary: u32) -> bool {
+    let mut found = false;
+    for (cluster, flags) in shape.clusters.iter().zip(&shape.glyph_flags) {
+        if *cluster == boundary {
+            found = true;
+            if flags & GLYPH_FLAG_UNSAFE_TO_CONCAT != 0 {
+                return false;
+            }
+        }
+    }
+    found
+}
+
+fn single_same_length_replacement_range(
+    mutations: super::semantic_wire::TextMutationBatch<'_>,
+) -> Option<(usize, usize)> {
+    if mutations.len() != 1 {
+        return None;
+    }
+    let mutation = mutations.get(0)?;
+    let start = usize::try_from(mutation.text_start).ok()?;
+    let delete_count = usize::try_from(mutation.delete_count).ok()?;
+    (mutation.insert_utf16_le.len().is_multiple_of(2)
+        && delete_count == mutation.insert_utf16_le.len() / 2)
+        .then(|| start.checked_add(delete_count))
+        .flatten()
+        .map(|end| (start, end))
+}
+
+fn reconcile_same_length_candidate(
+    committed: &TextStage,
+    pending: &mut TextStage,
+    edits: &mut Vec<TextEdit>,
+    start: usize,
+    end: usize,
+) -> Result<(), EngineError> {
+    edits.clear();
+    for_each_changed_utf16_unit(
+        &committed.units[start..end],
+        &pending.units[start..end],
+        |relative_offset| {
+            let offset = start + relative_offset;
+            pending.unit_ids[offset] = take_next_unit_identity(&mut pending.next_unit_id)?;
+            if let Some(edit) = edits.last_mut()
+                && edit.old_end == offset
+            {
+                edit.old_end += 1;
+                edit.new_end += 1;
+                return Ok(());
+            }
+            edits
+                .try_reserve(1)
+                .map_err(|_| EngineError::ResultTooLarge)?;
+            edits.push(TextEdit {
+                old_start: offset,
+                old_end: offset + 1,
+                new_start: offset,
+                new_end: offset + 1,
+            });
+            Ok(())
+        },
+    )
+}
+
+fn for_each_changed_utf16_unit(
+    accepted: &[u16],
+    candidate: &[u16],
+    mut changed: impl FnMut(usize) -> Result<(), EngineError>,
+) -> Result<(), EngineError> {
+    if accepted.len() != candidate.len() {
+        return Err(EngineError::InvalidRequest);
+    }
+    let paired_len = accepted.len() & !1;
+    let mut offset = 0usize;
+    while offset < paired_len {
+        let accepted_word = u32::from(accepted[offset]) | (u32::from(accepted[offset + 1]) << 16);
+        let candidate_word =
+            u32::from(candidate[offset]) | (u32::from(candidate[offset + 1]) << 16);
+        let different_lanes = accepted_word ^ candidate_word;
+        if different_lanes & 0xffff != 0 {
+            changed(offset)?;
+        }
+        if different_lanes >> 16 != 0 {
+            changed(offset + 1)?;
+        }
+        offset += 2;
+    }
+    if paired_len != accepted.len() && accepted[paired_len] != candidate[paired_len] {
+        changed(paired_len)?;
+    }
+    Ok(())
+}
+
+fn take_next_unit_identity(next_identity: &mut u32) -> Result<u32, EngineError> {
+    let identity = *next_identity;
+    if identity == 0 {
+        return Err(EngineError::RevisionExhausted);
+    }
+    *next_identity = next_identity
+        .checked_add(1)
+        .ok_or(EngineError::RevisionExhausted)?;
+    Ok(identity)
 }
 
 fn apply_text_identity_mutation(
@@ -4703,13 +5289,7 @@ fn apply_text_identity_mutation(
         identities.truncate(new_len);
     }
     for identity in &mut identities[start..start + insert_count] {
-        if *next_identity == 0 {
-            return Err(EngineError::RevisionExhausted);
-        }
-        *identity = *next_identity;
-        *next_identity = next_identity
-            .checked_add(1)
-            .ok_or(EngineError::RevisionExhausted)?;
+        *identity = take_next_unit_identity(next_identity)?;
     }
     Ok(())
 }
@@ -5878,6 +6458,69 @@ mod tests {
     }
 
     #[test]
+    fn packed_utf16_change_scan_matches_a_scalar_reference() {
+        let mut random = 0x2475_a11c_u32;
+        for len in 0..=65usize {
+            let mut accepted = Vec::with_capacity(len);
+            for offset in 0..len {
+                random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                let unit = match offset % 11 {
+                    0 => 0xd83d,
+                    1 => 0xde00,
+                    2 | 3 => b'a' as u16,
+                    _ => random as u16,
+                };
+                accepted.push(unit);
+            }
+            let mut candidate = accepted.clone();
+            for (offset, unit) in candidate.iter_mut().enumerate() {
+                random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                if random & 7 == 0 || offset == len.saturating_sub(1) {
+                    *unit ^= 0x0021;
+                }
+            }
+            let expected = accepted
+                .iter()
+                .zip(&candidate)
+                .enumerate()
+                .filter_map(|(offset, (left, right))| (left != right).then_some(offset))
+                .collect::<Vec<_>>();
+            let mut actual = Vec::new();
+            for_each_changed_utf16_unit(&accepted, &candidate, |offset| {
+                actual.push(offset);
+                Ok(())
+            })
+            .unwrap();
+            assert_eq!(actual, expected, "UTF-16 length {len}");
+        }
+    }
+
+    #[test]
+    fn flow_convergence_requires_one_same_length_dirty_range() {
+        let first = TextEdit {
+            old_start: 2,
+            old_end: 3,
+            new_start: 2,
+            new_end: 3,
+        };
+        let distant = TextEdit {
+            old_start: 20,
+            old_end: 21,
+            new_start: 20,
+            new_end: 21,
+        };
+        let insertion = TextEdit {
+            old_start: 2,
+            old_end: 2,
+            new_start: 2,
+            new_end: 3,
+        };
+        assert_eq!(convergent_flow_edit_offset(&[first]), Some(2));
+        assert_eq!(convergent_flow_edit_offset(&[first, distant]), None);
+        assert_eq!(convergent_flow_edit_offset(&[insertion]), None);
+    }
+
+    #[test]
     fn retained_edit_range_and_run_topology_track_insertions_without_crossing_run_boundaries() {
         let edit = changed_identity_range(&[1, 2, 3, 4], &[1, 5, 6, 2, 3, 4]).unwrap();
         assert_eq!(
@@ -5885,6 +6528,7 @@ mod tests {
             TextEdit {
                 old_start: 1,
                 old_end: 1,
+                new_start: 1,
                 new_end: 3,
             }
         );
@@ -7150,6 +7794,498 @@ mod tests {
     }
 
     #[test]
+    fn distant_replacements_preserve_middle_unit_identities_across_abort_and_commit() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine.create_root(4).unwrap();
+        engine.reserve_root_text(4, 16).unwrap();
+
+        let initial_bytes = text_mutation_bytes(&[(0, 0, &utf16("aaaaaaaaaa"))]);
+        let mut initial = update(0, 0, 0);
+        initial.text_mutations =
+            parse_text_mutations(&initial_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let replacement = utf16("AaaaaaaA");
+        let edit_bytes = text_mutation_bytes(&[(1, 8, replacement.as_slice())]);
+        let mut edit = update(1, 1, 1);
+        edit.text_mutations =
+            parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine.prepare_update(edit, 2).unwrap();
+        {
+            let paragraph = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert_eq!(
+                paragraph.text_edits,
+                [
+                    TextEdit {
+                        old_start: 1,
+                        old_end: 2,
+                        new_start: 1,
+                        new_end: 2,
+                    },
+                    TextEdit {
+                        old_start: 8,
+                        old_end: 9,
+                        new_start: 8,
+                        new_end: 9,
+                    },
+                ]
+            );
+            assert!(paragraph.unicode_reused_for_text_edit);
+            assert_eq!(paragraph.text.pending().unit_ids[2..8], [3, 4, 5, 6, 7, 8]);
+            assert_eq!(paragraph.text.pending().unit_ids[1], 11);
+            assert_eq!(paragraph.text.pending().unit_ids[8], 12);
+            assert_eq!(paragraph.text.pending().next_unit_id, 13);
+        }
+        engine.abort_update(prepared).unwrap();
+        assert_eq!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap()
+                .text
+                .committed()
+                .unit_ids,
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        );
+
+        let retry = engine.prepare_update(edit, 2).unwrap();
+        engine.commit_update(retry).unwrap();
+        let paragraph = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        assert_eq!(
+            paragraph.text.committed().unit_ids[2..8],
+            [3, 4, 5, 6, 7, 8]
+        );
+        assert_eq!(paragraph.text.committed().unit_ids[1], 11);
+        assert_eq!(paragraph.text.committed().unit_ids[8], 12);
+        assert_eq!(paragraph.text.committed().next_unit_id, 13);
+        assert!(paragraph.pending_text_mirrors_committed);
+        assert_eq!(
+            paragraph.text.pending().units,
+            paragraph.text.committed().units
+        );
+        assert_eq!(
+            paragraph.text.pending().unit_ids,
+            paragraph.text.committed().unit_ids
+        );
+    }
+
+    #[test]
+    fn many_sparse_windows_visit_each_retained_cluster_once_in_both_directions() {
+        const UNIT_COUNT: usize = 128;
+        let edits = (1..UNIT_COUNT)
+            .step_by(2)
+            .map(|offset| TextEdit {
+                old_start: offset,
+                old_end: offset + 1,
+                new_start: offset,
+                new_end: offset + 1,
+            })
+            .collect::<Vec<_>>();
+        let source_run = |direction| ShapingRun {
+            text_start: 0,
+            text_end: UNIT_COUNT as u32,
+            script: 0,
+            direction,
+            bidi_level: direction,
+            style: ResolvedStyle::default(),
+        };
+        let shaped_run = ShapedRun {
+            source_run: 0,
+            binding_handle: 1,
+            font_handle: 1,
+            text_start: 0,
+            text_end: UNIT_COUNT as u32,
+            glyph_start: 0,
+            glyph_count: UNIT_COUNT as u32,
+        };
+
+        for rtl in [false, true] {
+            let clusters = if rtl {
+                (0..UNIT_COUNT as u32).rev().collect()
+            } else {
+                (0..UNIT_COUNT as u32).collect()
+            };
+            let shape = ShapeArena {
+                runs: vec![shaped_run],
+                glyph_ids: vec![1; UNIT_COUNT],
+                clusters,
+                x_advances: vec![1; UNIT_COUNT],
+                y_advances: vec![0; UNIT_COUNT],
+                x_offsets: vec![0; UNIT_COUNT],
+                y_offsets: vec![0; UNIT_COUNT],
+                glyph_flags: vec![0; UNIT_COUNT],
+            };
+            let before = crate::SPARSE_BOUNDARY_VISITS.with(core::cell::Cell::get);
+            let mut windows = Vec::new();
+            assert!(
+                build_sparse_shape_windows(
+                    &edits,
+                    &shape,
+                    shaped_run,
+                    source_run(u8::from(rtl)),
+                    &mut windows,
+                )
+                .unwrap()
+            );
+            let visits = crate::SPARSE_BOUNDARY_VISITS.with(core::cell::Cell::get) - before;
+            assert_eq!(visits, UNIT_COUNT, "one traversal for rtl={rtl}");
+            assert_eq!(windows.len(), edits.len());
+            for (window, edit) in windows.iter().zip(&edits) {
+                let start = edit.old_start as u32;
+                let end = edit.old_end as u32;
+                assert_eq!((window.old_start, window.old_end), (start, end));
+                assert_eq!((window.new_start, window.new_end), (start, end));
+                assert_eq!(window.probe_end, (end + 1).min(UNIT_COUNT as u32));
+                let expected_glyphs = if rtl {
+                    (UNIT_COUNT - edit.old_end, UNIT_COUNT - edit.old_start)
+                } else {
+                    (edit.old_start, edit.old_end)
+                };
+                assert_eq!(
+                    (window.old_glyph_start, window.old_glyph_end),
+                    expected_glyphs
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sparse_real_font_shaping_matches_cold_shape_and_shapes_only_safe_windows() {
+        let original = "alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|juliet";
+        let edited = "Alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|JulieT";
+        assert_eq!(
+            original.encode_utf16().count(),
+            edited.encode_utf16().count()
+        );
+        let (mut engine, mut shaper) = shaped_engine(original);
+        let before_units = crate::SHAPED_UNITS.with(core::cell::Cell::get);
+        let original_ids = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap()
+            .text
+            .committed()
+            .unit_ids
+            .clone();
+
+        let replacement = utf16(edited);
+        let mutations = [(
+            0,
+            u32::try_from(replacement.len()).unwrap(),
+            replacement.as_slice(),
+        )];
+        let edit_bytes = text_mutation_bytes(&mutations);
+        let mut edit = update(1, 1, 1);
+        edit.limits.max_clusters = 256;
+        edit.limits.max_lines = 256;
+        edit.limits.max_output_bytes = 1 << 20;
+        edit.text_mutations =
+            parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, edit, 2)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+        let sparse_units = crate::SHAPED_UNITS.with(core::cell::Cell::get) - before_units;
+        assert_eq!(sparse_units, 5, "three distant edits reshape five units");
+
+        let (cold, _) = shaped_engine(edited);
+        let warm = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        let cold = cold
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        assert_visible_shape_equal(warm, cold, "three distant edits");
+        assert_eq!(warm.text.committed().unit_ids[1..56], original_ids[1..56]);
+
+        let replacement = utf16(original);
+        let mutations = [(
+            0,
+            u32::try_from(replacement.len()).unwrap(),
+            replacement.as_slice(),
+        )];
+        let edit_bytes = text_mutation_bytes(&mutations);
+        let mut edit = update(2, 2, 2);
+        edit.limits.max_clusters = 256;
+        edit.limits.max_lines = 256;
+        edit.limits.max_output_bytes = 1 << 20;
+        edit.text_mutations =
+            parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let before_units = crate::SHAPED_UNITS.with(core::cell::Cell::get);
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, edit, 3)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+        let sparse_units = crate::SHAPED_UNITS.with(core::cell::Cell::get) - before_units;
+        assert_eq!(
+            sparse_units, 5,
+            "the next assignment must reuse the retained shaped run"
+        );
+        let (cold, _) = shaped_engine(original);
+        let warm = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        let cold = cold
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        assert_visible_shape_equal(warm, cold, "second sparse assignment");
+        assert_eq!(warm.shape.committed().runs.len(), 1);
+    }
+
+    #[test]
+    fn sparse_rtl_windows_match_cold_shape_in_logical_order() {
+        let original = "alpha|bravo|charlie|delta|echo|foxtrot";
+        let edited = "Alpha|bravo|charlie|delta|echo|foxtroT";
+        let (mut engine, mut shaper) = shaped_rtl_engine(original);
+        let replacement = utf16(edited);
+        let mutations = [(
+            0,
+            u32::try_from(replacement.len()).unwrap(),
+            replacement.as_slice(),
+        )];
+        let edit_bytes = text_mutation_bytes(&mutations);
+        let mut edit = update(1, 1, 1);
+        edit.limits.max_clusters = 256;
+        edit.limits.max_lines = 256;
+        edit.limits.max_output_bytes = 1 << 20;
+        edit.text_mutations =
+            parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let before_units = crate::SHAPED_UNITS.with(core::cell::Cell::get);
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, edit, 2)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+        let shaped_units = crate::SHAPED_UNITS.with(core::cell::Cell::get) - before_units;
+        assert!(
+            shaped_units < replacement.len(),
+            "RTL assignment must execute bounded shaping scopes"
+        );
+
+        let (cold, _) = shaped_rtl_engine(edited);
+        let warm = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        let cold = cold
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        assert_eq!(warm.shaping_runs.committed().runs()[0].direction, 1);
+        assert_visible_shape_equal(warm, cold, "RTL sparse assignment");
+    }
+
+    #[test]
+    fn sparse_edit_fuzz_matches_cold_real_font_recomputation() {
+        let mut text = utf16("alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|juliet");
+        let (mut warm_engine, mut warm_shaper) = shaped_engine(&String::from_utf16(&text).unwrap());
+        let eligible = text
+            .iter()
+            .enumerate()
+            .filter_map(|(index, unit)| {
+                ((b'a' as u16..=b'z' as u16).contains(unit)
+                    || (b'A' as u16..=b'Z' as u16).contains(unit))
+                .then_some(index)
+            })
+            .collect::<Vec<_>>();
+        let mut random = 0x2475_1a9b_u32;
+        for step in 0..32_u32 {
+            let previous = text.clone();
+            let mut positions = Vec::new();
+            for _ in 0..3 {
+                random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                positions.push(eligible[random as usize % eligible.len()]);
+            }
+            positions.sort_unstable();
+            positions.dedup();
+            let payloads = positions
+                .iter()
+                .map(|position| {
+                    [if (b'a' as u16..=b'z' as u16).contains(&text[*position]) {
+                        text[*position] - 32
+                    } else {
+                        text[*position] + 32
+                    }]
+                })
+                .collect::<Vec<_>>();
+            for (position, payload) in positions.iter().zip(&payloads) {
+                text[*position] = payload[0];
+            }
+            let start = previous
+                .iter()
+                .zip(&text)
+                .position(|(accepted, candidate)| accepted != candidate)
+                .unwrap();
+            let end = previous
+                .iter()
+                .zip(&text)
+                .rposition(|(accepted, candidate)| accepted != candidate)
+                .unwrap()
+                + 1;
+            let records = [(
+                u32::try_from(start).unwrap(),
+                u32::try_from(end - start).unwrap(),
+                &text[start..end],
+            )];
+            let bytes = text_mutation_bytes(&records);
+            let mut update = update(step + 1, step + 1, step + 1);
+            update.limits.max_clusters = 256;
+            update.limits.max_lines = 256;
+            update.limits.max_output_bytes = 1 << 20;
+            update.text_mutations =
+                parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            let prepared = warm_engine
+                .prepare_update_with_shaper(&mut warm_shaper, update, step + 2)
+                .unwrap();
+            warm_engine.commit_update(prepared).unwrap();
+
+            let current = String::from_utf16(&text).unwrap();
+            let (cold_engine, _) = shaped_engine(&current);
+            let warm = warm_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            let cold = cold_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert_visible_shape_equal(warm, cold, &alloc::format!("seeded step {step}"));
+            assert_eq!(
+                warm.shape.committed().runs.len(),
+                1,
+                "seeded step {step} must retain one canonical shaped run"
+            );
+        }
+    }
+
+    #[test]
+    fn unsafe_ligature_combining_bidi_and_length_edits_match_cold_recomputation() {
+        let mut text = utf16("office a\u{301} שלום 😀 affine");
+        let (mut warm_engine, mut warm_shaper) =
+            shaped_inter_engine(&String::from_utf16(&text).unwrap());
+        for step in 0..6_u32 {
+            let edits = match step {
+                0 => vec![
+                    (0usize, 1usize, vec![b'O' as u16]),
+                    (text.len() - 1, 1, vec![b'E' as u16]),
+                ],
+                1 => vec![(3, 0, vec![b'X' as u16])],
+                2 => vec![(3, 1, vec![])],
+                3 => vec![(
+                    text.iter().position(|unit| *unit == 0x0301).unwrap(),
+                    1,
+                    vec![0x0300],
+                )],
+                4 => vec![(
+                    text.iter().position(|unit| *unit == 0x05e9).unwrap(),
+                    1,
+                    vec![0x05e8],
+                )],
+                5 => vec![(
+                    text.windows(2)
+                        .position(|pair| pair == [0xd83d, 0xde00])
+                        .unwrap(),
+                    2,
+                    utf16("😃"),
+                )],
+                _ => unreachable!(),
+            };
+            let records = edits
+                .iter()
+                .map(|(start, delete, insert)| {
+                    (
+                        u32::try_from(*start).unwrap(),
+                        u32::try_from(*delete).unwrap(),
+                        insert.as_slice(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            let bytes = text_mutation_bytes(&records);
+            for (start, delete, insert) in &edits {
+                text.splice(*start..*start + *delete, insert.iter().copied());
+            }
+            let styles = root_style_bytes_for_text(7, u32::try_from(text.len()).unwrap());
+            let mut update = update(step + 1, step + 1, step + 1);
+            update.limits.max_clusters = 256;
+            update.limits.max_lines = 256;
+            update.limits.max_output_bytes = 1 << 20;
+            update.text_mutations = parse_text_mutations(
+                &bytes,
+                ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+                u32::try_from(records.len()).unwrap(),
+            )
+            .unwrap();
+            update.style_mutations =
+                parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            let before_units = crate::SHAPED_UNITS.with(core::cell::Cell::get);
+            let prepared = warm_engine
+                .prepare_update_with_shaper(&mut warm_shaper, update, step + 2)
+                .unwrap();
+            warm_engine.commit_update(prepared).unwrap();
+            let shaped_units = crate::SHAPED_UNITS.with(core::cell::Cell::get) - before_units;
+            if step == 0 {
+                assert!(
+                    shaped_units >= text.len(),
+                    "Inter's unsafe concat chain must select broad shaping"
+                );
+            }
+
+            let current = String::from_utf16(&text).unwrap();
+            let (cold_engine, _) = shaped_inter_engine(&current);
+            let warm = warm_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            let cold = cold_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert_visible_shape_equal(warm, cold, &alloc::format!("fallback step {step}"));
+        }
+    }
+
+    #[test]
     fn invalid_utf16_aborts_text_and_unicode_analysis_together() {
         let mut engine = TextEngine::default();
         engine
@@ -7181,9 +8317,10 @@ mod tests {
             pending.units = "axc".encode_utf16().collect();
         }
         paragraph.text.mark_prepared();
-        paragraph.text_edit = Some(TextEdit {
+        paragraph.text_edits.push(TextEdit {
             old_start: 1,
             old_end: 2,
+            new_start: 1,
             new_end: 2,
         });
         paragraph.style_invalidation.bidi = true;
@@ -7882,6 +9019,182 @@ mod tests {
             .unwrap();
     }
 
+    fn utf16(value: &str) -> Vec<u16> {
+        value.encode_utf16().collect()
+    }
+
+    fn assert_visible_shape_equal(warm: &ParagraphState, cold: &ParagraphState, context: &str) {
+        let (warm_shape, cold_shape) = (warm.shape.committed(), cold.shape.committed());
+        assert_eq!(
+            warm_shape.glyph_ids, cold_shape.glyph_ids,
+            "{context}: glyph IDs"
+        );
+        assert_eq!(
+            warm_shape.clusters, cold_shape.clusters,
+            "{context}: shape clusters"
+        );
+        assert_eq!(
+            warm_shape.x_advances, cold_shape.x_advances,
+            "{context}: x advances"
+        );
+        assert_eq!(
+            warm_shape.y_advances, cold_shape.y_advances,
+            "{context}: y advances"
+        );
+        assert_eq!(
+            warm_shape.x_offsets, cold_shape.x_offsets,
+            "{context}: x offsets"
+        );
+        assert_eq!(
+            warm_shape.y_offsets, cold_shape.y_offsets,
+            "{context}: y offsets"
+        );
+        assert_eq!(
+            warm_shape.glyph_flags, cold_shape.glyph_flags,
+            "{context}: glyph flags"
+        );
+        let (warm_clusters, cold_clusters) = (warm.clusters.committed(), cold.clusters.committed());
+        assert_eq!(
+            warm_clusters.starts, cold_clusters.starts,
+            "{context}: starts"
+        );
+        assert_eq!(warm_clusters.ends, cold_clusters.ends, "{context}: ends");
+        assert_eq!(
+            warm_clusters.advances, cold_clusters.advances,
+            "{context}: advances"
+        );
+        assert_eq!(
+            warm_clusters.flags, cold_clusters.flags,
+            "{context}: cluster flags"
+        );
+        assert_eq!(
+            warm_clusters.source_runs, cold_clusters.source_runs,
+            "{context}: source runs"
+        );
+        assert_eq!(
+            warm_clusters.glyph_ids, cold_clusters.glyph_ids,
+            "{context}: cluster glyph IDs"
+        );
+        assert_eq!(
+            warm_clusters.glyph_clusters, cold_clusters.glyph_clusters,
+            "{context}: glyph clusters"
+        );
+        assert_eq!(
+            warm_clusters.glyph_x_advances, cold_clusters.glyph_x_advances,
+            "{context}: cluster x advances"
+        );
+        assert_eq!(
+            warm_clusters.glyph_shape_flags, cold_clusters.glyph_shape_flags,
+            "{context}: cluster shape flags"
+        );
+        let (warm_flow, cold_flow) = (warm.flow_layout.committed(), cold.flow_layout.committed());
+        assert_eq!(warm_flow.lines, cold_flow.lines, "{context}: flow lines");
+        assert_eq!(
+            warm_flow.fragments, cold_flow.fragments,
+            "{context}: flow fragments"
+        );
+        assert_eq!(
+            warm_flow.drop_caps, cold_flow.drop_caps,
+            "{context}: flow drop caps"
+        );
+        let warm_glyphs = warm.positioned.committed().glyphs();
+        let cold_glyphs = cold.positioned.committed().glyphs();
+        assert_eq!(
+            warm_glyphs.len(),
+            cold_glyphs.len(),
+            "{context}: glyph count"
+        );
+        for (warm_glyph, cold_glyph) in warm_glyphs.iter().zip(cold_glyphs) {
+            let (mut warm_glyph, mut cold_glyph) = (*warm_glyph, *cold_glyph);
+            warm_glyph.stable_id = 0;
+            warm_glyph.content_revision = 0;
+            warm_glyph.placement_slot = 0;
+            cold_glyph.stable_id = 0;
+            cold_glyph.content_revision = 0;
+            cold_glyph.placement_slot = 0;
+            assert_eq!(warm_glyph, cold_glyph, "{context}: positioned glyph");
+        }
+    }
+
+    fn shaped_engine(text: &str) -> (TextEngine, ShaperRegistry) {
+        const FONT: &[u8] = include_bytes!(
+            "../../../../../../benches/fixtures/fonts/dot-gothic-16/DotGothic16-Regular.ttf"
+        );
+        shaped_engine_with_font(text, FONT, 9_362)
+    }
+
+    fn shaped_inter_engine(text: &str) -> (TextEngine, ShaperRegistry) {
+        const FONT: &[u8] =
+            include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
+        shaped_engine_with_font(text, FONT, 2_937)
+    }
+
+    fn shaped_rtl_engine(text: &str) -> (TextEngine, ShaperRegistry) {
+        const FONT: &[u8] = include_bytes!(
+            "../../../../../../benches/fixtures/fonts/dot-gothic-16/DotGothic16-Regular.ttf"
+        );
+        let styles = override_style_bytes_for_text(
+            7,
+            u32::try_from(text.encode_utf16().count()).unwrap(),
+            DIRECTION_RTL,
+        );
+        shaped_engine_with_font_and_styles(text, FONT, 9_362, &styles, 2)
+    }
+
+    fn shaped_engine_with_font(
+        text: &str,
+        font: &[u8],
+        glyph_count: u32,
+    ) -> (TextEngine, ShaperRegistry) {
+        let styles = root_style_bytes_for_text(7, text.encode_utf16().count() as u32);
+        shaped_engine_with_font_and_styles(text, font, glyph_count, &styles, 1)
+    }
+
+    fn shaped_engine_with_font_and_styles(
+        text: &str,
+        font: &[u8],
+        glyph_count: u32,
+        style_bytes: &[u8],
+        style_count: u32,
+    ) -> (TextEngine, ShaperRegistry) {
+        let mut shaper = ShaperRegistry::default();
+        let extents = vec![0; glyph_count as usize * 8];
+        let availability = vec![0; (glyph_count as usize).div_ceil(8)];
+        assert_eq!(
+            shaper.register_font(1, font, &extents, &availability, 0, 0),
+            0
+        );
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine
+            .register_font_binding(42, 1, glyph_count, render_binding(glyph_count, 1))
+            .unwrap();
+        engine.register_font_stack(7, &[42]).unwrap();
+        engine.create_root(4).unwrap();
+        engine
+            .reserve_root_text(4, u32::try_from(text.encode_utf16().count()).unwrap())
+            .unwrap();
+
+        let units = utf16(text);
+        let text_bytes = text_mutation_bytes(&[(0, 0, &units)]);
+        let mut initial = update(0, 0, 0);
+        initial.limits.max_clusters = 256;
+        initial.limits.max_lines = 256;
+        initial.limits.max_output_bytes = 1 << 20;
+        initial.text_mutations =
+            parse_text_mutations(&text_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        initial.style_mutations =
+            parse_style_mutations(style_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, style_count)
+                .unwrap();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, initial, 1)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+        (engine, shaper)
+    }
+
     fn validated_codec(technique: TechniqueId) -> ValidatedCodec {
         validated_codec_with_input(technique, 0)
     }
@@ -8033,8 +9346,55 @@ mod tests {
         root_style_bytes_inner(font_stack_handle, None)
     }
 
+    fn root_style_bytes_for_text(font_stack_handle: u32, text_end: u32) -> Vec<u8> {
+        let mut bytes = root_style_bytes(font_stack_handle);
+        write_u32(
+            &mut bytes,
+            ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+            text_end,
+        );
+        bytes
+    }
+
     fn root_style_bytes_with_direction(font_stack_handle: u32, direction: u8) -> Vec<u8> {
         root_style_bytes_inner(font_stack_handle, Some(direction))
+    }
+
+    fn override_style_bytes_for_text(
+        font_stack_handle: u32,
+        text_end: u32,
+        direction: u8,
+    ) -> Vec<u8> {
+        let root = root_style_bytes_for_text(font_stack_handle, text_end);
+        let header = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let record_size = abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize;
+        let mut bytes = vec![0; header + record_size * 2];
+        bytes[header..header + record_size].copy_from_slice(&root[header..]);
+        let record = header + record_size;
+        bytes[record + abi::ENGINE_STYLE_MUTATION_OPCODE] = STYLE_MUTATION_UPSERT;
+        write_u32(&mut bytes, record + abi::ENGINE_STYLE_MUTATION_STYLE_ID, 2);
+        write_u32(
+            &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_CASCADE_ORDER,
+            1,
+        );
+        write_u32(
+            &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID,
+            1,
+        );
+        write_u32(
+            &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_FIELD_MASK,
+            STYLE_FIELD_DIRECTION,
+        );
+        write_u32(
+            &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+            text_end,
+        );
+        bytes[record + abi::ENGINE_STYLE_MUTATION_DIRECTION] = direction;
+        bytes
     }
 
     fn root_style_bytes_inner(font_stack_handle: u32, direction: Option<u8>) -> Vec<u8> {

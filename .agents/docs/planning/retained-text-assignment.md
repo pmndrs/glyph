@@ -42,6 +42,10 @@ Keep public `Text.set()` and whole-state assignment ergonomics. Derive invalidat
 using packed candidate and accepted text. Do not build a detailed multi-island edit table in JavaScript or introduce a
 public edit API for this work. See the [accepted decision](decisions/retained-text-assignment-invalidation.md).
 
+Keep one execution pipeline. Retained-boundary evidence selects reuse, bounded shaping windows, or whole-run work within
+the same shaping/splice executor. A failed boundary proof broadens that scope; it does not enter a duplicated optimized
+or conservative implementation. Font-fallback uncertainty continues through the existing fallback owner.
+
 [#247](https://github.com/pmndrs/glyph/issues/247) names the performance frontier; its issue closure is not evidence that
 large sparse assignments are fast. This plan records implementation and validation work, not a completed speedup.
 
@@ -97,10 +101,10 @@ drift, skipped cases, and uncertainty. Use the narrow appropriate benchmark labe
 
 Existing cases cover long-paragraph insertion/removal with measure and publication, and a trailing paint-span mutation
 across 1,000 labels.[^edit-bench][^spans-bench] They do not reproduce scattered character changes throughout one large
-paragraph. Add a deterministic Labs case for that workload: whole assignment through the public API, fixed-size text,
-several separated changed islands, thousands of paint spans, then normal publication. Include unchanged assignment and
-broad replacement controls; cover length changes and Unicode through correctness tests. Input preparation must not
-silently hide the setter, encoding, shaping, or publication cost being optimized.
+paragraph. The new [assignment suite](../../../benches/labs/package/sparse-assignment.bench.ts) fills that gap with one
+18,432-unit paragraph and 8,192 paint spans, whole assignment through the public API, scattered changes, and normal
+publication. Unchanged assignment and broad replacement are controls; length changes and Unicode have correctness
+coverage. Input preparation stays outside timing, while setter, encoding, shaping, and publication stay inside.
 
 Deterministic regression and seeded sequence tests compare retained results with fresh full recomputation: glyph IDs,
 clusters, advances, positions, breaks, paint, and publication. Cover ligatures, combining sequences, surrogate pairs,
@@ -109,10 +113,17 @@ actual emitted wire records and shaped work separately from elapsed time. A kern
 
 ## Recovery and current work
 
-As of 2026-10-09, implementation is still in isolated worktrees. No rope implementation or SWAR speedup is claimed.
-The sparse-text agent removed its JS multi-island producer and is moving derivation into Rust preparation. Retained-span
-normalization and render-plan production-path corrections are also in flight. Parent review, Labs comparison, and
-integration remain required before landing.
+The first sparse-text slice derives packed two-unit deltas in Rust, preserves unchanged unit identities, visits retained
+clusters once for all islands in LTR or RTL order, and executes bounded and whole-run scopes through one executor. It
+collapses spliced pieces into one canonical source run so subsequent assignments remain eligible. Storage is still
+retained vectors; balanced rope/chunk storage and multi-island flow reconvergence remain later slices. No rope
+implementation or measured SWAR speedup is claimed.
+
+Independent source review is clear after correcting quadratic window discovery and retaining public cold-output and
+two-sibling lifecycle regressions. Before rebasing, 321 Rust library tests and 74 public integration tests passed.
+Post-rebase integration and assignment Labs remain acceptance gates. Main already contains unchanged-paragraph
+preparation (#276), canonical spans/style deltas (#278), scoped Three synchronization (#279), and render-plan correction
+(#274). Their individual evidence does not close #247; the issue and roadmap own landing status.
 
 Runtime PIDs, sessions, and partial traces belong in ignored `.cache/agent-router/` manifests. They are not architectural
 knowledge. Resume from this plan and its decision, inspect current commits and authoritative results, and update this

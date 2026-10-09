@@ -3569,6 +3569,71 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   font.dispose();
 });
 
+test('full assignments publish one replacement spanning distant character edits', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+  const scene = new THREE.Scene();
+  const text = three.createText({ font, text: 'alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|juliet' });
+  scene.add(text);
+  scene.updateMatrixWorld();
+  text.set({ text: 'Alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|JulieT' });
+  scene.updateMatrixWorld();
+  assert.equal(text.commitState().status, 'committed');
+  assert.deepEqual(instrumentedGlyph.latestTextMutations(), [
+    { start: 0, deleteCount: 62, insert: 'Alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|JulieT' },
+  ]);
+});
+
+test('sibling measurement terminates after expansion sparse replacement and shrink assignments', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const left = three.createText({ font, text: 'AB' });
+  const right = three.createText({
+    font,
+    text: 'CD',
+    constraints: { width: { mode: 'exact', size: 100 }, height: { mode: 'exact', size: 100 } },
+    layout: { columns: { count: 2, gap: 10 } },
+  });
+  group.add(left, right);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+  const initialRight = right.measure();
+  const initialRightJson = JSON.stringify(initialRight);
+  const publishLeft = (text) => {
+    left.set({ text });
+    scene.updateMatrixWorld(true);
+    assert.equal(left.commitState().status, 'committed', `left must publish ${JSON.stringify(text)}`);
+  };
+  const original = 'alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|juliet';
+  const sparse = 'Alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|JulieT';
+
+  for (const value of ['A', 'AB', 'AY', original, sparse, 'AY', 'AZ', '🌍', 'AB']) publishLeft(value);
+
+  left.set({
+    constraints: { width: { mode: 'exact', size: 100 } },
+    layout: { wrap: 'word' },
+  });
+  const resized = left.measure();
+  assert.equal(resized.glyphCount, 2, 'the resized changed paragraph must complete first');
+  const measuredRight = right.measure();
+  assert.equal(measuredRight.glyphCount, initialRight.glyphCount, 'the unchanged sibling retains its glyph count');
+  assert.equal(JSON.stringify(measuredRight), initialRightJson, 'the unchanged sibling retains its scalar measurement');
+
+  scene.updateMatrixWorld(true);
+  assert.equal(left.commitState().status, 'committed');
+  assert.equal(right.commitState().status, 'committed');
+  assert.equal(group.error, undefined);
+  assert.equal(rootDraws(scene).length, 1);
+
+  group.dispose();
+  left.dispose();
+  right.dispose();
+});
+
 function instrumentNextGlyphEngine() {
   const abi = textShaperAbi;
   const originalInstantiate = WebAssembly.instantiate;
@@ -3877,6 +3942,147 @@ function instrumentNextGlyphEngine() {
     },
   };
 }
+
+test('repeated public Text.set assignments match freshly published semantic glyph output', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const [inter, amiri] = await Promise.all([
+    loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] })),
+    loadFont({ baked: { bytes: await readFile(amiriFontUrl) } }, bitmap({ strikes: [16] })),
+  ]);
+  const fallback = createFontStack(inter, amiri);
+  const scene = new THREE.Scene();
+  t.after(() => {
+    inter.dispose();
+    amiri.dispose();
+  });
+  const fixtures = [
+    {
+      name: 'concat-safe RTL',
+      font: amiri,
+      style: { fontSize: 16, direction: 'rtl', language: 'ar' },
+      values: ['مرحبا بالعالم هذا نص واضح', 'مرحبب بالعالم هذا خط واضخ', 'مرحبا بالعالم هذا نص واضح'],
+      verify(layout) {
+        assert.ok(
+          layout.glyphBidiLevels.every((level) => (level & 1) === 1),
+          'RTL glyphs must remain odd-level',
+        );
+      },
+    },
+    {
+      name: 'ligature combining bidi and surrogate risk',
+      font: fallback,
+      style: { fontSize: 16, direction: 'ltr', language: 'en' },
+      values: [
+        'office a\u0301 مرحبا 😀 affine',
+        'ofXice a\u0301 مرحبا 😀 affinE',
+        'ofXice a\u0300 مرحبى 😃 affinE',
+        'office a\u0301 مرحبا 😀 affine!',
+        'office a\u0301 مرحبا 😀 affine',
+      ],
+      verify(layout) {
+        assert.ok(new Set(layout.glyphBidiLevels).size > 1, 'mixed text must retain multiple bidi levels');
+      },
+    },
+    {
+      name: 'fallback entry and exit',
+      font: fallback,
+      style: { fontSize: 16, direction: 'ltr', language: 'en' },
+      values: ['alpha bravo', 'alpha مرحبا', 'alpha bravo'],
+      expectedFontCounts: [2, 1],
+    },
+  ];
+
+  for (const fixture of fixtures) {
+    const properties = {
+      font: fixture.font,
+      text: fixture.values[0],
+      style: fixture.style,
+      constraints: { width: { mode: 'exact', size: 240 } },
+      layout: { wrap: 'word' },
+    };
+    const warm = three.createText(properties);
+    scene.add(warm);
+    scene.updateMatrixWorld(true);
+    try {
+      for (const [index, value] of fixture.values.slice(1).entries()) {
+        warm.set({ text: value });
+        scene.updateMatrixWorld(true);
+        assert.equal(warm.error, undefined, `${fixture.name} warm publication ${String(index)} must succeed`);
+
+        const fresh = three.createText({ ...properties, text: value });
+        scene.add(fresh);
+        scene.updateMatrixWorld(true);
+        try {
+          assert.equal(fresh.error, undefined, `${fixture.name} fresh publication ${String(index)} must succeed`);
+          assertPublicSemanticLayoutEqual(warm, fresh, `${fixture.name} assignment ${String(index)}`);
+          fixture.verify?.(warm.glyphs());
+          if (fixture.expectedFontCounts !== undefined) {
+            assert.equal(
+              new Set(warm.glyphs().glyphFontSlots).size,
+              fixture.expectedFontCounts[index],
+              `${fixture.name} assignment ${String(index)} must select the expected font count`,
+            );
+          }
+        } finally {
+          scene.remove(fresh);
+          fresh.dispose();
+        }
+      }
+    } finally {
+      scene.remove(warm);
+      warm.dispose();
+    }
+  }
+});
+
+test('renderer rejection preserves Text.set semantic output through explicit retry', async (t) => {
+  const warmThree = await createThreeTestHandle(t);
+  const freshThree = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+  let rejectMaterial = true;
+  const material = defineTextMaterial((context) => {
+    if (rejectMaterial) throw new Error('deliberate sparse assignment publication rejection');
+    return context.createDefaultMaterial();
+  });
+  const warmScene = new THREE.Scene();
+  const freshScene = new THREE.Scene();
+  const group = warmThree.createTextGroup();
+  const warm = warmThree.createText({
+    font,
+    text: 'alpha|bravo|charlie|delta|echo|foxtrot',
+    constraints: { width: { mode: 'exact', size: 220 } },
+    layout: { wrap: 'word' },
+  });
+  group.add(warm);
+  warmScene.add(group);
+  warmScene.updateMatrixWorld(true);
+  const next = 'Alpha|bravo|charlie|delta|echo|foxtroT';
+  warm.set({ text: next, material });
+  warmScene.updateMatrixWorld(true);
+  assert.match(String(group.error), /deliberate sparse assignment publication rejection/u);
+
+  const fresh = freshThree.createText({
+    font,
+    text: next,
+    constraints: { width: { mode: 'exact', size: 220 } },
+    layout: { wrap: 'word' },
+  });
+  freshScene.add(fresh);
+  freshScene.updateMatrixWorld(true);
+  assertPublicSemanticLayoutEqual(warm, fresh, 'renderer-rejected assignment');
+
+  rejectMaterial = false;
+  warm.set({ material });
+  warmScene.updateMatrixWorld(true);
+  assert.equal(group.error, undefined, 'explicit material invalidation must retry the rejected publication');
+  assert.equal(rootDraws(warmScene).length, 1, 'the successful retry must realize the retained paragraph');
+  assertPublicSemanticLayoutEqual(warm, fresh, 'explicit retry');
+
+  group.dispose();
+  warm.dispose();
+  fresh.dispose();
+});
 
 test('Text.measure answers attached first-frame state without traversing matrices or realizing draws', async (t) => {
   const three = await createThreeTestHandle(t);
@@ -4828,6 +5034,42 @@ function createThreeFontDomain(firstLoad, onDispose = () => {}) {
 
 function dataUrl(bytes) {
   return `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
+}
+
+const publicSemanticLayoutFields = [
+  'glyphFontSlots',
+  'glyphIds',
+  'clusters',
+  'glyphBidiLevels',
+  'glyphFontSizes',
+  'x',
+  'y',
+  'glyphAdvances',
+  'glyphInkX',
+  'glyphInkY',
+  'glyphInkWidths',
+  'glyphInkHeights',
+  'glyphFlags',
+  'lineTextStarts',
+  'lineTextEnds',
+  'lineGlyphStarts',
+  'lineGlyphCounts',
+  'lineBaselines',
+  'lineAdvances',
+];
+
+function assertPublicSemanticLayoutEqual(actualText, expectedText, context) {
+  const actual = actualText.glyphs();
+  const expected = expectedText.glyphs();
+  assert.deepEqual(actualText.measure(), expectedText.measure(), `${context} measurement`);
+  assert.equal(actual.glyphCount, expected.glyphCount, `${context} glyphCount`);
+  assert.equal(actual.lineCount, expected.lineCount, `${context} lineCount`);
+  assert.equal(actual.missingGlyphCount, expected.missingGlyphCount, `${context} missingGlyphCount`);
+  assert.equal(actual.fontHandles.length, expected.fontHandles.length, `${context} font count`);
+  assert.deepEqual(actual.lines, expected.lines, `${context} lines`);
+  for (const field of publicSemanticLayoutFields) {
+    assert.deepEqual(Array.from(actual[field]), Array.from(expected[field]), `${context} ${field}`);
+  }
 }
 
 function rootDraws(scene, name = undefined) {
