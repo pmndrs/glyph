@@ -112,6 +112,7 @@ export function sizeLimitRows(
 export function formatCompactSizeLimitMarkdown(
   baseRows: readonly SizeLimitRow[],
   currentRows: readonly SizeLimitRow[],
+  iconBaseUrl = 'https://raw.githubusercontent.com/pmndrs/glyph/main/.github/assets/package-size',
 ): string {
   const definitions = new Map(summaryDefinitions.map((definition) => [definition.id, definition]));
   const base = new Map(baseRows.map((row) => [row.name, row.size]));
@@ -119,7 +120,7 @@ export function formatCompactSizeLimitMarkdown(
   const lines = ['| Surface | gzip | Surface | gzip |', '| --- | ---: | --- | ---: |'];
   for (let index = 0; index < Math.max(compactColumns.left.length, compactColumns.right.length); index += 1) {
     lines.push(
-      `| ${formatSurface(compactColumns.left[index], definitions, base, current)} | ${formatSurface(compactColumns.right[index], definitions, base, current)} |`,
+      `| ${formatSurface(compactColumns.left[index], definitions, base, current, iconBaseUrl)} | ${formatSurface(compactColumns.right[index], definitions, base, current, iconBaseUrl)} |`,
     );
   }
   return lines.join('\n');
@@ -130,6 +131,7 @@ function formatSurface(
   definitions: ReadonlyMap<string, SummaryDefinition>,
   base: ReadonlyMap<string, number>,
   current: ReadonlyMap<string, number>,
+  iconBaseUrl: string,
 ): string {
   if (id === undefined) return ' | ';
   const definition = definitions.get(id);
@@ -137,7 +139,7 @@ function formatSurface(
   const name = `${definition.label} (gzip)`;
   const currentBytes = current.get(name);
   if (currentBytes === undefined) throw new Error(`Compact package-size report requires ${name}`);
-  return `${definition.label} | ${formatBytes(currentBytes)} (${formatChange(base.get(name), currentBytes)})`;
+  return `${definition.label} | ${formatBytes(currentBytes)} (${formatChange(base.get(name), currentBytes, iconBaseUrl)})`;
 }
 
 function formatBytes(bytes: number): string {
@@ -146,14 +148,14 @@ function formatBytes(bytes: number): string {
   return `${bytes} B`;
 }
 
-function formatChange(base: number | undefined, current: number): string {
+function formatChange(base: number | undefined, current: number, iconBaseUrl: string): string {
   if (base === undefined || base === 0) return 'new';
   if (current === base) return '0%';
   const percent = ((current - base) / base) * 100;
   const rounded = Math.round(percent * 100) / 100;
-  const direction = current > base ? '🔺' : '🔽';
+  const direction = current > base ? 'increase' : 'decrease';
   const change = rounded === 0 ? '<0.01%' : `${rounded > 0 ? '+' : ''}${rounded}%`;
-  return `${change} ${direction}`;
+  return `${change} <img src="${iconBaseUrl}/${direction}.svg" width="12" height="12" alt="Size ${direction}" />`;
 }
 
 function isNonArrayObject(value: unknown): value is Record<string, unknown> {
