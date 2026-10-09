@@ -3453,8 +3453,16 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   nestedParent.visible = true;
   scene.updateMatrixWorld();
   instrumented.reset();
+  const paintDraw = rootDraws(scene)[0];
   right.style = { ...right.style, color: '#00ff00' };
   scene.updateMatrixWorld();
+  assert.equal(
+    instrumented.latestRequestFlags & textShaperAbi.engine.frameFlags.compositingIndependent,
+    textShaperAbi.engine.frameFlags.compositingIndependent,
+    'the public paint assignment must retain the production independent-compositing policy',
+  );
+  assert.equal(instrumented.latestPlanCounts().draws, 0, 'the retained paint edit publishes no replacement draws');
+  assert.equal(rootDraws(scene)[0], paintDraw, 'the renderer keeps the accepted independent-compositing draw');
   assert.deepEqual(
     instrumented.latestRequestCounts(),
     {
@@ -3679,6 +3687,14 @@ function instrumentNextGlyphEngine() {
     },
     get latestUpdateGeneration() {
       return latestUpdateGeneration;
+    },
+    get latestRequestFlags() {
+      assert.ok(latestRequest, 'a text update request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      return new DataView(latestRequest.buffer, latestRequest.byteOffset, latestRequest.byteLength).getUint32(
+        request.flags,
+        true,
+      );
     },
     get latestSemanticByteLength() {
       return latestSemanticByteLength;
