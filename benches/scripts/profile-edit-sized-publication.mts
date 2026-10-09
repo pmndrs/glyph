@@ -1,7 +1,7 @@
 /* @workflow {
   "name": "benchmark:edit-sized-publication-profile",
   "summary": "Profile one installed-package edit-sized publication lane, optionally with a named shaper Wasm artifact.",
-  "requirements": "One packed @pmndrs/glyph .tgz artifact and the authenticated Labs font fixtures. Accepts --artifact, --output, --case, --count, --position, --iterations, --warmups, and optional --wasm.",
+  "requirements": "One packed @pmndrs/glyph .tgz artifact and the authenticated Labs font fixtures. Accepts --artifact, --output, --case, --boundary, --count, --position, --iterations, --warmups, and optional --wasm. The prepared-read case accepts 100 or 1000 labels and preparation or publication boundaries.",
   "writes": "A CPU profile, summary, and artifact manifest under --output (default .cache/edit-sized-publication-profile)."
 } */
 import { createHash } from 'node:crypto';
@@ -48,6 +48,7 @@ try {
     benchesRoot,
     {
       GLYPH_EDIT_PROFILE_CASE: options.profileCase,
+      GLYPH_EDIT_PROFILE_BOUNDARY: options.boundary,
       GLYPH_EDIT_PROFILE_COUNT: String(options.count),
       GLYPH_EDIT_PROFILE_ITERATIONS: String(options.iterations),
       GLYPH_EDIT_PROFILE_OUTPUT: output,
@@ -80,11 +81,12 @@ try {
 
 interface Options {
   readonly artifact: string;
+  readonly boundary: 'preparation' | 'publication';
   readonly count: number;
   readonly iterations: number;
   readonly output: string;
   readonly position: 'first' | 'last';
-  readonly profileCase: 'same-length' | 'length-changing' | 'color-only' | 'interleaved-read';
+  readonly profileCase: 'same-length' | 'length-changing' | 'color-only' | 'interleaved-read' | 'prepared-read';
   readonly warmups: number;
   readonly wasm?: string;
 }
@@ -102,14 +104,27 @@ function parseOptions(arguments_: readonly string[]): Options {
   const artifactOption = values.get('artifact');
   if (artifactOption === undefined) throw new Error('--artifact is required');
   const profileCase = values.get('case') ?? 'same-length';
-  if (!['same-length', 'length-changing', 'color-only', 'interleaved-read'].includes(profileCase)) {
+  if (!['same-length', 'length-changing', 'color-only', 'interleaved-read', 'prepared-read'].includes(profileCase)) {
     throw new Error(`Unknown --case: ${profileCase}`);
   }
   const position = values.get('position') ?? 'first';
   if (position !== 'first' && position !== 'last') throw new Error(`Unknown --position: ${position}`);
+  const boundary = values.get('boundary') ?? 'publication';
+  if (boundary !== 'preparation' && boundary !== 'publication') throw new Error(`Unknown --boundary: ${boundary}`);
+  if (boundary === 'preparation' && profileCase !== 'prepared-read') {
+    throw new Error('--boundary preparation requires --case prepared-read');
+  }
+  const count = positiveInteger(values.get('count') ?? '1000', 'count');
+  if (profileCase === 'prepared-read' && count !== 100 && count !== 1000) {
+    throw new RangeError('--case prepared-read requires --count 100 or 1000');
+  }
+  if (profileCase === 'interleaved-read' && count < 100) {
+    throw new RangeError('--case interleaved-read requires at least 100 labels');
+  }
   return {
     artifact: artifactOption,
-    count: positiveInteger(values.get('count') ?? '1000', 'count'),
+    boundary,
+    count,
     iterations: positiveInteger(values.get('iterations') ?? '100', 'iterations'),
     output: values.get('output') ?? '.cache/edit-sized-publication-profile',
     position,

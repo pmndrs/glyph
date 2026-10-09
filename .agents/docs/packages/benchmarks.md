@@ -252,7 +252,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-09T18:20:19Z'
+  at: '2026-10-09T21:20:46Z'
 ---
 
 # Package reference: `@pmndrs/glyph-benchmarks`
@@ -803,10 +803,21 @@ Run `pnpm scripts list benchmark` from the workspace root to discover current be
 CPU comparisons use two fresh-process `@pmndrs/labs` lanes. `benchmark:labs-package` installs packed or registry
 artifacts and measures the public API; its default smoke suite covers common layout, measurement, style, and retained
 publication work. Its `edit-sized` suite isolates first and last same-length, length-changing, and color-only edits in
-10-, 100-, and 1,000-label roots, plus batched and interleaved edit-read paths at 100 labels; warm setup and untimed
-semantic checks surround every timed mutation. `benchmark:edit-sized-publication-profile` installs one packed artifact
+10-, 100-, and 1,000-label roots, plus batched and interleaved edit-read paths for 100 edits in 100- and 1,000-label
+roots. Edits in the larger root are spread across its ordered labels. Untimed glyph snapshots distinguish both edited
+outputs and verify untouched labels retain their accepted output. Warm setup and untimed semantic checks surround every
+timed mutation. Paired immediate-measurement cases perform the same 100 assignments and `measure()` reads with and
+without explicit renderer publication, retaining cold measurement oracles and untouched-label checks. Each cold oracle
+performs the same publication boundary as its timed case, because publication can add positioned ink data. Full edited
+measurements are compared structurally rather than relying on JSON property order. These semantic
+reads are distinct from `measureGlyphs()`, which describes currently displayed glyphs.
+`benchmark:edit-sized-publication-profile` installs one packed artifact
 and optionally substitutes a named shaper Wasm, then emits a CPU profile, timing summary, and manifest for shaping,
 gather, render-plan, serialization, allocation, host-JavaScript, and other-Wasm attribution.
+Its `--case prepared-read --count 100|1000 --boundary preparation|publication` profiles the same 100 scattered
+assignments and immediate semantic measurements as the paired Labs cases. Both boundaries use identical edited strings;
+only the publication boundary calls `glyph.shape()` after each assignment. Cold measurement oracles and untouched-label
+checks run outside the sampled loop. Existing profile cases retain their explicit-publication behavior.
 `benchmark:labs-internal` is reserved for workspace-only implementation experiments that cannot ship in
 the package artifact. Its `engine` suite preserves the raw retained-engine invalidation classes across selectable Bitmap,
 MTSDF, and Slug artifacts and Latin, bidi, and CJK corpora. Its `kernel` suite measures the scalar,
