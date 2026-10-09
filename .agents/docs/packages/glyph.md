@@ -742,13 +742,14 @@ updates it, successful publication clears current Text state plus the retained g
 participants or rediscovering ancestry, and group disposal releases the group from the same set and clears its terminal
 error state after lifecycle preflight. The root admits only the outermost attribution through state installation and user
 notifications, so callback-driven scene traversal cannot replace that in-flight failure with a secondary reconciliation
-or transform error. One bounded renderer phase flag extends that ownership across the complete irreversible commit: a
-traversal failure raised from add, remove, disposal, or final-matrix callbacks is retained in one explicit-value wrapper
-until commit reveals whether a primary retirement failure exists. The primary wins when present; otherwise the deferred
-traversal failure enters the same accepted hook and public throw instead of being lost. After commit and before a root
-consumes its accepted failure, the existing publication-failure wrapper continues to suppress later secondary traversal
-reports. Nested traversal and ordinary Text edits remain allowed throughout. Disposed groups cannot be reacquired by later
-attribution. Arbitrary callback throws, including
+or transform error. One bounded root publication-cycle flag extends that ownership from preparation, before any captured
+root can consume renderer commands, through accepted or rejected settlement. A traversal failure raised while that cycle
+is active is retained in one explicit-value wrapper. The renderer's existing retirement wrapper remains the primary when
+present; otherwise the deferred traversal failure enters the same accepted hook and public throw instead of being lost.
+This root ownership covers cross-root callbacks both before a later root commits and after it commits but before its hook,
+and clears on every adapter skip, rejection, acceptance, throw settlement, or disposal exit. Nested traversal and ordinary
+Text edits remain allowed throughout, and the successful hot path allocates no participant or ancestry snapshot. Disposed
+groups cannot be reacquired by later attribution. Arbitrary callback throws, including
 `undefined`, `null`, and `0`, retain their identity through `onError` and the public shaping throw. The
 accepted hook also preserves that retirement value if reentrant notification changes hierarchy and the following initial
 transform synchronization throws: synchronization errors surface when no earlier publication failure exists, and failed

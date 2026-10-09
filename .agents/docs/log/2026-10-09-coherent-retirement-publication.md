@@ -84,12 +84,32 @@ that call. A callback traversal could therefore notify a secondary transform err
 failure became known. The review also showed that the new cross-root test never entered its claimed
 `updateWorldMatrix()` failure because the authored group preceded the publication object.
 
-The source correction uses the existing renderer/root traversal owner with one commit-active flag and one explicit
-deferred-error wrapper. Traversal errors during irreversible commit wait for commit precedence: a retirement failure wins,
-while a successful commit promotes the deferred traversal error into the existing accepted settlement and public throw.
-Post-commit pending-primary suppression remains the same, including exact `undefined`, `null`, and `0` identity. New public
-test source moves the authored group after the publication object, proves the throwing override was entered, and covers
-material disposal, geometry disposal, child-add, child-remove, primary precedence, and successful-commit deferred-error
-settlement. The cross-root prepared-revision case now uses the same causal ordering and a failing-override counter. These
-changes are source-only and unexecuted; all build, type/static, focused/package runtime, exact-head review, Labs, and CI
-claims remain pending.
+The first source correction used the existing renderer/root traversal owner with one commit-active flag and one explicit
+deferred-error wrapper. It made traversal errors during one root's irreversible commit wait for commit precedence: a
+retirement failure won, while a successful commit promoted the deferred traversal error into the existing accepted
+settlement and public throw. The causal public tests moved the authored group after the publication object, proved the
+throwing override was entered, and covered material disposal, geometry disposal, child-add, child-remove, primary
+precedence, and successful-commit deferred-error settlement. That source passed its same-root coverage, but a later
+independent review correctly found that renderer-local ownership did not cover a different captured root before its commit
+or after its commit but before its accepted hook.
+
+The final bounded correction moves that one phase bit and deferred explicit-value wrapper to the existing Three root
+publication owner. Each captured root activates it during preparation, before any renderer consume, and clears it through
+its accepted, rejected, adapter-skip, throw-settlement, or disposal exit. Renderer retirement keeps its existing primary
+failure wrapper; acceptance selects that primary first and otherwise settles the root's deferred traversal failure. No
+successful participant array, ancestry rediscovery, draw scan, alternate publication path, public protocol, or API/ABI
+surface was added. Public two-root regressions prove both missing windows: an earlier material retirement callback traverses
+a later root before its commit, and an earlier `onError` traverses a later root after commit but before its hook. They use
+causal commit/override counters and specify exact aggregates `[primaryA, 0]` and `[primaryA, secondary]`, one later-root
+notification, accepted revision and Text/TextGroup state, and deterministic explicit recovery.
+
+On source commit `4a86b4b4` (authored from `8d61bbcc`), a negative control that disabled root traversal ownership failed
+those new assertions with two later-root notifications in the `0` case and a missing aggregate secondary in both
+no-primary windows. Restoring the shared path passed all 118 focused public Three tests, the four
+source/shader/emitted/peer TypeScript checks, touched-file lint and format checks, and the required Glyph build. The
+complete package check and complete Node lane were attempted but remain blocked by other unhydrated Git LFS pointer
+fixtures: Rust font tests read 131-byte pointer text and package tests rejected pointer-form GLB/font/bitmap fixtures. The
+five Unicode data archives and seven Three rendering fixtures used by the focused build/tests are authenticated existing
+LFS objects and remain clean. No Labs, server, full repository check, remote CI, or exact-head independent review ran for
+this final correction; independent review and remote CI remain gates, while the parent completed the exact-artifact Labs
+lane before this last change.
