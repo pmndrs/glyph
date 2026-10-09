@@ -39,3 +39,10 @@ surrogate, scalar, and layout assignments before measuring the unchanged constra
 isolated to an invalid test extension: expansion legitimately replaced the draw, and Node's failed object-identity
 assertion attempted to format two unequal cyclic Three graphs. Bounded probes proved both sibling measurement and scalar
 serialization had already completed; the standalone regression keeps only semantic comparisons and passes normally.
+
+After rebasing onto main `7b845b30`, source revision `79537881` passed the named shaper library lane with 328 tests and
+the two public assignment integration files with 85 tests. All four focused TypeScript source and emitted-declaration
+projects passed, as did shaper rustfmt, strict all-target Clippy, focused Oxc checks, and all 17
+`benchmark:workflow-check` cases including the `assignment` selector. The parent separately reported a successful full
+Glyph build at this source revision. No post-rebase source correction was required. Package Labs, browsers, servers, and
+profilers were deliberately not run here; the parent owns the serialized assignment benchmark lane.
