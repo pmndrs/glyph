@@ -38,6 +38,7 @@ interface FrameTimerOptions {
 const EMPTY_GPU_FRAME_MEASUREMENTS: readonly GpuFrameMeasurement[] = Object.freeze([]);
 const MAX_PENDING_WEBGL_QUERIES = 1_024;
 const GPU_FRAME_TIMER_DIAGNOSTICS_EVENT = 'pmndrs-gpu-frame-timer-diagnostics';
+const GPU_FRAME_TIMER_RETIREMENT_EVENT = 'pmndrs-gpu-frame-timer-retirement';
 
 interface GpuFrameTimerDiagnosticsRequest {
   diagnostics: GpuFrameTimerDiagnostics | undefined;
@@ -59,6 +60,25 @@ export function bindGpuFrameTimerDiagnosticsRequests(target: EventTarget, timer:
   };
   target.addEventListener(GPU_FRAME_TIMER_DIAGNOSTICS_EVENT, inspect);
   return () => target.removeEventListener(GPU_FRAME_TIMER_DIAGNOSTICS_EVENT, inspect);
+}
+
+/** Resolves with the timer state captured at the existing render host's retirement boundary. */
+export function waitForGpuFrameTimerRetirement(target: EventTarget): Promise<GpuFrameTimerDiagnostics> {
+  return new Promise((resolve) => {
+    const receive: EventListener = (event) => {
+      if (!(event instanceof CustomEvent)) return;
+      target.removeEventListener(GPU_FRAME_TIMER_RETIREMENT_EVENT, receive);
+      resolve(event.detail as GpuFrameTimerDiagnostics);
+    };
+    target.addEventListener(GPU_FRAME_TIMER_RETIREMENT_EVENT, receive);
+  });
+}
+
+/** Publishes the timer snapshot immediately before the owning render host retires it. */
+export function publishGpuFrameTimerRetirement(target: EventTarget, timer: GpuFrameTimer): void {
+  target.dispatchEvent(
+    new CustomEvent<GpuFrameTimerDiagnostics>(GPU_FRAME_TIMER_RETIREMENT_EVENT, { detail: timer.diagnostics() }),
+  );
 }
 
 export function createGpuFrameTimer(options: {
@@ -113,6 +133,11 @@ export function createWebGpuFrameTimer(
       resolution = resolver
         .resolveTimestampsAsync(THREE.TimestampQuery.RENDER)
         .then((durationMs) => {
+          if (durationMs !== undefined && (!Number.isFinite(durationMs) || durationMs < 0)) {
+            options.onError(new RangeError('GPU frame duration must be finite and nonnegative'));
+            if (!disposed) completed.push({ frameId, durationMs: undefined });
+            return;
+          }
           if (disposed) return;
           const backend = resolver.backend as { getTimestampFrames?(type: THREE.TimestampQuery): number[] } | undefined;
           const resolvedRendererFrameId = backend?.getTimestampFrames?.(THREE.TimestampQuery.RENDER).at(-1);
@@ -125,18 +150,11 @@ export function createWebGpuFrameTimer(
             completed.push({ frameId: frameIdForDuration, durationMs: undefined });
             return;
           }
-          if (!Number.isFinite(durationMs) || durationMs < 0) {
-            options.onError(new RangeError('GPU frame duration must be finite and nonnegative'));
-            completed.push({ frameId: frameIdForDuration, durationMs: undefined });
-            return;
-          }
           completed.push({ frameId: frameIdForDuration, durationMs });
         })
         .catch((error: unknown) => {
-          if (!disposed) {
-            options.onError(error);
-            completed.push({ frameId, durationMs: undefined });
-          }
+          options.onError(error);
+          if (!disposed) completed.push({ frameId, durationMs: undefined });
         })
         .finally(() => {
           resolution = undefined;
@@ -162,7 +180,9 @@ export function createWebGpuFrameTimer(
       disposed = true;
       activeFrameId = undefined;
       completed = [];
-      resolution = undefined;
+      // The host disposes this timer before the renderer. Three 0.185 destroys the WebGPU device without awaiting its
+      // timestamp-pool disposal, so this app-owned resolution must settle while its mapped buffer is still valid.
+      await resolution;
       resolutionFrameId = undefined;
       resolutionRendererFrameId = undefined;
     },

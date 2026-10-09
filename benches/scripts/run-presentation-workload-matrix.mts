@@ -1,4 +1,4 @@
-/* @workflow { "name": "benchmark:presentation", "summary": "Render selected or every workload through Bitmap, MTSDF, and Slug on WebGPU and WebGL2.", "requirements": "GPU-enabled Chromium and authenticated benchmark fixtures. Pass --typegpu to exercise /three/typegpu; --workload, --technique, and --backend select a focused cell.", "writes": "Ignored browser caches only." } */
+/* @workflow { "name": "benchmark:presentation", "summary": "Render selected or every workload through Bitmap, MTSDF, and Slug on WebGPU and WebGL2.", "requirements": "GPU-enabled Chromium and authenticated benchmark fixtures. Pass --typegpu to exercise /three/typegpu; --workload, --technique, and --backend select a focused cell. PRESENTATION_BASE_URL reuses an externally managed application server.", "writes": "Ignored browser caches only." } */
 import { runPresentationProbeMatrix } from './support/run-presentation-probe-matrix.mts';
 
 const selectedBackend = selectedArgument('--backend', ['webgpu', 'webgl2'] as const);

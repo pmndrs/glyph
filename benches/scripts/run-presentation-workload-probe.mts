@@ -17,12 +17,19 @@ const shaders = presentationShaders(process.env.PRESENTATION_SHADERS);
 const shaderQuery = shaders === 'typegpu' ? '&shaders=typegpu' : '';
 const screenshotDirectory = process.env.PRESENTATION_SCREENSHOT_DIR;
 if (screenshotDirectory !== undefined) await mkdir(screenshotDirectory, { recursive: true });
-const server = await createServer({ root, server: { host: LOOPBACK_HOST, port: await selectLoopbackPort() } });
-await server.listen();
-const address = server.httpServer?.address();
-if (address === null || address === undefined || typeof address === 'string') {
-  await server.close();
-  throw new Error('Vite did not publish a local TCP address');
+let server: Awaited<ReturnType<typeof createServer>> | undefined;
+let baseUrl: URL;
+if (process.env.PRESENTATION_BASE_URL === undefined) {
+  server = await createServer({ root, server: { host: LOOPBACK_HOST, port: await selectLoopbackPort() } });
+  await server.listen();
+  const address = server.httpServer?.address();
+  if (address === null || address === undefined || typeof address === 'string') {
+    await server.close();
+    throw new Error('Vite did not publish a local TCP address');
+  }
+  baseUrl = new URL(`http://${LOOPBACK_HOST}:${String(address.port)}`);
+} else {
+  baseUrl = new URL(process.env.PRESENTATION_BASE_URL);
 }
 
 const allWorkloads = [
@@ -110,7 +117,10 @@ try {
   });
   page.on('pageerror', (error) => consoleProblems.push(`pageerror: ${error.message}`));
   await page.goto(
-    `http://127.0.0.1:${String(address.port)}/presentation?mode=benchmark&technique=${technique}&backend=${backend}&delivery=baked&dpr=2&font=inter&workload=text-ladder${shaderQuery}`,
+    new URL(
+      `/presentation?mode=benchmark&technique=${technique}&backend=${backend}&delivery=baked&dpr=2&font=inter&workload=text-ladder${shaderQuery}`,
+      baseUrl,
+    ).href,
     { waitUntil: 'domcontentloaded' },
   );
   const workloadControl = page.getByLabel('Live workload', { exact: true });
@@ -264,6 +274,10 @@ try {
     });
     await assertCanvasHandoff(page, 'MTSDF→Bitmap', backend);
   }
+  const editorialWorkload = workloads.find((workload) => workload.id === 'editorial');
+  if (backend === 'webgpu' && technique === 'mtsdf' && editorialWorkload !== undefined) {
+    await assertWebGpuToWebGl2Switch(page, workloadControl, editorialWorkload);
+  }
   if (consoleProblems.length > 0) {
     throw new Error(`Presentation emitted browser warnings or errors: ${consoleProblems.join(' | ')}`);
   }
@@ -273,7 +287,7 @@ try {
   );
 } finally {
   await browser?.close();
-  await server.close();
+  await server?.close();
 }
 
 /** Waits until the named workload owns the viewport at its authored configuration and is publishing frames.
@@ -379,6 +393,56 @@ async function assertCanvasHandoff(page: Page, label: string, expectedBackend: P
   ) {
     throw new Error(`${label} did not retain one continuously attached renderer canvas: ${JSON.stringify(evidence)}`);
   }
+}
+
+async function assertWebGpuToWebGl2Switch(
+  page: Page,
+  workloadControl: ReturnType<Page['getByLabel']>,
+  editorialWorkload: (typeof allWorkloads)[number],
+): Promise<void> {
+  await workloadControl.click();
+  await page.getByRole('option', { name: editorialWorkload.label, exact: true }).click();
+  await waitForSettledWorkload(page, editorialWorkload, 'webgpu', false);
+  await page.evaluate(async () => {
+    const modulePath = '/src/renderer/gpu-frame-timer.ts';
+    const timerModule = (await import(/* @vite-ignore */ modulePath)) as {
+      waitForGpuFrameTimerRetirement(target: EventTarget): Promise<{ readonly pendingCount: number }>;
+    };
+    const canvas = document.querySelector<HTMLCanvasElement>('canvas[data-configured-renderer-active="true"]');
+    if (canvas === null) throw new Error('the WebGPU→WebGL2 probe lost its source canvas');
+    const scope = globalThis as typeof globalThis & {
+      presentationProbeTimerRetirement?: Promise<{ readonly pendingCount: number }>;
+    };
+    scope.presentationProbeTimerRetirement = timerModule.waitForGpuFrameTimerRetirement(canvas);
+  });
+  await page.getByRole('button', { name: 'Graphics backend: GPU', exact: true }).click();
+  await page.getByRole('button', { name: 'GL', exact: true }).click();
+  await waitForSettledWorkload(page, editorialWorkload, 'webgl2', false);
+  const retirement = await page.evaluate(async () => {
+    const scope = globalThis as typeof globalThis & {
+      presentationProbeTimerRetirement?: Promise<{ readonly pendingCount: number }>;
+    };
+    if (scope.presentationProbeTimerRetirement === undefined) {
+      throw new Error('the WebGPU→WebGL2 probe lost its retirement observation');
+    }
+    return scope.presentationProbeTimerRetirement;
+  });
+  // A real read may settle before the UI switch. Deferred unit tests prove waiting; this probe records the actual state.
+  console.log('presentation-timer-retirement', retirement);
+  await page.waitForFunction(() => {
+    const scope = globalThis as typeof globalThis & { presentationProbeCanvas?: HTMLCanvasElement };
+    const retiredCanvas = scope.presentationProbeCanvas;
+    const currentCanvas = document.querySelector<HTMLCanvasElement>('canvas[data-configured-renderer-active="true"]');
+    return (
+      retiredCanvas !== undefined &&
+      currentCanvas !== null &&
+      currentCanvas !== retiredCanvas &&
+      !retiredCanvas.isConnected &&
+      retiredCanvas.dataset.configuredRendererActive === 'false' &&
+      Number(document.documentElement.dataset.activeConfiguredRenderers) === 1
+    );
+  });
+  console.log('presentation-backend-switch-ready', 'webgpu→webgl2', editorialWorkload.id);
 }
 
 function presentationFormat(value: string | undefined): 'bitmap' | 'mtsdf' | 'slug' {
