@@ -241,6 +241,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     for (const atlas of this.#msdfAtlases.values()) atlas.dispose();
     for (const page of this.#slugPages.values()) page.dispose();
     for (const buffer of this.#buffers.values()) buffer.attribute.dispose();
+    this.#transformAttribute.dispose();
     this.#materials.clear();
     this.#bitmapTextures.clear();
     this.#msdfAtlases.clear();
@@ -367,6 +368,10 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
 
   #commit(prepared: PreparedPublication): unknown | undefined {
     let failure: unknown;
+    const retiredTransformAttribute =
+      prepared.replacesDraws && prepared.context.transformAttribute !== this.#transformAttribute
+        ? this.#transformAttribute
+        : undefined;
     const retainedBuffers = new Set(prepared.context.buffers.values());
     const retiredBuffers = [...this.#buffers.values()].filter((buffer) => !retainedBuffers.has(buffer));
     const attempt = (operation: () => void): void => {
@@ -421,6 +426,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     for (const material of prepared.retiredMaterials) attempt(() => material.dispose());
     for (const texture of prepared.retiredTextures) attempt(() => texture.dispose());
     for (const buffer of retiredBuffers) attempt(() => buffer.attribute.dispose());
+    if (retiredTransformAttribute !== undefined) attempt(() => retiredTransformAttribute.dispose());
     if (prepared.replacesDraws) {
       for (const draw of this.#draws) attempt(() => draw.updateMatrixWorld(false));
     }
@@ -467,7 +473,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       }
       const array = scalarArray(command.scalarType, command.byteLength);
       const attribute = new THREE.StorageInstancedBufferAttribute(array, command.vectorWidth);
-      attribute.setUsage(THREE.DynamicDrawUsage);
+      attribute.setUsage(THREE.StreamDrawUsage);
       attribute.needsUpdate = true;
       const retained: RetainedBuffer = {
         binding: command.buffer,
@@ -667,6 +673,13 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       if (retainedBuffers.has(buffer)) continue;
       try {
         buffer.attribute.dispose();
+      } catch {
+        // Candidate cleanup cannot replace the error that caused the rejection.
+      }
+    }
+    if (context.transformAttribute !== this.#transformAttribute) {
+      try {
+        context.transformAttribute.dispose();
       } catch {
         // Candidate cleanup cannot replace the error that caused the rejection.
       }

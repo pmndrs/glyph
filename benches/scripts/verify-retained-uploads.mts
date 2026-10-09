@@ -1,5 +1,6 @@
 /* @workflow { "name": "benchmark:retained-uploads", "summary": "Prove retained Three storage uploads and profile an ASCII-rich Text on WebGPU and WebGL2.", "requirements": "Built Glyph, project Chromium, authenticated Inter Bitmap fixture, Portless, WebGPU, WebGL2, and Darwin or Linux advisory-lock tooling. Pass --usage=dynamic only for a baseline revision.", "writes": "No repository files; JSON evidence to stdout." } */
 import { spawnSync } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer, type ViteDevServer } from 'vite';
@@ -22,7 +23,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const glyphPackageRoot =
   process.env.GLYPH_RETAINED_UPLOAD_PACKAGE_ROOT === undefined
     ? undefined
-    : resolvePath(process.env.GLYPH_RETAINED_UPLOAD_PACKAGE_ROOT);
+    : realpathSync(resolvePath(process.env.GLYPH_RETAINED_UPLOAD_PACKAGE_ROOT));
 const port = process.env.PORT === undefined ? 0 : Number(process.env.PORT);
 if (!Number.isSafeInteger(port) || port < 0 || port > 65_535) throw new Error('PORT must be a valid TCP port');
 
@@ -63,17 +64,23 @@ async function run(): Promise<void> {
       root,
       logLevel: 'warn',
       optimizeDeps: { force: true },
-      ...(glyphPackageRoot === undefined
-        ? {}
-        : {
-            resolve: {
+      resolve: {
+        dedupe: ['three'],
+        ...(glyphPackageRoot === undefined
+          ? {}
+          : {
               alias: [
                 { find: /^@pmndrs\/glyph\/three$/u, replacement: `${glyphPackageRoot}/dist/three.js` },
                 { find: /^@pmndrs\/glyph$/u, replacement: `${glyphPackageRoot}/dist/index.js` },
               ],
-            },
-          }),
-      server: { host: process.env.HOST ?? '127.0.0.1', port, strictPort: port !== 0 },
+            }),
+      },
+      server: {
+        host: process.env.HOST ?? '127.0.0.1',
+        port,
+        strictPort: port !== 0,
+        ...(glyphPackageRoot === undefined ? {} : { fs: { allow: [root, glyphPackageRoot] } }),
+      },
     });
     await server.listen();
     const address = server.httpServer?.address();

@@ -2525,6 +2525,45 @@ test('TextGroup drops disposed descendants and reuses their committed transform 
   fontDomain.dispose();
 });
 
+test('Three disposes superseded and final indexed-transform storage', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const root = three('transform-storage-lifetime');
+  const scene = new THREE.Scene();
+  const group = root.createTextGroup();
+  const labels = [root.createText({ font, text: 'A' })];
+  group.add(...labels);
+  scene.add(group);
+  scene.updateMatrixWorld();
+
+  const initial = rootDraws(scene, 'transform-storage-lifetime')[0].geometry.getAttribute('_pmndrsGlyphTransforms');
+  let initialDisposals = 0;
+  initial.addEventListener('dispose', () => {
+    initialDisposals += 1;
+  });
+
+  const added = Array.from({ length: 8 }, (_, index) => root.createText({ font, text: String(index) }));
+  labels.push(...added);
+  group.add(...added);
+  scene.updateMatrixWorld();
+  const grown = rootDraws(scene, 'transform-storage-lifetime')[0].geometry.getAttribute('_pmndrsGlyphTransforms');
+  assert.notEqual(grown, initial, 'additional transform identities must grow the indexed table');
+  assert.equal(initialDisposals, 1, 'the superseded transform table must be released after publication');
+
+  let finalDisposals = 0;
+  grown.addEventListener('dispose', () => {
+    finalDisposals += 1;
+  });
+  root.dispose();
+  assert.equal(finalDisposals, 1, 'disposing the root must release its final transform table');
+
+  for (const label of labels) label.dispose();
+  group.dispose();
+  font.dispose();
+  fontDomain.dispose();
+});
+
 test('Three retires materials bound to a replaced buffer generation', async (t) => {
   const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 2, policy: 'grow' } }));
   const fontDomain = createThreeFontDomain();

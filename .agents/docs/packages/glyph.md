@@ -681,6 +681,13 @@ future deltas. Portable payload bytes are already shared by immutable `Font` val
 root-local. Pooling those immutable device objects above roots is a Three implementation follow-up, not a core scene,
 device, render-pass, or implicit-standalone-batch API.
 
+Three retained storage uses `StreamDrawUsage` so its common attribute manager follows the attribute version instead of
+unconditionally uploading every `DynamicDrawUsage` resource on every render. Accepted buffer and transform mutations
+still merge update ranges, advance the storage version, and invalidate Three's WebGL2 PBO texture view. When a backend
+replaces a three-component attribute view with four-component padded storage, publication repacks every affected record
+into that detached view before advancing the version. Transform-table growth disposes the superseded attribute only after
+the candidate publishes; rejection disposes only the candidate, and root teardown disposes the final table.
+
 A paragraph's public content box may declare `columns: { count, gap }`, flowing text through side-by-side ordered columns
 inside the exact content-box width. Columns fill in order without balancing, so the final column may run short, and an
 exact `width` is required because the column advance is derived from it. Internally, Rust already retains bounded rectangle

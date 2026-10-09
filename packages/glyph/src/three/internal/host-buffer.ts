@@ -70,7 +70,9 @@ export function threeCodecAttributeName(id: ThreeBufferBindingId): ThreeCodecAtt
 
 export function transformAttribute(transformCapacity: number): THREE.StorageInstancedBufferAttribute {
   const attribute = new THREE.StorageInstancedBufferAttribute(new Float32Array(transformCapacity * 16), 4);
-  attribute.setUsage(THREE.DynamicDrawUsage);
+  // Three's common attribute manager uploads DynamicDrawUsage on every render call, regardless of version.
+  // Retained storage uses explicit dirty/version markers so shared draws upload each change once on either backend.
+  attribute.setUsage(THREE.StreamDrawUsage);
   return attribute;
 }
 
@@ -146,10 +148,35 @@ function commitBufferUpload(uploadRange: StagedBufferUpload): void {
   const source = scalarBytes(buffer.array).subarray(start, end);
   const upload = buffer.attribute.array;
   if (upload !== buffer.array) {
-    new Uint8Array(upload.buffer, upload.byteOffset + start, byteLength).set(source);
+    if (buffer.attribute.itemSize === buffer.vectorWidth) {
+      new Uint8Array(upload.buffer, upload.byteOffset + start, byteLength).set(source);
+    } else {
+      commitPaddedBufferUpload(buffer, start, end);
+      return;
+    }
   }
   const scalarBytesPerElement = buffer.array.BYTES_PER_ELEMENT;
   markStorageAttributeUpdated(buffer.attribute, start / scalarBytesPerElement, byteLength / scalarBytesPerElement);
+}
+
+function commitPaddedBufferUpload(buffer: RetainedBuffer, start: number, end: number): void {
+  const source = buffer.array;
+  const target = buffer.attribute.array as ScalarArray;
+  if (source.BYTES_PER_ELEMENT !== target.BYTES_PER_ELEMENT || buffer.attribute.itemSize < buffer.vectorWidth) {
+    throw new Error('Three storage upload view is incompatible with its retained buffer');
+  }
+  const bytesPerElement = source.BYTES_PER_ELEMENT;
+  const firstRecord = Math.floor(start / bytesPerElement / buffer.vectorWidth);
+  const finalRecord = Math.ceil(end / bytesPerElement / buffer.vectorWidth);
+  for (let record = firstRecord; record < finalRecord; record += 1) {
+    const sourceOffset = record * buffer.vectorWidth;
+    target.set(source.subarray(sourceOffset, sourceOffset + buffer.vectorWidth), record * buffer.attribute.itemSize);
+  }
+  markStorageAttributeUpdated(
+    buffer.attribute,
+    firstRecord * buffer.attribute.itemSize,
+    (finalRecord - firstRecord) * buffer.attribute.itemSize,
+  );
 }
 
 function mergeUpdateRange(attribute: THREE.BufferAttribute, start: number, count: number): void {

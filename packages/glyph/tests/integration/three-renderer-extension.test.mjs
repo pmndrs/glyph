@@ -14,7 +14,11 @@ import {
   createImmutableFontVariant,
 } from '../../dist/loaded-font.js';
 import { FontRegistry } from '../../dist/loader.js';
-import { markStorageAttributeUpdated } from '../../dist/three/internal/host-buffer.js';
+import {
+  commitBufferMutations,
+  markStorageAttributeUpdated,
+  transformAttribute,
+} from '../../dist/three/internal/host-buffer.js';
 import { registerThreeRasterProgram, ThreeConfig } from '../../dist/three.js';
 import { indexedQuadGeometry } from '../support/portable-geometry.mjs';
 import * as THREE from 'three/webgpu';
@@ -92,6 +96,41 @@ test('sparse detached writes cap upload-range bookkeeping', () => {
   const coveredEnd = Math.max(...attribute.updateRanges.map((range) => range.start + range.count));
   assert.equal(coveredStart, 0);
   assert.ok(coveredEnd >= 79 * 16);
+  attribute.dispose();
+});
+
+test('retained storage uses version-driven uploads and repacks a detached vec3 upload view', () => {
+  const transforms = transformAttribute(2);
+  assert.equal(transforms.usage, THREE.StreamDrawUsage);
+
+  const array = new Float32Array([1, 2, 3, 4, 5, 6]);
+  const attribute = new THREE.StorageInstancedBufferAttribute(array, 3);
+  attribute.setUsage(THREE.StreamDrawUsage);
+  attribute.itemSize = 4;
+  attribute.array = new Float32Array([1, 2, 3, 0, 4, 5, 6, 0]);
+  const buffer = {
+    binding: {},
+    storageKey: 'vec3-test',
+    codecBufferId: ORIGIN_BUFFER_ID,
+    threeAttributeName: '_pmndrsGlyph_vec3-test',
+    scalarType: 'f32',
+    vectorWidth: 3,
+    capacityRecords: 2,
+    array,
+    attribute,
+  };
+  const payload = new Uint8Array(new Float32Array([40, 50, 60]).buffer);
+  commitBufferMutations({
+    operations: [{ kind: 'write', buffer, destinationOffset: 12, payload }],
+    uploads: [{ buffer, start: 12, end: 24 }],
+  });
+
+  assert.deepEqual([...array], [1, 2, 3, 40, 50, 60]);
+  assert.deepEqual([...attribute.array], [1, 2, 3, 0, 40, 50, 60, 0]);
+  assert.deepEqual(attribute.updateRanges, [{ start: 4, count: 4 }]);
+  assert.equal(attribute.version, 1);
+
+  transforms.dispose();
   attribute.dispose();
 });
 
