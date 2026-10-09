@@ -50,8 +50,12 @@ primary aggregate entries, one notification per participant, committed revisions
 transform recovery. The retirement regression now compares the accepted and recovered renderer through the existing full
 cold differential instead of a draw-shell snapshot.
 
-The branch rebased without conflicts onto docs-only main `e5515024`; read-only inspection retained the #279 renderer
-ordering and scope-index regression plus #280's sparse implementation and public tests. Runtime validation of this final
-source remains pending because another agent owns the serialized heavy lane. No build, test, package check, Labs, install,
-or server workflow has run for this correction, and the matching source attestation must be regenerated only after those
-checks complete.
+The branch rebased without conflicts onto docs-only main `e5515024`; inspection retained the #279 renderer ordering and
+scope-index regression plus #280's sparse implementation and public tests. Serialized validation of the final correction
+passed source, public-fixture, shader, emitted-declaration, and peer-declaration TypeScript checks; touched-file formatting
+and lint; the required Glyph build; all 104 focused public Three tests; and all 936 package Node tests. The focused lane
+exercised the reentrant callback traversal with exact `undefined`, `null`, and `0` values, accepted Text/TextGroup state,
+single primary notifications, deterministic transform recovery, both real disposer types, and the full cold renderer
+differential. Authenticated fixture bodies were materialized from the recovery checkout and restored to their exact Git
+LFS pointer contents afterward. No Labs, install, server, full package check, or CI workflow ran; exact-artifact publication
+Labs, remote CI, and a final independent review of this corrected head remain release gates.
