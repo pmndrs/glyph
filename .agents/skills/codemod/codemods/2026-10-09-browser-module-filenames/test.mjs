@@ -21,7 +21,10 @@ test('digest module move preserves fingerprint symbols and is dry-run safe and i
   const caller =
     "import { fingerprint } from './internal/fingerprint.js'; export const key = { fingerprint, label: 'fingerprint' };";
   await writeFile(path.join(root, 'src/identity.ts'), caller);
-  await writeFile(path.join(root, 'tests/check.mjs'), "import { fingerprint } from '../dist/internal/fingerprint.js';");
+  await writeFile(
+    path.join(root, 'tests/check.mjs'),
+    "import { fingerprint } from '../dist/internal/fingerprint.js'; const load = () => import('../dist/internal/fingerprint.js');",
+  );
   const options = {
     codemod: path.dirname(fileURLToPath(import.meta.url)),
     project: path.join(root, 'tsconfig.json'),
@@ -35,6 +38,8 @@ test('digest module move preserves fingerprint symbols and is dry-run safe and i
   assert.match(updated, /content-digest\.js/);
   assert.match(updated, /label: 'fingerprint'/);
   assert.match(updated, /\{ fingerprint,/);
-  assert.match(await readFile(path.join(root, 'tests/check.mjs'), 'utf8'), /content-digest\.js/);
+  const privateConsumer = await readFile(path.join(root, 'tests/check.mjs'), 'utf8');
+  assert.match(privateConsumer, /content-digest\.js/);
+  assert.doesNotMatch(privateConsumer, /internal\/fingerprint\.js/);
   assert.deepEqual((await runCodemod(options)).changedFiles, []);
 });
