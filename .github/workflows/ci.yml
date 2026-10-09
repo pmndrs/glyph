@@ -29,6 +29,16 @@ on:
           - edit-sized
           - assignment
           - full
+      baseline_version:
+        description: Published Glyph release to compare (for example 0.1.0; blank uses canary)
+        required: false
+        default: ''
+        type: string
+      candidate_run_id:
+        description: Reuse this main CI run's full results and package (blank measures the selected branch)
+        required: false
+        default: ''
+        type: string
 
 permissions:
   actions: read
@@ -402,7 +412,9 @@ jobs:
         run: pnpm scripts run benchmark:unit
 
       - name: Check workflow registry
-        run: pnpm scripts run benchmark:workflow-check
+        run: |
+          pnpm scripts run benchmark:workflow-check
+          pnpm scripts run benchmark:release-comparison-check
 
       - name: Run browser conformance suite
         run: |
@@ -454,7 +466,7 @@ jobs:
     needs: check
     continue-on-error: true
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 90
     env:
       CI: true
 
@@ -463,6 +475,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
+          fetch-depth: 0
 
       - name: Install canonical toolchain
         uses: jdx/mise-action@9e7f7633ff6f6d6048a9418a68d48f288f50eb14 # v4.2.3
@@ -474,10 +487,29 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Download candidate package
+        if: inputs.candidate_run_id == ''
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: glyph-candidate-package
           path: benches/.cache/labs-candidate
+
+      - name: Download saved candidate package
+        if: inputs.candidate_run_id != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: glyph-candidate-package
+          path: benches/.cache/labs-candidate
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download saved candidate timings
+        if: inputs.candidate_run_id != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: glyph-package-performance
+          path: benches/.cache/labs-saved-candidate
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Select package performance suite
         id: suite
@@ -487,6 +519,7 @@ jobs:
         run: >-
           pnpm scripts run benchmark:labs-package --
           ${{ steps.suite.outputs.baseline_arguments }}
+          ${{ inputs.candidate_run_id != '' && '--saved-candidate .cache/labs-saved-candidate' || '' }}
           --candidate .cache/labs-candidate
           --suite ${{ steps.suite.outputs.suite }}
           --output .cache/labs-package

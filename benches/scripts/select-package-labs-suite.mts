@@ -1,6 +1,6 @@
 import { appendFile, readFile } from 'node:fs/promises';
 
-import { packageLabsComparesWithCanary, selectPackageLabsSuite } from './support/package-labs-suite.mts';
+import { packageLabsBaseline, selectPackageLabsSuite } from './support/package-labs-suite.mts';
 
 const eventName = requireEnvironment('GITHUB_EVENT_NAME');
 const eventPath = requireEnvironment('GITHUB_EVENT_PATH');
@@ -15,11 +15,16 @@ const suite = selectPackageLabsSuite({
   ...(requestedSuite === undefined ? {} : { requestedSuite }),
 });
 
-const baselineArguments = packageLabsComparesWithCanary({ eventName }) ? '--baseline @pmndrs/glyph@canary' : '';
+const requestedVersion = workflowBaselineVersion(payload);
+const baseline = packageLabsBaseline({
+  eventName,
+  ...(requestedVersion === undefined ? {} : { requestedVersion }),
+});
+const baselineArguments = baseline === undefined ? '' : `--baseline ${baseline}`;
 
 await appendFile(outputPath, `suite=${suite}\nbaseline_arguments=${baselineArguments}\n`);
 process.stdout.write(
-  `Selected Package Labs suite: ${suite} (${baselineArguments === '' ? 'candidate only' : 'compared with canary'})\n`,
+  `Selected Package Labs suite: ${suite} (${baseline === undefined ? 'candidate only' : `compared with ${baseline}`})\n`,
 );
 
 function pullRequestLabels(eventPayload: unknown): readonly string[] | undefined {
@@ -34,6 +39,11 @@ function pullRequestLabels(eventPayload: unknown): readonly string[] | undefined
 function workflowSuite(eventPayload: unknown): string | undefined {
   if (!isNonArrayObject(eventPayload) || !isNonArrayObject(eventPayload.inputs)) return undefined;
   return typeof eventPayload.inputs.suite === 'string' ? eventPayload.inputs.suite : undefined;
+}
+
+function workflowBaselineVersion(eventPayload: unknown): string | undefined {
+  if (!isNonArrayObject(eventPayload) || !isNonArrayObject(eventPayload.inputs)) return undefined;
+  return typeof eventPayload.inputs.baseline_version === 'string' ? eventPayload.inputs.baseline_version : undefined;
 }
 
 function isNonArrayObject(value: unknown): value is Record<string, unknown> {

@@ -57,6 +57,24 @@ export function packageLabsComparesWithCanary(event: Pick<PackageLabsEvent, 'eve
   return event.eventName !== 'push';
 }
 
+/** Manual release comparisons pin a stable published version instead of the moving canary tag. */
+export function packageLabsBaseline(event: {
+  readonly eventName: string;
+  readonly requestedVersion?: string;
+}): string | undefined {
+  if (
+    event.eventName === 'workflow_dispatch' &&
+    event.requestedVersion !== undefined &&
+    event.requestedVersion !== ''
+  ) {
+    if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u.test(event.requestedVersion)) {
+      throw new Error('Package Labs baseline_version must be an exact stable version such as 0.1.0');
+    }
+    return `@pmndrs/glyph@${event.requestedVersion}`;
+  }
+  return packageLabsComparesWithCanary(event) ? '@pmndrs/glyph@canary' : undefined;
+}
+
 export function requirePackageLabsSuite(value: string | undefined): PackageLabsSuite {
   if (value !== undefined && isPackageLabsSuite(value)) return value;
   throw new Error(`Unknown Package Labs suite: ${String(value)}`);
