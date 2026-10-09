@@ -7,7 +7,7 @@ import {
 } from './raster-ktx.js';
 import { DenseGlyphRecordError, validateDenseGlyphRecordTable, type RasterPageDimensions } from './raster-records.js';
 import { canonicalJson } from './raster-identity.js';
-import { isFingerprint as isFingerprintValue } from './fingerprint.js';
+import { isFingerprint as isFingerprintValue } from './content-digest.js';
 import { normalizeRasterCoverage, type RasterCoverage } from '../raster-coverage.js';
 import type { JsonValue } from '../raster.js';
 

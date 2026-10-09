@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-10-09-browser-module-filenames",
+  "created": "2026-10-09",
+  "package": "@pmndrs/glyph",
+  "from": "private source before #263",
+  "to": "private source after #263",
+  "summary": "Move the private digest module to a blocker-safe browser filename; preserve all public fingerprint names and values.",
+  "instructions": "./instructions.md",
+  "transform": "./transform.mjs",
+  "changes": [
+    {
+      "kind": "import-move",
+      "from": "src/internal/fingerprint.ts",
+      "to": "src/internal/content-digest.ts",
+      "automatic": true
+    }
+  ],
+  "verification": ["mise exec -- pnpm scripts run glyph:node-tests -- tests/package/module-filenames-codemod.test.mjs"]
+}

@@ -1,7 +1,7 @@
 import { fontBakerAbi, type FontBakerAbi } from './generated/font-baker-abi.js';
 import { GlyphError } from '../glyph-error.js';
 import type { Fingerprint } from '../identity.js';
-import { isFingerprint } from '../internal/fingerprint.js';
+import { isFingerprint } from '../internal/content-digest.js';
 
 export { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from './contract.js';
 export { fontBakerAbi } from './generated/font-baker-abi.js';

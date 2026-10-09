@@ -10,7 +10,7 @@ import {
 } from '../../dist/bakers/slug.js';
 import { validateSlugArtifact } from '../../dist/bakers/slug-validator.js';
 import { SLUG_EXTENSION, slugDescriptor, slugDescriptorRasterKey } from '../../dist/internal/slug-contract.js';
-import { fingerprint128, fingerprintDomain } from '../../dist/internal/fingerprint.js';
+import { fingerprint128, fingerprintDomain } from '../../dist/internal/content-digest.js';
 import { interShapingFingerprint } from '../support/inter-identity.mjs';
 import { slugBakerAbi } from '../../dist/slug-baker-abi.js';
 

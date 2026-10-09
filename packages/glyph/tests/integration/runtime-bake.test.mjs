@@ -13,7 +13,7 @@ import msdfBaker from '../../dist/bakers/msdf.js';
 import slugBaker from '../../dist/bakers/slug.js';
 import { resolveRasterBakePlan } from '../../dist/internal/raster-bake-plan.js';
 import { cloneImmutableFont, immutableFontResources, immutableFontVariantIdentity } from '../../dist/loaded-font.js';
-import { fingerprint128, fingerprintDomain } from '../../dist/internal/fingerprint.js';
+import { fingerprint128, fingerprintDomain } from '../../dist/internal/content-digest.js';
 
 const fixtureDirectory = new URL('../../../../benches/fixtures/fonts/inter-v4.1/', import.meta.url);
 const fixturePromise = Promise.all([

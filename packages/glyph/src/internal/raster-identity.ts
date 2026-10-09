@@ -1,6 +1,6 @@
 import type { Fingerprint, RasterKey } from '../identity.js';
 import type { JsonValue } from '../raster.js';
-import { fingerprint128, fingerprintDomain } from './fingerprint.js';
+import { fingerprint128, fingerprintDomain } from './content-digest.js';
 
 const textEncoder = new TextEncoder();
 const MAX_JSON_DEPTH = 256;

@@ -51,7 +51,7 @@ import { NodeBakeError } from '../internal/node-bake-error.js';
 import { assertDistinctInputOutputs, publishFilesWithRollback } from '../internal/node-file-publication.js';
 import { resolveRasterBakePlan, type ResolvedRasterBakePlan } from '../internal/raster-bake-plan.js';
 import { cacheSuccessfulPromise } from '../internal/successful-promise-cache.js';
-import { fingerprint128, fingerprintDomain } from '../internal/fingerprint.js';
+import { fingerprint128, fingerprintDomain } from '../internal/content-digest.js';
 import { compatibilityFingerprint } from '../internal/raster-identity.js';
 import { parseGlb } from '../font-baker/validator.js';
 

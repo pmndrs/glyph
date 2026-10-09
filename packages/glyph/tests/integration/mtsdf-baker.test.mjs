@@ -7,7 +7,7 @@ import { MsdfArtifactValidationError, validateMsdfArtifact } from '../../dist/ba
 import { MSDF_EM_SIZE, MSDF_PIXEL_RANGE } from '@pmndrs/glyph/core';
 import { msdf } from '@pmndrs/glyph';
 import { mtsdfBakerAbi, mtsdfBakerAbi as msdfBakerAbi } from '../../dist/mtsdf-baker-abi.js';
-import { fingerprint128, fingerprintDomain } from '../../dist/internal/fingerprint.js';
+import { fingerprint128, fingerprintDomain } from '../../dist/internal/content-digest.js';
 import { interShapingFingerprint, interSourceFingerprint } from '../support/inter-identity.mjs';
 import {
   MSDF_EXTENSION,

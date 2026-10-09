@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { fingerprint128, fingerprintDomain, isFingerprint } from '../../dist/internal/fingerprint.js';
+import { fingerprint128, fingerprintDomain, isFingerprint } from '../../dist/internal/content-digest.js';
 
 // Independent mmh3 vectors hold the Rust and TypeScript fingerprint ports to the same oracle.
 const corpus = JSON.parse(

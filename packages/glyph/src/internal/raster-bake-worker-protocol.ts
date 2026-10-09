@@ -1,6 +1,6 @@
 import type { RasterPayloadReport, SerializedBakeError } from '../bake.js';
 import type { RasterKey, Fingerprint } from '../identity.js';
-import { isFingerprint as isFingerprintValue } from './fingerprint.js';
+import { isFingerprint as isFingerprintValue } from './content-digest.js';
 
 export interface RasterBakeWorkerRequest {
   readonly type: 'bake-raster-v0';

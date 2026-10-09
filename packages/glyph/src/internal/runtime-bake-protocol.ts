@@ -1,7 +1,7 @@
 import type { FontBakeDescriptor, SerializedBakeError } from '../font-baker/index.js';
 import type { Fingerprint, RasterKey } from '../identity.js';
 import type { JsonValue } from '../raster.js';
-import { isFingerprint } from './fingerprint.js';
+import { isFingerprint } from './content-digest.js';
 
 export type RuntimeBakeUnicodeRange = {
   readonly start: number;

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { canonicalJson, deriveRasterKey } from '../../dist/internal/raster-identity.js';
-import { fingerprint128, fingerprintDomain } from '../../dist/internal/fingerprint.js';
+import { fingerprint128, fingerprintDomain } from '../../dist/internal/content-digest.js';
 
 test('canonicalizes JSON according to RFC 8785 member and number rules', () => {
   const value = {
