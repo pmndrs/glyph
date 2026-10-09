@@ -785,6 +785,8 @@ renderer-neutral core graph shrank to 330,709 / 209,530 / 55,042 / 46,099; TypeG
 
 A successful baked Presentation preload retains one application-lifetime `Font` owner per artifact and exact raster request. Short-lived scenes still acquire and dispose independent ref-counted leases, so switching away cannot evict a warm decode; HMR deterministically releases the retained preload owners. Rejected preloads are evicted immediately so a later request can retry.
 
+The Presentation workload probe checks Billboard labels at its authored density of 100. A stale density expectation of 50 caused its settling predicate to time out after switching from Icon Grid; correcting that expectation preserves the workload and rendering behavior.
+
 ## Package scripts
 
 `pnpm scripts run benchmark:presentation-screenshots` retains one MTSDF screenshot for every verified workload on WebGPU and forced WebGL under the ignored benchmark cache.
