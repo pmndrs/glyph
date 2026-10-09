@@ -48,18 +48,16 @@ export function decodeEmbeddedLosslessAtlasPage(
     throw new TypeError(`${path} uses an external page; lazy page residency is not available yet`);
   }
   const bytes = raster.view(nonnegativeSafeInteger(source.bufferView, `${path} bufferView`));
-  let container;
+  let levelData: Uint8Array;
   try {
-    container = validateNativeKtx2(bytes, width, height, format);
+    levelData = validateNativeKtx2(bytes, width, height, format);
   } catch (error) {
     if (error instanceof RasterKtxValidationError) {
       throw new TypeError(`${path} contains invalid KTX2: ${error.message}`, { cause: error });
     }
     throw error;
   }
-  const level = container.levels[0];
-  if (level === undefined) throw new TypeError(`${path} KTX2 contains no base level`);
-  return { width, height, bytes: level.levelData.slice() };
+  return { width, height, bytes: levelData.slice() };
 }
 
 export function validateDenseGlyphRecords(

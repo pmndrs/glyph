@@ -7,6 +7,7 @@ import { brotliCompress, brotliCompressSync, constants, gunzipSync, gzip, gzipSy
 import {
   bundleJavaScriptVariants,
   externalizeGlyphWasmPlugin,
+  isGlyphPeerDependency,
   type JavaScriptBundle,
 } from '../src/benchmark/vite-size-bundle.ts';
 import {
@@ -57,25 +58,6 @@ const gzipAsync = promisify(gzip);
 
 function reportMeasurement(message: string): void {
   process.stderr.write(`[package-size] ${message}\n`);
-}
-
-function isTextPeerDependency(id: string): boolean {
-  return (
-    id === 'three' ||
-    id.startsWith('three/') ||
-    id === 'react' ||
-    id.startsWith('@react-three/fiber') ||
-    // TypeGPU is the optional peer of the `/typegpu` shader subpath. It keys its identity
-    // to a single instance exactly as Three and React do, so the consumer-installed
-    // runtime stays outside what this package ships and outside its reviewed ceilings.
-    // `typed-binary` and `tinyest` are resolution internals reached only through TypeGPU.
-    id === 'typegpu' ||
-    id.startsWith('typegpu/') ||
-    id.startsWith('@typegpu/') ||
-    id === 'typed-binary' ||
-    id === 'tinyest' ||
-    id.startsWith('tinyest')
-  );
 }
 
 function assertGraphBoundary(
@@ -145,7 +127,7 @@ async function measureJavaScript(
     includeDynamic,
     label: `${label} bundle`,
     workspace,
-    ...(externalizePeerDependencies ? { external: isTextPeerDependency } : {}),
+    ...(externalizePeerDependencies ? { external: isGlyphPeerDependency } : {}),
     ...(externalizeWasmAsset ? { plugins: [externalizeGlyphWasmPlugin()] } : {}),
   });
   if (graphBoundary !== undefined) {

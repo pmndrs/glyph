@@ -52,6 +52,18 @@ sources:
   - id: handle-state
     resource: ../../../packages/glyph/src/internal/handle-state.ts
     title: Internal Glyph handle state and Wasm command transport
+  - id: native-ktx-reader
+    resource: ../../../packages/glyph/src/internal/raster-ktx.ts
+    title: Bounded native KTX2 reader and validation policy
+  - id: native-ktx-writer
+    resource: ../../../packages/glyph/rust/raster-artifact/src/ktx.rs
+    title: Package-owned native KTX2 writer
+  - id: native-ktx-tests
+    resource: ../../../packages/glyph/tests/package/raster-ktx.test.mjs
+    title: Native KTX2 reader oracle and corruption tests
+  - id: native-ktx-performance
+    resource: ../../../packages/glyph/scripts/benchmark-ktx-runtime.mts
+    title: Native KTX2 reader CPU and allocation comparison
   - id: tsl-shaders
     resource: ../../../packages/glyph/src/shaders/tsl/index.ts
     title: Raster-format shader library layer
@@ -802,6 +814,44 @@ shadow; Bitmap and Slug currently support neither. Three and root-configured int
 the selected font formats at the call that accepts a style, so an unsupported effect cannot become a malformed or
 silently degraded command buffer. The semantic ABI carries effect color, width, offset, and inherited opacity only for
 raster programs that opt in.
+
+Built-in raster pages use a package-owned KTX2 reader limited to the native formats the Bitmap, MSDF, and Slug contracts
+admit. One pass over the external bytes checks the identifier and restricted header before reading the single admitted
+level index, then validates safe 64-bit section coordinates, declared byte ranges, one basic data-format descriptor in
+place, exact dimensions and payload size, channel semantics, and the absence of supercompression or auxiliary metadata.
+An unsupported level count fails at that variant gate without parsing unused mip indexes. The reader constructs no
+general container, level array, descriptor object, or sample arrays; its only result is a zero-copy view of the validated
+base payload. The general `ktx-parse` package is a development-only independent oracle for these checks; it is not a
+production dependency or a shipped runtime module.
+
+The first native-reader pass at `ee2af476f`, measured at the corrected same source path against baseline `2ab37fdac`,
+moved the focused reader graph from 12,109 raw / 8,791 minified / 2,668 gzip bytes to 6,611 / 6,501 / 2,233, reductions
+of 5,498 (45.40%), 2,290 (26.05%), and 435 (16.30%) bytes. The complete peer-externalized Three Bitmap and MSDF graphs
+each removed 5,422 raw / 2,184 minified / 592 gzip bytes; Slug removed the same raw and minified bytes and 593 gzip
+bytes. The core root entry is byte-identical and does not reach a KTX reader in either its initial or complete graph.
+These JavaScript measurements compile revisions with identical pinned configurations at the same stable path, include
+every selected dynamic chunk in the complete graph, and exclude Wasm and optional peers; they are measured production
+closures, not install size or a Bundlephobia estimate.
+
+The in-place payload-reader pass at `e03de5a4f` reduces that first native reader from 6,611 raw / 6,501 minified / 2,233
+gzip / 1,929 Brotli bytes to 4,409 / 4,303 / 1,577 / 1,370: another 2,202 (33.31%), 2,198 (33.81%), 656
+(29.38%), and 559 (28.98%) bytes. Relative to `2ab37fdac`, the focused closure is 63.59% smaller raw and 40.89%
+smaller gzip. Complete Three Bitmap, MSDF, and Slug graphs each remove another 2,438 raw / 2,402 minified / 705 gzip
+bytes; their Brotli reductions are 516, 422, and 626 bytes. The root graph remains byte-identical. Initial Three graph
+raw and minified lengths are unchanged because the KTX reader is lazy; compression can move slightly when dynamic-chunk
+references change, so the complete graph is the application-facing comparison.
+
+The package-owned `glyph:ktx-runtime-performance` workflow compares the successful path of `ktx-parse` 1.1.0 plus the
+exact Glyph native-image policy from `f97d17be5` with the bounded reader at `1959e9982`. It authenticates and extracts
+all twelve KTX2 pages from the checked-in Inter Bitmap, MSDF, and Slug LFS artifacts before timing. Its six-format suite
+uses one real R8, RGBA8, and RGBA16F page plus independently serialized BC4, EAC R11, and ASTC containers because the
+repository has no compressed KTX2 fixture. Both implementations must return the same payload bytes, buffer, and byte
+offset. On Node 24.18.0 and Apple M2 Pro, fresh-process module load plus one real R8 validation measured 2.024 ms for
+`ktx-parse` and 1.033 ms for the native reader, a 1.96× speedup excluding process launch, fixture work, and I/O. Warm
+medians were 545.7 versus 120.9 ns/validation across six formats (4.51×) and 595.8 versus 133.1 ns across the twelve
+real pages (4.48×). V8 allocation sampling over 120,000 six-format validations observed 2,443.3 versus 196.7 sampled
+bytes/validation, a 91.95% reduction; this is statistical profiler evidence, not an exact language-level allocation
+count. The workflow serializes its complete measurement through `/private/tmp/glyph-perf-measurement.lock`.
 
 ## Glyph outlines
 

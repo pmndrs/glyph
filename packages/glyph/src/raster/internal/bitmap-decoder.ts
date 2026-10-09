@@ -1,4 +1,4 @@
-import { KHR_DF_CHANNEL_RGBSDA_RED, VK_FORMAT_R8_UNORM } from 'ktx-parse';
+import { KHR_DF_CHANNEL_RGBSDA_RED, VK_FORMAT_R8_UNORM } from '../../internal/ktx2-constants.js';
 
 import type { RasterDecodeFont } from '../../font.js';
 import {

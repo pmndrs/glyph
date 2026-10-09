@@ -13,7 +13,7 @@ import {
   KHR_DF_CHANNEL_RGBSDA_GREEN,
   KHR_DF_CHANNEL_RGBSDA_RED,
   VK_FORMAT_R8G8B8A8_UNORM,
-} from 'ktx-parse';
+} from '../internal/ktx2-constants.js';
 
 import msdfSchema from './schemas/glTF.PMNDRS_font_distance_field.schema.json' with { type: 'json' };
 import sourceSchema from './schemas/resourceSource.PMNDRS_font.schema.json' with { type: 'json' };
