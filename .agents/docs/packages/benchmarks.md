@@ -908,6 +908,7 @@ unexpired artifacts from the repository's main branch; the envelope and measured
 comparison. A missing or unavailable artifact falls back to building and measuring the exact base checkout. Invalid
 artifact contents fail visibly. `benchmark:package-size -- --output=<path>` prints measurements and can save an external
 report; it does not refresh the release display snapshot. `release:size:generate` remains the deliberate snapshot writer.
-This is a reporting cache, with no restored size ceilings or snapshot freshness gate. The compact report marks byte
-increases with 🔴 ↑ and decreases with 🟢 ↓; sub-rounding changes display `<0.01%` with their direction rather than
+This is a reporting cache, with no restored size ceilings or snapshot freshness gate. The compact report appends the original
+size-limit direction markers after each percentage: `+10% 🔺` for increases and `-10% 🔽` for decreases. Sub-rounding
+changes display `<0.01%` with their direction rather than
 appearing unchanged. Equal byte counts remain `0%`, and a missing baseline remains `new`.

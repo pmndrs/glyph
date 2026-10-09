@@ -95,11 +95,11 @@ describe('independent package-size report', () => {
     const current = rows.map((row) => ({ ...row, size: sizes[names.indexOf(row.name)] ?? row.size }));
     const base = rows.filter(({ name }) => name !== names[5]);
     const markdown = formatCompactSizeLimitMarkdown(base, current);
-    expect(markdown).toContain('(🔴 ↑ +10%)');
-    expect(markdown).toContain('(🟢 ↓ -10%)');
+    expect(markdown).toContain('(+10% 🔺)');
+    expect(markdown).toContain('(-10% 🔽)');
     expect(markdown).toContain('(0%)');
-    expect(markdown).toContain('(🔴 ↑ <0.01%)');
-    expect(markdown).toContain('(🟢 ↓ <0.01%)');
+    expect(markdown).toContain('(<0.01% 🔺)');
+    expect(markdown).toContain('(<0.01% 🔽)');
     expect(markdown).toContain('(new)');
   });
 

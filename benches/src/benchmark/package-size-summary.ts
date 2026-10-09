@@ -151,9 +151,9 @@ function formatChange(base: number | undefined, current: number): string {
   if (current === base) return '0%';
   const percent = ((current - base) / base) * 100;
   const rounded = Math.round(percent * 100) / 100;
-  const direction = current > base ? '🔴 ↑' : '🟢 ↓';
+  const direction = current > base ? '🔺' : '🔽';
   const change = rounded === 0 ? '<0.01%' : `${rounded > 0 ? '+' : ''}${rounded}%`;
-  return `${direction} ${change}`;
+  return `${change} ${direction}`;
 }
 
 function isNonArrayObject(value: unknown): value is Record<string, unknown> {
