@@ -17,3 +17,8 @@ index can address full-layout columns. The package manifest includes the guide i
 The command names and write behavior come from `pnpm scripts list` and `scripts show`; the migration transforms were not
 executed. Claims were checked against the public TypeScript sources, integration/type tests, archived recipes, the three
 merged breaking commits since `v0.1.0`, and the baker's variable-font rejection test.
+
+CI caught the strict packed-file inventory missing the newly included migration guide. Updated that explicit expected
+list and reran `glyph:node-tests -- tests/package/packed-package.test.mjs`: 1 passed, 0 failed, 0 skipped. This focused
+packaging check used the previously built sparse-slice distribution; no runtime source changed in this documentation
+PR. OKF validation passed with zero errors/warnings; the remote full CI rerun remains required.

@@ -58,6 +58,7 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   assert.deepEqual([...new Set(packedFiles.map((path) => path.split('/')[0]))].sort(), [
     'CHANGELOG.md',
     'LICENSE',
+    'MIGRATION-0.2.md',
     'bin',
     'dist',
     'package.json',
