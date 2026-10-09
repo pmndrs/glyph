@@ -88,6 +88,25 @@ describe('independent package-size report', () => {
     expect(() => summarizePackageSizes(incomplete)).toThrow(/text-shaper-wasm/);
   });
 
+  it('marks increases and decreases without disguising sub-rounding changes as unchanged', () => {
+    const rows = sizeLimitRows(report).map((row) => ({ ...row, size: 100_000 }));
+    const names = rows.slice(0, 6).map(({ name }) => name);
+    const sizes = [110_000, 90_000, 100_000, 100_001, 99_999, 100_000];
+    const current = rows.map((row) => ({ ...row, size: sizes[names.indexOf(row.name)] ?? row.size }));
+    const base = rows.filter(({ name }) => name !== names[5]);
+    const iconBaseUrl =
+      'https://media.githubusercontent.com/media/contributor/glyph/abc123/.github/assets/package-size';
+    const markdown = formatCompactSizeLimitMarkdown(base, current, iconBaseUrl);
+    const up = `<img src="${iconBaseUrl}/increase.svg" width="12" height="12" alt="Size increase" />`;
+    const down = `<img src="${iconBaseUrl}/decrease.svg" width="12" height="12" alt="Size decrease" />`;
+    expect(markdown).toContain(`(+10% ${up})`);
+    expect(markdown).toContain(`(-10% ${down})`);
+    expect(markdown).toContain('(0%)');
+    expect(markdown).toContain(`(<0.01% ${up})`);
+    expect(markdown).toContain(`(<0.01% ${down})`);
+    expect(markdown).toContain('(new)');
+  });
+
   it('presents every measured surface once in balanced compact columns', () => {
     const current = sizeLimitRows(report);
     const base = current.map((row) => ({ ...row, size: row.size - 1 }));

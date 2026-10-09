@@ -276,6 +276,8 @@ jobs:
           SIZE_REPORT_CURRENT_PATH: ${{ runner.temp }}/glyph-package-size-current.json
           SIZE_REPORT_PR: ${{ github.event.pull_request.number }}
           SIZE_REPORT_REPOSITORY: ${{ github.repository }}
+          SIZE_REPORT_ASSET_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          SIZE_REPORT_ASSET_REF: ${{ github.event.pull_request.head.sha }}
         run: node benches/src/benchmark/package-size-comment.mts
 
   check:
