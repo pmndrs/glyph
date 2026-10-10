@@ -10,9 +10,10 @@ interface SplittableText {
   readonly parent: THREE.Object3D | null;
   visible: boolean;
   split(): readonly [Glyphs, Decorations | undefined];
+  commitState(): { readonly status: string };
 }
 
-/** Pixel-compares the source, first detached frame, and an immediate full-matrix write. */
+/** Copies before source publication, then pixel-compares ordinary publication and detached rendering. */
 export async function proveDetachedRasterParity(
   renderer: THREE.WebGPURenderer,
   scene: THREE.Scene,
@@ -20,7 +21,6 @@ export async function proveDetachedRasterParity(
   target: THREE.RenderTarget,
   text: SplittableText,
 ): Promise<DetachedRasterParity> {
-  const sourcePixels = await renderer.readRenderTargetPixelsAsync(target, 0, 0, target.width, target.height);
   const sourceVisible = text.visible;
   const parent = text.parent;
   if (parent === null) throw new TypeError('detached raster parity requires an attached text object');
@@ -28,6 +28,9 @@ export async function proveDetachedRasterParity(
   let decorations: Decorations | undefined;
   try {
     [detached, decorations] = text.split();
+    if (text.commitState().status !== 'pending') throw new Error('split published the unrendered source');
+    await renderer.renderAsync(scene, camera);
+    const sourcePixels = await renderer.readRenderTargetPixelsAsync(target, 0, 0, target.width, target.height);
     parent.add(detached);
     if (decorations !== undefined) parent.add(decorations);
     text.visible = false;

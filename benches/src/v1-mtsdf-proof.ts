@@ -73,10 +73,6 @@ async function render(): Promise<TargetV1MtsdfResult> {
     parent.add(text);
     renderer.setRenderTarget(target);
     renderer.setClearColor(0x000000, 1);
-    await renderer.renderAsync(scene, camera);
-    const firstDraw = v1GlyphDraw(rootDraws(scene));
-    if (firstDraw === undefined) throw new Error('target-v1 MTSDF created no draw');
-    const firstStorage = firstDraw.geometry.getAttribute('_pmndrsGlyph_geometry');
     const { detachedFirstFrameMatches, detachedSameFrameWriteMatches } = await proveDetachedRasterParity(
       renderer,
       scene,
@@ -84,6 +80,9 @@ async function render(): Promise<TargetV1MtsdfResult> {
       target,
       text,
     );
+    const firstDraw = v1GlyphDraw(rootDraws(scene));
+    if (firstDraw === undefined) throw new Error('target-v1 MTSDF created no draw');
+    const firstStorage = firstDraw.geometry.getAttribute('_pmndrsGlyph_geometry');
     text.text = 'Target v1 MTSDE';
     await renderer.renderAsync(scene, camera);
     const retainedDraw = v1GlyphDraw(rootDraws(scene));

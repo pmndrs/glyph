@@ -1011,3 +1011,7 @@ changes display `<0.01%` with their direction rather than appearing unchanged. E
 missing baseline remains `new`.
 
 The installed-package browser consumer rejects requests whose URLs contain `fingerprint`, proving Worker baking and Bitmap font loading under that filename filter. A deliberate blocked request is the negative control; all real load requests must remain unblocked. Portless HTTPS origin detection is optional so the workflow remains portable.
+
+The shared Bitmap/MTSDF/Slug detached raster proof creates its copy before the source first renders and asserts that
+the source remains pending. It then pixel-compares that independent copy with ordinary source publication and with
+an immediate original-matrix write, on WebGPU and WebGL2; decorations and parent transforms participate.
