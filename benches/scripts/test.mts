@@ -17,7 +17,7 @@ export async function runBenchmarkTest(options: { readonly runtimePackagesReady?
     '--warmup',
     '1',
     '--port',
-    '5181',
+    process.env.PORT ?? '5181',
   ]);
   await runNodeScript('scripts/run-packed-consumer.mts');
 }
