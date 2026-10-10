@@ -194,9 +194,10 @@ export function createTextBatch(count: number) {
     }),
   );
   textGroup.add(...texts);
-  textGroup.updateMatrixWorld(true);
+  const scene = attachToScene(textGroup);
+  scene.updateMatrixWorld(true);
   if (textGroup.error !== undefined) throw textGroup.error;
-  return { root, textGroup, texts };
+  return { root, scene, textGroup, texts };
 }
 
 /** `count` labels under a nested TextGroup inside one top-level TextGroup, so every label shares one draw boundary. */

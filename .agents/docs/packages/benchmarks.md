@@ -252,7 +252,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-10T17:29:55.853Z'
+  at: '2026-10-10T18:24:40.443Z'
 ---
 
 # Package reference: `@pmndrs/glyph-benchmarks`
@@ -838,8 +838,12 @@ must not be interpreted as publication performance. Profiles are attribution evi
 The common-operation and 22k-paragraph publication cases now mount through the shared `createPublishedParagraph`
 fixture, traverse its Scene, and assert committed edit state outside the timed loop. Measurement-only and cached-read
 fixtures retain their detached setup. Historical timings from the corrected publication cases require fresh runs of
-both artifacts; they cannot be reused as equivalent workloads. Cold-mount and 1024-Text publication fixtures still
-require the same audit before their timings can establish completed publication.
+both artifacts; they cannot be reused as equivalent workloads. Cold paragraph publication and the 1024-Text batch
+now traverse real Scenes too. The cold first-edit case applies the edit before the first Scene publication. Cold cases
+capture committed status before disposal and assert it after timing; the batch checks every Text after timing.
+The shared detached paragraph fixture remains unchanged for measurement-only and cached-read workloads.
+Visibility-toggle validation restores the group after timing when the calibration-selected call count leaves it hidden;
+the retained-draw checks do not assume an even number of timed toggles.
 `benchmark:labs-internal` is reserved for workspace-only implementation experiments that cannot ship in
 the package artifact. Its `engine` suite preserves the raw retained-engine invalidation classes across selectable Bitmap,
 MTSDF, and Slug artifacts and Latin, bidi, and CJK corpora. Its `kernel` suite measures the scalar,
