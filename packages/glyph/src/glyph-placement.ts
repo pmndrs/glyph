@@ -22,10 +22,10 @@ export interface GlyphPlacement {
   readonly fontSize: number;
   /** Shaped advance: the distance the pen moved. Not the ink width and not the font size. */
   readonly advance: number;
-  /** Where the committed layout put this glyph's origin. A manipulation never changes it. */
+  /** Origin in the prepared layout. A manipulation never changes it. */
   readonly shapedX: number;
   readonly shapedY: number;
-  /** Where the committed renderer record draws the glyph. */
+  /** Accepted renderer origin when current; otherwise the prepared layout origin. */
   readonly x: number;
   readonly y: number;
   /** Ink box of the glyph as currently placed. A glyph with no outline reports zero extents. */
@@ -73,11 +73,11 @@ export interface GlyphCaret {
   readonly rect: LayoutBox;
 }
 
-/** Read-only view of one paragraph's committed records, addressable as glyphs/words/lines in one coordinate space; every array is internally consistent by construction. Mutation happens only via the detached `Glyphs` object. */
+/** Read-only view of one paragraph's prepared layout, addressed as glyphs, words, and lines. Detached `Glyphs` owns subsequent manipulation. */
 export interface GlyphPlacements {
   /** Every position and box below is in this space. No value in this snapshot is from another. */
   readonly space: GlyphSpace;
-  /** The committed layout these placements describe — rides along so a write against a stale (already-reflowed) snapshot is caught by comparison, not trusted to the caller. */
+  /** The prepared layout these placements describe, retained with the snapshot. */
   readonly layout: GlyphLayoutInspection;
   readonly glyphs: readonly GlyphPlacement[];
   /** Runs of non-whitespace glyphs, split at every line boundary. See `wordsOf` for the exact rule. */

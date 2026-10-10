@@ -1073,6 +1073,9 @@ The semantic values preserve information useful to callers:
 [archived migration](../../skills/codemod/codemods/2026-09-24-text-split/instructions.md).
 The rename preserves the tuple result, source independence, and disposal ownership.
 
+The existing engine borrow gate rejects reentrant setters before planner mutation. A material callback that catches
+that rejection leaves the pending split tuple and subsequent publication unchanged.
+
 Placement queries reconcile changed inherited group/root materials before reusing an entry. Copies realize that desired
 presentation independently while the source retains its accepted draws. Placement reads after root disposal retain their
 existing `undefined` result; `split()` throws when no layout is available.

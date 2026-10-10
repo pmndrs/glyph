@@ -1432,7 +1432,7 @@ export class PlanTransport {
     return this.#borrowParagraphRecord(layout, index);
   }
 
-  /** @internal Copies selected committed glyph records into a complete query checkpoint. */
+  /** @internal Copies selected current glyph records into a complete query checkpoint. */
   copyGlyphs(
     paragraphId: ParagraphId,
     stableIds: ArrayLike<number>,

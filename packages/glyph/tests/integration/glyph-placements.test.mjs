@@ -644,3 +644,46 @@ test('layout reads answer nothing once the root is disposed', async (t) => {
     group.dispose();
   }
 });
+
+test('a caught reentrant setter leaves pending split and subsequent publication unchanged', async (t) => {
+  const three = await createThreeTestHandle(t);
+  let node;
+  const rejected = [];
+  const material = defineTextMaterial((context) => {
+    try {
+      node.set({ text: 'changed', style: { fontSize: 40, decoration: { underline: false } } });
+    } catch (error) {
+      rejected.push(error);
+    }
+    return context.createDefaultMaterial();
+  });
+  node = three.createText({
+    font: await loadFont(),
+    text: 'one',
+    style: { fontSize: 16, decoration: { underline: true } },
+    material,
+  });
+  const scene = new THREE.Scene();
+  scene.add(node);
+  let pending;
+  let published;
+  try {
+    pending = node.split();
+    assert.ok(rejected.length > 0, 'the real material factory attempted an update');
+    assert.ok(rejected.every((error) => /borrowed render plan/.test(error.message)));
+    assert.equal(node.text, 'one');
+    assert.equal(node.style.fontSize, 16);
+    assert.equal(pending[0].count, 3);
+    assert.ok(pending[1], 'the original underline remains in the independent tuple');
+    assert.equal(node.commitState().status, 'pending');
+    scene.updateMatrixWorld(true);
+    assert.equal(node.commitState().status, 'committed');
+    published = node.split();
+    assert.deepEqual(copySnapshot(pending[0]), copySnapshot(published[0]));
+    assert.ok(published[1], 'the next publication retains the original underline');
+  } finally {
+    pending?.forEach((copy) => copy?.dispose());
+    published?.forEach((copy) => copy?.dispose());
+    node.dispose();
+  }
+});

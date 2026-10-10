@@ -520,7 +520,7 @@ export interface GlyphCopyDestination<Bindings extends GlyphBindingSet, Renderer
   readonly renderer: GlyphRenderer<Bindings, RendererResult>;
 }
 
-/** Retained destination produced by copying one committed Text subset. */
+/** Retained destination produced by independently copying one prepared Text subset. */
 export interface GlyphCopy<RendererResult> {
   readonly result: RendererResult;
   syncTransforms(): void;

@@ -834,7 +834,7 @@ fn update(
     u32::try_from(transport.publish_success(commit, staged)).unwrap_or(0)
 }
 
-/// Publishes a complete checkpoint containing only the requested committed glyph records.
+/// Returns a complete checkpoint containing only the requested current glyph records.
 /// The root and renderer fence are not mutated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_glyph_engine_copy_glyphs(
