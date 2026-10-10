@@ -152,6 +152,8 @@ pub struct DiagnosticRecord {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RenderPlanView<'a> {
+    /// The accepted host draw structure remains valid; primitive metadata may be fresh.
+    pub retained_host_topology: bool,
     pub codec_handle: u32,
     pub capability_set: u32,
     pub codec_fingerprint: u64,

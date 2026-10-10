@@ -91,6 +91,27 @@ test('typed command trees project the trusted group hierarchy lazily', () => {
   mapper.dispose();
 });
 
+test('retained topology proof preserves complete lazy primitive metadata projection', () => {
+  const mapper = new TypedCommandTreeMapper();
+  const fixture = planFixture();
+  const source = mapper.source(
+    { ...candidate(fixture.plan), retainedHostTopology: true },
+    new AbortController().signal,
+  );
+  assert.equal(source.group.kind, 'replace');
+  assert.equal(source.group.retainedTopology, true);
+  assert.equal(fixture.recordReads(), 0, 'proof propagation does not inspect records');
+  const child = source.group.value.children.at(0);
+  assert.equal(child.instances.length, 2, 'retained topology still supplies every primitive');
+  const span = child.instances.at(1);
+  assert.equal(span.recordIndex, 8);
+  assert.equal(mapper.instanceSpanDescriptor(source, span.identity).offset, fixture.primitiveOffset(1));
+  mapper.settle(source, false);
+  const retry = mapper.source(candidate(fixture.plan), new AbortController().signal);
+  assert.equal(retry.group.retainedTopology, undefined, 'absence of producer authority stays conservative');
+  mapper.settle(retry, true);
+});
+
 test('one transform binding resolves every root instance identity that shares it', () => {
   const mapper = new TypedCommandTreeMapper();
   const binding = Object.freeze({});
@@ -113,6 +134,7 @@ function candidate(plan, transformBinding = plan.transformBinding, instanceIds) 
     revision: 1,
     publicationGeneration: 1,
     checkpoint: true,
+    retainedHostTopology: false,
     transforms: Object.freeze([{ transformIndex: 19, binding: transformBinding, instanceIds }]),
     acquirePayload() {
       throw new Error('fixture has no portable payloads');

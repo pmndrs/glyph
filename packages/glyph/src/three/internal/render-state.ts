@@ -113,7 +113,7 @@ export type PreparedPublication =
   | (PreparedPublicationBase &
       Readonly<{
         replacesDraws: false;
-        transforms: undefined;
+        transforms: PreparedTransforms | undefined;
       }>)
   | (PreparedPublicationBase &
       Readonly<{

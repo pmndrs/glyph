@@ -162,7 +162,7 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
       if (placementTables.length > 1) throw new Error('TypeGPU received more than one session placement table');
       const placementTable = placementTables[0]?.[1];
       let spans = this.#spans;
-      if (frame.displayList.kind === 'replace') {
+      if (frame.displayList.kind === 'replace' && frame.displayList.retainedTopology !== true) {
         const next: Span[] = [];
         for (const child of frame.displayList.value.children) {
           // The direct Codec preserves a separate host transform for each Text.

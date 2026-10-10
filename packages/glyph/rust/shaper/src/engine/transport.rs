@@ -24,7 +24,10 @@ use crate::{
         ENGINE_UPDATE_BATCH_STATUS, ENGINE_UPDATE_REQUEST_HEADER_SIZE,
     },
     engine::{
-        frame::{CommittedUpdate, RESULT_FLAG_CHECKPOINT, RootRevision},
+        frame::{
+            CommittedUpdate, RESULT_FLAG_CHECKPOINT, RESULT_FLAG_RETAINED_HOST_TOPOLOGY,
+            RootRevision,
+        },
         render_plan::RenderPlanView,
         render_plan_wire::{EncodedPlanLayout, encode_publication, encode_query},
         semantic_view::SemanticRecord,
@@ -233,6 +236,7 @@ impl FrameTransport {
     ) -> Result<StagedPlan, u32> {
         encode_publication(plan, semantic_views, layout, self.output.bytes_mut())?;
         Ok(StagedPlan {
+            retained_host_topology: plan.retained_host_topology,
             codec_handle: plan.codec_handle,
             capability_set: plan.capability_set,
             codec_fingerprint: plan.codec_fingerprint,
@@ -277,6 +281,8 @@ impl FrameTransport {
             status: 0,
             flags: if commit.checkpoint {
                 RESULT_FLAG_CHECKPOINT
+            } else if staged.retained_host_topology {
+                RESULT_FLAG_RETAINED_HOST_TOPOLOGY
             } else {
                 0
             },
@@ -474,6 +480,7 @@ struct HeaderValues {
 }
 
 pub(crate) struct StagedPlan {
+    retained_host_topology: bool,
     codec_handle: u32,
     capability_set: u32,
     codec_fingerprint: u64,
@@ -970,6 +977,28 @@ mod tests {
             (expected.diagnostics.offset, expected.diagnostics.count)
         );
         assert_eq!(&bytes[payload_offset..payload_offset + 4], &[1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn retained_host_topology_flag_is_staged_and_checkpoints_revoke_it() {
+        let mut transport = FrameTransport::new(256, 1024).unwrap();
+        for (retained, revision, expected) in [
+            (false, 2, 0),
+            (true, 2, RESULT_FLAG_RETAINED_HOST_TOPOLOGY),
+            (true, 1, RESULT_FLAG_CHECKPOINT),
+        ] {
+            let staged = transport
+                .stage_plan(RenderPlanView {
+                    retained_host_topology: retained,
+                    ..plan()
+                })
+                .unwrap();
+            transport.publish_success(commit(revision), staged);
+            assert_eq!(
+                read_u32(transport.output.bytes(), ENGINE_RESULT_FLAGS),
+                Ok(expected)
+            );
+        }
     }
 
     fn commit(revision: u32) -> CommittedUpdate {

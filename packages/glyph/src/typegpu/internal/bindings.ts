@@ -43,6 +43,7 @@ export interface Bindings extends GlyphBindingSet {
   readonly transformInput: TypeGpuTransform;
 }
 export const schema: GlyphSchema<Bindings, void> = defineGlyphSchema({
+  preservesHostTopology: true,
   program: (_, program) => program,
   buffer: (_, input) => ({ input }),
   material: (_, material) => material,

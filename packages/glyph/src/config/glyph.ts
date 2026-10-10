@@ -115,6 +115,15 @@ export interface GlyphRootInstanceBindingInput<
 
 /** Config-owned schema that binds trusted engine meanings to renderer payloads. */
 export interface GlyphSchema<Bindings extends GlyphBindingSet, Boundary> {
+  /** Allows renderers to retain batch/instance bindings without rerunning those constructors
+   * when only primitive identity, semantic metadata or bounds change. Opt in only when these
+   * changes cannot alter host bindings and the constructors have no required side effects.
+   * defineGlyphSchema binds certification to these constructors, so spread overrides must opt in again.
+   * Complete fresh metadata remains available to renderers that consume it. Defaults to false.
+   */
+  readonly preservesHostTopology?:
+    | boolean
+    | Readonly<Pick<GlyphSchema<Bindings, Boundary>, 'batch' | 'instance' | 'instanceSpan'>>;
   program(boundary: Boundary, program: CodecProgram): Bindings['program'];
   buffer(boundary: Boundary, input: GlyphBufferBindingInput<Bindings['program']>): Bindings['buffer'];
   material(boundary: Boundary, material: Bindings['materialInput']): Bindings['material'];
@@ -206,7 +215,18 @@ export function defineGlyphSchema<
   for (const key of ['program', 'buffer', 'material', 'transform', 'batch', 'instance', 'instanceSpan'] as const) {
     if (typeof schema[key] !== 'function') throw new TypeError(`Glyph schema ${key} must be a function`);
   }
-  return Object.freeze({ ...schema });
+  return Object.freeze({
+    ...schema,
+    ...(schema.preservesHostTopology === true
+      ? {
+          preservesHostTopology: Object.freeze({
+            batch: schema.batch,
+            instance: schema.instance,
+            instanceSpan: schema.instanceSpan,
+          }),
+        }
+      : {}),
+  });
 }
 
 /** Codec selected by `GlyphConfig.encode`; codec-named values remain an internal ABI detail. */
@@ -324,7 +344,12 @@ export interface DisplayListTransform<Transform extends object> {
 
 export type DisplayListPhase<Bindings extends GlyphBindingSet> =
   | Readonly<{ kind: 'unchanged' }>
-  | Readonly<{ kind: 'replace'; value: DisplayList<Bindings> }>;
+  | Readonly<{
+      kind: 'replace';
+      /** Producer and schema certify retained host storage, order and bindings; fresh metadata remains available. */
+      retainedTopology?: true;
+      value: DisplayList<Bindings>;
+    }>;
 
 export type Retirement<Resource extends object, Buffer extends object> =
   | Readonly<{ kind: 'resource'; resource: Resource }>

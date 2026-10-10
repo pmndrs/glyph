@@ -121,6 +121,7 @@ pub struct OrderedPlanCompiler {
     pending_capability_set: u32,
     buffer_id_limit: u32,
     publish_bindings: bool,
+    retained_host_topology: bool,
     bindings_dirty: bool,
     reuse_live_bindings: bool,
     prepared: bool,
@@ -452,6 +453,7 @@ impl OrderedPlanCompiler {
             &[]
         };
         Ok(RenderPlanView {
+            retained_host_topology: self.retained_host_topology,
             codec_handle,
             capability_set: capability_set.0,
             codec_fingerprint,
@@ -562,6 +564,7 @@ impl OrderedPlanCompiler {
         self.retirements.clear();
         self.payload.clear();
         self.publish_bindings = false;
+        self.retained_host_topology = false;
         self.bindings_dirty = false;
         self.reuse_live_bindings = false;
     }
@@ -1118,6 +1121,7 @@ impl OrderedPlanCompiler {
     ) -> Result<(), OrderedPlanError> {
         if retained_topology && !self.bindings_dirty && self.retained_storage_bindings_match()? {
             self.reuse_live_bindings = true;
+            self.retained_host_topology = !context.checkpoint;
             #[cfg(test)]
             {
                 self.retained_binding_compilation_skips += 1;
@@ -1210,21 +1214,39 @@ impl OrderedPlanCompiler {
         } else {
             self.compile_ordered_draws(context)?;
         }
-        self.publish_bindings = context.checkpoint || !self.retained_bindings_match()?;
-        Ok(())
-    }
-
-    /// Whether the candidate can publish buffer patches against the accepted display list.
-    /// Buffer contents are deliberately absent from this proof: patches are the operation that
-    /// changes them. Every identity, capacity, live span, and draw descriptor must still match.
-    fn retained_bindings_match(&self) -> Result<bool, OrderedPlanError> {
-        if !self.retained_storage_bindings_match()?
-            || self.primitives != self.live_primitives
+        let retained_storage = self.retained_storage_bindings_match()?;
+        let retained_draws = retained_storage
+            && self.draws.len() == self.live_draws.len()
+            && self.draws.iter().zip(&self.live_draws).all(|(next, live)| {
+                DrawRecord {
+                    id: next.id,
+                    ..*live
+                } == *next
+            });
+        self.retained_host_topology = !context.checkpoint
+            && retained_draws
+            && self.primitives.len() == self.live_primitives.len()
+            && self
+                .primitives
+                .iter()
+                .zip(&self.live_primitives)
+                .all(|(next, live)| {
+                    // Identity, semantic inspection and bounds do not alter physical draw bindings.
+                    PrimitiveRecord {
+                        id: next.id,
+                        semantic_id: next.semantic_id,
+                        inline_start: next.inline_start,
+                        block_start: next.block_start,
+                        inline_extent: next.inline_extent,
+                        block_extent: next.block_extent,
+                        ..*live
+                    } == *next
+                });
+        self.publish_bindings = context.checkpoint
+            || !retained_draws
             || self.draws != self.live_draws
-        {
-            return Ok(false);
-        }
-        Ok(true)
+            || self.primitives != self.live_primitives;
+        Ok(())
     }
 
     fn retained_storage_bindings_match(&self) -> Result<bool, OrderedPlanError> {
@@ -2497,6 +2519,85 @@ mod tests {
         assert_eq!(shrink.retirements.len(), 1);
         assert_eq!(shrink.retirements[0].byte_offset, 8);
         assert_eq!(shrink.retirements[0].byte_length, 4);
+    }
+
+    #[test]
+    fn retained_host_topology_refreshes_metadata_but_rejects_structural_changes() {
+        let codec = codec();
+        let initial = [glyph(1, 1), glyph(2, 1), glyph(3, 1)];
+        let mut compiler = OrderedPlanCompiler::default();
+        prepare(&mut compiler, &codec, &initial, &[1.0, 2.0, 3.0], true);
+        assert!(
+            !compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap()
+                .retained_host_topology
+        );
+        compiler.commit().unwrap();
+
+        let mut changed = initial;
+        for item in &mut changed {
+            item.stable_id += 100;
+            item.content_revision += 1;
+            item.semantic_id = 77;
+            item.inline_start += 8.0;
+            item.inline_extent = 4.0;
+        }
+        prepare(&mut compiler, &codec, &changed, &[9.0, 10.0, 11.0], false);
+        let view = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        assert!(view.retained_host_topology);
+        assert!(
+            !view.primitives.is_empty(),
+            "fresh metadata remains observable"
+        );
+        let mut cold = OrderedPlanCompiler::default();
+        prepare(&mut cold, &codec, &changed, &[9.0, 10.0, 11.0], true);
+        let control = cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap();
+        assert_eq!(view.primitives, control.primitives);
+        assert_eq!(view.draws, control.draws);
+        compiler.abort();
+        assert_eq!(compiler.live_primitives[0].id, 1);
+
+        for edit in 0..4 {
+            let mut structural = changed;
+            match edit {
+                0 => structural[1].material_id = 2,
+                1 => structural[1].transform_id = 2,
+                2 => structural[1].clip_id = 2,
+                _ => structural[1].resource_generation += 1,
+            }
+            prepare(
+                &mut compiler,
+                &codec,
+                &structural,
+                &[9.0, 10.0, 11.0],
+                false,
+            );
+            assert!(
+                !compiler
+                    .plan_view(7, CAPABILITY, codec.fingerprint())
+                    .unwrap()
+                    .retained_host_topology
+            );
+            compiler.abort();
+        }
+        prepare(&mut compiler, &codec, &changed[..2], &[9.0, 10.0], false);
+        assert!(
+            !compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap()
+                .retained_host_topology
+        );
+        compiler.abort();
+        prepare(&mut compiler, &codec, &changed, &[9.0, 10.0, 11.0], true);
+        assert!(
+            !compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap()
+                .retained_host_topology
+        );
     }
 
     #[test]

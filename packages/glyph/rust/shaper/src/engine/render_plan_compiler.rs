@@ -228,6 +228,8 @@ impl RenderPlanCompiler {
                 .map_err(Into::into),
         }?;
         let session = self.session.view();
+        // Session storage is a draw binding too: replacement invalidates captured shader storage.
+        view.retained_host_topology &= session.buffers.is_empty() && session.retirements.is_empty();
         view.session_buffers = session.buffers;
         view.session_patches = session.patches;
         view.session_retirements = session.retirements;

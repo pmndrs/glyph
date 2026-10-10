@@ -135,7 +135,7 @@ sources:
     title: Pinned msdfgen CLI scanline and error-correction configuration
 generated:
   by: openai-codex/gpt-5
-  at: '2026-10-09T18:57:02Z'
+  at: '2026-10-10T16:19:04.057Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -2088,3 +2088,13 @@ The Three split is exercised through `pnpm scripts run benchmark:v1-bitmap`, wit
 The split verification on 2026-09-07 passed both browser workflows. Bitmap produced 3,109 lit pixels with native TSL and 2,685 with the experimental shaders on each backend; custom Bitmap composition likewise produced 2,642 versus 2,185. MTSDF and Slug lit-pixel counts matched in these fixtures. These checks establish rendering and lifecycle behavior, not complete visual parity; the Bitmap difference remains a reason to keep the experimental entry separate.
 
 Published distributions include hidden JavaScript source maps and referenced declaration maps. The build rebases staging-relative source paths onto the packaged source tree before atomically publishing dist; packed-package checks verify every map source and declaration reference resolves inside the installed package. Hidden JS maps add install bytes but no runtime imports or browser map requests.
+
+## Retained host topology publication
+
+Rust distinguishes fresh primitive metadata from structural host bindings using the existing result flags. A non-checkpoint publication may certify unchanged draw order, physical storage generations, clip/material/resource bindings and instance spans while still publishing complete fresh identities, semantic metadata and bounds. JavaScript combines that proof with unchanged transform membership and lifecycle order. Replacement of session placement storage revokes the proof.
+
+The existing display-list replacement carries an optional retainedTopology hint; it does not create a second publication executor. Three retains accepted meshes and bindings for certified metadata changes, applies buffer patches, refreshes matrices and repairs detached mesh parenting. Direct TypeGPU retains its accepted draw spans. Checkpoints and structural changes continue through full replacement.
+
+Schema constructors remain the authority for renderer-specific bindings. Integrators opt in with preservesHostTopology only when primitive metadata cannot change host bindings and skipped constructors have no required side effects. defineGlyphSchema binds that promise to the constructor identities: spreading a built-in schema and overriding a constructor automatically revokes inherited certification. Complete lazy metadata remains available during the synchronous command-buffer borrow.
+
+The standalone native shaper suite passes all 330 unit and 10 integration/conformance tests, including metadata/cold/abort and checkpoint controls. The formatted package build and all 953 package/integration Node tests pass; the independent source review found no remaining actionable defect. The exact packed candidate is 7034dd5e834ce14b8e39c36349e56975604a382a1ab8e8e09ab93bdffe9fbd91, with shaper 9ce201c984f02b514689dfc08603db29c537b790e848b13f3b3fd61475e70188 (1,459,785 raw bytes). Full local Labs against registry 0.1.0 is running. Strict whole-package checks, comparative size and hardware browser verification remain pending; this contract alone does not establish release performance parity.

@@ -144,6 +144,8 @@ export interface PlanCandidate {
   readonly publicationGeneration: number;
   /** Whether this publication is a complete renderer checkpoint rather than an incremental update. */
   readonly checkpoint: boolean;
+  /** Producer proof that host draw topology remains unchanged while metadata may be refreshed. */
+  readonly retainedHostTopology: boolean;
   readonly transforms: readonly ResolvedPlanTransform[];
   acquirePayload(referenceId: ResourceHandle): PortablePayloadLease;
   resolveMaterial(materialId: number): HandleMaterialBinding;
@@ -404,8 +406,14 @@ type RetainedTextLimitState = Pick<
   'desired' | 'metrics' | 'dirty' | 'semanticDirty' | 'styleChanges'
 >;
 
+interface ResolvedPublicationTransforms {
+  readonly transforms: readonly ResolvedPlanTransform[];
+  readonly retainedHostTopology: boolean;
+}
+
 interface PendingPublication {
   readonly publication: PlanPublication;
+  readonly transforms: ResolvedPublicationTransforms;
   readonly checkpointGeneration: number;
 }
 
@@ -869,8 +877,9 @@ class RenderPlannerImpl {
     const publication = this.#transport.consumeStagedUpdate(resultPointer, memoryBuffer);
     this.#engineRevision = publication.engineRevision;
     this.#cacheSemanticViews(publication, staged.semanticViewMask);
+    const transforms = this.#resolvedTransforms();
     this.#commitDesiredState();
-    this.#stagedPublication = { publication, checkpointGeneration: staged.checkpointGeneration };
+    this.#stagedPublication = { publication, transforms, checkpointGeneration: staged.checkpointGeneration };
   }
 
   consume(): PlanAcceptance {
@@ -879,7 +888,7 @@ class RenderPlannerImpl {
     this.#stagedPublication = undefined;
     const { publication } = pending;
     const lease = new BorrowedPlanLease(publication, this.#transport);
-    const candidate = this.#candidate(lease);
+    const candidate = this.#candidate(lease, pending.transforms);
     let result: PlanAcceptance;
     try {
       const answer = (this.#target as PlanTarget).accept(candidate, this.#targetController.signal);
@@ -1213,7 +1222,7 @@ class RenderPlannerImpl {
     this.#baseOrderValidationPending = false;
   }
 
-  #candidate(lease: BorrowedPlanLease): PlanCandidate {
+  #candidate(lease: BorrowedPlanLease, resolved = this.#resolvedTransforms()): PlanCandidate {
     return Object.freeze({
       origin: this.#origin,
       plan: lease.reader,
@@ -1221,7 +1230,11 @@ class RenderPlannerImpl {
       revision: lease.publication.revision,
       publicationGeneration: lease.publication.publicationGeneration,
       checkpoint: publicationIsCheckpoint(lease.publication),
-      transforms: Object.freeze(this.#resolvedTransforms()),
+      retainedHostTopology:
+        !publicationIsCheckpoint(lease.publication) &&
+        resolved.retainedHostTopology &&
+        (lease.publication.flags & textShaperAbi.engine.resultFlags.retainedHostTopology) !== 0,
+      transforms: resolved.transforms,
       acquirePayload: (referenceId: ResourceHandle) => {
         lease.assertActive();
         return this.#portablePayload(referenceId);
@@ -1294,7 +1307,8 @@ class RenderPlannerImpl {
     });
   }
 
-  #resolvedTransforms(): readonly ResolvedPlanTransform[] {
+  #resolvedTransforms(): ResolvedPublicationTransforms {
+    let retainedHostTopology = this.#removed.size === 0;
     const transforms = new Map<
       RenderPlanTransformId,
       { readonly binding: HandleTransformBinding; readonly instanceIds: ParagraphId[] }
@@ -1312,25 +1326,37 @@ class RenderPlannerImpl {
       if (instanceId !== undefined) retained.instanceIds.push(instanceId);
     };
     for (const state of this.#texts) {
-      if (state.removed) continue;
+      if (state.removed) {
+        retainedHostTopology = false;
+        continue;
+      }
+      const committed = state.committed;
+      retainedHostTopology &&=
+        committed !== undefined &&
+        !state.lifecycleDirty &&
+        !state.orderDirty &&
+        state.desired.transform.handle === committed.transform.handle &&
+        state.desired.flowTransforms.length === committed.flowTransforms.length;
       const rootIndex = state.desired.transform.handle;
       retain(
         rootIndex,
         this.#handleState._resolveOpaqueBinding('transform', state.desired.transform.handle),
         state.paragraphId,
       );
-      for (const transform of state.desired.flowTransforms) {
+      for (const [index, transform] of state.desired.flowTransforms.entries()) {
+        retainedHostTopology &&= committed?.flowTransforms[index]?.handle === transform.handle;
         const transformIndex = transform.handle;
         retain(transformIndex, this.#handleState._resolveOpaqueBinding('transform', transform.handle));
       }
     }
-    return [...transforms].map(([transformIndex, { binding, instanceIds }]) =>
+    const records = [...transforms].map(([transformIndex, { binding, instanceIds }]) =>
       Object.freeze({
         transformIndex,
         ...(instanceIds.length === 0 ? {} : { instanceIds: Object.freeze(instanceIds) }),
         binding,
       }),
     );
+    return { transforms: Object.freeze(records), retainedHostTopology };
   }
 
   #measurementParagraphMutations(state: RetainedTextState): PlannerParagraphMutation[] {
