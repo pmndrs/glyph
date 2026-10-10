@@ -1345,6 +1345,7 @@ export class PlanTransport {
     requestFrame: PlannerFrameUpdate,
     paragraphId: ParagraphId,
     maxOutputBytes: number,
+    onPreparationDiscarded?: () => void,
   ): PlanPublication {
     this.#assertActive();
     const request = preparePlannerFrameUpdate(requestFrame);
@@ -1381,6 +1382,7 @@ export class PlanTransport {
         requiredResultCapacity <= maxOutputBytes &&
         requiredResultCapacity > availableResultCapacity
       ) {
+        onPreparationDiscarded?.();
         canRepairResultCapacity = false;
         this.reserve(requestLength, requiredResultCapacity);
         continue;
@@ -1403,8 +1405,9 @@ export class PlanTransport {
     request: PlannerFrameUpdate,
     paragraphId: ParagraphId,
     maxOutputBytes: number,
+    onPreparationDiscarded?: () => void,
   ): BorrowedLayoutPublication {
-    const publication = this.measureParagraph(request, paragraphId, maxOutputBytes);
+    const publication = this.measureParagraph(request, paragraphId, maxOutputBytes, onPreparationDiscarded);
     if (publication.semanticViewCount !== 0) {
       throw new TypeError('borrowed layout setup unexpectedly serialized semantic records');
     }

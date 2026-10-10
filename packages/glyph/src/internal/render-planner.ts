@@ -772,6 +772,7 @@ class RenderPlannerImpl {
           this.#queryTextRequest(state, textShaperAbi.engine.semanticViewMasks.borrowedLayout),
           state.paragraphId,
           this.#limits.maxOutputBytes,
+          this.#discardMeasuredPreparation,
         );
       } catch (error) {
         this.#failedQuery(error);
@@ -1022,7 +1023,12 @@ class RenderPlannerImpl {
   #queryTextPublication(state: RetainedTextState, semanticViewMask: number): PlanPublication {
     const request = this.#queryTextRequest(state, semanticViewMask);
     try {
-      return this.#transport.measureParagraph(request, state.paragraphId, this.#limits.maxOutputBytes);
+      return this.#transport.measureParagraph(
+        request,
+        state.paragraphId,
+        this.#limits.maxOutputBytes,
+        this.#discardMeasuredPreparation,
+      );
     } catch (error) {
       this.#failedQuery(error);
     }
@@ -1490,6 +1496,8 @@ class RenderPlannerImpl {
   #assertActive(): void {
     if (this.#disposed) throw new RenderPlannerDisposedError();
   }
+
+  readonly #discardMeasuredPreparation = (): void => this.#clearMeasuredBindings();
 }
 
 class RetainedTextImpl implements RetainedText {

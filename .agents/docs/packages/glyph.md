@@ -1038,8 +1038,9 @@ committed placement reads retain their Three cache.
 The existing Rust glyph-ID allocator reserves its high-water mark when a successful query exposes identities.
 Those IDs cannot be recycled into another paragraph after cancellation, so a foreign selection fails naturally in Rust.
 Ordinary publication retires semantic inspections displaced by lifecycle changes, using the existing preparation
-bindings as its proof; failed queries release that proof. Accepted layout sidecars remain cached; pending Three
-placement snapshots are not promoted.
+bindings as its proof; failed queries and transport capacity-repair retries release that proof. The transport
+notifies the same owner before a hidden retry, including sparse-borrow setup. Accepted layout sidecars remain cached;
+pending Three placement snapshots are not promoted.
 
 Queries carry pending paragraph creations and ordering changes even when the queried paragraph is already committed
 in Rust. A rejected first renderer publication followed by an over-budget sibling therefore remains queryable: reads

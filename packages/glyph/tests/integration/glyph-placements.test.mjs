@@ -6,6 +6,7 @@ import { bitmap, createFontStack, glyph as glyphRuntime, glyphFlags } from '@pmn
 import { createGlyphPlacements } from '@pmndrs/glyph/core';
 import { defineTextMaterial, defineThreeConfig } from '@pmndrs/glyph/three';
 import { loadFont as loadGlyphFont } from '../../dist/loader.js';
+import { PlanTransport } from '../../dist/internal/handle-state.js';
 import * as THREE from 'three/webgpu';
 
 import { createThreeTestHandle } from '../support/three-handle.mjs';
@@ -688,39 +689,58 @@ test('a caught reentrant setter leaves pending split and subsequent publication 
   }
 });
 
-test('a failed sibling query retires speculative identities before ordinary publication', async (t) => {
-  const config = defineThreeConfig();
-  const three = await createThreeTestHandle(t, {
-    ...config,
-    commands: { ...config.commands, limits: { ...config.commands.limits, maxOutputBytes: 4_096 } },
-  });
-  const font = await loadFont();
-  const source = three.createText({ font, text: 'A' });
-  const sibling = three.createText({ font, text: 'capacity '.repeat(512) });
-  const scene = new THREE.Scene();
-  scene.add(source, sibling);
-  let copy;
-  try {
-    assert.equal(source.measureGlyphs().length, 1);
-    assert.throws(() => sibling.measureGlyphs(), { statusCode: 'result-too-large' });
-    sibling.text = 'B';
-    scene.updateMatrixWorld(true);
-    assert.equal(source.commitState().status, 'committed');
-    const acceptedIds = Array.from(source.glyphs().glyphStableIds);
-    copy = source.split()[0];
-    assert.deepEqual(Array.from(source.glyphs().glyphStableIds), acceptedIds);
-    assert.equal(copy.count, 1);
-    assert.deepEqual(
-      copySnapshot(copy).measurements,
-      source.measureGlyphs().map(({ anchorPoint, ...measurement }) => ({
-        ...measurement,
-        center: anchorPoint('center'),
-      })),
-    );
-  } finally {
-    copy?.dispose();
-    source.dispose();
-    sibling.dispose();
+test('discarded sibling queries retire speculative identities before ordinary publication', async (t) => {
+  for (const retry of [false, true]) {
+    await t.test(retry ? 'capacity repair succeeds' : 'output limit rejects', async (caseContext) => {
+      const config = defineThreeConfig();
+      const three = await createThreeTestHandle(caseContext, {
+        ...config,
+        commands: {
+          ...config.commands,
+          resultBytes: 4_096,
+          limits: { ...config.commands.limits, ...(retry ? {} : { maxOutputBytes: 4_096 }) },
+        },
+      });
+      const font = await loadFont();
+      const source = three.createText({ font, text: 'A' });
+      const sibling = three.createText({ font, text: 'capacity '.repeat(512) });
+      const scene = new THREE.Scene();
+      scene.add(source, sibling);
+      let copy;
+      try {
+        assert.equal(source.measureGlyphs().length, 1);
+        let repairs = 0;
+        const reserve = PlanTransport.prototype.reserve;
+        caseContext.mock.method(PlanTransport.prototype, 'reserve', function (...args) {
+          repairs += 1;
+          return reserve.apply(this, args);
+        });
+        if (retry) {
+          assert.equal(sibling.measureGlyphs().length, sibling.text.length);
+          assert.ok(repairs > 0, 'the successful query must grow the result arena');
+        } else {
+          assert.throws(() => sibling.measureGlyphs(), { statusCode: 'result-too-large' });
+        }
+        sibling.text = 'B';
+        scene.updateMatrixWorld(true);
+        assert.equal(source.commitState().status, 'committed');
+        const acceptedIds = Array.from(source.glyphs().glyphStableIds);
+        copy = source.split()[0];
+        assert.deepEqual(Array.from(source.glyphs().glyphStableIds), acceptedIds);
+        assert.equal(copy.count, 1);
+        assert.deepEqual(
+          copySnapshot(copy).measurements,
+          source.measureGlyphs().map(({ anchorPoint, ...measurement }) => ({
+            ...measurement,
+            center: anchorPoint('center'),
+          })),
+        );
+      } finally {
+        copy?.dispose();
+        source.dispose();
+        sibling.dispose();
+      }
+    });
   }
 });
 
