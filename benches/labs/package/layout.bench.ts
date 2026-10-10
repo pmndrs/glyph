@@ -32,11 +32,12 @@ group('public paragraph layout at 22k glyphs @layout @exhaustive', () => {
       iteration += 1;
       created.paragraph.constraints = { width: { mode: 'exact', size: 420 + iteration / 64 } };
       const glyphCount = created.paragraph.measure().glyphCount;
-      created.textGroup.updateMatrixWorld(true);
+      created.scene.updateMatrixWorld(true);
       if (created.textGroup.error !== undefined) throw created.textGroup.error;
       return glyphCount + created.textGroup.textCount;
     };
     assert(result > 1, 'measurement and publication must contain text');
+    assert.equal(created.paragraph.commitState().status, 'committed');
     disposeParagraph(created);
   });
 
@@ -67,11 +68,12 @@ group('public paragraph layout at 22k glyphs @layout @exhaustive', () => {
       iteration += 1;
       created.paragraph.constraints = { width: { mode: 'exact', size: 420 + iteration / 64 } };
       const glyphCount = created.paragraph.glyphs().glyphCount;
-      created.textGroup.updateMatrixWorld(true);
+      created.scene.updateMatrixWorld(true);
       if (created.textGroup.error !== undefined) throw created.textGroup.error;
       return glyphCount + created.textGroup.textCount;
     };
     assert(result > 1, 'inspection and publication must contain text');
+    assert.equal(created.paragraph.commitState().status, 'committed');
     disposeParagraph(created);
   });
 
@@ -81,11 +83,12 @@ group('public paragraph layout at 22k glyphs @layout @exhaustive', () => {
     const textCount = yield () => {
       iteration += 1;
       created.paragraph.style = { fontSize: 12 + iteration / 256 };
-      created.textGroup.updateMatrixWorld(true);
+      created.scene.updateMatrixWorld(true);
       if (created.textGroup.error !== undefined) throw created.textGroup.error;
       return created.textGroup.textCount;
     };
     assert.equal(textCount, 1);
+    assert.equal(created.paragraph.commitState().status, 'committed');
     disposeParagraph(created);
   });
 
@@ -95,11 +98,12 @@ group('public paragraph layout at 22k glyphs @layout @exhaustive', () => {
     const textCount = yield () => {
       iteration += 1;
       created.paragraph.constraints = { width: { mode: 'exact', size: 420 + iteration / 64 } };
-      created.textGroup.updateMatrixWorld(true);
+      created.scene.updateMatrixWorld(true);
       if (created.textGroup.error !== undefined) throw created.textGroup.error;
       return created.textGroup.textCount;
     };
     assert.equal(textCount, 1);
+    assert.equal(created.paragraph.commitState().status, 'committed');
     disposeParagraph(created);
   });
 
@@ -109,11 +113,12 @@ group('public paragraph layout at 22k glyphs @layout @exhaustive', () => {
     const textCount = yield () => {
       const leading = String.fromCharCode(65 + (iteration++ % 26));
       created.paragraph.text = `${leading}${text.slice(1)}`;
-      created.textGroup.updateMatrixWorld(true);
+      created.scene.updateMatrixWorld(true);
       if (created.textGroup.error !== undefined) throw created.textGroup.error;
       return created.textGroup.textCount;
     };
     assert.equal(textCount, 1);
+    assert.equal(created.paragraph.commitState().status, 'committed');
     disposeParagraph(created);
   });
 });

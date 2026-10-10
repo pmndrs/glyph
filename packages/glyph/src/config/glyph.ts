@@ -486,8 +486,12 @@ export interface GlyphShapeOptions {
 
 /** Core-owned shaping/publication services scoped to exactly one anonymous or named root. */
 export interface GlyphRootServices<Bindings extends GlyphBindingSet, RendererResult, Boundary = unknown> {
+  /** Throws before host state changes when this root owns a staged publication. */
+  assertMutationAllowed(): void;
   /** @internal Reject lifecycle mutation while this root belongs to an active engine publication or settlement. */
   _preflightLifecycleMutation(): void;
+  /** @internal Whether this root is already queued for the next engine shape transaction. */
+  _isShapeQueued(): boolean;
   createText<Format extends RasterFormatMetadata>(
     state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>,
   ): GlyphTextController<Format, Bindings['materialInput'], Bindings['transformInput']>;

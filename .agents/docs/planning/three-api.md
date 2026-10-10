@@ -34,8 +34,8 @@ sources:
     resource: https://threejs.org/docs/pages/Object3D.html
     title: Three.js Object3D
 generated:
-  by: openai-codex/gpt-6
-  at: '2026-09-24T20:29:45Z'
+  by: openai-codex/gpt-5
+  at: '2026-10-09T19:10:09Z'
 ---
 
 # Three.js text API
@@ -208,9 +208,11 @@ label.constraints = { width: { mode: 'exact', size: 500 } };
 label.set({ text: 'Final value', style: { color: '#ffffff' } });
 ```
 
-Setters change desired state. The owning root gathers all pending descendant changes on its next
-`updateMatrixWorld()` traversal. Reassigning a value that normalizes to the current state is a no-op. Transform-only
-changes update the transform buffer and do not reshape or recompose text.
+Once a `Text` has a runtime binding, each setter synchronously prepares its current text and layout in Rust before the
+setter returns. `measure()`, `glyphs()`, and `readGlyphs()` consume that prepared revision without waiting for
+`updateMatrixWorld()`. Author input may exist before a runtime binding; the root prepares it synchronously when that
+binding is created. Reassigning a value that normalizes to the current state is a no-op. Transform-only changes update
+the transform buffer and do not reshape or recompose text.
 
 Call `glyph.shape()` to synchronously publish all dirty roots in one Rust/Wasm crossing instead of crossing once per
 TextGroup or named root. Three scene traversal also participates in publication before display-list realization. If no
@@ -218,20 +220,30 @@ semantics are pending, `updateMatrixWorld()` uses only the cheap transform synch
 `Text`/`TextGroup`; explicit `glyph.shape()` throws a publication failure at the call that requested it.
 
 One root traversal contributes at most one entry to the mutating `pmndrs_glyph_engine_update_batch` transaction for that
-root's pending values. An earlier `measure()` query uses the non-publishing paragraph measurement call and retains a speculative batch
-candidate; the traversal adopts matching work rather than repeating it.
+root's pending values. Traversal publishes the exact preparation produced by the setter and does not replay text,
+styles, geometry, or Unicode work.
 
-Editor-style changes go through the same assignment. `label.text = next` states the string the paragraph now holds, and
-the adapter derives its smallest common-prefix/common-suffix replacement without allocating a second scan buffer, so an
-editor that keeps its own document sends one narrow UTF-16 edit per keystroke without describing the edit itself:
+Paragraph base order remains part of that complete root publication. Reordering reused Scene siblings updates desired
+orders one Text at a time, so semantic setter preparation keeps each existing paragraph at its last Rust-installed order
+and retains the desired order until traversal has reconciled the complete sibling set. A newly bound Text whose final
+slot is temporarily occupied prepares at a creation-only free order. Neither preparation order is observable through
+measurement or glyph reads; the gated final-set check and one publication install swaps, beginning insertions,
+removal/reinsertion, and mixed content/order changes atomically.
+
+Editor-style changes go through the same assignment. `label.text = next` states the complete string the paragraph now
+holds. JavaScript performs cheap equivalence/domain checks and UTF-16 encoding; Rust compares that input with its
+retained text, discovers scalar-safe changed ranges through the shared packed comparison path, and drives the same
+Unicode, shaping, wrapping, and positioning pipeline used for publication:
 
 ```ts
 label.text = document.applyEdit(cursor, 'a');
 label.set({ text: document.value, spans: document.spans });
 ```
 
-Multiple assignments before traversal remain one Wasm call. An assignment cannot address the inside of a Unicode scalar,
-so the replacement it derives is scalar-aligned by construction rather than by a range check.
+Each successful assignment is its own synchronous preparation, while multiple assignments before traversal still
+publish only the latest prepared revision. The wire carries a full replacement (`start = 0`, prior UTF-16 length,
+complete input); it is not a public edit table. Rust, not a JavaScript prefix/suffix scan, establishes reusable sparse
+evidence and Unicode-scalar boundaries.
 
 `text` and `spans` are authored together: stating `text` without `spans` clears the ranges it replaced, because
 replacement text carries its own formatting and retaining the previous ranges would reinterpret them against unrelated
@@ -311,23 +323,16 @@ const summary = label.measure();
 const glyphs = label.glyphs();
 ```
 
-`measure()` synchronously requests an allocation-light `ParagraphLayoutSummary` for current desired state. A detached
-`Text` uses its implicit standalone planner; a `Text` beneath a `TextGroup` uses that group's planner. The call does not
-traverse matrices, realize materials or GPU resources, publish draws, or change `commitState()` from `pending` to
-`committed`. An explicit call intentionally pays one synchronous one-Text engine query, which is suitable for Yoga/uikit
-measurement without introducing a second renderer-free retained runtime.
+`measure()` synchronously returns the allocation-light `ParagraphLayoutSummary` cached by the latest successful
+preparation. A detached `Text` uses its implicit standalone planner; a `Text` beneath a `TextGroup` uses that group's
+planner. Creating that runtime binding prepares the author value once. Later unchanged `measure()` calls make no Wasm
+preparation call, do not traverse matrices, realize materials or GPU resources, publish draws, or change
+`commitState()` from `pending` to `committed`.
 
-Sequential `measure()` calls in one group extend a full desired-lifecycle speculative transaction. Each query applies
-semantic mutations only for its paragraph; the first render traversal publishes the complete batch once and adopts the
-prepared work. Repeating an unchanged measurement returns the retained result object without another Wasm crossing.
-The root may park one preceding detached controller outside active publication membership, so alternating two detached
-queries preserves both semantic caches while only the explicitly queried Text remains bound. A third distinct detached
-query or an ordinary scene publication evicts that bounded slot.
-
-`glyphs()` is intentionally different: it positions current desired text and copies per-line and per-glyph arrays. It
-still does not publish or realize renderer resources. Ordinary rendering never materializes either semantic view merely
-to draw. Caret and selection lookup use renderer-accepted placement state and may return `undefined` while desired state
-is pending or a renderer candidate was rejected.
+`glyphs()` copies per-line and per-glyph arrays from the current prepared positioned arena, while `readGlyphs()` borrows
+only requested scalar records. Neither is a preparation trigger. Ordinary rendering consumes the same retained revision
+without materializing a semantic inspection table merely to draw. Caret and selection lookup use renderer-accepted
+placement state and may return `undefined` while desired state is pending or a renderer candidate was rejected.
 
 The complete field semantics are defined by the [core layout-query reference](core-api.md#layout-query-values).
 

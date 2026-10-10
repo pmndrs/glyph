@@ -167,6 +167,7 @@ pub(crate) struct PreparedUpdate {
     pub(super) codec_handle: u32,
     pub(super) capability_set: u32,
     pub(super) codec_fingerprint: u64,
+    pub(super) preparation_revision: u32,
 }
 
 impl PreparedUpdate {
@@ -175,10 +176,9 @@ impl PreparedUpdate {
     }
 }
 
-/// Witness of a paragraph-scoped speculative measurement: semantic records for the
-/// queried paragraph are ready to stage while committed planner state, revisions, and
-/// identity counters remain untouched. The prepared pending state stays retained as
-/// the retained plan's speculative transaction; it cannot be committed through this witness.
+/// Witness of a staged paragraph preparation. Semantic records are ready to encode while
+/// renderer-plan revision and acknowledgement remain untouched; after successful result encoding,
+/// the Wasm boundary may commit the retained semantic/positioning state through this witness.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct MeasuredParagraph {
     pub(super) root_id: u32,

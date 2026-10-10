@@ -256,10 +256,13 @@ export function assertTextStyle(value: TextStyle, label = 'text style'): void {
 
 /** @internal Validate absolute feature ranges against the style scope that will carry them. */
 export function assertTextStyleFeatureRanges(value: TextStyle, start: number, end: number, label = 'text style'): void {
-  for (const [index, feature] of (value.features ?? []).entries()) {
+  const features = value.features;
+  if (features === undefined) return;
+  for (let index = 0; index < features.length; index++) {
+    const feature = features[index]!;
     const featureStart = feature.start ?? start;
     const featureEnd = feature.end ?? end;
-    if (featureStart < start || featureEnd > end) {
+    if (featureStart < start || featureEnd > end || featureEnd < featureStart) {
       throw new RangeError(`${label} feature ${index} (${feature.tag}) must stay inside [${start}, ${end})`);
     }
   }

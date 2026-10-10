@@ -206,6 +206,20 @@ test(
               text: {
                 text,
                 spans: [
+                  { start: 0, end: 2, style: { features: [{ tag: 'liga', start: 0, end: 3 }] } },
+                  { start: 2, end: 4, style: { color: '#ffffff' } },
+                ],
+              },
+            }),
+          /must stay inside \[0, 2\)/u,
+          'changed caller features revalidate scope while retaining the unchanged Unicode grid',
+        );
+        assert.throws(
+          () =>
+            node.set({
+              text: {
+                text,
+                spans: [
                   { start: 1, end: 2, style: { color: '#2f7fff' } },
                   { start: 2, end: 4, style: { color: '#ffffff' } },
                 ],

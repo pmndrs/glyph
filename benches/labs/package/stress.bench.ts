@@ -25,7 +25,11 @@ group('1,000-label stress @stress', () => {
     update();
     const textCount = yield update;
     assert.equal(textCount, created.labels.length);
-    assert.equal(created.textGroup.visible, true);
+    assert.equal(created.textGroup.visible, visible);
+    // Labs may time an odd number of toggles; restore the visible state before checking its retained output.
+    created.textGroup.visible = true;
+    created.scene.updateMatrixWorld(true);
+    if (created.textGroup.error !== undefined) throw created.textGroup.error;
     assert.equal(borrowedGlyphChecksum(created.labels), expectedChecksum);
     const draws = inspectDraws(created.scene);
     assert.equal(draws.draws, expectedDraws.draws);
@@ -127,11 +131,13 @@ group('1,000-label stress @stress', () => {
       for (const [index, text] of created.texts.entries()) {
         text.text = `${prefix} ${String(index).padStart(4, '0')}`;
       }
-      created.textGroup.updateMatrixWorld(true);
+      created.scene.updateMatrixWorld(true);
       if (created.textGroup.error !== undefined) throw created.textGroup.error;
       return created.textGroup.textCount;
     };
     assert.equal(textCount, created.texts.length);
+    for (const text of created.texts) assert.equal(text.commitState().status, 'committed');
+    assert(inspectDraws(created.scene).glyphs > 0, 'publication must render glyphs');
     disposeTextBatch(created);
   });
 });

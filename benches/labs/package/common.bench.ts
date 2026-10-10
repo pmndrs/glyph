@@ -19,7 +19,7 @@ group('common text operations @core', () => {
     let iteration = 0;
     const publishEdit = () => {
       created.paragraph.text = editedText(iteration++);
-      created.textGroup.updateMatrixWorld(true);
+      created.scene.updateMatrixWorld(true);
       if (created.textGroup.error !== undefined) throw created.textGroup.error;
       return created.textGroup.textCount;
     };
@@ -27,6 +27,7 @@ group('common text operations @core', () => {
     publishEdit();
     const textCount = yield publishEdit;
     assert.equal(textCount, 1);
+    assert.equal(created.paragraph.commitState().status, 'committed');
     disposeParagraph(created);
   });
 
@@ -36,11 +37,12 @@ group('common text operations @core', () => {
     const textCount = yield () => {
       iteration += 1;
       created.paragraph.constraints = { width: { mode: 'exact', size: 520 + iteration / 64 } };
-      created.textGroup.updateMatrixWorld(true);
+      created.scene.updateMatrixWorld(true);
       if (created.textGroup.error !== undefined) throw created.textGroup.error;
       return created.textGroup.textCount;
     };
     assert.equal(textCount, 1);
+    assert.equal(created.paragraph.commitState().status, 'committed');
     disposeParagraph(created);
   });
 
@@ -50,11 +52,12 @@ group('common text operations @core', () => {
     const textCount = yield () => {
       alternate = !alternate;
       created.paragraph.style = { color: alternate ? '#f97316' : '#38bdf8', fontSize: 24 };
-      created.textGroup.updateMatrixWorld(true);
+      created.scene.updateMatrixWorld(true);
       if (created.textGroup.error !== undefined) throw created.textGroup.error;
       return created.textGroup.textCount;
     };
     assert.equal(textCount, 1);
+    assert.equal(created.paragraph.commitState().status, 'committed');
     disposeParagraph(created);
   });
 
@@ -64,11 +67,12 @@ group('common text operations @core', () => {
     const textCount = yield () => {
       iteration += 1;
       created.paragraph.style = { fontSize: 20 + iteration / 1024 };
-      created.textGroup.updateMatrixWorld(true);
+      created.scene.updateMatrixWorld(true);
       if (created.textGroup.error !== undefined) throw created.textGroup.error;
       return created.textGroup.textCount;
     };
     assert.equal(textCount, 1);
+    assert.equal(created.paragraph.commitState().status, 'committed');
     disposeParagraph(created);
   });
 

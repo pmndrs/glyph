@@ -2,6 +2,7 @@
 
 ## Product, API, and execution
 
+- [Publication frontier checklist](publication-frontier.md) — compact active task tracker and resume point for 0.2.0 publication performance.
 - [Project brief](project-brief.md) — product intent, merged v0, target v1, and later horizon.
 - [Three.js text API](three-api.md) — authoritative `glyph.fontFace()`, `ThreeConfig`, `TextGroup`, and `Text` surface, including roots, font leases, ordering, and render-loop synchronization.
 - [Planner-assisted detached glyph slices](detached-glyph-slice.md) — synchronous committed-record copies, independent Three.js `Glyphs` and decoration objects, matrix ownership, and first-frame upload invariants.

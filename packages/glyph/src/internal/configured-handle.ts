@@ -100,7 +100,13 @@ class ConfiguredHandleDomain<
   readonly #handleState: GlyphHandleState;
   readonly #codecRegistration;
   readonly #codec: CodecValue;
-  readonly #roots = new Map<string | undefined, Root>();
+  readonly #roots = new Map<
+    string | undefined,
+    Readonly<{
+      root: Root;
+      services: ConfiguredRootServices<Bindings, RendererResult, Boundary, CodecValue>;
+    }>
+  >();
   #copyLeases = 0;
   #infrastructureDisposed = false;
   #disposed = false;
@@ -156,7 +162,7 @@ class ConfiguredHandleDomain<
   #root(name: string | undefined): Root {
     this.#assertActive();
     const existing = this.#roots.get(name);
-    if (existing !== undefined) return existing;
+    if (existing !== undefined) return existing.root;
     const services = new ConfiguredRootServices<Bindings, RendererResult, Boundary, CodecValue>(
       this.#input.engine,
       this.#handleState,
@@ -190,7 +196,7 @@ class ConfiguredHandleDomain<
       if (!finalized || selected !== created || selected.name !== name || typeof selected.dispose !== 'function') {
         throw new TypeError('GlyphConfig.root.create() must return context.create(...)');
       }
-      this.#roots.set(name, selected);
+      this.#roots.set(name, { root: selected, services });
       return selected;
     } catch (error) {
       try {
@@ -216,18 +222,23 @@ class ConfiguredHandleDomain<
       services._preflightLifecycleMutation();
       disposed = true;
       this.#roots.delete(name);
+      let failurePresent = false;
       let failure: unknown;
       try {
         services.dispose();
       } catch (error) {
+        failurePresent = true;
         failure = error;
       }
       try {
         disposeHost?.();
       } catch (error) {
-        failure ??= error;
+        if (!failurePresent) {
+          failurePresent = true;
+          failure = error;
+        }
       }
-      if (failure !== undefined) throw failure;
+      if (failurePresent) throw failure;
     };
     return new Proxy(extension, {
       has: (target, property) =>
@@ -303,29 +314,40 @@ class ConfiguredHandleDomain<
   #dispose(): void {
     if (this.#disposed) return;
     this.#handleState._assertEngineLifecycleMutationAllowed();
+    for (const { services } of this.#roots.values()) services.assertMutationAllowed();
     this.#disposed = true;
+    let failurePresent = false;
     let failure: unknown;
-    for (const root of [...this.#roots.values()]) {
+    for (const { root } of [...this.#roots.values()]) {
       try {
         root.dispose();
       } catch (error) {
-        failure ??= error;
+        if (!failurePresent) {
+          failurePresent = true;
+          failure = error;
+        }
       }
     }
     this.#roots.clear();
     try {
       this.#input.released(this.handle);
     } catch (error) {
-      failure ??= error;
+      if (!failurePresent) {
+        failurePresent = true;
+        failure = error;
+      }
     }
     if (this.#copyLeases === 0) {
       try {
         this.#disposeInfrastructure();
       } catch (error) {
-        failure ??= error;
+        if (!failurePresent) {
+          failurePresent = true;
+          failure = error;
+        }
       }
     }
-    if (failure !== undefined) throw failure;
+    if (failurePresent) throw failure;
   }
 
   #retainCopy(): () => void {
@@ -344,23 +366,31 @@ class ConfiguredHandleDomain<
   #disposeInfrastructure(): void {
     if (this.#infrastructureDisposed) return;
     this.#infrastructureDisposed = true;
+    let failurePresent = false;
     let failure: unknown;
     try {
       this.#codecRegistration.dispose();
     } catch (error) {
+      failurePresent = true;
       failure = error;
     }
     try {
       this.#codec.dispose?.();
     } catch (error) {
-      failure ??= error;
+      if (!failurePresent) {
+        failurePresent = true;
+        failure = error;
+      }
     }
     try {
       this.#handleState.dispose();
     } catch (error) {
-      failure ??= error;
+      if (!failurePresent) {
+        failurePresent = true;
+        failure = error;
+      }
     }
-    if (failure !== undefined) throw failure;
+    if (failurePresent) throw failure;
   }
 
   #assertActive(): void {
@@ -488,11 +518,18 @@ class ConfiguredRootServices<
     state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>,
   ): GlyphTextController<Format, Bindings['materialInput'], Bindings['transformInput']> {
     const planner = this.#requiredPlanner();
+    planner.assertMutationAllowed();
     return new ConfiguredTextController(planner, this, state);
   }
 
-  invalidate(): void {
+  /** @internal */
+  _isShapeQueued(): boolean {
     this.#requiredPlanner();
+    return this.#shapeRegistration!.queued;
+  }
+
+  invalidate(): void {
+    this.assertMutationAllowed();
     this.#handleState._assertEngineMutationAllowed();
     this.#forceShape = true;
     this.#shapeRegistration!.invalidate();
@@ -595,6 +632,7 @@ class ConfiguredRootServices<
   }
 
   bindParagraphOrderScope(scopeObject: object | undefined): number {
+    this.assertMutationAllowed();
     if (scopeObject === undefined) return 0;
     if (typeof scopeObject !== 'object' || scopeObject === null) {
       throw new TypeError('paragraph order scope must be an object');
@@ -615,8 +653,14 @@ class ConfiguredRootServices<
     this.#requiredPlanner();
   }
 
+  assertMutationAllowed(): void {
+    this.#requiredPlanner().assertMutationAllowed();
+  }
+
   _preflightLifecycleMutation(): void {
     this.#handleState._assertEngineLifecycleMutationAllowed();
+    const planner = this.#planner;
+    if (planner !== undefined && !planner.disposed) planner.assertMutationAllowed();
   }
 
   dispose(): void {
@@ -839,7 +883,7 @@ class ConfiguredTextController<
 
   update(state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>): void {
     this.#assertActive();
-    this.#services.assertTextCall();
+    this.#services.assertMutationAllowed();
     const snapshot = withOwnedTextPropertySnapshots(this.#state, this.#acceptedPropertyInputs, state);
     const reusableUpdate = reusablePlainTextUpdate(this.#state, snapshot);
     if (reusableUpdate !== undefined) {
@@ -873,7 +917,7 @@ class ConfiguredTextController<
 
   updateParagraphOrder(order: number, scope: object | undefined, rank: number): void {
     this.#assertActive();
-    this.#services.assertTextCall();
+    this.#services.assertMutationAllowed();
     const orderRank = normalizeParagraphOrderRank(rank);
     this.#text.updateOrder(order, this.#services.bindParagraphOrderScope(scope), orderRank);
   }

@@ -1,15 +1,17 @@
 /* @workflow {
   "name": "benchmark:edit-sized-publication-profile",
   "summary": "Profile one installed-package edit-sized publication lane, optionally with a named shaper Wasm artifact.",
-  "requirements": "One packed @pmndrs/glyph .tgz artifact and the authenticated Labs font fixtures. Accepts --artifact, --output, --case, --boundary, --count, --position, --iterations, --warmups, and optional --wasm. The prepared-read case accepts 100 or 1000 labels and preparation or publication boundaries.",
+  "requirements": "One packed @pmndrs/glyph .tgz artifact and the authenticated Labs font fixtures. Accepts --artifact, --output, --case, --boundary, --count, --position, --iterations, --warmups, and optional --wasm. One-label, prepared-read and bulk-write cases support setter+read preparation or setter+read+publication. Prepared-read accepts 100 or 1000 labels; interleaved-read requires publication.",
   "writes": "A CPU profile, summary, and artifact manifest under --output (default .cache/edit-sized-publication-profile)."
 } */
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { authenticateNamedShaper, sha256 } from '../../packages/glyph/scripts/support/named-shaper.mjs';
 
 import { installedPackageDependencies } from './support/package-labs-dependencies.mts';
 
@@ -37,10 +39,23 @@ try {
   );
   await runPnpm(['install', '--ignore-scripts', '--config.confirmModulesPurge=false'], temporaryRoot);
   const packageRoot = resolve(temporaryRoot, 'node_modules/@pmndrs/glyph');
+  let namedWasm;
   if (options.wasm !== undefined) {
     const wasm = resolve(process.cwd(), options.wasm);
     await requireFile(wasm, '--wasm');
-    await copyFile(wasm, resolve(packageRoot, 'dist/text-shaper.wasm'));
+    const releasePath = resolve(packageRoot, 'dist/text-shaper.wasm');
+    const release = await readFile(releasePath);
+    const override = await readFile(wasm);
+    const proof = authenticateNamedShaper(release, override);
+    namedWasm = {
+      file: wasm,
+      sha256: sha256(override),
+      releaseSha256: sha256(release),
+      executableSha256: proof.executableSha256,
+      functions: proof.functions,
+    };
+    // Write the authenticated bytes, avoiding a second path read after validation.
+    await writeFile(releasePath, override);
   }
   await run(
     process.execPath,
@@ -67,7 +82,7 @@ try {
           sha256: createHash('sha256').update(artifactBytes).digest('hex'),
         },
         generatedAt: new Date().toISOString(),
-        namedWasm: options.wasm,
+        ...(namedWasm === undefined ? {} : { namedWasm }),
         options,
       },
       null,
@@ -86,7 +101,13 @@ interface Options {
   readonly iterations: number;
   readonly output: string;
   readonly position: 'first' | 'last';
-  readonly profileCase: 'same-length' | 'length-changing' | 'color-only' | 'interleaved-read' | 'prepared-read';
+  readonly profileCase:
+    | 'same-length'
+    | 'length-changing'
+    | 'color-only'
+    | 'interleaved-read'
+    | 'prepared-read'
+    | 'bulk-write';
   readonly warmups: number;
   readonly wasm?: string;
 }
@@ -104,15 +125,19 @@ function parseOptions(arguments_: readonly string[]): Options {
   const artifactOption = values.get('artifact');
   if (artifactOption === undefined) throw new Error('--artifact is required');
   const profileCase = values.get('case') ?? 'same-length';
-  if (!['same-length', 'length-changing', 'color-only', 'interleaved-read', 'prepared-read'].includes(profileCase)) {
+  if (
+    !['same-length', 'length-changing', 'color-only', 'interleaved-read', 'prepared-read', 'bulk-write'].includes(
+      profileCase,
+    )
+  ) {
     throw new Error(`Unknown --case: ${profileCase}`);
   }
   const position = values.get('position') ?? 'first';
   if (position !== 'first' && position !== 'last') throw new Error(`Unknown --position: ${position}`);
   const boundary = values.get('boundary') ?? 'publication';
   if (boundary !== 'preparation' && boundary !== 'publication') throw new Error(`Unknown --boundary: ${boundary}`);
-  if (boundary === 'preparation' && profileCase !== 'prepared-read') {
-    throw new Error('--boundary preparation requires --case prepared-read');
+  if (boundary === 'preparation' && profileCase === 'interleaved-read') {
+    throw new Error('--case interleaved-read requires --boundary publication');
   }
   const count = positiveInteger(values.get('count') ?? '1000', 'count');
   if (profileCase === 'prepared-read' && count !== 100 && count !== 1000) {

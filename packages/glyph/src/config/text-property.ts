@@ -1,17 +1,30 @@
-// Three normalizes these records before the configured-controller seam. Marking
-// package-owned snapshots lets that seam retain them without a second deep clone.
-const ownedTextPropertySnapshots = new WeakSet<object>();
+import { assertTextStyle, type TextStyle } from '../text-properties.js';
+
+// Ownership and style authority share one provenance registry. A frozen layout/reactive snapshot has no style proof.
+const ownedTextPropertySnapshots = new WeakMap<object, 'snapshot' | 'validated-style'>();
 
 /** @internal Mark one deeply frozen package-created text-property snapshot for zero-copy adoption. */
 export function ownTextPropertySnapshot<Value extends object>(value: Value): Value {
   deepFreeze(value);
-  ownedTextPropertySnapshots.add(value);
+  if (!ownedTextPropertySnapshots.has(value)) ownedTextPropertySnapshots.set(value, 'snapshot');
   return value;
 }
 
 /** @internal Whether a text-property record is already a deeply frozen package-created snapshot. */
 export function isOwnedTextPropertySnapshot(value: unknown): value is object {
   return typeof value === 'object' && value !== null && ownedTextPropertySnapshots.has(value);
+}
+
+/** @internal Validate caller-authored style once and own its deeply frozen snapshot; scope is validated separately. */
+export function reuseOrCreateTextStyleSnapshot(
+  previous: TextStyle | undefined,
+  value: TextStyle,
+  label: string,
+): TextStyle {
+  if (ownedTextPropertySnapshots.get(value) !== 'validated-style') assertTextStyle(value, label);
+  const snapshot = reuseOrCreateTextPropertySnapshot(previous, value, label);
+  ownedTextPropertySnapshots.set(snapshot, 'validated-style');
+  return snapshot;
 }
 
 /** @internal Snapshot one text-property record or retain an equal owned snapshot. */

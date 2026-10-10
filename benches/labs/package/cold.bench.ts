@@ -10,9 +10,10 @@ group('first-time operations @cold', () => {
   bench('mount and publish a 22k-glyph paragraph @exhaustive', function* () {
     const textCount = yield () => {
       const created = createParagraph(paragraphText);
-      created.textGroup.updateMatrixWorld(true);
+      created.scene.updateMatrixWorld(true);
       if (created.textGroup.error !== undefined) throw created.textGroup.error;
       const result = created.textGroup.textCount;
+      assert.equal(created.paragraph.commitState().status, 'committed');
       disposeParagraph(created);
       return result;
     };
@@ -24,9 +25,10 @@ group('first-time operations @cold', () => {
     const textCount = yield () => {
       const created = createParagraph(`label ${String(iteration)}`);
       created.paragraph.text = `edited ${String(iteration++)}`;
-      created.textGroup.updateMatrixWorld(true);
+      created.scene.updateMatrixWorld(true);
       if (created.textGroup.error !== undefined) throw created.textGroup.error;
       const result = created.textGroup.textCount;
+      assert.equal(created.paragraph.commitState().status, 'committed');
       disposeParagraph(created);
       return result;
     };

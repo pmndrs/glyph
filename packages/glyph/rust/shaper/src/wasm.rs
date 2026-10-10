@@ -1014,7 +1014,10 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_measure_paragraph(
             Err(error) => Err((engine_status(error), error.fault(), 0)),
         };
         match staged {
-            Ok(pointer) => u32::try_from(pointer).unwrap_or(0),
+            Ok(pointer) => match state.engine.commit_measure(measured) {
+                Ok(_) => u32::try_from(pointer).unwrap_or(0),
+                Err(error) => publish_engine_failure(state, root_id, revision, error),
+            },
             Err((status, fault, required_result_capacity)) => {
                 // A query the caller only observes as failed must not leave an
                 // adoptable transaction behind; the reported watermark lets the

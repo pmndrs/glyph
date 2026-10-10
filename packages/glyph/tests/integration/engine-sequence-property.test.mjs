@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { loadFont } from '../../dist/loader.js';
-import { bitmap } from '@pmndrs/glyph';
+import { bitmap, createFontStack } from '@pmndrs/glyph';
 import * as THREE from 'three/webgpu';
 
 import { createThreeTestHandle } from '../support/three-handle.mjs';
@@ -302,8 +302,8 @@ async function runSequence({ seed, steps, paragraphs, fonts, root }) {
         subject.apply();
       }
 
-      // Layout queries between mutations open speculative transactions that the next
-      // publish either adopts or drops; interleaving them is the point of the harness.
+      // Layout queries between mutations must consume the setter-owned preparation without
+      // opening another semantic transaction; interleaving them remains the point of the harness.
       if (random() < 0.5) {
         for (const [candidateIndex, candidate] of subjects.entries()) {
           if (!candidate.attached || candidate.node === undefined) continue;
@@ -345,6 +345,63 @@ test('randomized interactive sequences never fail to publish valid input', async
     loaded.dispose();
   }
 });
+
+test(
+  'setter preparation and reads interleave across 10, 100, and 1000 labels',
+  { timeout: 5 * 60 * 1_000 },
+  async (t) => {
+    const three = await createThreeTestHandle(t);
+    const loaded = await loadFonts();
+    const fallback = createFontStack(loaded.fonts.inter, loaded.fonts.amiri);
+    try {
+      for (const count of [10, 100, 1000]) {
+        const root = three(`retained-preparation:${String(count)}`);
+        const scene = new THREE.Scene();
+        const group = root.createTextGroup();
+        scene.add(group);
+        const nodes = Array.from({ length: count }, (_, index) => {
+          const node = root.createText({
+            font: fallback,
+            text: `label ${String(index)} office`,
+            style: { fontSize: 12, lineHeight: 1.2, features: [{ tag: 'liga', value: 1 }] },
+            constraints: { width: { mode: 'exact', size: 180 } },
+            layout: { wrap: 'word' },
+          });
+          group.add(node);
+          return node;
+        });
+        scene.updateMatrixWorld(true);
+        try {
+          const selected = [...new Set([0, Math.floor(count / 2), count - 1])];
+          const replacements = ['e\u0301 ffi 👩🏽‍💻', 'سلام PMNDRS 2026', 'office'];
+          for (const [edit, index] of selected.entries()) {
+            const node = nodes[index];
+            node.set({
+              text: replacements[edit],
+              constraints: { width: { mode: 'exact', size: 72 + edit * 31 } },
+            });
+            const immediate = node.measure();
+            const glyphs = node.glyphs();
+            assert.equal(glyphs.glyphCount, immediate.glyphCount, `scale ${count} label ${index} immediate glyphs`);
+            assert.equal(node.measure(), immediate, `scale ${count} label ${index} unchanged measure identity`);
+          }
+          const unchanged = nodes[Math.min(count - 1, 1)];
+          const before = unchanged.measure();
+          assert.equal(unchanged.measure(), before, `scale ${count} unchanged label reuses its preparation`);
+          scene.updateMatrixWorld(true);
+          for (const index of selected) {
+            assert.equal(nodes[index].commitState().status, 'committed', `scale ${count} label ${index} publishes`);
+          }
+        } finally {
+          for (const node of nodes) node.dispose();
+          group.dispose();
+        }
+      }
+    } finally {
+      loaded.dispose();
+    }
+  },
+);
 
 test('the authored shaping timeline types, wraps, and restyles without desynchronizing', async (t) => {
   const three = await createThreeTestHandle(t);

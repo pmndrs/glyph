@@ -305,6 +305,91 @@ test('a structural GlyphConfig honors spread overrides and releases a handle cre
   reused.dispose();
 });
 
+test('configured renderer disposal preserves a first thrown undefined while completing later cleanup', async () => {
+  const face = glyph.fontFace(new Blob([bytes], { type: 'model/gltf-binary' }), {
+    family: 'ConfiguredRendererRawDisposal',
+    format: portableBitmap({ strikes: [16] }),
+  });
+  await face.load();
+
+  try {
+    for (const [index, laterFailure] of [undefined, false].entries()) {
+      const base = defineFontAwareConfig();
+      const rootName = `raw-disposal-${String(index)}`;
+      let configuredDisposals = 0;
+      let defaultDisposals = 0;
+      let projectorReleases = 0;
+      const defaultRenderer = {
+        decode: () => ({ result: undefined, commit: () => undefined, discard: () => undefined }),
+        syncTransforms: () => undefined,
+        dispose: () => {
+          defaultDisposals += 1;
+          if (laterFailure !== undefined) throw laterFailure;
+        },
+      };
+      const config = {
+        ...base,
+        resolve: ({ payload }) => resourceLease({ payload }, () => (projectorReleases += 1)),
+        renderer: ({ boundary }) => ({
+          decode: () => ({ result: undefined, commit: () => undefined, discard: () => undefined }),
+          syncTransforms: () => undefined,
+          dispose: () => {
+            if (boundary !== rootName) return;
+            configuredDisposals += 1;
+            throw undefined;
+          },
+        }),
+        root: {
+          create(context) {
+            return base.root.create({
+              ...context,
+              create(extension, options) {
+                return context.create(extension, {
+                  ...options,
+                  boundary: context.name,
+                  ...(context.name === rootName ? { defaultRenderer } : {}),
+                });
+              },
+            });
+          },
+        },
+      };
+      const handle = glyph.handle(`font-face:raw-disposal:${String(index)}`, config);
+      const root = handle(rootName);
+      const text = root.createText(face, { text: `raw disposal ${String(index)}` });
+      try {
+        glyph.shape();
+        assert.ok(projectorReleases === 0, 'the accepted projector retains its resource before root disposal');
+        let caught = false;
+        let caughtValue;
+        try {
+          root.dispose();
+        } catch (error) {
+          caught = true;
+          caughtValue = error;
+        }
+        assert.equal(caught, true, `case ${String(index)} rethrows the configured renderer failure`);
+        assert.equal(Object.is(caughtValue, undefined), true, `case ${String(index)} preserves first raw identity`);
+        assert.equal(configuredDisposals, 1, `case ${String(index)} disposes the configured renderer once`);
+        assert.equal(defaultDisposals, 1, `case ${String(index)} continues through default-renderer cleanup`);
+        assert.ok(projectorReleases > 0, `case ${String(index)} continues through projector resource cleanup`);
+        const releases = projectorReleases;
+        root.dispose();
+        assert.deepEqual(
+          [configuredDisposals, defaultDisposals, projectorReleases],
+          [1, 1, releases],
+          `case ${String(index)} repeated public disposal is terminal and idempotent`,
+        );
+      } finally {
+        text.dispose();
+        handle.dispose();
+      }
+    }
+  } finally {
+    face.dispose();
+  }
+});
+
 test('a loaded FontFace constructs an imperative Three Text and owns its hidden Font lease', async () => {
   const handle = glyph.handle('three:font-face-imperative', ThreeConfig);
   const face = glyph.fontFace(new Blob([bytes], { type: 'model/gltf-binary' }), {
