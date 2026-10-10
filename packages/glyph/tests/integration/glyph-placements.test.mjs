@@ -715,8 +715,9 @@ test('queries carry pending sibling lifecycle after renderer rejection without p
         group.material = undefined;
         extra = three.createText({ font, text: 'more' });
         group.add(extra);
-        assert.equal(node.measure().glyphCount, 5);
+        node.constraints = { width: { mode: 'exact', size: 100 } };
         node.computeBoundingBox();
+        assert.equal(node.measure().width, 100);
         assert.equal(node.measureGlyphs()?.length, 5);
         pending = node.split();
         assert.equal(pending[0].count, 5);
@@ -735,5 +736,72 @@ test('queries carry pending sibling lifecycle after renderer rejection without p
         group.dispose();
       }
     });
+  }
+});
+
+test('sibling preparation refreshes split identities before and after publication', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont();
+  for (const priorPublication of [false, true]) {
+    for (const publishBeforeSplit of [false, true]) {
+      const scene = new THREE.Scene();
+      const a = three.createText({ font, style: { fontSize: 16 }, text: 'A' });
+      const b = three.createText({ font, style: { fontSize: 16 }, text: 'B' });
+      const copies = [];
+      try {
+        scene.add(a);
+        if (priorPublication) {
+          scene.updateMatrixWorld(true);
+          a.text = 'AA';
+        }
+        assert.equal(a.measureGlyphs().length, a.text.length);
+        scene.add(b);
+        assert.equal(b.measureGlyphs().length, 1);
+        if (publishBeforeSplit) scene.updateMatrixWorld(true);
+        const [pending] = a.split();
+        copies.push(pending);
+        assert.equal(pending.glyphAt(0).glyphId, a.glyphs().glyphIds[0]);
+        const expected = copySnapshot(pending);
+        scene.updateMatrixWorld(true);
+        const [published] = a.split();
+        copies.push(published);
+        assert.deepEqual(copySnapshot(published), expected);
+      } finally {
+        for (const copy of copies) copy.dispose();
+        a.dispose();
+        b.dispose();
+      }
+    }
+  }
+});
+
+test('pending split uses desired render order before source publication', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont();
+  const scene = new THREE.Scene();
+  const node = three.createText({ font, style: { fontSize: 16 }, text: 'order' });
+  const copies = [];
+  const orders = (copy) => {
+    const result = [];
+    copy.traverse((object) => {
+      if (object.isMesh) result.push(object.renderOrder);
+    });
+    return result;
+  };
+  try {
+    scene.add(node);
+    scene.updateMatrixWorld(true);
+    node.style = { fontSize: 24 };
+    node.renderOrder = 10;
+    const [pending] = node.split();
+    copies.push(pending);
+    assert.deepEqual(orders(pending), [10]);
+    scene.updateMatrixWorld(true);
+    const [published] = node.split();
+    copies.push(published);
+    assert.deepEqual(orders(pending), orders(published));
+  } finally {
+    for (const copy of copies) copy.dispose();
+    node.dispose();
   }
 });

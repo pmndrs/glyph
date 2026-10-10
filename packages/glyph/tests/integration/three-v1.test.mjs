@@ -2595,6 +2595,30 @@ test('Text.split preserves TextGroup paint order across detached roots', async (
       Math.max(...glyphDraws.map((draw) => draw.renderOrder)) < Math.min(...over.map((draw) => draw.renderOrder)),
       'line-through draws must remain above copied glyph draws',
     );
+    const acceptedOrder = Math.min(...glyphDraws.map((draw) => draw.renderOrder));
+    label.style = { ...label.style, fontSize: 24 };
+    group.renderOrder = 30;
+    const [pendingGlyphs, pendingDecorations] = label.split();
+    try {
+      const pendingOrder = Math.min(
+        ...pendingGlyphs.children.filter((child) => child.isMesh).map((draw) => draw.renderOrder),
+      );
+      assert.equal(pendingOrder, acceptedOrder + 10, 'pending copies preserve shared draw offsets at the desired base');
+      scene.updateMatrixWorld(true);
+      const [publishedGlyphs, publishedDecorations] = label.split();
+      try {
+        assert.equal(
+          Math.min(...publishedGlyphs.children.filter((child) => child.isMesh).map((draw) => draw.renderOrder)),
+          pendingOrder,
+        );
+      } finally {
+        publishedGlyphs.dispose();
+        publishedDecorations?.dispose();
+      }
+    } finally {
+      pendingGlyphs.dispose();
+      pendingDecorations?.dispose();
+    }
   } finally {
     decorations?.dispose();
     glyphs?.dispose();

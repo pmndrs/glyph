@@ -1076,7 +1076,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     const glyphs = createGlyphs({
       text: this.text,
       source,
-      placements,
+      placements: () => binding.glyphPlacements(source, true)!,
       resources: this.#root.rendererResources,
       renderOrderBase: glyphRenderOrderBase,
       copy: (renderer, boundary) => binding.copyGlyphs(source, stableIds, renderer, boundary),
@@ -1383,6 +1383,7 @@ interface BoundTextEntry {
   stagedOrderRank: number;
   stagedPresentation: TextPresentation;
   committedRevision: number;
+  committedRenderOrder: number | undefined;
 }
 
 interface DetachedQueryEntry {
@@ -1569,7 +1570,7 @@ class ThreeRootPublication {
 
   #measureText(text: Text<RasterFormatMetadata>, positionGlyphs: boolean): ParagraphLayoutSummary {
     this.#assertActive();
-    const entry = this.#queryEntry(text);
+    const entry = this.#queryEntry(text, false);
     const measurement = positionGlyphs ? entry.handle.measureInk() : entry.handle.measure();
     this.#detachedQuery = nearestScene(text) === undefined ? text : undefined;
     reconciler.publishMeasurement(text, measurement);
@@ -1578,7 +1579,7 @@ class ThreeRootPublication {
 
   inspection(text: Text<RasterFormatMetadata>): GlyphLayoutInspection {
     this.#assertActive();
-    const entry = this.#queryEntry(text);
+    const entry = this.#queryEntry(text, false);
     const inspection = entry.handle.inspect();
     this.#detachedQuery = nearestScene(text) === undefined ? text : undefined;
     reconciler.publishMeasurement(text, inspection);
@@ -1587,25 +1588,29 @@ class ThreeRootPublication {
 
   readGlyphs<Result>(text: Text<RasterFormatMetadata>, read: (glyphs: BorrowedGlyphLayout) => Result): Result {
     this.#assertActive();
-    const entry = this.#queryEntry(text);
+    const entry = this.#queryEntry(text, false);
     const result = entry.handle.readGlyphs(read);
     this.#detachedQuery = nearestScene(text) === undefined ? text : undefined;
     return result;
   }
 
-  #queryEntry(text: Text<RasterFormatMetadata>): BoundTextEntry {
+  #queryEntry(text: Text<RasterFormatMetadata>, presentationRequired = true): BoundTextEntry {
     const current = this.#entries.get(text);
-    const presentation = resolveTextPresentation(text);
     if (
       current !== undefined &&
       current.committedRevision >= 0 &&
-      !this.#materialInvalidated &&
-      sameTextPresentation(current.stagedPresentation, presentation) &&
-      Object.is(current.stagedOrderRank, presentation.group === undefined ? 0 : paragraphOrderRank(text)) &&
       current.stagedRevision === reconciler.desiredRevision(text) &&
       nearestScene(text) !== undefined
     ) {
-      return current;
+      // Semantic columns do not depend on renderer material or batching presentation.
+      if (!presentationRequired) return current;
+      const presentation = resolveTextPresentation(text);
+      if (
+        !this.#materialInvalidated &&
+        sameTextPresentation(current.stagedPresentation, presentation) &&
+        Object.is(current.stagedOrderRank, presentation.group === undefined ? 0 : paragraphOrderRank(text))
+      )
+        return current;
     }
     const texts = this.#root.queryMembers(text);
     if (this.#needsActiveReconcile(texts)) this.#reconcileQuery(texts, text);
@@ -1659,8 +1664,8 @@ class ThreeRootPublication {
     this.#pendingMeasurements.delete(cached.text);
   }
 
-  glyphPlacements(text: Text<RasterFormatMetadata>): GlyphPlacements | undefined {
-    const layout = this.#canonicalInspection(text);
+  glyphPlacements(text: Text<RasterFormatMetadata>, refresh = false): GlyphPlacements | undefined {
+    const layout = this.#canonicalInspection(text, refresh);
     if (layout === undefined) return undefined;
     const committed =
       !this.#rendererUpdateRejected && this.#entries.get(text)?.committedRevision === reconciler.desiredRevision(text);
@@ -1679,7 +1684,12 @@ class ThreeRootPublication {
     this.#assertActive();
     const entry = this.#entries.get(text);
     if (entry === undefined) throw new Error('cannot inspect draw order for an unbound text paragraph');
-    return this.#target.renderOrderBaseForGlyphs(stableIds) ?? entry.stagedPresentation.renderOrder;
+    const acceptedOrder = this.#target.renderOrderBaseForGlyphs(stableIds);
+    const offset =
+      acceptedOrder === undefined || entry.committedRenderOrder === undefined
+        ? 0
+        : acceptedOrder - entry.committedRenderOrder;
+    return entry.stagedPresentation.renderOrder + offset;
   }
 
   copyGlyphs(
@@ -1728,6 +1738,7 @@ class ThreeRootPublication {
       entry.preparedRevision = undefined;
       if (acceptedRevision === undefined) continue;
       entry.committedRevision = acceptedRevision;
+      entry.committedRenderOrder = entry.stagedPresentation.renderOrder;
       reconciler.markCommitted(text, acceptedRevision);
       if (entry.stagedRevision === acceptedRevision && this.#pendingMeasurements.delete(text)) {
         reconciler.publishMeasurement(text, entry.handle.measure());
@@ -1803,6 +1814,7 @@ class ThreeRootPublication {
         stagedOrderRank: orderRank,
         stagedPresentation: presentation,
         committedRevision: -1,
+        committedRenderOrder: undefined,
       });
     } else {
       const scopedOrderChanged =
@@ -1819,11 +1831,11 @@ class ThreeRootPublication {
     this.#inspections.delete(text);
   }
 
-  #canonicalInspection(text: Text<RasterFormatMetadata>): GlyphLayoutInspection {
+  #canonicalInspection(text: Text<RasterFormatMetadata>, refresh = false): GlyphLayoutInspection {
     const entry = this.#queryEntry(text);
     const revision = reconciler.desiredRevision(text);
     const cached = this.#inspections.get(text);
-    if (cached?.revision === revision) return cached.value;
+    if (!refresh && entry.committedRevision === revision && cached?.revision === revision) return cached.value;
     const inspection = entry.handle.inspect();
     this.#inspections.set(text, { revision, value: inspection });
     return inspection;

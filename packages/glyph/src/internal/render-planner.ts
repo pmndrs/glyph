@@ -788,7 +788,17 @@ class RenderPlannerImpl {
 
   /** @internal */
   _copyGlyphs(state: RetainedTextState, stableIds: ArrayLike<number>, target: PlanTarget): PlanAcceptance {
+    const previous = state.inspection;
     this.#assertCopyable(state, target);
+    const current = state.inspection!;
+    // A sibling query can restart speculative identity allocation without changing this text.
+    // Resolve a selection from its owned inspection into the preparation being copied.
+    if (previous !== undefined && previous.glyphStableIds.some((id, index) => id !== current.glyphStableIds[index])) {
+      const identities = new Map<number, number>();
+      for (let index = 0; index < previous.glyphStableIds.length; index += 1)
+        identities.set(previous.glyphStableIds[index]!, current.glyphStableIds[index]!);
+      stableIds = Uint32Array.from(stableIds, (id) => identities.get(id) ?? 0);
+    }
     const publication = this.#transport.copyGlyphs(
       state.paragraphId,
       stableIds,
@@ -822,6 +832,7 @@ class RenderPlannerImpl {
     this.#structureRevision = checkedNextStructureRevision(this.#structureRevision);
     if (state.committed === undefined && !this.#measured.has(state)) {
       this.#texts.delete(state);
+      if (this.#pendingParagraphCount === 0 && this.#removed.size === 0) this.#baseOrderValidationPending = false;
       return;
     }
     state.removed = true;

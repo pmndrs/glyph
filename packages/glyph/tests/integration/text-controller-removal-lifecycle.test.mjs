@@ -14,6 +14,8 @@ import {
   msdfCodec,
 } from '@pmndrs/glyph/core';
 
+import { PlanTransport } from '../../dist/internal/handle-state.js';
+
 const fontUrl = new URL('../../../../benches/fixtures/rendering/inter-mtsdf.font.glb.gz', import.meta.url);
 const capabilitySet = Object.freeze({
   capabilities: Object.freeze(['alias-vec2', 'alias-vec4', 'ordered-direct']),
@@ -40,7 +42,7 @@ function defineHeadlessConfig() {
     material: () => ({}),
     transform: () => ({}),
     batch: () => ({}),
-    instance: () => ({}),
+    instance: (_boundary, input) => ({ recordCount: input.instance.recordCount }),
     instanceSpan: () => ({}),
   });
   return defineGlyphConfig({
@@ -61,11 +63,12 @@ function defineHeadlessConfig() {
       },
     }),
     resolve: ({ payload }) => resourceLease({ payload }, () => undefined),
-    renderer: () => ({
-      decode: () => ({ result: undefined, commit: () => undefined, discard: () => undefined }),
-      syncTransforms: () => undefined,
-      dispose: () => undefined,
-    }),
+    renderer: ({ defaultRenderer }) =>
+      defaultRenderer ?? {
+        decode: () => ({ result: undefined, commit: () => undefined, discard: () => undefined }),
+        syncTransforms: () => undefined,
+        dispose: () => undefined,
+      },
     root: {
       create: (context) => context.create({ fonts: context.fonts, services: context.services }, { boundary: {} }),
     },
@@ -149,4 +152,96 @@ test('a published text re-measures while a sibling removal waits for the next pu
   a.dispose();
   assert.doesNotThrow(() => glyph.shape());
   root.dispose();
+});
+
+test('canceling an unqueried creation leaves later copy queries free of lifecycle rows', (t) => {
+  const root = handle('removal-lifecycle:canceled-creation');
+  const source = root.services.createText(textState(font, 'retained', unconstrained));
+  const destination = () => ({
+    boundary: {},
+    renderer: {
+      decode: () => ({ result: undefined, commit: () => undefined, discard: () => undefined }),
+      syncTransforms: () => undefined,
+      dispose: () => undefined,
+    },
+  });
+  let copy;
+  try {
+    glyph.shape();
+    const inspection = source.inspect();
+    const canceled = root.services.createText(textState(font, 'canceled', unconstrained));
+    canceled.dispose();
+    const lifecycleCounts = [];
+    let publications = 0;
+    const measureParagraph = PlanTransport.prototype.measureParagraph;
+    const stageUpdate = PlanTransport.prototype.stageUpdate;
+    PlanTransport.prototype.measureParagraph = function (request, ...rest) {
+      lifecycleCounts.push(request.paragraphMutations.length);
+      return measureParagraph.call(this, request, ...rest);
+    };
+    PlanTransport.prototype.stageUpdate = function (...arguments_) {
+      publications += 1;
+      return stageUpdate.apply(this, arguments_);
+    };
+    t.after(() => {
+      PlanTransport.prototype.measureParagraph = measureParagraph;
+      PlanTransport.prototype.stageUpdate = stageUpdate;
+    });
+    copy = root.services.copy(source, { kind: 'glyphs', stableIds: inspection.glyphStableIds }, destination());
+    assert.deepEqual(lifecycleCounts, [0], 'the shared copy query must not resend unchanged paragraph rows');
+    assert.equal(publications, 0, 'copying cannot publish the source');
+    assert.deepEqual(source.inspect().glyphStableIds, inspection.glyphStableIds);
+    copy.dispose();
+    const retained = root.services.createText(textState(font, 'retained sibling', unconstrained));
+    const anotherCanceled = root.services.createText(textState(font, 'another canceled sibling', unconstrained));
+    anotherCanceled.dispose();
+    try {
+      copy = root.services.copy(source, { kind: 'glyphs', stableIds: inspection.glyphStableIds }, destination());
+      assert.deepEqual(lifecycleCounts, [0, 2], 'a remaining creation must keep its lifecycle row');
+      assert.equal(publications, 0);
+    } finally {
+      retained.dispose();
+    }
+  } finally {
+    copy?.dispose();
+    source.dispose();
+    root.dispose();
+  }
+});
+
+test('copy resolves a cached glyph subset after a sibling restarts speculative identities', () => {
+  const root = handle('removal-lifecycle:copy-selection');
+  const source = root.services.createText(textState(font, 'ABC', unconstrained));
+  let sibling;
+  let copy;
+  try {
+    const original = source.inspect();
+    sibling = root.services.createText(textState(font, 'sibling', unconstrained));
+    sibling.inspect();
+    copy = root.services.copy(
+      source,
+      { kind: 'glyphs', stableIds: [original.glyphStableIds[1]] },
+      {
+        boundary: {},
+        renderer: {
+          decode: (view) => ({
+            result: [...view.displayList.value.children].reduce((sum, child) => sum + child.value.recordCount, 0),
+            commit: () => undefined,
+            discard: () => undefined,
+          }),
+          syncTransforms: () => undefined,
+          dispose: () => undefined,
+        },
+      },
+    );
+    assert.equal(copy.result, 1, 'only the selected glyph must be realized');
+    assert.deepEqual(source.inspect().glyphIds, original.glyphIds);
+    glyph.shape();
+    assert.deepEqual(source.inspect().glyphIds, original.glyphIds);
+  } finally {
+    copy?.dispose();
+    sibling?.dispose();
+    source.dispose();
+    root.dispose();
+  }
 });

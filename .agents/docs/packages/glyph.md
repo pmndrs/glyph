@@ -1028,10 +1028,19 @@ placement, caret, and selection methods answer from current desired layout throu
 `split()` copies that desired layout into independently owned renderer objects. These calls leave source publication
 pending, preserve public signatures and ABI, and do not publish unrelated labels. Matching prepared results are reused
 by the next ordinary publication; this change does not resolve the remaining whole-root publication work in #247.
+Unchanged semantic reads reuse their bound controller without resolving renderer presentation. Placement and copy reads
+resolve desired presentation before using renderer geometry. Pending copies apply desired draw order while retaining
+the accepted draw offset within a shared batch.
+A sibling query may restart speculative glyph identities without changing an owned semantic inspection. Independent
+copies resolve selections from that inspection into the freshly prepared identities, and detached renderer metadata
+is captured after the copy from the same preparation. Pending placement reads consult the shared inspection cache;
+committed placement reads retain their Three cache.
 
 Queries carry pending paragraph creations and ordering changes even when the queried paragraph is already committed
 in Rust. A rejected first renderer publication followed by an over-budget sibling therefore remains queryable: reads
-and independent copies do not acknowledge the rejected source or publish the sibling.
+and independent copies do not acknowledge the rejected source or publish the sibling. Canceling an unqueried creation
+clears the structural flag when the existing pending-paragraph/removal counters prove the root is clean, so later
+copy queries do not resend neutral lifecycle rows.
 
 An explicit query before first render carries the complete desired paragraph lifecycle and applies text, style, and
 geometry mutations only for the queried paragraph. It serializes paragraph-order rows only for nonremoved paragraphs

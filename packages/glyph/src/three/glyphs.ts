@@ -40,7 +40,7 @@ export function localToWorldMatrix(
 interface GlyphsOptions {
   readonly text: string;
   readonly source: DetachedTextSource;
-  readonly placements: GlyphPlacements;
+  readonly placements: () => GlyphPlacements;
   readonly copy: (renderer: ThreeCommandBufferRenderer, boundary: ThreePublicationBoundary) => GlyphCopy<void>;
   readonly resources: ThreeRendererResources;
   readonly renderOrderBase: number;
@@ -127,8 +127,6 @@ export class Glyphs extends THREE.Object3D {
     let target: ThreeCommandBufferRenderer | undefined;
     let copy: GlyphCopy<void> | undefined;
     try {
-      const layout = options.placements.layout;
-      this.#layout = layout;
       copyCurrentLocalTransform(options.source, this);
       // A Glyphs object may receive world-space instance writes in the first useFrame after it is
       // attached, before the renderer has traversed the scene once.
@@ -168,6 +166,8 @@ export class Glyphs extends THREE.Object3D {
         objectForTransform: (_recordIndex, _source) => this,
       });
       this.#copy = copy;
+      const layout = options.placements().layout;
+      this.#layout = layout;
       if (this.#storages.size === 0) {
         throw new Error('detached glyph copy produced no drawable record storage');
       }
