@@ -485,18 +485,16 @@ function writeTextMutations(
     view.setUint32(offset + layout.deleteCount, u32(mutation.deleteCount, 'text mutation delete count'), true);
     view.setUint32(offset + layout.insertOffset, payloadOffset, true);
     view.setUint32(offset + layout.insertCount, u32(mutation.insert.length, 'text mutation insert count'), true);
-    let unit = 0;
-    for (; unit + 1 < mutation.insert.length; unit += 2) {
-      view.setUint32(
-        payloadOffset + unit * 2,
-        mutation.insert.charCodeAt(unit) | (mutation.insert.charCodeAt(unit + 1) << 16),
-        true,
-      );
-    }
-    if (unit < mutation.insert.length) {
-      view.setUint16(payloadOffset + unit * 2, mutation.insert.charCodeAt(unit), true);
-    }
+    writeUtf16Payload(view, payloadOffset, mutation.insert);
   }
+}
+
+function writeUtf16Payload(view: DataView, offset: number, text: string): void {
+  let unit = 0;
+  for (; unit + 1 < text.length; unit += 2) {
+    view.setUint32(offset + unit * 2, text.charCodeAt(unit) | (text.charCodeAt(unit + 1) << 16), true);
+  }
+  if (unit < text.length) view.setUint16(offset + unit * 2, text.charCodeAt(unit), true);
 }
 
 function writeStyleMutations(

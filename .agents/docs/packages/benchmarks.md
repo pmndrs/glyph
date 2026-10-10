@@ -252,7 +252,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-10T18:24:40.443Z'
+  at: '2026-10-10T19:21:50.744Z'
 ---
 
 # Package reference: `@pmndrs/glyph-benchmarks`
@@ -342,6 +342,9 @@ draw topology, and the selected red or blue Bitmap paint lane. `benchmark:public
 artifact workload with separate set/stage and commit timings plus V8 CPU and sampled-heap profiles.
 The `layout` suite also compares single-paragraph, 1,000-paragraph and order-only request-arena encoding from installed
 artifacts, with full encoded-byte equality checked after timing; it measures wire preparation, not engine layout.
+Two `reflow` controls encode the same 22,000 UTF-16-unit payload into Wasm and ordinary-array destinations. The
+shared request writer and an independent Node UTF-16LE payload oracle distinguish destination costs from layout work;
+setup and full-byte assertions remain outside timing. Older packages allocate and copy through their existing writer.
 
 Each suite holds workloads that time alike. Labs decides per run whether to batch iterations or time single calls from
 the cost of the first calls, so a workload whose first call is first-time work can be timed differently on each side
