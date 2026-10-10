@@ -1064,12 +1064,18 @@ The semantic values preserve information useful to callers:
 
 `Text.split()` replaces `Text.breakApart()` without a deprecated alias. Existing callers can use the
 [archived migration](../../skills/codemod/codemods/2026-09-24-text-split/instructions.md).
-The rename preserves the tuple result, committed-state requirement, source independence, and disposal ownership.
+The rename preserves the tuple result, source independence, and disposal ownership.
 
-Public `Text.split()` requests committed glyph and decoration subsets through its owning root. Rust compacts the
+Public `Text.split()` queries the desired paragraph synchronously and requests independent glyph and decoration subsets
+through its owning root, including before the first renderer publication. Rust compacts the
 selected paragraph records through the installed Codec into complete checkpoints; it does not expose buffer offsets or
 private planning objects for each renderer to reconstruct. Root services synchronously decode each detached copy into its
-destination renderer. The query does not advance the source root's revision or publication generation.
+destination renderer. The query does not advance the source root's revision or publication generation or publish unrelated Texts.
+The copy compiler reads the existing prepared positioning stage, uses paragraph-local placement segments for its own
+compact slots, and retains the queried Codec identity until ordinary publication adopts the matching preparation.
+Placement/caret/selection reads use this same desired inspection cache, retaining it through matching publication;
+accepted renderer origins and supplied geometry are used when available. A split derives drawable membership and
+geometry from its independently realized target, so spaces remain excluded before source publication too.
 
 Three's `Text.split()` uses both planner requests and returns the frozen tuple
 `[Glyphs, Decorations | undefined]`. It preserves the source transform, Codec-defined batching, fallback raster formats,

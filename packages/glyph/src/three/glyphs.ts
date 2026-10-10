@@ -3,7 +3,7 @@ import * as THREE from 'three/webgpu';
 import type { GlyphCopy } from '../config/glyph.js';
 import type { GlyphOutlineContour } from '../glyph-outline.js';
 import type { GlyphLayoutInspection } from '../layout.js';
-import type { GlyphPlacement, GlyphPlacements } from '../glyph-placement.js';
+import { createGlyphPlacements, type GlyphPlacement, type GlyphPlacements } from '../glyph-placement.js';
 import { ThreeCommandBufferRenderer, type ThreeRendererHost } from './command-buffer-renderer.js';
 import type { ThreeGlyphGeometrySource, ThreeGlyphMeasurement } from './glyph-measurement.js';
 import { measureGlyphPlacements } from './glyph-measurement.js';
@@ -13,6 +13,7 @@ import type { ThreeRendererResources } from './internal/renderer-resources.js';
 import { copyCurrentLocalTransform } from './detached-object.js';
 
 interface DetachedTextSource extends THREE.Object3D {
+  readonly text: string;
   readonly pixelSnapping: boolean;
 }
 
@@ -40,7 +41,6 @@ export function localToWorldMatrix(
 interface GlyphsOptions {
   readonly source: DetachedTextSource;
   readonly placements: GlyphPlacements;
-  readonly geometry?: ReadonlyMap<number, ThreeGlyphGeometrySource>;
   readonly copy: (renderer: ThreeCommandBufferRenderer, boundary: ThreePublicationBoundary) => GlyphCopy<void>;
   readonly resources: ThreeRendererResources;
   readonly renderOrderBase: number;
@@ -129,32 +129,6 @@ export class Glyphs extends THREE.Object3D {
     try {
       const layout = options.placements.layout;
       this.#layout = layout;
-      const incomplete = new Set(options.placements.incomplete);
-      const placements = options.placements.glyphs.filter((placement) => !incomplete.has(placement.index));
-      this.#sourceIndices = Uint32Array.from(placements, (placement) => placement.index);
-      this.#glyphs = Object.freeze(
-        placements.map((placement, index) =>
-          Object.freeze({
-            index,
-            fontHandle: layout.fontHandles[layout.glyphFontSlots[placement.index]!]!,
-            glyphId: layout.glyphIds[placement.index]!,
-            key: placement.key,
-            cluster: placement.cluster,
-            line: placement.line,
-            word: placement.word,
-            fontSize: placement.fontSize,
-            advance: placement.advance,
-          }),
-        ),
-      );
-      const measurements = measureGlyphPlacements(options.placements, options.geometry);
-      this.#measurements = Object.freeze(
-        placements.map((placement, index) => Object.freeze({ ...measurements[placement.index]!, index })),
-      );
-      this.#matrices = new Float32Array(placements.length * 16);
-      this.#pivots = new Float32Array(placements.length * 2);
-      this.#records = new Int32Array(placements.length).fill(-1);
-      this.#recordStorages = new Array<DetachedGlyphStorage | undefined>(placements.length).fill(undefined);
       copyCurrentLocalTransform(options.source, this);
       // A Glyphs object may receive world-space instance writes in the first useFrame after it is
       // attached, before the renderer has traversed the scene once.
@@ -197,6 +171,46 @@ export class Glyphs extends THREE.Object3D {
       if (this.#storages.size === 0) {
         throw new Error('detached glyph copy produced no drawable record storage');
       }
+      const drawn = this.#target.snapshotGlyphOrigins(layout.glyphStableIds, layout.x, layout.y);
+      const copiedPlacements = createGlyphPlacements(
+        layout,
+        options.source.text,
+        drawn.drawnX,
+        drawn.drawnY,
+        drawn.incomplete,
+      );
+      const incomplete = new Set(copiedPlacements.incomplete);
+      const placements = copiedPlacements.glyphs.filter((placement) => !incomplete.has(placement.index));
+      this.#sourceIndices = Uint32Array.from(placements, (placement) => placement.index);
+      this.#glyphs = Object.freeze(
+        placements.map((placement, index) =>
+          Object.freeze({
+            index,
+            fontHandle: layout.fontHandles[layout.glyphFontSlots[placement.index]!]!,
+            glyphId: layout.glyphIds[placement.index]!,
+            key: placement.key,
+            cluster: placement.cluster,
+            line: placement.line,
+            word: placement.word,
+            fontSize: placement.fontSize,
+            advance: placement.advance,
+          }),
+        ),
+      );
+      const geometryByStableId = this.#target.glyphGeometry(layout.glyphStableIds);
+      const geometryByIndex = new Map<number, ThreeGlyphGeometrySource>();
+      for (const placement of placements) {
+        const geometry = geometryByStableId.get(layout.glyphStableIds[placement.index]!);
+        if (geometry !== undefined) geometryByIndex.set(placement.index, geometry);
+      }
+      const measurements = measureGlyphPlacements(copiedPlacements, geometryByIndex);
+      this.#measurements = Object.freeze(
+        placements.map((placement, index) => Object.freeze({ ...measurements[placement.index]!, index })),
+      );
+      this.#matrices = new Float32Array(placements.length * 16);
+      this.#pivots = new Float32Array(placements.length * 2);
+      this.#records = new Int32Array(placements.length).fill(-1);
+      this.#recordStorages = new Array<DetachedGlyphStorage | undefined>(placements.length).fill(undefined);
       for (const [index, placement] of placements.entries()) {
         const stableId = layout.glyphStableIds[placement.index];
         if (stableId === undefined) throw new Error(`detached glyph ${placement.index} has no stable id`);

@@ -1,7 +1,7 @@
 ---
 type: Planning Concept
 title: Planner-assisted detached glyph slices
-description: Defines the synchronous copy contract that turns committed paragraph records into independently owned renderer objects without retaining publication memory or reconstructing child text.
+description: Defines the synchronous copy contract that turns desired paragraph records into independently owned renderer objects without retaining publication memory or reconstructing child text.
 tags: [render-plan, glyphs, threejs, instancing, physics]
 sources:
   - id: core-planner
@@ -30,15 +30,15 @@ Status: accepted and implemented
 
 ## Contract
 
-A detached glyph slice is a new renderer-owned object built from selected drawable records in one committed paragraph. It is a copy, not a claim, borrow of text ownership, presentation override, or second live paragraph.
+A detached glyph slice is a new renderer-owned object built from selected drawable records in one prepared paragraph. It is a copy, not a claim, borrow of text ownership, presentation override, or second live paragraph.
 
 The source paragraph remains bound to its planner and may continue shaping, publishing, or becoming visible. The detached object no longer follows those updates. Its owner decides when to add it to a scene, hide the source, animate its matrices, restore the source, and dispose the copy.
 
 The operation is synchronous from request through renderer import:
 
-1. The renderer identifies drawable records by committed stable glyph ID.
+1. The renderer identifies drawable records by queried stable glyph ID.
 2. `RetainedText.copyGlyphs(ids, target)` asks the existing planner for one complete checkpoint containing only those records.
-3. Rust re-runs the installed policy over the selected committed records, compacts semantic and physical buffers, and emits ordinary render-plan tables.
+3. Rust re-runs the installed policy over the selected prepared records, compacts semantic and physical buffers, and emits ordinary render-plan tables.
 4. The supplied borrowed `PlanTarget` imports buffers, draws, materials, payload leases, and resource relationships before returning.
 5. Borrowed Wasm publication memory expires immediately after `accept()` returns. The imported renderer state is then self-contained and independently disposable.
 
@@ -52,19 +52,19 @@ The renderer still owns engine-specific state. It imports the checkpoint through
 
 ## Glyph selection
 
-`copyGlyphs()` accepts non-zero unique stable IDs from exactly one committed `RetainedText`. Missing, duplicate, foreign, stale, or empty selections fail at the call. Semantic-only records such as spaces are not requested as draws. Rust indexes drawable technique columns by physical glyph index while resolving semantic metadata through each record's semantic index; the two index spaces must never be conflated.
+`copyGlyphs()` accepts non-zero unique stable IDs from exactly one queried `RetainedText`. Missing, duplicate, foreign, stale, or empty selections fail at the call. Semantic-only records such as spaces produce no draws; the realized copy determines drawable membership. Rust indexes drawable technique columns by physical glyph index while resolving semantic metadata through each record's semantic index; the two index spaces must never be conflated.
 
 The emitted checkpoint is complete rather than a patch. Buffer capacities and record indices remain planner-defined, so a renderer allocates from physical plan capacity instead of assuming selected glyph count equals storage size.
 
 ## Decorations
 
-Decorations are not glyph records and do not silently ride `RetainedText.copyGlyphs()`. `RetainedText.copyDecorations(target)` emits the committed paragraph's under/over decoration passes as a separate complete checkpoint. Three coordinates both planner requests in `Text.split()` and returns the decoration import as an independently owned `Decorations` object when the committed paragraph actually has decoration draws. Glyph and decoration objects retain separate engine-domain, material, and disposal ownership.
+Decorations are not glyph records and do not silently ride `RetainedText.copyGlyphs()`. `RetainedText.copyDecorations(target)` emits the desired paragraph's under/over decoration passes as a separate complete checkpoint. Three coordinates both planner requests in `Text.split()` and returns the decoration import as an independently owned `Decorations` object when the prepared paragraph has decoration draws. Glyph and decoration objects retain separate engine-domain, material, and disposal ownership.
 
 This separation lets callers keep, replace, animate, or omit decoration rendering without coupling decoration lifetime to glyph physics.
 
 ## Three.js surface
 
-`Text.split()` is available only after the source renderer state is committed. It synchronously returns the frozen tuple `[Glyphs, Decorations | undefined]`. Both groups use the ordinary Three render-plan executor; the operation does not create one `Text`, mesh, or material per glyph. If decoration import fails, Three disposes the already-created glyph branch before rethrowing, so the call is atomic from the caller's perspective.
+`Text.split()` queries desired positioning and copies it before or after source publication, without publishing the source or unrelated paragraphs. It synchronously returns the frozen tuple `[Glyphs, Decorations | undefined]`. Both groups use the ordinary Three render-plan executor; the operation does not create one `Text`, mesh, or material per glyph. If decoration import fails, Three disposes the already-created glyph branch before rethrowing, so the call is atomic from the caller's perspective.
 
 ```ts
 const [glyphs, decorations] = text.split();
@@ -96,7 +96,7 @@ The public manipulation surface follows `InstancedMesh` conventions:
 - each returned object retains the engine domain it needs, so source `Text`, `Font`, and `FontLoader` owners may be disposed first;
 - `dispose()` releases the imported plan, transform storage, materials, shared-resource leases, and engine-domain lease and removes the group from its parent.
 
-The `Glyphs` root starts with the same local transform as the source `Text`. Adding it to the source parent overlays the committed glyphs exactly. Its per-record transform starts at each glyph's committed drawn origin. Parent translation, rotation, and scale therefore remain on the root. `measureGlyphs()` and `Glyphs.measurements` stay local and cannot cache a stale ancestor transform; callers that need world-space physics cross that boundary explicitly through `getWorldMatrixAt()` and `setWorldMatrixAt()`.
+The `Glyphs` root starts with the same local transform as the source `Text`. Adding it to the source parent overlays the queried glyphs exactly. Its per-record transform starts at each glyph's copied drawn origin. Parent translation, rotation, and scale therefore remain on the root. `measureGlyphs()` and `Glyphs.measurements` stay local and cannot cache a stale ancestor transform; callers that need world-space physics cross that boundary explicitly through `getWorldMatrixAt()` and `setWorldMatrixAt()`.
 
 The source-to-copy handoff must be atomic at draw time. Direct matrix assignment re-dirties the root after plan realization, every transform write marks both Three storage and the WebGL2 PBO mirror, and the renderer uploads those buffers before drawing. First-frame and same-render writes are pixel-compared on WebGPU and WebGL2.
 

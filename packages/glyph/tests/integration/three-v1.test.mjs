@@ -2457,7 +2457,6 @@ test('Text.split returns a paragraph-scoped independent decoration plan when one
     style: { decoration: { underline: true, color: '#38bdf8' }, fontSize: 16 },
   });
   scene.add(label);
-  scene.updateMatrixWorld(true);
 
   let decorations;
   let detached;
@@ -2465,7 +2464,9 @@ test('Text.split returns a paragraph-scoped independent decoration plan when one
   let plainGlyphs;
   try {
     [detached, decorations] = label.split();
-    assert.ok(decorations, 'the tuple includes decorations when the committed paragraph draws them');
+    assert.ok(decorations, 'the prepared paragraph includes independently copied decorations');
+    assert.equal(label.commitState().status, 'pending');
+    assert.equal(rootDraws(scene).length, 0, 'the source is not published by split');
     scene.add(decorations);
     scene.updateMatrixWorld();
     const copiedDraws = decorations.children.filter((child) => child.isMesh);
@@ -2620,15 +2621,16 @@ test('Text.split preserves per-span material routing with independently owned in
     material: base,
   });
   scene.add(label);
-  scene.updateMatrixWorld(true);
 
   let detached;
   try {
-    const sourceNames = new Set(rootDraws(scene).map((draw) => draw.material.name));
-    assert.deepEqual(sourceNames, new Set(['detached-base', 'detached-accent']));
     [detached] = label.split();
+    assert.equal(label.commitState().status, 'pending');
+    assert.equal(rootDraws(scene).length, 0);
     scene.add(detached);
     scene.updateMatrixWorld(true);
+    const sourceNames = new Set(rootDraws(scene).map((draw) => draw.material.name));
+    assert.deepEqual(sourceNames, new Set(['detached-base', 'detached-accent']));
     assert.deepEqual(
       new Set(detached.materials.map((material) => material.name)),
       new Set(['detached-base', 'detached-accent']),
@@ -3130,15 +3132,14 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   assert.equal(instrumented.crossings, 1, 'measurement must not retry or consume renderer publication');
   assert.match(String(group.error), /deliberate material realization failure/u);
   assert.ok(label.glyphs().glyphCount > 0, 'renderer-free positioned inspection survives renderer rejection');
-  assert.equal(
-    label.measureGlyphs(),
-    undefined,
-    'drawn measurements are unavailable while renderer realization failed',
+  assert.ok(
+    label.measureGlyphs().length > 0,
+    'desired-layout measurements remain available while renderer realization failed',
   );
   assert.throws(
     () => label.split(),
-    /after renderer realization failed/,
-    'a failed renderer publication cannot be presented as a committed detached copy',
+    /deliberate material realization failure/,
+    'the independent copy reports its own material realization failure without retrying source publication',
   );
   assert.equal(instrumented.crossings, 1, 'inspection must not turn a rejected unchanged frame into a retry');
 
@@ -5925,6 +5926,38 @@ test('renderer rejection preserves Text.set semantic output through explicit ret
   group.dispose();
   warm.dispose();
   fresh.dispose();
+});
+
+test('placement reads retain their scoped inspection cache through matching publication', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const label = three.createText({ font, text: 'cached placement' });
+  scene.add(label);
+  instrumentedGlyph.reset();
+  try {
+    const before = label.measureGlyphs();
+    assert.ok(before.length > 0);
+    const queries = instrumentedGlyph.measureCrossings;
+    assert.equal(queries, 1);
+    label.caretAt(0, 0);
+    label.caretForOffset(label.text.length);
+    label.selectionRects(0, label.text.length);
+    assert.equal(instrumentedGlyph.measureCrossings, queries, 'all placement helpers share one inspection');
+    assert.equal(instrumentedGlyph.crossings, 0, 'placement reads do not publish');
+    scene.updateMatrixWorld(true);
+    assert.equal(instrumentedGlyph.crossings, 1);
+    label.measureGlyphs();
+    label.caretAt(0, 0);
+    assert.equal(instrumentedGlyph.measureCrossings, queries, 'matching publication preserves the query cache');
+    label.text = 'edited placement';
+    label.measureGlyphs();
+    assert.equal(instrumentedGlyph.measureCrossings, queries + 1, 'an edit invalidates the shared inspection');
+    assert.equal(instrumentedGlyph.crossings, 1, 'reading the edit leaves renderer publication pending');
+  } finally {
+    label.dispose();
+    font.dispose();
+  }
 });
 
 test('Text.measure answers attached first-frame state without traversing matrices or realizing draws', async (t) => {

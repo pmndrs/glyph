@@ -60,6 +60,35 @@ function leadingEdgeOf(placements, cluster) {
   return (glyphs[0].bidiLevel & 1) !== 0 ? right : left;
 }
 
+test('placement reads query desired layout before first publication and after edits', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const node = three.createText({ font: await loadFont(), style: { fontSize: 16 }, text: 'Wavy' });
+  scene.add(group);
+  group.add(node);
+  try {
+    for (const text of ['Wavy', 'Different length']) {
+      node.text = text;
+      assert.equal(node.commitState().status, 'pending');
+      const measurements = node.measureGlyphs();
+      assert.ok(measurements !== undefined, 'query must answer before renderer publication');
+      const expected = placementsOf(node);
+      assert.equal(measurements.length, expected.glyphs.length);
+      assert.deepEqual(node.caretAt(0, 0), expected.caretAt(0, 0));
+      assert.deepEqual(node.caretForOffset(text.length), expected.caretForOffset(text.length));
+      assert.deepEqual(node.selectionRects(0, text.length), expected.selectionRects(0, text.length));
+      assert.equal(node.commitState().status, 'pending', 'read-only queries must not publish renderer state');
+      scene.updateMatrixWorld(true);
+      assert.equal(node.commitState().status, 'committed');
+      assert.deepEqual(node.caretAt(0, 0), expected.caretAt(0, 0));
+      assert.deepEqual(node.selectionRects(0, text.length), expected.selectionRects(0, text.length));
+    }
+  } finally {
+    unmount({ group, node });
+  }
+});
+
 test('measureGlyphs publishes local geometry without traversing world matrices', async (t) => {
   const mounted = await mount(t, await loadFont(), 'Wavy');
   try {
@@ -339,6 +368,51 @@ test('glyph flags decode through exported names rather than remembered indices',
   }
 });
 
+test('pending split matches publication and retains its independent copy across later edits', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont();
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const node = three.createText({ font, style: { fontSize: 16 }, text: 'one two' });
+  const sibling = three.createText({ font, style: { fontSize: 16 }, text: 'untouched' });
+  scene.add(group);
+  group.add(node, sibling);
+  const copies = [];
+  const snapshot = (copy) => ({
+    glyphs: Array.from({ length: copy.count }, (_, index) => copy.glyphAt(index)),
+    measurements: copy.measurements.map(({ anchorPoint, ...measurement }) => ({
+      ...measurement,
+      center: anchorPoint('center'),
+    })),
+  });
+  try {
+    for (const text of ['one two', 'different words']) {
+      node.text = text;
+      sibling.text = `still pending: ${text}`;
+      const [before, beforeDecorations] = node.split();
+      copies.push(before, beforeDecorations);
+      const saved = snapshot(before);
+      assert.equal(node.commitState().status, 'pending');
+      assert.equal(sibling.commitState().status, 'pending');
+      assert.equal(before.count, text.replaceAll(' ', '').length, 'spaces are not drawable glyphs');
+      scene.updateMatrixWorld(true);
+      const [publishedCopy, publishedDecorations] = node.split();
+      copies.push(publishedCopy, publishedDecorations);
+      assert.deepEqual(snapshot(publishedCopy), saved);
+      node.text = 'subsequent edit';
+      node.measure();
+      assert.deepEqual(snapshot(before), saved, 'queries and edits cannot mutate the earlier copy');
+    }
+    node.dispose();
+    for (const copy of copies) if (copy?.count !== undefined) assert.ok(copy.count > 0);
+  } finally {
+    for (const copy of copies) copy?.dispose();
+    node.dispose();
+    sibling.dispose();
+    group.dispose();
+  }
+});
+
 test('split carries stable line and word metadata without presentation overrides', async (t) => {
   const mounted = await mount(t, await loadFont(), 'one two three', {
     constraints: { width: { mode: 'exact', size: 60 } },
@@ -418,10 +492,15 @@ test('commit state distinguishes unbound, pending, and committed paragraph state
   const node = three.createText({ font, style: { fontSize: 16 }, text: 'ready' });
   try {
     assert.deepEqual(node.commitState(), { status: 'unbound' });
-    assert.throws(() => node.split(), /before its renderer state is committed/);
+    const [copy] = node.split();
+    assert.equal(copy.count, 5);
+    copy.dispose();
     scene.add(node);
     assert.equal(node.commitState().status, 'pending');
-    assert.throws(() => node.split(), /before its renderer state is committed/);
+    const [pendingCopy] = node.split();
+    assert.equal(pendingCopy.count, 5);
+    pendingCopy.dispose();
+    assert.equal(node.commitState().status, 'pending');
     scene.updateMatrixWorld(true);
     const committed = node.commitState();
     assert.equal(committed.status, 'committed');

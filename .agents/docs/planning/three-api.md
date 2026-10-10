@@ -419,10 +419,10 @@ matrix storage. A later, separately scoped implementation must prove Three and T
 interaction-geometry, and performance behavior together. Use `split()` when the caller wants an independently
 owned, already-shaped object whose existing per-glyph matrices can be manipulated outside the source Text lifecycle.
 
-## Break committed glyphs into an independent object
+## Copy desired glyphs into an independent object
 
-`split()` copies the source paragraph's committed drawable records and any committed decoration draws into independently
-owned groups. The copy is synchronous, is available only when `commitState().status === 'committed'`, and returns a frozen
+`split()` synchronously queries the desired paragraph and copies its drawable records and decoration draws into independently
+owned groups, including before first render or after an unpublished edit. It leaves source publication pending and returns a frozen
 two-entry tuple whose decoration slot is `undefined` when the paragraph has no decoration draws.
 
 ```ts
@@ -484,7 +484,7 @@ if (decorations !== undefined) {
 glyphs.dispose();
 ```
 
-`caretAt(x, y)` and `selectionRects(start, end)` remain read-only interaction helpers over accepted glyph extents. They
+`caretAt(x, y)` and `selectionRects(start, end)` remain synchronous interaction helpers over desired glyph extents, using accepted renderer origins when current. They
 resolve to clusters, not JavaScript characters: a ligature is one glyph over several characters, and under bidi the
 character after an offset can be drawn to its left.
 

@@ -270,9 +270,9 @@ export interface RetainedText {
   glyphs(): GlyphLayoutInspection;
   /** Demand-reads positioned glyphs through a synchronous expiring view. */
   readGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result;
-  /** Offers a complete checkpoint containing selected committed stable glyph ids to one renderer target. */
+  /** Offers a complete checkpoint containing selected desired-layout stable glyph ids to one renderer target. */
   copyGlyphs(stableIds: ArrayLike<number>, target: PlanTarget): PlanAcceptance;
-  /** Offers a complete checkpoint containing this paragraph's committed decorations. */
+  /** Offers a complete checkpoint containing this paragraph's desired decorations. */
   copyDecorations(target: PlanTarget): PlanAcceptance;
   dispose(): void;
 }
@@ -1265,12 +1265,10 @@ class RenderPlannerImpl {
 
   #assertCopyable(state: RetainedTextState, target: PlanTarget): void {
     this.#assertTextQueryable(state);
-    if (!state.published || state.committed === undefined) {
-      throw new Error('retained text must have a committed render publication before it can be copied');
-    }
     if (typeof target !== 'object' || target === null || target.delivery !== 'borrowed') {
       throw new TypeError('detached plan copies require a synchronous borrowed plan target');
     }
+    this.#queryInspection(state);
   }
 
   #capabilitySetId(): number {
