@@ -2314,34 +2314,72 @@ fn append_planner_gather(
     let mut resume = None;
     if retaining && sparse && replacement.is_none() {
         let owners = planner.order_sort_scratch.iter().map(|entry| {
-            let paragraph = planner.paragraph(entry.1).ok_or(GatherError::InvalidSemanticShape)?;
+            let paragraph = planner
+                .paragraph(entry.1)
+                .ok_or(GatherError::InvalidSemanticShape)?;
             let positioned = paragraph.state.positioned.active();
-            let range = paragraph.gather_range.ok_or(GatherError::InvalidSemanticShape)?;
-            let masks = if !paragraph.positioned_changed && !paragraph.preparation_changed_since_publication {
+            let range = paragraph
+                .gather_range
+                .ok_or(GatherError::InvalidSemanticShape)?;
+            let masks = if !paragraph.positioned_changed
+                && !paragraph.preparation_changed_since_publication
+            {
                 &[][..]
-            } else { positioned.semantic_change_masks() };
-            Ok(RetainedGatherOwner::positioned(range, entry.1, positioned, masks,
+            } else {
+                positioned.semantic_change_masks()
+            };
+            Ok(RetainedGatherOwner::positioned(
+                range,
+                entry.1,
+                positioned,
+                masks,
                 (paragraph.positioned_changed || paragraph.preparation_changed_since_publication)
-                    .then(|| positioned.unpublished_source_intervals()).flatten()))
+                    .then(|| positioned.unpublished_source_intervals())
+                    .flatten(),
+            ))
         });
-        let stop = gather.append_retained_stream(codec, capability_set, owners, |handle| {
-            font_bindings.iter().find(|binding| binding.handle == handle).map(|binding| &binding.binding)
-        }).map_err(gather_error)?;
+        let stop = gather
+            .append_retained_stream(codec, capability_set, owners, |handle| {
+                font_bindings
+                    .iter()
+                    .find(|binding| binding.handle == handle)
+                    .map(|binding| &binding.binding)
+            })
+            .map_err(gather_error)?;
         if let Some(stop) = stop {
-            let paragraph = planner.paragraph(stop.transform_id).ok_or(EngineError::InvalidRequest)?;
+            let paragraph = planner
+                .paragraph(stop.transform_id)
+                .ok_or(EngineError::InvalidRequest)?;
             order_index = paragraph.renderer_order_index;
-            resume = Some((stop.source_index, paragraph.gather_range.ok_or(EngineError::InvalidRequest)?));
+            resume = Some((
+                stop.source_index,
+                paragraph.gather_range.ok_or(EngineError::InvalidRequest)?,
+            ));
         } else {
-            order_index = planner.order_sort_scratch.last().map_or(Ok(0), |entry|
-                usize::try_from(entry.0).map(|index| index + 1).map_err(|_| EngineError::InvalidRequest))?;
+            order_index = planner.order_sort_scratch.last().map_or(Ok(0), |entry| {
+                usize::try_from(entry.0)
+                    .map(|index| index + 1)
+                    .map_err(|_| EngineError::InvalidRequest)
+            })?;
             if order_index < planner.active_order().len() {
-                let first = planner.paragraph(planner.active_order()[order_index].id).and_then(|p| p.gather_range);
-                let last = planner.active_order().last().and_then(|ordered| planner.paragraph(ordered.id)).and_then(|p| p.gather_range);
-                if first.zip(last).is_some_and(|(first, last)| gather.retain_unchanged(first.through(last))) {
+                let first = planner
+                    .paragraph(planner.active_order()[order_index].id)
+                    .and_then(|p| p.gather_range);
+                let last = planner
+                    .active_order()
+                    .last()
+                    .and_then(|ordered| planner.paragraph(ordered.id))
+                    .and_then(|p| p.gather_range);
+                if first
+                    .zip(last)
+                    .is_some_and(|(first, last)| gather.retain_unchanged(first.through(last)))
+                {
                     order_index = planner.active_order().len();
                 }
             }
-            if order_index == planner.active_order().len() && gather.finish_retained() { return Ok(0); }
+            if order_index == planner.active_order().len() && gather.finish_retained() {
+                return Ok(0);
+            }
         }
         gather.truncate_to_retained_prefix().map_err(gather_error)?;
         retaining = false;
@@ -2490,7 +2528,13 @@ fn append_planner_gather(
             #[cfg(test)]
             super::work_attribution::record(|work| work.gather_paragraph_visits += 1);
             gather
-                .append_from(codec, capability_set, input, resumed.map_or(0, |(index, _)| index), binding_for_font)
+                .append_from(
+                    codec,
+                    capability_set,
+                    input,
+                    resumed.map_or(0, |(index, _)| index),
+                    binding_for_font,
+                )
                 .map_err(gather_error)?;
         }
         gather

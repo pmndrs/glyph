@@ -307,7 +307,9 @@ impl<T: RopeRecord> RetainedRope<T> {
         range: Range<usize>,
         update: impl FnMut(usize, &T) -> Result<RopeUpdate<T>, E>,
     ) -> Result<bool, RopeEditError<E>> {
-        if range.start > range.end || range.end > self.len() || range.is_empty() { return Ok(false); }
+        if range.start > range.end || range.end > self.len() || range.is_empty() {
+            return Ok(false);
+        }
         self.update_ordered_ranges(core::iter::once(Ok(range)), update)
     }
 
@@ -318,14 +320,25 @@ impl<T: RopeRecord> RetainedRope<T> {
         ranges: impl Iterator<Item = Result<Range<usize>, E>>,
         mut update: impl FnMut(usize, &T) -> Result<RopeUpdate<T>, E>,
     ) -> Result<bool, RopeEditError<E>> {
-        let Some(root) = self.root.as_ref() else { return Ok(false) };
-        let mut ranges = OrderedRanges { ranges, current: None, previous_end: 0, len: self.len() };
+        let Some(root) = self.root.as_ref() else {
+            return Ok(false);
+        };
+        let mut ranges = OrderedRanges {
+            ranges,
+            current: None,
+            previous_end: 0,
+            len: self.len(),
+        };
         ranges.advance_to(0)?;
-        if ranges.current.is_none() { return Ok(false); }
+        if ranges.current.is_none() {
+            return Ok(false);
+        }
         record_ordered_traversal();
         let mut stopped = false;
         let replacement = update_ordered_node(root, 0, &mut ranges, &mut update, &mut stopped)?;
-        if !stopped { ranges.advance_to(self.len())?; }
+        if !stopped {
+            ranges.advance_to(self.len())?;
+        }
         if let Some(replacement) = replacement {
             self.root = Some(replacement);
             Ok(true)
@@ -1148,14 +1161,23 @@ struct OrderedRanges<I> {
 
 impl<E, I: Iterator<Item = Result<Range<usize>, E>>> OrderedRanges<I> {
     fn advance_to(&mut self, offset: usize) -> Result<(), RopeEditError<E>> {
-        while self.current.as_ref().is_none_or(|range| range.end <= offset) {
-            let Some(range) = self.ranges.next() else { self.current = None; return Ok(()) };
+        while self
+            .current
+            .as_ref()
+            .is_none_or(|range| range.end <= offset)
+        {
+            let Some(range) = self.ranges.next() else {
+                self.current = None;
+                return Ok(());
+            };
             let range = range.map_err(RopeEditError::Callback)?;
             if range.start < self.previous_end || range.start > range.end || range.end > self.len {
                 return Err(RopeEditError::Storage);
             }
             self.previous_end = range.end;
-            if range.is_empty() { continue; }
+            if range.is_empty() {
+                continue;
+            }
             self.current = Some(range);
         }
         Ok(())
@@ -1176,7 +1198,13 @@ fn update_ordered_node<T: RopeRecord, E>(
         .checked_add(node.summary().records)
         .ok_or(RopeEditError::Storage)?;
     ranges.advance_to(record_start)?;
-    if ranges.current.as_ref().is_none_or(|range| record_end <= range.start) { return Ok(None); }
+    if ranges
+        .current
+        .as_ref()
+        .is_none_or(|range| record_end <= range.start)
+    {
+        return Ok(None);
+    }
     match node.as_ref() {
         Node::Leaf { items, .. } => {
             record_ordered_leaf_visit();
@@ -1185,8 +1213,12 @@ fn update_ordered_node<T: RopeRecord, E>(
             while item_index < items.len() {
                 let global_index = record_start + item_index;
                 ranges.advance_to(global_index)?;
-                let Some(range) = ranges.current.as_ref() else { break };
-                if range.start >= record_end { break; }
+                let Some(range) = ranges.current.as_ref() else {
+                    break;
+                };
+                if range.start >= record_end {
+                    break;
+                }
                 item_index = item_index.max(range.start.saturating_sub(record_start));
                 let visited_index = item_index;
                 item_index += 1;
@@ -1922,14 +1954,21 @@ mod tests {
         let mut pending = snapshot.clone();
         let ranges = (0..16).map(|owner| Ok::<_, u8>(owner * 8..owner * 8 + 2));
         reset_work_counters();
-        pending.update_ordered_ranges(ranges, |_, previous| {
-            Ok(RopeUpdate::Replace(Record { fragments: previous.fragments + 1, ..*previous }))
-        }).unwrap();
+        pending
+            .update_ordered_ranges(ranges, |_, previous| {
+                Ok(RopeUpdate::Replace(Record {
+                    fragments: previous.fragments + 1,
+                    ..*previous
+                }))
+            })
+            .unwrap();
         assert_eq!(ordered_work_counters(), (1, 4, 32));
         assert_eq!(work_counters().0, 128);
         let mut expected = original.clone();
         for (index, record) in expected.iter_mut().enumerate() {
-            if index % 8 < 2 { record.fragments += 1; }
+            if index % 8 < 2 {
+                record.fragments += 1;
+            }
         }
         assert_matches_flat(&pending, &expected);
         assert_matches_flat(&snapshot, &original);
@@ -1940,21 +1979,43 @@ mod tests {
         let original = records(65);
         let mut pending = RetainedRope::from(original.clone());
         let snapshot = pending.clone();
-        assert_eq!(pending.update_ordered_ranges([Ok(0..1), Err(7u8)].into_iter(), |_, previous| {
-            Ok(RopeUpdate::Replace(Record { fragments: previous.fragments + 1, ..*previous }))
-        }), Err(RopeEditError::Callback(7)));
+        assert_eq!(
+            pending.update_ordered_ranges([Ok(0..1), Err(7u8)].into_iter(), |_, previous| {
+                Ok(RopeUpdate::Replace(Record {
+                    fragments: previous.fragments + 1,
+                    ..*previous
+                }))
+            }),
+            Err(RopeEditError::Callback(7))
+        );
         assert_eq!(pending, snapshot);
-        assert_eq!(pending.update_ordered_ranges([Ok::<_, u8>(0..1), Ok(65..66)].into_iter(), |_, previous| {
-            Ok(RopeUpdate::Replace(*previous))
-        }), Err(RopeEditError::Storage));
+        assert_eq!(
+            pending.update_ordered_ranges(
+                [Ok::<_, u8>(0..1), Ok(65..66)].into_iter(),
+                |_, previous| { Ok(RopeUpdate::Replace(*previous)) }
+            ),
+            Err(RopeEditError::Storage)
+        );
         assert_eq!(pending, snapshot);
-        pending.update_ordered_ranges([Ok::<_, u8>(0..20), Err(7)].into_iter(), |index, previous| {
-            Ok(if index == 9 { RopeUpdate::Stop } else {
-                RopeUpdate::Replace(Record { fragments: previous.fragments + 1, ..*previous })
-            })
-        }).unwrap();
+        pending
+            .update_ordered_ranges(
+                [Ok::<_, u8>(0..20), Err(7)].into_iter(),
+                |index, previous| {
+                    Ok(if index == 9 {
+                        RopeUpdate::Stop
+                    } else {
+                        RopeUpdate::Replace(Record {
+                            fragments: previous.fragments + 1,
+                            ..*previous
+                        })
+                    })
+                },
+            )
+            .unwrap();
         let mut expected = original;
-        for record in &mut expected[..9] { record.fragments += 1; }
+        for record in &mut expected[..9] {
+            record.fragments += 1;
+        }
         assert_matches_flat(&pending, &expected);
     }
 
@@ -1973,10 +2034,20 @@ mod tests {
             }
             indexes.sort_unstable();
             indexes.dedup();
-            pending.update_ordered_ranges(indexes.iter().map(|&index| Ok::<_, u8>(index..index + 1)), |_, previous| {
-                Ok(RopeUpdate::Replace(Record { fragments: previous.fragments + 1, ..*previous }))
-            }).unwrap();
-            for index in indexes { expected[index].fragments += 1; }
+            pending
+                .update_ordered_ranges(
+                    indexes.iter().map(|&index| Ok::<_, u8>(index..index + 1)),
+                    |_, previous| {
+                        Ok(RopeUpdate::Replace(Record {
+                            fragments: previous.fragments + 1,
+                            ..*previous
+                        }))
+                    },
+                )
+                .unwrap();
+            for index in indexes {
+                expected[index].fragments += 1;
+            }
             assert_matches_flat(&pending, &expected);
             assert_matches_flat(&snapshot, &before);
         }

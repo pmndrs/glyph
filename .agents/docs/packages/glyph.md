@@ -158,6 +158,8 @@ The `glyph:shaper-profile-artifact` diagnostic workflow builds with the same rel
 
 Sparse retained gather now feeds the existing sorted dirty-owner frontier and owner-local unpublished source intervals into one ordered rope traversal. Ranges that intersect the same leaf are handled before that leaf is reconstructed, so owner boundaries no longer repeat leaf and ancestor copies. The one-owner entry point adapts to the same stream and glyph callback. Borrowed semantic column views carry no copied text/glyph data; authoritative gather ranges retain the distinction between source glyphs and emitted rows, including clean decorated owners. Topology stops identify the owner and local source offset before the existing suffix builder resumes. Source-tree errors preserve the previous root, and the existing cache-invalid publication failure path rebuilds the mutated column workspace.
 
+The integrated stream passes 399 native unit tests and independent outline/Unicode controls, including cold output, sparse dirty islands, clean decorated gaps, recordless owners, growth/shrink Stop and failure recovery. Its first rebuilt package passes all 990 package/integration Node tests. Final formatter and Clippy cleanup passes the shared static gate and repeated native suite. These checks prove correctness at those boundaries; final artifact size, fuzz, browser and comparative performance remain separate gates for the draft frontier.
+
 ## Ownership
 
 The package owns six runtime layers:
