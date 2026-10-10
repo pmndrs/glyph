@@ -706,9 +706,17 @@ test('a failed sibling query retires speculative identities before ordinary publ
     sibling.text = 'B';
     scene.updateMatrixWorld(true);
     assert.equal(source.commitState().status, 'committed');
+    const acceptedIds = Array.from(source.glyphs().glyphStableIds);
     copy = source.split()[0];
+    assert.deepEqual(Array.from(source.glyphs().glyphStableIds), acceptedIds);
     assert.equal(copy.count, 1);
-    assert.deepEqual(copy.measureGlyphs(), source.measureGlyphs());
+    assert.deepEqual(
+      copySnapshot(copy).measurements,
+      source.measureGlyphs().map(({ anchorPoint, ...measurement }) => ({
+        ...measurement,
+        center: anchorPoint('center'),
+      })),
+    );
   } finally {
     copy?.dispose();
     source.dispose();
