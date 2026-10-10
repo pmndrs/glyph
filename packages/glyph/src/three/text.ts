@@ -1837,7 +1837,7 @@ class ThreeRootPublication {
     const cached = this.#inspections.get(text);
     if (!refresh && entry.committedRevision === revision && cached?.revision === revision) return cached.value;
     const inspection = entry.handle.inspect();
-    this.#inspections.set(text, { revision, value: inspection });
+    if (entry.committedRevision === revision) this.#inspections.set(text, { revision, value: inspection });
     return inspection;
   }
 

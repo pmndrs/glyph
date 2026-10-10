@@ -245,3 +245,37 @@ test('copy resolves a cached glyph subset after a sibling restarts speculative i
     root.dispose();
   }
 });
+
+test('copy rejects a sibling identity after speculative preparation is restarted', () => {
+  const root = handle('removal-lifecycle:foreign-selection');
+  const source = root.services.createText(textState(font, 'A', unconstrained));
+  let sibling;
+  try {
+    const original = source.inspect();
+    sibling = root.services.createText(textState(font, 'B', unconstrained));
+    const foreign = sibling.inspect().glyphStableIds[0];
+    assert.notEqual(foreign, original.glyphStableIds[0], 'an exposed identity must not be recycled');
+    const destination = {
+      boundary: {},
+      renderer: {
+        decode: () => ({ result: undefined, commit: () => undefined, discard: () => undefined }),
+        syncTransforms: () => undefined,
+        dispose: () => undefined,
+      },
+    };
+    assert.throws(
+      () => root.services.copy(source, { kind: 'glyphs', stableIds: [foreign + 1 + 2 ** 32] }, destination),
+      RangeError,
+      'identity refresh must not truncate caller-authored selections',
+    );
+    assert.throws(() => root.services.copy(source, { kind: 'glyphs', stableIds: [foreign] }, destination), {
+      statusCode: 'invalid-request',
+    });
+    glyph.shape();
+    assert.equal(source.inspect().glyphCount, 1);
+  } finally {
+    sibling?.dispose();
+    source.dispose();
+    root.dispose();
+  }
+});

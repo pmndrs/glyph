@@ -1035,6 +1035,11 @@ A sibling query may restart speculative glyph identities without changing an own
 copies resolve selections from that inspection into the freshly prepared identities, and detached renderer metadata
 is captured after the copy from the same preparation. Pending placement reads consult the shared inspection cache;
 committed placement reads retain their Three cache.
+The existing Rust glyph-ID allocator reserves its high-water mark when a successful query exposes identities.
+Those IDs cannot be recycled into another paragraph after cancellation, so a foreign selection fails naturally in Rust.
+Ordinary publication retires semantic inspections displaced by lifecycle changes, using the existing preparation
+bindings as its proof; failed queries release that proof. Accepted layout sidecars remain cached; pending Three
+placement snapshots are not promoted.
 
 Queries carry pending paragraph creations and ordering changes even when the queried paragraph is already committed
 in Rust. A rejected first renderer publication followed by an over-budget sibling therefore remains queryable: reads

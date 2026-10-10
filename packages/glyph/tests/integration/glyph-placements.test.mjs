@@ -688,6 +688,34 @@ test('a caught reentrant setter leaves pending split and subsequent publication 
   }
 });
 
+test('a failed sibling query retires speculative identities before ordinary publication', async (t) => {
+  const config = defineThreeConfig();
+  const three = await createThreeTestHandle(t, {
+    ...config,
+    commands: { ...config.commands, limits: { ...config.commands.limits, maxOutputBytes: 4_096 } },
+  });
+  const font = await loadFont();
+  const source = three.createText({ font, text: 'A' });
+  const sibling = three.createText({ font, text: 'capacity '.repeat(512) });
+  const scene = new THREE.Scene();
+  scene.add(source, sibling);
+  let copy;
+  try {
+    assert.equal(source.measureGlyphs().length, 1);
+    assert.throws(() => sibling.measureGlyphs(), { statusCode: 'result-too-large' });
+    sibling.text = 'B';
+    scene.updateMatrixWorld(true);
+    assert.equal(source.commitState().status, 'committed');
+    copy = source.split()[0];
+    assert.equal(copy.count, 1);
+    assert.deepEqual(copy.measureGlyphs(), source.measureGlyphs());
+  } finally {
+    copy?.dispose();
+    source.dispose();
+    sibling.dispose();
+  }
+});
+
 test('queries carry pending sibling lifecycle after renderer rejection without publishing an over-budget batch', async (t) => {
   for (const initiallyPublished of [false, true]) {
     await t.test(initiallyPublished ? 'previously published source' : 'first publication', async (caseContext) => {
@@ -760,11 +788,13 @@ test('sibling preparation refreshes split identities before and after publicatio
         if (publishBeforeSplit) scene.updateMatrixWorld(true);
         const [pending] = a.split();
         copies.push(pending);
+        assert.equal(pending.count, a.text.length);
         assert.equal(pending.glyphAt(0).glyphId, a.glyphs().glyphIds[0]);
         const expected = copySnapshot(pending);
         scene.updateMatrixWorld(true);
         const [published] = a.split();
         copies.push(published);
+        assert.equal(published.count, a.text.length);
         assert.deepEqual(copySnapshot(published), expected);
       } finally {
         for (const copy of copies) copy.dispose();

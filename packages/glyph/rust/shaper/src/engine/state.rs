@@ -1370,6 +1370,8 @@ impl TextEngine {
             next_glyph_id,
             next_content_revision,
         });
+        // Reserve identities when they become observable, even if adoption later fails.
+        planner.next_glyph_id = planner.next_glyph_id.max(next_glyph_id);
         Ok(MeasuredParagraph {
             root_id: request.root_id,
             revision: planner.revision,
@@ -7323,6 +7325,55 @@ mod tests {
         let committed = engine.commit_update(follow).unwrap();
         assert_eq!(committed.revision, RootRevision { engine: 2, root: 2 });
         assert_eq!(engine.root_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
+    }
+
+    #[test]
+    fn rejected_adoption_does_not_recycle_queried_glyph_identities() {
+        let (mut engine, mut shaper) = shaped_inter_engine("A");
+        let replacement = utf16("BB");
+        let bytes = text_mutation_bytes(&[(0, 1, &replacement)]);
+        let styles = root_style_bytes_for_text(7, replacement.len() as u32);
+        let mut query = update(1, 1, 1);
+        query.limits.max_clusters = 8;
+        query.limits.max_lines = 8;
+        query.limits.max_output_bytes = 1 << 20;
+        query.text_mutations =
+            parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        query.style_mutations =
+            parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        engine
+            .measure_paragraph_with_shaper(&mut shaper, query, 1)
+            .unwrap();
+        let reserved = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .speculative
+            .unwrap()
+            .next_glyph_id;
+        let mut rejected = query;
+        rejected.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION;
+        rejected.limits.max_clusters = 1;
+        assert!(
+            engine
+                .prepare_update_with_shaper(&mut shaper, rejected, 2)
+                .is_err()
+        );
+        assert!(engine.planners.get(&4).unwrap().speculative.is_none());
+        assert!(engine.planners.get(&4).unwrap().next_glyph_id >= reserved);
+        engine
+            .measure_paragraph_with_shaper(&mut shaper, query, 1)
+            .unwrap();
+        assert!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .speculative
+                .unwrap()
+                .next_glyph_id
+                > reserved
+        );
     }
 
     #[test]

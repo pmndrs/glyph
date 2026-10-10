@@ -766,11 +766,16 @@ class RenderPlannerImpl {
     if (inspection !== undefined) {
       glyphs = createInspectionBorrowedGlyphLayout(inspection, assertActive, decodeOutline);
     } else {
-      const publication = this.#transport.borrowParagraphLayout(
-        this.#queryTextRequest(state, textShaperAbi.engine.semanticViewMasks.borrowedLayout),
-        state.paragraphId,
-        this.#limits.maxOutputBytes,
-      );
+      let publication: ReturnType<PlanTransport['borrowParagraphLayout']>;
+      try {
+        publication = this.#transport.borrowParagraphLayout(
+          this.#queryTextRequest(state, textShaperAbi.engine.semanticViewMasks.borrowedLayout),
+          state.paragraphId,
+          this.#limits.maxOutputBytes,
+        );
+      } catch (error) {
+        this.#failedQuery(error);
+      }
       glyphs = createBorrowedGlyphLayout(this.#transport, publication, assertActive, decodeOutline);
       if (state.inspectionBorrowMode === 'sparse-first') state.inspectionBorrowMode = 'promotion-ready';
       this.#adoptMeasuredBindings(state);
@@ -797,7 +802,7 @@ class RenderPlannerImpl {
       const identities = new Map<number, number>();
       for (let index = 0; index < previous.glyphStableIds.length; index += 1)
         identities.set(previous.glyphStableIds[index]!, current.glyphStableIds[index]!);
-      stableIds = Uint32Array.from(stableIds, (id) => identities.get(id) ?? 0);
+      stableIds = Array.from(stableIds, (id) => identities.get(id) ?? id);
     }
     const publication = this.#transport.copyGlyphs(
       state.paragraphId,
@@ -889,7 +894,7 @@ class RenderPlannerImpl {
     this.#engineRevision = publication.engineRevision;
     this.#cacheSemanticViews(publication, staged.semanticViewMask);
     const transforms = this.#resolvedTransforms();
-    this.#commitDesiredState();
+    this.#commitDesiredState(staged.semanticViewMask);
     this.#stagedPublication = { publication, transforms, checkpointGeneration: staged.checkpointGeneration };
   }
 
@@ -1016,7 +1021,20 @@ class RenderPlannerImpl {
 
   #queryTextPublication(state: RetainedTextState, semanticViewMask: number): PlanPublication {
     const request = this.#queryTextRequest(state, semanticViewMask);
-    return this.#transport.measureParagraph(request, state.paragraphId, this.#limits.maxOutputBytes);
+    try {
+      return this.#transport.measureParagraph(request, state.paragraphId, this.#limits.maxOutputBytes);
+    } catch (error) {
+      this.#failedQuery(error);
+    }
+  }
+
+  #failedQuery(error: unknown): never {
+    try {
+      this.#clearMeasuredBindings();
+    } catch {
+      // Preserve the query failure after releasing every preparation binding.
+    }
+    throw error;
   }
 
   #queryTextRequest(state: RetainedTextState, semanticViewMask: number): PlannerFrameUpdate {
@@ -1197,40 +1215,50 @@ class RenderPlannerImpl {
     if (state.dirty) this.#pendingStyleCount -= pendingStyleMutationCount(state);
   }
 
-  #commitDesiredState(): void {
-    this.#clearMeasuredBindings();
-    for (const state of this.#removed) {
-      this.#texts.delete(state);
-      if (!state.desiredReleased) releaseResolvedText(state.desired);
-      state.desiredReleased = true;
-      if (state.committed !== undefined) releaseResolvedText(state.committed);
-      state.committed = undefined;
-    }
-    this.#removed.clear();
-    for (const state of this.#texts) {
-      if (!state.dirty) continue;
-      if (state.geometryDirty) commitFlowEntityRevisions(state);
-      if (state.committed !== state.desired) {
-        retainResolvedText(state.desired);
+  #commitDesiredState(semanticViewMask: number): void {
+    try {
+      for (const state of this.#removed) {
+        this.#texts.delete(state);
+        if (!state.desiredReleased) releaseResolvedText(state.desired);
+        state.desiredReleased = true;
         if (state.committed !== undefined) releaseResolvedText(state.committed);
-        state.committed = state.desired;
+        state.committed = undefined;
       }
-      state.published = true;
-      if (state.semanticDirty) {
-        state.publishedText = state.desired.text;
+      this.#removed.clear();
+      for (const state of this.#texts) {
+        if (!state.dirty) continue;
+        // Displaced speculative identities cannot index the accepted renderer records.
+        if (
+          state.semanticDirty &&
+          (semanticViewMask & textShaperAbi.engine.semanticViewMasks.layoutInspection) === 0 &&
+          (this.#measuredStructureRevision !== this.#structureRevision || this.#measured.get(state) !== state.desired)
+        )
+          state.inspection = undefined;
+        if (state.geometryDirty) commitFlowEntityRevisions(state);
+        if (state.committed !== state.desired) {
+          retainResolvedText(state.desired);
+          if (state.committed !== undefined) releaseResolvedText(state.committed);
+          state.committed = state.desired;
+        }
+        state.published = true;
+        if (state.semanticDirty) {
+          state.publishedText = state.desired.text;
+        }
+        if (state.geometryDirty) state.geometryRevision += 1;
+        this.#pendingParagraphCount -= 1;
+        this.#pendingContentCount -= Number(state.semanticDirty);
+        this.#pendingStyleCount -= pendingStyleMutationCount(state);
+        state.dirty = false;
+        state.semanticDirty = false;
+        state.lifecycleDirty = false;
+        state.styleChanges = noRetainedStyleChanges;
+        state.geometryDirty = false;
+        state.orderDirty = false;
       }
-      if (state.geometryDirty) state.geometryRevision += 1;
-      this.#pendingParagraphCount -= 1;
-      this.#pendingContentCount -= Number(state.semanticDirty);
-      this.#pendingStyleCount -= pendingStyleMutationCount(state);
-      state.dirty = false;
-      state.semanticDirty = false;
-      state.lifecycleDirty = false;
-      state.styleChanges = noRetainedStyleChanges;
-      state.geometryDirty = false;
-      state.orderDirty = false;
+      this.#baseOrderValidationPending = false;
+    } finally {
+      this.#clearMeasuredBindings();
     }
-    this.#baseOrderValidationPending = false;
   }
 
   #candidate(lease: BorrowedPlanLease, resolved = this.#resolvedTransforms()): PlanCandidate {
