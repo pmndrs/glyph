@@ -1029,6 +1029,10 @@ placement, caret, and selection methods answer from current desired layout throu
 pending, preserve public signatures and ABI, and do not publish unrelated labels. Matching prepared results are reused
 by the next ordinary publication; this change does not resolve the remaining whole-root publication work in #247.
 
+Queries carry pending paragraph creations and ordering changes even when the queried paragraph is already committed
+in Rust. A rejected first renderer publication followed by an over-budget sibling therefore remains queryable: reads
+and independent copies do not acknowledge the rejected source or publish the sibling.
+
 An explicit query before first render carries the complete desired paragraph lifecycle and applies text, style, and
 geometry mutations only for the queried paragraph. It serializes paragraph-order rows only for nonremoved paragraphs
 whose scoped rank is still pending publication; a semantic-only query therefore does not resend stable ranks, while

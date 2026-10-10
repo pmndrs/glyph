@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
 
-import { bitmap, createFontStack, glyphFlags } from '@pmndrs/glyph';
+import { bitmap, createFontStack, glyph as glyphRuntime, glyphFlags } from '@pmndrs/glyph';
 import { createGlyphPlacements } from '@pmndrs/glyph/core';
-import { defineTextMaterial } from '@pmndrs/glyph/three';
+import { defineTextMaterial, defineThreeConfig } from '@pmndrs/glyph/three';
 import { loadFont as loadGlyphFont } from '../../dist/loader.js';
 import * as THREE from 'three/webgpu';
 
@@ -685,5 +685,55 @@ test('a caught reentrant setter leaves pending split and subsequent publication 
     pending?.forEach((copy) => copy?.dispose());
     published?.forEach((copy) => copy?.dispose());
     node.dispose();
+  }
+});
+
+test('queries carry pending sibling lifecycle after renderer rejection without publishing an over-budget batch', async (t) => {
+  for (const initiallyPublished of [false, true]) {
+    await t.test(initiallyPublished ? 'previously published source' : 'first publication', async (caseContext) => {
+      const three = await createThreeTestHandle(
+        caseContext,
+        defineThreeConfig({ capacity: { size: 6, policy: 'fixed' } }),
+      );
+      const font = await loadFont();
+      const node = three.createText({ font, text: 'ready' });
+      const group = three.createTextGroup();
+      const scene = new THREE.Scene();
+      scene.add(group);
+      group.add(node);
+      let extra;
+      let pending;
+      let published;
+      try {
+        assert.equal(node.measureGlyphs()?.length, 5);
+        if (initiallyPublished) scene.updateMatrixWorld(true);
+        const failure = new Error('material creation failed');
+        group.material = defineTextMaterial(() => {
+          throw failure;
+        });
+        assert.throws(glyphRuntime.shape.bind(glyphRuntime), (error) => error === failure);
+        group.material = undefined;
+        extra = three.createText({ font, text: 'more' });
+        group.add(extra);
+        assert.equal(node.measure().glyphCount, 5);
+        node.computeBoundingBox();
+        assert.equal(node.measureGlyphs()?.length, 5);
+        pending = node.split();
+        assert.equal(pending[0].count, 5);
+        assert.equal(node.commitState().status, 'failed', 'queries cannot acknowledge the rejected source');
+        assert.notEqual(extra.commitState().status, 'committed', 'the unrelated sibling remains unpublished');
+        extra.dispose();
+        scene.updateMatrixWorld(true);
+        assert.equal(node.commitState().status, 'committed');
+        published = node.split();
+        assert.deepEqual(copySnapshot(pending[0]), copySnapshot(published[0]));
+      } finally {
+        pending?.forEach((copy) => copy?.dispose());
+        published?.forEach((copy) => copy?.dispose());
+        extra?.dispose();
+        node.dispose();
+        group.dispose();
+      }
+    });
   }
 });

@@ -1361,7 +1361,8 @@ class RenderPlannerImpl {
     const mutations: PlannerParagraphMutation[] = [...this.#removed]
       .filter((removed) => removed.published)
       .map((removed) => ({ opcode: 'remove' as const, paragraphId: removed.paragraphId }));
-    if (!state.published) {
+    // Pending creations need lifecycle rows even when the queried paragraph is already published.
+    if (!state.published || this.#baseOrderValidationPending) {
       for (const candidate of this.#texts) {
         if (candidate.removed) continue;
         mutations.push({ opcode: 'upsert', paragraphId: candidate.paragraphId, order: candidate.metrics.order });
