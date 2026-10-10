@@ -17,7 +17,7 @@ use super::{
     codec::{CapabilitySetId, ValidatedCodec},
     codec_gather::{
         CodecGatherWorkspace, DEFAULT_GATHER_RECORD_CAPACITY, GatherError, LayoutPlanInput,
-        RetainedGather,
+        RetainedGather, RetainedGatherOwner,
     },
     flow_composition::{EllipsisReplacement, FlowFragment, FlowLayoutArena, NO_BOUNDARY},
     flow_geometry::{FlowGeometryArena, LocalizedGeometryChange},
@@ -2311,6 +2311,41 @@ fn append_planner_gather(
     let mut retaining = retained;
     let mut order_index = 0;
     let mut dirty_index = 0;
+    let mut resume = None;
+    if retaining && sparse && replacement.is_none() {
+        let owners = planner.order_sort_scratch.iter().map(|entry| {
+            let paragraph = planner.paragraph(entry.1).ok_or(GatherError::InvalidSemanticShape)?;
+            let positioned = paragraph.state.positioned.active();
+            let range = paragraph.gather_range.ok_or(GatherError::InvalidSemanticShape)?;
+            let masks = if !paragraph.positioned_changed && !paragraph.preparation_changed_since_publication {
+                &[][..]
+            } else { positioned.semantic_change_masks() };
+            Ok(RetainedGatherOwner::positioned(range, entry.1, positioned, masks,
+                (paragraph.positioned_changed || paragraph.preparation_changed_since_publication)
+                    .then(|| positioned.unpublished_source_intervals()).flatten()))
+        });
+        let stop = gather.append_retained_stream(codec, capability_set, owners, |handle| {
+            font_bindings.iter().find(|binding| binding.handle == handle).map(|binding| &binding.binding)
+        }).map_err(gather_error)?;
+        if let Some(stop) = stop {
+            let paragraph = planner.paragraph(stop.transform_id).ok_or(EngineError::InvalidRequest)?;
+            order_index = paragraph.renderer_order_index;
+            resume = Some((stop.source_index, paragraph.gather_range.ok_or(EngineError::InvalidRequest)?));
+        } else {
+            order_index = planner.order_sort_scratch.last().map_or(Ok(0), |entry|
+                usize::try_from(entry.0).map(|index| index + 1).map_err(|_| EngineError::InvalidRequest))?;
+            if order_index < planner.active_order().len() {
+                let first = planner.paragraph(planner.active_order()[order_index].id).and_then(|p| p.gather_range);
+                let last = planner.active_order().last().and_then(|ordered| planner.paragraph(ordered.id)).and_then(|p| p.gather_range);
+                if first.zip(last).is_some_and(|(first, last)| gather.retain_unchanged(first.through(last))) {
+                    order_index = planner.active_order().len();
+                }
+            }
+            if order_index == planner.active_order().len() && gather.finish_retained() { return Ok(0); }
+        }
+        gather.truncate_to_retained_prefix().map_err(gather_error)?;
+        retaining = false;
+    }
     while order_index < planner.active_order().len() {
         if sparse && retaining {
             let next_dirty = match planner.order_sort_scratch.get(dirty_index) {
@@ -2347,8 +2382,6 @@ fn append_planner_gather(
             }
         }
         let ordered = planner.active_order()[order_index];
-        #[cfg(test)]
-        super::work_attribution::record(|work| work.gather_paragraph_visits += 1);
         let paragraph_index = planner
             .paragraphs
             .binary_search_by_key(&ordered.id, |paragraph| paragraph.id)
@@ -2368,10 +2401,13 @@ fn append_planner_gather(
                 .gather_range
                 .is_some_and(|range| gather.retain_unchanged(range))
         {
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.gather_paragraph_visits += 1);
             order_index += 1;
             continue;
         }
-        let start = gather.position();
+        let resumed = resume.take();
+        let start = resumed.map_or_else(|| gather.position(), |(_, range)| range.start_position());
         let positioned = paragraph.state.positioned.active();
         let semantic_f32 = positioned.semantic_f32();
         let semantic_u32 = positioned.semantic_u32();
@@ -2415,6 +2451,8 @@ fn append_planner_gather(
                 .gather_range
                 .is_some_and(|range| range.source_count() != input.glyphs.len())
         {
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.gather_paragraph_visits += 1);
             let old = paragraph.gather_range.ok_or(EngineError::InvalidRequest)?;
             let next = gather
                 .replace_retained_owner(codec, capability_set, input, old, binding_for_font)
@@ -2449,8 +2487,10 @@ fn append_planner_gather(
                 }
             }
         } else {
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.gather_paragraph_visits += 1);
             gather
-                .append(codec, capability_set, input, binding_for_font)
+                .append_from(codec, capability_set, input, resumed.map_or(0, |(index, _)| index), binding_for_font)
                 .map_err(gather_error)?;
         }
         gather

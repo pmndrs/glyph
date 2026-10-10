@@ -305,21 +305,28 @@ impl<T: RopeRecord> RetainedRope<T> {
     pub(crate) fn update_ordered<E>(
         &mut self,
         range: Range<usize>,
+        update: impl FnMut(usize, &T) -> Result<RopeUpdate<T>, E>,
+    ) -> Result<bool, RopeEditError<E>> {
+        if range.start > range.end || range.end > self.len() || range.is_empty() { return Ok(false); }
+        self.update_ordered_ranges(core::iter::once(Ok(range)), update)
+    }
+
+    /// Applies sorted disjoint ranges in one tree traversal. Each changed leaf and branch
+    /// is reconstructed once even when several ranges intersect it.
+    pub(crate) fn update_ordered_ranges<E>(
+        &mut self,
+        ranges: impl Iterator<Item = Result<Range<usize>, E>>,
         mut update: impl FnMut(usize, &T) -> Result<RopeUpdate<T>, E>,
     ) -> Result<bool, RopeEditError<E>> {
-        if range.start > range.end || range.end > self.len() {
-            return Ok(false);
-        }
-        if range.is_empty() {
-            return Ok(false);
-        }
-        let Some(root) = self.root.as_ref() else {
-            return Ok(false);
-        };
+        let Some(root) = self.root.as_ref() else { return Ok(false) };
+        let mut ranges = OrderedRanges { ranges, current: None, previous_end: 0, len: self.len() };
+        ranges.advance_to(0)?;
+        if ranges.current.is_none() { return Ok(false); }
         record_ordered_traversal();
         let mut stopped = false;
-        if let Some(replacement) = update_ordered_node(root, 0, &range, &mut update, &mut stopped)?
-        {
+        let replacement = update_ordered_node(root, 0, &mut ranges, &mut update, &mut stopped)?;
+        if !stopped { ranges.advance_to(self.len())?; }
+        if let Some(replacement) = replacement {
             self.root = Some(replacement);
             Ok(true)
         } else {
@@ -1132,10 +1139,33 @@ fn replace_record<T: RopeRecord>(
     }
 }
 
+struct OrderedRanges<I> {
+    ranges: I,
+    current: Option<Range<usize>>,
+    previous_end: usize,
+    len: usize,
+}
+
+impl<E, I: Iterator<Item = Result<Range<usize>, E>>> OrderedRanges<I> {
+    fn advance_to(&mut self, offset: usize) -> Result<(), RopeEditError<E>> {
+        while self.current.as_ref().is_none_or(|range| range.end <= offset) {
+            let Some(range) = self.ranges.next() else { self.current = None; return Ok(()) };
+            let range = range.map_err(RopeEditError::Callback)?;
+            if range.start < self.previous_end || range.start > range.end || range.end > self.len {
+                return Err(RopeEditError::Storage);
+            }
+            self.previous_end = range.end;
+            if range.is_empty() { continue; }
+            self.current = Some(range);
+        }
+        Ok(())
+    }
+}
+
 fn update_ordered_node<T: RopeRecord, E>(
     node: &Arc<Node<T>>,
     record_start: usize,
-    range: &Range<usize>,
+    ranges: &mut OrderedRanges<impl Iterator<Item = Result<Range<usize>, E>>>,
     update: &mut impl FnMut(usize, &T) -> Result<RopeUpdate<T>, E>,
     stopped: &mut bool,
 ) -> Result<Option<Arc<Node<T>>>, RopeEditError<E>> {
@@ -1145,21 +1175,26 @@ fn update_ordered_node<T: RopeRecord, E>(
     let record_end = record_start
         .checked_add(node.summary().records)
         .ok_or(RopeEditError::Storage)?;
-    if range.end <= record_start || record_end <= range.start {
-        return Ok(None);
-    }
+    ranges.advance_to(record_start)?;
+    if ranges.current.as_ref().is_none_or(|range| record_end <= range.start) { return Ok(None); }
     match node.as_ref() {
         Node::Leaf { items, .. } => {
             record_ordered_leaf_visit();
-            let local_start = range.start.saturating_sub(record_start).min(items.len());
-            let local_end = range.end.saturating_sub(record_start).min(items.len());
             let mut replacement = None;
-            for item_index in local_start..local_end {
+            let mut item_index = 0;
+            while item_index < items.len() {
+                let global_index = record_start + item_index;
+                ranges.advance_to(global_index)?;
+                let Some(range) = ranges.current.as_ref() else { break };
+                if range.start >= record_end { break; }
+                item_index = item_index.max(range.start.saturating_sub(record_start));
+                let visited_index = item_index;
+                item_index += 1;
                 record_ordered_record_visit();
                 let global_index = record_start
-                    .checked_add(item_index)
+                    .checked_add(visited_index)
                     .ok_or(RopeEditError::Storage)?;
-                let candidate = match update(global_index, &items[item_index])
+                let candidate = match update(global_index, &items[visited_index])
                     .map_err(RopeEditError::Callback)?
                 {
                     RopeUpdate::Keep => continue,
@@ -1175,7 +1210,7 @@ fn update_ordered_node<T: RopeRecord, E>(
                 }
                 replacement
                     .as_mut()
-                    .and_then(|items| items.get_mut(item_index))
+                    .and_then(|items| items.get_mut(visited_index))
                     .map(|item| *item = candidate)
                     .ok_or(RopeEditError::Storage)?;
             }
@@ -1190,8 +1225,8 @@ fn update_ordered_node<T: RopeRecord, E>(
             let right_start = record_start
                 .checked_add(left.summary().records)
                 .ok_or(RopeEditError::Storage)?;
-            let next_left = update_ordered_node(left, record_start, range, update, stopped)?;
-            let next_right = update_ordered_node(right, right_start, range, update, stopped)?;
+            let next_left = update_ordered_node(left, record_start, ranges, update, stopped)?;
+            let next_right = update_ordered_node(right, right_start, ranges, update, stopped)?;
             let replacement = match (next_left, next_right) {
                 (None, None) => return Ok(None),
                 (Some(next_left), None) => branch(next_left, Arc::clone(right)),
@@ -1878,6 +1913,73 @@ mod tests {
         let (copied, _) = work_counters();
         assert!(copied <= LEAF_CAPACITY * 6, "copied {copied} records");
         assert_eq!(target.len(), 4094);
+    }
+
+    #[test]
+    fn ordered_ranges_copy_each_leaf_once_across_owner_boundaries() {
+        let original = records(128);
+        let snapshot = RetainedRope::from(original.clone());
+        let mut pending = snapshot.clone();
+        let ranges = (0..16).map(|owner| Ok::<_, u8>(owner * 8..owner * 8 + 2));
+        reset_work_counters();
+        pending.update_ordered_ranges(ranges, |_, previous| {
+            Ok(RopeUpdate::Replace(Record { fragments: previous.fragments + 1, ..*previous }))
+        }).unwrap();
+        assert_eq!(ordered_work_counters(), (1, 4, 32));
+        assert_eq!(work_counters().0, 128);
+        let mut expected = original.clone();
+        for (index, record) in expected.iter_mut().enumerate() {
+            if index % 8 < 2 { record.fragments += 1; }
+        }
+        assert_matches_flat(&pending, &expected);
+        assert_matches_flat(&snapshot, &original);
+    }
+
+    #[test]
+    fn ordered_range_stream_failure_and_stop_preserve_their_contracts() {
+        let original = records(65);
+        let mut pending = RetainedRope::from(original.clone());
+        let snapshot = pending.clone();
+        assert_eq!(pending.update_ordered_ranges([Ok(0..1), Err(7u8)].into_iter(), |_, previous| {
+            Ok(RopeUpdate::Replace(Record { fragments: previous.fragments + 1, ..*previous }))
+        }), Err(RopeEditError::Callback(7)));
+        assert_eq!(pending, snapshot);
+        assert_eq!(pending.update_ordered_ranges([Ok::<_, u8>(0..1), Ok(65..66)].into_iter(), |_, previous| {
+            Ok(RopeUpdate::Replace(*previous))
+        }), Err(RopeEditError::Storage));
+        assert_eq!(pending, snapshot);
+        pending.update_ordered_ranges([Ok::<_, u8>(0..20), Err(7)].into_iter(), |index, previous| {
+            Ok(if index == 9 { RopeUpdate::Stop } else {
+                RopeUpdate::Replace(Record { fragments: previous.fragments + 1, ..*previous })
+            })
+        }).unwrap();
+        let mut expected = original;
+        for record in &mut expected[..9] { record.fragments += 1; }
+        assert_matches_flat(&pending, &expected);
+    }
+
+    #[test]
+    fn seeded_disjoint_ordered_ranges_match_flat_updates_and_share_snapshots() {
+        let mut seed = 0x5317_u32;
+        let mut expected = records(257);
+        let mut pending = RetainedRope::from(expected.clone());
+        for _ in 0..64 {
+            let snapshot = pending.clone();
+            let before = expected.clone();
+            let mut indexes = Vec::new();
+            for _ in 0..24 {
+                seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                indexes.push(seed as usize % expected.len());
+            }
+            indexes.sort_unstable();
+            indexes.dedup();
+            pending.update_ordered_ranges(indexes.iter().map(|&index| Ok::<_, u8>(index..index + 1)), |_, previous| {
+                Ok(RopeUpdate::Replace(Record { fragments: previous.fragments + 1, ..*previous }))
+            }).unwrap();
+            for index in indexes { expected[index].fragments += 1; }
+            assert_matches_flat(&pending, &expected);
+            assert_matches_flat(&snapshot, &before);
+        }
     }
 
     #[test]

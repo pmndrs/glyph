@@ -156,6 +156,8 @@ archived rename commands and keeps deferred API work out of shipped claims.
 
 The `glyph:shaper-profile-artifact` diagnostic workflow builds with the same release shaper settings and Binaryen pass list, retaining function names in an isolated Cargo target. It requires a frozen package archive and refuses any difference in the ordered non-custom Wasm sections. The final diagnostic artifact consists of the original release sections plus the optimized candidate's name section; it never replaces `dist`. Its manifest records archive, release, diagnostic and executable-section hashes, tool versions, source revision/dirty state and final function-index names. Names identify optimized functions; merged and inlined work may not map to a single Rust source function.
 
+Sparse retained gather now feeds the existing sorted dirty-owner frontier and owner-local unpublished source intervals into one ordered rope traversal. Ranges that intersect the same leaf are handled before that leaf is reconstructed, so owner boundaries no longer repeat leaf and ancestor copies. The one-owner entry point adapts to the same stream and glyph callback. Borrowed semantic column views carry no copied text/glyph data; authoritative gather ranges retain the distinction between source glyphs and emitted rows, including clean decorated owners. Topology stops identify the owner and local source offset before the existing suffix builder resumes. Source-tree errors preserve the previous root, and the existing cache-invalid publication failure path rebuilds the mutated column workspace.
+
 ## Ownership
 
 The package owns six runtime layers:
