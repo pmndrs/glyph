@@ -8,6 +8,7 @@ import { loadFont as loadGlyphFont } from '../../dist/loader.js';
 import * as THREE from 'three/webgpu';
 
 import { createThreeTestHandle } from '../support/three-handle.mjs';
+import { seededRandom } from '../support/text-mutation-lanes.mjs';
 
 const fontUrls = {
   inter: new URL('../../../../benches/fixtures/rendering/inter-bitmap-16-32.font.glb', import.meta.url),
@@ -368,6 +369,16 @@ test('glyph flags decode through exported names rather than remembered indices',
   }
 });
 
+function copySnapshot(copy) {
+  return {
+    glyphs: Array.from({ length: copy.count }, (_, index) => copy.glyphAt(index)),
+    measurements: copy.measurements.map(({ anchorPoint, ...measurement }) => ({
+      ...measurement,
+      center: anchorPoint('center'),
+    })),
+  };
+}
+
 test('pending split matches publication and retains its independent copy across later edits', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont();
@@ -378,30 +389,23 @@ test('pending split matches publication and retains its independent copy across 
   scene.add(group);
   group.add(node, sibling);
   const copies = [];
-  const snapshot = (copy) => ({
-    glyphs: Array.from({ length: copy.count }, (_, index) => copy.glyphAt(index)),
-    measurements: copy.measurements.map(({ anchorPoint, ...measurement }) => ({
-      ...measurement,
-      center: anchorPoint('center'),
-    })),
-  });
   try {
     for (const text of ['one two', 'different words']) {
       node.text = text;
       sibling.text = `still pending: ${text}`;
       const [before, beforeDecorations] = node.split();
       copies.push(before, beforeDecorations);
-      const saved = snapshot(before);
+      const saved = copySnapshot(before);
       assert.equal(node.commitState().status, 'pending');
       assert.equal(sibling.commitState().status, 'pending');
       assert.equal(before.count, text.replaceAll(' ', '').length, 'spaces are not drawable glyphs');
       scene.updateMatrixWorld(true);
       const [publishedCopy, publishedDecorations] = node.split();
       copies.push(publishedCopy, publishedDecorations);
-      assert.deepEqual(snapshot(publishedCopy), saved);
+      assert.deepEqual(copySnapshot(publishedCopy), saved);
       node.text = 'subsequent edit';
       node.measure();
-      assert.deepEqual(snapshot(before), saved, 'queries and edits cannot mutate the earlier copy');
+      assert.deepEqual(copySnapshot(before), saved, 'queries and edits cannot mutate the earlier copy');
     }
     node.dispose();
     for (const copy of copies) if (copy?.count !== undefined) assert.ok(copy.count > 0);
@@ -410,6 +414,46 @@ test('pending split matches publication and retains its independent copy across 
     node.dispose();
     sibling.dispose();
     group.dispose();
+  }
+});
+
+test('seeded pending split edits match freshly published Unicode layouts', async (t) => {
+  const font = createFontStack(await loadFont(), await loadFont('amiri'));
+  const three = await createThreeTestHandle(t);
+  const scene = new THREE.Scene();
+  const node = three.createText({ font, text: 'seed', style: { fontSize: 16 } });
+  scene.add(node);
+  const random = seededRandom(0x51a17);
+  const fragments = ['office', 'a\u0301', 'سلام', 'ab سلام cd', 'A\nB', 'one two three'];
+  try {
+    for (let step = 0; step < 32; step += 1) {
+      const text = `${fragments[Math.floor(random() * fragments.length)]} ${step}`;
+      const properties = {
+        style: { fontSize: 12 + Math.floor(random() * 12), color: step % 2 === 0 ? '#ff0000' : '#0000ff' },
+        constraints: { width: { mode: 'exact', size: 35 + Math.floor(random() * 100) } },
+        layout: { wrap: 'word', align: step % 2 === 0 ? 'start' : 'center' },
+      };
+      node.set({ text, ...properties });
+      const [pending, decorations] = node.split();
+      assert.equal(node.commitState().status, 'pending', `step ${step} must not publish the source`);
+      const fresh = await mount(t, font, text, properties);
+      let published;
+      let publishedDecorations;
+      try {
+        [published, publishedDecorations] = fresh.node.split();
+        assert.deepEqual(copySnapshot(pending), copySnapshot(published), `seeded edit ${step}: ${text}`);
+        scene.updateMatrixWorld(true);
+        assert.equal(node.commitState().status, 'committed');
+      } finally {
+        pending.dispose();
+        decorations?.dispose();
+        published?.dispose();
+        publishedDecorations?.dispose();
+        unmount(fresh);
+      }
+    }
+  } finally {
+    node.dispose();
   }
 });
 
