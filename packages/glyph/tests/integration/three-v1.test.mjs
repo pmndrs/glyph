@@ -202,6 +202,130 @@ test('one initialized Glyph runtime creates independent named Three handles over
   reused.dispose();
 });
 
+test('host topology authority refreshes metadata and rejects changed scope or storage', async (t) => {
+  const frames = [];
+  let spanCalls = 0;
+  const three = await createThreeTestHandle(t, {
+    ...ThreeConfig,
+    schema: {
+      ...ThreeConfig.schema,
+      preservesHostTopology: true,
+      instanceSpan(boundary, input) {
+        spanCalls += 1;
+        return ThreeConfig.schema.instanceSpan(boundary, input);
+      },
+    },
+    renderer(context) {
+      const renderer = ThreeConfig.renderer(context);
+      const decode = renderer.decode.bind(renderer);
+      renderer.decode = (frame) => {
+        frames.push({ kind: frame.displayList.kind, retained: frame.displayList.retainedTopology });
+        const before = spanCalls;
+        const prepared = decode(frame);
+        if (frame.displayList.retainedTopology === true) {
+          assert.equal(spanCalls, before, 'retained renderer does not force lazy schema constructors');
+          const span = frame.displayList.value.children.at(0).instances.at(0);
+          assert.ok(Number.isFinite(span.value.input.inlineExtent), 'fresh metadata remains lazily readable');
+          assert.ok(spanCalls > before, 'explicit metadata consumption invokes the constructor');
+        }
+        return prepared;
+      };
+      return renderer;
+    },
+  });
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const other = three.createTextGroup();
+  const label = three.createText({ font, text: '54,321' });
+  group.add(label);
+  scene.add(group, other);
+  try {
+    scene.updateMatrixWorld(true);
+    assert.equal(frames.at(-1).retained, undefined, 'cold publication has no accepted topology');
+    const calls = spanCalls;
+    label.text = '12,345';
+    scene.updateMatrixWorld(true);
+    assert.deepEqual(frames.at(-1), { kind: 'replace', retained: true });
+    assert.ok(spanCalls > calls, 'complete fresh metadata still passes through custom schema callbacks');
+    const acceptedDraw = rootDraws(scene)[0];
+    acceptedDraw.removeFromParent();
+    label.text = '98,765';
+    scene.updateMatrixWorld(true);
+    assert.equal(frames.at(-1).retained, true);
+    assert.equal(rootDraws(scene)[0], acceptedDraw, 'metadata update restores a detached accepted host mesh');
+    const acceptedCount = frames.length;
+    assert.throws(() => {
+      label.constraints = { width: { mode: 'exact', size: NaN } };
+    });
+    scene.updateMatrixWorld(true);
+    assert.equal(frames.length, acceptedCount, 'rejected setters do not invalidate accepted producer state');
+    other.add(label);
+    scene.updateMatrixWorld(true);
+    assert.equal(
+      frames.at(-1).retained,
+      undefined,
+      'changed scope/transform binding requires complete host replacement',
+    );
+    label.text = 'a long paragraph that forces larger instance storage '.repeat(16);
+    scene.updateMatrixWorld(true);
+    assert.equal(frames.at(-1).retained, undefined, 'count and storage replacement revoke topology authority');
+  } finally {
+    label.dispose();
+    group.dispose();
+    other.dispose();
+    font.dispose();
+  }
+});
+
+test('spread schema overrides lose inherited host topology certification', async (t) => {
+  const observed = [];
+  const phases = [];
+  const three = await createThreeTestHandle(t, {
+    ...ThreeConfig,
+    schema: {
+      ...ThreeConfig.schema,
+      instanceSpan(boundary, input) {
+        observed.push(input.inlineExtent);
+        return Object.freeze({
+          ...ThreeConfig.schema.instanceSpan(boundary, input),
+          metadataExtent: input.inlineExtent,
+        });
+      },
+    },
+    renderer(context) {
+      const renderer = ThreeConfig.renderer(context);
+      const decode = renderer.decode.bind(renderer);
+      renderer.decode = (frame) => {
+        phases.push(frame.displayList.retainedTopology);
+        return decode(frame);
+      };
+      return renderer;
+    },
+  });
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const label = three.createText({ font, text: 'iiiiii' });
+  scene.add(label);
+  try {
+    scene.updateMatrixWorld(true);
+    const count = observed.length;
+    const oldExtent = observed.at(-1);
+    label.text = 'WWWWWW';
+    scene.updateMatrixWorld(true);
+    assert.equal(
+      phases.at(-1),
+      undefined,
+      'spread callback override revokes inherited certification without explicit opt-out',
+    );
+    assert.ok(observed.length > count, 'ordinary replacement executes metadata-dependent constructors');
+    assert.notEqual(observed.at(-1), oldExtent, 'the callback receives the new proportional-font bounds');
+  } finally {
+    label.dispose();
+    font.dispose();
+  }
+});
+
 test('glyph.shape preserves root, codec, and font ownership while batching handles', async (t) => {
   const first = await createThreeTestHandle(t);
   const second = await createThreeTestHandle(t);

@@ -296,9 +296,9 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
   }
 
   #prepareBound(frame: CommandBufferView<ThreeBindings>): PreparedPublication {
-    const replacesDraws = frame.displayList.kind === 'replace';
+    const replacesDraws = frame.displayList.kind === 'replace' && frame.displayList.retainedTopology !== true;
     const transforms = replacesDraws ? new Map<number, THREE.Object3D>() : this.#transforms;
-    if (frame.displayList.kind === 'replace') {
+    if (frame.displayList.kind === 'replace' && replacesDraws) {
       for (let index = 0; index < frame.displayList.value.transforms.length; index += 1) {
         const transform = frame.displayList.value.transforms.at(index)!;
         transforms.set(transform.recordIndex, transform.value);
@@ -324,7 +324,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       this.#readBoundResources(frame, context);
       this.#readBoundBuffers(frame, context);
       preparedDraws =
-        frame.displayList.kind === 'replace'
+        frame.displayList.kind === 'replace' && replacesDraws
           ? prepareDrawReplacement({
               root: this.#owner.renderObject,
               children: frame.displayList.value.children,
@@ -376,7 +376,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
         : {
             ...publication,
             replacesDraws: false,
-            transforms: undefined,
+            transforms: frame.displayList.kind === 'replace' ? this.#prepareTransforms(preparedDraws) : undefined,
           };
     } catch (error) {
       this.#discardPreparation(context, preparedDraws);
@@ -406,7 +406,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     if (prepared.draws.changed) {
       for (const update of prepared.draws.reusedUpdates) applyReusedDrawUpdate(update);
     }
-    if (prepared.replacesDraws) {
+    if (prepared.transforms !== undefined) {
       commitTransforms(prepared.context.transformAttribute, prepared.transforms);
       for (const update of prepared.transforms.direct) applyTransformUpdate(update);
     }
@@ -449,8 +449,11 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     for (const texture of prepared.retiredTextures) attempt(() => texture.dispose());
     for (const buffer of retiredBuffers) attempt(() => buffer.attribute.dispose());
     if (retiredTransformAttribute !== undefined) attempt(() => retiredTransformAttribute.dispose());
-    if (prepared.replacesDraws) {
-      for (const draw of this.#draws) attempt(() => draw.updateMatrixWorld(false));
+    if (prepared.transforms !== undefined) {
+      for (const draw of this.#draws) {
+        if (draw.parent !== prepared.draws.root) attempt(() => prepared.draws.root.add(draw));
+        attempt(() => draw.updateMatrixWorld(false));
+      }
     }
     this.#originRecords.clear();
     return failure;

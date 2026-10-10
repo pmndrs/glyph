@@ -115,6 +115,7 @@ export type ThreeCodec = Codec;
 export const ThreeFontFormats: ThreeFontFormats = Object.freeze({ bitmap, msdf, slug });
 
 export const ThreeSchema: GlyphSchema<ThreeBindings, ThreePublicationBoundary> = defineGlyphSchema({
+  preservesHostTopology: true,
   program: (_root, program) => Object.freeze({ kind: 'three-program', program }),
   buffer: (_root, input) => Object.freeze({ kind: 'three-buffer', input }),
   material: (root, binding) => {

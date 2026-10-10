@@ -93,7 +93,9 @@ export interface TypedGroup {
   readonly children: BorrowedCommandSequence<TypedGroupChild>;
 }
 
-export type TypedGroupPhase = Readonly<{ kind: 'unchanged' }> | Readonly<{ kind: 'replace'; value: TypedGroup }>;
+export type TypedGroupPhase =
+  | Readonly<{ kind: 'unchanged' }>
+  | Readonly<{ kind: 'replace'; retainedTopology?: true; value: TypedGroup }>;
 
 export type TypedRetirementCommand =
   | Readonly<{ kind: 'resource'; resource: TypedResource }>
@@ -287,6 +289,7 @@ export class TypedCommandTreeMapper {
       replacesGroup
         ? Object.freeze({
             kind: 'replace' as const,
+            ...(candidate.retainedHostTopology ? { retainedTopology: true as const } : {}),
             value: Object.freeze({ children: groupChildren }),
           })
         : Object.freeze({ kind: 'unchanged' as const }),

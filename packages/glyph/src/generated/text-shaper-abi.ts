@@ -163,7 +163,8 @@ export const textShaperAbi = {
       "update": 2
     },
     "resultFlags": {
-      "checkpoint": 1
+      "checkpoint": 1,
+      "retainedHostTopology": 2
     },
     "retirementKinds": {
       "buffer": 2,

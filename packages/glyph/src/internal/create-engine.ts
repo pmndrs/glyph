@@ -227,11 +227,23 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
         }) satisfies DisplayListInstanceSpan<Bindings['instanceSpan']>;
       };
 
+      const certification = this.#config.schema.preservesHostTopology;
+      const preservesHostTopology =
+        certification === true ||
+        (certification !== undefined &&
+          certification !== false &&
+          certification.batch === this.#config.schema.batch &&
+          certification.instance === this.#config.schema.instance &&
+          certification.instanceSpan === this.#config.schema.instanceSpan);
+
       const group =
         source.group.kind === 'unchanged'
           ? Object.freeze({ kind: 'unchanged' as const })
           : Object.freeze({
               kind: 'replace' as const,
+              ...(source.group.retainedTopology === true && preservesHostTopology
+                ? { retainedTopology: true as const }
+                : {}),
               value: Object.freeze({
                 transforms: mapBorrowedSequence(this.#mapper.transformBindings(source), ({ binding, transformIndex }) =>
                   Object.freeze({ value: this.#transform(binding, transformIndex), recordIndex: transformIndex }),
