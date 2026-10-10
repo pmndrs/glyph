@@ -485,7 +485,15 @@ function writeTextMutations(
     view.setUint32(offset + layout.deleteCount, u32(mutation.deleteCount, 'text mutation delete count'), true);
     view.setUint32(offset + layout.insertOffset, payloadOffset, true);
     view.setUint32(offset + layout.insertCount, u32(mutation.insert.length, 'text mutation insert count'), true);
-    for (let unit = 0; unit < mutation.insert.length; unit += 1) {
+    let unit = 0;
+    for (; unit + 1 < mutation.insert.length; unit += 2) {
+      view.setUint32(
+        payloadOffset + unit * 2,
+        mutation.insert.charCodeAt(unit) | (mutation.insert.charCodeAt(unit + 1) << 16),
+        true,
+      );
+    }
+    if (unit < mutation.insert.length) {
       view.setUint16(payloadOffset + unit * 2, mutation.insert.charCodeAt(unit), true);
     }
   }

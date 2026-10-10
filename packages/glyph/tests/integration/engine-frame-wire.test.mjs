@@ -56,6 +56,53 @@ test('prepared frame writes exact bytes into a nonzero-offset request arena', ()
   assert.throws(() => writePreparedPlannerFrameUpdate(prepared, arena.subarray(1)), /exactly/u);
 });
 
+test('text request payloads preserve every UTF-16 unit at odd and even lengths and arena offsets', () => {
+  let seed = 0x12345678;
+  const lengths = [0, 1, 2, 3, 4, 7, 8, 31, 64, 127, 128, 129, 22_000];
+  const payload = textShaperAbi.layouts.engineTextMutation;
+  for (const length of lengths) {
+    const units = Array.from({ length }, () => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed >>> 16;
+    });
+    const insert = units.map((unit) => String.fromCharCode(unit)).join('');
+    const prepared = preparePlannerFrameUpdate({
+      rootId: ROOT_ID,
+      codecHandle: CODEC_ID,
+      expectedEngineRevision: 0,
+      consumedRevision: 0,
+      acknowledgedPublicationGeneration: 0,
+      limits: {
+        maxParagraphs: 1,
+        maxClusters: 32_000,
+        maxLines: 8,
+        maxRegions: 1,
+        maxExclusions: 1,
+        maxInlineObjects: 1,
+        maxSlotsPerBand: 1,
+        maxOutputBytes: 65_536,
+      },
+      // The leading odd-length insertion also exercises a payload only aligned to two bytes.
+      textMutations: [
+        { paragraphId: PARAGRAPH_ID, start: 0, deleteCount: 0, insert: '\u0000' },
+        { paragraphId: PARAGRAPH_ID, start: 1, deleteCount: 0, insert },
+      ],
+    });
+    for (const offset of [0, 1, 3, 8]) {
+      const storage = new Uint8Array(prepared.byteLength + offset + 5).fill(0xa5);
+      const arena = storage.subarray(offset, offset + prepared.byteLength);
+      writePreparedPlannerFrameUpdate(prepared, arena);
+      const view = new DataView(arena.buffer, arena.byteOffset, arena.byteLength);
+      const record = prepared.offsets.textOffset + payload.size;
+      const start = view.getUint32(record + payload.insertOffset, true);
+      assert.equal(view.getUint32(record + payload.insertCount, true), length);
+      assert.deepEqual(arena.subarray(start, start + length * 2), new Uint8Array(Buffer.from(insert, 'utf16le')));
+      assert.ok(storage.subarray(0, offset).every((byte) => byte === 0xa5));
+      assert.ok(storage.subarray(offset + prepared.byteLength).every((byte) => byte === 0xa5));
+    }
+  }
+});
+
 test('production frame compiler preserves the established benchmark request bytes', async () => {
   const abi = textShaperAbi;
   const text = 'A😀B';
