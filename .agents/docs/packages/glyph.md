@@ -134,8 +134,8 @@ sources:
     resource: https://github.com/Chlumsky/msdfgen/blob/v1.13/main.cpp
     title: Pinned msdfgen CLI scanline and error-correction configuration
 generated:
-  by: openai-codex/gpt-5
-  at: '2026-10-10T18:08:30.261Z'
+  by: openai-codex/gpt-6
+  at: '2026-10-10T19:25:28.016Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -1309,7 +1309,8 @@ and stage semantic changes before moving the uniform, so rejected caller input p
 
 Planner frames are prepared as validated records and written directly into the retained Wasm request arena, including
 paragraph queries. The single UTF-16 payload loop packs two code units into each little-endian 32-bit write,
-with one 16-bit tail for odd lengths; it allocates no intermediate text buffer. The writer respects the arena view's
+with one 16-bit tail for odd lengths; its helper receives only the destination view, payload offset and text, and
+allocates no intermediate text buffer. The writer respects the arena view's
 byte offset and clears reused storage before encoding. Query
 requests retain minimal text mutations; removal requests include only paragraphs previously published. Output growth
 invalidates prior borrowed results and rewrites the request before retrying, preserving the existing acceptance fence.
