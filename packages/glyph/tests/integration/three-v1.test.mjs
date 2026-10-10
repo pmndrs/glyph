@@ -2428,22 +2428,25 @@ test('Text.split imports a planner-assisted copy with exact world alignment and 
 });
 
 test('detached glyphs retain their engine domain after the source and font owners are disposed', async (t) => {
-  const three = await createThreeTestHandle(t);
-  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
-  const scene = new THREE.Scene();
-  const label = three.createText({ font, text: 'outlives source', style: { fontSize: 16 } });
-  scene.add(label);
-  scene.updateMatrixWorld(true);
-  const [detached] = label.split();
-  scene.add(detached);
-  label.dispose();
-  font.dispose();
-  three.dispose();
-  try {
-    assert.ok(detached.materials.length > 0);
-    detached.getMatrixAt(0, new THREE.Matrix4());
-  } finally {
-    detached.dispose();
+  for (const published of [false, true]) {
+    const three = await createThreeTestHandle(t);
+    const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+    const scene = new THREE.Scene();
+    const label = three.createText({ font, text: 'outlives source', style: { fontSize: 16 } });
+    scene.add(label);
+    if (published) scene.updateMatrixWorld(true);
+    const [detached] = label.split();
+    assert.equal(label.commitState().status, published ? 'committed' : 'pending');
+    scene.add(detached);
+    label.dispose();
+    font.dispose();
+    three.dispose();
+    try {
+      assert.ok(detached.materials.length > 0);
+      detached.getMatrixAt(0, new THREE.Matrix4());
+    } finally {
+      detached.dispose();
+    }
   }
 });
 
