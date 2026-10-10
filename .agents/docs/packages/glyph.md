@@ -2090,7 +2090,7 @@ The Three split is exercised through `pnpm scripts run benchmark:v1-bitmap`, wit
 
 The split verification on 2026-09-07 passed both browser workflows. Bitmap produced 3,109 lit pixels with native TSL and 2,685 with the experimental shaders on each backend; custom Bitmap composition likewise produced 2,642 versus 2,185. MTSDF and Slug lit-pixel counts matched in these fixtures. These checks establish rendering and lifecycle behavior, not complete visual parity; the Bitmap difference remains a reason to keep the experimental entry separate.
 
-Published distributions include hidden JavaScript source maps and referenced declaration maps. The build rebases staging-relative source paths onto the packaged source tree before atomically publishing dist; packed-package checks verify every map source and declaration reference resolves inside the installed package. Hidden JS maps add install bytes but no runtime imports or browser map requests.
+Published distributions include hidden JavaScript source maps and referenced declaration maps. The build rebases staging-relative source paths onto the packaged source tree before atomically publishing dist; packed-package checks verify every map source and declaration reference resolves inside the installed package. Hidden JS maps add install bytes but no runtime imports or browser map requests. The repository-only raster-baker profiler is excluded together with its source and maps.
 
 ## Retained host topology publication
 
