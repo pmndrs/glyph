@@ -252,7 +252,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-09T21:20:46Z'
+  at: '2026-10-10T17:29:55.853Z'
 ---
 
 # Package reference: `@pmndrs/glyph-benchmarks`
@@ -828,6 +828,18 @@ Its `--case prepared-read --count 100|1000 --boundary preparation|publication` p
 assignments and immediate semantic measurements as the paired Labs cases. Both boundaries use identical edited strings;
 only the publication boundary calls `glyph.shape()` after each assignment. Cold measurement oracles and untouched-label
 checks run outside the sampled loop. Existing profile cases retain their explicit-publication behavior.
+The `width-reflow` profile uses the existing 22k-glyph paragraph fixture and the Labs width sequence
+`420 + iteration / 64`, with one paragraph attached to a real Scene. Preparation reads `measure().glyphCount`;
+publication additionally traverses the Scene, including its private publication root. The publication lane asserts
+committed output before cold-control queries. A fresh paragraph receives the final width and equivalent read demands,
+including optional ink inspection, before complete measurements are compared outside the sampled loop.
+A standalone TextGroup matrix traversal is not a semantic publication fence; legacy rows using only that traversal
+must not be interpreted as publication performance. Profiles are attribution evidence, not statistical release comparisons.
+The common-operation and 22k-paragraph publication cases now mount through the shared `createPublishedParagraph`
+fixture, traverse its Scene, and assert committed edit state outside the timed loop. Measurement-only and cached-read
+fixtures retain their detached setup. Historical timings from the corrected publication cases require fresh runs of
+both artifacts; they cannot be reused as equivalent workloads. Cold-mount and 1024-Text publication fixtures still
+require the same audit before their timings can establish completed publication.
 `benchmark:labs-internal` is reserved for workspace-only implementation experiments that cannot ship in
 the package artifact. Its `engine` suite preserves the raw retained-engine invalidation classes across selectable Bitmap,
 MTSDF, and Slug artifacts and Latin, bidi, and CJK corpora. Its `kernel` suite measures the scalar,

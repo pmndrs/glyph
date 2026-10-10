@@ -1,6 +1,13 @@
 import { assert, bench, group } from '@pmndrs/labs';
 
-import { createLabels, createParagraph, disposeLabels, disposeParagraph, editedText } from './fixture.ts';
+import {
+  createLabels,
+  createParagraph,
+  disposeLabels,
+  disposeParagraph,
+  editedText,
+  createPublishedParagraph,
+} from './fixture.ts';
 
 group('common text operations @core', () => {
   bench('measure after text change @layout @measure @smoke', function* () {
@@ -15,60 +22,64 @@ group('common text operations @core', () => {
   });
 
   bench('publish after text change @layout @publication @smoke', function* () {
-    const created = createParagraph();
+    const created = createPublishedParagraph();
     let iteration = 0;
     const publishEdit = () => {
       created.paragraph.text = editedText(iteration++);
-      created.textGroup.updateMatrixWorld(true);
+      created.scene.updateMatrixWorld(true);
       if (created.textGroup.error !== undefined) throw created.textGroup.error;
       return created.textGroup.textCount;
     };
     // The first edit of a mounted Text is first-time work, measured in the cold suite; this workload times later edits.
     publishEdit();
     const textCount = yield publishEdit;
+    assert.equal(created.paragraph.commitState().status, 'committed', 'scene traversal must publish the edit');
     assert.equal(textCount, 1);
     disposeParagraph(created);
   });
 
   bench('reflow after width change @layout @reflow @publication @smoke', function* () {
-    const created = createParagraph();
+    const created = createPublishedParagraph();
     let iteration = 0;
     const textCount = yield () => {
       iteration += 1;
       created.paragraph.constraints = { width: { mode: 'exact', size: 520 + iteration / 64 } };
-      created.textGroup.updateMatrixWorld(true);
+      created.scene.updateMatrixWorld(true);
       if (created.textGroup.error !== undefined) throw created.textGroup.error;
       return created.textGroup.textCount;
     };
     assert.equal(textCount, 1);
+    assert.equal(created.paragraph.commitState().status, 'committed', 'scene traversal must publish the edit');
     disposeParagraph(created);
   });
 
   bench('publish after color change @style @publication @smoke', function* () {
-    const created = createParagraph();
+    const created = createPublishedParagraph();
     let alternate = false;
     const textCount = yield () => {
       alternate = !alternate;
       created.paragraph.style = { color: alternate ? '#f97316' : '#38bdf8', fontSize: 24 };
-      created.textGroup.updateMatrixWorld(true);
+      created.scene.updateMatrixWorld(true);
       if (created.textGroup.error !== undefined) throw created.textGroup.error;
       return created.textGroup.textCount;
     };
     assert.equal(textCount, 1);
+    assert.equal(created.paragraph.commitState().status, 'committed', 'scene traversal must publish the edit');
     disposeParagraph(created);
   });
 
   bench('relayout after font-size change @layout @style @publication @smoke', function* () {
-    const created = createParagraph();
+    const created = createPublishedParagraph();
     let iteration = 0;
     const textCount = yield () => {
       iteration += 1;
       created.paragraph.style = { fontSize: 20 + iteration / 1024 };
-      created.textGroup.updateMatrixWorld(true);
+      created.scene.updateMatrixWorld(true);
       if (created.textGroup.error !== undefined) throw created.textGroup.error;
       return created.textGroup.textCount;
     };
     assert.equal(textCount, 1);
+    assert.equal(created.paragraph.commitState().status, 'committed', 'scene traversal must publish the edit');
     disposeParagraph(created);
   });
 
