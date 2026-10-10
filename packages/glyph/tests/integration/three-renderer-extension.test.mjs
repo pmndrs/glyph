@@ -156,7 +156,19 @@ test('a custom Three technique realizes supplied geometry through GlyphConfig', 
   const scene = new THREE.Scene();
   const text = three.createText({ font, text: '12345', style: { fontSize: 16 } });
   scene.add(text);
+  const [pendingCopy] = text.split();
+  t.after(() => pendingCopy.dispose());
+  assert.equal(text.commitState().status, 'pending');
+  assert.equal(pendingCopy.count, 5);
+  assert.ok(pendingCopy.measurements.every((measurement) => measurement.geometry.kind === 'supplied'));
+  const copiedGeometry = pendingCopy.measurements.map((measurement) => measurement.geometry);
   scene.updateMatrixWorld(true);
+  const [publishedCopy] = text.split();
+  t.after(() => publishedCopy.dispose());
+  assert.deepEqual(
+    publishedCopy.measurements.map((measurement) => measurement.geometry),
+    copiedGeometry,
+  );
   const retainedDraw = scene.getObjectByName('@pmndrs/glyph:anonymous')?.children.find((child) => child.isMesh);
   assert.ok(retainedDraw);
   assert.equal(retainedDraw.geometry.instanceCount, 5);

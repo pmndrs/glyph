@@ -13,7 +13,6 @@ import type { ThreeRendererResources } from './internal/renderer-resources.js';
 import { copyCurrentLocalTransform } from './detached-object.js';
 
 interface DetachedTextSource extends THREE.Object3D {
-  readonly text: string;
   readonly pixelSnapping: boolean;
 }
 
@@ -39,6 +38,7 @@ export function localToWorldMatrix(
 
 /** @internal Constructed only by `Text.split()`. */
 interface GlyphsOptions {
+  readonly text: string;
   readonly source: DetachedTextSource;
   readonly placements: GlyphPlacements;
   readonly copy: (renderer: ThreeCommandBufferRenderer, boundary: ThreePublicationBoundary) => GlyphCopy<void>;
@@ -174,7 +174,7 @@ export class Glyphs extends THREE.Object3D {
       const drawn = this.#target.snapshotGlyphOrigins(layout.glyphStableIds, layout.x, layout.y);
       const copiedPlacements = createGlyphPlacements(
         layout,
-        options.source.text,
+        options.text,
         drawn.drawnX,
         drawn.drawnY,
         drawn.incomplete,

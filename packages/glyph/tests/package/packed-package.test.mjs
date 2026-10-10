@@ -46,6 +46,9 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   assert.ok(packedFiles.includes('dist/internal/content-digest.js'));
   assert.equal(packedFiles.includes('dist/internal/raster-baker-profile.d.ts'), false);
   assert.equal(packedFiles.includes('dist/internal/raster-baker-profile.js'), false);
+  assert.equal(packedFiles.includes('dist/internal/raster-baker-profile.js.map'), false);
+  assert.equal(packedFiles.includes('dist/internal/raster-baker-profile.d.ts.map'), false);
+  assert.equal(packedFiles.includes('src/internal/raster-baker-profile.ts'), false);
   // The ABI ships as the generated TypeScript module the package's own bakers import. No JSON copy is
   // published: nothing could import one, because `exports` has no wildcard and names no ABI JSON. The
   // modules are packed because the published baker subpaths reach them, not because a consumer can.

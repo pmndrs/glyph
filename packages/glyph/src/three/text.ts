@@ -1073,6 +1073,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     const source = this.#root.member(this);
     const glyphRenderOrderBase = binding.glyphRenderOrderBase(source, stableIds);
     const glyphs = createGlyphs({
+      text: this.text,
       source,
       placements,
       resources: this.#root.rendererResources,
