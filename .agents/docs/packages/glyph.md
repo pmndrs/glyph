@@ -137,8 +137,8 @@ sources:
     resource: ../../../packages/glyph/scripts/check-static.mts
     title: Shared built-package static verification workflow
 generated:
-  by: openai-codex/gpt-5
-  at: '2026-10-10T16:19:04.057Z'
+  by: openai-codex/gpt-6
+  at: '2026-10-10T16:40:14Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -2371,6 +2371,8 @@ The standalone native shaper suite passes all 330 unit and 10 integration/confor
 The exact packed candidate is 7034dd5e834ce14b8e39c36349e56975604a382a1ab8e8e09ab93bdffe9fbd91, with shaper 9ce201c984f02b514689dfc08603db29c537b790e848b13f3b3fd61475e70188 (1,459,785 raw bytes; 540,139 gzip bytes at Node level 9). The package-size workflow passes its production graph checks. Compared with cached main artifact 9a25542ca86357a07270adf94cb1bb879bbbffd43c529ac1af355070b23df22e, the shaper adds 1,161 raw and 331 gzip bytes; all 270 packaged TypeScript source files in that baseline match main 305e5ec9.
 
 The four-block full Labs comparison against registry 0.1.0 reports 45 faster, 9 slower, 45 neutral and 3 excluded workloads. The workload median remains 1.15 ms; workloads above 3 ms fall from 41 to 37. Baseline CPU clock drift of 11.3% limits exact deltas. Width-change measurement and inspection remain slower by approximately 1.4 ms on the 22,000-glyph paragraph. These results support reviewing the small publication cut separately from the unfinished rope/#247 frontier; they do not establish universal speedups. Exact-head remote CI and PR landing remain pending.
+
+The combined rope integration is source-only and has not been built or tested; standalone evidence does not clear that combined source or close #247.
 
 Named diagnostics retain raw Rust names outside optimizer input. Production passes consume stripped executable bytes; the final read-only function map supplies optimized indexes. Numeric defined identities map to raw function names with the import offset, generated/merged identities stay explicitly labeled, and every final index must be present. Exact executable-section equality authorizes the override. A surviving name does not identify every inlined or merged contributor.
 

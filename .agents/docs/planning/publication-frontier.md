@@ -8,16 +8,16 @@ sources:
     title: Detailed design, lifetimes, evidence and artifact hashes
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-10T16:36:42Z'
+  at: '2026-10-10T16:40:14Z'
 ---
 
 # Publication frontier checklist
 
 Current resume point: the standalone producer-owned publication contract is committed as `4d4e12bc` on `feat/retained-host-publication`, based on remote main `305e5ec9`. The rope draft is rebased above it as the real dependency `main → feat/retained-host-publication → feat/publication-range-spike`. Original rope history remains in `feat/backup-rope-before-host-publication-20261010`; the full binary delta is saved under `.cache/rebase-host-publication-backup/`.
 
-The standalone packed release candidate is SHA256 `7034dd5e834ce14b8e39c36349e56975604a382a1ab8e8e09ab93bdffe9fbd91`, shaper `9ce201c984f02b514689dfc08603db29c537b790e848b13f3b3fd61475e70188`. Its native 330-unit plus 10 integration/conformance tests, focused 133 and full 953 Node tests passed. The rebased combined source has no new artifact or runtime clearance. Never use an older rope or tactical Three artifact to validate this source.
+The standalone packed release candidate is SHA256 `7034dd5e834ce14b8e39c36349e56975604a382a1ab8e8e09ab93bdffe9fbd91`, shaper `9ce201c984f02b514689dfc08603db29c537b790e848b13f3b3fd61475e70188`. Its native 330-unit plus 10 integration/conformance tests, focused 133 and full 953 Node tests passed. Strict standalone Glyph package check 10489 exited successfully. ASCII live checks passed at DPR 1 and 2 against the standalone contract. Combined rope source `3330219e` has not been built or tested and has no new artifact or runtime clearance. Never use an older rope or tactical Three artifact to validate this source.
 
-The release decider is registry **0.1.0 → this standalone candidate**, not an additional isolated main comparison. Full four-block Labs completed: **45 faster, 9 slower, 45 neutral, 3 excluded** after correcting timing-mode exclusions. Baseline clock drift was **11.3%**, so absolute deltas remain qualified; slower workloads remain open findings. Report and manifest: `.cache/publication-contract-main/.cache/retained-host-release-full/`. Strict package, comparative size, hardware and exact-head CI gates remain pending; no release-readiness claim.
+The release decider is registry **0.1.0 → this standalone candidate**, not an additional isolated main comparison. Full four-block Labs completed: **45 faster, 9 slower, 45 neutral, 3 excluded** after correcting timing-mode exclusions. Baseline clock drift was **11.3%**, so absolute deltas remain qualified; slower workloads remain open findings. Report and manifest: `.cache/publication-contract-main/.cache/retained-host-release-full/`. Standalone strict package and ASCII DPR 1/2 checks passed; comparative size and exact-head CI review remain pending, and combined-source checks are still outstanding; no release-readiness claim.
 
 The small main cut may ship independently. The rope/#247 frontier remains unfinished and draft; the user accepts considering the remaining frontier for 0.3.0. Public full assignments, synchronous reads, batching, rejection recovery and explicit publisher lifetime must survive every cut. Retire replaced paths and keep one preparation/publication implementation.
 
