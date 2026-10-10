@@ -6,7 +6,15 @@ import { performance } from 'node:perf_hooks';
 import { resolve } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
 
-import { createLabels, disposeLabels, glyph } from './fixture.ts';
+import {
+  attachToScene,
+  createLabels,
+  createParagraph,
+  disposeLabels,
+  disposeParagraph,
+  glyph,
+  paragraphTextForGlyphs,
+} from './fixture.ts';
 
 const output = requiredEnvironment('GLYPH_EDIT_PROFILE_OUTPUT');
 const profileCase = requiredEnvironment('GLYPH_EDIT_PROFILE_CASE');
@@ -15,13 +23,20 @@ const count = positiveInteger(requiredEnvironment('GLYPH_EDIT_PROFILE_COUNT'), '
 const iterations = positiveInteger(requiredEnvironment('GLYPH_EDIT_PROFILE_ITERATIONS'), 'iterations');
 const warmups = positiveInteger(requiredEnvironment('GLYPH_EDIT_PROFILE_WARMUPS'), 'warmups');
 const position = requiredEnvironment('GLYPH_EDIT_PROFILE_POSITION');
-if (!['same-length', 'length-changing', 'color-only', 'interleaved-read', 'prepared-read'].includes(profileCase)) {
+if (
+  !['same-length', 'length-changing', 'color-only', 'interleaved-read', 'prepared-read', 'width-reflow'].includes(
+    profileCase,
+  )
+) {
   throw new Error(`Unknown profile case: ${profileCase}`);
 }
 if (position !== 'first' && position !== 'last') throw new Error(`Unknown profile position: ${position}`);
 if (boundary !== 'preparation' && boundary !== 'publication') throw new Error(`Unknown profile boundary: ${boundary}`);
-if (boundary === 'preparation' && profileCase !== 'prepared-read') {
-  throw new Error('The preparation boundary requires the prepared-read case');
+if (boundary === 'preparation' && profileCase !== 'prepared-read' && profileCase !== 'width-reflow') {
+  throw new Error('The preparation boundary requires the prepared-read or width-reflow case');
+}
+if (profileCase === 'width-reflow' && count !== 1) {
+  throw new RangeError('The width-reflow case requires one paragraph');
 }
 if (profileCase === 'prepared-read' && count !== 100 && count !== 1000) {
   throw new RangeError('The prepared-read case requires 100 or 1000 labels');
@@ -48,7 +63,15 @@ if (expectedMeasurements !== undefined) {
   assert(JSON.stringify(expectedMeasurements[0]) !== JSON.stringify(expectedMeasurements[1]));
 }
 
-const created = createLabels(count);
+const widthText = profileCase === 'width-reflow' ? paragraphTextForGlyphs(22_000) : undefined;
+const created = (() => {
+  if (widthText !== undefined) {
+    const paragraph = createWidthParagraph(widthText);
+    return { ...paragraph, labels: [paragraph.paragraph], dispose: () => disposeParagraph(paragraph) };
+  }
+  const labels = createLabels(count);
+  return { ...labels, dispose: () => disposeLabels(labels) };
+})();
 const edited = profileCase === 'prepared-read' ? created.labels.filter((_, index) => index % (count / 100) === 0) : [];
 const untouched =
   profileCase === 'prepared-read' ? created.labels.filter((_, index) => index % (count / 100) !== 0) : [];
@@ -84,8 +107,25 @@ const updatePrepared = () => {
   }
   return glyphCount;
 };
+let widthIteration = 0;
+const updateWidth = () => {
+  widthIteration += 1;
+  target.constraints = { width: { mode: 'exact', size: 420 + widthIteration / 64 } };
+  const glyphCount = target.measure().glyphCount;
+  if (boundary === 'publication') {
+    created.scene.updateMatrixWorld(true);
+    if (created.textGroup.error !== undefined) throw created.textGroup.error;
+  }
+  return glyphCount;
+};
 const update =
-  profileCase === 'prepared-read' ? updatePrepared : profileCase === 'interleaved-read' ? updateInterleaved : updateOne;
+  profileCase === 'width-reflow'
+    ? updateWidth
+    : profileCase === 'prepared-read'
+      ? updatePrepared
+      : profileCase === 'interleaved-read'
+        ? updateInterleaved
+        : updateOne;
 
 for (let index = 0; index < warmups; index++) update();
 globalGc()?.();
@@ -103,7 +143,26 @@ for (let index = 0; index < iterations; index++) {
 }
 const cpu = await session.post('Profiler.stop');
 session.disconnect();
+if (boundary === 'publication') assertCommitted();
 
+if (widthText !== undefined) {
+  const cold = createWidthParagraph(widthText);
+  try {
+    cold.paragraph.constraints = { width: { mode: 'exact', size: 420 + widthIteration / 64 } };
+    assert(cold.paragraph.measure().glyphCount > 0, 'cold width reflow must contain glyphs');
+    if (boundary === 'publication') {
+      cold.scene.updateMatrixWorld(true);
+      if (cold.textGroup.error !== undefined) throw cold.textGroup.error;
+    }
+    // Demand the same optional ink metadata in both controls before comparing complete measurements.
+    target.glyphs();
+    cold.paragraph.glyphs();
+    assert(target.measure().glyphCount > 0, 'width reflow must contain glyphs');
+    deepStrictEqual(target.measure(), cold.paragraph.measure());
+  } finally {
+    disposeParagraph(cold);
+  }
+}
 if (expectedMeasurements !== undefined) {
   assert.equal(edited.length, 100);
   for (const label of edited) deepStrictEqual(label.measure(), expectedMeasurements[alternate ? 0 : 1]);
@@ -112,8 +171,7 @@ if (expectedMeasurements !== undefined) {
     untouchedMeasurements,
   );
 }
-if (boundary === 'publication') assertCommitted();
-disposeLabels(created);
+created.dispose();
 const directory = resolve(output);
 await mkdir(directory, { recursive: true });
 await writeFile(resolve(directory, 'cpu-profile.json'), `${JSON.stringify(cpu.profile)}\n`);
@@ -130,8 +188,17 @@ await writeFile(resolve(directory, 'summary.json'), `${JSON.stringify(summary, n
 process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
 
 function assertCommitted(): void {
-  if (target.commitState().status !== 'committed') throw new Error('profile target did not commit');
+  const state = target.commitState();
+  if (state.status !== 'committed') throw new Error(`profile target did not commit: ${JSON.stringify(state)}`);
   if (target.measureGlyphs() === undefined) throw new Error('profile target has no committed glyph output');
+}
+
+function createWidthParagraph(text: string) {
+  const paragraph = createParagraph(text);
+  const scene = attachToScene(paragraph.textGroup);
+  scene.updateMatrixWorld(true);
+  if (paragraph.textGroup.error !== undefined) throw paragraph.textGroup.error;
+  return { ...paragraph, scene };
 }
 
 function requiredEnvironment(name: string): string {

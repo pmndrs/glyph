@@ -1,7 +1,7 @@
 /* @workflow {
   "name": "benchmark:edit-sized-publication-profile",
-  "summary": "Profile one installed-package edit-sized publication lane, optionally with a named shaper Wasm artifact.",
-  "requirements": "One packed @pmndrs/glyph .tgz artifact and the authenticated Labs font fixtures. Accepts --artifact, --output, --case, --boundary, --count, --position, --iterations, --warmups, and optional --wasm. The prepared-read case accepts 100 or 1000 labels and preparation or publication boundaries.",
+  "summary": "Profile installed-package retained edits or width reflow, optionally with a named shaper Wasm artifact.",
+  "requirements": "One packed @pmndrs/glyph .tgz artifact and the authenticated Labs font fixtures. Accepts --artifact, --output, --case, --boundary, --count, --position, --iterations, --warmups, and optional --wasm. prepared-read accepts 100 or 1000 labels; width-reflow uses one 22k-glyph paragraph. Both accept preparation or publication boundaries.",
   "writes": "A CPU profile, summary, and artifact manifest under --output (default .cache/edit-sized-publication-profile)."
 } */
 import { createHash } from 'node:crypto';
@@ -86,7 +86,13 @@ interface Options {
   readonly iterations: number;
   readonly output: string;
   readonly position: 'first' | 'last';
-  readonly profileCase: 'same-length' | 'length-changing' | 'color-only' | 'interleaved-read' | 'prepared-read';
+  readonly profileCase:
+    | 'same-length'
+    | 'length-changing'
+    | 'color-only'
+    | 'interleaved-read'
+    | 'prepared-read'
+    | 'width-reflow';
   readonly warmups: number;
   readonly wasm?: string;
 }
@@ -104,17 +110,24 @@ function parseOptions(arguments_: readonly string[]): Options {
   const artifactOption = values.get('artifact');
   if (artifactOption === undefined) throw new Error('--artifact is required');
   const profileCase = values.get('case') ?? 'same-length';
-  if (!['same-length', 'length-changing', 'color-only', 'interleaved-read', 'prepared-read'].includes(profileCase)) {
+  if (
+    !['same-length', 'length-changing', 'color-only', 'interleaved-read', 'prepared-read', 'width-reflow'].includes(
+      profileCase,
+    )
+  ) {
     throw new Error(`Unknown --case: ${profileCase}`);
   }
   const position = values.get('position') ?? 'first';
   if (position !== 'first' && position !== 'last') throw new Error(`Unknown --position: ${position}`);
   const boundary = values.get('boundary') ?? 'publication';
   if (boundary !== 'preparation' && boundary !== 'publication') throw new Error(`Unknown --boundary: ${boundary}`);
-  if (boundary === 'preparation' && profileCase !== 'prepared-read') {
-    throw new Error('--boundary preparation requires --case prepared-read');
+  if (boundary === 'preparation' && profileCase !== 'prepared-read' && profileCase !== 'width-reflow') {
+    throw new Error('--boundary preparation requires --case prepared-read or width-reflow');
   }
-  const count = positiveInteger(values.get('count') ?? '1000', 'count');
+  const count = positiveInteger(values.get('count') ?? (profileCase === 'width-reflow' ? '1' : '1000'), 'count');
+  if (profileCase === 'width-reflow' && count !== 1) {
+    throw new RangeError('--case width-reflow requires --count 1');
+  }
   if (profileCase === 'prepared-read' && count !== 100 && count !== 1000) {
     throw new RangeError('--case prepared-read requires --count 100 or 1000');
   }
