@@ -10,7 +10,8 @@ const [glyphs, decorations] = text.breakApart();
 const [glyphs, decorations] = text.split();
 ```
 
-This is a method rename with no deprecated alias. It still requires committed renderer state and returns the frozen tuple
+This is a method rename with no deprecated alias. In 0.2.0, `split()` queries current desired layout before first render
+or after edits without publishing the source or unrelated labels. It returns the frozen tuple
 `[Glyphs, Decorations | undefined]` synchronously. Both returned objects are independent copies; the source remains live
 and unchanged. Preserve caller-owned attachment, visibility, per-glyph transforms, and disposal. The method does not
 accept a separator or offset and does not create child text objects. Existing failure and cleanup behavior remains.
@@ -25,5 +26,5 @@ Rename only actual Glyph operations; preserve protocol strings, historical recor
 messages and test descriptions deliberately. The repository's detached-render proof has a structural interface that must
 be migrated alongside its call.
 
-Verify the tuple type, source independence, transform alignment, decoration ownership, committed-state errors, and disposal
+Verify the tuple type, source independence, transform alignment, decoration ownership, first-render and edited-copy parity, and disposal
 through the existing integration and browser tests. Run the consumer typecheck. A second dry-run must report no changes.
