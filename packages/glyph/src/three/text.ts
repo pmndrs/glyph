@@ -543,6 +543,7 @@ export class ThreeRootHost {
 
   /** @internal Query desired placements without publishing renderer state. */
   glyphPlacements(text: THREE.Object3D): GlyphPlacements | undefined {
+    if (this.#disposed) return undefined;
     this.#assertMember(text);
     return this.#rootBinding().glyphPlacements(text);
   }
@@ -1594,9 +1595,13 @@ class ThreeRootPublication {
 
   #queryEntry(text: Text<RasterFormatMetadata>): BoundTextEntry {
     const current = this.#entries.get(text);
+    const presentation = resolveTextPresentation(text);
     if (
       current !== undefined &&
       current.committedRevision >= 0 &&
+      !this.#materialInvalidated &&
+      sameTextPresentation(current.stagedPresentation, presentation) &&
+      Object.is(current.stagedOrderRank, presentation.group === undefined ? 0 : paragraphOrderRank(text)) &&
       current.stagedRevision === reconciler.desiredRevision(text) &&
       nearestScene(text) !== undefined
     ) {

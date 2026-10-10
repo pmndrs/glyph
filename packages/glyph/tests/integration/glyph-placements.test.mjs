@@ -4,6 +4,7 @@ import test, { after } from 'node:test';
 
 import { bitmap, createFontStack, glyphFlags } from '@pmndrs/glyph';
 import { createGlyphPlacements } from '@pmndrs/glyph/core';
+import { defineTextMaterial } from '@pmndrs/glyph/three';
 import { loadFont as loadGlyphFont } from '../../dist/loader.js';
 import * as THREE from 'three/webgpu';
 
@@ -557,5 +558,89 @@ test('commit state distinguishes unbound, pending, and committed paragraph state
     assert.notEqual(node.commitState().revision, committed.revision);
   } finally {
     node.dispose();
+  }
+});
+
+test('split queries changed group presentation without publishing the source', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont();
+  const named = (name) => defineTextMaterial((context) => Object.assign(context.createDefaultMaterial(), { name }));
+  const first = three.createTextGroup({ material: named('first') });
+  const second = three.createTextGroup({ material: named('second') });
+  const node = three.createText({ font, text: 'moved' });
+  const scene = new THREE.Scene();
+  scene.add(first, second);
+  first.add(node);
+  scene.updateMatrixWorld(true);
+  let copies;
+  try {
+    second.add(node);
+    copies = node.split();
+    const names = new Set();
+    copies[0].traverse((object) => {
+      if (object.material !== undefined) names.add(object.material.name);
+    });
+    assert.deepEqual([...names], ['second']);
+    const sourceNames = new Set();
+    scene.traverse((object) => {
+      if (object.isMesh && object.material !== undefined) sourceNames.add(object.material.name);
+    });
+    assert.deepEqual([...sourceNames], ['first'], 'the source keeps its accepted material until publication');
+  } finally {
+    copies?.forEach((copy) => copy?.dispose());
+    node.dispose();
+    first.dispose();
+    second.dispose();
+  }
+});
+
+test('split queries changed root material without publishing the source', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont();
+  const named = (name) => defineTextMaterial((context) => Object.assign(context.createDefaultMaterial(), { name }));
+  three.material = named('first');
+  const node = three.createText({ font, text: 'moved' });
+  const scene = new THREE.Scene();
+  scene.add(node);
+  scene.updateMatrixWorld(true);
+  let copies;
+  try {
+    assert.equal(node.commitState().status, 'committed');
+    three.material = named('second');
+    assert.equal(node.commitState().status, 'committed');
+    copies = node.split();
+    const names = new Set();
+    copies[0].traverse((object) => {
+      if (object.material !== undefined) names.add(object.material.name);
+    });
+    assert.deepEqual([...names], ['second']);
+    const sourceNames = new Set();
+    scene.traverse((object) => {
+      if (object.isMesh && object.material !== undefined) sourceNames.add(object.material.name);
+    });
+    assert.deepEqual([...sourceNames], ['first'], 'the source keeps its accepted material until publication');
+  } finally {
+    copies?.forEach((copy) => copy?.dispose());
+    node.dispose();
+  }
+});
+
+test('layout reads answer nothing once the root is disposed', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const node = three.createText({ font: await loadFont(), text: 'gone' });
+  const group = three.createTextGroup();
+  const scene = new THREE.Scene();
+  scene.add(group);
+  group.add(node);
+  scene.updateMatrixWorld(true);
+  try {
+    three.dispose();
+    assert.equal(node.measureGlyphs(), undefined);
+    assert.equal(node.caretAt(0, 0), undefined);
+    assert.equal(node.selectionRects(0, 1), undefined);
+    assert.throws(() => node.split(), /before a layout is available/);
+  } finally {
+    node.dispose();
+    group.dispose();
   }
 });

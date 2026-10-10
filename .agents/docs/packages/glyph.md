@@ -1066,6 +1066,10 @@ The semantic values preserve information useful to callers:
 [archived migration](../../skills/codemod/codemods/2026-09-24-text-split/instructions.md).
 The rename preserves the tuple result, source independence, and disposal ownership.
 
+Placement queries reconcile changed inherited group/root materials before reusing an entry. Copies realize that desired
+presentation independently while the source retains its accepted draws. Placement reads after root disposal retain their
+existing `undefined` result; `split()` throws when no layout is available.
+
 Public `Text.split()` queries the desired paragraph synchronously and requests independent glyph and decoration subsets
 through its owning root, including before the first renderer publication. Rust compacts the
 selected paragraph records through the installed Codec into complete checkpoints; it does not expose buffer offsets or
