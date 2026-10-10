@@ -49,7 +49,7 @@ const allWorkloads = [
     label: 'Billboard labels',
     fontSize: 18,
     layoutWidthRatio: 0.82,
-    amount: 50,
+    amount: 100,
     camera: 'perspective',
   },
   {
