@@ -24,6 +24,8 @@ group('1,000-label stress @stress', () => {
     };
     update();
     const textCount = yield update;
+    // Calibration controls the number of toggles; restore visibility before checking retained draws.
+    if (!visible) update();
     assert.equal(textCount, created.labels.length);
     assert.equal(created.textGroup.visible, true);
     assert.equal(borrowedGlyphChecksum(created.labels), expectedChecksum);
@@ -127,11 +129,15 @@ group('1,000-label stress @stress', () => {
       for (const [index, text] of created.texts.entries()) {
         text.text = `${prefix} ${String(index).padStart(4, '0')}`;
       }
-      created.textGroup.updateMatrixWorld(true);
+      created.scene.updateMatrixWorld(true);
       if (created.textGroup.error !== undefined) throw created.textGroup.error;
       return created.textGroup.textCount;
     };
     assert.equal(textCount, created.texts.length);
+    assert(
+      created.texts.every((text) => text.commitState().status === 'committed'),
+      'every retained Text must complete publication',
+    );
     disposeTextBatch(created);
   });
 });
