@@ -903,7 +903,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_copy_glyphs(
     })
 }
 
-/// Publishes a complete checkpoint containing one paragraph's committed decorations.
+/// Returns a complete checkpoint containing one paragraph's current decorations.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_glyph_engine_copy_decorations(
     root_id: u32,

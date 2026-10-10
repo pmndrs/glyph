@@ -1478,7 +1478,7 @@ export class PlanTransport {
     }
   }
 
-  /** @internal Copies one committed paragraph's decorations into a complete query checkpoint. */
+  /** @internal Copies one prepared paragraph's decorations into a complete query checkpoint. */
   copyDecorations(
     paragraphId: ParagraphId,
     codecHandle: CodecHandle,
