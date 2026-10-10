@@ -994,6 +994,10 @@ tree-shakes, preserves optional peer isolation, and cannot expose private deep i
 
 The shared package Labs fixture adapts an older installed canary's `breakApart` to `split` once before timing.
 The package publishes only the renamed method; the adapter belongs to the comparison harness.
+The glyph suite times edits followed by an independent copy of one label in roots of 1 and 1,000 labels.
+A setup probe identifies packages requiring source publication before the synchronous copy; that required traversal is
+timed for those packages, while query-first packages copy prepared state directly. This compares delivering the same
+current eight-character copy, including disposal, rather than claiming publication and query are identical operations.
 
 Package-size CI retains a measured main artifact named for its exact commit SHA. Pull requests reuse only matching,
 unexpired artifacts from the repository's main branch; the envelope and measured gzip values are checked before
@@ -1007,3 +1011,7 @@ changes display `<0.01%` with their direction rather than appearing unchanged. E
 missing baseline remains `new`.
 
 The installed-package browser consumer rejects requests whose URLs contain `fingerprint`, proving Worker baking and Bitmap font loading under that filename filter. A deliberate blocked request is the negative control; all real load requests must remain unblocked. Portless HTTPS origin detection is optional so the workflow remains portable.
+
+The shared Bitmap/MTSDF/Slug detached raster proof creates its copy before the source first renders and asserts that
+the source remains pending. It then pixel-compares that independent copy with ordinary source publication and with
+an immediate original-matrix write, on WebGPU and WebGL2; decorations and parent transforms participate.

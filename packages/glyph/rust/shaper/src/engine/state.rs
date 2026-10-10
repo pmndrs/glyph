@@ -234,6 +234,7 @@ struct BoundaryCandidate {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct SpeculativeTransaction {
     revision: RootRevision,
+    codec_binding: CodecBinding,
     /// Increments whenever a queried paragraph's semantic prefix (text/style) or the
     /// lifecycle input rebuilds cold; geometry-only extension keeps the generation.
     generation: u32,
@@ -851,7 +852,7 @@ impl TextEngine {
         self.prepare_update_inner(Some(shaper), request, publication_generation)
     }
 
-    /// Builds a complete independent render plan for selected committed glyph records.
+    /// Builds a complete independent render plan for selected current glyph records.
     ///
     /// This query leaves planner revisions, publication generation, and the acknowledgement fence
     /// untouched. The returned compiler owns compacted codec buffers that
@@ -876,7 +877,13 @@ impl TextEngine {
             .planners
             .get(&root_id)
             .ok_or(EngineError::RootMissing)?;
-        let binding = planner.codec_binding.ok_or(EngineError::InvalidRequest)?;
+        let speculative = planner
+            .speculative
+            .filter(|transaction| transaction.revision == planner.revision);
+        let binding = speculative
+            .map(|transaction| transaction.codec_binding)
+            .or(planner.codec_binding)
+            .ok_or(EngineError::InvalidRequest)?;
         if binding.handle != codec_handle {
             return Err(EngineError::InvalidRequest);
         }
@@ -897,7 +904,11 @@ impl TextEngine {
         let paragraph = planner
             .paragraph(paragraph_id)
             .ok_or(EngineError::InvalidRequest)?;
-        let positioned = paragraph.state.positioned.committed();
+        let positioned = if speculative.is_some() {
+            paragraph.state.positioned.active()
+        } else {
+            paragraph.state.positioned.committed()
+        };
         let source_glyphs = positioned.glyphs();
         let source_semantic = positioned.semantic_glyphs();
         let source_f32 = positioned.semantic_f32();
@@ -928,8 +939,10 @@ impl TextEngine {
                 .try_into()
                 .map_err(|_| EngineError::ResultTooLarge)?;
             semantic_glyphs.push(*semantic);
+            // Copies own their placement slots; segment indices are valid before root publication too.
+            glyph.placement_slot = semantic.placement_segment;
             glyphs.push(glyph);
-            selected_placement_slots.push(source.placement_slot);
+            selected_placement_slots.push(semantic.placement_segment);
             for (destination, values) in semantic_f32.iter_mut().zip(source_f32.iter()) {
                 if values.is_empty() {
                     continue;
@@ -949,32 +962,15 @@ impl TextEngine {
         }
         selected_placement_slots.sort_unstable();
         selected_placement_slots.dedup();
-        let mut source_placement_rows = Vec::new();
-        source_placement_rows
-            .try_reserve(positioned.placement_segments().len())
-            .map_err(|_| EngineError::ResultTooLarge)?;
-        for (segment_index, translation) in positioned.placement_translations().iter().enumerate() {
-            let handle = positioned
-                .placement_handle(segment_index)
-                .ok_or(EngineError::InvalidRequest)?;
-            source_placement_rows.push((handle.slot().get(), *translation));
-        }
-        source_placement_rows.sort_unstable_by_key(|(slot, _)| *slot);
-        if source_placement_rows
-            .windows(2)
-            .any(|rows| rows[0].0 == rows[1].0)
-        {
-            return Err(EngineError::InvalidRequest);
-        }
         let mut placement_rows = Vec::new();
         placement_rows
             .try_reserve(selected_placement_slots.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         for (slot, source_slot) in selected_placement_slots.iter().copied().enumerate() {
-            let source_index = source_placement_rows
-                .binary_search_by_key(&source_slot, |(candidate, _)| *candidate)
-                .map_err(|_| EngineError::InvalidRequest)?;
-            let translation = source_placement_rows[source_index].1;
+            let translation = positioned
+                .placement_translations()
+                .get(usize::try_from(source_slot).map_err(|_| EngineError::InvalidRequest)?)
+                .ok_or(EngineError::InvalidRequest)?;
             placement_rows.push(SessionPlacementRow {
                 slot: u32::try_from(slot).map_err(|_| EngineError::ResultTooLarge)?,
                 inline: translation.translation_inline as f32,
@@ -1040,7 +1036,7 @@ impl TextEngine {
         Ok(compiler)
     }
 
-    /// Builds a complete independent plan for one committed paragraph's decorations.
+    /// Builds a complete independent plan for one current paragraph's decorations.
     pub(crate) fn copy_decorations(
         &self,
         root_id: u32,
@@ -1052,7 +1048,13 @@ impl TextEngine {
             .planners
             .get(&root_id)
             .ok_or(EngineError::RootMissing)?;
-        let binding = planner.codec_binding.ok_or(EngineError::InvalidRequest)?;
+        let speculative = planner
+            .speculative
+            .filter(|transaction| transaction.revision == planner.revision);
+        let binding = speculative
+            .map(|transaction| transaction.codec_binding)
+            .or(planner.codec_binding)
+            .ok_or(EngineError::InvalidRequest)?;
         if binding.handle != codec_handle {
             return Err(EngineError::InvalidRequest);
         }
@@ -1070,7 +1072,11 @@ impl TextEngine {
         let paragraph = planner
             .paragraph(paragraph_id)
             .ok_or(EngineError::InvalidRequest)?;
-        let positioned = paragraph.state.positioned.committed();
+        let positioned = if speculative.is_some() {
+            paragraph.state.positioned.active()
+        } else {
+            paragraph.state.positioned.committed()
+        };
 
         let mut gather = CodecGatherWorkspace::default();
         gather
@@ -1206,6 +1212,11 @@ impl TextEngine {
             .map_or(0, |transaction| transaction.generation);
         let transaction = planner.speculative.filter(|transaction| {
             transaction.revision == planner.revision
+                && transaction.codec_binding
+                    == CodecBinding {
+                        handle: request.codec_handle,
+                        fingerprint: codec_fingerprint,
+                    }
                 && transaction.lifecycle_fingerprint == lifecycle_fingerprint
         });
         if planner.speculative.is_some() && transaction.is_none() {
@@ -1350,11 +1361,17 @@ impl TextEngine {
         }
         planner.speculative = Some(SpeculativeTransaction {
             revision: planner.revision,
+            codec_binding: CodecBinding {
+                handle: request.codec_handle,
+                fingerprint: codec_fingerprint,
+            },
             generation,
             lifecycle_fingerprint,
             next_glyph_id,
             next_content_revision,
         });
+        // Reserve identities when they become observable, even if adoption later fails.
+        planner.next_glyph_id = planner.next_glyph_id.max(next_glyph_id);
         Ok(MeasuredParagraph {
             root_id: request.root_id,
             revision: planner.revision,
@@ -1420,6 +1437,11 @@ impl TextEngine {
         let adopted = match planner.speculative {
             Some(transaction)
                 if transaction.revision == planner.revision
+                    && transaction.codec_binding
+                        == CodecBinding {
+                            handle: request.codec_handle,
+                            fingerprint: codec_fingerprint,
+                        }
                     && transaction.lifecycle_fingerprint
                         == speculative_lifecycle_fingerprint(planner, request)? =>
             {
@@ -7303,6 +7325,55 @@ mod tests {
         let committed = engine.commit_update(follow).unwrap();
         assert_eq!(committed.revision, RootRevision { engine: 2, root: 2 });
         assert_eq!(engine.root_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
+    }
+
+    #[test]
+    fn rejected_adoption_does_not_recycle_queried_glyph_identities() {
+        let (mut engine, mut shaper) = shaped_inter_engine("A");
+        let replacement = utf16("BB");
+        let bytes = text_mutation_bytes(&[(0, 1, &replacement)]);
+        let styles = root_style_bytes_for_text(7, replacement.len() as u32);
+        let mut query = update(1, 1, 1);
+        query.limits.max_clusters = 8;
+        query.limits.max_lines = 8;
+        query.limits.max_output_bytes = 1 << 20;
+        query.text_mutations =
+            parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        query.style_mutations =
+            parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        engine
+            .measure_paragraph_with_shaper(&mut shaper, query, 1)
+            .unwrap();
+        let reserved = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .speculative
+            .unwrap()
+            .next_glyph_id;
+        let mut rejected = query;
+        rejected.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION;
+        rejected.limits.max_clusters = 1;
+        assert!(
+            engine
+                .prepare_update_with_shaper(&mut shaper, rejected, 2)
+                .is_err()
+        );
+        assert!(engine.planners.get(&4).unwrap().speculative.is_none());
+        assert!(engine.planners.get(&4).unwrap().next_glyph_id >= reserved);
+        engine
+            .measure_paragraph_with_shaper(&mut shaper, query, 1)
+            .unwrap();
+        assert!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .speculative
+                .unwrap()
+                .next_glyph_id
+                > reserved
+        );
     }
 
     #[test]

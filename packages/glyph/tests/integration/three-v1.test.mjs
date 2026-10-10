@@ -2428,22 +2428,25 @@ test('Text.split imports a planner-assisted copy with exact world alignment and 
 });
 
 test('detached glyphs retain their engine domain after the source and font owners are disposed', async (t) => {
-  const three = await createThreeTestHandle(t);
-  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
-  const scene = new THREE.Scene();
-  const label = three.createText({ font, text: 'outlives source', style: { fontSize: 16 } });
-  scene.add(label);
-  scene.updateMatrixWorld(true);
-  const [detached] = label.split();
-  scene.add(detached);
-  label.dispose();
-  font.dispose();
-  three.dispose();
-  try {
-    assert.ok(detached.materials.length > 0);
-    detached.getMatrixAt(0, new THREE.Matrix4());
-  } finally {
-    detached.dispose();
+  for (const published of [false, true]) {
+    const three = await createThreeTestHandle(t);
+    const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+    const scene = new THREE.Scene();
+    const label = three.createText({ font, text: 'outlives source', style: { fontSize: 16 } });
+    scene.add(label);
+    if (published) scene.updateMatrixWorld(true);
+    const [detached] = label.split();
+    assert.equal(label.commitState().status, published ? 'committed' : 'pending');
+    scene.add(detached);
+    label.dispose();
+    font.dispose();
+    three.dispose();
+    try {
+      assert.ok(detached.materials.length > 0);
+      detached.getMatrixAt(0, new THREE.Matrix4());
+    } finally {
+      detached.dispose();
+    }
   }
 });
 
@@ -2457,7 +2460,6 @@ test('Text.split returns a paragraph-scoped independent decoration plan when one
     style: { decoration: { underline: true, color: '#38bdf8' }, fontSize: 16 },
   });
   scene.add(label);
-  scene.updateMatrixWorld(true);
 
   let decorations;
   let detached;
@@ -2465,7 +2467,9 @@ test('Text.split returns a paragraph-scoped independent decoration plan when one
   let plainGlyphs;
   try {
     [detached, decorations] = label.split();
-    assert.ok(decorations, 'the tuple includes decorations when the committed paragraph draws them');
+    assert.ok(decorations, 'the prepared paragraph includes independently copied decorations');
+    assert.equal(label.commitState().status, 'pending');
+    assert.equal(rootDraws(scene).length, 0, 'the source is not published by split');
     scene.add(decorations);
     scene.updateMatrixWorld();
     const copiedDraws = decorations.children.filter((child) => child.isMesh);
@@ -2591,6 +2595,30 @@ test('Text.split preserves TextGroup paint order across detached roots', async (
       Math.max(...glyphDraws.map((draw) => draw.renderOrder)) < Math.min(...over.map((draw) => draw.renderOrder)),
       'line-through draws must remain above copied glyph draws',
     );
+    const acceptedOrder = Math.min(...glyphDraws.map((draw) => draw.renderOrder));
+    label.style = { ...label.style, fontSize: 24 };
+    group.renderOrder = 30;
+    const [pendingGlyphs, pendingDecorations] = label.split();
+    try {
+      const pendingOrder = Math.min(
+        ...pendingGlyphs.children.filter((child) => child.isMesh).map((draw) => draw.renderOrder),
+      );
+      assert.equal(pendingOrder, acceptedOrder + 10, 'pending copies preserve shared draw offsets at the desired base');
+      scene.updateMatrixWorld(true);
+      const [publishedGlyphs, publishedDecorations] = label.split();
+      try {
+        assert.equal(
+          Math.min(...publishedGlyphs.children.filter((child) => child.isMesh).map((draw) => draw.renderOrder)),
+          pendingOrder,
+        );
+      } finally {
+        publishedGlyphs.dispose();
+        publishedDecorations?.dispose();
+      }
+    } finally {
+      pendingGlyphs.dispose();
+      pendingDecorations?.dispose();
+    }
   } finally {
     decorations?.dispose();
     glyphs?.dispose();
@@ -2620,15 +2648,16 @@ test('Text.split preserves per-span material routing with independently owned in
     material: base,
   });
   scene.add(label);
-  scene.updateMatrixWorld(true);
 
   let detached;
   try {
-    const sourceNames = new Set(rootDraws(scene).map((draw) => draw.material.name));
-    assert.deepEqual(sourceNames, new Set(['detached-base', 'detached-accent']));
     [detached] = label.split();
+    assert.equal(label.commitState().status, 'pending');
+    assert.equal(rootDraws(scene).length, 0);
     scene.add(detached);
     scene.updateMatrixWorld(true);
+    const sourceNames = new Set(rootDraws(scene).map((draw) => draw.material.name));
+    assert.deepEqual(sourceNames, new Set(['detached-base', 'detached-accent']));
     assert.deepEqual(
       new Set(detached.materials.map((material) => material.name)),
       new Set(['detached-base', 'detached-accent']),
@@ -3097,6 +3126,49 @@ test('nested TextGroup nodes inherit presentation without creating nested public
   }
 });
 
+test('pending copy survives a rejected publication followed by a sibling query', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  let reject = true;
+  const material = defineTextMaterial((context) => {
+    if (reject) throw new Error('copy retry material failure');
+    return context.createDefaultMaterial();
+  });
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const first = three.createText({ font, material, text: 'ABCDEFGH' });
+  const second = three.createText({ font, text: 'second label' });
+  group.onError = () => {};
+  group.add(first, second);
+  scene.add(group);
+  let copy;
+  try {
+    const before = first.measureGlyphs();
+    scene.updateMatrixWorld(true);
+    assert.match(String(group.error), /copy retry material failure/u);
+    reject = false;
+    second.measureGlyphs();
+    [copy] = first.split();
+    assert.equal(first.commitState().status, 'failed');
+    const snapshot = (measurements) =>
+      measurements.map(({ key, shapedOrigin, drawnOrigin, originalMatrix }) => ({
+        key,
+        shapedOrigin,
+        drawnOrigin,
+        originalMatrix,
+      }));
+    assert.equal(copy.count, 8);
+    assert.deepEqual(snapshot(copy.measurements), snapshot(before));
+  } finally {
+    copy?.dispose();
+    first.dispose();
+    second.dispose();
+    group.dispose();
+    font.dispose();
+    three.dispose();
+  }
+});
+
 test('renderer rejection waits for explicit invalidation and then checkpoints without copied bytes', async (t) => {
   const three = await createThreeTestHandle(t);
   const instrumented = instrumentedGlyph;
@@ -3130,15 +3202,14 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   assert.equal(instrumented.crossings, 1, 'measurement must not retry or consume renderer publication');
   assert.match(String(group.error), /deliberate material realization failure/u);
   assert.ok(label.glyphs().glyphCount > 0, 'renderer-free positioned inspection survives renderer rejection');
-  assert.equal(
-    label.measureGlyphs(),
-    undefined,
-    'drawn measurements are unavailable while renderer realization failed',
+  assert.ok(
+    label.measureGlyphs().length > 0,
+    'desired-layout measurements remain available while renderer realization failed',
   );
   assert.throws(
     () => label.split(),
-    /after renderer realization failed/,
-    'a failed renderer publication cannot be presented as a committed detached copy',
+    /deliberate material realization failure/,
+    'the independent copy reports its own material realization failure without retrying source publication',
   );
   assert.equal(instrumented.crossings, 1, 'inspection must not turn a rejected unchanged frame into a retry');
 
@@ -5925,6 +5996,38 @@ test('renderer rejection preserves Text.set semantic output through explicit ret
   group.dispose();
   warm.dispose();
   fresh.dispose();
+});
+
+test('placement reads retain their scoped inspection cache through matching publication', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const label = three.createText({ font, text: 'cached placement' });
+  scene.add(label);
+  instrumentedGlyph.reset();
+  try {
+    const before = label.measureGlyphs();
+    assert.ok(before.length > 0);
+    const queries = instrumentedGlyph.measureCrossings;
+    assert.equal(queries, 1);
+    label.caretAt(0, 0);
+    label.caretForOffset(label.text.length);
+    label.selectionRects(0, label.text.length);
+    assert.equal(instrumentedGlyph.measureCrossings, queries, 'all placement helpers share one inspection');
+    assert.equal(instrumentedGlyph.crossings, 0, 'placement reads do not publish');
+    scene.updateMatrixWorld(true);
+    assert.equal(instrumentedGlyph.crossings, 1);
+    label.measureGlyphs();
+    label.caretAt(0, 0);
+    assert.equal(instrumentedGlyph.measureCrossings, queries, 'matching publication preserves the query cache');
+    label.text = 'edited placement';
+    label.measureGlyphs();
+    assert.equal(instrumentedGlyph.measureCrossings, queries + 1, 'an edit invalidates the shared inspection');
+    assert.equal(instrumentedGlyph.crossings, 1, 'reading the edit leaves renderer publication pending');
+  } finally {
+    label.dispose();
+    font.dispose();
+  }
 });
 
 test('Text.measure answers attached first-frame state without traversing matrices or realizing draws', async (t) => {

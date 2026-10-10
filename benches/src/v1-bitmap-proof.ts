@@ -68,10 +68,6 @@ async function render(): Promise<TargetV1BitmapResult> {
     parent.add(text);
     renderer.setRenderTarget(target);
     renderer.setClearColor(0x000000, 1);
-    await renderer.renderAsync(scene, camera);
-    const firstDraw = v1GlyphDraw(rootDraws(scene));
-    if (firstDraw === undefined) throw new Error('target-v1 Bitmap created no draw');
-    const firstStorage = firstDraw.geometry.getAttribute('_pmndrsGlyphOrigins');
     const { detachedFirstFrameMatches, detachedSameFrameWriteMatches } = await proveDetachedRasterParity(
       renderer,
       scene,
@@ -79,6 +75,9 @@ async function render(): Promise<TargetV1BitmapResult> {
       target,
       text,
     );
+    const firstDraw = v1GlyphDraw(rootDraws(scene));
+    if (firstDraw === undefined) throw new Error('target-v1 Bitmap created no draw');
+    const firstStorage = firstDraw.geometry.getAttribute('_pmndrsGlyphOrigins');
 
     text.text = 'Target v1 Bitmop';
     await renderer.renderAsync(scene, camera);

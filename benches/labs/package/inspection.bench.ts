@@ -29,6 +29,31 @@ group('per-glyph inspection @glyphs @api', () => {
     disposeLabels(created);
   });
 
+  for (const count of [1, 1000]) {
+    bench(`edit and independently copy one label among ${count} labels @layout @glyphs @api`, function* () {
+      const created = createLabels(count);
+      const label = created.labels[count - 1]!;
+      label.text = 'ABCDEFGH';
+      // Older packages need source publication to answer the same synchronous copy request.
+      const requiresPublication = label.measureGlyphs() === undefined;
+      if (requiresPublication) created.scene.updateMatrixWorld(true);
+      let iteration = 0;
+      const glyphCount = yield () => {
+        label.text = iteration++ % 2 === 0 ? 'abcdefgh' : 'ABCDEFGH';
+        if (requiresPublication) created.scene.updateMatrixWorld(true);
+        const [copy, decorations] = label.split();
+        try {
+          return copy.count;
+        } finally {
+          decorations?.dispose();
+          copy.dispose();
+        }
+      };
+      assert.equal(glyphCount, 8, 'the copy must contain the current eight drawable characters');
+      disposeLabels(created);
+    });
+  }
+
   bench('borrow per-glyph metrics from 100 promoted labels @cached @glyphs @api', function* () {
     const created = createLabels();
     created.labels.forEach((label) => label.readGlyphs((glyphs) => glyphs.glyphCount));

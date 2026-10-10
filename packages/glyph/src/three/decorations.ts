@@ -44,7 +44,7 @@ export function decorationDraws(
   return inspectDecorationDraws(decorations);
 }
 
-/** An independently rendered copy of one committed paragraph's decorations. */
+/** An independently rendered copy of one prepared paragraph's decorations. */
 export class Decorations extends THREE.Object3D {
   readonly #target: ThreeCommandBufferRenderer;
   readonly #copy: GlyphCopy<void>;

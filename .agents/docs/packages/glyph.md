@@ -1022,6 +1022,32 @@ only while it has changed text to publish; an idle synchronization does not ente
 publication therefore pays no semantic-sidecar cost, while renderers that need same-frame bounds pay the explicit
 per-publication cost instead of making a second Wasm query.
 
+[#299](https://github.com/pmndrs/glyph/pull/299) supersedes
+[#240](https://github.com/pmndrs/glyph/pull/240)'s publish-on-read implementation. Three's existing measurement, glyph,
+placement, caret, and selection methods answer from current desired layout through the shared paragraph query/cache.
+`split()` copies that desired layout into independently owned renderer objects. These calls leave source publication
+pending, preserve public signatures and ABI, and do not publish unrelated labels. Matching prepared results are reused
+by the next ordinary publication; this change does not resolve the remaining whole-root publication work in #247.
+Unchanged semantic reads reuse their bound controller without resolving renderer presentation. Placement and copy reads
+resolve desired presentation before using renderer geometry. Pending copies apply desired draw order while retaining
+the accepted draw offset within a shared batch.
+A sibling query may restart speculative glyph identities without changing an owned semantic inspection. Independent
+copies resolve selections from that inspection into the freshly prepared identities, and detached renderer metadata
+is captured after the copy from the same preparation. Pending placement reads consult the shared inspection cache;
+committed placement reads retain their Three cache.
+The existing Rust glyph-ID allocator reserves its high-water mark when a successful query exposes identities.
+Those IDs cannot be recycled into another paragraph after cancellation, so a foreign selection fails naturally in Rust.
+Ordinary publication retires semantic inspections displaced by lifecycle changes, using the existing preparation
+bindings as its proof; failed queries and transport capacity-repair retries release that proof. The transport
+notifies the same owner before a hidden retry, including sparse-borrow setup. Accepted layout sidecars remain cached;
+pending Three placement snapshots are not promoted.
+
+Queries carry pending paragraph creations and ordering changes even when the queried paragraph is already committed
+in Rust. A rejected first renderer publication followed by an over-budget sibling therefore remains queryable: reads
+and independent copies do not acknowledge the rejected source or publish the sibling. Canceling an unqueried creation
+clears the structural flag when the existing pending-paragraph/removal counters prove the root is clean, so later
+copy queries do not resend neutral lifecycle rows.
+
 An explicit query before first render carries the complete desired paragraph lifecycle and applies text, style, and
 geometry mutations only for the queried paragraph. It serializes paragraph-order rows only for nonremoved paragraphs
 whose scoped rank is still pending publication; a semantic-only query therefore does not resend stable ranks, while
@@ -1064,12 +1090,25 @@ The semantic values preserve information useful to callers:
 
 `Text.split()` replaces `Text.breakApart()` without a deprecated alias. Existing callers can use the
 [archived migration](../../skills/codemod/codemods/2026-09-24-text-split/instructions.md).
-The rename preserves the tuple result, committed-state requirement, source independence, and disposal ownership.
+The rename preserves the tuple result, source independence, and disposal ownership.
 
-Public `Text.split()` requests committed glyph and decoration subsets through its owning root. Rust compacts the
+The existing engine borrow gate rejects reentrant setters before planner mutation. A material callback that catches
+that rejection leaves the pending split tuple and subsequent publication unchanged.
+
+Placement queries reconcile changed inherited group/root materials before reusing an entry. Copies realize that desired
+presentation independently while the source retains its accepted draws. Placement reads after root disposal retain their
+existing `undefined` result; `split()` throws when no layout is available.
+
+Public `Text.split()` queries the desired paragraph synchronously and requests independent glyph and decoration subsets
+through its owning root, including before the first renderer publication. Rust compacts the
 selected paragraph records through the installed Codec into complete checkpoints; it does not expose buffer offsets or
 private planning objects for each renderer to reconstruct. Root services synchronously decode each detached copy into its
-destination renderer. The query does not advance the source root's revision or publication generation.
+destination renderer. The query does not advance the source root's revision or publication generation or publish unrelated Texts.
+The copy compiler reads the existing prepared positioning stage, uses paragraph-local placement segments for its own
+compact slots, and retains the queried Codec identity until ordinary publication adopts the matching preparation.
+Placement/caret/selection reads use this same desired inspection cache, retaining it through matching publication;
+accepted renderer origins and supplied geometry are used when available. A split derives drawable membership and
+geometry from its independently realized target, so spaces remain excluded before source publication too.
 
 Three's `Text.split()` uses both planner requests and returns the frozen tuple
 `[Glyphs, Decorations | undefined]`. It preserves the source transform, Codec-defined batching, fallback raster formats,

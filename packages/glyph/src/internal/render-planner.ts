@@ -270,9 +270,9 @@ export interface RetainedText {
   glyphs(): GlyphLayoutInspection;
   /** Demand-reads positioned glyphs through a synchronous expiring view. */
   readGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result;
-  /** Offers a complete checkpoint containing selected committed stable glyph ids to one renderer target. */
+  /** Offers a complete checkpoint containing selected desired-layout stable glyph ids to one renderer target. */
   copyGlyphs(stableIds: ArrayLike<number>, target: PlanTarget): PlanAcceptance;
-  /** Offers a complete checkpoint containing this paragraph's committed decorations. */
+  /** Offers a complete checkpoint containing this paragraph's desired decorations. */
   copyDecorations(target: PlanTarget): PlanAcceptance;
   dispose(): void;
 }
@@ -766,11 +766,17 @@ class RenderPlannerImpl {
     if (inspection !== undefined) {
       glyphs = createInspectionBorrowedGlyphLayout(inspection, assertActive, decodeOutline);
     } else {
-      const publication = this.#transport.borrowParagraphLayout(
-        this.#queryTextRequest(state, textShaperAbi.engine.semanticViewMasks.borrowedLayout),
-        state.paragraphId,
-        this.#limits.maxOutputBytes,
-      );
+      let publication: ReturnType<PlanTransport['borrowParagraphLayout']>;
+      try {
+        publication = this.#transport.borrowParagraphLayout(
+          this.#queryTextRequest(state, textShaperAbi.engine.semanticViewMasks.borrowedLayout),
+          state.paragraphId,
+          this.#limits.maxOutputBytes,
+          this.#discardMeasuredPreparation,
+        );
+      } catch (error) {
+        this.#failedQuery(error);
+      }
       glyphs = createBorrowedGlyphLayout(this.#transport, publication, assertActive, decodeOutline);
       if (state.inspectionBorrowMode === 'sparse-first') state.inspectionBorrowMode = 'promotion-ready';
       this.#adoptMeasuredBindings(state);
@@ -788,7 +794,17 @@ class RenderPlannerImpl {
 
   /** @internal */
   _copyGlyphs(state: RetainedTextState, stableIds: ArrayLike<number>, target: PlanTarget): PlanAcceptance {
+    const previous = state.inspection;
     this.#assertCopyable(state, target);
+    const current = state.inspection!;
+    // A sibling query can restart speculative identity allocation without changing this text.
+    // Resolve a selection from its owned inspection into the preparation being copied.
+    if (previous !== undefined && previous.glyphStableIds.some((id, index) => id !== current.glyphStableIds[index])) {
+      const identities = new Map<number, number>();
+      for (let index = 0; index < previous.glyphStableIds.length; index += 1)
+        identities.set(previous.glyphStableIds[index]!, current.glyphStableIds[index]!);
+      stableIds = Array.from(stableIds, (id) => identities.get(id) ?? id);
+    }
     const publication = this.#transport.copyGlyphs(
       state.paragraphId,
       stableIds,
@@ -822,6 +838,7 @@ class RenderPlannerImpl {
     this.#structureRevision = checkedNextStructureRevision(this.#structureRevision);
     if (state.committed === undefined && !this.#measured.has(state)) {
       this.#texts.delete(state);
+      if (this.#pendingParagraphCount === 0 && this.#removed.size === 0) this.#baseOrderValidationPending = false;
       return;
     }
     state.removed = true;
@@ -878,7 +895,7 @@ class RenderPlannerImpl {
     this.#engineRevision = publication.engineRevision;
     this.#cacheSemanticViews(publication, staged.semanticViewMask);
     const transforms = this.#resolvedTransforms();
-    this.#commitDesiredState();
+    this.#commitDesiredState(staged.semanticViewMask);
     this.#stagedPublication = { publication, transforms, checkpointGeneration: staged.checkpointGeneration };
   }
 
@@ -1005,7 +1022,25 @@ class RenderPlannerImpl {
 
   #queryTextPublication(state: RetainedTextState, semanticViewMask: number): PlanPublication {
     const request = this.#queryTextRequest(state, semanticViewMask);
-    return this.#transport.measureParagraph(request, state.paragraphId, this.#limits.maxOutputBytes);
+    try {
+      return this.#transport.measureParagraph(
+        request,
+        state.paragraphId,
+        this.#limits.maxOutputBytes,
+        this.#discardMeasuredPreparation,
+      );
+    } catch (error) {
+      this.#failedQuery(error);
+    }
+  }
+
+  #failedQuery(error: unknown): never {
+    try {
+      this.#clearMeasuredBindings();
+    } catch {
+      // Preserve the query failure after releasing every preparation binding.
+    }
+    throw error;
   }
 
   #queryTextRequest(state: RetainedTextState, semanticViewMask: number): PlannerFrameUpdate {
@@ -1186,40 +1221,50 @@ class RenderPlannerImpl {
     if (state.dirty) this.#pendingStyleCount -= pendingStyleMutationCount(state);
   }
 
-  #commitDesiredState(): void {
-    this.#clearMeasuredBindings();
-    for (const state of this.#removed) {
-      this.#texts.delete(state);
-      if (!state.desiredReleased) releaseResolvedText(state.desired);
-      state.desiredReleased = true;
-      if (state.committed !== undefined) releaseResolvedText(state.committed);
-      state.committed = undefined;
-    }
-    this.#removed.clear();
-    for (const state of this.#texts) {
-      if (!state.dirty) continue;
-      if (state.geometryDirty) commitFlowEntityRevisions(state);
-      if (state.committed !== state.desired) {
-        retainResolvedText(state.desired);
+  #commitDesiredState(semanticViewMask: number): void {
+    try {
+      for (const state of this.#removed) {
+        this.#texts.delete(state);
+        if (!state.desiredReleased) releaseResolvedText(state.desired);
+        state.desiredReleased = true;
         if (state.committed !== undefined) releaseResolvedText(state.committed);
-        state.committed = state.desired;
+        state.committed = undefined;
       }
-      state.published = true;
-      if (state.semanticDirty) {
-        state.publishedText = state.desired.text;
+      this.#removed.clear();
+      for (const state of this.#texts) {
+        if (!state.dirty) continue;
+        // Displaced speculative identities cannot index the accepted renderer records.
+        if (
+          state.semanticDirty &&
+          (semanticViewMask & textShaperAbi.engine.semanticViewMasks.layoutInspection) === 0 &&
+          (this.#measuredStructureRevision !== this.#structureRevision || this.#measured.get(state) !== state.desired)
+        )
+          state.inspection = undefined;
+        if (state.geometryDirty) commitFlowEntityRevisions(state);
+        if (state.committed !== state.desired) {
+          retainResolvedText(state.desired);
+          if (state.committed !== undefined) releaseResolvedText(state.committed);
+          state.committed = state.desired;
+        }
+        state.published = true;
+        if (state.semanticDirty) {
+          state.publishedText = state.desired.text;
+        }
+        if (state.geometryDirty) state.geometryRevision += 1;
+        this.#pendingParagraphCount -= 1;
+        this.#pendingContentCount -= Number(state.semanticDirty);
+        this.#pendingStyleCount -= pendingStyleMutationCount(state);
+        state.dirty = false;
+        state.semanticDirty = false;
+        state.lifecycleDirty = false;
+        state.styleChanges = noRetainedStyleChanges;
+        state.geometryDirty = false;
+        state.orderDirty = false;
       }
-      if (state.geometryDirty) state.geometryRevision += 1;
-      this.#pendingParagraphCount -= 1;
-      this.#pendingContentCount -= Number(state.semanticDirty);
-      this.#pendingStyleCount -= pendingStyleMutationCount(state);
-      state.dirty = false;
-      state.semanticDirty = false;
-      state.lifecycleDirty = false;
-      state.styleChanges = noRetainedStyleChanges;
-      state.geometryDirty = false;
-      state.orderDirty = false;
+      this.#baseOrderValidationPending = false;
+    } finally {
+      this.#clearMeasuredBindings();
     }
-    this.#baseOrderValidationPending = false;
   }
 
   #candidate(lease: BorrowedPlanLease, resolved = this.#resolvedTransforms()): PlanCandidate {
@@ -1265,12 +1310,10 @@ class RenderPlannerImpl {
 
   #assertCopyable(state: RetainedTextState, target: PlanTarget): void {
     this.#assertTextQueryable(state);
-    if (!state.published || state.committed === undefined) {
-      throw new Error('retained text must have a committed render publication before it can be copied');
-    }
     if (typeof target !== 'object' || target === null || target.delivery !== 'borrowed') {
       throw new TypeError('detached plan copies require a synchronous borrowed plan target');
     }
+    this.#queryInspection(state);
   }
 
   #capabilitySetId(): number {
@@ -1363,7 +1406,8 @@ class RenderPlannerImpl {
     const mutations: PlannerParagraphMutation[] = [...this.#removed]
       .filter((removed) => removed.published)
       .map((removed) => ({ opcode: 'remove' as const, paragraphId: removed.paragraphId }));
-    if (!state.published) {
+    // Pending creations need lifecycle rows even when the queried paragraph is already published.
+    if (!state.published || this.#baseOrderValidationPending) {
       for (const candidate of this.#texts) {
         if (candidate.removed) continue;
         mutations.push({ opcode: 'upsert', paragraphId: candidate.paragraphId, order: candidate.metrics.order });
@@ -1452,6 +1496,8 @@ class RenderPlannerImpl {
   #assertActive(): void {
     if (this.#disposed) throw new RenderPlannerDisposedError();
   }
+
+  readonly #discardMeasuredPreparation = (): void => this.#clearMeasuredBindings();
 }
 
 class RetainedTextImpl implements RetainedText {

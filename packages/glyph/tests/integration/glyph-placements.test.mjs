@@ -2,12 +2,15 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
 
-import { bitmap, createFontStack, glyphFlags } from '@pmndrs/glyph';
+import { bitmap, createFontStack, glyph as glyphRuntime, glyphFlags } from '@pmndrs/glyph';
 import { createGlyphPlacements } from '@pmndrs/glyph/core';
+import { defineTextMaterial, defineThreeConfig } from '@pmndrs/glyph/three';
 import { loadFont as loadGlyphFont } from '../../dist/loader.js';
+import { PlanTransport } from '../../dist/internal/handle-state.js';
 import * as THREE from 'three/webgpu';
 
 import { createThreeTestHandle } from '../support/three-handle.mjs';
+import { seededRandom } from '../support/text-mutation-lanes.mjs';
 
 const fontUrls = {
   inter: new URL('../../../../benches/fixtures/rendering/inter-bitmap-16-32.font.glb', import.meta.url),
@@ -59,6 +62,35 @@ function leadingEdgeOf(placements, cluster) {
   const right = Math.max(...glyphs.flatMap((glyph) => [glyph.x, glyph.x + glyph.advance]));
   return (glyphs[0].bidiLevel & 1) !== 0 ? right : left;
 }
+
+test('placement reads query desired layout before first publication and after edits', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const node = three.createText({ font: await loadFont(), style: { fontSize: 16 }, text: 'Wavy' });
+  scene.add(group);
+  group.add(node);
+  try {
+    for (const text of ['Wavy', 'Different length']) {
+      node.text = text;
+      assert.equal(node.commitState().status, 'pending');
+      const measurements = node.measureGlyphs();
+      assert.ok(measurements !== undefined, 'query must answer before renderer publication');
+      const expected = placementsOf(node);
+      assert.equal(measurements.length, expected.glyphs.length);
+      assert.deepEqual(node.caretAt(0, 0), expected.caretAt(0, 0));
+      assert.deepEqual(node.caretForOffset(text.length), expected.caretForOffset(text.length));
+      assert.deepEqual(node.selectionRects(0, text.length), expected.selectionRects(0, text.length));
+      assert.equal(node.commitState().status, 'pending', 'read-only queries must not publish renderer state');
+      scene.updateMatrixWorld(true);
+      assert.equal(node.commitState().status, 'committed');
+      assert.deepEqual(node.caretAt(0, 0), expected.caretAt(0, 0));
+      assert.deepEqual(node.selectionRects(0, text.length), expected.selectionRects(0, text.length));
+    }
+  } finally {
+    unmount({ group, node });
+  }
+});
 
 test('measureGlyphs publishes local geometry without traversing world matrices', async (t) => {
   const mounted = await mount(t, await loadFont(), 'Wavy');
@@ -339,6 +371,94 @@ test('glyph flags decode through exported names rather than remembered indices',
   }
 });
 
+function copySnapshot(copy) {
+  return {
+    glyphs: Array.from({ length: copy.count }, (_, index) => copy.glyphAt(index)),
+    measurements: copy.measurements.map(({ anchorPoint, ...measurement }) => ({
+      ...measurement,
+      center: anchorPoint('center'),
+    })),
+  };
+}
+
+test('pending split matches publication and retains its independent copy across later edits', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont();
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const node = three.createText({ font, style: { fontSize: 16 }, text: 'one two' });
+  const sibling = three.createText({ font, style: { fontSize: 16 }, text: 'untouched' });
+  scene.add(group);
+  group.add(node, sibling);
+  const copies = [];
+  try {
+    for (const text of ['one two', 'different words']) {
+      node.text = text;
+      sibling.text = `still pending: ${text}`;
+      const [before, beforeDecorations] = node.split();
+      copies.push(before, beforeDecorations);
+      const saved = copySnapshot(before);
+      assert.equal(node.commitState().status, 'pending');
+      assert.equal(sibling.commitState().status, 'pending');
+      assert.equal(before.count, text.replaceAll(' ', '').length, 'spaces are not drawable glyphs');
+      scene.updateMatrixWorld(true);
+      const [publishedCopy, publishedDecorations] = node.split();
+      copies.push(publishedCopy, publishedDecorations);
+      assert.deepEqual(copySnapshot(publishedCopy), saved);
+      node.text = 'subsequent edit';
+      node.measure();
+      assert.deepEqual(copySnapshot(before), saved, 'queries and edits cannot mutate the earlier copy');
+    }
+    node.dispose();
+    for (const copy of copies) if (copy?.count !== undefined) assert.ok(copy.count > 0);
+  } finally {
+    for (const copy of copies) copy?.dispose();
+    node.dispose();
+    sibling.dispose();
+    group.dispose();
+  }
+});
+
+test('seeded pending split edits match freshly published Unicode layouts', async (t) => {
+  const font = createFontStack(await loadFont(), await loadFont('amiri'));
+  const three = await createThreeTestHandle(t);
+  const scene = new THREE.Scene();
+  const node = three.createText({ font, text: 'seed', style: { fontSize: 16 } });
+  scene.add(node);
+  const random = seededRandom(0x51a17);
+  const fragments = ['office', 'a\u0301', 'سلام', 'ab سلام cd', 'A\nB', 'one two three'];
+  try {
+    for (let step = 0; step < 32; step += 1) {
+      const text = `${fragments[Math.floor(random() * fragments.length)]} ${step}`;
+      const properties = {
+        style: { fontSize: 12 + Math.floor(random() * 12), color: step % 2 === 0 ? '#ff0000' : '#0000ff' },
+        constraints: { width: { mode: 'exact', size: 35 + Math.floor(random() * 100) } },
+        layout: { wrap: 'word', align: step % 2 === 0 ? 'start' : 'center' },
+      };
+      node.set({ text, ...properties });
+      const [pending, decorations] = node.split();
+      assert.equal(node.commitState().status, 'pending', `step ${step} must not publish the source`);
+      const fresh = await mount(t, font, text, properties);
+      let published;
+      let publishedDecorations;
+      try {
+        [published, publishedDecorations] = fresh.node.split();
+        assert.deepEqual(copySnapshot(pending), copySnapshot(published), `seeded edit ${step}: ${text}`);
+        scene.updateMatrixWorld(true);
+        assert.equal(node.commitState().status, 'committed');
+      } finally {
+        pending.dispose();
+        decorations?.dispose();
+        published?.dispose();
+        publishedDecorations?.dispose();
+        unmount(fresh);
+      }
+    }
+  } finally {
+    node.dispose();
+  }
+});
+
 test('split carries stable line and word metadata without presentation overrides', async (t) => {
   const mounted = await mount(t, await loadFont(), 'one two three', {
     constraints: { width: { mode: 'exact', size: 60 } },
@@ -418,10 +538,15 @@ test('commit state distinguishes unbound, pending, and committed paragraph state
   const node = three.createText({ font, style: { fontSize: 16 }, text: 'ready' });
   try {
     assert.deepEqual(node.commitState(), { status: 'unbound' });
-    assert.throws(() => node.split(), /before its renderer state is committed/);
+    const [copy] = node.split();
+    assert.equal(copy.count, 5);
+    copy.dispose();
     scene.add(node);
     assert.equal(node.commitState().status, 'pending');
-    assert.throws(() => node.split(), /before its renderer state is committed/);
+    const [pendingCopy] = node.split();
+    assert.equal(pendingCopy.count, 5);
+    pendingCopy.dispose();
+    assert.equal(node.commitState().status, 'pending');
     scene.updateMatrixWorld(true);
     const committed = node.commitState();
     assert.equal(committed.status, 'committed');
@@ -433,6 +558,308 @@ test('commit state distinguishes unbound, pending, and committed paragraph state
     assert.equal(node.commitState().status, 'committed');
     assert.notEqual(node.commitState().revision, committed.revision);
   } finally {
+    node.dispose();
+  }
+});
+
+test('split queries changed group presentation without publishing the source', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont();
+  const named = (name) => defineTextMaterial((context) => Object.assign(context.createDefaultMaterial(), { name }));
+  const first = three.createTextGroup({ material: named('first') });
+  const second = three.createTextGroup({ material: named('second') });
+  const node = three.createText({ font, text: 'moved' });
+  const scene = new THREE.Scene();
+  scene.add(first, second);
+  first.add(node);
+  scene.updateMatrixWorld(true);
+  let copies;
+  try {
+    second.add(node);
+    copies = node.split();
+    const names = new Set();
+    copies[0].traverse((object) => {
+      if (object.material !== undefined) names.add(object.material.name);
+    });
+    assert.deepEqual([...names], ['second']);
+    const sourceNames = new Set();
+    scene.traverse((object) => {
+      if (object.isMesh && object.material !== undefined) sourceNames.add(object.material.name);
+    });
+    assert.deepEqual([...sourceNames], ['first'], 'the source keeps its accepted material until publication');
+  } finally {
+    copies?.forEach((copy) => copy?.dispose());
+    node.dispose();
+    first.dispose();
+    second.dispose();
+  }
+});
+
+test('split queries changed root material without publishing the source', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont();
+  const named = (name) => defineTextMaterial((context) => Object.assign(context.createDefaultMaterial(), { name }));
+  three.material = named('first');
+  const node = three.createText({ font, text: 'moved' });
+  const scene = new THREE.Scene();
+  scene.add(node);
+  scene.updateMatrixWorld(true);
+  let copies;
+  try {
+    assert.equal(node.commitState().status, 'committed');
+    three.material = named('second');
+    assert.equal(node.commitState().status, 'committed');
+    copies = node.split();
+    const names = new Set();
+    copies[0].traverse((object) => {
+      if (object.material !== undefined) names.add(object.material.name);
+    });
+    assert.deepEqual([...names], ['second']);
+    const sourceNames = new Set();
+    scene.traverse((object) => {
+      if (object.isMesh && object.material !== undefined) sourceNames.add(object.material.name);
+    });
+    assert.deepEqual([...sourceNames], ['first'], 'the source keeps its accepted material until publication');
+  } finally {
+    copies?.forEach((copy) => copy?.dispose());
+    node.dispose();
+  }
+});
+
+test('layout reads answer nothing once the root is disposed', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const node = three.createText({ font: await loadFont(), text: 'gone' });
+  const group = three.createTextGroup();
+  const scene = new THREE.Scene();
+  scene.add(group);
+  group.add(node);
+  scene.updateMatrixWorld(true);
+  try {
+    three.dispose();
+    assert.equal(node.measureGlyphs(), undefined);
+    assert.equal(node.caretAt(0, 0), undefined);
+    assert.equal(node.selectionRects(0, 1), undefined);
+    assert.throws(() => node.split(), /before a layout is available/);
+  } finally {
+    node.dispose();
+    group.dispose();
+  }
+});
+
+test('a caught reentrant setter leaves pending split and subsequent publication unchanged', async (t) => {
+  const three = await createThreeTestHandle(t);
+  let node;
+  const rejected = [];
+  const material = defineTextMaterial((context) => {
+    try {
+      node.set({ text: 'changed', style: { fontSize: 40, decoration: { underline: false } } });
+    } catch (error) {
+      rejected.push(error);
+    }
+    return context.createDefaultMaterial();
+  });
+  node = three.createText({
+    font: await loadFont(),
+    text: 'one',
+    style: { fontSize: 16, decoration: { underline: true } },
+    material,
+  });
+  const scene = new THREE.Scene();
+  scene.add(node);
+  let pending;
+  let published;
+  try {
+    pending = node.split();
+    assert.ok(rejected.length > 0, 'the real material factory attempted an update');
+    assert.ok(rejected.every((error) => /borrowed render plan/.test(error.message)));
+    assert.equal(node.text, 'one');
+    assert.equal(node.style.fontSize, 16);
+    assert.equal(pending[0].count, 3);
+    assert.ok(pending[1], 'the original underline remains in the independent tuple');
+    assert.equal(node.commitState().status, 'pending');
+    scene.updateMatrixWorld(true);
+    assert.equal(node.commitState().status, 'committed');
+    published = node.split();
+    assert.deepEqual(copySnapshot(pending[0]), copySnapshot(published[0]));
+    assert.ok(published[1], 'the next publication retains the original underline');
+  } finally {
+    pending?.forEach((copy) => copy?.dispose());
+    published?.forEach((copy) => copy?.dispose());
+    node.dispose();
+  }
+});
+
+test('discarded sibling queries retire speculative identities before ordinary publication', async (t) => {
+  for (const retry of [false, true]) {
+    await t.test(retry ? 'capacity repair succeeds' : 'output limit rejects', async (caseContext) => {
+      const config = defineThreeConfig();
+      const three = await createThreeTestHandle(caseContext, {
+        ...config,
+        commands: {
+          ...config.commands,
+          resultBytes: 4_096,
+          limits: { ...config.commands.limits, ...(retry ? {} : { maxOutputBytes: 4_096 }) },
+        },
+      });
+      const font = await loadFont();
+      const source = three.createText({ font, text: 'A' });
+      const sibling = three.createText({ font, text: 'capacity '.repeat(512) });
+      const scene = new THREE.Scene();
+      scene.add(source, sibling);
+      let copy;
+      try {
+        assert.equal(source.measureGlyphs().length, 1);
+        let repairs = 0;
+        const reserve = PlanTransport.prototype.reserve;
+        caseContext.mock.method(PlanTransport.prototype, 'reserve', function (...args) {
+          repairs += 1;
+          return reserve.apply(this, args);
+        });
+        if (retry) {
+          assert.equal(sibling.measureGlyphs().length, sibling.text.length);
+          assert.ok(repairs > 0, 'the successful query must grow the result arena');
+        } else {
+          assert.throws(() => sibling.measureGlyphs(), { statusCode: 'result-too-large' });
+        }
+        sibling.text = 'B';
+        scene.updateMatrixWorld(true);
+        assert.equal(source.commitState().status, 'committed');
+        const acceptedIds = Array.from(source.glyphs().glyphStableIds);
+        copy = source.split()[0];
+        assert.deepEqual(Array.from(source.glyphs().glyphStableIds), acceptedIds);
+        assert.equal(copy.count, 1);
+        assert.deepEqual(
+          copySnapshot(copy).measurements,
+          source.measureGlyphs().map(({ anchorPoint, ...measurement }) => ({
+            ...measurement,
+            center: anchorPoint('center'),
+          })),
+        );
+      } finally {
+        copy?.dispose();
+        source.dispose();
+        sibling.dispose();
+      }
+    });
+  }
+});
+
+test('queries carry pending sibling lifecycle after renderer rejection without publishing an over-budget batch', async (t) => {
+  for (const initiallyPublished of [false, true]) {
+    await t.test(initiallyPublished ? 'previously published source' : 'first publication', async (caseContext) => {
+      const three = await createThreeTestHandle(
+        caseContext,
+        defineThreeConfig({ capacity: { size: 6, policy: 'fixed' } }),
+      );
+      const font = await loadFont();
+      const node = three.createText({ font, text: 'ready' });
+      const group = three.createTextGroup();
+      const scene = new THREE.Scene();
+      scene.add(group);
+      group.add(node);
+      let extra;
+      let pending;
+      let published;
+      try {
+        assert.equal(node.measureGlyphs()?.length, 5);
+        if (initiallyPublished) scene.updateMatrixWorld(true);
+        const failure = new Error('material creation failed');
+        group.material = defineTextMaterial(() => {
+          throw failure;
+        });
+        assert.throws(glyphRuntime.shape.bind(glyphRuntime), (error) => error === failure);
+        group.material = undefined;
+        extra = three.createText({ font, text: 'more' });
+        group.add(extra);
+        node.constraints = { width: { mode: 'exact', size: 100 } };
+        node.computeBoundingBox();
+        assert.equal(node.measure().width, 100);
+        assert.equal(node.measureGlyphs()?.length, 5);
+        pending = node.split();
+        assert.equal(pending[0].count, 5);
+        assert.equal(node.commitState().status, 'failed', 'queries cannot acknowledge the rejected source');
+        assert.notEqual(extra.commitState().status, 'committed', 'the unrelated sibling remains unpublished');
+        extra.dispose();
+        scene.updateMatrixWorld(true);
+        assert.equal(node.commitState().status, 'committed');
+        published = node.split();
+        assert.deepEqual(copySnapshot(pending[0]), copySnapshot(published[0]));
+      } finally {
+        pending?.forEach((copy) => copy?.dispose());
+        published?.forEach((copy) => copy?.dispose());
+        extra?.dispose();
+        node.dispose();
+        group.dispose();
+      }
+    });
+  }
+});
+
+test('sibling preparation refreshes split identities before and after publication', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont();
+  for (const priorPublication of [false, true]) {
+    for (const publishBeforeSplit of [false, true]) {
+      const scene = new THREE.Scene();
+      const a = three.createText({ font, style: { fontSize: 16 }, text: 'A' });
+      const b = three.createText({ font, style: { fontSize: 16 }, text: 'B' });
+      const copies = [];
+      try {
+        scene.add(a);
+        if (priorPublication) {
+          scene.updateMatrixWorld(true);
+          a.text = 'AA';
+        }
+        assert.equal(a.measureGlyphs().length, a.text.length);
+        scene.add(b);
+        assert.equal(b.measureGlyphs().length, 1);
+        if (publishBeforeSplit) scene.updateMatrixWorld(true);
+        const [pending] = a.split();
+        copies.push(pending);
+        assert.equal(pending.count, a.text.length);
+        assert.equal(pending.glyphAt(0).glyphId, a.glyphs().glyphIds[0]);
+        const expected = copySnapshot(pending);
+        scene.updateMatrixWorld(true);
+        const [published] = a.split();
+        copies.push(published);
+        assert.equal(published.count, a.text.length);
+        assert.deepEqual(copySnapshot(published), expected);
+      } finally {
+        for (const copy of copies) copy.dispose();
+        a.dispose();
+        b.dispose();
+      }
+    }
+  }
+});
+
+test('pending split uses desired render order before source publication', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont();
+  const scene = new THREE.Scene();
+  const node = three.createText({ font, style: { fontSize: 16 }, text: 'order' });
+  const copies = [];
+  const orders = (copy) => {
+    const result = [];
+    copy.traverse((object) => {
+      if (object.isMesh) result.push(object.renderOrder);
+    });
+    return result;
+  };
+  try {
+    scene.add(node);
+    scene.updateMatrixWorld(true);
+    node.style = { fontSize: 24 };
+    node.renderOrder = 10;
+    const [pending] = node.split();
+    copies.push(pending);
+    assert.deepEqual(orders(pending), [10]);
+    scene.updateMatrixWorld(true);
+    const [published] = node.split();
+    copies.push(published);
+    assert.deepEqual(orders(pending), orders(published));
+  } finally {
+    for (const copy of copies) copy.dispose();
     node.dispose();
   }
 });
