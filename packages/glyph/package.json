@@ -27,8 +27,8 @@
     "dist",
     "src",
     "!dist/.tsbuildinfo",
-    "!dist/internal/raster-baker-profile.d.ts",
-    "!dist/internal/raster-baker-profile.js"
+    "!dist/internal/raster-baker-profile.*",
+    "!src/internal/raster-baker-profile.ts"
   ],
   "type": "module",
   "sideEffects": [

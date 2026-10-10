@@ -70,7 +70,7 @@ original edit-sized and interleaved-read acceptance; it is excluded from this re
 
 - [x] Land manual batch visibility validation and package-owned breaking-change migration guidance (#284, #281).
 - [x] Pass full CI for merged runtime checkpoint `8122d97e`, including browser/packed-consumer checks and full Labs (run 37997996053).
-- [ ] Establish release-wide parity against published 0.1.0. Saved-main comparison 38001807239 refused runner CPU mismatches before timing; same-runner smoke comparison 38003684672 completed with five neutral cases and one clock-confounded exclusion. This focused result cannot alone clear release-wide parity.
+- [ ] Reconcile release-wide performance against published 0.1.0. The completed four-block full comparison against main `30391d02` reports 56 faster, 3 slower, 43 neutral and 2 timing-mode exclusions, with no correctness errors. Median workload p50 moves from 2.560 to 2.085 ms; workloads above 3 ms fall from 48 to 41. Remaining slowdowns add 43–51 µs each; baseline clock drift is 8.3%. This is broad improvement, not strict every-case parity. The [complete report](https://github.com/pmndrs/glyph/issues/253#issuecomment-6101717975) preserves all timings and exclusions.
 - [x] Land complete merged-feature release notes (#288, main `653d7969`).
 - [ ] Prepare and validate the 0.2.0 manifest and release package after the performance cut is accepted.
 - [ ] Obtain explicit authorization and publish only after the release gates pass. Pushing a stable `v0.2.0` tag invokes npm publication; do not push that tag as a preparation step.
