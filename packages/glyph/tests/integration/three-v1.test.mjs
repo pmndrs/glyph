@@ -3102,6 +3102,49 @@ test('nested TextGroup nodes inherit presentation without creating nested public
   }
 });
 
+test('pending copy survives a rejected publication followed by a sibling query', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  let reject = true;
+  const material = defineTextMaterial((context) => {
+    if (reject) throw new Error('copy retry material failure');
+    return context.createDefaultMaterial();
+  });
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const first = three.createText({ font, material, text: 'ABCDEFGH' });
+  const second = three.createText({ font, text: 'second label' });
+  group.onError = () => {};
+  group.add(first, second);
+  scene.add(group);
+  let copy;
+  try {
+    const before = first.measureGlyphs();
+    scene.updateMatrixWorld(true);
+    assert.match(String(group.error), /copy retry material failure/u);
+    reject = false;
+    second.measureGlyphs();
+    [copy] = first.split();
+    assert.equal(first.commitState().status, 'failed');
+    const snapshot = (measurements) =>
+      measurements.map(({ key, shapedOrigin, drawnOrigin, originalMatrix }) => ({
+        key,
+        shapedOrigin,
+        drawnOrigin,
+        originalMatrix,
+      }));
+    assert.equal(copy.count, 8);
+    assert.deepEqual(snapshot(copy.measurements), snapshot(before));
+  } finally {
+    copy?.dispose();
+    first.dispose();
+    second.dispose();
+    group.dispose();
+    font.dispose();
+    three.dispose();
+  }
+});
+
 test('renderer rejection waits for explicit invalidation and then checkpoints without copied bytes', async (t) => {
   const three = await createThreeTestHandle(t);
   const instrumented = instrumentedGlyph;
