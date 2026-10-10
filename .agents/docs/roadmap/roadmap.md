@@ -65,8 +65,11 @@ renderer baseline. Their completion did not publish a release or freeze the publ
 The historical v0/v1 architecture milestone names below are distinct from npm versions. The published baseline is
 0.1.0. The maintainer's current cut line is to release stable merged work as 0.2.0 once correctness and release-wide
 performance parity are established, with remaining Xi rope integration and #247 frontier work targeted at 0.3.0.
-Do not land the unvalidated preparation/rope branches to satisfy the release date. #240 remains dependent on #247's
-original edit-sized and interleaved-read acceptance; it is excluded from this release candidate.
+Do not land the unvalidated preparation/rope branches to satisfy the release date. [#299](https://github.com/pmndrs/glyph/pull/299)
+supersedes [#240](https://github.com/pmndrs/glyph/pull/240): synchronous placement reads and `split()` query current desired
+layout without publishing the source batch. Public signatures remain unchanged. #299 still requires final review and
+exact-head CI/performance validation; #240's publish-on-read implementation remains held. This bounded follow-up does
+not close #247's edit-sized publication frontier.
 
 - [x] Land manual batch visibility validation and package-owned breaking-change migration guidance (#284, #281).
 - [x] Pass full CI for merged runtime checkpoint `8122d97e`, including browser/packed-consumer checks and full Labs (run 37997996053).
@@ -842,7 +845,7 @@ Deliver:
 - core-owned raster-resource partitioning, typed technique bindings, stable instance slots, overflow chunks, technique packing, dirty ranges, resolved variants, and ordered glyph runs;
 - canonical technique-defined CPU instance storage with adjacent dirty ranges and live glyph-run ranges for engine-owned buffer synchronization;
 - atomic runtime revisions spanning every paragraph batch touched at one synchronization point;
-- planner-assisted committed glyph and decoration checkpoints that import as independently owned renderer objects,
+- planner-assisted prepared desired-layout glyph and decoration checkpoints that import as independently owned renderer objects,
   without animation, physics-body, collision, or live presentation-override policy in core;
 - one target staging contract whose fallible work preserves the live revision and whose commit is synchronous
   at an engine-owned safe frame boundary;

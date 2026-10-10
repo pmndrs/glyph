@@ -54,6 +54,9 @@ drawable index as `glyphs.measurements[index]` and `setMatrixAt(index)`. `glyphs
 
 You can measure text bounds and font metrics with `Text.measure()`.  
 Use `Text.glyphs()` if you need per glyph position and layout metrics, this can incur a small overhead if used before the text is shaped.
+Measurements, glyphs, carets, and selection geometry are available before first render and after text edits.
+These reads query current layout without publishing the source batch; repeated unchanged reads reuse cached results.
+`Text.split()` also works before rendering and returns an independent copy of the current layout.
 
 ```ts
 const label = three.createText({

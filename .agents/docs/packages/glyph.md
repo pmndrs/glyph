@@ -1022,6 +1022,13 @@ only while it has changed text to publish; an idle synchronization does not ente
 publication therefore pays no semantic-sidecar cost, while renderers that need same-frame bounds pay the explicit
 per-publication cost instead of making a second Wasm query.
 
+[#299](https://github.com/pmndrs/glyph/pull/299) supersedes
+[#240](https://github.com/pmndrs/glyph/pull/240)'s publish-on-read implementation. Three's existing measurement, glyph,
+placement, caret, and selection methods answer from current desired layout through the shared paragraph query/cache.
+`split()` copies that desired layout into independently owned renderer objects. These calls leave source publication
+pending, preserve public signatures and ABI, and do not publish unrelated labels. Matching prepared results are reused
+by the next ordinary publication; this change does not resolve the remaining whole-root publication work in #247.
+
 An explicit query before first render carries the complete desired paragraph lifecycle and applies text, style, and
 geometry mutations only for the queried paragraph. It serializes paragraph-order rows only for nonremoved paragraphs
 whose scoped rank is still pending publication; a semantic-only query therefore does not resend stable ranks, while
