@@ -2,7 +2,8 @@ import { assert, bench, group } from '@pmndrs/labs';
 
 import { attachToScene, createParagraph, disposeParagraph, inspectDraws, txt } from './fixture.ts';
 
-// Prepared inputs exclude scene generation, while timing the full public assignment and publication path.
+// Authored inputs exclude scene generation. Every timed assignment still includes public setter
+// normalization, UTF-16 request encoding, and synchronous Rust preparation.
 const original = 'ab cd ef gh ij kl '.repeat(1_024);
 const characters = original.split('');
 for (let offset = 1; offset < characters.length; offset += 1_021) {
@@ -41,7 +42,21 @@ group('large retained assignments @edit @assignment', () => {
     ['scattered', sparse],
     ['broad', broad],
   ] as const) {
-    bench(`${kind} character assignment in one large paragraph with 8192 paint spans`, function* () {
+    bench(`${kind} setter preparation in one large paragraph with 8192 paint spans @preparation @encoding`, function* () {
+      const created = createParagraph(original);
+      const desired = [formatted(original), formatted(alternate)];
+      let selected = 0;
+      const glyphCount = yield () => {
+        selected = 1 - selected;
+        created.paragraph.set({ text: desired[selected]! });
+        return created.paragraph.measure().glyphCount;
+      };
+      assert(glyphCount > 0, 'setter-owned preparation must be immediately measurable');
+      assert.equal(created.paragraph.text, desired[selected]!.text);
+      disposeParagraph(created);
+    });
+
+    bench(`${kind} end-to-end setter and publication with 8192 paint spans @preparation @encoding @publication`, function* () {
       const created = createParagraph(original);
       const scene = attachToScene(created.textGroup);
       const desired = [formatted(original), formatted(alternate)];

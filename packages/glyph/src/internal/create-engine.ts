@@ -150,11 +150,22 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
         return Object.freeze({ kind: command.kind, resource: retained.value });
       });
 
+      const boundRetirements: Retirement<Bindings['resource'], Bindings['buffer']>[] = [];
       const boundBuffers = Array.from(source.updates.buffers, (command) => {
         const record = this.#mapper.bufferIdentity(command.buffer);
         const program = command.program === undefined ? undefined : this.#program(command.program);
         let retained = buffers.get(record.id);
         if (retained?.generation !== record.generation) {
+          // Rust adoption can precede renderer acceptance. Retire the accepted generation even
+          // when a retry checkpoint no longer names it in the engine's retirement commands.
+          const accepted = previousBuffers.get(record.id);
+          if (
+            accepted !== undefined &&
+            accepted.generation !== record.generation &&
+            !boundRetirements.some((retirement) => retirement.kind === 'buffer' && retirement.buffer === accepted.value)
+          ) {
+            boundRetirements.push(Object.freeze({ kind: 'buffer', buffer: accepted.value }));
+          }
           const declaration = this.#bufferDeclaration(record.programId, record.bindingId);
           const value = this.#config.schema.buffer(this.#boundary, { program, declaration });
           retained = { generation: record.generation, value };
@@ -176,7 +187,6 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
         bindPatch(patch, (identity) => this.#buffer(identity, buffers)),
       );
 
-      const boundRetirements: Retirement<Bindings['resource'], Bindings['buffer']>[] = [];
       for (const retirement of source.updates.retirements) {
         const bound = bindRetirement(retirement, {
           resource: (resource) => {
@@ -194,7 +204,16 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
             return retired.value;
           },
         });
-        if (bound !== undefined) boundRetirements.push(bound);
+        if (bound === undefined) continue;
+        if (
+          bound.kind === 'buffer' &&
+          boundRetirements.some(
+            (acceptedRetirement) => acceptedRetirement.kind === 'buffer' && acceptedRetirement.buffer === bound.buffer,
+          )
+        ) {
+          continue;
+        }
+        boundRetirements.push(bound);
       }
 
       const bindSpan = (span: TypedInstanceSpan) => {

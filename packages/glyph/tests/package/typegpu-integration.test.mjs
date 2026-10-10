@@ -36,6 +36,7 @@ function recordingHost() {
   const allocations = new Set();
   const recorded = [];
   const uploads = [];
+  const projectedBuffers = [];
   const stats = { allocations: 0, preparations: 0, publications: 0, uniformWrites: 0, reject: false };
   function buffer(size, usage = 0) {
     const value = {
@@ -81,6 +82,12 @@ function recordingHost() {
     renderer: ({ defaultRenderer }) => ({
       decode(frame) {
         stats.publications++;
+        projectedBuffers.push({
+          updates: Array.from(frame.updates.buffers, (command) => command.buffer),
+          retirements: Array.from(frame.updates.retirements)
+            .filter((command) => command.kind === 'buffer')
+            .map((command) => command.buffer),
+        });
         const prepared = defaultRenderer.decode(frame);
         if (stats.reject) {
           prepared.discard();
@@ -174,7 +181,7 @@ function recordingHost() {
       },
     },
   };
-  return { config, allocations, recorded, uploads, stats };
+  return { config, allocations, recorded, uploads, projectedBuffers, stats };
 }
 
 function renderedState(draws) {
@@ -285,6 +292,9 @@ test('localized TypeGPU edits retain GPU buffers and discard leaves accepted byt
     assert.equal(host.uploads.length, 0, 'decode/discard must not upload into accepted buffers');
     assert.equal(host.stats.allocations, allocationCount);
     host.stats.reject = false;
+    assert.throws(() => text.update({ text: 'invalid', style: { fontSize: -1 } }), /fontSize/);
+    assert.deepEqual(snapshot(), edited, 'a failed setter does not change accepted or pending owners');
+    text.update({ text: 'temporary' });
     text.update({ text: 'e' });
     glyph.shape();
     const after = snapshot();
@@ -304,12 +314,31 @@ test('localized TypeGPU edits retain GPU buffers and discard leaves accepted byt
     host.stats.reject = true;
     text.update({ text: 'z'.repeat(8192) });
     assert.throws(() => glyph.shape(), /Injected renderer rejection/);
+    const rejectedResize = host.projectedBuffers.at(-1);
+    assert.ok(rejectedResize.retirements.length > 0, 'resize replaces accepted buffer bindings');
+    assert.equal(
+      new Set(rejectedResize.retirements).size,
+      rejectedResize.retirements.length,
+      'explicit retirement is deduplicated',
+    );
     assert.equal(host.allocations.size, retainedAllocations, 'discard releases resized staging buffers');
     assert.equal(host.uploads.length, 0, 'a discarded resize uploads nothing');
     assert.deepEqual(snapshot(), after);
     host.stats.reject = false;
     text.update({ text: 'e' });
     glyph.shape();
+    const recoveredResize = host.projectedBuffers.at(-1);
+    for (const accepted of rejectedResize.retirements) {
+      assert.equal(
+        recoveredResize.retirements.filter((buffer) => buffer === accepted).length,
+        1,
+        'retry retires each previous accepted binding exactly once',
+      );
+    }
+    assert.ok(
+      rejectedResize.updates.every((buffer) => !recoveredResize.retirements.includes(buffer)),
+      'rejected candidate bindings never enter accepted retirement ownership',
+    );
     assert.deepEqual(renderedState(snapshot()), renderedState(after));
     host.uploads.length = 0;
     glyph.shape();
@@ -474,6 +503,47 @@ test('the shared planner rejects duplicate final orders while allowing atomic sw
     assert.throws(() => glyph.shape(), /retained text order 1 is already in use/);
     second.update({ order: 0 });
     assert.doesNotThrow(() => glyph.shape(), 'a rejected duplicate leaves the desired frame repairable');
+
+    // Exercise both phases of order settlement repeatedly; a cold root independently
+    // proves that pending membership never drops a swap owner or retains a stale one.
+    let seed = 0x1234abcd;
+    for (let step = 0; step < 8; step++) {
+      seed ^= seed << 13;
+      seed ^= seed >>> 17;
+      seed ^= seed << 5;
+      const order = (seed >>> 0) & 1;
+      const firstText = `first ${step}`;
+      const secondText = `second ${step}`;
+      first.update({ text: firstText, order });
+      second.update({ text: secondText, order: 1 - order });
+      glyph.shape();
+      handle.draw({}, { width: 640, height: 240 });
+      const actual = renderedState(host.recorded.splice(0));
+      const cold = handle(`cold-order-${step}`);
+      let coldFirst;
+      let coldSecond;
+      try {
+        coldFirst = cold.createCoreText(font, { text: firstText, order });
+        coldSecond = cold.createCoreText(font, { text: secondText, order: 1 - order });
+        glyph.shape();
+        cold.draw({}, { width: 640, height: 240 });
+        assert.deepEqual(renderedState(host.recorded.splice(0)), actual, `order sequence ${step}`);
+      } finally {
+        coldFirst?.dispose();
+        coldSecond?.dispose();
+        cold.dispose();
+      }
+    }
+    first.dispose();
+    second.dispose();
+    glyph.shape();
+    handle.draw({}, { width: 640, height: 240 });
+    assert.deepEqual(host.recorded.splice(0), [], 'empty adoption settles every pending removal');
+    first = handle.createCoreText(font, { text: 'replacement', order: 0 });
+    first.update({ text: 'replacement updated', order: 0 });
+    glyph.shape();
+    handle.draw({}, { width: 640, height: 240 });
+    assert.ok(host.recorded.splice(0).length > 0, 'the same empty publisher retains its lease until disposal');
   } finally {
     first?.dispose();
     second?.dispose();

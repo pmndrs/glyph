@@ -1,0 +1,24 @@
+---
+type: Log Entry
+title: Omit unchanged geometry from setter preparation
+sources:
+  - resource: ../packages/glyph.md
+    title: Retained preparation ownership
+  - resource: ../planning/publication-frontier.md
+    title: Publication frontier tracker
+generated:
+  by: openai-codex/gpt-6
+  at: '2026-10-10T13:16:51.296Z'
+---
+
+The existing setter request now omits unchanged authored geometry, retaining Rust's committed geometry instead of recompiling constraints and regions and rebuilding pending maps for every text or paint assignment. Geometry dirt compares normalized owned layout/constraint identity and transform handle; explicit flow and inline-object assignments remain conservative. This replaces the old property-presence helper, which marked Three's complete state updates dirty even when geometry was equivalent. The shared preparation executor, synchronous measurements, batching and publication lifetime remain unchanged. Production source changes +18/-21 lines before formatting.
+
+Independent source review traced empty geometry batches to Rust's committed geometry and verified that font/metric/text changes retain ordinary flow invalidation. Pending maps are reused only without geometry mutation; reachable exposed Text states are already prepared, while creation owns fresh maps. Existing Three integration coverage now checks geometry omission and compares a measured text/metric update with cold columns after caller mutation and a rejected constraint setter. Formatter and static session57836 passed. Build and all134 focused Three tests session54140 passed; full Node6700 passed974/974 with zero skipped. All five Wasm hashes are unchanged; emitted planner35,069→35,323 raw and10,091→10,141 system-gzip bytes. Frozen TGZ3ab474a5b678d8ab5f251651415659ffa4eb1c41b700cd81888486c15461b29f is preserved under .cache/publication-retained-geometry-candidate. Corrected registry0.1.0 stress4 Labs34519 and live checks completed as recorded below; #247 remains open.
+
+Corrected registry0.1.0 stress4 Labs34519 exited0: four faster, three slower, one neutral and zero skipped. Bulk1024 publication20.72→34.19ms (+13.47ms/+65%), borrowed1000 glyphs3.14→5.36ms (+2.22ms/+70.4%) and unchanged1000 measurements305.94→349.56µs remain regressions. Reorder3.52→3.01ms, reorder/edit8.89→7.51ms and sparse edit/measure289.02→203.75µs improve. Prior candidate38.54ms bulk is separate-run context, not proof of the isolated patch's speedup. The slice comparison reuses this exact candidate report while measuring only the prior33b4d098 package; machine variability remains.
+
+GPU72959 exited0: MTSDF dynamic-layout on WebGPU and WebGL2 each settled387 glyphs in one draw with one retained renderer; WebGPU Slug rich-text settled612 glyphs in five draws. All used shaper64e4ce00 and matching candidate source; all three captures under .cache/publication-retained-geometry-visual were inspected without a new visible defect. Existing control-panel occlusion remains. This is source-plus-authenticated-Wasm browser evidence, not a packed-JavaScript network replacement or comparative FPS report. The sandboxed Chrome launch failed before page creation; the scoped unsandboxed verification then succeeded.
+
+Isolated slice stress4 Labs13203 exited0, comparing33b4d098 to3ab474a5 while reusing the exact candidate's completed release-run timings. CPU, architecture, Node, suite, blocks and artifact identity checks matched; separate-run machine variability remains. Two workloads faster, zero slower, six neutral and zero skipped: bulk1024 publication38.00→34.19ms (-3.81ms/-10%, p=.029,95% CI -14.2..-7.5%); sparse edit/borrow278.48→243.29µs (-12.6%). Request-count tests independently prove omission of unchanged geometry. Report .cache/publication-retained-geometry-slice-stress/summary.md. The release regression remains material; this change is a bounded improvement, not #247 completion.
+
+Committed03754110. Follow-up frozen-artifact bulk-write publication profile39597 exited0 with100 iterations/10 warmups/1024 labels: p5023.118125/p9528.014208ms,65% sampled Wasm/33% JavaScript/2% runtime. Prior49ab profile27.682458/32.647375ms is separate-run attribution context, not a paired speed verdict. Geometry compilation no longer appears among the30 reported hotspots. Matching emitted source maps identify writeHeader (61.79ms sampled), writePreparedPlannerFrameUpdate (49.336ms), assertGlyphId (46.708ms), Three #applyUpdate (39.458ms) and planner \_updateText (36.25ms) across the100-iteration profile. The ID hotspot is assertGlyphId, not GlyphIdScope.id; Wasm samples still carry numeric indices without symbolic kernel attribution. The read-only Rust trace finds target-scoped successful preparation, binary ID lookup and pending-ID settlement, not a whole-root preparation scan. Remaining publication walks are investigated separately.

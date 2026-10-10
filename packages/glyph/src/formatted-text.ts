@@ -7,11 +7,13 @@ import {
 } from './internal/graphemes.js';
 import { statedProperties } from './internal/span-cascade.js';
 import { isImmutableFontSelection, type FontSelection } from './loaded-font.js';
-import { assertTextStyle, type TextStyle } from './text-properties.js';
+import { assertTextStyleFeatureRanges, type TextStyle } from './text-properties.js';
+import { reuseOrCreateTextStyleSnapshot } from './config/text-property.js';
 import type { RasterFormatMetadata } from './config/raster-format.js';
 
 declare const textLiteralFormat: unique symbol;
 declare const textSpanFragmentFormat: unique symbol;
+type StyledRange = ClusterAlignableRange & { readonly style?: TextStyle };
 
 export interface ParagraphSpan<Format extends RasterFormatMetadata> {
   readonly start: number;
@@ -37,26 +39,46 @@ export interface TextSpanFragment<
   readonly properties: Properties;
 }
 
-/** Internal adapter handoff: resolves and freezes spans while recording that the exact array is canonical for `text`. */
-export function ownClusterAlignedSpans<Span extends ClusterAlignableRange>(
+/** Internal adapter handoff: owns validated style snapshots and resolves package-produced span boundaries. */
+export function ownClusterAlignedSpans<Span extends StyledRange>(
   text: string,
   spans: readonly Span[],
 ): readonly Span[] {
-  return ownClusterAlignedRanges(text, spans);
+  let snapshot: Span[] | undefined;
+  for (let index = 0; index < spans.length; index++) {
+    const span = spans[index]!;
+    const style = span.style;
+    if (style === undefined) {
+      snapshot?.push(span);
+      continue;
+    }
+    const ownedStyle = reuseOrCreateTextStyleSnapshot(undefined, style, 'span style');
+    if (ownedStyle !== style) snapshot ??= spans.slice(0, index);
+    snapshot?.push(ownedStyle === style ? span : { ...span, style: ownedStyle });
+  }
+  return ownClusterAlignedRanges(text, snapshot ?? spans, assertAlignedSpanFeatureRanges, spans);
 }
 
-/** Internal adapter handoff for font binding, which replaces records without changing their proven boundaries. */
-export function inheritClusterAlignedSpans<Span extends ClusterAlignableRange>(
+function assertAlignedSpanFeatureRanges(spans: readonly StyledRange[]): void {
+  for (const span of spans) {
+    const style = span.style;
+    if (style !== undefined) assertTextStyleFeatureRanges(style, span.start, span.end, 'span style');
+  }
+}
+
+/** Internal adapter handoff: font/material mapping preserves the owned style and scope; other changes revalidate. */
+export function inheritClusterAlignedSpans<Span extends StyledRange>(
   text: string,
-  source: readonly ClusterAlignableRange[],
+  source: readonly StyledRange[],
   spans: readonly Span[],
 ): readonly Span[] {
-  return inheritClusterAlignedRanges(text, source, spans);
+  const aligned = inheritClusterAlignedRanges(text, source, spans);
+  return areOwnedSpansClusterAligned(text, aligned) ? aligned : ownClusterAlignedSpans(text, aligned);
 }
 
 /** Internal adapter check for the package-owned handoff above. Arbitrary caller arrays deliberately return false. */
 export function areOwnedSpansClusterAligned(text: string, spans: readonly ClusterAlignableRange[]): boolean {
-  return areOwnedRangesClusterAligned(text, spans);
+  return areOwnedRangesClusterAligned(text, spans, true);
 }
 
 /** Resolves span boundaries onto the grapheme-cluster grid before the engine sees them — it rejects any frame whose styles split a cluster (`cluster_state.rs::build`). Malformed UTF-16 has no grid; spans pass through untouched for the engine to reject. */
@@ -98,7 +120,11 @@ export function createSpanTag<Format extends RasterFormatMetadata, Properties ex
   if (typeof properties !== 'object' || properties === null || Array.isArray(properties)) {
     throw new TypeError('span properties must be an object');
   }
-  const frozen = Object.freeze({ ...properties });
+  const style = (properties as { readonly style?: TextStyle }).style;
+  const frozen = Object.freeze({
+    ...properties,
+    ...(style === undefined ? {} : { style: reuseOrCreateTextStyleSnapshot(undefined, style, 'span style') }),
+  });
   return ((strings: TemplateStringsArray, ...values: readonly TextTemplateValue<Format>[]) => {
     const composed = compose(strings, values);
     return Object.freeze({
@@ -192,7 +218,7 @@ function normalizeFormats<Format extends RasterFormatMetadata>(
       if (Object.keys(styled).length !== 0) style = Object.freeze({ ...(style ?? {}), ...styled });
     }
   }
-  if (style !== undefined) assertTextStyle(style, 'span style');
+  if (style !== undefined) style = reuseOrCreateTextStyleSnapshot(undefined, style, 'span style');
   return Object.freeze({
     ...(font === undefined ? {} : { font }),
     ...(style === undefined ? {} : { style }),

@@ -380,14 +380,11 @@ impl StyleArena {
         Ok(())
     }
 
-    pub(crate) fn validate(
+    /// Rechecks caller-dependent text and font validity without rediscovering unchanged nesting.
+    pub(crate) fn validate_text(
         &self,
         text: &[u16],
         mut font_stack_exists: impl FnMut(u32) -> bool,
-        order_scratch: &mut Vec<usize>,
-        nesting_scratch: &mut Vec<u32>,
-        sort_pairs: &mut Vec<(u64, u32)>,
-        sort_pairs_pass: &mut Vec<(u64, u32)>,
     ) -> Result<(), EngineError> {
         if self.records.is_empty() {
             return Ok(());
@@ -427,6 +424,22 @@ impl StyleArena {
         }
         if root_count != 1 {
             return Err(EngineError::StyleRootInvalid(FrameFault::default()));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn validate(
+        &self,
+        text: &[u16],
+        font_stack_exists: impl FnMut(u32) -> bool,
+        order_scratch: &mut Vec<usize>,
+        nesting_scratch: &mut Vec<u32>,
+        sort_pairs: &mut Vec<(u64, u32)>,
+        sort_pairs_pass: &mut Vec<(u64, u32)>,
+    ) -> Result<(), EngineError> {
+        self.validate_text(text, font_stack_exists)?;
+        if self.records.is_empty() {
+            return Ok(());
         }
 
         order_scratch.clear();
@@ -916,6 +929,62 @@ mod tests {
         assert_eq!(arena.resolved_features(deepest), arena.features.as_slice());
         assert!(!deepest.has_line_height);
         assert_eq!(resolved.segments()[3].style.material_id, 0);
+    }
+
+    #[test]
+    fn retained_style_validation_rechecks_text_features_and_fonts() {
+        let arena = StyleArena {
+            records: vec![
+                style(10, 0, 0, 8, ROOT_REQUIRED_FIELDS, true),
+                style(20, 1, 2, 6, STYLE_FIELD_FEATURES, false),
+            ],
+            languages: Vec::new(),
+            features: vec![FeatureRecord {
+                tag: u32::from_be_bytes(*b"kern"),
+                value: 1,
+                start: 3,
+                end: 5,
+            }],
+        };
+        arena
+            .validate(
+                &[0x61; 8],
+                |handle| handle == 7,
+                &mut Vec::new(),
+                &mut Vec::new(),
+                &mut Vec::new(),
+                &mut Vec::new(),
+            )
+            .unwrap();
+        assert_eq!(
+            arena.validate_text(&[0x62; 8], |handle| handle == 7),
+            Ok(())
+        );
+        for start in [1, 2, 4, 5] {
+            let mut text = [0x61; 8];
+            text[start..start + 2].copy_from_slice(&[0xd83d, 0xde00]);
+            assert_eq!(
+                arena.validate_text(&text, |handle| handle == 7),
+                Err(EngineError::StyleRangeInvalid(FrameFault::style(20))),
+                "retained style/feature endpoints must still be scalar boundaries",
+            );
+        }
+        assert_eq!(
+            arena.validate_text(&[0x61; 7], |handle| handle == 7),
+            Err(EngineError::StyleRangeInvalid(FrameFault::style(10))),
+        );
+        assert_eq!(
+            arena.validate_text(&[0x61; 9], |handle| handle == 7),
+            Err(EngineError::StyleRootInvalid(FrameFault::style(10))),
+        );
+        assert_eq!(
+            arena.validate_text(&[0x61; 8], |_| false),
+            Err(EngineError::StyleFontStackMissing(FrameFault::style(10))),
+        );
+        assert_eq!(
+            arena.validate_text(&[0x61; 8], |handle| handle == 7),
+            Ok(())
+        );
     }
 
     #[test]

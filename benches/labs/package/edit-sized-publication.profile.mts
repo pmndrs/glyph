@@ -15,13 +15,17 @@ const count = positiveInteger(requiredEnvironment('GLYPH_EDIT_PROFILE_COUNT'), '
 const iterations = positiveInteger(requiredEnvironment('GLYPH_EDIT_PROFILE_ITERATIONS'), 'iterations');
 const warmups = positiveInteger(requiredEnvironment('GLYPH_EDIT_PROFILE_WARMUPS'), 'warmups');
 const position = requiredEnvironment('GLYPH_EDIT_PROFILE_POSITION');
-if (!['same-length', 'length-changing', 'color-only', 'interleaved-read', 'prepared-read'].includes(profileCase)) {
+if (
+  !['same-length', 'length-changing', 'color-only', 'interleaved-read', 'prepared-read', 'bulk-write'].includes(
+    profileCase,
+  )
+) {
   throw new Error(`Unknown profile case: ${profileCase}`);
 }
 if (position !== 'first' && position !== 'last') throw new Error(`Unknown profile position: ${position}`);
 if (boundary !== 'preparation' && boundary !== 'publication') throw new Error(`Unknown profile boundary: ${boundary}`);
-if (boundary === 'preparation' && profileCase !== 'prepared-read') {
-  throw new Error('The preparation boundary requires the prepared-read case');
+if (boundary === 'preparation' && profileCase === 'interleaved-read') {
+  throw new Error('The interleaved-read case requires publication');
 }
 if (profileCase === 'prepared-read' && count !== 100 && count !== 1000) {
   throw new RangeError('The prepared-read case requires 100 or 1000 labels');
@@ -61,8 +65,12 @@ const updateOne = () => {
   if (profileCase === 'same-length') target.text = alternate ? '12,345' : '54,321';
   else if (profileCase === 'length-changing') target.text = alternate ? '123,456' : '12,345';
   else target.style = { color: alternate ? '#f97316' : '#38bdf8', fontSize: 16 };
-  glyph.shape();
-  if (created.textGroup.error !== undefined) throw created.textGroup.error;
+  const glyphCount = target.measure().glyphCount;
+  if (boundary === 'publication') {
+    glyph.shape();
+    if (created.textGroup.error !== undefined) throw created.textGroup.error;
+  }
+  return glyphCount;
 };
 const updateInterleaved = () => {
   alternate = !alternate;
@@ -84,8 +92,28 @@ const updatePrepared = () => {
   }
   return glyphCount;
 };
+const updateBulk = () => {
+  alternate = !alternate;
+  const prefix = alternate ? 'bravo' : 'alpha';
+  let glyphCount = 0;
+  for (const [index, label] of created.labels.entries()) {
+    label.text = `${prefix} ${String(index).padStart(4, '0')}`;
+    glyphCount += label.measure().glyphCount;
+  }
+  if (boundary === 'publication') {
+    glyph.shape();
+    if (created.textGroup.error !== undefined) throw created.textGroup.error;
+  }
+  return glyphCount;
+};
 const update =
-  profileCase === 'prepared-read' ? updatePrepared : profileCase === 'interleaved-read' ? updateInterleaved : updateOne;
+  profileCase === 'bulk-write'
+    ? updateBulk
+    : profileCase === 'prepared-read'
+      ? updatePrepared
+      : profileCase === 'interleaved-read'
+        ? updateInterleaved
+        : updateOne;
 
 for (let index = 0; index < warmups; index++) update();
 globalGc()?.();
@@ -113,6 +141,27 @@ if (expectedMeasurements !== undefined) {
   );
 }
 if (boundary === 'publication') assertCommitted();
+if (['same-length', 'length-changing', 'color-only'].includes(profileCase)) {
+  const cold = createLabels(1);
+  try {
+    cold.labels[0]!.text = target.text;
+    cold.labels[0]!.style = target.style;
+    deepStrictEqual(target.measure(), cold.labels[0]!.measure());
+  } finally {
+    disposeLabels(cold);
+  }
+}
+if (profileCase === 'bulk-write') {
+  const prefix = alternate ? 'bravo' : 'alpha';
+  for (const [index, label] of created.labels.entries()) {
+    assert.equal(label.text, `${prefix} ${String(index).padStart(4, '0')}`);
+    assert(label.measure().glyphCount > 0);
+    if (boundary === 'publication') {
+      assert.equal(label.commitState().status, 'committed');
+      assert(label.measureGlyphs() !== undefined);
+    }
+  }
+}
 disposeLabels(created);
 const directory = resolve(output);
 await mkdir(directory, { recursive: true });

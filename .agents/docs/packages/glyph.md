@@ -133,9 +133,12 @@ sources:
   - id: msdfgen-cli
     resource: https://github.com/Chlumsky/msdfgen/blob/v1.13/main.cpp
     title: Pinned msdfgen CLI scanline and error-correction configuration
+  - id: glyph-static-check
+    resource: ../../../packages/glyph/scripts/check-static.mts
+    title: Shared built-package static verification workflow
 generated:
-  by: openai-codex/gpt-5
-  at: '2026-10-10T16:19:04.057Z'
+  by: openai-codex/gpt-6
+  at: '2026-10-10T16:40:14Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -150,6 +153,12 @@ then cut its stable tag from the reviewed commit after CI passes.
 semver target and excludes CI or commit-history narration. The package-owned
 [`MIGRATION-0.2.md`](../../../packages/glyph/MIGRATION-0.2.md) is the task-oriented path from 0.1 to 0.2; it links the
 archived rename commands and keeps deferred API work out of shipped claims.
+
+The `glyph:shaper-profile-artifact` diagnostic workflow builds with the same release shaper settings and Binaryen pass list, retaining function names in an isolated Cargo target. It requires a frozen package archive and refuses any difference in the ordered non-custom Wasm sections. The final diagnostic artifact consists of the original release sections plus the optimized candidate's name section; it never replaces `dist`. Its manifest records archive, release, diagnostic and executable-section hashes, tool versions, source revision/dirty state and final function-index names. Names identify optimized functions; merged and inlined work may not map to a single Rust source function.
+
+Sparse retained gather now feeds the existing sorted dirty-owner frontier and owner-local unpublished source intervals into one ordered rope traversal. Ranges that intersect the same leaf are handled before that leaf is reconstructed, so owner boundaries no longer repeat leaf and ancestor copies. The one-owner entry point adapts to the same stream and glyph callback. Borrowed semantic column views carry no copied text/glyph data; authoritative gather ranges retain the distinction between source glyphs and emitted rows, including clean decorated owners. Topology stops identify the owner and local source offset before the existing suffix builder resumes. Source-tree errors preserve the previous root, and the existing cache-invalid publication failure path rebuilds the mutated column workspace.
+
+The integrated stream passes 399 native unit tests and independent outline/Unicode controls, including cold output, sparse dirty islands, clean decorated gaps, recordless owners, growth/shrink Stop and failure recovery. Its first rebuilt package passes all 990 package/integration Node tests. Final formatter and Clippy cleanup passes the shared static gate and repeated native suite. These checks prove correctness at those boundaries; final artifact size, fuzz, browser and comparative performance remain separate gates for the draft frontier.
 
 ## Ownership
 
@@ -191,7 +200,7 @@ configurable intermediate decoder and ordinary renderer code receives no numeric
 The producer boundary is the proof boundary. Application and integration inputs are validated where they enter the public
 GlyphConfig services; package-owned retained state is then trusted. Rust validates raw ABI requests where memory safety
 requires it and emits the canonical publication layout. JavaScript reads that package-owned publication directly rather
-than rescanning every table, scalar, and registration on every frame.
+than rescanning every table, scalar, and registration on every frame. Private paragraph transport calls receive IDs minted by the retained planner; they retain active-root, borrow, range and Rust ownership checks without repeating the global identity-registry lookup. Caller-authored Codec and stable-glyph IDs still validate at their public boundary.
 Rust encoder and transport tests pin every emitted table span and payload rebase, while multi-handle product tests prove
 root, Codec, and font ownership across a shared engine batch. A failed owned invariant is a package defect covered by those
 tests, not an application-facing recovery path repeated in the hot runtime.
@@ -500,19 +509,41 @@ exact format, while `face.slug.load()` loads only that exact declared format. `f
 main GLB without fetching sidecars and returns its frozen, ordered format keys. Successful calls preserve Promise and
 result identity; rejected calls are evicted for retry. The consuming handle supplies its configured default key when an
 undeclared face is passed to Text; imperative Three rejects an unloaded selected format before creating retained state.
-Explicit `Text.measure()` and `Text.glyphs()` calls synchronously query one Text through its selected handle. They may pay
-one additional Wasm crossing, but do not traverse a scene, publish commands, or realize renderer resources. Normal
-rendering still publishes every dirty root through one `glyph.shape()` crossing. A query reconciles render-active root
-members plus the explicitly queried Text; querying an attached sibling cannot bind an unrelated detached Text, while a
-detached Text can still measure or inspect itself without entering the rendered batch. The former renderer-free
-`createParagraph()` path was removed because its private engine, handle, Codec, planner, font bindings, and caches
-duplicated the GlyphConfig pipeline (D-339).
+`Text.measure()` and `Text.glyphs()` answer from the setter-prepared paragraph selected by their handle. Prepared reads
+look up the current desired revision independently of renderer acceptance and Scene membership; they do not traverse a
+scene, publish commands, realize renderer resources, or initiate another semantic preparation. A first read may establish
+an absent binding through the same preparation producer. Normal rendering publishes dirty roots through `glyph.shape()`.
+The former renderer-free `createParagraph()` path was removed because its private engine, handle, Codec, planner, font
+bindings, and caches duplicated the GlyphConfig pipeline (D-339).
 
-The Three root keeps only the current detached query publicly bound and parks at most one preceding detached controller
-outside active publication membership. Alternating two detached measurements or inspections therefore reuses each
-controller's revision-aware semantic cache without accumulating removal rows, while a third distinct query evicts the
-single parked controller. Scene publication also evicts that slot. This bound permits at most one dormant core
-inspection cache; `Text.glyphs()` still returns freshly copied, caller-owned columns on every call.
+Setter preparation omits unchanged authored geometry from the same engine request. Normalized owned layout and constraint
+snapshots retain identity for equivalent assignments, including Three's complete state updates; text and paint changes
+therefore reuse Rust's committed geometry. Transform binding changes and explicit flow or inline-object assignments retain
+geometry invalidation. Font or metric changes still reflow through the existing engine using that retained geometry.
+
+Native test-only work attribution separates setter measurement/query serialization from final semanticViews:none publication, with cold-shape/full-gather oracles outside the counted phases. The bulk fixture distinguishes per-owner work from per-glyph work using 1,024 ten-glyph labels; it is a work-count diagnostic, not timing evidence for the Inter Labs font.
+
+Unchanged committed style structure reuses its validated nesting/order during text-only preparation. The same validator still checks the new UTF-16 length and style/feature endpoints plus registered font stacks; changed or new styles also run structural validation and resolution. Failed preparation preserves committed text/styles and permits the next valid assignment.
+
+Three publication revision preparation and settlement use the existing pending-measurement owners. Rejection retains those
+owners for retry; detached query cache transfers preserve their pending membership. Fixed capacity uses staged UTF-16 units
+maintained at successful updates and lifecycle changes, rather than summing every bound Text during publication. Hierarchy
+reconciliation and transform synchronization remain separate observations of the live Three scene.
+
+During Scene traversal, a root already present in the engine's dirty-registration Set skips the redundant presentation
+preflight; its existing preparation still reconciles current hierarchy, materials and order. Unqueued roots retain the
+preflight so raw Three mutations are observed without staging clean roots. Queue membership is package-private, consumed
+before staging, and removed on rejection, deferral and disposal; pending measurement owners do not authorize implicit
+retry. This adds no dirty flag, cache or publication executor.
+
+Alternating reads of two detached paragraphs already prepared by their setters preserve both bindings and their cached
+measurements. The regression makes 8,193 measurement reads followed by 8,193 owned glyph reads with no further preparation
+or renderer publication. `Text.glyphs()` still returns freshly copied caller-owned columns. The existing owned inspection
+cache retains its outline reader and font stores once per prepared layout; returned copies keep independent columns and
+can read outlines after Text or Font disposal. A successful setter invalidates that cache, while a rejected setter preserves
+the previous prepared inspection. Sparse borrowing counts successful record fetches in this same inspection owner. Once demand reaches the prepared glyph count, the next callback materializes through the existing inspection-copy producer before caller entry; descriptor, invalid and expired reads contribute no demand. Promotion never occurs after a callback and preserves borrowed expiry/mutation guards. Publication membership remains
+separate from semantic preparation lifetime; the older detached-query fallback has not yet been retired from every
+binding transition, so this evidence does not establish completion of the setter-first integration.
 
 `Text.readGlyphs(callback)` replaces `withGlyphs` without a compatibility alias. The
 [archived migration](../../skills/codemod/codemods/2026-09-24-read-glyphs/instructions.md) preserves callback return values,
@@ -611,15 +642,25 @@ nestable for scene hierarchy, transform/visibility inheritance, material selecti
 does not create another planner or publication stream. Capacity is immutable `ThreeConfig` policy shared
 by the anonymous and named roots of one handle; selecting different policy means creating another handle from
 `defineThreeConfig(...)`, not mutating a live root. Per-root, group, Text, and span material selection remains retained
-scene state because it describes authored presentation rather than renderer policy. A traversal sends only changed
-paragraph sections:
+scene state because it describes authored presentation rather than renderer policy. A bound `Text.set()` or property
+assignment synchronously prepares its current semantic/layout state in Rust before returning. A changed text assignment
+uses one full existing-wire UTF-16 replacement; Rust performs packed sparse comparison for same-length candidates and
+scalar-aligned prefix/suffix discovery for length changes. `measure()` reads the prepared fixed-size summary, borrowed
+glyph demand addresses prepared positioning directly; explicit inspection or recurring full-record demand materializes the same owned inspection. A
+traversal publishes renderer commands from that preparation. The ownership split is:
 
-- text replacement sends text plus any dependent style/geometry state;
-- font, spans, shaping style, paint, raster ratio, or material compare the complete normalized span batch with the last
-  engine-adopted state and send only changed compact style rows plus removed tail rows;
-- content-box changes send geometry;
+- a setter sends full changed text plus only changed compact style rows, removed style tails, and changed geometry;
+- traversal does not replay text/style/geometry after setter preparation and sends only remaining renderer
+  lifecycle/order demand;
 - transform and visibility changes update Three's renderer-local sidecar without calling Wasm;
 - an empty or normalized-equal update sends nothing.
+
+Prepared measurement totals, glyph spans and ink use the same positioned representation. The obsolete line-only
+preparation selector, repair branch and flow-level glyph-total fallback are retired; production query/update entry points
+always supply a shaper and complete positioning. No-shaper fixtures remain test-only. Equivalent geometry retains the
+committed flow/positioned pair, while full clipped inspection positions its intrinsic scratch before consumption.
+The bounded retirement passes 330 focused engine tests, all static gates including 11 Rust fmt/Clippy gates, a fresh
+package build, and 971 compiled-Wasm package/integration tests. Performance acceptance remains separate.
 
 Formatted-text compilers resolve cluster boundaries once and freeze their span arrays. A package-private WeakMap records
 the exact array and text value, so React and Vue may preserve that proof while replacing span records to bind fonts and
@@ -671,19 +712,166 @@ draws, or retirements. Recordless source glyphs remain in retained semantic stat
 permutation exactly as they are from Codec output. Any incompatible topology falls back to ordinary retained compilation.
 The packed-artifact Labs case over 1,000 labels measured 6.62 ms to 3.85 ms p50 (-41.8%, p=.002) with the other 18 matched
 benchmarks neutral.
-An active paragraph with no authored text, style, constraint, or inline-object span skips paragraph preparation when it
-also has no pending staged state. A speculative measurement query leaves staged paragraph state, so the next ordinary
-frame still prepares that paragraph to resolve the transaction even when the frame edits only a sibling. Codec and
-font-binding invalidation remain gather concerns; this preparation skip adds no alternate gather or publication path.
+An active paragraph with no authored text, style, constraint, or inline-object span skips redundant paragraph
+preparation when it has no pending setter transaction. Successful setter preparation commits independently of renderer
+plan revision and acknowledgement; a later ordinary frame gathers the newer preparation without replaying semantic
+input, even when another paragraph triggered publication. Codec and font-binding invalidation remain gather concerns;
+this preparation skip adds no alternate gather or publication path. Preparation transactions retain a fallibly reserved,
+sorted frontier of stable paragraph IDs. A measurement commit adopts only those touched paragraphs through the shared
+paragraph commit operation; lifecycle adoption remains independent, and renderer publication still owns its existing
+revision fence. A separate compact unpublished-owner frontier carries successful preparations to publication, using
+the paragraph's existing dirty flag for membership; measurement settles only staged owners and publication settles their
+union once. Abort preserves previously committed owners, while lifecycle removal retires their IDs before reuse.
+Admission reserves frontier growth before mutation, so settlement adds no allocation or failure boundary.
+The existing gather cursor reuses exact cached source/output ranges for unchanged paragraphs. A compact journal clears
+only prior nonzero mask ranges at retained begin; clean ranges only advance cursors. One mask writer owns journal updates,
+with capacity reserved before rows mutate and suffix truncation retiring the matching journal tail.
+Dirty/placement/lifecycle changes and shifted endpoints retain the same gather/suffix-rebuild
+algorithm. Semantic preparation indexes authored mutation owners and already-staged IDs only, preserving authored order
+through existing sort scratch; duplicate semantic-order vectors are retired. With an exact gather cache key and unchanged
+source counts, undecorated publication sorts only changed owners by lifecycle-owned renderer index and joins clean cached
+ranges in the same gather loop. Measurement-time lifecycle changes invalidate that authorization. Count, decoration or
+cache changes use the existing broad gather and suffix rebuild. Placement occurrence order and its sorted key index
+now use slot-ID records in the existing retained rope, with keys owned by dense slots and staged roots adopted only
+at Rust commit. Canonical index comparisons resolve dense occupants; pending indices are not searched. Full and dirty scopes merge sorted
+old/new key streams through one reconciliation body; the former sorted/indexed structural executors are removed.
+Changed logical keys allocate fresh physical slots through the same dense allocator and acknowledgement quarantine.
+Unchanged-count dirty owners supply only their binding rows; actual buffer replacement and checkpoints require complete
+rows through the existing session compiler. Lifecycle adoption invalidates cached occurrence ranges. Abort retains
+canonical roots and restores the exact free-slot stack. Native cold/seeded tests pass, including nonzero clean-row
+preservation across capacity growth and checkpoint retry. The first optimized artifact passes 971 package tests but
+grows Wasm by 21,419 raw / 6,714 gzip bytes. Slot-ID consolidation reduces that growth to 16,072 raw / 6,103 gzip
+bytes; 971 Node tests and static gates pass. Exact installed-package Labs reports 12 faster, 33 neutral and two excluded
+cases, with no comparable slowdown: the 1,000-label 100-edit immediate-read/publication case falls from 102.01 to
+73.25 ms. This is a publication win against the frozen local control, not release-0.1.0 parity or complete #247 acceptance.
+The cumulative size gate remains open. Matched-ABI visuals pass MTSDF dynamic layout on WebGPU/WebGL2 and Slug rich text
+on WebGPU. Exact artifact identities and exclusions live in the retained assignment design.
+The next ordered-consumer slice replaces canonical/pending instance vectors with the existing retained rope and removes
+the retained semantic-mask field and full dirty-record rediscovery. Gather's emitted-record intervals carry a private
+committed-owner revision proof; rebuilds, decorations and shifted selections revoke it. Generic callers use complete
+scope through the same executor. Complete admission traverses physical batches sequentially; sparse scope maps only
+changed input intervals. Borrowed draw/writer iterators avoid per-record tree queries. Commit adopts the proof and abort
+preserves the prior owner. Full native verification passes 360 unit tests, six outline oracles and Unicode conformance,
+including mixed-batch multileaf and seeded cold-output oracles. Source review, static gates, optimized build and 971
+Node tests pass. Shaper growth is now 28,663 raw / 10,281 gzip bytes over control, including another 4,178 gzip bytes
+over compact placement; the size gate remains open. Exact installed `edit-sized` Labs finishes with 13 faster, six slower,
+27 neutral and one timing-mode exclusion. Immediate read/publication improves 102.14→68.75 ms, but 1,000-label
+first length-changing scene publication regresses 5.71→6.47 ms. This cut is not merge-ready. The subsequent correction
+reuses admission-validated instances from existing dirty scratch and uses shared packed-leaf construction for full layout
+and rank reorder. It retires both per-record instance construction loops and the duplicate test-only chunk builder.
+Append adopts its candidate root only after every chunk succeeds. Review, 361 native tests, outline/Unicode oracles and
+static gates, optimized build and 971 Node tests pass. Correction shaper is 1,551,366 raw / 571,239 gzip bytes,
++11,738 gzip versus control. Growth profile median improves 3.84→3.55 ms but control is 3.16 ms; no corrected Labs
+verdict is claimed. Size and performance gates remain open. Compact dirty scratch is restored while retaining bulk
+construction; independent review, static/native checks and build pass. This isolation is 1,547,984 raw / 570,028 gzip,
+recovering 1,211 gzip bytes from the combined correction but remaining +10,527 over control. All 971 Node tests pass; growth profile median 3.91 ms versus control 3.16 ms. Separate profiles do not prove
+scratch causality; neither performance nor cumulative size gate passes. Single-paragraph
+scattered edits remain a separate integration gate.
+The trailing-owner count-change spike extends the existing private producer proof with a clean emitted prefix.
+The shared complete admission/layout retains each accepted physical batch prefix and rebuilds only the tail, then uses
+the same batch preparation/writer. Initial eligibility requires every batch retain a clean record and stable membership;
+other cases use full scope. Mapping scratch has Invalid/Current/RebuiltPending ownership, preventing aborted full
+rebuilds or empty commits from authorizing stale prefix mappings. Successful tail replacement marks existing binding
+dirt conservatively even at unchanged emitted counts, preserving draw identity/bounds. Independent review, static checks,
+three focused regressions, 363 native tests, outline/Unicode, optimized build and 971 Node tests pass.
+Frozen shaper is 1,551,337 raw / 570,621 gzip bytes (+11,120 gzip versus prepared control); cumulative size gate fails.
+Last-label growth/publication profile median is 1.557→1.450 ms and p95 2.320→2.172 ms.
+Four-block exact installed edit-sized Labs completes: 14 faster / one slower / 32 neutral, all comparable.
+1,000-label 100-edit immediate read/publication improves 99.97→68.63 ms and interleaved publication
+143.03→108.00 ms. Small color-only scene regresses 432.10→469.08 µs; first growth is neutral 5.87→6.07 ms.
+Prepared control is neither current main nor released 0.1.0; release parity and the cumulative size gate remain open.
+Draw/resource/binding walks and count-changing placement reconciliation remain broad. This does not clear #247
+or prove the single-paragraph ASCII case. Shaper formatting is a package-owned named maintenance workflow.
+The [compact frontier tracker](../planning/publication-frontier.md) records the current validation checkpoint.
+The following shared draw aggregation cleanup fuses bounds and semantic-ID reduction into the existing draw acceptance
+traversal. It retires repeated physical rope span walks and shares a concrete accumulator with unchanged public bounds
+helper signatures. Independent review, static checks, explicit expected bounds/semantic/nonfinite/abort regression and
+364 native tests plus outline/Unicode and optimized build pass. Frozen shaper is 1,550,403 raw / 570,198 gzip,
+recovering 423 gzip bytes but remaining +10,697 over prepared control. Compiled JS and four other Wasm modules are
+unchanged. All 971 Node tests pass; causally settled exact-artifact MTSDF dynamic layout on WebGPU/WebGL2 and Slug
+rich text on WebGPU render successfully and captures are inspected. Cleanup-versus-prefix exact Labs completes:
+46 neutral, zero classified faster/slower, one incompatible timing-mode exclusion. Immediate read/publication
+68.71→67.91 ms and interleaved 108.88→107.45 ms are neutral. No FPS or release-readiness claim.
+The next slice replaces the flow and positioned single-envelope fields with reusable coalesced interval scratch on
+their existing owners. One current-preparation/style proof gates retained line copying and revision comparison. A concrete
+run-correspondence check preserves source anchors, owners, glyph counts and numeric blocks through the shared placement
+executor; failed proof positions the line normally. Its existing monotone validator is bounded by the segment endpoint.
+The authentic 192-line/2,304-glyph full-assignment fixture positions/revision-compares 60 then 24 glyphs, copying 2,244 then
+2,280 clean rows. These are work counters, not time savings. Paint/effects and numeric-prefix changes match complete cold
+output. A 16-run local-edit fixture retains most rows with zero global lookup visits; distant edits across differently sized
+runs still require complete flow. Global lookup preparation remains at most once per retained-line call for reordered runs.
+The same gather updater always refreshes structural placement slots, including codecs without u32 operands. Regression
+and full-gather checks cover this existing main defect. Independent source review closes all accepted findings; focused
+and multiline seeded cold/gather/abort tests pass. Full native/outline/Unicode passed before the final local lookup bound;
+the final bound has focused/static validation. Optimized build and all 971 Node tests pass. Shaper is 1,552,801 raw /
+571,224 gzip (+1,026 gzip versus draw cleanup, +11,723 prepared control); size remains held. Shipped JavaScript and four
+other Wasm modules are unchanged. Exact artifact MTSDF WebGPU/WebGL2 dynamic-layout and Slug WebGPU rich-text probes
+pass and captures are inspected. Four-block assignment Labs versus draw cleanup: six neutral, no exclusions or classified
+speedups/regressions. Scattered preparation 24.64→24.82 ms; scattered SET/publication 27.97→28.17 ms. This does not
+demonstrate a speedup in the 8,192-paint-span Inter workload; size and downstream interval publication remain open.
+No second rope, shaper or positioning executor; paragraph-wide gather/binding snapshots remain explicit integration work.
+The following cleanup consolidates four endpoints into one range only after existing endpoint equality/count admission,
+and shares base/effect semantic-copy loops with current-only effect zero filling. Production shrinks 27 lines; focused,
+static/build/971 Node and independent source review pass. Shaper shrinks 761 raw / 198 gzip to 1,552,040 / 571,026;
+still +11,525 gzip over prepared control. JS/other Wasm unchanged; scoped cleanup Labs completes with six neutral and
+no skips. Scattered preparation 24.42→24.78 ms and SET/publication 27.50→27.92 ms; no measured speedup.
+The next publication slice removes the duplicate whole-paragraph output journal and borrows the existing nonzero emitted
+mask ranges for ordered admission. Existing source/record cache, identity/topology, decoration, abort and checkpoint
+authority remains. Four focused regressions and independent source review pass, including successive measured SETs and
+pure structural placement dirt without codec operands. Gather still scans source rows. Static/all 370 native + outline/
+Unicode/build/971 Node tests pass. Shaper saves another 258 raw / 206 gzip bytes: 1,551,782 / 570,820, still +11,319 gzip
+prepared control. JS/other Wasm unchanged; installed assignment Labs is six neutral/no skips, scattered SET/publication
+27.71→28.12 ms; no measured speedup. Exact-artifact dynamic MTSDF WebGPU/WebGL2 and rich-text Slug WebGPU pass;
+all captures inspected. An exact Inter discriminator locates whole-run
+shaping extent reused as flow dirt: 85 state-equal earlier
+lines cannot stop, all 308 lines recompose, and placement remap is never attempted. Detailed next-slice constraints and
+cold oracles remain in the assignment design; no wall-time or release-parity claim follows from these counters.
+The following test-only Inter proof retains 18,415/18,432 complete local snapshots after scattered full-run shaping;
+only 17 source units differ in 13 islands. Formatter, focused cold/gather/abort oracle and static checks pass. This
+establishes sparse local evidence, not production flow or placement authority; no production code changed in that slice.
+The publication consumer checkpoint builds successfully and passes 971 package/integration Node tests. Its added
+seeded gather oracle runs four fixed seeds with 64 edits each, comparing glyphs, sources, masks, placement slots and
+all field columns against a fresh gather through length changes, recordless rows, no-ops and discarded-candidate retry.
+This tests gather/cache transitions; separate lifecycle cold oracles remain the authority for paragraph rollback.
+The isolated rope consumer integration
+replaces flow-line/fragment vectors and absolute fragment-start bookkeeping with one COW tree representation, retained
+fragment/source summaries and ordered leaf cursors. Proven shaping windows bound wrapping/reconvergence through the
+existing line composer. Native engine tests pass; current Wasm/browser/Labs/size gates remain pending, and no rope
+speedup is claimed. Whole-root publication discovery remains follow-up work. Cursor extraction now skips leaves/subtrees by record summaries and
+returns the same node-relative range type as ordinary rope ranges. It no longer clones iterator stacks or walks records
+before range consumers; retained-line lookahead uses that cursor's peek/advance operations.
+Test-only counters now distinguish new positioning, completed retained payload copies, gather visits and publication
+settlement. Real shaping fonts with controlled render rectangles and cold preparation oracles confirm one-label edits
+position one glyph at 10/100/1,000 labels. Range reuse reduces publication to one glyph walk and one settlement, while
+paragraph traversal remains root-wide. The later sparse-owner/mask-journal native checkpoint passes 337 engine tests;
+fresh package/browser/Labs verification remains pending. A 200-character sparse
+assignment still positions all 200 glyphs; geometry-only reflow copies 200 records and 34,000 counted native bytes.
+These counts exclude placement/run-local storage, metadata, UTF-16 and failed partial copies; they are neither timings
+nor total memory traffic. The attribution checkpoint passes 331 native engine tests, static checks and docs validation.
 Core preflights uniqueness only when a paragraph is created or its base lifecycle order changes, and validates the final
 nonremoved desired set rather than each update in isolation. Atomic base-order swaps therefore remain valid, duplicate
 final slots fail before serialization, and rank-only Billboard frames avoid the scan entirely; Rust retains the same
-authoritative validation at the ABI boundary. An accepted rank-only frame commits revisions without repeating cached
-paragraph measurement calls or bounding-box publication.
+authoritative validation at the ABI boundary. Eager semantic preparation does not install an existing paragraph's
+pending renderer order: it prepares against the paragraph's last Rust-installed order and carries the desired order to
+the complete publication. A new binding whose final slot is still occupied selects a creation-only free preparation
+order; reads cannot observe it, and publication installs the complete adapter base order and explicit sibling ranks. An accepted rank-only
+frame commits revisions without repeating cached paragraph measurement calls or bounding-box publication.
+The JavaScript planner indexes successfully prepared owners awaiting publication. Lifecycle/order serialization and
+desired-state settlement consume that index rather than scanning unchanged Text states. Rust adoption retires each
+settled owner; renderer rejection retains the existing acknowledgment/checkpoint contract. Removal deletes the live
+pending owner and queues its existing lifecycle retirement; empty publication retains the publisher until disposal.
+The same planner retains one frozen complete transform table. Successful membership changes and root or ordered flow
+transform handle changes invalidate it before binding release; ordinary edits and renderer retries reuse it. Existing
+desired and committed leases protect those handles, and removal invalidates membership before ordinal recycling.
 Each traversed Text reports only its own current Scene. When that Scene and the renderer-owned draw object are unchanged,
-observation returns without allocating or scanning sibling Text instances. A full membership scan is reserved for an
-actual Scene transition or a detached draw object, including recovery after a host clears and reattaches the authored
-scene tree.
+that individual observation returns without allocating or scanning sibling Text instances. Root traversal still
+authenticates active membership, including raw ancestor removal/reparenting, and reconciles presentation before
+publication. Reconciliation iterates the entries Map directly, deleting removed entries before staging new ones;
+it no longer allocates a copied keys array. The existing desired-membership Set remains authoritative for this pass.
+Presentation resolution observes the same ancestry and validates order before cache reuse. Its shared field comparison
+returns the existing frozen presentation when unchanged, allocating a new object only on a miss or field change.
+Scene transitions and detached draw objects also trigger observation, including recovery after a host clears and
+reattaches the authored tree.
 
 Rust publishes one revision containing:
 
@@ -1000,13 +1188,50 @@ the source's at every index, survive a re-layout and the font's disposal, and re
 
 ## Semantic queries
 
-Publication emits no semantic readback by default. A renderer that needs current local bounds requests the measurement
-sidecar on the same update; core copies it into the retained text cache before target acceptance, so plan publication and
-bounds cost one Wasm hop. Every semantic mutation invalidates that cache immediately. `Text.measure()` then answers from
-the cache or explicitly measures current desired state, while `Text.glyphs()` similarly requests the positioned
-inspection lane. `Text.readGlyphs()` prepares that same state without emitting the full inspection table and copies only
-explicitly indexed records. None of these queries traverses matrices, realizes renderer resources, flips publication
-slots, or burns a revision.
+Caller-authored styles enter one validating snapshot producer. The existing property ownership registry distinguishes
+ordinary frozen snapshots from validated immutable styles; the existing span registry records feature-scope validation
+only after cluster alignment and feature validation succeed. Font/material mapping inherits that authority only when
+bounds and style identity remain unchanged. Three and planner consumers reuse that producer authority rather than
+walking the same feature schemas again. Changed text length or scope still validates absolute feature ranges synchronously;
+a defaulted end before an explicit start is rejected before mutation. No end-to-end speedup is established yet.
+
+Disposed text retains its desired binding leases in the existing removed-state entry until publication consumes its Rust
+paragraph removal, or root teardown destroys the Rust root. Public disposal is terminal before this internal retirement
+fence. A later setter can consume pending Rust removals without releasing bindings still protected by the publication
+lifetime. An empty Three host retains its existing publication adapter until explicit root teardown; it can settle
+pending Rust removals and publish later additions through the same executor. All four last-label retirement cases pass.
+The [assignment plan](../planning/retained-text-assignment.md#lifetime-state-machine-and-ownership-fences)
+records the ownership claims and separate preparation, compilation and renderer-acceptance transitions. The earlier
+expanded authoring/framework/Three lane passed 178/184 before the publication correction below; its six failures were
+indexed/direct patch-only width reflow and multi-set cold-renderer equivalence, including their parent tests.
+
+The subsequent local Rust publication correction retains gather-cache ownership across semantic preparation and carries
+placement identities plus unpublished semantic masks through the same positioned arena. Masks clear at publication
+commit; order-only reuse requires no pending prepared changes. All 331 Rust unit tests, the full Wasm build and the
+184-test authoring/framework/Three lane pass, including retained width-only draws, multi-set cold-renderer equivalence
+and prepared paint/metrics plus sibling reordering. Labs remain pending. This does not clear the branch for landing.
+
+Integration of main `9cbee175` retains its accepted-error attribution and retirement flow. A failed root recipe preserves
+its error before planner creation; 152 focused Three/engine tests pass. The broader diagnostic run passed 967/970 Node
+tests. Terminal cleanup after throwing renderer disposal is now corrected and all 16 FontFace/controller tests pass on
+the rebuilt package. The clipped-inspection correction replaces the unversioned intrinsic positioned scratch with an
+ordinary accepted/pending inspection stage: measurement and borrowed glyph demand select the same prepared revision;
+abort restores its previous selection and glyph records. Its real-shaper commit/abort/retry regression passes. The full
+package build succeeds and all 28 focused FontFace/unsafe-break tests pass, including retained-versus-cold clipping,
+ellipsis, changed text, max-lines and empty text. The fresh integrated run passes all 971 package/integration tests,
+all deterministic fuzz and font-baker lanes, strict TypeScript checks and TypeScript linting. After formatting and
+Clippy corrections, the final full built-package check on `dd937d3b` exits successfully, including all 11 Rust crate
+Clippy gates. An unused production measurement wrapper is test-only; production retains one encoder. All 34
+placement-filtered Rust tests pass. The expanded multiline indexed/direct cold-renderer sequence also passes within
+the 131-test Three lane. Scoped review finds no introduced actionable correctness defects. Diagnostic paired profiles
+still show root-size-dependent preparation and publication work; see the [stable checkpoint](../planning/retained-text-assignment.md#stable-checkpoint-and-xi-integration-boundary--2026-10-09).
+Focused Labs remains pending. This does not clear #247 or justify landing the preparation branch.
+
+Publication emits no semantic readback by default. Creation and every changed bound setter synchronously commit the
+current Rust preparation and a fixed-size measurement sidecar before returning; renderer-plan revision, publication
+generation, and acknowledgement do not advance. `Text.measure()` and `measureInk()` read that cache.
+`Text.readGlyphs()` borrows selected records directly from the same prepared positioned arena. Repeated dense demand promotes the existing inspection storage before the next callback; sparse demand remains sparse. `Text.glyphs()` returns independent caller-owned columns from the shared inspection producer. Reads do not reconstruct text/style/geometry input, prepare
+another semantic candidate, traverse matrices, realize renderer resources, or publish.
 
 Integration authors can pass one package-produced `GlyphLayoutInspection`, its source text, and renderer-owned drawn
 origins to `/core`'s `createGlyphPlacements()`. The resulting read-only placement view exposes cluster-aware carets and
@@ -1022,34 +1247,18 @@ only while it has changed text to publish; an idle synchronization does not ente
 publication therefore pays no semantic-sidecar cost, while renderers that need same-frame bounds pay the explicit
 per-publication cost instead of making a second Wasm query.
 
-An explicit query before first render carries the complete desired paragraph lifecycle and applies text, style, and
-geometry mutations only for the queried paragraph. It serializes paragraph-order rows only for nonremoved paragraphs
-whose scoped rank is still pending publication; a semantic-only query therefore does not resend stable ranks, while
-sequential queries preserve every rank in the pending transaction. Sequential queries extend one speculative batch
-candidate. The next ordinary publication adopts matching prepared work and publishes the batch once instead of shaping
-twice; a geometry-only mismatch reuses the semantic prefix and recomputes only flow and positioning. Unchanged
-measurements and inspections remain cached until the next semantic mutation.
+Author values may exist before a runtime binding. The binding operation performs the same synchronous preparation as an
+already-bound setter; a first `measure()` is allowed to create that binding but is not a separate lazy preparation
+algorithm. Paragraph rank/order remains renderer-publication input and does not contaminate semantic preparation.
+Unchanged measurements and prepared glyph state remain current until the next successful assignment.
 
-The engine additionally exports `pmndrs_glyph_engine_measure_paragraph`, a paragraph-scoped synchronous query beside
-`pmndrs_glyph_engine_update`. It reuses the update request layout with the queried paragraph as an ABI argument, runs
-validation and speculative preparation for that paragraph only, and writes the header plus semantic table into the
-borrowed result arena without publishing: no publication-generation bump, no revision advance, and no
-renderer-fence acknowledgment. The host must copy the records out before its next update call (host lease). The query
-terminates leave-committed, so the following ordinary frame proceeds from pre-measure revisions with no checkpoint
-hazard.
-
-The prepared pending state is retained as one speculative render-planner transaction. Sequential queries extend it while the
-committed revision, lifecycle input, and the queried paragraph's text/style input fingerprints still match — a
-geometry-only follow-up query re-runs just geometry, flow, and positioning over the retained semantic prefix, and
-identities extend linearly from the transaction's high-water marks instead of rolling back between queries. Any
-fingerprint mismatch rebuilds cold with results identical to a fresh preparation.
-
-The committing frame adopts the transaction instead of discarding it: when the frame's lifecycle input matches, its
-identity counters continue from the transaction's reserved high-water marks, and each paragraph whose text/style/geometry
-inputs fingerprint-match its speculative pending state skips preparation entirely — the stable glyph identities a query
-reported stay valid in the committed frame. A paragraph whose prefix matches but whose geometry changed re-runs only the
-geometry/flow/positioning tail; anything else prepares cold. A frame whose inputs do not match the transaction drops it
-leave-committed at entry, so committed state never observes an unadopted query.
+The existing ABI export remains named `pmndrs_glyph_engine_measure_paragraph`, but its role is now transactional
+preparation plus a measurement result. It reuses the semantic update wire, commits validated text/Unicode/bidi/shaping/
+layout/positioning state only after the result has been encoded, and advances a preparation revision distinct from all
+renderer revisions. Failure aborts the pending arenas and leaves the prior preparation intact. A later ordinary update
+contains no semantic replay: gather and plan compilation detect the unpublished preparation revision, use the retained
+per-paragraph change evidence, and publish it once. Aborted plan compilation restores temporary placement-binding
+metadata; renderer rejection retains the independently valid preparation for explicit retry.
 
 The semantic values preserve information useful to callers:
 
@@ -1178,6 +1387,11 @@ display-list children and exposes the closed semantic `GlyphInstanceKind` union,
 projection state, and publication settlement remain private. An integration therefore implements one host-realization
 step rather than selecting or invoking a second decoder.
 
+Projection retains renderer-accepted buffer generations separately from Rust-canonical publication state. When a new
+generation replaces an accepted binding, projection emits that accepted binding's retirement through the existing
+command list, deduplicating any matching Rust retirement. This also covers recovery after a renderer rejects a resize;
+discarded candidate bindings never enter accepted ownership. Candidate maps settle only on acceptance.
+
 Codec authoring similarly exposes only the identity vocabulary an integration can legitimately declare:
 `id.buffer`, `id.technique`, `id.program`, and `id.resource`. Numeric identities for installed Codecs, font bindings,
 root publications, paragraphs, styles, materials, regions, exclusions, inline objects, and live resources are minted and
@@ -1218,6 +1432,11 @@ movement remains the explicit lazy `FontFace.clone()` operation; render-plan tra
 The former direct planner/transport update path is also gone: it had no production caller and would have restored one
 Wasm crossing per root beside the staged batch. The example renderer proves TypeGPU and WebGPU realization directly
 against the same borrowed Rust command buffer.
+
+The `glyph:static-check` workflow runs the same static implementation used by the full package `check`: strict
+TypeScript and emitted declarations, TypeScript lint/format, and Rust format/Clippy for every maintained crate. It requires
+a current built distribution and does not rebuild or run tests. The full `check` still runs its complete build and test
+lane before invoking these shared static gates.[^glyph-static-check]
 
 ## Current correctness evidence
 
@@ -1307,10 +1526,23 @@ Direct TypeGPU text owns its position coordinates separately from semantic text 
 uniform without staging a semantic publication; unchanged coordinates do not write it again. Mixed updates validate
 and stage semantic changes before moving the uniform, so rejected caller input preserves the accepted position.
 
-Planner frames are prepared as validated records and written directly into the retained Wasm request arena, including
-paragraph queries. The writer respects the arena view's byte offset and clears reused storage before encoding. Query
-requests retain minimal text mutations; removal requests include only paragraphs previously published. Output growth
-invalidates prior borrowed results and rewrites the request before retrying, preserving the existing acceptance fence.
+Planner frames are prepared as validated records and written directly into the retained Wasm request arena. A bound
+setter encodes the complete changed UTF-16 assignment and synchronously commits one paragraph preparation; Rust discovers
+the changed range in the shared shaping/layout executor, and measurement or glyph demand reads that retained result.
+Pending removals, including prepared paragraphs that were never renderer-published, fold into a later setter preparation
+or the next publication. A successfully staged renderer publication owns the request arena until adopt or discard, so
+setter, order, creation, and disposal attempts on that root throw without changing the encoded frame or desired lifecycle
+state. This one transport-owned fact is exposed upward without a second lifecycle machine: controllers check it before
+snapshot/binding/order-scope work, root disposal checks before registration or host teardown, and handle disposal checks
+every owned root before making any of them terminal. Three root Text creation checks before font selection or FontFace
+lease acquisition. A `TextGroup.batching` equality no-op stays legal, but a changed value checks before adopting desired
+state. Prepared reads remain legal. Once those nonmutating preflights pass, teardown remains best-effort and each cleanup
+layer, including the configured renderer target, preserves the first raw thrown value even when it is `undefined`.
+The constrained `GlyphRootServices.assertMutationAllowed()` capability exposes that same gate to host integrations;
+Three does not import configured-handle internals or establish another staged-owner flag.
+Output-capacity growth invalidates prior borrows and rewrites the same prepared request before its one bounded retry; it
+does not revive a query-only preparation path. The causal lifecycle regressions for these boundary placements are
+source-authored at the current feature head and still require parent-coordinated compiled validation.
 
 Complete public text assignment still compiles to at most one scalar-aligned UTF-16 replacement; JavaScript does not
 allocate a precise edit table or expose a separate edit API. For a same-length replacement, the retained Rust engine
@@ -1320,9 +1552,16 @@ retained clusters derives every dirty window and glyph cursor for both LTR and R
 handles bounded windows or a whole run and collapses its chunks back into the canonical retained shaped run. Window
 splicing is admitted only when retained and new HarfRust `UNSAFE_TO_CONCAT` flags prove the boundaries safe with full
 source-run context; font fallback, unsafe boundaries, topology changes, and unequal lengths use the broad scopes or
-existing fallback pipeline. Multiple internal islands deliberately take a full flow-layout rebuild because line
-convergence currently accepts only one dirty offset. The retained storage remains compact vectors rather than a claimed
-rope, pending end-to-end transfer and comparison measurements. Public Three integration coverage repeatedly assigns full
+existing fallback pipeline. The existing canonical cluster comparison also produces coalesced layout dirt when source
+coordinates, counts and safe boundaries remain compatible. The shared flow/placement executor uses those intervals to
+retain converged clean line islands; shaping windows no longer independently determine layout invalidation. Missing
+correspondence, unsafe corrected boundaries, changed base direction, geometry/metrics or ellipsis retain full flow.
+Candidate dirt is revoked on abort, adoption and explicit reset, with scratch capacity retained. The block/line summaries
+and rope consumers remain in the existing pipeline; strict numeric-basis proof still limits retained placement reuse.
+After exact cluster-coordinate admission, the shared comparison trusts the resolved-style producer's unchanged-metrics
+proof instead of resolving geometric styles again. Whole-run text/unit identity remains authoritative; changed-cluster
+text uses checked absolute slices, with source direction/script/bidi still compared against the actual shaping runs.
+Public Three integration coverage repeatedly assigns full
 strings through `Text.set`, publishes both retained and freshly created `Text` objects, and compares every public semantic
 glyph and line column except retained glyph identities across safe-boundary RTL, ligature/combining/bidi/surrogate risk,
 font-fallback entry and exit, and renderer rejection followed by explicit retry. A two-paragraph lifecycle regression
@@ -1555,14 +1794,15 @@ and 2.76× faster. This proves the migration comparison on this machine; it does
 objective. Local-edit p95 remains about 6 ms and high-variance, while width p95 ranges from 4.29 to 4.75 ms across
 raster formats.
 
-The paragraph-scoped synchronous measure (11.17) closes that objective for the explicit measure shape. At the same
+Historical paragraph-scoped synchronous measure work (11.17) closed that objective for the old explicit-query shape. At the same
 22,000-glyph corpus and cadence, the new `measure-query` lane answers the identical alternating widths as the
 `column-resize` lane through `pmndrs_glyph_engine_measure_paragraph`: 1.815 ms median / 1.930 ms p95 / 3.0% RSD with
 zero patches and zero publication bytes, beside the full update's 2.996 ms median / 4.483 ms p95 / 21.7% RSD in the
 same run — the first width-change lane under the 4 ms p95 objective, recorded in the
 [measure-query record](../../../benches/fixtures/results/rust-layout-bitmap-measure-a42c976-darwin-arm64.json).
-The variance collapse follows from what the query skips: no gather, no plan compile, no publication packing, and no
-revision burn, so the following ordinary frame adopts the speculative layout instead of paying a checkpoint rebuild.
+The variance collapse followed from what that query skipped: gather, plan compile, publication packing, and renderer
+revision burn. The retained setter cutover no longer presents this cached number as end-to-end assignment performance;
+fresh Labs must include normalization, full-input encoding, and durable Rust preparation before publication.
 
 The preceding unchanged 22,000-glyph localized-edit lane measured the complete production `pmndrs_glyph_engine_update` plus Bitmap render
 plan at 2.607 ms median / 6.184 ms p95 after 40 warmups over 101 updates. The fast ASCII-letter path reuses Unicode and
@@ -1579,8 +1819,9 @@ patches, and roughly 1.2 KiB written. The 1,153,122-byte optimized shaper is 5,8
 and retained high-water memory is 80.19 MiB. The fast class approaches 1 ms; the break-sensitive p95 remains open.
 
 The ordered-direct compiler additionally retains committed glyph-to-batch and glyph-to-slot topology while Codec,
-capability, glyph count, and every physical storage key remain compatible. It still validates every glyph and stable
-identity; the first storage mismatch falls back to complete batch discovery. Three consecutive optimized runs measured
+capability, glyph count, and every physical storage key remain compatible. The initial admission path validated every
+glyph and stable identity; current authenticated range admission is described below. Storage mismatch still falls back
+to the same complete batch discovery. Three consecutive optimized runs measured
 1.164/5.761, 1.153/5.740, and 1.155/5.738 ms median/p95, versus the preceding 1.314/5.863 ms checkpoint. The optimized
 shaper is 1,157,311 raw bytes, a 4,189-byte increase, and retained high-water memory is 79.81 MiB. The repeated median gain
 is established; the roughly 5.74 ms p95 and 81.4–81.6% RSD still fail the tail-latency gate.
@@ -1605,9 +1846,19 @@ or growth, and pending retirement all retain complete compilation. The productio
 Inter glyph, commits independent compositing, changes only foreground paint, and proves the skip survives abort/retry;
 the public Three test separately proves a color assignment emits that production compositing policy and retains the
 accepted draw. A focused 1,000-glyph single-draw case proves this branch does not walk the accepted draw span, but
-retained topology still confirms every glyph and rebuilds root-wide pending instance state. Overall preparation therefore
-remains root-scaled; no latency gain or edit-sized gate closure is claimed until the serialized Labs measurement owned by
-the parent review.
+complete admission confirms every glyph. Internal root updates can authorize sparse instance changes through the same
+rope-backed consumer using authenticated changed-output intervals; canonical commit and abort govern that proof.
+Count-changing suffix metadata and complete draw compilation can still scale with root size. The early measurements
+above predate these consumers; current scoped results and open gates live in the publication frontier checklist.
+
+Resource lifecycle compilation enumerates admitted pending batch keys instead of every glyph. Each key carries full
+resource identity; retained admission or full fallback preserves first-occurrence order. Deduplication, conflict checks,
+checkpoint/generation actions, decoration omission and abort/retry use the same compiler. Buffer/draw compilation is
+unchanged; this removes only resource rediscovery. Independent review, focused cold/applied-host tests, full native/Node
+and build/pack pass. The optimized shaper changes -37 raw/+24 gzip bytes; JS and baker binaries stay identical.
+Checkpoint-relative Labs found one faster and 46 neutral edit-sized workloads, six neutral assignment workloads, and no
+slower or skipped results. Three matching-source/exact-Wasm WebGPU/WebGL2 probes passed with inspected captures.
+This does not establish a broad resource-key timing win or release-wide parity.
 
 The retained-publication regression suite replays emitted allocation/write/retirement records into a test host and
 compares active buffer bytes and draw metadata against both forced full checkpoints and fresh cold compilers over 4,096
@@ -1691,17 +1942,15 @@ the reported fragment advance in both directions), required positional run-topol
 metric-only scale refresh (a metrics restyle can merge adjacent runs and dangle retained run indices), and
 collapsed the build's payload scatter to bulk copies when shaped runs tile the glyph array in cluster order.
 
-The measure-query stretch target is met: a measurement-only query now skips the per-glyph positioning tail —
-measurement derives at line level from flow and clusters, glyph totals from the adjacency stream and boundary
-records, and the committing frame runs exactly the missing tail once, proven byte-identical to a never-measured
-control by an integration test. The lane moved from 1.82–1.90 ms to 0.458 ms median / 0.607 ms p95 (−75%,
-three interleaved rounds), inside the plan's 0.6–0.9 ms objective; the earlier attribution of the residual floor
-to the fit walk was wrong — the floor was the positioning tail. The identity-order scatter reclaimed the
-retained-stream cost on the edit lanes (suffix and splice both −1.6%, three rounds); font-size pays +1.2% for the
-correctness admissions and remains ~11% below the pre-stream baseline. Still open: the committing-resize
-p95-under-4-ms objective. The tail is structural, not noise — 4.42–4.49 p95 against a 2.8 ms median on both sides
-of every round — and belongs to break-sensitive full recomposition; the productized interactive width path is the
-measure query above, and the raw full-update tail remains the documented open gate.
+Historical lazy-query evidence showed that omitting per-glyph positioning moved the measurement-only lane from
+1.82–1.90 ms to 0.458 ms median / 0.607 ms p95 (−75%, three interleaved rounds). The setter-first retained contract
+supersedes that runtime shape: a successful assignment now prepares positioning as part of the durable revision so
+immediate metric and glyph reads agree and do no later preparation. Those older measurements remain attribution
+evidence for the cost of positioning, not a benchmark claim for the new end-to-end setter path. The identity-order
+scatter reclaimed the retained-stream cost on the edit lanes (suffix and splice both −1.6%, three rounds); font-size
+pays +1.2% for the correctness admissions and remains ~11% below the pre-stream baseline. Still open and requiring
+fresh setter-inclusive evidence: the committing-resize p95-under-4-ms objective. The historical tail was structural,
+not noise — 4.42–4.49 p95 against a 2.8 ms median — and belongs to break-sensitive full recomposition.
 
 Per-sample attribution (the benchmark's `--samples` dump, 101 widening reps at 22k glyphs) later replaced that
 characterization with measured structure: the resize distribution has three classes, none of them noise. A third of
@@ -1864,14 +2113,38 @@ prepares placement anchors as an explicit subsequent step.
 Retained geometry-only positioning has a matching guarded path for visually trivial, boundary-free, undecorated text. It
 reuses committed glyph-local, raster, and effect rows, copies compact placement metadata, and refreshes clip, region,
 thread, and transform metadata. Internal positioned semantic rows keep local origin and ink coordinates plus their
-placement-segment index; pure placement changes therefore preserve their content revision and do not dirty static Codec
-position inputs. Public borrowed/full glyph queries and CPU/plan ink bounds compose absolute f32 values lazily from the
+placement-segment index. Pure placement changes retain local Codec inputs. Absolute cached plan bounds must refresh when
+translation changes, using gather's ordered f32 addition, without falsely marking local Codec origins dirty. Gather owns
+that derived metadata and forwards a scalar bounds-change fact into existing binding compilation; unchanged local GPU
+inputs retain their revisions and masks. Changed immutable primitive bounds require publication. The integrated source
+uses existing accepted session placement bytes to preserve translation dirt across abort/retry without marking a fresh
+gather as changed. Session preparation precedes ordered binding preparation; abort cleans up both. Full native/package
+correctness passes; performance and cumulative size remain held in the [publication tracker](../planning/publication-frontier.md).
+Public borrowed/full
+glyph queries and CPU/plan ink bounds compose absolute f32 values lazily from the
 authoritative segment translation. Plan gather requires that positioned semantic row and translation and derives semantic
 identity from the same row; malformed internal input is rejected rather than interpreting local coordinates as absolute or
 falling back to a parallel semantic lane. Retained gather resolves only genuinely changed Codec dependencies without repeating
-font selection, raster resource lookup, full `PlanGlyph` construction, or glyph-position arithmetic. Stable/glyph/font
+font selection, raster resource lookup, or full `PlanGlyph` construction. Stable/glyph/font
 identity and exact outline presence authenticate retained rows; any mismatch aborts the candidate. Other changes use the
 general authorities.
+
+Copied complete placement spans retain their bound slot-and-generation handle after source/run/count correspondence.
+Coverage-growing merge, extension or instance append revokes that proof. The shared binding executor skips glyph rows
+only for an exact retained handle; otherwise it applies the same slot/revision/mask rule for prepared and committed
+callers. Committed publication reserves an indexed journal of changed handles and glyph fields before mutation. Abort
+restores those entries; late revision overflow also restores the revision cursor. Successful publication clears the
+existing journal. Dense paragraph glyph snapshots, duplicate mutation loops and full after-write comparison/restore
+walks are retired; segment-count/handle traversal and whole-source gather remain. Static, cold/rollback/generation and
+complete native/package checks pass; exact-artifact speed/size gates remain in the publication tracker.
+
+The local publication frontier replaces gather's source Vec with the existing retained rope. Record/selected-count summaries map authenticated source intervals to emitted rows, including recordless glyphs. The single retained row executor consumes accumulated unpublished positioning intervals; measurement retains that proof, publication clears it, and transactional binding restores it on abort. The consolidated walker retires iterator/tuple scratch and stops at the first suffix mismatch. The actual-positioning journal records numeric-remap fallback work and retires the post-loop flow-only envelope; existing correspondence and rollback fences remain. The same gather executor now admits one count-changing owner with an authenticated clean suffix, sharing source storage and splicing emitted flat fields; source and emitted deltas remain independent. Commit authorizes reuse, while abort revokes speculative shifted metadata. Static, native/Unicode, package and scoped cold/seeded tests pass. Actual Inter visits/gather fall 18,432→13,752, but latest large-paragraph assignment Labs remains neutral. Clean-suffix copy artifact dd65dd1e adds 7,571 gzip bytes versus fda6856d; count-changing Labs proves 1,000 first-label length-change engine publication 5.72→4.20 ms and scene publication 6.02→4.42 ms, with four faster/zero slower/42 neutral/one clock-confounded skip. Three exact-artifact GPU captures pass and are inspected. Repeated edit/read/publication remains neutral. Suffix byte movement and owner metadata work remain. This is unfinished performance work, not release-ready behavior; exact artifacts and gates live in the publication tracker.
+
+Retained ordered admission normalizes one nonempty exact whole-input interval to the existing complete physical
+iterator after mapping, codec, capability and input-count gates. Sparse, empty and multiple intervals retain their
+scope; the shared admission body still verifies canonical input mapping, identities and semantic masks. Cold A/B/A
+batch-order and abort/retry oracles pass. This removes leaf-local fetches in complete dirt; exact stress Labs remains
+neutral, so this is not evidence of release parity or a publication timing win.
 
 Placement-slot identity follows the stable occurrence source rather than the run's geometry revision. Paragraph,
 boundary-source, and ellipsis runs remain distinct source kinds, but changing font metrics or other canonical run geometry
@@ -1932,7 +2205,7 @@ texture nor an additional Codec buffer or draw. Direct TypeGPU remains a proof-o
 choice no longer exceeds the contract it advertises.
 
 The planner-scoped placement allocator reconciles compact CPU placement topology transactionally and quarantines retired
-slots until renderer acknowledgement. Its focused lifecycle tests validate reorder, retirement, acknowledgement,
+slots until renderer acknowledgement. Adjacent occurrence ranges with contiguous input ranges coalesce during existing subset admission; complete root coverage uses the same sorted reconciliation executor without per-key sparse searches or repeated occurrence-rope replacement. Sparse gaps keep their original scope. Its focused lifecycle tests validate reorder, retirement, acknowledgement,
 abort/retry, and stale-slot reuse directly; there is no parallel run allocator, canonical-update mode, batch identity, or
 draw identity. Its desired and occupied values are the planner's `PlacementLogicalKey` directly; the former generic
 one-field wrappers carried no additional invariant and are removed. The standalone M1 visual-span and multi-fragment
@@ -2102,3 +2375,9 @@ The standalone native shaper suite passes all 330 unit and 10 integration/confor
 The exact packed candidate is 7034dd5e834ce14b8e39c36349e56975604a382a1ab8e8e09ab93bdffe9fbd91, with shaper 9ce201c984f02b514689dfc08603db29c537b790e848b13f3b3fd61475e70188 (1,459,785 raw bytes; 540,139 gzip bytes at Node level 9). The package-size workflow passes its production graph checks. Compared with cached main artifact 9a25542ca86357a07270adf94cb1bb879bbbffd43c529ac1af355070b23df22e, the shaper adds 1,161 raw and 331 gzip bytes; all 270 packaged TypeScript source files in that baseline match main 305e5ec9.
 
 The four-block full Labs comparison against registry 0.1.0 reports 45 faster, 9 slower, 45 neutral and 3 excluded workloads. The workload median remains 1.15 ms; workloads above 3 ms fall from 41 to 37. Baseline CPU clock drift of 11.3% limits exact deltas. Width-change measurement and inspection remain slower by approximately 1.4 ms on the 22,000-glyph paragraph. These results support reviewing the small publication cut separately from the unfinished rope/#247 frontier; they do not establish universal speedups. Exact-head remote CI and PR landing remain pending.
+
+The combined rope integration is source-only and has not been built or tested; standalone evidence does not clear that combined source or close #247.
+
+Named diagnostics retain raw Rust names outside optimizer input. Production passes consume stripped executable bytes; the final read-only function map supplies optimized indexes. Numeric defined identities map to raw function names with the import offset, generated/merged identities stay explicitly labeled, and every final index must be present. Exact executable-section equality authorizes the override. A surviving name does not identify every inlined or merged contributor.
+
+The diagnostic Wasm helper has a package-owned declaration companion for benchmark TypeScript imports. This supplies the validated function-map/proof types without an implicit-any boundary; it does not add runtime exports or shipping bytes.

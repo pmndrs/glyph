@@ -128,7 +128,6 @@ export interface PlanPublication {
 
 /** @internal Fixed-size lease for demand reads from one retained positioned paragraph. */
 export interface BorrowedLayoutPublication {
-  readonly publication: PlanPublication;
   readonly rootId: PlannerHandle;
   readonly paragraphId: ParagraphId;
   readonly generation: number;
@@ -266,7 +265,7 @@ export class GlyphHandleState {
   readonly #ids = new GlyphIdScope();
   readonly #exports;
   readonly #owners: EngineRegistrationOwners;
-  readonly #planners = new Set<{ dispose(): void }>();
+  readonly #planners = new Set<RenderPlanner>();
   readonly #transports = new Set<PlanTransport>();
   readonly #codecs = new Set<CodecHandle>();
   readonly #fontStacks = new Map<FontStackHandle, readonly FontBindingHandle[]>();
@@ -762,7 +761,7 @@ export class GlyphHandleState {
   }
 
   /** @internal */
-  _detachPlanner(planner: { dispose(): void }): void {
+  _detachPlanner(planner: RenderPlanner): void {
     this.#planners.delete(planner);
   }
 
@@ -835,12 +834,18 @@ export class GlyphHandleState {
   dispose(): void {
     if (this.#disposed) return;
     this._assertEngineLifecycleMutationAllowed();
+    for (const planner of this.#planners) planner.assertMutationAllowed();
+    for (const transport of this.#transports) transport.assertMutationAllowed();
+    let failurePresent = false;
     let failure: unknown;
     const attempt = (dispose: () => void): void => {
       try {
         dispose();
       } catch (error) {
-        failure ??= error;
+        if (!failurePresent) {
+          failurePresent = true;
+          failure = error;
+        }
       }
     };
     for (const planner of [...this.#planners]) attempt(() => planner.dispose());
@@ -868,18 +873,24 @@ export class GlyphHandleState {
       this.#codecs.size !== 0 ||
       this.#portablePayloads.size !== 0
     ) {
-      failure ??= new Error('Glyph handle state disposal left live registrations or payload leases');
+      if (!failurePresent) {
+        failurePresent = true;
+        failure = new Error('Glyph handle state disposal left live registrations or payload leases');
+      }
     } else {
       try {
         this.#ids.dispose();
       } catch (error) {
-        failure ??= error;
+        if (!failurePresent) {
+          failurePresent = true;
+          failure = error;
+        }
       } finally {
         this.#disposed = true;
         this.#onDispose?.();
       }
     }
-    if (failure !== undefined) throw failure;
+    if (failurePresent) throw failure;
   }
 
   #disposeRetainedFontBinding(state: RetainedHandleFontBinding): void {
@@ -1223,6 +1234,7 @@ export class PlanTransport {
   #epoch = 0;
   /** The epoch each issued borrow was published under, keyed by publication identity. */
   readonly #issued = new WeakMap<PlanPublication, number>();
+  readonly #issuedLayouts = new WeakMap<BorrowedLayoutPublication, number>();
   #latestGeneration = 0;
   #stagedUpdate: { readonly requestLength: number; readonly initialMemoryBuffer: ArrayBuffer } | undefined;
 
@@ -1247,6 +1259,14 @@ export class PlanTransport {
 
   get handle(): PlannerHandle {
     return this.#handle;
+  }
+
+  /** @internal Rejects mutation while the retained request arena belongs to an encoded batch publication. */
+  assertMutationAllowed(): void {
+    this.#assertActive();
+    if (this.#stagedUpdate !== undefined) {
+      throw new Error('retained text cannot be mutated while its renderer publication is staged');
+    }
   }
 
   /** Whether this transport's borrow expired after another answer, memory growth, or disposal. */
@@ -1340,15 +1360,14 @@ export class PlanTransport {
     this.#stagedUpdate = undefined;
   }
 
-  /** Answers one paragraph-scoped synchronous measurement without publishing. Result bytes stay readable only until the next Wasm call; revisions and renderer fences are untouched. */
-  measureParagraph(
+  /** Transactionally prepares one paragraph and returns its fixed-size measurement sidecar without publishing renderer state. Result bytes stay readable only until the next Wasm call. */
+  prepareParagraph(
     requestFrame: PlannerFrameUpdate,
     paragraphId: ParagraphId,
     maxOutputBytes: number,
   ): PlanPublication {
-    this.#assertActive();
+    this.assertMutationAllowed();
     const request = preparePlannerFrameUpdate(requestFrame);
-    assertGlyphId(paragraphId, 'paragraph', 'paragraph id');
     maxOutputBytes = uint32(maxOutputBytes, 'paragraph measure max output bytes');
     this.#invalidate();
     const requestLength = uint32(request.byteLength, 'paragraph measure byte length');
@@ -1398,16 +1417,10 @@ export class PlanTransport {
     }
   }
 
-  /** @internal Prepares positioning and returns only a fixed-size demand-read descriptor. */
-  borrowParagraphLayout(
-    request: PlannerFrameUpdate,
-    paragraphId: ParagraphId,
-    maxOutputBytes: number,
-  ): BorrowedLayoutPublication {
-    const publication = this.measureParagraph(request, paragraphId, maxOutputBytes);
-    if (publication.semanticViewCount !== 0) {
-      throw new TypeError('borrowed layout setup unexpectedly serialized semantic records');
-    }
+  /** @internal Borrows the current prepared positioning through a fixed-size demand descriptor. */
+  borrowParagraphLayout(paragraphId: ParagraphId): BorrowedLayoutPublication {
+    this.#assertActive();
+    this.#invalidate();
     const pointer = this.#exports.borrowParagraphLayout(this.#handle, paragraphId);
     const memoryBuffer = this.#exports.memory.buffer;
     const layout = textShaperAbi.layouts.borrowedLayoutDescriptor;
@@ -1418,13 +1431,14 @@ export class PlanTransport {
     if (rootId !== this.#handle || describedParagraph !== paragraphId) {
       throw new TypeError('borrowed layout descriptor identifies a different paragraph');
     }
-    return Object.freeze({
-      publication,
+    const publication: BorrowedLayoutPublication = Object.freeze({
       rootId,
       paragraphId: describedParagraph,
       generation: uint32Handle(view.getUint32(layout.generation, true), 'borrowed layout generation'),
       glyphCount: view.getUint32(layout.glyphCount, true),
     });
+    this.#issuedLayouts.set(publication, this.#epoch);
+    return publication;
   }
 
   /** @internal Returns one fixed scratch glyph record during an active layout borrow, over current Wasm memory. */
@@ -1441,7 +1455,6 @@ export class PlanTransport {
     maxOutputBytes: number,
   ): PlanPublication {
     this.#assertActive();
-    assertGlyphId(paragraphId, 'paragraph', 'paragraph id');
     if (stableIds === null || stableIds === undefined || stableIds.length === 0) {
       throw new TypeError('glyph copy needs at least one stable glyph id');
     }
@@ -1486,7 +1499,6 @@ export class PlanTransport {
     maxOutputBytes: number,
   ): PlanPublication {
     this.#assertActive();
-    assertGlyphId(paragraphId, 'paragraph', 'paragraph id');
     this.#invalidate();
     const initialMemoryBuffer = this.#exports.memory.buffer;
     const resultPointer = this.#exports.copyDecorations(
@@ -1521,7 +1533,7 @@ export class PlanTransport {
   }
 
   #borrowParagraphRecord(layout: BorrowedLayoutPublication, index: number): DataView {
-    if (layout.rootId !== this.#handle || this.#disposed || this.#issued.get(layout.publication) !== this.#epoch) {
+    if (layout.rootId !== this.#handle || this.#disposed || this.#issuedLayouts.get(layout) !== this.#epoch) {
       throw new Error('borrowed glyph layout has expired');
     }
     if (!Number.isSafeInteger(index) || index < 0 || index >= layout.glyphCount) {
@@ -1587,7 +1599,7 @@ export class PlanTransport {
 
   dispose(): void {
     if (this.#disposed) return;
-    this.#assertEngineAvailable();
+    this.assertMutationAllowed();
     requireStatus(this.#exports.disposeRoot(this.#handle), 'dispose Glyph root');
     this.#stagedUpdate = undefined;
     this.#invalidate();

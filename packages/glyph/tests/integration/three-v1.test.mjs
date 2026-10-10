@@ -7,6 +7,7 @@ import {
   Constraints,
   createFontStack,
   glyph,
+  GlyphFontError,
   ParagraphLayout,
   TextStyle,
   txt,
@@ -15,6 +16,7 @@ import {
   slug,
 } from '@pmndrs/glyph';
 import { createFontLibrary, loadFont } from '../../dist/loader.js';
+import { FontFaceHandleStore } from '../../dist/font-face.js';
 import { GlyphHandleState } from '../../dist/internal/handle-state.js';
 import {
   defineThreeConfig,
@@ -57,6 +59,56 @@ async function createThreeTestHandle(t, config = ThreeConfig) {
   t.after(() => handle.dispose());
   return handle;
 }
+
+function observeThreeRootPreparation(observe) {
+  return {
+    ...ThreeConfig,
+    root: {
+      create(context) {
+        return ThreeConfig.root.create({
+          ...context,
+          create(extension, options) {
+            const prepare = options.shape?.prepare;
+            return context.create(extension, {
+              ...options,
+              shape: {
+                ...options.shape,
+                prepare() {
+                  const prepared = prepare?.();
+                  observe(context.name);
+                  return prepared;
+                },
+              },
+            });
+          },
+        });
+      },
+    },
+  };
+}
+
+test('a failed root recipe preserves its error and can be retried before creating a planner', async (t) => {
+  const failure = new Error('deliberate root recipe failure');
+  let reject = true;
+  const three = await createThreeTestHandle(t, {
+    ...ThreeConfig,
+    root: {
+      create(context) {
+        if (context.name === 'recipe-failure' && reject) throw failure;
+        return ThreeConfig.root.create(context);
+      },
+    },
+  });
+  assert.throws(
+    () => three('recipe-failure'),
+    (error) => error === failure,
+  );
+  reject = false;
+  const root = three('recipe-failure');
+  assert.equal(root, three('recipe-failure'), 'retry interns the successfully constructed root');
+  root.dispose();
+  root.dispose();
+});
 
 test('failed Glyph initialization retains one rejected operation until the module is replaced', async () => {
   const isolatedModule = await import(new URL('../../dist/glyph.js?failed-initialization', import.meta.url));
@@ -566,6 +618,744 @@ test('Text renderOrder ranks grouped paragraphs while standalone Text keeps Thre
   font.dispose();
 });
 
+test('last Text removal retains its prepared font stack until publication or root teardown', async (t) => {
+  for (const published of [false, true]) {
+    for (const publishRemoval of [false, true]) {
+      await t.test(
+        `${published ? 'published' : 'unpublished'} / ${publishRemoval ? 'publish removal' : 'teardown'}`,
+        async (caseContext) => {
+          const three = await createThreeTestHandle(caseContext);
+          const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+          const text = three.createText({ font, text: 'retained font owner' });
+          const scene = new THREE.Scene();
+          scene.add(text);
+          assert.ok(text.measure().glyphCount > 0, 'the paragraph is prepared before disposal');
+          if (published) scene.updateMatrixWorld(true);
+          const disposeFontStack = GlyphHandleState.prototype.disposeFontStack;
+          let releases = 0;
+          GlyphHandleState.prototype.disposeFontStack = function (...args) {
+            const result = disposeFontStack.apply(this, args);
+            releases += 1;
+            return result;
+          };
+          try {
+            text.dispose();
+            font.dispose();
+            assert.equal(text.disposed, true);
+            assert.throws(() => text.measure(), /disposed/u);
+            assert.equal(releases, 0, 'queued Rust removal still protects the font stack');
+            text.dispose();
+            assert.equal(releases, 0, 'repeated Text disposal does not release the pending claim');
+            if (publishRemoval) {
+              glyph.shape();
+              assert.equal(rootDraws(scene).length, 0, 'the accepted empty frame removes the last label');
+              assert.ok(releases > 0, 'publication retires the registration before root teardown');
+            }
+            three.dispose();
+            assert.ok(releases > 0, 'publication or teardown releases the actual Rust registration');
+            const terminalReleases = releases;
+            three.dispose();
+            assert.equal(releases, terminalReleases, 'repeated teardown releases no second claim');
+          } finally {
+            GlyphHandleState.prototype.disposeFontStack = disposeFontStack;
+            three.dispose();
+            font.dispose();
+          }
+        },
+      );
+    }
+  }
+});
+
+test('Three sibling rank changes publish complete order transactions over prepared content', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const coldThree = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const first = three.createText({ font, text: 'A' });
+  const second = three.createText({ font, text: 'B' });
+  const third = three.createText({ font, text: 'C' });
+  first.position.x = 10;
+  second.position.x = 20;
+  third.position.x = 30;
+  group.add(first, second);
+  scene.add(group);
+  const coldScene = new THREE.Scene();
+  const coldGroup = coldThree.createTextGroup();
+  const coldTexts = [];
+  coldScene.add(coldGroup);
+
+  const renderedParagraphXs = (targetScene) => {
+    const draws = rootDraws(targetScene);
+    assert.equal(draws.length, 1, 'the fixture keeps one compatible aggregate draw');
+    const draw = draws[0];
+    const start = draw.userData.pmndrsGlyphRunStart;
+    const transformIndices = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id));
+    const transforms = draw.geometry.getAttribute('_pmndrsGlyphTransforms');
+    const result = [];
+    for (let index = 0; index < draw.geometry.instanceCount; index += 1) {
+      const transform = transformIndices.getX(start + index);
+      const x = transforms.array[transform * 16 + 12];
+      if (!Object.is(result.at(-1), x)) result.push(x);
+    }
+    return result;
+  };
+  const compareWithCold = (entries, context) => {
+    for (const [index, entry] of entries.entries()) entry.text.renderOrder = index;
+    scene.updateMatrixWorld(true);
+    coldGroup.remove(...coldTexts);
+    for (const cold of coldTexts.splice(0)) cold.dispose();
+    for (const [index, { text, x, material }] of entries.entries()) {
+      const cold = coldThree.createText({
+        font,
+        text: text.text,
+        style: text.style,
+        ...(material === undefined ? {} : { material }),
+      });
+      cold.position.x = x;
+      cold.renderOrder = index;
+      coldGroup.add(cold);
+      coldTexts.push(cold);
+    }
+    coldScene.updateMatrixWorld(true);
+    assert.equal(group.error, undefined, `${context} retained publication succeeds`);
+    assert.equal(coldGroup.error, undefined, `${context} cold publication succeeds`);
+    assert.deepEqual(
+      renderedParagraphXs(scene),
+      entries.map(({ x }) => x),
+      `${context} renderer order follows complete explicit child ranks`,
+    );
+    assert.deepEqual(renderedParagraphXs(scene), renderedParagraphXs(coldScene), `${context} renderer matches cold`);
+    const renderedColors = (targetScene) =>
+      rootDraws(targetScene).map((draw) => {
+        const color = draw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.color.id));
+        const start = draw.userData.pmndrsGlyphRunStart * color.itemSize;
+        return Array.from(color.array.subarray(start, start + draw.geometry.instanceCount * color.itemSize));
+      });
+    assert.deepEqual(renderedColors(scene), renderedColors(coldScene), `${context} published paint matches cold`);
+    for (const [index, entry] of entries.entries()) {
+      assert.equal(entry.text.text, coldTexts[index].text, `${context} text ${String(index)}`);
+      assertPublicSemanticLayoutEqual(entry.text, coldTexts[index], `${context} layout ${String(index)}`);
+    }
+  };
+
+  try {
+    scene.updateMatrixWorld(true);
+    compareWithCold(
+      [
+        { text: first, x: 10 },
+        { text: second, x: 20 },
+      ],
+      'initial A/B',
+    );
+
+    group.remove(first, second);
+    group.add(second, first);
+    scene.updateMatrixWorld(true);
+    compareWithCold(
+      [
+        { text: second, x: 20 },
+        { text: first, x: 10 },
+      ],
+      'reused A/B swap',
+    );
+
+    group.remove(second, first);
+    group.add(third, second, first);
+    scene.updateMatrixWorld(true);
+    compareWithCold(
+      [
+        { text: third, x: 30 },
+        { text: second, x: 20 },
+        { text: first, x: 10 },
+      ],
+      'insert at beginning',
+    );
+
+    group.remove(second);
+    scene.updateMatrixWorld(true);
+    compareWithCold(
+      [
+        { text: third, x: 30 },
+        { text: first, x: 10 },
+      ],
+      'middle removal',
+    );
+    group.remove(third, first);
+    group.add(second, third, first);
+    scene.updateMatrixWorld(true);
+    compareWithCold(
+      [
+        { text: second, x: 20 },
+        { text: third, x: 30 },
+        { text: first, x: 10 },
+      ],
+      'removed sibling reinserted at beginning',
+    );
+
+    first.text = 'Alpha edited';
+    group.remove(second, third, first);
+    group.add(first, second, third);
+    scene.updateMatrixWorld(true);
+    compareWithCold(
+      [
+        { text: first, x: 10 },
+        { text: second, x: 20 },
+        { text: third, x: 30 },
+      ],
+      'mixed text edit and swap',
+    );
+
+    first.style = { color: '#00ff00', fontSize: 24 };
+    compareWithCold(
+      [
+        { text: third, x: 30 },
+        { text: first, x: 10 },
+        { text: second, x: 20 },
+      ],
+      'prepared paint and metrics with sibling rank changes',
+    );
+
+    compareWithCold(
+      [
+        { text: first, x: 10 },
+        { text: second, x: 20 },
+        { text: third, x: 30 },
+      ],
+      'painted sibling order restored before rejection',
+    );
+
+    let rejectMaterial = true;
+    const rejection = new Error('deliberate reordered publication rejection');
+    const material = defineTextMaterial((context) => {
+      if (rejectMaterial) throw rejection;
+      return context.createDefaultMaterial();
+    });
+    first.set({ material, text: 'Alpha recovered' });
+    group.remove(first, second, third);
+    group.add(third, first, second);
+    scene.updateMatrixWorld(true);
+    assert.equal(group.error, rejection, 'reorder rejection preserves the raw renderer error');
+    assert.deepEqual(renderedParagraphXs(scene), [10, 20, 30], 'rejection preserves the last accepted renderer order');
+    assert.equal(first.measure().glyphCount, 15, 'rejection retains the setter-prepared semantic revision');
+
+    rejectMaterial = false;
+    first.set({ material: undefined });
+    scene.updateMatrixWorld(true);
+    compareWithCold(
+      [
+        { text: third, x: 30 },
+        { text: first, x: 10 },
+        { text: second, x: 20 },
+      ],
+      'reorder recovery',
+    );
+  } finally {
+    scene.remove(group);
+    group.remove(first, second, third);
+    first.dispose();
+    second.dispose();
+    third.dispose();
+    group.dispose();
+    coldGroup.remove(...coldTexts);
+    for (const cold of coldTexts) cold.dispose();
+    coldGroup.dispose();
+    font.dispose();
+  }
+});
+
+test('a staged Three root rejects later-root assignment and disposal until its frame is consumed', async (t) => {
+  let onLaterRootPrepare;
+  const three = await createThreeTestHandle(
+    t,
+    observeThreeRootPreparation((name) => {
+      if (name === 'staged-owner-b') onLaterRootPrepare?.();
+    }),
+  );
+  const coldThree = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const disposedFont = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  disposedFont.dispose();
+  t.after(() => font.dispose());
+  const rootA = three('staged-owner-a');
+  const rootB = three('staged-owner-b');
+  const coldRoot = coldThree('staged-owner-a');
+  const scene = new THREE.Scene();
+  const coldScene = new THREE.Scene();
+  const first = rootA.createText({ font, text: 'alpha staged' });
+  const survivor = rootA.createText({ font, text: 'survivor staged' });
+  const trigger = rootB.createText({ font, text: 'later root' });
+  const coldFirst = coldRoot.createText({ font, text: 'alpha staged' });
+  const coldSurvivor = coldRoot.createText({ font, text: 'survivor staged' });
+  first.position.x = coldFirst.position.x = 10;
+  survivor.position.x = coldSurvivor.position.x = 20;
+  scene.add(first, survivor, trigger);
+  coldScene.add(coldFirst, coldSurvivor);
+  const rendererSnapshot = (targetScene) =>
+    rootDraws(targetScene, 'staged-owner-a').map((draw) => ({
+      instanceCount: draw.geometry.instanceCount,
+      renderOrder: draw.renderOrder,
+    }));
+  const compareAcceptedWithCold = (context) => {
+    scene.updateMatrixWorld(true);
+    coldScene.updateMatrixWorld(true);
+    assert.deepEqual(rendererSnapshot(scene), rendererSnapshot(coldScene), `${context} renderer output`);
+    assertPublicSemanticLayoutEqual(survivor, coldSurvivor, `${context} survivor layout`);
+    if (!first.disposed) assertPublicSemanticLayoutEqual(first, coldFirst, `${context} first layout`);
+  };
+
+  try {
+    const stagedMeasurement = first.measure();
+    let assignmentError;
+    let assignmentRead;
+    onLaterRootPrepare = () => {
+      try {
+        first.text = 'late assignment';
+      } catch (error) {
+        assignmentError = error;
+      }
+      assignmentRead = first.measure();
+    };
+    glyph.shape();
+    assert.match(String(assignmentError), /renderer publication is staged/u);
+    assert.equal(first.text, 'alpha staged', 'the rejected setter preserves authored state');
+    assert.equal(assignmentRead, stagedMeasurement, 'the rejected setter preserves the prepared measurement');
+    compareAcceptedWithCold('staged assignment rejection');
+
+    onLaterRootPrepare = undefined;
+    first.text = 'late assignment';
+    coldFirst.text = 'late assignment';
+    assertPublicSemanticLayoutEqual(first, coldFirst, 'assignment retry immediate prepared read');
+    glyph.shape();
+    compareAcceptedWithCold('assignment retry');
+
+    survivor.text = 'survivor before invalid font';
+    coldSurvivor.text = 'survivor before invalid font';
+    trigger.text = 'later root invalid font trigger';
+    const beforeInvalidFont = first.measure();
+    let invalidFontError;
+    onLaterRootPrepare = () => {
+      try {
+        first.set({ font: disposedFont });
+      } catch (error) {
+        invalidFontError = error;
+      }
+    };
+    glyph.shape();
+    assert.match(String(invalidFontError), /renderer publication is staged/u);
+    assert.equal(first.measure(), beforeInvalidFont, 'the ownership gate runs before invalid-font normalization');
+    onLaterRootPrepare = undefined;
+    assert.throws(
+      () => first.set({ font: disposedFont }),
+      /font has been disposed/u,
+      'after settlement the same assignment reaches its ordinary font boundary',
+    );
+    compareAcceptedWithCold('staged invalid-font rejection');
+
+    survivor.text = 'survivor before disposal';
+    coldSurvivor.text = 'survivor before disposal';
+    trigger.text = 'later root disposal trigger';
+    const beforeDisposal = first.measure();
+    let disposalError;
+    let disposalRead;
+    onLaterRootPrepare = () => {
+      try {
+        first.dispose();
+      } catch (error) {
+        disposalError = error;
+      }
+      disposalRead = first.measure();
+    };
+    glyph.shape();
+    assert.match(String(disposalError), /renderer publication is staged/u);
+    assert.equal(first.disposed, false, 'the rejected disposal leaves the public Text live');
+    assert.equal(disposalRead, beforeDisposal, 'the rejected disposal preserves immediate prepared reads');
+    compareAcceptedWithCold('staged disposal rejection');
+
+    onLaterRootPrepare = undefined;
+    first.dispose();
+    coldFirst.dispose();
+    assert.equal(first.disposed, true, 'disposal retries after the staged frame is consumed');
+    glyph.shape();
+    compareAcceptedWithCold('disposal retry removal');
+  } finally {
+    onLaterRootPrepare = undefined;
+    first.dispose();
+    survivor.dispose();
+    trigger.dispose();
+    coldFirst.dispose();
+    coldSurvivor.dispose();
+  }
+});
+
+test('TextGroup batching rejects before desired state changes while its root publication is staged', async (t) => {
+  let onLaterRootPrepare;
+  const three = await createThreeTestHandle(
+    t,
+    observeThreeRootPreparation((name) => {
+      if (name === 'staged-batching-b') onLaterRootPrepare?.();
+    }),
+  );
+  const coldThree = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+  const rootA = three('staged-batching-a');
+  const rootB = three('staged-batching-b');
+  const coldRoot = coldThree('staged-batching-a');
+  const scene = new THREE.Scene();
+  const coldScene = new THREE.Scene();
+  const group = rootA.createTextGroup({ batching: 'shared' });
+  const coldGroup = coldRoot.createTextGroup({ batching: 'shared' });
+  const grouped = rootA.createText({ font, text: 'grouped accepted' });
+  const standalone = rootA.createText({ font, text: 'standalone accepted' });
+  const trigger = rootB.createText({ font, text: 'later batching root' });
+  const coldGrouped = coldRoot.createText({ font, text: 'grouped accepted' });
+  const coldStandalone = coldRoot.createText({ font, text: 'standalone accepted' });
+  group.add(grouped);
+  coldGroup.add(coldGrouped);
+  scene.add(group, standalone, trigger);
+  coldScene.add(coldGroup, coldStandalone);
+  scene.updateMatrixWorld(true);
+  coldScene.updateMatrixWorld(true);
+  const rendererSnapshot = (targetScene) =>
+    rootDraws(targetScene, 'staged-batching-a').map((draw) => ({
+      instanceCount: draw.geometry.instanceCount,
+      renderOrder: draw.renderOrder,
+    }));
+  const assertCold = (context) => {
+    scene.updateMatrixWorld(true);
+    coldScene.updateMatrixWorld(true);
+    assert.deepEqual(rendererSnapshot(scene), rendererSnapshot(coldScene), `${context} renderer output`);
+    assertPublicSemanticLayoutEqual(grouped, coldGrouped, `${context} grouped layout`);
+    assertPublicSemanticLayoutEqual(standalone, coldStandalone, `${context} standalone layout`);
+  };
+
+  try {
+    grouped.text = 'grouped prepared replacement';
+    coldGrouped.text = 'grouped prepared replacement';
+    trigger.text = 'later batching trigger';
+    let batchingError;
+    onLaterRootPrepare = () => {
+      try {
+        group.batching = 'group';
+      } catch (error) {
+        batchingError = error;
+      }
+    };
+    glyph.shape();
+    assert.match(String(batchingError), /renderer publication is staged/u);
+    assert.equal(group.batching, 'shared', 'the rejected setter preserves its prior desired batching policy');
+    assertCold('staged batching rejection');
+
+    onLaterRootPrepare = undefined;
+    group.batching = 'group';
+    coldGroup.batching = 'group';
+    glyph.shape();
+    assert.equal(group.batching, 'group', 'the same batching change succeeds after publication settlement');
+    assertCold('batching retry');
+  } finally {
+    onLaterRootPrepare = undefined;
+    grouped.dispose();
+    standalone.dispose();
+    trigger.dispose();
+    coldGrouped.dispose();
+    coldStandalone.dispose();
+    group.dispose();
+    coldGroup.dispose();
+  }
+});
+
+test('Three Text creation gates before font selection and FontFace lease acquisition on a staged root', async (t) => {
+  let onLaterRootPrepare;
+  const three = await createThreeTestHandle(
+    t,
+    observeThreeRootPreparation((name) => {
+      if (name === 'staged-create-b') onLaterRootPrepare?.();
+    }),
+  );
+  const coldThree = await createThreeTestHandle(t);
+  const fontBytes = await readFile(fontUrl);
+  const font = await loadFont({ baked: { bytes: fontBytes } }, bitmap({ strikes: [16] }));
+  const face = glyph.fontFace(new Blob([fontBytes], { type: 'model/gltf-binary' }), {
+    family: 'StagedCreationFace',
+    format: bitmap({ strikes: [16] }),
+  });
+  await face.load();
+  t.after(() => {
+    face.dispose();
+    font.dispose();
+  });
+  const acquire = FontFaceHandleStore.prototype.acquire;
+  let acquisitions = 0;
+  FontFaceHandleStore.prototype.acquire = function (...args) {
+    acquisitions += 1;
+    return acquire.apply(this, args);
+  };
+  t.after(() => {
+    FontFaceHandleStore.prototype.acquire = acquire;
+  });
+  const rootA = three('staged-create-a');
+  const rootB = three('staged-create-b');
+  const coldRoot = coldThree('staged-create-a');
+  const scene = new THREE.Scene();
+  const coldScene = new THREE.Scene();
+  const anchor = rootA.createText({ font, text: 'creation anchor' });
+  const trigger = rootB.createText({ font, text: 'later creation root' });
+  const coldAnchor = coldRoot.createText({ font, text: 'creation anchor' });
+  scene.add(anchor, trigger);
+  coldScene.add(coldAnchor);
+  scene.updateMatrixWorld(true);
+  coldScene.updateMatrixWorld(true);
+  const rendererSnapshot = (targetScene) =>
+    rootDraws(targetScene, 'staged-create-a').map((draw) => ({
+      instanceCount: draw.geometry.instanceCount,
+      renderOrder: draw.renderOrder,
+    }));
+  const assertCold = (context) => {
+    scene.updateMatrixWorld(true);
+    coldScene.updateMatrixWorld(true);
+    assert.deepEqual(rendererSnapshot(scene), rendererSnapshot(coldScene), `${context} renderer output`);
+    assertPublicSemanticLayoutEqual(anchor, coldAnchor, `${context} anchor layout`);
+  };
+  let created;
+  let coldCreated;
+
+  try {
+    anchor.text = 'creation anchor missing-face frame';
+    coldAnchor.text = 'creation anchor missing-face frame';
+    trigger.text = 'missing-face trigger';
+    const acquisitionsBeforeMissing = acquisitions;
+    let missingError;
+    onLaterRootPrepare = () => {
+      try {
+        rootA.createText({ font: 'MissingStagedCreationFace', text: 'must not be created' });
+      } catch (error) {
+        missingError = error;
+      }
+    };
+    glyph.shape();
+    assert.match(String(missingError), /renderer publication is staged/u);
+    assert.equal(acquisitions, acquisitionsBeforeMissing, 'staged precedence performs no FontFace acquisition');
+    onLaterRootPrepare = undefined;
+    assert.throws(
+      () => rootA.createText({ font: 'MissingStagedCreationFace', text: 'ordinary missing face' }),
+      (error) => error instanceof GlyphFontError && error.reason === 'FONT_FACE_NOT_FOUND',
+      'after settlement the same wrapper reaches its ordinary font-selection error',
+    );
+    assertCold('missing FontFace staged rejection');
+
+    anchor.text = 'creation anchor loaded-face frame';
+    coldAnchor.text = 'creation anchor loaded-face frame';
+    trigger.text = 'loaded-face trigger';
+    const acquisitionsBeforeLoaded = acquisitions;
+    let loadedError;
+    onLaterRootPrepare = () => {
+      try {
+        rootA.createText({ font: face, text: 'must not acquire a staged lease' });
+      } catch (error) {
+        loadedError = error;
+      }
+    };
+    glyph.shape();
+    assert.match(String(loadedError), /renderer publication is staged/u);
+    assert.equal(
+      acquisitions,
+      acquisitionsBeforeLoaded,
+      'rejected loaded-face creation acquires and releases no lease',
+    );
+    onLaterRootPrepare = undefined;
+    assertCold('loaded FontFace staged rejection');
+
+    created = rootA.createText({ font: face, text: 'created after settlement' });
+    coldCreated = coldRoot.createText({ font: face, text: 'created after settlement' });
+    assert.equal(
+      acquisitions,
+      acquisitionsBeforeLoaded + 2,
+      'successful warm and cold creation each acquire one lease',
+    );
+    const createdFont = created.font;
+    const coldCreatedFont = coldCreated.font;
+    scene.add(created);
+    coldScene.add(coldCreated);
+    glyph.shape();
+    assertCold('loaded FontFace creation retry');
+    assertPublicSemanticLayoutEqual(created, coldCreated, 'loaded FontFace created layout');
+    created.dispose();
+    coldCreated.dispose();
+    assert.equal(createdFont.disposed, true, 'successful retry releases its acquired lease on disposal');
+    assert.equal(coldCreatedFont.disposed, true, 'cold oracle releases its acquired lease on disposal');
+    created = undefined;
+    coldCreated = undefined;
+  } finally {
+    onLaterRootPrepare = undefined;
+    created?.dispose();
+    coldCreated?.dispose();
+    anchor.dispose();
+    trigger.dispose();
+    coldAnchor.dispose();
+  }
+});
+
+async function assertStagedPublicDisposalRollback(t, target) {
+  let onLaterRootPrepare;
+  const three = await createThreeTestHandle(
+    t,
+    observeThreeRootPreparation((name) => {
+      if (name === `${target}-dispose-b`) onLaterRootPrepare?.();
+    }),
+  );
+  const coldThree = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+  const rootAName = `${target}-dispose-a`;
+  const rootBName = `${target}-dispose-b`;
+  const siblingName = `${target}-dispose-unstaged`;
+  const siblingRoot = target === 'handle' ? three(siblingName) : undefined;
+  const rootA = three(rootAName);
+  const rootB = three(rootBName);
+  const selectedSiblingRoot = siblingRoot ?? three(siblingName);
+  const coldRootA = coldThree(rootAName);
+  const coldSiblingRoot = coldThree(siblingName);
+  const scene = new THREE.Scene();
+  const coldScene = new THREE.Scene();
+  const first = rootA.createText({ font, text: 'first accepted' });
+  const survivor = rootA.createText({ font, text: 'survivor accepted' });
+  const trigger = rootB.createText({ font, text: 'later root' });
+  const sibling = selectedSiblingRoot.createText({ font, text: 'unstaged sibling' });
+  const coldFirst = coldRootA.createText({ font, text: 'first accepted' });
+  const coldSurvivor = coldRootA.createText({ font, text: 'survivor accepted' });
+  const coldSibling = coldSiblingRoot.createText({ font, text: 'unstaged sibling' });
+  scene.add(first, survivor, trigger, sibling);
+  coldScene.add(coldFirst, coldSurvivor, coldSibling);
+  scene.updateMatrixWorld(true);
+  coldScene.updateMatrixWorld(true);
+
+  const disposeFontStack = GlyphHandleState.prototype.disposeFontStack;
+  let fontStackDisposals = 0;
+  GlyphHandleState.prototype.disposeFontStack = function (...args) {
+    fontStackDisposals += 1;
+    return disposeFontStack.apply(this, args);
+  };
+  t.after(() => {
+    GlyphHandleState.prototype.disposeFontStack = disposeFontStack;
+  });
+  const rendererSnapshot = (targetScene, name) =>
+    rootDraws(targetScene, name).map((draw) => ({
+      instanceCount: draw.geometry.instanceCount,
+      renderOrder: draw.renderOrder,
+    }));
+  const assertLiveAgainstCold = (context) => {
+    scene.updateMatrixWorld(true);
+    coldScene.updateMatrixWorld(true);
+    assert.deepEqual(rendererSnapshot(scene, rootAName), rendererSnapshot(coldScene, rootAName), `${context} root A`);
+    assert.deepEqual(
+      rendererSnapshot(scene, siblingName),
+      rendererSnapshot(coldScene, siblingName),
+      `${context} unstaged sibling`,
+    );
+    assertPublicSemanticLayoutEqual(first, coldFirst, `${context} first`);
+    assertPublicSemanticLayoutEqual(survivor, coldSurvivor, `${context} survivor`);
+    assertPublicSemanticLayoutEqual(sibling, coldSibling, `${context} unstaged sibling`);
+  };
+
+  try {
+    glyph.shape();
+    assertLiveAgainstCold('initial accepted state');
+
+    first.text = 'first prepared replacement';
+    survivor.text = 'survivor prepared replacement';
+    coldFirst.text = 'first prepared replacement';
+    coldSurvivor.text = 'survivor prepared replacement';
+    trigger.text = 'later root disposal trigger';
+    const firstMeasurement = first.measure();
+    const survivorMeasurement = survivor.measure();
+    const siblingMeasurement = sibling.measure();
+    const disposalsBeforeAttempt = fontStackDisposals;
+    let disposalError;
+    let callbackReturned = false;
+    let callbackMeasurements;
+    onLaterRootPrepare = () => {
+      try {
+        if (target === 'root') rootA.dispose();
+        else three.dispose();
+      } catch (error) {
+        disposalError = error;
+      }
+      callbackMeasurements = [first.measure(), survivor.measure(), sibling.measure()];
+      callbackReturned = true;
+    };
+
+    glyph.shape();
+    assert.equal(callbackReturned, true, `${target} disposal runs in the later root prepare callback`);
+    assert.match(String(disposalError), /renderer publication is staged/u);
+    assert.equal(three.disposed, false, 'the handle remains live after rejected disposal');
+    assert.equal(rootA.disposed, false, 'the staged root remains live after rejected disposal');
+    assert.equal(selectedSiblingRoot.disposed, false, 'the unstaged sibling root remains live after rejected disposal');
+    assert.deepEqual(
+      [first.disposed, survivor.disposed, sibling.disposed],
+      [false, false, false],
+      'rejected disposal leaves public Text lifecycles unchanged',
+    );
+    assert.equal(callbackMeasurements[0], firstMeasurement, 'first prepared measurement remains readable in callback');
+    assert.equal(
+      callbackMeasurements[1],
+      survivorMeasurement,
+      'survivor prepared measurement remains readable in callback',
+    );
+    assert.equal(
+      callbackMeasurements[2],
+      siblingMeasurement,
+      'unstaged sibling measurement remains readable in callback',
+    );
+    assert.equal(fontStackDisposals, disposalsBeforeAttempt, 'rejected disposal releases no root font-stack lease');
+    assert.equal(font.disposed, false, 'rejected disposal preserves the caller-owned font lease');
+    onLaterRootPrepare = undefined;
+    assertLiveAgainstCold(`staged ${target} disposal rollback`);
+
+    const beforeRetry = fontStackDisposals;
+    if (target === 'root') rootA.dispose();
+    else three.dispose();
+    assert.equal(rootA.disposed, true, `${target} disposal retry makes the staged root terminal`);
+    assert.equal(three.disposed, target === 'handle', 'only handle disposal makes the handle terminal');
+    assert.equal(
+      selectedSiblingRoot.disposed,
+      target === 'handle',
+      'handle disposal includes the unstaged sibling while root disposal preserves it',
+    );
+    assert.equal(rootDraws(scene, rootAName).length, 0, 'terminal retry removes the staged root renderer output');
+    assert.equal(
+      rootDraws(scene, siblingName).length === 0,
+      target === 'handle',
+      'terminal retry removes exactly the roots owned by its public lifecycle target',
+    );
+    assert.ok(fontStackDisposals > beforeRetry, 'terminal retry releases retained font-stack leases');
+    const afterRetry = fontStackDisposals;
+    if (target === 'root') rootA.dispose();
+    else three.dispose();
+    assert.equal(fontStackDisposals, afterRetry, 'repeated terminal disposal is idempotent');
+    assert.throws(() => first.measure(), /disposed/u, 'a terminally disposed root no longer answers reads');
+    if (target === 'root') assertPublicSemanticLayoutEqual(sibling, coldSibling, 'root retry preserves sibling layout');
+  } finally {
+    onLaterRootPrepare = undefined;
+    first.dispose();
+    survivor.dispose();
+    trigger.dispose();
+    sibling.dispose();
+    coldFirst.dispose();
+    coldSurvivor.dispose();
+    coldSibling.dispose();
+  }
+}
+
+test('public Three root disposal rolls back above a staged owner and retries terminally', async (t) => {
+  await assertStagedPublicDisposalRollback(t, 'root');
+});
+
+test('public Three handle disposal preflights staged and unstaged roots before terminal teardown', async (t) => {
+  await assertStagedPublicDisposalRollback(t, 'handle');
+});
+
 test('rank-only updates republish bindings when one storage batch has multiple materials', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
@@ -660,23 +1450,27 @@ test('patch-only publications retain direct transform synchronization', async (t
   try {
     const draw = rootDraws(scene)[0];
     label.position.x = 42;
-    label.constraints = { ...label.constraints, width: { mode: 'exact', size: 60 } };
+    label.style = { ...label.style, color: '#00ff00' };
     instrumentedGlyph.reset();
     scene.updateMatrixWorld(true);
-    assert.equal(rootDraws(scene)[0], draw, 'a width-only reflow keeps the direct draw');
-    assert.equal(instrumentedGlyph.latestPlanCounts().draws, 0, 'the width-only reflow remains patch-only');
+    assert.equal(rootDraws(scene)[0], draw, 'a paint update keeps the direct draw');
+    assert.equal(instrumentedGlyph.latestPlanCounts().draws, 0, 'the paint update remains patch-only');
+    assert.ok(instrumentedGlyph.latestPlanCounts().patches > 0, 'the paint update publishes mutable data');
     assert.equal(draw.matrix.elements[12], 42, 'the direct draw receives the transform changed in the same frame');
 
     label.visible = false;
-    label.constraints = { ...label.constraints, width: { mode: 'exact', size: 80 } };
+    label.style = { ...label.style, color: '#0000ff' };
     instrumentedGlyph.reset();
     scene.updateMatrixWorld(true);
-    assert.equal(
-      instrumentedGlyph.latestPlanCounts().draws,
-      0,
-      'visibility with a width-only reflow remains patch-only',
-    );
+    assert.equal(instrumentedGlyph.latestPlanCounts().draws, 0, 'visibility with a paint update remains patch-only');
     assert.equal(draw.visible, false, 'the retained direct draw receives visibility changed in the same frame');
+
+    label.constraints = { ...label.constraints, width: { mode: 'exact', size: 60 } };
+    instrumentedGlyph.reset();
+    scene.updateMatrixWorld(true);
+    assert.ok(instrumentedGlyph.latestPlanCounts().primitives > 0, 'reflow republishes changed primitive bounds');
+    assert.equal(rootDraws(scene)[0], draw, 'bounds publication preserves the host draw');
+    assert.equal(draw.visible, false, 'bounds publication preserves current visibility');
   } finally {
     label.dispose();
     font.dispose();
@@ -726,11 +1520,12 @@ test('patch-only publications refresh a standalone Text added after the publicat
           }
 
           late.position.x = 42;
-          late.constraints = { ...late.constraints, width: { mode: 'exact', size: 60 } };
+          late.style = { ...late.style, color: '#00ff00' };
           instrumentedGlyph.reset();
           scene.updateMatrixWorld(true);
 
-          assert.equal(instrumentedGlyph.latestPlanCounts().draws, 0, 'the width-only reflow remains patch-only');
+          assert.equal(instrumentedGlyph.latestPlanCounts().draws, 0, 'the paint update remains patch-only');
+          assert.ok(instrumentedGlyph.latestPlanCounts().patches > 0, 'the paint update publishes mutable data');
           assert.equal(visibleX(), 42, 'the late Text transform becomes visible in the accepting scene traversal');
 
           const renderObject = scene.getObjectByName('@pmndrs/glyph:anonymous');
@@ -741,15 +1536,17 @@ test('patch-only publications refresh a standalone Text added after the publicat
             'the late-added Text must now precede the private publication root',
           );
           late.position.x = 84;
-          late.constraints = { ...late.constraints, width: { mode: 'exact', size: 80 } };
+          late.style = { ...late.style, color: '#0000ff' };
           instrumentedGlyph.reset();
           scene.updateMatrixWorld(true);
-          assert.equal(
-            instrumentedGlyph.latestPlanCounts().draws,
-            0,
-            'the second width-only reflow remains patch-only',
-          );
+          assert.equal(instrumentedGlyph.latestPlanCounts().draws, 0, 'the second paint update remains patch-only');
           assert.equal(visibleX(), 84, 'a late-added Text before the private root keeps same-frame transforms');
+
+          late.constraints = { ...late.constraints, width: { mode: 'exact', size: 60 } };
+          instrumentedGlyph.reset();
+          scene.updateMatrixWorld(true);
+          assert.ok(instrumentedGlyph.latestPlanCounts().primitives > 0, 'reflow republishes changed primitive bounds');
+          assert.equal(visibleX(), 84, 'bounds publication preserves the late Text transform');
         } finally {
           late.dispose();
           first.dispose();
@@ -863,15 +1660,16 @@ test('Rust ranks interleaved TextGroup scopes only within their stable root slot
     {
       paragraph: 0,
       paragraphOrder: 0,
-      text: 2,
-      style: 1,
+      text: 0,
+      style: 0,
       constraint: 0,
       region: 0,
       exclusion: 0,
       inlineObject: 0,
     },
-    'variable-length content edits publish text and root-style coverage without unchanged lifecycle or geometry',
+    'content publication consumes both setter preparations without replaying semantic input',
   );
+  assert.equal(instrumentedGlyph.measureCrossings, 2, 'each content setter prepares synchronously');
   assert.deepEqual(
     sequence(),
     [authored[2], authored[1], authored[0], authored[3]],
@@ -1454,7 +2252,7 @@ test('deterministic retained renderer mutations match cold checkpoints in indexe
             batching: 'auto',
             color: '#ffffff',
             renderOrder: 0,
-            text: `label ${String(id)}`,
+            text: `retained first line ${String(id)}\nretained middle line\nlabel ${String(id)}`,
             visible: true,
             x: id * 3,
           };
@@ -1494,6 +2292,9 @@ test('deterministic retained renderer mutations match cold checkpoints in indexe
               case 2: {
                 selected.color = (random() & 1) === 0 ? '#00ff00' : '#ff00ff';
                 live.label.style = { ...live.label.style, color: selected.color };
+                // Earlier lines converge while the last line changes; keep their unpublished paint deltas.
+                live.label.text = `${selected.text} transient`;
+                live.label.text = selected.text;
                 break;
               }
               case 3: {
@@ -1514,7 +2315,8 @@ test('deterministic retained renderer mutations match cold checkpoints in indexe
                 break;
               }
               case 6: {
-                selected.text = selected.text.length === 0 ? `restored ${String(selected.id)}` : '';
+                selected.text =
+                  selected.text.length === 0 ? `retained first line\nrestored ${String(selected.id)}` : '';
                 live.label.text = selected.text;
                 break;
               }
@@ -1650,7 +2452,7 @@ test('a reused hidden boundary draw becomes visible after joining the shared poo
   }
 });
 
-test('a root releases its renderer publication when its final Text is disposed', async (t) => {
+test('an empty root retains its publication until explicit teardown and can publish again', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const root = three('transient');
@@ -1668,13 +2470,18 @@ test('a root releases its renderer publication when its final Text is disposed',
     undefined,
     'the empty root no longer retains its Scene',
   );
-  assert.equal(root.gpuBytes, 0, 'the empty root releases its planner and renderer resources');
+  assert.ok(root.gpuBytes > 0, 'an empty root retains reusable publication resources');
+  glyph.shape();
+  assert.equal(rootDraws(scene, 'transient').length, 0, 'empty publication settles removal without reattaching a draw');
 
   const second = root.createText({ font, text: 'second' });
   scene.add(second);
   scene.updateMatrixWorld(true);
   assert.ok(scene.getObjectByName('@pmndrs/glyph:transient'), 'the same idempotent root can publish again');
+  assert.ok(rootDraws(scene, 'transient').length > 0, 'the retained publisher renders new content');
   second.dispose();
+  root.dispose();
+  assert.equal(root.gpuBytes, 0, 'explicit teardown releases publication resources');
   font.dispose();
 });
 
@@ -1682,24 +2489,40 @@ test('a root restores its draw object when the host clears and reattaches the au
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
-  const text = three.createText({ font, text: 'reattached' });
-  scene.add(text);
-  scene.updateMatrixWorld(true);
-  assert.ok(scene.getObjectByName('@pmndrs/glyph:anonymous'));
-  assert.ok(rootDraws(scene).length > 0);
+  const ancestor = new THREE.Group();
+  const texts = ['A', 'B', 'C'].map((text) => three.createText({ font, text }));
+  const sentinel = three.createText({ font, text: 'D' });
+  const glyphCount = () => rootDraws(scene).reduce((count, draw) => count + draw.geometry.instanceCount, 0);
+  ancestor.add(...texts);
+  scene.add(ancestor, sentinel);
+  try {
+    scene.updateMatrixWorld(true);
+    assert.equal(glyphCount(), 4);
 
-  scene.clear();
-  assert.equal(scene.getObjectByName('@pmndrs/glyph:anonymous'), undefined);
-  scene.add(text);
-  scene.updateMatrixWorld(true);
-  assert.ok(
-    scene.getObjectByName('@pmndrs/glyph:anonymous'),
-    'the stable scene identity must not hide a detached draw object',
-  );
-  assert.ok(rootDraws(scene).length > 0);
+    scene.remove(ancestor);
+    scene.updateMatrixWorld(true);
+    assert.equal(glyphCount(), 1, 'ancestor removal retires every consecutive entry, retaining the sibling');
+    assert.equal(texts[0].measure().glyphCount, 1, 'detached text remains synchronously measurable');
+    glyph.shape();
+    assert.equal(glyphCount(), 1, 'a detached query does not restore removed scene membership');
 
-  text.dispose();
-  font.dispose();
+    scene.add(ancestor);
+    scene.updateMatrixWorld(true);
+    assert.equal(glyphCount(), 4, 'reattachment restores all retired entries');
+
+    scene.clear();
+    assert.equal(scene.getObjectByName('@pmndrs/glyph:anonymous'), undefined);
+    scene.add(ancestor, sentinel);
+    scene.updateMatrixWorld(true);
+    assert.ok(
+      scene.getObjectByName('@pmndrs/glyph:anonymous'),
+      'the stable scene identity must not hide a detached draw object',
+    );
+    assert.equal(glyphCount(), 4);
+  } finally {
+    for (const text of [...texts, sentinel]) text.dispose();
+    font.dispose();
+  }
 });
 
 test('TextGroup ancestry cannot smuggle a Text across Glyph roots', async (t) => {
@@ -2856,7 +3679,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.equal(firstDraws[0].geometry.instanceCount, 10, 'the GPU plan omits the non-rendering space glyph');
   assert.equal(firstDraws[0].renderOrder, 12);
   const measurement = label.measure();
-  assert.ok(measurement, 'layout measurement must be available through an explicit Rust query');
+  assert.ok(measurement, 'layout measurement must be available from the current Rust preparation');
   assert.equal(measurement.width, measurement.contentWidth);
   assert.equal(measurement.height, measurement.contentHeight);
   assert.ok(measurement.firstBaseline > 0);
@@ -2867,7 +3690,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.equal(measurement.missingGlyphCount, 0);
   assert.equal(label.measure(), measurement, 'an unchanged committed layout must reuse its queried measurement');
   const inspection = label.glyphs();
-  assert.ok(inspection, 'per-glyph layout must be available only through an explicit Rust inspection query');
+  assert.ok(inspection, 'per-glyph layout must be copied from the current Rust preparation');
   assert.equal(inspection.glyphIds.length, measurement.glyphCount);
   assert.equal(inspection.glyphStableIds.length, inspection.glyphIds.length);
   assert.equal(inspection.lineGlyphCounts.length, measurement.lineCount);
@@ -3097,6 +3920,116 @@ test('nested TextGroup nodes inherit presentation without creating nested public
   }
 });
 
+test('cached Three presentation still rejects nonfinite child and draw order', async (t) => {
+  for (const grouped of [false, true]) {
+    await t.test(grouped ? 'grouped child rank' : 'standalone draw order', async (caseContext) => {
+      const three = await createThreeTestHandle(caseContext);
+      const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+      const scene = new THREE.Scene();
+      const label = three.createText({ font, text: 'Cached presentation' });
+      const group = grouped ? three.createTextGroup() : undefined;
+      if (group === undefined) scene.add(label);
+      else {
+        group.add(label);
+        scene.add(group);
+      }
+      try {
+        scene.updateMatrixWorld(true);
+        const [acceptedDraw] = rootDraws(scene);
+        assert.ok(acceptedDraw);
+        scene.updateMatrixWorld(true);
+        assert.equal(rootDraws(scene)[0], acceptedDraw, 'unchanged presentation retains its accepted draw');
+
+        label.renderOrder = Number.POSITIVE_INFINITY;
+        scene.updateMatrixWorld(true);
+        assert.match(String(label.error), /renderOrder must be finite/u);
+        assert.equal(rootDraws(scene)[0], acceptedDraw, 'invalid presentation preserves the accepted draw');
+
+        label.renderOrder = 0;
+        label.text = 'Recovered presentation';
+        scene.updateMatrixWorld(true);
+        assert.equal(label.error, undefined, 'a valid authored update recovers the same retained label');
+        assert.equal(rootDraws(scene)[0], acceptedDraw);
+      } finally {
+        label.dispose();
+        group?.dispose();
+        font.dispose();
+      }
+    });
+  }
+});
+
+test('an already queued Three root observes presentation only during preparation', async (t) => {
+  let services;
+  let materialReads = 0;
+  let readsBeforePrepare;
+  const config = {
+    ...ThreeConfig,
+    root: {
+      create(context) {
+        services = context.services;
+        return ThreeConfig.root.create({
+          ...context,
+          create(extension, options) {
+            const prepare = options.shape.prepare;
+            return context.create(extension, {
+              ...options,
+              shape: {
+                ...options.shape,
+                prepare() {
+                  readsBeforePrepare = materialReads;
+                  return prepare();
+                },
+              },
+            });
+          },
+        });
+      },
+    },
+  };
+  const three = await createThreeTestHandle(t, config);
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const label = three.createText({ font, text: 'Before' });
+  const material = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(group), 'material');
+  Object.defineProperty(group, 'material', {
+    configurable: true,
+    get() {
+      materialReads += 1;
+      return material.get.call(this);
+    },
+  });
+  try {
+    group.add(label);
+    scene.add(group);
+    scene.updateMatrixWorld(true);
+    assert.equal(services._isShapeQueued(), false);
+    label.text = 'After';
+    assert.equal(services._isShapeQueued(), true, 'the setter queues the existing engine registration');
+    materialReads = 0;
+    readsBeforePrepare = undefined;
+    scene.updateMatrixWorld(true);
+    assert.equal(readsBeforePrepare, 0, 'a queued root must not repeat presentation preflight before preparation');
+    assert.ok(materialReads > 0, 'preparation still observes the complete ancestor presentation');
+    assert.equal(services._isShapeQueued(), false);
+    assert.equal(label.commitState().status, 'committed');
+
+    const crossings = instrumentedGlyph.crossings;
+    materialReads = 0;
+    scene.updateMatrixWorld(true);
+    assert.ok(materialReads > 0, 'an unqueued traversal still checks raw hierarchy and presentation changes');
+    assert.equal(instrumentedGlyph.crossings, crossings, 'an unchanged unqueued traversal must not publish');
+    group.renderOrder = 8;
+    scene.updateMatrixWorld(true);
+    assert.equal(rootDraws(scene)[0].renderOrder, 8, 'unqueued raw presentation changes still reach publication');
+  } finally {
+    label.dispose();
+    group.dispose();
+    font.dispose();
+  }
+});
+
 test('renderer rejection waits for explicit invalidation and then checkpoints without copied bytes', async (t) => {
   const three = await createThreeTestHandle(t);
   const instrumented = instrumentedGlyph;
@@ -3301,7 +4234,7 @@ test('material preparation rejection preserves the last accepted Three branch an
   font.dispose();
 });
 
-test('a rejected fixed-capacity candidate releases its provisional font-stack lease', async (t) => {
+test('a rejected fixed-capacity candidate releases its prepared font-stack lease after removal publication', async (t) => {
   const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'fixed' } }));
   const registerFontStack = GlyphHandleState.prototype.registerFontStack;
   const disposeFontStack = GlyphHandleState.prototype.disposeFontStack;
@@ -3329,7 +4262,35 @@ test('a rejected fixed-capacity candidate releases its provisional font-stack le
     scene.updateMatrixWorld();
     assert.deepEqual(label.commitState(), { status: 'pending' });
     label.dispose();
-    assert.equal(disposals, registrations, 'a skipped candidate must not retain its compiled font stack');
+    assert.equal(disposals, 0, 'the prepared paragraph protects its stack until Rust consumes removal');
+    glyph.shape();
+    assert.equal(disposals, registrations, 'empty publication retires the rejected candidate stack');
+    const replacement = three.createText({ font, text: 'A' });
+    try {
+      scene.add(replacement);
+      scene.updateMatrixWorld(true);
+      assert.equal(replacement.commitState().status, 'committed', 'removed text releases the adapter capacity');
+      const accepted = replacement.commitState();
+      assert.throws(
+        () =>
+          replacement.set({
+            text: 'invalid length must not count',
+            constraints: { width: { mode: 'exact', size: NaN } },
+          }),
+        /width/u,
+      );
+      assert.equal(replacement.text, 'A');
+      scene.updateMatrixWorld(true);
+      assert.deepEqual(replacement.commitState(), accepted, 'a failed setter preserves the capacity contribution');
+      replacement.text = 'A😀';
+      scene.updateMatrixWorld(true);
+      assert.equal(replacement.commitState().status, 'pending', 'capacity counts authored UTF-16 units');
+      replacement.text = 'B';
+      scene.updateMatrixWorld(true);
+      assert.equal(replacement.commitState().status, 'committed', 'shrinking the same owner repairs capacity');
+    } finally {
+      replacement.dispose();
+    }
   } finally {
     label.dispose();
     font.dispose();
@@ -5107,35 +6068,34 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   scene.updateMatrixWorld();
 
   assert.equal(group.error, undefined);
-  const paragraphMutations = instrumented.latestParagraphMutations();
-  assert.equal(paragraphMutations.length, 2);
-  assert.equal(new Set(paragraphMutations.map(({ paragraphId }) => paragraphId)).size, 2);
-  assert.ok(paragraphMutations.every(({ paragraphId }) => paragraphId !== 0));
   assert.deepEqual(
-    paragraphMutations.map(({ order }) => order),
-    [0, 1],
-    'the retained planner must publish each paragraph once in scene order',
+    instrumented.latestRequestCounts(),
+    {
+      paragraph: 0,
+      paragraphOrder: 2,
+      text: 0,
+      style: 0,
+      constraint: 0,
+      region: 0,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'publication consumes the setter-owned preparations without replaying semantic input; grouping supplies two order records',
   );
-  const constraints = instrumented.latestConstraints();
   assert.deepEqual(
-    constraints.map(({ paragraphId }) => paragraphId),
-    paragraphMutations.map(({ paragraphId }) => paragraphId),
-    'each planner-owned paragraph must produce exactly one matching constraint',
+    instrumented.latestMeasurementRequestCounts(),
+    {
+      paragraph: 0,
+      paragraphOrder: 0,
+      text: 0,
+      style: 1,
+      constraint: 0,
+      region: 0,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'attachment updates presentation without replaying already prepared text, geometry, or lifecycle',
   );
-  assert.equal(new Set(constraints.map(({ flowThreadId }) => flowThreadId)).size, 2);
-  assert.ok(constraints.every(({ flowThreadId }) => flowThreadId !== 0));
-  assert.deepEqual(
-    constraints.map(({ regionStart, regionCount, resumeRegion }) => ({ regionStart, regionCount, resumeRegion })),
-    [
-      { regionStart: 0, regionCount: 1, resumeRegion: 0 },
-      { regionStart: 1, regionCount: 2, resumeRegion: 0 },
-    ],
-    'planner geometry must publish one contiguous region partition per paragraph',
-  );
-  const regions = instrumented.latestRegions();
-  assert.equal(regions.length, 3);
-  assert.equal(new Set(regions.map(({ id }) => id)).size, 3);
-  assert.ok(regions.every(({ id, transformIndex }) => id !== 0 && transformIndex !== 0));
   const draws = rootDraws(scene);
   assert.equal(draws.length, 1, 'compatible paragraphs must batch in Rust before Three sees the plan');
   assert.equal(draws[0].geometry.instanceCount, 4);
@@ -5151,6 +6111,7 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
 
   const initialLeftMeasurement = left.measure();
   const initialRightMeasurement = right.measure();
+  const initialRightCommit = right.commitState();
   assert.ok(initialLeftMeasurement);
   assert.ok(initialRightMeasurement);
 
@@ -5165,6 +6126,8 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   assert.equal(instrumented.crossings, 0, 'a cached paragraph measurement must remain local to its retained entry');
   group.remove(pendingSibling);
   pendingSibling.dispose();
+  scene.updateMatrixWorld();
+  assert.equal(rootDraws(scene)[0].geometry.instanceCount, 4, 'pending sibling removal settles before no-op checks');
 
   instrumented.reset();
   left.set({});
@@ -5193,27 +6156,34 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   assert.equal(instrumented.crossings, 0, 'equivalent normalized properties must not cross into Rust');
   assert.deepEqual(left.commitState(), unchangedCommit, 'a semantic no-op must preserve the committed revision');
 
-  // Assigning `text` states the desired string. Publication derives the narrowest scalar-aligned
-  // replacement from the last published string, coalescing intermediate desired states.
+  // Assigning `text` synchronously sends the complete authored string. Rust discovers the
+  // scalar-safe retained range before this setter returns; publication replays no text input.
   left.text = 'A';
+  assert.deepEqual(instrumented.latestPreparationTextMutations(), [{ start: 0, deleteCount: 2, insert: 'A' }]);
   scene.updateMatrixWorld();
-  assert.deepEqual(instrumented.latestTextMutations(), [{ start: 1, deleteCount: 1, insert: '' }]);
+  assert.deepEqual(instrumented.latestTextMutations(), []);
   assert.equal(left.text, 'A');
+  assert.deepEqual(
+    right.commitState(),
+    initialRightCommit,
+    'settling one dirty owner preserves its clean sibling revision',
+  );
+  assert.equal(right.measure(), initialRightMeasurement, 'settlement preserves the clean sibling measurement identity');
 
   left.text = 'AB';
+  assert.deepEqual(instrumented.latestPreparationTextMutations(), [{ start: 0, deleteCount: 1, insert: 'AB' }]);
   scene.updateMatrixWorld();
-  assert.deepEqual(instrumented.latestTextMutations(), [{ start: 1, deleteCount: 0, insert: 'B' }]);
+  assert.deepEqual(instrumented.latestTextMutations(), []);
   assert.equal(left.text, 'AB');
 
   left.text = 'AY';
-  scene.updateMatrixWorld();
   assert.deepEqual(
-    instrumented.latestTextMutations(),
-    [{ start: 1, deleteCount: 1, insert: 'Y' }],
-    'declarative assignment must serialize its smallest scalar-aligned replacement',
+    instrumented.latestPreparationTextMutations(),
+    [{ start: 0, deleteCount: 2, insert: 'AY' }],
+    'declarative assignment sends full input while Rust owns scalar-safe changed-range discovery',
   );
   assert.deepEqual(
-    instrumented.latestRequestCounts(),
+    instrumented.latestMeasurementRequestCounts(),
     {
       paragraph: 0,
       paragraphOrder: 0,
@@ -5224,25 +6194,29 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
       exclusion: 0,
       inlineObject: 0,
     },
-    'equal-length plain content publishes no unchanged retained state',
+    'the full Three setter encodes changed text while Rust retains the current geometry',
   );
+  scene.updateMatrixWorld();
+  assert.deepEqual(instrumented.latestTextMutations(), []);
 
   left.text = 'AZ';
   left.text = 'Z';
   left.text = 'AZ';
-  scene.updateMatrixWorld();
   assert.deepEqual(
-    instrumented.latestTextMutations(),
-    [{ start: 1, deleteCount: 1, insert: 'Z' }],
-    'retained authoring coalesces desired state into one minimal edit from the published string',
+    instrumented.latestPreparationTextMutations(),
+    [{ start: 0, deleteCount: 1, insert: 'AZ' }],
+    'each setter prepares immediately instead of coalescing edits until publication',
   );
+  scene.updateMatrixWorld();
+  assert.deepEqual(instrumented.latestTextMutations(), []);
   assert.equal(left.text, 'AZ');
 
-  // A whole-string assignment cannot address the inside of a scalar, so the replacement derived
-  // from it is scalar-aligned by construction rather than by a range check.
+  // The host sends UTF-16 for the full assignment. Rust aligns its retained discovery around the
+  // surrogate pair; no JavaScript scalar prefix/suffix scan participates.
   left.text = '🌍';
+  assert.deepEqual(instrumented.latestPreparationTextMutations(), [{ start: 0, deleteCount: 2, insert: '🌍' }]);
   scene.updateMatrixWorld();
-  assert.deepEqual(instrumented.latestTextMutations(), [{ start: 0, deleteCount: 2, insert: '🌍' }]);
+  assert.deepEqual(instrumented.latestTextMutations(), []);
   assert.equal(left.text, '🌍');
   left.text = 'AB';
   scene.updateMatrixWorld();
@@ -5259,7 +6233,8 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
     'one requested semantic publication must populate every retained paragraph',
   );
   scene.updateMatrixWorld();
-  assert.equal(instrumented.crossings, 1, 'mutation, render plan, and demanded measurement must share one text_update');
+  assert.equal(instrumented.measureCrossings, 2, 'each property assignment synchronously prepares its own revision');
+  assert.equal(instrumented.crossings, 1, 'render traversal publishes the last prepared revision once');
 
   const version = transforms.version;
   let forcedTextWorldUpdates = 0;
@@ -5312,13 +6287,27 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
       paragraph: 0,
       paragraphOrder: 0,
       text: 0,
+      style: 0,
+      constraint: 0,
+      region: 0,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'paint-only publication replays no semantic input',
+  );
+  assert.deepEqual(
+    instrumented.latestMeasurementRequestCounts(),
+    {
+      paragraph: 0,
+      paragraphOrder: 0,
+      text: 0,
       style: 1,
       constraint: 0,
       region: 0,
       exclusion: 0,
       inlineObject: 0,
     },
-    'paint-only style updates publish no unchanged lifecycle, text, or geometry',
+    'the full Three paint setter prepares synchronously without resending geometry',
   );
 
   instrumented.reset();
@@ -5331,13 +6320,27 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
       paragraph: 0,
       paragraphOrder: 0,
       text: 0,
+      style: 0,
+      constraint: 0,
+      region: 0,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'font-size publication replays no semantic input',
+  );
+  assert.deepEqual(
+    instrumented.latestMeasurementRequestCounts(),
+    {
+      paragraph: 0,
+      paragraphOrder: 0,
+      text: 0,
       style: 1,
       constraint: 0,
       region: 0,
       exclusion: 0,
       inlineObject: 0,
     },
-    'font-size updates publish only style while Rust derives shaping and layout invalidation',
+    'Rust derives shaping and layout invalidation during the font-size setter',
   );
 
   const mutableWidth = { mode: 'exact', size: 120 };
@@ -5361,20 +6364,65 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
       paragraphOrder: 0,
       text: 0,
       style: 0,
+      constraint: 0,
+      region: 0,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'a nested constraint publication replays no geometry',
+  );
+  assert.deepEqual(
+    instrumented.latestMeasurementRequestCounts(),
+    {
+      paragraph: 0,
+      paragraphOrder: 0,
+      text: 0,
+      style: 0,
       constraint: 1,
       region: 2,
       exclusion: 0,
       inlineObject: 0,
     },
-    'a nested constraint change publishes geometry without unchanged semantic sections',
+    'the nested constraint snapshot is prepared during assignment',
   );
+
+  mutableWidth.size = 300;
+  assert.throws(() => right.set({ constraints: { width: { mode: 'exact', size: NaN } } }), RangeError);
+  right.text = 'DC';
+  assert.equal(instrumented.latestMeasurementRequestCounts().constraint, 0, 'text retains the owned width snapshot');
+  right.style = { ...right.style, fontSize: 21 };
+  assert.equal(instrumented.latestMeasurementRequestCounts().region, 0, 'metrics reflow uses retained column regions');
+  const retainedColumns = right.glyphs();
+  const coldRoot = await createThreeTestHandle(t);
+  const coldColumns = coldRoot.createText({
+    font,
+    text: 'DC',
+    style: right.style,
+    layout: right.layout,
+    constraints: { width: { mode: 'exact', size: 60 }, height: { mode: 'exact', size: 100 } },
+  });
+  try {
+    const coldInspection = coldColumns.glyphs();
+    for (const field of ['glyphIds', 'clusters', 'x', 'y', 'glyphAdvances', 'lineGlyphStarts', 'lineGlyphCounts']) {
+      assert.deepEqual(
+        retainedColumns[field],
+        coldInspection[field],
+        `${field} retains cold geometry after measured SETs`,
+      );
+    }
+    scene.updateMatrixWorld(true);
+    assert.equal(group.error, undefined, 'publication adopts the omitted-geometry preparations');
+  } finally {
+    coldColumns.dispose();
+  }
 
   instrumented.reset();
   left.text = 'ABC';
   const replacedMeasurement = left.measure();
   assert.equal(replacedMeasurement?.glyphCount, 3);
   scene.updateMatrixWorld();
-  assert.equal(instrumented.crossings, 1, 'text replacement and demanded measurement must share one text_update');
+  assert.equal(instrumented.measureCrossings, 1, 'the text setter owns the only preparation crossing');
+  assert.equal(instrumented.crossings, 1, 'the render traversal publishes that preparation once');
   const replacedDraws = rootDraws(scene);
   assert.equal(replacedDraws.length, 1);
   assert.equal(replacedDraws[0].geometry.instanceCount, 5, 'the published command buffer must include the new glyph');
@@ -5412,7 +6460,7 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   font.dispose();
 });
 
-test('full assignments publish one replacement spanning distant character edits', async (t) => {
+test('full assignments prepare one complete replacement while Rust discovers distant edits', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   t.after(() => font.dispose());
@@ -5421,11 +6469,13 @@ test('full assignments publish one replacement spanning distant character edits'
   scene.add(text);
   scene.updateMatrixWorld();
   text.set({ text: 'Alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|JulieT' });
-  scene.updateMatrixWorld();
-  assert.equal(text.commitState().status, 'committed');
-  assert.deepEqual(instrumentedGlyph.latestTextMutations(), [
+  assert.deepEqual(instrumentedGlyph.latestPreparationTextMutations(), [
     { start: 0, deleteCount: 62, insert: 'Alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|JulieT' },
   ]);
+  assert.equal(text.measure().glyphCount, 62, 'the prepared revision is readable before publication');
+  scene.updateMatrixWorld();
+  assert.equal(text.commitState().status, 'committed');
+  assert.deepEqual(instrumentedGlyph.latestTextMutations(), [], 'publication does not replay the assignment');
 });
 
 test('sibling measurement terminates after expansion sparse replacement and shrink assignments', async (t) => {
@@ -5783,6 +6833,31 @@ function instrumentNextGlyphEngine() {
         };
       });
     },
+    latestPreparationTextMutations() {
+      assert.ok(latestMeasurementRequest, 'a paragraph preparation request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      const mutation = abi.layouts.engineTextMutation;
+      const view = new DataView(
+        latestMeasurementRequest.buffer,
+        latestMeasurementRequest.byteOffset,
+        latestMeasurementRequest.byteLength,
+      );
+      const offset = view.getUint32(request.textMutationsOffset, true);
+      const count = view.getUint32(request.textMutationCount, true);
+      return Array.from({ length: count }, (_recordValue, index) => {
+        const record = offset + index * mutation.size;
+        const insertOffset = view.getUint32(record + mutation.insertOffset, true);
+        const insertCount = view.getUint32(record + mutation.insertCount, true);
+        const insert = String.fromCharCode(
+          ...Array.from({ length: insertCount }, (_unitValue, unit) => view.getUint16(insertOffset + unit * 2, true)),
+        );
+        return {
+          start: view.getUint32(record + mutation.textStart, true),
+          deleteCount: view.getUint32(record + mutation.deleteCount, true),
+          insert,
+        };
+      });
+    },
   };
 }
 
@@ -5878,53 +6953,203 @@ test('repeated public Text.set assignments match freshly published semantic glyp
   }
 });
 
-test('renderer rejection preserves Text.set semantic output through explicit retry', async (t) => {
+test('renderer rejection preserves raw falsy values and Text.set output through explicit retry', async (t) => {
   const warmThree = await createThreeTestHandle(t);
   const freshThree = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   t.after(() => font.dispose());
-  let rejectMaterial = true;
-  const material = defineTextMaterial((context) => {
-    if (rejectMaterial) throw new Error('deliberate sparse assignment publication rejection');
-    return context.createDefaultMaterial();
-  });
-  const warmScene = new THREE.Scene();
-  const freshScene = new THREE.Scene();
-  const group = warmThree.createTextGroup();
-  const warm = warmThree.createText({
-    font,
-    text: 'alpha|bravo|charlie|delta|echo|foxtrot',
-    constraints: { width: { mode: 'exact', size: 220 } },
-    layout: { wrap: 'word' },
-  });
-  group.add(warm);
-  warmScene.add(group);
-  warmScene.updateMatrixWorld(true);
   const next = 'Alpha|bravo|charlie|delta|echo|foxtroT';
-  warm.set({ text: next, material });
-  warmScene.updateMatrixWorld(true);
-  assert.match(String(group.error), /deliberate sparse assignment publication rejection/u);
+  const rendererSnapshot = (scene, rootName) =>
+    rootDraws(scene, rootName).map((draw) => ({
+      instanceCount: draw.geometry.instanceCount,
+      renderOrder: draw.renderOrder,
+    }));
 
-  const fresh = freshThree.createText({
-    font,
-    text: next,
-    constraints: { width: { mode: 'exact', size: 220 } },
-    layout: { wrap: 'word' },
+  for (const [index, rejection] of [0, false, '', null, undefined].entries()) {
+    const rootName = `raw-rejection-${String(index)}`;
+    const warmRoot = warmThree(rootName);
+    const freshRoot = freshThree(rootName);
+    let rejectMaterial = true;
+    const material = defineTextMaterial((context) => {
+      if (rejectMaterial) throw rejection;
+      return context.createDefaultMaterial();
+    });
+    const warmScene = new THREE.Scene();
+    const freshScene = new THREE.Scene();
+    const group = warmRoot.createTextGroup();
+    const freshGroup = freshRoot.createTextGroup();
+    const warm = warmRoot.createText({
+      font,
+      text: next,
+      material,
+      constraints: { width: { mode: 'exact', size: 220 } },
+      layout: { wrap: 'word' },
+    });
+    const fresh = freshRoot.createText({
+      font,
+      text: next,
+      constraints: { width: { mode: 'exact', size: 220 } },
+      layout: { wrap: 'word' },
+    });
+    const reported = [];
+    group.onError = (error) => reported.push(error);
+    group.add(warm);
+    freshGroup.add(fresh);
+    warmScene.add(group);
+    freshScene.add(freshGroup);
+
+    try {
+      let caught = false;
+      let caughtValue;
+      try {
+        glyph.shape();
+      } catch (error) {
+        caught = true;
+        caughtValue = error;
+      }
+      assert.equal(caught, true, `case ${String(index)} must reject the top-level shape call`);
+      assert.equal(Object.is(caughtValue, rejection), true, `case ${String(index)} preserves the thrown identity`);
+      assert.equal(Object.is(group.error, rejection), true, `case ${String(index)} preserves TextGroup.error`);
+      assert.equal(Object.is(warm.error, rejection), true, `case ${String(index)} preserves Text.error`);
+      assert.equal(warm.commitState().status, 'failed', `case ${String(index)} records rejection presence`);
+      assert.equal(
+        Object.is(warm.commitState().error, rejection),
+        true,
+        `case ${String(index)} retains an explicitly thrown undefined`,
+      );
+      assert.equal(reported.length, 1, `case ${String(index)} reports once`);
+      assert.equal(Object.is(reported[0], rejection), true, `case ${String(index)} preserves onError identity`);
+      assertPublicSemanticLayoutEqual(warm, fresh, `raw rejection ${String(index)}`);
+
+      rejectMaterial = false;
+      warm.set({ material });
+      glyph.shape();
+      warmScene.updateMatrixWorld(true);
+      freshScene.updateMatrixWorld(true);
+      assert.equal(group.error, undefined, `case ${String(index)} clears the accepted retry error`);
+      assert.equal(warm.commitState().status, 'committed', `case ${String(index)} commits after retry`);
+      assert.deepEqual(
+        rendererSnapshot(warmScene, rootName),
+        rendererSnapshot(freshScene, rootName),
+        `case ${String(index)} accepted renderer output matches cold construction`,
+      );
+      assertPublicSemanticLayoutEqual(warm, fresh, `raw rejection retry ${String(index)}`);
+    } finally {
+      warm.dispose();
+      fresh.dispose();
+      group.dispose();
+      freshGroup.dispose();
+    }
+  }
+});
+
+test('two real roots aggregate distinct raw renderer rejections in participant order and retry cold', async (t) => {
+  const warmThree = await createThreeTestHandle(t);
+  const coldThree = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+  const rootNames = ['aggregate-raw-a', 'aggregate-raw-b'];
+  const warmRoots = rootNames.map((name) => warmThree(name));
+  const coldRoots = rootNames.map((name) => coldThree(name));
+  const warmScene = new THREE.Scene();
+  const coldScene = new THREE.Scene();
+  const warmGroups = warmRoots.map((root) => root.createTextGroup());
+  const coldGroups = coldRoots.map((root) => root.createTextGroup());
+  const baselineTexts = ['first accepted root', 'second accepted root'];
+  const desiredTexts = ['first prepared root with replacement', 'second prepared root with replacement'];
+  const warmTexts = warmRoots.map((root, index) => root.createText({ font, text: baselineTexts[index] }));
+  const coldTexts = coldRoots.map((root, index) => root.createText({ font, text: desiredTexts[index] }));
+  for (let index = 0; index < warmGroups.length; index += 1) {
+    warmGroups[index].add(warmTexts[index]);
+    coldGroups[index].add(coldTexts[index]);
+    warmScene.add(warmGroups[index]);
+    coldScene.add(coldGroups[index]);
+  }
+  warmScene.updateMatrixWorld(true);
+  coldScene.updateMatrixWorld(true);
+
+  const rendererSnapshot = (scene, rootName) =>
+    rootDraws(scene, rootName).map((draw) => ({
+      instanceCount: draw.geometry.instanceCount,
+      renderOrder: draw.renderOrder,
+    }));
+  const acceptedBefore = rootNames.map((name) => rendererSnapshot(warmScene, name));
+  const rejectionValues = [undefined, false];
+  const reject = [true, true];
+  const materials = rejectionValues.map((value, index) =>
+    defineTextMaterial((context) => {
+      if (reject[index]) throw value;
+      return context.createDefaultMaterial();
+    }),
+  );
+  const reported = [[], []];
+  warmGroups.forEach((group, index) => {
+    group.onError = (error) => reported[index].push(error);
   });
-  freshScene.add(fresh);
-  freshScene.updateMatrixWorld(true);
-  assertPublicSemanticLayoutEqual(warm, fresh, 'renderer-rejected assignment');
 
-  rejectMaterial = false;
-  warm.set({ material });
-  warmScene.updateMatrixWorld(true);
-  assert.equal(group.error, undefined, 'explicit material invalidation must retry the rejected publication');
-  assert.equal(rootDraws(warmScene).length, 1, 'the successful retry must realize the retained paragraph');
-  assertPublicSemanticLayoutEqual(warm, fresh, 'explicit retry');
+  try {
+    for (let index = 0; index < warmTexts.length; index += 1) {
+      warmTexts[index].set({ text: desiredTexts[index], material: materials[index] });
+    }
+    let caught = false;
+    let caughtValue;
+    try {
+      glyph.shape();
+    } catch (error) {
+      caught = true;
+      caughtValue = error;
+    }
+    assert.equal(caught, true, 'two rejecting roots throw from the explicit shape boundary');
+    assert.equal(caughtValue instanceof AggregateError, true, 'multiple roots use AggregateError only at aggregation');
+    assert.equal(caughtValue.errors.length, 2, 'exactly one raw error is retained for each rejecting root');
+    assert.equal(Object.is(caughtValue.errors[0], rejectionValues[0]), true, 'first participant retains undefined');
+    assert.equal(Object.is(caughtValue.errors[1], rejectionValues[1]), true, 'second participant retains false');
+    for (let index = 0; index < warmTexts.length; index += 1) {
+      const state = warmTexts[index].commitState();
+      assert.equal(state.status, 'failed', `root ${String(index)} records its renderer rejection`);
+      assert.equal(Object.is(state.error, rejectionValues[index]), true, `root ${String(index)} keeps raw identity`);
+      assert.equal(
+        Object.is(warmGroups[index].error, rejectionValues[index]),
+        true,
+        `root ${String(index)} attributes only its own group error`,
+      );
+      assert.equal(reported[index].length, 1, `root ${String(index)} notifies exactly once`);
+      assert.equal(
+        Object.is(reported[index][0], rejectionValues[index]),
+        true,
+        `root ${String(index)} notification preserves raw identity`,
+      );
+      assert.deepEqual(
+        rendererSnapshot(warmScene, rootNames[index]),
+        acceptedBefore[index],
+        `root ${String(index)} retains its last accepted renderer output`,
+      );
+      assertPublicSemanticLayoutEqual(warmTexts[index], coldTexts[index], `root ${String(index)} prepared semantics`);
+    }
 
-  group.dispose();
-  warm.dispose();
-  fresh.dispose();
+    reject.fill(false);
+    for (let index = 0; index < warmTexts.length; index += 1) {
+      warmTexts[index].set({ material: materials[index] });
+    }
+    glyph.shape();
+    warmScene.updateMatrixWorld(true);
+    coldScene.updateMatrixWorld(true);
+    for (let index = 0; index < warmTexts.length; index += 1) {
+      assert.equal(warmTexts[index].commitState().status, 'committed', `root ${String(index)} accepts explicit retry`);
+      assert.equal(warmGroups[index].error, undefined, `root ${String(index)} clears its attributed error`);
+      assert.deepEqual(
+        rendererSnapshot(warmScene, rootNames[index]),
+        rendererSnapshot(coldScene, rootNames[index]),
+        `root ${String(index)} retry renderer output matches cold construction`,
+      );
+      assertPublicSemanticLayoutEqual(warmTexts[index], coldTexts[index], `root ${String(index)} retry semantics`);
+    }
+  } finally {
+    warmTexts.forEach((text) => text.dispose());
+    coldTexts.forEach((text) => text.dispose());
+    warmGroups.forEach((group) => group.dispose());
+    coldGroups.forEach((group) => group.dispose());
+  }
 });
 
 test('Text.measure answers attached first-frame state without traversing matrices or realizing draws', async (t) => {
@@ -5953,9 +7178,9 @@ test('Text.measure answers attached first-frame state without traversing matrice
   const secondMeasurement = second.measure();
   assert.ok(firstMeasurement.lineCount > 0);
   assert.ok(secondMeasurement.glyphCount > 0);
-  assert.equal(firstMeasurement.inkBounds, undefined, 'the fast measurement path does not position glyph ink');
+  assert.ok(firstMeasurement.inkBounds, 'setter-first measurement includes authoritative positioned ink');
   assert.equal(instrumentedGlyph.crossings, 0, 'measurement must not publish a full engine frame');
-  assert.equal(instrumentedGlyph.measureCrossings, 2, 'each new paragraph uses one scoped query');
+  assert.equal(instrumentedGlyph.measureCrossings, 0, 'reads consume the paragraphs already prepared by construction');
   assert.equal(group.gpuBytes, 0, 'measurement must not realize renderer buffers');
   assert.equal(group.children.length, 2, 'measurement must not add renderer draw objects');
   for (const [index, object] of [first, second, group, scene].entries()) {
@@ -5972,7 +7197,11 @@ test('Text.measure answers attached first-frame state without traversing matrice
     textShaperAbi.engine.resultFlags.checkpoint,
     "the planner's first render plan is necessarily its initial checkpoint",
   );
-  assert.equal(instrumentedGlyph.measureCrossings, 2, 'publication must not repeat the host measurement query');
+  assert.equal(
+    instrumentedGlyph.measureCrossings,
+    2,
+    'attachment prepares each changed presentation before renderer publication',
+  );
   assert.equal(first.commitState().status, 'committed');
   assert.equal(second.commitState().status, 'committed');
   assert.equal(first.boundingBox.isEmpty(), false, 'the first positioned publication must install ink bounds');
@@ -5981,7 +7210,7 @@ test('Text.measure answers attached first-frame state without traversing matrice
   assert.equal(
     instrumentedGlyph.measureCrossings,
     2,
-    'reading first-frame bounds must reuse the measurement published beside the render plan',
+    'reading first-frame bounds must reuse the setter/binding preparation consumed by the render plan',
   );
 
   group.dispose();
@@ -5996,37 +7225,33 @@ test('Text.measure retains unpublished lifecycle but skips published paragraph u
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
   const group = three.createTextGroup();
-  const first = three.createText({ font, text: 'first query' });
-  const second = three.createText({ font, text: 'second query' });
+  const first = three.createText({ font, text: 'first preparation' });
+  const second = three.createText({ font, text: 'second preparation' });
   group.add(first, second);
   scene.add(group);
   scene.updateMatrixWorld(true);
 
-  first.text = 'first unchanged-order query';
   instrumentedGlyph.reset();
+  first.text = 'first unchanged-order preparation';
+  const semanticPreparationCounts = instrumentedGlyph.latestMeasurementRequestCounts();
   assert.ok(first.measure().glyphCount > 0);
-  const semanticQueryCounts = instrumentedGlyph.latestMeasurementRequestCounts();
-  assert.equal(semanticQueryCounts.paragraph, 0, 'a published target needs no repeated paragraph lifecycle rows');
-  assert.equal(semanticQueryCounts.paragraphOrder, 0, 'a semantic query does not resend stable rank rows');
+  assert.equal(semanticPreparationCounts.paragraph, 0, 'a published target needs no repeated paragraph lifecycle rows');
+  assert.equal(semanticPreparationCounts.paragraphOrder, 0, 'semantic preparation does not resend stable rank rows');
+  assert.equal(instrumentedGlyph.measureCrossings, 1, 'the following measure consumes the setter preparation');
 
   first.renderOrder = 2;
   second.renderOrder = 1;
-  first.text = 'first ranked query';
-  second.text = 'second ranked query';
   instrumentedGlyph.reset();
+  first.text = 'first ranked preparation';
+  second.text = 'second ranked preparation';
   assert.ok(first.measure().glyphCount > 0);
-  assert.deepEqual(
-    instrumentedGlyph.latestMeasurementParagraphOrderMutations().map(({ orderRank }) => orderRank),
-    [2, 1],
-    'a scoped query serializes every rank still pending publication',
-  );
   assert.ok(second.measure().glyphCount > 0);
   assert.deepEqual(
     instrumentedGlyph.latestMeasurementParagraphOrderMutations().map(({ orderRank }) => orderRank),
-    [2, 1],
-    'successive speculative queries retain the same pending rank transaction',
+    [],
+    'setter preparation leaves renderer rank changes for publication',
   );
-  assert.equal(instrumentedGlyph.crossings, 0, 'queries do not publish a full frame');
+  assert.equal(instrumentedGlyph.crossings, 0, 'preparation and reads do not publish a full frame');
   assert.equal(instrumentedGlyph.measureCrossings, 2);
 
   scene.updateMatrixWorld(true);
@@ -6041,6 +7266,7 @@ test('Text.readGlyphs demand-reads scalar records only inside one synchronous bo
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const label = three.createText({ font, text: 'Borrowed glyph records wrap across two lines' });
   label.constraints = { width: { mode: 'exact', size: 140 } };
+  const preparedSemanticRecords = instrumentedGlyph.latestSemanticRecordCount;
   instrumentedGlyph.reset();
   let escaped;
   let glyphCount = 0;
@@ -6061,7 +7287,9 @@ test('Text.readGlyphs demand-reads scalar records only inside one synchronous bo
   });
 
   assert.equal(returned, answer, 'the callback result retains its identity');
-  assert.equal(instrumentedGlyph.latestSemanticRecordCount, 0, 'borrow setup serializes no semantic records');
+  assert.equal(instrumentedGlyph.measureCrossings, 0, 'borrow setup consumes preparation without measuring again');
+  assert.equal(instrumentedGlyph.crossings, 0, 'borrow setup does not publish');
+  assert.equal(instrumentedGlyph.latestSemanticRecordCount, preparedSemanticRecords, 'borrow setup emits no sidecar');
   assert.equal(instrumentedGlyph.borrowedGlyphReads, 2, 'only explicitly selected glyphs cross the Wasm ABI');
   const owned = label.glyphs();
   assert.equal(glyphCount, owned.glyphCount);
@@ -6103,7 +7331,7 @@ test('Text.readGlyphs demand-reads scalar records only inside one synchronous bo
   font.dispose();
 });
 
-test('Text.readGlyphs promotes repeated reads to a cached callback-scoped inspection', async (t) => {
+test('Text.readGlyphs reuses setter preparation without a query-side promotion pass', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
@@ -6118,34 +7346,35 @@ test('Text.readGlyphs promotes repeated reads to a cached callback-scoped inspec
   const firstGlyphId = label.readGlyphs((layout) => layout.glyphAt(0).glyphId);
   const secondGlyphId = label.readGlyphs((layout) => layout.glyphAt(0).glyphId);
   assert.equal(firstGlyphId, secondGlyphId);
-  assert.equal(instrumentedGlyph.measureCrossings, 2, 'the second borrow promotes one canonical inspection');
-  assert.equal(instrumentedGlyph.borrowedGlyphReads, 1, 'the promoted borrow reads its scalar from cached columns');
+  assert.equal(instrumentedGlyph.measureCrossings, 0, 'unchanged borrows never prepare again');
+  assert.equal(instrumentedGlyph.borrowedGlyphReads, 2, 'each selected scalar is read from the prepared arena');
 
   instrumentedGlyph.reset();
   assert.equal(
     label.readGlyphs((layout) => layout.glyphAt(0).glyphId),
     firstGlyphId,
   );
-  assert.equal(instrumentedGlyph.measureCrossings, 0, 'unchanged promoted borrows stay inside JS');
-  assert.equal(instrumentedGlyph.borrowedGlyphReads, 0);
+  assert.equal(instrumentedGlyph.measureCrossings, 0, 'unchanged borrows stay on the prepared revision');
+  assert.equal(instrumentedGlyph.borrowedGlyphReads, 1);
 
-  label.text = 'Dirty';
   instrumentedGlyph.reset();
+  label.text = 'Dirty';
+  assert.equal(instrumentedGlyph.measureCrossings, 1, 'the setter performs the revision preparation');
   assert.equal(
     label.readGlyphs((layout) => layout.glyphCount),
     5,
   );
-  assert.equal(instrumentedGlyph.measureCrossings, 1, 'the first borrow after an edit remains sparse');
+  assert.equal(instrumentedGlyph.measureCrossings, 1, 'the first borrow after an edit reuses preparation');
   assert.equal(
     label.readGlyphs((layout) => layout.glyphCount),
     5,
   );
-  assert.equal(instrumentedGlyph.measureCrossings, 2, 'the second unchanged borrow promotes the new revision');
+  assert.equal(instrumentedGlyph.measureCrossings, 1, 'the second unchanged borrow still does not prepare');
   assert.equal(
     label.readGlyphs((layout) => layout.glyphCount),
     5,
   );
-  assert.equal(instrumentedGlyph.measureCrossings, 2, 'the promoted revision stays cached');
+  assert.equal(instrumentedGlyph.measureCrossings, 1, 'all unchanged reads consume one setter-owned revision');
 
   const measurement = label.measure();
   assert.equal(measurement.x, undefined, 'measure does not expose the canonical inspection columns');
@@ -6162,6 +7391,138 @@ test('Text.readGlyphs promotes repeated reads to a cached callback-scoped inspec
   group.dispose();
   label.dispose();
   font.dispose();
+});
+
+test('Text.readGlyphs promotes actual dense demand before the next callback and invalidates on successful edits', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const label = three.createText({ font, text: 'Dense borrowed demand' });
+  const count = label.measure().glyphCount;
+  assert.ok(count > 4);
+  instrumentedGlyph.reset();
+  for (let read = 0; read < count * 2; read += 1) {
+    label.readGlyphs((layout) => {
+      assert.equal(layout.glyphCount, count);
+      assert.throws(() => layout.glyphAt(-1), RangeError);
+      assert.throws(() => layout.outlineAt(count), RangeError);
+    });
+  }
+  assert.equal(instrumentedGlyph.borrowedGlyphReads, 0, 'descriptor and rejected reads create no dense demand');
+  let escaped;
+  assert.throws(
+    () =>
+      label.readGlyphs((layout) => {
+        escaped = layout;
+        layout.glyphAt(0);
+        throw new Error('after successful record');
+      }),
+    /after successful record/,
+  );
+  assert.equal(instrumentedGlyph.borrowedGlyphReads, 1);
+  assert.throws(() => escaped.glyphAt(0), /expired/);
+  assert.equal(instrumentedGlyph.borrowedGlyphReads, 1, 'expired reads create no demand');
+  const records = label.readGlyphs((layout) => {
+    const result = [];
+    for (let index = 1; index < count; index += 1) result.push(layout.glyphAt(index));
+    return result;
+  });
+  assert.equal(
+    instrumentedGlyph.borrowedGlyphReads,
+    count,
+    'the first full demand remains sparse until its callback ends',
+  );
+  label.readGlyphs((layout) => {
+    assert.equal(
+      instrumentedGlyph.borrowedGlyphReads,
+      count * 2,
+      'promotion completes before the next caller callback',
+    );
+    records.forEach((record, index) => assert.deepEqual(layout.glyphAt(index + 1), record));
+    assert.throws(() => label.set({ text: 'inside owned borrow' }), /cannot be reentered/);
+  });
+  assert.equal(instrumentedGlyph.borrowedGlyphReads, count * 2, 'owned callbacks cross no record ABI');
+  assert.throws(() => label.set({ constraints: { width: { mode: 'exact', size: NaN } } }), RangeError);
+  instrumentedGlyph.reset();
+  assert.deepEqual(
+    label.readGlyphs((layout) => layout.glyphAt(1)),
+    records[0],
+  );
+  assert.equal(instrumentedGlyph.borrowedGlyphReads, 0, 'a rejected setter preserves owned columns');
+  const copy = label.glyphs();
+  copy.glyphIds.fill(0);
+  assert.ok(label.readGlyphs((layout) => layout.glyphAt(0).glyphId) > 0, 'caller copies cannot modify owned columns');
+  for (const text of ['Sparse edited demand', 'Sparse edited again']) {
+    label.text = text;
+    instrumentedGlyph.reset();
+    label.readGlyphs((layout) => layout.glyphAt(0));
+    assert.equal(instrumentedGlyph.borrowedGlyphReads, 1, 'each successful edit resets dense demand');
+  }
+  label.dispose();
+  assert.throws(() => label.readGlyphs(() => undefined), /disposed/);
+  font.dispose();
+});
+
+test('seeded inspection demand remains equal to cold recomputation across edits and rejected callbacks', async (t) => {
+  const warmThree = await createThreeTestHandle(t);
+  const coldThree = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const warm = warmThree.createText({ font, text: 'seeded inspection initial' });
+  let seed = 0x247_1d;
+  let text = warm.text;
+  let style = { fontSize: 16, color: '#ff0000' };
+  let constraints = { width: { mode: 'exact', size: 220 } };
+  try {
+    for (let step = 0; step < 12; step += 1) {
+      seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0;
+      if (step % 3 === 0) text = `seeded ${String(seed)} inspection text`;
+      else if (step % 3 === 1) constraints = { width: { mode: 'exact', size: 90 + (seed % 160) } };
+      else style = { fontSize: 16 + (seed % 4), color: (seed & 1) === 0 ? '#00ff00' : '#0000ff' };
+      warm.set({ text, style, constraints });
+      const cold = coldThree.createText({ font, text, style, constraints });
+      try {
+        const expected = cold.glyphs();
+        const index = seed % expected.glyphCount;
+        let escaped;
+        const callbackFailure = new Error(`inspection callback ${String(step)}`);
+        assert.throws(
+          () =>
+            warm.readGlyphs((layout) => {
+              escaped = layout;
+              assert.equal(layout.glyphAt(index).glyphId, expected.glyphIds[index]);
+              throw callbackFailure;
+            }),
+          (error) => error === callbackFailure,
+        );
+        assert.throws(() => escaped.glyphAt(index), /expired/);
+        assert.throws(
+          () => warm.set({ text: 'rejected candidate', constraints: { width: { mode: 'exact', size: NaN } } }),
+          RangeError,
+        );
+        assert.equal(warm.text, text, 'a rejected setter preserves the inspected preparation');
+        warm.readGlyphs((layout) => {
+          for (let ordinal = 0; ordinal < layout.glyphCount; ordinal += 1) {
+            assert.equal(layout.glyphAt(ordinal).glyphId, expected.glyphIds[ordinal]);
+          }
+        });
+        const warmOutline = captureThrown(() => warm.readGlyphs((layout) => layout.outlineAt(index)));
+        const coldOutline = captureThrown(() => cold.readGlyphs((layout) => layout.outlineAt(index)));
+        assert.equal(warmOutline.present, true, 'the bitmap fixture intentionally omits optional outlines');
+        assert.equal(coldOutline.present, true);
+        assert.equal(warmOutline.error.constructor, coldOutline.error.constructor);
+        assert.equal(String(warmOutline.error), String(coldOutline.error), `step ${String(step)} missing outline`);
+        assertPublicSemanticLayoutEqual(warm, cold, `inspection sequence ${String(step)}`);
+        const copy = warm.glyphs();
+        copy.glyphIds.fill(0);
+        copy.x.fill(12345);
+        assertPublicSemanticLayoutEqual(warm, cold, `copy independence ${String(step)}`);
+      } finally {
+        cold.dispose();
+      }
+    }
+  } finally {
+    warm.dispose();
+    font.dispose();
+  }
 });
 
 test('Text.readGlyphs keeps sparse borrowing when canonical inspection exceeds the output limit', async (t) => {
@@ -6199,7 +7560,7 @@ test('empty Text bounding boxes cache their valid measurement', async (t) => {
 
   assert.equal(label.computeBoundingBox().isEmpty(), true);
   assert.equal(label.computeBoundingBox().isEmpty(), true);
-  assert.equal(instrumentedGlyph.measureCrossings, 1, 'a valid empty box stays current');
+  assert.equal(instrumentedGlyph.measureCrossings, 0, 'the setter-prepared empty box stays current without a query');
 
   label.dispose();
   font.dispose();
@@ -6231,13 +7592,9 @@ test('Three Box3 measures transformed Text and TextGroup ink without adding scen
     const preRenderBox = new THREE.Box3().setFromObject(first);
     const preRenderMeasurement = first.measure();
     assert.equal(preRenderBox.isEmpty(), false, 'Box3 positions ink before the first rendered frame');
-    assert.ok(preRenderMeasurement.inkBounds, 'the pre-render query caches authoritative ink bounds');
-    assert.equal(instrumentedGlyph.measureCrossings, 1, 'Box3 uses one positioned measurement query');
-    assert.equal(
-      instrumentedGlyph.latestSemanticRecordCount,
-      preRenderMeasurement.lineCount + 1,
-      'Box3 does not serialize per-glyph inspection records',
-    );
+    assert.ok(preRenderMeasurement.inkBounds, 'the pre-render preparation caches authoritative ink bounds');
+    assert.equal(instrumentedGlyph.measureCrossings, 0, 'Box3 reads setter-prepared positioned ink');
+    assert.equal(instrumentedGlyph.crossings, 0, 'pre-render Box3 does not publish');
     assertSameBox(preRenderBox, expectedWorldBox(first), 'pre-render Text');
 
     scene.updateMatrixWorld(true);
@@ -6298,7 +7655,7 @@ test('Three Box3 measures transformed Text and TextGroup ink without adding scen
   }
 });
 
-test('root-owned Text.measure creates only its implicit measurement batch before traversal', async (t) => {
+test('root-owned Text.measure reads its setter preparation before traversal', async (t) => {
   const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
   const font = await fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
@@ -6311,12 +7668,12 @@ test('root-owned Text.measure creates only its implicit measurement batch before
 
   assert.ok(label.measure().glyphCount > 0);
   assert.equal(instrumentedGlyph.crossings, 0);
-  assert.equal(instrumentedGlyph.measureCrossings, 1);
+  assert.equal(instrumentedGlyph.measureCrossings, 0);
   const inspection = label.glyphs();
   assert.ok(inspection.inkBounds, 'explicit positioned inspection provides pre-frame ink bounds');
-  assert.equal(instrumentedGlyph.measureCrossings, 2);
+  assert.equal(instrumentedGlyph.measureCrossings, 0, 'glyph inspection consumes the current preparation');
   assert.equal(label.boundingBox.isEmpty(), false);
-  assert.equal(instrumentedGlyph.measureCrossings, 2, 'the Three box reuses the positioned inspection');
+  assert.equal(instrumentedGlyph.measureCrossings, 0, 'the Three box reuses the positioned inspection');
   assert.equal(label.gpuBytes, 0);
   assert.equal(label.children.length, 0);
   for (const [index, object] of [label, scene].entries()) {
@@ -6328,8 +7685,8 @@ test('root-owned Text.measure creates only its implicit measurement batch before
   assert.equal(instrumentedGlyph.crossings, 1);
   assert.equal(
     instrumentedGlyph.measureCrossings,
-    2,
-    'publication adopts the explicit queries instead of repeating them',
+    0,
+    'publication consumes the bound preparation instead of repeating it',
   );
   assert.equal(label.commitState().status, 'committed');
 
@@ -6338,13 +7695,13 @@ test('root-owned Text.measure creates only its implicit measurement batch before
   fontDomain.dispose();
 });
 
-test('layout queries do not retain unrelated detached Texts', async (t) => {
+test('measurement bindings do not retain unrelated detached Texts', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
   const group = three.createTextGroup();
   const detached = three.createText({ font, text: 'detached sibling' });
-  const attached = three.createText({ font, text: 'attached query target' });
+  const attached = three.createText({ font, text: 'attached preparation target' });
   group.add(detached, attached);
   scene.add(group);
   scene.updateMatrixWorld(true);
@@ -6361,10 +7718,10 @@ test('layout queries do not retain unrelated detached Texts', async (t) => {
   assert.ok(attached.glyphs().glyphCount > 0);
   assert.equal(detached.bound, false, 'inspecting a sibling cannot retain an unrelated detached Text');
 
-  assert.ok(detached.measure().glyphCount > 0, 'the explicitly queried detached Text remains measurable');
+  assert.ok(detached.measure().glyphCount > 0, 'the explicitly rebound detached Text remains measurable');
   assert.equal(detached.bound, true);
   scene.updateMatrixWorld(true);
-  assert.equal(detached.bound, false, 'the next draw removes only the explicitly queried detached Text');
+  assert.equal(detached.bound, false, 'the next draw removes only the explicitly rebound detached Text');
   assert.equal(attached.bound, true);
 
   detached.dispose();
@@ -6373,7 +7730,7 @@ test('layout queries do not retain unrelated detached Texts', async (t) => {
   font.dispose();
 });
 
-test('alternating detached measurements retire one bounded speculative lifecycle', async (t) => {
+test('alternating detached measurements retain one bounded prepared lifecycle', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const first = three.createText({ font, text: 'first detached query' });
@@ -6384,78 +7741,69 @@ test('alternating detached measurements retire one bounded speculative lifecycle
   scene.remove(first, second);
   first.style = { ...first.style, fontSize: 17 };
   second.style = { ...second.style, fontSize: 17 };
+  const initialRequestCounts = instrumentedGlyph.latestMeasurementRequestCounts();
   instrumentedGlyph.reset();
 
   const firstMeasurement = first.measure();
   assert.equal(firstMeasurement.glyphCount, 20);
-  assert.equal(second.bound, false, 'querying the first Text must not bind its detached sibling');
+  assert.equal(second.bound, true, 'the sibling keeps its setter-prepared binding');
   assert.equal(second.measure().glyphCount, 21);
-  assert.equal(first.bound, false, 'querying the second Text must not bind its detached sibling');
-  const initialRequestCounts = instrumentedGlyph.latestMeasurementRequestCounts();
-  assert.ok(initialRequestCounts.paragraph <= 2, 'the speculative lifecycle stays bounded to the two query targets');
-  assert.equal(instrumentedGlyph.measureCrossings, 2, 'each paragraph incurs one initial query');
+  assert.equal(first.bound, true, 'reads retain the first setter-prepared binding');
+  assert.ok(initialRequestCounts.paragraph <= 2, 'the prepared lifecycle stays bounded to the two query targets');
+  assert.equal(instrumentedGlyph.measureCrossings, 0, 'reads perform no preparation after the setters');
   assert.equal(first.measure(), firstMeasurement, 'returning to the first Text must reuse its controller measurement');
-  assert.equal(instrumentedGlyph.measureCrossings, 2, 'alternation must not recreate the first paragraph');
+  assert.equal(instrumentedGlyph.measureCrossings, 0, 'alternation must not recreate the first paragraph');
 
   for (let iteration = 0; iteration < 8_193; iteration += 1) {
     const target = iteration % 2 === 0 ? first : second;
     const unrelated = target === first ? second : first;
     assert.equal(target.measure().glyphCount, target === first ? 20 : 21);
-    assert.equal(target.bound, true, 'the explicitly queried Text remains bound to its query controller');
-    assert.equal(unrelated.bound, false, 'an alternating query must leave its detached sibling unbound');
+    assert.equal(target.bound, true, 'the explicitly measured Text remains bound to its measurement controller');
+    assert.equal(unrelated.bound, true, 'an alternating measurement preserves the prepared sibling');
   }
 
-  assert.equal(instrumentedGlyph.crossings, 0, 'queries must not publish renderer work');
-  assert.equal(instrumentedGlyph.measureCrossings, 2, 'cached siblings must not be destroyed and remeasured');
+  assert.equal(instrumentedGlyph.crossings, 0, 'measurements must not publish renderer work');
+  assert.equal(instrumentedGlyph.measureCrossings, 0, 'cached siblings must not be destroyed and remeasured');
 
   for (let iteration = 0; iteration < 8_193; iteration += 1) {
     const target = iteration % 2 === 0 ? first : second;
     const unrelated = target === first ? second : first;
     assert.equal(target.glyphs().glyphCount, target === first ? 20 : 21);
-    assert.equal(target.bound, true, 'the explicitly inspected Text remains bound to its query controller');
-    assert.equal(unrelated.bound, false, 'an alternating inspection must leave its detached sibling unbound');
+    assert.equal(target.bound, true, 'the explicitly inspected Text remains bound to its measurement controller');
+    assert.equal(unrelated.bound, true, 'an alternating inspection preserves the prepared sibling');
   }
 
-  assert.equal(instrumentedGlyph.measureCrossings, 4, 'each controller performs one positioning upgrade');
-  assert.deepEqual(
-    instrumentedGlyph.latestMeasurementRequestCounts(),
-    initialRequestCounts,
-    'alternation beyond the paragraph-mutation limit must not accumulate lifecycle rows',
-  );
-  assert.equal(three.textCount, 2, 'query alternation must preserve both root-owned Text lifetimes');
+  assert.equal(instrumentedGlyph.measureCrossings, 0, 'glyph reads reuse each setter preparation');
+  assert.equal(instrumentedGlyph.crossings, 0, 'alternation beyond the mutation limit performs no publication');
+  assert.equal(three.textCount, 2, 'measurement alternation must preserve both root-owned Text lifetimes');
 
   first.text = 'first detached query changed';
   assert.equal(first.measure().glyphCount, 28, 'a semantic mutation invalidates the controller measurement');
-  assert.equal(instrumentedGlyph.measureCrossings, 5, 'the changed paragraph incurs exactly one new query');
-  assert.equal(second.bound, false);
+  assert.equal(instrumentedGlyph.measureCrossings, 1, 'the changed paragraph incurs exactly one new preparation');
+  assert.equal(second.bound, true);
 
   first.style = { ...first.style, fontSize: 20 };
   assert.equal(first.measure().glyphCount, 28, 'a style mutation invalidates the controller measurement');
-  assert.equal(instrumentedGlyph.measureCrossings, 6, 'the changed style incurs exactly one new query');
+  assert.equal(instrumentedGlyph.measureCrossings, 2, 'the changed style incurs exactly one new preparation');
   first.font = font;
   assert.equal(first.measure().glyphCount, 28, 'a font mutation invalidates the controller measurement');
-  assert.equal(instrumentedGlyph.measureCrossings, 7, 'the changed font selection incurs exactly one new query');
+  assert.equal(instrumentedGlyph.measureCrossings, 3, 'the changed font selection incurs exactly one new preparation');
 
   scene.add(first, second);
   scene.updateMatrixWorld(true);
   assert.equal(instrumentedGlyph.crossings, 1, 'later attachment publishes both Texts in one frame');
-  assert.ok(instrumentedGlyph.latestRequestCounts().paragraph <= 3, 'publication retires at most one query paragraph');
+  assert.equal(
+    instrumentedGlyph.latestRequestCounts().paragraph,
+    0,
+    'binding preparations retire the detached paragraph and create both attached paragraphs before publication',
+  );
   const paragraphMutations = instrumentedGlyph.latestParagraphMutations();
-  const opcodes = textShaperAbi.engine.paragraphMutationOpcodes;
-  assert.equal(
-    paragraphMutations.filter(({ opcode }) => opcode === opcodes.remove).length,
-    1,
-    'attachment evicts exactly the one detached query-cache paragraph',
-  );
-  assert.equal(
-    paragraphMutations.filter(({ opcode }) => opcode === opcodes.upsert).length,
-    2,
-    'attachment publishes exactly the two authored paragraphs',
-  );
+  assert.deepEqual(paragraphMutations, [], 'renderer publication replays no prepared lifecycle rows');
   assert.equal(first.bound, true);
   assert.equal(second.bound, true);
   assert.equal(first.commitState().status, 'committed');
   assert.equal(second.commitState().status, 'committed');
+  assert.equal(second.measure().glyphCount, 21, 'restored detached preparation settles with its own measurement');
 
   first.dispose();
   second.dispose();
@@ -6663,18 +8011,12 @@ test('one Three root atomically replaces child paragraphs without multiplying re
   group.add(...second);
   scene.updateMatrixWorld();
   assert.equal(group.error, undefined);
-  const paragraphMutations = instrumentedGlyph.latestParagraphMutations();
-  const opcodes = textShaperAbi.engine.paragraphMutationOpcodes;
-  assert.equal(paragraphMutations.filter(({ opcode }) => opcode === opcodes.remove).length, 2);
-  assert.equal(paragraphMutations.filter(({ opcode }) => opcode === opcodes.upsert).length, 3);
-  assert.ok(
-    paragraphMutations.every(({ flags, reserved0 }) => flags === 0 && reserved0 === 0),
-    'the retained planner owns zeroed paragraph mutation reserved fields',
+  assert.deepEqual(
+    instrumentedGlyph.latestParagraphMutations().map(({ opcode, order }) => ({ opcode, order })),
+    [0, 1, 2].map((order) => ({ opcode: textShaperAbi.engine.paragraphMutationOpcodes.upsert, order })),
+    'preparation settles removals while publication installs the complete replacement order',
   );
-  assert.ok(
-    paragraphMutations.filter(({ opcode }) => opcode === opcodes.remove).every(({ order }) => order === 0),
-    'the retained planner owns the canonical zero order for paragraph removals',
-  );
+  assert.equal(instrumentedGlyph.latestSemanticRecordCount, 0, 'publication does not replay prepared summaries');
   assert.equal(rootDraws(scene).length, 1);
   assert.equal(rootDraws(scene)[0].geometry.instanceCount, 3);
 
@@ -6706,8 +8048,7 @@ test('one Three root grows aggregate glyph storage without reserving one aggrega
   assert.equal(group.error, undefined);
   assert.equal(group.textCount, labels.length);
   assert.equal(rootDraws(scene).length, 1);
-  assert.equal(instrumentedGlyph.latestSemanticParagraphCount, labels.length);
-  const initialSemanticByteLength = instrumentedGlyph.latestSemanticByteLength;
+  assert.equal(instrumentedGlyph.latestSemanticRecordCount, 0, 'initial publication consumes setter summaries');
   const measurements = labels.map((label) => label.measure());
   assert.equal(labels[48].measure(), measurements[48], 'an unchanged attached Text reuses its measurement');
   let measurementPublications = 0;
@@ -6729,18 +8070,9 @@ test('one Three root grows aggregate glyph storage without reserving one aggrega
     scene.updateMatrixWorld();
     assert.equal(group.error, undefined, `recycling cycle ${String(cycle)} must remain publishable`);
     assert.equal(
-      instrumentedGlyph.latestSemanticParagraphCount,
-      48,
-      `recycling cycle ${String(cycle)} emits only dirty paragraph measurements`,
-    );
-    assert.equal(
       instrumentedGlyph.latestSemanticRecordCount,
-      96,
-      `recycling cycle ${String(cycle)} emits one summary and line per dirty paragraph`,
-    );
-    assert.ok(
-      instrumentedGlyph.latestSemanticByteLength < initialSemanticByteLength,
-      `recycling cycle ${String(cycle)} keeps the semantic publication smaller than first publication`,
+      0,
+      `recycling cycle ${String(cycle)} publishes no duplicate semantic records`,
     );
     assert.equal(
       measurementPublications,
@@ -6763,8 +8095,8 @@ test('one Three root grows aggregate glyph storage without reserving one aggrega
   fontDomain.dispose();
 });
 
-/** A geometry-only constraint change routes to the paragraph-scoped synchronous engine query — no full planner update, no publication flip — and the next ordinary frame adopts the speculative work without a checkpoint rebuild. */
-test('repeated layout under changing constraints stays on the paragraph query path', async (t) => {
+/** A geometry-only constraint setter commits paragraph-scoped preparation with no renderer publication flip; the next ordinary frame publishes the final prepared revision. */
+test('repeated layout under changing constraints stays on the paragraph preparation path', async (t) => {
   const abi = textShaperAbi;
   const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
@@ -6795,7 +8127,7 @@ test('repeated layout under changing constraints stays on the paragraph query pa
     assert.ok(measurement.lineCount >= 1, 'layout reports laid-out lines');
   }
   assert.equal(instrumentedGlyph.crossings, 0, 'measurement never drives a full engine update');
-  assert.equal(instrumentedGlyph.measureCrossings, widths.length, 'each constraint change measures through one query');
+  assert.equal(instrumentedGlyph.measureCrossings, widths.length, 'each constraint setter prepares exactly once');
   assert.equal(
     instrumentedGlyph.latestUpdateGeneration,
     committedGeneration,

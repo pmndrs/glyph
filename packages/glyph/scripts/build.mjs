@@ -4,6 +4,7 @@ import { chmod, copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm, stat } 
 import { basename, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { shaperBuildEnvironment, shaperCargoArguments, shaperOptimizationArguments } from './support/shaper-build.mjs';
 import { captureCommand } from './support/capture-command.mjs';
 import { rewritePublishedSourceMaps } from './support/published-source-maps.mjs';
 import { writeGeneratedTypescriptAbi } from './support/generated-typescript-abi.mjs';
@@ -72,11 +73,7 @@ const mtsdfArtifactTargetDirectory = fileURLToPath(
 const slugArtifactTargetDirectory = fileURLToPath(
   new URL('../rust/slug-baker/target/artifact-baker-wasm/', import.meta.url),
 );
-const shaperRustEnvironment = {
-  ...rustEnvironment,
-  CARGO_TARGET_DIR: shaperTargetDirectory,
-  CARGO_ENCODED_RUSTFLAGS: `${rustEnvironment.CARGO_ENCODED_RUSTFLAGS}\u001f-C\u001ftarget-feature=${shaperSimd ? '+simd128' : '-simd128'}`,
-};
+const shaperRustEnvironment = shaperBuildEnvironment(workspaceRoot, shaperTargetDirectory, shaperSimd);
 const mtsdfArtifactRustEnvironment = {
   ...rustEnvironment,
   CARGO_TARGET_DIR: mtsdfArtifactTargetDirectory,
@@ -232,21 +229,7 @@ await run(
   ],
   mtsdfArtifactRustEnvironment,
 );
-await run(
-  'cargo',
-  [
-    'build',
-    '--manifest-path',
-    'rust/shaper/Cargo.toml',
-    '--target',
-    'wasm32-unknown-unknown',
-    '--release',
-    '--locked',
-    '--no-default-features',
-    ...(shaperSimd ? ['--features', 'simd128'] : []),
-  ],
-  shaperRustEnvironment,
-);
+await run('cargo', shaperCargoArguments(shaperSimd), shaperRustEnvironment);
 await run(
   'cargo',
   [
@@ -293,18 +276,7 @@ await run(wasmOpt, [
   '-o',
   distributedWasm,
 ]);
-await run(wasmOpt, [
-  '--enable-bulk-memory',
-  '--enable-nontrapping-float-to-int',
-  ...(shaperSimd ? ['--enable-simd'] : []),
-  '--merge-similar-functions',
-  '-Oz',
-  '--merge-similar-functions',
-  '-Oz',
-  shaperWasm,
-  '-o',
-  distributedShaperWasm,
-]);
+await run(wasmOpt, [...shaperOptimizationArguments(shaperSimd), shaperWasm, '-o', distributedShaperWasm]);
 await run(wasmOpt, [
   '--enable-bulk-memory',
   '--enable-nontrapping-float-to-int',

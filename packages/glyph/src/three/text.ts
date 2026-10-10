@@ -36,7 +36,6 @@ import type {
 import {
   assertConstraints,
   assertParagraphLayout,
-  assertTextStyle,
   assertTextStyleFeatureRanges,
   normalizeGlyphBufferCapacity,
   normalizeTextFlow,
@@ -47,6 +46,7 @@ import {
   equalTextPropertySnapshots,
   isOwnedTextPropertySnapshot,
   reuseOrCreateTextPropertySnapshot,
+  reuseOrCreateTextStyleSnapshot,
 } from '../config/text-property.js';
 import { ThreeCommandBufferRenderer } from './command-buffer-renderer.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
@@ -365,6 +365,7 @@ export class ThreeRootHost {
   setMaterial(value: ThreeTextMaterial | undefined): void {
     this.#assertActive();
     if (this.#material === value) return;
+    this.assertMutationAllowed();
     this.#material = value;
     this.#binding?.invalidateMaterial();
   }
@@ -375,6 +376,7 @@ export class ThreeRootHost {
       | (Omit<StandaloneTextProperties<Format>, 'font'> & { readonly font: FontFaceSelection | string }),
   ): Text<Format> {
     this.#assertActive();
+    this.assertMutationAllowed();
     const selection = this.#resolveFontSelection(properties.font);
     if (!isFontFaceSelection(selection)) {
       return new Text(threeTextConstructionToken, properties as StandaloneTextProperties<Format>, [], this);
@@ -483,6 +485,7 @@ export class ThreeRootHost {
   /** @internal Register one retained leaf with this publication root. */
   register(text: THREE.Object3D): void {
     this.#assertActive();
+    this.assertMutationAllowed();
     this.#texts.add(text);
     try {
       this.#rootBinding().reconcile(this.members());
@@ -502,19 +505,21 @@ export class ThreeRootHost {
     if (text instanceof Text) this.#binding?.removeText(text);
     this.#texts.delete(text);
     if (this.#texts.size !== 0 || this.#binding === undefined) return;
-    const binding = this.#binding;
-    this.#binding = undefined;
-    try {
-      binding.dispose();
-    } finally {
-      this.#renderObject.removeFromParent();
-      this.#scene = undefined;
-    }
+    // Keep the root publisher alive until its queued Rust removals can settle.
+    // The empty adapter is reusable; root teardown remains its terminal owner.
+    this.#renderObject.removeFromParent();
+    this.#scene = undefined;
   }
 
   /** @internal Invalidate inherited material state after a TextGroup change. */
   invalidateMaterial(): void {
     this.#binding?.invalidateMaterial();
+  }
+
+  /** @internal Reject host-side mutation while this root owns a staged publication. */
+  assertMutationAllowed(): void {
+    this.#assertActive();
+    this.#services.assertMutationAllowed();
   }
 
   /** @internal Release one retiring group from presentation and attributed-error ownership. */
@@ -672,7 +677,9 @@ export class ThreeRootHost {
     if (this.#disposed) return;
     const texts = this.#renderMembers();
     try {
-      if (this.#binding?.needsReconcile(texts) === true) this.#services.invalidate();
+      if (!this.#services._isShapeQueued() && this.#binding?.needsReconcile(texts) === true) {
+        this.#services.invalidate();
+      }
     } catch (error) {
       if (!this.#ownsTraversalFailure(error)) this.#reportError(error, texts);
       return;
@@ -873,6 +880,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     if (host === undefined) {
       throw new TypeError('Three Text must be created by a Glyph Three root');
     }
+    host.assertMutationAllowed();
     assertNoRawSpans(properties, 'Text properties');
     const desired = normalizeDesired(properties);
     this.#ownedFonts = ownedFonts;
@@ -979,6 +987,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     ) {
       return false;
     }
+    this.#root.assertMutationAllowed();
     const next =
       updateKeys.length === 1 && updateKeys[0] === 'text' && typeof update.text === 'string'
         ? replaceDesiredString(this.#desired, update.text)
@@ -998,7 +1007,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return true;
   }
 
-  /** Measures current desired text without scene attachment or matrix traversal; a cache miss may synchronously incur font/measure lookup work. */
+  /** Measures the current synchronously prepared text without scene attachment or matrix traversal. */
   measure(): ParagraphLayoutSummary {
     this.#assertActive();
     const text = this;
@@ -1007,7 +1016,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return measurement;
   }
 
-  /** Returns caller-owned positioned glyph and line columns without requiring a rendered frame; a cache miss may incur lookup work, and every call copies the columns. */
+  /** Returns caller-owned positioned glyph and line columns from current preparation; every call copies the columns. */
   glyphs(): GlyphLayoutInspection {
     this.#assertActive();
     const text = this;
@@ -1159,7 +1168,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
 
   #setBoundingBox(measurement: ParagraphLayoutSummary): void {
     const bounds = measurement.inkBounds;
-    if (bounds === undefined) {
+    if (bounds === undefined || measurement.glyphCount === 0) {
       this.#boundingBox.makeEmpty();
       this.#boundingBoxCurrent = true;
       return;
@@ -1293,6 +1302,7 @@ export class TextGroup extends THREE.Object3D {
     this.#assertActive();
     const batching = normalizeTextGroupBatching(value);
     if (this.#batching === batching) return;
+    this.#root.assertMutationAllowed();
     this.#batching = batching;
     this.#root.invalidateMaterial();
   }
@@ -1310,6 +1320,7 @@ export class TextGroup extends THREE.Object3D {
   }
   set material(value: ThreeTextMaterial | undefined) {
     this.#assertActive();
+    this.#root.assertMutationAllowed();
     this.#material = value;
     this.#root.invalidateMaterial();
   }
@@ -1376,6 +1387,7 @@ export class TextGroup extends THREE.Object3D {
 
 interface BoundTextEntry {
   readonly handle: GlyphTextController<RasterFormatMetadata, ThreeMaterialBinding, THREE.Object3D>;
+  textUnits: number;
   stagedRevision: number;
   preparedRevision: number | undefined;
   stagedOrder: number;
@@ -1388,6 +1400,7 @@ interface BoundTextEntry {
 interface DetachedQueryEntry {
   readonly text: Text<RasterFormatMetadata>;
   readonly entry: BoundTextEntry;
+  readonly pendingMeasurement: boolean;
 }
 
 interface TextPresentation {
@@ -1412,6 +1425,7 @@ class ThreeRootPublication {
   readonly #inspections = new Map<Text<RasterFormatMetadata>, CanonicalInspection>();
   readonly #materialBindings = new ThreeMaterialBindingCache();
   #capacity: GlyphBufferCapacity;
+  #textUnits = 0;
   #rendererUpdateRejected = false;
   #capacityExceeded: { readonly required: number; readonly size: number } | undefined;
   #materialInvalidated = false;
@@ -1454,7 +1468,7 @@ class ThreeRootPublication {
     texts: readonly Text<RasterFormatMetadata>[],
     desired: ReadonlySet<Text<RasterFormatMetadata>> = new Set(texts),
   ): void {
-    for (const text of [...this.#entries.keys()]) {
+    for (const text of this.#entries.keys()) {
       if (!desired.has(text)) this.removeText(text);
     }
     for (let order = 0; order < texts.length; order += 1) {
@@ -1467,7 +1481,14 @@ class ThreeRootPublication {
       if (
         entry === undefined ||
         entry.stagedRevision !== revision ||
-        !sameTextPresentation(entry.stagedPresentation, presentation) ||
+        !sameTextPresentation(
+          entry.stagedPresentation,
+          presentation.group,
+          presentation.batchGroup,
+          presentation.material,
+          presentation.pixelSnapping,
+          presentation.renderOrder,
+        ) ||
         this.#materialInvalidated
       ) {
         this.#stage(text, reconciler.desired(text), revision, order, orderScope, orderRank, presentation);
@@ -1505,7 +1526,14 @@ class ThreeRootPublication {
         entry.stagedOrder !== order ||
         entry.stagedOrderScope !== orderScope ||
         !Object.is(entry.stagedOrderRank, orderRank) ||
-        !sameTextPresentation(entry.stagedPresentation, presentation)
+        !sameTextPresentation(
+          entry.stagedPresentation,
+          presentation.group,
+          presentation.batchGroup,
+          presentation.material,
+          presentation.pixelSnapping,
+          presentation.renderOrder,
+        )
       ) {
         return true;
       }
@@ -1555,6 +1583,7 @@ class ThreeRootPublication {
     if (this.#detachedQuery === text) this.#detachedQuery = undefined;
     this.#pendingMeasurements.delete(text);
     this.#entries.delete(text);
+    this.#textUnits -= entry.textUnits;
     this.#inspections.delete(text);
     reconciler.unbindFrom(text, this);
   }
@@ -1595,12 +1624,8 @@ class ThreeRootPublication {
 
   #queryEntry(text: Text<RasterFormatMetadata>): BoundTextEntry {
     const current = this.#entries.get(text);
-    if (
-      current !== undefined &&
-      current.committedRevision >= 0 &&
-      current.stagedRevision === reconciler.desiredRevision(text) &&
-      nearestScene(text) !== undefined
-    ) {
+    // Semantic reads consume the setter-prepared revision, independently of renderer acceptance or Scene membership.
+    if (current !== undefined && current.stagedRevision === reconciler.desiredRevision(text)) {
       return current;
     }
     const texts = this.#root.queryMembers(text);
@@ -1622,6 +1647,8 @@ class ThreeRootPublication {
     if (cached?.text === text && !this.#entries.has(text)) {
       this.#detachedQueryCache = undefined;
       this.#entries.set(text, cached.entry);
+      this.#textUnits += cached.entry.textUnits;
+      if (cached.pendingMeasurement) this.#pendingMeasurements.add(text);
     }
     const previous = this.#detachedQuery;
     let retired = previous !== undefined && previous !== text && !desired.has(previous) ? previous : undefined;
@@ -1638,10 +1665,11 @@ class ThreeRootPublication {
       entry.handle.updateParagraphOrder(detachedQueryOrder, entry.stagedOrderScope, entry.stagedOrderRank);
       entry.stagedOrder = detachedQueryOrder;
       this.#entries.delete(retired);
+      this.#textUnits -= entry.textUnits;
       this.#inspections.delete(retired);
-      this.#pendingMeasurements.delete(retired);
+      const pendingMeasurement = this.#pendingMeasurements.delete(retired);
       reconciler.unbindFrom(retired, this);
-      this.#detachedQueryCache = { text: retired, entry };
+      this.#detachedQueryCache = { text: retired, entry, pendingMeasurement };
     }
     this.#reconcileEntries(texts, desired);
   }
@@ -1705,24 +1733,25 @@ class ThreeRootPublication {
 
   prepareShape(): import('../config/glyph.js').GlyphShapeOptions | false {
     this.#assertActive();
-    let required = 0;
-    for (const [text, entry] of this.#entries) {
-      required += text.text.length;
+    for (const text of this.#pendingMeasurements) {
+      const entry = this.#entries.get(text)!;
       entry.preparedRevision = entry.stagedRevision;
     }
+    const required = this.#textUnits;
     if (this.#capacity.policy === 'fixed' && required > this.#capacity.size) {
       this.#capacityExceeded = Object.freeze({ required, size: this.#capacity.size });
       return false;
     }
     this.#capacityExceeded = undefined;
-    return Object.freeze({ semanticViews: this.#pendingMeasurements.size === 0 ? 'none' : 'measurement' });
+    return Object.freeze({ semanticViews: 'none' });
   }
 
   acceptShape(): void {
     this.#assertActive();
     this.#rendererUpdateRejected = false;
     this.#inspections.clear();
-    for (const [text, entry] of this.#entries) {
+    for (const text of this.#pendingMeasurements) {
+      const entry = this.#entries.get(text)!;
       const acceptedRevision = entry.preparedRevision;
       entry.preparedRevision = undefined;
       if (acceptedRevision === undefined) continue;
@@ -1737,7 +1766,7 @@ class ThreeRootPublication {
   rejectShape(): void {
     this.#assertActive();
     this.#rendererUpdateRejected = true;
-    for (const entry of this.#entries.values()) entry.preparedRevision = undefined;
+    for (const text of this.#pendingMeasurements) this.#entries.get(text)!.preparedRevision = undefined;
   }
 
   syncTransforms(worldMatricesCurrent: boolean): void {
@@ -1749,12 +1778,16 @@ class ThreeRootPublication {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#detachedQuery = undefined;
+    let failurePresent = false;
     let failure: unknown;
     for (const [text, entry] of this.#entries) {
       try {
         entry.handle.dispose();
       } catch (error) {
-        failure ??= error;
+        if (!failurePresent) {
+          failurePresent = true;
+          failure = error;
+        }
       }
       reconciler.unbindFrom(text, this);
     }
@@ -1764,12 +1797,16 @@ class ThreeRootPublication {
       try {
         cached.entry.handle.dispose();
       } catch (error) {
-        failure ??= error;
+        if (!failurePresent) {
+          failurePresent = true;
+          failure = error;
+        }
       }
     }
     this.#entries.clear();
+    this.#textUnits = 0;
     this.#pendingMeasurements.clear();
-    if (failure !== undefined) throw failure;
+    if (failurePresent) throw failure;
   }
 
   #stage(
@@ -1795,6 +1832,7 @@ class ThreeRootPublication {
       if (orderScope !== undefined) handle.updateParagraphOrder(order, orderScope, orderRank);
       this.#entries.set(text, {
         handle,
+        textUnits: desired.text.length,
         stagedRevision: revision,
         preparedRevision: undefined,
         stagedOrder: order,
@@ -1803,11 +1841,14 @@ class ThreeRootPublication {
         stagedPresentation: presentation,
         committedRevision: -1,
       });
+      this.#textUnits += desired.text.length;
     } else {
       const scopedOrderChanged =
         previous.stagedOrderScope !== orderScope || !Object.is(previous.stagedOrderRank, orderRank);
       previous.handle.update(state);
       if (scopedOrderChanged) previous.handle.updateParagraphOrder(order, orderScope, orderRank);
+      this.#textUnits += desired.text.length - previous.textUnits;
+      previous.textUnits = desired.text.length;
       previous.stagedRevision = revision;
       previous.stagedOrder = order;
       previous.stagedOrderScope = orderScope;
@@ -1950,9 +1991,13 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
   const flowReused = previous !== undefined && properties.flow === previous.flow;
   const style = styleReused
     ? previous.style
-    : isOwnedTextPropertySnapshot(properties.style)
-      ? (properties.style as TextStyle)
-      : mergePropertyList(properties.style, 'Text style');
+    : reuseOrCreateTextStyleSnapshot(
+        previous?.style,
+        isOwnedTextPropertySnapshot(properties.style)
+          ? (properties.style as TextStyle)
+          : mergePropertyList(properties.style, 'Text style'),
+        'Text style',
+      );
   const layout = layoutReused
     ? previous.layout
     : isOwnedTextPropertySnapshot(properties.layout)
@@ -1963,7 +2008,6 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
     : isOwnedTextPropertySnapshot(properties.constraints)
       ? (properties.constraints as Constraints)
       : mergePropertyList(properties.constraints, 'Text constraints');
-  if (!styleReused) assertTextStyle(style, 'Text style');
   if (!layoutReused) assertParagraphLayout(layout, 'Text layout');
   if (!constraintsReused) assertConstraints(constraints, 'Text constraints');
   const normalizedFlow = flowReused
@@ -1982,7 +2026,9 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
   if (formatted !== undefined && !isFormattedText(formatted)) throw new TypeError('Text content is invalid');
   const text = formatted?.text ?? (properties.text as string);
   if (typeof text !== 'string') throw new TypeError('Text content must be a string or formatted text');
-  assertTextStyleFeatureRanges(style, 0, text.length, 'Text style');
+  if (style !== previous?.style || text.length !== previous.text.length) {
+    assertTextStyleFeatureRanges(style, 0, text.length, 'Text style');
+  }
   const stated =
     (formatted?.spans as readonly TextSpan<Format>[] | undefined) ??
     (properties as DesiredTextState<Format>).spans ??
@@ -2034,7 +2080,7 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
     font: properties.font,
     text,
     spans,
-    style: styleReused ? style : reuseOrCreateTextPropertySnapshot(previous?.style, style, 'Text style'),
+    style,
     layout: layoutReused ? layout : reuseOrCreateTextPropertySnapshot(previous?.layout, layout, 'Text layout'),
     constraints: constraintsReused
       ? constraints
@@ -2060,7 +2106,7 @@ function replaceDesiredString<Format extends RasterFormatMetadata>(
   text: string,
 ): DesiredTextState<Format> {
   assertPairedSurrogates(text);
-  assertTextStyleFeatureRanges(previous.style, 0, text.length, 'Text style');
+  if (text.length !== previous.text.length) assertTextStyleFeatureRanges(previous.style, 0, text.length, 'Text style');
   return Object.freeze({
     ...previous,
     text,
@@ -2095,7 +2141,7 @@ function reuseOrCreateTextSpans<Format extends RasterFormatMetadata>(
     const style =
       span.style === undefined
         ? undefined
-        : reuseOrCreateTextPropertySnapshot(prior?.style, span.style, `Text span ${index} style`);
+        : reuseOrCreateTextStyleSnapshot(prior?.style, span.style, `Text span ${index} style`);
     if (
       prior !== undefined &&
       prior.start === span.start &&
@@ -2139,10 +2185,6 @@ function assertSpanRanges<Format extends RasterFormatMetadata>(
       throw new TypeError(`Text span ${index} must be an object`);
     }
     assertRange(`span ${index}`, span.start, span.end, text.length);
-    if (span.style !== undefined) {
-      assertTextStyle(span.style, `Text span ${index} style`);
-      assertTextStyleFeatureRanges(span.style, span.start, span.end, `Text span ${index} style`);
-    }
   }
   assertSpansNest(spans);
   return spans;
@@ -2292,19 +2334,25 @@ function resolveTextPresentation(text: Text<RasterFormatMetadata>): TextPresenta
     parent = parent.parent;
   }
   const batchGroup = explicitBatchGroup ?? (outermostGroup?.batching === 'auto' ? outermostGroup : undefined);
-  const resolved: TextPresentation = {
+  const resolvedMaterial = material ?? root.material;
+  const resolvedPixelSnapping = pixelSnapping ?? text.pixelSnapping;
+  // Inside a group the child's renderOrder is a Rust paragraph rank, never a
+  // Three material/draw key. An entirely unstated group shares Three's default 0.
+  const resolvedRenderOrder = renderOrder ?? (group === undefined ? text.renderOrder : 0);
+  if (!Number.isFinite(resolvedRenderOrder)) throw new RangeError('Text renderOrder must be finite');
+  const cached = textPresentations.get(text);
+  if (
+    cached !== undefined &&
+    sameTextPresentation(cached, group, batchGroup, resolvedMaterial, resolvedPixelSnapping, resolvedRenderOrder)
+  )
+    return cached;
+  const presentation: TextPresentation = Object.freeze({
     group,
     batchGroup,
-    material: material ?? root.material,
-    pixelSnapping: pixelSnapping ?? text.pixelSnapping,
-    // Inside a group the child's renderOrder is a Rust paragraph rank, never a
-    // Three material/draw key. An entirely unstated group shares Three's default 0.
-    renderOrder: renderOrder ?? (group === undefined ? text.renderOrder : 0),
-  };
-  if (!Number.isFinite(resolved.renderOrder)) throw new RangeError('Text renderOrder must be finite');
-  const cached = textPresentations.get(text);
-  if (cached !== undefined && sameTextPresentation(cached, resolved)) return cached;
-  const presentation = Object.freeze(resolved);
+    material: resolvedMaterial,
+    pixelSnapping: resolvedPixelSnapping,
+    renderOrder: resolvedRenderOrder,
+  });
   textPresentations.set(text, presentation);
   return presentation;
 }
@@ -2336,13 +2384,20 @@ function observeTextGroupVisibility(group: TextGroup, visible: boolean): boolean
   return true;
 }
 
-function sameTextPresentation(left: TextPresentation, right: TextPresentation): boolean {
+function sameTextPresentation(
+  left: TextPresentation,
+  group: TextPresentation['group'],
+  batchGroup: TextPresentation['batchGroup'],
+  material: TextPresentation['material'],
+  pixelSnapping: TextPresentation['pixelSnapping'],
+  renderOrder: TextPresentation['renderOrder'],
+): boolean {
   return (
-    left.group === right.group &&
-    left.batchGroup === right.batchGroup &&
-    left.material === right.material &&
-    left.pixelSnapping === right.pixelSnapping &&
-    left.renderOrder === right.renderOrder
+    left.group === group &&
+    left.batchGroup === batchGroup &&
+    left.material === material &&
+    left.pixelSnapping === pixelSnapping &&
+    left.renderOrder === renderOrder
   );
 }
 

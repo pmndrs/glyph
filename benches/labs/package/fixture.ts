@@ -123,13 +123,18 @@ export function createParagraph(text = paragraphText, width = 600, fontFace = fo
     constraints: { width: { mode: 'exact', size: width } },
   });
   textGroup.add(paragraph);
-  textGroup.updateMatrixWorld(true);
+  const scene = attachToScene(textGroup);
+  scene.updateMatrixWorld(true);
   if (textGroup.error !== undefined) throw textGroup.error;
-  return { paragraph, root, textGroup };
+  if (paragraph.commitState().status !== 'committed' || inspectDraws(scene).glyphs === 0) {
+    throw new Error('paragraph fixture did not publish rendered glyphs');
+  }
+  return { paragraph, root, scene, textGroup };
 }
 
 /** Parents a text group to a scene, so a scene traversal publishes its texts. */
-export function attachToScene(textGroup: ReturnType<typeof createParagraph>['textGroup']) {
+export function attachToScene(textGroup: ThreeTypes.Object3D) {
+  if (textGroup.parent instanceof THREE.Scene) return textGroup.parent;
   const scene = new THREE.Scene();
   scene.add(textGroup);
   return scene;
@@ -185,9 +190,13 @@ export function createTextBatch(count: number) {
     }),
   );
   textGroup.add(...texts);
-  textGroup.updateMatrixWorld(true);
+  const scene = attachToScene(textGroup);
+  scene.updateMatrixWorld(true);
   if (textGroup.error !== undefined) throw textGroup.error;
-  return { root, textGroup, texts };
+  if (texts.some((text) => text.commitState().status !== 'committed') || inspectDraws(scene).glyphs === 0) {
+    throw new Error('text batch fixture did not publish rendered glyphs');
+  }
+  return { root, scene, textGroup, texts };
 }
 
 /** `count` labels under a nested TextGroup inside one top-level TextGroup, so every label shares one draw boundary. */

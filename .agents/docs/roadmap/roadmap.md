@@ -28,13 +28,16 @@ sources:
   - id: 'fragment-relative-reflow'
     resource: '../planning/fragment-relative-reflow.md'
     title: 'Fragment-relative reflow and LayoutRun placement'
+  - id: publication-frontier
+    resource: ../planning/publication-frontier.md
+    title: Compact publication frontier checkpoint and task tracker
   - id: 'release-0-2-tracker'
     resource: 'https://github.com/pmndrs/glyph/issues/253'
     title: '0.2.0 release integration and evidence tracker'
 
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-09T22:58:02Z'
+  at: '2026-10-10T10:13:37Z'
 ---
 
 # Canonical implementation roadmap
@@ -974,6 +977,13 @@ Windfoil, browser-time JIT, MLIR, GPU shaping, runtime variation axes, and autom
 ### Milestone 11.x — incremental update correctness
 
 Closes the class of defect behind the displaced-record-slot corruption, in dependency order. Each step is verifiable against the gate the previous step establishes; none may regress the incremental fast path, and each carries its own A/B evidence per D-060.
+
+The 0.2.0 publication frontier is active in the [compact tracker](../planning/publication-frontier.md), with detailed
+lifetimes and evidence in the [retained assignment design](../planning/retained-text-assignment.md). The local candidate
+remains held on count-changing performance and cumulative binary size despite passing correctness and visual checks.
+Clean-prefix retention is the next bounded spike; scattered intervals inside one large paragraph remain an open gate.
+Release-wide parity with published 0.1.0 is still required. These local experiments do not clear #247/#240 or authorize
+a release, and deferred variable-font, bindless and automatic off-screen-culling work does not block this assessment.
 
 - [x] a differential oracle through the packed instanced attributes, covering every edit class that moves a glyph between record slots, on Bitmap, MSDF and Slug (D-261);
 - [x] repack a record slot handed to another glyph identity, and stop narrowing registers for pushed rows that have no prior value;

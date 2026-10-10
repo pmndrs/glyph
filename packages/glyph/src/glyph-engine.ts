@@ -37,6 +37,7 @@ export interface GlyphShapeParticipant {
 
 /** @internal Stable invalidation and teardown channel for one registered shape participant. */
 export interface GlyphShapeRegistration {
+  readonly queued: boolean;
   invalidate(): void;
   dispose(): void;
 }
@@ -342,6 +343,11 @@ class GlyphEngineImpl implements GlyphEngine {
   }
 
   /** @internal */
+  _isShapeParticipantQueued(registration: GlyphShapeRegistrationImpl): boolean {
+    return this.#dirtyShapeRegistrations.has(registration);
+  }
+
+  /** @internal */
   _invalidateShapeParticipant(registration: GlyphShapeRegistrationImpl): void {
     this.#assertActive();
     if (!this.#shapeRegistrations.has(registration)) {
@@ -626,6 +632,10 @@ class GlyphShapeRegistrationImpl implements GlyphShapeRegistration {
 
   get disposed(): boolean {
     return this.#disposed;
+  }
+
+  get queued(): boolean {
+    return this.#engine._isShapeParticipantQueued(this);
   }
 
   invalidate(): void {

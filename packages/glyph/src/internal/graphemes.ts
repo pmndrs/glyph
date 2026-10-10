@@ -1,6 +1,7 @@
 import { graphemeSegments } from 'unicode-segmenter/grapheme';
+import type { TextStyle } from '../text-properties.js';
 
-const clusterAlignedTextByRanges = new WeakMap<object, string>();
+const clusterAlignedTextByRanges = new WeakMap<object, { text: string; validatedSpanStyles: boolean }>();
 const clusterAlignedRangesBrand: unique symbol = Symbol('pmndrs.glyph.cluster-aligned-ranges');
 
 interface ClusterAlignedRangesBrand {
@@ -31,7 +32,7 @@ export function assertWellFormed(text: string): void {
 }
 
 /** The two offsets any styled range carries, whatever else it states. */
-export type ClusterAlignableRange = Readonly<{ start: number; end: number }>;
+export type ClusterAlignableRange = Readonly<{ start: number; end: number; style?: TextStyle }>;
 
 /** Moves boundaries forward to their cluster's end (the base takes the style); both ends move the
  *  same direction so adjacent ranges stay adjacent. A collapsed-to-empty range is KEPT — dropping it would delete a caller's style and shift later indices. */
@@ -69,56 +70,71 @@ export function resolveRangesToClusters<Range extends ClusterAlignableRange>(
 
 /** Resolves, freezes, and records package-owned ranges so adapters can prove that the exact array is already on this
  *  text's cluster grid. This takes ownership of a fresh package-local array and freezes both it and its records. The text
- *  association matters: reusing an array with different content must fall back to normal Unicode alignment. */
+ *  association matters: reusing an array with different content must fall back to normal Unicode alignment. A producer
+ *  replacing only style data can supply its unchanged-boundary alignment source without another segmentation pass. */
 export function ownClusterAlignedRanges<Range extends ClusterAlignableRange>(
   text: string,
   ranges: readonly Range[],
+  validateSpanStyles?: (aligned: readonly Range[]) => void,
+  alignmentSource: readonly ClusterAlignableRange[] = ranges,
 ): readonly Range[] {
   freezeRanges(ranges);
-  if (!text.isWellFormed()) return Object.freeze(ranges);
-  return markOwnedRangesClusterAligned(text, resolveRangesToClusters(text, ranges));
+  const alignmentKnown = areOwnedRangesClusterAligned(text, alignmentSource);
+  const aligned = alignmentKnown ? ranges : resolveRangesToClusters(text, ranges);
+  validateSpanStyles?.(aligned);
+  if (!alignmentKnown && !text.isWellFormed()) return Object.freeze(aligned);
+  return markOwnedRangesClusterAligned(text, aligned, validateSpanStyles !== undefined);
 }
 
-/** Transfers proven alignment from one package-owned range array to a derived array whose boundaries are unchanged.
- *  An unproven source falls back to full alignment, preserving correctness across duplicate package copies. */
+/** Transfers alignment across unchanged bounds; changed styles lose their scope authority without losing alignment.
+ *  Unproven sources and changed bounds follow the same complete alignment producer. */
 export function inheritClusterAlignedRanges<Range extends ClusterAlignableRange>(
   text: string,
   source: readonly ClusterAlignableRange[],
   ranges: readonly Range[],
 ): readonly Range[] {
-  return areOwnedRangesClusterAligned(text, source) && haveEqualBoundaries(source, ranges)
-    ? markOwnedRangesClusterAligned(text, ranges)
-    : ownClusterAlignedRanges(text, ranges);
+  if (!areOwnedRangesClusterAligned(text, source) || source.length !== ranges.length) {
+    return ownClusterAlignedRanges(text, ranges);
+  }
+  let stylesUnchanged = true;
+  for (let index = 0; index < source.length; index++) {
+    const prior = source[index]!;
+    const next = ranges[index]!;
+    if (prior.start !== next.start || prior.end !== next.end) return ownClusterAlignedRanges(text, ranges);
+    if (prior.style !== next.style) stylesUnchanged = false;
+  }
+  return markOwnedRangesClusterAligned(
+    text,
+    ranges,
+    stylesUnchanged && (clusterAlignedTextByRanges.get(source)?.validatedSpanStyles ?? false),
+  );
 }
 
 /** True only for an exact package-owned range array normalized against the same text. */
-export function areOwnedRangesClusterAligned(text: string, ranges: readonly ClusterAlignableRange[]): boolean {
+export function areOwnedRangesClusterAligned(
+  text: string,
+  ranges: readonly ClusterAlignableRange[],
+  requireValidatedSpanStyles = false,
+): boolean {
+  const ownership = clusterAlignedTextByRanges.get(ranges);
   return (
     (ranges as readonly ClusterAlignableRange[] & ClusterAlignedRangesBrand)[clusterAlignedRangesBrand] === true &&
-    clusterAlignedTextByRanges.get(ranges) === text
+    ownership?.text === text &&
+    (!requireValidatedSpanStyles || ownership.validatedSpanStyles)
   );
 }
 
 function markOwnedRangesClusterAligned<Range extends ClusterAlignableRange>(
   text: string,
   ranges: readonly Range[],
+  validatedSpanStyles: boolean,
 ): readonly Range[] {
   const owned = Object.isExtensible(ranges) ? ranges : [...ranges];
   freezeRanges(owned);
   Object.defineProperty(owned, clusterAlignedRangesBrand, { value: true });
   Object.freeze(owned);
-  clusterAlignedTextByRanges.set(owned, text);
+  clusterAlignedTextByRanges.set(owned, { text, validatedSpanStyles });
   return owned;
-}
-
-function haveEqualBoundaries(
-  source: readonly ClusterAlignableRange[],
-  ranges: readonly ClusterAlignableRange[],
-): boolean {
-  return (
-    source.length === ranges.length &&
-    source.every((range, index) => range.start === ranges[index]!.start && range.end === ranges[index]!.end)
-  );
 }
 
 function freezeRanges(ranges: readonly ClusterAlignableRange[]): void {

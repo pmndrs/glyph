@@ -1,4 +1,5 @@
-import { mkdir } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, readFile } from 'node:fs/promises';
 import { resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Browser, Page } from 'playwright';
@@ -17,6 +18,9 @@ const shaders = presentationShaders(process.env.PRESENTATION_SHADERS);
 const shaderQuery = shaders === 'typegpu' ? '&shaders=typegpu' : '';
 const screenshotDirectory = process.env.PRESENTATION_SCREENSHOT_DIR;
 if (screenshotDirectory !== undefined) await mkdir(screenshotDirectory, { recursive: true });
+// Pin the engine artifact independently of a watching server's current build.
+const shaperArtifactPath = process.env.PRESENTATION_SHAPER_ARTIFACT;
+const shaperArtifact = shaperArtifactPath === undefined ? undefined : await readFile(shaperArtifactPath);
 let server: Awaited<ReturnType<typeof createServer>> | undefined;
 let baseUrl: URL;
 if (process.env.PRESENTATION_BASE_URL === undefined) {
@@ -110,6 +114,18 @@ try {
     args: ['--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu'],
   });
   const page = await browser.newPage({ viewport: { width: 1_280, height: 720 } });
+  let shaperArtifactRequests = 0;
+  if (shaperArtifact !== undefined) {
+    await page.route('**/text-shaper.wasm*', async (route) => {
+      // Vite can also request a JavaScript URL module for this path; only replace fetched bytes.
+      if (route.request().resourceType() !== 'fetch') {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({ contentType: 'application/wasm', body: shaperArtifact });
+      shaperArtifactRequests += 1;
+    });
+  }
   page.on('console', (message) => {
     if (message.type() === 'warning' || message.type() === 'error') {
       consoleProblems.push(`${message.type()}: ${message.text()}`);
@@ -138,6 +154,10 @@ try {
       Number(viewport.dataset.framesPerSecond) > 0
     );
   }, backend);
+  if (shaperArtifact !== undefined) {
+    if (shaperArtifactRequests === 0) throw new Error('Presentation did not fetch the pinned shaper artifact');
+    console.log('presentation-shaper-artifact', createHash('sha256').update(shaperArtifact).digest('hex'));
+  }
   await page.evaluate(() => {
     const canvas = document.querySelector<HTMLCanvasElement>('canvas[data-configured-renderer-active="true"]');
     const scope = globalThis as typeof globalThis & {
@@ -285,6 +305,15 @@ try {
     'presentation-workloads-ready',
     JSON.stringify({ backend, workloads: workloads.length, rendererCount: 1, shaders, technique }),
   );
+} catch (error) {
+  console.error('presentation-probe-problems', JSON.stringify(consoleProblems.slice(-12)));
+  const failurePage = browser?.contexts()[0]?.pages()[0];
+  if (failurePage !== undefined && screenshotDirectory !== undefined) {
+    await failurePage
+      .screenshot({ path: resolvePath(screenshotDirectory, `${backend}-${technique}-failure.png`) })
+      .catch((screenshotError) => console.error('presentation-probe-screenshot-error', screenshotError));
+  }
+  throw error;
 } finally {
   await browser?.close();
   await server?.close();

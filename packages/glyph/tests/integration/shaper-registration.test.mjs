@@ -574,8 +574,8 @@ function align(value, alignment) {
   return Math.ceil(value / alignment) * alignment;
 }
 
-/** measureParagraph overwrites the borrowed result without publishing or advancing revisions. */
-test('measure_paragraph answers synchronously without publishing or burning revisions', async () => {
+/** The legacy-named measureParagraph export now commits semantic preparation without publishing renderer state. */
+test('measure_paragraph prepares synchronously without publishing or burning renderer revisions', async () => {
   const [interArtifact, shaperWasm, abi] = await Promise.all([
     readFile(new URL('../../../../benches/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
     readFile(shaperWasmUrl),
@@ -650,7 +650,7 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   );
   assert.equal(seeded.status, abi.status.ok);
 
-  // The narrow measure reflects the queried constraint, not the committed one.
+  // The narrow result reflects the newly prepared constraint.
   const measureRequest = engineStyleUpdateBytes(abi, {
     rootId: 29,
     codecHandle: 23,
@@ -676,9 +676,8 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   assert.equal(measured.publicationGeneration, seeded.publicationGeneration, 'no publication flip');
   assert.equal(measured.engineRevision, seeded.engineRevision, 'no revision burn');
 
-  // Sequential queries extend one retained speculative transaction: a repeated
-  // identical query answers identically, and a new width relayouts correctly from
-  // the retained prefix without touching publication or revision state.
+  // Repeated explicit preparations answer identically, and a new width relayouts from retained
+  // state without touching renderer publication or renderer revision state.
   const repeated = run(measureRequest.slice(), 'measure', 1);
   assert.equal(repeated.status, abi.status.ok);
   assert.deepEqual(measurementFor(repeated, 1), narrow, 'a repeated query answers identically');
@@ -701,15 +700,15 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   const wider = run(widerRequest, 'measure', 1);
   assert.equal(wider.status, abi.status.ok);
   const relaxed = measurementFor(wider, 1);
-  assert.ok(relaxed, 'the extended transaction re-answers for the new constraint');
+  assert.ok(relaxed, 'the next preparation answers for the new constraint');
   assert.ok(relaxed.inlineExtent <= 150 + 1e-3, 'the new measure reflects the new width');
   assert.ok(relaxed.inlineExtent > narrow.inlineExtent, 'the wider constraint relaxes the wrap');
   assert.ok(relaxed.lineCount < narrow.lineCount, 'the wider constraint uses fewer lines');
   assert.equal(wider.publicationGeneration, seeded.publicationGeneration, 'still no publication flip');
   assert.equal(wider.engineRevision, seeded.engineRevision, 'still no revision burn');
 
-  // Reverting to the committed constraint must revert the speculative layout
-  // tail: the answer comes from committed flow, not the narrow query's leftovers.
+  // Reverting to the original constraint replaces the current preparation rather than retaining
+  // the narrow layout tail.
   const committedWidthRequest = engineStyleUpdateBytes(abi, {
     rootId: 29,
     codecHandle: 23,
@@ -736,8 +735,7 @@ test('measure_paragraph answers synchronously without publishing or burning revi
     'the committed-width answer reflects committed flow, not the retained narrow tail',
   );
 
-  // Committed state is intact: an ordinary follow-up frame continues from the
-  // pre-measure revisions.
+  // Renderer publication consumes the exact current preparation with no semantic replay.
   const followUp = run(
     engineStyleUpdateBytes(abi, {
       rootId: 29,
@@ -748,7 +746,7 @@ test('measure_paragraph answers synchronously without publishing or burning revi
       acknowledgedPublicationGeneration: seeded.publicationGeneration,
       maxClusters: 64,
       styles: false,
-      geometry: { width: 260, height: 200, maxLines: 16 },
+      geometry: false,
     }),
     'update',
   );
@@ -757,8 +755,8 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   assert.equal(fn.disposeRoot(29), abi.status.ok);
 });
 
-/** On a fingerprint hit, the committing frame adopts the retained speculative transaction's pending state and reserved glyph ids rather than rolling them back. */
-test('the committing frame adopts the speculative transaction and its reserved glyph identities', async () => {
+/** Renderer publication consumes the setter-prepared identities without replaying semantic input. */
+test('the committing frame publishes the durable preparation without semantic replay', async () => {
   const [interArtifact, shaperWasm, abi] = await Promise.all([
     readFile(new URL('../../../../benches/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
     readFile(shaperWasmUrl),
@@ -784,12 +782,8 @@ test('the committing frame adopts the speculative transaction and its reserved g
 
   const resultLayout = abi.layouts.engineResult;
   const record = abi.layouts.engineSemanticView;
-  const run = (bytes, entry, paragraphId) => {
-    new DataView(bytes.buffer).setUint32(
-      abi.layouts.engineUpdateRequest.semanticViewMask,
-      abi.engine.semanticViewMasks.all,
-      true,
-    );
+  const run = (bytes, entry, paragraphId, semanticViewMask = abi.engine.semanticViewMasks.all) => {
+    new DataView(bytes.buffer).setUint32(abi.layouts.engineUpdateRequest.semanticViewMask, semanticViewMask, true);
     const pointer = fn.requestPointer(29);
     new Uint8Array(memory.buffer, pointer, bytes.byteLength).set(bytes);
     const resultPointer =
@@ -850,33 +844,35 @@ test('the committing frame adopts the speculative transaction and its reserved g
   });
   const newIds = (result) => result.glyphIds.filter((id) => !seeded.glyphIds.includes(id));
 
-  const first = run(engineStyleUpdateBytes(abi, appended(' gamma')), 'measure', 1);
-  assert.equal(first.status, abi.status.ok);
-  const firstNew = newIds(first);
-  assert.ok(firstNew.length > 0, 'the first query reserves identities for its speculative glyphs');
+  const prepared = run(engineStyleUpdateBytes(abi, appended(' gamma')), 'measure', 1);
+  assert.equal(prepared.status, abi.status.ok);
+  const preparedIds = newIds(prepared);
+  assert.ok(preparedIds.length > 0, 'the synchronous preparation assigns identities for new glyphs');
 
-  const second = run(engineStyleUpdateBytes(abi, appended(' delta')), 'measure', 1);
-  assert.equal(second.status, abi.status.ok);
-  const secondNew = newIds(second);
-  assert.ok(secondNew.length > 0, 'the second query reserves identities for its speculative glyphs');
-  assert.ok(
-    Math.min(...secondNew) > Math.max(...firstNew),
-    'identity reservation is linear across queries: the rebuilt speculation never reuses reported ids',
+  const committed = run(
+    engineStyleUpdateBytes(abi, {
+      rootId: 29,
+      codecHandle: 23,
+      fontStackHandle: 17,
+      expectedEngineRevision: seeded.engineRevision,
+      consumedRevision: seeded.engineRevision,
+      acknowledgedPublicationGeneration: seeded.publicationGeneration,
+      maxClusters: 64,
+      styles: false,
+      geometry: false,
+    }),
+    'update',
+    undefined,
+    0,
   );
-
-  const committed = run(engineStyleUpdateBytes(abi, appended(' delta')), 'update');
   assert.equal(committed.status, abi.status.ok);
   assert.equal(committed.engineRevision, seeded.engineRevision + 1);
-  assert.deepEqual(
-    newIds(committed),
-    secondNew,
-    'the committing frame adopts the exact glyph identities the query reported',
-  );
+  assert.deepEqual(committed.glyphIds, [], 'publication does not serialize unchanged semantic glyph records');
   assert.equal(fn.disposeRoot(29), abi.status.ok);
 });
 
-/** Measurement-only queries skip per-glyph positioning (derived at line level instead); committing then runs exactly that missing tail, proved by byte-identical output vs. a never-measured control. */
-test('measurement-only queries leave the committing frame byte-identical to a never-measured control', async () => {
+/** Semantic result masks control serialization only; every successful preparation remains borrowable and publishable. */
+test('measurement-only results still commit complete positioned preparation', async () => {
   const [interArtifact, shaperWasm, abi] = await Promise.all([
     readFile(new URL('../../../../benches/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
     readFile(shaperWasmUrl),
@@ -923,7 +919,7 @@ test('measurement-only queries leave the committing frame byte-identical to a ne
         ).slice(),
       };
     };
-    return { fn, run };
+    return { fn, memory, run };
   };
 
   const text = Array.from('alpha beta gamma delta', (character) => character.charCodeAt(0));
@@ -941,7 +937,7 @@ test('measurement-only queries leave the committing frame byte-identical to a ne
           }),
       ...(withText ? { text } : { styles: false }),
       maxClusters: 64,
-      geometry: { width: geometryWidth, height: 200, maxLines: 16 },
+      geometry: geometryWidth === undefined ? false : { width: geometryWidth, height: 200, maxLines: 16 },
     });
   const all = abi.engine.semanticViewMasks.all;
   const measurement = abi.engine.semanticViewMasks.measurement;
@@ -953,26 +949,17 @@ test('measurement-only queries leave the committing frame byte-identical to a ne
     const query = measuring.run(request(width, measuredSeed, false), 'measure', measurement, 1);
     assert.equal(query.status, abi.status.ok, `measure at width ${width}`);
   }
-  const measuredCommit = measuring.run(request(96, measuredSeed, false), 'update', all);
+  const borrowedPointer = measuring.fn.borrowParagraphLayout(37, 1);
+  assert.notEqual(borrowedPointer, 0, 'a measurement-sidecar preparation is positioned for demand reads');
+  const borrowedLayout = abi.layouts.borrowedLayoutDescriptor;
+  const borrowed = new DataView(measuring.memory.buffer, borrowedPointer, borrowedLayout.size);
+  assert.ok(borrowed.getUint32(borrowedLayout.glyphCount, true) > 0, 'prepared demand exposes positioned glyphs');
+
+  const measuredCommit = measuring.run(request(undefined, measuredSeed, false), 'update', 0);
   assert.equal(measuredCommit.status, abi.status.ok);
+  assert.equal(measuredCommit.semanticBytes.byteLength, 0, 'publication does not replay prepared semantic records');
 
-  const control = await createEngine();
-  const controlSeed = control.run(request(300, undefined, true), 'update', all);
-  assert.equal(controlSeed.status, abi.status.ok);
-  const controlCommit = control.run(request(96, controlSeed, false), 'update', all);
-  assert.equal(controlCommit.status, abi.status.ok);
-
-  assert.equal(measuredCommit.engineRevision, controlCommit.engineRevision);
-  assert.deepEqual(
-    measuredCommit.semanticBytes,
-    controlCommit.semanticBytes,
-    'the adopted commit publishes the exact semantic table a never-measured commit publishes',
-  );
-
-  // The presentation-surface regression: an inspection query positions the
-  // speculative flow, and a following measurement-only query at a NEW width
-  // re-runs flow without positioning — the stale pending positioning must
-  // drop rather than mismatch the superseded flow.
+  // Changing result masks across later preparations must not change durable positioning.
   const inspected = measuring.run(
     request(
       220,

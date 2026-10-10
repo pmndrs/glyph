@@ -70,6 +70,16 @@ pub(crate) struct SessionPlacementCompiler {
 }
 
 impl SessionPlacementCompiler {
+    /// Replacement buffers and checkpoints need every live row, including unchanged owners.
+    pub(crate) fn requires_complete_rows(&self, live_records: u32, checkpoint: bool) -> bool {
+        live_records != 0
+            && (checkpoint
+                || self
+                    .placement
+                    .as_ref()
+                    .is_none_or(|buffer| buffer.capacity < live_records))
+    }
+
     pub(crate) fn prepare(
         &mut self,
         input: SessionPlacementInput<'_>,
@@ -155,10 +165,7 @@ impl SessionPlacementCompiler {
             )?;
             return Ok(());
         }
-        let replaced = self
-            .placement
-            .as_ref()
-            .is_none_or(|buffer| buffer.capacity < live_records);
+        let replaced = self.requires_complete_rows(live_records, false);
         let generation = if replaced {
             let record_alignment =
                 record_alignment_for_stride(PLACEMENT_STRIDE, capability.update_alignment);
