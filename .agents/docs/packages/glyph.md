@@ -7,6 +7,12 @@ workspace_package: '@pmndrs/glyph'
 documentation_type: reference
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
+  - id: query-first-ci
+    resource: https://github.com/pmndrs/glyph/actions/runs/38093741115
+    title: Exact-head query-first CI, package and glyph Labs artifacts
+  - id: release-comparison
+    resource: https://github.com/pmndrs/glyph/issues/253#issuecomment-6101717975
+    title: Supplemental published 0.1.0 versus pre-query main comparison
   - id: manifest
     resource: ../../../packages/glyph/package.json
     title: Package manifest
@@ -135,7 +141,7 @@ sources:
     title: Pinned msdfgen CLI scanline and error-correction configuration
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-10T19:25:28.016Z'
+  at: '2026-10-10T23:39:59Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -2139,8 +2145,10 @@ The existing display-list replacement carries an optional retainedTopology hint;
 
 Schema constructors remain the authority for renderer-specific bindings. Integrators opt in with preservesHostTopology only when primitive metadata cannot change host bindings and skipped constructors have no required side effects. defineGlyphSchema binds that promise to the constructor identities: spreading a built-in schema and overriding a constructor automatically revokes inherited certification. Complete lazy metadata remains available during the synchronous command-buffer borrow.
 
-The standalone native shaper suite passes all 330 unit and 10 integration/conformance tests, including metadata/cold/abort and checkpoint controls. All 953 package/integration Node tests and the strict package check pass, including deterministic fuzzing, public declarations, lint, formatting and Rust Clippy. Independent source review found no remaining actionable defect. ASCII integration passes live WebGPU verification at DPR 1 and 2, including all 15 scenes, raster switching, flat/depth projection and retained transition handoff; these browser checks do not establish comparative frame times.
+Merged #299 at `9022bb40087afaedce83de2fef38627d283828e7` passed final rebuilt local validation: 341 native Rust tests and 974 Node package/integration tests, plus types, lint, formatting and documentation checks. Final correctness/maintainability review cleared the implementation; the subsequent full v0.1.0-to-main static review found no additional runtime or architecture defects. These reviews did not execute tests. Exact-head CI run 38093741115 passed all five jobs, including 16 browser conformance cases, packed-consumer checks and TypeGPU GPU proof. The reviewed PR head, CI merge checkout and merged main share the same tree.[^query-first-ci]
 
-The exact packed candidate is 7034dd5e834ce14b8e39c36349e56975604a382a1ab8e8e09ab93bdffe9fbd91, with shaper 9ce201c984f02b514689dfc08603db29c537b790e848b13f3b3fd61475e70188 (1,459,785 raw bytes; 540,139 gzip bytes at Node level 9). The package-size workflow passes its production graph checks. Compared with cached main artifact 9a25542ca86357a07270adf94cb1bb879bbbffd43c529ac1af355070b23df22e, the shaper adds 1,161 raw and 331 gzip bytes; all 270 packaged TypeScript source files in that baseline match main 305e5ec9.
+The frozen CI package SHA-256 is `c2ea9cef0c24f8a553b9d213b9f9b66bedc049d04e67cefcc0883469e51103cc`; its shaper SHA-256 is `dc0d918f28e67591417ecd29c86d442b9fc8d703a992781fc25803b05f415403`. The archive contains 1,217 files and 3,099,916 bytes; repository-only profiler files and fingerprint filenames are absent. CI delivery-size deltas versus the immediate base are Core JS +0.19%, Three adapter +0.28% and Shaper Wasm −0.24%; fonts and bakers are unchanged. The adapter rows overlap and must not be summed.[^query-first-ci]
 
-The four-block full Labs comparison against registry 0.1.0 reports 45 faster, 9 slower, 45 neutral and 3 excluded workloads. The workload median remains 1.15 ms; workloads above 3 ms fall from 41 to 37. Baseline CPU clock drift of 11.3% limits exact deltas. Width-change measurement and inspection remain slower by approximately 1.4 ms on the 22,000-glyph paragraph. These results support reviewing the small publication cut separately from the unfinished rope/#247 frontier; they do not establish universal speedups. Exact-head remote CI and PR landing remain pending.
+The eight-block installed-package glyph comparison versus pre-PR main reports 2 faster, 0 slower, 10 neutral and no excluded workloads, baseline correctness failures or timing-mode mismatches. Edit plus independent copy improves from 3.48 to 3.22 ms for one label and 13.07 to 7.60 ms for one among 1,000. Neutral increases remain visible: width inspection plus publication adds 0.55 ms, and cached 100-label metric copies add 11.07 µs. These focused CPU workloads do not establish release-wide parity or FPS.[^query-first-ci]
+
+The full published 0.1.0 comparison against this frozen merged-main package remains in progress. The supplemental pre-query main `30391d02` report has 56 faster, 3 slower, 43 neutral and two timing-mode exclusions, with zero correctness errors and 8.3% baseline clock drift. It does not clear the newly merged query change. #247 remains an open performance frontier; #240's whole-root publish-on-read proposal and rope draft #292 remain held.[^release-comparison]
