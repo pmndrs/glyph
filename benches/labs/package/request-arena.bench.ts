@@ -91,12 +91,15 @@ function sample(bytes: Uint8Array): number {
   return bytes.byteLength + bytes[0]! + bytes[Math.floor(bytes.byteLength / 2)]! + bytes[bytes.byteLength - 1]!;
 }
 
-function benchmarkFrame(name: string, frame: PlannerFrame): void {
+function benchmarkFrame(name: string, frame: PlannerFrame, backing: 'wasm' | 'owned' = 'wasm'): void {
   bench(name, function* () {
     const expected = frameWire.compilePlannerFrameUpdate(frame);
     const arenaOffset = 64;
-    const memory = new WebAssembly.Memory({ initial: Math.ceil((arenaOffset + expected.byteLength) / 65_536) });
-    const target = new Uint8Array(memory.buffer, arenaOffset, expected.byteLength);
+    const buffer =
+      backing === 'wasm'
+        ? new WebAssembly.Memory({ initial: Math.ceil((arenaOffset + expected.byteLength) / 65_536) }).buffer
+        : new ArrayBuffer(arenaOffset + expected.byteLength);
+    const target = new Uint8Array(buffer, arenaOffset, expected.byteLength);
     const expectedSample = sample(expected);
 
     const write = () => {
@@ -122,4 +125,15 @@ group('direct request-arena encoding @engine @layout', () => {
   benchmarkFrame('write one paragraph and text mutation @single-semantic', singleSemanticFrame);
   benchmarkFrame('write 1000 paragraph-order mutations @order', orderFrame);
   benchmarkFrame('write 1000 paragraph and text mutations @bulk-semantic', semanticFrame);
+  const insert = 'ab漢🙂'.repeat(4_400);
+  const longTextFrame: PlannerFrame = {
+    ...singleSemanticFrame,
+    textMutations: [{ paragraphId: paragraphIds[0]!, start: 0, deleteCount: 0, insert }],
+  };
+  // This frame has one trailing text payload and no other variable payloads.
+  const encoded = frameWire.compilePlannerFrameUpdate(longTextFrame);
+  const payload = Buffer.from(insert, 'utf16le');
+  deepStrictEqual(encoded.subarray(encoded.byteLength - payload.byteLength), new Uint8Array(payload));
+  benchmarkFrame('write 22k UTF16 text into Wasm request arena @reflow @long-payload', longTextFrame);
+  benchmarkFrame('write 22k UTF16 text into owned array control @reflow @long-payload', longTextFrame, 'owned');
 });
