@@ -7,13 +7,12 @@ import { resolve } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
 
 import {
-  attachToScene,
   createLabels,
-  createParagraph,
   disposeLabels,
   disposeParagraph,
   glyph,
   paragraphTextForGlyphs,
+  createPublishedParagraph,
 } from './fixture.ts';
 
 const output = requiredEnvironment('GLYPH_EDIT_PROFILE_OUTPUT');
@@ -66,7 +65,7 @@ if (expectedMeasurements !== undefined) {
 const widthText = profileCase === 'width-reflow' ? paragraphTextForGlyphs(22_000) : undefined;
 const created = (() => {
   if (widthText !== undefined) {
-    const paragraph = createWidthParagraph(widthText);
+    const paragraph = createPublishedParagraph(widthText);
     return { ...paragraph, labels: [paragraph.paragraph], dispose: () => disposeParagraph(paragraph) };
   }
   const labels = createLabels(count);
@@ -146,7 +145,7 @@ session.disconnect();
 if (boundary === 'publication') assertCommitted();
 
 if (widthText !== undefined) {
-  const cold = createWidthParagraph(widthText);
+  const cold = createPublishedParagraph(widthText);
   try {
     cold.paragraph.constraints = { width: { mode: 'exact', size: 420 + widthIteration / 64 } };
     assert(cold.paragraph.measure().glyphCount > 0, 'cold width reflow must contain glyphs');
@@ -191,14 +190,6 @@ function assertCommitted(): void {
   const state = target.commitState();
   if (state.status !== 'committed') throw new Error(`profile target did not commit: ${JSON.stringify(state)}`);
   if (target.measureGlyphs() === undefined) throw new Error('profile target has no committed glyph output');
-}
-
-function createWidthParagraph(text: string) {
-  const paragraph = createParagraph(text);
-  const scene = attachToScene(paragraph.textGroup);
-  scene.updateMatrixWorld(true);
-  if (paragraph.textGroup.error !== undefined) throw paragraph.textGroup.error;
-  return { ...paragraph, scene };
 }
 
 function requiredEnvironment(name: string): string {

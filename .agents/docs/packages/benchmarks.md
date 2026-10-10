@@ -835,6 +835,11 @@ committed output before cold-control queries. A fresh paragraph receives the fin
 including optional ink inspection, before complete measurements are compared outside the sampled loop.
 A standalone TextGroup matrix traversal is not a semantic publication fence; legacy rows using only that traversal
 must not be interpreted as publication performance. Profiles are attribution evidence, not statistical release comparisons.
+The common-operation and 22k-paragraph publication cases now mount through the shared `createPublishedParagraph`
+fixture, traverse its Scene, and assert committed edit state outside the timed loop. Measurement-only and cached-read
+fixtures retain their detached setup. Historical timings from the corrected publication cases require fresh runs of
+both artifacts; they cannot be reused as equivalent workloads. Cold-mount and 1024-Text publication fixtures still
+require the same audit before their timings can establish completed publication.
 `benchmark:labs-internal` is reserved for workspace-only implementation experiments that cannot ship in
 the package artifact. Its `engine` suite preserves the raw retained-engine invalidation classes across selectable Bitmap,
 MTSDF, and Slug artifacts and Latin, bidi, and CJK corpora. Its `kernel` suite measures the scalar,

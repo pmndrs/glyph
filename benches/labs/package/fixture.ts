@@ -135,6 +135,15 @@ export function attachToScene(textGroup: ReturnType<typeof createParagraph>['tex
   return scene;
 }
 
+/** Mounts publication workloads; detached paragraphs remain available for measurement-only workloads. */
+export function createPublishedParagraph(text = paragraphText) {
+  const created = createParagraph(text);
+  const scene = attachToScene(created.textGroup);
+  scene.updateMatrixWorld(true);
+  if (created.textGroup.error !== undefined) throw created.textGroup.error;
+  return { ...created, scene };
+}
+
 export function disposeParagraph(created: ReturnType<typeof createParagraph>): void {
   created.textGroup.dispose();
   created.paragraph.dispose();
