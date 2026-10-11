@@ -300,7 +300,8 @@ pub fn coalesce_buffer_ranges(
         .checked_mul(bytes_per_record)
         .and_then(|bytes| {
             bytes.checked_add(
-                (ranges.len() as u32).saturating_mul(capability.range_call_penalty_bytes),
+                // Both alternatives submit one call; only extra partial calls add cost.
+                (ranges.len() as u32 - 1).saturating_mul(capability.range_call_penalty_bytes),
             )
         })
         .ok_or(PackingError::ArithmeticOverflow)?;
@@ -422,6 +423,29 @@ mod tests {
     }
 
     #[test]
+    fn a_single_small_tail_patch_does_not_pay_the_common_submission_cost() {
+        let mut adjacent = vec![
+            RecordRange { start: 34, end: 35 },
+            RecordRange { start: 35, end: 36 },
+        ];
+        coalesce_buffer_ranges(&mut adjacent, 8, &capability(), 36).unwrap();
+        assert_eq!(adjacent, [RecordRange { start: 34, end: 36 }]);
+    }
+
+    #[test]
+    fn additional_fragmented_calls_still_promote_a_whole_buffer_update() {
+        let mut fragmented = [0, 40, 80, 120]
+            .into_iter()
+            .map(|start| RecordRange {
+                start,
+                end: start + 1,
+            })
+            .collect();
+        coalesce_buffer_ranges(&mut fragmented, 8, &capability(), 128).unwrap();
+        assert_eq!(fragmented, [RecordRange { start: 0, end: 128 }]);
+    }
+
+    #[test]
     fn physical_buffer_cost_promotes_fragmented_and_expensive_updates() {
         let mut fragmented = (0..9)
             .map(|index| RecordRange {
@@ -461,6 +485,7 @@ mod tests {
         let mut aligned = vec![RecordRange { start: 0, end: 2 }];
         let mut capability = capability();
         capability.update_alignment = 16;
+        capability.whole_buffer_threshold_basis_points = 5_000;
 
         coalesce_buffer_ranges(&mut aligned, 8, &capability, 3).unwrap();
 

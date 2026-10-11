@@ -173,12 +173,16 @@ class ConfiguredGlyphPlanTarget<
     if (this.#disposed) return;
     this.#disposed = true;
     this.#rendererAbort.abort(new DOMException('Glyph plan target disposed', 'AbortError'));
+    let failurePresent = false;
     let failure: unknown;
     const release = (dispose: () => void): void => {
       try {
         dispose();
       } catch (error) {
-        failure ??= error;
+        if (!failurePresent) {
+          failurePresent = true;
+          failure = error;
+        }
       }
     };
     release(() => this.#renderer.dispose());
@@ -186,6 +190,6 @@ class ConfiguredGlyphPlanTarget<
       release(() => this.#defaultRenderer?.dispose());
     }
     release(() => this.#projector.dispose());
-    if (failure !== undefined) throw failure;
+    if (failurePresent) throw failure;
   }
 }

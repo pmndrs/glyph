@@ -78,7 +78,7 @@ test('measurement growth uses the exact failing result capacity', () => {
   );
   const paragraph = permanentGlyphId('paragraph', 'test.text-engine-handle-state/asymmetric-query');
 
-  const result = transport.measureParagraph(emptyPlannerFrame(), paragraph, 1_000);
+  const result = transport.prepareParagraph(emptyPlannerFrame(), paragraph, 1_000);
   assert.equal(result.bytes.byteLength, layout.size);
   assert.equal(reserves, 1, 'the failing arena must trigger one strict growth');
 });
@@ -122,7 +122,7 @@ test('measurement growth permits at most one bounded capacity repair', () => {
   const paragraph = permanentGlyphId('paragraph', 'test.text-engine-handle-state/bounded-query-growth');
 
   assert.throws(
-    () => transport.measureParagraph(emptyPlannerFrame(), paragraph, 1_000),
+    () => transport.prepareParagraph(emptyPlannerFrame(), paragraph, 1_000),
     (error) => {
       assert.equal(error.statusCode, 'result-too-large');
       return true;
@@ -170,7 +170,7 @@ test('measurement growth rejects capacity beyond the authored output limit witho
   const paragraph = permanentGlyphId('paragraph', 'test.text-engine-handle-state/over-limit-query-growth');
 
   assert.throws(
-    () => transport.measureParagraph(emptyPlannerFrame(), paragraph, 100),
+    () => transport.prepareParagraph(emptyPlannerFrame(), paragraph, 100),
     (error) => {
       assert.equal(error.statusCode, 'result-too-large');
       return true;

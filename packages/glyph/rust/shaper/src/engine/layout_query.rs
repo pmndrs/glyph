@@ -7,8 +7,8 @@ use alloc::vec::Vec;
 
 use super::{
     EngineError,
-    cluster_state::{CLUSTER_HARD_BREAK, ClusterArena},
-    flow_composition::{FlowFragment, FlowLayoutArena, FlowLine, NO_BOUNDARY},
+    cluster_state::ClusterArena,
+    flow_composition::{FlowFragment, FlowLayoutArena, FlowLine},
     flow_geometry::FlowGeometryArena,
     frame::{AXIS_AT_MOST, AXIS_EXACT, AXIS_UNCONSTRAINED},
     placement_state::SegmentTranslation,
@@ -16,10 +16,10 @@ use super::{
         PositionedSemanticGlyph, ThreadTypography, constraint_typography,
         positioned_fragment_advance,
     },
+    retained_rope::{RopeCursor, RopeCursorRange},
     semantic_view::{
         SEMANTIC_GLYPH, SEMANTIC_LINE, SEMANTIC_PARAGRAPH_MEASUREMENT, SemanticRecord,
     },
-    shaping_state::BoundaryShapeArena,
 };
 
 pub(crate) const MEASUREMENT_FLAG_OVERFLOWED: u16 = 1;
@@ -49,6 +49,8 @@ impl InkBounds {
         translation: SegmentTranslation,
     ) -> Result<(), EngineError> {
         let glyph = glyph.placed(translation)?;
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.measurement_ink_glyph_visits += 1);
         let inline_min = f64::from(glyph.ink_inline_start);
         let block_min = f64::from(glyph.ink_block_start);
         let inline_max = inline_min + f64::from(glyph.ink_inline_extent);
@@ -110,7 +112,8 @@ fn semantic_line_record(
     ink: InkBounds,
 ) -> Result<SemanticRecord, EngineError> {
     let mut record = SemanticRecord {
-        id: u32::try_from(index.saturating_add(1)).map_err(|_| EngineError::ResultTooLarge)?,
+        id: u32::try_from(index.checked_add(1).ok_or(EngineError::ResultTooLarge)?)
+            .map_err(|_| EngineError::ResultTooLarge)?,
         kind: SEMANTIC_LINE,
         flags: 0,
         parent_id: paragraph_id,
@@ -163,104 +166,6 @@ fn line_ink_bounds(
     Ok(bounds)
 }
 
-/// The visible glyph totals of a composed flow, derived at line level from the
-/// cluster arena's adjacency stream and the boundary records — the same set
-/// positioning emits, so a measurement-only query (which skips the positioning
-/// tail) reports identical counts to a positioned frame.
-pub(crate) fn visible_glyph_counts(
-    flow: &FlowLayoutArena,
-    clusters: &ClusterArena,
-    boundary_shape: &BoundaryShapeArena,
-) -> Result<(usize, usize), EngineError> {
-    fn range_counts(ids: &[u16], start: u32, count: u32) -> Result<(usize, usize), EngineError> {
-        let start = usize::try_from(start).map_err(|_| EngineError::InvalidRequest)?;
-        let end = start
-            .checked_add(usize::try_from(count).map_err(|_| EngineError::InvalidRequest)?)
-            .ok_or(EngineError::InvalidRequest)?;
-        let range = ids.get(start..end).ok_or(EngineError::InvalidRequest)?;
-        Ok((range.len(), range.iter().filter(|id| **id == 0).count()))
-    }
-    let mut total = 0_usize;
-    let mut missing = 0_usize;
-    for cap in &flow.drop_caps {
-        for cluster in usize::try_from(cap.fragment.line.cluster_start)
-            .map_err(|_| EngineError::InvalidRequest)?
-            ..usize::try_from(cap.fragment.line.cluster_end)
-                .map_err(|_| EngineError::InvalidRequest)?
-        {
-            let (count, zeros) = range_counts(
-                &clusters.glyph_ids,
-                clusters.glyph_starts[cluster],
-                clusters.glyph_counts[cluster],
-            )?;
-            total = total
-                .checked_add(count)
-                .ok_or(EngineError::ResultTooLarge)?;
-            missing += zeros;
-        }
-    }
-    for line in flow.lines.iter().copied() {
-        for fragment in line_fragments(flow, line)?.iter().copied() {
-            let cluster_start = usize::try_from(fragment.line.cluster_start)
-                .map_err(|_| EngineError::InvalidRequest)?;
-            let cluster_end = usize::try_from(fragment.line.cluster_end)
-                .map_err(|_| EngineError::InvalidRequest)?;
-            let record = |index: u32| {
-                (index != NO_BOUNDARY)
-                    .then(|| {
-                        boundary_shape
-                            .record(index)
-                            .ok_or(EngineError::InvalidRequest)
-                    })
-                    .transpose()
-            };
-            let (boundary, lead, tail) = (
-                record(fragment.boundary_index)?,
-                record(fragment.lead_index)?,
-                record(fragment.tail_index)?,
-            );
-            let body_start = lead.map_or(cluster_start, |lead| lead.cluster_end as usize);
-            let retained_end = boundary.or(tail).map_or(cluster_end, |boundary| {
-                usize::try_from(boundary.cluster_start).unwrap_or(usize::MAX)
-            });
-            if retained_end > cluster_end {
-                return Err(EngineError::InvalidRequest);
-            }
-            // A boundary cutting at or before the fragment start leaves an
-            // empty retained range — positioning walks the same empty range
-            // without erroring, and the count mirrors that.
-            for cluster in body_start..retained_end {
-                // Positioning skips hard-break clusters before its glyph walk;
-                // the count mirrors that exactly.
-                if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
-                    continue;
-                }
-                let (count, zeros) = range_counts(
-                    &clusters.glyph_ids,
-                    clusters.glyph_starts[cluster],
-                    clusters.glyph_counts[cluster],
-                )?;
-                total = total
-                    .checked_add(count)
-                    .ok_or(EngineError::ResultTooLarge)?;
-                missing += zeros;
-            }
-            for boundary in lead.into_iter().chain(boundary).chain(tail) {
-                for (start, count) in [
-                    (boundary.source_glyph_start, boundary.source_glyph_count),
-                    (boundary.ellipsis_glyph_start, boundary.ellipsis_glyph_count),
-                ] {
-                    let (span, zeros) =
-                        range_counts(&boundary_shape.shape.glyph_ids, start, count)?;
-                    total = total.checked_add(span).ok_or(EngineError::ResultTooLarge)?;
-                    missing += zeros;
-                }
-            }
-        }
-    }
-    Ok((total, missing))
-}
-
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct LayoutExtents {
     pub width: f64,
@@ -271,8 +176,9 @@ pub(crate) struct LayoutExtents {
 // Stage aggregation: each argument is one explicit input threaded through the
 // pipeline rather than hidden mutable state, and D-244 measured outlining these
 // bodies as size-neutral. Arity is the shape, not a smell.
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn append_measurement(
+fn append_measurement(
     target: &mut Vec<SemanticRecord>,
     paragraph_id: u32,
     text_length: usize,
@@ -290,6 +196,48 @@ pub(crate) fn append_measurement(
     intrinsics: super::cluster_state::IntrinsicWidths,
     include_glyphs: bool,
 ) -> Result<(), EngineError> {
+    append_measurement_with_glyph_spans(
+        target,
+        paragraph_id,
+        text_length,
+        cluster_count,
+        visible_glyphs,
+        geometry,
+        flow,
+        positioned_glyphs,
+        placement_translations,
+        semantic_line_glyph_starts,
+        semantic_line_glyph_counts,
+        semantic_line_inline_extents,
+        clusters,
+        intrinsic_extents,
+        intrinsics,
+        include_glyphs,
+        include_glyphs,
+    )
+}
+
+#[inline(never)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn append_measurement_with_glyph_spans(
+    target: &mut Vec<SemanticRecord>,
+    paragraph_id: u32,
+    text_length: usize,
+    cluster_count: usize,
+    visible_glyphs: (usize, usize),
+    geometry: &FlowGeometryArena,
+    flow: &FlowLayoutArena,
+    positioned_glyphs: &[PositionedSemanticGlyph],
+    placement_translations: &[SegmentTranslation],
+    semantic_line_glyph_starts: &[u32],
+    semantic_line_glyph_counts: &[u32],
+    semantic_line_inline_extents: Option<&[f64]>,
+    clusters: &ClusterArena,
+    intrinsic_extents: Option<LayoutExtents>,
+    intrinsics: super::cluster_state::IntrinsicWidths,
+    include_glyph_spans: bool,
+    include_glyphs: bool,
+) -> Result<(), EngineError> {
     let constraint = geometry
         .constraints
         .first()
@@ -297,7 +245,7 @@ pub(crate) fn append_measurement(
     if constraint.paragraph_id != paragraph_id {
         return Err(EngineError::InvalidRequest);
     }
-    if include_glyphs
+    if include_glyph_spans
         && (semantic_line_glyph_starts.len() != flow.lines.len()
             || semantic_line_glyph_counts.len() != flow.lines.len())
         || semantic_line_inline_extents.is_some_and(|extents| extents.len() != flow.lines.len())
@@ -305,29 +253,40 @@ pub(crate) fn append_measurement(
         return Err(EngineError::InvalidRequest);
     }
     let mut line_count = 0_usize;
+    let mut fragment_cursor = flow
+        .fragments
+        .cursor_from(0)
+        .ok_or(EngineError::InvalidRequest)?;
     for line in flow.lines.iter().copied() {
-        if line.flow_thread_id == constraint.flow_thread_id
-            && !line_fragments(flow, line)?.is_empty()
-        {
+        let fragments = next_line_fragments(line, &mut fragment_cursor)?;
+        if line.flow_thread_id == constraint.flow_thread_id && !fragments.is_empty() {
             line_count = line_count
                 .checked_add(1)
                 .ok_or(EngineError::ResultTooLarge)?;
         }
     }
+    require_complete_fragment_traversal(&fragment_cursor)?;
     let reserve = line_count
-        .saturating_add(1)
-        .saturating_add(if include_glyphs {
-            positioned_glyphs.len()
-        } else {
-            0
-        });
+        .checked_add(1)
+        .and_then(|count| {
+            count.checked_add(if include_glyphs {
+                positioned_glyphs.len()
+            } else {
+                0
+            })
+        })
+        .ok_or(EngineError::ResultTooLarge)?;
     target
         .try_reserve(reserve)
         .map_err(|_| EngineError::ResultTooLarge)?;
 
     let summary_index = target.len();
-    let line_start =
-        u32::try_from(summary_index.saturating_add(1)).map_err(|_| EngineError::ResultTooLarge)?;
+    let line_start = u32::try_from(
+        summary_index
+            .checked_add(1)
+            .ok_or(EngineError::ResultTooLarge)?,
+    )
+    .map_err(|_| EngineError::ResultTooLarge)?;
     let glyph_record_start = summary_index
         .checked_add(1)
         .and_then(|value| value.checked_add(line_count))
@@ -341,11 +300,25 @@ pub(crate) fn append_measurement(
     let mut consumed_clusters =
         usize::try_from(constraint.resume_cluster).map_err(|_| EngineError::InvalidRequest)?;
 
-    for (index, line) in flow.lines.iter().copied().enumerate() {
+    fragment_cursor = flow
+        .fragments
+        .cursor_from(0)
+        .ok_or(EngineError::InvalidRequest)?;
+    let next_lines = flow
+        .lines
+        .iter()
+        .copied()
+        .skip(1)
+        .map(Some)
+        .chain(core::iter::once(None));
+    let mut previous_flow_thread_id = None;
+    for (index, (line, next_line)) in flow.lines.iter().copied().zip(next_lines).enumerate() {
+        let fragments = next_line_fragments(line, &mut fragment_cursor)?;
+        let first_thread_line = previous_flow_thread_id != Some(line.flow_thread_id);
+        previous_flow_thread_id = Some(line.flow_thread_id);
         if line.flow_thread_id != constraint.flow_thread_id {
             continue;
         }
-        let fragments = line_fragments(flow, line)?;
         let Some(first) = fragments.first() else {
             continue;
         };
@@ -358,14 +331,16 @@ pub(crate) fn append_measurement(
             line_inline_extent(
                 flow,
                 line,
-                index,
+                &fragments,
+                first_thread_line,
+                next_line.is_none_or(|next| next.flow_thread_id != line.flow_thread_id),
                 clusters,
                 constraint_typography(constraint),
             )?
         };
         content_width = content_width.max(advance);
         content_height = content_height.max(line.block_start + line.height);
-        let drop_cap = (index == 0 || flow.lines[index - 1].flow_thread_id != line.flow_thread_id)
+        let drop_cap = first_thread_line
             .then(|| {
                 flow.drop_caps
                     .iter()
@@ -377,7 +352,7 @@ pub(crate) fn append_measurement(
         }
         consumed_clusters = consumed_clusters
             .max(usize::try_from(last.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?);
-        let item_start = if include_glyphs {
+        let item_start = if include_glyph_spans {
             u32::try_from(glyph_record_start)
                 .map_err(|_| EngineError::ResultTooLarge)?
                 .checked_add(semantic_line_glyph_starts[index])
@@ -385,7 +360,7 @@ pub(crate) fn append_measurement(
         } else {
             0
         };
-        let item_count = if include_glyphs {
+        let item_count = if include_glyph_spans {
             semantic_line_glyph_counts[index]
         } else {
             0
@@ -416,6 +391,7 @@ pub(crate) fn append_measurement(
         line_count_emitted += 1;
         paragraph_ink.join(line_ink);
     }
+    require_complete_fragment_traversal(&fragment_cursor)?;
 
     if include_glyphs {
         if target.len() != glyph_record_start {
@@ -474,14 +450,12 @@ pub(crate) fn append_measurement(
             constraint.height,
             full_content_height,
         )?;
-    // Glyph totals come from the flow-level derivation, not the positioned
-    // arena, so a measurement-only query (which skips the positioning tail)
-    // reports the same counts a positioned frame reports.
+    // Totals and ink derive from the same positioned result supplied by preparation.
     let (visible_glyph_count, missing_glyph_count) = visible_glyphs;
     // Ink is authoritative exactly when this query positioned the glyphs it measured. A paragraph
     // that positioned zero glyphs still reports authoritatively — its ink box is genuinely empty —
     // so the bit tracks whether positioning ran, not whether any ink was found.
-    let ink_measured = !positioned_glyphs.is_empty() || (include_glyphs && line_count == 0);
+    let ink_measured = !positioned_glyphs.is_empty() || (include_glyph_spans && line_count == 0);
     target[summary_index] = SemanticRecord {
         id: paragraph_id,
         kind: SEMANTIC_PARAGRAPH_MEASUREMENT,
@@ -519,22 +493,42 @@ pub(crate) fn flow_extents(
     typography: ThreadTypography,
 ) -> Result<LayoutExtents, EngineError> {
     let mut extents = LayoutExtents::default();
-    for (index, line) in flow.lines.iter().copied().enumerate() {
+    let mut fragment_cursor = flow
+        .fragments
+        .cursor_from(0)
+        .ok_or(EngineError::InvalidRequest)?;
+    let next_lines = flow
+        .lines
+        .iter()
+        .copied()
+        .skip(1)
+        .map(Some)
+        .chain(core::iter::once(None));
+    let mut previous_flow_thread_id = None;
+    for (line, next_line) in flow.lines.iter().copied().zip(next_lines) {
+        let fragments = next_line_fragments(line, &mut fragment_cursor)?;
+        let first_thread_line = previous_flow_thread_id != Some(line.flow_thread_id);
+        previous_flow_thread_id = Some(line.flow_thread_id);
         if line.flow_thread_id != flow_thread_id {
             continue;
         }
-        let fragments = line_fragments(flow, line)?;
         if fragments.is_empty() {
             continue;
         }
         let Some(last) = fragments.last() else {
             continue;
         };
-        extents.width = extents
-            .width
-            .max(line_inline_extent(flow, line, index, clusters, typography)?);
+        extents.width = extents.width.max(line_inline_extent(
+            flow,
+            line,
+            &fragments,
+            first_thread_line,
+            next_line.is_none_or(|next| next.flow_thread_id != line.flow_thread_id),
+            clusters,
+            typography,
+        )?);
         extents.height = extents.height.max(line.block_start + line.height);
-        if (index == 0 || flow.lines[index - 1].flow_thread_id != line.flow_thread_id)
+        if first_thread_line
             && let Some(cap) = flow
                 .drop_caps
                 .iter()
@@ -546,30 +540,28 @@ pub(crate) fn flow_extents(
             .consumed_clusters
             .max(usize::try_from(last.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?);
     }
+    require_complete_fragment_traversal(&fragment_cursor)?;
     Ok(extents)
 }
 
 fn line_inline_extent(
     flow: &FlowLayoutArena,
     line: FlowLine,
-    index: usize,
+    fragments: &RopeCursorRange<'_, FlowFragment>,
+    first_thread_line: bool,
+    final_line: bool,
     clusters: &ClusterArena,
     typography: ThreadTypography,
 ) -> Result<f64, EngineError> {
-    let fragments = line_fragments(flow, line)?;
     if fragments.is_empty() {
         return Ok(0.0);
     }
-    let final_line = flow
-        .lines
-        .get(index + 1)
-        .is_none_or(|next| next.flow_thread_id != line.flow_thread_id);
     let mut inline_start = fragments
         .iter()
         .map(|fragment| fragment.slot_start)
         .fold(f64::INFINITY, f64::min);
     let mut inline_end = f64::NEG_INFINITY;
-    if (index == 0 || flow.lines[index - 1].flow_thread_id != line.flow_thread_id)
+    if first_thread_line
         && let Some(cap) = flow
             .drop_caps
             .iter()
@@ -599,13 +591,21 @@ fn line_inline_extent(
     Ok((inline_end - inline_start).max(0.0))
 }
 
-fn line_fragments(flow: &FlowLayoutArena, line: FlowLine) -> Result<&[FlowFragment], EngineError> {
-    let start = usize::try_from(line.fragment_start).map_err(|_| EngineError::InvalidRequest)?;
-    let end = start
-        .checked_add(usize::from(line.fragment_count))
-        .ok_or(EngineError::InvalidRequest)?;
-    flow.fragments
-        .get(start..end)
+fn next_line_fragments<'a>(
+    line: FlowLine,
+    cursor: &mut RopeCursor<'a, FlowFragment>,
+) -> Result<RopeCursorRange<'a, FlowFragment>, EngineError> {
+    cursor
+        .take(usize::from(line.fragment_count))
+        .ok_or(EngineError::InvalidRequest)
+}
+
+fn require_complete_fragment_traversal(
+    cursor: &RopeCursor<'_, FlowFragment>,
+) -> Result<(), EngineError> {
+    cursor
+        .is_empty()
+        .then_some(())
         .ok_or(EngineError::InvalidRequest)
 }
 
@@ -678,13 +678,13 @@ mod tests {
                 region_id: 3,
                 transform_index: 1,
                 clip_id: 0,
-                fragment_start: 0,
                 fragment_count: 1,
                 align: 1,
                 block_start: 0.0,
                 baseline: 4.0,
                 height: 5.0,
-            }],
+            }]
+            .into(),
             fragments: vec![FlowFragment {
                 line: ComposedLine {
                     cluster_start: 0,
@@ -703,11 +703,12 @@ mod tests {
                 boundary_index: NO_BOUNDARY,
                 lead_index: NO_BOUNDARY,
                 tail_index: NO_BOUNDARY,
-            }],
+            }]
+            .into(),
             ..FlowLayoutArena::default()
         };
         let mut records = vec![];
-        append_measurement(
+        append_measurement_with_glyph_spans(
             &mut records,
             7,
             2,
@@ -723,12 +724,20 @@ mod tests {
             &ClusterArena::default(),
             None,
             crate::engine::cluster_state::IntrinsicWidths::default(),
+            true,
             false,
         )
         .unwrap();
         // The first line occupies indent + advance inline, and the paragraph's
         // block extent carries the trailing space-after.
         assert_eq!(records[1].inline_extent, 11.0);
+        assert_eq!(
+            records.len(),
+            2,
+            "line spans do not require serialized glyph records"
+        );
+        assert_eq!(records[1].item_start, 2);
+        assert_eq!(records[1].item_count, 2);
         assert_eq!(records[0].inline_extent, 11.0);
         assert_eq!(records[0].block_extent, 11.0);
     }
@@ -745,13 +754,13 @@ mod tests {
                 region_id: 3,
                 transform_index: 1,
                 clip_id: 0,
-                fragment_start: 0,
                 fragment_count: 1,
                 align: 1,
                 block_start: 0.0,
                 baseline: 4.0,
                 height: 5.0,
-            }],
+            }]
+            .into(),
             fragments: vec![FlowFragment {
                 line: ComposedLine {
                     cluster_start: 0,
@@ -770,7 +779,8 @@ mod tests {
                 boundary_index: NO_BOUNDARY,
                 lead_index: NO_BOUNDARY,
                 tail_index: NO_BOUNDARY,
-            }],
+            }]
+            .into(),
             ..FlowLayoutArena::default()
         };
         let mut records = vec![];
@@ -855,13 +865,13 @@ mod tests {
                 region_id: 3,
                 transform_index: 1,
                 clip_id: 0,
-                fragment_start: 0,
                 fragment_count: 1,
                 align: 1,
                 block_start: 0.0,
                 baseline: 4.0,
                 height: 5.0,
-            }],
+            }]
+            .into(),
             fragments: vec![FlowFragment {
                 line: ComposedLine {
                     cluster_start: 0,
@@ -880,7 +890,8 @@ mod tests {
                 boundary_index: NO_BOUNDARY,
                 lead_index: NO_BOUNDARY,
                 tail_index: NO_BOUNDARY,
-            }],
+            }]
+            .into(),
             ..FlowLayoutArena::default()
         };
         let mut records = vec![];
@@ -927,13 +938,13 @@ mod tests {
                 region_id: 3,
                 transform_index: 1,
                 clip_id: 0,
-                fragment_start: 0,
                 fragment_count: 1,
                 align: 1,
                 block_start: 0.0,
                 baseline: 100.0,
                 height: 140.64,
-            }],
+            }]
+            .into(),
             fragments: vec![FlowFragment {
                 line: ComposedLine {
                     cluster_start: 0,
@@ -952,7 +963,8 @@ mod tests {
                 boundary_index: NO_BOUNDARY,
                 lead_index: NO_BOUNDARY,
                 tail_index: NO_BOUNDARY,
-            }],
+            }]
+            .into(),
             ..FlowLayoutArena::default()
         };
         let mut records = vec![];
@@ -1084,13 +1096,13 @@ mod tests {
                 region_id: 3,
                 transform_index: 1,
                 clip_id: 0,
-                fragment_start: 0,
                 fragment_count: 1,
                 align: 1,
                 block_start: 0.0,
                 baseline: 4.0,
                 height: 5.0,
-            }],
+            }]
+            .into(),
             fragments: vec![FlowFragment {
                 line: ComposedLine {
                     cluster_start: 0,
@@ -1109,7 +1121,8 @@ mod tests {
                 boundary_index: NO_BOUNDARY,
                 lead_index: NO_BOUNDARY,
                 tail_index: NO_BOUNDARY,
-            }],
+            }]
+            .into(),
             ..FlowLayoutArena::default()
         };
         // The second glyph overhangs the first on both axes, which is the case an advance-derived
@@ -1183,13 +1196,13 @@ mod tests {
                 region_id: 3,
                 transform_index: 1,
                 clip_id: 0,
-                fragment_start: 0,
                 fragment_count: 1,
                 align: 1,
                 block_start: 0.0,
                 baseline: 4.0,
                 height: 5.0,
-            }],
+            }]
+            .into(),
             fragments: vec![FlowFragment {
                 line: ComposedLine {
                     cluster_start: 0,
@@ -1208,7 +1221,8 @@ mod tests {
                 boundary_index: NO_BOUNDARY,
                 lead_index: NO_BOUNDARY,
                 tail_index: NO_BOUNDARY,
-            }],
+            }]
+            .into(),
             ..FlowLayoutArena::default()
         };
         let mut records = vec![];

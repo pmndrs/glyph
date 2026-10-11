@@ -51,6 +51,61 @@ test('a clipped paragraph inspects the same lead glyphs as the unclipped paragra
   assert.deepEqual(Array.from(clipped.glyphIds), Array.from(open.glyphIds));
 });
 
+test('retained clipped inspection matches cold layouts across clipping, ellipsis and text changes', async (t) => {
+  const create = await session(t, 'clipped-retained', 'cross-space-bitmap-16.font.glb');
+  const cases = [
+    {
+      text: crossSpaceText,
+      layout: { wrap: 'word', overflow: 'clip' },
+      constraints: { ...width(200), height: { mode: 'exact', size: 28 } },
+    },
+    {
+      text: `${crossSpaceText} a new line`,
+      layout: { wrap: 'word', overflow: 'clip' },
+      constraints: { ...width(240), height: { mode: 'exact', size: 28 } },
+    },
+    { text: crossSpaceText, layout: { wrap: 'word', overflow: 'ellipsis', maxLines: 2 }, constraints: width(200) },
+    { text: crossSpaceText, layout: { wrap: 'word', overflow: 'clip', maxLines: 2 }, constraints: width(200) },
+    {
+      text: 'the apple\nate a banana',
+      layout: { wrap: 'word', overflow: 'clip' },
+      constraints: { ...width(200), height: { mode: 'exact', size: 28 } },
+    },
+    { text: crossSpaceText, layout: { wrap: 'word', overflow: 'visible' }, constraints: width(200) },
+    {
+      text: '',
+      layout: { wrap: 'word', overflow: 'clip' },
+      constraints: { ...width(200), height: { mode: 'exact', size: 28 } },
+    },
+  ];
+  const fields = [
+    'glyphIds',
+    'clusters',
+    'x',
+    'y',
+    'glyphAdvances',
+    'lineTextStarts',
+    'lineTextEnds',
+    'lineGlyphStarts',
+    'lineGlyphCounts',
+    'lineAdvances',
+  ];
+  const retained = create(cases[0]);
+  for (let iteration = 0; iteration < 2; iteration += 1) {
+    for (const options of cases) {
+      retained.set(options);
+      const cold = create(options);
+      const actual = retained.glyphs();
+      const expected = cold.glyphs();
+      for (const field of fields) {
+        assert.deepEqual(Array.from(actual[field]), Array.from(expected[field]), field);
+      }
+      assert.equal(actual.glyphIds.length, retained.measure().glyphCount);
+      cold.dispose();
+    }
+  }
+});
+
 test('a text edit that also changes shaping features does not keep stale break corrections', async (t) => {
   const create = await session(t, 'edit-restyle', 'cross-space-bitmap-16.font.glb');
   const style = { features: [{ tag: 'calt', value: 0 }] };

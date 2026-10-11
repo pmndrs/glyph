@@ -130,6 +130,34 @@ pub(crate) struct LayoutRun {
     pub canonical_revision: Option<RunCanonicalRevision>,
 }
 
+/// Candidate-only source-coordinate proof, reused across preparations without dropping capacity.
+#[derive(Default)]
+pub(crate) struct LayoutDirtyRanges {
+    pub ranges: Vec<core::ops::Range<u32>>,
+    pub valid: bool,
+}
+
+impl LayoutDirtyRanges {
+    pub fn clear(&mut self) {
+        self.ranges.clear();
+        self.valid = false;
+    }
+
+    fn record(&mut self, range: core::ops::Range<u32>) -> Result<(), EngineError> {
+        if let Some(last) = self.ranges.last_mut()
+            && last.end == range.start
+        {
+            last.end = range.end;
+        } else {
+            self.ranges
+                .try_reserve(1)
+                .map_err(|_| EngineError::ResultTooLarge)?;
+            self.ranges.push(range);
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct RunCanonicalInput<'a> {
     pub text: &'a [u16],
@@ -884,6 +912,10 @@ impl ClusterArena {
     /// boundaries, like Blink's fast min-content path; line layout is exact at the
     /// breaks it takes.
     pub(crate) fn intrinsic_widths(&self, wrap: u8) -> IntrinsicWidths {
+        #[cfg(test)]
+        super::work_attribution::record(|work| {
+            work.measurement_intrinsic_cluster_visits += self.starts.len();
+        });
         let mut min_run = 0.0_f64;
         let mut max_run = 0.0_f64;
         let mut space_tail = 0.0_f64;
@@ -1184,7 +1216,16 @@ impl ClusterArena {
         committed: RunCanonicalInput<'_>,
         index: &mut IdentityIndex,
         next_revision: &mut u32,
+        layout_dirty: Option<(&mut LayoutDirtyRanges, bool)>,
     ) -> Result<(), EngineError> {
+        let styles_unchanged = layout_dirty.as_ref().is_some_and(|(_, proven)| *proven);
+        let mut layout_dirty = layout_dirty.map(|(dirty, _)| dirty);
+        if let Some(dirty) = layout_dirty.as_deref_mut() {
+            dirty.clear();
+            dirty.valid = self.starts.len() == previous.starts.len()
+                && self.layout_runs.runs.len() == previous.layout_runs.runs.len()
+                && current.text.len() == committed.text.len();
+        }
         index
             .prepare(previous.layout_runs.runs.len())
             .map_err(identity_index_error)?;
@@ -1205,9 +1246,24 @@ impl ClusterArena {
                 .get(anchor)
                 .and_then(|previous_index| usize::try_from(previous_index).ok())
                 .and_then(|previous_index| previous.layout_runs.runs.get(previous_index).copied());
+            if previous_run.is_none()
+                && let Some(dirty) = layout_dirty.as_deref_mut()
+            {
+                dirty.valid = false;
+            }
             let retained = previous_run
                 .map(|candidate| {
-                    runs_canonically_equal(self, run, current, previous, candidate, committed)
+                    runs_canonically_equal(
+                        self,
+                        run,
+                        current,
+                        previous,
+                        candidate,
+                        committed,
+                        layout_dirty
+                            .as_deref_mut()
+                            .map(|dirty| (dirty, styles_unchanged)),
+                    )
                 })
                 .transpose()?
                 .filter(|equal| *equal)
@@ -1296,17 +1352,25 @@ impl ClusterArena {
         direction: u8,
         cluster: usize,
         stop_after_space: bool,
+        limit: usize,
     ) -> Result<(PlacementCluster, usize), EngineError> {
         let placement = self.placement_cluster_at(run, direction, cluster)?;
         if direction & 1 != 0 || self.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
             return Ok((placement, cluster + 1));
         }
-        let run_end = usize::try_from(run.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+        let run_end = usize::try_from(run.cluster_end)
+            .map_err(|_| EngineError::InvalidRequest)?
+            .min(limit);
+        if run_end <= cluster {
+            return Err(EngineError::InvalidRequest);
+        }
         let mut segment_end = cluster + 1;
         while segment_end < run_end
             && self.placement_segment_anchors[segment_end] == placement.segment_anchor
             && (!stop_after_space || self.flags[segment_end - 1] & CLUSTER_SPACE == 0)
         {
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.placement_segment_validation_visits += 1);
             segment_end += 1;
         }
         let run_start =
@@ -1329,6 +1393,8 @@ impl ClusterArena {
                 .get(block_lane_start + (block_end - run_start))
                 == Some(&block)
         {
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.placement_segment_validation_visits += 1);
             block_end += 1;
         }
         Ok((placement, block_end))
@@ -1942,72 +2008,174 @@ fn runs_canonically_equal(
     previous_clusters: &ClusterArena,
     previous_run: LayoutRun,
     previous: RunCanonicalInput<'_>,
+    layout_dirty: Option<(&mut LayoutDirtyRanges, bool)>,
 ) -> Result<bool, EngineError> {
-    let current_clusters_range = run_cluster_range(current_clusters, current_run)?;
-    let previous_clusters_range = run_cluster_range(previous_clusters, previous_run)?;
-    if current_clusters_range.len() != previous_clusters_range.len()
+    let styles_unchanged = layout_dirty.as_ref().is_some_and(|(_, proven)| *proven);
+    let mut layout_dirty = layout_dirty.map(|(dirty, _)| dirty);
+    let current_range = run_cluster_range(current_clusters, current_run)?;
+    let previous_range = run_cluster_range(previous_clusters, previous_run)?;
+    if current_range.len() != previous_range.len()
         || current_run.glyph_count != previous_run.glyph_count
         || current_run.font_handle != previous_run.font_handle
-        || !run_text_equal(
-            current_clusters,
-            current_clusters_range.clone(),
-            current,
-            previous_clusters,
-            previous_clusters_range.clone(),
-            previous,
-        )?
     {
+        if let Some(dirty) = layout_dirty {
+            dirty.valid = false;
+        }
         return Ok(false);
     }
-
-    for (current_cluster, previous_cluster) in current_clusters_range.zip(previous_clusters_range) {
-        let current_style = cluster_style(current_clusters, current_cluster, current.styles)?;
-        let previous_style = cluster_style(previous_clusters, previous_cluster, previous.styles)?;
-        if lane(&current_clusters.stable_ids, current_cluster)?
-            != lane(&previous_clusters.stable_ids, previous_cluster)?
-            || cluster_text_len(current_clusters, current_cluster)?
-                != cluster_text_len(previous_clusters, previous_cluster)?
-            || lane(&current_clusters.advances, current_cluster)?.to_bits()
-                != lane(&previous_clusters.advances, previous_cluster)?.to_bits()
-            || lane(&current_clusters.advance_units, current_cluster)?
-                != lane(&previous_clusters.advance_units, previous_cluster)?
-            || lane(&current_clusters.units_per_em, current_cluster)?.to_bits()
-                != lane(&previous_clusters.units_per_em, previous_cluster)?.to_bits()
-            || lane(&current_clusters.flags, current_cluster)?
-                != lane(&previous_clusters.flags, previous_cluster)?
-            || lane(&current_clusters.font_handles, current_cluster)?
-                != lane(&previous_clusters.font_handles, previous_cluster)?
-            || lane(&current_clusters.glyph_counts, current_cluster)?
-                != lane(&previous_clusters.glyph_counts, previous_cluster)?
-            || lane(&current_clusters.shaped, current_cluster)?
-                != lane(&previous_clusters.shaped, previous_cluster)?
-            || lane(&current_clusters.unsafe_before, current_cluster)?
-                != lane(&previous_clusters.unsafe_before, previous_cluster)?
-            || !cluster_direction_equal(
-                current_clusters,
-                current_cluster,
-                current,
-                previous_clusters,
-                previous_cluster,
-                previous,
-            )?
-            || !geometric_style_equal(
-                current_style,
-                current.style_arena,
-                previous_style,
-                previous.style_arena,
-            )
-            || !cluster_glyphs_equal(
-                current_clusters,
-                current_cluster,
-                previous_clusters,
-                previous_cluster,
-            )?
+    let text_equal = run_text_equal(
+        current_clusters,
+        current_range.clone(),
+        current,
+        previous_clusters,
+        previous_range.clone(),
+        previous,
+    )?;
+    if !text_equal && layout_dirty.as_ref().is_none_or(|dirty| !dirty.valid) {
+        return Ok(false);
+    }
+    let mut equal = text_equal;
+    for (current_cluster, previous_cluster) in current_range.zip(previous_range) {
+        if let Some(dirty) = layout_dirty.as_deref_mut()
+            && dirty.valid
         {
-            return Ok(false);
+            let start = lane(&current_clusters.starts, current_cluster)?;
+            let end = lane(&current_clusters.ends, current_cluster)?;
+            if current_cluster != previous_cluster
+                || start != lane(&previous_clusters.starts, previous_cluster)?
+                || end != lane(&previous_clusters.ends, previous_cluster)?
+                || lane(&current_clusters.glyph_counts, current_cluster)?
+                    != lane(&previous_clusters.glyph_counts, previous_cluster)?
+                || (lane(&current_clusters.flags, current_cluster)?
+                    | lane(&previous_clusters.flags, previous_cluster)?)
+                    & CLUSTER_BREAK_CORRECTION
+                    != 0
+            {
+                dirty.valid = false;
+            }
+        }
+        let cluster_equal = clusters_canonically_equal(
+            current_clusters,
+            current_cluster,
+            current,
+            previous_clusters,
+            previous_cluster,
+            previous,
+            ClusterComparison {
+                text_equal,
+                styles_unchanged: styles_unchanged
+                    && layout_dirty.as_ref().is_some_and(|dirty| dirty.valid),
+            },
+        )?;
+        if !cluster_equal {
+            if let Some(dirty) = layout_dirty.as_deref_mut()
+                && dirty.valid
+            {
+                dirty.record(
+                    lane(&current_clusters.starts, current_cluster)?
+                        ..lane(&current_clusters.ends, current_cluster)?,
+                )?;
+            }
+
+            equal = false;
+            if layout_dirty.as_ref().is_none_or(|dirty| !dirty.valid) {
+                return Ok(false);
+            }
         }
     }
-    Ok(true)
+    Ok(equal)
+}
+
+#[derive(Clone, Copy)]
+struct ClusterComparison {
+    text_equal: bool,
+    styles_unchanged: bool,
+}
+
+fn clusters_canonically_equal(
+    current_clusters: &ClusterArena,
+    current_cluster: usize,
+    current: RunCanonicalInput<'_>,
+    previous_clusters: &ClusterArena,
+    previous_cluster: usize,
+    previous: RunCanonicalInput<'_>,
+    comparison: ClusterComparison,
+) -> Result<bool, EngineError> {
+    #[cfg(test)]
+    super::work_attribution::record(|work| work.canonical_cluster_comparisons += 1);
+    Ok(!(lane(&current_clusters.stable_ids, current_cluster)?
+        != lane(&previous_clusters.stable_ids, previous_cluster)?
+        || cluster_text_len(current_clusters, current_cluster)?
+            != cluster_text_len(previous_clusters, previous_cluster)?
+        || lane(&current_clusters.advances, current_cluster)?.to_bits()
+            != lane(&previous_clusters.advances, previous_cluster)?.to_bits()
+        || lane(&current_clusters.advance_units, current_cluster)?
+            != lane(&previous_clusters.advance_units, previous_cluster)?
+        || lane(&current_clusters.units_per_em, current_cluster)?.to_bits()
+            != lane(&previous_clusters.units_per_em, previous_cluster)?.to_bits()
+        || lane(&current_clusters.flags, current_cluster)?
+            != lane(&previous_clusters.flags, previous_cluster)?
+        || lane(&current_clusters.font_handles, current_cluster)?
+            != lane(&previous_clusters.font_handles, previous_cluster)?
+        || lane(&current_clusters.glyph_counts, current_cluster)?
+            != lane(&previous_clusters.glyph_counts, previous_cluster)?
+        || lane(&current_clusters.shaped, current_cluster)?
+            != lane(&previous_clusters.shaped, previous_cluster)?
+        || lane(&current_clusters.unsafe_before, current_cluster)?
+            != lane(&previous_clusters.unsafe_before, previous_cluster)?
+        || !cluster_direction_equal(
+            current_clusters,
+            current_cluster,
+            current,
+            previous_clusters,
+            previous_cluster,
+            previous,
+        )?
+        || (!comparison.styles_unchanged && {
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.canonical_style_resolutions += 2);
+            !geometric_style_equal(
+                cluster_style(current_clusters, current_cluster, current.styles)?,
+                current.style_arena,
+                cluster_style(previous_clusters, previous_cluster, previous.styles)?,
+                previous.style_arena,
+            )
+        })
+        || !cluster_glyphs_equal(
+            current_clusters,
+            current_cluster,
+            previous_clusters,
+            previous_cluster,
+        )?
+        || (!comparison.text_equal && {
+            let current_start = usize::try_from(lane(&current_clusters.starts, current_cluster)?)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let current_end = usize::try_from(lane(&current_clusters.ends, current_cluster)?)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let previous_start =
+                usize::try_from(lane(&previous_clusters.starts, previous_cluster)?)
+                    .map_err(|_| EngineError::InvalidRequest)?;
+            let previous_end = usize::try_from(lane(&previous_clusters.ends, previous_cluster)?)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let current_range = current_start..current_end;
+            let previous_range = previous_start..previous_end;
+            current
+                .text
+                .get(current_range.clone())
+                .ok_or(EngineError::InvalidRequest)?
+                != previous
+                    .text
+                    .get(previous_range.clone())
+                    .ok_or(EngineError::InvalidRequest)?
+                || current
+                    .text_unit_ids
+                    .get(current_range)
+                    .ok_or(EngineError::InvalidRequest)?
+                    != previous
+                        .text_unit_ids
+                        .get(previous_range)
+                        .ok_or(EngineError::InvalidRequest)?
+        })))
 }
 
 fn run_cluster_range(
@@ -2043,6 +2211,8 @@ fn run_text_equal(
     previous_range: core::ops::Range<usize>,
     previous: RunCanonicalInput<'_>,
 ) -> Result<bool, EngineError> {
+    #[cfg(test)]
+    super::work_attribution::record(|work| work.canonical_text_validations += 1);
     if current.text.len() != current.text_unit_ids.len()
         || previous.text.len() != previous.text_unit_ids.len()
     {
@@ -2165,7 +2335,8 @@ fn cluster_direction_equal(
                 .get(usize::try_from(previous_index).map_err(|_| EngineError::InvalidRequest)?)
                 .ok_or(EngineError::InvalidRequest)?;
             Ok(current_run.direction == previous_run.direction
-                && current_run.bidi_level == previous_run.bidi_level)
+                && current_run.bidi_level == previous_run.bidi_level
+                && current_run.script == previous_run.script)
         }
     }
 }
@@ -2336,6 +2507,16 @@ mod tests {
         index: &mut IdentityIndex,
         next_revision: &mut u32,
     ) {
+        finalize_fixture_with_dirty(current, previous, index, next_revision, None);
+    }
+
+    fn finalize_fixture_with_dirty(
+        current: &mut CanonicalFixture,
+        previous: &CanonicalFixture,
+        index: &mut IdentityIndex,
+        next_revision: &mut u32,
+        dirty: Option<(&mut LayoutDirtyRanges, bool)>,
+    ) {
         let current_input = RunCanonicalInput {
             text: &current.text,
             text_unit_ids: &current.text_unit_ids,
@@ -2358,6 +2539,7 @@ mod tests {
                 previous_input,
                 index,
                 next_revision,
+                dirty,
             )
             .unwrap();
     }
@@ -2526,6 +2708,51 @@ mod tests {
     }
 
     #[test]
+    fn layout_dirty_ranges_require_exact_coordinates_and_safe_boundaries() {
+        let style = ResolvedStyle::test_typography(10.0, 0.0, 0.0);
+        let previous = canonical_fixture(
+            &[97, 98, 99, 100, 101],
+            &[10, 11, 12, 13, 14],
+            &[0; 5],
+            style,
+        );
+        let mut dirty = LayoutDirtyRanges::default();
+        let mut index = IdentityIndex::default();
+        let mut next_revision = 20;
+        for negative in 0..3 {
+            let mut current = canonical_fixture(
+                &[97, 120, 99, 121, 101],
+                &[10, 21, 12, 23, 14],
+                &[0; 5],
+                style,
+            );
+            if negative == 1 {
+                current.arena.starts[2] = 1;
+            } else if negative == 2 {
+                current.arena.flags[4] |= CLUSTER_BREAK_CORRECTION;
+            }
+            finalize_fixture_with_dirty(
+                &mut current,
+                &previous,
+                &mut index,
+                &mut next_revision,
+                Some((&mut dirty, false)),
+            );
+            if negative == 0 {
+                assert!(dirty.valid);
+                assert_eq!(dirty.ranges, [1..2, 3..4]);
+            } else {
+                assert!(!dirty.valid);
+            }
+        }
+        let capacity = dirty.ranges.capacity();
+        dirty.clear();
+        assert!(!dirty.valid);
+        assert!(dirty.ranges.is_empty());
+        assert_eq!(dirty.ranges.capacity(), capacity);
+    }
+
+    #[test]
     fn canonical_revision_reconciles_insertion_before_by_stable_anchor() {
         let style = ResolvedStyle::test_typography(16.0, 0.0, 0.0);
         let mut previous =
@@ -2580,7 +2807,12 @@ mod tests {
         let mut paint_only = canonical_fixture(&[b'a' as u16], &[10], &[0], paint);
         paint_only.arena.binding_handles[0] = 999;
         let mut next_revision = 2;
+        super::super::work_attribution::reset();
         finalize_fixture(&mut paint_only, &previous, &mut index, &mut next_revision);
+        assert_eq!(
+            super::super::work_attribution::snapshot().canonical_style_resolutions,
+            2
+        );
         assert_eq!(revisions(&paint_only), [1]);
         assert_eq!(next_revision, 2);
 
@@ -3138,6 +3370,183 @@ mod tests {
         assert_eq!(clusters.glyph_counts, [1, 0]);
         assert_eq!(clusters.advances, [16.0, 0.0]);
         assert_eq!(clusters.flags[1] & CLUSTER_SAFE_BEFORE, 0);
+    }
+
+    #[test]
+    fn rtl_numeric_chunks_preserve_glyphless_ownership_and_detached_breaks() {
+        for count in [63usize, 64, 65] {
+            for (glyphless, hard_break) in [(false, false), (true, false), (false, true)] {
+                let mut text = vec![0x05d0; count];
+                let middle = count / 2;
+                if hard_break {
+                    text[middle] = 0x000a;
+                }
+                let text_unit_ids: Vec<u32> = (1..=u32::try_from(count).unwrap()).collect();
+                let mut unicode = UnicodeAnalysis::default();
+                unicode.analyze(&text).unwrap();
+                let style = ResolvedStyle::test_typography(16.0, 0.0, 0.0);
+                let styles = [StyleSegment {
+                    text_start: 0,
+                    text_end: u32::try_from(count).unwrap(),
+                    style,
+                }];
+                let ranges = if hard_break {
+                    vec![0..middle, middle + 1..count]
+                } else {
+                    core::iter::once(0..count).collect::<Vec<_>>()
+                };
+                let mut runs = Vec::new();
+                let mut shape = ShapeArena::default();
+                for (source_run, range) in ranges.iter().enumerate() {
+                    let start = u32::try_from(range.start).unwrap();
+                    let end = u32::try_from(range.end).unwrap();
+                    runs.push(ShapingRun {
+                        text_start: start,
+                        text_end: end,
+                        script: u32::from_be_bytes(*b"Hebr"),
+                        direction: 5,
+                        bidi_level: 1,
+                        style,
+                    });
+                    let glyph_start = u32::try_from(shape.glyph_ids.len()).unwrap();
+                    for cluster in range.clone().rev() {
+                        // The neighboring unsafe glyph owns the omitted continuation, as in
+                        // the ligature fixture above; newline is outside both shaped runs.
+                        if glyphless && (cluster == 0 || cluster == count - 2) {
+                            continue;
+                        }
+                        shape.glyph_ids.push(u16::try_from(cluster + 1).unwrap());
+                        shape.clusters.push(u32::try_from(cluster).unwrap());
+                        shape.x_advances.push(500);
+                        shape.y_advances.push(0);
+                        shape.x_offsets.push(0);
+                        shape.y_offsets.push(0);
+                        shape.glyph_flags.push(
+                            if glyphless && (cluster == 1 || cluster == count - 1) {
+                                GLYPH_UNSAFE_TO_BREAK
+                            } else {
+                                0
+                            },
+                        );
+                    }
+                    shape.runs.push(ShapedRun {
+                        source_run: u32::try_from(source_run).unwrap(),
+                        binding_handle: 19,
+                        font_handle: 9,
+                        text_start: start,
+                        text_end: end,
+                        glyph_start,
+                        glyph_count: u32::try_from(shape.glyph_ids.len()).unwrap() - glyph_start,
+                    });
+                }
+                let mut clusters = ClusterArena::default();
+                clusters
+                    .build(
+                        ClusterBuildInput {
+                            text: &text,
+                            text_unit_ids: &text_unit_ids,
+                            unicode: &unicode,
+                            styles: &styles,
+                            runs: &runs,
+                            shape: &shape,
+                        },
+                        |_| {
+                            Some(FontMetrics {
+                                units_per_em: 1_000,
+                                ascender: 800,
+                                cap_height: 700,
+                                descender: -200,
+                                line_gap: 0,
+                                underline_position: -100,
+                                underline_thickness: 50,
+                                strikeout_position: 300,
+                                strikeout_size: 50,
+                            })
+                        },
+                    )
+                    .unwrap();
+                clusters
+                    .rebuild_run_local_geometry(&runs, &styles, |_, _| {
+                        Some(FontGlyphExtents {
+                            x_min: 0,
+                            y_min: 0,
+                            x_max: 500,
+                            y_max: 700,
+                        })
+                    })
+                    .unwrap();
+                assert_eq!(
+                    clusters.starts,
+                    (0..u32::try_from(count).unwrap()).collect::<Vec<_>>()
+                );
+                assert_eq!(
+                    clusters.ends,
+                    (1..=u32::try_from(count).unwrap()).collect::<Vec<_>>()
+                );
+                assert_eq!(clusters.run_local().rows().len(), shape.glyph_ids.len());
+                let mut seen = vec![false; shape.glyph_ids.len()];
+                for row in clusters.run_local().rows() {
+                    let source = usize::try_from(row.source_glyph).unwrap();
+                    assert!(!seen[source], "each shaped glyph is emitted once");
+                    seen[source] = true;
+                    assert_eq!(
+                        clusters.run_local().row_for_source_glyph(row.source_glyph),
+                        Some(row)
+                    );
+                }
+                assert!(seen.iter().all(|value| *value));
+                for run in clusters.layout_runs() {
+                    let start = usize::try_from(run.cluster_start).unwrap();
+                    let end = usize::try_from(run.cluster_end).unwrap();
+                    let numeric_start = usize::try_from(run.numeric_blocks.cluster_start).unwrap();
+                    let mut prefix = 0.0f64;
+                    let mut block_prefix = 0.0f64;
+                    for (ordinal, cluster) in (start..end).rev().enumerate() {
+                        if ordinal % LAYOUT_CHUNK == 0 {
+                            block_prefix = prefix;
+                        }
+                        let block = clusters.run_local().cluster_blocks()[numeric_start + ordinal];
+                        if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
+                            assert_eq!(block, u32::MAX);
+                            assert_eq!(clusters.glyph_counts[cluster], 0);
+                            continue;
+                        }
+                        assert_eq!(clusters.font_handles[cluster], 9);
+                        assert_eq!(clusters.binding_handles[cluster], 19);
+                        assert_eq!(clusters.source_runs[cluster], run.source_run);
+                        if block == u32::MAX {
+                            // A glyphless final chunk retains shaping ownership, but the writer
+                            // allocates no numeric block without rows. It is not a hard break.
+                            assert_eq!(clusters.glyph_counts[cluster], 0);
+                            prefix += clusters.advances[cluster];
+                            continue;
+                        }
+                        let relative_block = block - run.numeric_blocks.start;
+                        assert_eq!(
+                            relative_block,
+                            u32::try_from(ordinal / LAYOUT_CHUNK).unwrap()
+                        );
+                        for glyph in clusters.glyph_starts[cluster]
+                            ..clusters.glyph_starts[cluster] + clusters.glyph_counts[cluster]
+                        {
+                            let row = clusters.run_local().row_for_source_glyph(glyph).unwrap();
+                            let anchor = clusters.run_local().blocks()
+                                [usize::try_from(block).unwrap()]
+                            .anchor_inline;
+                            assert_eq!(
+                                block_prefix + anchor + f64::from(row.inline_origin),
+                                prefix
+                            );
+                        }
+                        prefix += clusters.advances[cluster];
+                    }
+                }
+                if glyphless {
+                    assert_eq!(clusters.glyph_counts[0], 0);
+                    assert_eq!(clusters.glyph_counts[count - 2], 0);
+                }
+            }
+        }
     }
 
     #[test]
