@@ -8,7 +8,7 @@ sources:
     title: Detailed design, lifetimes and rope evidence
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-11T00:40:24Z'
+  at: '2026-10-11T00:53:44Z'
 ---
 
 # Publication frontier checklist
@@ -26,7 +26,8 @@ Detailed prior diagnostic checkpoints remain in Git history through6f82128f; do 
 ## Resumed ropes work — 2026-10-11
 
 The user released the development hold: rebase #292 onto main, measure, then pursue the remaining publication frontier.
-Keep #292 draft until combined correctness, performance, size and review gates pass. #240 remains superseded/held;
+Keep #292 draft until combined correctness, performance, size and review gates pass; then mark it ready for review
+and HOLD UNMERGED, even if all gates pass. The user explicitly prohibited merging ropes. #240 remains superseded/held;
 no stable release/tag or demo merge. The completed query-first goal and release report below remain historical evidence.
 
 1. [x] Preserve all75 local commits in feat/ropes-pre-main-2026-10-11 atb86830f2.
@@ -47,7 +48,7 @@ no stable release/tag or demo merge. The completed query-first goal and release 
        All236 shipped JS files total860,471raw versus857,169 (+3,302); this sum is not a delivery bundle size.
        Exact artifact evidence .cache/ropes-rebased-main-candidate/size-evidence.json. Do not treat old size gates as cleared.
 7. [ ] Review exact integrated code; update draft PR through gh stack submit --auto only after local gates.
-       No merge authorization implied by the development restart.
+       After every gate passes, mark #292 ready for review and hold it. DO NOT MERGE ropes; this applies even when complete.
 
 Parallel user-requested native GLSL Three WebGLRenderer config variant: router Codex gpt-5.6-sol/high PID23469,
 session01a1285f-bec1-7553-8a05-184a7704aa8e, transportcli-fallback, isolated .cache/webgl-renderer-support.
