@@ -368,6 +368,10 @@ fn boundary_shape_span<'a>(
     })
 }
 
+fn sort_replacement_order(order: &mut [u32], records: &[BoundaryShape]) {
+    order.sort_unstable_by_key(|index| (records[*index as usize].flow_thread_id, *index));
+}
+
 fn same_boundary_run(
     current: BoundaryRunSpec,
     previous: BoundaryRunSpec,
@@ -1495,20 +1499,11 @@ impl PositionedGlyphArena {
             self.replacement_previous_order
                 .push(u32::try_from(index).map_err(|_| EngineError::ResultTooLarge)?);
         }
-        self.replacement_current_order
-            .sort_unstable_by_key(|index| {
-                (
-                    current_shape.records[*index as usize].flow_thread_id,
-                    *index,
-                )
-            });
-        self.replacement_previous_order
-            .sort_unstable_by_key(|index| {
-                (
-                    previous_shape.records[*index as usize].flow_thread_id,
-                    *index,
-                )
-            });
+        sort_replacement_order(&mut self.replacement_current_order, &current_shape.records);
+        sort_replacement_order(
+            &mut self.replacement_previous_order,
+            &previous_shape.records,
+        );
         if self.replacement_current_order.windows(2).any(|pair| {
             let (left, right) = (
                 current_shape.records[pair[0] as usize],
