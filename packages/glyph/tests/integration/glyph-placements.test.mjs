@@ -7,6 +7,7 @@ import { createGlyphPlacements } from '@pmndrs/glyph/core';
 import { defineTextMaterial, defineThreeConfig } from '@pmndrs/glyph/three';
 import { loadFont as loadGlyphFont } from '../../dist/loader.js';
 import { PlanTransport } from '../../dist/internal/handle-state.js';
+import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 import * as THREE from 'three/webgpu';
 
 import { createThreeTestHandle } from '../support/three-handle.mjs';
@@ -689,7 +690,7 @@ test('a caught reentrant setter leaves pending split and subsequent publication 
   }
 });
 
-test('discarded sibling queries retire speculative identities before ordinary publication', async (t) => {
+test('publication capacity failure or repair preserves prepared sibling identities', async (t) => {
   for (const retry of [false, true]) {
     await t.test(retry ? 'capacity repair succeeds' : 'output limit rejects', async (caseContext) => {
       const config = defineThreeConfig();
@@ -715,11 +716,24 @@ test('discarded sibling queries retire speculative identities before ordinary pu
           repairs += 1;
           return reserve.apply(this, args);
         });
+        assert.equal(sibling.measureGlyphs().length, sibling.text.length);
+        assert.equal(repairs, 0, 'prepared reads do not serialize a large result arena');
+        let publicationCapacity = 0;
+        const consume = PlanTransport.prototype.consumeStagedUpdate;
+        caseContext.mock.method(PlanTransport.prototype, 'consumeStagedUpdate', function (pointer, buffer) {
+          publicationCapacity = new DataView(buffer).getUint32(
+            pointer + textShaperAbi.layouts.engineResult.resultCapacity,
+            true,
+          );
+          return consume.call(this, pointer, buffer);
+        });
+        scene.updateMatrixWorld(true);
         if (retry) {
-          assert.equal(sibling.measureGlyphs().length, sibling.text.length);
-          assert.ok(repairs > 0, 'the successful query must grow the result arena');
+          assert.ok(publicationCapacity > 4_096, 'publication must grow the result arena');
+          assert.equal(sibling.commitState().status, 'committed');
         } else {
-          assert.throws(() => sibling.measureGlyphs(), { statusCode: 'result-too-large' });
+          assert.equal(sibling.commitState().status, 'failed');
+          assert.equal(sibling.commitState().error.statusCode, 'result-too-large');
         }
         sibling.text = 'B';
         scene.updateMatrixWorld(true);

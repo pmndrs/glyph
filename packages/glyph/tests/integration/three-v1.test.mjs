@@ -7234,7 +7234,7 @@ test('placement reads retain their scoped inspection cache through matching publ
     const before = label.measureGlyphs();
     assert.ok(before.length > 0);
     const queries = instrumentedGlyph.measureCrossings;
-    assert.equal(queries, 1);
+    assert.equal(queries, 0, 'placement reads reuse setter preparation');
     label.caretAt(0, 0);
     label.caretForOffset(label.text.length);
     label.selectionRects(0, label.text.length);
