@@ -11,8 +11,9 @@ export function createBorrowedGlyphLayout(
   publication: BorrowedLayoutPublication,
   assertActive: () => void,
   decodeOutline: OutlineDecoder,
+  recordRead: () => void,
 ): BorrowedGlyphLayout {
-  return Object.freeze(new BorrowedGlyphLayoutView(transport, publication, assertActive, decodeOutline));
+  return Object.freeze(new BorrowedGlyphLayoutView(transport, publication, assertActive, decodeOutline, recordRead));
 }
 
 export function createInspectionBorrowedGlyphLayout(
@@ -41,17 +42,20 @@ class BorrowedGlyphLayoutView implements BorrowedGlyphLayout {
   readonly #publication: BorrowedLayoutPublication;
   readonly #assertActive: () => void;
   readonly #decodeOutline: OutlineDecoder;
+  readonly #recordRead: () => void;
 
   constructor(
     transport: PlanTransport,
     publication: BorrowedLayoutPublication,
     assertActive: () => void,
     decodeOutline: OutlineDecoder,
+    recordRead: () => void,
   ) {
     this.#transport = transport;
     this.#publication = publication;
     this.#assertActive = assertActive;
     this.#decodeOutline = decodeOutline;
+    this.#recordRead = recordRead;
   }
 
   get glyphCount(): number {
@@ -63,7 +67,13 @@ class BorrowedGlyphLayoutView implements BorrowedGlyphLayout {
     this.#assertActive();
     const view = this.#transport.borrowParagraphGlyph(this.#publication, index);
     const layout = textShaperAbi.layouts.borrowedGlyph;
-    return this.#decodeOutline(view.getUint32(layout.fontHandle, true), view.getUint16(layout.glyphId, true), target);
+    const outline = this.#decodeOutline(
+      view.getUint32(layout.fontHandle, true),
+      view.getUint16(layout.glyphId, true),
+      target,
+    );
+    this.#recordRead();
+    return outline;
   }
 
   glyphAt(index: number): BorrowedGlyph {
@@ -72,7 +82,7 @@ class BorrowedGlyphLayoutView implements BorrowedGlyphLayout {
     const layout = textShaperAbi.layouts.borrowedGlyph;
     const bidiLevel = view.getUint8(layout.bidiLevel);
     if (bidiLevel > 125) throw new RangeError('borrowed layout glyph has an invalid bidi level');
-    return Object.freeze({
+    const glyph = Object.freeze({
       stableId: view.getUint32(layout.stableId, true),
       fontHandle: view.getUint32(layout.fontHandle, true),
       glyphId: view.getUint16(layout.glyphId, true),
@@ -88,6 +98,8 @@ class BorrowedGlyphLayoutView implements BorrowedGlyphLayout {
       inkHeight: view.getFloat32(layout.inkBlockExtent, true),
       flags: view.getUint16(layout.flags, true),
     });
+    this.#recordRead();
+    return glyph;
   }
 }
 

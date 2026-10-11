@@ -108,10 +108,16 @@ enum PreparedStrategy {
     Ordered,
 }
 
+pub(crate) struct OwnedOutputScope<'a> {
+    pub previous_revision: u32,
+    pub scope: super::ordered_plan::RetainedOutputScope<'a>,
+}
+
 pub struct RenderPlanCompiler {
     ordered: OrderedPlanCompiler,
     session: SessionPlacementCompiler,
     prepared_strategy: PreparedStrategy,
+    canonical_owner_revision: Option<u32>,
 }
 
 impl Default for RenderPlanCompiler {
@@ -120,11 +126,21 @@ impl Default for RenderPlanCompiler {
             ordered: OrderedPlanCompiler::with_buffer_id_limit(CODEC_BUFFER_ID_LIMIT),
             session: SessionPlacementCompiler::default(),
             prepared_strategy: PreparedStrategy::None,
+            canonical_owner_revision: None,
         }
     }
 }
 
 impl RenderPlanCompiler {
+    pub(crate) fn requires_complete_placement_rows(
+        &self,
+        live_records: u32,
+        checkpoint: bool,
+    ) -> bool {
+        self.session
+            .requires_complete_rows(live_records, checkpoint)
+    }
+
     pub(crate) fn prepare_reuse(&mut self) -> Result<(), RenderPlanCompilerError> {
         if self.prepared_strategy != PreparedStrategy::None {
             return Err(RenderPlanCompilerError::AlreadyPrepared);
@@ -164,9 +180,6 @@ impl RenderPlanCompiler {
         publication_generation: u32,
         checkpoint: bool,
     ) -> Result<(), RenderPlanCompilerError> {
-        if self.prepared_strategy == PreparedStrategy::None {
-            return Err(RenderPlanCompilerError::NotPrepared);
-        }
         self.session
             .prepare(input, capability, publication_generation, checkpoint)?;
         Ok(())
@@ -181,6 +194,30 @@ impl RenderPlanCompiler {
         checkpoint: bool,
         publication_generation: u32,
         acknowledged_publication_generation: u32,
+    ) -> Result<(), RenderPlanCompilerError> {
+        self.prepare_owned(
+            codec,
+            capability_set,
+            input,
+            checkpoint,
+            publication_generation,
+            acknowledged_publication_generation,
+            None,
+            false,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn prepare_owned(
+        &mut self,
+        codec: &ValidatedCodec,
+        capability_set: CapabilitySetId,
+        input: PlanInput<'_>,
+        checkpoint: bool,
+        publication_generation: u32,
+        acknowledged_publication_generation: u32,
+        output_scope: Option<OwnedOutputScope<'_>>,
+        bounds_changed: bool,
     ) -> Result<(), RenderPlanCompilerError> {
         if self.prepared_strategy != PreparedStrategy::None {
             return Err(RenderPlanCompilerError::AlreadyPrepared);
@@ -197,12 +234,21 @@ impl RenderPlanCompiler {
             self.prepared_strategy = PreparedStrategy::Empty;
             return Ok(());
         }
-        self.ordered.prepare(
+        let placement = self.session.view();
+        let bounds_changed = bounds_changed
+            || !placement.patches.is_empty()
+            || !placement.buffers.is_empty()
+            || !placement.retirements.is_empty();
+        self.ordered.prepare_scoped(
             codec,
             capability_set,
             input,
             checkpoint,
             publication_generation,
+            output_scope
+                .filter(|scope| self.canonical_owner_revision == Some(scope.previous_revision))
+                .map(|scope| scope.scope),
+            bounds_changed,
         )?;
         self.prepared_strategy = PreparedStrategy::Ordered;
         Ok(())
@@ -237,6 +283,12 @@ impl RenderPlanCompiler {
         Ok(view)
     }
 
+    pub(crate) fn commit_owned(&mut self, revision: u32) -> Result<(), RenderPlanCompilerError> {
+        self.commit()?;
+        self.canonical_owner_revision = Some(revision);
+        Ok(())
+    }
+
     pub fn commit(&mut self) -> Result<(), RenderPlanCompilerError> {
         match self.prepared_strategy {
             PreparedStrategy::None => return Err(RenderPlanCompilerError::NotPrepared),
@@ -244,6 +296,7 @@ impl RenderPlanCompiler {
             PreparedStrategy::Ordered => self.ordered.commit()?,
         }
         self.session.commit();
+        self.canonical_owner_revision = None;
         self.prepared_strategy = PreparedStrategy::None;
         Ok(())
     }
@@ -305,6 +358,212 @@ mod tests {
     }
 
     #[test]
+    fn accepted_session_translation_proves_bounds_dirt_after_abort() {
+        use crate::engine::render_plan::SESSION_PLACEMENT_BUFFER_ID;
+        use crate::engine::session_placement::SessionPlacementRow;
+        let codec = codec();
+        let original = [glyph(1, ORDERED, 0)];
+        let mut shifted = original;
+        shifted[0].inline_start -= 3.0;
+        shifted[0].block_start += 11.0;
+        let old_rows = [SessionPlacementRow {
+            slot: 0,
+            inline: 0.0,
+            block: 0.0,
+        }];
+        let next_rows = [SessionPlacementRow {
+            slot: 0,
+            inline: -3.0,
+            block: 11.0,
+        }];
+        fn input(glyphs: &[PlanGlyph]) -> PlanInput<'_> {
+            PlanInput {
+                glyphs,
+                placement_slots: &[0],
+                semantic_change_masks: &[0],
+                f32_fields: &[&[1.0]],
+                u32_fields: &[],
+                order_independent: false,
+            }
+        }
+        let mut compiler = RenderPlanCompiler::default();
+        compiler
+            .prepare_session(
+                SessionPlacementInput {
+                    placement_rows: &old_rows,
+                    placement_capacity: 1,
+                },
+                &capability(),
+                1,
+                true,
+            )
+            .unwrap();
+        compiler
+            .prepare_owned(
+                &codec,
+                CAPABILITY,
+                input(&original),
+                true,
+                1,
+                0,
+                None,
+                false,
+            )
+            .unwrap();
+        compiler.commit_owned(1).unwrap();
+        let accepted = compiler
+            .buffer_bytes(SESSION_PLACEMENT_BUFFER_ID)
+            .unwrap()
+            .to_vec();
+        let mut cold = RenderPlanCompiler::default();
+        cold.prepare_session(
+            SessionPlacementInput {
+                placement_rows: &next_rows,
+                placement_capacity: 1,
+            },
+            &capability(),
+            2,
+            true,
+        )
+        .unwrap();
+        cold.prepare_owned(&codec, CAPABILITY, input(&shifted), true, 2, 1, None, false)
+            .unwrap();
+        let expected = cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap();
+        let expected_primitives = expected.primitives.to_vec();
+        let expected_draws = expected.draws.to_vec();
+        cold.commit_owned(2).unwrap();
+        for reject in [true, false] {
+            compiler
+                .prepare_session(
+                    SessionPlacementInput {
+                        placement_rows: &next_rows,
+                        placement_capacity: 1,
+                    },
+                    &capability(),
+                    2,
+                    false,
+                )
+                .unwrap();
+            compiler
+                .prepare_owned(
+                    &codec,
+                    CAPABILITY,
+                    input(&shifted),
+                    false,
+                    2,
+                    1,
+                    Some(OwnedOutputScope {
+                        previous_revision: 1,
+                        scope: super::super::ordered_plan::RetainedOutputScope::ChangedIntervals(
+                            &[],
+                        ),
+                    }),
+                    false,
+                )
+                .unwrap();
+            let plan = compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap();
+            assert_eq!(plan.primitives, expected_primitives);
+            assert_eq!(plan.draws, expected_draws);
+            assert!(plan.patches.is_empty());
+            assert!(plan.payload.is_empty());
+            assert!(!plan.session_patches.is_empty());
+            if reject {
+                compiler.abort();
+                assert_eq!(
+                    compiler.buffer_bytes(SESSION_PLACEMENT_BUFFER_ID).unwrap(),
+                    accepted
+                );
+            } else {
+                compiler.commit_owned(2).unwrap();
+            }
+        }
+        assert_eq!(
+            compiler.buffer_bytes(SESSION_PLACEMENT_BUFFER_ID),
+            cold.buffer_bytes(SESSION_PLACEMENT_BUFFER_ID)
+        );
+        compiler
+            .prepare_session(
+                SessionPlacementInput {
+                    placement_rows: &next_rows,
+                    placement_capacity: 1,
+                },
+                &capability(),
+                3,
+                false,
+            )
+            .unwrap();
+        compiler
+            .prepare_owned(
+                &codec,
+                CAPABILITY,
+                input(&shifted),
+                false,
+                3,
+                2,
+                Some(OwnedOutputScope {
+                    previous_revision: 2,
+                    scope: super::super::ordered_plan::RetainedOutputScope::ChangedIntervals(&[]),
+                }),
+                false,
+            )
+            .unwrap();
+        let plan = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        assert!(plan.primitives.is_empty());
+        assert!(plan.draws.is_empty());
+        assert!(plan.session_patches.is_empty());
+        compiler.commit_owned(3).unwrap();
+        // Ordered preparation can fail after session preparation; abort must release that
+        // pending state without changing accepted placement bytes or blocking a later prepare.
+        compiler
+            .prepare_session(
+                SessionPlacementInput {
+                    placement_rows: &old_rows,
+                    placement_capacity: 1,
+                },
+                &capability(),
+                4,
+                false,
+            )
+            .unwrap();
+        assert!(matches!(
+            compiler.prepare_owned(
+                &codec,
+                CAPABILITY,
+                input(&original),
+                false,
+                0,
+                3,
+                None,
+                false
+            ),
+            Err(RenderPlanCompilerError::InvalidIdentity)
+        ));
+        compiler.abort();
+        assert_eq!(
+            compiler.buffer_bytes(SESSION_PLACEMENT_BUFFER_ID),
+            cold.buffer_bytes(SESSION_PLACEMENT_BUFFER_ID)
+        );
+        compiler.prepare_reuse().unwrap();
+        compiler.abort();
+        compiler
+            .prepare_session(
+                SessionPlacementInput {
+                    placement_rows: &next_rows,
+                    placement_capacity: 1,
+                },
+                &capability(),
+                4,
+                false,
+            )
+            .unwrap();
+        compiler.abort();
+    }
+
+    #[test]
     fn acknowledged_ordered_state_can_publish_an_empty_reuse_transaction() {
         let codec = codec();
         let glyphs = [glyph(1, ORDERED, 0)];
@@ -316,7 +575,8 @@ mod tests {
             .unwrap()
             .buffers[0]
             .id;
-        compiler.commit().unwrap();
+        compiler.commit_owned(1).unwrap();
+        assert_eq!(compiler.canonical_owner_revision, Some(1));
 
         compiler.prepare_reuse().unwrap();
         let plan = compiler
@@ -324,8 +584,98 @@ mod tests {
             .unwrap();
         assert!(plan.buffers.is_empty());
         assert!(plan.patches.is_empty());
-        compiler.commit().unwrap();
+        compiler.abort();
+        assert_eq!(compiler.canonical_owner_revision, Some(1));
+        compiler.prepare_reuse().unwrap();
+        compiler.commit_owned(2).unwrap();
+        assert_eq!(compiler.canonical_owner_revision, Some(2));
         assert!(compiler.buffer_bytes(buffer).is_some());
+        compiler.prepare_reuse().unwrap();
+        compiler.commit().unwrap();
+        assert_eq!(compiler.canonical_owner_revision, None);
+    }
+
+    #[test]
+    fn empty_owner_commit_does_not_authorize_aborted_input_mappings() {
+        let codec = codec();
+        let mut compiler = RenderPlanCompiler::default();
+        let mut control = RenderPlanCompiler::default();
+        let initial: alloc::vec::Vec<_> = (1..=6)
+            .map(|id| {
+                let mut value = glyph(id, ORDERED, 0);
+                value.resource_id += id % 2;
+                value
+            })
+            .collect();
+        let x = [1.0; 6];
+        for owner in [&mut compiler, &mut control] {
+            prepare(owner, &codec, &initial, &x, true, 1, 0);
+            owner.commit_owned(1).unwrap();
+        }
+        let mut rejected = initial.clone();
+        rejected.swap(0, 1);
+        prepare(&mut compiler, &codec, &rejected, &x, true, 2, 1);
+        compiler.abort();
+        // Empty publications advance the owning Rust revision, but do not rebuild
+        // the aborted ordered compiler's speculative input mappings.
+        for owner in [&mut compiler, &mut control] {
+            owner.prepare_reuse().unwrap();
+            owner.commit_owned(2).unwrap();
+        }
+        let mut next = initial.clone();
+        next[4].stable_id = 70;
+        next[5].stable_id = 71;
+        next[4].inline_extent = 10.0;
+        let input = PlanInput {
+            glyphs: &next,
+            placement_slots: &[0; 6],
+            semantic_change_masks: &[u16::MAX; 6],
+            f32_fields: &[&x],
+            u32_fields: &[],
+            order_independent: false,
+        };
+        super::super::work_attribution::reset();
+        compiler
+            .prepare_owned(
+                &codec,
+                CAPABILITY,
+                input,
+                false,
+                3,
+                2,
+                Some(OwnedOutputScope {
+                    previous_revision: 2,
+                    scope: super::super::ordered_plan::RetainedOutputScope::ReplaceTail {
+                        unchanged_prefix: 4,
+                    },
+                }),
+                false,
+            )
+            .unwrap();
+        assert_eq!(
+            super::super::work_attribution::snapshot().ordered_admission_visits,
+            6
+        );
+        control
+            .prepare(&codec, CAPABILITY, input, false, 3, 2)
+            .unwrap();
+        let actual = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        let expected = control
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        assert_eq!(actual.resources, expected.resources);
+        assert_eq!(actual.buffers, expected.buffers);
+        assert_eq!(actual.primitives, expected.primitives);
+        assert_eq!(actual.draws, expected.draws);
+        let buffers: alloc::vec::Vec<_> = actual.buffers.iter().map(|buffer| buffer.id).collect();
+        assert!(!buffers.is_empty());
+        compiler.commit_owned(3).unwrap();
+        control.commit_owned(3).unwrap();
+        for buffer in buffers {
+            assert_eq!(compiler.buffer_bytes(buffer), control.buffer_bytes(buffer));
+        }
     }
 
     #[allow(clippy::too_many_arguments)]

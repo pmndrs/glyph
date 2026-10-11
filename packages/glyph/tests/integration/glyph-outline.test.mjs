@@ -286,6 +286,25 @@ test('owned outlines from glyphs() equal the borrowed views as curve tuples', as
     }
     assert.equal(Object.keys(layout).includes('outlineAt'), false, 'the columns stay plain data');
     assert.deepEqual(structuredClone(layout).glyphIds, layout.glyphIds);
+    const repeated = text.glyphs();
+    for (const [column, value] of Object.entries(layout)) {
+      if (ArrayBuffer.isView(value)) {
+        assert.notEqual(repeated[column].buffer, value.buffer, `${column} copies own their array storage`);
+        assert.deepEqual(repeated[column], value, `${column} repeated copies retain their values`);
+      }
+    }
+    layout.glyphIds.fill(0);
+    layout.glyphFontSlots.fill(0xffff);
+    layout.x.fill(12345);
+    borrowed.forEach(({ outline }, index) => {
+      assert.deepEqual(layout.outlineAt(index), outline, 'caller array edits cannot redirect the owned reader');
+      assert.deepEqual(repeated.outlineAt(index), outline, 'repeated copies share immutable outline data');
+    });
+    assert.deepEqual(text.glyphs().glyphIds, repeated.glyphIds, 'caller edits do not reach cached columns');
+    assert.deepEqual(
+      text.readGlyphs((glyphs) => glyphs.glyphAt(0)),
+      borrowed[0].glyph,
+    );
     assert.throws(() => layout.outlineAt(layout.glyphCount), RangeError);
     assert.throws(() => layout.outlineAt(-1), RangeError);
     text.readGlyphs((glyphs) => {
@@ -386,7 +405,9 @@ test('owned outlines are data: they read inside a render plan, after it, and aft
   const [outlined, drawnFont] = await Promise.all([load(bakes.inter), load(bakes.interPlain)]);
   const probe = three.createText({ font: outlined, text: 'Owned' });
   const layout = probe.glyphs();
+  const repeated = probe.glyphs();
   const expected = layout.outlineAt(0);
+  assert.deepEqual(repeated.outlineAt(0), expected);
   let duringPlan;
   const material = defineTextMaterial((context) => {
     try {
@@ -405,9 +426,15 @@ test('owned outlines are data: they read inside a render plan, after it, and aft
   assert.equal(group.error, undefined);
   assert.deepEqual(duringPlan, expected, 'a read inside a material callback makes no engine call');
   assert.deepEqual(layout.outlineAt(0), expected, 'the copy reads after a render pass releases unused fonts');
+  assert.throws(() => probe.set({ constraints: { width: { mode: 'exact', size: NaN } } }), RangeError);
+  assert.deepEqual(probe.glyphs().outlineAt(0), expected, 'a rejected setter preserves the cached outline reader');
+  probe.font = drawnFont;
+  assert.throws(() => probe.glyphs().outlineAt(0), /outlines/iu, 'a successful font change replaces the cached reader');
+  assert.deepEqual(repeated.outlineAt(0), expected, 'an earlier copy retains its original font store');
   probe.dispose();
   outlined.dispose();
   assert.deepEqual(layout.outlineAt(0), expected, 'the copy reads after its Text and font are disposed');
+  assert.deepEqual(repeated.outlineAt(0), expected, 'a repeated copy keeps the shared reader after disposal');
   label.dispose();
   drawnFont.dispose();
 });

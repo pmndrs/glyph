@@ -34,11 +34,11 @@ test('a nested Text with a string child becomes one styled span', () => {
 
 test('a nested Text textStyle list survives vnode creation and merges left to right', () => {
   // Vue flattens any array `style` prop into one object inside `h()`; the renamed prop must reach the walker as a list.
-  const textStyle = [{ color: 'red', fontSize: 64 }, false, { fontSize: 16 }, null];
+  const textStyle = [{ color: '#ff0000', fontSize: 64 }, false, { fontSize: 16 }, null];
   const vnode = h(TextComponent, { textStyle }, 'x');
   assert.equal(vnode.props.textStyle, textStyle);
   const result = flattenVueText([vnode], options);
-  assert.deepEqual(result.spans, [{ start: 0, end: 1, style: { color: 'red', fontSize: 16 } }]);
+  assert.deepEqual(result.spans, [{ start: 0, end: 1, style: { color: '#ff0000', fontSize: 16 } }]);
 });
 
 test('a nested Text with slot children inherits and merges the enclosing style', () => {
@@ -46,9 +46,9 @@ test('a nested Text with slot children inherits and merges the enclosing style',
     [
       h(
         TextComponent,
-        { textStyle: { fontSize: 20, color: 'red' } },
+        { textStyle: { fontSize: 20, color: '#ff0000' } },
         {
-          default: () => ['outer ', h(TextComponent, { textStyle: { color: 'blue' } }, 'inner')],
+          default: () => ['outer ', h(TextComponent, { textStyle: { color: '#0000ff' } }, 'inner')],
         },
       ),
     ],
@@ -56,8 +56,8 @@ test('a nested Text with slot children inherits and merges the enclosing style',
   );
   assert.equal(result.text, 'outer inner');
   assert.deepEqual(result.spans, [
-    { start: 0, end: 11, style: { fontSize: 20, color: 'red' } },
-    { start: 6, end: 11, style: { fontSize: 20, color: 'blue' } },
+    { start: 0, end: 11, style: { fontSize: 20, color: '#ff0000' } },
+    { start: 6, end: 11, style: { fontSize: 20, color: '#0000ff' } },
   ]);
 });
 
@@ -68,7 +68,7 @@ test('a nested Text without style, font, or material contributes text but no spa
 });
 
 test('an empty nested Text contributes no span even when styled', () => {
-  const result = flattenVueText(['a', h(TextComponent, { textStyle: { color: 'red' } }), 'b'], options);
+  const result = flattenVueText(['a', h(TextComponent, { textStyle: { color: '#ff0000' } }), 'b'], options);
   assert.equal(result.text, 'ab');
   assert.deepEqual(result.spans, []);
 });
@@ -85,8 +85,11 @@ test('nested string fonts resolve once through the resolver and are collected', 
 });
 
 test('key and ref props on a nested Text are not treated as box properties', () => {
-  const result = flattenVueText([h(TextComponent, { key: 'k', ref: 'r', textStyle: { color: 'red' } }, 'x')], options);
-  assert.deepEqual(result.spans, [{ start: 0, end: 1, style: { color: 'red' } }]);
+  const result = flattenVueText(
+    [h(TextComponent, { key: 'k', ref: 'r', textStyle: { color: '#ff0000' } }, 'x')],
+    options,
+  );
+  assert.deepEqual(result.spans, [{ start: 0, end: 1, style: { color: '#ff0000' } }]);
 });
 
 test('a box property on a nested Text throws and names the camel-cased property', () => {
@@ -109,7 +112,7 @@ test('a foreign component child throws', () => {
 
 test('span boundaries resolve onto the grapheme cluster grid', () => {
   // U+0301 combines with the preceding "a"; the styled span must absorb the whole cluster.
-  const result = flattenVueText([h(TextComponent, { textStyle: { color: 'red' } }, 'a'), '\u0301bc'], options);
+  const result = flattenVueText([h(TextComponent, { textStyle: { color: '#ff0000' } }, 'a'), '\u0301bc'], options);
   assert.equal(result.text, 'a\u0301bc');
-  assert.deepEqual(result.spans, [{ start: 0, end: 2, style: { color: 'red' } }]);
+  assert.deepEqual(result.spans, [{ start: 0, end: 2, style: { color: '#ff0000' } }]);
 });

@@ -46,6 +46,7 @@ mod positioning;
 pub mod render_plan;
 pub mod render_plan_compiler;
 pub(crate) mod render_plan_wire;
+mod retained_rope;
 mod run_local;
 pub(crate) mod semantic_view;
 mod semantic_wire;
@@ -54,6 +55,8 @@ pub(crate) mod shaping_state;
 pub(crate) mod sort;
 mod staged;
 mod style_state;
+#[cfg(test)]
+mod work_attribution;
 
 pub(crate) use positioning::SemanticGlyph;
 pub use state::{EngineError, FrameFault, TextEngine};
