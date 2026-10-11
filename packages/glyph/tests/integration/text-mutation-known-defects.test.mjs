@@ -5,7 +5,7 @@ import test, { after } from 'node:test';
 import { span, txt, bitmap } from '@pmndrs/glyph';
 import { createFontCache, edit, lanes, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
 import { findLineBreaks } from '../support/unicode-line-breaks.mjs';
-import { findGraphemeBoundaries } from '../../dist/internal/graphemes.js';
+import { findGraphemeBoundaries } from '../support/graphemes.mjs';
 
 const bitmap16 = bitmap({ strikes: [16] });
 const fonts = createFontCache({
@@ -64,19 +64,18 @@ test('1. an unedited paragraph keeps every record when a bidi island is deleted 
   }
 });
 
-test('2. an authored span kept across a text change stays aligned to clusters', { timeout }, async () => {
+test('2. Rust resolves authored spans after a text change joins a grapheme', { timeout }, async () => {
   const font = await fonts.load('inter');
   const latin = { fontSize: 6, lineHeight: 1 };
-  // 'abc' is three single-scalar clusters, so a span over the first is cluster-aligned and legal.
-  const red = span({ color: '#ff2f00' });
-  const mounted = mount(font, [authored(txt`${red`a`}bc`, latin)]);
+  // The authored range remains [0, 1) as the text changes from "abc" to "a + acute + bc".
+  const large = span({ fontSize: 12 });
+  const mounted = mount(font, [authored(txt`${large`a`}bc`, latin)]);
   try {
     const node = mounted.nodes[0];
     assert.equal(node.measure().glyphCount, 3, 'the starting paragraph must publish');
-    // Legal by the public contract: the caller structurally re-authors the same styled fragment
-    // followed by a combining mark. Concatenation fuses them into one cluster spanning [0, 2),
-    // so txt must move the derived boundary instead of exposing or retaining a raw offset.
-    const updated = txt`${red`a`}́bc`;
+    // Rust must re-resolve the retained [0, 1) source range so the new [0, 2) grapheme
+    // inherits the base's style even when the span itself did not change.
+    const updated = txt`${large`a`}́bc`;
     node.set({ text: updated });
     mounted.scene.updateMatrixWorld(true);
     assert.equal(node.text, 'ábc');
@@ -87,11 +86,16 @@ test('2. an authored span kept across a text change stays aligned to clusters', 
     );
     assert.deepEqual(
       updated.spans.map(({ start, end }) => [start, end]),
-      [[0, 2]],
-      'the boundary must resolve onto the cluster whose base the span already held',
+      [[0, 1]],
+      'formatted text preserves the authored UTF-16 range before Rust preparation',
     );
     assert.equal(node.error, undefined, `the paragraph stopped publishing: ${String(node.error?.message)}`);
-    assert.equal(node.measure().glyphCount, 3);
+    const wholeCluster = mount(font, [authored(txt`${large`á`}bc`, latin)]);
+    try {
+      assert.deepEqual(node.measure(), wholeCluster.nodes[0].measure(), 'the fused cluster keeps its base style');
+    } finally {
+      unmount(wholeCluster);
+    }
   } finally {
     unmount(mounted);
   }

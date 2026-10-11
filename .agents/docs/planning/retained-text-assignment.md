@@ -100,9 +100,18 @@ byte deltas, benchmark absolute deltas, correctness/review results and remaining
 vectors, caches, compatibility branches and executors in the same coherent change when their replacement is proven.
 No permanent duplicate implementation is an acceptable shortcut to the size target.
 
-Current evidence checkpoint: the control is frozen; spike source and tests await execution and final review.
-There is no candidate binary-size or performance verdict yet. The parent owns validation/build/Labs and this plan;
-the implementation agent owns spike source; the reviewer owns read-only correctness review. Serialize heavy work.
+Current slice: TypeScript span alignment and its identity-provenance path are retired; Rust resolves retained authored
+ranges from the same grapheme grid used for shaping. The change removes 514 lines and adds 389 across source, tests, and
+docs. The full Rust shaper suite passed (402 tests), the full Node suite passed (1,010 tests), focused regression tests,
+static checks, package and app builds passed, and the OKF bundle and frozen lockfile validate.
+
+The focused packed-package `spans` comparison found one workload faster: mutating a trailing span across 1,000 formatted
+labels fell from 73.41 ms to 61.61 ms (-11.80 ms, -16.1%, p < .001, 95% CI -16.5% to -14.1%). Each side used eight fresh
+runs; clock readings were stable, with median spread below 1%. This is one adapter workload, not a full Labs verdict or
+frame-time result. The current package-size snapshot records 1,577,970 raw / 589,891 gzip / 460,392 Brotli bytes for the
+shaper Wasm, 351,117 raw / 85,584 gzip bytes for core JS, and 555,114 raw / 136,050 gzip bytes for Three JS. An exact
+immediate-control Wasm-size delta remains unverified: the LFS checkout could not be built in this environment because
+`git-lfs` is unavailable. Treat that binary-size comparison as an open gate before accepting the cumulative stack.
 
 `Text.set()` and property assignment remain the authoring API. When a `Text` already has a runtime binding, assignment
 synchronously validates, encodes, shapes, and lays out the new desired value in Rust before the assignment returns.
@@ -265,7 +274,7 @@ on first read and again on publication.
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `three/text.ts` Text/root/group boundaries                       | Normalize desired state and stage an update only when a binding exists.                                            | Preserve authoring syntax and raw throws; preflight staged ownership before normalization that can allocate or bind, before root Text font selection/acquisition, and—after its equality no-op—before a changed `TextGroup.batching` value is stored. Return from a bound `stageUpdate` only after Rust preparation commits. Unbound authoring stays cheap until binding. |
 | `internal/configured-handle.ts` controller/root/handle lifecycle | Translate host values, own root registrations, and tear down configured resources.                                 | Expose the existing planner/transport owner as a nonmutating service preflight. Check before controller snapshots/bindings and before root or all-root handle terminal transitions; retain one registration authority and ordinary best-effort teardown after the preflight succeeds.                                                                                     |
-| `formatted-text.ts` and `internal/graphemes.ts`                  | Freeze spans and align authored boundaries with a host Unicode segmentation path.                                  | Temporary compatibility debt, not a second authority. Exact alignment moves to the pinned Rust pipeline in a reviewed breaking slice described below.                                                                                                                                                                                                                     |
+| `formatted-text.ts` and Rust `engine/style_state.rs`             | Freeze spans, resolve authored boundaries in JavaScript, then preserve aligned ranges for Rust.                    | Implemented first range-authority cutover: TypeScript snapshots authored UTF-16 offsets; Rust validates and resolves them on its pinned grapheme grid, retaining authored offsets for later text edits. The public authoring syntax is unchanged, while observable span ranges now remain authored and require a release note.                                            |
 | `internal/render-planner.ts` `RetainedTextImpl.update`           | Replace JS desired state, invalidate caches, and defer Rust work to a read or publication.                         | Prepare transactionally before adopting JS desired state; cache fixed-size measurement; unchanged reads reuse the prepared revision.                                                                                                                                                                                                                                      |
 | `internal/render-planner.ts` metric/glyph reads                  | On a miss, rebuild a semantic frame and invoke paragraph measurement; rendering later rebuilds it again.           | Metrics read the setter-produced cache. Borrowed glyph reads use the existing demand descriptor. Owned glyph inspection copies columns from that prepared borrow only when requested.                                                                                                                                                                                     |
 | `internal/render-planner.ts` publication stage                   | Recompile text/style/geometry mutations and commit desired semantic state while adopting render output.            | Send renderer fences/order plus publication demand; Rust gather/plan compile consumes its committed preparation. JS renderer-binding commit remains acceptance-gated.                                                                                                                                                                                                     |
@@ -812,6 +821,14 @@ identify the path it retires, preserve cold/full oracles and synchronous reads, 
 
 ### Slice 2 — canonical input encoding and span cutover
 
+- [x] First range-authority cutover: `txt`/`span` retain authored UTF-16 offsets; the retained Rust style arena resolves
+      them with pinned grapheme boundaries and re-resolves retained ranges after text changes. React, Vue, Three, and the
+      planner no longer run or transfer JS alignment provenance. Collapsed styles are inactive for the current text but
+      retain authored offsets for later edits. The public `TextLiteral.spans` observation changes to authored offsets and
+      must be called out as breaking in the release migration notes.
+- [ ] Continue the Rust-owned input path: reduce TS per-update style/span construction and full-input copying without
+      changing `txt`/`span` authoring syntax or adding a second executor. The retained-state cutover alone does not eliminate
+      TypeScript object composition or ABI serialization.
 - Move repeated span comparison, style preparation, and Unicode alignment out of JS and into retained Rust input/state.
 - Keep only cheap public structural checks and host-object-to-handle translation in adapters. Preserve Rust ownership of
   changed-range discovery while investigating chunked/shared encoding that reduces full-input copying without exposing

@@ -3752,12 +3752,12 @@ impl ParagraphState {
             self.preparation_count += 1;
         }
         self.prepare_text(text_mutations)?;
+        self.prepare_unicode()?;
         self.prepare_styles(style_mutations, |handle| {
             font_stacks
                 .binary_search_by_key(&handle, |stack| stack.handle)
                 .is_ok()
         })?;
-        self.prepare_unicode()?;
         self.prepare_bidi()?;
         self.prepare_shaping_runs()?;
         if let Some(shaper) = shaper.as_deref_mut() {
@@ -4130,25 +4130,33 @@ impl ParagraphState {
     fn prepare_styles(
         &mut self,
         mutations: super::semantic_wire::StyleMutationBatch<'_>,
-        font_stack_exists: impl FnMut(u32) -> bool,
+        mut font_stack_exists: impl FnMut(u32) -> bool,
     ) -> Result<(), EngineError> {
         self.abort_styles();
         if mutations.len() == 0 {
             if !self.text.is_prepared() || self.styles.committed().arena.len() == 0 {
                 return Ok(());
             }
-            // Committed style ordering/nesting is unchanged; only the new text can invalidate it.
-            return self
+            let grapheme_boundaries = self.unicode.active().grapheme_boundaries();
+            if !self
                 .styles
                 .committed()
                 .arena
-                .validate_text(self.text.pending().units.as_slice(), font_stack_exists);
+                .needs_range_realign(grapheme_boundaries)
+            {
+                return self
+                    .styles
+                    .committed()
+                    .arena
+                    .validate_text(self.text.pending().units.as_slice(), &mut font_stack_exists);
+            }
         }
         {
             let (pending_styles, committed_styles) = self.styles.derive_mut();
             pending_styles.arena.prepare_from(
                 &committed_styles.arena,
                 mutations,
+                self.unicode.active().grapheme_boundaries(),
                 &mut self.style_mutation_scratch,
                 &mut self.sort_pair_scratch,
             )?;

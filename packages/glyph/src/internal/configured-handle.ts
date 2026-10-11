@@ -48,7 +48,7 @@ import type {
 } from './render-planner.js';
 import { observeRenderPlannerDirty, stageRenderPlanner } from './render-planner.js';
 import { reuseOrCreateTextPropertySnapshot } from '../config/text-property.js';
-import { areOwnedSpansClusterAligned, inheritClusterAlignedSpans } from '../formatted-text.js';
+import { inheritTextSpans } from '../formatted-text.js';
 import type { BorrowedGlyphLayout } from '../layout.js';
 import { normalizeTextFlow, type TextFlow, type TextFlowBounds, type TextFlowShape } from '../text-properties.js';
 
@@ -697,9 +697,7 @@ class ConfiguredRootServices<
         ...(span.style === undefined ? {} : { style: span.style }),
       });
     });
-    const spans = areOwnedSpansClusterAligned(input.text, input.spans)
-      ? inheritClusterAlignedSpans(input.text, input.spans, mappedSpans)
-      : Object.freeze(mappedSpans);
+    const spans = inheritTextSpans(mappedSpans);
     return Object.freeze({
       text: input.text,
       spans,

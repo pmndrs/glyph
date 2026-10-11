@@ -32,6 +32,8 @@ pub(crate) struct RetainedStyle {
     pub style_id: u32,
     pub cascade_order: u32,
     pub field_mask: u32,
+    pub authored_text_start: u32,
+    pub authored_text_end: u32,
     pub text_start: u32,
     pub text_end: u32,
     pub font_stack_handle: u32,
@@ -284,6 +286,17 @@ impl StyleArena {
         })
     }
 
+    pub(crate) fn needs_range_realign(&self, grapheme_boundaries: &[u32]) -> bool {
+        self.records.iter().any(|style| {
+            !style.root
+                && normalize_style_range(
+                    style.authored_text_start,
+                    style.authored_text_end,
+                    grapheme_boundaries,
+                ) != (style.text_start, style.text_end)
+        })
+    }
+
     pub(crate) fn reserve_default(&mut self) -> Result<(), EngineError> {
         self.records
             .try_reserve_exact(DEFAULT_STYLE_CAPACITY)
@@ -306,6 +319,7 @@ impl StyleArena {
         &mut self,
         committed: &Self,
         mutations: StyleMutationBatch<'_>,
+        grapheme_boundaries: &[u32],
         scratch: &mut Vec<MutationKey>,
         sort_pairs: &mut Vec<(u64, u32)>,
     ) -> Result<(), EngineError> {
@@ -366,13 +380,21 @@ impl StyleArena {
                 .get(mutation_index)
                 .map_or(u32::MAX, |key| key.style_id);
             if committed_id < mutation_id {
-                self.push_retained(committed, committed_index)?;
+                self.push_retained(committed, committed_index, grapheme_boundaries)?;
                 committed_index += 1;
             } else if mutation_id < committed_id {
-                self.push_mutation(mutations, scratch[mutation_index].request_index)?;
+                self.push_mutation(
+                    mutations,
+                    scratch[mutation_index].request_index,
+                    grapheme_boundaries,
+                )?;
                 mutation_index += 1;
             } else {
-                self.push_mutation(mutations, scratch[mutation_index].request_index)?;
+                self.push_mutation(
+                    mutations,
+                    scratch[mutation_index].request_index,
+                    grapheme_boundaries,
+                )?;
                 committed_index += 1;
                 mutation_index += 1;
             }
@@ -393,7 +415,11 @@ impl StyleArena {
         let mut root_count = 0;
         for style in &self.records {
             let fault = FrameFault::style(style.style_id);
-            if style.text_start > style.text_end
+            if style.authored_text_start > style.authored_text_end
+                || style.authored_text_end > text_length
+                || !valid_utf16_boundary(text, style.authored_text_start)
+                || !valid_utf16_boundary(text, style.authored_text_end)
+                || style.text_start > style.text_end
                 || style.text_end > text_length
                 || !valid_utf16_boundary(text, style.text_start)
                 || !valid_utf16_boundary(text, style.text_end)
@@ -452,13 +478,16 @@ impl StyleArena {
         // order matches the previous four-field key exactly.
         sort::prepare_pairs(sort_pairs, self.records.len())?;
         for (index, style) in self.records.iter().enumerate() {
+            if !style.root && style.text_start == style.text_end {
+                continue;
+            }
             sort_pairs.push((
                 (u64::from(!style.root) << 32) | u64::from(style.cascade_order),
                 index as u32,
             ));
         }
         sort::sort_pairs(sort_pairs);
-        sort::prepare_pairs(sort_pairs_pass, self.records.len())?;
+        sort::prepare_pairs(sort_pairs_pass, sort_pairs.len())?;
         for (position, &(_, record_index)) in sort_pairs.iter().enumerate() {
             let style = self.records[record_index as usize];
             sort_pairs_pass.push((
@@ -629,8 +658,20 @@ impl StyleArena {
             && self.resolved_features(left) == self.resolved_features(right)
     }
 
-    fn push_retained(&mut self, source: &Self, index: usize) -> Result<(), EngineError> {
+    fn push_retained(
+        &mut self,
+        source: &Self,
+        index: usize,
+        grapheme_boundaries: &[u32],
+    ) -> Result<(), EngineError> {
         let mut style = source.records[index];
+        if !style.root {
+            (style.text_start, style.text_end) = normalize_style_range(
+                style.authored_text_start,
+                style.authored_text_end,
+                grapheme_boundaries,
+            );
+        }
         let language = source.language(style);
         let features = source.features(style);
         set_payload_ranges(self, &mut style, language, features)?;
@@ -642,6 +683,7 @@ impl StyleArena {
         &mut self,
         mutations: StyleMutationBatch<'_>,
         request_index: usize,
+        grapheme_boundaries: &[u32],
     ) -> Result<(), EngineError> {
         let mutation = mutations
             .get(request_index)
@@ -650,6 +692,10 @@ impl StyleArena {
             return Ok(());
         };
         let mut style = retained(value);
+        if !value.root {
+            (style.text_start, style.text_end) =
+                normalize_style_range(value.text_start, value.text_end, grapheme_boundaries);
+        }
         style.language_start =
             u32::try_from(self.languages.len()).map_err(|_| EngineError::ResultTooLarge)?;
         style.language_length =
@@ -677,6 +723,30 @@ impl StyleArena {
         let start = style.feature_start as usize;
         &self.features[start..start + usize::from(style.feature_count)]
     }
+}
+
+fn cluster_end_at_or_after(boundaries: &[u32], offset: u32) -> u32 {
+    let Some(&last) = boundaries.last() else {
+        return offset;
+    };
+    if offset == 0 || offset >= last {
+        return offset;
+    }
+    boundaries
+        .get(boundaries.partition_point(|boundary| *boundary < offset))
+        .copied()
+        .unwrap_or(offset)
+}
+
+fn normalize_style_range(start: u32, end: u32, boundaries: &[u32]) -> (u32, u32) {
+    let aligned_start = cluster_end_at_or_after(boundaries, start);
+    let aligned_end = cluster_end_at_or_after(boundaries, end);
+    let normalized_end = if start <= end {
+        aligned_end.max(aligned_start)
+    } else {
+        aligned_end
+    };
+    (aligned_start, normalized_end)
 }
 
 fn apply_style(mut resolved: ResolvedStyle, style: RetainedStyle, source: usize) -> ResolvedStyle {
@@ -808,6 +878,8 @@ fn retained(value: StyleValue<'_>) -> RetainedStyle {
         style_id: value.style_id,
         cascade_order: value.cascade_order,
         field_mask: value.field_mask,
+        authored_text_start: value.text_start,
+        authored_text_end: value.text_end,
         text_start: value.text_start,
         text_end: value.text_end,
         font_stack_handle: value.font_stack_handle,
@@ -847,6 +919,31 @@ mod tests {
         STYLE_FIELD_LETTER_SPACING, STYLE_FIELD_MATERIAL, STYLE_FIELD_WORD_SPACING,
     };
     use alloc::vec;
+
+    #[test]
+    fn authored_style_ranges_advance_to_the_grapheme_end() {
+        let boundaries = [0, 1, 3, 5, 6];
+        assert_eq!(cluster_end_at_or_after(&boundaries, 1), 1);
+        assert_eq!(cluster_end_at_or_after(&boundaries, 2), 3);
+        assert_eq!(cluster_end_at_or_after(&boundaries, 4), 5);
+        assert_eq!(cluster_end_at_or_after(&boundaries, 6), 6);
+        assert_eq!(cluster_end_at_or_after(&[], 2), 2);
+        assert_eq!(normalize_style_range(1, 2, &[0, 2, 3]), (2, 2));
+        assert_eq!(normalize_style_range(0, 1, &[0, 2, 3]), (0, 2));
+    }
+
+    #[test]
+    fn retained_ranges_detect_grapheme_changes_from_authored_offsets() {
+        let arena = StyleArena {
+            records: vec![
+                style(1, 0, 0, 2, ROOT_REQUIRED_FIELDS, true),
+                style(2, 1, 0, 1, 0, false),
+            ],
+            ..StyleArena::default()
+        };
+        assert!(!arena.needs_range_realign(&[0, 1, 2]));
+        assert!(arena.needs_range_realign(&[0, 2, 3]));
+    }
 
     #[test]
     fn resolves_nested_and_equal_range_styles_once_per_boundary() {
@@ -1152,6 +1249,8 @@ mod tests {
             style_id,
             cascade_order,
             field_mask,
+            authored_text_start: text_start,
+            authored_text_end: text_end,
             text_start,
             text_end,
             font_stack_handle: if field_mask & STYLE_FIELD_FONT_STACK != 0 {
