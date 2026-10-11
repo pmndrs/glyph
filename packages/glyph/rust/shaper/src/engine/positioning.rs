@@ -18,9 +18,10 @@ use super::{
     codec_gather::{LayoutGlyph, PAINT_LAYER_GLYPH},
     flow_composition::{FlowDropCap, FlowFragment, FlowLayoutArena, FlowLine},
     frame::{ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START},
-    identity_index::{IdentityIndex, IdentityIndexError},
+    identity_index::{IdentityIndex, identity_index_error},
     line_composition::ComposedLine,
     placement_slot_arena::PlacementHandle,
+    reserve_vec as reserve,
     retained_rope::{RopeCursor, RopeCursorRange},
     run_local::{
         ClusterFinish, RunLocalArena, RunLocalBuildError, RunLocalGlyph, RunLocalGlyphInput,
@@ -4539,24 +4540,6 @@ fn nonnegative_f32(value: f64) -> Result<f32, EngineError> {
     (value >= 0.0)
         .then_some(value)
         .ok_or(EngineError::InvalidRequest)
-}
-
-fn identity_index_error(error: IdentityIndexError) -> EngineError {
-    match error {
-        IdentityIndexError::AllocationFailed | IdentityIndexError::ArithmeticOverflow => {
-            EngineError::ResultTooLarge
-        }
-        IdentityIndexError::DuplicateIdentity => EngineError::InvalidRequest,
-    }
-}
-
-fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
-    if values.capacity() < capacity {
-        values
-            .try_reserve_exact(capacity.saturating_sub(values.len()))
-            .map_err(|_| EngineError::ResultTooLarge)?;
-    }
-    Ok(())
 }
 
 #[cfg(test)]

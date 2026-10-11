@@ -9,8 +9,9 @@ use crate::{FontGlyphExtents, FontMetrics, unicode::UnicodeAnalysis};
 use super::{
     EngineError, FrameFault,
     frame::{WRAP_CHARACTER, WRAP_NONE, WRAP_WORD},
-    identity_index::{IdentityIndex, IdentityIndexError},
+    identity_index::{IdentityIndex, identity_index_error},
     line_composition::Correction,
+    reserve_vec as reserve,
     run_local::{NumericBlockSpan, RunLocalArena},
     shaping_state::{ShapeArena, ShapingRun},
     style_state::{ResolvedStyle, StyleArena, StyleSegment},
@@ -1975,15 +1976,6 @@ fn is_hard_break(text: &[u16], start: u32) -> Result<bool, EngineError> {
     ))
 }
 
-fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
-    if values.capacity() < capacity {
-        values
-            .try_reserve_exact(capacity.saturating_sub(values.len()))
-            .map_err(|_| EngineError::ResultTooLarge)?;
-    }
-    Ok(())
-}
-
 /// True exactly when the build scatter's destination equals every glyph's own
 /// index: the shaped runs tile the glyph array in array order and the source
 /// cluster ids never decrease across it, so per-cluster ordinals assign
@@ -2396,15 +2388,6 @@ fn lane<T: Copy>(values: &[T], index: usize) -> Result<T, EngineError> {
 
 fn glyph_slice<T>(values: &[T], range: core::ops::Range<usize>) -> Result<&[T], EngineError> {
     values.get(range).ok_or(EngineError::InvalidRequest)
-}
-
-fn identity_index_error(error: IdentityIndexError) -> EngineError {
-    match error {
-        IdentityIndexError::AllocationFailed | IdentityIndexError::ArithmeticOverflow => {
-            EngineError::ResultTooLarge
-        }
-        IdentityIndexError::DuplicateIdentity => EngineError::InvalidRequest,
-    }
 }
 
 #[cfg(test)]
