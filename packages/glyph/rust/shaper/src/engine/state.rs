@@ -2001,6 +2001,7 @@ impl TextEngine {
                 planner.abort_pending();
                 return Err(EngineError::RevisionExhausted);
             };
+            planner.codec_binding = Some(transaction.codec_binding);
             planner.speculative = None;
             planner.commit_paragraphs(false);
             planner.next_glyph_id = transaction.next_glyph_id;

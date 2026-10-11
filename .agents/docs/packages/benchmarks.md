@@ -291,6 +291,10 @@ failed probes also capture the page and print recent browser errors without repl
 
 The optional `--wasm` profile override must contain function names and exactly match the installed artifact's ordered non-custom Wasm sections. Authentication happens before executing the profile, and its manifest records both Wasm hashes, the executable-section digest and function-index names. Produce a verified override with `glyph:shaper-profile-artifact --artifact <frozen.tgz>`; this workflow shares production optimization settings and writes only diagnostic artifacts. Once executable equivalence is established, the final function-index map can also annotate an existing numeric CPU profile without rerunning the workload.
 
+The draft integration preserves current-main width-reflow profiling and adds bulk-write attribution to the
+same installed-package profiling workflow. Preparation and publication are separate selectable boundaries;
+the candidate must pass cold-output controls before its elapsed results are compared with frozen main.
+
 ## Approved performance lanes
 
 | Lane                  | Runner                         | Owns                                                                                            | Selection                                                                                                                   |

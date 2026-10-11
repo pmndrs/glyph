@@ -642,6 +642,13 @@ restrictions, and storage corruption are transparent misses followed by the same
 
 ## Retained frame transaction
 
+Draft #292 is rebased onto main2f62d6ba, including the merged query-first copy contract. Durable paragraph
+preparation retains the transaction Codec binding when commit_measure consumes the speculative transaction;
+copying therefore uses that same prepared paragraph before first publication, without manufacturing another query
+or publishing its source. Inspection reads do not serialize full semantic result buffers. Publication capacity
+failure/growth is tested at the actual command-result boundary. The integrated native suite and focused copy/lifetime
+controls pass; combined performance and binary-size gates remain open.
+
 Every handle owns one anonymous root, and `handle(name)` idempotently selects named sibling roots. Each root owns one Rust
 command-buffer stream and one renderer publication boundary. It may bind to at most one Three `Scene`, discovered from its attached Text
 members by object identity; a root name is stable semantic/customization metadata, not a `Scene.uuid`. A second Scene

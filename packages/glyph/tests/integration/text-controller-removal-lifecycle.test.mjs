@@ -173,22 +173,22 @@ test('canceling an unqueried creation leaves later copy queries free of lifecycl
     canceled.dispose();
     const lifecycleCounts = [];
     let publications = 0;
-    const measureParagraph = PlanTransport.prototype.measureParagraph;
+    const prepareParagraph = PlanTransport.prototype.prepareParagraph;
     const stageUpdate = PlanTransport.prototype.stageUpdate;
-    PlanTransport.prototype.measureParagraph = function (request, ...rest) {
+    PlanTransport.prototype.prepareParagraph = function (request, ...rest) {
       lifecycleCounts.push(request.paragraphMutations.length);
-      return measureParagraph.call(this, request, ...rest);
+      return prepareParagraph.call(this, request, ...rest);
     };
     PlanTransport.prototype.stageUpdate = function (...arguments_) {
       publications += 1;
       return stageUpdate.apply(this, arguments_);
     };
     t.after(() => {
-      PlanTransport.prototype.measureParagraph = measureParagraph;
+      PlanTransport.prototype.prepareParagraph = prepareParagraph;
       PlanTransport.prototype.stageUpdate = stageUpdate;
     });
     copy = root.services.copy(source, { kind: 'glyphs', stableIds: inspection.glyphStableIds }, destination());
-    assert.deepEqual(lifecycleCounts, [0], 'the shared copy query must not resend unchanged paragraph rows');
+    assert.deepEqual(lifecycleCounts, [], 'copy consumes durable preparation without another lifecycle request');
     assert.equal(publications, 0, 'copying cannot publish the source');
     assert.deepEqual(source.inspect().glyphStableIds, inspection.glyphStableIds);
     copy.dispose();
@@ -197,7 +197,7 @@ test('canceling an unqueried creation leaves later copy queries free of lifecycl
     anotherCanceled.dispose();
     try {
       copy = root.services.copy(source, { kind: 'glyphs', stableIds: inspection.glyphStableIds }, destination());
-      assert.deepEqual(lifecycleCounts, [0, 2], 'a remaining creation must keep its lifecycle row');
+      assert.deepEqual(lifecycleCounts, [2, 1], 'setters carry the canceled removal and new creation exactly once');
       assert.equal(publications, 0);
     } finally {
       retained.dispose();
