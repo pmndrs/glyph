@@ -5,8 +5,12 @@ export function captureCommand(command, args, options = {}) {
     const child = spawn(command, args, {
       cwd: options.cwd,
       env: options.env ?? process.env,
-      stdio: ['ignore', 'pipe', 'inherit'],
+      stdio: [options.input === undefined ? 'ignore' : 'pipe', 'pipe', 'inherit'],
     });
+    if (options.input !== undefined) {
+      child.stdin.on('error', reject);
+      child.stdin.end(options.input);
+    }
     const chunks = [];
     child.stdout.on('data', (chunk) => chunks.push(chunk));
     child.once('error', reject);

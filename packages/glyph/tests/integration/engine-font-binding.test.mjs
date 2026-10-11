@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { GlyphEngineStatusError } from '@pmndrs/glyph';
+
 import { techniqueProgram } from '../../dist/config/codec-program.js';
 import { id } from '../../dist/config/codec.js';
 import { defineRasterFormat, defineRasterResourceId } from '../../dist/config/raster-format.js';
@@ -83,6 +85,54 @@ async function fixtureFont() {
 async function fixtureEngine() {
   return createGlyphEngine({ wasm: await readFile(wasmUrl) });
 }
+
+test('shape registration queue membership ends at staging, including deferral and rejection', async () => {
+  const engine = await fixtureEngine();
+  const failure = new Error('deliberate stage rejection');
+  let reject = false;
+  let stages = 0;
+  let rejected = 0;
+  const registration = registerGlyphShapeParticipant(engine, {
+    stage() {
+      stages += 1;
+      assert.equal(registration.queued, false, 'the engine consumes the queue before entering stage hooks');
+      assert.throws(() => shapeGlyphEngine(engine), /cannot be reentered/u);
+      if (reject) throw failure;
+      return undefined;
+    },
+    accepted() {},
+    rejected(error) {
+      assert.equal(error, failure);
+      rejected += 1;
+    },
+  });
+  try {
+    assert.equal(registration.queued, false);
+    registration.invalidate();
+    registration.invalidate();
+    assert.equal(registration.queued, true);
+    shapeGlyphEngine(engine);
+    assert.equal(registration.queued, false, 'a deferred root must not remain implicitly queued');
+    shapeGlyphEngine(engine);
+    assert.equal(stages, 1);
+    reject = true;
+    registration.invalidate();
+    assert.throws(
+      () => shapeGlyphEngine(engine),
+      (error) => error === failure,
+    );
+    assert.equal(registration.queued, false, 'rejection must not create an implicit retry');
+    shapeGlyphEngine(engine);
+    assert.equal(stages, 2);
+    assert.equal(rejected, 1);
+    registration.invalidate();
+    registration.dispose();
+    assert.equal(registration.queued, false, 'disposal removes the existing queued registration');
+  } finally {
+    registration.dispose();
+    engine.dispose();
+  }
+});
 
 function captureNextMeasureRequest() {
   const originalInstantiate = WebAssembly.instantiate;
@@ -295,17 +345,25 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
   const inlineMaterials = [handleState.createMaterialBinding(), handleState.createMaterialBinding()];
   const inlineResources = [handleState.createResourceBinding(), handleState.createResourceBinding()];
   let acceptedPublications = 0;
+  const transformTables = [];
+  let targetControl;
+  let duringAccept;
   const planner = handleState.createRootPlanner({
     codec,
     capabilitySetIndex: 0,
-    target: () => ({
-      delivery: 'borrowed',
-      accept: () => {
-        acceptedPublications += 1;
-        return { accepted: true };
-      },
-      dispose() {},
-    }),
+    target: (control) => {
+      targetControl = control;
+      return {
+        delivery: 'borrowed',
+        accept: (candidate) => {
+          transformTables.push(candidate.transforms);
+          duringAccept?.();
+          acceptedPublications += 1;
+          return { accepted: true };
+        },
+        dispose() {},
+      };
+    },
     limits: {
       maxParagraphs: 1,
       maxClusters: 64,
@@ -760,6 +818,8 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
     );
     shapeGlyphEngine(glyphEngine);
     assert.equal(acceptedPublications, 4);
+    assert.equal(transformTables[3], transformTables[0], 'paint and exclusion edits reuse the complete table');
+    assert.equal(Object.isFrozen(transformTables[0]), true);
     text.update({
       flow: {
         regions: [
@@ -804,6 +864,14 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
     );
     shapeGlyphEngine(glyphEngine);
     assert.equal(acceptedPublications, 5);
+    assert.notEqual(transformTables[4], transformTables[3], 'ordered flow handle changes rebuild the table');
+    assert.deepEqual(
+      transformTables[4].slice(1).map((entry) => entry.binding),
+      transformTables[0]
+        .slice(1)
+        .map((entry) => entry.binding)
+        .reverse(),
+    );
     text.update({ text: sourceText });
     assert.equal(
       text.measure().lineCount > 0,
@@ -826,6 +894,18 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
       true,
       'remove records zero every field outside their opcode and identities',
     );
+    shapeGlyphEngine(glyphEngine);
+    const stableTransforms = transformTables.at(-1);
+    assert.throws(() => text.update({ style: { fontSize: -1 } }), /fontSize/);
+    duringAccept = () => assert.throws(() => text.update({ text: 'reentrant' }), /borrow|publication|mutation/);
+    targetControl.requestCheckpoint();
+    shapeGlyphEngine(glyphEngine);
+    assert.equal(
+      transformTables.at(-1),
+      stableTransforms,
+      'invalid setters and checkpoints preserve the complete table',
+    );
+    duringAccept = undefined;
   } finally {
     stopObservingDirty();
     registration.dispose();
@@ -840,24 +920,36 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
   }
 });
 
-test('style-clean text edits do not consume the pending style mutation limit', async () => {
+test('style-clean text edits do not consume the setter preparation style-mutation limit', async () => {
   const font = await fixtureFont();
   const glyphEngine = await fixtureEngine();
   const handleState = createGlyphHandleState(glyphEngine, { integration: 'test.render-planner-style-limits' });
   const codec = handleState.installCodec(threeCodecDescriptor);
   const fontBinding = handleState.bindFontStack(createFontStack(font));
   let acceptedPublications = 0;
+  const transformTables = [];
+  const sharedTransform = handleState.createTransformBinding();
+  let targetControl;
+  let reject = false;
+  let replacement;
+  let recycledTransform;
+  let recycledText;
   const planner = handleState.createRootPlanner({
     codec,
     capabilitySetIndex: 0,
-    target: () => ({
-      delivery: 'borrowed',
-      accept: () => {
-        acceptedPublications += 1;
-        return { accepted: true };
-      },
-      dispose() {},
-    }),
+    target: (control) => {
+      targetControl = control;
+      return {
+        delivery: 'borrowed',
+        accept: (candidate) => {
+          transformTables.push(candidate.transforms);
+          if (reject) throw new Error('transform target rejected');
+          acceptedPublications += 1;
+          return { accepted: true };
+        },
+        dispose() {},
+      };
+    },
     limits: {
       maxParagraphs: 3,
       maxClusters: 5,
@@ -897,10 +989,10 @@ test('style-clean text edits do not consume the pending style mutation limit', a
     shapeGlyphEngine(glyphEngine);
     assert.equal(acceptedPublications, 1);
 
-    // Two span removals and this root paint update consume three mutation slots.
+    // Two span removals and this root paint update consume three slots in this setter preparation.
     first.update({ text: 'abc', style: { color: '#ff0000' } });
     second.update({
-      // This root update plus one span upsert fill the remaining two slots.
+      // This independent setter preparation carries one root update and one span upsert.
       style: { color: '#00ff00' },
       text: {
         text: 'd',
@@ -909,16 +1001,188 @@ test('style-clean text edits do not consume the pending style mutation limit', a
     });
     assert.doesNotThrow(
       () => third.update({ text: 'f' }),
-      'a text-only edit emits no style record beside the five pending style mutations',
+      'a text-only edit emits no style record in its setter preparation',
     );
     shapeGlyphEngine(glyphEngine);
     assert.equal(acceptedPublications, 2);
+    assert.equal(transformTables[1], transformTables[0], 'ordinary edits retain the complete transform table');
+    first.update({ transform: sharedTransform });
+    third.update({ transform: sharedTransform });
+    shapeGlyphEngine(glyphEngine);
+    const sharedTable = transformTables.at(-1);
+    assert.notEqual(sharedTable, transformTables[0]);
+    assert.equal(sharedTable.find((entry) => entry.instanceIds?.length === 2) !== undefined, true);
+    reject = true;
+    targetControl.requestCheckpoint();
+    assert.throws(() => shapeGlyphEngine(glyphEngine), /transform target rejected/);
+    assert.equal(transformTables.at(-1), sharedTable);
+    reject = false;
+    shapeGlyphEngine(glyphEngine);
+    assert.equal(transformTables.at(-1), sharedTable, 'renderer rejection preserves transform authority');
+    third.dispose();
+    shapeGlyphEngine(glyphEngine);
+    const removedTable = transformTables.at(-1);
+    assert.notEqual(removedTable, sharedTable);
+    assert.equal(
+      removedTable.every((entry) => entry.instanceIds?.length === 1),
+      true,
+    );
+    replacement = planner.createText({ font: fontBinding, text: 'g', transform: sharedTransform });
+    shapeGlyphEngine(glyphEngine);
+    assert.notEqual(transformTables.at(-1), removedTable);
+    assert.equal(transformTables.at(-1).find((entry) => entry.instanceIds?.length === 2) !== undefined, true);
+    const sharedEntry = transformTables.at(-1).find((entry) => entry.instanceIds?.length === 2);
+    first.dispose();
+    second.dispose();
+    replacement.dispose();
+    shapeGlyphEngine(glyphEngine);
+    assert.deepEqual(transformTables.at(-1), [], 'empty publication clears transform membership');
+    sharedTransform.dispose();
+    recycledTransform = handleState.createTransformBinding();
+    recycledText = planner.createText({ font: fontBinding, text: 'h', transform: recycledTransform });
+    shapeGlyphEngine(glyphEngine);
+    const recycledEntry = transformTables.at(-1)[0];
+    assert.equal(recycledEntry.transformIndex, sharedEntry.transformIndex, 'the freed transform ordinal is reused');
+    assert.notEqual(recycledEntry.binding, sharedEntry.binding, 'recycling resolves the new binding identity');
   } finally {
     stopObservingDirty();
     registration.dispose();
     first.dispose();
     second.dispose();
     third.dispose();
+    replacement?.dispose();
+    recycledText?.dispose();
+    planner.dispose();
+    recycledTransform?.dispose();
+    sharedTransform.dispose();
+    fontBinding.dispose();
+    codec.dispose();
+    handleState.dispose();
+    glyphEngine.dispose();
+    font.dispose();
+  }
+});
+
+test('base-order publication admits swaps and preserves pending order across semantic preparation', async () => {
+  const font = await fixtureFont();
+  const glyphEngine = await fixtureEngine();
+  const handleState = createGlyphHandleState(glyphEngine, { integration: 'test.render-planner-order-ownership' });
+  const codec = handleState.installCodec(threeCodecDescriptor);
+  const fontBinding = handleState.bindFontStack(createFontStack(font));
+  let acceptedPublications = 0;
+  const planner = handleState.createRootPlanner({
+    codec,
+    capabilitySetIndex: 0,
+    target: () => ({
+      delivery: 'borrowed',
+      accept: () => {
+        acceptedPublications += 1;
+        return { accepted: true };
+      },
+      dispose() {},
+    }),
+    limits: {
+      maxParagraphs: 4,
+      maxClusters: 16,
+      maxLines: 16,
+      maxRegions: 4,
+      maxExclusions: 1,
+      maxInlineObjects: 1,
+      maxSlotsPerBand: 1,
+      maxOutputBytes: 1_048_576,
+    },
+    requestCapacity: 65_536,
+    resultCapacity: 1_048_576,
+    textCapacity: 64,
+  });
+  const registration = registerGlyphShapeParticipant(glyphEngine, {
+    stage: () => stageRenderPlanner(planner),
+    accepted() {},
+    rejected(error) {
+      throw error;
+    },
+  });
+  const stopObservingDirty = observeRenderPlannerDirty(planner, () => registration.invalidate());
+  const first = planner.createText({ font: fontBinding, order: 10, text: 'alpha' });
+  const second = planner.createText({ font: fontBinding, order: 20, text: 'beta' });
+  let duplicate;
+  let replacement;
+  let formerOrderReuse;
+
+  try {
+    shapeGlyphEngine(glyphEngine);
+    assert.equal(acceptedPublications, 1);
+
+    first.updateOrder(20, 0, 0);
+    first.update({ text: 'alpha moved' });
+    second.updateOrder(10, 0, 0);
+    assert.equal(first.measure().glyphCount, 11, 'the semantic setter prepares before the order swap publishes');
+    shapeGlyphEngine(glyphEngine);
+    assert.equal(acceptedPublications, 2, 'the complete unique swap publishes as one transaction');
+
+    first.updateOrder(30, 0, 0);
+    second.updateOrder(30, 0, 0);
+    first.update({ text: 'pending duplicate' });
+    assert.equal(first.measure().glyphCount, 17, 'duplicate desired order does not block independent preparation');
+    assert.throws(
+      () => shapeGlyphEngine(glyphEngine),
+      /retained text order 30 is already in use/,
+      'only the complete publication rejects a duplicate final order',
+    );
+    assert.equal(acceptedPublications, 2, 'a rejected final order preserves the last accepted renderer state');
+    assert.equal(first.measure().glyphCount, 17, 'publication rejection retains current prepared content');
+    second.updateOrder(40, 0, 0);
+    shapeGlyphEngine(glyphEngine);
+    assert.equal(acceptedPublications, 3, 'repairing the final order retries the retained preparation');
+
+    duplicate = planner.createText({ font: fontBinding, order: 30, text: 'duplicate creation' });
+    assert.equal(duplicate.measure().glyphCount, 18, 'creation prepares at an unobservable temporary lifecycle order');
+    assert.throws(
+      () => shapeGlyphEngine(glyphEngine),
+      /retained text order 30 is already in use/,
+      'the complete final set still rejects duplicate created order before serialization',
+    );
+    duplicate.dispose();
+
+    first.dispose();
+    replacement = planner.createText({ font: fontBinding, order: 30, text: 'replacement' });
+    assert.equal(replacement.measure().glyphCount, 11, 'removal and same-order creation prepare atomically');
+    replacement.updateOrder(50, 0, 0);
+    replacement.update({ text: 'replacement moved' });
+    assert.equal(replacement.measure().glyphCount, 17, 'an ordinary setter preserves pending lifecycle intent');
+    shapeGlyphEngine(glyphEngine);
+    assert.equal(acceptedPublications, 4);
+
+    replacement.updateOrder(60, 0, 0);
+    const beforeRejectedPreparation = replacement.measure();
+    assert.throws(
+      () => replacement.update({ text: 'bad\ud800text' }),
+      (error) => error instanceof GlyphEngineStatusError && error.statusCode === 'invalid-request',
+    );
+    assert.equal(
+      replacement.measure(),
+      beforeRejectedPreparation,
+      'a rejected preparation retains both measurement and pending order intent',
+    );
+    shapeGlyphEngine(glyphEngine);
+    assert.equal(acceptedPublications, 5, 'the pending order publishes after preparation rollback');
+
+    formerOrderReuse = planner.createText({ font: fontBinding, order: 30, text: 'former order reused' });
+    assert.equal(formerOrderReuse.measure().glyphCount, 19, 'the former order prepares after the pending move commits');
+    shapeGlyphEngine(glyphEngine);
+    assert.equal(
+      acceptedPublications,
+      6,
+      'reusing the former order proves Rust installed the recovered paragraph at its pending order',
+    );
+  } finally {
+    stopObservingDirty();
+    registration.dispose();
+    first.dispose();
+    second.dispose();
+    duplicate?.dispose();
+    replacement?.dispose();
+    formerOrderReuse?.dispose();
     planner.dispose();
     fontBinding.dispose();
     codec.dispose();

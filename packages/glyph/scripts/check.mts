@@ -17,6 +17,10 @@ const rustCrates = [
 
 export async function runGlyphCheck(): Promise<void> {
   await runGlyphTest();
+  await runGlyphStaticCheck();
+}
+
+export async function runGlyphStaticCheck(): Promise<void> {
   await runNode('node_modules/typescript/bin/tsc', ['-p', 'tsconfig.json', '--noEmit']);
   await runNode('node_modules/typescript/bin/tsc', ['-p', 'tsconfig.slug-shaders.json', '--noEmit']);
   // Emitted public declarations must survive strict consumers: stripInternal can orphan a

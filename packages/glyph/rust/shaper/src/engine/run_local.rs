@@ -4,6 +4,8 @@ use alloc::vec::Vec;
 
 use crate::FontGlyphExtents;
 
+use super::cluster_state::LAYOUT_CHUNK;
+
 pub(crate) const LOCAL_ABS_LIMIT: f64 = 8_192.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -156,6 +158,18 @@ impl RunLocalWriter<'_> {
     pub(crate) fn begin_cluster(&mut self) -> Result<(), RunLocalBuildError> {
         if !self.arena.pending_cluster_rows.is_empty() || self.cluster_open {
             return Err(RunLocalBuildError::InvalidSource);
+        }
+        // Source-relative chunk boundaries are identical for cold and retained builds.
+        // Envelope precision splits remain free to subdivide each chunk.
+        let ordinal = self
+            .arena
+            .cluster_blocks
+            .len()
+            .checked_sub(self.first_cluster)
+            .and_then(|count| count.checked_add(self.arena.pending_block_clusters.len()))
+            .ok_or(RunLocalBuildError::AllocationFailed)?;
+        if ordinal != 0 && ordinal % LAYOUT_CHUNK == 0 {
+            self.finalize_block()?;
         }
         self.cluster_open = true;
         Ok(())
@@ -640,6 +654,69 @@ mod tests {
     }
 
     #[test]
+    fn numeric_blocks_obey_source_chunk_boundaries_with_detached_and_precision_splits() {
+        for count in [63, 64, 65, 128] {
+            for variant in 0..3 {
+                let mut arena = RunLocalArena::default();
+                let mut writer = arena.begin_run();
+                for ordinal in 0..count {
+                    if variant == 1 && ordinal == 4 {
+                        writer.push_detached_cluster().unwrap();
+                        continue;
+                    }
+                    writer.begin_cluster().unwrap();
+                    if variant != 1 || ordinal != 6 {
+                        let advance = if variant == 2 && ordinal == 0 {
+                            8_000
+                        } else {
+                            10
+                        };
+                        let mut row = glyph(ordinal as u32, advance);
+                        if variant == 2 && ordinal == 1 {
+                            row.x_offset = -1_000;
+                        }
+                        writer.push_glyph(row).unwrap();
+                    }
+                    let advance = if variant == 2 && ordinal == 0 {
+                        -8_000.0
+                    } else {
+                        10.0
+                    };
+                    writer
+                        .finish_cluster(ClusterFinish::Resync(advance))
+                        .unwrap();
+                }
+                let span = writer.finish().unwrap();
+                assert_eq!(span.cluster_count as usize, count);
+                assert_eq!(arena.cluster_blocks().len(), count);
+                if variant == 0 {
+                    assert_eq!(span.count as usize, count.div_ceil(LAYOUT_CHUNK));
+                }
+                if variant == 2 {
+                    assert!(span.count as usize > count.div_ceil(LAYOUT_CHUNK));
+                }
+                let mut block_first = vec![None; arena.blocks().len()];
+                let mut block_clusters = vec![0; arena.blocks().len()];
+                for (ordinal, &block) in arena.cluster_blocks().iter().enumerate() {
+                    if block == u32::MAX {
+                        continue;
+                    }
+                    let first = block_first[block as usize].get_or_insert(ordinal);
+                    assert_eq!(*first / LAYOUT_CHUNK, ordinal / LAYOUT_CHUNK);
+                    block_clusters[block as usize] += 1;
+                }
+                assert!(block_clusters.iter().all(|&count| count <= LAYOUT_CHUNK));
+                assert!(
+                    arena
+                        .rows()
+                        .iter()
+                        .all(|row| row.inline_origin.abs() <= LOCAL_ABS_LIMIT as f32)
+                );
+            }
+        }
+    }
+
+    #[test]
     fn fixed_blocks_split_on_the_full_resynchronized_envelope() {
         let mut arena = RunLocalArena::default();
         let mut writer = arena.begin_run();
@@ -861,15 +938,19 @@ mod tests {
             span,
             NumericBlockSpan {
                 start: 0,
-                count: 1,
+                count: 64,
                 cluster_start: 0,
                 cluster_count: 4_096,
             }
         );
-        assert_eq!(arena.blocks()[0].row_count, 4_096);
+        assert!(arena.blocks().iter().all(|block| block.row_count == 64));
         assert_eq!(arena.rows().len(), 4_096);
         assert_eq!(arena.rows()[4_095].source_glyph, 4_095);
-        assert_eq!(arena.rows()[4_095].pen_inline, 4_095.0);
+        let last_block = arena.blocks().last().unwrap();
+        assert_eq!(
+            f64::from(arena.rows()[4_095].inline_origin) + last_block.anchor_inline + 4_032.0,
+            4_095.0
+        );
     }
 
     #[test]

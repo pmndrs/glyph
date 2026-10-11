@@ -97,6 +97,11 @@ test('application values and types stay at root while integration construction l
     }
   }
   const core = published(await declaration('core.d.ts'));
+  assert.doesNotMatch(
+    await declaration('config/glyph.d.ts'),
+    /_isShapeQueued/,
+    'engine queue membership must remain stripped from the public root services contract',
+  );
   const placementTypes = ['GlyphLine', 'GlyphPlacement', 'GlyphPlacements', 'GlyphRun', 'GlyphSpace'];
   for (const name of placementTypes) {
     assert.equal(core.has(name), true, `integration authors must be able to name ${name} from core`);

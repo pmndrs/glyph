@@ -136,6 +136,9 @@ sources:
   - id: presentation-workload-probe
     resource: ../../../benches/scripts/run-presentation-workload-probe.mts
     title: Sequential Presentation workload and backend-switch product probe
+  - id: prebuilt-preview
+    resource: ../../../benches/scripts/dev-built.mts
+    title: Benchmark preview over already-built runtime artifacts
   - id: runtime-world
     resource: ../../../benches/src/benchmark/runtime-world.ts
     title: Koota benchmark runtime trait schema
@@ -270,6 +273,19 @@ The Vite and TypeScript configurations opt into the workspace packages' custom `
 build, and typecheck therefore consume current TypeScript sources without requiring a package rebuild; release-oriented
 Node workflows continue to exercise built package exports.
 
+`benchmark:dev-built` serves the benchmark app without rebuilding runtime artifacts. Its optional `PORT`, `HOST`,
+and `PORTLESS_URL` detection supports local orchestration; these variables and Portless are not contributor prerequisites.
+Presentation probes can pin `PRESENTATION_SHAPER_ARTIFACT` to an existing Wasm file while reusing `PRESENTATION_BASE_URL`.
+Use JavaScript sources matching that artifact's ABI. The probe replaces fetched shaper bytes, reports SHA-256 and fails
+if the artifact was not requested; URL-module imports remain untouched. When a screenshot directory is supplied,
+failed probes also capture the page and print recent browser errors without replacing the original failure.
+
+The optional `--wasm` profile override must contain function names and exactly match the installed artifact's ordered non-custom Wasm sections. Authentication happens before executing the profile, and its manifest records both Wasm hashes, the executable-section digest and function-index names. Produce a verified override with `glyph:shaper-profile-artifact --artifact <frozen.tgz>`; this workflow shares production optimization settings and writes only diagnostic artifacts. Once executable equivalence is established, the final function-index map can also annotate an existing numeric CPU profile without rerunning the workload.
+
+The draft integration preserves current-main width-reflow profiling and adds bulk-write attribution to the
+same installed-package profiling workflow. Preparation and publication are separate selectable boundaries;
+the candidate must pass cold-output controls before its elapsed results are compared with frozen main.
+
 ## Approved performance lanes
 
 | Lane                  | Runner                         | Owns                                                                                            | Selection                                                                                                                   |
@@ -325,8 +341,10 @@ choice and compares with the canary. Available focused suites are `layout`, `mea
 `batch`, `style`, `reflow`, `stress`, `cold`, and `edit`; `spans` isolates the 1,000-label trailing-span mutation, while
 `edit` types one character into a long Inter or Fredoka paragraph and measures it or publishes a frame.
 The `assignment` suite isolates one 18,432-unit paragraph with 8,192 alternating paint spans. It compares unchanged,
-scattered-character, and broad-character full assignments through public `Text.set()` and scene publication. Prepared
-inputs keep scene generation outside timing; untimed checks verify text, rendered glyph semantics, and draw glyph count.
+scattered-character, and broad-character full assignments in paired setter-plus-immediate-measurement and
+setter-plus-scene-publication cases. Both include public `Text.set()` normalization, request encoding and synchronous
+Rust preparation. Authored inputs keep scene generation outside timing; untimed checks verify text and positive glyph
+count for preparation, and rendered glyph semantics plus draw glyph count for publication.
 These checks are benchmark sanity checks, while independent warm-versus-cold integration tests own correctness evidence.
 `full` does not run browser observations, native/Worker profiles, or correctness and release gates.
 

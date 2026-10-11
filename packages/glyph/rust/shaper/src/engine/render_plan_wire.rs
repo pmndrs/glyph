@@ -192,6 +192,11 @@ pub(crate) fn encode_query(
         semantic_views,
         write_semantic,
     );
+    #[cfg(test)]
+    super::work_attribution::record(|work| {
+        work.query_serialized_records += semantic_views.len();
+        work.query_serialized_bytes += byte_length;
+    });
     Ok(layout)
 }
 

@@ -1,5 +1,11 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { LayoutBox, GlyphLayoutColumns, ParagraphLayoutSummary, ParagraphLineMetrics } from '../layout.js';
+import type {
+  BorrowedGlyphLayout,
+  LayoutBox,
+  GlyphLayoutColumns,
+  ParagraphLayoutSummary,
+  ParagraphLineMetrics,
+} from '../layout.js';
 import type { PlanPublication } from './handle-state.js';
 
 /** Reads the ink box off one semantic record, or reports its absence via a flag bit — not a sentinel extent, since a zero-extent ink box (a paragraph of spaces) is a legitimate answer. */
@@ -47,8 +53,8 @@ export function readPlannerMeasurements(publication: PlanPublication): ReadonlyM
       // The engine reports the line box's ascent; its descent is the remainder of the box, so the
       // two are derived from one number instead of two that could disagree.
       const ascent = view.f32(line + recordLayout.ascent);
-      // A measurement-only query leaves the line's glyph span zeroed; it is only meaningful
-      // alongside the per-glyph columns, which the measure reader validates before publishing.
+      // Setter preparation may carry line-local glyph spans without serializing per-glyph
+      // semantic records; owned glyph demand combines these spans with the borrowed arena.
       const lineGlyphStart = view.u32(line + recordLayout.itemStart);
       lines.push(
         Object.freeze({
@@ -116,6 +122,95 @@ export function measurementFromLayoutInspection(layout: GlyphLayoutColumns): Par
     lineCount: layout.lineCount,
     missingGlyphCount: layout.missingGlyphCount,
     lines: layout.lines,
+  });
+}
+
+/** Copies owned inspection columns from the current prepared borrowed layout without replaying text preparation. */
+export function copyPreparedLayoutInspection(
+  measurement: ParagraphLayoutSummary,
+  borrowed: BorrowedGlyphLayout,
+): GlyphLayoutColumns {
+  const glyphCount = borrowed.glyphCount;
+  if (glyphCount !== measurement.glyphCount) {
+    throw new TypeError('prepared glyph demand disagrees with its measurement');
+  }
+  const fontHandles: number[] = [];
+  const fontSlots = new Map<number, number>();
+  const glyphStableIds = new Uint32Array(glyphCount);
+  const glyphFontSlots = new Uint16Array(glyphCount);
+  const glyphIds = new Uint16Array(glyphCount);
+  const clusters = new Uint32Array(glyphCount);
+  const glyphBidiLevels = new Uint8Array(glyphCount);
+  const glyphFontSizes = new Float32Array(glyphCount);
+  const x = new Float32Array(glyphCount);
+  const y = new Float32Array(glyphCount);
+  const glyphAdvances = new Float32Array(glyphCount);
+  const glyphInkX = new Float32Array(glyphCount);
+  const glyphInkY = new Float32Array(glyphCount);
+  const glyphInkWidths = new Float32Array(glyphCount);
+  const glyphInkHeights = new Float32Array(glyphCount);
+  const glyphFlags = new Uint16Array(glyphCount);
+  for (let index = 0; index < glyphCount; index += 1) {
+    const glyph = borrowed.glyphAt(index);
+    let fontSlot = fontSlots.get(glyph.fontHandle);
+    if (fontSlot === undefined) {
+      fontSlot = fontHandles.length;
+      if (fontSlot > 0xffff) throw new RangeError('prepared layout exceeds the font-slot range');
+      fontSlots.set(glyph.fontHandle, fontSlot);
+      fontHandles.push(glyph.fontHandle);
+    }
+    glyphStableIds[index] = glyph.stableId;
+    glyphFontSlots[index] = fontSlot;
+    glyphIds[index] = glyph.glyphId;
+    clusters[index] = glyph.cluster;
+    glyphBidiLevels[index] = glyph.bidiLevel;
+    glyphFontSizes[index] = glyph.fontSize;
+    x[index] = glyph.x;
+    y[index] = glyph.y;
+    glyphAdvances[index] = glyph.advance;
+    glyphInkX[index] = glyph.inkX;
+    glyphInkY[index] = glyph.inkY;
+    glyphInkWidths[index] = glyph.inkWidth;
+    glyphInkHeights[index] = glyph.inkHeight;
+    glyphFlags[index] = glyph.flags;
+  }
+  const lineTextStarts = new Uint32Array(measurement.lineCount);
+  const lineTextEnds = new Uint32Array(measurement.lineCount);
+  const lineGlyphStarts = new Uint32Array(measurement.lineCount);
+  const lineGlyphCounts = new Uint32Array(measurement.lineCount);
+  const lineBaselines = new Float32Array(measurement.lineCount);
+  const lineAdvances = new Float32Array(measurement.lineCount);
+  for (const [index, line] of measurement.lines.entries()) {
+    lineTextStarts[index] = line.textStart;
+    lineTextEnds[index] = line.textEnd;
+    lineGlyphStarts[index] = line.glyphStart;
+    lineGlyphCounts[index] = line.glyphCount;
+    lineBaselines[index] = line.baseline;
+    lineAdvances[index] = line.advance;
+  }
+  return Object.freeze({
+    ...measurement,
+    fontHandles: Uint32Array.from(fontHandles),
+    glyphStableIds,
+    glyphFontSlots,
+    glyphIds,
+    clusters,
+    glyphBidiLevels,
+    glyphFontSizes,
+    x,
+    y,
+    glyphAdvances,
+    glyphInkX,
+    glyphInkY,
+    glyphInkWidths,
+    glyphInkHeights,
+    glyphFlags,
+    lineTextStarts,
+    lineTextEnds,
+    lineGlyphStarts,
+    lineGlyphCounts,
+    lineBaselines,
+    lineAdvances,
   });
 }
 
