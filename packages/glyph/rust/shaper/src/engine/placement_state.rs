@@ -2,8 +2,9 @@ use alloc::vec::Vec;
 
 use super::{
     EngineError,
-    cluster_state::{LayoutRun, LayoutRunSourceKind, RunCanonicalRevision},
+    cluster_state::{ClusterArena, LayoutRun, LayoutRunSourceKind, RunCanonicalRevision},
     placement_slot_arena::PlacementHandle,
+    shaping_state::ShapingRun,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -76,6 +77,181 @@ pub(crate) struct RetainedLinePlacement {
     pub old_fragment_start: u32,
     pub new_fragment_start: u32,
     pub instance_count: u32,
+}
+
+/// Current preparation's clean-line proof, admitted by positioning after style validation.
+#[derive(Clone, Copy)]
+pub(crate) struct RetainedRunCorrespondence<'a> {
+    pub previous_clusters: &'a ClusterArena,
+    pub clusters: &'a ClusterArena,
+    pub previous_runs: &'a [ShapingRun],
+    pub runs: &'a [ShapingRun],
+}
+
+impl RetainedRunCorrespondence<'_> {
+    fn remap(self, mut segment: PlacementSegment) -> Result<PlacementSegment, EngineError> {
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.placement_remap_attempts += 1);
+        if segment.layout_run_owner != LayoutRunOwner::Paragraph
+            || segment.glyph_source != GlyphSource::LayoutRun
+        {
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.placement_remap_run_rejections += 1);
+            return Err(EngineError::InvalidRequest);
+        }
+        let index =
+            usize::try_from(segment.layout_run_index).map_err(|_| EngineError::InvalidRequest)?;
+        let old = *self
+            .previous_clusters
+            .layout_runs()
+            .get(index)
+            .ok_or(EngineError::InvalidRequest)?;
+        let new = *self
+            .clusters
+            .layout_runs()
+            .get(index)
+            .ok_or(EngineError::InvalidRequest)?;
+        if old.canonical_revision != segment.canonical_revision
+            || new.canonical_revision.is_none()
+            || old.source_kind != LayoutRunSourceKind::Paragraph
+            || new.source_kind != old.source_kind
+            || new.cluster_start != old.cluster_start
+            || new.cluster_end != old.cluster_end
+            || new.glyph_start != old.glyph_start
+            || new.glyph_count != old.glyph_count
+            || new.font_handle != old.font_handle
+        {
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.placement_remap_run_rejections += 1);
+            return Err(EngineError::InvalidRequest);
+        }
+        let direction = self
+            .runs
+            .get(new.source_run as usize)
+            .ok_or(EngineError::InvalidRequest)?
+            .direction;
+        if self
+            .previous_runs
+            .get(old.source_run as usize)
+            .ok_or(EngineError::InvalidRequest)?
+            .direction
+            != direction
+        {
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.placement_remap_direction_rejections += 1);
+            return Err(EngineError::InvalidRequest);
+        }
+        let start = new
+            .cluster_start
+            .checked_add(segment.run_cluster_start)
+            .ok_or(EngineError::InvalidRequest)?;
+        let end = start
+            .checked_add(segment.run_cluster_count)
+            .filter(|end| *end <= new.cluster_end && *end > start)
+            .ok_or(EngineError::InvalidRequest)?;
+        let start = usize::try_from(start).map_err(|_| EngineError::InvalidRequest)?;
+        let end = usize::try_from(end).map_err(|_| EngineError::InvalidRequest)?;
+        if self.clusters.stable_ids.get(start).copied() != Some(segment.source_anchor)
+            || self.previous_clusters.stable_ids.get(start).copied() != Some(segment.source_anchor)
+        {
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.placement_remap_anchor_rejections += 1);
+            return Err(EngineError::InvalidRequest);
+        }
+        let (numeric, block_end) = self
+            .clusters
+            .placement_segment_monotone(new, direction, start, false, end)?;
+        let old_numeric = self
+            .previous_clusters
+            .placement_cluster(old, direction, start)?;
+        // Copied semantic columns use the old local coordinates. A changed numeric
+        // prefix/block requires normal positioning, rather than retagging those rows.
+        if numeric != old_numeric
+            || block_end < end
+            || numeric.segment_anchor != segment.segment_anchor
+            || numeric.numeric_block_ordinal != segment.numeric_block_ordinal
+            || numeric.dense != (segment.identity == PlacementIdentity::Dense)
+        {
+            #[cfg(test)]
+            {
+                // Diagnostic categories have priority: partition, identity, then overlapping
+                // numeric causes. Metadata reads do not add another validation traversal.
+                let block_span = |clusters: &ClusterArena, run: LayoutRun, ordinal: u32| {
+                    run.numeric_blocks
+                        .start
+                        .checked_add(ordinal)
+                        .and_then(|index| clusters.run_local().blocks().get(index as usize))
+                        .map(|block| {
+                            (
+                                block.source_glyph_start,
+                                block.source_glyph_count,
+                                block.row_count,
+                            )
+                        })
+                };
+                let partition = block_end < end
+                    || numeric.numeric_block_ordinal != old_numeric.numeric_block_ordinal
+                    || block_span(self.clusters, new, numeric.numeric_block_ordinal)
+                        != block_span(
+                            self.previous_clusters,
+                            old,
+                            old_numeric.numeric_block_ordinal,
+                        );
+                let identity = numeric.segment_anchor != old_numeric.segment_anchor
+                    || numeric.segment_anchor != segment.segment_anchor
+                    || numeric.dense != old_numeric.dense
+                    || numeric.dense != (segment.identity == PlacementIdentity::Dense)
+                    || numeric.numeric_block_ordinal != segment.numeric_block_ordinal;
+                let prefix = numeric.block_local_prefix != old_numeric.block_local_prefix;
+                let anchor = numeric.block_anchor_inline != old_numeric.block_anchor_inline
+                    || numeric.block_anchor_block != old_numeric.block_anchor_block;
+                super::work_attribution::record(|work| {
+                    work.placement_remap_numeric_rejections += 1;
+                    if partition {
+                        work.placement_remap_numeric_partition += 1;
+                    } else if identity {
+                        work.placement_remap_numeric_identity += 1;
+                    } else {
+                        match (prefix, anchor) {
+                            (true, false) => work.placement_remap_numeric_prefix_only += 1,
+                            (false, true) => work.placement_remap_numeric_anchor_only += 1,
+                            (true, true) => work.placement_remap_numeric_prefix_and_anchor += 1,
+                            (false, false) => work.placement_remap_numeric_other += 1,
+                        }
+                    }
+                });
+            }
+            return Err(EngineError::InvalidRequest);
+        }
+        let glyph_start = *self
+            .clusters
+            .glyph_starts
+            .get(start)
+            .ok_or(EngineError::InvalidRequest)?;
+        let glyph_end = self
+            .clusters
+            .glyph_starts
+            .get(end - 1)
+            .copied()
+            .and_then(|start| {
+                self.clusters
+                    .glyph_counts
+                    .get(end - 1)
+                    .and_then(|count| start.checked_add(*count))
+            })
+            .ok_or(EngineError::InvalidRequest)?;
+        if glyph_start.checked_sub(new.glyph_start) != Some(segment.source_glyph_start)
+            || glyph_end.checked_sub(glyph_start) != Some(segment.source_glyph_count)
+        {
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.placement_remap_glyph_rejections += 1);
+            return Err(EngineError::InvalidRequest);
+        }
+        segment.canonical_revision = new.canonical_revision;
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.placement_remap_successes += 1);
+        Ok(segment)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -167,6 +343,7 @@ impl PlacementState {
         {
             let index = usize::try_from(last_index).map_err(|_| EngineError::InvalidRequest)?;
             let stored = &mut self.segments[index];
+            stored.placement_handle = None;
             stored.run_cluster_start = cluster_start;
             stored.run_cluster_count = cluster_count;
             stored.source_glyph_start = glyph_start;
@@ -178,6 +355,7 @@ impl PlacementState {
                     run_cluster_count: cluster_count,
                     source_glyph_start: glyph_start,
                     source_glyph_count: glyph_count,
+                    placement_handle: None,
                     ..previous
                 },
                 previous_placement,
@@ -235,6 +413,7 @@ impl PlacementState {
             .segments
             .get_mut(index)
             .ok_or(EngineError::InvalidRequest)?;
+        stored.placement_handle = None;
         stored.run_cluster_start = cluster_start;
         stored.run_cluster_count = cluster_count;
         stored.source_glyph_start = glyph_start;
@@ -246,6 +425,7 @@ impl PlacementState {
                 run_cluster_count: cluster_count,
                 source_glyph_start: glyph_start,
                 source_glyph_count: glyph_count,
+                placement_handle: None,
                 ..previous
             },
             placement,
@@ -269,6 +449,12 @@ impl PlacementState {
         *instance_count = instance_count
             .checked_add(glyph_count)
             .ok_or(EngineError::ResultTooLarge)?;
+        self.segments[segment].placement_handle = None;
+        if let Some((index, last, _)) = &mut self.last_segment
+            && usize::try_from(*index).ok() == Some(segment)
+        {
+            last.placement_handle = None;
+        }
         Ok(())
     }
 
@@ -278,24 +464,16 @@ impl PlacementState {
         retained: RetainedLinePlacement,
         layout_runs: &[LayoutRun],
         replacement_runs: &[LayoutRun],
+        correspondence: Option<RetainedRunCorrespondence<'_>>,
     ) -> Result<RetainedSegmentRemap, EngineError> {
-        let (segment_start, segment_end) = line_span(
-            &previous.line_segment_starts,
-            &previous.line_segment_counts,
-            retained.line_index,
-            previous.segments.len(),
-        )?;
-        if (segment_start..segment_end).any(|index| {
-            previous
-                .segments
-                .get(index)
-                .is_none_or(|segment| !hinted_run_matches(*segment, layout_runs, replacement_runs))
-        }) {
-            self.prepare_run_resolution(layout_runs, replacement_runs)?;
-        }
         let checkpoint = self.checkpoint();
-        let result =
-            self.append_retained_line_inner(previous, retained, layout_runs, replacement_runs);
+        let result = self.append_retained_line_inner(
+            previous,
+            retained,
+            layout_runs,
+            replacement_runs,
+            correspondence,
+        );
         if result.is_err() {
             self.restore(checkpoint);
         }
@@ -324,6 +502,7 @@ impl PlacementState {
         retained: RetainedLinePlacement,
         layout_runs: &[LayoutRun],
         replacement_runs: &[LayoutRun],
+        correspondence: Option<RetainedRunCorrespondence<'_>>,
     ) -> Result<RetainedSegmentRemap, EngineError> {
         if !self.has_aligned_lanes() || !previous.has_aligned_lanes() {
             return Err(EngineError::InvalidRequest);
@@ -357,6 +536,7 @@ impl PlacementState {
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.reserve_line_record()?;
 
+        let mut lookup_prepared = false;
         for relative in 0..slice_count {
             let mut slice = previous.segments[slice_start + relative];
             let fragment_offset = slice
@@ -367,8 +547,17 @@ impl PlacementState {
                 .new_fragment_start
                 .checked_add(fragment_offset)
                 .ok_or(EngineError::ResultTooLarge)?;
+            if !hinted_run_matches(slice, layout_runs, replacement_runs) {
+                if let Some(correspondence) = correspondence {
+                    // A current clean-line proof can rebind the hinted run directly. Failed
+                    // correspondence recomputes this line; it cannot authorize a global lookup.
+                    slice = correspondence.remap(slice)?;
+                } else if !lookup_prepared {
+                    self.prepare_run_resolution(layout_runs, replacement_runs)?;
+                    lookup_prepared = true;
+                }
+            }
             slice.layout_run_index = self.resolve_run(slice, layout_runs, replacement_runs)?.0;
-            slice.placement_handle = None;
             let placement = previous.translations[slice_start + relative];
             self.segments.push(slice);
             self.translations.push(placement);
@@ -420,17 +609,13 @@ impl PlacementState {
             })
     }
 
-    pub(crate) fn bind_placement_handles(
-        &mut self,
-        handles: &[PlacementHandle],
-    ) -> Result<(), EngineError> {
-        if handles.len() != self.segments.len() {
-            return Err(EngineError::InvalidRequest);
+    pub(crate) fn set_placement_handle(&mut self, index: usize, handle: Option<PlacementHandle>) {
+        self.segments[index].placement_handle = handle;
+        if let Some((last_index, last, _)) = &mut self.last_segment
+            && usize::try_from(*last_index).ok() == Some(index)
+        {
+            last.placement_handle = handle;
         }
-        for (segment, handle) in self.segments.iter_mut().zip(handles) {
-            segment.placement_handle = Some(*handle);
-        }
-        Ok(())
     }
 
     pub(crate) fn placement_handle(&self, segment_index: usize) -> Option<PlacementHandle> {
@@ -590,6 +775,8 @@ fn prepare_run_lookup(
         .try_reserve(runs.len())
         .map_err(|_| EngineError::ResultTooLarge)?;
     for (index, run) in runs.iter().enumerate() {
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.placement_run_lookup_visits += 1);
         let revision = run.canonical_revision.ok_or(EngineError::InvalidRequest)?;
         lookup.push((
             revision,
@@ -701,6 +888,9 @@ mod tests {
                 },
             )
             .unwrap();
+        let mut slots = super::super::placement_slot_arena::PlacementSlotArena::default();
+        slots.prepare(&[1u32], 1).unwrap();
+        state.set_placement_handle(0, Some(slots.assignments().unwrap()[0]));
         let second = state
             .push_segment(
                 adjacent_segment(1),
@@ -712,9 +902,32 @@ mod tests {
             .unwrap();
 
         assert_eq!((first, second), (0, 0));
+        assert_eq!(state.placement_handle(0), None);
+        assert_eq!(state.last_segment.unwrap().1.placement_handle, None);
         assert_eq!(state.segments().len(), 1);
         assert_eq!(state.segments().first().unwrap().run_cluster_count, 2);
         assert_eq!(state.segments().first().unwrap().source_glyph_count, 2);
+    }
+
+    #[test]
+    fn extending_bound_segment_revokes_complete_span_proof() {
+        let mut state = PlacementState::default();
+        state
+            .push_segment(
+                adjacent_segment(0),
+                SegmentTranslation {
+                    translation_inline: 1.0,
+                    translation_block: 2.0,
+                },
+            )
+            .unwrap();
+        state.push_segment_instances(0, 1).unwrap();
+        let mut slots = super::super::placement_slot_arena::PlacementSlotArena::default();
+        slots.prepare(&[1u32], 1).unwrap();
+        state.set_placement_handle(0, Some(slots.assignments().unwrap()[0]));
+        state.extend_last_segment(0, 1, 1, 1, 1).unwrap();
+        assert_eq!(state.placement_handle(0), None);
+        assert_eq!(state.last_segment.unwrap().1.placement_handle, None);
     }
 
     #[test]
@@ -744,7 +957,27 @@ mod tests {
             .unwrap();
         previous.push_segment_instances(segment, 2).unwrap();
         previous.segments[0].canonical_revision = Some(revisions[2]);
+        let mut second = previous.segments[0];
+        second.fragment_index = 5;
+        second.layout_run_index = 0;
+        second.canonical_revision = Some(revisions[0]);
+        let second = previous
+            .push_segment(
+                second,
+                SegmentTranslation {
+                    translation_inline: 48.0,
+                    translation_block: 12.0,
+                },
+            )
+            .unwrap();
+        previous.push_segment_instances(second, 2).unwrap();
         previous.finish_line(line).unwrap();
+        let mut slots = super::super::placement_slot_arena::PlacementSlotArena::default();
+        slots.prepare(&[1u32, 2], 1).unwrap();
+        let handles = slots.assignments().unwrap().to_vec();
+        for (index, handle) in handles.iter().enumerate() {
+            previous.set_placement_handle(index, Some(*handle));
+        }
 
         let runs = revisions.map(|canonical_revision| LayoutRun {
             source_kind: LayoutRunSourceKind::Paragraph,
@@ -767,17 +1000,26 @@ mod tests {
                     line_index: 0,
                     old_fragment_start: 4,
                     new_fragment_start: 9,
-                    instance_count: 2,
+                    instance_count: 4,
                 },
                 &runs,
                 &[],
+                None,
             )
             .unwrap();
         assert_eq!(state.segments().first().unwrap().fragment_index, 9);
 
+        for (index, handle) in handles.iter().enumerate() {
+            assert_eq!(state.placement_handle(index), Some(*handle));
+        }
+        state.push_segment_instances(1, 1).unwrap();
+        assert_eq!(state.placement_handle(0), Some(handles[0]));
+        assert_eq!(state.placement_handle(1), None);
+        assert_eq!(state.last_segment.unwrap().1.placement_handle, None);
+
         let reordered = [runs[2], runs[0], runs[1]];
         let mut rebound = PlacementState::default();
-        rebound.prepare_run_resolution(&reordered, &[]).unwrap();
+        super::super::work_attribution::reset();
         rebound
             .append_retained_line(
                 &previous,
@@ -785,13 +1027,19 @@ mod tests {
                     line_index: 0,
                     old_fragment_start: 4,
                     new_fragment_start: 9,
-                    instance_count: 2,
+                    instance_count: 4,
                 },
                 &reordered,
                 &[],
+                None,
             )
             .unwrap();
         assert_eq!(rebound.segments().first().unwrap().layout_run_index, 0);
+        assert_eq!(rebound.segments()[1].layout_run_index, 1);
+        assert_eq!(
+            super::super::work_attribution::snapshot().placement_run_lookup_visits,
+            reordered.len()
+        );
 
         previous.segments[0].canonical_revision =
             Some(RunCanonicalRevision::allocate(&mut next_revision).unwrap());
@@ -803,10 +1051,11 @@ mod tests {
                     line_index: 0,
                     old_fragment_start: 4,
                     new_fragment_start: 9,
-                    instance_count: 2,
+                    instance_count: 4,
                 },
                 &runs,
                 &[],
+                None,
             ),
             Err(EngineError::InvalidRequest)
         ));

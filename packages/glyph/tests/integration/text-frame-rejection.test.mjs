@@ -109,6 +109,89 @@ test('a malformed feature range throws while constructing its structural span', 
   );
 });
 
+test('structural span styles own nested caller data when the tag is authored', { timeout }, async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await fonts.load('inter');
+  const feature = { tag: 'liga', value: 0, start: 0, end: 3 };
+  const style = { features: [feature], color: '#ff2f00' };
+  const tag = span(style);
+  feature.end = 30;
+  style.features.push({ tag: 'bad' });
+  style.color = '#00ff00';
+  const document = txt`${tag`abc`}`;
+  assert.deepEqual(document.spans[0].style, {
+    features: [{ tag: 'liga', value: 0, start: 0, end: 3 }],
+    color: '#ff2f00',
+  });
+  assert.ok(Object.isFrozen(document.spans[0].style.features[0]));
+  const node = three.createText({ font, text: document });
+  try {
+    const before = node.measure();
+    assert.throws(() => node.set({ text: txt`${tag`ab`}` }), /must stay inside \[0, 2\)/u);
+    assert.equal(node.text, 'abc');
+    assert.deepEqual(node.measure(), before, 'rejected range edits leave prepared measurement unchanged');
+  } finally {
+    node.dispose();
+  }
+});
+
+test('recomposing a styled fragment validates absolute feature ranges in its new scope', { timeout }, () => {
+  const fragment = span({ features: [{ tag: 'liga', start: 0, end: 2 }] })`ab`;
+  assert.doesNotThrow(() => txt`${fragment}`);
+  assert.throws(() => txt`prefix ${fragment}`, /must stay inside \[7, 9\)/u);
+  assert.throws(() => txt`${span({ features: [{ tag: 'liga', start: 6 }] })`abc`}`, /must stay inside \[0, 3\)/u);
+  assert.throws(() => txt`prefix ${span({ features: [{ tag: 'liga', end: 1 }] })`ab`}`, /must stay inside \[7, 9\)/u);
+});
+
+test(
+  'owned structural spans retain Unicode cluster and feature scope invariants across assignments',
+  { timeout },
+  async (t) => {
+    const three = await createThreeTestHandle(t);
+    const font = await fonts.load('inter');
+    const node = three.createText({ font, text: 'initial' });
+    try {
+      for (const text of ['a\u0301', '👩‍👩‍👧‍👦', 'क्‍ष', 'office']) {
+        const source = { features: [{ tag: 'liga', start: 0, end: text.length }] };
+        const document = txt`${span(source)`${text}`}`;
+        source.features[0].end = 999;
+        node.set({ text: document });
+        const cold = three.createText({ font, text: document });
+        try {
+          assert.deepEqual(node.measure(), cold.measure(), `retained assignment matches cold ${text}`);
+        } finally {
+          cold.dispose();
+        }
+      }
+    } finally {
+      node.dispose();
+    }
+  },
+);
+
+test('shortening text rejects an out-of-scope feature without changing the text', { timeout }, async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await fonts.load('inter');
+  const node = three.createText({
+    font,
+    text: 'abcdef',
+    style: { features: [{ tag: 'liga', start: 0, end: 6 }] },
+  });
+  try {
+    const before = node.measure();
+    assert.throws(() => node.set({ style: { features: [{ tag: 'liga', start: 8 }] } }), /must stay inside \[0, 6\)/u);
+    assert.deepEqual(node.measure(), before, 'a rejected root feature range leaves preparation unchanged');
+    assert.throws(() => node.set({ text: 'abc' }), /must stay inside \[0, 3\)/u);
+    assert.equal(node.text, 'abcdef', 'range validation precedes mutation');
+    node.set({ text: 'abc', style: { features: [] } });
+    assert.equal(node.text, 'abc');
+    node.set({ text: 'ab', style: {} });
+    assert.equal(node.text, 'ab');
+  } finally {
+    node.dispose();
+  }
+});
+
 test('a fixed root budget keeps the last complete revision and self-heals', { timeout }, async (t) => {
   const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 8, policy: 'fixed' } }));
   const font = await fonts.load('inter');
