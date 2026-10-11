@@ -2,11 +2,22 @@
 
 use alloc::vec::Vec;
 
+use super::EngineError;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum IdentityIndexError {
     AllocationFailed,
     ArithmeticOverflow,
     DuplicateIdentity,
+}
+
+pub(super) fn identity_index_error(error: IdentityIndexError) -> EngineError {
+    match error {
+        IdentityIndexError::AllocationFailed | IdentityIndexError::ArithmeticOverflow => {
+            EngineError::ResultTooLarge
+        }
+        IdentityIndexError::DuplicateIdentity => EngineError::InvalidRequest,
+    }
 }
 
 #[derive(Default)]
