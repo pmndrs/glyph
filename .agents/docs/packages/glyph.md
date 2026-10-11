@@ -478,10 +478,11 @@ objects with the R3F host and are constructed during its commit rather than in a
 therefore pre-render a hidden text or whole text group, while R3F retains visibility and eventual disposal ownership.
 
 Structural `txt`/`span` values and nested React `<Text>` are the only public rich-text authoring paths. They compile one
-immutable string and internal span records, then resolve their derived joins onto the extended grapheme-cluster grid
-before a frame is built (D-265). Public `Text` and `Text.set()` inputs reject a parallel raw `spans` field;
-callers therefore cannot forge offsets, split a cluster, or keep a mutable range table synchronized with text. Internal
-alignment remains a compiler backstop because concatenation can fuse the tail of one fragment with the head of the next.
+immutable string and internal span records while preserving authored UTF-16 join offsets. Rust resolves those ranges
+against its pinned grapheme boundaries during preparation, including when a text edit changes cluster boundaries
+(D-265). Public `Text` and `Text.set()` inputs reject a parallel raw `spans` field; callers therefore cannot forge
+offsets or maintain a separate mutable range table. TypeScript validates and snapshots caller-owned styles, while Rust
+owns grapheme alignment and retained style ranges.
 
 A frame the engine refuses names its cause and the input that caused it (D-267). Six caller-actionable statuses --
 `styleRangeInvalid`, `styleSplitsCluster`, `styleNestingInvalid`, `styleRootInvalid`, `fontStackMissing`,
@@ -675,18 +676,12 @@ committed flow/positioned pair, while full clipped inspection positions its intr
 The bounded retirement passes 330 focused engine tests, all static gates including 11 Rust fmt/Clippy gates, a fresh
 package build, and 971 compiled-Wasm package/integration tests. Performance acceptance remains separate.
 
-Formatted-text compilers resolve cluster boundaries once and freeze their span arrays. A package-private WeakMap records
-the exact array and text value, so React and Vue may preserve that proof while replacing span records to bind fonts and
-Three may skip duplicate Unicode segmentation. A separately authored raw array is still validated in full; when its text
-and every boundary equal the previous normalized value, that value proves the new records remain aligned in both Three
-and the retained planner. Changed text or boundaries, malformed UTF-16, and unproven first inputs still take the normal
-cluster-alignment path. Three also marks each deeply frozen span-style snapshot with package-private WeakSet provenance;
-the material- and font-binding maps preserve both proofs, and the retained planner adopts that canonical formatted input
-instead of rebuilding a second span snapshot. It still scans every incoming batch because callers provide no change
-indices, but it retains equal record/array identities and derives sparse style upserts/removals against the engine-adopted
-state. Pre-adoption discard retains those pending changes; a renderer rejection occurs after adoption and uses the
-existing complete-checkpoint recovery. A caller-authored style, including a merely frozen object, has no ownership proof
-and is still cloned and deeply frozen at the owning boundary.
+Formatted-text adapters snapshot caller-owned styles and preserve authored ranges through React, Vue, Three, and the
+retained planner. They do not run a JavaScript grapheme pass or carry range-provenance brands. Rust stores both authored
+and resolved style offsets, re-resolves retained styles when text changes, and omits collapsed ranges from cascade
+resolution while retaining their source offsets for future edits. The JS grapheme implementation is test-only and
+supplies an independent conformance oracle. Style values remain validated at the caller boundary; renderer adapters
+bind fonts and materials without becoming a second range authority.
 
 Three's ordinary scene traversal owns world-matrix composition. The root observes Text membership and ancestor state,
 publishes semantic changes once at its renderer-owned draw node, and patches root-relative transforms through a separate
@@ -1641,10 +1636,10 @@ its layout, and proves an unchanged constrained sibling still measures and publi
 
 The Rust command buffer is the only glyph-packing implementation. Rust is also the production authority for Unicode
 analysis: the generator emits the compact Script/Script_Extensions and line-break tables consumed by the shaper, and
-the full TypeScript paragraph analyzer has been retired. The JavaScript `findGraphemeBoundaries` helper remains a real
-runtime dependency while authored rich-text spans are normalized synchronously before the shape boundary; its complete
-Unicode 17 GraphemeBreakTest gate is retained beside an independent gate over Rust's analysis. Mutation tests keep a
-test-only line-break oracle so their expected topology is not derived from the engine under test.
+the full TypeScript paragraph analyzer has been retired. Rust also resolves authored rich-text span ranges against its
+grapheme boundaries before shaping, so no production JavaScript grapheme segmenter or range-provenance cache remains.
+The independent Unicode 17 grapheme oracle is test-only; mutation tests also keep a test-only line-break oracle so their
+expected topology is not derived from the engine under test.
 
 The former TypeScript `RasterRuntime`, raster
 candidate/commit transaction, `select`, `createStorage`, and `writeStorage` surfaces are deleted from production source

@@ -29,7 +29,7 @@ import {
   type FontFaceRasterOf,
   type FontFaceSource,
 } from './font-face.js';
-import { inheritClusterAlignedSpans, type FormattedText } from './formatted-text.js';
+import { inheritTextSpans, type FormattedText } from './formatted-text.js';
 import type { Font } from './font.js';
 import { glyph } from './glyph.js';
 import { GlyphFontError } from './loader.js';
@@ -760,7 +760,7 @@ function desiredText(
     font: loadedFont(outerFont, loaded),
     text: Object.freeze({
       text: flattened.text,
-      spans: inheritClusterAlignedSpans(flattened.text, flattened.spans, spans),
+      spans: inheritTextSpans(spans),
     }) as FormattedText<RasterFormatMetadata>,
     style: snapshotReactivePropertyList(props.textStyle, 'Text style', previous?.style),
     layout: snapshotReactivePropertyList(props.layout, 'Text layout', previous?.layout),

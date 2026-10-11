@@ -110,9 +110,9 @@ test('a foreign component child throws', () => {
   );
 });
 
-test('span boundaries resolve onto the grapheme cluster grid', () => {
-  // U+0301 combines with the preceding "a"; the styled span must absorb the whole cluster.
+test('Vue flattening preserves authored span offsets for Rust to resolve', () => {
+  // U+0301 combines with the preceding "a"; flattening preserves the structural source range.
   const result = flattenVueText([h(TextComponent, { textStyle: { color: '#ff0000' } }, 'a'), '\u0301bc'], options);
   assert.equal(result.text, 'a\u0301bc');
-  assert.deepEqual(result.spans, [{ start: 0, end: 2, style: { color: '#ff0000' } }]);
+  assert.deepEqual(result.spans, [{ start: 0, end: 1, style: { color: '#ff0000' } }]);
 });

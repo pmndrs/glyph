@@ -1,14 +1,6 @@
 import * as THREE from 'three/webgpu';
 
-import {
-  alignSpansToClusters,
-  areOwnedSpansClusterAligned,
-  inheritClusterAlignedSpans,
-  ownClusterAlignedSpans,
-  type FormattedText,
-  type ParagraphSpan,
-  type TextInput,
-} from '../formatted-text.js';
+import { type FormattedText, type ParagraphSpan, type TextInput } from '../formatted-text.js';
 import type { Font } from '../font.js';
 import { isFontFaceSelection, resolveFontFace, type FontFaceSelection, type FontFaceRasterOf } from '../font-face.js';
 import { createGlyphPlacements, type GlyphCaret, type GlyphPlacements } from '../glyph-placement.js';
@@ -1918,10 +1910,7 @@ function coreTextState(
       ...(span.style === undefined ? {} : { style: span.style }),
     });
   });
-  const spans =
-    mappedSpans.length !== 0 && areOwnedSpansClusterAligned(desired.text, desired.spans)
-      ? inheritClusterAlignedSpans(desired.text, desired.spans, mappedSpans)
-      : Object.freeze(mappedSpans);
+  const spans = Object.freeze(mappedSpans);
   return {
     font: desired.font,
     text: spans.length === 0 ? desired.text : Object.freeze({ text: desired.text, spans }),
@@ -2051,23 +2040,7 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
     spans = stated;
   } else {
     const checked = assertSpanRanges(text, stated);
-    // Glyph's text compilers hand off package-owned arrays already normalized to this text's cluster grid. Raw caller
-    // arrays with new text or boundaries still take the exact shared Unicode path. A previous normalized state also
-    // proves that validated raw spans with the same text and boundaries are already on that grid.
-    const alignmentReused =
-      previous !== undefined && previous.text === text && haveEqualSpanBoundaries(previous.spans, checked);
-    const aligned =
-      areOwnedSpansClusterAligned(text, checked) || alignmentReused ? checked : alignSpansToClusters(text, checked);
-    const snapshot = reuseOrCreateTextSpans(previous?.spans, aligned);
-    if (areOwnedSpansClusterAligned(text, snapshot)) {
-      spans = snapshot;
-    } else if (areOwnedSpansClusterAligned(text, checked)) {
-      spans = inheritClusterAlignedSpans(text, checked, snapshot);
-    } else if (alignmentReused) {
-      spans = inheritClusterAlignedSpans(text, previous!.spans, snapshot);
-    } else {
-      spans = ownClusterAlignedSpans(text, snapshot);
-    }
+    spans = reuseOrCreateTextSpans(previous?.spans, checked);
   }
   const rootTechniques = immutableFontSelectionFonts(properties.font).map((font) => font.raster);
   const inheritedTechniques = [
@@ -2102,16 +2075,6 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
     ...(rasterPixelRatio === undefined ? {} : { rasterPixelRatio }),
     ...(properties.material === undefined ? {} : { material: properties.material }),
   });
-}
-
-function haveEqualSpanBoundaries<Format extends RasterFormatMetadata>(
-  previous: readonly TextSpan<Format>[],
-  next: readonly TextSpan<Format>[],
-): boolean {
-  return (
-    previous.length === next.length &&
-    previous.every((span, index) => span.start === next[index]!.start && span.end === next[index]!.end)
-  );
 }
 
 function replaceDesiredString<Format extends RasterFormatMetadata>(

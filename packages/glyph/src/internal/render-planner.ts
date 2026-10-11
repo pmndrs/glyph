@@ -1,9 +1,3 @@
-import {
-  alignSpansToClusters,
-  areOwnedSpansClusterAligned,
-  inheritClusterAlignedSpans,
-  ownClusterAlignedSpans,
-} from '../formatted-text.js';
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { GlyphError } from '../glyph-error.js';
 import {
@@ -1744,12 +1738,6 @@ function normalizeTextInput(value: unknown, previous?: ResolvedTextOptions): Ret
   const text = value.text;
   const previousInput = typeof previous?.source.text === 'object' ? previous.source.text : undefined;
   const inputSpans = value.spans as readonly unknown[];
-  const ownedAligned = areOwnedSpansClusterAligned(text, inputSpans as readonly { start: number; end: number }[]);
-  if (ownedAligned) {
-    return Object.isFrozen(value)
-      ? (value as unknown as RetainedFormattedText)
-      : Object.freeze({ text, spans: inputSpans as readonly RetainedTextSpan[] });
-  }
   const checked = inputSpans.map((span, index) => {
     if (!isNonArrayObject(span)) throw new TypeError(`text span ${index} must be an object`);
     if (!Number.isSafeInteger(span.start) || !Number.isSafeInteger(span.end)) {
@@ -1779,26 +1767,9 @@ function normalizeTextInput(value: unknown, previous?: ResolvedTextOptions): Ret
     });
   });
   const previousSpans = previous?.text === text ? previousInput?.spans : undefined;
-  const alignmentReused = previousSpans !== undefined && haveEqualSpanBoundaries(previousSpans, checked);
-  const aligned = alignmentReused ? checked : alignSpansToClusters(text, checked);
-  const reconciled = reuseOrCreateRetainedTextSpans(previousSpans, aligned);
-  const spans = areOwnedSpansClusterAligned(text, reconciled)
-    ? reconciled
-    : alignmentReused
-      ? inheritClusterAlignedSpans(text, previousSpans, reconciled)
-      : ownClusterAlignedSpans(text, reconciled);
+  const spans = reuseOrCreateRetainedTextSpans(previousSpans, checked);
   if (spans === value.spans && Object.isFrozen(value)) return value as unknown as RetainedFormattedText;
   return Object.freeze({ text, spans });
-}
-
-function haveEqualSpanBoundaries(
-  previous: readonly { readonly start: number; readonly end: number }[],
-  next: readonly { readonly start: number; readonly end: number }[],
-): boolean {
-  return (
-    previous.length === next.length &&
-    previous.every((span, index) => span.start === next[index]!.start && span.end === next[index]!.end)
-  );
 }
 
 function reuseOrCreateRetainedTextSpans(

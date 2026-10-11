@@ -5,12 +5,6 @@ import { createElement } from 'react';
 import { glyph, span, txt, bitmap } from '@pmndrs/glyph';
 import { Text as R3fText } from '@pmndrs/glyph/react';
 import { assertMatchesFreshBuild, createFontCache, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
-import {
-  areOwnedRangesClusterAligned,
-  findGraphemeBoundaries,
-  inheritClusterAlignedRanges,
-  ownClusterAlignedRanges,
-} from '../../dist/internal/graphemes.js';
 
 globalThis.self ??= globalThis;
 globalThis.requestAnimationFrame ??= () => 0;
@@ -27,33 +21,13 @@ const constraints = { width: { mode: 'exact', size: 220 } };
 const layout = { wrap: 'word' };
 const style = [{ fontSize: 6, lineHeight: 1 }, { color: '#ffffff' }];
 
-function ranges(literal) {
-  return literal.spans.map(({ start, end }) => [start, end]);
-}
-
-function assertAligned(literal) {
-  const boundaries = new Set(findGraphemeBoundaries(literal.text));
-  for (const { start, end } of literal.spans) {
-    assert.ok(boundaries.has(start), `span starts inside a cluster at ${start}`);
-    assert.ok(boundaries.has(end), `span ends inside a cluster at ${end}`);
-  }
-}
-
-test('txt resolves a styled fragment opening with a combining mark onto the base cluster', { timeout }, async () => {
+test('Rust resolves authored template ranges after fragments join into graphemes', { timeout }, async () => {
   const literal = txt`a${span({ color: '#ff2f00' })`${ACUTE}b`}`;
   assert.equal(literal.text, `a${ACUTE}b`);
-  assert.deepEqual([...findGraphemeBoundaries(literal.text)], [0, 2, 3]);
-  assert.deepEqual(ranges(literal), [[2, 3]]);
-  assertAligned(literal);
-  assert.equal(literal.spans.every(Object.isFrozen), true, 'rewritten package-owned span records must stay immutable');
-  assert.equal(areOwnedRangesClusterAligned(literal.text, literal.spans), true);
-  assert.equal(areOwnedRangesClusterAligned(`${literal.text}c`, literal.spans), false);
-  const rebound = inheritClusterAlignedRanges(
-    literal.text,
-    literal.spans,
-    literal.spans.map((entry) => Object.freeze({ ...entry })),
+  assert.deepEqual(
+    literal.spans.map(({ start, end }) => [start, end]),
+    [[1, 3]],
   );
-  assert.equal(areOwnedRangesClusterAligned(literal.text, rebound), true);
 
   const font = await fonts.load('inter');
   const mounted = mount(font, [{ properties: { constraints, layout, style, text: literal } }]);
@@ -67,66 +41,29 @@ test('txt resolves a styled fragment opening with a combining mark onto the base
   }
 });
 
-test('span provenance inheritance realigns unproven and changed-text sources', () => {
-  const text = `a${ACUTE}b`;
-  const raw = Object.freeze([Object.freeze({ start: 1, end: 3 })]);
-  const fromUnproven = inheritClusterAlignedRanges(
-    text,
-    raw,
-    raw.map((entry) => Object.freeze({ ...entry })),
-  );
-  assert.deepEqual(ranges({ spans: fromUnproven }), [[2, 3]]);
-  assert.equal(areOwnedRangesClusterAligned(text, fromUnproven), true);
-  assert.equal(fromUnproven.every(Object.isFrozen), true);
-
-  const source = ownClusterAlignedRanges('ab', Object.freeze([Object.freeze({ start: 1, end: 2 })]));
-  const fromChangedText = inheritClusterAlignedRanges(
-    text,
-    source,
-    source.map((entry) => Object.freeze({ ...entry })),
-  );
-  assert.deepEqual(ranges({ spans: fromChangedText }), [[2, 2]]);
-  assert.equal(areOwnedRangesClusterAligned(text, fromChangedText), true);
-
-  const alignedSource = ownClusterAlignedRanges(text, Object.freeze([Object.freeze({ start: 2, end: 3 })]));
-  const fromChangedBoundaries = inheritClusterAlignedRanges(
-    text,
-    alignedSource,
-    Object.freeze([Object.freeze({ start: 1, end: 3 })]),
-  );
-  assert.deepEqual(ranges({ spans: fromChangedBoundaries }), [[2, 3]]);
-  assert.equal(areOwnedRangesClusterAligned(text, fromChangedBoundaries), true);
-
-  const [brand] = Object.getOwnPropertySymbols(alignedSource);
-  assert.ok(brand);
-  const forged = [{ start: 2, end: 3 }];
-  Object.defineProperty(forged, brand, { value: true });
-  assert.equal(
-    areOwnedRangesClusterAligned(text, Object.freeze(forged)),
-    false,
-    'the private brand needs WeakMap proof',
-  );
-});
-
-test('malformed UTF-16 is never marked as cluster aligned', () => {
-  const text = '\ud800';
-  const spans = ownClusterAlignedRanges(text, Object.freeze([Object.freeze({ start: 0, end: 1 })]));
-  assert.equal(Object.isFrozen(spans), true);
-  assert.equal(areOwnedRangesClusterAligned(text, spans), false);
-});
-
-test('nested structural spans preserve hierarchy after a joining boundary moves', () => {
+test('nested structural spans preserve authored ranges until Rust resolves them', { timeout }, async () => {
   const inner = span({ color: '#00ff2f' })`${ACUTE}b`;
   const literal = txt`${span({ color: '#ff2f00' })`a${inner}`}c`;
   assert.equal(literal.text, `a${ACUTE}bc`);
-  assert.deepEqual(ranges(literal), [
-    [0, 3],
-    [2, 3],
-  ]);
-  assertAligned(literal);
+  assert.deepEqual(
+    literal.spans.map(({ start, end }) => [start, end]),
+    [
+      [0, 3],
+      [1, 3],
+    ],
+  );
+  const font = await fonts.load('inter');
+  const mounted = mount(font, [{ properties: { constraints, layout, style, text: literal } }]);
+  try {
+    mounted.scene.updateMatrixWorld(true);
+    assert.equal(mounted.nodes[0].error, undefined);
+    assert.equal(mounted.nodes[0].measure().glyphCount, 3);
+  } finally {
+    unmount(mounted);
+  }
 });
 
-test('repeated raw Unicode spans realign before retaining the accepted measurement', { timeout }, async () => {
+test('equivalent authored ranges resolve to the same measurement in Rust', { timeout }, async () => {
   const text = `a${ACUTE}b`;
   const formatted = () => ({
     text,
@@ -141,7 +78,7 @@ test('repeated raw Unicode spans realign before retaining the accepted measureme
     assert.equal(accepted.glyphCount, 2);
     node.set({ text: formatted() });
     mounted.scene.updateMatrixWorld(true);
-    assert.equal(node.measure(), accepted, 'equivalent unaligned input must retain its aligned accepted state');
+    assert.deepEqual(node.measure(), accepted, 'equivalent authored ranges must resolve to the same layout');
     node.set({
       text: {
         text,
@@ -149,100 +86,93 @@ test('repeated raw Unicode spans realign before retaining the accepted measureme
       },
     });
     mounted.scene.updateMatrixWorld(true);
-    assert.equal(node.measure(), accepted, 'raw input must align before desired-state equality is decided');
+    assert.deepEqual(node.measure(), accepted, 'a range already on the cluster grid has the same layout');
   } finally {
     unmount(mounted);
   }
 });
 
-test(
-  'validated raw spans reuse prior alignment only while text and boundaries stay unchanged',
-  { timeout },
-  async () => {
-    const text = `a${ACUTE}fi`;
-    const formatted = (color) => ({
-      text,
-      spans: [
-        { start: 0, end: 2, style: { color } },
-        { start: 2, end: 4, style: { color: '#ffffff' } },
-      ],
+test('raw span updates do not run JavaScript grapheme segmentation', { timeout }, async () => {
+  const text = `a${ACUTE}fi`;
+  const formatted = (color) => ({
+    text,
+    spans: [
+      { start: 0, end: 2, style: { color } },
+      { start: 2, end: 4, style: { color: '#ffffff' } },
+    ],
+  });
+  const font = await fonts.load('inter');
+  const mounted = mount(font, [{ properties: { constraints, layout, style, text: formatted('#ff2f00') } }]);
+  try {
+    mounted.scene.updateMatrixWorld(true);
+    const node = mounted.nodes[0];
+    const accepted = node.measure();
+    const descriptor = Object.getOwnPropertyDescriptor(String.prototype, 'isWellFormed');
+    assert.ok(descriptor);
+    let wellFormedChecks = 0;
+    // Test instrumentation: an unchanged text value must not be segmented in the JS adapter.
+    // oxlint-disable-next-line no-extend-native
+    Object.defineProperty(String.prototype, 'isWellFormed', {
+      ...descriptor,
+      value: function () {
+        wellFormedChecks += 1;
+        return descriptor.value.call(this);
+      },
     });
-    const font = await fonts.load('inter');
-    const mounted = mount(font, [{ properties: { constraints, layout, style, text: formatted('#ff2f00') } }]);
     try {
-      mounted.scene.updateMatrixWorld(true);
-      const node = mounted.nodes[0];
-      const accepted = node.measure();
-      const descriptor = Object.getOwnPropertyDescriptor(String.prototype, 'isWellFormed');
-      assert.ok(descriptor);
-      // Test instrumentation: any full alignment path must revalidate UTF-16 through this built-in.
-      // oxlint-disable-next-line no-extend-native
-      Object.defineProperty(String.prototype, 'isWellFormed', {
-        ...descriptor,
-        value() {
-          throw new Error('full Unicode alignment invoked');
+      const originalStructuredClone = globalThis.structuredClone;
+      let structuredCloneCalls = 0;
+      globalThis.structuredClone = (...arguments_) => {
+        structuredCloneCalls += 1;
+        return originalStructuredClone(...arguments_);
+      };
+      try {
+        assert.doesNotThrow(() => node.set({ text: formatted('#2f7fff') }));
+      } finally {
+        globalThis.structuredClone = originalStructuredClone;
+      }
+      assert.equal(
+        structuredCloneCalls,
+        1,
+        'Three snapshots the changed caller style once before Rust prepares the authored ranges',
+      );
+      assert.equal(wellFormedChecks, 0, 'a paint-only update must not scan or segment unchanged text in JS');
+      assert.deepEqual(node.measure(), accepted, 'a paint-only update preserves shaping and placement');
+      assert.throws(
+        () =>
+          node.set({
+            text: {
+              text,
+              spans: [
+                { start: 0, end: 2, style: { features: [{ tag: 'liga', start: 0, end: 3 }] } },
+                { start: 2, end: 4, style: { color: '#ffffff' } },
+              ],
+            },
+          }),
+        /must stay inside \[0, 2\)/u,
+        'changed caller features revalidate scope while retaining the unchanged Unicode grid',
+      );
+      node.set({
+        text: {
+          text,
+          spans: [
+            { start: 1, end: 2, style: { color: '#2f7fff' } },
+            { start: 2, end: 4, style: { color: '#ffffff' } },
+          ],
         },
       });
-      try {
-        const originalStructuredClone = globalThis.structuredClone;
-        let structuredCloneCalls = 0;
-        globalThis.structuredClone = (...arguments_) => {
-          structuredCloneCalls += 1;
-          return originalStructuredClone(...arguments_);
-        };
-        try {
-          assert.doesNotThrow(() => node.set({ text: formatted('#2f7fff') }));
-        } finally {
-          globalThis.structuredClone = originalStructuredClone;
-        }
-        assert.equal(
-          structuredCloneCalls,
-          1,
-          'Three snapshots the changed caller style once and the planner adopts its proven immutable spans',
-        );
-        assert.throws(
-          () =>
-            node.set({
-              text: {
-                text,
-                spans: [
-                  { start: 0, end: 2, style: { features: [{ tag: 'liga', start: 0, end: 3 }] } },
-                  { start: 2, end: 4, style: { color: '#ffffff' } },
-                ],
-              },
-            }),
-          /must stay inside \[0, 2\)/u,
-          'changed caller features revalidate scope while retaining the unchanged Unicode grid',
-        );
-        assert.throws(
-          () =>
-            node.set({
-              text: {
-                text,
-                spans: [
-                  { start: 1, end: 2, style: { color: '#2f7fff' } },
-                  { start: 2, end: 4, style: { color: '#ffffff' } },
-                ],
-              },
-            }),
-          /full Unicode alignment invoked/u,
-        );
-        assert.throws(
-          () => node.set({ text: { ...formatted('#2f7fff'), text: `b${ACUTE}fi` } }),
-          /full Unicode alignment invoked/u,
-        );
-      } finally {
-        // oxlint-disable-next-line no-extend-native
-        Object.defineProperty(String.prototype, 'isWellFormed', descriptor);
-      }
-      mounted.scene.updateMatrixWorld(true);
-      assert.equal(node.error, undefined);
-      assert.deepEqual(node.measure(), accepted, 'a paint-only span change must preserve shaping and placement');
     } finally {
-      unmount(mounted);
+      // oxlint-disable-next-line no-extend-native
+      Object.defineProperty(String.prototype, 'isWellFormed', descriptor);
     }
-  },
-);
+    node.set({ text: { ...formatted('#2f7fff'), text: `b${ACUTE}fi` } });
+    mounted.scene.updateMatrixWorld(true);
+    assert.equal(node.error, undefined);
+    assert.equal(node.text, `b${ACUTE}fi`, 'Rust re-resolves retained authored ranges after a text edit');
+  } finally {
+    unmount(mounted);
+  }
+});
 
 test('seeded retained formatted batches match a cold full publication after sparse edits', { timeout }, async () => {
   const font = await fonts.load('inter');

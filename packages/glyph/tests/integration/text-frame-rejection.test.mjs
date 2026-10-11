@@ -51,6 +51,32 @@ test('structural spans derive valid nested and disjoint ranges without an offset
   }
 });
 
+test('Rust aligns authored inline ranges to the pinned grapheme grid', { timeout }, async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await fonts.load('inter');
+  const base = span({ fontSize: 12 });
+  const combiningMark = span({ fontSize: 6 });
+  const splitCluster = txt`${base`a`}${combiningMark`\u0301`}`;
+  const baseStyledCluster = txt`${base`a\u0301`}`;
+  assert.deepEqual(
+    splitCluster.spans.map(({ start, end }) => [start, end]),
+    [
+      [0, 1],
+      [1, 2],
+    ],
+    'template composition preserves authored UTF-16 ranges for the engine to resolve',
+  );
+
+  const split = three.createText({ font, text: splitCluster });
+  const whole = three.createText({ font, text: baseStyledCluster });
+  try {
+    assert.deepEqual(split.measure(), whole.measure(), 'the grapheme base owns its attached combining mark');
+  } finally {
+    split.dispose();
+    whole.dispose();
+  }
+});
+
 test(
   'structural spans authenticate a loaded Font instead of copying it into authored style data',
   { timeout },
