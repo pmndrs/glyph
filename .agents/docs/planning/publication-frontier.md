@@ -35,12 +35,17 @@ no stable release/tag or demo merge. The completed query-first goal and release 
        pass; first rebuilt focused run exposed missing durable codec binding and obsolete result-serialization assumptions.
        Existing commit_measure now retains its transaction Codec binding. Rebuilt session86380 completed exit0;
        native410/410, focused178/178 and static76975 pass. Full Node session87190 is running,
-       log /tmp/glyph-ropes-rebase-all-node.log. Combined Labs/browser/size remain unverified.
+       log /tmp/glyph-ropes-rebase-all-node.log. Full Node1010/1011 passed; its sole retired-query expectation
+       was corrected and lifecycle6/6 pass. Workflow17/17 and docs0errors pass. Integration commitd5b673aa is clean.
 4. [ ] Pass full native/Node/seeded fuzz and relevant static/browser controls before benchmarking a frozen artifact.
 5. [ ] Measure edit/read without publication, edit/read with publication, bulk setters and trailing-span workloads against
-       frozen current-main package0205a45f. One heavy benchmark lane; record absolute deltas and correctness failures.
+       frozen current-main package0205a45f. Edit-sized4block run session16463 is live; log /tmp/glyph-ropes-main-edit-sized.log.
+       Candidate e1e3d492, output .cache/ropes-rebased-main-edit-sized. No timing verdict yet; one heavy lane.
 6. [ ] Attribute remaining cost, implement one bounded shared-path improvement at a time, retire replaced code, and verify
-       cumulative production additions/deletions plus raw/gzip Wasm and runtime delivery sizes.
+       cumulative production additions/deletions plus raw/gzip Wasm and runtime delivery sizes. Current candidate
+       shaper1,587,966raw/585,299gzip9 versus main1,456,090/534,013: +131,876raw/+51,286gzip9; size gate OPEN.
+       All236 shipped JS files total860,471raw versus857,169 (+3,302); this sum is not a delivery bundle size.
+       Exact artifact evidence .cache/ropes-rebased-main-candidate/size-evidence.json. Do not treat old size gates as cleared.
 7. [ ] Review exact integrated code; update draft PR through gh stack submit --auto only after local gates.
        No merge authorization implied by the development restart.
 
