@@ -8,7 +8,7 @@ sources:
     title: Detailed design, lifetimes and rope evidence
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-11T00:06:02Z'
+  at: '2026-10-11T00:40:24Z'
 ---
 
 # Publication frontier checklist
@@ -23,7 +23,33 @@ Preserve unrelated ROOT edits (~45). One local heavy lane. Sync ASCII through th
 advances; preserve all app edits and use Portless for servers. Never advance publishedText on measurement.
 Detailed prior diagnostic checkpoints remain in Git history through6f82128f; do not recreate a chronology here.
 
-## Current checkpoint
+## Resumed ropes work — 2026-10-11
+
+The user released the development hold: rebase #292 onto main, measure, then pursue the remaining publication frontier.
+Keep #292 draft until combined correctness, performance, size and review gates pass. #240 remains superseded/held;
+no stable release/tag or demo merge. The completed query-first goal and release report below remain historical evidence.
+
+1. [x] Preserve all75 local commits in feat/ropes-pre-main-2026-10-11 atb86830f2.
+2. [x] Consolidate their final tree and rebase with gh stack onto main2f62d6ba; local integration head e0d86c63.
+3. [ ] Integrate durable preparation with query-first copy/lifetime/cache guarantees. TypeScript and native ID reservation
+       pass; first rebuilt focused run exposed missing durable codec binding and obsolete result-serialization assumptions.
+       Existing commit_measure now retains its transaction Codec binding. Rebuilt session86380 completed exit0;
+       native410/410, focused178/178 and static76975 pass. Full Node session87190 is running,
+       log /tmp/glyph-ropes-rebase-all-node.log. Combined Labs/browser/size remain unverified.
+4. [ ] Pass full native/Node/seeded fuzz and relevant static/browser controls before benchmarking a frozen artifact.
+5. [ ] Measure edit/read without publication, edit/read with publication, bulk setters and trailing-span workloads against
+       frozen current-main package0205a45f. One heavy benchmark lane; record absolute deltas and correctness failures.
+6. [ ] Attribute remaining cost, implement one bounded shared-path improvement at a time, retire replaced code, and verify
+       cumulative production additions/deletions plus raw/gzip Wasm and runtime delivery sizes.
+7. [ ] Review exact integrated code; update draft PR through gh stack submit --auto only after local gates.
+       No merge authorization implied by the development restart.
+
+Parallel user-requested native GLSL Three WebGLRenderer config variant: router Codex gpt-5.6-sol/high PID23469,
+session01a1285f-bec1-7553-8a05-184a7704aa8e, transportcli-fallback, isolated .cache/webgl-renderer-support.
+Shared shaping/publication/batching; separate config variant; no TSL or WebGPURenderer fallback. Agent may implement and
+typecheck but heavy build/browser/benchmark lane requires parent coordination. Manifest ROOT/.cache/agent-router/three-webgl-renderer.json.
+
+## Completed query-first checkpoint
 
 - Main after merged #300: **2f62d6bae1da688904dfd1aba40b0ed507262824**. #299 merged at9022bb40. Reviewed head cd75ff03,
   CI merge checkout711626c2 and actual main share tree0e8068601968dbbd9c084fa416790073dacd072a.
