@@ -6,7 +6,7 @@ use crate::{
 };
 
 use super::{
-    EngineError,
+    EngineError, reserve_vec,
     style_state::{ResolvedStyle, StyleArena, StyleSegment},
 };
 
@@ -92,12 +92,7 @@ pub(crate) struct BoundaryShapeArena {
 
 impl ShapingRunArena {
     pub(crate) fn reserve(&mut self, capacity: usize) -> Result<(), EngineError> {
-        if self.runs.capacity() < capacity {
-            self.runs
-                .try_reserve_exact(capacity.saturating_sub(self.runs.len()))
-                .map_err(|_| EngineError::ResultTooLarge)?;
-        }
-        Ok(())
+        reserve_vec(&mut self.runs, capacity)
     }
 
     pub(crate) fn build(
@@ -578,15 +573,6 @@ impl BoundaryShapeArena {
             .and_then(|index| self.records.get(index))
             .copied()
     }
-}
-
-fn reserve_vec<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
-    if values.capacity() < capacity {
-        values
-            .try_reserve_exact(capacity.saturating_sub(values.len()))
-            .map_err(|_| EngineError::ResultTooLarge)?;
-    }
-    Ok(())
 }
 
 fn direction(style: ResolvedStyle, level: u8) -> u8 {

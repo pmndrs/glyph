@@ -3,6 +3,8 @@
 //! The public types in this module are available to native consumers. Wasm memory ownership and
 //! pointer validation stay in the target-gated transport module.
 
+use alloc::vec::Vec;
+
 mod cluster_state;
 #[cfg_attr(not(test), allow(dead_code))]
 mod flow_composition;
@@ -60,3 +62,12 @@ mod work_attribution;
 
 pub(crate) use positioning::SemanticGlyph;
 pub use state::{EngineError, FrameFault, TextEngine};
+
+fn reserve_vec<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
+    if values.capacity() < capacity {
+        values
+            .try_reserve_exact(capacity.saturating_sub(values.len()))
+            .map_err(|_| EngineError::ResultTooLarge)?;
+    }
+    Ok(())
+}

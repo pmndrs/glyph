@@ -921,7 +921,7 @@ impl FlowLayoutArena {
                 self.clear();
                 return Ok(false);
             }
-            let first_fragments = line_fragments(previous, line_index)?;
+            let first_fragments = previous.line_fragments(line_index)?;
             let Some(first_fragment) = first_fragments.first() else {
                 self.clear();
                 return Ok(false);
@@ -1281,7 +1281,8 @@ impl FlowLayoutArena {
             .iter()
             .rposition(|line| line.flow_thread_id == constraint.flow_thread_id);
         let cursor_start = if let Some(line_index) = previous_thread_line {
-            line_fragments(previous, line_index)?
+            previous
+                .line_fragments(line_index)?
                 .last()
                 .and_then(|fragment| usize::try_from(fragment.line.cluster_end).ok())
                 .ok_or(EngineError::InvalidRequest)?
@@ -2003,13 +2004,6 @@ fn shrink_for_flow_thread(
         .find(|constraint| constraint.flow_thread_id == flow_thread_id)
         .map(constraint_word_space_shrink)
         .ok_or(EngineError::InvalidRequest)
-}
-
-fn line_fragments(
-    flow: &FlowLayoutArena,
-    line_index: usize,
-) -> Result<RopeRange<'_, FlowFragment>, EngineError> {
-    flow.line_fragments(line_index)
 }
 
 fn same_flow_line_records(
