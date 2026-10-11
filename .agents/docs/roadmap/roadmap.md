@@ -34,7 +34,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-09T22:58:02Z'
+  at: '2026-10-10T23:36:28Z'
 ---
 
 # Canonical implementation roadmap
@@ -67,13 +67,14 @@ The historical v0/v1 architecture milestone names below are distinct from npm ve
 performance parity are established, with remaining Xi rope integration and #247 frontier work targeted at 0.3.0.
 Do not land the unvalidated preparation/rope branches to satisfy the release date. [#299](https://github.com/pmndrs/glyph/pull/299)
 supersedes [#240](https://github.com/pmndrs/glyph/pull/240): synchronous placement reads and `split()` query current desired
-layout without publishing the source batch. Public signatures remain unchanged. #299 still requires final review and
-exact-head CI/performance validation; #240's publish-on-read implementation remains held. This bounded follow-up does
+layout without publishing the source batch. Public signatures remain unchanged. #299 merged as `9022bb40` after
+review, all five CI jobs and eight-block glyph Labs passed (2 faster, 0 slower, 10 neutral, 0 excluded); #240's
+publish-on-read implementation remains held. This bounded follow-up does
 not close #247's edit-sized publication frontier.
 
 - [x] Land manual batch visibility validation and package-owned breaking-change migration guidance (#284, #281).
 - [x] Pass full CI for merged runtime checkpoint `8122d97e`, including browser/packed-consumer checks and full Labs (run 37997996053).
-- [ ] Reconcile release-wide performance against published 0.1.0. The completed four-block full comparison against main `30391d02` reports 56 faster, 3 slower, 43 neutral and 2 timing-mode exclusions, with no correctness errors. Median workload p50 moves from 2.560 to 2.085 ms; workloads above 3 ms fall from 48 to 41. Remaining slowdowns add 43–51 µs each; baseline clock drift is 8.3%. This is broad improvement, not strict every-case parity. The [complete report](https://github.com/pmndrs/glyph/issues/253#issuecomment-6101717975) preserves all timings and exclusions.
+- [ ] Reconcile release-wide performance against published 0.1.0. A fresh full comparison against the frozen merged-main `9022bb40` CI package is running, alongside the full release source review. The supplemental four-block full comparison against pre-query main `30391d02` reports 56 faster, 3 slower, 43 neutral and 2 timing-mode exclusions, with no correctness errors. Median workload p50 moves from 2.560 to 2.085 ms; workloads above 3 ms fall from 48 to 41. Remaining slowdowns add 43–51 µs each; baseline clock drift is 8.3%. This is broad improvement, not strict every-case parity. The [complete report](https://github.com/pmndrs/glyph/issues/253#issuecomment-6101717975) preserves all timings and exclusions.
 - [x] Land complete merged-feature release notes (#288, main `653d7969`).
 - [ ] Prepare and validate the 0.2.0 manifest and release package after the performance cut is accepted.
 - [ ] Obtain explicit authorization and publish only after the release gates pass. Pushing a stable `v0.2.0` tag invokes npm publication; do not push that tag as a preparation step.

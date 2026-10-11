@@ -4,9 +4,12 @@ title: 'Rename detached text copies to split'
 description: 'Rename the detached Three Text copy method to split without a compatibility alias.'
 decision_status: Accepted
 decided: '2026-10-08'
+sources:
+  - resource: https://github.com/pmndrs/glyph/pull/299
+    title: Query prepared placements and split before publication
 generated:
-  by: process:docs-new
-  at: '2026-10-08T13:20:17Z'
+  by: openai-codex/gpt-6
+  at: '2026-10-10T23:36:28Z'
 ---
 
 # Rename detached text copies to split
@@ -24,5 +27,5 @@ The [archived AST migration](../../../skills/codemod/codemods/2026-09-24-text-sp
 ## Consequences
 
 This is a breaking name change for 0.2.0. No old-name alias is published. The comparison harness alone adapts old canaries
-before timing. Read-publication behavior belongs to #240, and the root-wide publication performance frontier remains #247.
-When those changes are combined, preserve their layout-publication order and apply this rename to their callers.
+before timing. Merged #299 supplies current desired reads and independent copies without source/root publication,
+superseding the held #240 proposal. The root-wide publication performance frontier remains #247.

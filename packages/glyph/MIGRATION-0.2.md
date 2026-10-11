@@ -53,7 +53,8 @@ const [glyphs, decorations] = text.split();
 ```
 
 The tuple is still synchronous and independently owned, the source `Text` stays live, and callers still own attachment,
-visibility, transforms, and disposal. `split()` still requires committed renderer state.
+visibility, transforms, and disposal. `split()` queries current desired layout, including before the first render or
+after an edit. It does not publish the source or unrelated labels; the returned copies own their realized data.
 
 In 0.2, every `Glyphs` index is dense over drawable records. Spaces and other blank layout glyphs remain in
 `text.glyphs()` but are absent from the detached object, so `glyphs.count` can be smaller than
@@ -118,7 +119,7 @@ repairing the cause, assign material or other renderer-relevant state to request
 At minimum, verify:
 
 - callback return inference, exception propagation, and borrowed-view lifetime for `readGlyphs`;
-- committed-state errors, tuple ownership, source independence, and disposal for `split`;
+- first-render and edited-copy parity, tuple ownership, source independence, and disposal for `split`;
 - blank-containing text, detached counts, detached measurement alignment, and `RangeError` handling;
 - the intended draw count and manual visibility behavior for each `TextGroup` batching mode;
 - outline absence errors and outline placement if the application uses `--outlines`.
