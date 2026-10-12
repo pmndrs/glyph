@@ -89,7 +89,7 @@ useSlug.preload('/fonts/Inter.font.glb');
 
 A `GlyphProvider` can be used to load and map fonts to a string name allowing you to refer to the font by name anywhere under the provider. The provider also acts as an optional Suspense and Error boundary to handle glyph errors or suspend while loading fonts.
 
-Check out the [React Three Fiber playground](apps/r3f-playground/README.md) example for more details.
+Check out the [React Three Fiber playground](apps/r3f-hello-world/README.md) example for more details.
 
 ## TypeGPU
 
