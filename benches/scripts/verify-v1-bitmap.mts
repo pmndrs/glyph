@@ -1,8 +1,9 @@
-/* @workflow { "name": "benchmark:v1-bitmap", "summary": "Render the Rust command-buffer path for Three Bitmap/MTSDF/Slug and a custom material on WebGPU and WebGL2.", "requirements": "Playwright Chromium, WebGPU, WebGL2, and baked Inter fixtures. Pass --typegpu to exercise /three/typegpu.", "writes": "No repository files." } */
+/* @workflow { "name": "benchmark:v1-bitmap", "summary": "Render the Rust command-buffer path for Three Bitmap/MTSDF/Slug and a custom material on WebGPU and WebGL2.", "requirements": "Playwright Chromium, WebGPU, WebGL2, and baked Inter fixtures. Pass --typegpu for /three/typegpu, --compose-only for material proofs, or --slug-original-footprint for the expected-failing nonlinear AA control.", "writes": "No repository files." } */
 import { fileURLToPath } from 'node:url';
 import { createServer, type ViteDevServer } from 'vite';
 
 import { launchProjectChromium } from './support/project-chromium.mts';
+import { slugOriginalFootprintControl } from './support/slug-footprint-control.mts';
 
 interface RasterProofResult {
   readonly backend: 'webgpu' | 'webgl2';
@@ -30,6 +31,9 @@ interface ComposeProofResult {
   readonly slugCanonicalLitPixels: number;
   readonly slugCoverageAtMismatchedPixels: number;
   readonly slugCoverageAtOutsideLitPixels: number;
+  readonly slugNonlinearSamples: number;
+  readonly slugNonlinearMaxByteDelta: number;
+  readonly slugNonlinearByteBound: number;
 }
 
 interface MsdfProofResult extends RasterProofResult {
@@ -41,6 +45,7 @@ interface MsdfProofResult extends RasterProofResult {
 }
 
 const shaderQuery = process.argv.includes('--typegpu') ? '&shaders=typegpu' : '';
+const composeOnly = process.argv.includes('--compose-only');
 process.stdout.write(`Three shaders: ${shaderQuery === '' ? 'stable TSL' : 'experimental TypeGPU'}\n`);
 
 const stageTimeoutMs = 3 * 60 * 1_000;
@@ -67,6 +72,7 @@ if (!Number.isSafeInteger(port) || port < 0 || port > 65_535) throw new Error('P
 const host = process.env.HOST ?? '127.0.0.1';
 let browser: Awaited<ReturnType<typeof launchProjectChromium>> | undefined;
 let server: ViteDevServer | undefined;
+const nonlinearFailures: string[] = [];
 try {
   reportStage('starting Vite');
   server = await withinDeadline(
@@ -75,6 +81,7 @@ try {
       root,
       logLevel: 'info',
       optimizeDeps: { force: true },
+      plugins: process.argv.includes('--slug-original-footprint') ? [slugOriginalFootprintControl()] : [],
       server: { host, port, strictPort: port !== 0 },
     }),
   );
@@ -93,7 +100,7 @@ try {
       args: ['--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu'],
     }),
   );
-  for (const expected of ['webgpu', 'webgl2'] as const) {
+  for (const expected of composeOnly ? [] : (['webgpu', 'webgl2'] as const)) {
     reportStage(`${expected} Bitmap`);
     const page = await browser.newPage({ viewport: { width: 256, height: 128 }, deviceScaleFactor: 1 });
     const errors: string[] = [];
@@ -140,7 +147,7 @@ try {
     process.stdout.write(`${expected}: ${JSON.stringify(result)}\n`);
     await page.close();
   }
-  for (const expected of ['webgpu', 'webgl2'] as const) {
+  for (const expected of composeOnly ? [] : (['webgpu', 'webgl2'] as const)) {
     reportStage(`${expected} MTSDF`);
     const page = await browser.newPage({ viewport: { width: 256, height: 128 }, deviceScaleFactor: 1 });
     const errors: string[] = [];
@@ -189,7 +196,7 @@ try {
     process.stdout.write(`${expected} msdf: ${JSON.stringify(result)}\n`);
     await page.close();
   }
-  for (const expected of ['webgpu', 'webgl2'] as const) {
+  for (const expected of composeOnly ? [] : (['webgpu', 'webgl2'] as const)) {
     reportStage(`${expected} Slug`);
     const page = await browser.newPage({ viewport: { width: 256, height: 128 }, deviceScaleFactor: 1 });
     const errors: string[] = [];
@@ -283,9 +290,18 @@ try {
       );
     if (result.slugCoverageAtOutsideLitPixels !== 0)
       throw new Error(`Slug coverageAt did not integrate at the coordinate it was given: ${JSON.stringify(result)}`);
+    if (result.slugNonlinearSamples !== 24 || result.slugNonlinearByteBound !== 1)
+      throw new Error(`Slug nonlinear probe did not establish its independent oracle: ${JSON.stringify(result)}`);
+    if (result.slugNonlinearMaxByteDelta > result.slugNonlinearByteBound)
+      nonlinearFailures.push(`${expected}: ${JSON.stringify(result)}`);
     process.stdout.write(`${expected} compose: ${JSON.stringify(result)}\n`);
     await page.close();
   }
+  // Finish both backend measurements before reporting the failed nonlinear assertion, including negative controls.
+  if (nonlinearFailures.length !== 0)
+    throw new Error(
+      `Slug nonlinear coverage did not follow its coordinate footprint: ${nonlinearFailures.join(' | ')}`,
+    );
 } finally {
   try {
     if (browser !== undefined) await withinDeadline('Chromium shutdown', browser.close());

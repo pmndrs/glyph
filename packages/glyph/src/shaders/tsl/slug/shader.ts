@@ -82,6 +82,8 @@ export interface TslSlugShaderOutput {
    * The same integral at an em-space coordinate the material chooses, so an effect can bend the letterform rather than
    * the quad: evaluate at the inverse of a warp and the outline follows it, antialiased by that coordinate's own screen
    * footprint. Ink appears only where the quad driven by `position` is drawn. Each call is another whole integral.
+   * Antialiasing uses componentwise screen derivatives as a local approximation for smooth mappings; discontinuities
+   * and subpixel folds can alias. Evaluate outside divergent fragment control flow, as required by derivatives.
    */
   coverageAt(coordinate: Node<'vec2'>): Node<'float'>;
   readonly color: Node<'vec3'>;

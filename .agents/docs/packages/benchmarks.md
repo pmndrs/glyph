@@ -85,6 +85,15 @@ sources:
   - id: v1-compose-proof
     resource: ../../../benches/src/v1-compose-proof.ts
     title: Target-v1 composed canonical-shader browser proof
+  - id: slug-nonlinear-proof
+    resource: ../../../benches/src/slug-nonlinear-proof.ts
+    title: Nonlinear Slug material and independent rectangular pixel-area oracle
+  - id: slug-nonlinear-fixture
+    resource: ../../../benches/src/slug-nonlinear-fixture.ts
+    title: Authenticated contour coordinates and derived numeric error bound
+  - id: slug-footprint-control
+    resource: ../../../benches/scripts/support/slug-footprint-control.mts
+    title: Original-coordinate derivative negative control
   - id: paragraph-contracts
     resource: ../../../benches/src/benchmark/targets/conformance/paragraph-contracts.ts
     title: Public Rust paragraph conformance target
@@ -252,7 +261,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-10T19:21:50.744Z'
+  at: '2026-10-13T18:42:06Z'
 ---
 
 # Package reference: `@pmndrs/glyph-benchmarks`
@@ -382,6 +391,16 @@ the default Bitmap material, then renders the same Rust-produced draw with a `de
 `createDefaultMaterial()` and changes only its final colour. The verification compares the two passes on the same page
 rather than against a stored golden: an identical lit-pixel set proves the custom material inherited canonical placement,
 snapping, and coverage, and an empty green channel proves it still emitted its own output.
+
+The same compose stage tests Slug `coverageAt()` with a nonlinear inverse map, normalized `s -> s + s²` on the
+authenticated Inter `I` rectangle. Decoded curve coordinates must match the fixture's four straight edges. Its warped
+right edge has an independent quadratic-root position and rectangular pixel-area oracle; controlled subpixel placement
+selects 24 RGB samples with a one-byte bound derived before rendering from finite-difference linearization, float32
+rounding, and linear RGBA8 quantization. Chrome Canary 157 returned zero byte delta on WebGPU and WebGL2 in both Three
+configurations. `benchmark:v1-bitmap -- --compose-only` selects this material stage; `--typegpu` selects the bridge.
+`--slug-original-footprint` changes only the derivative input to the analytic inverse of the tested map, preserving
+warped band and root evaluation. It fails the nonlinear assertion with a 64-byte delta in all four cases, while identity
+and outside-coordinate checks still pass. `benchmark:compose-check` owns its focused type, lint, and format gate.
 
 The finite Bitmap conformance lane drives that adapter directly. `bitmap-finite-scene` builds its paragraph with `Text`
 and reads the CPU reference from a compatibility view reconstructed from the compiled binding and portable payloads.

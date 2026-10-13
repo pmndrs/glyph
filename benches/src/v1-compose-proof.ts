@@ -8,6 +8,7 @@ import { loadBenchmarkFont as loadFont } from './workloads/font-assets/library';
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from './three-root';
+import { renderSlugNonlinearProof } from './slug-nonlinear-proof';
 
 declare global {
   interface Window {
@@ -27,6 +28,9 @@ interface TargetV1ComposeResult {
   readonly slugCanonicalLitPixels: number;
   readonly slugCoverageAtMismatchedPixels: number;
   readonly slugCoverageAtOutsideLitPixels: number;
+  readonly slugNonlinearSamples: number;
+  readonly slugNonlinearMaxByteDelta: number;
+  readonly slugNonlinearByteBound: number;
 }
 
 /** Composed material keeps canonical position/coverage, tinting only color — proving it reuses the exported technique shader rather than reimplementing it. */
@@ -73,6 +77,7 @@ async function render(): Promise<TargetV1ComposeResult> {
   let composedText: Text<typeof bitmap> | undefined;
   let canonicalFont: Font<typeof bitmap> | undefined;
   let slugFont: FontFace<typeof slug> | undefined;
+  let slugOracleFont: Font<typeof slug> | undefined;
   try {
     renderer.setSize(256, 128, false);
     renderer.setPixelRatio(1);
@@ -128,6 +133,8 @@ async function render(): Promise<TargetV1ComposeResult> {
     const slugCanonical = await renderSlug(root, renderer, target, scene, camera, slugFont);
     const slugCoverageAt = await renderSlug(root, renderer, target, scene, camera, slugFont, slugCoverageAtMaterial);
     const slugOutside = await renderSlug(root, renderer, target, scene, camera, slugFont, slugOutsideMaterial);
+    slugOracleFont = await loadFont({ baked: { bytes: new Uint8Array(artifact) } }, slug);
+    const nonlinear = await renderSlugNonlinearProof(root, renderer, target, scene, camera, slugOracleFont);
 
     return {
       backend: renderer.backend instanceof THREE.WebGLBackend ? 'webgl2' : 'webgpu',
@@ -141,6 +148,9 @@ async function render(): Promise<TargetV1ComposeResult> {
       slugCanonicalLitPixels: countPixels(slugCanonical).lit,
       slugCoverageAtMismatchedPixels: mismatchedPixels(slugCanonical, slugCoverageAt),
       slugCoverageAtOutsideLitPixels: countPixels(slugOutside).lit,
+      slugNonlinearSamples: nonlinear.samples,
+      slugNonlinearMaxByteDelta: nonlinear.maxByteDelta,
+      slugNonlinearByteBound: nonlinear.byteBound,
     };
   } finally {
     canonicalText?.removeFromParent();
@@ -149,6 +159,7 @@ async function render(): Promise<TargetV1ComposeResult> {
     composedText?.dispose();
     canonicalFont?.dispose();
     slugFont?.dispose();
+    slugOracleFont?.dispose();
     disposeBenchmarkThreeRoot(root);
     target.dispose();
     renderer.dispose();

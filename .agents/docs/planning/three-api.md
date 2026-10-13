@@ -35,7 +35,7 @@ sources:
     title: Three.js Object3D
 generated:
   by: openai-codex/gpt-6
-  at: '2026-09-24T20:29:45Z'
+  at: '2026-10-13T18:42:06Z'
 ---
 
 # Three.js text API
@@ -420,7 +420,10 @@ material.opacityNode = context.shader.coverageAt(source);
 ```
 
 Antialiasing follows the screen footprint of the coordinate passed, so a warp that stretches the outline softens its
-edge. The quad is not enlarged: ink appears only where the glyph's quad is drawn. Each call is a whole integral, and
+edge. The footprint uses componentwise screen derivatives: it is a local approximation for smooth mappings, rather
+than exact integration of a nonlinear pixel footprint. Sharp discontinuities, subpixel folds, and rapidly changing or
+singular mappings can alias. Evaluate coverage outside divergent fragment control flow, as required by shader
+derivatives. The quad is not enlarged: ink appears only where the glyph's quad is drawn. Each call is a whole integral, and
 `/three` inlines each one, so a material reading both `coverage` and `coverageAt()` doubles its fragment shader and Three
 renames the second copy's variables with a warning per name. Replacing `opacity` with `coverageAt()` drops paint alpha,
 which the context does not expose separately. Raw TypeGPU hosts pass their own coordinate to `slugRender()`.
