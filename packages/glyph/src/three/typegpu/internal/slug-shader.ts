@@ -102,8 +102,14 @@ export interface TslSlugShaderOutput {
   readonly position: Node<'vec3'>;
   /** Interpolated em-space coordinate the coverage integral is evaluated at. */
   readonly renderCoordinate: Node<'vec2'>;
-  /** Analytic fill coverage before paint alpha. */
+  /** Analytic fill coverage before paint alpha, integrated at `renderCoordinate`. */
   readonly coverage: Node<'float'>;
+  /**
+   * The same integral at an em-space coordinate the material chooses, so an effect can bend the letterform rather than
+   * the quad: evaluate at the inverse of a warp and the outline follows it, antialiased by that coordinate's own screen
+   * footprint. Ink appears only where the quad driven by `position` is drawn. Each call is another whole integral.
+   */
+  coverageAt(coordinate: Node<'vec2'>): Node<'float'>;
   readonly color: Node<'vec3'>;
   readonly opacity: Node<'float'>;
 }
@@ -166,30 +172,33 @@ export function slugShader(instance: TslSlugInstanceNodes, resources: TslSlugSha
     .with(slugHeaderTexelSlot, page.loadHeader)
     .with(slugReferenceTexelSlot, page.loadReference);
   const rule = renderOptions(resources.fillRule);
-  const coverage = t3.toTSL(() => {
-    'use gpu';
-    return specializedSlugRender(
-      SlugShaderGlyph({
-        curveBaseTexel: t3.fromTSL(instance.curveBaseTexel, d.u32).$,
-        horizontalHeaderBase: t3.fromTSL(instance.horizontalHeaderBase, d.u32).$,
-        verticalHeaderBase: t3.fromTSL(instance.verticalHeaderBase, d.u32).$,
-        referenceBase: t3.fromTSL(instance.referenceBase, d.u32).$,
-        horizontalBandCount: t3.fromTSL(instance.horizontalBandCount, d.u32).$,
-        verticalBandCount: t3.fromTSL(instance.verticalBandCount, d.u32).$,
-        bandTransform: t3.fromTSL(instance.bandTransform, d.vec4f).$,
-      }),
-      t3.fromTSL(renderCoordinate, d.vec2f).$,
-      t3.fromTSL(rule.evenOdd, d.bool).$,
-      t3.fromTSL(rule.weightBoost, d.bool).$,
-      t3.fromTSL(rule.stemDarken, d.f32).$,
-      t3.fromTSL(rule.thicken, d.f32).$,
-    );
-  }) as Node<'float'>;
+  const coverageAt = (coordinate: Node<'vec2'>): Node<'float'> =>
+    t3.toTSL(() => {
+      'use gpu';
+      return specializedSlugRender(
+        SlugShaderGlyph({
+          curveBaseTexel: t3.fromTSL(instance.curveBaseTexel, d.u32).$,
+          horizontalHeaderBase: t3.fromTSL(instance.horizontalHeaderBase, d.u32).$,
+          verticalHeaderBase: t3.fromTSL(instance.verticalHeaderBase, d.u32).$,
+          referenceBase: t3.fromTSL(instance.referenceBase, d.u32).$,
+          horizontalBandCount: t3.fromTSL(instance.horizontalBandCount, d.u32).$,
+          verticalBandCount: t3.fromTSL(instance.verticalBandCount, d.u32).$,
+          bandTransform: t3.fromTSL(instance.bandTransform, d.vec4f).$,
+        }),
+        t3.fromTSL(coordinate, d.vec2f).$,
+        t3.fromTSL(rule.evenOdd, d.bool).$,
+        t3.fromTSL(rule.weightBoost, d.bool).$,
+        t3.fromTSL(rule.stemDarken, d.f32).$,
+        t3.fromTSL(rule.thicken, d.f32).$,
+      );
+    }) as Node<'float'>;
+  const coverage = coverageAt(renderCoordinate);
 
   return {
     position,
     renderCoordinate,
     coverage,
+    coverageAt,
     color: instance.color.rgb,
     opacity: instance.color.a.mul(coverage),
   };

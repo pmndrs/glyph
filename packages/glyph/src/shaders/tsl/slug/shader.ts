@@ -76,8 +76,14 @@ export interface TslSlugShaderOutput {
   readonly position: Node<'vec3'>;
   /** Interpolated em-space coordinate the coverage integral is evaluated at. */
   readonly renderCoordinate: Node<'vec2'>;
-  /** Analytic fill coverage before paint alpha. */
+  /** Analytic fill coverage before paint alpha, integrated at `renderCoordinate`. */
   readonly coverage: Node<'float'>;
+  /**
+   * The same integral at an em-space coordinate the material chooses, so an effect can bend the letterform rather than
+   * the quad: evaluate at the inverse of a warp and the outline follows it, antialiased by that coordinate's own screen
+   * footprint. Ink appears only where the quad driven by `position` is drawn. Each call is another whole integral.
+   */
+  coverageAt(coordinate: Node<'vec2'>): Node<'float'>;
   readonly color: Node<'vec3'>;
   readonly opacity: Node<'float'>;
 }
@@ -121,27 +127,30 @@ export function slugShader(instance: TslSlugInstanceNodes, resources: TslSlugSha
     renderCoordinate.assign(dilated.textureCoordinate);
     return TSL.vec3(dilated.position.x, dilated.position.y, 0);
   })();
-  const coverage: Node<'float'> = TSL.Fn(() =>
-    slugRender(
-      resources.page,
-      {
-        curveBaseTexel: instance.curveBaseTexel,
-        horizontalHeaderBase: instance.horizontalHeaderBase,
-        verticalHeaderBase: instance.verticalHeaderBase,
-        referenceBase: instance.referenceBase,
-        horizontalBandCount: instance.horizontalBandCount,
-        verticalBandCount: instance.verticalBandCount,
-        bandTransform: instance.bandTransform,
-      },
-      renderCoordinate,
-      renderOptions(resources.fillRule),
-    ),
-  )();
+  const coverageAt = (coordinate: Node<'vec2'>): Node<'float'> =>
+    TSL.Fn(() =>
+      slugRender(
+        resources.page,
+        {
+          curveBaseTexel: instance.curveBaseTexel,
+          horizontalHeaderBase: instance.horizontalHeaderBase,
+          verticalHeaderBase: instance.verticalHeaderBase,
+          referenceBase: instance.referenceBase,
+          horizontalBandCount: instance.horizontalBandCount,
+          verticalBandCount: instance.verticalBandCount,
+          bandTransform: instance.bandTransform,
+        },
+        coordinate,
+        renderOptions(resources.fillRule),
+      ),
+    )();
+  const coverage = coverageAt(renderCoordinate);
 
   return {
     position,
     renderCoordinate,
     coverage,
+    coverageAt,
     color: instance.color.rgb,
     opacity: instance.color.a.mul(coverage),
   };

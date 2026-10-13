@@ -403,6 +403,28 @@ corresponding physical radius when authoring in CSS pixels. Effects remain limit
 glyph quad. Publishing the field does not enlarge either, so a wide glow can require a larger baked range.
 Raw TypeGPU `msdfFragment()` and `msdfRenderDetailed()` expose the same three fields on `TypeGpuMsdfFragmentOutput`.
 
+### Slug coverage at a coordinate
+
+When `context.kind === 'glyph'` and `context.format === 'pmndrs.slug'`, both `/three` and `/three/typegpu` expose
+`context.shader.coverageAt(coordinate)`. It evaluates the analytic integral behind `coverage` at any em-space
+`Node<'vec2'>` the material computes (one unit per em, y up), returning fill coverage in `[0, 1]` before paint alpha.
+`coverage` is `coverageAt(renderCoordinate)`.
+
+To bend the letterform rather than the quad, compute where each fragment's ink came from, the inverse of the warp, and
+integrate there:
+
+```ts
+const { renderCoordinate } = context.shader;
+const source = renderCoordinate.add(vec2(sin(renderCoordinate.y.mul(12)).mul(0.03), 0));
+material.opacityNode = context.shader.coverageAt(source);
+```
+
+Antialiasing follows the screen footprint of the coordinate passed, so a warp that stretches the outline softens its
+edge. The quad is not enlarged: ink appears only where the glyph's quad is drawn. Each call is a whole integral, and
+`/three` inlines each one, so a material reading both `coverage` and `coverageAt()` doubles its fragment shader and Three
+renames the second copy's variables with a warning per name. Replacing `opacity` with `coverageAt()` drops paint alpha,
+which the context does not expose separately. Raw TypeGPU hosts pass their own coordinate to `slugRender()`.
+
 ## Mix fallback raster formats
 
 `createFontStack()` accepts already loaded immutable `Font` values in fallback order, including Fonts returned by the
