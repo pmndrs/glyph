@@ -2,23 +2,33 @@
 export const SLUG_RECTANGLE = { glyph: 197, left: 180 / 2048, right: 370 / 2048, top: 1490 / 2048 };
 export const SLUG_NONLINEAR_FONT_SIZE = 2048;
 export const SLUG_NONLINEAR_WIDTH = (SLUG_RECTANGLE.right - SLUG_RECTANGLE.left) * SLUG_NONLINEAR_FONT_SIZE;
-export const SLUG_NONLINEAR_RIGHT = (Math.sqrt(5) - 1) / 2;
+export const SLUG_NONLINEAR_QUAD_LEFT = 1;
+export const SLUG_NONLINEAR_Y_SCALE = 1 / 16;
 export const SLUG_NONLINEAR_EDGE_PIXEL = 96.25;
-export const SLUG_NONLINEAR_EXPECTED_BYTE = Math.round(0.25 * 255);
+export const SLUG_NONLINEAR_RIGHT = (SLUG_NONLINEAR_EDGE_PIXEL - SLUG_NONLINEAR_QUAD_LEFT) / SLUG_NONLINEAR_WIDTH;
+export const SLUG_NONLINEAR_QUADRATIC = (1 - SLUG_NONLINEAR_RIGHT) / SLUG_NONLINEAR_RIGHT ** 2;
+export const SLUG_NONLINEAR_EXPECTED_BYTE = Math.round((SLUG_NONLINEAR_EDGE_PIXEL % 1) * 255);
 
-// A paired-pixel finite difference of s+s² differs from its derivative at the edge by at most 1.5/W.
-// At the selected .25-pixel phase, the resulting coverage error is <= .4375/(W*sqrt(5)-1.5).
-// For float32 unit roundoff e=2^-24, gamma(n)=n*e/(1-n*e) bounds accumulated rounding.
-// Axis-aligned position/projection use <=32 nonzero operations on x values <=384 physical pixels;
-// the normalized warp and straight-edge solve use <=16 operations on values <=2. Errors in the latter
-// become pixels through W/sqrt(5). Y cannot feed X in this scene. Together they contribute <.229 byte.
-// W=190: <.265 byte linearization, <=.5 byte RGBA8 quantization, and <.229 byte arithmetic: <1 byte.
-// Fix this bound before reading candidate pixels; it is not a fitted backend tolerance.
+// The carrier's dilated quad is [.5,191.5] x [16.9375,111.0625] pixels: exact 1/16-pixel vertices,
+// wholly inside the target. X coordinates come from fragment pixel centers, not interpolated varyings;
+// the original probe's irrational quad placement left rasterization/interpolation precision unbounded.
+// For q(s)=s+a*s², a=(1-r)/r² puts q(r)=1 at the independently chosen 96.25-pixel contour.
+// Its derivative J=1+2ar changes with s. At the selected d=.25-pixel phase, the paired finite difference
+// has derivative error in [-.5a/W,1.5a/W]; the coverage error is <= .3125a/(WJ-1.5a).
+// Screen centers/subtracting 1 are exact. In the sampled pair, a<2 and x/width<2; <=32 rounded
+// positive arithmetic operations/input conversions give normalized coordinate error epsilon=2*gamma(32).
+// The derivative subtracts two coordinates, so its error is <=2epsilon. The coverage ratio is <1/3:
+// its error is <= (5/3)*epsilon/(minimumDerivative-2epsilon), plus gamma(8) for final coverage math.
+// These bounds contribute <.384 byte; linear RGBA8 quantization adds <=.5 byte, hence a one-byte gate.
+// Keep this independently derived bound fixed; do not fit it to observed candidate pixels.
 const gamma = (operations: number): number => (operations * 2 ** -24) / (1 - operations * 2 ** -24);
+const derivative = 1 + 2 * SLUG_NONLINEAR_QUADRATIC * SLUG_NONLINEAR_RIGHT;
+const minimumDerivative = (derivative - (1.5 * SLUG_NONLINEAR_QUADRATIC) / SLUG_NONLINEAR_WIDTH) / SLUG_NONLINEAR_WIDTH;
+const coordinateError = 2 * gamma(32);
 export const SLUG_NONLINEAR_BYTE_BOUND = Math.ceil(
-  (0.4375 / (SLUG_NONLINEAR_WIDTH * Math.sqrt(5) - 1.5) +
-    gamma(32) * 384 +
-    (gamma(16) * 2 * SLUG_NONLINEAR_WIDTH) / Math.sqrt(5)) *
+  ((0.3125 * SLUG_NONLINEAR_QUADRATIC) / (SLUG_NONLINEAR_WIDTH * derivative - 1.5 * SLUG_NONLINEAR_QUADRATIC) +
+    ((5 / 3) * coordinateError) / (minimumDerivative - 2 * coordinateError) +
+    gamma(8)) *
     255 +
     0.5,
 );

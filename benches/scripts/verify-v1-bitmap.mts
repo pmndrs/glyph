@@ -1,4 +1,4 @@
-/* @workflow { "name": "benchmark:v1-bitmap", "summary": "Render the Rust command-buffer path for Three Bitmap/MTSDF/Slug and a custom material on WebGPU and WebGL2.", "requirements": "Playwright Chromium, WebGPU, WebGL2, and baked Inter fixtures. Pass --typegpu for /three/typegpu, --compose-only for material proofs, or --slug-original-footprint for the expected-failing nonlinear AA control.", "writes": "No repository files." } */
+/* @workflow { "name": "benchmark:v1-bitmap", "summary": "Render the Rust command-buffer path for Three Bitmap/MTSDF/Slug and a custom material on WebGPU and WebGL2.", "requirements": "Playwright Chromium, WebGPU, WebGL2, and baked Inter fixtures. Pass --typegpu for /three/typegpu, --compose-only for material proofs, --software-gpu for verified SwiftShader, or --slug-original-footprint for the expected-failing nonlinear AA control.", "writes": "No repository files." } */
 import { fileURLToPath } from 'node:url';
 import { createServer, type ViteDevServer } from 'vite';
 
@@ -21,6 +21,7 @@ interface RasterProofResult {
 
 interface ComposeProofResult {
   readonly backend: 'webgpu' | 'webgl2';
+  readonly rendererIdentity: string | null;
   readonly drawCount: number;
   readonly glyphCount: number;
   readonly litPixels: number;
@@ -46,6 +47,7 @@ interface MsdfProofResult extends RasterProofResult {
 
 const shaderQuery = process.argv.includes('--typegpu') ? '&shaders=typegpu' : '';
 const composeOnly = process.argv.includes('--compose-only');
+const softwareGpu = process.argv.includes('--software-gpu');
 process.stdout.write(`Three shaders: ${shaderQuery === '' ? 'stable TSL' : 'experimental TypeGPU'}\n`);
 
 const stageTimeoutMs = 3 * 60 * 1_000;
@@ -97,7 +99,21 @@ try {
     'Chromium launch',
     launchProjectChromium({
       headless: true,
-      args: ['--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu'],
+      // Chromium documents SwANGLE flags in docs/gpu/swiftshader.md and --use-webgpu-adapter=swiftshader
+      // selects Dawn's fallback adapter (Chromium commit 80eb7960c9f238670b58fc68b87d6a59af5c1241).
+      args: [
+        '--enable-gpu',
+        '--ignore-gpu-blocklist',
+        '--enable-unsafe-webgpu',
+        ...(softwareGpu
+          ? [
+              '--use-gl=angle',
+              '--use-angle=swiftshader',
+              '--enable-unsafe-swiftshader',
+              '--use-webgpu-adapter=swiftshader',
+            ]
+          : []),
+      ],
     }),
   );
   for (const expected of composeOnly ? [] : (['webgpu', 'webgl2'] as const)) {
@@ -272,6 +288,11 @@ try {
     );
     if (errors.length !== 0) throw new Error(`${expected} compose browser errors: ${errors.join(' | ')}`);
     if (result.backend !== expected) throw new Error(`expected ${expected}, received ${result.backend}`);
+    process.stdout.write(`[three-proof] ${expected} renderer identity: ${String(result.rendererIdentity)}\n`);
+    if (softwareGpu && (result.rendererIdentity === null || !/swiftshader/iu.test(result.rendererIdentity)))
+      throw new Error(
+        `software proof did not establish SwiftShader on ${expected}: ${String(result.rendererIdentity)}`,
+      );
     if (result.drawCount < 1 || result.glyphCount !== 16 || result.canonicalGreenPixels !== result.canonicalLitPixels)
       throw new Error(`compose proof did not establish a canonical baseline: ${JSON.stringify(result)}`);
     // Composing over the exported shader may repaint the glyphs but must not move or reshape them: an identical lit set

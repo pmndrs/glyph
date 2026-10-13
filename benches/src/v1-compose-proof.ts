@@ -18,6 +18,7 @@ declare global {
 
 interface TargetV1ComposeResult {
   readonly backend: 'webgpu' | 'webgl2';
+  readonly rendererIdentity: string | null;
   readonly drawCount: number;
   readonly glyphCount: number;
   readonly litPixels: number;
@@ -138,6 +139,7 @@ async function render(): Promise<TargetV1ComposeResult> {
 
     return {
       backend: renderer.backend instanceof THREE.WebGLBackend ? 'webgl2' : 'webgpu',
+      rendererIdentity: rendererIdentity(renderer),
       drawCount,
       glyphCount,
       litPixels: composed.lit,
@@ -170,6 +172,34 @@ interface PixelCounts {
   readonly lit: number;
   readonly red: number;
   readonly green: number;
+}
+
+/** Read the renderer's actual live device/context before disposal, without requesting a second adapter. */
+function rendererIdentity(renderer: THREE.WebGPURenderer): string | null {
+  const backend = renderer.backend;
+  // Three 0.185.1 owns these runtime properties; its 0.185.4 declarations omit them.
+  if (backend instanceof THREE.WebGLBackend) {
+    if (!('gl' in backend) || !(backend.gl instanceof WebGL2RenderingContext)) return null;
+    const info = backend.gl.getExtension('WEBGL_debug_renderer_info');
+    if (info === null) return null;
+    const name: unknown = backend.gl.getParameter(info.UNMASKED_RENDERER_WEBGL);
+    return typeof name === 'string' ? name : null;
+  }
+  if (!('device' in backend) || !(backend.device instanceof GPUDevice) || !('adapterInfo' in backend.device))
+    return null;
+  // Chrome exposes adapterInfo on this device; @webgpu/types 0.1.71 does not declare it yet.
+  const info = backend.device.adapterInfo;
+  if (info === null || typeof info !== 'object') return null;
+  if (
+    !('vendor' in info) ||
+    typeof info.vendor !== 'string' ||
+    !('architecture' in info) ||
+    typeof info.architecture !== 'string' ||
+    !('description' in info) ||
+    typeof info.description !== 'string'
+  )
+    return null;
+  return `${info.vendor} ${info.architecture} ${info.description}`;
 }
 
 /** Draw one Slug label alone, through `material` when given, and read back the frame. */
