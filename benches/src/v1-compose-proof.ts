@@ -25,9 +25,7 @@ interface TargetV1ComposeResult {
   readonly canonicalLitPixels: number;
   readonly canonicalGreenPixels: number;
   readonly slugCanonicalLitPixels: number;
-  /** Pixels where coverage read at each fragment's own coordinate differs from the default Slug material. */
   readonly slugCoverageAtMismatchedPixels: number;
-  /** Pixels lit when every fragment reads coverage two em past its own coordinate. */
   readonly slugCoverageAtOutsideLitPixels: number;
 }
 
