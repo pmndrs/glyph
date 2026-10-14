@@ -79,11 +79,9 @@ export interface TslSlugShaderOutput {
   /** Analytic fill coverage before paint alpha, integrated at `renderCoordinate`. */
   readonly coverage: Node<'float'>;
   /**
-   * The same integral at an em-space coordinate the material chooses, so an effect can bend the letterform rather than
-   * the quad: evaluate at the inverse of a warp and the outline follows it, antialiased by that coordinate's own screen
-   * footprint. Ink appears only where the quad driven by `position` is drawn. Each call is another whole integral.
-   * Antialiasing uses componentwise screen derivatives as a local approximation for smooth mappings; discontinuities
-   * and subpixel folds can alias. Evaluate outside divergent fragment control flow, as required by derivatives.
+   * Analytic coverage at an em-space coordinate, using its screen derivatives; clipped to the existing quad.
+   * Each call evaluates a full integral. AA assumes a smooth mapping; folds or discontinuities can alias.
+   * Evaluate outside divergent fragment control flow.
    */
   coverageAt(coordinate: Node<'vec2'>): Node<'float'>;
   readonly color: Node<'vec3'>;
