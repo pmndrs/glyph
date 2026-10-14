@@ -40,6 +40,17 @@ const customMaterial = defineTextMaterial((context) => {
 const bitmapCoverage: Node<'float'> = bitmapOutput.coverage;
 const mtsdfOutlineCoverage: Node<'float'> = mtsdfOutput.outlineCoverage;
 const slugCoverage: Node<'float'> = slugOutput.coverage;
+// Slug integrates wherever the material asks, so bending the letterform is the caller's inverse map.
+const slugWarpedCoverage: Node<'float'> = slugOutput.coverageAt(slugOutput.renderCoordinate.mul(0.5));
+// @ts-expect-error The coordinate is an em-space vec2; a float cannot address the integral.
+slugOutput.coverageAt(slugOutput.coverage);
+
+const warpedMaterial = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  if (context.kind === 'glyph' && context.format === 'pmndrs.slug')
+    material.opacityNode = context.shader.coverageAt(context.shader.renderCoordinate.add(0.1));
+  return material;
+});
 
 const material = new THREE.MeshBasicNodeMaterial();
 material.positionNode = slugOutput.position;
@@ -71,6 +82,8 @@ void bitmapCoverage;
 void threeBitmapOutput;
 void mtsdfOutlineCoverage;
 void slugCoverage;
+void slugWarpedCoverage;
+void warpedMaterial;
 void material;
 void bitmapMaterial;
 void wrongColor;

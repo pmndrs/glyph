@@ -27,6 +27,9 @@ interface ComposeProofResult {
   readonly greenPixels: number;
   readonly canonicalLitPixels: number;
   readonly canonicalGreenPixels: number;
+  readonly slugCanonicalLitPixels: number;
+  readonly slugCoverageAtMismatchedPixels: number;
+  readonly slugCoverageAtOutsideLitPixels: number;
 }
 
 interface MsdfProofResult extends RasterProofResult {
@@ -270,6 +273,16 @@ try {
       throw new Error(`custom material did not reproduce the canonical coverage: ${JSON.stringify(result)}`);
     if (result.greenPixels !== 0)
       throw new Error(`custom material did not apply its own final output: ${JSON.stringify(result)}`);
+    if (result.slugCanonicalLitPixels < 32)
+      throw new Error(`compose proof did not establish a canonical Slug baseline: ${JSON.stringify(result)}`);
+    // Integrating at the fragment's own coordinate is the canonical draw to the byte, and moving the coordinate past
+    // every outline leaves nothing: the coverage is the integral at the coordinate the material passes.
+    if (result.slugCoverageAtMismatchedPixels !== 0)
+      throw new Error(
+        `Slug coverageAt(renderCoordinate) did not reproduce the canonical draw: ${JSON.stringify(result)}`,
+      );
+    if (result.slugCoverageAtOutsideLitPixels !== 0)
+      throw new Error(`Slug coverageAt did not integrate at the coordinate it was given: ${JSON.stringify(result)}`);
     process.stdout.write(`${expected} compose: ${JSON.stringify(result)}\n`);
     await page.close();
   }

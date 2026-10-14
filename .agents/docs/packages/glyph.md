@@ -875,6 +875,14 @@ Both Three configurations use the same `TslMsdfShaderOutput` type; raw TypeGPU `
 distances to coverage and custom effects. `msdfCoverage()` retains its coverage-vector return contract. The
 [material reference](../planning/three-api.md#msdf-distance-fields) defines units, sign, and effect limits.
 
+Slug material shaders publish `coverageAt(coordinate)` beside `coverage`: the same analytic integral at an em-space
+coordinate the material chooses, so a material can bend the letterform by integrating at the inverse of a warp.
+`coverage` is `coverageAt(renderCoordinate)`, and both Three configurations publish the same `TslSlugShaderOutput` type.
+The [material reference](../planning/three-api.md#slug-coverage-at-a-coordinate) states its footprint, quad, and cost
+limits. The compose stage of `benchmark:v1-bitmap` proves on WebGPU and WebGL2, in both configurations, that
+`coverageAt(renderCoordinate)` matches the default draw byte for byte and that a coordinate past every outline draws
+nothing.
+
 Bitmap atlas pages within one strike are renderer layers, not independent draw resources. The font binding exposes one
 strike resource, the Rust Codec program writes the selected page as one u32 instance lane, and Three uploads the strike as one
 R8 texture array. This preserves authored glyph order while preventing page transitions inside ordinary prose from

@@ -20,6 +20,7 @@ See the [0.2 migration guide](./MIGRATION-0.2.md) for before/after examples and 
 - Added `batching="auto" | "shared" | "group"` to Three, React, and Vue `TextGroup`s. `auto` creates a boundary for a top-level authored group and inherits that boundary through nested automatic groups; `group` forces a nested boundary; `shared` joins the nearest enclosing authored boundary or the implicit root pool.
 - Exported `TextGroupBatching` from `@pmndrs/glyph/three`.
 - Added `/core`'s `createGlyphPlacements()` for cluster-aware caret and selection geometry from a layout inspection and renderer-owned glyph origins.
+- Added `coverageAt(coordinate)` to the Slug material shader in `/three` and `/three/typegpu`. It evaluates the analytic coverage integral at an em-space coordinate the material chooses, so a material can bend the letterform itself by integrating at the inverse of a warp; `coverage` is `coverageAt(renderCoordinate)`.
 
 ### Fixed
 
