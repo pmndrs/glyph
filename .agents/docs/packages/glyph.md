@@ -141,7 +141,7 @@ sources:
     title: Pinned msdfgen CLI scanline and error-correction configuration
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-10T23:39:59Z'
+  at: '2026-10-13T18:42:06Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -881,7 +881,10 @@ coordinate the material chooses, so a material can bend the letterform by integr
 The [material reference](../planning/three-api.md#slug-coverage-at-a-coordinate) states its footprint, quad, and cost
 limits. The compose stage of `benchmark:v1-bitmap` proves on WebGPU and WebGL2, in both configurations, that
 `coverageAt(renderCoordinate)` matches the default draw byte for byte and that a coordinate past every outline draws
-nothing.
+nothing. Its nonlinear Inter rectangle case also checks a changing coordinate footprint against an independent
+pixel-area oracle; a control that keeps warped roots but evaluates original-coordinate derivatives fails that assertion
+in all four backend/configuration cases. The material reference scopes derivative AA as a local approximation for
+smooth mappings, with the usual derivative control-flow restrictions.
 
 Bitmap atlas pages within one strike are renderer layers, not independent draw resources. The font binding exposes one
 strike resource, the Rust Codec program writes the selected page as one u32 instance lane, and Three uploads the strike as one
