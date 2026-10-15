@@ -40,6 +40,21 @@ function draws(scene) {
   return result;
 }
 
+function assertDrawTranslation(draw, transformMode, x, y, message) {
+  if (transformMode === 'direct') {
+    near(draw.matrix.elements[12], x, `${message} x`);
+    near(draw.matrix.elements[13], y, `${message} y`);
+  } else {
+    const matrices = draw.geometry.getAttribute('_pmndrsGlyphTransforms').array;
+    assert.ok(
+      Array.from({ length: matrices.length / 16 }, (_, i) => i).some(
+        (i) => Math.abs(matrices[i * 16 + 12] - x) < 0.0001 && Math.abs(matrices[i * 16 + 13] - y) < 0.0001,
+      ),
+      `${message}: indexed GPU storage has no expected translation ${x}, ${y}`,
+    );
+  }
+}
+
 async function make(t, properties = {}, config) {
   const handle = await createThreeTestHandle(t, config);
   const text = handle.createText({
@@ -349,6 +364,139 @@ test('a rejected Three publication preserves the accepted anchor transform', asy
     'an explicit anchor edit retries the rejected semantic publication',
   );
   near(draws(scene)[0].matrix.elements[13], -text.measure().anchorOffset.y, 'retried anchor placement');
+});
+
+test('inherited material rejection preserves accepted anchors in same-frame and previously failed updates', async (t) => {
+  for (const transformMode of ['direct', 'indexed'])
+    for (const owner of ['root', 'group'])
+      for (const sequence of ['same-frame', 'already-rejected', 'query-staged'])
+        await t.test(`${transformMode}/${owner}/${sequence}`, async (subtest) => {
+          const handle = await createThreeTestHandle(subtest, defineThreeConfig({ transformMode }));
+          const root = handle('inherited-anchor');
+          const text = root.createText({
+            font: await font(),
+            text: 'Accepted',
+            style: { fontSize: 20 },
+            constraints: { anchor: { x: 'center', y: 'first-baseline' } },
+          });
+          const group = owner === 'group' ? root.createTextGroup() : undefined;
+          subtest.after(() => {
+            text.dispose();
+            group?.dispose();
+          });
+          const scene = new THREE.Scene();
+          if (group) {
+            group.add(text);
+            scene.add(group);
+          } else scene.add(text);
+          scene.updateMatrixWorld(true);
+          const before = draws(scene).map((draw) => ({
+            draw,
+            matrix: draw.matrix.clone(),
+            transforms: draw.geometry.getAttribute('_pmndrsGlyphTransforms')?.array.slice(),
+          }));
+          assert.ok(before.length > 0);
+          let rejectMaterial = true;
+          let materialAttempts = 0;
+          (group ?? root).material = defineTextMaterial((context) => {
+            materialAttempts++;
+            if (rejectMaterial) throw new Error('intentional inherited material rejection');
+            return context.createDefaultMaterial();
+          });
+          if (sequence === 'already-rejected') {
+            scene.updateMatrixWorld(true);
+            assert.equal(text.commitState().status, 'failed');
+            assert.ok(materialAttempts > 0);
+          }
+          if (sequence === 'query-staged') {
+            text.measureGlyphs();
+            assert.equal(materialAttempts, 0, 'a placement query stages presentation without accepting its material');
+          }
+          text.constraints = { anchor: { x: 'right', y: 'bottom' } };
+          scene.updateMatrixWorld(true);
+          assert.equal(text.commitState().status, 'failed');
+          assert.ok(materialAttempts > 0, 'candidate actually reached the rejecting material factory');
+          for (const { draw, matrix, transforms } of before) {
+            assert.ok(draw.matrix.equals(matrix), 'rejected inherited material retains the accepted draw matrix');
+            if (transforms)
+              assert.deepEqual(
+                draw.geometry.getAttribute('_pmndrsGlyphTransforms').array,
+                transforms,
+                'rejected inherited material retains indexed GPU transform storage',
+              );
+          }
+          if (group) {
+            const acceptedOffset = { x: -text.measure().width / 2, y: -text.measure().firstBaseline };
+            group.position.set(13, -7, 0);
+            scene.updateMatrixWorld(true);
+            assertDrawTranslation(
+              draws(scene)[0],
+              transformMode,
+              acceptedOffset.x + 13,
+              -acceptedOffset.y - 7,
+              'accepted branch still follows live group motion while its new anchor is rejected',
+            );
+          }
+          rejectMaterial = false;
+          text.constraints = { anchor: { x: 'left', y: 'cap-height-top' } };
+          scene.updateMatrixWorld(true);
+          assert.equal(text.commitState().status, 'committed');
+          const offset = text.measure().anchorOffset;
+          assertDrawTranslation(
+            draws(scene)[0],
+            transformMode,
+            offset.x + (group?.position.x ?? 0),
+            -offset.y + (group?.position.y ?? 0),
+            'accepted inherited candidate anchor',
+          );
+        });
+});
+
+test('inherited draw-order changes stay with a rejected material candidate', async (t) => {
+  for (const transformMode of ['direct', 'indexed'])
+    await t.test(transformMode, async (subtest) => {
+      const handle = await createThreeTestHandle(subtest, defineThreeConfig({ transformMode }));
+      const root = handle('ordered-anchor');
+      const group = root.createTextGroup({ renderOrder: 1 });
+      const text = root.createText({
+        font: await font(),
+        text: 'Ordered',
+        constraints: { anchor: { x: 'center', y: 'first-baseline' } },
+      });
+      subtest.after(() => {
+        text.dispose();
+        group.dispose();
+      });
+      let rejectMaterial = true;
+      group.add(text);
+      const scene = new THREE.Scene();
+      scene.add(group);
+      scene.updateMatrixWorld(true);
+      const accepted = text.measure().anchorOffset;
+      root.material = defineTextMaterial((context) => {
+        if (rejectMaterial) throw new Error('intentional draw-order material rejection');
+        return context.createDefaultMaterial();
+      });
+      group.renderOrder = 3;
+      text.constraints = { anchor: { x: 'right', y: 'bottom' } };
+      scene.updateMatrixWorld(true);
+      assert.equal(text.commitState().status, 'failed');
+      assert.equal(draws(scene)[0].renderOrder, 1, 'draw order stays with the accepted material');
+      assertDrawTranslation(draws(scene)[0], transformMode, accepted.x, -accepted.y, 'draw-order rejected anchor');
+      rejectMaterial = false;
+      text.constraints = { anchor: { x: 'left', y: 'cap-height-top' } };
+      scene.updateMatrixWorld(true);
+      assert.equal(text.commitState().status, 'committed');
+      assert.equal(draws(scene)[0].renderOrder, 3);
+      const offset = text.measure().anchorOffset;
+      assertDrawTranslation(draws(scene)[0], transformMode, offset.x, -offset.y, 'accepted draw-order anchor');
+      text.renderOrder = 7;
+      text.constraints = { anchor: { x: 'center', y: 'first-baseline' } };
+      scene.updateMatrixWorld(true);
+      assert.equal(text.commitState().status, 'committed', 'a scoped rank plus anchor update still accepts normally');
+      const rankedOffset = text.measure().anchorOffset;
+      assertDrawTranslation(draws(scene)[0], transformMode, rankedOffset.x, -rankedOffset.y, 'accepted scoped rank');
+    });
 });
 
 test('anchors compose in local axes under Three rotation and scale, including detached copies', async (t) => {

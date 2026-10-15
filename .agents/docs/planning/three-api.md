@@ -348,10 +348,12 @@ anchored Text-local Three coordinates. Text's caret and selection helpers use an
 continues to describe unshifted paragraph coordinates. `split()` incorporates the source anchor into each independent
 root's copied transform so detached glyphs and decorations preserve their world placement.
 
-Anchor-only edits of an accepted paragraph update the host placement without waiting for an engine publication.
-Semantic edits keep the previous accepted draw/anchor together until the new publication is accepted. Rejected
-publications preserve that accepted placement; desired measurement still describes the pending text. React and Vue
-forward the same constraints and retain the same shallow property-list rules.
+Anchor-only edits of an accepted paragraph update the host placement without waiting for an engine publication when
+its effective presentation and order still match the accepted publication. Pending or rejected root/TextGroup material,
+batching or order changes keep the previous draw/anchor together until acceptance, including presentation staged by an
+inspection query before a render attempt. Semantic edits follow the same acceptance boundary. Ordinary Three object
+motion and visibility continue to update the accepted branch using its accepted anchor. Desired measurement still
+describes pending text. React and Vue forward the same constraints and retain the same shallow property-list rules.
 
 ## Define a material
 
