@@ -215,6 +215,72 @@ An adapter Text owns desired state and privately holds a `GlyphTextController`. 
 `controller.update()`. The top-level `glyph.shape()` publishes semantic changes; `services.syncTransforms()` is the
 cheap transform-only path. TextGroup remains adapter hierarchy and inheritance inside a root, not a publication boundary.
 
+## Layout-query values
+
+`controller.measure()` returns paragraph-local box and typographic metrics without positioning or copying individual
+glyphs. The coordinate system remains top-left origin, +X right, +Y down. `width`/`height` describe the resolved
+constraint box; `contentWidth`/`contentHeight` describe advance extents before clamping. Paragraph spacing belongs to
+these box extents. `inkBounds` remains absent until positioning is explicitly requested; ordinary baseline layout does
+not need it.
+
+Each line publishes its existing baseline, ascent, descent and line height, plus these computed references:
+
+| Metric                | Meaning                                                                                  |
+| --------------------- | ---------------------------------------------------------------------------------------- |
+| `alphabeticBaseline`  | The line's layout baseline.                                                              |
+| `ideographicBaseline` | The line-box bottom: `baseline - ascent + lineHeight`.                                   |
+| `capHeightTop`        | Baseline minus the primary-face cap-height envelope, including authored baseline shifts. |
+| `xHeightTop`          | Baseline minus the primary-face x-height envelope, including authored baseline shifts.   |
+
+The paragraph publishes the **first line's** references and `fontMetrics`; `firstBaseline` and `lastBaseline` continue
+to select lines rather than baseline types. An empty paragraph publishes zero references and dimensions for its
+`fontMetrics`, with fallback provenance. These named baselines are computed layout references, **not OpenType BASE
+coordinates**. Script-specific BASE tags, hanging/mathematical baselines and vertical-text baseline selection are not
+implemented by this API.
+
+`fontMetrics` contains scaled hhea ascent/descent without half-leading or baseline shift, effective `leading`, `capHeight`
+and `xHeight`. Effective leading is `lineHeight - fontMetrics.ascent - fontMetrics.descent` and may be negative. The
+existing authored-stack policy governs these values: each authored style uses its stack's primary face; glyph fallback
+does not change line typography. Mixed authored styles take the maximum font dimensions and the shifted cap/x-height
+envelopes. `capHeightSource`/`xHeightSource` are `font` only when every contributing primary face supplies a positive
+OS/2 height; otherwise they are `fallback`. Missing or nonpositive cap height uses rounded 0.66em; x-height uses 0.5em
+in font units. These are deterministic font-metric estimates, not inferred glyph ink.
+
+A same-source drop cap contributes its primary face's cap/x-height dimensions and provenance to the first logical
+line. Top references union the body's and initial's absolute cap/x-height positions using each one's actual baseline;
+text-top and baseline-aligned initials therefore produce different envelopes. The body's ascent, descent, effective
+leading, alphabetic baseline, ideographic baseline and line height remain the body strut. Later lines contain only their
+own participating styles. This preserves body line spacing while making cap/x-height anchors account for the initial.
+
+### Box anchoring
+
+`constraints.anchor` selects the paragraph-box reference that coincides with the host's supplied placement origin.
+Line alignment stays in `layout.align` and controls lines _inside_ that box. Omitting the anchor preserves left/top
+placement. Horizontal tokens are `left`, `center`, `right`; vertical tokens are `top`, `middle`, `bottom`,
+`first-baseline`, `last-baseline`, `alphabetic-baseline`, `ideographic-baseline`, `cap-height-top`, `x-height-top`.
+Metric tokens are their public camelCase names converted directly to kebab case.
+
+`measure().anchorOffset` is the negative reference point in paragraph-local units. Geometry anchors use the resolved
+`width`/`height`, including exact constraints and paragraph spacing. Typographic anchors use the named reference.
+Measurement dimensions, line positions, glyph columns and stable identities remain unshifted; hosts apply this offset
+to drawing and host-local interaction geometry. Integration authors apply the measured offset in their host transform, converting only
+the host's axis direction, rather than changing text flow or inspecting glyphs.
+
+```ts
+const boxes = Constraints.create({
+  centered: { anchor: { x: 'center', y: 'middle' } },
+});
+const baseline = {
+  anchor: { ...boxes.centered.anchor, y: 'first-baseline' },
+};
+```
+
+Composition remains shallow everywhere. A later `{ anchor: { y: 'first-baseline' } }` replaces the complete earlier
+anchor and therefore restores the horizontal default. Explicit spread retains an existing axis. No deep merge or
+anchor-specific merge rule is introduced. Ordinary paragraph anchor edits reuse cached line/layout results without another engine query. Explicit flow bindings
+retain their existing geometry-invalidation path; anchor resolution itself does not change shaping or paragraph
+coordinates.
+
 ## Fonts
 
 Immutable `Font<RasterFormat>` values remain the renderer-neutral ownership model. `glyph.fontFace()` is the only

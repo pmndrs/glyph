@@ -61,9 +61,9 @@ export function runtimeShaperEngineExports(shaper: RuntimeShaper): ShaperExports
 export async function createRuntimeShaper(options: RuntimeShaperOptions = {}): Promise<RuntimeShaper> {
   const source = options.wasm ?? (await compileDefaultWasm());
   const module = source instanceof WebAssembly.Module ? source : await WebAssembly.compile(source);
-  shareShaperModule(module);
   const instance = await WebAssembly.instantiate(module, {});
   const resolved = readModule(instance);
+  shareShaperModule(module);
   return new RuntimeShaperImpl(options.registry ?? new FontRegistry(), resolved);
 }
 

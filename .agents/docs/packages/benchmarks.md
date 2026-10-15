@@ -947,7 +947,14 @@ The size lane is also a package-graph gate. Its consumer builds inspect emitted 
 
 The V0 autoresearch baseline is a fail-closed control artifact, not an active optimizer. Its generated evidence list authenticates the current package sizes, admitted harness, shaping, paragraph, bidi, CJK, and advanced-shaping conformance records at the exact root toolchain pins. A discriminated campaign state remains `disabled`; tests reject malformed evidence and prove that an enabled manifest cannot cross the campaign guard without a later explicit maintainer decision.
 
-The packed-consumer lane builds and packs both workspace packages, extracts only their published tarballs into an isolated Vite application, and executes `@pmndrs/glyph/runtime-bake` through the installed module Worker in Chromium. Canonical Inter returns the exact 172,144-byte artifact and SHA-256 `edf896923f38c9e6080e176540699a7b96b7cd15606b0522447750e7595170b5`. This closes the gap between source-workspace Worker evidence and what an installed consumer actually resolves.
+The packed-consumer lane packs the built Glyph package into an isolated Vite application and executes
+`@pmndrs/glyph/runtime-bake` through the installed module Worker in Chromium. Its offline dependency manifest pins
+`suspend-react`'s required React peer to the exact workspace-tested version already provisioned by the frozen lock;
+installed-package Labs shares this core dependency manifest and adds its Three/TypeGPU peers. A tooling test checks the
+React pin against the installed workspace version, preventing a stale manual pin when the renderer catalog changes.
+The install remains offline, with no retry or online fallback. Canonical Inter must match the fixture manifest's exact
+artifact byte count and SHA-256. This closes the gap between source-workspace Worker evidence and what an installed
+consumer actually resolves.
 
 The `glyph:kernel-lab-browser` workflow runs the package-owned scalar, compiler-vectorized, and selected hybrid shaper
 artifacts in the project-pinned Chromium from a trustworthy loopback origin. It consumes the same captured 25,515- and

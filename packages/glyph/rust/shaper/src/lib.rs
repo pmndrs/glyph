@@ -105,6 +105,9 @@ pub(crate) struct FontMetrics {
     pub units_per_em: u16,
     pub ascender: i16,
     pub cap_height: u16,
+    pub x_height: u16,
+    /// Bit 0: cap height fallback; bit 1: x-height fallback.
+    pub height_fallbacks: u8,
     pub descender: i16,
     pub line_gap: i16,
     pub underline_position: i16,
@@ -230,17 +233,27 @@ impl ShaperRegistry {
                 let units_per_em = head.units_per_em();
                 let fallback_cap_height =
                     u16::try_from((u32::from(units_per_em) * 66 + 50) / 100).unwrap_or(u16::MAX);
-                let cap_height = font
-                    .os2()
-                    .ok()
-                    .and_then(|os2| os2.s_cap_height())
+                let os2 = font.os2().ok();
+                let authored_cap_height = os2
+                    .as_ref()
+                    .and_then(|table| table.s_cap_height())
                     .and_then(|height| u16::try_from(height).ok())
-                    .filter(|height| *height != 0)
-                    .unwrap_or(fallback_cap_height);
+                    .filter(|height| *height != 0);
+                let authored_x_height = os2
+                    .as_ref()
+                    .and_then(|table| table.sx_height())
+                    .and_then(|height| u16::try_from(height).ok())
+                    .filter(|height| *height != 0);
+                let cap_height = authored_cap_height.unwrap_or(fallback_cap_height);
+                let x_height = authored_x_height.unwrap_or(units_per_em / 2);
+                let height_fallbacks = u8::from(authored_cap_height.is_none())
+                    | (u8::from(authored_x_height.is_none()) << 1);
                 FontMetrics {
                     units_per_em,
                     ascender: hhea.ascender().to_i16(),
                     cap_height,
+                    x_height,
+                    height_fallbacks,
                     descender: hhea.descender().to_i16(),
                     line_gap: hhea.line_gap().to_i16(),
                     underline_position,
@@ -815,10 +828,37 @@ mod tests {
         );
         let metrics = registry.font_metrics(7).expect("registered font metrics");
         assert_eq!(metrics.cap_height, 1490);
+        assert_eq!(metrics.x_height, 1118);
+        assert_eq!(metrics.height_fallbacks, 0);
         assert_eq!(metrics.underline_position, -348);
         assert_eq!(metrics.underline_thickness, 140);
         assert_eq!(metrics.strikeout_position, 671);
         assert_eq!(metrics.strikeout_size, 140);
+    }
+
+    #[test]
+    fn absent_optional_os2_heights_have_explicit_deterministic_fallbacks() {
+        let mut sfnt =
+            include_bytes!("../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf")
+                .to_vec();
+        let table_count = u16::from_be_bytes([sfnt[4], sfnt[5]]);
+        let os2 = (0..usize::from(table_count))
+            .map(|index| 12 + index * 16)
+            .find(|offset| &sfnt[*offset..*offset + 4] == b"OS/2")
+            .expect("fixture has OS/2");
+        // Renaming this optional table leaves hhea/head and the shaping tables intact.
+        sfnt[os2..os2 + 4].copy_from_slice(b"TEST");
+        let mut registry = ShaperRegistry::default();
+        let extents = alloc::vec![0; 2937 * 8];
+        let availability = alloc::vec![0; 2937_usize.div_ceil(8)];
+        assert_eq!(
+            registry.register_font(1, &sfnt, &extents, &availability, 0, 0),
+            STATUS_OK
+        );
+        let metrics = registry.font_metrics(1).expect("registered font");
+        assert_eq!(metrics.cap_height, 1352); // round(2048 * .66)
+        assert_eq!(metrics.x_height, 1024);
+        assert_eq!(metrics.height_fallbacks, 3);
     }
 
     #[test]

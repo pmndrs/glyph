@@ -399,7 +399,7 @@ function assertResult(memory, pointer, abi, expected) {
     assert.equal(view.getUint32(layout.codecFingerprintHigh, true), 0);
   }
   for (const field of [
-    'semanticsCount',
+    'semanticViewCount',
     'resourceCount',
     'bufferCount',
     'patchCount',

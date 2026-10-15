@@ -33,8 +33,28 @@ export type AxisConstraint =
   | { readonly mode: 'at-most'; readonly size: number }
   | { readonly mode: 'exact'; readonly size: number };
 
-/** Parent-supplied bounds for one measurement or retained text instance. */
+/** Horizontal reference of the resolved paragraph box. */
+export type TextAnchorX = 'left' | 'center' | 'right';
+/** Vertical reference; metric tokens are the exact kebab-case names returned by measure(). */
+export type TextAnchorY =
+  | 'top'
+  | 'middle'
+  | 'bottom'
+  | 'first-baseline'
+  | 'last-baseline'
+  | 'alphabetic-baseline'
+  | 'ideographic-baseline'
+  | 'cap-height-top'
+  | 'x-height-top';
+/** Paragraph-box reference that coincides with the supplied placement origin. Omitted axes use left/top. Property composition replaces this whole object; spread an existing anchor to override one axis. */
+export interface TextAnchor {
+  readonly x?: TextAnchorX;
+  readonly y?: TextAnchorY;
+}
+
+/** Parent-supplied bounds and box reference for one measurement or retained text instance. */
 export interface Constraints {
+  readonly anchor?: TextAnchor;
   readonly width?: AxisConstraint;
   readonly height?: AxisConstraint;
 }
@@ -326,6 +346,25 @@ export function assertConstraints(value: Constraints, label = 'text constraints'
   assertRecord(value, label);
   assertAxis(value.width, `${label} width`);
   assertAxis(value.height, `${label} height`);
+  if (value.anchor !== undefined) {
+    assertRecord(value.anchor, `${label} anchor`);
+    optionalEnum(value.anchor.x, ['left', 'center', 'right'], `${label} anchor x`);
+    optionalEnum(
+      value.anchor.y,
+      [
+        'top',
+        'middle',
+        'bottom',
+        'first-baseline',
+        'last-baseline',
+        'alphabetic-baseline',
+        'ideographic-baseline',
+        'cap-height-top',
+        'x-height-top',
+      ],
+      `${label} anchor y`,
+    );
+  }
 }
 
 /** @internal Validate, normalize winding, and freeze one public flow description. */

@@ -1,3 +1,4 @@
+import type { LayoutPoint } from '../layout.js';
 import * as THREE from 'three/webgpu';
 
 import type { GlyphCopy } from '../config/glyph.js';
@@ -13,6 +14,7 @@ interface DetachedTextSource extends THREE.Object3D {
 /** @internal Constructed only by `Text.split()`. */
 interface DecorationsOptions {
   readonly source: DetachedTextSource;
+  readonly anchorOffset: LayoutPoint;
   readonly copy: (renderer: ThreeCommandBufferRenderer, boundary: ThreePublicationBoundary) => GlyphCopy<void>;
   readonly resources: ThreeRendererResources;
   readonly renderOrderBase: number;
@@ -74,7 +76,7 @@ export class Decorations extends THREE.Object3D {
     let target: ThreeCommandBufferRenderer | undefined;
     let copy: GlyphCopy<void> | undefined;
     try {
-      copyCurrentLocalTransform(options.source, this);
+      copyCurrentLocalTransform(options.source, this, options.anchorOffset);
 
       const owner: ThreeRendererHost = {
         renderObject: this,

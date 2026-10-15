@@ -331,6 +331,30 @@ is pending or a renderer candidate was rejected.
 
 The complete field semantics are defined by the [core layout-query reference](core-api.md#layout-query-values).
 
+Box references belong to constraints, independently of line alignment:
+
+```ts
+label.set({
+  constraints: { width: { mode: 'exact', size: 320 }, anchor: { x: 'center', y: 'first-baseline' } },
+  layout: { align: 'center' },
+});
+```
+
+`measure()` and `glyphs()` retain unshifted paragraph coordinates. `anchorOffset` reports the placement translation in
++Y-down paragraph units. Three applies `(offset.x, -offset.y)` through the text's host transform, including local
+rotation/scale; it does not modify `Text.position`. `boundingBox`/`computeBoundingBox()` and `measureGlyphs()` describe
+anchored Text-local Three coordinates. Text's caret and selection helpers use anchored Text-local coordinates with
++Y down, as before; their returned rectangles include the same offset. `/core`'s lower-level `createGlyphPlacements()`
+continues to describe unshifted paragraph coordinates. `split()` incorporates the source anchor into each independent
+root's copied transform so detached glyphs and decorations preserve their world placement.
+
+Anchor-only edits of an accepted paragraph update the host placement without waiting for an engine publication when
+its effective presentation and order still match the accepted publication. Pending or rejected root/TextGroup material,
+batching or order changes keep the previous draw/anchor together until acceptance, including presentation staged by an
+inspection query before a render attempt. Semantic edits follow the same acceptance boundary. Ordinary Three object
+motion and visibility continue to update the accepted branch using its accepted anchor. Desired measurement still
+describes pending text. React and Vue forward the same constraints and retain the same shallow property-list rules.
+
 ## Define a material
 
 ```ts

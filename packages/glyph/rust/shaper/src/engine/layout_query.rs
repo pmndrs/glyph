@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 use super::{
     EngineError,
     cluster_state::{CLUSTER_HARD_BREAK, ClusterArena},
-    flow_composition::{FlowFragment, FlowLayoutArena, FlowLine, NO_BOUNDARY},
+    flow_composition::{FlowDropCap, FlowFragment, FlowLayoutArena, FlowLine, NO_BOUNDARY},
     flow_geometry::FlowGeometryArena,
     frame::{AXIS_AT_MOST, AXIS_EXACT, AXIS_UNCONSTRAINED},
     placement_state::SegmentTranslation,
@@ -106,13 +106,14 @@ fn semantic_line_record(
     item_start: u32,
     item_count: u32,
     line: FlowLine,
+    drop_cap: Option<&FlowDropCap>,
     advance: f64,
     ink: InkBounds,
 ) -> Result<SemanticRecord, EngineError> {
     let mut record = SemanticRecord {
         id: u32::try_from(index.saturating_add(1)).map_err(|_| EngineError::ResultTooLarge)?,
         kind: SEMANTIC_LINE,
-        flags: 0,
+        flags: u16::from(line.typography.height_fallbacks),
         parent_id: paragraph_id,
         text_start,
         text_end,
@@ -122,8 +123,33 @@ fn semantic_line_record(
         inline_extent: finite_nonnegative_f32(advance)?,
         block_extent: finite_nonnegative_f32(line.height)?,
         ascent: finite_nonnegative_f32(line.baseline)?,
+        inline_start: finite_nonnegative_f32(line.typography.ascent)?,
+        inline_advance: finite_nonnegative_f32(line.typography.descent)?,
+        min_content_width: finite_nonnegative_f32(line.typography.cap_height)?,
+        max_content_width: finite_nonnegative_f32(line.typography.x_height)?,
+        cap_height_top: finite_f32(line.block_start + line.baseline - line.typography.cap_over)?,
+        x_height_top: finite_f32(line.block_start + line.baseline - line.typography.x_over)?,
         ..SemanticRecord::default()
     };
+    if let Some(cap) = drop_cap {
+        // The initial belongs to the first logical line, but its baseline is independent of
+        // the body strut. Merge absolute height references without inflating body line boxes.
+        let typography = cap.line.typography;
+        let baseline = cap.line.block_start + cap.line.baseline;
+        record.flags |= u16::from(typography.height_fallbacks);
+        record.min_content_width = record
+            .min_content_width
+            .max(finite_nonnegative_f32(typography.cap_height)?);
+        record.max_content_width = record
+            .max_content_width
+            .max(finite_nonnegative_f32(typography.x_height)?);
+        record.cap_height_top = record
+            .cap_height_top
+            .min(finite_f32(baseline - typography.cap_over)?);
+        record.x_height_top = record
+            .x_height_top
+            .min(finite_f32(baseline - typography.x_over)?);
+    }
     ink.write(&mut record)?;
     Ok(record)
 }
@@ -405,6 +431,7 @@ pub(crate) fn append_measurement(
             item_start,
             item_count,
             line,
+            drop_cap,
             advance,
             line_ink,
         )?);
@@ -674,6 +701,7 @@ mod tests {
         };
         let flow = FlowLayoutArena {
             lines: vec![FlowLine {
+                typography: Default::default(),
                 flow_thread_id: 11,
                 region_id: 3,
                 transform_index: 1,
@@ -741,6 +769,7 @@ mod tests {
         };
         let flow = FlowLayoutArena {
             lines: vec![FlowLine {
+                typography: Default::default(),
                 flow_thread_id: 11,
                 region_id: 3,
                 transform_index: 1,
@@ -851,6 +880,7 @@ mod tests {
         };
         let flow = FlowLayoutArena {
             lines: vec![FlowLine {
+                typography: Default::default(),
                 flow_thread_id: 11,
                 region_id: 3,
                 transform_index: 1,
@@ -923,6 +953,7 @@ mod tests {
         };
         let flow = FlowLayoutArena {
             lines: vec![FlowLine {
+                typography: Default::default(),
                 flow_thread_id: 11,
                 region_id: 3,
                 transform_index: 1,
@@ -1080,6 +1111,7 @@ mod tests {
         };
         let flow = FlowLayoutArena {
             lines: vec![FlowLine {
+                typography: Default::default(),
                 flow_thread_id: 11,
                 region_id: 3,
                 transform_index: 1,
@@ -1179,6 +1211,7 @@ mod tests {
         };
         let flow = FlowLayoutArena {
             lines: vec![FlowLine {
+                typography: Default::default(),
                 flow_thread_id: 11,
                 region_id: 3,
                 transform_index: 1,

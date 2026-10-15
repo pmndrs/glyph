@@ -35,6 +35,11 @@ fn panic(_info: &core::panic::PanicInfo<'_>) -> ! {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_shaper_abi_version() -> u32 {
+    crate::abi_contract::ABI_VERSION
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_glyph_shaper_initialize() -> u32 {
     with_state(|state| {
         if let Err(status) = state.registry.initialize() {

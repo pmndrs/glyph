@@ -1017,6 +1017,41 @@ the source's at every index, survive a re-layout and the font's disposal, and re
 
 ## Semantic queries
 
+`ParagraphLayoutSummary` now carries primary-face line font metrics (including cap height/x-height and explicit
+font/fallback provenance), computed alphabetic/ideographic references and cap/x-height top positions. Paragraph-level
+references select the first line; first/last baseline fields retain their independent line-selection meaning. The
+[layout-query contract](../planning/core-api.md#layout-query-values) defines spacing, mixed-style aggregation, deterministic
+missing-OS/2 fallbacks and the distinction from OpenType BASE. These bounded aggregate values do not require glyph
+positioning or ink inspection.
+
+`constraints.anchor: { x?, y? }` and the measured `anchorOffset` establish renderer-neutral box placement while retaining
+unshifted paragraph coordinates. Property composition stays shallow; the caller spreads a prior nested anchor when
+retaining an axis. The core resolver and cache metadata own reference arithmetic. Three, React and Vue apply the offset
+through host transforms and interaction geometry; TypeGPU composes it with the existing position uniform. Both hosts
+preserve accepted placement during pending/rejected semantic updates. Three permits its host-only placement shortcut
+only while the resolved material, presentation and order match the last accepted publication, with no pending material
+invalidation or renderer rejection. Root/group presentation changes do not advance Text's desired revision, so that
+revision alone cannot authorize an anchor commit. Live host/group transforms still apply to accepted geometry.
+Ordinary paragraph anchor-only changes reuse line records
+and avoid a layout engine query; explicit flow bindings retain their geometry-invalidation path, and explicit
+invalidation/retry semantics are unchanged.
+
+The semantic reader bounds its native `DataView` to the publication once, retaining native scalar bounds checks and
+whole-table range validation without repeating JavaScript range validation for every metric field. Adjacent lines with
+identical font metrics share one immutable strut value; mixed authored metrics remain independent. Three rejects the
+anchor-only shortcut immediately when the anchor identity is unchanged, before comparing accepted presentation.
+
+The compiler-owned query record grows from 76 to 84 bytes for two shifted height references. Four spare line-record
+fields carry font ascent/descent/cap height/x-height and line flags carry fallback provenance. Render/Codec records and
+default publications do not grow. Explicit glyph inspection also pays the eight-byte record increase; ordinary
+`measure()` remains proportional to line count and copies no per-glyph arrays. This incompatible semantic query change
+uses [shaper ABI 1](../planning/decisions/shaper-abi-1.md), with an exact version bootstrap before module initialization;
+unversioned modules and mismatched revisions are rejected. Failed public initialization retains its existing fatal module-lifetime contract.
+
+Same-source dropped initials contribute cap/x-height dimensions, provenance and absolute top references to the first
+logical measurement line, while the body strut continues to own ascent, descent, leading and baselines. Baseline and
+text-top alignment are covered independently with authored Inter/Amiri fonts.
+
 Publication emits no semantic readback by default. A renderer that needs current local bounds requests the measurement
 sidecar on the same update; core copies it into the retained text cache before target acceptance, so plan publication and
 bounds cost one Wasm hop. Every semantic mutation invalidates that cache immediately. `Text.measure()` then answers from

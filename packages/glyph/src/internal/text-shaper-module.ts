@@ -111,6 +111,18 @@ export function readModule(instance: WebAssembly.Instance): ShaperModule {
   const memory = instance.exports.memory;
   if (!(memory instanceof WebAssembly.Memory)) throw new TypeError('text shaper is missing memory');
   const functions = textShaperAbi.functions;
+  const versionExport = instance.exports[functions.abiVersion];
+  if (typeof versionExport !== 'function') {
+    throw new TypeError(
+      `incompatible text shaper Wasm ABI: expected ${textShaperAbi.version}; unversioned legacy modules are unsupported`,
+    );
+  }
+  const version: unknown = versionExport();
+  if (version !== textShaperAbi.version) {
+    throw new TypeError(
+      `incompatible text shaper Wasm ABI: expected ${textShaperAbi.version}, received ${String(version)}`,
+    );
+  }
   const initialize = exportedFunction(instance, functions.initialize);
   const status = initialize();
   if (status !== 0) throw shaperStatusError(status, 'initialize');

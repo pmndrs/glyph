@@ -54,6 +54,12 @@ test('application values and types stay at root while integration construction l
     'GlyphOutlineContour',
     'GlyphOutlineCurve',
     'GlyphOutlineView',
+    'TextAnchor',
+    'TextAnchorX',
+    'TextAnchorY',
+    'LayoutPoint',
+    'LineFontMetrics',
+    'TypographicReferences',
   ]) {
     assert.equal(root.has(name), true, `applications must be able to name ${name} from the root`);
   }

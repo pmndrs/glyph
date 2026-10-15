@@ -14,6 +14,7 @@ import { createServer, type ViteDevServer } from 'vite';
 
 import { launchProjectChromium } from './support/project-chromium.mts';
 import { packedArchiveDependency } from './support/packed-archive.mts';
+import { installedCoreDependencies } from './support/package-labs-dependencies.mts';
 
 interface PackedResult {
   readonly hash?: string;
@@ -49,7 +50,7 @@ try {
   await Promise.all([
     writeFile(
       join(consumerDirectory, 'package.json'),
-      `${JSON.stringify({ private: true, type: 'module', dependencies: { '@pmndrs/glyph': glyphArchive } }, undefined, 2)}\n`,
+      `${JSON.stringify({ private: true, type: 'module', dependencies: installedCoreDependencies(glyphArchive) }, undefined, 2)}\n`,
     ),
     writeFile(
       join(consumerDirectory, 'index.html'),

@@ -611,6 +611,8 @@ fn write_semantic(bytes: &mut [u8], at: usize, value: SemanticRecord) {
         value.ink_inline_extent,
     );
     f32_at(bytes, at, SEMANTIC_INK_BLOCK_EXTENT, value.ink_block_extent);
+    f32_at(bytes, at, SEMANTIC_CAP_HEIGHT_TOP, value.cap_height_top);
+    f32_at(bytes, at, SEMANTIC_X_HEIGHT_TOP, value.x_height_top);
     f32_at(bytes, at, SEMANTIC_ASCENT, value.ascent);
     f32_at(
         bytes,
@@ -801,6 +803,8 @@ mod tests {
             ascent: 10.5,
             min_content_width: 11.5,
             max_content_width: 12.5,
+            cap_height_top: 17.5,
+            x_height_top: 18.5,
         };
         let size = usize::try_from(SEMANTIC_RECORD_SIZE).unwrap();
         let mut bytes = vec![0_u8; size];

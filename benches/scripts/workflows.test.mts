@@ -8,13 +8,14 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { version as reactVersion } from 'react';
 
 import { forwardedWorkflowArguments, workflowCommandArguments } from './workflow-arguments.mts';
 import { hasVitexecFailure } from './workflow-output.mts';
 import { acceptLabsResult, assertLabsResultHasNoErrors, timingModeMismatches } from './support/labs-result.mts';
 import { parseLabsComparison, renderLabsSummary, writeLabsSummary } from './support/labs-summary.mts';
 import { LOOPBACK_HOST, selectLoopbackPort } from './support/loopback-port.mts';
-import { installedPackageDependencies } from './support/package-labs-dependencies.mts';
+import { installedCoreDependencies, installedPackageDependencies } from './support/package-labs-dependencies.mts';
 import { packageLabsComparesWithCanary, selectPackageLabsSuite } from './support/package-labs-suite.mts';
 import { packedArchiveDependency } from './support/packed-archive.mts';
 
@@ -178,9 +179,16 @@ test('installs the archive emitted by pnpm pack regardless of package version', 
   );
 });
 
+test('pins the transitive React peer to the frozen workspace installation for offline core consumers', () => {
+  const dependencies = installedCoreDependencies('file:archives/glyph.tgz');
+  assert.deepEqual(dependencies, { '@pmndrs/glyph': 'file:archives/glyph.tgz', react: reactVersion });
+  assert.match(dependencies.react, /^\d+\.\d+\.\d+$/u, 'offline consumers must request an exact provisioned version');
+});
+
 test('installs the optional peers exercised by installed-package Labs', () => {
   assert.deepEqual(installedPackageDependencies('file:archives/glyph.tgz'), {
     '@pmndrs/glyph': 'file:archives/glyph.tgz',
+    react: reactVersion,
     three: '0.185.1',
     typegpu: '0.12.5',
   });

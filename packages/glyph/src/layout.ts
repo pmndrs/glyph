@@ -30,8 +30,46 @@ export interface BaselineMetrics {
   readonly lineHeight: number;
 }
 
+/** A point or translation in paragraph-local units, +X right and +Y down. */
+export interface LayoutPoint {
+  readonly x: number;
+  readonly y: number;
+}
+
+/** Scaled primary-face metrics used by a line. Mixed authored styles take the maximum of each dimension; fallback glyph faces do not change the line's typography. A drop cap contributes cap/x-height dimensions and provenance to the first logical line; ascent, descent and leading retain the body strut. */
+export interface LineFontMetrics {
+  /** Font ascent without half-leading or baseline shift. */
+  readonly ascent: number;
+  /** Font descent without half-leading or baseline shift, positive down. */
+  readonly descent: number;
+  /** Effective line height minus font ascent and descent; may be negative with tight leading. */
+  readonly leading: number;
+  readonly capHeight: number;
+  readonly xHeight: number;
+  /** `font` means all participating primary faces supplied a positive OS/2 sCapHeight; otherwise the line includes the 0.66em fallback. */
+  readonly capHeightSource: 'font' | 'fallback';
+  /** `font` means all participating primary faces supplied a positive OS/2 sxHeight; otherwise the line includes the 0.5em fallback. */
+  readonly xHeightSource: 'font' | 'fallback';
+}
+
+/** Computed typographic positions in paragraph-local coordinates, not OpenType BASE coordinates. Paragraph-level references describe the first line; an empty paragraph uses zero. */
+export interface TypographicReferences {
+  /** The line's layout baseline, including authored spacing and half-leading. */
+  readonly alphabeticBaseline: number;
+  /** The line-box bottom, computed from ascent, descent and effective leading; not a script-specific BASE lookup. */
+  readonly ideographicBaseline: number;
+  /** Top of the participating primary faces' cap-height envelope, including baseline shifts. */
+  readonly capHeightTop: number;
+  /** Top of the participating primary faces' x-height envelope, including baseline shifts. */
+  readonly xHeightTop: number;
+}
+
 /** Allocation-light paragraph metrics; no per-glyph arrays. Size and content extents round outward at the public f32 boundary so measure-to-exact feedback cannot undershoot the measured layout. `contentWidth`/`contentHeight` are *advance* extents (CSS box measure); `inkBounds` is the *ink* extent (glyph outlines) — using one where the other belongs is a silent visual error. */
-export interface ParagraphMeasurement extends BaselineMetrics {
+export interface ParagraphMeasurement extends BaselineMetrics, TypographicReferences {
+  /** Primary-face metrics of the first line, or zero dimensions for an empty paragraph. */
+  readonly fontMetrics: LineFontMetrics;
+  /** Translation placing constraints.anchor at the supplied host origin. Metrics and glyph columns remain unshifted paragraph-local values. */
+  readonly anchorOffset: LayoutPoint;
   /** Whole-paragraph baseline metrics use `firstBaseline` as their reference baseline. */
   readonly ascent: number;
   readonly descent: number;
@@ -54,7 +92,8 @@ export interface ParagraphMeasurement extends BaselineMetrics {
 }
 
 /** Metrics of one laid-out line, in the paragraph's coordinate space. */
-export interface ParagraphLineMetrics extends BaselineMetrics {
+export interface ParagraphLineMetrics extends BaselineMetrics, TypographicReferences {
+  readonly fontMetrics: LineFontMetrics;
   /** Position of this line among the paragraph's lines. */
   readonly index: number;
   /** UTF-16 offsets this line covers in the paragraph text. */

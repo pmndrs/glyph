@@ -267,6 +267,7 @@ export const textShaperAbi = {
     }
   },
   "functions": {
+    "abiVersion": "pmndrs_glyph_shaper_abi_version",
     "allocate": "pmndrs_glyph_shaper_alloc",
     "borrowParagraphGlyph": "pmndrs_glyph_engine_borrow_paragraph_glyph",
     "borrowParagraphLayout": "pmndrs_glyph_engine_borrow_paragraph_layout",
@@ -692,7 +693,11 @@ export const textShaperAbi = {
       "ascent": 64,
       "blockExtent": 40,
       "blockStart": 32,
+      "capHeight": 68,
+      "capHeightTop": 76,
       "flags": 6,
+      "fontAscent": 28,
+      "fontDescent": 44,
       "id": 0,
       "inkBlockExtent": 60,
       "inkBlockStart": 52,
@@ -707,9 +712,11 @@ export const textShaperAbi = {
       "maxContentWidth": 72,
       "minContentWidth": 68,
       "parentId": 8,
-      "size": 76,
+      "size": 84,
       "textEnd": 16,
-      "textStart": 12
+      "textStart": 12,
+      "xHeight": 72,
+      "xHeightTop": 80
     },
     "engineStyleMutation": {
       "alignment": 4,
@@ -887,7 +894,7 @@ export const textShaperAbi = {
     "styleRootInvalid": 18,
     "styleSplitsCluster": 16
   },
-  "version": 0,
+  "version": 1,
   "versions": {
     "fontFormat": 0,
     "harfrust": "0.12.0",

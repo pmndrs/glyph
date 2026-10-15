@@ -57,7 +57,7 @@ use crate::engine::semantic_view::{
 };
 use crate::engine::{SemanticGlyph, layout_borrow::BorrowedLayoutDescriptor};
 
-pub const ABI_VERSION: u32 = 0;
+pub const ABI_VERSION: u32 = 1;
 pub const SHAPER_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const HARFRUST_VERSION: &str = "0.12.0";
 pub const HARFRUST_COMMIT: &str = "60b28ea22b5261710018d69c168a762bcb28794c";
@@ -1843,6 +1843,8 @@ field_offset!(
     ink_inline_extent
 );
 field_offset!(SEMANTIC_INK_BLOCK_EXTENT, SemanticRecord, ink_block_extent);
+field_offset!(SEMANTIC_CAP_HEIGHT_TOP, SemanticRecord, cap_height_top);
+field_offset!(SEMANTIC_X_HEIGHT_TOP, SemanticRecord, x_height_top);
 field_offset!(SEMANTIC_ASCENT, SemanticRecord, ascent);
 field_offset!(
     SEMANTIC_MIN_CONTENT_WIDTH,
@@ -2011,6 +2013,7 @@ pub fn json() -> String {
             "fontFormat": 0
         },
         "functions": {
+            "abiVersion": "pmndrs_glyph_shaper_abi_version",
             "initialize": "pmndrs_glyph_shaper_initialize",
             "allocate": "pmndrs_glyph_shaper_alloc",
             "deallocate": "pmndrs_glyph_shaper_dealloc",
@@ -2462,7 +2465,13 @@ pub fn json() -> String {
                 "inkBlockExtent": SEMANTIC_INK_BLOCK_EXTENT,
                 "ascent": SEMANTIC_ASCENT,
                 "minContentWidth": SEMANTIC_MIN_CONTENT_WIDTH,
-                "maxContentWidth": SEMANTIC_MAX_CONTENT_WIDTH
+                "maxContentWidth": SEMANTIC_MAX_CONTENT_WIDTH,
+                "fontAscent": SEMANTIC_INLINE_START,
+                "fontDescent": SEMANTIC_INLINE_ADVANCE,
+                "capHeight": SEMANTIC_MIN_CONTENT_WIDTH,
+                "xHeight": SEMANTIC_MAX_CONTENT_WIDTH,
+                "capHeightTop": SEMANTIC_CAP_HEIGHT_TOP,
+                "xHeightTop": SEMANTIC_X_HEIGHT_TOP
             },
             "borrowedLayoutDescriptor": {
                 "size": BORROWED_LAYOUT_DESCRIPTOR_SIZE,

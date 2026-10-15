@@ -8,7 +8,13 @@ import { schema } from './internal/bindings.js';
 import { codecDescriptor } from './internal/codec.js';
 import { createResource } from './internal/resources.js';
 import { Renderer, type TypeGpuTransform } from './internal/renderer.js';
-import { createText, type TypeGpuFontSelection, type TypeGpuText, type TypeGpuTextOptions } from './text.js';
+import {
+  createText,
+  type TypeGpuFontSelection,
+  type TypeGpuText,
+  type TypeGpuTextOptions,
+  type TypeGpuTextPublication,
+} from './text.js';
 
 /** Vertex-stage callback: top-left, y-down logical pixels (including text.position) to homogeneous clip coordinates.
  * May capture TypeGPU resources. Slug estimates its antialiasing footprint from nearby positions;
@@ -83,14 +89,14 @@ export function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyph
     root: {
       create(context) {
         const renderer = new Renderer(options.root);
-        const texts = new Set<TypeGpuText>();
+        const texts = new Map<TypeGpuText, TypeGpuTextPublication>();
         const transforms = new Set<TypeGpuTransform>();
         const retired = new Set<TypeGpuTransform>();
         let disposed = false;
         const dispose = (): void => {
           if (disposed) return;
           disposed = true;
-          for (const text of texts) text.dispose();
+          for (const text of texts.keys()) text.dispose();
           for (const transform of transforms) transform.position.buffer.destroy();
           texts.clear();
           transforms.clear();
@@ -107,15 +113,16 @@ export function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyph
                 const transform = { position: options.root.createUniform(d.vec2f) };
                 let text: TypeGpuText<Selection>;
                 try {
-                  text = createText(context.fonts!, context.services, transform, textOptions, () => {
+                  const publication = createText(context.fonts!, context.services, transform, textOptions, () => {
                     texts.delete(text);
                     retired.add(transform);
                   });
+                  text = publication.text;
+                  texts.set(text, publication);
                 } catch (error) {
                   transform.position.buffer.destroy();
                   throw error;
                 }
-                texts.add(text);
                 transforms.add(transform);
                 return text;
               },
@@ -126,7 +133,14 @@ export function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyph
               defaultRenderer: renderer,
               dispose,
               shape: {
+                prepare: () => {
+                  for (const text of texts.values()) text.prepare();
+                },
+                rejected: () => {
+                  for (const text of texts.values()) text.rejected();
+                },
                 accepted: () => {
+                  for (const text of texts.values()) text.accepted();
                   for (const transform of retired) {
                     transform.position.buffer.destroy();
                     transforms.delete(transform);
