@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import type { LayoutPoint } from '../layout.js';
 
 import {
   type CommandBufferView,
@@ -50,6 +51,8 @@ export interface ThreeRendererHost {
   readonly renderOrderBase?: number;
   /** Resolves retained visibility when transforms are not descendants of the private publication object. */
   visibleObject?(object: THREE.Object3D): boolean;
+  /** Placement-only paragraph translation; candidate state is used transactionally during decode. */
+  anchorOffset?(object: THREE.Object3D, preparing: boolean): LayoutPoint | undefined;
   /** Optional transform remapping used when a copied plan is imported beneath a detached root. */
   objectForTransform?(transformId: number, source: THREE.Object3D): THREE.Object3D;
   /** Allocates detached per-record storage before any material captures it. */
@@ -83,6 +86,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
   readonly #requestedTransformIds: number[] = [];
   readonly #originRecords = new Map<number, OriginRecord>();
   readonly #transformSynchronizer = new ThreeTransformSynchronizer();
+  readonly #anchorTranslation = new THREE.Matrix4();
   readonly #transformState: ThreeTransformState;
   #transformAttribute = transformAttribute(0);
   #transformGeneration = 1;
@@ -113,6 +117,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
         return renderer.#transformAttribute;
       },
       ...(owner.visibleObject === undefined ? {} : { visibleObject: owner.visibleObject }),
+      ...(owner.anchorOffset === undefined ? {} : { anchorOffset: (object) => owner.anchorOffset!(object, false) }),
     };
   }
 
@@ -652,6 +657,10 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       object.updateWorldMatrix(true, false, true);
       if (object === draws.root) relative.identity();
       else relative.multiplyMatrices(rootInverse, object.matrixWorld);
+      const anchor = this.#owner.anchorOffset?.(object, true);
+      if (anchor !== undefined && (anchor.x !== 0 || anchor.y !== 0)) {
+        relative.multiply(this.#anchorTranslation.makeTranslation(anchor.x, -anchor.y, 0));
+      }
       const visible = this.#owner.visibleObject?.(object) ?? visibleBelowRoot(object, draws.root);
       if (draws.activeTransformIndices.has(transformId)) {
         const offset = transformId * 16;

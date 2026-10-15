@@ -34,6 +34,7 @@ pub(crate) struct FlowLine {
     pub block_start: f64,
     pub baseline: f64,
     pub height: f64,
+    pub typography: LineTypography,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -139,10 +140,43 @@ pub(crate) struct EllipsisReplacement {
     pub advance_adjustment: f64,
 }
 
+/// Primary authored-face metrics, aggregated once per line rather than per glyph.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct LineTypography {
+    pub ascent: f64,
+    pub descent: f64,
+    pub cap_height: f64,
+    pub x_height: f64,
+    pub cap_over: f64,
+    pub x_over: f64,
+    pub height_fallbacks: u8,
+    present: bool,
+}
+
+impl LineTypography {
+    fn include(&mut self, other: Self) {
+        if !other.present {
+            return;
+        }
+        if !self.present {
+            *self = other;
+            return;
+        }
+        self.ascent = self.ascent.max(other.ascent);
+        self.descent = self.descent.max(other.descent);
+        self.cap_height = self.cap_height.max(other.cap_height);
+        self.x_height = self.x_height.max(other.x_height);
+        self.cap_over = self.cap_over.max(other.cap_over);
+        self.x_over = self.x_over.max(other.x_over);
+        self.height_fallbacks |= other.height_fallbacks;
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct LineExtents {
     above: f64,
     below: f64,
+    typography: LineTypography,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -160,6 +194,7 @@ impl LineExtents {
     fn include(&mut self, other: Self) {
         self.above = self.above.max(other.above);
         self.below = self.below.max(other.below);
+        self.typography.include(other.typography);
     }
 }
 
@@ -282,6 +317,15 @@ fn prepare_drop_cap(
         block_start: baseline + envelope.block_start,
         baseline: -envelope.block_start,
         height: line_height,
+        typography: line_metrics_for_cluster(
+            clusters,
+            styles,
+            0,
+            metrics_for,
+            first_font_for_stack,
+        )?
+        .extents
+        .typography,
     };
     let fragment = FlowFragment {
         line: ComposedLine {
@@ -913,6 +957,7 @@ impl FlowLayoutArena {
                 LineExtents {
                     above: old_line.baseline,
                     below: old_line.height - old_line.baseline,
+                    typography: old_line.typography,
                 },
                 match drop_cap.as_ref() {
                     Some(cap) => cap.cut_for_band(
@@ -1333,7 +1378,10 @@ impl FlowLayoutArena {
                 return Ok(None);
             }
             // Seed from the estimate so valid negative half-leading is not clamped against zero.
-            let mut measured = initial_extents;
+            let mut measured = LineExtents {
+                typography: LineTypography::default(),
+                ..initial_extents
+            };
             let mut composed = false;
             for slot in available.iter().copied() {
                 // The paragraph's first line composes against an indented width;
@@ -1393,6 +1441,10 @@ impl FlowLayoutArena {
                 extents = measured;
                 continue;
             }
+            // A line containing only a hard break still inherits its authored font's strut.
+            if !measured.typography.present {
+                measured.typography = initial_extents.typography;
+            }
             let fragment_count = self.fragments.len() - fragment_start;
             self.lines.push(FlowLine {
                 flow_thread_id,
@@ -1407,6 +1459,7 @@ impl FlowLayoutArena {
                 block_start,
                 baseline: extents.above,
                 height: extents.height(),
+                typography: measured.typography,
             });
             return Ok(Some(extents.height()));
         }
@@ -1875,6 +1928,16 @@ fn line_metrics_for_cluster(
             // Preserve negative half-leading; clamping either side makes tight line boxes too tall.
             above: ascent + leading * 0.5 + shift,
             below: descent + leading * 0.5 - shift,
+            typography: LineTypography {
+                ascent,
+                descent,
+                cap_height: f64::from(metrics.cap_height) * scale,
+                x_height: f64::from(metrics.x_height) * scale,
+                cap_over: f64::from(metrics.cap_height) * scale + shift,
+                x_over: f64::from(metrics.x_height) * scale + shift,
+                height_fallbacks: metrics.height_fallbacks,
+                present: true,
+            },
         },
         cap_height: f64::from(metrics.cap_height) * scale,
         baseline_shift: shift,
@@ -1942,6 +2005,7 @@ fn positive_extents(
     Ok(LineExtents {
         above: fallback,
         below: 0.0,
+        typography: extents.typography,
     })
 }
 
@@ -1980,6 +2044,8 @@ mod tests {
             units_per_em: 1_000,
             ascender: 800,
             cap_height: 700,
+            x_height: 500,
+            height_fallbacks: 0,
             descender: -200,
             line_gap: 100,
             underline_position: -100,
@@ -2626,6 +2692,8 @@ mod tests {
                         units_per_em: 1_000,
                         ascender: 800,
                         cap_height: 700,
+                        x_height: 500,
+                        height_fallbacks: 0,
                         descender: -200,
                         line_gap: 0,
                         underline_position: -100,
@@ -2700,6 +2768,8 @@ mod tests {
                         units_per_em: 1_000,
                         ascender: 800,
                         cap_height: 700,
+                        x_height: 500,
+                        height_fallbacks: 0,
                         descender: -200,
                         line_gap: 0,
                         underline_position: -100,
@@ -2778,6 +2848,8 @@ mod tests {
                 units_per_em: 1_000,
                 ascender: 800,
                 cap_height: 700,
+                x_height: 500,
+                height_fallbacks: 0,
                 descender: -200,
                 line_gap: 360,
                 underline_position: -100,
@@ -2869,6 +2941,8 @@ mod tests {
                         units_per_em: 1_000,
                         ascender: 800,
                         cap_height: 700,
+                        x_height: 500,
+                        height_fallbacks: 0,
                         descender: -200,
                         line_gap: 0,
                         underline_position: -100,
@@ -2943,6 +3017,8 @@ mod tests {
                         units_per_em: 1_000,
                         ascender: 800,
                         cap_height: 700,
+                        x_height: 500,
+                        height_fallbacks: 0,
                         descender: -200,
                         line_gap: 0,
                         underline_position: -100,
@@ -2988,6 +3064,8 @@ mod tests {
                 units_per_em: 1_000,
                 ascender: 800,
                 cap_height: 700,
+                x_height: 500,
+                height_fallbacks: 0,
                 descender: -200,
                 line_gap: 0,
                 underline_position: -100,
@@ -3071,6 +3149,8 @@ mod tests {
                 units_per_em: 1_000,
                 ascender: 800,
                 cap_height: 700,
+                x_height: 500,
+                height_fallbacks: 0,
                 descender: -200,
                 line_gap: 0,
                 underline_position: -100,
@@ -3292,6 +3372,8 @@ mod tests {
                 units_per_em: 1_000,
                 ascender: 800,
                 cap_height: 700,
+                x_height: 500,
+                height_fallbacks: 0,
                 descender: -200,
                 line_gap: 0,
                 underline_position: -100,
@@ -3396,6 +3478,8 @@ mod tests {
                 units_per_em: 1_000,
                 ascender: 800,
                 cap_height: 700,
+                x_height: 500,
+                height_fallbacks: 0,
                 descender: -200,
                 line_gap: 0,
                 underline_position: -100,
@@ -3452,6 +3536,8 @@ mod tests {
                 units_per_em: 1_000,
                 ascender: 800,
                 cap_height: 700,
+                x_height: 500,
+                height_fallbacks: 0,
                 descender: -200,
                 line_gap: 0,
                 underline_position: -100,
@@ -3672,6 +3758,7 @@ mod tests {
         });
         let mut layout = FlowLayoutArena {
             lines: vec![FlowLine {
+                typography: Default::default(),
                 flow_thread_id: 7,
                 region_id: 1,
                 transform_index: 0,
@@ -3774,6 +3861,8 @@ mod tests {
                         units_per_em: 1_000,
                         ascender: 800,
                         cap_height: 700,
+                        x_height: 500,
+                        height_fallbacks: 0,
                         descender: -200,
                         line_gap: 0,
                         underline_position: -100,

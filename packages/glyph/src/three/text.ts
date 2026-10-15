@@ -1,3 +1,4 @@
+import { sameConstraintSizes } from '../text-anchor.js';
 import * as THREE from 'three/webgpu';
 
 import {
@@ -15,6 +16,7 @@ import { createGlyphPlacements, type GlyphCaret, type GlyphPlacements } from '..
 import {
   type BorrowedGlyphLayout,
   type LayoutBox,
+  type LayoutPoint,
   type GlyphLayoutInspection,
   type ParagraphLayoutSummary,
 } from '../layout.js';
@@ -339,6 +341,7 @@ export class ThreeRootHost {
       renderObject: this.#renderObject,
       root: this,
       visibleObject: (object) => this.visible(object),
+      anchorOffset: (object, preparing) => this.#binding?.anchorOffset(object, preparing),
     });
   }
 
@@ -1052,7 +1055,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   measureGlyphs(): readonly ThreeGlyphMeasurement[] | undefined {
     const placements = this.#glyphPlacements();
     if (placements === undefined) return undefined;
-    return measureGlyphPlacements(placements, this.#glyphGeometry(placements));
+    return measureGlyphPlacements(placements, this.#glyphGeometry(placements), placements.layout.anchorOffset);
   }
 
   /** Copies drawable desired glyphs and optional decorations into independently rendered Three objects; blank glyphs are excluded. */
@@ -1076,6 +1079,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     const glyphs = createGlyphs({
       text: this.text,
       source,
+      anchorOffset: placements.layout.anchorOffset,
       placements: () => binding.glyphPlacements(source, true)!,
       resources: this.#root.rendererResources,
       renderOrderBase: glyphRenderOrderBase,
@@ -1085,6 +1089,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     try {
       decorations = createDecorations({
         source,
+        anchorOffset: placements.layout.anchorOffset,
         resources: this.#root.rendererResources,
         renderOrderBase: glyphRenderOrderBase,
         copy: (renderer, boundary) => binding.copyDecorations(source, renderer, boundary),
@@ -1127,17 +1132,28 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
 
   /** Queries the nearest desired-layout cluster boundary without publishing renderer state. */
   caretAt(x: number, y: number): GlyphCaret | undefined {
-    return this.#glyphPlacements()?.caretAt(x, y);
+    const placements = this.#glyphPlacements();
+    if (placements === undefined) return undefined;
+    const offset = placements.layout.anchorOffset;
+    return anchoredCaret(placements.caretAt(x - offset.x, y - offset.y), offset);
   }
 
   /** Resolves a UTF-16 offset with the placement snapshot's cluster, bidi-affinity, and line-boundary policy. */
   caretForOffset(offset: number): GlyphCaret | undefined {
-    return this.#glyphPlacements()?.caretForOffset(offset);
+    const placements = this.#glyphPlacements();
+    return placements === undefined
+      ? undefined
+      : anchoredCaret(placements.caretForOffset(offset), placements.layout.anchorOffset);
   }
 
   /** Queries desired-layout selection rectangles without publishing renderer state. */
   selectionRects(start: number, end: number): readonly LayoutBox[] | undefined {
-    return this.#glyphPlacements()?.selectionRects(start, end);
+    const placements = this.#glyphPlacements();
+    return placements === undefined
+      ? undefined
+      : Object.freeze(
+          placements.selectionRects(start, end).map((box) => anchoredBox(box, placements.layout.anchorOffset)),
+        );
   }
 
   override updateMatrixWorld(force?: boolean): void {
@@ -1164,8 +1180,9 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       this.#boundingBoxCurrent = true;
       return;
     }
-    this.#boundingBox.min.set(bounds.x, -(bounds.y + bounds.height), 0);
-    this.#boundingBox.max.set(bounds.x + bounds.width, -bounds.y, 0);
+    const offset = measurement.anchorOffset;
+    this.#boundingBox.min.set(bounds.x + offset.x, -(bounds.y + offset.y + bounds.height), 0);
+    this.#boundingBox.max.set(bounds.x + offset.x + bounds.width, -(bounds.y + offset.y), 0);
     this.#boundingBoxCurrent = true;
   }
 
@@ -1384,6 +1401,9 @@ interface BoundTextEntry {
   stagedPresentation: TextPresentation;
   committedRevision: number;
   committedRenderOrder: number | undefined;
+  stagedDesired: DesiredTextState<RasterFormatMetadata>;
+  stagedAnchorOffset: LayoutPoint | undefined;
+  committedAnchorOffset: LayoutPoint | undefined;
 }
 
 interface DetachedQueryEntry {
@@ -1426,6 +1446,12 @@ class ThreeRootPublication {
     this.#root = root;
     this.#capacity = capacity;
     this.#target = root.renderer;
+  }
+
+  anchorOffset(object: THREE.Object3D, preparing: boolean): LayoutPoint | undefined {
+    if (!(object instanceof Text)) return undefined;
+    const entry = this.#entries.get(object);
+    return preparing ? entry?.stagedAnchorOffset : entry?.committedAnchorOffset;
   }
 
   get textCount(): number {
@@ -1739,6 +1765,7 @@ class ThreeRootPublication {
       if (acceptedRevision === undefined) continue;
       entry.committedRevision = acceptedRevision;
       entry.committedRenderOrder = entry.stagedPresentation.renderOrder;
+      entry.committedAnchorOffset = entry.stagedAnchorOffset;
       reconciler.markCommitted(text, acceptedRevision);
       if (entry.stagedRevision === acceptedRevision && this.#pendingMeasurements.delete(text)) {
         reconciler.publishMeasurement(text, entry.handle.measure());
@@ -1794,6 +1821,10 @@ class ThreeRootPublication {
     presentation: TextPresentation,
   ): void {
     const previous = this.#entries.get(text);
+    const placementOnly =
+      previous !== undefined &&
+      previous.stagedRevision === previous.committedRevision &&
+      sameDesiredExceptAnchor(previous.stagedDesired, desired);
     const state = coreTextState(
       desired,
       text,
@@ -1815,6 +1846,9 @@ class ThreeRootPublication {
         stagedPresentation: presentation,
         committedRevision: -1,
         committedRenderOrder: undefined,
+        stagedDesired: desired,
+        stagedAnchorOffset: undefined,
+        committedAnchorOffset: undefined,
       });
     } else {
       const scopedOrderChanged =
@@ -1826,6 +1860,18 @@ class ThreeRootPublication {
       previous.stagedOrderScope = orderScope;
       previous.stagedOrderRank = orderRank;
       previous.stagedPresentation = presentation;
+    }
+    const entry = this.#entries.get(text)!;
+    entry.stagedAnchorOffset =
+      desired.constraints.anchor === undefined ? undefined : entry.handle.measure().anchorOffset;
+    entry.stagedDesired = desired;
+    if (placementOnly) {
+      entry.committedAnchorOffset = entry.stagedAnchorOffset;
+      entry.committedRevision = revision;
+      reconciler.markCommitted(text, revision);
+      this.#pendingMeasurements.delete(text);
+      this.#inspections.delete(text);
+      return;
     }
     this.#pendingMeasurements.add(text);
     this.#inspections.delete(text);
@@ -2369,4 +2415,33 @@ function checkedNextRevision(current: number): number {
   const next = current + 1;
   if (!Number.isSafeInteger(next)) throw new RangeError('Text revisions are exhausted');
   return next;
+}
+
+function anchoredBox(box: LayoutBox, offset: LayoutPoint): LayoutBox {
+  return Object.freeze({ ...box, x: box.x + offset.x, y: box.y + offset.y });
+}
+
+function anchoredCaret(caret: GlyphCaret, offset: LayoutPoint): GlyphCaret {
+  return Object.freeze({ ...caret, rect: anchoredBox(caret.rect, offset) });
+}
+
+function sameDesiredExceptAnchor(
+  previous: DesiredTextState<RasterFormatMetadata>,
+  next: DesiredTextState<RasterFormatMetadata>,
+): boolean {
+  const beforeAnchor = previous.constraints?.anchor;
+  const afterAnchor = next.constraints?.anchor;
+  if (beforeAnchor === afterAnchor) return false;
+
+  return (
+    previous.font === next.font &&
+    previous.text === next.text &&
+    previous.spans === next.spans &&
+    previous.style === next.style &&
+    previous.layout === next.layout &&
+    previous.flow === next.flow &&
+    previous.material === next.material &&
+    Object.is(previous.rasterPixelRatio ?? 1, next.rasterPixelRatio ?? 1) &&
+    sameConstraintSizes(previous.constraints, next.constraints)
+  );
 }

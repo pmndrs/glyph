@@ -1,3 +1,4 @@
+import { sameConstraintSizes, withTextAnchor } from '../text-anchor.js';
 import {
   alignSpansToClusters,
   areOwnedSpansClusterAligned,
@@ -640,6 +641,15 @@ class RenderPlannerImpl {
             state.desired,
           )
         : forkResolvedTextWithText(state.desired, textOnly, state.metrics.order);
+    if (sameTextExceptAnchor(state.desired, desired, state.ordinal)) {
+      const anchor = desired.source.constraints?.anchor;
+      if (state.measurement !== undefined) state.measurement = withTextAnchor(state.measurement, anchor);
+      if (state.inspection !== undefined) state.inspection = withTextAnchor(state.inspection, anchor);
+      releaseResolvedText(state.desired);
+      state.desired = desired;
+      this.#dirtyListener?.();
+      return;
+    }
     const metrics = retainedTextMetrics(desired, state.ordinal);
     const styleChanges =
       state.styleChanges.length !== 0 ||
@@ -982,8 +992,10 @@ class RenderPlannerImpl {
       for (const state of this.#texts) {
         const layout = layouts.get(state.paragraphId);
         if (layout === undefined) continue;
-        state.measurement = measurementFromLayoutInspection(layout);
-        state.inspection = layout;
+        state.measurement = measurementFromLayoutInspection(
+          withTextAnchor(layout, state.desired.source.constraints?.anchor),
+        );
+        state.inspection = withTextAnchor(layout, state.desired.source.constraints?.anchor);
       }
       return;
     }
@@ -991,7 +1003,8 @@ class RenderPlannerImpl {
     const measurements = readPlannerMeasurements(publication);
     for (const state of this.#texts) {
       const measurement = measurements.get(state.paragraphId);
-      if (measurement !== undefined) state.measurement = measurement;
+      if (measurement !== undefined)
+        state.measurement = withTextAnchor(measurement, state.desired.source.constraints?.anchor);
     }
   }
 
@@ -1005,8 +1018,8 @@ class RenderPlannerImpl {
     const measurement = readPlannerMeasurements(publication).get(state.paragraphId);
     if (measurement === undefined) throw new Error('text engine returned no measurement for retained text');
     this.#adoptMeasuredBindings(state);
-    state.measurement = measurement;
-    return measurement;
+    state.measurement = withTextAnchor(measurement, state.desired.source.constraints?.anchor);
+    return state.measurement;
   }
 
   #queryInspection(state: RetainedTextState): GlyphLayoutColumns {
@@ -1015,9 +1028,11 @@ class RenderPlannerImpl {
     const layout = readPlannerLayouts(publication).get(state.paragraphId);
     if (layout === undefined) throw new Error('text engine returned no layout inspection for retained text');
     this.#adoptMeasuredBindings(state);
-    state.measurement = measurementFromLayoutInspection(layout);
-    state.inspection = layout;
-    return layout;
+    state.measurement = measurementFromLayoutInspection(
+      withTextAnchor(layout, state.desired.source.constraints?.anchor),
+    );
+    state.inspection = withTextAnchor(layout, state.desired.source.constraints?.anchor);
+    return state.inspection;
   }
 
   #queryTextPublication(state: RetainedTextState, semanticViewMask: number): PlanPublication {
@@ -1970,6 +1985,30 @@ function updateChangesStyle(
     Object.hasOwn(update, 'rasterPixelRatio') ||
     Object.hasOwn(update, 'style') ||
     (Object.hasOwn(update, 'text') && (previous.spans.length !== 0 || desired.spans.length !== 0))
+  );
+}
+
+function sameTextExceptAnchor(previous: ResolvedTextOptions, next: ResolvedTextOptions, ordinal: number): boolean {
+  const beforeAnchor = previous.source.constraints?.anchor;
+  const afterAnchor = next.source.constraints?.anchor;
+  if (beforeAnchor === afterAnchor) return false;
+
+  const left = previous.source;
+  const right = next.source;
+  return (
+    previous.text === next.text &&
+    previous.spans.length === next.spans.length &&
+    previous.spans.every((span, index) => sameSpanEngineStyle(span, next.spans[index]!)) &&
+    previous.font.handle === next.font.handle &&
+    previous.material?.handle === next.material?.handle &&
+    previous.transform.handle === next.transform.handle &&
+    left.style === right.style &&
+    left.layout === right.layout &&
+    left.flow === right.flow &&
+    left.inlineObjects === right.inlineObjects &&
+    (left.order ?? ordinal - 1) === (right.order ?? ordinal - 1) &&
+    left.rasterPixelRatio === right.rasterPixelRatio &&
+    sameConstraintSizes(left.constraints, right.constraints)
   );
 }
 

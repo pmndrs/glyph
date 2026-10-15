@@ -207,6 +207,9 @@ export type {
   BorrowedGlyph,
   BorrowedGlyphLayout,
   LayoutBox,
+  LayoutPoint,
+  LineFontMetrics,
+  TypographicReferences,
   ParagraphIntrinsicWidths,
   GlyphLayout,
   GlyphLayoutInspection,
@@ -224,6 +227,9 @@ export type { FontSelection, FontStack } from './loaded-font.js';
 export { createFontStack } from './loaded-font.js';
 
 export type {
+  TextAnchor,
+  TextAnchorX,
+  TextAnchorY,
   AxisConstraint,
   ColorInput,
   GlyphBufferCapacity,

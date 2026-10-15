@@ -1,3 +1,4 @@
+import type { LayoutPoint } from '../layout.js';
 import * as THREE from 'three/webgpu';
 
 import type { GlyphCopy } from '../config/glyph.js';
@@ -40,6 +41,7 @@ export function localToWorldMatrix(
 interface GlyphsOptions {
   readonly text: string;
   readonly source: DetachedTextSource;
+  readonly anchorOffset: LayoutPoint;
   readonly placements: () => GlyphPlacements;
   readonly copy: (renderer: ThreeCommandBufferRenderer, boundary: ThreePublicationBoundary) => GlyphCopy<void>;
   readonly resources: ThreeRendererResources;
@@ -127,7 +129,7 @@ export class Glyphs extends THREE.Object3D {
     let target: ThreeCommandBufferRenderer | undefined;
     let copy: GlyphCopy<void> | undefined;
     try {
-      copyCurrentLocalTransform(options.source, this);
+      copyCurrentLocalTransform(options.source, this, options.anchorOffset);
       // A Glyphs object may receive world-space instance writes in the first useFrame after it is
       // attached, before the renderer has traversed the scene once.
       this.matrixWorldNeedsUpdate = true;

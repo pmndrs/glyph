@@ -98,6 +98,37 @@ export function adapterBehavior(name, mount) {
     }
   });
 
+  test(`${name}: anchor presets remain shallow and measure tracks dynamic named references`, async () => {
+    const font = await adapterFont();
+    const initial = {
+      font: font.face,
+      text: 'baseline',
+      constraints: [
+        { width: { mode: 'exact', size: 200 }, anchor: { x: 'center', y: 'middle' } },
+        { anchor: { y: 'first-baseline' } },
+      ],
+    };
+    const host = await mount(initial);
+    try {
+      assert.deepEqual(host.text.constraints.anchor, { y: 'first-baseline' });
+      const first = host.text.measure();
+      assert.deepEqual(first.anchorOffset, { x: 0, y: -first.firstBaseline });
+      await host.update({
+        ...initial,
+        text: 'two\nlines',
+        constraints: { anchor: { x: 'center', y: 'last-baseline' } },
+      });
+      const next = host.text.measure();
+      assert.equal(next.lineCount, 2);
+      assert.deepEqual(next.anchorOffset, { x: -next.width / 2, y: -next.lastBaseline });
+      await host.update({ font: font.face, text: 'reset' });
+      assert.deepEqual(host.text.measure().anchorOffset, { x: 0, y: 0 });
+    } finally {
+      await host.unmount();
+      font.dispose();
+    }
+  });
+
   test(`${name}: malformed PropertyList input throws at the framework update`, async () => {
     const font = await adapterFont();
     const initial = { font: font.face, text: 'invalid style' };

@@ -24,11 +24,12 @@ pub struct SemanticRecord {
     pub text_end: u32,
     pub item_start: u32,
     pub item_count: u32,
+    /// Lines: primary-face font ascent, without half-leading or baseline shift.
     pub inline_start: f32,
     pub block_start: f32,
     pub inline_extent: f32,
     pub block_extent: f32,
-    /// Inline advance of one item's layout box. Populated for `SEMANTIC_GLYPH`, where it is the
+    /// Lines: primary-face font descent. Other kinds: inline advance of one item's layout box. Populated for `SEMANTIC_GLYPH`, where it is the
     /// shaped advance the pen moves by, which is neither the ink width nor the font size.
     pub inline_advance: f32,
     /// Ink box in the same positioned space as `inline_start`/`block_start`, in the block-axis
@@ -52,10 +53,13 @@ pub struct SemanticRecord {
     /// descent is `block_extent - ascent` exactly, and the box top is `block_start - ascent`.
     pub ascent: f32,
     /// Paragraph-measurement summaries only: the largest unbreakable run under the
-    /// constraint's wrap codec. Line, glyph, and other records carry zero.
+    /// constraint's wrap codec. Lines carry primary-face cap height; other records carry zero.
     pub min_content_width: f32,
-    /// Paragraph-measurement summaries only: the widest hard-break-free run.
+    /// Paragraph summaries: widest hard-break-free run. Lines: primary-face x-height.
     pub max_content_width: f32,
+    /// Lines: top of the primary-face cap/x-height envelope including baseline shifts.
+    pub cap_height_top: f32,
+    pub x_height_top: f32,
 }
 
-const _: () = assert!(core::mem::size_of::<SemanticRecord>() == 76);
+const _: () = assert!(core::mem::size_of::<SemanticRecord>() == 84);

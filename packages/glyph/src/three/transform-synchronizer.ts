@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import type { LayoutPoint } from '../layout.js';
 
 import { visibleBelowRoot } from './internal/scene-tree.js';
 
@@ -8,6 +9,7 @@ export interface ThreeTransformState {
   readonly directDrawsByTransform: ReadonlyMap<number, readonly THREE.Mesh[]>;
   readonly transforms: ReadonlyMap<number, THREE.Object3D>;
   readonly transformAttribute: THREE.StorageInstancedBufferAttribute;
+  readonly anchorOffset?: (object: THREE.Object3D) => LayoutPoint | undefined;
   readonly visibleObject?: (object: THREE.Object3D) => boolean;
 }
 
@@ -15,6 +17,7 @@ export interface ThreeTransformState {
 export class ThreeTransformSynchronizer {
   readonly #rootInverse = new THREE.Matrix4();
   readonly #relativeTransform = new THREE.Matrix4();
+  readonly #anchorTranslation = new THREE.Matrix4();
 
   sync(state: ThreeTransformState, transformIds: Iterable<number>, worldMatricesCurrent: boolean): number {
     const target = state.transformAttribute.array as Float32Array;
@@ -36,6 +39,10 @@ export class ThreeTransformSynchronizer {
       if (!worldMatricesCurrent) object.updateWorldMatrix(true, false, true);
       if (object === state.renderObject) this.#relativeTransform.identity();
       else this.#relativeTransform.multiplyMatrices(this.#rootInverse, object.matrixWorld);
+      const anchor = state.anchorOffset?.(object);
+      if (anchor !== undefined && (anchor.x !== 0 || anchor.y !== 0)) {
+        this.#relativeTransform.multiply(this.#anchorTranslation.makeTranslation(anchor.x, -anchor.y, 0));
+      }
       const visible = state.visibleObject?.(object) ?? visibleBelowRoot(object, state.renderObject);
       let transformChanged = false;
       if (indexed) {

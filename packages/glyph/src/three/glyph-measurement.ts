@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 
 import type { PortableGeometryPayload } from '../config/resources.js';
 import type { GlyphKey, GlyphPlacement, GlyphPlacements } from '../glyph-placement.js';
-import type { LayoutBox } from '../layout.js';
+import type { LayoutBox, LayoutPoint } from '../layout.js';
 
 export type GlyphAnchorAxis = 'min' | 'center' | 'max';
 
@@ -45,9 +45,10 @@ export interface ThreeGlyphMeasurement {
 export function measureGlyphPlacements(
   placements: GlyphPlacements,
   geometryByIndex: ReadonlyMap<number, ThreeGlyphGeometrySource> = new Map(),
+  offset: LayoutPoint = { x: 0, y: 0 },
 ): readonly ThreeGlyphMeasurement[] {
   const measurements = placements.glyphs.map((placement) =>
-    measureGlyph(placement, geometryByIndex.get(placement.index)),
+    measureGlyph(placement, geometryByIndex.get(placement.index), offset),
   );
   return Object.freeze(measurements);
 }
@@ -100,12 +101,14 @@ export function createSuppliedGlyphGeometrySource(
 function measureGlyph(
   placement: GlyphPlacement,
   suppliedGeometry: ThreeGlyphGeometrySource | undefined,
+  offset: LayoutPoint,
 ): ThreeGlyphMeasurement {
-  const localInkBounds = paragraphBox(placement.ink);
-  const localAdvanceBounds = paragraphBox(placement.bounds);
+  const translation = new THREE.Vector3(offset.x, -offset.y, 0);
+  const localInkBounds = paragraphBox(placement.ink).translate(translation);
+  const localAdvanceBounds = paragraphBox(placement.bounds).translate(translation);
   const localQuad = quadFromBox(localInkBounds);
-  const shapedOrigin = new THREE.Vector3(placement.shapedX, -placement.shapedY, 0);
-  const drawnOrigin = new THREE.Vector3(placement.x, -placement.y, 0);
+  const shapedOrigin = new THREE.Vector3(placement.shapedX + offset.x, -(placement.shapedY + offset.y), 0);
+  const drawnOrigin = new THREE.Vector3(placement.x + offset.x, -(placement.y + offset.y), 0);
   const originalMatrix = new THREE.Matrix4().makeTranslation(drawnOrigin.x, drawnOrigin.y, drawnOrigin.z);
   const anchorInkBounds = localInkBounds.clone();
   const anchorAdvanceBounds = localAdvanceBounds.clone();

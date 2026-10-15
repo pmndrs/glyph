@@ -66,13 +66,22 @@ export interface TypeGpuText<Selection extends TypeGpuFontSelection = TypeGpuFon
   dispose(): void;
 }
 
+/** @internal Private host publication hooks; the application sees only text. */
+export interface TypeGpuTextPublication<Selection extends TypeGpuFontSelection = TypeGpuFontSelection> {
+  readonly text: TypeGpuText<Selection>;
+  prepare(): void;
+  accepted(): void;
+  rejected(): void;
+}
+
+/** @internal Construct a private publication owner; the public root exposes only its text. */
 export function createText<Selection extends TypeGpuFontSelection>(
   fonts: GlyphHandleFonts,
   services: GlyphRootServices<Bindings, void, void>,
   transform: TypeGpuTransform,
   options: TypeGpuTextOptions<Selection>,
   onDispose: () => void,
-): TypeGpuText<Selection> {
+): TypeGpuTextPublication<Selection> {
   if (options.style?.decoration !== undefined) throw new TypeError('TypeGPU text decoration lines are not supported');
   const { position: _initialPosition, ...initialSemanticState } = options;
   let state: TypeGpuSemanticTextOptions<Selection> = initialSemanticState;
@@ -81,8 +90,17 @@ export function createText<Selection extends TypeGpuFontSelection>(
   let positionY = options.position?.[1] ?? 0;
   const positionValue: [number, number] = [positionX, positionY];
   let font = fonts.acquire(options.font);
+  let anchorX = 0;
+  let anchorY = 0;
+  let pendingAnchorX = 0;
+  let pendingAnchorY = 0;
+  let hasAuthoredAnchor = options.constraints?.anchor !== undefined;
+  let semanticRevision = 0;
+  let pendingSemantic = true;
+  let prepared: { revision: number; x: number; y: number } | undefined;
   let controller: GlyphTextController<FontFaceRasterOf<Selection>, object, TypeGpuTransform>;
   let disposed = false;
+  let acquiredController: typeof controller | undefined;
   const coreState = (next: TypeGpuSemanticTextOptions<Selection>, selected: Font<FontFaceRasterOf<Selection>>) => ({
     font: selected,
     text: next.text,
@@ -95,14 +113,27 @@ export function createText<Selection extends TypeGpuFontSelection>(
   try {
     writePosition(transform, positionValue, positionX, positionY);
     controller = services.createText(coreState(state, font));
+    acquiredController = controller;
+    if (state.constraints?.anchor !== undefined) {
+      const offset = controller.measure().anchorOffset;
+      anchorX = offset.x;
+      anchorY = offset.y;
+      pendingAnchorX = anchorX;
+      pendingAnchorY = anchorY;
+      writePosition(transform, positionValue, positionX + anchorX, positionY + anchorY);
+    }
   } catch (error) {
-    font.dispose();
+    try {
+      acquiredController?.dispose();
+    } finally {
+      font.dispose();
+    }
     throw error;
   }
   function assertActive(): void {
     if (disposed) throw new Error('TypeGPU text is disposed');
   }
-  return {
+  const text: TypeGpuText<Selection> = {
     get disposed() {
       return disposed;
     },
@@ -114,7 +145,7 @@ export function createText<Selection extends TypeGpuFontSelection>(
       const nextPositionY = updatesPosition ? (update.position?.[1] ?? 0) : positionY;
       if (!hasSemanticUpdate(update)) {
         if (nextPositionX !== positionX || nextPositionY !== positionY) {
-          writePosition(transform, positionValue, nextPositionX, nextPositionY);
+          writePosition(transform, positionValue, nextPositionX + anchorX, nextPositionY + anchorY);
           positionX = nextPositionX;
           positionY = nextPositionY;
         }
@@ -123,21 +154,44 @@ export function createText<Selection extends TypeGpuFontSelection>(
       const { position: _position, ...semanticUpdate } = update;
       const next = { ...state, ...semanticUpdate };
       if (next.style?.decoration !== undefined) throw new TypeError('TypeGPU text decoration lines are not supported');
+      const anchorsPresent = next.constraints?.anchor !== undefined || hasAuthoredAnchor;
+      const previousMeasurement = anchorsPresent ? controller.measure() : undefined;
       const nextFont = next.font === state.font ? font : fonts.acquire(next.font);
+      let nextMeasurement: ParagraphLayoutSummary | undefined;
       try {
         controller.update(coreState(next, nextFont));
+        nextMeasurement = anchorsPresent ? controller.measure() : undefined;
       } catch (error) {
         if (nextFont !== font) nextFont.dispose();
         throw error;
       }
-      if (nextPositionX !== positionX || nextPositionY !== positionY) {
-        writePosition(transform, positionValue, nextPositionX, nextPositionY);
-        positionX = nextPositionX;
-        positionY = nextPositionY;
+      const nextOffset = nextMeasurement?.anchorOffset ?? { x: 0, y: 0 };
+      // The controller owns cache invalidation. Reused lines prove that only placement changed,
+      // including when a caller supplies new objects or mutates an earlier authored object.
+      const placementOnly =
+        !pendingSemantic &&
+        previousMeasurement !== undefined &&
+        nextMeasurement !== undefined &&
+        previousMeasurement.lines === nextMeasurement.lines &&
+        previousMeasurement.width === nextMeasurement.width &&
+        previousMeasurement.height === nextMeasurement.height;
+      semanticRevision += 1;
+      pendingAnchorX = nextOffset.x;
+      pendingAnchorY = nextOffset.y;
+      pendingSemantic = !placementOnly;
+      if (placementOnly) {
+        anchorX = pendingAnchorX;
+        anchorY = pendingAnchorY;
       }
+      if (nextPositionX !== positionX || nextPositionY !== positionY || placementOnly) {
+        writePosition(transform, positionValue, nextPositionX + anchorX, nextPositionY + anchorY);
+      }
+      positionX = nextPositionX;
+      positionY = nextPositionY;
       if (nextFont !== font) font.dispose();
       font = nextFont;
       state = next;
+      hasAuthoredAnchor = next.constraints?.anchor !== undefined;
     },
     measure() {
       assertActive();
@@ -161,6 +215,26 @@ export function createText<Selection extends TypeGpuFontSelection>(
         // Accepted draws may still reference this transform until the next shape().
         onDispose();
       }
+    },
+  };
+  return {
+    text,
+    prepare() {
+      prepared = pendingSemantic ? { revision: semanticRevision, x: pendingAnchorX, y: pendingAnchorY } : undefined;
+    },
+    accepted() {
+      const accepted = prepared;
+      prepared = undefined;
+      if (disposed || accepted === undefined) return;
+      if (anchorX !== accepted.x || anchorY !== accepted.y) {
+        anchorX = accepted.x;
+        anchorY = accepted.y;
+        writePosition(transform, positionValue, positionX + anchorX, positionY + anchorY);
+      }
+      if (semanticRevision === accepted.revision) pendingSemantic = false;
+    },
+    rejected() {
+      prepared = undefined;
     },
   };
 }

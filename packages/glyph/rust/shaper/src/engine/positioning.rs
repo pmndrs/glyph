@@ -4271,6 +4271,7 @@ mod tests {
             .collect();
         FlowLayoutArena {
             lines: vec![FlowLine {
+                typography: Default::default(),
                 flow_thread_id: 1,
                 region_id: 1,
                 transform_index: 0,
@@ -4640,6 +4641,8 @@ mod tests {
                 units_per_em: 1_000,
                 ascender: 800,
                 cap_height: 700,
+                x_height: 500,
+                height_fallbacks: 0,
                 descender: -200,
                 line_gap: 0,
                 underline_position: -100,
@@ -4723,6 +4726,7 @@ mod tests {
             .copied()
             .sum();
         let mut line = FlowLine {
+            typography: Default::default(),
             flow_thread_id: 1,
             region_id: 2,
             transform_index: 3,
@@ -4898,6 +4902,7 @@ mod tests {
         runs[1].bidi_level = 1;
         let cluster_end = clusters.starts.len();
         let line = FlowLine {
+            typography: Default::default(),
             flow_thread_id: 1,
             region_id: 2,
             transform_index: 3,
@@ -4983,6 +4988,7 @@ mod tests {
 
         fn pen_with(paragraph_level: u8, hung_advance: f64, hung_leads: bool) -> f64 {
             let line = FlowLine {
+                typography: Default::default(),
                 flow_thread_id: 1,
                 region_id: 1,
                 transform_index: 0,
@@ -5493,6 +5499,7 @@ mod tests {
             ..ClusterArena::default()
         };
         let line = FlowLine {
+            typography: Default::default(),
             flow_thread_id: 1,
             region_id: 1,
             transform_index: 1,
@@ -5676,6 +5683,7 @@ mod tests {
         };
         let flow = FlowLayoutArena {
             lines: vec![FlowLine {
+                typography: Default::default(),
                 flow_thread_id: 7,
                 region_id: 9,
                 transform_index: 9,
@@ -5713,6 +5721,8 @@ mod tests {
                 units_per_em: 1_000,
                 ascender: 800,
                 cap_height: 700,
+                x_height: 500,
+                height_fallbacks: 0,
                 descender: -200,
                 line_gap: 0,
                 underline_position: -100,
@@ -5827,6 +5837,7 @@ mod tests {
         };
         let flow = FlowLayoutArena {
             lines: vec![FlowLine {
+                typography: Default::default(),
                 flow_thread_id: 7,
                 region_id: 9,
                 transform_index: 9,
@@ -5864,6 +5875,8 @@ mod tests {
                 units_per_em: 1_000,
                 ascender: 800,
                 cap_height: 700,
+                x_height: 500,
+                height_fallbacks: 0,
                 descender: -200,
                 line_gap: 0,
                 underline_position: -100,
@@ -6091,6 +6104,7 @@ mod tests {
         };
         let lines = [
             FlowLine {
+                typography: Default::default(),
                 flow_thread_id: 7,
                 region_id: 9,
                 transform_index: 9,
@@ -6103,6 +6117,7 @@ mod tests {
                 height: 10.0,
             },
             FlowLine {
+                typography: Default::default(),
                 flow_thread_id: 7,
                 region_id: 9,
                 transform_index: 9,
@@ -6164,6 +6179,8 @@ mod tests {
                 units_per_em: 1_000,
                 ascender: 800,
                 cap_height: 700,
+                x_height: 500,
+                height_fallbacks: 0,
                 descender: -200,
                 line_gap: 0,
                 underline_position: -100,
@@ -6375,6 +6392,7 @@ mod tests {
         };
         let mut flow = FlowLayoutArena {
             lines: vec![FlowLine {
+                typography: Default::default(),
                 flow_thread_id: 7,
                 region_id: 9,
                 transform_index: 9,
@@ -6412,6 +6430,8 @@ mod tests {
                 units_per_em: 1_000,
                 ascender: 800,
                 cap_height: 700,
+                x_height: 500,
+                height_fallbacks: 0,
                 descender: -200,
                 line_gap: 0,
                 underline_position: -100,

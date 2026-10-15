@@ -1,6 +1,23 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { LayoutBox, GlyphLayoutColumns, ParagraphLayoutSummary, ParagraphLineMetrics } from '../layout.js';
+import type {
+  LayoutBox,
+  GlyphLayoutColumns,
+  ParagraphLayoutSummary,
+  ParagraphLineMetrics,
+  LineFontMetrics,
+} from '../layout.js';
 import type { PlanPublication } from './handle-state.js';
+
+const zeroFontMetrics: LineFontMetrics = Object.freeze({
+  ascent: 0,
+  descent: 0,
+  leading: 0,
+  capHeight: 0,
+  xHeight: 0,
+  capHeightSource: 'fallback',
+  xHeightSource: 'fallback',
+});
+const zeroAnchorOffset = Object.freeze({ x: 0, y: 0 });
 
 /** Reads the ink box off one semantic record, or reports its absence via a flag bit — not a sentinel extent, since a zero-extent ink box (a paragraph of spaces) is a legitimate answer. */
 function inkBoundsOf(view: SemanticViewReader, record: number, measured: boolean): LayoutBox | undefined {
@@ -47,6 +64,18 @@ export function readPlannerMeasurements(publication: PlanPublication): ReadonlyM
       // The engine reports the line box's ascent; its descent is the remainder of the box, so the
       // two are derived from one number instead of two that could disagree.
       const ascent = view.f32(line + recordLayout.ascent);
+      const fontAscent = view.f32(line + recordLayout.fontAscent);
+      const fontDescent = view.f32(line + recordLayout.fontDescent);
+      const heightFallbacks = view.u16(line + recordLayout.flags);
+      const fontMetrics: LineFontMetrics = Object.freeze({
+        ascent: fontAscent,
+        descent: fontDescent,
+        leading: lineHeight - fontAscent - fontDescent,
+        capHeight: view.f32(line + recordLayout.capHeight),
+        xHeight: view.f32(line + recordLayout.xHeight),
+        capHeightSource: (heightFallbacks & 1) === 0 ? 'font' : 'fallback',
+        xHeightSource: (heightFallbacks & 2) === 0 ? 'font' : 'fallback',
+      });
       // A measurement-only query leaves the line's glyph span zeroed; it is only meaningful
       // alongside the per-glyph columns, which the measure reader validates before publishing.
       const lineGlyphStart = view.u32(line + recordLayout.itemStart);
@@ -58,6 +87,11 @@ export function readPlannerMeasurements(publication: PlanPublication): ReadonlyM
           glyphStart: lineGlyphStart === 0 ? 0 : lineGlyphStart - glyphStart,
           glyphCount: view.u32(line + recordLayout.itemCount),
           baseline,
+          alphabeticBaseline: baseline,
+          ideographicBaseline: baseline - ascent + lineHeight,
+          capHeightTop: view.f32(line + recordLayout.capHeightTop),
+          xHeightTop: view.f32(line + recordLayout.xHeightTop),
+          fontMetrics,
           advance: view.f32(line + recordLayout.inlineExtent),
           ascent,
           descent: lineHeight - ascent,
@@ -78,6 +112,12 @@ export function readPlannerMeasurements(publication: PlanPublication): ReadonlyM
         contentHeight,
         firstBaseline,
         lastBaseline,
+        alphabeticBaseline: lines[0]?.alphabeticBaseline ?? 0,
+        ideographicBaseline: lines[0]?.ideographicBaseline ?? 0,
+        capHeightTop: lines[0]?.capHeightTop ?? 0,
+        xHeightTop: lines[0]?.xHeightTop ?? 0,
+        fontMetrics: lines[0]?.fontMetrics ?? zeroFontMetrics,
+        anchorOffset: zeroAnchorOffset,
         // Whole-paragraph BaselineMetrics use the first baseline as their one reference.
         ascent,
         descent: contentHeight - ascent,
@@ -105,6 +145,12 @@ export function measurementFromLayoutInspection(layout: GlyphLayoutColumns): Par
     contentHeight: layout.contentHeight,
     firstBaseline: layout.firstBaseline,
     lastBaseline: layout.lastBaseline,
+    alphabeticBaseline: layout.alphabeticBaseline,
+    ideographicBaseline: layout.ideographicBaseline,
+    capHeightTop: layout.capHeightTop,
+    xHeightTop: layout.xHeightTop,
+    fontMetrics: layout.fontMetrics,
+    anchorOffset: layout.anchorOffset,
     ascent: layout.ascent,
     descent: layout.descent,
     lineHeight: layout.lineHeight,

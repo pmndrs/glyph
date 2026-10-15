@@ -1843,6 +1843,8 @@ field_offset!(
     ink_inline_extent
 );
 field_offset!(SEMANTIC_INK_BLOCK_EXTENT, SemanticRecord, ink_block_extent);
+field_offset!(SEMANTIC_CAP_HEIGHT_TOP, SemanticRecord, cap_height_top);
+field_offset!(SEMANTIC_X_HEIGHT_TOP, SemanticRecord, x_height_top);
 field_offset!(SEMANTIC_ASCENT, SemanticRecord, ascent);
 field_offset!(
     SEMANTIC_MIN_CONTENT_WIDTH,
@@ -2462,7 +2464,13 @@ pub fn json() -> String {
                 "inkBlockExtent": SEMANTIC_INK_BLOCK_EXTENT,
                 "ascent": SEMANTIC_ASCENT,
                 "minContentWidth": SEMANTIC_MIN_CONTENT_WIDTH,
-                "maxContentWidth": SEMANTIC_MAX_CONTENT_WIDTH
+                "maxContentWidth": SEMANTIC_MAX_CONTENT_WIDTH,
+                "fontAscent": SEMANTIC_INLINE_START,
+                "fontDescent": SEMANTIC_INLINE_ADVANCE,
+                "capHeight": SEMANTIC_MIN_CONTENT_WIDTH,
+                "xHeight": SEMANTIC_MAX_CONTENT_WIDTH,
+                "capHeightTop": SEMANTIC_CAP_HEIGHT_TOP,
+                "xHeightTop": SEMANTIC_X_HEIGHT_TOP
             },
             "borrowedLayoutDescriptor": {
                 "size": BORROWED_LAYOUT_DESCRIPTOR_SIZE,

@@ -504,3 +504,83 @@ test('TypeGPU application and shader entrypoints have separate dependency bounda
     false,
   );
 });
+
+test('TypeGPU anchors translate the host origin while preserving paragraph metrics and idle publication', async () => {
+  const host = recordingHost();
+  const handle = glyph.handle('typegpu:anchors', host.config);
+  const font = glyph.fontFace(new Blob([fontBytes]), { format: msdf });
+  try {
+    await font.load();
+    const text = handle.createText({
+      font,
+      text: 'Anchored',
+      position: [100, 80],
+      constraints: { anchor: { x: 'center', y: 'first-baseline' } },
+    });
+    const measured = text.measure();
+    glyph.shape();
+    handle.draw({}, { width: 640, height: 240 });
+    assert.deepEqual(host.recorded.splice(0)[0].position, [
+      100 + measured.anchorOffset.x,
+      80 + measured.anchorOffset.y,
+    ]);
+    const publications = host.stats.publications;
+    text.update({ constraints: { anchor: { x: 'right', y: 'bottom' } } });
+    const next = text.measure();
+    assert.equal(next.width, measured.width);
+    assert.equal(next.height, measured.height);
+    glyph.shape();
+    handle.draw({}, { width: 640, height: 240 });
+    assert.deepEqual(host.recorded.splice(0)[0].position, [100 - next.width, 80 - next.height]);
+    assert.equal(host.stats.publications, publications, 'placement-only anchor changes leave engine publication idle');
+    text.update({ position: [120, 90] });
+    handle.draw({}, { width: 640, height: 240 });
+    assert.deepEqual(host.recorded.splice(0)[0].position, [120 - next.width, 90 - next.height]);
+    text.update({ constraints: {} });
+    handle.draw({}, { width: 640, height: 240 });
+    assert.deepEqual(host.recorded.splice(0)[0].position, [120, 90]);
+    text.dispose();
+  } finally {
+    handle.dispose();
+    font.dispose();
+  }
+  assert.equal(host.allocations.size, 0);
+});
+
+test('TypeGPU holds the accepted anchor across pending and rejected semantic updates', async () => {
+  const host = recordingHost();
+  const handle = glyph.handle('typegpu:anchor-rejection', host.config);
+  const font = glyph.fontFace(new Blob([fontBytes]), { format: msdf });
+  const snapshot = () => {
+    handle.draw({}, { width: 640, height: 240 });
+    return host.recorded.splice(0);
+  };
+  try {
+    await font.load();
+    const text = handle.createText({
+      font,
+      text: 'Accepted',
+      position: [100, 80],
+      constraints: { anchor: { x: 'center', y: 'first-baseline' } },
+    });
+    glyph.shape();
+    const accepted = snapshot();
+    assert.ok(accepted.length > 0);
+    text.update({ text: 'Much longer pending text', constraints: { anchor: { x: 'right', y: 'bottom' } } });
+    const desired = text.measure();
+    assert.notDeepEqual([100 + desired.anchorOffset.x, 80 + desired.anchorOffset.y], accepted[0].position);
+    assert.deepEqual(snapshot(), accepted, 'pending measure must not move accepted glyphs');
+    host.stats.reject = true;
+    assert.throws(() => glyph.shape(), /Injected renderer rejection/);
+    assert.deepEqual(snapshot(), accepted, 'rejected semantic+anchor update retains accepted placement');
+    host.stats.reject = false;
+    text.update({ text: 'Much longer pending text' }); // Explicit invalidation retries the rejected publication.
+    glyph.shape();
+    assert.deepEqual(snapshot()[0].position, [100 + desired.anchorOffset.x, 80 + desired.anchorOffset.y]);
+    text.dispose();
+  } finally {
+    handle.dispose();
+    font.dispose();
+  }
+  assert.equal(host.allocations.size, 0);
+});
