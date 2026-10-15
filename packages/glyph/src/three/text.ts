@@ -1176,8 +1176,11 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   #setBoundingBox(measurement: ParagraphLayoutSummary): void {
     const bounds = measurement.inkBounds;
     if (bounds === undefined) {
-      this.#boundingBox.makeEmpty();
-      this.#boundingBoxCurrent = true;
+      // Layout-only queries leave ink unknown; only zero glyphs prove an empty box.
+      if (measurement.glyphCount === 0) {
+        this.#boundingBox.makeEmpty();
+        this.#boundingBoxCurrent = true;
+      }
       return;
     }
     const offset = measurement.anchorOffset;

@@ -330,6 +330,10 @@ to draw. Caret and selection lookup also query desired layout; pending or reject
 query into the previously accepted layout. Renderer-derived glyph origins are used only when that desired revision is
 committed; otherwise placement falls back to desired layout origins.
 
+`computeBoundingBox()` requests positioned aggregate ink when it is unknown; a preceding allocation-light `measure()`
+does not cache an empty box for visible text. Repeated bounds reads reuse known ink for the same desired revision.
+Zero glyphs cache an empty Three box, and positioned whitespace can have a finite zero-height extent.
+
 The complete field semantics are defined by the [core layout-query reference](core-api.md#layout-query-values).
 
 Box references belong to constraints, independently of line alignment:

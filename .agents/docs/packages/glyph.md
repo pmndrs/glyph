@@ -424,7 +424,9 @@ second renderer/runtime object to applications.
 `BufferGeometry` marker so `Box3.setFromObject()` visits those bounds in ordinary and precise modes. The marker has no
 vertex payload, child, draw, per-Text allocation, serialization, or raycast behavior. Before the first rendered frame,
 Box3 requests one positioned measurement containing only the paragraph summary and lines; later traversal reuses the
-revision-aware measurement cache. Drei Center/Bounds can therefore consume transformed paragraph boxes without coupling
+revision-aware measurement cache. An aggregate layout query with unknown ink does not mark the Three bounds cache
+current or clear known same-revision ink. Zero glyphs prove a valid empty box; positioned spaces retain a finite
+zero-height extent. Drei Center/Bounds can therefore consume transformed paragraph boxes without coupling
 authored objects to renderer-owned batch meshes or copying the per-glyph columns.
 
 The unbundled source graph follows the same boundary. `/three/raster-program` exposes the custom-raster
