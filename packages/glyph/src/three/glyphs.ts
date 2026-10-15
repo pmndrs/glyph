@@ -17,7 +17,7 @@ interface DetachedTextSource extends THREE.Object3D {
   readonly pixelSnapping: boolean;
 }
 
-/** Converts an instance matrix from world into one `Glyphs` object's local space using a precomputed inverse (no allocation/recompute); `target` may alias `matrixWorld`. */
+/** Converts a world instance matrix to Glyphs-local Three coordinates (+X right, +Y up, anchor included) using a supplied owner-world inverse. `target` may alias the input. */
 export function worldToLocalMatrix(
   glyphsMatrixWorldInverse: THREE.Matrix4,
   matrixWorld: THREE.Matrix4,
@@ -27,7 +27,7 @@ export function worldToLocalMatrix(
   return target.copy(glyphsMatrixWorldInverse).multiply(matrixWorld);
 }
 
-/** Converts an instance matrix from `Glyphs`-local space into world space using the owner's current `matrixWorld`; `target` may alias `matrixLocal`. */
+/** Converts an anchored Glyphs-local Three matrix (+X right, +Y up) to world coordinates through the owner and ancestors. `target` may alias the input. */
 export function localToWorldMatrix(
   glyphsMatrixWorld: THREE.Matrix4,
   matrixLocal: THREE.Matrix4,
@@ -91,7 +91,8 @@ interface DetachedGlyphStorage {
  * A detached render-plan branch from `Text.split()`: imports the planner's compacted publication into the normal renderer without child Text objects; per-glyph matrices are Three-side only and never reach the live paragraph.
  *
  * Only glyphs with render records are included. Per-glyph data and matrices share a dense drawable index;
- * the mapping back to the source layout stays private.
+ * the mapping back to the source layout stays private. The root keeps the source's local transform/pivot;
+ * Glyphs-local coordinates (+X right, +Y up) include the captured anchor once in the content.
  */
 export class Glyphs extends THREE.Object3D {
   readonly #target: ThreeCommandBufferRenderer;
@@ -101,9 +102,9 @@ export class Glyphs extends THREE.Object3D {
   readonly #sourceIndices: Uint32Array;
   readonly #glyphs: readonly DetachedGlyph[];
   readonly #measurements: readonly ThreeGlyphMeasurement[];
-  /** Public matrices, 16 per glyph, keep the user-facing pivot-relative contract. */
+  /** Current glyph-pen-to-Glyphs-local matrices, captured anchor included; 16 scalars per glyph. */
   readonly #matrices: Float32Array;
-  /** Each glyph's drawn pen origin, 2 per glyph. */
+  /** Raw drawn pen origin in native Three axes, before anchoring; 2 scalars per glyph. */
   readonly #pivots: Float32Array;
   /** Physical record of each glyph in its storage, or -1 when the glyph draws nothing. */
   readonly #records: Int32Array;
@@ -129,7 +130,7 @@ export class Glyphs extends THREE.Object3D {
     let target: ThreeCommandBufferRenderer | undefined;
     let copy: GlyphCopy<void> | undefined;
     try {
-      copyCurrentLocalTransform(options.source, this, options.anchorOffset);
+      copyCurrentLocalTransform(options.source, this);
       // A Glyphs object may receive world-space instance writes in the first useFrame after it is
       // attached, before the renderer has traversed the scene once.
       this.matrixWorldNeedsUpdate = true;
@@ -205,7 +206,7 @@ export class Glyphs extends THREE.Object3D {
         const geometry = geometryByStableId.get(layout.glyphStableIds[placement.index]!);
         if (geometry !== undefined) geometryByIndex.set(placement.index, geometry);
       }
-      const measurements = measureGlyphPlacements(copiedPlacements, geometryByIndex);
+      const measurements = measureGlyphPlacements(copiedPlacements, geometryByIndex, options.anchorOffset);
       this.#measurements = Object.freeze(
         placements.map((placement, index) => Object.freeze({ ...measurements[placement.index]!, index })),
       );
@@ -229,7 +230,7 @@ export class Glyphs extends THREE.Object3D {
         this.#records[index] = address.index;
         this.#recordStorages[index] = storage;
       }
-      this.#initializeTransforms(placements);
+      this.#initializeTransforms(placements, options.anchorOffset);
       // Command-buffer realization visits the root before it is attached and consumes the initial dirty flag.
       // Re-dirty it so the first scene traversal composes this exact local matrix with its real parent.
       this.matrixWorldNeedsUpdate = true;
@@ -249,7 +250,7 @@ export class Glyphs extends THREE.Object3D {
     return this.#glyphs.length;
   }
 
-  /** One measurement per glyph, at the glyph's index. */
+  /** Original Glyphs-local measurements (+X right, +Y up), with the captured anchor included. Use matrix accessors for current instance transforms. */
   get measurements(): readonly ThreeGlyphMeasurement[] {
     return this.#measurements;
   }
@@ -260,14 +261,14 @@ export class Glyphs extends THREE.Object3D {
     return this.#target.materials;
   }
 
-  /** Reads drawable glyph `index`'s matrix; its rest value translates to the glyph's pen origin. */
+  /** Reads the current instance matrix in Glyphs-local space (+X right, +Y up). Its rest pen origin includes the captured anchor. */
   getMatrixAt(index: number, target: THREE.Matrix4): void {
     this.#assertActive();
     this.#assertIndex(index);
     target.fromArray(this.#matrices, index * 16);
   }
 
-  /** Writes drawable glyph `index`'s matrix. */
+  /** Writes an instance matrix in Glyphs-local space (+X right, +Y up); supply the complete anchored-local transform. */
   setMatrixAt(index: number, matrix: THREE.Matrix4): void {
     this.#assertActive();
     this.#assertIndex(index);
@@ -282,7 +283,7 @@ export class Glyphs extends THREE.Object3D {
     markStorageAttributeUpdated(storage.transforms, offset, 16);
   }
 
-  /** Writes a world-space transform; this per-call convenience updates the ancestor chain and inverts `matrixWorld` each time — bulk callers should do that once and call `setMatrixAt()` per glyph. */
+  /** Writes a world-space instance matrix after the owner and ancestors. Updates/inverts `matrixWorld` per call; bulk callers should convert once and use `setMatrixAt()`. */
   setWorldMatrixAt(index: number, matrixWorld: THREE.Matrix4): void {
     this.#assertActive();
     this.updateWorldMatrix(true, false, true);
@@ -291,7 +292,7 @@ export class Glyphs extends THREE.Object3D {
     this.setMatrixAt(index, this.#worldLocal);
   }
 
-  /** Reads a full affine instance transform expressed in world space. */
+  /** Reads the current world-space instance matrix, including the captured anchor, owner transform and ancestors. */
   getWorldMatrixAt(index: number, target: THREE.Matrix4): void {
     this.#assertActive();
     this.updateWorldMatrix(true, false, true);
@@ -342,16 +343,21 @@ export class Glyphs extends THREE.Object3D {
     if (failure !== undefined) throw failure;
   }
 
-  #initializeTransforms(placements: readonly GlyphPlacement[]): void {
+  #initializeTransforms(placements: readonly GlyphPlacement[], anchor: LayoutPoint): void {
+    const offsetX = anchor.x;
+    const offsetY = anchor.y === 0 ? 0 : -anchor.y;
     for (const [index, placement] of placements.entries()) {
       const x = placement.x;
       const y = -placement.y;
+      // GPU records retain raw pen coordinates; public matrices include the captured anchor.
       this.#pivots.set([x, y], index * 2);
-      this.#composed.makeTranslation(x, y, 0);
+      this.#composed.makeTranslation(x + offsetX, y + offsetY, 0);
       this.#composed.toArray(this.#matrices, index * 16);
       const storage = this.#recordStorages[index];
       if (storage === undefined) continue;
-      this.#composed.identity().toArray(storage.transforms.array as Float32Array, this.#records[index]! * 16);
+      this.#composed
+        .makeTranslation(offsetX, offsetY, 0)
+        .toArray(storage.transforms.array as Float32Array, this.#records[index]! * 16);
     }
     for (const storage of this.#storages.values()) {
       storage.transforms.needsUpdate = true;

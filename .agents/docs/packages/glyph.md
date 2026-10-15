@@ -424,7 +424,9 @@ second renderer/runtime object to applications.
 `BufferGeometry` marker so `Box3.setFromObject()` visits those bounds in ordinary and precise modes. The marker has no
 vertex payload, child, draw, per-Text allocation, serialization, or raycast behavior. Before the first rendered frame,
 Box3 requests one positioned measurement containing only the paragraph summary and lines; later traversal reuses the
-revision-aware measurement cache. Drei Center/Bounds can therefore consume transformed paragraph boxes without coupling
+revision-aware measurement cache. An aggregate layout query with unknown ink does not mark the Three bounds cache
+current or clear known same-revision ink. Zero glyphs prove a valid empty box; positioned spaces retain a finite
+zero-height extent. Drei Center/Bounds can therefore consume transformed paragraph boxes without coupling
 authored objects to renderer-owned batch meshes or copying the per-glyph columns.
 
 The unbundled source graph follows the same boundary. `/three/raster-program` exposes the custom-raster
@@ -1035,6 +1037,13 @@ revision alone cannot authorize an anchor commit. Live host/group transforms sti
 Ordinary paragraph anchor-only changes reuse line records
 and avoid a layout engine query; explicit flow bindings retain their geometry-invalidation path, and explicit
 invalidation/retry semantics are unchanged.
+
+The [Three coordinate contract](../planning/three-api.md#measure-desired-layout-and-inspect-positioned-glyphs) separates
+raw paragraph queries from anchored Text-local queries and detached Glyphs-local snapshots. Split siblings preserve
+per-glyph world transforms and the source local transform/pivot under transformed ancestors and matching later group
+motion. Captured anchoring belongs to local content, not the copied container transform. `Glyphs.measurements` records
+original owner-local geometry, while matrix accessors report subsequent animated transforms. Desired
+queries remain distinct from accepted draws during pending/rejected publication.
 
 The semantic reader bounds its native `DataView` to the publication once, retaining native scalar bounds checks and
 whole-table range validation without repeating JavaScript range validation for every metric field. Adjacent lines with

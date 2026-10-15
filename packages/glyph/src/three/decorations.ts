@@ -76,13 +76,15 @@ export class Decorations extends THREE.Object3D {
     let target: ThreeCommandBufferRenderer | undefined;
     let copy: GlyphCopy<void> | undefined;
     try {
-      copyCurrentLocalTransform(options.source, this, options.anchorOffset);
+      copyCurrentLocalTransform(options.source, this);
+      const anchor = options.anchorOffset;
 
       const owner: ThreeRendererHost = {
         renderObject: this,
         pixelSnapping: options.source.pixelSnapping,
         renderOrderBase: options.renderOrderBase,
         objectForTransform: () => this,
+        ...(anchor.x === 0 && anchor.y === 0 ? {} : { anchorOffset: () => anchor }),
       };
       target = new ThreeCommandBufferRenderer(options.resources, owner);
       this.#target = target;

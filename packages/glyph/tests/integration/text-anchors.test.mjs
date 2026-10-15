@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
 import * as THREE from 'three/webgpu';
-import { Constraints, bitmap, createFontStack, txt, span } from '@pmndrs/glyph';
+import { Constraints, bitmap, createFontStack, glyph, txt, span } from '@pmndrs/glyph';
 import { loadFont } from '../../dist/loader.js';
 import { defineThreeConfig, defineTextMaterial } from '@pmndrs/glyph/three';
 import { PlanTransport } from '../../dist/internal/handle-state.js';
@@ -332,13 +332,157 @@ test('Three draw transforms, bounds, glyph measures, carets, selection and split
         detached.dispose();
         decorations?.dispose();
       });
-      near(detached.position.x, offset.x, 'split glyph origin x');
-      near(detached.position.y, -offset.y, 'split glyph origin y');
+      near(detached.position.x, text.position.x, 'split keeps source pivot x');
+      near(detached.position.y, text.position.y, 'split keeps source pivot y');
       if (decorations) {
-        near(decorations.position.x, offset.x, 'split decoration origin x');
-        near(decorations.position.y, -offset.y, 'split decoration origin y');
+        near(decorations.position.x, text.position.x, 'split decoration source pivot x');
+        near(decorations.position.y, text.position.y, 'split decoration source pivot y');
       }
     });
+});
+
+test('split preserves the source local frame, pivot and instance APIs through group motion', async (t) => {
+  const face = glyph.fontFace(
+    new Blob([
+      await readFile(new URL('../../../../benches/fixtures/rendering/inter-bitmap-16-32.font.glb', import.meta.url)),
+    ]),
+    { format: bitmap({ strikes: [16, 32] }) },
+  );
+  await face.load();
+  t.after(() => face.dispose());
+  const matrixNear = (actual, expected, message) => {
+    actual.elements.forEach((value, index) => near(value, expected.elements[index], `${message} matrix ${index}`));
+  };
+  for (const transformMode of ['direct', 'indexed'])
+    for (const anchor of [undefined, { x: 'center', y: 'first-baseline' }])
+      for (const motion of ['rotation', 'scale', 'combined'])
+        await t.test(`${transformMode}/${anchor === undefined ? 'default' : 'anchored'}/${motion}`, async (subtest) => {
+          const handle = await createThreeTestHandle(subtest, defineThreeConfig({ transformMode }));
+          const text = handle.createText({
+            font: face,
+            text: 'Abc',
+            style: { fontSize: 20, decoration: { underline: true } },
+            constraints: anchor === undefined ? undefined : { anchor },
+          });
+          subtest.after(() => text.dispose());
+          const scene = new THREE.Scene();
+          const parent = new THREE.Group();
+          parent.position.set(17, -9, 3);
+          parent.rotation.set(0.1, -0.2, 0.35);
+          parent.scale.set(1.6, 0.65, 1.1);
+          text.position.set(-4, 7, 2);
+          text.rotation.set(-0.15, 0.1, -0.25);
+          text.scale.set(1.2, 0.8, 0.9);
+          parent.add(text);
+          scene.add(parent);
+          scene.updateMatrixWorld(true);
+          const paragraph = text.glyphs();
+          const [detached, decorations] = text.split();
+          assert.ok(decorations);
+          subtest.after(() => {
+            detached.dispose();
+            decorations.dispose();
+          });
+          parent.add(detached, decorations);
+          scene.updateMatrixWorld(true);
+          const instance = new THREE.Matrix4();
+          const assertSwap = () => {
+            const source = text.measureGlyphs();
+            assert.equal(detached.count, source.length);
+            for (let index = 0; index < detached.count; index += 1) {
+              const expected = text.matrixWorld.clone().multiply(source[index].originalMatrix);
+              detached.getWorldMatrixAt(index, instance);
+              matrixNear(instance, expected, `glyph ${index} world`);
+              detached.getMatrixAt(index, instance);
+              matrixNear(instance, source[index].originalMatrix, `glyph ${index} owner-local`);
+              matrixNear(
+                detached.measurements[index].originalMatrix,
+                source[index].originalMatrix,
+                'original snapshot',
+              );
+            }
+            matrixNear(detached.matrix, text.matrix, 'Glyphs source transform/pivot');
+            matrixNear(decorations.matrix, text.matrix, 'Decorations source transform/pivot');
+            const offset = paragraph.anchorOffset;
+            const expectedContent = new THREE.Matrix4().makeTranslation(offset.x, offset.y === 0 ? 0 : -offset.y, 0);
+            for (const draw of draws(decorations)) {
+              if (transformMode === 'direct') matrixNear(draw.matrix, expectedContent, 'decoration content anchor');
+              else {
+                const table = draw.geometry.getAttribute('_pmndrsGlyphTransforms').array;
+                assert.ok(
+                  Array.from({ length: table.length / 16 }, (_, i) => i).some((i) =>
+                    expectedContent.elements.every((value, j) => Math.abs(table[i * 16 + j] - value) < 0.0001),
+                  ),
+                );
+              }
+            }
+          };
+          assertSwap();
+          const initialGpuTransform = new THREE.Matrix4().makeTranslation(
+            paragraph.anchorOffset.x,
+            paragraph.anchorOffset.y === 0 ? 0 : -paragraph.anchorOffset.y,
+            0,
+          );
+          for (const draw of draws(detached)) {
+            const table = draw.geometry.getAttribute('_pmndrsGlyphInstanceTransforms').array;
+            let initialized = 0;
+            for (let record = 0; record < table.length / 16; record += 1) {
+              if (table[record * 16 + 15] === 0) continue;
+              matrixNear(
+                new THREE.Matrix4().fromArray(table, record * 16),
+                initialGpuTransform,
+                'initial GPU transform',
+              );
+              initialized++;
+            }
+            assert.ok(initialized > 0, 'at least one copied glyph occupies this draw storage');
+          }
+          for (const object of [text, detached, decorations]) {
+            if (motion !== 'scale') object.rotateZ(0.45);
+            if (motion !== 'rotation') object.scale.multiply(new THREE.Vector3(1.3, 0.7, 1.1));
+          }
+          scene.updateMatrixWorld(true);
+          assertSwap();
+
+          const assertStorage = (index, local) => {
+            const raw = new THREE.Matrix4().makeTranslation(-paragraph.x[index], paragraph.y[index], 0);
+            const expected = local.clone().multiply(raw);
+            assert.ok(
+              draws(detached).some((draw) => {
+                const table = draw.geometry.getAttribute('_pmndrsGlyphInstanceTransforms').array;
+                return Array.from({ length: table.length / 16 }, (_, i) => i).some((i) =>
+                  expected.elements.every((value, j) => Math.abs(table[i * 16 + j] - value) < 0.0001),
+                );
+              }),
+              'public owner-local instance matrix reaches GPU storage with one raw-pen compensation',
+            );
+          };
+          detached.getMatrixAt(0, instance);
+          instance.multiply(new THREE.Matrix4().makeRotationZ(0.2));
+          instance.elements[12] += 2;
+          detached.setMatrixAt(0, instance);
+          const localWrite = instance.clone();
+          detached.getMatrixAt(0, instance);
+          matrixNear(instance, localWrite, 'local setter round trip');
+          assertStorage(0, localWrite);
+          const worldWrite = detached.matrixWorld.clone().multiply(detached.measurements[1].originalMatrix);
+          worldWrite.elements[13] += 3;
+          detached.setWorldMatrixAt(1, worldWrite);
+          detached.getWorldMatrixAt(1, instance);
+          matrixNear(instance, worldWrite, 'world setter round trip');
+          assertStorage(1, detached.matrixWorld.clone().invert().multiply(worldWrite));
+          const frozenWorld = Array.from({ length: detached.count }, (_, index) => {
+            const matrix = new THREE.Matrix4();
+            detached.getWorldMatrixAt(index, matrix);
+            return matrix;
+          });
+          text.set({ text: 'Different text', constraints: { anchor: { x: 'right', y: 'bottom' } } });
+          scene.updateMatrixWorld(true);
+          for (let index = 0; index < detached.count; index += 1) {
+            detached.getWorldMatrixAt(index, instance);
+            matrixNear(instance, frozenWorld[index], 'source-independent captured content');
+          }
+        });
 });
 
 test('a rejected Three publication preserves the accepted anchor transform', async (t) => {
@@ -545,7 +689,7 @@ test('anchors compose in local axes under Three rotation and scale, including de
         glyphs.dispose();
         decorations?.dispose();
       });
-      glyphs.matrix.elements.forEach((value, i) => near(value, expected.elements[i], `detached anchor matrix ${i}`));
+      glyphs.matrix.elements.forEach((value, i) => near(value, text.matrix.elements[i], `detached source matrix ${i}`));
     });
 });
 

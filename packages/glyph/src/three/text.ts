@@ -913,6 +913,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   private get geometry(): THREE.BufferGeometry {
     return textBoundsGeometry;
   }
+  /** Desired ink bounds in Text-local Three coordinates (+X right, +Y up), anchor included. */
   get boundingBox(): THREE.Box3 {
     return this.computeBoundingBox();
   }
@@ -1007,7 +1008,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return true;
   }
 
-  /** Measures current desired text without scene attachment or matrix traversal; a cache miss may synchronously incur font/measure lookup work. */
+  /** Measures desired paragraph-local layout (+X right, +Y down), unanchored; `anchorOffset` is separate metadata. A cache miss may synchronously incur font/measure lookup work. */
   measure(): ParagraphLayoutSummary {
     this.#assertActive();
     const text = this;
@@ -1016,7 +1017,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return measurement;
   }
 
-  /** Returns caller-owned positioned glyph and line columns without requiring a rendered frame; a cache miss may incur lookup work, and every call copies the columns. */
+  /** Copies desired glyph/line columns on every call in unanchored paragraph-local coordinates (+X right, +Y down). No render is required; a cache miss may incur lookup work. */
   glyphs(): GlyphLayoutInspection {
     this.#assertActive();
     const text = this;
@@ -1025,7 +1026,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return inspection;
   }
 
-  /** Synchronously reads selected positioned glyphs and returns the callback's result. The view expires when the callback exits; the full layout is not copied. */
+  /** Reads desired unanchored paragraph-local glyphs (+X right, +Y down) without copying the full layout. The view expires on callback return. */
   readGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result {
     this.#assertActive();
     return this.#root.readGlyphs(this, read);
@@ -1041,6 +1042,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return { status: 'committed', revision: this.#committedRevision };
   }
 
+  /** Returns desired ink bounds in Text-local Three coordinates (+X right, +Y up), anchor included; excludes owner/ancestor transforms. */
   computeBoundingBox(): THREE.Box3 {
     if (!this.#boundingBoxCurrent) this.#setBoundingBox(this.#root.measurementWithInk(this));
     return this.#boundingBox;
@@ -1051,14 +1053,14 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return this.#root.glyphPlacements(this);
   }
 
-  /** Measures desired glyphs synchronously in Text-local space; accepted renderer geometry is used after publication. */
+  /** Synchronously measures desired glyphs in Text-local Three coordinates (+X right, +Y up), anchor included. Uses accepted source geometry when current. */
   measureGlyphs(): readonly ThreeGlyphMeasurement[] | undefined {
     const placements = this.#glyphPlacements();
     if (placements === undefined) return undefined;
     return measureGlyphPlacements(placements, this.#glyphGeometry(placements), placements.layout.anchorOffset);
   }
 
-  /** Copies drawable desired glyphs and optional decorations into independently rendered Three objects; blank glyphs are excluded. */
+  /** Independently copies desired drawable content (excluding blanks) into the same Text-local Three frame (+X right, +Y up), anchor included once. Detached roots keep this object's local transform/pivot. */
   split(): readonly [glyphs: Glyphs, decorations: Decorations | undefined] {
     this.#assertActive();
     const placements = this.#glyphPlacements();
@@ -1130,7 +1132,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return sourceByIndex;
   }
 
-  /** Queries the nearest desired-layout cluster boundary without publishing renderer state. */
+  /** Finds the nearest desired caret to logical Text-local coordinates (+X right, +Y down), anchor included; does not publish a frame. */
   caretAt(x: number, y: number): GlyphCaret | undefined {
     const placements = this.#glyphPlacements();
     if (placements === undefined) return undefined;
@@ -1138,7 +1140,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return anchoredCaret(placements.caretAt(x - offset.x, y - offset.y), offset);
   }
 
-  /** Resolves a UTF-16 offset with the placement snapshot's cluster, bidi-affinity, and line-boundary policy. */
+  /** Resolves a UTF-16 offset to a desired caret in logical Text-local coordinates (+X right, +Y down), anchor included. */
   caretForOffset(offset: number): GlyphCaret | undefined {
     const placements = this.#glyphPlacements();
     return placements === undefined
@@ -1146,7 +1148,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       : anchoredCaret(placements.caretForOffset(offset), placements.layout.anchorOffset);
   }
 
-  /** Queries desired-layout selection rectangles without publishing renderer state. */
+  /** Returns desired selection rectangles in logical Text-local coordinates (+X right, +Y down), anchor included; does not publish a frame. */
   selectionRects(start: number, end: number): readonly LayoutBox[] | undefined {
     const placements = this.#glyphPlacements();
     return placements === undefined
@@ -1176,8 +1178,11 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   #setBoundingBox(measurement: ParagraphLayoutSummary): void {
     const bounds = measurement.inkBounds;
     if (bounds === undefined) {
-      this.#boundingBox.makeEmpty();
-      this.#boundingBoxCurrent = true;
+      // Layout-only queries leave ink unknown; only zero glyphs prove an empty box.
+      if (measurement.glyphCount === 0) {
+        this.#boundingBox.makeEmpty();
+        this.#boundingBoxCurrent = true;
+      }
       return;
     }
     const offset = measurement.anchorOffset;
