@@ -36,7 +36,7 @@ export interface LayoutPoint {
   readonly y: number;
 }
 
-/** Scaled primary-face metrics used by a line. Mixed authored styles take the maximum of each dimension; fallback glyph faces do not change the line's typography. */
+/** Scaled primary-face metrics used by a line. Mixed authored styles take the maximum of each dimension; fallback glyph faces do not change the line's typography. A drop cap contributes cap/x-height dimensions and provenance to the first logical line; ascent, descent and leading retain the body strut. */
 export interface LineFontMetrics {
   /** Font ascent without half-leading or baseline shift. */
   readonly ascent: number;

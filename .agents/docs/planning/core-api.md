@@ -246,6 +246,12 @@ envelopes. `capHeightSource`/`xHeightSource` are `font` only when every contribu
 OS/2 height; otherwise they are `fallback`. Missing or nonpositive cap height uses rounded 0.66em; x-height uses 0.5em
 in font units. These are deterministic font-metric estimates, not inferred glyph ink.
 
+A same-source drop cap contributes its primary face's cap/x-height dimensions and provenance to the first logical
+line. Top references union the body's and initial's absolute cap/x-height positions using each one's actual baseline;
+text-top and baseline-aligned initials therefore produce different envelopes. The body's ascent, descent, effective
+leading, alphabetic baseline, ideographic baseline and line height remain the body strut. Later lines contain only their
+own participating styles. This preserves body line spacing while making cap/x-height anchors account for the initial.
+
 ### Box anchoring
 
 `constraints.anchor` selects the paragraph-box reference that coincides with the host's supplied placement origin.
