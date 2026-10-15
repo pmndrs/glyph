@@ -29,10 +29,8 @@ test('ships a zero-import optimized shaper module whose published ABI is generat
   const wasm = await readFile(shaperWasmUrl);
   const module = await WebAssembly.compile(wasm);
   assert.deepEqual(WebAssembly.Module.imports(module), []);
-  assert.equal(
-    WebAssembly.Module.exports(module).some(({ name }) => name.includes('abi_')),
-    false,
-  );
+  const instance = await WebAssembly.instantiate(module, {});
+  assert.equal(instance.exports[textShaperAbi.functions.abiVersion](), textShaperAbi.version);
   const generated = await import('../../dist/generated/text-shaper-abi.js');
   // The published subpath must surface the generated module itself, not a copy of it. Identity is
   // the assertion that matters: a copy is what would let the two drift.

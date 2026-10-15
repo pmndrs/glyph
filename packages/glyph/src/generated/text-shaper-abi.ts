@@ -267,6 +267,7 @@ export const textShaperAbi = {
     }
   },
   "functions": {
+    "abiVersion": "pmndrs_glyph_shaper_abi_version",
     "allocate": "pmndrs_glyph_shaper_alloc",
     "borrowParagraphGlyph": "pmndrs_glyph_engine_borrow_paragraph_glyph",
     "borrowParagraphLayout": "pmndrs_glyph_engine_borrow_paragraph_layout",
@@ -893,7 +894,7 @@ export const textShaperAbi = {
     "styleRootInvalid": 18,
     "styleSplitsCluster": 16
   },
-  "version": 0,
+  "version": 1,
   "versions": {
     "fontFormat": 0,
     "harfrust": "0.12.0",

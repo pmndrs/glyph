@@ -57,7 +57,7 @@ use crate::engine::semantic_view::{
 };
 use crate::engine::{SemanticGlyph, layout_borrow::BorrowedLayoutDescriptor};
 
-pub const ABI_VERSION: u32 = 0;
+pub const ABI_VERSION: u32 = 1;
 pub const SHAPER_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const HARFRUST_VERSION: &str = "0.12.0";
 pub const HARFRUST_COMMIT: &str = "60b28ea22b5261710018d69c168a762bcb28794c";
@@ -2013,6 +2013,7 @@ pub fn json() -> String {
             "fontFormat": 0
         },
         "functions": {
+            "abiVersion": "pmndrs_glyph_shaper_abi_version",
             "initialize": "pmndrs_glyph_shaper_initialize",
             "allocate": "pmndrs_glyph_shaper_alloc",
             "deallocate": "pmndrs_glyph_shaper_dealloc",

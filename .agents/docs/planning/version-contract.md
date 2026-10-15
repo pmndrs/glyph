@@ -112,7 +112,7 @@ These values are exact fixture and provenance inputs. “Latest” is never a va
 | Coverage-guided Rust fuzzer           | `nightly-2026-06-01` (`14210df0e`) + cargo-fuzz `0.13.2` + libfuzzer-sys `0.4.13` | nested mise-owned fuzz workspace; fixed default seed `0x504d4e44`; excluded from product builds                                                           |
 | `PMNDRS_font` format                  | `0`; `1` only for a font that carries outlines                                    | extension schema, shaping contract, and glyph-outlines decision                                                                                           |
 | Portable baker ABI                    | `0`                                                                               | generated `font-baker-abi.ts`                                                                                                                             |
-| Text shaper ABI                       | `0`                                                                               | generated `text-shaper-abi.ts`                                                                                                                            |
+| Text shaper ABI                       | `1`                                                                               | generated `text-shaper-abi.ts`                                                                                                                            |
 | Bitmap baker ABI                      | `0`                                                                               | generated `bitmap-baker-abi.ts`                                                                                                                           |
 | Font baker                            | `0.0.0`                                                                           | Cargo/npm package version during the integration slice                                                                                                    |
 | Bitmap generator                      | `0.0.0`                                                                           | Cargo/package version embedded into descriptors and artifacts                                                                                             |
@@ -140,5 +140,10 @@ Every raster generator stamps its exact owning package semantic version into its
 | Fuzz harness                  | Deterministic seed replay, fixed-seed stable smoke, bounded cargo-fuzz execution, exact root/nested toolchain authorities, mise/cargo-fuzz/libFuzzer drift guards, and minimized-crash promotion. |
 | ABI or font format            | Explicit version increment, compatibility decision, and old/new fixture coverage.                                                                                                                 |
 | Baker or raster generator     | Deterministic artifact diff, payload report, and Node/Worker parity run.                                                                                                                          |
+
+The shaper's [ABI 1 compatibility decision](decisions/shaper-abi-1.md) requires an exact version bootstrap before
+initialization; unversioned ABI 0 modules are rejected. The historical 76-byte-query fixture is authenticated by its
+manifest, while the current build exercises the matching 84-byte reader/writer pair. A caller overriding `wasm` must
+update both halves together; no old-layout translation is provided.
 
 Fixture manifests record these values explicitly. Updating this page alone never upgrades the code: the generated ABI, package locks, fixtures, and compatibility tests must change in the same atomic workstream.
