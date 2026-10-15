@@ -86,6 +86,12 @@ test('measure exposes primary-face font dimensions and computed paragraph/line r
   assert.equal(metrics.fontMetrics.capHeightSource, 'font');
   assert.equal(metrics.fontMetrics.xHeightSource, 'font');
   assert.equal(metrics.fontMetrics, metrics.lines[0].fontMetrics);
+  assert.equal(
+    metrics.lines[0].fontMetrics,
+    metrics.lines[1].fontMetrics,
+    'identical line struts share immutable metrics',
+  );
+  assert.ok(Object.isFrozen(metrics.fontMetrics));
   assert.equal(metrics.alphabeticBaseline, metrics.firstBaseline);
   for (const line of metrics.lines) {
     near(
@@ -246,6 +252,11 @@ test('empty, tight leading, sizing, dynamic text, mixed fonts and fallback retai
   near(fallback.fontMetrics.capHeight, (1490 * 20) / 2048, 'fallback glyphs keep authored primary face metrics');
   text.set({ text: txt`small ${span({ fontSize: 40 })`BIG`}` });
   near(text.measure().fontMetrics.capHeight, (1490 * 40) / 2048, 'mixed authored sizes aggregate cap height');
+  text.set({ text: txt`small\n${span({ fontSize: 40 })`BIG`}` });
+  const [smallLine, largeLine] = text.measure().lines;
+  near(smallLine.fontMetrics.capHeight, (1490 * 20) / 2048, 'first line keeps smaller strut');
+  near(largeLine.fontMetrics.capHeight, (1490 * 40) / 2048, 'next line keeps larger strut');
+  assert.notEqual(smallLine.fontMetrics, largeLine.fontMetrics, 'different line struts remain independent');
   const other = handle.createText({ font: secondary, text: 'مرحبا', style: { fontSize: 30 } });
   t.after(() => other.dispose());
   const otherMetrics = other.measure();

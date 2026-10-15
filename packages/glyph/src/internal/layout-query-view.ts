@@ -52,6 +52,7 @@ export function readPlannerMeasurements(publication: PlanPublication): ReadonlyM
     let firstBaseline = 0;
     let lastBaseline = 0;
     const lines: ParagraphLineMetrics[] = [];
+    let previousFontMetrics: LineFontMetrics | undefined;
     for (let lineIndex = 0; lineIndex < lineCount; lineIndex += 1) {
       const line = view.record(table, lineStart + lineIndex);
       if (view.u16(line + recordLayout.kind) !== kinds.line || view.u32(line + recordLayout.parentId) !== paragraphId) {
@@ -67,15 +68,33 @@ export function readPlannerMeasurements(publication: PlanPublication): ReadonlyM
       const fontAscent = view.f32(line + recordLayout.fontAscent);
       const fontDescent = view.f32(line + recordLayout.fontDescent);
       const heightFallbacks = view.u16(line + recordLayout.flags);
-      const fontMetrics: LineFontMetrics = Object.freeze({
-        ascent: fontAscent,
-        descent: fontDescent,
-        leading: lineHeight - fontAscent - fontDescent,
-        capHeight: view.f32(line + recordLayout.capHeight),
-        xHeight: view.f32(line + recordLayout.xHeight),
-        capHeightSource: (heightFallbacks & 1) === 0 ? 'font' : 'fallback',
-        xHeightSource: (heightFallbacks & 2) === 0 ? 'font' : 'fallback',
-      });
+      const leading = lineHeight - fontAscent - fontDescent;
+      const capHeight = view.f32(line + recordLayout.capHeight);
+      const xHeight = view.f32(line + recordLayout.xHeight);
+      const capHeightSource = (heightFallbacks & 1) === 0 ? 'font' : 'fallback';
+      const xHeightSource = (heightFallbacks & 2) === 0 ? 'font' : 'fallback';
+      // Adjacent lines commonly share one authored strut. Keep that immutable value shared rather
+      // than allocating the same metrics object for every line on every publication.
+      const fontMetrics: LineFontMetrics =
+        previousFontMetrics !== undefined &&
+        previousFontMetrics.ascent === fontAscent &&
+        previousFontMetrics.descent === fontDescent &&
+        previousFontMetrics.leading === leading &&
+        previousFontMetrics.capHeight === capHeight &&
+        previousFontMetrics.xHeight === xHeight &&
+        previousFontMetrics.capHeightSource === capHeightSource &&
+        previousFontMetrics.xHeightSource === xHeightSource
+          ? previousFontMetrics
+          : Object.freeze({
+              ascent: fontAscent,
+              descent: fontDescent,
+              leading,
+              capHeight,
+              xHeight,
+              capHeightSource,
+              xHeightSource,
+            });
+      previousFontMetrics = fontMetrics;
       // A measurement-only query leaves the line's glyph span zeroed; it is only meaningful
       // alongside the per-glyph columns, which the measure reader validates before publishing.
       const lineGlyphStart = view.u32(line + recordLayout.itemStart);
@@ -353,7 +372,9 @@ class SemanticViewReader {
       throw new TypeError('text-engine query bytes do not belong to the reported Wasm memory');
     }
     this.#publication = publication;
-    this.#view = new DataView(publication.memoryBuffer);
+    // Bound the native view to this publication once. Each scalar load then gets DataView's
+    // bounds protection without rechecking package-owned record arithmetic in JavaScript.
+    this.#view = new DataView(publication.memoryBuffer, publication.bytes.byteOffset, publication.bytes.byteLength);
   }
 
   table(): SemanticViewTable {
@@ -384,18 +405,15 @@ class SemanticViewReader {
   }
 
   u16(offset: number): number {
-    this.#assertRange(offset, 2);
-    return this.#view.getUint16(this.#publication.bytes.byteOffset + offset, true);
+    return this.#view.getUint16(offset, true);
   }
 
   u32(offset: number): number {
-    this.#assertRange(offset, 4);
-    return this.#view.getUint32(this.#publication.bytes.byteOffset + offset, true);
+    return this.#view.getUint32(offset, true);
   }
 
   f32(offset: number): number {
-    this.#assertRange(offset, 4);
-    return this.#view.getFloat32(this.#publication.bytes.byteOffset + offset, true);
+    return this.#view.getFloat32(offset, true);
   }
 
   #assertRange(offset: number, byteLength: number): void {

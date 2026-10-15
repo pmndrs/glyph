@@ -1830,6 +1830,7 @@ class ThreeRootPublication {
     // Inherited presentation and scoped order can change without advancing this Text's desired revision.
     const placementOnly =
       previous !== undefined &&
+      previous.stagedDesired.constraints.anchor !== desired.constraints.anchor &&
       previous.stagedRevision === previous.committedRevision &&
       !this.#materialInvalidated &&
       !this.#rendererUpdateRejected &&

@@ -1036,6 +1036,11 @@ Ordinary paragraph anchor-only changes reuse line records
 and avoid a layout engine query; explicit flow bindings retain their geometry-invalidation path, and explicit
 invalidation/retry semantics are unchanged.
 
+The semantic reader bounds its native `DataView` to the publication once, retaining native scalar bounds checks and
+whole-table range validation without repeating JavaScript range validation for every metric field. Adjacent lines with
+identical font metrics share one immutable strut value; mixed authored metrics remain independent. Three rejects the
+anchor-only shortcut immediately when the anchor identity is unchanged, before comparing accepted presentation.
+
 The compiler-owned query record grows from 76 to 84 bytes for two shifted height references. Four spare line-record
 fields carry font ascent/descent/cap height/x-height and line flags carry fallback provenance. Render/Codec records and
 default publications do not grow. Explicit glyph inspection also pays the eight-byte record increase; ordinary
