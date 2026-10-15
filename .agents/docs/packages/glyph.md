@@ -1040,8 +1040,9 @@ invalidation/retry semantics are unchanged.
 
 The [Three coordinate contract](../planning/three-api.md#measure-desired-layout-and-inspect-positioned-glyphs) separates
 raw paragraph queries from anchored Text-local queries and detached Glyphs-local snapshots. Split siblings preserve
-per-glyph world transforms under transformed ancestors; the copied container owns the captured anchor. Immutable
-`Glyphs.measurements` records original geometry, while matrix accessors report subsequent animated transforms. Desired
+per-glyph world transforms and the source local transform/pivot under transformed ancestors and matching later group
+motion. Captured anchoring belongs to local content, not the copied container transform. `Glyphs.measurements` records
+original owner-local geometry, while matrix accessors report subsequent animated transforms. Desired
 queries remain distinct from accepted draws during pending/rejected publication.
 
 The semantic reader bounds its native `DataView` to the publication once, retaining native scalar bounds checks and

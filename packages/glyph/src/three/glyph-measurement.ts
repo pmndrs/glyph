@@ -15,7 +15,7 @@ export interface GlyphAnchor {
 /** The coordinate system used by a retained renderer geometry source. */
 export type ThreeGlyphGeometryCoordinates = 'glyph-local' | 'unit-square' | 'em';
 
-/** `metric-quad` is already in Text-local Three coordinates; `supplied` is the technique's immutable source mesh in its own declared coordinates — not a collision guarantee. */
+/** `metric-quad` is glyph-local (+X right, +Y up), relative to the pen origin; `supplied` uses the declared source coordinates. Neither defines a collision body. */
 export interface ThreeGlyphGeometrySource {
   readonly kind: 'metric-quad' | 'supplied';
   readonly geometryKind?: 'quad' | 'hull' | 'custom';
@@ -25,23 +25,30 @@ export interface ThreeGlyphGeometrySource {
   readonly bounds: THREE.Box3;
 }
 
+/** A desired Text query or original detached snapshot; owner-local fields use native Three axes and include the anchor. */
 export interface ThreeGlyphMeasurement {
   readonly key: GlyphKey;
   /** Index in the returned measurement array; dense drawable index for a detached `Glyphs` object. */
   readonly index: number;
+  /** Shaped pen origin in owner-local Three coordinates (+X right, +Y up), anchor included. */
   readonly shapedOrigin: THREE.Vector3;
+  /** Drawn pen origin in owner-local Three coordinates (+X right, +Y up), anchor included. */
   readonly drawnOrigin: THREE.Vector3;
-  /** Caller-owned glyph-transform snapshot in the measured Text or detached Glyphs object's local space. */
+  /** Maps glyph-pen-local Three coordinates (+X right, +Y up) into owner-local coordinates, anchor included. This original snapshot does not follow instance writes. */
   readonly originalMatrix: THREE.Matrix4;
+  /** Original owner-local Three quad (+X right, +Y up), anchor included. */
   readonly localQuad: readonly [THREE.Vector3, THREE.Vector3, THREE.Vector3, THREE.Vector3];
+  /** Original ink bounds in owner-local Three coordinates (+X right, +Y up), anchor included. */
   readonly localInkBounds: THREE.Box3;
+  /** Original advance bounds in owner-local Three coordinates (+X right, +Y up), anchor included. */
   readonly localAdvanceBounds: THREE.Box3;
-  /** Exact metric fallback or retained supplied source geometry for this glyph's draw. */
+  /** Glyph-local metric quad (+X right, +Y up), or supplied geometry in its declared coordinates; not owner-local bounds. */
   readonly geometry: ThreeGlyphGeometrySource;
+  /** Resolves a point in original owner-local Three bounds (+X right, +Y up), anchor included. */
   anchorPoint(anchor: GlyphAnchor, bounds?: 'ink' | 'advance'): THREE.Vector3;
 }
 
-/** Builds Three-local measurements from one committed paragraph snapshot. */
+/** Builds owner-local Three measurements from one desired placement snapshot and its captured anchor. */
 export function measureGlyphPlacements(
   placements: GlyphPlacements,
   geometryByIndex: ReadonlyMap<number, ThreeGlyphGeometrySource> = new Map(),
