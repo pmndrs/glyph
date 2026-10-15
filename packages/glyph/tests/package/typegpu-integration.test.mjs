@@ -577,6 +577,18 @@ test('TypeGPU holds the accepted anchor across pending and rejected semantic upd
     text.update({ text: 'Much longer pending text' }); // Explicit invalidation retries the rejected publication.
     glyph.shape();
     assert.deepEqual(snapshot()[0].position, [100 + desired.anchorOffset.x, 80 + desired.anchorOffset.y]);
+    host.stats.reject = true;
+    text.update({ text: 'Second pending paragraph', constraints: { anchor: { x: 'center', y: 'bottom' } } });
+    assert.throws(() => glyph.shape(), /Injected renderer rejection/);
+    host.stats.reject = false;
+    text.update({ constraints: { anchor: { x: 'left', y: 'first-baseline' } } });
+    const retried = text.measure();
+    glyph.shape();
+    assert.deepEqual(
+      snapshot()[0].position,
+      [100 + retried.anchorOffset.x, 80 + retried.anchorOffset.y],
+      'anchor edit explicitly retries failed semantic output',
+    );
     text.dispose();
   } finally {
     handle.dispose();

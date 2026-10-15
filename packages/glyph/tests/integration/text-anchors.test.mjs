@@ -279,8 +279,10 @@ test('a rejected Three publication preserves the accepted anchor transform', asy
   scene.updateMatrixWorld(true);
   const before = draws(scene).map((draw) => ({ draw, matrix: draw.matrix.clone() }));
   assert.ok(before.length > 0);
-  const rejected = defineTextMaterial(() => {
-    throw new Error('intentional anchored material rejection');
+  let rejectMaterial = true;
+  const rejected = defineTextMaterial((context) => {
+    if (rejectMaterial) throw new Error('intentional anchored material rejection');
+    return context.createDefaultMaterial();
   });
   text.set({
     text: 'A much longer pending paragraph',
@@ -291,6 +293,15 @@ test('a rejected Three publication preserves the accepted anchor transform', asy
   assert.equal(text.commitState().status, 'failed');
   for (const { draw, matrix } of before)
     assert.ok(draw.matrix.equals(matrix), 'failed candidate retains accepted anchor placement');
+  rejectMaterial = false;
+  text.constraints = { anchor: { x: 'left', y: 'cap-height-top' } };
+  scene.updateMatrixWorld(true);
+  assert.equal(
+    text.commitState().status,
+    'committed',
+    'an explicit anchor edit retries the rejected semantic publication',
+  );
+  near(draws(scene)[0].matrix.elements[13], -text.measure().anchorOffset.y, 'retried anchor placement');
 });
 
 test('anchors compose in local axes under Three rotation and scale, including detached copies', async (t) => {

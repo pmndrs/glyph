@@ -641,7 +641,8 @@ class RenderPlannerImpl {
             state.desired,
           )
         : forkResolvedTextWithText(state.desired, textOnly, state.metrics.order);
-    if (sameTextExceptAnchor(state.desired, desired, state.ordinal)) {
+    // After renderer rejection, even an anchor edit must retry the engine's unaccepted output.
+    if (this.#engineRevision === this.#revision && sameTextExceptAnchor(state.desired, desired, state.ordinal)) {
       const anchor = desired.source.constraints?.anchor;
       if (state.measurement !== undefined) state.measurement = withTextAnchor(state.measurement, anchor);
       if (state.inspection !== undefined) state.inspection = withTextAnchor(state.inspection, anchor);
