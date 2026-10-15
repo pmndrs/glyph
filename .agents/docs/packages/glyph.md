@@ -1036,6 +1036,12 @@ Ordinary paragraph anchor-only changes reuse line records
 and avoid a layout engine query; explicit flow bindings retain their geometry-invalidation path, and explicit
 invalidation/retry semantics are unchanged.
 
+The [Three coordinate contract](../planning/three-api.md#measure-desired-layout-and-inspect-positioned-glyphs) separates
+raw paragraph queries from anchored Text-local queries and detached Glyphs-local snapshots. Split siblings preserve
+per-glyph world transforms under transformed ancestors; the copied container owns the captured anchor. Immutable
+`Glyphs.measurements` records original geometry, while matrix accessors report subsequent animated transforms. Desired
+queries remain distinct from accepted draws during pending/rejected publication.
+
 The semantic reader bounds its native `DataView` to the publication once, retaining native scalar bounds checks and
 whole-table range validation without repeating JavaScript range validation for every metric field. Adjacent lines with
 identical font metrics share one immutable strut value; mixed authored metrics remain independent. Three rejects the

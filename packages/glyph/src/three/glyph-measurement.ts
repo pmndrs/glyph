@@ -31,7 +31,7 @@ export interface ThreeGlyphMeasurement {
   readonly index: number;
   readonly shapedOrigin: THREE.Vector3;
   readonly drawnOrigin: THREE.Vector3;
-  /** Caller-owned glyph-transform snapshot in the source Text's local space. */
+  /** Caller-owned glyph-transform snapshot in the measured Text or detached Glyphs object's local space. */
   readonly originalMatrix: THREE.Matrix4;
   readonly localQuad: readonly [THREE.Vector3, THREE.Vector3, THREE.Vector3, THREE.Vector3];
   readonly localInkBounds: THREE.Box3;

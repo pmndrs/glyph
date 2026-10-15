@@ -249,7 +249,7 @@ export class Glyphs extends THREE.Object3D {
     return this.#glyphs.length;
   }
 
-  /** One measurement per glyph, at the glyph's index. */
+  /** Original captured measurements in this Glyphs object's local space. The container transform already captures the source Text's anchor and local transform; use matrix accessors for later per-glyph animation. */
   get measurements(): readonly ThreeGlyphMeasurement[] {
     return this.#measurements;
   }

@@ -341,6 +341,62 @@ test('Three draw transforms, bounds, glyph measures, carets, selection and split
     });
 });
 
+test('split preserves anchored glyph world transforms under rotated nonuniformly scaled ancestors', async (t) => {
+  for (const transformMode of ['direct', 'indexed'])
+    for (const anchor of [undefined, { x: 'center', y: 'first-baseline' }])
+      await t.test(`${transformMode} / ${anchor === undefined ? 'default' : 'anchored'}`, async (subtest) => {
+        const { text } = await make(
+          subtest,
+          { text: 'Abc', constraints: { anchor } },
+          defineThreeConfig({ transformMode }),
+        );
+        const scene = new THREE.Scene();
+        const parent = new THREE.Group();
+        parent.position.set(17, -9, 3);
+        parent.rotation.set(0.1, -0.2, 0.35);
+        parent.scale.set(1.6, 0.65, 1.1);
+        text.position.set(-4, 7, 2);
+        text.rotation.set(-0.15, 0.1, -0.25);
+        text.scale.set(1.2, 0.8, 0.9);
+        parent.add(text);
+        scene.add(parent);
+        scene.updateMatrixWorld(true);
+        if (anchor === undefined) assert.deepEqual(text.measure().anchorOffset, { x: 0, y: 0 });
+        const source = text.measureGlyphs();
+        const expected = source.map((glyph) => text.matrixWorld.clone().multiply(glyph.originalMatrix));
+        const [detached, decorations] = text.split();
+        subtest.after(() => {
+          detached.dispose();
+          decorations?.dispose();
+        });
+        parent.add(detached);
+        if (decorations !== undefined) parent.add(decorations);
+        text.visible = false;
+        scene.updateMatrixWorld(true);
+        assert.equal(detached.count, expected.length);
+        const actual = new THREE.Matrix4();
+        const assertSwap = () => {
+          for (let index = 0; index < detached.count; index += 1) {
+            detached.getWorldMatrixAt(index, actual);
+            for (let component = 0; component < 16; component += 1)
+              near(
+                actual.elements[component],
+                expected[index].elements[component],
+                `glyph ${index} matrix ${component}`,
+              );
+            const local = detached.measurements[index];
+            const worldOrigin = local.drawnOrigin.clone().applyMatrix4(detached.matrixWorld);
+            const sourceOrigin = new THREE.Vector3().setFromMatrixPosition(expected[index]);
+            near(worldOrigin.distanceTo(sourceOrigin), 0, `glyph ${index} measured world origin`);
+          }
+        };
+        assertSwap();
+        text.set({ text: 'Different text', constraints: { anchor: { x: 'right', y: 'bottom' } } });
+        scene.updateMatrixWorld(true);
+        assertSwap();
+      });
+});
+
 test('a rejected Three publication preserves the accepted anchor transform', async (t) => {
   const { text } = await make(
     t,

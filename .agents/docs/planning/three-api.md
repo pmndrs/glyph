@@ -326,8 +326,9 @@ query or an ordinary scene publication evicts that bounded slot.
 
 `glyphs()` is intentionally different: it positions current desired text and copies per-line and per-glyph arrays. It
 still does not publish or realize renderer resources. Ordinary rendering never materializes either semantic view merely
-to draw. Caret and selection lookup use renderer-accepted placement state and may return `undefined` while desired state
-is pending or a renderer candidate was rejected.
+to draw. Caret and selection lookup also query desired layout; pending or rejected publication does not change that
+query into the previously accepted layout. Renderer-derived glyph origins are used only when that desired revision is
+committed; otherwise placement falls back to desired layout origins.
 
 The complete field semantics are defined by the [core layout-query reference](core-api.md#layout-query-values).
 
@@ -347,6 +348,21 @@ anchored Text-local Three coordinates. Text's caret and selection helpers use an
 +Y down, as before; their returned rectangles include the same offset. `/core`'s lower-level `createGlyphPlacements()`
 continues to describe unshifted paragraph coordinates. `split()` incorporates the source anchor into each independent
 root's copied transform so detached glyphs and decorations preserve their world placement.
+
+The coordinate spaces are intentional and must not be mixed:
+
+| Query                                               | Coordinates                                      | Anchor already applied?                           |
+| --------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------- |
+| `measure()`, `glyphs()`, `readGlyphs()`             | Paragraph-local, +Y down                         | No; `anchorOffset` is separate placement metadata |
+| `Text.measureGlyphs()`, `computeBoundingBox()`      | Text-local Three coordinates, +Y up              | Yes                                               |
+| `caretAt()`, `caretForOffset()`, `selectionRects()` | Anchored Text-local logical coordinates, +Y down | Yes                                               |
+| `Glyphs.measurements`, `getMatrixAt()`              | Detached Glyphs-local Three coordinates, +Y up   | The captured anchor is in the container transform |
+| `Glyphs.getWorldMatrixAt()`                         | Scene world coordinates                          | Yes, including ancestor transforms                |
+
+For a Text-local glyph measurement, multiply `originalMatrix` by the Text's `matrixWorld` to get its world transform;
+do not add `anchorOffset` again. Raw paragraph inspection is lower-level: converting its coordinates to Three-local
+space requires the anchor translation and a Y-axis conversion. `measure().firstBaseline` remains a distance from the
+paragraph box top, not a world-space baseline position.
 
 Anchor-only edits of an accepted paragraph update the host placement without waiting for an engine publication when
 its effective presentation and order still match the accepted publication. Pending or rejected root/TextGroup material,
@@ -510,6 +526,19 @@ geometry used by the renderer. It never traverses or caches scene ancestors. Wor
 root once, invert its `matrixWorld` once, and cross that boundary through `worldToLocalMatrix(inverse, world, target)`
 plus `setMatrixAt()` for bulk writes. The convenience `setWorldMatrixAt()` remains correct for individual writes but
 updates and inverts the ancestor chain on every call. These are rendering facts, not prescribed collision bodies.
+
+The source Text and its detached Glyphs need not report identical local numbers: the source applies anchoring inside
+its rendering transform, while `split()` captures it in the detached container's transform. With sibling attachment,
+each glyph's world matrix is identical at the split boundary, including beneath rotated, nonuniformly scaled parents.
+Adding `anchorOffset` to the detached glyph matrices would apply the anchor twice. Reparenting into a different frame
+requires preserving world transforms explicitly; adding the detached container as a child of the source Text is not the
+sibling replacement shown above.
+
+`Glyphs.measurements` is an immutable snapshot of original Glyphs-local geometry and matrices. After per-glyph animation,
+read `getMatrixAt()` or `getWorldMatrixAt()` for current transforms rather than treating the original snapshot as live.
+For a swap of the source's currently visible renderer state, first require `label.commitState().status === 'committed'`.
+A split of pending/rejected desired state intentionally copies the new desired layout, while the source can still draw
+its previous accepted revision. Later source edits do not change the detached snapshot or its captured anchor.
 
 Materials are cloned into each detached branch and exposed through `materials`; changing one cannot mutate the source
 `Text` or its sibling detached branch. Immutable atlas/page GPU resources are leased from the existing Three engine domain
