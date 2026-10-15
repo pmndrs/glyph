@@ -140,6 +140,53 @@ test('all anchor tokens resolve from measured box or named reference without res
   assert.deepEqual(text.measure().anchorOffset, { x: 0, y: 0 });
 });
 
+test('anchors use resolved at-most dimensions, wrapped lines and exact height including paragraph spacing', async (t) => {
+  const { text } = await make(t, { text: 'abc' });
+  const natural = text.measure();
+  text.constraints = {
+    width: { mode: 'at-most', size: 200 },
+    anchor: { x: 'center', y: 'bottom' },
+  };
+  const shrink = text.measure();
+  near(shrink.width, natural.width, 'at-most resolves to short content, not its maximum');
+  assert.ok(shrink.width < 200);
+  near(shrink.anchorOffset.x, -natural.width / 2, 'center uses the resolved short-content width');
+  near(shrink.anchorOffset.y, -24, 'bottom uses one authored line');
+
+  text.set({
+    text: 'abc abc abc',
+    constraints: { width: { mode: 'at-most', size: 60 }, anchor: { x: 'right', y: 'last-baseline' } },
+  });
+  const wrapped = text.measure();
+  assert.equal(wrapped.lineCount, 3, 'constraint wraps three words into three lines');
+  near(wrapped.height, 72, 'three authored line boxes');
+  assert.ok(wrapped.width <= 60);
+  near(wrapped.anchorOffset.x, -wrapped.width, 'right uses the resolved wrapped box');
+  near(wrapped.anchorOffset.y, -(natural.firstBaseline + 48), 'last baseline follows constrained wrapping');
+
+  text.set({
+    text: 'abc\nabc',
+    layout: { spaceBefore: 7, spaceAfter: 9 },
+    constraints: {
+      width: { mode: 'exact', size: 160 },
+      height: { mode: 'exact', size: 100 },
+      anchor: { x: 'center', y: 'bottom' },
+    },
+  });
+  const fixed = text.measure();
+  near(fixed.height, 100, 'exact height owns the box despite content and spacing');
+  near(fixed.contentHeight, 64, 'content retains two lines plus before/after spacing');
+  assert.deepEqual(fixed.anchorOffset, { x: -80, y: -100 });
+  near(fixed.firstBaseline, natural.firstBaseline + 7, 'spaceBefore offsets the typographic reference');
+  near(fixed.lastBaseline, natural.firstBaseline + 31, 'spaceAfter does not offset the last baseline');
+  text.constraints = {
+    width: { mode: 'exact', size: 160 },
+    height: { mode: 'exact', size: 100 },
+    anchor: { y: 'first-baseline' },
+  };
+  near(text.measure().anchorOffset.y, -(natural.firstBaseline + 7), 'baseline anchor includes spaceBefore');
+});
+
 test('shallow property lists replace the whole anchor and explicit spread composes one axis', () => {
   const presets = Constraints.create({ center: { anchor: { x: 'center', y: 'middle' } } });
   const composed = Constraints.create({
